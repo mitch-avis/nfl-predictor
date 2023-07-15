@@ -6,18 +6,29 @@ LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": True,
     "formatters": {
-        "default": {"format": "%(asctime)s %(name)-12s %(levelname)-8s %(message)s"},
+        "default": {
+            "format": (
+                "[%(asctime)s.%(msecs)03d][%(levelname)s]"
+                "[%(name)s:%(filename)s:%(funcName)s:%(lineno)s][%(threadName)s] %(message)s"
+            ),
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "class": "coloredlogs.ColoredFormatter",
+        },
     },
     "handlers": {
         "default": {
-            "class": "logging.StreamHandler",
-            "formatter": "default",
             "level": "DEBUG",
+            "formatter": "default",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
         },
     },
-    "root": {
-        "handlers": ["default"],
-        "level": "DEBUG",
+    "loggers": {
+        "root": {
+            "handlers": ["default"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
     },
 }
 AWAY_STATS = [

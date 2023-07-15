@@ -570,3 +570,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# CSV data files
+*/data/*.csv

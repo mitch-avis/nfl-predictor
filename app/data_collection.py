@@ -21,7 +21,14 @@ from definitions import (
 from sportsipy.nfl.boxscore import Boxscore, Boxscores
 from utils.utils import read_write_data
 
-from app import log
+
+def main():
+    start_date = "2022-09-08"
+    start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date = "2023-01-11"
+    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    current_week = 18
+    collect_data(start_date_dt, end_date_dt, current_week)
 
 
 def collect_data(start_date: datetime, end_date: datetime, current_week: int):

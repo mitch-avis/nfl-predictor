@@ -31,6 +31,7 @@ LOGGING_CONFIG = {
         },
     },
 }
+ELO_DATA_URL = "https://projects.fivethirtyeight.com/nfl-api/nfl_elo.csv"
 AWAY_STATS = [
     "away_first_downs",
     "away_fourth_down_attempts",

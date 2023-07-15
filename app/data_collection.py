@@ -12,6 +12,7 @@ from definitions import (
     AGG_RENAME_HOME,
     AWAY_STATS,
     AWAY_STATS_DROP,
+    ELO_DATA_URL,
     ELO_DROP_COLS,
     ELO_TEAMS,
     HOME_STATS,
@@ -383,7 +384,8 @@ def agg_weekly_data(schedule_df, season_games_df, current_week, weeks):
 
 
 def get_elo(start_date, end_date):
-    elo_df = pd.read_csv("./utils/nfl_elo.csv")
+    elo_df = pd.read_csv(ELO_DATA_URL)
+    # elo_df = pd.read_csv("./utils/nfl_elo.csv")
     elo_df = elo_df.drop(columns=ELO_DROP_COLS)
     elo_df["date"] = pd.to_datetime(elo_df["date"])
     mask = (elo_df["date"] >= start_date) & (elo_df["date"] <= end_date)

@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import sqlalchemy as db
 from definitions import DATA_PATH
+from logger import log
 
 DB_TYPE = os.getenv("DB_TYPE", "postgresql")
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1:5432")
@@ -26,7 +27,7 @@ def read_write_data(data_name, func, *args, **kwargs):
             dataframe = read_df_from_sql(data_name)
         # Otherwise, call function to get/create dataframe
         else:
-            print(f"Calling {func.__name__} with args [{args}]...")
+            log.debug(f"Calling {func.__name__} with args [{args}]...")
             dataframe = pd.DataFrame(func(*args, **kwargs))
         # Write dataframe to CSV file
         write_df_to_csv(dataframe, f"{data_name}.csv")

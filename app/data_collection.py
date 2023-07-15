@@ -18,6 +18,7 @@ from definitions import (
     HOME_STATS_DROP,
     STD_TEAMS,
 )
+from logger import log
 from sportsipy.nfl.boxscore import Boxscore, Boxscores
 from utils.utils import read_write_data
 
@@ -74,7 +75,7 @@ def get_season_data(year, current_week):
     season_games_df = pd.DataFrame()
     # Step through each week of current season
     for week in range(1, current_week + 1):
-        print(f"Scraping Week {week} game data...")
+        log.info(f"Scraping Week {week} game data...")
         # Get and save week's game data
         week_games_name = f"{year}_{week}"
         week_games_df = read_write_data(week_games_name, get_game_data_by_week, year, week)
@@ -205,9 +206,9 @@ def parse_game_data(game_df, game_stats):
 def get_schedule(year):
     weeks = list(range(1, 19))
     schedule_df = pd.DataFrame()
-    print(f"Getting {year} schedule...")
+    log.info(f"Getting {year} schedule...")
     for week in weeks:
-        print(f"Week {week}...")
+        log.info(f"Week {week}...")
         date_string = f"{week}-{year}"
         week_scores = Boxscores(week, year)
         time.sleep(3)
@@ -368,7 +369,7 @@ def agg_weekly_data(schedule_df, season_games_df, current_week, weeks):
         if agg_weekly_df["winning_name"].isna().values.any():
             if agg_weekly_df["winning_name"].isna().sum() == agg_weekly_df.shape[0]:
                 agg_weekly_df["result"] = np.nan
-                print(f"Week {week} games have not finished yet.")
+                log.info(f"Week {week} games have not finished yet.")
             else:
                 agg_weekly_df.loc[agg_weekly_df["winning_name"].isna(), "result"] = 0
                 agg_weekly_df["result"] = agg_weekly_df["result"].astype("float")
@@ -416,15 +417,6 @@ def parse_completed_games(combined_data_df):
 def parse_games_to_predict(combined_data_df, current_week):
     pred_games_df = pd.DataFrame(combined_data_df[combined_data_df["week"] == current_week])
     return pred_games_df
-
-
-def main():
-    start_date = "2022-09-08"
-    start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_date = "2023-01-11"
-    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    current_week = 18
-    collect_data(start_date_dt, end_date_dt, current_week)
 
 
 if __name__ == "__main__":

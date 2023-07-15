@@ -21,7 +21,7 @@ numpy==1.25.1
 packaging==23.1
 pandas==2.0.3
 pathspec==0.11.1
-platformdirs==3.9.0
+platformdirs==3.9.1
 psycopg2==2.9.6
 pycodestyle==2.10.0
 pydocstyle==6.3.0
@@ -35,7 +35,6 @@ scikit-learn==1.3.0
 scipy==1.11.1
 six==1.16.0
 snowballstemmer==2.2.0
-sportsipy @ file:///C:/Users/Mitch/OneDrive/Python/football/wheels/sportsipy-0.6.0-py3-none-any.whl#sha256=d45bd6a64786c9042a6bcfe7a5eb8a8cd7e8378b5414d2f5cda4ae61de41bac4
 SQLAlchemy==2.0.19
 threadpoolctl==3.2.0
 typing_extensions==4.7.1
@@ -43,3 +42,5 @@ tzdata==2023.3
 urllib3==2.0.3
 Werkzeug==2.3.6
 xgboost==1.7.6
+
+./wheels/sportsipy-0.6.0-py3-none-any.whl

@@ -36,7 +36,16 @@ def read_write_data(data_name, func, *args, **kwargs):
     return dataframe
 
 
-def read_df_from_csv(file_name):
+def get_dataframe(data_name: str) -> pd.DataFrame:
+    if os.path.isfile(f"{DATA_PATH}/{data_name}.csv"):
+        dataframe = read_df_from_csv(f"{data_name}.csv")
+    elif INSP.has_table(data_name):
+        dataframe = read_df_from_sql(data_name)
+    else:
+        log.info(f"{data_name} not found!")
+        exit(1)
+    return dataframe
+
     dataframe = pd.read_csv(f"{DATA_PATH}/{file_name}")
     return dataframe
 
@@ -52,3 +61,13 @@ def read_df_from_sql(table_name):
 
 def write_df_to_sql(dataframe: pd.DataFrame, table_name):
     dataframe.to_sql(name=table_name, con=ENGINE, index=True, index_label="id", if_exists="replace")
+def display(y_pred: ndarray, x_test: pd.DataFrame) -> None:
+    for game in range(len(y_pred)):
+        win_prob = round(y_pred[game] * 100, 2)
+        week = x_test.reset_index().drop(columns="index").loc[game, "week"]
+        away_team = x_test.reset_index().drop(columns="index").loc[game, "away_name"]
+        home_team = x_test.reset_index().drop(columns="index").loc[game, "home_name"]
+        print(
+            f"Week {week}: The {away_team} have a probability of {win_prob}% of beating the "
+            f"{home_team}."
+        )

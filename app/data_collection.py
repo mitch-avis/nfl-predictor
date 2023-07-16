@@ -33,7 +33,7 @@ def main():
     collect_data(start_date_dt, end_date_dt, current_week)
 
 
-def collect_data(start_date: datetime, end_date: datetime, current_week: int):
+def collect_data(start_date: datetime, end_date: datetime, current_week: int) -> None:
     # Get start year from start date
     start_year = int(start_date.year)
     # Get end year from end date
@@ -43,7 +43,7 @@ def collect_data(start_date: datetime, end_date: datetime, current_week: int):
         end_year = int(end_date.year)
     # Create list of weeks to scrape
     weeks = list(range(1, current_week + 1))
-    for year in range(start_year, end_year):
+    for year in range(start_year, end_year + 1):
         log.info(f"Collecting game data for {year}...")
         # Get and save season's game data
         season_games_name = f"{year}_season_games"
@@ -71,11 +71,11 @@ def collect_data(start_date: datetime, end_date: datetime, current_week: int):
         comp_games_name = f"{year}_comp_games"
         _ = read_write_data(comp_games_name, parse_completed_games, combined_data_df)
         # Get and save games to predict
-        pred_games_name = f"{end_year}_{current_week}_pred_games"
+        pred_games_name = f"{year}_{current_week}_pred_games"
         _ = read_write_data(pred_games_name, parse_games_to_predict, combined_data_df, current_week)
 
 
-def get_season_data(year, current_week):
+def get_season_data(year: int, current_week: int) -> pd.DataFrame:
     season_games_df = pd.DataFrame()
     # Step through each week of current season
     for week in range(1, current_week + 1):
@@ -88,7 +88,7 @@ def get_season_data(year, current_week):
     return season_games_df
 
 
-def get_game_data_by_week(year, week):
+def get_game_data_by_week(year: int, week: int) -> pd.DataFrame:
     date_string = f"{week}-{year}"
     week_scores = Boxscores(week, year)
     time.sleep(3)
@@ -108,7 +108,9 @@ def get_game_data_by_week(year, week):
     return week_games_df
 
 
-def parse_game_data(game_df, game_stats):
+def parse_game_data(
+    game_df: pd.DataFrame, game_stats: Boxscore
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     try:
         away_team_df = game_df[["away_name", "away_abbr", "away_score"]].rename(
             columns={
@@ -207,7 +209,7 @@ def parse_game_data(game_df, game_stats):
     return away_team_df, home_team_df
 
 
-def get_schedule(year):
+def get_schedule(year: int) -> pd.DataFrame:
     weeks = list(range(1, 19))
     schedule_df = pd.DataFrame()
     log.info(f"Getting {year} schedule...")
@@ -234,7 +236,9 @@ def get_schedule(year):
     return schedule_df
 
 
-def agg_weekly_data(schedule_df, season_games_df, current_week, weeks):
+def agg_weekly_data(
+    schedule_df: pd.DataFrame, season_games_df: pd.DataFrame, current_week: int, weeks: list
+) -> pd.DataFrame:
     schedule_df = schedule_df[schedule_df.week < current_week + 1]
     agg_games_df = pd.DataFrame()
     for week in weeks:
@@ -386,7 +390,7 @@ def agg_weekly_data(schedule_df, season_games_df, current_week, weeks):
     return agg_games_df
 
 
-def get_elo(start_date, end_date):
+def get_elo(start_date: datetime, end_date: datetime) -> pd.DataFrame:
     elo_df = pd.read_csv(ELO_DATA_URL)
     # elo_df = pd.read_csv("./utils/nfl_elo.csv")
     elo_df = elo_df.drop(columns=ELO_DROP_COLS)
@@ -398,7 +402,7 @@ def get_elo(start_date, end_date):
     return elo_df
 
 
-def combine_data(agg_games_df, elo_df):
+def combine_data(agg_games_df: pd.DataFrame, elo_df: pd.DataFrame) -> pd.DataFrame:
     agg_games_df = pd.merge(
         agg_games_df,
         elo_df,
@@ -414,12 +418,12 @@ def combine_data(agg_games_df, elo_df):
     return agg_games_df
 
 
-def parse_completed_games(combined_data_df):
+def parse_completed_games(combined_data_df: pd.DataFrame) -> pd.DataFrame:
     comp_games_df = combined_data_df[combined_data_df["result"].notna()]
     return comp_games_df
 
 
-def parse_games_to_predict(combined_data_df, current_week):
+def parse_games_to_predict(combined_data_df: pd.DataFrame, current_week: int) -> pd.DataFrame:
     pred_games_df = pd.DataFrame(combined_data_df[combined_data_df["week"] == current_week])
     return pred_games_df
 

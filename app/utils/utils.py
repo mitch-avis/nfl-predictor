@@ -4,6 +4,7 @@ import pandas as pd
 import sqlalchemy as db
 from definitions import DATA_PATH
 from logger import log
+from numpy import ndarray
 
 DB_TYPE = os.getenv("DB_TYPE", "postgresql")
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1:5432")
@@ -15,7 +16,7 @@ ENGINE = db.create_engine(DB_PATH)
 INSP = db.inspect(ENGINE)
 
 
-def read_write_data(data_name, func, *args, **kwargs):
+def read_write_data(data_name: str, func, *args, **kwargs) -> pd.DataFrame:
     dataframe = pd.DataFrame()
     # Get dataframe from CSV if it exists
     if os.path.isfile(f"{DATA_PATH}/{data_name}.csv"):
@@ -46,21 +47,25 @@ def get_dataframe(data_name: str) -> pd.DataFrame:
         exit(1)
     return dataframe
 
+
+def read_df_from_csv(file_name: str) -> pd.DataFrame:
     dataframe = pd.read_csv(f"{DATA_PATH}/{file_name}")
     return dataframe
 
 
-def write_df_to_csv(dataframe: pd.DataFrame, file_name):
+def write_df_to_csv(dataframe: pd.DataFrame, file_name: str) -> pd.DataFrame:
     dataframe.to_csv(f"{DATA_PATH}/{file_name}", index=False)
 
 
-def read_df_from_sql(table_name):
+def read_df_from_sql(table_name: str) -> pd.DataFrame:
     dataframe = pd.read_sql(table_name, con=ENGINE, index_col="id")
     return dataframe
 
 
-def write_df_to_sql(dataframe: pd.DataFrame, table_name):
+def write_df_to_sql(dataframe: pd.DataFrame, table_name: str) -> pd.DataFrame:
     dataframe.to_sql(name=table_name, con=ENGINE, index=True, index_label="id", if_exists="replace")
+
+
 def display(y_pred: ndarray, x_test: pd.DataFrame) -> None:
     for game in range(len(y_pred)):
         win_prob = round(y_pred[game] * 100, 2)

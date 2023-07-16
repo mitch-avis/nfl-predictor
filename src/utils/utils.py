@@ -2,9 +2,10 @@ import os
 
 import pandas as pd
 import sqlalchemy as db
-from definitions import DATA_PATH
-from logger import log
 from numpy import ndarray
+
+from definitions import DATA_PATH
+from utils.logger import log
 
 DB_TYPE = os.getenv("DB_TYPE", "postgresql")
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1:5432")
@@ -72,7 +73,7 @@ def display(y_pred: ndarray, x_test: pd.DataFrame) -> None:
         week = x_test.reset_index().drop(columns="index").loc[game, "week"]
         away_team = x_test.reset_index().drop(columns="index").loc[game, "away_name"]
         home_team = x_test.reset_index().drop(columns="index").loc[game, "home_name"]
-        print(
+        log.info(
             f"Week {week}: The {away_team} have a probability of {win_prob}% of beating the "
             f"{home_team}."
         )

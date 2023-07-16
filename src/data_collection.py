@@ -5,6 +5,8 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from sportsipy.nfl.boxscore import Boxscore, Boxscores
+
 from definitions import (
     AGG_DROP_COLS,
     AGG_MERGE_ON,
@@ -19,8 +21,7 @@ from definitions import (
     HOME_STATS_DROP,
     STD_TEAMS,
 )
-from logger import log
-from sportsipy.nfl.boxscore import Boxscore, Boxscores
+from utils.logger import log
 from utils.utils import read_write_data
 
 

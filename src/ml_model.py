@@ -3,8 +3,9 @@
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from logger import log
 from sklearn.linear_model import LogisticRegression
+
+from utils.logger import log
 from utils.utils import display, get_dataframe
 
 NUM_ROUNDS = 1000

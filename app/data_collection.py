@@ -37,7 +37,10 @@ def collect_data(start_date: datetime, end_date: datetime, current_week: int):
     # Get start year from start date
     start_year = int(start_date.year)
     # Get end year from end date
-    end_year = int(end_date.year)
+    if end_date.year == start_date.year + 1:
+        end_year = int(end_date.year - 1)
+    else:
+        end_year = int(end_date.year)
     # Create list of weeks to scrape
     weeks = list(range(1, current_week + 1))
     for year in range(start_year, end_year):

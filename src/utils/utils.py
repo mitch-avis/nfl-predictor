@@ -69,11 +69,13 @@ def write_df_to_sql(dataframe: pd.DataFrame, table_name: str) -> pd.DataFrame:
 
 def display(y_pred: ndarray, x_test: pd.DataFrame) -> None:
     for game in range(len(y_pred)):
-        win_prob = round(y_pred[game] * 100, 2)
+        away_win_prob = round(y_pred[game] * 100, 2)
+        home_win_prob = round((1 - y_pred[game]) * 100, 2)
         week = x_test.reset_index().drop(columns="index").loc[game, "week"]
         away_team = x_test.reset_index().drop(columns="index").loc[game, "away_name"]
         home_team = x_test.reset_index().drop(columns="index").loc[game, "home_name"]
         log.info(
-            f"Week {week}: The {away_team} have a probability of {win_prob}% of beating the "
-            f"{home_team}."
+            f"{'Week ' + str(week):<7}: "
+            f"{away_team:<21} ({str(away_win_prob) + '%)':<8} at "
+            f"{home_team:<21} ({str(home_win_prob) + '%)':<8}"
         )

@@ -7,22 +7,22 @@ import numpy as np
 import pandas as pd
 from sportsipy.nfl.boxscore import Boxscore, Boxscores
 
-from definitions import (
-    AGG_DROP_COLS,
-    AGG_MERGE_ON,
-    AGG_RENAME_AWAY,
-    AGG_RENAME_HOME,
-    AWAY_STATS,
-    AWAY_STATS_DROP,
-    ELO_DATA_URL,
-    ELO_DROP_COLS,
-    ELO_TEAMS,
-    HOME_STATS,
-    HOME_STATS_DROP,
-    STD_TEAMS,
-)
+from definitions import Definitions
 from utils.logger import log
 from utils.utils import read_write_data
+
+ELO_DATA_URL = Definitions.ELO_DATA_URL
+AWAY_STATS = Definitions.AWAY_STATS
+AWAY_STATS_RENAME = Definitions.AWAY_STATS_RENAME
+HOME_STATS = Definitions.HOME_STATS
+HOME_STATS_RENAME = Definitions.HOME_STATS_RENAME
+AGG_RENAME_AWAY = Definitions.AGG_RENAME_AWAY
+AGG_RENAME_HOME = Definitions.AGG_RENAME_HOME
+AGG_MERGE_ON = Definitions.AGG_MERGE_ON
+AGG_DROP_COLS = Definitions.AGG_DROP_COLS
+ELO_DROP_COLS = Definitions.ELO_DROP_COLS
+ELO_TEAMS = Definitions.ELO_TEAMS
+STD_TEAMS = Definitions.STD_TEAMS
 
 
 def main():
@@ -84,6 +84,7 @@ def get_season_data(year: int, current_week: int) -> pd.DataFrame:
         # Get and save week's game data
         week_games_name = f"{year}_{week}"
         week_games_df = read_write_data(week_games_name, get_game_data_by_week, year, week)
+        log.debug("week_games_df:\n%s", week_games_df)
         # Concatenate week's game data into season
         season_games_df = pd.concat([season_games_df, week_games_df])
     return season_games_df
@@ -104,6 +105,8 @@ def get_game_data_by_week(year: int, week: int) -> pd.DataFrame:
         home_team_df["week"] = week
         away_team_df["year"] = year
         home_team_df["year"] = year
+        # log.debug("away_team_df:\n%s", away_team_df)
+        # log.debug("home_team_df:\n%s", home_team_df)
         week_games_df = pd.concat([week_games_df, away_team_df], ignore_index=True)
         week_games_df = pd.concat([week_games_df, home_team_df], ignore_index=True)
     return week_games_df
@@ -128,55 +131,58 @@ def parse_game_data(
             }
         )
         try:
+            # Away team won
             if game_df.loc[0, "away_score"] > game_df.loc[0, "home_score"]:
                 away_team_df = pd.merge(
                     away_team_df,
-                    pd.DataFrame({"game_won": [1], "game_lost": [0]}),
+                    pd.DataFrame({"game_won": [float(1.0)], "game_lost": [float(0.0)]}),
                     left_index=True,
                     right_index=True,
                 )
                 home_team_df = pd.merge(
                     home_team_df,
-                    pd.DataFrame({"game_won": [0], "game_lost": [1]}),
+                    pd.DataFrame({"game_won": [float(0.0)], "game_lost": [float(1.0)]}),
                     left_index=True,
                     right_index=True,
                 )
+            # Home team won
             elif game_df.loc[0, "away_score"] < game_df.loc[0, "home_score"]:
                 away_team_df = pd.merge(
                     away_team_df,
-                    pd.DataFrame({"game_won": [0], "game_lost": [1]}),
+                    pd.DataFrame({"game_won": [float(0.0)], "game_lost": [float(1.0)]}),
                     left_index=True,
                     right_index=True,
                 )
                 home_team_df = pd.merge(
                     home_team_df,
-                    pd.DataFrame({"game_won": [1], "game_lost": [0]}),
+                    pd.DataFrame({"game_won": [float(1.0)], "game_lost": [float(0.0)]}),
                     left_index=True,
                     right_index=True,
                 )
+            # Tie game
             else:
                 away_team_df = pd.merge(
                     away_team_df,
-                    pd.DataFrame({"game_won": [0], "game_lost": [0]}),
+                    pd.DataFrame({"game_won": [float(0.5)], "game_lost": [float(0.5)]}),
                     left_index=True,
                     right_index=True,
                 )
                 home_team_df = pd.merge(
                     home_team_df,
-                    pd.DataFrame({"game_won": [0], "game_lost": [0]}),
+                    pd.DataFrame({"game_won": [float(0.5)], "game_lost": [float(0.5)]}),
                     left_index=True,
                     right_index=True,
                 )
         except TypeError:
             away_team_df = pd.merge(
                 away_team_df,
-                pd.DataFrame({"game_won": [np.nan], "game_lost": [np.nan]}),
+                pd.DataFrame({"game_won": [float(0.0)], "game_lost": [float(0.0)]}),
                 left_index=True,
                 right_index=True,
             )
             home_team_df = pd.merge(
                 home_team_df,
-                pd.DataFrame({"game_won": [np.nan], "game_lost": [np.nan]}),
+                pd.DataFrame({"game_won": [float(0.0)], "game_lost": [float(0.0)]}),
                 left_index=True,
                 right_index=True,
             )
@@ -184,17 +190,18 @@ def parse_game_data(
             game_stats.dataframe[AWAY_STATS]
             .reset_index()
             .drop(columns="index")
-            .rename(columns=AWAY_STATS_DROP)
+            .rename(columns=AWAY_STATS_RENAME)
         )
         home_stats_df = (
             game_stats.dataframe[HOME_STATS]
             .reset_index()
             .drop(columns="index")
-            .rename(columns=HOME_STATS_DROP)
+            .rename(columns=HOME_STATS_RENAME)
         )
         away_team_df = pd.merge(away_team_df, away_stats_df, left_index=True, right_index=True)
         home_team_df = pd.merge(home_team_df, home_stats_df, left_index=True, right_index=True)
         try:
+            # Convert ToP from mm:ss to total seconds
             away_team_df["time_of_possession"] = (
                 int(away_team_df["time_of_possession"].loc[0][0:2]) * 60
             ) + int(away_team_df["time_of_possession"].loc[0][3:5])

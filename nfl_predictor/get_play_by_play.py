@@ -1,14 +1,14 @@
 import pandas as pd
 
-from definitions import Definitions
-from utils.logger import log
-from utils.utils import nested_dict_to_df, read_write_data, write_df_to_sql
+from nfl_predictor.constants import Constants
+from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.utils import nested_dict_to_df, read_write_data, write_df_to_sql
 
 START_YEAR = 2023
 END_YEAR = 2023
-ACTIVE_QB_IDS = Definitions.ACTIVE_QB_IDS
-PBP_TEAMS = Definitions.PBP_TEAMS
-TEAMS = Definitions.TEAMS
+ACTIVE_QB_IDS = Constants.ACTIVE_QB_IDS
+PBP_TEAMS = Constants.PBP_TEAMS
+TEAMS = Constants.TEAMS
 
 
 def clean_pbp_data(raw_pbp_df: pd.DataFrame):

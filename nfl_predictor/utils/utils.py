@@ -1,13 +1,14 @@
 import os
+import sys
 
 import pandas as pd
 import sqlalchemy as db
 from numpy import ndarray
 
-from definitions import Definitions
-from utils.logger import log
+from nfl_predictor.constants import Constants
+from nfl_predictor.utils.logger import log
 
-DATA_PATH = Definitions.DATA_PATH
+DATA_PATH = Constants.DATA_PATH
 DB_TYPE = os.getenv("DB_TYPE", "postgresql")
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1:5432")
 DB_USER = os.getenv("DB_USER", "postgres")
@@ -40,7 +41,7 @@ INSP = db.inspect(ENGINE)
 
 
 def read_write_data(data_name: str, func, *args, **kwargs) -> pd.DataFrame:
-    log.debug(f" * Calling {func.__name__}()")
+    log.debug(" * Calling %s()", func.__name__)
     dataframe = pd.DataFrame(func(*args, **kwargs))
     # Write dataframe to CSV file
     write_df_to_csv(dataframe, f"{data_name}.csv")
@@ -55,8 +56,8 @@ def get_dataframe(data_name: str) -> pd.DataFrame:
     elif INSP.has_table(data_name):
         dataframe = read_df_from_sql(data_name)
     else:
-        log.info(f"{data_name} not found!")
-        exit(1)
+        log.info("%s not found!", data_name)
+        sys.exit(1)
     return dataframe
 
 
@@ -79,17 +80,18 @@ def write_df_to_sql(dataframe: pd.DataFrame, table_name: str) -> pd.DataFrame:
 
 
 def display(y_pred: ndarray, x_test: pd.DataFrame) -> None:
-    for game in range(len(y_pred)):
-        away_win_prob = round(y_pred[game] * 100, 2)
-        home_win_prob = round((1 - y_pred[game]) * 100, 2)
-        week = x_test.reset_index().drop(columns="index").loc[game, "week"]
-        away_team = x_test.reset_index().drop(columns="index").loc[game, "away_name"]
-        home_team = x_test.reset_index().drop(columns="index").loc[game, "home_name"]
-        log.info(
+    for idx, game in enumerate(y_pred):
+        away_win_prob = round(game * 100, 2)
+        home_win_prob = round((1 - game) * 100, 2)
+        week = x_test.reset_index().drop(columns="index").loc[idx, "week"]
+        away_team = x_test.reset_index().drop(columns="index").loc[idx, "away_name"]
+        home_team = x_test.reset_index().drop(columns="index").loc[idx, "home_name"]
+        display_string = (
             f"{'Week ' + str(week):<7}: "
             f"{away_team:<21} ({str(away_win_prob) + '%)':<8} at "
             f"{home_team:<21} ({str(home_win_prob) + '%)':<8}"
         )
+        log.info(display_string)
 
 
 def flatten_dict(nested_dict):

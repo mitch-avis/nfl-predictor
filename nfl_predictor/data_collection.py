@@ -7,22 +7,22 @@ import numpy as np
 import pandas as pd
 from sportsipy.nfl.boxscore import Boxscore, Boxscores
 
-from definitions import Definitions
-from utils.logger import log
-from utils.utils import read_write_data
+from nfl_predictor.constants import Constants
+from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.utils import read_write_data
 
-ELO_DATA_URL = Definitions.ELO_DATA_URL
-AWAY_STATS = Definitions.AWAY_STATS
-AWAY_STATS_RENAME = Definitions.AWAY_STATS_RENAME
-HOME_STATS = Definitions.HOME_STATS
-HOME_STATS_RENAME = Definitions.HOME_STATS_RENAME
-AGG_RENAME_AWAY = Definitions.AGG_RENAME_AWAY
-AGG_RENAME_HOME = Definitions.AGG_RENAME_HOME
-AGG_MERGE_ON = Definitions.AGG_MERGE_ON
-AGG_DROP_COLS = Definitions.AGG_DROP_COLS
-ELO_DROP_COLS = Definitions.ELO_DROP_COLS
-ELO_TEAMS = Definitions.ELO_TEAMS
-STD_TEAMS = Definitions.STD_TEAMS
+ELO_DATA_URL = Constants.ELO_DATA_URL
+AWAY_STATS = Constants.AWAY_STATS
+AWAY_STATS_RENAME = Constants.AWAY_STATS_RENAME
+HOME_STATS = Constants.HOME_STATS
+HOME_STATS_RENAME = Constants.HOME_STATS_RENAME
+AGG_RENAME_AWAY = Constants.AGG_RENAME_AWAY
+AGG_RENAME_HOME = Constants.AGG_RENAME_HOME
+AGG_MERGE_ON = Constants.AGG_MERGE_ON
+AGG_DROP_COLS = Constants.AGG_DROP_COLS
+ELO_DROP_COLS = Constants.ELO_DROP_COLS
+ELO_TEAMS = Constants.ELO_TEAMS
+STD_TEAMS = Constants.STD_TEAMS
 
 
 def main():
@@ -45,7 +45,7 @@ def collect_data(start_date: datetime, end_date: datetime, current_week: int) ->
     # Create list of weeks to scrape
     weeks = list(range(1, current_week + 1))
     for year in range(start_year, end_year + 1):
-        log.info(f"Collecting game data for {year}...")
+        log.info("Collecting game data for %s...", year)
         # Get and save season's game data
         season_games_name = f"{year}_season_games"
         season_games_df = read_write_data(season_games_name, get_season_data, year, current_week)
@@ -80,7 +80,7 @@ def get_season_data(year: int, current_week: int) -> pd.DataFrame:
     season_games_df = pd.DataFrame()
     # Step through each week of current season
     for week in range(1, current_week + 1):
-        log.info(f"Scraping Week {week} game data...")
+        log.info("Scraping Week %s game data...", week)
         # Get and save week's game data
         week_games_name = f"{year}_{week}"
         week_games_df = read_write_data(week_games_name, get_game_data_by_week, year, week)
@@ -220,9 +220,9 @@ def parse_game_data(
 def get_schedule(year: int) -> pd.DataFrame:
     weeks = list(range(1, 19))
     schedule_df = pd.DataFrame()
-    log.info(f"Getting {year} schedule...")
+    log.info("Getting %s schedule...", year)
     for week in weeks:
-        log.info(f"Week {week}...")
+        log.info("Week %s...", week)
         date_string = f"{week}-{year}"
         week_scores = Boxscores(week, year)
         time.sleep(3)
@@ -385,7 +385,7 @@ def agg_weekly_data(
         if agg_weekly_df["winning_name"].isna().values.any():
             if agg_weekly_df["winning_name"].isna().sum() == agg_weekly_df.shape[0]:
                 agg_weekly_df["result"] = np.nan
-                log.info(f"Week {week} games have not finished yet.")
+                log.info("Week %s games have not finished yet.", week)
             else:
                 agg_weekly_df.loc[agg_weekly_df["winning_name"].isna(), "result"] = 0
                 agg_weekly_df["result"] = agg_weekly_df["result"].astype("float")

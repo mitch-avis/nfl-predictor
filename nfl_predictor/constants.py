@@ -1,7 +1,7 @@
 import os
 
 
-class Definitions:
+class Constants:
     ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_PATH = os.path.join(ROOT_DIR, "data")
     ELO_DATA_URL = "https://projects.fivethirtyeight.com/nfl-api/nfl_elo.csv"

@@ -2,7 +2,7 @@ import pandas as pd
 
 from nfl_predictor.constants import Constants
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.utils import nested_dict_to_df, read_write_data, write_df_to_sql
+from nfl_predictor.utils.utils import nested_dict_to_df, read_write_data
 
 START_YEAR = 2023
 END_YEAR = 2023
@@ -141,13 +141,11 @@ def main():
     qb_df_name = "2023_qbs"
     qb_df = read_write_data(qb_df_name, parse_qb_data, play_by_play_df)
     log.debug("qb_df:\n%s", qb_df)
-    write_df_to_sql(qb_df, qb_df_name)
     # Parse weekly Team data
     # team_df_name = "all_teams"
     team_df_name = "2023_teams"
     team_df = read_write_data(team_df_name, parse_team_data, play_by_play_df)
     log.debug("team_df:\n%s", team_df)
-    write_df_to_sql(team_df, team_df_name)
 
 
 if __name__ == "__main__":

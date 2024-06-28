@@ -26,11 +26,11 @@ STD_TEAMS = Constants.STD_TEAMS
 
 
 def main():
-    start_date = "2022-09-08"
+    start_date = "2023-09-01"
     start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_date = "2023-01-11"
+    end_date = "2024-02-28"
     end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    current_week = 18
+    current_week = 1
     collect_data(start_date_dt, end_date_dt, current_week)
 
 

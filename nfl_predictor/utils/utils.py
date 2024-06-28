@@ -113,5 +113,5 @@ def nested_dict_to_df(values_dict):
     df = pd.DataFrame.from_dict(flat_dict, orient="index")
     df.index = pd.MultiIndex.from_tuples(df.index)
     df = df.unstack(level=-1)
-    df.columns = df.columns.map("{0[1]}".format)
+    df.columns = df.columns.map("{0[1]}".format)  # pylint: disable=C0209
     return df

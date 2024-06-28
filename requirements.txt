@@ -16,7 +16,7 @@ dill==0.3.8
 executing==2.0.1
 fastparquet==2024.5.0
 flake8==7.1.0
-fsspec==2024.6.0
+fsspec==2024.6.1
 greenlet==3.0.3
 humanfriendly==10.0
 idna==3.7
@@ -32,7 +32,6 @@ matplotlib-inline==0.1.7
 mccabe==0.7.0
 mypy-extensions==1.0.0
 nest-asyncio==1.6.0
-nfl_data_py @ file:///C:/Users/Mitch/Workspace/Python/nfl-predictor/wheels/nfl_data_py-0.4.0-py3-none-any.whl#sha256=95c9430796b6bd532c9dd070c434b5d7b6e75d861cc0c8957185340dd67c0cf0
 numpy==2.0.0
 packaging==24.1
 pandas==2.2.2
@@ -46,7 +45,7 @@ pure-eval==0.2.2
 pycodestyle==2.12.0
 pyflakes==3.2.0
 Pygments==2.18.0
-pylint==3.2.4
+pylint==3.2.5
 pyquery==2.0.0
 pyreadline3==3.4.1
 python-dateutil==2.9.0.post0
@@ -58,7 +57,6 @@ scikit-learn==1.5.0
 scipy==1.14.0
 setuptools==70.1.1
 six==1.16.0
-sportsipy @ file:///C:/Users/Mitch/Workspace/Python/nfl-predictor/wheels/sportsipy-0.6.0-py3-none-any.whl#sha256=d45bd6a64786c9042a6bcfe7a5eb8a8cd7e8378b5414d2f5cda4ae61de41bac4
 SQLAlchemy==2.0.31
 stack-data==0.6.3
 threadpoolctl==3.5.0
@@ -71,3 +69,7 @@ urllib3==2.2.2
 wcwidth==0.2.13
 wheel==0.43.0
 xgboost==2.1.0
+
+# Local package
+./wheels/nfl_data_py-0.4.0-py3-none-any.whl
+./wheels/sportsipy-0.6.0-py3-none-any.whl

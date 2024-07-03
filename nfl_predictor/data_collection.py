@@ -9,11 +9,11 @@ from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.utils import read_write_data
 
-STARTING_SEASON = 2023
-NUM_SEASONS = 1
+STARTING_SEASON = 2000
+NUM_SEASONS = 24
 CURRENT_WEEK = 1
 
-REFRESH_ELO = False
+REFRESH_ELO = True
 REFRESH_SEASON = False
 REFRESH_WEEKS = False
 REFRESH_SCHEDULE = False
@@ -34,6 +34,10 @@ TEAMS = constants.TEAMS
 
 
 def main() -> None:
+    read_write_data("all_data", collect_data, force_refresh=True)
+
+
+def collect_data() -> None:
     # Get and save latest ELO spreadsheet
     elo_df_name = "nfl_elo"
     elo_df = read_write_data(
@@ -53,6 +57,7 @@ def main() -> None:
         end_season - start_season,
         list(range(start_season, end_season)),
     )
+    all_data_df = pd.DataFrame()
     for season in range(start_season, end_season):
         # Create list of weeks to scrape; use all weeks for past seasons, or only up to the current
         # week if scraping the current season
@@ -97,13 +102,14 @@ def main() -> None:
         combined_data_df = read_write_data(
             combined_data_df_name,
             combine_data,
+            season,
             agg_games_df,
             yearly_elo_df,
             force_refresh=True,
         )
         # Get and save completed games
         comp_games_df_name = f"{season}/completed_games"
-        read_write_data(
+        comp_games_df = read_write_data(
             comp_games_df_name,
             parse_completed_games,
             combined_data_df,
@@ -117,6 +123,9 @@ def main() -> None:
         #     combined_data_df,
         #     force_refresh=True,
         # )
+        # Concatenate season's game data into all_data
+        all_data_df = pd.concat([all_data_df, comp_games_df])
+    return all_data_df
 
 
 def get_elo() -> pd.DataFrame:
@@ -476,7 +485,7 @@ def get_yearly_elo(elo_df: pd.DataFrame, year: int) -> pd.DataFrame:
     return yearly_elo_df
 
 
-def combine_data(agg_games_df: pd.DataFrame, elo_df: pd.DataFrame) -> pd.DataFrame:
+def combine_data(year: int, agg_games_df: pd.DataFrame, elo_df: pd.DataFrame) -> pd.DataFrame:
     agg_games_df = pd.merge(
         agg_games_df,
         elo_df,
@@ -489,6 +498,7 @@ def combine_data(agg_games_df: pd.DataFrame, elo_df: pd.DataFrame) -> pd.DataFra
     agg_games_df = agg_games_df.drop(
         columns=["elo1_pre", "elo2_pre", "qb1_value_pre", "qb2_value_pre"]
     )
+    agg_games_df.insert(loc=4, column="year", value=year)
     # Set team abbreviations back to normal ones
     agg_games_df["home_abbr"] = agg_games_df["home_abbr"].replace(STD_TEAMS, TEAMS)
     agg_games_df["away_abbr"] = agg_games_df["away_abbr"].replace(STD_TEAMS, TEAMS)
@@ -506,8 +516,8 @@ def parse_completed_games(combined_data_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def parse_games_to_predict(combined_data_df: pd.DataFrame) -> pd.DataFrame:
-    pred_games_df = pd.DataFrame(combined_data_df[combined_data_df["week"] == CURRENT_WEEK])
-    return pred_games_df
+    games_to_predict_df = pd.DataFrame(combined_data_df[combined_data_df["week"] == CURRENT_WEEK])
+    return games_to_predict_df
 
 
 if __name__ == "__main__":

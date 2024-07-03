@@ -8,7 +8,7 @@ LOGGING_CONFIG = {
         "default": {
             "format": (
                 "[%(asctime)s.%(msecs)03d][%(levelname)s]"
-                "[%(name)s:%(filename)s:%(funcName)s:%(lineno)s][%(threadName)s] %(message)s"
+                "[%(filename)s:%(funcName)s:%(lineno)s] %(message)s"
             ),
             "datefmt": "%Y-%m-%d %H:%M:%S",
             "class": "coloredlogs.ColoredFormatter",

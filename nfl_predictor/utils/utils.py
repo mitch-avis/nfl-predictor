@@ -4,10 +4,10 @@ import sys
 import pandas as pd
 from numpy import ndarray
 
-from nfl_predictor.constants import Constants
+from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 
-DATA_PATH = Constants.DATA_PATH
+DATA_PATH = constants.DATA_PATH
 
 
 def read_write_data(data_name: str, func, *args, **kwargs) -> pd.DataFrame:

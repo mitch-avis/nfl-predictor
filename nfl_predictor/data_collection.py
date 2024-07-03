@@ -1,20 +1,22 @@
-from datetime import datetime
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
+from dateutil.relativedelta import relativedelta
 from sportsipy.nfl.boxscore import Boxscore, Boxscores
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.utils import read_df_from_csv, read_write_data
+from nfl_predictor.utils.utils import read_write_data
 
-START_DATE = "2023-09-01"
-END_DATE = "2025-02-28"
-CURRENT_WEEK = 18
+STARTING_SEASON = 2023
+NUM_SEASONS = 1
+CURRENT_WEEK = 1
 
 REFRESH_ELO = False
-REFRESH_SCHEDULE = False
 REFRESH_SEASON = False
+REFRESH_WEEKS = False
+REFRESH_SCHEDULE = False
 
 ELO_DATA_URL = constants.ELO_DATA_URL
 AWAY_STATS = constants.AWAY_STATS
@@ -28,86 +30,70 @@ AGG_DROP_COLS = constants.AGG_DROP_COLS
 ELO_DROP_COLS = constants.ELO_DROP_COLS
 ELO_TEAMS = constants.ELO_TEAMS
 STD_TEAMS = constants.STD_TEAMS
+TEAMS = constants.TEAMS
 
 
-def main():
-    start_date_dt = datetime.strptime(START_DATE, "%Y-%m-%d")
-    end_date_dt = datetime.strptime(END_DATE, "%Y-%m-%d")
-    collect_data(start_date_dt, end_date_dt, CURRENT_WEEK)
-
-
-def collect_data(start_date: datetime, end_date: datetime, current_week: int) -> None:
-    # Get start year from start date
-    start_year = int(start_date.year)
-    # Ensure end date is not later than current date
-    today_dt = datetime.now()
-    # today_dt = datetime.strptime("2024-12-08", "%Y-%m-%d")
-    end_date = min(end_date, today_dt)
-    end_year = int(end_date.year)
-    # Get and save each season's schedule
-    for year in range(start_year, end_year + 1):
-        log.info("Collecting schedule for %s...", year)
-        schedule_df_name = f"{year}_schedule"
-        schedule_df = read_write_data(
-            schedule_df_name,
-            get_schedule,
-            year,
-            force_refresh=REFRESH_SCHEDULE,
-        )
-    # Get and save latest ELO spreadsheet, overwriting old one (if it exists)
+def main() -> None:
+    # Get and save latest ELO spreadsheet
     elo_df_name = "nfl_elo"
     elo_df = read_write_data(
         elo_df_name,
         get_elo,
         force_refresh=REFRESH_ELO,
     )
-    # Check if end date is before the start of the current season and set end_year accordingly
-    if end_date.year == today_dt.year and end_date.month < 9:
-        end_year = int(end_date.year - 1)
-    for year in range(start_year, end_year + 1):
-        # Create list of weeks to scrape
-        if year < end_year + 1:
-            if year < 2021:
+    # Create Date objects for start and end dates, using set number of seasons
+    start_date = date(STARTING_SEASON, 9, 1)
+    end_date = start_date + relativedelta(years=NUM_SEASONS - 1) + relativedelta(months=6)
+    start_season = start_date.year
+    end_season = end_date.year
+    today = date.today()
+    current_season = today.year - 1 if today.month <= 3 else today.year
+    log.info(
+        "Collecting NFL data for the following [%s] season(s): %s",
+        end_season - start_season,
+        list(range(start_season, end_season)),
+    )
+    for season in range(start_season, end_season):
+        # Create list of weeks to scrape; use all weeks for past seasons, or only up to the current
+        # week if scraping the current season
+        if season < current_season:
+            if season < 2021:
                 weeks = list(range(1, 18))
             else:
                 weeks = list(range(1, 19))
         else:
-            weeks = list(range(1, current_week + 1))
+            weeks = list(range(1, CURRENT_WEEK + 1))
         # Get and save season's game data
-        log.info("Collecting game data for %s...", year)
-        season_games_df_name = f"{year}_season_games"
+        log.info("Collecting game data for the %s season...", season)
+        season_games_df_name = f"{season}/season_games"
         season_games_df = read_write_data(
             season_games_df_name,
             get_season_data,
-            year,
+            season,
             weeks,
             force_refresh=REFRESH_SEASON,
         )
-        # Get current year's schedule
-        schedule_df = read_df_from_csv(f"{year}_schedule.csv")
         # Get and save aggregate game data
-        agg_games_df_name = f"{year}_agg_games"
+        agg_games_df_name = f"{season}/agg_games"
         agg_games_df = read_write_data(
             agg_games_df_name,
             agg_weekly_data,
-            schedule_df,
             season_games_df,
-            current_week,
+            season,
             weeks,
             force_refresh=True,
         )
         # Get and save year's ELO ratings
-        yearly_elo_df_name = f"{year}_elo"
+        yearly_elo_df_name = f"{season}/elo"
         yearly_elo_df = read_write_data(
             yearly_elo_df_name,
             get_yearly_elo,
             elo_df,
-            start_date,
-            end_date,
+            season,
             force_refresh=True,
         )
         # Get and save combined data
-        combined_data_df_name = f"{year}_combined_data"
+        combined_data_df_name = f"{season}/combined_data"
         combined_data_df = read_write_data(
             combined_data_df_name,
             combine_data,
@@ -116,22 +102,21 @@ def collect_data(start_date: datetime, end_date: datetime, current_week: int) ->
             force_refresh=True,
         )
         # Get and save completed games
-        comp_games_df_name = f"{year}_completed_games"
-        _ = read_write_data(
+        comp_games_df_name = f"{season}/completed_games"
+        read_write_data(
             comp_games_df_name,
             parse_completed_games,
             combined_data_df,
             force_refresh=True,
         )
-        # Get and save games to predict
-        pred_games_df_name = f"{year}_week_{current_week:>02}_pred_games"
-        _ = read_write_data(
-            pred_games_df_name,
-            parse_games_to_predict,
-            combined_data_df,
-            current_week,
-            force_refresh=True,
-        )
+        # # Get and save games to predict
+        # pred_games_df_name = f"{season}/week_{CURRENT_WEEK:>02}_games_to_predict"
+        # read_write_data(
+        #     pred_games_df_name,
+        #     parse_games_to_predict,
+        #     combined_data_df,
+        #     force_refresh=True,
+        # )
 
 
 def get_elo() -> pd.DataFrame:
@@ -139,52 +124,24 @@ def get_elo() -> pd.DataFrame:
     return elo_df
 
 
-def get_schedule(year: int) -> pd.DataFrame:
-    # Create list of weeks to scrape
-    if year < 2021:
-        weeks = list(range(1, 18))
-    else:
-        weeks = list(range(1, 19))
-    schedule_df = pd.DataFrame()
-    log.info("Scraping %s schedule...", year)
-    for week in weeks:
-        log.info("Week %s...", week)
-        date_string = f"{week}-{year}"
-        week_scores = Boxscores(week, year)
-        week_games_df = pd.DataFrame()
-        for game in range(len(week_scores.games[date_string])):
-            game_df = pd.DataFrame(week_scores.games[date_string][game], index=[0])[
-                [
-                    "away_name",
-                    "away_abbr",
-                    "home_name",
-                    "home_abbr",
-                    "winning_name",
-                    "winning_abbr",
-                ]
-            ]
-            game_df["week"] = week
-            week_games_df = pd.concat([week_games_df, game_df])
-        schedule_df = pd.concat([schedule_df, week_games_df]).reset_index(drop=True)
-    return schedule_df
-
-
 def get_season_data(year: int, weeks: list) -> pd.DataFrame:
     season_games_df = pd.DataFrame()
+    # Skip scraping game data if it's a new season
+    if len(weeks) == 1:
+        return season_games_df
     # Step through each week of current season
     log.info("Scraping game data for %s...", year)
     for week in weeks:
         log.info("Collecting game data for Week %s...", week)
         # Get and save week's game data
-        week_games_name = f"{year}_week_{week:>02}_game_data"
+        week_games_name = f"{year}/week_{week:>02}_game_data"
         week_games_df = read_write_data(
             week_games_name,
             get_game_data_by_week,
             year,
             week,
-            force_refresh=False,
+            force_refresh=REFRESH_WEEKS,
         )
-        # log.debug("week_games_df:\n%s", week_games_df)
         # Concatenate week's game data into season
         season_games_df = pd.concat([season_games_df, week_games_df])
     return season_games_df
@@ -205,8 +162,6 @@ def get_game_data_by_week(year: int, week: int) -> pd.DataFrame:
         home_team_df["week"] = week
         away_team_df["year"] = year
         home_team_df["year"] = year
-        # log.debug("away_team_df:\n%s", away_team_df)
-        # log.debug("home_team_df:\n%s", home_team_df)
         week_games_df = pd.concat([week_games_df, away_team_df], ignore_index=True)
         week_games_df = pd.concat([week_games_df, home_team_df], ignore_index=True)
     return week_games_df
@@ -317,10 +272,17 @@ def parse_game_data(
     return away_team_df, home_team_df
 
 
-def agg_weekly_data(
-    schedule_df: pd.DataFrame, season_games_df: pd.DataFrame, current_week: int, weeks: list
-) -> pd.DataFrame:
-    schedule_df = schedule_df[schedule_df.week < current_week + 1]
+def agg_weekly_data(season_games_df: pd.DataFrame, year: int, weeks: list) -> pd.DataFrame:
+    # Get and save season's schedule
+    log.info("Collecting schedule for %s...", year)
+    schedule_df_name = f"{year}/schedule"
+    schedule_df = read_write_data(
+        schedule_df_name,
+        get_schedule,
+        year,
+        force_refresh=REFRESH_SCHEDULE,
+    )
+    # TODO: Create empty df for first week of new season and skip all this
     agg_games_df = pd.DataFrame()
     for week in weeks:
         games_df = schedule_df[schedule_df.week == week]
@@ -471,10 +433,42 @@ def agg_weekly_data(
     return agg_games_df
 
 
-def get_yearly_elo(elo_df: pd.DataFrame, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+def get_schedule(year: int) -> pd.DataFrame:
+    # Create list of weeks to scrape
+    if year < 2021:
+        weeks = list(range(1, 18))
+    else:
+        weeks = list(range(1, 19))
+    schedule_df = pd.DataFrame()
+    log.info("Scraping %s schedule...", year)
+    for week in weeks:
+        log.info("Week %s...", week)
+        date_string = f"{week}-{year}"
+        week_scores = Boxscores(week, year)
+        week_games_df = pd.DataFrame()
+        for game in range(len(week_scores.games[date_string])):
+            game_df = pd.DataFrame(week_scores.games[date_string][game], index=[0])[
+                [
+                    "away_name",
+                    "away_abbr",
+                    "home_name",
+                    "home_abbr",
+                    "winning_name",
+                    "winning_abbr",
+                ]
+            ]
+            game_df["week"] = week
+            week_games_df = pd.concat([week_games_df, game_df])
+        schedule_df = pd.concat([schedule_df, week_games_df]).reset_index(drop=True)
+    return schedule_df
+
+
+def get_yearly_elo(elo_df: pd.DataFrame, year: int) -> pd.DataFrame:
     yearly_elo_df = elo_df.copy()
     yearly_elo_df = yearly_elo_df.drop(columns=ELO_DROP_COLS)
     yearly_elo_df["date"] = pd.to_datetime(yearly_elo_df["date"])
+    start_date = datetime(year, 9, 1)
+    end_date = datetime(year + 1, 3, 1)
     mask = (yearly_elo_df["date"] >= start_date) & (yearly_elo_df["date"] <= end_date)
     yearly_elo_df = yearly_elo_df.loc[mask]
     yearly_elo_df["team1"] = yearly_elo_df["team1"].replace(ELO_TEAMS, STD_TEAMS)
@@ -495,6 +489,14 @@ def combine_data(agg_games_df: pd.DataFrame, elo_df: pd.DataFrame) -> pd.DataFra
     agg_games_df = agg_games_df.drop(
         columns=["elo1_pre", "elo2_pre", "qb1_value_pre", "qb2_value_pre"]
     )
+    # Set team abbreviations back to normal ones
+    agg_games_df["home_abbr"] = agg_games_df["home_abbr"].replace(STD_TEAMS, TEAMS)
+    agg_games_df["away_abbr"] = agg_games_df["away_abbr"].replace(STD_TEAMS, TEAMS)
+    # Move "result" column to the end
+    agg_games_df = agg_games_df[
+        [col for col in agg_games_df if col not in ["result"]]
+        + [col for col in ["result"] if col in agg_games_df]
+    ]
     return agg_games_df
 
 
@@ -503,8 +505,8 @@ def parse_completed_games(combined_data_df: pd.DataFrame) -> pd.DataFrame:
     return comp_games_df
 
 
-def parse_games_to_predict(combined_data_df: pd.DataFrame, current_week: int) -> pd.DataFrame:
-    pred_games_df = pd.DataFrame(combined_data_df[combined_data_df["week"] == current_week])
+def parse_games_to_predict(combined_data_df: pd.DataFrame) -> pd.DataFrame:
+    pred_games_df = pd.DataFrame(combined_data_df[combined_data_df["week"] == CURRENT_WEEK])
     return pred_games_df
 
 

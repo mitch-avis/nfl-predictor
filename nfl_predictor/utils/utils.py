@@ -42,6 +42,8 @@ def read_df_from_csv(file_name: str) -> pd.DataFrame:
 
 
 def write_df_to_csv(dataframe: pd.DataFrame, file_name: str) -> pd.DataFrame:
+    if not os.path.exists(os.path.dirname(f"{DATA_PATH}/{file_name}")):
+        os.makedirs(os.path.dirname(f"{DATA_PATH}/{file_name}"))
     dataframe.to_csv(f"{DATA_PATH}/{file_name}", index=True)
 
 

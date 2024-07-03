@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Callable
 
 import pandas as pd
 from numpy import ndarray
@@ -10,14 +11,16 @@ from nfl_predictor.utils.logger import log
 DATA_PATH = constants.DATA_PATH
 
 
-def read_write_data(data_name: str, func, *args, **kwargs) -> pd.DataFrame:
+def read_write_data(
+    data_name: str, func: Callable, *args, force_refresh: bool = False, **kwargs
+) -> pd.DataFrame:
     dataframe = pd.DataFrame()
     # Get dataframe from CSV if it exists
     if os.path.isfile(f"{DATA_PATH}/{data_name}.csv"):
         dataframe = read_df_from_csv(f"{data_name}.csv")
     # Otherwise,
-    if dataframe.empty:
-        log.debug(" * Calling %s()", func.__name__)
+    if dataframe.empty or force_refresh:
+        log.debug("* Calling %s()", func.__name__)
         dataframe = pd.DataFrame(func(*args, **kwargs))
         # Write dataframe to CSV file
         write_df_to_csv(dataframe, f"{data_name}.csv")
@@ -34,7 +37,7 @@ def get_dataframe(data_name: str) -> pd.DataFrame:
 
 
 def read_df_from_csv(file_name: str) -> pd.DataFrame:
-    dataframe = pd.read_csv(f"{DATA_PATH}/{file_name}", low_memory=False)
+    dataframe = pd.read_csv(f"{DATA_PATH}/{file_name}", index_col=0)
     return dataframe
 
 

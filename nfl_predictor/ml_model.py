@@ -6,7 +6,7 @@ import xgboost as xgb
 from sklearn.linear_model import LogisticRegression
 
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.utils import display, get_dataframe
+from nfl_predictor.utils.utils import display_predictions, read_df_from_csv
 
 NUM_ROUNDS = 1000
 
@@ -15,9 +15,9 @@ def main():
     year = 2022
     current_week = 18
     comp_games_name = f"{year}_comp_games"
-    comp_games_df = get_dataframe(comp_games_name)
+    comp_games_df = read_df_from_csv(comp_games_name)
     pred_games_name = f"{year}_{current_week}_pred_games"
-    pred_games_df = get_dataframe(pred_games_name)
+    pred_games_df = read_df_from_csv(pred_games_name)
     predict_games(comp_games_df, pred_games_df)
 
 
@@ -54,7 +54,7 @@ def predict_games(comp_games_df: pd.DataFrame, pred_games_df: pd.DataFrame) -> N
     y_pred = clf.predict_proba(x_test)
     y_pred = y_pred[:, 1]
 
-    display(y_pred, test_df)
+    display_predictions(y_pred, test_df)
     dtest = xgb.DMatrix(x_test, y_test, feature_names=x_test.columns)
     dtrain = xgb.DMatrix(x_train, y_train, feature_names=x_train.columns)
     params = {
@@ -80,7 +80,7 @@ def predict_games(comp_games_df: pd.DataFrame, pred_games_df: pd.DataFrame) -> N
     y_pred = clf.predict_proba(x_test)
     y_pred = y_pred[:, 1]
 
-    display(y_pred, pred_games_df)
+    display_predictions(y_pred, pred_games_df)
 
 
 if __name__ == "__main__":

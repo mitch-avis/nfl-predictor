@@ -1,3 +1,13 @@
+"""
+This module defines constants used throughout the project.
+
+It includes paths for root directory and data storage, URLs for data sources, and standardized lists
+of NFL team abbreviations.  These constants are utilized in various parts of the project for data
+retrieval, storage, and processing tasks.
+"""
+
+# pylint: disable=too-many-lines
+
 import os
 from pathlib import Path
 

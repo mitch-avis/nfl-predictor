@@ -1,31 +1,23 @@
 """
-This module is responsible for collecting and processing NFL game data, including ELO ratings and
-game statistics, for a specified range of seasons.  It utilizes the sportsipy library to fetch game
-data and the pandas library for data manipulation.
+This module orchestrates the collection, processing, and storage of NFL game data across multiple
+seasons.  It includes functionality to:
 
-The data collection process can be customized through various flags to refresh different components
-of the data, such as ELO ratings, season data, weekly data, and the game schedule.  The constants
-module provides necessary configurations like URLs for data sources and mappings for data
-processing.
+1. Collect and aggregate game data and ELO ratings for NFL teams across multiple seasons.
+2. Extract and save completed games data.
+3. Identify and save upcoming games for the current week that require predictions.
 
-Functions:
-    main(): The main entry point for initiating the data collection and processing workflow.
+The module ensures data freshness by incorporating a `force_refresh` mechanism, which can be used to
+bypass cached data and fetch the latest information available.
 
-Constants:
-    STARTING_SEASON (int):      The starting season year for data collection.
-    NUM_SEASONS (int):          The number of seasons to collect data for, starting from
-                                STARTING_SEASON.
-    CURRENT_WEEK (int):         The current week number for which data is to be collected.
-    REFRESH_ELO (bool):         Flag to refresh ELO ratings data.
-    REFRESH_SEASON (bool):      Flag to refresh season data.
-    REFRESH_WEEKS (bool):       Flag to refresh weekly data.
-    REFRESH_SCHEDULE (bool):    Flag to refresh the game schedule.
-    ELO_DATA_URL (str):         URL for fetching ELO ratings data.
+Functions within this module handle various steps of the data collection and processing workflow,
+including:
+- Fetching the latest ELO ratings for NFL teams.
+- Scraping game data for specified seasons and weeks.
+- Aggregating collected data into a comprehensive dataset.
+- Parsing completed games and games to predict for the current week.
 
-Dependencies:
-    pandas:     Used for data manipulation and storage.
-    sportsipy:  Used for fetching NFL game data.
-    dateutil:   Used for date calculations.
+This module is designed to support predictive modeling efforts by providing a rich dataset that
+includes historical game outcomes and team performance metrics.
 """
 
 from datetime import date, datetime

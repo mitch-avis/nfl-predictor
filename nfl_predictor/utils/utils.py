@@ -54,7 +54,7 @@ def read_write_data(
 
     # Check if the CSV file exists and read it if force_refresh is not True
     if os.path.isfile(file_path) and not force_refresh:
-        dataframe = read_df_from_csv(file_path)
+        dataframe = read_df_from_csv(file_path, check_exists=False)
 
     # If the DataFrame is empty (file doesn't exist) or force_refresh is True, generate the data
     if dataframe.empty or force_refresh:
@@ -66,7 +66,7 @@ def read_write_data(
     return dataframe
 
 
-def read_df_from_csv(file_name: str, check_exists: bool = True) -> pd.DataFrame:
+def read_df_from_csv(file_path: str, check_exists: bool = True) -> pd.DataFrame:
     """
     Reads a DataFrame from a CSV file, optionally checking if the file exists first.
 
@@ -76,8 +76,7 @@ def read_df_from_csv(file_name: str, check_exists: bool = True) -> pd.DataFrame:
     first column set as the index.
 
     Args:
-        file_name (str):                The name of the CSV file to read, including the '.csv'
-                                        extension.
+        file_path (str):                The full path of the CSV file to read.
         check_exists (bool, optional):  Whether to check if the file exists before reading. Defaults
                                         to True.
 
@@ -87,44 +86,41 @@ def read_df_from_csv(file_name: str, check_exists: bool = True) -> pd.DataFrame:
     Raises:
         SystemExit: If `check_exists` is True and the CSV file does not exist.
     """
-    # Construct the full path to the CSV file
-    full_path = f"{DATA_PATH}/{file_name}"
-
     # Check if the file exists, if required
-    if check_exists and not os.path.isfile(full_path):
+    if check_exists and not os.path.isfile(file_path):
         # Log an error message and exit if the file does not exist
-        log.info("%s not found!", file_name)
+        log.info("%s not found!", os.path.basename(file_path))
         sys.exit(1)
 
     # Read the CSV file into a DataFrame, using the first column as the index
-    dataframe = pd.read_csv(full_path, index_col=0)
+    dataframe = pd.read_csv(file_path, index_col=0)
     return dataframe
 
 
-def write_df_to_csv(dataframe: pd.DataFrame, file_name: str) -> None:
+def write_df_to_csv(dataframe: pd.DataFrame, file_path: str) -> None:
     """
     Writes a DataFrame to a CSV file, ensuring the directory exists.
 
     This function checks if the directory for the specified CSV file exists within a predefined data
-    path (`DATA_PATH`).  If the directory does not exist, it is created. Then, the DataFrame is
+    path (`DATA_PATH`).  If the directory does not exist, it is created.  Then, the DataFrame is
     written to the CSV file at the specified path, including the DataFrame's index.
 
     Args:
         dataframe (pd.DataFrame):   The DataFrame to be written to a CSV file.
-        file_name (str):            The name of the target CSV file, including the '.csv' extension.
+        file_path (str):            The full path of the target CSV file.
 
     Returns:
         None
     """
     # Construct the directory path for the CSV file
-    directory_path = os.path.dirname(f"{DATA_PATH}/{file_name}")
+    directory_path = os.path.dirname(file_path)
 
     # Create the directory if it does not exist
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
 
     # Write the DataFrame to the CSV file, including the index
-    dataframe.to_csv(f"{DATA_PATH}/{file_name}", index=True)
+    dataframe.to_csv(file_path, index=True)
 
 
 def display_predictions(y_pred: ndarray, x_test: pd.DataFrame) -> None:

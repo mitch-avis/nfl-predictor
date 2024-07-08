@@ -39,14 +39,14 @@ from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.utils import read_write_data
 
-STARTING_SEASON = 2023
-NUM_SEASONS = 2
+STARTING_SEASON = 2000
+NUM_SEASONS = 24
 CURRENT_WEEK = 1
 
 REFRESH_ELO = True
-REFRESH_SEASON = False
-REFRESH_WEEKS = False
-REFRESH_SCHEDULE = False
+REFRESH_SEASON = True
+REFRESH_WEEKS = True
+REFRESH_SCHEDULE = True
 
 ELO_DATA_URL = constants.ELO_DATA_URL
 AWAY_STATS = constants.AWAY_STATS

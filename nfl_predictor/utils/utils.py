@@ -11,6 +11,7 @@ needs.
 
 import os
 import sys
+from datetime import date, timedelta
 from typing import Callable
 
 import pandas as pd
@@ -121,6 +122,66 @@ def write_df_to_csv(dataframe: pd.DataFrame, file_path: str) -> None:
 
     # Write the DataFrame to the CSV file, including the index
     dataframe.to_csv(file_path, index=True)
+
+
+def determine_nfl_week_by_date(given_date: date) -> int:
+    """
+    Helper function that returns the NFL week number based on a given date.
+
+    The NFL season starts on the Thursday following the first Monday of September, and each NFL week
+    runs from Tuesday to the following Monday.  This function calculates the NFL week number for a
+    given date, considering the structure of the NFL season.  It treats the offseason period after
+    the previous season as the start of the new season for dates before the current season's start.
+
+    Args:
+        given_date (date):  The date for which the NFL week number is to be determined.
+
+    Returns:
+        week_num (int): The NFL week number, ranging from 1 to 18.  Returns 1 if the date is during
+                        the offseason period after the previous season, effectively considering it
+                        as the start of the new season.  Returns 0 if the date is before the
+                        previous season's start.
+    """
+    # Determine the given season's start date
+    season_start = get_season_start(given_date.year)
+
+    # If given_date is before season's start, check if it's closer to the previous season's start
+    if given_date < season_start:
+        previous_season_start = get_season_start(given_date.year - 1)
+        # If today is after the previous season start, use it
+        if given_date >= previous_season_start:
+            # Treat the offseason after the previous season as the start of the new season
+            return 1
+        # Indicates the date is before the previous season's start
+        return 0
+
+    # Calculate the week number, adjusting for the season structure
+    week_number = ((given_date - season_start).days // 7) + 1
+
+    # Ensure week number falls within the 1 to 18 range; otherwise, return 1 for offseason
+    return max(1, min(week_number, 18)) if week_number > 0 else 1
+
+
+def get_season_start(year: int) -> date:
+    """
+    Calculate the start date of the NFL season for a given year.
+
+    The NFL season starts on the Thursday following the first Monday of September each year.  This
+    function calculates that start date based on the year provided.
+
+    Args:
+        year (int): The year for which the NFL season start date is to be calculated.
+
+    Returns:
+        season_start (date):    The calculated start date of the NFL season.
+    """
+    # Calculate the date for the first of September of the given year
+    sept_first = date(year, 9, 1)
+    # Calculate the date for the first Monday of September
+    first_monday = sept_first + timedelta((7 - sept_first.weekday()) % 7)
+    # The season starts on the Thursday following the first Monday of September
+    season_start = first_monday + timedelta(days=3)
+    return season_start
 
 
 def display_predictions(y_pred: ndarray, x_test: pd.DataFrame) -> None:

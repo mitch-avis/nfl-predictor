@@ -1,4 +1,5 @@
-"""Module for machine learning utilities in the NFL predictor project.
+"""
+Module for machine learning utilities in the NFL predictor project.
 
 This module contains functions for displaying predictions, flattening nested dictionaries, and
 converting nested dictionaries to pandas DataFrames. These utilities support the analysis and

@@ -13,7 +13,9 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent.parent
 DATA_PATH = os.path.join(ROOT_DIR, "data")
-# ELO_DATA_URL = "https://projects.fivethirtyeight.com/nfl-api/nfl_elo.csv"
+SEASON_END_MONTH = 2  # NFL season typically ends in February
+WEEKS_BEFORE_2021 = 17  # Weeks in seasons before 2021
+WEEKS_FROM_2021_ONWARDS = 18  # Weeks from 2021 onwards
 ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
 TEAMS = [
     "ARI",

@@ -1,8 +1,9 @@
 import pandas as pd
 
 from nfl_predictor import constants
+from nfl_predictor.utils.csv_utils import read_write_data
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.utils import nested_dict_to_df, read_write_data
+from nfl_predictor.utils.ml_utils import nested_dict_to_df
 
 START_YEAR = 2023
 END_YEAR = 2023

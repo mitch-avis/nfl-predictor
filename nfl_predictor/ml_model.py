@@ -5,8 +5,9 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.linear_model import LogisticRegression
 
+from nfl_predictor.utils.csv_utils import read_df_from_csv
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.utils import display_predictions, read_df_from_csv
+from nfl_predictor.utils.ml_utils import display_predictions
 
 NUM_ROUNDS = 1000
 

@@ -1,14 +1,19 @@
 """
-This module configures a logger with a specific format and color support for console output.
+Implements a logging system for the NFL predictor project, providing a unified approach to logging
+across the application. This module configures log levels and formats, facilitating debugging and
+monitoring by recording operational events and errors.
 
-The logger is configured to display messages with timestamps, log level, source file name, function
-name, and line number.  It uses the `coloredlogs` package to enhance the log output with colors,
-making it easier to distinguish between different levels of log messages.  The log messages are
-output to stderr.
+Features:
+- Configurable log levels to control the verbosity of log messages.
+- Standardized log format across the application for consistency.
+- Integration with Python's built-in logging module for robust log management.
 
-Attributes:
-    LOGGING_CONFIG (dict):  Configuration dictionary for setting up the logging.
-    log (logging.Logger):   Configured logger instance for use throughout the application.
+Usage:
+This module is used throughout the project to log various events, errors, and informational
+messages. It aids in debugging and provides insights into the application's operation.
+
+Dependencies:
+- Python's logging module: Utilized for all logging operations.
 """
 
 import logging

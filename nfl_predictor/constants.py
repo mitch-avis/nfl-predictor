@@ -1,12 +1,21 @@
-"""
-This module defines constants used throughout the project.
-
-It includes paths for root directory and data storage, URLs for data sources, and standardized lists
-of NFL team abbreviations.  These constants are utilized in various parts of the project for data
-retrieval, storage, and processing tasks.
-"""
-
 # pylint: disable=too-many-lines
+"""
+Defines constants used across the NFL predictor project, including paths, NFL season configuration,
+team abbreviations, statistical metrics, and player information. Centralizing these configurations
+facilitates maintenance and ensures consistency across the project.
+
+Constants Include:
+- ROOT_DIR, DATA_PATH: Directories for the project root and data storage.
+- SEASON_END_MONTH, WEEKS_BEFORE_2021, WEEKS_FROM_2021_ONWARDS: NFL season configurations.
+- ELO_DATA_URL: URL for fetching ELO ratings.
+- TEAMS, PBP_TEAMS, ELO_TEAMS: Team abbreviations in various formats.
+- BOXSCORE_STATS, AGG_METRICS: Statistical metrics for analysis.
+- ELO_DROP_COLS: Columns to exclude from the ELO dataset.
+- ACTIVE_QB_IDS: Information on active quarterbacks including names, draft years, and numbers.
+
+This module plays a crucial role in ensuring that all parts of the project refer to the same
+constants, thereby maintaining data integrity and consistency.
+"""
 
 import os
 from pathlib import Path
@@ -17,6 +26,8 @@ SEASON_END_MONTH = 2  # NFL season typically ends in February
 WEEKS_BEFORE_2021 = 17  # Weeks in seasons before 2021
 WEEKS_FROM_2021_ONWARDS = 18  # Weeks from 2021 onwards
 ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
+
+# Team abbreviations in various formats used across different datasets
 TEAMS = [
     "ARI",
     "ATL",
@@ -237,6 +248,8 @@ ELO_DROP_COLS = [
     "importance",
     "total_rating",
 ]
+
+# Active quarterback IDs with their names, draft years, and draft numbers
 ACTIVE_QB_IDS = {
     "00-0019596": {
         "name": "Tom Brady",

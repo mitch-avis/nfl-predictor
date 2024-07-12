@@ -1,32 +1,39 @@
 """
-Defines constants used across the NFL predictor project, including paths, NFL season configuration,
-team abbreviations, statistical metrics, and player information. Centralizing these configurations
-facilitates maintenance and ensures consistency across the project.
+This module defines constants for the NFL predictor project. It includes configurations such as
+paths, NFL season details, team abbreviations, and various statistics relevant to player and team
+performance analysis. By centralizing these configurations, the module aids in maintaining
+consistency and integrity across the project, making it easier to manage and update.
 
-Constants Include:
-- ROOT_DIR, DATA_PATH: Directories for the project root and data storage.
-- SEASON_END_MONTH, WEEKS_BEFORE_2021, WEEKS_FROM_2021_ONWARDS: NFL season configurations.
-- ELO_DATA_URL: URL for fetching ELO ratings.
-- TEAMS, PBP_TEAMS, ELO_TEAMS: Team abbreviations in various formats.
-- BOXSCORE_STATS, AGG_METRICS: Statistical metrics for analysis.
-- ELO_DROP_COLS: Columns to exclude from the ELO dataset.
-- ACTIVE_QB_IDS: Information on active quarterbacks including names, draft years, and numbers.
+Key Constants:
+- Directories: ROOT_DIR, DATA_PATH for project root and data storage.
+- NFL Season: SEASON_END_MONTH, WEEKS_BEFORE_2021, WEEKS_FROM_2021_ONWARDS for season
+  configurations.
+- Data URLs: ELO_DATA_URL for fetching ELO ratings.
+- Team Abbreviations: TEAMS, PBP_TEAMS, ELO_TEAMS, STD_TEAMS for different dataset formats.
+- Statistics: BASE_COLUMNS, BOXSCORE_STATS, AGG_STATS for analysis metrics.
+- Exclusions: ELO_DROP_COLS for columns to exclude from the ELO dataset.
+- Player Information: ACTIVE_QB_IDS for active quarterbacks' names, draft years, and numbers.
 
-This module plays a crucial role in ensuring that all parts of the project refer to the same
-constants, thereby maintaining data integrity and consistency.
+This structured approach ensures easy reference and modification, supporting the project's
+scalability and adaptability.
 """
 
 import os
 from pathlib import Path
 
+# Project directory configurations
 ROOT_DIR = Path(__file__).parent.parent
 DATA_PATH = os.path.join(ROOT_DIR, "data")
+
+# NFL season configurations
 SEASON_END_MONTH = 2  # NFL season typically ends in February
-WEEKS_BEFORE_2021 = 17  # Weeks in seasons before 2021
-WEEKS_FROM_2021_ONWARDS = 18  # Weeks from 2021 onwards
+WEEKS_BEFORE_2021 = 17  # Number of weeks in NFL seasons before 2021
+WEEKS_FROM_2021_ONWARDS = 18  # Number of weeks in NFL seasons from 2021 onwards
+
+# URL for ELO ratings data
 ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
 
-# Team abbreviations in various formats used across different datasets
+# Team abbreviations in various formats for compatibility across datasets
 TEAMS = [
     "ARI",
     "ATL",
@@ -164,9 +171,16 @@ STD_TEAMS = [
     "was",
 ]
 
-# Statistical metrics used in box scores and aggregate metrics
+# Key statistics for analysis
+BASE_COLUMNS = [
+    "team_name",
+    "team_abbr",
+    "points_scored",
+    "points_allowed",
+    "game_won",
+    "game_lost",
+]
 BOXSCORE_STATS = [
-    "points",
     "first_downs",
     "rush_attempts",
     "rush_yards",
@@ -191,34 +205,48 @@ BOXSCORE_STATS = [
     "fourth_down_attempts",
     "time_of_possession",
 ]
-AGG_METRICS = [
+AGG_STATS = [
+    "win_perc",
     "points_scored",
+    "points_allowed",
     "first_downs",
+    "rush_attempts",
+    "rush_yards",
+    "rush_touchdowns",
+    "pass_completions",
+    "pass_attempts",
+    "pass_yards",
+    "pass_touchdowns",
+    "interceptions",
+    "times_sacked",
+    "yards_lost_from_sacks",
+    "net_pass_yards",
+    "total_yards",
     "fumbles",
     "fumbles_lost",
-    "interceptions",
-    "net_pass_yards",
-    "pass_attempts",
-    "pass_completions",
-    "pass_touchdowns",
-    "pass_yards",
-    "penalties",
-    "points_allowed",
-    "rush_attempts",
-    "rush_touchdowns",
-    "rush_yards",
-    "time_of_possession",
-    "times_sacked",
-    "total_yards",
     "turnovers",
+    "penalties",
     "yards_from_penalties",
-    "yards_lost_from_sacks",
-    "fourth_down_perc",
     "third_down_perc",
-    "win_perc",
+    "fourth_down_perc",
+    "time_of_possession",
+]
+AGG_DROP_COLS = [
+    "season",
+    "week",
+    "game_won",
+    "game_lost",
+    "third_down_conversions",
+    "third_down_attempts",
+    "fourth_down_conversions",
+    "fourth_down_attempts",
+    "opponent_third_down_conversions",
+    "opponent_third_down_attempts",
+    "opponent_fourth_down_conversions",
+    "opponent_fourth_down_attempts",
 ]
 
-# Columns to drop from ELO dataset
+# Columns to exclude from the ELO dataset for streamlined analysis
 ELO_DROP_COLS = [
     "season",
     "neutral",
@@ -227,8 +255,6 @@ ELO_DROP_COLS = [
     "elo_prob2",
     "elo1_post",
     "elo2_post",
-    "qbelo1_pre",
-    "qbelo2_pre",
     "qb1",
     "qb2",
     "qb1_adj",
@@ -248,7 +274,7 @@ ELO_DROP_COLS = [
     "total_rating",
 ]
 
-# Active quarterback IDs with their names, draft years, and draft numbers
+# Active quarterback IDs: names, draft years, and numbers for player tracking
 ACTIVE_QB_IDS = {
     "00-0019596": {"name": "Tom Brady", "draft_year": 2000, "draft_number": 199},
     "00-0020531": {"name": "Drew Brees", "draft_year": 2001, "draft_number": 32},

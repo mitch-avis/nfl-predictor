@@ -194,7 +194,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             weeks,
             season_games_df,
             schedule_df,
-            force_refresh=False,
+            force_refresh=True,
         )
 
         # Fetch ELO ratings for the season
@@ -214,7 +214,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             combine_data,
             agg_games_df,
             season_elo_df,
-            force_refresh=False,
+            force_refresh=True,
         )
 
         combined_data_list.append(combined_data_df)  # Append combined data for the season

@@ -1,39 +1,47 @@
-#!/bin/env python
+"""
+_summary_
+"""
+
+from datetime import date
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.linear_model import LogisticRegression
 
+from nfl_predictor import constants
 from nfl_predictor.utils.csv_utils import read_df_from_csv
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.ml_utils import display_predictions
+from nfl_predictor.utils.nfl_utils import determine_nfl_week_by_date
 
 NUM_ROUNDS = 1000
 
 
-def main():
-    year = 2022
-    current_week = 18
-    comp_games_name = f"{year}_comp_games"
-    comp_games_df = read_df_from_csv(comp_games_name)
-    pred_games_name = f"{year}_{current_week}_pred_games"
-    pred_games_df = read_df_from_csv(pred_games_name)
-    predict_games(comp_games_df, pred_games_df)
+def main() -> None:
+    """
+    _summary_
+    """
+    today = date.today()
+    current_week = determine_nfl_week_by_date(today)
+    completed_games_df_name = f"{constants.DATA_PATH}/completed_games.csv"
+    completed_games_df = read_df_from_csv(completed_games_df_name, check_exists=True)
+    pred_games_name = f"{constants.DATA_PATH}/predict/week_{current_week:>02}_games_to_predict.csv"
+    games_to_predict_df = read_df_from_csv(pred_games_name, check_exists=True)
+    predict_games(completed_games_df, games_to_predict_df)
 
 
 def predict_games(comp_games_df: pd.DataFrame, pred_games_df: pd.DataFrame) -> None:
+    """
+    _summary_
+    """
     msk = np.random.rand(len(comp_games_df)) < 0.8
     train_df = comp_games_df[msk]
     test_df = comp_games_df[~msk]
 
-    x_train = train_df.drop(
-        columns=["away_name", "away_abbr", "home_name", "home_abbr", "week", "result"]
-    )
+    x_train = train_df.drop(columns=constants.ML_DROP_COLS)
     y_train = train_df[["result"]]
-    x_test = test_df.drop(
-        columns=["away_name", "away_abbr", "home_name", "home_abbr", "week", "result"]
-    )
+    x_test = test_df.drop(columns=constants.ML_DROP_COLS)
     y_test = test_df[["result"]]
 
     clf = LogisticRegression(
@@ -75,9 +83,7 @@ def predict_games(comp_games_df: pd.DataFrame, pred_games_df: pd.DataFrame) -> N
         len(preds)
     )
     log.debug("error=%s", error)
-    x_test = pred_games_df.drop(
-        columns=["away_name", "away_abbr", "home_name", "home_abbr", "week", "result"]
-    )
+    x_test = pred_games_df.drop(columns=constants.ML_DROP_COLS)
     y_pred = clf.predict_proba(x_test)
     y_pred = y_pred[:, 1]
 

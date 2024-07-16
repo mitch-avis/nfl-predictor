@@ -74,12 +74,13 @@ SEASONS_TO_SCRAPE = [
     2024,
 ]
 REFRESH_ELO = False
-REFRESH_SEASON_DATA = False
-REFRESH_GAME_DATA = True
 REFRESH_SCHEDULE = False
+REFRESH_SEASON_DATA = False
+REFRESH_GAME_DATA = False
 REFRESH_AGGREGATE_DATA = False
 REFRESH_ELO_SEASON = False
-REFRESH_TEAM_RANKINGS = True
+REFRESH_SEASON_RANKINGS = False
+REFRESH_GAME_RANKINGS = False
 REFRESH_COMBINED_DATA = True
 
 
@@ -205,7 +206,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             f"{season}/{season}_team_rankings",
             scrape_team_rankings_for_season,
             season,
-            force_refresh=REFRESH_TEAM_RANKINGS,
+            force_refresh=REFRESH_SEASON_RANKINGS,
         )
 
         # Combine game data and ELO ratings
@@ -503,7 +504,7 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
             scrape_team_rankings_for_week,
             week_number,
             week_date,
-            force_refresh=REFRESH_GAME_DATA,
+            force_refresh=REFRESH_GAME_RANKINGS,
         )
         # Append the week's rankings to the season list if data is present.
         if not week_rankings_df.empty:

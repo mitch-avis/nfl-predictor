@@ -33,6 +33,7 @@ ELO_DATA_URL = constants.ELO_DATA_URL
 BASE_COLUMNS = constants.BASE_COLUMNS
 BOXSCORE_STATS = constants.BOXSCORE_STATS
 AGG_STATS = constants.AGG_STATS
+AGG_DROP_COLS = constants.AGG_DROP_COLS
 
 
 def fetch_nfl_elo_ratings() -> pd.DataFrame:
@@ -377,6 +378,122 @@ def reorder_and_drop_columns(team_df: pd.DataFrame) -> pd.DataFrame:
     return team_df[ordered_columns]
 
 
+def prepare_data_for_week(
+    week: int, schedule_df: pd.DataFrame, season_games_df: pd.DataFrame
+) -> tuple:
+    """
+    Prepares weekly game and results data from season schedules and game outcomes.
+
+    This function filters the provided season schedule and game outcomes data for a specific week,
+    returning two DataFrames: one with the week's games and another with the results, focusing on
+    essential columns defined in BASE_COLUMNS.
+
+    Args:
+        week (int): Target week number for data extraction.
+        schedule_df (pd.DataFrame): Season's schedule data.
+        season_games_df (pd.DataFrame): Detailed outcomes of season's games.
+
+    Returns:
+        tuple[pd.DataFrame, pd.DataFrame]: A tuple containing:
+            - DataFrame of the week's games from the schedule.
+            - DataFrame of the week's game results, limited to essential columns.
+    """
+    # Filter for the specified week's games and results
+    week_games_df = schedule_df[schedule_df["week"] == week]
+    results_df = season_games_df[season_games_df["week"] == week][BASE_COLUMNS]
+
+    return week_games_df, results_df
+
+
+def calculate_stats(df: pd.DataFrame, week: int) -> pd.DataFrame:
+    """
+    Optimizes statistics calculation for NFL games by week, handling initialization for week 1 and
+    aggregating metrics for subsequent weeks.
+
+    Args:
+        df (pd.DataFrame): Season games data.
+        week (int): Target week for statistics calculation.
+
+    Returns:
+        pd.DataFrame: DataFrame with updated or calculated statistics for the specified week.
+    """
+    # For week 1, initialize specific columns with NaN
+    if week == 1:
+        for col in [
+            "win_perc",
+            "third_down_perc",
+            "fourth_down_perc",
+            "opponent_third_down_perc",
+            "opponent_fourth_down_perc",
+        ]:
+            df[col] = np.nan
+        return df
+
+    # Define metrics for aggregation
+    metrics = {
+        "game_won": "sum",
+        "game_lost": "sum",
+        "third_down_conversions": "sum",
+        "third_down_attempts": "sum",
+        "fourth_down_conversions": "sum",
+        "fourth_down_attempts": "sum",
+        "opponent_third_down_conversions": "sum",
+        "opponent_third_down_attempts": "sum",
+        "opponent_fourth_down_conversions": "sum",
+        "opponent_fourth_down_attempts": "sum",
+    }
+
+    # Aggregate metrics and calculate win/conversion rates
+    agg_metrics_df = df.groupby(["team_name", "team_abbr"], as_index=False).agg(metrics)
+    agg_metrics_df = calc_win_and_conversion_rates(agg_metrics_df)
+
+    # Calculate mean for columns not included in metrics, excluding specific columns
+    excluded_columns = set(metrics) | {"team_name", "team_abbr", "week", "season"}
+    mean_columns = df.columns.difference(excluded_columns)
+    agg_metrics_df[mean_columns] = df.groupby(["team_name", "team_abbr"])[mean_columns].transform(
+        "mean"
+    )
+
+    return agg_metrics_df
+
+
+def merge_and_finalize(week_games_df, agg_weekly_df, results_df):
+    """
+    Prepares and merges weekly game data with aggregated statistics and results.
+
+    Drops unnecessary columns from aggregated data, prefixes columns to distinguish between home
+    and away teams, merges the dataframes, calculates statistical differences, and merges final
+    scores.
+
+    Args:
+        week_games_df (pd.DataFrame): DataFrame containing the week's games schedule.
+        agg_weekly_df (pd.DataFrame): DataFrame with aggregated weekly statistics.
+        results_df (pd.DataFrame): DataFrame with the week's game results.
+
+    Returns:
+        pd.DataFrame: The finalized DataFrame ready for analysis or storage.
+    """
+    # Drop specified columns from aggregated data
+    agg_weekly_df = agg_weekly_df.drop(columns=AGG_DROP_COLS, errors="ignore")
+
+    # Prepare away and home team data with appropriate prefixes and renames
+    agg_weekly_away_df = agg_weekly_df.add_prefix("away_").rename(
+        columns={"away_team_name": "away_name", "away_team_abbr": "away_abbr"}
+    )
+    agg_weekly_home_df = agg_weekly_df.add_prefix("home_").rename(
+        columns={"home_team_name": "home_name", "home_team_abbr": "home_abbr"}
+    )
+
+    # Merge aggregated stats with the week's game schedule
+    merged_df = merge_aggregated_stats(week_games_df, agg_weekly_away_df, agg_weekly_home_df)
+
+    # Calculate statistical differences between teams
+    merged_df = calc_stat_diffs(merged_df)
+
+    # Merge in the game results
+    return merge_scores(merged_df, results_df)
+
+
 def calc_win_and_conversion_rates(agg_weekly_df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculates win percentages and down conversion rates for aggregated weekly data.
@@ -495,7 +612,7 @@ def calc_stat_diffs(merged_df: pd.DataFrame) -> pd.DataFrame:
     # Iterate over predefined aggregate stats to calculate differences between away and home teams
     for stat in AGG_STATS:
         # Calculate and store the difference for each stat in a new column
-        merged_df[f"{stat}_dif"] = merged_df[f"away_{stat}"] - merged_df[f"home_{stat}"]
+        merged_df[f"{stat}_diff"] = merged_df[f"away_{stat}"] - merged_df[f"home_{stat}"]
 
     # Define stats not applicable for opponent comparison
     excluded_stats = ["win_perc", "points_scored", "points_allowed", "time_of_possession"]
@@ -505,7 +622,7 @@ def calc_stat_diffs(merged_df: pd.DataFrame) -> pd.DataFrame:
     # Calculate differences in opponent stats between away and home teams
     for stat in opponent_stats:
         # Calculate and store the difference in opponent stats in a new column
-        merged_df[f"opponent_{stat}_dif"] = (
+        merged_df[f"opponent_{stat}_diff"] = (
             merged_df[f"away_opponent_{stat}"] - merged_df[f"home_opponent_{stat}"]
         )
 

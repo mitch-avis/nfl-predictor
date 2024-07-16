@@ -33,17 +33,16 @@ from nfl_predictor import constants
 from nfl_predictor.utils.csv_utils import read_write_data
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.nfl_utils import (
-    calc_stat_diffs,
-    calc_win_and_conversion_rates,
+    calculate_stats,
     compute_game_outcomes,
     create_stats_dfs_from_boxscore,
     determine_nfl_week_by_date,
     determine_weeks_to_scrape,
     fetch_nfl_elo_ratings,
     init_team_stats_dfs,
-    merge_aggregated_stats,
+    merge_and_finalize,
     merge_and_format_df,
-    merge_scores,
+    prepare_data_for_week,
 )
 
 SEASONS_TO_SCRAPE = [
@@ -437,119 +436,43 @@ def aggregate_season_data(
     weeks: list, season_games_df: pd.DataFrame, schedule_df: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Aggregates game data for a given season up to specified weeks, calculating various stats.
+    Aggregates game data for specified weeks, calculating team performance metrics.
 
-    This function processes game data and schedule information for a given NFL season, aggregating
-    statistics up to the specified weeks. It calculates team performance metrics, including win
-    percentages and conversion rates, and prepares data for analysis by computing differences in
-    stats between opposing teams.
+    This function processes game and schedule data for an NFL season, calculating metrics like
+    win percentages and conversion rates. It prepares data by computing differences in stats
+    between opposing teams for the specified weeks.
 
     Args:
-        weeks (list): The weeks within the season for which to aggregate data.
-        season_games_df (pd.DataFrame): DataFrame containing detailed game data for the season.
-        schedule_df (pd.DataFrame): DataFrame containing the schedule and outcomes for the season.
+        weeks (list): Weeks within the season to aggregate data for.
+        season_games_df (pd.DataFrame): Detailed game data for the season.
+        schedule_df (pd.DataFrame): Schedule and outcomes for the season.
 
     Returns:
-        pd.DataFrame: The aggregated game data with calculated stats for the specified season
-                      and weeks, including differences in team performance metrics.
+        pd.DataFrame: Aggregated game data with calculated stats for specified weeks.
     """
+    # Initialize an empty list to hold aggregated data for each week
     agg_games_list = []
+
+    # Loop through each week to aggregate data
     for week in weeks:
-        # Filter games for the current week from the schedule
-        games_df = schedule_df[schedule_df["week"] == week]
-
-        # Get current week's results, if available, focusing on base columns
-        results_df = season_games_df[season_games_df["week"] == week][BASE_COLUMNS]
-
+        log.info("Aggregating game data for Week %s...", week)
+        # Prepare data for the current week
+        week_games_df, results_df = prepare_data_for_week(week, schedule_df, season_games_df)
+        # Calculate stats for the current week, considering data from previous weeks if applicable
         if week == 1:
-            # For the first week, initialize stats with NaN as there are no previous games
-            agg_weekly_df = (
-                season_games_df.head(0)
-                .assign(
-                    **{col: np.nan for col in season_games_df.columns if col not in BASE_COLUMNS}
-                )
-                .drop(columns=["season", "week"])
-            )
-            # Merge with results to include game outcomes where available
-            agg_weekly_df = pd.merge(results_df, agg_weekly_df, how="left", on=BASE_COLUMNS)
-            # Initialize calculated stats columns with NaN values
-            agg_weekly_df["points_scored"] = np.nan
-            agg_weekly_df["points_allowed"] = np.nan
-            agg_weekly_df["win_perc"] = np.nan
-            agg_weekly_df["third_down_perc"] = np.nan
-            agg_weekly_df["fourth_down_perc"] = np.nan
-            agg_weekly_df["opponent_third_down_perc"] = np.nan
-            agg_weekly_df["opponent_fourth_down_perc"] = np.nan
+            # For Week 1, initialize agg_weekly_df with no prior data
+            agg_weekly_df = season_games_df.head(0)
+            agg_weekly_df = calculate_stats(agg_weekly_df, week)
         else:
-            # For subsequent weeks, calculate aggregated stats from previous weeks' data
+            # For subsequent weeks, calculate stats based on previous weeks' data
             previous_weeks_df = season_games_df[season_games_df["week"] < week]
-            agg_metrics_df = previous_weeks_df.groupby(
-                ["team_name", "team_abbr"], as_index=False
-            ).agg(
-                {
-                    "game_won": "sum",
-                    "game_lost": "sum",
-                    "third_down_conversions": "sum",
-                    "third_down_attempts": "sum",
-                    "fourth_down_conversions": "sum",
-                    "fourth_down_attempts": "sum",
-                    "opponent_fourth_down_attempts": "sum",
-                    "opponent_fourth_down_conversions": "sum",
-                    "opponent_third_down_attempts": "sum",
-                    "opponent_third_down_conversions": "sum",
-                }
-            )
-            # Merge aggregated metrics back into the DataFrame for current week's games
-            agg_weekly_df = pd.merge(
-                previous_weeks_df.drop(columns=AGG_DROP_COLS),
-                agg_metrics_df,
-                on=["team_name", "team_abbr"],
-                how="left",
-            )
-
-            # Calculate win percentage and down conversion rates
-            agg_weekly_df = calc_win_and_conversion_rates(agg_weekly_df)
-
-        # Drop columns not needed for the final DataFrame
-        agg_weekly_df.drop(
-            columns=AGG_DROP_COLS,
-            inplace=True,
-            errors="ignore",
-        )
-        # Prepare separate DataFrames for away and home team stats
-        agg_weekly_away_df = agg_weekly_df.add_prefix("away_")
-        agg_weekly_home_df = agg_weekly_df.add_prefix("home_")
-        # Rename columns for merging
-        agg_weekly_away_df.rename(
-            columns={
-                "away_team_name": "away_name",
-                "away_team_abbr": "away_abbr",
-            },
-            inplace=True,
-        )
-        agg_weekly_home_df.rename(
-            columns={
-                "home_team_name": "home_name",
-                "home_team_abbr": "home_abbr",
-            },
-            inplace=True,
-        )
-
-        # Merge aggregated stats with the games DataFrame for both away and home teams
-        merged_df = merge_aggregated_stats(games_df, agg_weekly_away_df, agg_weekly_home_df)
-
-        # Calculate differences in stats between away and home teams for analysis
-        merged_df = calc_stat_diffs(merged_df)
-
-        # Merge results_df with merged_df for away team scores and results
-        merged_df = merge_scores(merged_df, results_df)
-
-        # Append the processed DataFrame for the week to the list
+            agg_weekly_df = calculate_stats(previous_weeks_df, week)
+        # Merge current week's data with results and add to the list
+        merged_df = merge_and_finalize(week_games_df, agg_weekly_df, results_df)
         agg_games_list.append(merged_df)
 
     # Concatenate all weekly aggregated data into a single DataFrame
     final_agg_df = pd.concat(agg_games_list, ignore_index=True)
-
     return final_agg_df
 
 
@@ -567,7 +490,7 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     # Copy the DataFrame to avoid modifying the original
     yearly_elo_df = elo_df.copy()
     # Drop columns not needed for analysis
-    yearly_elo_df = yearly_elo_df.drop(columns=ELO_DROP_COLS)
+    yearly_elo_df = yearly_elo_df.drop(columns=constants.ELO_DROP_COLS)
     # Convert date column to datetime format
     yearly_elo_df["date"] = pd.to_datetime(yearly_elo_df["date"])
     # Define the start and end dates for the NFL season
@@ -577,29 +500,32 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     mask = (yearly_elo_df["date"] >= start_date) & (yearly_elo_df["date"] <= end_date)
     # Apply the mask to filter the DataFrame
     yearly_elo_df = yearly_elo_df.loc[mask]
-    # Replace ELO team names with standard team names for consistency
-    yearly_elo_df["team1"] = yearly_elo_df["team1"].replace(ELO_TEAMS, STD_TEAMS)
-    yearly_elo_df["team2"] = yearly_elo_df["team2"].replace(ELO_TEAMS, STD_TEAMS)
+    # Create a mapping from ELO team names to standard team names
+    team_name_mapping = dict(zip(constants.ELO_TEAMS, constants.STD_TEAMS))
+    # Replace team names in the dataframe using the mapping
+    yearly_elo_df["team1"] = yearly_elo_df["team1"].map(team_name_mapping)
+    yearly_elo_df["team2"] = yearly_elo_df["team2"].map(team_name_mapping)
     return yearly_elo_df
 
 
 def combine_data(agg_games_df: pd.DataFrame, elo_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Merges aggregated game data with ELO ratings, calculating differences in ELO and QB values.
+    Enhances aggregated game data with ELO ratings, focusing on differences in ELO and QB values.
 
-    This function takes aggregated game data and ELO ratings for a given NFL season, merges them
-    based on team abbreviations, and calculates the differences in ELO ratings and QB values
-    between the home and away teams. It also standardizes team abbreviations and reorders columns
-    for improved readability.
+    This function enriches NFL game data by merging it with ELO ratings, calculating the differences
+    in ELO ratings and QB values between the home and away teams. It standardizes team abbreviations
+    and reorders columns to facilitate future data cleaning and analysis, particularly for machine
+    learning models aimed at predicting game outcomes and scores.
 
     Args:
-        agg_games_df (pd.DataFrame): DataFrame containing aggregated game data for the season.
-        elo_df (pd.DataFrame): DataFrame containing ELO ratings for the season.
+        agg_games_df (pd.DataFrame): Aggregated game data for the season.
+        elo_df (pd.DataFrame): ELO ratings for the season.
 
     Returns:
-        pd.DataFrame: A combined DataFrame with calculated differences and the season column added.
+        pd.DataFrame: Combined DataFrame with calculated differences, standardized abbreviations,
+                      and columns reordered for analysis, including final scores and result.
     """
-    # Merge game data with ELO ratings using team abbreviations; drop redundant 'team' columns
+    # Merge game data with ELO ratings on team abbreviations; drop redundant 'team' columns
     combined_df = pd.merge(
         agg_games_df,
         elo_df,
@@ -613,7 +539,7 @@ def combine_data(agg_games_df: pd.DataFrame, elo_df: pd.DataFrame) -> pd.DataFra
     combined_df["qb_dif"] = combined_df["qb2_value_pre"] - combined_df["qb1_value_pre"]
     combined_df["qb_elo_dif"] = combined_df["qbelo2_pre"] - combined_df["qbelo1_pre"]
 
-    # Drop columns that are no longer needed after calculating differences
+    # Drop columns not needed after calculating differences
     combined_df = combined_df.drop(
         columns=[
             "date",
@@ -626,14 +552,19 @@ def combine_data(agg_games_df: pd.DataFrame, elo_df: pd.DataFrame) -> pd.DataFra
         ]
     )
 
-    # Standardize team abbreviations to their original format for consistency
-    combined_df["home_abbr"] = combined_df["home_abbr"].replace(STD_TEAMS, TEAMS)
-    combined_df["away_abbr"] = combined_df["away_abbr"].replace(STD_TEAMS, TEAMS)
+    # Standardize team abbreviations for consistency
+    combined_df["home_abbr"] = combined_df["home_abbr"].replace(
+        constants.STD_TEAMS, constants.TEAMS
+    )
+    combined_df["away_abbr"] = combined_df["away_abbr"].replace(
+        constants.STD_TEAMS, constants.TEAMS
+    )
 
-    # Reorder columns for readability, moving 'result' column to the end if it exists
-    result_col = ["result"] if "result" in combined_df else []  # Check for 'result' column
-    cols_except_result = [col for col in combined_df if col not in result_col]
-    combined_df = combined_df[cols_except_result + result_col]
+    # Reorder columns for readability, ensuring 'away_score', 'home_score', and 'result' are last
+    result_cols = [
+        col for col in combined_df.columns if col not in ["away_score", "home_score", "result"]
+    ]
+    combined_df = combined_df[result_cols + ["away_score", "home_score", "result"]]
 
     return combined_df
 
@@ -666,7 +597,7 @@ def parse_upcoming_games_to_predict(combined_data_df: pd.DataFrame) -> pd.DataFr
     """
     # Determine the current season based on today's date and SEASON_END_MONTH
     today = date.today()
-    current_season = today.year if today.month > SEASON_END_MONTH else today.year - 1
+    current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
     # Determine the current week for the current season
     current_week = determine_nfl_week_by_date(today)

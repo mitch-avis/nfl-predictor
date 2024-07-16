@@ -145,6 +145,28 @@ def determine_weeks_to_scrape(season: int, include_future_weeks: bool = False) -
     return weeks_to_scrape
 
 
+def get_week_dates(season: int) -> list[date]:
+    """
+    Generate a list of dates representing the start of each week to scrape for a given season.
+
+    This function calculates the start date for each week of the season to scrape, based on the
+    season's start date and the number of weeks determined to scrape.
+
+    Args:
+        season (int): The season number to calculate week start dates for.
+
+    Returns:
+        list: A list of datetime.date objects representing the start of each week to scrape.
+    """
+    # Calculate the initial date to start from, which is 8 days before the season start date
+    season_start_date = get_season_start(season) - timedelta(days=8)
+    # Determine the number of weeks to scrape for the given season
+    weeks_to_scrape = determine_weeks_to_scrape(season)
+    # Use list comprehension to generate the list of week start dates
+    week_dates = [season_start_date + timedelta(weeks=week) for week in weeks_to_scrape]
+    return week_dates
+
+
 def init_team_stats_dfs(game_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Prepares DataFrames for away and home teams based on game data, focusing on team names,

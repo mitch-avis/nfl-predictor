@@ -33,6 +33,51 @@ WEEKS_FROM_2021_ONWARDS = 18  # Number of weeks in NFL seasons from 2021 onwards
 # URL for ELO ratings data
 ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
 
+# URL for Team Rankings data
+TEAM_RANKINGS_URL = "https://www.teamrankings.com/nfl/ranking/"
+
+# Team Rankings subpaths for different ratings
+TEAM_RANKINGS_RATINGS = [
+    "predictive-by-other",
+    "future-sos-by-other",
+]
+
+# Dictionary for renaming team names for consistency across datasets
+TR_TEAM_RENAMES = {
+    "Arizona": "Arizona Cardinals",
+    "Atlanta": "Atlanta Falcons",
+    "Baltimore": "Baltimore Ravens",
+    "Buffalo": "Buffalo Bills",
+    "Carolina": "Carolina Panthers",
+    "Chicago": "Chicago Bears",
+    "Cincinnati": "Cincinnati Bengals",
+    "Cleveland": "Cleveland Browns",
+    "Dallas": "Dallas Cowboys",
+    "Denver": "Denver Broncos",
+    "Detroit": "Detroit Lions",
+    "Green Bay": "Green Bay Packers",
+    "Houston": "Houston Texans",
+    "Indianapolis": "Indianapolis Colts",
+    "Jacksonville": "Jacksonville Jaguars",
+    "Kansas City": "Kansas City Chiefs",
+    "LA Chargers": "Los Angeles Chargers",
+    "LA Rams": "Los Angeles Rams",
+    "Las Vegas": "Las Vegas Raiders",
+    "Miami": "Miami Dolphins",
+    "Minnesota": "Minnesota Vikings",
+    "New England": "New England Patriots",
+    "New Orleans": "New Orleans Saints",
+    "NY Giants": "New York Giants",
+    "NY Jets": "New York Jets",
+    "Philadelphia": "Philadelphia Eagles",
+    "Pittsburgh": "Pittsburgh Steelers",
+    "San Francisco": "San Francisco 49ers",
+    "Seattle": "Seattle Seahawks",
+    "Tampa Bay": "Tampa Bay Buccaneers",
+    "Tennessee": "Tennessee Titans",
+    "Washington": "Washington Commanders",
+}
+
 # Team abbreviations in various formats for compatibility across datasets
 TEAMS = [
     "ARI",
@@ -67,39 +112,6 @@ TEAMS = [
     "TB",
     "TEN",
     "WSH",
-]
-PBP_TEAMS = [
-    "ARI",
-    "ATL",
-    "BAL",
-    "BUF",
-    "CAR",
-    "CHI",
-    "CIN",
-    "CLE",
-    "DAL",
-    "DEN",
-    "DET",
-    "GB",
-    "HOU",
-    "IND",
-    "JAX",
-    "KC",
-    "LAC",
-    "LA",
-    "LV",
-    "MIA",
-    "MIN",
-    "NE",
-    "NO",
-    "NYG",
-    "NYJ",
-    "PHI",
-    "PIT",
-    "SEA",
-    "SF",
-    "TB",
-    "TEN",
     "WSH",
 ]
 ELO_TEAMS = [
@@ -134,6 +146,7 @@ ELO_TEAMS = [
     "SF",
     "TB",
     "TEN",
+    "WAS",
     "WSH",
 ]
 STD_TEAMS = [
@@ -169,6 +182,41 @@ STD_TEAMS = [
     "tam",
     "oti",
     "was",
+    "was",
+]
+PBP_TEAMS = [
+    "ARI",
+    "ATL",
+    "BAL",
+    "BUF",
+    "CAR",
+    "CHI",
+    "CIN",
+    "CLE",
+    "DAL",
+    "DEN",
+    "DET",
+    "GB",
+    "HOU",
+    "IND",
+    "JAX",
+    "KC",
+    "LAC",
+    "LA",
+    "LV",
+    "MIA",
+    "MIN",
+    "NE",
+    "NO",
+    "NYG",
+    "NYJ",
+    "PHI",
+    "PIT",
+    "SEA",
+    "SF",
+    "TB",
+    "TEN",
+    "WSH",
 ]
 
 # Key statistics for analysis

@@ -39,16 +39,6 @@ from sportsipy.nfl.boxscore import Boxscore, Boxscores
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 
-DATA_PATH = constants.DATA_PATH
-SEASON_END_MONTH = constants.SEASON_END_MONTH
-WEEKS_BEFORE_2021 = constants.WEEKS_BEFORE_2021
-WEEKS_FROM_2021_ONWARDS = constants.WEEKS_FROM_2021_ONWARDS
-ELO_DATA_URL = constants.ELO_DATA_URL
-BASE_COLUMNS = constants.BASE_COLUMNS
-BOXSCORE_STATS = constants.BOXSCORE_STATS
-AGG_STATS = constants.AGG_STATS
-AGG_DROP_COLS = constants.AGG_DROP_COLS
-
 
 def fetch_nfl_elo_ratings() -> pd.DataFrame:
     """
@@ -61,7 +51,7 @@ def fetch_nfl_elo_ratings() -> pd.DataFrame:
         pd.DataFrame: A DataFrame containing the ELO ratings for NFL teams.
     """
     # Utilize pandas to directly read the ELO ratings CSV from the URL into a DataFrame
-    elo_df = pd.read_csv(ELO_DATA_URL)
+    elo_df = pd.read_csv(constants.ELO_DATA_URL)
     return elo_df
 
 
@@ -135,16 +125,16 @@ def determine_weeks_to_scrape(season: int, include_future_weeks: bool = False) -
     today = date.today()
     # Determine the current NFL season based on today's date, considering the NFL season typically
     # ends in February.
-    current_season = today.year if today.month > SEASON_END_MONTH else today.year - 1
+    current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
     if season < 2021:
         # For seasons before 2021, the NFL had 17 weeks. This accounts for the schedule prior to
         # the expansion to an 18-week season.
-        weeks_to_scrape = list(range(1, WEEKS_BEFORE_2021 + 1))
+        weeks_to_scrape = list(range(1, constants.WEEKS_BEFORE_2021 + 1))
     elif season <= current_season or include_future_weeks:
         # For past seasons from 2021 onwards, including the current season if include_future_weeks
         # is True, and for future seasons if include_future_weeks is True, the NFL has 18 weeks.
-        weeks_to_scrape = list(range(1, WEEKS_FROM_2021_ONWARDS + 1))
+        weeks_to_scrape = list(range(1, constants.WEEKS_FROM_2021_ONWARDS + 1))
     else:
         # For the current season without including future weeks, scrape up to the current week.
         # This ensures data is only collected for weeks that have potentially completed.
@@ -259,12 +249,12 @@ def init_team_stats_dfs(game_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFra
     # Select and rename columns for the away team to standardize the structure. The renaming
     # aligns with a base format for easier comparison and analysis of team performance.
     away_team_df = game_df.loc[:, ["away_name", "away_abbr", "away_score", "home_score"]].copy()
-    away_team_df.columns = BASE_COLUMNS[:-2]
+    away_team_df.columns = constants.BASE_COLUMNS[:-2]
 
     # Perform a similar selection and renaming process for the home team, ensuring both DataFrames
     # have a consistent format for direct comparison and further statistical analysis.
     home_team_df = game_df.loc[:, ["home_name", "home_abbr", "home_score", "away_score"]].copy()
-    home_team_df.columns = BASE_COLUMNS[:-2]
+    home_team_df.columns = constants.BASE_COLUMNS[:-2]
 
     return away_team_df, home_team_df
 
@@ -349,7 +339,7 @@ def create_stats_dfs_from_boxscore(
         # is unavailable. This ensures that the function's return value remains consistent and
         # predictable, even in the absence of data.
         empty_df_structure = pd.DataFrame(
-            {stat: pd.Series(dtype="float") for stat in BOXSCORE_STATS}
+            {stat: pd.Series(dtype="float") for stat in constants.BOXSCORE_STATS}
         )
         away_stats_df = empty_df_structure.copy()
         home_stats_df = empty_df_structure.copy()
@@ -375,7 +365,7 @@ def create_stats_df(game_stats_df: pd.DataFrame, team_prefix: str) -> pd.DataFra
     # Create a mapping of prefixed column names (e.g., 'away_points_scored') to standard column
     # names (e.g., 'points_scored'). This step is crucial for ensuring that data from both home
     # and away teams can be analyzed in a consistent format.
-    column_mapping = {f"{team_prefix}_{stat}": stat for stat in BOXSCORE_STATS}
+    column_mapping = {f"{team_prefix}_{stat}": stat for stat in constants.BOXSCORE_STATS}
 
     # Use the column mapping to rename the selected columns in the DataFrame. This involves
     # filtering out columns based on the prefix and then renaming them to a standardized format,
@@ -463,13 +453,13 @@ def reorder_and_drop_columns(team_df: pd.DataFrame) -> pd.DataFrame:
     other_columns = [
         col
         for col in team_df.columns
-        if col not in BASE_COLUMNS
+        if col not in constants.BASE_COLUMNS
         and col not in ("opponent_points_allowed", "opponent_time_of_possession")
     ]
     # Combine the base columns with the additional, relevant columns for the final column order.
     # This reordering aligns the DataFrame structure with expected formats for downstream
     # analysis or reporting, ensuring consistency and readability.
-    ordered_columns = BASE_COLUMNS + other_columns
+    ordered_columns = constants.BASE_COLUMNS + other_columns
     # Return the DataFrame with columns reordered according to the specified order. This final
     # DataFrame is streamlined for analysis, with unnecessary columns removed and relevant
     # columns properly organized.
@@ -484,7 +474,7 @@ def prepare_data_for_week(
 
     This function filters the provided season schedule and game outcomes data for a specific week,
     returning two DataFrames: one with the week's games and another with the results, focusing on
-    essential columns defined in BASE_COLUMNS.
+    essential columns defined in constants.BASE_COLUMNS.
 
     Args:
         week (int): Target week number for data extraction.
@@ -498,7 +488,7 @@ def prepare_data_for_week(
     """
     # Filter for the specified week's games and results
     week_games_df = schedule_df[schedule_df["week"] == week]
-    results_df = season_games_df[season_games_df["week"] == week][BASE_COLUMNS]
+    results_df = season_games_df[season_games_df["week"] == week][constants.BASE_COLUMNS]
 
     return week_games_df, results_df
 
@@ -572,7 +562,7 @@ def merge_and_finalize(week_games_df, agg_weekly_df, results_df):
         pd.DataFrame: The finalized DataFrame ready for analysis or storage.
     """
     # Drop specified columns from aggregated data
-    agg_weekly_df = agg_weekly_df.drop(columns=AGG_DROP_COLS, errors="ignore")
+    agg_weekly_df = agg_weekly_df.drop(columns=constants.AGG_DROP_COLS, errors="ignore")
 
     # Prepare away and home team data with appropriate prefixes and renames
     agg_weekly_away_df = agg_weekly_df.add_prefix("away_").rename(
@@ -708,14 +698,14 @@ def calc_stat_diffs(merged_df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: The input DataFrame with added columns for each of the stat differences.
     """
     # Iterate over predefined aggregate stats to calculate differences between away and home teams
-    for stat in AGG_STATS:
+    for stat in constants.AGG_STATS:
         # Calculate and store the difference for each stat in a new column
         merged_df[f"{stat}_diff"] = merged_df[f"away_{stat}"] - merged_df[f"home_{stat}"]
 
     # Define stats not applicable for opponent comparison
     excluded_stats = ["win_perc", "points_scored", "points_allowed", "time_of_possession"]
     # Filter out excluded stats to focus on opponent-specific stats
-    opponent_stats = [stat for stat in AGG_STATS if stat not in excluded_stats]
+    opponent_stats = [stat for stat in constants.AGG_STATS if stat not in excluded_stats]
 
     # Calculate differences in opponent stats between away and home teams
     for stat in opponent_stats:

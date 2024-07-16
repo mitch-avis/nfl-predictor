@@ -319,6 +319,18 @@ ELO_DROP_COLS = [
     "importance",
     "total_rating",
 ]
+# Columns to exclude from the completed games dataset for streamlined analysis
+ML_DROP_COLS = [
+    "away_name",
+    "away_abbr",
+    "home_name",
+    "home_abbr",
+    "season",
+    "week",
+    "away_score",
+    "home_score",
+    "result",
+]
 
 # Active quarterback IDs: names, draft years, and numbers for player tracking
 ACTIVE_QB_IDS = {

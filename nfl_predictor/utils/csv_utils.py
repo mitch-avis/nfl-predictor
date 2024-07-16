@@ -33,8 +33,6 @@ import pandas as pd
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 
-DATA_PATH = constants.DATA_PATH
-
 
 def read_write_data(
     data_name: str, func: Callable, *args, force_refresh: bool = False, **kwargs
@@ -58,7 +56,7 @@ def read_write_data(
     """
     # Initialize an empty DataFrame
     dataframe = pd.DataFrame()
-    file_path = f"{DATA_PATH}/{data_name}.csv"
+    file_path = f"{constants.DATA_PATH}/{data_name}.csv"
 
     # Check if the CSV file exists and read it if force_refresh is not True
     if os.path.isfile(file_path) and not force_refresh:

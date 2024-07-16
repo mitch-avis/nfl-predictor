@@ -1,25 +1,27 @@
 """
-This module is responsible for the collection, processing, and storage of data relevant to NFL
-game predictions. It includes functionalities for scraping NFL game data, fetching ELO ratings,
-and preparing datasets for analysis. The module leverages pandas for data manipulation and
-sportsipy for data scraping, along with custom utilities for data I/O and logging.
+This module, data_collection.py, is designed for the collection, processing, and storage of NFL game
+data, crucial for making accurate game predictions. It offers a wide range of functionalities,
+including scraping historical NFL game data, fetching the latest ELO ratings for teams, and
+preparing datasets for analysis. It leverages pandas for data manipulation, sportsipy for scraping,
+and custom utilities for efficient data I/O and logging, making it a core component for keeping NFL
+data current and analytically valuable.
 
 Main Functionalities:
-- Scraping historical NFL game data across specified seasons.
-- Fetching the latest ELO ratings for NFL teams.
-- Processing and cleaning the collected data to prepare it for analysis.
-- Storing the processed data in a structured format for easy access and analysis.
-
-Usage:
-This module is typically used to refresh the underlying data used for NFL game predictions,
-including both historical game data and ELO ratings. It supports conditional data refreshes based
-on specific flags to avoid unnecessary processing.
+- Scraping historical NFL game data to provide a rich historical dataset.
+- Fetching current ELO ratings for teams to assess performance.
+- Processing and cleaning data to ready it for analysis.
+- Storing data in a structured format for easy access and analysis.
 
 Dependencies:
 - pandas: For data manipulation and analysis.
 - numpy: For numerical operations.
-- sportsipy: For scraping sports data from the web.
-- custom utilities: For logging, data I/O, and additional NFL-specific operations.
+- sportsipy: For scraping sports data.
+- custom utilities: For logging, data I/O, and NFL-specific tasks.
+
+Usage:
+This module is primarily used for updating the data foundation for NFL game predictions, handling
+both historical data and current ELO ratings. It supports conditional data refreshes for efficient
+processing.
 """
 
 from datetime import date, datetime

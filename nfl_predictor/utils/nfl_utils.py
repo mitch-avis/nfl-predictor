@@ -1,20 +1,32 @@
 """
-Provides utility functions for the NFL predictor project, facilitating operations such as game
-outcome computation, stats DataFrame creation, and NFL week determination. These utilities support
-the data collection and analysis processes by offering specialized operations tailored to NFL data.
+This module, nfl_utils.py, provides utility functions for the NFL predictor project, aiding in
+data collection and analysis. It includes functionalities for handling NFL data, such as game
+outcome calculations, statistical DataFrame generation from boxscore data, NFL week determination,
+data scraping for specific weeks, and fetching ELO ratings for teams.
 
-Functions:
-- compute_game_outcomes: Calculates the outcomes of games based on team stats.
-- create_stats_dfs_from_boxscore: Generates pandas DataFrames from boxscore data.
-- determine_nfl_week_by_date: Determines the NFL week number based on a given date.
-- determine_weeks_to_scrape: Identifies the weeks of NFL games to scrape data for.
-- fetch_nfl_elo_ratings: Retrieves ELO ratings for NFL teams.
+Key Functions:
+- fetch_nfl_elo_ratings: Retrieves current ELO ratings for NFL teams.
+- get_season_start: Determines the NFL season's start date.
+- determine_nfl_week_by_date: Calculates NFL week number from a date.
+- determine_weeks_to_scrape: Identifies weeks within a season for data scraping.
+- get_week_dates: Generates dates for each week of an NFL season.
+- fetch_week_boxscores: Retrieves boxscore data for all games in a specified week.
+- fetch_game_boxscore: Obtains boxscore data for a single game.
 - init_team_stats_dfs: Initializes DataFrames for team statistics.
-- merge_and_format_df: Merges and formats different DataFrames into a coherent structure.
+- compute_game_outcomes: Calculates game outcomes from team statistics.
+- create_stats_dfs_from_boxscore: Transforms boxscore data into structured DataFrames.
+- create_stats_df: Generates a DataFrame of team statistics from game data.
+- merge_and_format_df: Merges and formats team and opponent statistics for analysis.
+- convert_top_to_seconds_in_df: Converts time of possession to seconds.
+- reorder_and_drop_columns: Reorganizes and prunes DataFrame columns.
+- prepare_data_for_week: Processes data for a specific NFL week.
+- calculate_stats: Computes aggregated team statistics.
 
 Dependencies:
-- pandas: For creating and manipulating DataFrames.
-- numpy: Used for numerical operations.
+- pandas: For data manipulation and analysis.
+- numpy: For numerical computations.
+- sportsipy: For scraping NFL boxscores.
+- custom utilities: For logging and data processing efficiency.
 """
 
 from datetime import date, timedelta

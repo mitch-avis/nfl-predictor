@@ -1,39 +1,27 @@
 """
-This module provides a comprehensive suite of utilities for handling CSV file operations, tailored
-specifically for the NFL predictor project. It encapsulates functionalities for efficiently
-reading from, writing to, and updating CSV files, with a particular focus on integration with
-pandas DataFrames. These utilities are designed to streamline the import and export processes of
-data, ensuring efficient data storage and retrieval mechanisms that are vital for the management
-of the project's dataset.
+This module offers utilities for CSV file operations within the NFL predictor project, focusing on
+efficiently reading, writing, and updating CSV files in conjunction with pandas DataFrames. It aims
+to simplify data import/export, ensuring effective data management.
 
 Key Functions:
-- read_write_data: Orchestrates the reading of data from a CSV file or its generation using a
-  specified function, followed by writing the data back to a CSV file. This function is
-  instrumental in managing datasets that require periodic updates or refreshes.
-- read_df_from_csv: Facilitates the reading of data from a CSV file into a pandas DataFrame,
-  including optional checks for file existence to prevent runtime errors.
-- write_df_to_csv: Handles the writing of a pandas DataFrame to a CSV file, ensuring the creation
-  of necessary directories and the preservation of DataFrame indices.
+- read_write_data: Manages reading from or generating data for a CSV file, then writing it back,
+  useful for datasets needing regular updates.
+- read_df_from_csv: Reads data from a CSV file into a pandas DataFrame, with an option to check
+  file existence.
+- write_df_to_csv: Writes a pandas DataFrame to a CSV file, including directory creation and index
+  preservation.
 
 Dependencies:
-- os: Utilized for file system interactions, such as checking for the existence of files and
-  directories.
-- pandas (pd): The primary library used for all operations involving reading from and writing to
-  CSV files, as well as for manipulating the data within DataFrames.
-- constants: Provides access to project-wide constants, including the data storage path, which is
-  essential for locating CSV files within the project's directory structure.
-- logger (log): Employed for logging informational messages and errors, facilitating debugging and
-  operational monitoring.
+- os: For file and directory checks.
+- pandas (pd): For CSV operations and DataFrame manipulation.
+- constants: Accesses project-wide constants like data storage paths.
+- logger (log): For logging messages and errors, aiding in debugging and monitoring.
 
-Usage Scenario:
-This module is integral to the NFL predictor project, finding application across various stages
-where data needs to be ingested from or persisted to CSV files. It supports critical operations
-such as loading historical game data, storing processed data for future analysis, and exporting
-data for external use or sharing.
-
-By abstracting the complexities of CSV file handling and integrating closely with pandas
-DataFrames, this module significantly contributes to the project's data management efficiency and
-reliability.
+Usage:
+Essential for stages requiring data ingestion from or persistence to CSV files, supporting tasks
+like loading historical data, storing processed data, and exporting data for external use. It
+enhances data management efficiency and reliability by abstracting CSV handling complexities and
+leveraging pandas DataFrames.
 """
 
 import os

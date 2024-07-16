@@ -1,21 +1,20 @@
 """
-This module defines constants for the NFL predictor project. It includes configurations such as
-paths, NFL season details, team abbreviations, and various statistics relevant to player and team
-performance analysis. By centralizing these configurations, the module aids in maintaining
-consistency and integrity across the project, making it easier to manage and update.
+This module defines constants for the NFL predictor project, including configurations for paths,
+NFL season details, team abbreviations, and statistics for performance analysis. Centralizing these
+configurations helps maintain consistency and integrity across the project, simplifying management
+and updates.
 
 Key Constants:
-- Directories: ROOT_DIR, DATA_PATH for project root and data storage.
-- NFL Season: SEASON_END_MONTH, WEEKS_BEFORE_2021, WEEKS_FROM_2021_ONWARDS for season
-  configurations.
-- Data URLs: ELO_DATA_URL for fetching ELO ratings.
-- Team Abbreviations: TEAMS, PBP_TEAMS, ELO_TEAMS, STD_TEAMS for different dataset formats.
+- Directories: ROOT_DIR, DATA_PATH for project root and data storage paths.
+- NFL Season: SEASON_END_MONTH, WEEKS_BEFORE_2021, WEEKS_FROM_2021_ONWARDS for season timelines.
+- Data URLs: ELO_DATA_URL, TEAM_RANKINGS_URL for fetching ELO ratings and team rankings.
+- Team Abbreviations: TEAMS_TO_ABBR for mapping team names to abbreviations.
 - Statistics: BASE_COLUMNS, BOXSCORE_STATS, AGG_STATS for analysis metrics.
 - Exclusions: ELO_DROP_COLS for columns to exclude from the ELO dataset.
-- Player Information: ACTIVE_QB_IDS for active quarterbacks' names, draft years, and numbers.
+- Player Information: ACTIVE_QB_IDS for active quarterbacks' details.
 
-This structured approach ensures easy reference and modification, supporting the project's
-scalability and adaptability.
+This approach ensures easy reference and modification, supporting the project's scalability and
+adaptability.
 """
 
 import os

@@ -18,12 +18,14 @@ Dependencies:
 """
 
 from datetime import date, timedelta
+from time import sleep
 
 import numpy as np
 import pandas as pd
-from sportsipy.nfl.boxscore import Boxscore
+from sportsipy.nfl.boxscore import Boxscore, Boxscores
 
 from nfl_predictor import constants
+from nfl_predictor.utils.logger import log
 
 DATA_PATH = constants.DATA_PATH
 SEASON_END_MONTH = constants.SEASON_END_MONTH
@@ -165,6 +167,68 @@ def get_week_dates(season: int) -> list[date]:
     # Use list comprehension to generate the list of week start dates
     week_dates = [season_start_date + timedelta(weeks=week) for week in weeks_to_scrape]
     return week_dates
+
+
+def fetch_week_boxscores(season: int, week: int) -> tuple[Boxscores, Exception]:
+    """
+    Fetches box scores for all games in a specified week and season, retrying on failure.
+
+    This function attempts to retrieve box scores for a given week and season. If the initial
+    attempt fails, it retries up to two more times, with an increasing delay between attempts.
+    It returns a tuple containing the Boxscores object (or None if unsuccessful) and an Exception
+    object if an error occurred on the final attempt (or None if successful).
+
+    Args:
+        season (int): The NFL season year.
+        week (int): The week number within the NFL season.
+
+    Returns:
+        tuple[Boxscores, Exception]: A tuple containing the Boxscores object and an Exception
+                                     object if an error occurred, or None for both if successful.
+    """
+    # pylint: disable=broad-except
+    for attempt in range(3):
+        try:
+            return Boxscores(week, season), None
+        except Exception as e:
+            log.warning("Failed to fetch week scores on attempt %s: %s", attempt + 1, e)
+            if attempt == 2:
+                return None, e  # Return the exception on the final attempt
+            sleep(2**attempt)  # Exponential backoff between retries
+    return None, Exception("Unable to fetch week scores after multiple attempts.")
+
+
+def fetch_game_boxscore(game_info: str) -> tuple[Boxscore, Exception]:
+    """
+    Fetches individual game stats with retries on failure.
+
+    Attempts to retrieve the boxscore for a single game identified by its boxscore URL segment.
+    If the initial attempt fails, it retries up to two more times, with an increasing delay
+    between attempts. It returns a tuple containing the Boxscore object (or None if unsuccessful)
+    and an Exception object if an error occurred on the final attempt (or None if successful).
+
+    Args:
+        game_info (str): The boxscore URL segment for the game.
+
+    Returns:
+        tuple[Boxscore, Exception]: A tuple containing the Boxscore object and an Exception
+                                    object if an error occurred, or None for both if successful.
+    """
+    # pylint: disable=broad-except
+    for attempt in range(3):
+        try:
+            return Boxscore(game_info), None
+        except Exception as e:
+            log.warning(
+                "Failed to fetch game stats for %s on attempt %s: %s",
+                game_info,
+                attempt + 1,
+                e,
+            )
+            if attempt == 2:
+                return None, e  # Return the exception on the final attempt
+            sleep(2**attempt)  # Exponential backoff between retries
+    return None, Exception("Unable to fetch game stats after multiple attempts.")
 
 
 def init_team_stats_dfs(game_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:

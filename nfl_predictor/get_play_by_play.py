@@ -8,8 +8,8 @@ from nfl_predictor.utils.ml_utils import nested_dict_to_df
 START_YEAR = 2023
 END_YEAR = 2023
 ACTIVE_QB_IDS = constants.ACTIVE_QB_IDS
-PBP_TEAMS = constants.PBP_TEAMS
-TEAMS = constants.TEAMS
+PBP_TEAMS = constants.PBP_TEAM_ABBR
+TEAMS = constants.TEAM_ABBR
 
 
 def clean_pbp_data(raw_pbp_df: pd.DataFrame):

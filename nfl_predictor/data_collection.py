@@ -226,6 +226,10 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             force_refresh=REFRESH_COMBINED_DATA,
         )
 
+        # Drop week 1 rows for 2003 season (not enough data for analysis)
+        if season == 2003:
+            combined_data_df = combined_data_df[combined_data_df["week"] != 1]
+
         # Append the combined data for the season to the list
         combined_data_list.append(combined_data_df)
 

@@ -77,37 +77,47 @@ def get_season_start(year: int) -> date:
 
 def determine_nfl_week_by_date(given_date: date) -> int:
     """
-    Determines the NFL week number for a given date, accounting for the season's structure and
-    handling dates outside the regular season by assigning them to the closest season's start or
-    treating them as offseason.
+    Calculates the NFL week number for a given date, adjusting for offseason and season structure.
+
+    This function identifies the NFL week number for any given date, taking into account the regular
+    season's structure, the offseason, and the transition periods between seasons. It handles
+    special cases for January and February, considering them as part of the previous season. The
+    function returns a week number from 1 to 18, where 1 can indicate either the first week of the
+    season, an offseason period, or a pre-season phase, depending on the date's context.
 
     Args:
-        given_date (date): The date for which the NFL week number is determined.
+        given_date (date): The date for which the NFL week number is to be determined.
 
     Returns:
-        int: The NFL week number for the given date, with 1 for dates before the season start or
-             offseason, and up to 18 for the regular season weeks.
+        int: The NFL week number, ranging from 1 (offseason or first week) to 18 (end of the
+             regular season).
     """
-    # Determine the given season's start date based on the year of the given date
+    # Determine the start date of the NFL season for the given year
     season_start = get_season_start(given_date.year)
 
-    # If the given date is before the season's start, determine if it's closer to the previous
-    # season's start or should be considered as offseason/preseason for the current year
+    # Handle dates before the season start, considering January and February for final weeks of
+    # the previous season or postseason
     if given_date < season_start:
-        previous_season_start = get_season_start(given_date.year - 1)
-        # If the given date is after the previous season's start, consider it as the start of the
-        # new season (offseason/preseason period)
-        if given_date >= previous_season_start:
-            return 1  # Treat as the beginning of the new season
-        return 0  # Indicates the date is before the previous season's start (deep offseason)
+        # January and February are treated as part of the previous season
+        if given_date.month in (1, 2):
+            # Calculate week number from the previous season's start date
+            previous_season_start = get_season_start(given_date.year - 1)
+            week_number = ((given_date - previous_season_start).days // 7) + 1
+            # Ensure week number is within the regular season range
+            return max(1, min(week_number, 18))
+        else:
+            # For dates before the previous season's start, determine if it's offseason
+            previous_season_start = get_season_start(given_date.year - 1)
+            if given_date >= previous_season_start:
+                # Treat as the beginning of the new season (offseason/preseason)
+                return 1
+            # Date is before the previous season's start (previous season's offseason)
+            return 0
 
-    # Calculate the week number by dividing the difference in days by 7 and adding 1 to adjust
-    # for the first week. This calculation assumes a week starts from the season start date.
+    # Calculate the week number for dates during or after the season start
     week_number = ((given_date - season_start).days // 7) + 1
-
-    # Ensure the week number is within the NFL regular season range (1 to 18), adjusting for
-    # dates that fall outside this range to treat them as offseason/preseason.
-    return max(1, min(week_number, 18)) if week_number > 0 else 1
+    # Ensure week number is within the regular season range
+    return max(1, min(week_number, 18))
 
 
 def determine_weeks_to_scrape(season: int, include_future_weeks: bool = False) -> list:

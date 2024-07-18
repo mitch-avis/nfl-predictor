@@ -300,6 +300,7 @@ AGG_DROP_COLS = [
 # Columns to exclude from the ELO dataset for streamlined analysis
 ELO_DROP_COLS = [
     "season",
+    "neutral",
     "playoff",
     "elo_prob1",
     "elo_prob2",

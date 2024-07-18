@@ -542,8 +542,10 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pd.DataF
             rating_df = rating_df.iloc[:, 1:3].rename(
                 columns={"Team": "abbr", "Rating": rating_name}
             )
-            # Clean team names and convert to abbreviations
-            rating_df["abbr"] = rating_df["abbr"].str.replace(r"\s+\(\d+-\d+\)$", "", regex=True)
+            # Strip win-loss-tie records from team abbreviations and map to standard abbreviations
+            rating_df["abbr"] = rating_df["abbr"].str.replace(
+                r"\s+\(\d+-\d+(-\d+)*\)$", "", regex=True
+            )
             rating_df["abbr"] = rating_df["abbr"].apply(lambda x: constants.TEAMS_TO_ABBR.get(x, x))
             # Merge the current rating data with the week's DataFrame
             week_rankings_df = pd.merge(week_rankings_df, rating_df, on="abbr", how="outer")

@@ -584,66 +584,62 @@ def merge_and_finalize(week_games_df, agg_weekly_df, results_df):
 
 def calc_win_and_conversion_rates(agg_weekly_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculates win percentages and down conversion rates for aggregated weekly data.
+    Calculates and updates win percentages and down conversion rates for aggregated weekly
+    NFL data, substituting missing data with predefined median values.
 
-    This function takes a DataFrame of aggregated weekly data and calculates the win percentage,
-    third down conversion rate, fourth down conversion rate, and opponent's third and fourth down
-    conversion rates for each team.
+    This function enhances data integrity by ensuring that teams with incomplete data are
+    evaluated using industry-standard median values rather than being disregarded or inaccurately
+    represented. It leverages vectorized operations for efficiency and readability, making it
+    suitable for large datasets.
 
     Args:
-        agg_weekly_df (pd.DataFrame): DataFrame containing aggregated weekly data for teams.
+        agg_weekly_df (pd.DataFrame): DataFrame containing aggregated weekly data for NFL teams.
 
     Returns:
-        pd.DataFrame: The input DataFrame with added columns for each of the calculated rates.
+        pd.DataFrame: The DataFrame with new columns for win percentage, third and fourth down
+        conversion rates, and opponent's third and fourth down conversion rates, with missing
+        data handled via median values.
+
+    Note:
+        Median values are defined in a separate constants module and should reflect current
+        industry standards or historical averages to maintain accuracy.
     """
-    # Calculate win percentage; handle cases with missing data using np.where to avoid division by
-    # zero
+
+    # Calculate win percentage, using median if data is missing
     agg_weekly_df["win_perc"] = np.where(
-        (agg_weekly_df["game_won"].notna() & agg_weekly_df["game_lost"].notna()),
+        agg_weekly_df["game_won"] + agg_weekly_df["game_lost"] > 0,
         agg_weekly_df["game_won"] / (agg_weekly_df["game_won"] + agg_weekly_df["game_lost"]),
-        np.nan,
+        constants.MEDIAN_WIN_PERCENTAGE,  # Substitute for missing data
     )
 
-    # Calculate third down conversion percentage; handle missing data to avoid division errors
+    # Calculate third down conversion rate, using median if data is missing
     agg_weekly_df["third_down_perc"] = np.where(
-        (
-            agg_weekly_df["third_down_conversions"].notna()
-            & agg_weekly_df["third_down_attempts"].notna()
-        ),
+        agg_weekly_df["third_down_attempts"] > 0,
         agg_weekly_df["third_down_conversions"] / agg_weekly_df["third_down_attempts"],
-        np.nan,
+        constants.MEDIAN_THIRD_DOWN,  # Substitute for missing data
     )
 
-    # Calculate fourth down conversion percentage; similarly handle missing data
+    # Calculate fourth down conversion rate, using median if data is missing
     agg_weekly_df["fourth_down_perc"] = np.where(
-        (
-            agg_weekly_df["fourth_down_conversions"].notna()
-            & agg_weekly_df["fourth_down_attempts"].notna()
-        ),
+        agg_weekly_df["fourth_down_attempts"] > 0,
         agg_weekly_df["fourth_down_conversions"] / agg_weekly_df["fourth_down_attempts"],
-        np.nan,
+        constants.MEDIAN_FOURTH_DOWN,  # Substitute for missing data
     )
 
-    # Calculate opponent's third down conversion percentage; handle missing data
+    # Calculate opponent's third down conversion rate, using median if data is missing
     agg_weekly_df["opponent_third_down_perc"] = np.where(
-        (
-            agg_weekly_df["opponent_third_down_conversions"].notna()
-            & agg_weekly_df["opponent_third_down_attempts"].notna()
-        ),
+        agg_weekly_df["opponent_third_down_attempts"] > 0,
         agg_weekly_df["opponent_third_down_conversions"]
         / agg_weekly_df["opponent_third_down_attempts"],
-        np.nan,
+        constants.MEDIAN_THIRD_DOWN,  # Substitute for missing data
     )
 
-    # Calculate opponent's fourth down conversion percentage; handle missing data
+    # Calculate opponent's fourth down conversion rate, using median if data is missing
     agg_weekly_df["opponent_fourth_down_perc"] = np.where(
-        (
-            agg_weekly_df["opponent_fourth_down_conversions"].notna()
-            & agg_weekly_df["opponent_fourth_down_attempts"].notna()
-        ),
+        agg_weekly_df["opponent_fourth_down_attempts"] > 0,
         agg_weekly_df["opponent_fourth_down_conversions"]
         / agg_weekly_df["opponent_fourth_down_attempts"],
-        np.nan,
+        constants.MEDIAN_FOURTH_DOWN,  # Substitute for missing data
     )
 
     return agg_weekly_df

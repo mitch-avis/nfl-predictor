@@ -592,21 +592,22 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     # Create a mask to filter rows within the season date range
     mask = (elo_df["date"] >= week_dates[0]) & (elo_df["date"] <= week_dates[-1])
     filtered_elo_df = elo_df.loc[mask].copy()
+    # Add week number to the DataFrame for consistency with other data
+    filtered_elo_df["week"] = filtered_elo_df["date"].apply(lambda x: determine_nfl_week_by_date(x))
 
     # Map ELO team names to standard team names using a predefined mapping
     team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.PFR_TEAM_ABBR))
     filtered_elo_df["team1"] = filtered_elo_df["team1"].map(team_name_mapping)
     filtered_elo_df["team2"] = filtered_elo_df["team2"].map(team_name_mapping)
 
-    # For neutral games, create swapped rows to represent both perspectives
-    neutral_rows = filtered_elo_df[filtered_elo_df["neutral"] == 1].copy()
+    # Create swapped rows to account for neutral games
+    duplicate_rows = filtered_elo_df.copy()
     # Swap columns for team names and related ELO ratings according to constants.ELO_SWAP_COLS
-    swapped_rows = neutral_rows.rename(columns=constants.ELO_SWAP_COLS)
+    swapped_rows = duplicate_rows.rename(columns=constants.ELO_SWAP_COLS)
 
     # Concatenate original and swapped rows, then clean up the DataFrame
     final_elo_df = (
         pd.concat([filtered_elo_df, swapped_rows], ignore_index=True)
-        .drop(columns=["neutral"])  # 'neutral' column no longer needed
         .sort_values(by=["date"])  # Sort by date for chronological order
         .reset_index(drop=True)  # Reset index for a clean DataFrame
     )
@@ -652,8 +653,8 @@ def combine_data(
         combined_df,
         elo_df,
         how="inner",
-        left_on=["home_abbr", "away_abbr"],
-        right_on=["team1", "team2"],
+        left_on=["home_abbr", "away_abbr", "week"],
+        right_on=["team1", "team2", "week"],
     ).drop(
         columns=["team1", "team2"]
     )  # Remove redundant columns after merge

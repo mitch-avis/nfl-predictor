@@ -24,7 +24,7 @@ both historical data and current ELO ratings. It supports conditional data refre
 processing.
 """
 
-from datetime import date, datetime
+from datetime import date
 from io import StringIO
 from time import sleep
 
@@ -80,9 +80,9 @@ REFRESH_ELO = False
 REFRESH_SCHEDULE = False
 REFRESH_SEASON_DATA = False
 REFRESH_GAME_DATA = False
-REFRESH_AGGREGATE_DATA = False
-REFRESH_ELO_SEASON = False
-REFRESH_SEASON_RANKINGS = False
+REFRESH_AGGREGATE_DATA = True
+REFRESH_ELO_SEASON = True
+REFRESH_SEASON_RANKINGS = True
 REFRESH_GAME_RANKINGS = False
 REFRESH_COMBINED_DATA = True
 
@@ -562,34 +562,51 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pd.DataF
 
 def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     """
-    Filters and adjusts ELO ratings for a specific NFL season.
+    Filters and adjusts ELO ratings for a specific NFL season from a DataFrame containing ELO
+    ratings across multiple seasons. This function optimizes data handling by dropping unnecessary
+    columns early, using vectorized operations for date filtering, and minimizing data copying.
+    It also handles neutral games by creating and appending swapped rows to account for all game
+    scenarios.
 
     Args:
-        elo_df (pd.DataFrame): DataFrame containing ELO ratings for all teams and seasons.
-        season (int): The NFL season year to filter the ELO data for.
+        elo_df (pd.DataFrame): DataFrame containing ELO ratings for all teams across seasons.
+        season (int): The NFL season year for which to filter and adjust ELO ratings.
 
     Returns:
-        pd.DataFrame: Adjusted ELO ratings for the specified season.
+        pd.DataFrame: Adjusted DataFrame with ELO ratings for the specified season, including
+                      handling of neutral games and re-mapping of team names.
     """
-    # Copy the DataFrame to avoid modifying the original
-    yearly_elo_df = elo_df.copy()
-    # Drop columns not needed for analysis
-    yearly_elo_df = yearly_elo_df.drop(columns=constants.ELO_DROP_COLS)
-    # Convert date column to datetime format
-    yearly_elo_df["date"] = pd.to_datetime(yearly_elo_df["date"])
-    # Define the start and end dates for the NFL season
-    start_date = datetime(season, 9, 1)
-    end_date = datetime(season + 1, 3, 1)
-    # Create a mask to filter rows within the NFL season dates
-    mask = (yearly_elo_df["date"] >= start_date) & (yearly_elo_df["date"] <= end_date)
-    # Apply the mask to filter the DataFrame
-    yearly_elo_df = yearly_elo_df.loc[mask]
-    # Create a mapping from ELO team names to standard team names
+    # Drop columns not needed for analysis to reduce memory usage
+    elo_df = elo_df.drop(columns=constants.ELO_DROP_COLS)
+
+    # Convert 'date' column to datetime, then to date for efficient filtering
+    elo_df["date"] = pd.to_datetime(elo_df["date"]).dt.date
+    # Get the start and end dates for the specified season
+    week_dates = get_week_dates(season)
+    # Extend the date range to include the end of the last week
+    week_dates.append((week_dates[-1] + pd.DateOffset(weeks=1)).date())
+    # Create a mask to filter rows within the season date range
+    mask = (elo_df["date"] >= week_dates[0]) & (elo_df["date"] <= week_dates[-1])
+    filtered_elo_df = elo_df.loc[mask].copy()
+
+    # Map ELO team names to standard team names using a predefined mapping
     team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.PFR_TEAM_ABBR))
-    # Replace team names in the dataframe using the mapping
-    yearly_elo_df["team1"] = yearly_elo_df["team1"].map(team_name_mapping)
-    yearly_elo_df["team2"] = yearly_elo_df["team2"].map(team_name_mapping)
-    return yearly_elo_df
+    filtered_elo_df["team1"] = filtered_elo_df["team1"].map(team_name_mapping)
+    filtered_elo_df["team2"] = filtered_elo_df["team2"].map(team_name_mapping)
+
+    # For neutral games, create swapped rows to represent both perspectives
+    neutral_rows = filtered_elo_df[filtered_elo_df["neutral"] == 1].copy()
+    # Swap columns for team names and related ELO ratings according to constants.ELO_SWAP_COLS
+    swapped_rows = neutral_rows.rename(columns=constants.ELO_SWAP_COLS)
+
+    # Concatenate original and swapped rows, then clean up the DataFrame
+    final_elo_df = (
+        pd.concat([filtered_elo_df, swapped_rows], ignore_index=True)
+        .drop(columns=["neutral"])  # 'neutral' column no longer needed
+        .sort_values(by=["date"])  # Sort by date for chronological order
+        .reset_index(drop=True)  # Reset index for a clean DataFrame
+    )
+    return final_elo_df
 
 
 def combine_data(

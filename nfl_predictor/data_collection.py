@@ -497,6 +497,7 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
         )
         # Append the week's rankings to the season list if data is present
         if not week_rankings_df.empty:
+            week_rankings_df = week_rankings_df.fillna(0.0)
             season_rankings.append(week_rankings_df)
 
     # Concatenate all weekly rankings into a single DataFrame for the season
@@ -537,7 +538,7 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pd.DataF
         if table:
             # Parse the HTML table, convert ratings to numeric, and rename columns
             rating_df = pd.read_html(StringIO(str(table)))[0]
-            rating_df["Rating"] = pd.to_numeric(rating_df["Rating"], errors="coerce")
+            rating_df["Rating"] = pd.to_numeric(rating_df["Rating"], errors="coerce").fillna(0.0)
             rating_df = rating_df.iloc[:, 1:3].rename(
                 columns={"Team": "abbr", "Rating": rating_name}
             )

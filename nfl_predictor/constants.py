@@ -29,6 +29,11 @@ SEASON_END_MONTH = 2  # NFL season typically ends in February
 WEEKS_BEFORE_2021 = 17  # Number of weeks in NFL seasons before 2021
 WEEKS_FROM_2021_ONWARDS = 18  # Number of weeks in NFL seasons from 2021 onwards
 
+# Median values for key statistics
+MEDIAN_THIRD_DOWN = 0.4  # Median third down conversion rate for analysis
+MEDIAN_FOURTH_DOWN = 0.5  # Median fourth down conversion rate for analysis
+MEDIAN_WIN_PERCENTAGE = 0.5  # Median win percentage for analysis
+
 # URL for ELO ratings data
 ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
 
@@ -295,7 +300,6 @@ AGG_DROP_COLS = [
 # Columns to exclude from the ELO dataset for streamlined analysis
 ELO_DROP_COLS = [
     "season",
-    "neutral",
     "playoff",
     "elo_prob1",
     "elo_prob2",
@@ -319,6 +323,18 @@ ELO_DROP_COLS = [
     "importance",
     "total_rating",
 ]
+# Dictionary to swap columns for ELO dataset in the event of neutral site games
+ELO_SWAP_COLS = {
+    "team1": "team2",
+    "team2": "team1",
+    "elo1_pre": "elo2_pre",
+    "elo2_pre": "elo1_pre",
+    "qbelo1_pre": "qbelo2_pre",
+    "qbelo2_pre": "qbelo1_pre",
+    "qb1_value_pre": "qb2_value_pre",
+    "qb2_value_pre": "qb1_value_pre",
+}
+
 # Columns to exclude from the completed games dataset for streamlined analysis
 ML_DROP_COLS = [
     "away_name",

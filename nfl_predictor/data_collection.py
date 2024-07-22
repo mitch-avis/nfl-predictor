@@ -593,7 +593,7 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     mask = (elo_df["date"] >= week_dates[0]) & (elo_df["date"] <= week_dates[-1])
     filtered_elo_df = elo_df.loc[mask].copy()
     # Add week number to the DataFrame for consistency with other data
-    filtered_elo_df["week"] = filtered_elo_df["date"].apply(lambda x: determine_nfl_week_by_date(x))
+    filtered_elo_df["week"] = filtered_elo_df["date"].apply(determine_nfl_week_by_date)
 
     # Map ELO team names to standard team names using a predefined mapping
     team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.PFR_TEAM_ABBR))

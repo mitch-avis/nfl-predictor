@@ -12,26 +12,26 @@ PBP_TEAMS = constants.PBP_TEAM_ABBR
 TEAMS = constants.TEAM_ABBR
 
 
-def clean_pbp_data(raw_pbp_df: pd.DataFrame):
-    cleaned_pbp_df = raw_pbp_df.copy()
-    del raw_pbp_df
-    cleaned_pbp_df = cleaned_pbp_df.rename(columns={"id": "player_id2"})
-    cleaned_pbp_df = cleaned_pbp_df.loc[
-        (cleaned_pbp_df["play_type"].isin(["pass", "run", "no_play"]))
-        & ~(cleaned_pbp_df["epa"].isna())
-    ]
-    cleaned_pbp_df.loc[cleaned_pbp_df["pass"] == 1, "play_type"] = "pass"
-    cleaned_pbp_df.loc[cleaned_pbp_df["rush"] == 1, "play_type"] = "rush"
-    cleaned_pbp_df.reset_index(drop=True, inplace=True)
-    return cleaned_pbp_df
+def main():
+    # Get play-by-play data
+    play_by_play_df = get_pbp_data()
+    # Parse weekly QB data
+    # qb_df_name = "all_qbs"
+    qb_df_name = "2023_qbs"
+    qb_df = read_write_data(qb_df_name, parse_qb_data, play_by_play_df)
+    log.debug("qb_df:\n%s", qb_df)
+    # Parse weekly Team data
+    # team_df_name = "all_teams"
+    team_df_name = "2023_teams"
+    team_df = read_write_data(team_df_name, parse_team_data, play_by_play_df)
+    log.debug("team_df:\n%s", team_df)
 
 
-def get_season_pbp(year: int):
-    season_pbp_df = pd.DataFrame()
-    url = f"https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_{year}.csv"
-    season_pbp_df = pd.read_csv(url, low_memory=False)
-    season_pbp_df = clean_pbp_data(season_pbp_df)
-    return season_pbp_df
+def get_pbp_data():
+    # play_by_play_df_name = "all_pbp"
+    play_by_play_df_name = "2023_all_pbp"
+    play_by_play_df = read_write_data(play_by_play_df_name, get_all_pbp_data)
+    return play_by_play_df
 
 
 def get_all_pbp_data():
@@ -44,11 +44,26 @@ def get_all_pbp_data():
     return play_by_play_df
 
 
-def get_pbp_data():
-    # play_by_play_df_name = "all_pbp"
-    play_by_play_df_name = "2023_all_pbp"
-    play_by_play_df = read_write_data(play_by_play_df_name, get_all_pbp_data)
-    return play_by_play_df
+def get_season_pbp(year: int):
+    season_pbp_df = pd.DataFrame()
+    url = f"https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_{year}.csv"
+    season_pbp_df = pd.read_csv(url, low_memory=False)
+    season_pbp_df = clean_pbp_data(season_pbp_df)
+    return season_pbp_df
+
+
+def clean_pbp_data(raw_pbp_df: pd.DataFrame):
+    cleaned_pbp_df = raw_pbp_df.copy()
+    del raw_pbp_df
+    cleaned_pbp_df = cleaned_pbp_df.rename(columns={"id": "player_id2"})
+    cleaned_pbp_df = cleaned_pbp_df.loc[
+        (cleaned_pbp_df["play_type"].isin(["pass", "run", "no_play"]))
+        & ~(cleaned_pbp_df["epa"].isna())
+    ]
+    cleaned_pbp_df.loc[cleaned_pbp_df["pass"] == 1, "play_type"] = "pass"
+    cleaned_pbp_df.loc[cleaned_pbp_df["rush"] == 1, "play_type"] = "rush"
+    cleaned_pbp_df.reset_index(drop=True, inplace=True)
+    return cleaned_pbp_df
 
 
 def parse_qb_data(play_by_play_df: pd.DataFrame):
@@ -132,21 +147,6 @@ def parse_team_data(play_by_play_df: pd.DataFrame):
     team_epa_df = team_epa_df.reset_index(drop=True)
     log.debug("team_epa_df:\n%s", team_epa_df)
     return team_epa_df
-
-
-def main():
-    # Get play-by-play data
-    play_by_play_df = get_pbp_data()
-    # Parse weekly QB data
-    # qb_df_name = "all_qbs"
-    qb_df_name = "2023_qbs"
-    qb_df = read_write_data(qb_df_name, parse_qb_data, play_by_play_df)
-    log.debug("qb_df:\n%s", qb_df)
-    # Parse weekly Team data
-    # team_df_name = "all_teams"
-    team_df_name = "2023_teams"
-    team_df = read_write_data(team_df_name, parse_team_data, play_by_play_df)
-    log.debug("team_df:\n%s", team_df)
 
 
 if __name__ == "__main__":

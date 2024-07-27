@@ -76,7 +76,7 @@ SEASONS_TO_SCRAPE = [
     2023,
     2024,
 ]
-REFRESH_ELO = False
+REFRESH_ELO = True
 REFRESH_SCHEDULE = False
 REFRESH_SEASON_DATA = False
 REFRESH_GAME_DATA = False
@@ -229,9 +229,13 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             force_refresh=REFRESH_COMBINED_DATA,
         )
 
-        # Drop week 1 rows for 2003 season (not enough data for analysis)
-        if season == 2003:
-            combined_data_df = combined_data_df[combined_data_df["week"] != 1]
+        # Drop rows with NaN values in any column, except the latest season/week, reset the index,
+        # and log which rows were dropped
+        if season != SEASONS_TO_SCRAPE[-1]:
+            dropped_rows = combined_data_df[combined_data_df.isnull().any(axis=1)]
+            if not dropped_rows.empty:
+                log.info("Dropped rows: %s", dropped_rows)
+                combined_data_df = combined_data_df.dropna().reset_index(drop=True)
 
         # Append the combined data for the season to the list
         combined_data_list.append(combined_data_df)

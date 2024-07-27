@@ -105,14 +105,13 @@ def determine_nfl_week_by_date(given_date: date) -> int:
             week_number = ((given_date - previous_season_start).days // 7) + 1
             # Ensure week number is within the regular season range
             return max(1, min(week_number, 18))
-        else:
-            # For dates before the previous season's start, determine if it's offseason
-            previous_season_start = get_season_start(given_date.year - 1)
-            if given_date >= previous_season_start:
-                # Treat as the beginning of the new season (offseason/preseason)
-                return 1
-            # Date is before the previous season's start (previous season's offseason)
-            return 0
+        # For dates before the previous season's start, determine if it's offseason
+        previous_season_start = get_season_start(given_date.year - 1)
+        if given_date >= previous_season_start:
+            # Treat as the beginning of the new season (offseason/preseason)
+            return 1
+        # Date is before the previous season's start (previous season's offseason)
+        return 0
 
     # Calculate the week number for dates during or after the season start
     week_number = ((given_date - season_start).days // 7) + 1

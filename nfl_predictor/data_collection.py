@@ -596,7 +596,7 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     filtered_elo_df["week"] = filtered_elo_df["date"].apply(determine_nfl_week_by_date)
 
     # Map ELO team names to standard team names using a predefined mapping
-    team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.PFR_TEAM_ABBR))
+    team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
     filtered_elo_df["team1"] = filtered_elo_df["team1"].map(team_name_mapping)
     filtered_elo_df["team2"] = filtered_elo_df["team2"].map(team_name_mapping)
 
@@ -622,8 +622,8 @@ def combine_data(
 
     This function merges aggregated game data with team rankings and ELO ratings to provide a
     comprehensive dataset that includes differences in ELO ratings, QB values, and other relevant
-    metrics between the home and away teams. It standardizes team abbreviations and reorders
-    columns to facilitate analysis, especially for predictive modeling of game outcomes.
+    metrics between the home and away teams. It also reorders columns to facilitate analysis,
+    especially for predictive modeling of game outcomes.
 
     Args:
         agg_games_df (pd.DataFrame): Aggregated game data for the season.
@@ -675,14 +675,6 @@ def combine_data(
             "qbelo1_pre",
             "qbelo2_pre",
         ]
-    )
-
-    # Standardize team abbreviations to ensure consistency across the dataset
-    combined_df["home_abbr"] = combined_df["home_abbr"].replace(
-        constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
-    )
-    combined_df["away_abbr"] = combined_df["away_abbr"].replace(
-        constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
     )
 
     # Reorder columns to improve readability, placing scores and result at the end

@@ -575,10 +575,10 @@ def merge_and_finalize(week_games_df, agg_weekly_df, results_df):
 
     # Prepare away and home team data with appropriate prefixes and renames
     agg_weekly_away_df = agg_weekly_df.add_prefix("away_").rename(
-        columns={"away_team_name": "away_name", "away_team_abbr": "away_abbr"}
+        columns={"away_team_abbr": "away_abbr"}
     )
     agg_weekly_home_df = agg_weekly_df.add_prefix("home_").rename(
-        columns={"home_team_name": "home_name", "home_team_abbr": "home_abbr"}
+        columns={"home_team_abbr": "home_abbr"}
     )
 
     # Merge aggregated stats with the week's game schedule
@@ -677,14 +677,14 @@ def merge_aggregated_stats(
         games_df,
         agg_weekly_away_df,
         how="left",  # Use left join to keep all records from the main game DataFrame
-        on=["away_name", "away_abbr"],  # Join on away team name and abbreviation
+        on=["away_abbr"],  # Join on away team abbreviation
     )
     # Merge the result with the aggregated stats for home teams
     merged_df = pd.merge(
         merged_df,
         agg_weekly_home_df,
         how="left",  # Use left join to ensure no game data is lost
-        on=["home_name", "home_abbr"],  # Join on home team name and abbreviation
+        on=["home_abbr"],  # Join on home team abbreviation
     )
     return merged_df
 

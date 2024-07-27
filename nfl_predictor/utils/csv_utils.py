@@ -90,9 +90,8 @@ def read_df_from_csv(file_path: str, check_exists: bool = True) -> pd.DataFrame:
     # Check if the file exists, if required
     if check_exists and not os.path.isfile(file_path):
         # Log an error message and exit if the file does not exist
-        log.info("%s not found!", os.path.basename(file_path))
+        log.error("%s not found!", os.path.basename(file_path))
         sys.exit(1)
-
     # Read the CSV file into a DataFrame, using the first column as the index
     dataframe = pd.read_csv(file_path, index_col=0)
     return dataframe
@@ -109,12 +108,9 @@ def write_df_to_csv(dataframe: pd.DataFrame, file_path: str) -> None:
         dataframe (pd.DataFrame): The DataFrame to write.
         file_path (str): The path to the CSV file where the data should be written.
     """
-    # Construct the directory path for the CSV file
-    directory_path = os.path.dirname(file_path)
-
     # Create the directory if it does not exist
-    if not os.path.exists(directory_path):
-        os.makedirs(directory_path)
-
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     # Write the DataFrame to the CSV file, including the index
     dataframe.to_csv(file_path, index=True)
+    # Log a message indicating the successful write
+    log.debug("Data written to %s", os.path.basename(file_path))

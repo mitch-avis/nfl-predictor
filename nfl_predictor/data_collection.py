@@ -114,6 +114,8 @@ def main() -> None:
         force_refresh=True,
     )
 
+    log.info("Data collection and processing complete.")
+
 
 def collect_data() -> pd.DataFrame:
     """

@@ -495,6 +495,16 @@ def prepare_data_for_week(
             - DataFrame of the week's games from the schedule.
             - DataFrame of the week's game results, limited to essential columns.
     """
+    # Standardize team abbreviations to ensure consistency across the dataset
+    schedule_df["home_abbr"] = schedule_df["home_abbr"].replace(
+        constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
+    )
+    schedule_df["away_abbr"] = schedule_df["away_abbr"].replace(
+        constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
+    )
+    season_games_df["team_abbr"] = season_games_df["team_abbr"].replace(
+        constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
+    )
     # Filter for the specified week's games and results
     week_games_df = schedule_df[schedule_df["week"] == week]
     results_df = season_games_df[season_games_df["week"] == week][constants.BASE_COLUMNS]
@@ -502,56 +512,57 @@ def prepare_data_for_week(
     return week_games_df, results_df
 
 
-def calculate_stats(df: pd.DataFrame, week: int) -> pd.DataFrame:
+def calculate_stats(previous_weeks_df: pd.DataFrame, previous_season: bool = False) -> pd.DataFrame:
     """
-    Optimizes statistics calculation for NFL games by week, handling initialization for week 1 and
-    aggregating metrics for subsequent weeks.
+    Calculates aggregated statistics for each team based on previous weeks' data.
+    If `previous_season` is True, regress each team's mean stats to the league mean for each stat.
 
     Args:
-        df (pd.DataFrame): Season games data.
-        week (int): Target week for statistics calculation.
+        previous_weeks_df (pd.DataFrame): DataFrame containing each team's statistics for each week
+                                          prior to the current week.
+        previous_season (bool): Flag indicating if the data represents the entire previous season's
+                                stats.
 
     Returns:
-        pd.DataFrame: DataFrame with updated or calculated statistics for the specified week.
+        pd.DataFrame: DataFrame with aggregated statistics for each team.
     """
-    # For week 1, initialize specific columns with NaN
-    if week == 1:
-        for col in [
-            "win_perc",
-            "third_down_perc",
-            "fourth_down_perc",
-            "opponent_third_down_perc",
-            "opponent_fourth_down_perc",
-        ]:
-            df[col] = np.nan
-        return df
+    # Aggregate ratios and calculate win and conversion rates
+    agg_ratios_df = previous_weeks_df.groupby(["team_name", "team_abbr"], as_index=False).agg(
+        constants.RATIOS_DICT
+    )
+    agg_ratios_df = calc_win_and_conversion_rates(agg_ratios_df)
 
-    # Define metrics for aggregation
-    metrics = {
-        "game_won": "sum",
-        "game_lost": "sum",
-        "third_down_conversions": "sum",
-        "third_down_attempts": "sum",
-        "fourth_down_conversions": "sum",
-        "fourth_down_attempts": "sum",
-        "opponent_third_down_conversions": "sum",
-        "opponent_third_down_attempts": "sum",
-        "opponent_fourth_down_conversions": "sum",
-        "opponent_fourth_down_attempts": "sum",
+    # Exclude specific columns from mean calculation
+    excluded_columns = set(constants.RATIOS_DICT) | {
+        "team_name",
+        "team_abbr",
+        "week",
+        "season",
     }
 
-    # Aggregate metrics and calculate win/conversion rates
-    agg_metrics_df = df.groupby(["team_name", "team_abbr"], as_index=False).agg(metrics)
-    agg_metrics_df = calc_win_and_conversion_rates(agg_metrics_df)
+    # Identify columns to calculate mean values
+    mean_columns = previous_weeks_df.columns.difference(excluded_columns)
 
-    # Calculate mean for columns not included in metrics, excluding specific columns
-    excluded_columns = set(metrics) | {"team_name", "team_abbr", "week", "season"}
-    mean_columns = df.columns.difference(excluded_columns)
-    agg_metrics_df[mean_columns] = df.groupby(["team_name", "team_abbr"])[mean_columns].transform(
-        "mean"
-    )
+    # Calculate mean stats for each team
+    agg_means_df = previous_weeks_df.groupby(["team_name", "team_abbr"], as_index=False)[
+        mean_columns
+    ].mean()
 
-    return agg_metrics_df
+    # Merge aggregated ratios and mean stats
+    agg_stats_df = pd.merge(agg_ratios_df, agg_means_df, on=["team_name", "team_abbr"])
+
+    if previous_season:
+        # Regress each team's mean stats towards the league mean
+        mean_columns = agg_stats_df.columns.difference(["team_name", "team_abbr", "week", "season"])
+        league_means = agg_stats_df[mean_columns].mean()
+        regression_factor = 1 / 3  # Degree of regression towards the league mean
+        for column in mean_columns:
+            agg_stats_df[column] = (
+                regression_factor * league_means[column]
+                + (1 - regression_factor) * agg_stats_df[column]
+            )
+
+    return agg_stats_df
 
 
 def merge_and_finalize(week_games_df, agg_weekly_df, results_df):

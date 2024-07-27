@@ -282,6 +282,18 @@ AGG_STATS = [
     "fourth_down_perc",
     "time_of_possession",
 ]
+RATIOS_DICT = {
+    "game_won": "sum",
+    "game_lost": "sum",
+    "third_down_conversions": "sum",
+    "third_down_attempts": "sum",
+    "fourth_down_conversions": "sum",
+    "fourth_down_attempts": "sum",
+    "opponent_third_down_conversions": "sum",
+    "opponent_third_down_attempts": "sum",
+    "opponent_fourth_down_conversions": "sum",
+    "opponent_fourth_down_attempts": "sum",
+}
 AGG_DROP_COLS = [
     "team_name",
     "season",

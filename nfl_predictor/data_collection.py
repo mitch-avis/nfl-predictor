@@ -34,7 +34,7 @@ from bs4 import BeautifulSoup
 from sportsipy.nfl.boxscore import Boxscore, Boxscores
 
 from nfl_predictor import constants
-from nfl_predictor.utils.csv_utils import read_write_data
+from nfl_predictor.utils.csv_utils import read_df_from_csv, read_write_data
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.nfl_utils import (
     calculate_stats,
@@ -192,6 +192,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
         agg_games_df = read_write_data(
             f"{season}/{season}_agg_games",
             aggregate_season_data,
+            season,
             weeks,
             season_games_df,
             schedule_df,
@@ -431,7 +432,7 @@ def get_schedule(season: int) -> pd.DataFrame:
 
 
 def aggregate_season_data(
-    weeks: list, season_games_df: pd.DataFrame, schedule_df: pd.DataFrame
+    season: int, weeks: list, season_games_df: pd.DataFrame, schedule_df: pd.DataFrame
 ) -> pd.DataFrame:
     """
     Aggregates game data for specified weeks, calculating team performance metrics.
@@ -441,6 +442,7 @@ def aggregate_season_data(
     between opposing teams for the specified weeks.
 
     Args:
+        season (int): NFL season year.
         weeks (list): Weeks within the season to aggregate data for.
         season_games_df (pd.DataFrame): Detailed game data for the season.
         schedule_df (pd.DataFrame): Schedule and outcomes for the season.
@@ -456,19 +458,27 @@ def aggregate_season_data(
         log.info("Aggregating game data for Week %s...", week)
         # Prepare data for the current week
         week_games_df, results_df = prepare_data_for_week(week, schedule_df, season_games_df)
-        # Calculate stats for the current week, considering data from previous weeks if applicable
         if week == 1:
-            # For Week 1, initialize agg_weekly_df with no prior data
-            agg_weekly_df = season_games_df.head(0)
-            agg_weekly_df = calculate_stats(agg_weekly_df, week)
+            # Load previous season's game data if not the first season in SEASONS_TO_SCRAPE
+            if season != SEASONS_TO_SCRAPE[0]:
+                prev_season = season - 1
+                prev_season_file = (
+                    f"{constants.DATA_PATH}/{prev_season}/{prev_season}_season_games.csv"
+                )
+                previous_weeks_df = read_df_from_csv(prev_season_file)
+                previous_weeks_df["team_abbr"] = previous_weeks_df["team_abbr"].replace(
+                    constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
+                )
+            else:
+                continue
+            previous_season = True
         else:
-            # For subsequent weeks, calculate stats based on previous weeks' data
             previous_weeks_df = season_games_df[season_games_df["week"] < week]
-            agg_weekly_df = calculate_stats(previous_weeks_df, week)
+            previous_season = False
+        agg_weekly_df = calculate_stats(previous_weeks_df, previous_season=previous_season)
         # Merge current week's data with results and add to the list
         merged_df = merge_and_finalize(week_games_df, agg_weekly_df, results_df)
         agg_games_list.append(merged_df)
-
     # Concatenate all weekly aggregated data into a single DataFrame
     final_agg_df = pd.concat(agg_games_list, ignore_index=True)
     return final_agg_df

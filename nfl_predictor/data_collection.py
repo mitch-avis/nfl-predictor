@@ -468,6 +468,7 @@ def aggregate_season_data(
     Returns:
         pd.DataFrame: Aggregated game data with calculated stats for specified weeks.
     """
+    # pylint: disable=too-many-locals
     # Initialize an empty list to hold aggregated data for each week
     agg_games_list = []
 

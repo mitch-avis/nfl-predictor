@@ -6,7 +6,7 @@ import time
 from datetime import date
 from typing import Tuple
 
-import matplotlib.pylab as plt
+# import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -72,6 +72,7 @@ def predict_games_new(completed_games: pd.DataFrame, week_games_to_predict: pd.D
         week_games_to_predict (pd.DataFrame):   DataFrame containing data for the upcoming week's
                                                 games.
     """
+    # pylint: disable=too-many-locals
     # Preprocessing
     features = completed_games.drop(columns=constants.ML_DROP_COLS)
     target_regression_away = completed_games["away_score"].astype(int)
@@ -201,47 +202,47 @@ def scale_features(features: pd.DataFrame) -> Tuple[np.ndarray, pd.Series]:
     return features_scaled, normal_features
 
 
-def modelfit(alg, dtrain, predictors, use_train_cv=True, cv_folds=5, early_stopping_rounds=50):
-    """_summary_
+# def modelfit(alg, dtrain, predictors, use_train_cv=True, cv_folds=5, early_stopping_rounds=50):
+#     """_summary_
 
-    Args:
-        alg (_type_): _description_
-        dtrain (_type_): _description_
-        predictors (_type_): _description_
-        useTrainCV (bool, optional): _description_. Defaults to True.
-        cv_folds (int, optional): _description_. Defaults to 5.
-        early_stopping_rounds (int, optional): _description_. Defaults to 50.
-    """
-    if use_train_cv:
-        xgb_param = alg.get_xgb_params()
-        xgtrain = xgb.DMatrix(dtrain[predictors].values, label=dtrain[target].values)
-        cvresult = xgb.cv(
-            xgb_param,
-            xgtrain,
-            num_boost_round=alg.get_params()["n_estimators"],
-            nfold=cv_folds,
-            metrics="auc",
-            early_stopping_rounds=early_stopping_rounds,
-        )
-        alg.set_params(n_estimators=cvresult.shape[0])
+#     Args:
+#         alg (_type_): _description_
+#         dtrain (_type_): _description_
+#         predictors (_type_): _description_
+#         useTrainCV (bool, optional): _description_. Defaults to True.
+#         cv_folds (int, optional): _description_. Defaults to 5.
+#         early_stopping_rounds (int, optional): _description_. Defaults to 50.
+#     """
+#     if use_train_cv:
+#         xgb_param = alg.get_xgb_params()
+#         xgtrain = xgb.DMatrix(dtrain[predictors].values, label=dtrain[target].values)
+#         cvresult = xgb.cv(
+#             xgb_param,
+#             xgtrain,
+#             num_boost_round=alg.get_params()["n_estimators"],
+#             nfold=cv_folds,
+#             metrics="auc",
+#             early_stopping_rounds=early_stopping_rounds,
+#         )
+#         alg.set_params(n_estimators=cvresult.shape[0])
 
-    # Fit the algorithm on the data
-    alg.fit(dtrain[predictors], dtrain["Disbursed"], eval_metric="auc")
+#     # Fit the algorithm on the data
+#     alg.fit(dtrain[predictors], dtrain["Disbursed"], eval_metric="auc")
 
-    # Predict training set:
-    dtrain_predictions = alg.predict(dtrain[predictors])
-    dtrain_predprob = alg.predict_proba(dtrain[predictors])[:, 1]
+#     # Predict training set:
+#     dtrain_predictions = alg.predict(dtrain[predictors])
+#     dtrain_predprob = alg.predict_proba(dtrain[predictors])[:, 1]
 
-    # Print model report:
-    log.info("\nModel Report")
-    log.info(
-        "Accuracy : %.4g", metrics.accuracy_score(dtrain["Disbursed"].values, dtrain_predictions)
-    )
-    log.info("AUC Score (Train): %f", metrics.roc_auc_score(dtrain["Disbursed"], dtrain_predprob))
+#     # Print model report:
+#     log.info("\nModel Report")
+#     log.info(
+#         "Accuracy : %.4g", metrics.accuracy_score(dtrain["Disbursed"].values, dtrain_predictions)
+#     )
+#     log.info("AUC Score (Train): %f", metrics.roc_auc_score(dtrain["Disbursed"], dtrain_predprob))
 
-    feat_imp = pd.Series(alg.booster().get_fscore()).sort_values(ascending=False)
-    feat_imp.plot(kind="bar", title="Feature Importances")
-    plt.ylabel("Feature Importance Score")
+#     feat_imp = pd.Series(alg.booster().get_fscore()).sort_values(ascending=False)
+#     feat_imp.plot(kind="bar", title="Feature Importances")
+#     plt.ylabel("Feature Importance Score")
 
 
 if __name__ == "__main__":

@@ -54,25 +54,25 @@ from nfl_predictor.utils.nfl_utils import (
 )
 
 SEASONS_TO_SCRAPE = [
-    2003,
-    2004,
-    2005,
-    2006,
-    2007,
-    2008,
-    2009,
-    2010,
-    2011,
-    2012,
-    2013,
-    2014,
-    2015,
-    2016,
-    2017,
-    2018,
-    2019,
-    2020,
-    2021,
+    # 2003,
+    # 2004,
+    # 2005,
+    # 2006,
+    # 2007,
+    # 2008,
+    # 2009,
+    # 2010,
+    # 2011,
+    # 2012,
+    # 2013,
+    # 2014,
+    # 2015,
+    # 2016,
+    # 2017,
+    # 2018,
+    # 2019,
+    # 2020,
+    # 2021,
     2022,
     2023,
     2024,
@@ -138,6 +138,12 @@ def collect_data() -> pd.DataFrame:
     cleaned_data_list = [df.dropna(axis=1, how="all") for df in combined_data_list]
     # Combine cleaned data into a single DataFrame
     combined_data_df = pd.concat(cleaned_data_list, ignore_index=True)
+    # Ensure the 'date' column is of datetime type
+    combined_data_df["date"] = pd.to_datetime(combined_data_df["date"], errors="coerce")
+    # Sort by date column, newest to oldest
+    combined_data_df = combined_data_df.sort_values(by=["date"], ascending=False).reset_index(
+        drop=True
+    )
 
     return combined_data_df
 
@@ -279,6 +285,7 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
             season,
             week,
             force_refresh=force_refresh or REFRESH_WEEKLY_DATA,
+            # force_refresh=False,
         )
         # Append the week's game data to the season list if it's not empty
         if not week_games_df.empty:
@@ -586,6 +593,7 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
             week_number,
             week_date,
             force_refresh=force_refresh or REFRESH_WEEKLY_TEAM_RANKINGS,
+            # force_refresh=False,
         )
         # Append the week's rankings to the season list if data is present
         if not week_rankings_df.empty:

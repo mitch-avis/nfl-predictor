@@ -235,7 +235,27 @@ PBP_TEAM_ABBR = [
     "TB",
     "TEN",
     "WSH",
+    "WSH",
 ]
+# Dictionary to map historical team names to modern names for consistency
+MODERN_TEAM_NAMES = {
+    "Oakland Raiders": "Las Vegas Raiders",
+    "San Diego Chargers": "Los Angeles Chargers",
+    "St. Louis Rams": "Los Angeles Rams",
+    "Washington Football Team": "Washington Commanders",
+    "Washington Redskins": "Washington Commanders",
+}
+# Divisional team groupings for analysis
+DIVISION_TEAMS = {
+    "AFC East": ["BUF", "MIA", "NE", "NYJ"],
+    "AFC North": ["BAL", "CIN", "CLE", "PIT"],
+    "AFC South": ["HOU", "IND", "JAX", "TEN"],
+    "AFC West": ["DEN", "KC", "LV", "LAC"],
+    "NFC East": ["DAL", "NYG", "PHI", "WAS"],
+    "NFC North": ["CHI", "DET", "GB", "MIN"],
+    "NFC South": ["ATL", "CAR", "NO", "TB"],
+    "NFC West": ["ARI", "LAR", "SF", "SEA"],
+}
 
 # Key statistics for analysis
 BASE_COLUMNS = [

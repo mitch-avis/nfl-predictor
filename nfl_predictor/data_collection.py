@@ -31,7 +31,7 @@ from time import sleep
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from sportsipy.nfl.boxscore import Boxscore, Boxscores
+from sportsipy.nfl.boxscore import Boxscore
 
 from nfl_predictor import constants
 from nfl_predictor.utils.csv_utils import read_df_from_csv, read_write_data
@@ -47,6 +47,7 @@ from nfl_predictor.utils.nfl_utils import (
     fetch_week_boxscores,
     get_week_dates,
     init_team_stats_dfs,
+    is_division_game,
     merge_and_finalize,
     merge_and_format_df,
     prepare_data_for_week,
@@ -76,15 +77,14 @@ SEASONS_TO_SCRAPE = [
     2023,
     2024,
 ]
-REFRESH_ELO = True
-REFRESH_SCHEDULE = False
 REFRESH_SEASON_DATA = False
-REFRESH_GAME_DATA = False
-REFRESH_AGGREGATE_DATA = True
-REFRESH_ELO_SEASON = True
-REFRESH_SEASON_RANKINGS = True
-REFRESH_GAME_RANKINGS = False
-REFRESH_COMBINED_DATA = True
+REFRESH_WEEKLY_DATA = False
+REFRESH_SCHEDULE = False
+REFRESH_AGGREGATE_DATA = False
+REFRESH_SEASON_TEAM_RANKINGS = False
+REFRESH_WEEKLY_TEAM_RANKINGS = False
+REFRESH_ELO_SEASON = False
+REFRESH_ELO_WEEKLY = False
 
 
 def main() -> None:
@@ -128,7 +128,7 @@ def collect_data() -> pd.DataFrame:
         pd.DataFrame: Combined and cleaned data from all processed seasons.
     """
     # Step 1: Fetch and save the latest ELO ratings for NFL teams
-    elo_df = read_write_data("nfl_elo", fetch_nfl_elo_ratings, force_refresh=REFRESH_ELO)
+    elo_df = read_write_data("nfl_elo", fetch_nfl_elo_ratings, force_refresh=True)
 
     # Step 2: Process game data for each season, using the ELO ratings for enhancement
     combined_data_list = process_seasons(elo_df)
@@ -163,10 +163,17 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
         SEASONS_TO_SCRAPE,
     )
 
-    combined_data_list = []  # Holds the combined data for each season
+    # Holds the combined data for each season
+    combined_data_list = []
+    # Determine the current season year
+    current_season = date.today().year
+
     for season in SEASONS_TO_SCRAPE:
         # Determine which weeks of the season to scrape
         weeks = determine_weeks_to_scrape(season)
+
+        # Set force_refresh to True if the season is the current season
+        force_refresh = season == current_season
 
         # Collect game data for the season
         log.info("Collecting game data for the %s season...", season)
@@ -175,7 +182,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             scrape_season_data,
             season,
             weeks,
-            force_refresh=REFRESH_SEASON_DATA,
+            force_refresh=force_refresh or REFRESH_SEASON_DATA,
         )
 
         # Collect the schedule for the season
@@ -196,7 +203,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             weeks,
             season_games_df,
             schedule_df,
-            force_refresh=REFRESH_AGGREGATE_DATA,
+            force_refresh=force_refresh or REFRESH_AGGREGATE_DATA,
         )
 
         # Fetch team rankings for the season
@@ -205,7 +212,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             f"{season}/{season}_team_rankings",
             scrape_team_rankings_for_season,
             season,
-            force_refresh=REFRESH_SEASON_RANKINGS,
+            force_refresh=force_refresh or REFRESH_SEASON_TEAM_RANKINGS,
         )
 
         # Fetch ELO ratings for the season
@@ -215,7 +222,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             get_season_elo,
             elo_df,
             season,
-            force_refresh=REFRESH_ELO_SEASON,
+            force_refresh=force_refresh or REFRESH_ELO_SEASON,
         )
 
         # Combine all collected and processed data for the season into a single DataFrame
@@ -226,16 +233,8 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             agg_games_df,
             team_rankings_df,
             season_elo_df,
-            force_refresh=REFRESH_COMBINED_DATA,
+            force_refresh=True,
         )
-
-        # Drop rows with NaN values in any column, except the latest season/week, reset the index,
-        # and log which rows were dropped
-        if season != SEASONS_TO_SCRAPE[-1]:
-            dropped_rows = combined_data_df[combined_data_df.isnull().any(axis=1)]
-            if not dropped_rows.empty:
-                log.info("Dropped rows: %s", dropped_rows)
-                combined_data_df = combined_data_df.dropna().reset_index(drop=True)
 
         # Append the combined data for the season to the list
         combined_data_list.append(combined_data_df)
@@ -254,15 +253,24 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Aggregated game data for the specified season and weeks.
     """
-    log.info("Scraping game data for %s season...", season)
-    season_games_list = []
-
     # Early return if no weeks are specified to avoid unnecessary processing
     if not weeks:
         log.info("No weeks specified for season %s. Returning empty DataFrame.", season)
         return pd.DataFrame()
 
+    log.info("Scraping game data for %s season...", season)
+    season_games_list = []
+
+    # Determine the current season year and NFL week
+    today = date.today()
+    current_season = today.year
+    current_week = determine_nfl_week_by_date(today)
+
     for week in weeks:
+        # Set force_refresh to True if the season is the current season and the week is the current
+        # week, plus/minus one week to account for potential delays in data availability
+        force_refresh = season == current_season and abs(week - current_week) <= 1
+
         log.info("Collecting game data for Week %s...", week)
         # Scrape and save game data for the week
         week_games_df = read_write_data(
@@ -270,7 +278,7 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
             scrape_weekly_game_data,
             season,
             week,
-            force_refresh=REFRESH_GAME_DATA,
+            force_refresh=force_refresh or REFRESH_WEEKLY_DATA,
         )
         # Append the week's game data to the season list if it's not empty
         if not week_games_df.empty:
@@ -373,7 +381,6 @@ def extract_team_statistics_from_game(
 
 
 def get_schedule(season: int) -> pd.DataFrame:
-    # pylint: disable=broad-except
     """
     Scrapes and returns the NFL game schedule for a given season as a DataFrame.
 
@@ -381,9 +388,10 @@ def get_schedule(season: int) -> pd.DataFrame:
         season (int): The NFL season year to scrape the schedule for.
 
     Returns:
-        pd.DataFrame: A DataFrame containing the schedule for the specified NFL season. Each row
-                      represents a game with columns for away and home team names and abbreviations,
-                      winning team name and abbreviation (if available), and the week of the season.
+        pd.DataFrame:   A DataFrame containing the schedule for the specified NFL season. Each row
+                        represents a game with columns for away and home team names and
+                        abbreviations, winning team name and abbreviation (if available), and the
+                        week of the season.
     """
     weeks = determine_weeks_to_scrape(season)  # Determine weeks to scrape for the season
     all_games_data = []  # Initialize a list to store game data for all weeks
@@ -391,35 +399,16 @@ def get_schedule(season: int) -> pd.DataFrame:
     log.info("Scraping %s schedule...", season)
     for week in weeks:
         log.info("Week %s...", week)
-        week_scores = None
-        for attempt in range(3):
-            try:
-                week_scores = Boxscores(week, season)
-                if week_scores.games:  # Check if Boxscores returned data
-                    break
-            except Exception as e:
-                log.warning(
-                    "Attempt %d to fetch week %s of season %s failed: %s",
-                    attempt + 1,
-                    week,
-                    season,
-                    e,
-                )
-                sleep(2**attempt)  # Exponential backoff
-        if (
-            not week_scores or not week_scores.games
-        ):  # If still no data after retries, skip this week
-            log.warning(
-                "Failed to fetch data for week %s of season %s after 3 attempts.", week, season
-            )
-            continue
+        week_scores, error = fetch_week_boxscores(season, week)
+        if error or week_scores is None:
+            continue  # Skip to the next week if fetching week scores fails
 
-        date_string = f"{week}-{season}"
+        game_key = f"{week}-{season}"
         # Check if there are games for the week to avoid KeyError
-        if date_string not in week_scores.games:
+        if game_key not in week_scores.games:
             continue
 
-        for game in week_scores.games[date_string]:
+        for game in week_scores.games[game_key]:
             game_data = {
                 "away_name": game["away_name"],
                 "away_abbr": game["away_abbr"],
@@ -432,6 +421,31 @@ def get_schedule(season: int) -> pd.DataFrame:
 
     # Convert the list of dictionaries to a DataFrame in one operation
     schedule_df = pd.DataFrame(all_games_data)
+
+    # Create a combined DataFrame to calculate game numbers
+    away_games = schedule_df[["away_abbr", "week"]].rename(columns={"away_abbr": "team_abbr"})
+    home_games = schedule_df[["home_abbr", "week"]].rename(columns={"home_abbr": "team_abbr"})
+    combined_games = pd.concat([away_games, home_games]).sort_values("week").reset_index(drop=True)
+
+    # Calculate the game number for each team
+    combined_games["game_number"] = combined_games.groupby("team_abbr").cumcount() + 1
+
+    # Merge the game numbers back into the original schedule DataFrame
+    schedule_df = schedule_df.merge(
+        combined_games.rename(
+            columns={"team_abbr": "away_abbr", "game_number": "away_game_number"}
+        ),
+        on=["away_abbr", "week"],
+        how="left",
+    )
+    schedule_df = schedule_df.merge(
+        combined_games.rename(
+            columns={"team_abbr": "home_abbr", "game_number": "home_game_number"}
+        ),
+        on=["home_abbr", "week"],
+        how="left",
+    )
+
     return schedule_df
 
 
@@ -475,11 +489,57 @@ def aggregate_season_data(
                 )
             else:
                 continue
-            previous_season = True
         else:
             previous_weeks_df = season_games_df[season_games_df["week"] < week]
-            previous_season = False
-        agg_weekly_df = calculate_stats(previous_weeks_df, previous_season=previous_season)
+
+            # Check for teams with missing data
+            current_teams = set(previous_weeks_df["team_abbr"])
+            all_teams = set(schedule_df["away_abbr"]).union(set(schedule_df["home_abbr"]))
+            missing_teams = all_teams - current_teams
+
+            if missing_teams:
+                # Load previous season's game data if not the first season in SEASONS_TO_SCRAPE
+                if season != SEASONS_TO_SCRAPE[0]:
+                    prev_season = season - 1
+                    prev_season_file = (
+                        f"{constants.DATA_PATH}/{prev_season}/{prev_season}_season_games.csv"
+                    )
+                    previous_season_df = read_df_from_csv(prev_season_file)
+                    previous_season_df["team_abbr"] = previous_season_df["team_abbr"].replace(
+                        constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
+                    )
+
+                    # Append missing teams' data from the previous season to previous_weeks_df
+                    missing_teams_df = previous_season_df[
+                        previous_season_df["team_abbr"].isin(missing_teams)
+                    ]
+                    previous_weeks_df = pd.concat(
+                        [previous_weeks_df, missing_teams_df], ignore_index=True
+                    )
+
+        # Merge game_number values from week_games_df into previous_weeks_df
+        previous_weeks_df = previous_weeks_df.merge(
+            week_games_df[["away_abbr", "away_game_number"]].rename(
+                columns={"away_abbr": "team_abbr", "away_game_number": "game_number"}
+            ),
+            on="team_abbr",
+            how="left",
+        )
+        previous_weeks_df = previous_weeks_df.merge(
+            week_games_df[["home_abbr", "home_game_number"]].rename(
+                columns={"home_abbr": "team_abbr", "home_game_number": "game_number"}
+            ),
+            on="team_abbr",
+            how="left",
+        )
+
+        # Fill NaN values in game_number column
+        previous_weeks_df["game_number"] = previous_weeks_df["game_number_x"].combine_first(
+            previous_weeks_df["game_number_y"]
+        )
+        previous_weeks_df = previous_weeks_df.drop(columns=["game_number_x", "game_number_y"])
+
+        agg_weekly_df = calculate_stats(previous_weeks_df)
         # Merge current week's data with results and add to the list
         merged_df = merge_and_finalize(week_games_df, agg_weekly_df, results_df)
         agg_games_list.append(merged_df)
@@ -502,10 +562,21 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing the compiled team rankings for the entire season.
     """
-    week_dates = get_week_dates(season)  # Get list of dates for each week in the season
-    season_rankings = []  # Initialize list to hold weekly rankings DataFrames
+    # Get list of dates for each week in the season
+    week_dates = get_week_dates(season)
+
+    # Determine the current season year and NFL week
+    today = date.today()
+    current_season = today.year
+    current_week = determine_nfl_week_by_date(today)
+
+    # Initialize list to hold weekly rankings DataFrames
+    season_rankings = []
 
     for week_number, week_date in enumerate(week_dates, start=1):
+        # Set force_refresh to True if the season is the current season and the week is the current
+        # week, plus/minus one week to account for potential delays in data availability
+        force_refresh = season == current_season and abs(week_number - current_week) <= 1
         log.info("Collecting team rankings for Week %s...", week_number)
         # Attempt to scrape and retrieve team rankings for the week
         week_rankings_df = read_write_data(
@@ -513,7 +584,7 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
             scrape_team_rankings_for_week,
             week_number,
             week_date,
-            force_refresh=REFRESH_GAME_RANKINGS,
+            force_refresh=force_refresh or REFRESH_WEEKLY_TEAM_RANKINGS,
         )
         # Append the week's rankings to the season list if data is present
         if not week_rankings_df.empty:
@@ -540,17 +611,18 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pd.DataF
         week_date (date): The date corresponding to the week of interest.
 
     Returns:
-        pd.DataFrame: A DataFrame containing the team rankings for the specified week, with teams
-                      represented by their abbreviations and including rankings for each rating
-                      type.
+        pd.DataFrame:   A DataFrame containing the team rankings for the specified week, with teams
+                        represented by their abbreviations and including rankings for each rating
+                        type.
     """
     # Initialize DataFrame to hold rankings with a column for team abbreviations
     week_rankings_df = pd.DataFrame(columns=["abbr"])
 
     for rating, rating_name in constants.TEAM_RANKINGS_RATINGS.items():
-        # Construct the URL for scraping
-        url = f"{constants.TEAM_RANKINGS_URL}{rating}?date={week_date}"
         log.info("Scraping team rankings: %s for Week %s...", rating_name, week_number)
+        # Construct the URL for scraping
+        url = f"{constants.TEAM_RANKINGS_URL}/ranking/{rating}?date={week_date}"
+        log.debug("Scraping data from %s...", url)
         response = requests.get(url, timeout=10)
         soup = BeautifulSoup(response.content, "html.parser")
         table = soup.find("table")
@@ -575,6 +647,32 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pd.DataF
         # Sleep to avoid overloading the server
         sleep(constants.TEAM_RANKINGS_SLEEP)
 
+    for statistic, statistic_name in constants.TEAM_RANKINGS_STATS.items():
+        log.info("Scraping team statistics: %s for Week %s...", statistic_name, week_number)
+        # Construct the URL for scraping
+        url = f"{constants.TEAM_RANKINGS_URL}/stat/{statistic}?date={week_date}"
+        log.debug("Scraping data from %s...", url)
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.content, "html.parser")
+        table = soup.find("table")
+
+        if table:
+            # Parse the HTML table, convert stats to numeric, and rename columns
+            stat_df = pd.read_html(StringIO(str(table)))[0]
+            stat_df["Stat"] = pd.to_numeric(stat_df.iloc[:, 2], errors="coerce").fillna(0.0)
+            stat_df = stat_df.iloc[:, [1, -1]].rename(
+                columns={"Team": "abbr", stat_df.columns[-1]: statistic_name}
+            )
+            # Map team names to standard abbreviations
+            stat_df["abbr"] = stat_df["abbr"].apply(lambda x: constants.TEAMS_TO_ABBR.get(x, x))
+            # Merge the current rating data with the week's DataFrame
+            week_rankings_df = pd.merge(week_rankings_df, stat_df, on="abbr", how="outer")
+        else:
+            log.warning("No data found for %s on %s", statistic_name, week_date)
+
+        # Sleep to avoid overloading the server
+        sleep(constants.TEAM_RANKINGS_SLEEP)
+
     # Add the week number to the DataFrame
     week_rankings_df["week"] = week_number
     return week_rankings_df
@@ -593,8 +691,8 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
         season (int): The NFL season year for which to filter and adjust ELO ratings.
 
     Returns:
-        pd.DataFrame: Adjusted DataFrame with ELO ratings for the specified season, including
-                      handling of neutral games and re-mapping of team names.
+        pd.DataFrame:   Adjusted DataFrame with ELO ratings for the specified season, including
+                        handling of neutral games and re-mapping of team names.
     """
     # Drop columns not needed for analysis to reduce memory usage
     elo_df = elo_df.drop(columns=constants.ELO_DROP_COLS)
@@ -623,10 +721,11 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
 
     # Concatenate original and swapped rows, then clean up the DataFrame
     final_elo_df = (
-        pd.concat([filtered_elo_df, swapped_rows], ignore_index=True)
+        pd.concat([swapped_rows, filtered_elo_df], ignore_index=True)
         .sort_values(by=["date"])  # Sort by date for chronological order
         .reset_index(drop=True)  # Reset index for a clean DataFrame
     )
+
     return final_elo_df
 
 
@@ -647,9 +746,9 @@ def combine_data(
         elo_df (pd.DataFrame): ELO ratings for the season.
 
     Returns:
-        pd.DataFrame: A DataFrame that combines all the provided data, with calculated differences
-                      in ELO and QB values, standardized team abbreviations, and reordered columns
-                      for easier analysis.
+        pd.DataFrame:   A DataFrame that combines all the provided data, with calculated differences
+                        in ELO and QB values, standardized team abbreviations, and reordered columns
+                        for easier analysis.
     """
     # Rename columns in team_rankings_df to differentiate between home and away teams
     team_rankings_df_away = team_rankings_df.rename(
@@ -680,24 +779,37 @@ def combine_data(
     combined_df["qb_dif"] = combined_df["qb2_value_pre"] - combined_df["qb1_value_pre"]
     combined_df["qb_elo_dif"] = combined_df["qbelo2_pre"] - combined_df["qbelo1_pre"]
 
-    # Remove columns no longer needed after calculating differences
-    combined_df = combined_df.drop(
-        columns=[
-            "date",
-            "elo1_pre",
-            "elo2_pre",
-            "qb1_value_pre",
-            "qb2_value_pre",
-            "qbelo1_pre",
-            "qbelo2_pre",
-        ]
-    )
+    # Rename ELO columns to away/home format for consistency with other data
+    combined_df = combined_df.rename(columns=constants.ELO_RENAME_COLS)
+
+    # Add a column to indicate if the game is a divisional matchup
+    combined_df["division"] = combined_df.apply(is_division_game, axis=1)
 
     # Reorder columns to improve readability, placing scores and result at the end
-    result_cols = [
-        col for col in combined_df.columns if col not in ["away_score", "home_score", "result"]
+    first_columns = [
+        "away_name",
+        "away_abbr",
+        "home_name",
+        "home_abbr",
+        "away_qb",
+        "home_qb",
+        "season",
+        "week",
+        "date",
+        "away_game_number",
+        "home_game_number",
+        "neutral",
+        "division",
     ]
-    combined_df = combined_df[result_cols + ["away_score", "home_score", "result"]]
+    result_columns = ["away_score", "home_score", "result"]
+    data_columns = sorted(
+        [col for col in combined_df.columns if col not in first_columns + result_columns]
+    )
+    combined_df = combined_df[first_columns + data_columns + result_columns]
+
+    # Rename legacy teams to modern team names using constants.MODERN_TEAM_NAMES
+    combined_df["away_name"] = combined_df["away_name"].replace(constants.MODERN_TEAM_NAMES)
+    combined_df["home_name"] = combined_df["home_name"].replace(constants.MODERN_TEAM_NAMES)
 
     return combined_df
 

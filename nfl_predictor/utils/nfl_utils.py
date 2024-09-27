@@ -1,32 +1,8 @@
 """
-This module, nfl_utils.py, provides utility functions for the NFL predictor project, aiding in
-data collection and analysis. It includes functionalities for handling NFL data, such as game
-outcome calculations, statistical DataFrame generation from boxscore data, NFL week determination,
-data scraping for specific weeks, and fetching ELO ratings for teams.
-
-Key Functions:
-- fetch_nfl_elo_ratings: Retrieves current ELO ratings for NFL teams.
-- get_season_start: Determines the NFL season's start date.
-- determine_nfl_week_by_date: Calculates NFL week number from a date.
-- determine_weeks_to_scrape: Identifies weeks within a season for data scraping.
-- get_week_dates: Generates dates for each week of an NFL season.
-- fetch_week_boxscores: Retrieves boxscore data for all games in a specified week.
-- fetch_game_boxscore: Obtains boxscore data for a single game.
-- init_team_stats_dfs: Initializes DataFrames for team statistics.
-- compute_game_outcomes: Calculates game outcomes from team statistics.
-- create_stats_dfs_from_boxscore: Transforms boxscore data into structured DataFrames.
-- create_stats_df: Generates a DataFrame of team statistics from game data.
-- merge_and_format_df: Merges and formats team and opponent statistics for analysis.
-- convert_top_to_seconds_in_df: Converts time of possession to seconds.
-- reorder_and_drop_columns: Reorganizes and prunes DataFrame columns.
-- prepare_data_for_week: Processes data for a specific NFL week.
-- calculate_stats: Computes aggregated team statistics.
-
-Dependencies:
-- pandas: For data manipulation and analysis.
-- numpy: For numerical computations.
-- sportsipy: For scraping NFL boxscores.
-- custom utilities: For logging and data processing efficiency.
+This module provides utility functions for the NFL predictor project, aiding in data collection and
+analysis. It includes functionalities for handling NFL data, such as game outcome calculations,
+statistical DataFrame generation from boxscore data, NFL week determination, data scraping for
+specific weeks, and fetching ELO ratings for teams.
 """
 
 from datetime import date, timedelta
@@ -89,33 +65,33 @@ def determine_nfl_week_by_date(given_date: date) -> int:
         given_date (date): The date for which the NFL week number is to be determined.
 
     Returns:
-        int: The NFL week number, ranging from 1 (offseason or first week) to 18 (end of the
-             regular season).
+        int:    The NFL week number, ranging from 1 (offseason or first week) to 18 (end of the
+                regular season).
     """
+
+    def adjust_to_wednesday(start_date: date) -> date:
+        """Adjusts the given date to the nearest Wednesday."""
+        return start_date - timedelta(days=(start_date.weekday() - 2) % 7)
+
     # Determine the start date of the NFL season for the given year
-    season_start = get_season_start(given_date.year)
+    season_start = adjust_to_wednesday(get_season_start(given_date.year))
 
     # Handle dates before the season start, considering January and February for final weeks of
     # the previous season or postseason
     if given_date < season_start:
         # January and February are treated as part of the previous season
         if given_date.month in (1, 2):
-            # Calculate week number from the previous season's start date
-            previous_season_start = get_season_start(given_date.year - 1)
+            previous_season_start = adjust_to_wednesday(get_season_start(given_date.year - 1))
             week_number = ((given_date - previous_season_start).days // 7) + 1
-            # Ensure week number is within the regular season range
             return max(1, min(week_number, 18))
         # For dates before the previous season's start, determine if it's offseason
-        previous_season_start = get_season_start(given_date.year - 1)
+        previous_season_start = adjust_to_wednesday(get_season_start(given_date.year - 1))
         if given_date >= previous_season_start:
-            # Treat as the beginning of the new season (offseason/preseason)
             return 1
-        # Date is before the previous season's start (previous season's offseason)
         return 0
 
     # Calculate the week number for dates during or after the season start
     week_number = ((given_date - season_start).days // 7) + 1
-    # Ensure week number is within the regular season range
     return max(1, min(week_number, 18))
 
 
@@ -185,8 +161,8 @@ def fetch_week_boxscores(season: int, week: int) -> tuple[Boxscores, Exception]:
     Fetches box scores for all games in a specified week and season, retrying on failure.
 
     This function attempts to retrieve box scores for a given week and season. If the initial
-    attempt fails, it retries up to two more times, with an increasing delay between attempts.
-    It returns a tuple containing the Boxscores object (or None if unsuccessful) and an Exception
+    attempt fails, it retries up to two more times, with an increasing delay between attempts. It
+    returns a tuple containing the Boxscores object (or None if unsuccessful) and an Exception
     object if an error occurred on the final attempt (or None if successful).
 
     Args:
@@ -194,8 +170,8 @@ def fetch_week_boxscores(season: int, week: int) -> tuple[Boxscores, Exception]:
         week (int): The week number within the NFL season.
 
     Returns:
-        tuple[Boxscores, Exception]: A tuple containing the Boxscores object and an Exception
-                                     object if an error occurred, or None for both if successful.
+        tuple[Boxscores, Exception]:    A tuple containing the Boxscores object and an Exception
+                                        object if an error occurred, or None for both if successful.
     """
     # pylint: disable=broad-except
     for attempt in range(3):
@@ -252,8 +228,8 @@ def init_team_stats_dfs(game_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFra
         game_df (pd.DataFrame): The DataFrame containing basic game information.
 
     Returns:
-        tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames for away and home teams, respectively,
-                                           with standardized column names.
+        tuple[pd.DataFrame, pd.DataFrame]:  Two DataFrames for away and home teams, respectively,
+                                            with standardized column names.
     """
     # Select and rename columns for the away team to standardize the structure. The renaming
     # aligns with a base format for easier comparison and analysis of team performance.
@@ -277,14 +253,14 @@ def compute_game_outcomes(
     In the event of a tie, both 'game_won' and 'game_lost' are set to 0.5.
 
     Args:
-        away_team_df (pd.DataFrame): DataFrame containing the away team's game statistics,
-                                     including 'points_scored' and 'points_allowed'.
-        home_team_df (pd.DataFrame): DataFrame containing the home team's game statistics,
-                                     including 'points_scored' and 'points_allowed'.
+        away_team_df (pd.DataFrame):    DataFrame containing the away team's game statistics,
+                                        including 'points_scored' and 'points_allowed'.
+        home_team_df (pd.DataFrame):    DataFrame containing the home team's game statistics,
+                                        including 'points_scored' and 'points_allowed'.
 
     Returns:
-        tuple[pd.DataFrame, pd.DataFrame]: A tuple containing the updated away and home team
-                                           DataFrames with new columns for game outcomes.
+        tuple[pd.DataFrame, pd.DataFrame]:  A tuple containing the updated away and home team
+                                            DataFrames with new columns for game outcomes.
     """
     # Identify unplayed games by checking for NaN in 'points_scored'
     unplayed_games = away_team_df["points_scored"].isna() | home_team_df["points_scored"].isna()
@@ -332,8 +308,8 @@ def create_stats_dfs_from_boxscore(
         boxscore (Boxscore): The Boxscore object containing detailed game statistics.
 
     Returns:
-        tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing statistics for away and home
-                                           teams.
+        tuple[pd.DataFrame, pd.DataFrame]:  Two DataFrames containing statistics for away and home
+                                            teams.
     """
     # Check if the Boxscore object is valid and contains a dataframe with game statistics. This
     # step ensures that the function can handle cases where the Boxscore might be incomplete or
@@ -364,12 +340,12 @@ def create_stats_df(game_stats_df: pd.DataFrame, team_prefix: str) -> pd.DataFra
 
     Args:
         game_stats_df (pd.DataFrame): DataFrame containing detailed game statistics.
-        team_prefix (str): Prefix indicating whether the statistics are for the away team ('away')
-                           or the home team ('home'), used to select relevant columns.
+        team_prefix (str):  Prefix indicating whether the statistics are for the away team ('away')
+                            or the home team ('home'), used to select relevant columns.
 
     Returns:
-        pd.DataFrame: A DataFrame with standardized and correctly labeled columns, facilitating
-                      uniform data analysis.
+        pd.DataFrame:   A DataFrame with standardized and correctly labeled columns, facilitating
+                        uniform data analysis.
     """
     # Create a mapping of prefixed column names (e.g., 'away_points_scored') to standard column
     # names (e.g., 'points_scored'). This step is crucial for ensuring that data from both home
@@ -401,8 +377,8 @@ def merge_and_format_df(
         opponent_stats_df (pd.DataFrame): DataFrame containing detailed statistics for the opponent.
 
     Returns:
-        pd.DataFrame: A comprehensive DataFrame that combines team and opponent statistics, with
-                      specific formatting applied to ensure data consistency and readability.
+        pd.DataFrame:   A comprehensive DataFrame that combines team and opponent statistics, with
+                        specific formatting applied to ensure data consistency and readability.
     """
     # Rename opponent's statistics columns for clarity, prefixing them to distinguish from the
     # team's stats
@@ -430,8 +406,8 @@ def convert_top_to_seconds_in_df(team_df: pd.DataFrame) -> pd.DataFrame:
         team_df (pd.DataFrame): DataFrame containing team data, including TOP in "MM:SS" format.
 
     Returns:
-        pd.DataFrame: Updated DataFrame with TOP converted from "MM:SS" to seconds, ensuring
-                      consistency in data format for analysis.
+        pd.DataFrame:   Updated DataFrame with TOP converted from "MM:SS" to seconds, ensuring
+                        consistency in data format for analysis.
     """
     # Check for 'time_of_possession' column and convert non-NaN TOP values from "MM:SS" to seconds.
     # NaN values are left unchanged, preserving data integrity for entries without TOP information.
@@ -512,14 +488,14 @@ def prepare_data_for_week(
     return week_games_df, results_df
 
 
-def calculate_stats(previous_weeks_df: pd.DataFrame, previous_season: bool = False) -> pd.DataFrame:
+def calculate_stats(previous_weeks_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculates aggregated statistics for each team based on previous weeks' data.
-    If `previous_season` is True, regress each team's mean stats to the league mean for each stat.
+    Computes aggregated team statistics, regressing each team's mean stats to the league mean for
+    each stat for each team's first game of the season.
 
     Args:
-        previous_weeks_df (pd.DataFrame): DataFrame containing each team's statistics for each week
-                                          prior to the current week.
+        previous_weeks_df (pd.DataFrame):   DataFrame containing each team's statistics for each
+                                            week prior to the current week.
         previous_season (bool): Flag indicating if the data represents the entire previous season's
                                 stats.
 
@@ -538,6 +514,7 @@ def calculate_stats(previous_weeks_df: pd.DataFrame, previous_season: bool = Fal
         "team_abbr",
         "week",
         "season",
+        "game_number",
     }
 
     # Identify columns to calculate mean values
@@ -551,55 +528,22 @@ def calculate_stats(previous_weeks_df: pd.DataFrame, previous_season: bool = Fal
     # Merge aggregated ratios and mean stats
     agg_stats_df = pd.merge(agg_ratios_df, agg_means_df, on=["team_name", "team_abbr"])
 
-    if previous_season:
-        # Regress each team's mean stats towards the league mean
-        mean_columns = agg_stats_df.columns.difference(["team_name", "team_abbr", "week", "season"])
-        league_means = agg_stats_df[mean_columns].mean()
-        regression_factor = 1 / 3  # Degree of regression towards the league mean
-        for column in mean_columns:
-            agg_stats_df[column] = (
-                regression_factor * league_means[column]
-                + (1 - regression_factor) * agg_stats_df[column]
-            )
+    # Regress each team's mean stats towards the league mean for their first game of the season
+    mean_columns = agg_stats_df.columns.difference(list(excluded_columns))
+    league_means = agg_stats_df[mean_columns].mean()
+    regression_factor = 1 / 3  # Degree of regression towards the league mean
+
+    for team in previous_weeks_df["team_abbr"].unique():
+        team_df = previous_weeks_df[previous_weeks_df["team_abbr"] == team]
+        if team_df["game_number"].iloc[0] == 1:
+            for column in mean_columns:
+                agg_stats_df.loc[agg_stats_df["team_abbr"] == team, column] = (
+                    regression_factor * league_means[column]
+                    + (1.0 - regression_factor)
+                    * agg_stats_df.loc[agg_stats_df["team_abbr"] == team, column]
+                )
 
     return agg_stats_df
-
-
-def merge_and_finalize(week_games_df, agg_weekly_df, results_df):
-    """
-    Prepares and merges weekly game data with aggregated statistics and results.
-
-    Drops unnecessary columns from aggregated data, prefixes columns to distinguish between home
-    and away teams, merges the dataframes, calculates statistical differences, and merges final
-    scores.
-
-    Args:
-        week_games_df (pd.DataFrame): DataFrame containing the week's games schedule.
-        agg_weekly_df (pd.DataFrame): DataFrame with aggregated weekly statistics.
-        results_df (pd.DataFrame): DataFrame with the week's game results.
-
-    Returns:
-        pd.DataFrame: The finalized DataFrame ready for analysis or storage.
-    """
-    # Drop specified columns from aggregated data
-    agg_weekly_df = agg_weekly_df.drop(columns=constants.AGG_DROP_COLS, errors="ignore")
-
-    # Prepare away and home team data with appropriate prefixes and renames
-    agg_weekly_away_df = agg_weekly_df.add_prefix("away_").rename(
-        columns={"away_team_abbr": "away_abbr"}
-    )
-    agg_weekly_home_df = agg_weekly_df.add_prefix("home_").rename(
-        columns={"home_team_abbr": "home_abbr"}
-    )
-
-    # Merge aggregated stats with the week's game schedule
-    merged_df = merge_aggregated_stats(week_games_df, agg_weekly_away_df, agg_weekly_home_df)
-
-    # Calculate statistical differences between teams
-    merged_df = calc_stat_diffs(merged_df)
-
-    # Merge in the game results
-    return merge_scores(merged_df, results_df)
 
 
 def calc_win_and_conversion_rates(agg_weekly_df: pd.DataFrame) -> pd.DataFrame:
@@ -665,8 +609,45 @@ def calc_win_and_conversion_rates(agg_weekly_df: pd.DataFrame) -> pd.DataFrame:
     return agg_weekly_df
 
 
+def merge_and_finalize(week_games_df, agg_weekly_df, results_df):
+    """
+    Prepares and merges weekly game data with aggregated statistics and results.
+
+    Drops unnecessary columns from aggregated data, prefixes columns to distinguish between home
+    and away teams, merges the dataframes, calculates statistical differences, and merges final
+    scores.
+
+    Args:
+        week_games_df (pd.DataFrame): DataFrame containing the week's games schedule.
+        agg_weekly_df (pd.DataFrame): DataFrame with aggregated weekly statistics.
+        results_df (pd.DataFrame): DataFrame with the week's game results.
+
+    Returns:
+        pd.DataFrame: The finalized DataFrame ready for analysis or storage.
+    """
+    # Drop specified columns from aggregated data
+    agg_weekly_df = agg_weekly_df.drop(columns=constants.AGG_DROP_COLS, errors="ignore")
+
+    # Prepare away and home team data with appropriate prefixes and renames
+    agg_weekly_away_df = agg_weekly_df.add_prefix("away_").rename(
+        columns={"away_team_abbr": "away_abbr"}
+    )
+    agg_weekly_home_df = agg_weekly_df.add_prefix("home_").rename(
+        columns={"home_team_abbr": "home_abbr"}
+    )
+
+    # Merge aggregated stats with the week's game schedule
+    merged_df = merge_aggregated_stats(week_games_df, agg_weekly_away_df, agg_weekly_home_df)
+
+    # Calculate statistical differences between teams
+    merged_df = calc_stat_diffs(merged_df)
+
+    # Merge in the game results
+    return merge_scores(merged_df, results_df)
+
+
 def merge_aggregated_stats(
-    games_df: pd.DataFrame, agg_weekly_away_df: pd.DataFrame, agg_weekly_home_df: pd.DataFrame
+    week_games_df: pd.DataFrame, agg_weekly_away_df: pd.DataFrame, agg_weekly_home_df: pd.DataFrame
 ) -> pd.DataFrame:
     """
     Merges aggregated stats with game data for both away and home teams.
@@ -676,19 +657,20 @@ def merge_aggregated_stats(
     both the away and home teams, facilitating comprehensive analysis.
 
     Args:
-        games_df (pd.DataFrame): DataFrame containing the main game data.
+        week_games_df (pd.DataFrame): DataFrame containing the week's game data.
         agg_weekly_away_df (pd.DataFrame): DataFrame with aggregated stats for away teams.
         agg_weekly_home_df (pd.DataFrame): DataFrame with aggregated stats for home teams.
 
     Returns:
         pd.DataFrame: The merged DataFrame including game data and corresponding team stats.
     """
-    # Merge the main game DataFrame with the aggregated stats for away teams
+    # Merge the week's games DataFrame with the aggregated stats for away teams
     merged_df = pd.merge(
-        games_df,
+        week_games_df,
         agg_weekly_away_df,
-        how="left",  # Use left join to keep all records from the main game DataFrame
+        how="left",  # Use left join to keep all records from the week's games DataFrame
         on=["away_abbr"],  # Join on away team abbreviation
+        suffixes=("", "_away"),  # Add suffixes to distinguish columns from the away team
     )
     # Merge the result with the aggregated stats for home teams
     merged_df = pd.merge(
@@ -696,6 +678,7 @@ def merge_aggregated_stats(
         agg_weekly_home_df,
         how="left",  # Use left join to ensure no game data is lost
         on=["home_abbr"],  # Join on home team abbreviation
+        suffixes=("", "_home"),  # Add suffixes to distinguish columns from the home team
     )
     return merged_df
 
@@ -772,3 +755,21 @@ def merge_scores(merged_df: pd.DataFrame, results_df: pd.DataFrame) -> pd.DataFr
     )
 
     return merged_df
+
+
+# Function to check if the game is a division game
+def is_division_game(row):
+    """
+    Determines if a game is a divisional game based on the teams' divisions.
+
+    Args:
+        row (pd.Series): A row from a DataFrame containing game data.
+    """
+    # Reverse the dictionary to map teams to their divisions
+    team_to_division = {
+        team: division for division, teams in constants.DIVISION_TEAMS.items() for team in teams
+    }
+
+    away_division = team_to_division.get(row["away_abbr"])
+    home_division = team_to_division.get(row["home_abbr"])
+    return 1 if away_division == home_division else 0

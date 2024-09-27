@@ -5,8 +5,8 @@ from nfl_predictor.utils.csv_utils import read_write_data
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.ml_utils import nested_dict_to_df
 
-START_YEAR = 2023
-END_YEAR = 2023
+START_YEAR = 2024
+END_YEAR = 2024
 ACTIVE_QB_IDS = constants.ACTIVE_QB_IDS
 PBP_TEAMS = constants.PBP_TEAM_ABBR
 TEAMS = constants.TEAM_ABBR
@@ -17,20 +17,20 @@ def main():
     play_by_play_df = get_pbp_data()
     # Parse weekly QB data
     # qb_df_name = "all_qbs"
-    qb_df_name = "2023_qbs"
-    qb_df = read_write_data(qb_df_name, parse_qb_data, play_by_play_df)
+    qb_df_name = f"{END_YEAR}_qbs"
+    qb_df = read_write_data(qb_df_name, parse_qb_data, play_by_play_df, force_refresh=True)
     log.debug("qb_df:\n%s", qb_df)
     # Parse weekly Team data
     # team_df_name = "all_teams"
-    team_df_name = "2023_teams"
-    team_df = read_write_data(team_df_name, parse_team_data, play_by_play_df)
+    team_df_name = f"{END_YEAR}_teams"
+    team_df = read_write_data(team_df_name, parse_team_data, play_by_play_df, force_refresh=True)
     log.debug("team_df:\n%s", team_df)
 
 
 def get_pbp_data():
     # play_by_play_df_name = "all_pbp"
-    play_by_play_df_name = "2023_all_pbp"
-    play_by_play_df = read_write_data(play_by_play_df_name, get_all_pbp_data)
+    play_by_play_df_name = f"{END_YEAR}_all_pbp"
+    play_by_play_df = read_write_data(play_by_play_df_name, get_all_pbp_data, force_refresh=True)
     return play_by_play_df
 
 
@@ -38,7 +38,9 @@ def get_all_pbp_data():
     play_by_play_df = pd.DataFrame()
     for year in range(START_YEAR, END_YEAR + 1):
         season_pbp_df_name = f"{year}_pbp"
-        season_pbp_df = read_write_data(season_pbp_df_name, get_season_pbp, year)
+        season_pbp_df = read_write_data(
+            season_pbp_df_name, get_season_pbp, year, force_refresh=True
+        )
         play_by_play_df = pd.concat([play_by_play_df, season_pbp_df], sort=True)
         del season_pbp_df
     return play_by_play_df

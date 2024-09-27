@@ -562,4 +562,11 @@ ACTIVE_QB_IDS = {
     "00-0039152": {"name": "Will Levis", "draft_year": 2023, "draft_number": 33},
     "00-0039163": {"name": "C.J. Stroud", "draft_year": 2023, "draft_number": 2},
     "00-0039164": {"name": "Anthony Richardson", "draft_year": 2023, "draft_number": 4},
+    "00-0039376": {"name": "Spencer Rattler", "draft_year": 2024, "draft_number": 150},
+    "00-0039398": {"name": "Joe Milton", "draft_year": 2024, "draft_number": 193},
+    "00-0039732": {"name": "Bo Nix", "draft_year": 2024, "draft_number": 12},
+    "00-0039851": {"name": "Drake Maye", "draft_year": 2024, "draft_number": 3},
+    "00-0039910": {"name": "Jayden Daniels", "draft_year": 2024, "draft_number": 2},
+    "00-0039917": {"name": "Michael Penix", "draft_year": 2024, "draft_number": 8},
+    "00-0039918": {"name": "Caleb Williams", "draft_year": 2024, "draft_number": 1},
 }

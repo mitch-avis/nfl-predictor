@@ -38,13 +38,28 @@ MEDIAN_WIN_PERCENTAGE = 0.5  # Median win percentage for analysis
 ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
 
 # URL for Team Rankings data
-TEAM_RANKINGS_URL = "https://www.teamrankings.com/nfl/ranking/"
+TEAM_RANKINGS_URL = "https://www.teamrankings.com/nfl"
 TEAM_RANKINGS_SLEEP = 1  # Sleep time in seconds for web scraping
 
 # Team Rankings subpaths for different ratings
 TEAM_RANKINGS_RATINGS = {
     "predictive-by-other": "predictive_rating",
+    "home-by-other": "home_rating",
+    "away-by-other": "away_rating",
+    "schedule-strength-by-other": "strength_of_schedule_rating",
     "future-sos-by-other": "future_sos_rating",
+    "last-5-games-by-other": "last_5_games_rating",
+}
+# Team Rankings subpaths for different statistics
+TEAM_RANKINGS_STATS = {
+    "average-scoring-margin": "average_scoring_margin",
+    "yards-per-point-margin": "yards_per_point_margin",
+    "points-per-play-margin": "points_per_play_margin",
+    "turnover-margin-per-game": "turnover_margin_per_game",
+    "penalty-yards-per-game": "penalty_yards_per_game",
+    "opponent-penalty-yards-per-game": "opponent_penalty_yards_per_game",
+    "penalty-yards-per-penalty": "penalty_yards_per_penalty",
+    "opponent-penalty-yards-per-penalty": "opponent_penalty_yards_per_penalty",
 }
 # Dictionary used to map team names to abbreviations
 TEAMS_TO_ABBR = {

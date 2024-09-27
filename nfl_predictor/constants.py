@@ -328,14 +328,10 @@ AGG_DROP_COLS = [
 # Columns to exclude from the ELO dataset for streamlined analysis
 ELO_DROP_COLS = [
     "season",
-    "neutral",
-    "playoff",
     "elo_prob1",
     "elo_prob2",
     "elo1_post",
     "elo2_post",
-    "qb1",
-    "qb2",
     "qb1_adj",
     "qb2_adj",
     "qbelo_prob1",
@@ -351,17 +347,34 @@ ELO_DROP_COLS = [
     "quality",
     "importance",
     "total_rating",
+    "game_type",
+    "game_id",
 ]
 # Dictionary to swap columns for ELO dataset in the event of neutral site games
 ELO_SWAP_COLS = {
     "team1": "team2",
     "team2": "team1",
+    "qb1": "qb2",
+    "qb2": "qb1",
     "elo1_pre": "elo2_pre",
     "elo2_pre": "elo1_pre",
     "qbelo1_pre": "qbelo2_pre",
     "qbelo2_pre": "qbelo1_pre",
     "qb1_value_pre": "qb2_value_pre",
     "qb2_value_pre": "qb1_value_pre",
+}
+# Dictionary to rename ELO columns to away/home format for consistency
+ELO_RENAME_COLS = {
+    "team1": "home_name",
+    "team2": "away_name",
+    "qb1": "home_qb",
+    "qb2": "away_qb",
+    "elo1_pre": "home_elo_pre",
+    "elo2_pre": "away_elo_pre",
+    "qbelo1_pre": "home_qb_elo_pre",
+    "qbelo2_pre": "away_qb_elo_pre",
+    "qb1_value_pre": "home_qb_value_pre",
+    "qb2_value_pre": "away_qb_value_pre",
 }
 
 # Columns to exclude from the completed games dataset for streamlined analysis

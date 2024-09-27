@@ -36,13 +36,14 @@ def display_predictions(y_pred: np.ndarray, x_test: pd.DataFrame) -> None:
         home_win_prob = round((1 - game) * 100, 2)
 
         # Extract game details
+        season = x_test_reset.loc[idx, "season"]
         week = x_test_reset.loc[idx, "week"]
         away_team = x_test_reset.loc[idx, "away_name"]
         home_team = x_test_reset.loc[idx, "home_name"]
 
         # Format and log the display string
         display_string = (
-            f"{'Week ' + str(week):<7}: "
+            f"Season: {season} {'Week ' + str(week):<7}: "
             f"{away_team:<21} ({str(away_win_prob) + '%)':<8} at "
             f"{home_team:<21} ({str(home_win_prob) + '%)':<8}"
         )

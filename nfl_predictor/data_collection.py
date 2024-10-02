@@ -584,18 +584,17 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
     season_rankings = []
 
     for week_number, week_date in enumerate(week_dates, start=1):
-        # Set force_refresh to True if the season is the current season and the week is the current
-        # week, plus/minus one week to account for potential delays in data availability
-        force_refresh = season == current_season and abs(week_number - current_week) <= 1
         log.info("Collecting team rankings for Week %s...", week_number)
-
-        if season == current_season and week_number >= current_week + 1:
+        # Set future_week to True if the week is in the future
+        future_week = season == current_season and week_number >= current_week + 1
+        if future_week:
             # Copy the current week's rankings to future weeks
             data_path = f"{constants.DATA_PATH}/{season}"
             current_week_file = f"{data_path}/{season}_week_{current_week:>02}_team_rankings.csv"
             future_week_file = f"{data_path}/{season}_week_{week_number:>02}_team_rankings.csv"
             log.info("Copying rankings from Week %s to Week %s...", current_week, week_number)
             week_rankings_df = read_df_from_csv(current_week_file, check_exists=True)
+            week_rankings_df["week"] = week_number
             write_df_to_csv(week_rankings_df, future_week_file)
         else:
             # Attempt to scrape and retrieve team rankings for the week
@@ -604,7 +603,7 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
                 scrape_team_rankings_for_week,
                 week_number,
                 week_date,
-                force_refresh=force_refresh or REFRESH_WEEKLY_TEAM_RANKINGS,
+                force_refresh=REFRESH_WEEKLY_TEAM_RANKINGS,
             )
 
         # Append the week's rankings to the season list if data is present

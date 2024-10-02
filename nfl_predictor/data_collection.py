@@ -34,7 +34,7 @@ from bs4 import BeautifulSoup
 from sportsipy.nfl.boxscore import Boxscore
 
 from nfl_predictor import constants
-from nfl_predictor.utils.csv_utils import read_df_from_csv, read_write_data
+from nfl_predictor.utils.csv_utils import read_df_from_csv, read_write_data, write_df_to_csv
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.nfl_utils import (
     calculate_stats,
@@ -84,7 +84,6 @@ REFRESH_AGGREGATE_DATA = False
 REFRESH_SEASON_TEAM_RANKINGS = False
 REFRESH_WEEKLY_TEAM_RANKINGS = False
 REFRESH_ELO_SEASON = False
-REFRESH_ELO_WEEKLY = False
 
 
 def main() -> None:
@@ -586,15 +585,25 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
         # week, plus/minus one week to account for potential delays in data availability
         force_refresh = season == current_season and abs(week_number - current_week) <= 1
         log.info("Collecting team rankings for Week %s...", week_number)
-        # Attempt to scrape and retrieve team rankings for the week
-        week_rankings_df = read_write_data(
-            f"{season}/{season}_week_{week_number:>02}_team_rankings",
-            scrape_team_rankings_for_week,
-            week_number,
-            week_date,
-            force_refresh=force_refresh or REFRESH_WEEKLY_TEAM_RANKINGS,
-            # force_refresh=False,
-        )
+
+        if season == current_season and week_number >= current_week + 1:
+            # Copy the current week's rankings to future weeks
+            data_path = f"{constants.DATA_PATH}/{season}"
+            current_week_file = f"{data_path}/{season}_week_{current_week:>02}_team_rankings.csv"
+            future_week_file = f"{data_path}/{season}_week_{week_number:>02}_team_rankings.csv"
+            log.info("Copying rankings from Week %s to Week %s...", current_week, week_number)
+            week_rankings_df = read_df_from_csv(current_week_file, check_exists=True)
+            write_df_to_csv(week_rankings_df, future_week_file)
+        else:
+            # Attempt to scrape and retrieve team rankings for the week
+            week_rankings_df = read_write_data(
+                f"{season}/{season}_week_{week_number:>02}_team_rankings",
+                scrape_team_rankings_for_week,
+                week_number,
+                week_date,
+                force_refresh=force_refresh or REFRESH_WEEKLY_TEAM_RANKINGS,
+            )
+
         # Append the week's rankings to the season list if data is present
         if not week_rankings_df.empty:
             week_rankings_df = week_rankings_df.fillna(0.0)

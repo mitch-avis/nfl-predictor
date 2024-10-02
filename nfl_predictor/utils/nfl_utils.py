@@ -69,23 +69,23 @@ def determine_nfl_week_by_date(given_date: date) -> int:
                 regular season).
     """
 
-    def adjust_to_wednesday(start_date: date) -> date:
-        """Adjusts the given date to the nearest Wednesday."""
-        return start_date - timedelta(days=(start_date.weekday() - 2) % 7)
+    def adjust_to_tuesday(start_date: date) -> date:
+        """Adjusts the given date to the nearest Tuesday."""
+        return start_date - timedelta(days=(start_date.weekday() - 1) % 7)
 
     # Determine the start date of the NFL season for the given year
-    season_start = adjust_to_wednesday(get_season_start(given_date.year))
+    season_start = adjust_to_tuesday(get_season_start(given_date.year))
 
     # Handle dates before the season start, considering January and February for final weeks of
     # the previous season or postseason
     if given_date < season_start:
         # January and February are treated as part of the previous season
         if given_date.month in (1, 2):
-            previous_season_start = adjust_to_wednesday(get_season_start(given_date.year - 1))
+            previous_season_start = adjust_to_tuesday(get_season_start(given_date.year - 1))
             week_number = ((given_date - previous_season_start).days // 7) + 1
             return max(1, min(week_number, 18))
         # For dates before the previous season's start, determine if it's offseason
-        previous_season_start = adjust_to_wednesday(get_season_start(given_date.year - 1))
+        previous_season_start = adjust_to_tuesday(get_season_start(given_date.year - 1))
         if given_date >= previous_season_start:
             return 1
         return 0

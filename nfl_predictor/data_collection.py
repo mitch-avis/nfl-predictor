@@ -290,6 +290,9 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
         if not week_games_df.empty:
             season_games_list.append(week_games_df)
 
+    # Filter out empty DataFrames before concatenating
+    season_games_list = [df for df in season_games_list if not df.empty]
+
     # Concatenate all weekly game data into a single DataFrame, if any data was collected
     if season_games_list:
         return pd.concat(season_games_list, ignore_index=True)

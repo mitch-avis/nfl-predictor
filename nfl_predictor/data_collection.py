@@ -603,7 +603,7 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
                 scrape_team_rankings_for_week,
                 week_number,
                 week_date,
-                force_refresh=REFRESH_WEEKLY_TEAM_RANKINGS,
+                force_refresh=week_number == current_week or REFRESH_WEEKLY_TEAM_RANKINGS,
             )
 
         # Append the week's rankings to the season list if data is present

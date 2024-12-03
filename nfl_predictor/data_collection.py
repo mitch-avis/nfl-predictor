@@ -44,6 +44,7 @@ from nfl_predictor.utils.nfl_utils import (
     determine_weeks_to_scrape,
     fetch_game_boxscore,
     fetch_nfl_elo_ratings,
+    fetch_nfl_lines,
     fetch_week_boxscores,
     get_week_dates,
     init_team_stats_dfs,
@@ -51,28 +52,29 @@ from nfl_predictor.utils.nfl_utils import (
     merge_and_finalize,
     merge_and_format_df,
     prepare_data_for_week,
+    spread_to_moneyline,
 )
 
 SEASONS_TO_SCRAPE = [
-    # 2003,
-    # 2004,
-    # 2005,
-    # 2006,
-    # 2007,
-    # 2008,
-    # 2009,
-    # 2010,
-    # 2011,
-    # 2012,
-    # 2013,
-    # 2014,
-    # 2015,
-    # 2016,
-    # 2017,
-    # 2018,
-    # 2019,
-    # 2020,
-    # 2021,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
     2022,
     2023,
     2024,
@@ -80,10 +82,11 @@ SEASONS_TO_SCRAPE = [
 REFRESH_SEASON_DATA = False
 REFRESH_WEEKLY_DATA = False
 REFRESH_SCHEDULE = False
-REFRESH_AGGREGATE_DATA = False
+REFRESH_AGGREGATE_DATA = True
 REFRESH_SEASON_TEAM_RANKINGS = False
 REFRESH_WEEKLY_TEAM_RANKINGS = False
-REFRESH_ELO_SEASON = False
+REFRESH_ELO_SEASON = True
+REFRESH_LINES_SEASON = True
 
 
 def main() -> None:
@@ -95,17 +98,17 @@ def main() -> None:
     2. Filters and stores data for completed games.
     3. Identifies and stores upcoming games for predictions.
     """
-    # Step 1: Collect and consolidate data from multiple seasons
+    # Collect and consolidate data from multiple seasons
     combined_data_df = read_write_data("all_data", collect_data, force_refresh=True)
 
-    # Step 2: Filter and store data for completed games
+    # Filter and store data for completed games
     read_write_data("completed_games", parse_completed_games, combined_data_df, force_refresh=True)
 
     # Determine today's date and the current NFL week
     today = date.today()
     current_week = determine_nfl_week_by_date(today)
 
-    # Step 3: Identify and store upcoming games for the current week for predictions
+    # Identify and store upcoming games for the current week for predictions
     read_write_data(
         f"predict/week_{current_week:>02}_games_to_predict",
         parse_upcoming_games_to_predict,
@@ -126,13 +129,16 @@ def collect_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: Combined and cleaned data from all processed seasons.
     """
-    # Step 1: Fetch and save the latest ELO ratings for NFL teams
+    # Fetch and save the latest ELO ratings for NFL teams
     elo_df = read_write_data("nfl_elo", fetch_nfl_elo_ratings, force_refresh=True)
 
-    # Step 2: Process game data for each season, using the ELO ratings for enhancement
-    combined_data_list = process_seasons(elo_df)
+    # Fetch and save the latest NFL lines for games
+    lines_df = read_write_data("nfl_lines", fetch_nfl_lines, force_refresh=True)
 
-    # Step 3: Clean and aggregate the processed data from all seasons
+    # Process game data for each season, using the ELO ratings for enhancement
+    combined_data_list = process_seasons(elo_df, lines_df)
+
+    # Clean and aggregate the processed data from all seasons
     # Remove columns that are entirely empty or contain only NA values
     cleaned_data_list = [df.dropna(axis=1, how="all") for df in combined_data_list]
     # Combine cleaned data into a single DataFrame
@@ -147,7 +153,7 @@ def collect_data() -> pd.DataFrame:
     return combined_data_df
 
 
-def process_seasons(elo_df: pd.DataFrame) -> list:
+def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
     """
     Processes and combines game data, team rankings, and ELO ratings for specified NFL seasons.
 
@@ -230,6 +236,16 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             force_refresh=force_refresh or REFRESH_ELO_SEASON,
         )
 
+        # Fetch NFL odds for the season
+        log.info("Collecting NFL odds for the %s season...", season)
+        season_lines_df = read_write_data(
+            f"{season}/{season}_lines",
+            get_season_lines,
+            lines_df,
+            season,
+            force_refresh=force_refresh or REFRESH_LINES_SEASON,
+        )
+
         # Combine all collected and processed data for the season into a single DataFrame
         log.info("Combining all data for the %s season...", season)
         combined_data_df = read_write_data(
@@ -238,6 +254,7 @@ def process_seasons(elo_df: pd.DataFrame) -> list:
             agg_games_df,
             team_rankings_df,
             season_elo_df,
+            season_lines_df,
             force_refresh=True,
         )
 
@@ -715,7 +732,7 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
                         handling of neutral games and re-mapping of team names.
     """
     # Drop columns not needed for analysis to reduce memory usage
-    elo_df = elo_df.drop(columns=constants.ELO_DROP_COLS)
+    elo_df = elo_df.drop(columns=constants.ELO_DROP_COLS, errors="ignore")
 
     # Convert 'date' column to datetime, then to date for efficient filtering
     elo_df["date"] = pd.to_datetime(elo_df["date"]).dt.date
@@ -740,35 +757,127 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     swapped_rows = duplicate_rows.rename(columns=constants.ELO_SWAP_COLS)
 
     # Concatenate original and swapped rows, then clean up the DataFrame
-    final_elo_df = (
+    season_elo_df = (
         pd.concat([swapped_rows, filtered_elo_df], ignore_index=True)
         .sort_values(by=["date"])  # Sort by date for chronological order
         .reset_index(drop=True)  # Reset index for a clean DataFrame
     )
 
-    return final_elo_df
+    return season_elo_df
+
+
+def get_season_lines(lines_df: pd.DataFrame, season: int) -> pd.DataFrame:
+    """
+    Filters and adjusts NFL lines for a specific season from a DataFrame containing lines across
+    multiple seasons. This function optimizes data handling by dropping unnecessary columns early,
+    mapping team abbreviations to standard formats, handling missing values, and organizing columns
+    for consistency.
+
+    Args:
+        lines_df (pd.DataFrame): DataFrame containing weekly NFL lines for all teams across seasons.
+        season (int): The NFL season year for which to filter and adjust lines.
+
+    Returns:
+        pd.DataFrame:   Adjusted DataFrame with NFL lines for the specified season, including
+                        re-mapping of team names and organized columns.
+    """
+    # Drop columns not needed for analysis to reduce memory usage
+    lines_df = lines_df.drop(columns=constants.LINES_DROP_COLS, errors="ignore")
+
+    # Filter lines for the specified season
+    lines_df = lines_df[lines_df["season"] == season]
+
+    # Map team abbreviations to standard abbreviations using a predefined mapping
+    team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
+    lines_df["home_abbr"] = lines_df["home_team"].map(team_name_mapping)
+    lines_df["away_abbr"] = lines_df["away_team"].map(team_name_mapping)
+
+    # Handle potential missing mappings
+    if lines_df["home_abbr"].isnull().any() or lines_df["away_abbr"].isnull().any():
+        log.warning(
+            "Some team abbreviations could not be mapped. Please check the TEAMS_TO_ABBR mapping."
+        )
+
+    # Create 'away_spread' as the opposite sign of 'home_spread_open'
+    lines_df["away_spread"] = -lines_df["home_spread_open"]
+    # Rename 'home_spread_open' to 'home_spread' for consistency
+    lines_df = lines_df.rename(columns={"home_spread_open": "home_spread"})
+
+    # Determine if 'open' columns are available based on the season
+    if season >= 2024:
+        # Use 'open' columns for the latest season
+        lines_df["home_moneyline"] = lines_df["home_ml_open"]
+        lines_df["away_moneyline"] = lines_df["away_ml_open"]
+        lines_df["total_line"] = lines_df["total_line_open"]
+    else:
+        # Use 'last' columns for previous seasons
+        # Fill missing total_line_last with 44
+        lines_df["total_line"] = lines_df["total_line_last"].fillna(44)
+
+        # Assign moneylines from 'last' columns
+        lines_df["home_moneyline"] = lines_df["home_ml_last"]
+        lines_df["away_moneyline"] = lines_df["away_ml_last"]
+
+    # Calculate moneylines where missing using the spread
+    lines_df["home_moneyline"] = lines_df.apply(
+        lambda row: (
+            row["home_moneyline"]
+            if pd.notnull(row["home_moneyline"])
+            else spread_to_moneyline(row["home_spread"])
+        ),
+        axis=1,
+    )
+    lines_df["away_moneyline"] = lines_df.apply(
+        lambda row: (
+            row["away_moneyline"]
+            if pd.notnull(row["away_moneyline"])
+            else spread_to_moneyline(row["away_spread"])
+        ),
+        axis=1,
+    )
+
+    # Select and reorder columns as specified
+    desired_columns = [
+        "away_abbr",
+        "home_abbr",
+        "season",
+        "week",
+        "away_spread",
+        "away_moneyline",
+        "home_spread",
+        "home_moneyline",
+        "total_line",
+    ]
+    lines_df = lines_df[desired_columns]
+
+    return lines_df
 
 
 def combine_data(
-    agg_games_df: pd.DataFrame, team_rankings_df: pd.DataFrame, elo_df: pd.DataFrame
+    agg_games_df: pd.DataFrame,
+    team_rankings_df: pd.DataFrame,
+    elo_df: pd.DataFrame,
+    lines_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Combines aggregated game data with team rankings and ELO ratings for enhanced analysis.
+    Combines aggregated game data with team rankings, ELO ratings, and NFL lines for enhanced
+    analysis.
 
-    This function merges aggregated game data with team rankings and ELO ratings to provide a
-    comprehensive dataset that includes differences in ELO ratings, QB values, and other relevant
-    metrics between the home and away teams. It also reorders columns to facilitate analysis,
-    especially for predictive modeling of game outcomes.
+    This function merges aggregated game data with team rankings, ELO ratings, and NFL lines to
+    provide a comprehensive dataset that includes differences in ELO ratings, QB values, NFL betting
+    lines, and other relevant metrics between the home and away teams. It also reorders columns to
+    facilitate analysis, especially for predictive modeling of game outcomes.
 
     Args:
         agg_games_df (pd.DataFrame): Aggregated game data for the season.
         team_rankings_df (pd.DataFrame): Team rankings for the season.
         elo_df (pd.DataFrame): ELO ratings for the season.
+        lines_df (pd.DataFrame): NFL lines for the season.
 
     Returns:
-        pd.DataFrame:   A DataFrame that combines all the provided data, with calculated differences
-                        in ELO and QB values, standardized team abbreviations, and reordered columns
-                        for easier analysis.
+        pd.DataFrame:   A DataFrame that combines all the provided data, including betting lines,
+                        with calculated differences in ELO and QB values, standardized team
+                        abbreviations, and reordered columns for easier analysis.
     """
     # Rename columns in team_rankings_df to differentiate between home and away teams
     team_rankings_df_away = team_rankings_df.rename(
@@ -799,6 +908,14 @@ def combine_data(
     combined_df["qb_dif"] = combined_df["qb2_value_pre"] - combined_df["qb1_value_pre"]
     combined_df["qb_elo_dif"] = combined_df["qbelo2_pre"] - combined_df["qbelo1_pre"]
 
+    # Merge with NFL lines
+    combined_df = pd.merge(
+        combined_df,
+        lines_df,
+        how="left",
+        on=["away_abbr", "home_abbr", "season", "week"],
+    )
+
     # Rename ELO columns to away/home format for consistency with other data
     combined_df = combined_df.rename(columns=constants.ELO_RENAME_COLS)
 
@@ -821,11 +938,22 @@ def combine_data(
         "neutral",
         "division",
     ]
+    lines_columns = [
+        "away_spread",
+        "away_moneyline",
+        "home_spread",
+        "home_moneyline",
+        "total_line",
+    ]
     result_columns = ["away_score", "home_score", "result"]
     data_columns = sorted(
-        [col for col in combined_df.columns if col not in first_columns + result_columns]
+        [
+            col
+            for col in combined_df.columns
+            if col not in first_columns + lines_columns + result_columns
+        ]
     )
-    combined_df = combined_df[first_columns + data_columns + result_columns]
+    combined_df = combined_df[first_columns + data_columns + lines_columns + result_columns]
 
     # Rename legacy teams to modern team names using constants.MODERN_TEAM_NAMES
     combined_df["away_name"] = combined_df["away_name"].replace(constants.MODERN_TEAM_NAMES)

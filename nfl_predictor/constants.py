@@ -34,8 +34,12 @@ MEDIAN_THIRD_DOWN = 0.4  # Median third down conversion rate for analysis
 MEDIAN_FOURTH_DOWN = 0.5  # Median fourth down conversion rate for analysis
 MEDIAN_WIN_PERCENTAGE = 0.5  # Median win percentage for analysis
 
+# Standard deviation of score differences
+SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for analysis
+
 # URL for ELO ratings data
 ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
+ELO_LINES_URL = "https://github.com/greerreNFL/nfelomarket_data/raw/main/Data/lines.csv"
 
 # URL for Team Rankings data
 TEAM_RANKINGS_URL = "https://www.teamrankings.com/nfl"
@@ -312,7 +316,6 @@ AGG_STATS = [
     "fumbles_lost",
     "turnovers",
     "penalties",
-    "yards_from_penalties",
     "third_down_perc",
     "fourth_down_perc",
     "time_of_possession",
@@ -348,6 +351,7 @@ AGG_DROP_COLS = [
 # Columns to exclude from the ELO dataset for streamlined analysis
 ELO_DROP_COLS = [
     "season",
+    "playoff",
     "elo_prob1",
     "elo_prob2",
     "elo1_post",
@@ -385,6 +389,62 @@ ELO_SWAP_COLS = {
 }
 # Dictionary to rename ELO columns to away/home format for consistency
 ELO_RENAME_COLS = {
+    "team1": "home_name",
+    "team2": "away_name",
+    "qb1": "home_qb",
+    "qb2": "away_qb",
+    "elo1_pre": "home_elo_pre",
+    "elo2_pre": "away_elo_pre",
+    "qbelo1_pre": "home_qb_elo_pre",
+    "qbelo2_pre": "away_qb_elo_pre",
+    "qb1_value_pre": "home_qb_value_pre",
+    "qb2_value_pre": "away_qb_value_pre",
+}
+
+# Columns to exclude from the NFL lines dataset for streamlined analysis
+LINES_DROP_COLS = [
+    "Unnamed: 0",
+    "game_id",
+    "home_spread_open_price",
+    "away_spread_open_price",
+    "home_spread_open_source",
+    "home_spread_open_timestamp",
+    "home_spread_last_price",
+    "away_spread_last_price",
+    "home_spread_last_source",
+    "home_spread_last_timestamp",
+    "home_spread_tickets_pct",
+    "home_spread_money_pct",
+    "home_spread_pcts_source",
+    "home_spread_pct_timestamp",
+    "ml_open_source",
+    "ml_open_timestamp",
+    "ml_last_source",
+    "ml_last_timestamp",
+    "under_price_open",
+    "over_price_open",
+    "total_line_open_source",
+    "total_line_open_timestamp",
+    "under_price_last",
+    "over_price_last",
+    "total_line_last_source",
+    "total_line_last_timestamp",
+]
+# Dictionary to swap columns for NFL lines dataset in the event of neutral site games
+LINES_SWAP_COLS = {
+    "team1": "team2",
+    "team2": "team1",
+    "qb1": "qb2",
+    "qb2": "qb1",
+    "elo1_pre": "elo2_pre",
+    "elo2_pre": "elo1_pre",
+    "qbelo1_pre": "qbelo2_pre",
+    "qbelo2_pre": "qbelo1_pre",
+    "qb1_value_pre": "qb2_value_pre",
+    "qb2_value_pre": "qb1_value_pre",
+}
+# Dictionary to rename NFL lines columns to away/home format for consistency
+LINES_RENAME_COLS = {
     "team1": "home_name",
     "team2": "away_name",
     "qb1": "home_qb",

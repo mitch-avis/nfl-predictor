@@ -10,6 +10,7 @@ from time import sleep
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 from sportsipy.nfl.boxscore import Boxscore, Boxscores
 
 from nfl_predictor import constants
@@ -29,6 +30,54 @@ def fetch_nfl_elo_ratings() -> pd.DataFrame:
     # Utilize pandas to directly read the ELO ratings CSV from the URL into a DataFrame
     elo_df = pd.read_csv(constants.ELO_DATA_URL)
     return elo_df
+
+
+def fetch_nfl_lines() -> pd.DataFrame:
+    """
+    Fetches the latest NFL lines from a specified URL.
+
+    This function uses pandas to read a CSV file containing NFL lines directly from a URL into a
+    DataFrame. The lines include information such as the spread, over/under, and moneyline odds.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the latest NFL lines.
+    """
+    # Utilize pandas to directly read the NFL lines CSV from the URL into a DataFrame
+    lines_df = pd.read_csv(constants.ELO_LINES_URL)
+    return lines_df
+
+
+def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
+    """
+    Converts an NFL point spread to a moneyline, including the effect of vig.
+
+    Args:
+        spread (float): The point spread (negative for favorites, positive for underdogs).
+        vig (float): The vig percentage as a decimal (default is 0.05 for 5%).
+
+    Returns:
+        int: The moneyline corresponding to the given spread.
+    """
+    # Calculate the implied probability based on the normal distribution
+    implied_probability = stats.norm.cdf(-spread, 0, constants.SCORE_DIFF_STD_DEV)
+
+    # Calculate the complementary probability for the other side of the moneyline
+    complementary_probability = 1 - implied_probability
+
+    # Scale probabilities to include the vig
+    total_probability = implied_probability + complementary_probability
+    adjusted_implied_probability = implied_probability / total_probability * (1 + vig)
+
+    # Convert probabilities back to moneyline odds
+    if spread < 0:
+        # Favorite moneyline (negative)
+        moneyline = -100 * (adjusted_implied_probability / (1 - adjusted_implied_probability))
+    else:
+        # Underdog moneyline (positive)
+        moneyline = 100 * ((1 - adjusted_implied_probability) / adjusted_implied_probability)
+
+    # Round to the nearest whole number and return
+    return int(round(moneyline))
 
 
 def get_season_start(year: int) -> date:

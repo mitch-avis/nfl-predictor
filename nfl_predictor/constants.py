@@ -3,18 +3,6 @@ This module defines constants for the NFL predictor project, including configura
 NFL season details, team abbreviations, and statistics for performance analysis. Centralizing these
 configurations helps maintain consistency and integrity across the project, simplifying management
 and updates.
-
-Key Constants:
-- Directories: ROOT_DIR, DATA_PATH for project root and data storage paths.
-- NFL Season: SEASON_END_MONTH, WEEKS_BEFORE_2021, WEEKS_FROM_2021_ONWARDS for season timelines.
-- Data URLs: ELO_DATA_URL, TEAM_RANKINGS_URL for fetching ELO ratings and team rankings.
-- Team Abbreviations: TEAMS_TO_ABBR for mapping team names to abbreviations.
-- Statistics: BASE_COLUMNS, BOXSCORE_STATS, AGG_STATS for analysis metrics.
-- Exclusions: ELO_DROP_COLS for columns to exclude from the ELO dataset.
-- Player Information: ACTIVE_QB_IDS for active quarterbacks' details.
-
-This approach ensures easy reference and modification, supporting the project's scalability and
-adaptability.
 """
 
 import os
@@ -54,6 +42,7 @@ TEAM_RANKINGS_RATINGS = {
     "future-sos-by-other": "future_sos_rating",
     "last-5-games-by-other": "last_5_games_rating",
 }
+
 # Team Rankings subpaths for different statistics
 TEAM_RANKINGS_STATS = {
     "average-scoring-margin": "average_scoring_margin",
@@ -65,6 +54,7 @@ TEAM_RANKINGS_STATS = {
     "penalty-yards-per-penalty": "penalty_yards_per_penalty",
     "opponent-penalty-yards-per-penalty": "opponent_penalty_yards_per_penalty",
 }
+
 # Dictionary used to map team names to abbreviations
 TEAMS_TO_ABBR = {
     "Arizona": "ARI",
@@ -100,6 +90,7 @@ TEAMS_TO_ABBR = {
     "Tennessee": "TEN",
     "Washington": "WSH",
 }
+
 # Team abbreviations in various formats for compatibility across datasets
 PFR_TEAM_ABBR = [
     "crd",
@@ -241,6 +232,7 @@ PBP_TEAM_ABBR = [
     "WSH",
     "WSH",
 ]
+
 # Dictionary to map historical team names to modern names for consistency
 MODERN_TEAM_NAMES = {
     "Oakland Raiders": "Las Vegas Raiders",
@@ -249,6 +241,7 @@ MODERN_TEAM_NAMES = {
     "Washington Football Team": "Washington Commanders",
     "Washington Redskins": "Washington Commanders",
 }
+
 # Divisional team groupings for analysis
 DIVISION_TEAMS = {
     "AFC East": ["BUF", "MIA", "NE", "NYJ"],
@@ -375,6 +368,7 @@ ELO_DROP_COLS = [
     "game_type",
     "game_id",
 ]
+
 # Dictionary to swap columns for ELO dataset in the event of neutral site games
 ELO_SWAP_COLS = {
     "team1": "team2",
@@ -388,6 +382,7 @@ ELO_SWAP_COLS = {
     "qb1_value_pre": "qb2_value_pre",
     "qb2_value_pre": "qb1_value_pre",
 }
+
 # Dictionary to rename ELO columns to away/home format for consistency
 ELO_RENAME_COLS = {
     "team1": "home_name",
@@ -406,12 +401,8 @@ ELO_RENAME_COLS = {
 LINES_DROP_COLS = [
     "Unnamed: 0",
     "game_id",
-    "home_spread_open_price",
-    "away_spread_open_price",
     "home_spread_open_source",
     "home_spread_open_timestamp",
-    "home_spread_last_price",
-    "away_spread_last_price",
     "home_spread_last_source",
     "home_spread_last_timestamp",
     "home_spread_tickets_pct",
@@ -422,22 +413,20 @@ LINES_DROP_COLS = [
     "ml_open_timestamp",
     "ml_last_source",
     "ml_last_timestamp",
-    "under_price_open",
-    "over_price_open",
     "total_line_open_source",
     "total_line_open_timestamp",
-    "under_price_last",
-    "over_price_last",
     "total_line_last_source",
     "total_line_last_timestamp",
 ]
 
-# Columns to exclude from the completed games dataset for streamlined analysis
-ML_DROP_COLS = [
+# Ordered list of columns for the final dataset
+FIRST_COLUMNS = [
     "away_name",
     "away_abbr",
     "home_name",
     "home_abbr",
+    "away_qb",
+    "home_qb",
     "season",
     "week",
     "date",
@@ -445,6 +434,15 @@ ML_DROP_COLS = [
     "home_game_number",
     "neutral",
     "division",
+]
+LINES_COLUMNS = [
+    "away_spread",
+    "away_moneyline",
+    "home_spread",
+    "home_moneyline",
+    "total_line",
+]
+RESULT_COLUMNS = [
     "away_score",
     "home_score",
     "result",

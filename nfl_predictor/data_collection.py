@@ -82,11 +82,11 @@ SEASONS_TO_SCRAPE = [
 REFRESH_SEASON_DATA = False
 REFRESH_WEEKLY_DATA = False
 REFRESH_SCHEDULE = False
-REFRESH_AGGREGATE_DATA = True
+REFRESH_AGGREGATE_DATA = False
 REFRESH_SEASON_TEAM_RANKINGS = False
 REFRESH_WEEKLY_TEAM_RANKINGS = False
-REFRESH_ELO_SEASON = True
-REFRESH_LINES_SEASON = True
+REFRESH_ELO_SEASON = False
+REFRESH_LINES_SEASON = False
 
 
 def main() -> None:
@@ -743,8 +743,6 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     # Create a mask to filter rows within the season date range
     mask = (elo_df["date"] >= week_dates[0]) & (elo_df["date"] <= week_dates[-1])
     filtered_elo_df = elo_df.loc[mask].copy()
-    # Add week number to the DataFrame for consistency with other data
-    filtered_elo_df["week"] = filtered_elo_df["date"].apply(determine_nfl_week_by_date)
 
     # Map ELO team names to standard team names using a predefined mapping
     team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
@@ -792,31 +790,24 @@ def get_season_lines(lines_df: pd.DataFrame, season: int) -> pd.DataFrame:
     lines_df["home_abbr"] = lines_df["home_team"].map(team_name_mapping)
     lines_df["away_abbr"] = lines_df["away_team"].map(team_name_mapping)
 
-    # Handle potential missing mappings
-    if lines_df["home_abbr"].isnull().any() or lines_df["away_abbr"].isnull().any():
-        log.warning(
-            "Some team abbreviations could not be mapped. Please check the TEAMS_TO_ABBR mapping."
-        )
+    # Check if 'open' columns are all populated, including 'home_spread_open'
+    open_columns = ["home_ml_open", "away_ml_open", "home_spread_open", "total_line_open"]
+    mask = lines_df[open_columns].notnull().all(axis=1)
 
-    # Create 'away_spread' as the opposite sign of 'home_spread_open'
-    lines_df["away_spread"] = -lines_df["home_spread_open"]
-    # Rename 'home_spread_open' to 'home_spread' for consistency
-    lines_df = lines_df.rename(columns={"home_spread_open": "home_spread"})
+    # Use 'open' columns where all are present
+    lines_df.loc[mask, "home_moneyline"] = lines_df.loc[mask, "home_ml_open"]
+    lines_df.loc[mask, "away_moneyline"] = lines_df.loc[mask, "away_ml_open"]
+    lines_df.loc[mask, "home_spread"] = lines_df.loc[mask, "home_spread_open"]
+    lines_df.loc[mask, "total_line"] = lines_df.loc[mask, "total_line_open"]
 
-    # Determine if 'open' columns are available based on the season
-    if season >= 2024:
-        # Use 'open' columns for the latest season
-        lines_df["home_moneyline"] = lines_df["home_ml_open"]
-        lines_df["away_moneyline"] = lines_df["away_ml_open"]
-        lines_df["total_line"] = lines_df["total_line_open"]
-    else:
-        # Use 'last' columns for previous seasons
-        # Fill missing total_line_last with 44
-        lines_df["total_line"] = lines_df["total_line_last"].fillna(44)
+    # For rows with any missing 'open' columns, use 'last' columns
+    lines_df.loc[~mask, "home_moneyline"] = lines_df.loc[~mask, "home_ml_last"]
+    lines_df.loc[~mask, "away_moneyline"] = lines_df.loc[~mask, "away_ml_last"]
+    lines_df.loc[~mask, "home_spread"] = lines_df.loc[~mask, "home_spread_last"]
+    lines_df.loc[~mask, "total_line"] = lines_df.loc[~mask, "total_line_last"].fillna(44)
 
-        # Assign moneylines from 'last' columns
-        lines_df["home_moneyline"] = lines_df["home_ml_last"]
-        lines_df["away_moneyline"] = lines_df["away_ml_last"]
+    # Set 'away_spread' as the opposite of 'home_spread'
+    lines_df["away_spread"] = -lines_df["home_spread"]
 
     # Calculate moneylines where missing using the spread
     lines_df["home_moneyline"] = lines_df.apply(

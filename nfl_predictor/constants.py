@@ -316,6 +316,7 @@ AGG_STATS = [
     "fumbles_lost",
     "turnovers",
     "penalties",
+    "yards_from_penalties",
     "third_down_perc",
     "fourth_down_perc",
     "time_of_possession",
@@ -430,32 +431,6 @@ LINES_DROP_COLS = [
     "total_line_last_source",
     "total_line_last_timestamp",
 ]
-# Dictionary to swap columns for NFL lines dataset in the event of neutral site games
-LINES_SWAP_COLS = {
-    "team1": "team2",
-    "team2": "team1",
-    "qb1": "qb2",
-    "qb2": "qb1",
-    "elo1_pre": "elo2_pre",
-    "elo2_pre": "elo1_pre",
-    "qbelo1_pre": "qbelo2_pre",
-    "qbelo2_pre": "qbelo1_pre",
-    "qb1_value_pre": "qb2_value_pre",
-    "qb2_value_pre": "qb1_value_pre",
-}
-# Dictionary to rename NFL lines columns to away/home format for consistency
-LINES_RENAME_COLS = {
-    "team1": "home_name",
-    "team2": "away_name",
-    "qb1": "home_qb",
-    "qb2": "away_qb",
-    "elo1_pre": "home_elo_pre",
-    "elo2_pre": "away_elo_pre",
-    "qbelo1_pre": "home_qb_elo_pre",
-    "qbelo2_pre": "away_qb_elo_pre",
-    "qb1_value_pre": "home_qb_value_pre",
-    "qb2_value_pre": "away_qb_value_pre",
-}
 
 # Columns to exclude from the completed games dataset for streamlined analysis
 ML_DROP_COLS = [
@@ -465,6 +440,11 @@ ML_DROP_COLS = [
     "home_abbr",
     "season",
     "week",
+    "date",
+    "away_game_number",
+    "home_game_number",
+    "neutral",
+    "division",
     "away_score",
     "home_score",
     "result",

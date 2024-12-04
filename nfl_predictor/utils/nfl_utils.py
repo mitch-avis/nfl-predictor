@@ -47,39 +47,6 @@ def fetch_nfl_lines() -> pd.DataFrame:
     return lines_df
 
 
-def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
-    """
-    Converts an NFL point spread to a moneyline, including the effect of vig.
-
-    Args:
-        spread (float): The point spread (negative for favorites, positive for underdogs).
-        vig (float): The vig percentage as a decimal (default is 0.05 for 5%).
-
-    Returns:
-        int: The moneyline corresponding to the given spread.
-    """
-    # Calculate the implied probability based on the normal distribution
-    implied_probability = stats.norm.cdf(-spread, 0, constants.SCORE_DIFF_STD_DEV)
-
-    # Calculate the complementary probability for the other side of the moneyline
-    complementary_probability = 1 - implied_probability
-
-    # Scale probabilities to include the vig
-    total_probability = implied_probability + complementary_probability
-    adjusted_implied_probability = implied_probability / total_probability * (1 + vig)
-
-    # Convert probabilities back to moneyline odds
-    if spread < 0:
-        # Favorite moneyline (negative)
-        moneyline = -100 * (adjusted_implied_probability / (1 - adjusted_implied_probability))
-    else:
-        # Underdog moneyline (positive)
-        moneyline = 100 * ((1 - adjusted_implied_probability) / adjusted_implied_probability)
-
-    # Round to the nearest whole number and return
-    return int(round(moneyline))
-
-
 def get_season_start(year: int) -> date:
     """
     Calculates the NFL season start date for a given year, traditionally the Thursday following the
@@ -804,6 +771,328 @@ def merge_scores(merged_df: pd.DataFrame, results_df: pd.DataFrame) -> pd.DataFr
     )
 
     return merged_df
+
+
+def drop_unneeded_columns(lines_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Drops unnecessary columns from the lines DataFrame.
+
+    Removes columns specified in constants.LINES_DROP_COLS to streamline the DataFrame
+    for further processing.
+
+    Args:
+        lines_df (pd.DataFrame): The original DataFrame containing NFL lines.
+
+    Returns:
+        pd.DataFrame: DataFrame with unneeded columns removed.
+    """
+    return lines_df.drop(columns=constants.LINES_DROP_COLS, errors="ignore")
+
+
+def filter_season(lines_df: pd.DataFrame, season: int) -> pd.DataFrame:
+    """
+    Filters the lines DataFrame for a specific NFL season.
+
+    Extracts only the rows corresponding to the given season year.
+
+    Args:
+        lines_df (pd.DataFrame): The DataFrame containing NFL lines across multiple seasons.
+        season (int): The NFL season year to filter for.
+
+    Returns:
+        pd.DataFrame: Filtered DataFrame containing lines for the specified season.
+    """
+    return lines_df[lines_df["season"] == season].copy()
+
+
+def map_team_abbreviations(lines_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Maps team names to their standardized abbreviations.
+
+    Utilizes the ELO_TEAM_ABBR and TEAM_ABBR constants to ensure consistency across datasets.
+
+    Args:
+        lines_df (pd.DataFrame): DataFrame containing NFL lines with team names.
+
+    Returns:
+        pd.DataFrame: DataFrame with 'home_abbr' and 'away_abbr' columns added.
+    """
+    team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
+    lines_df["home_abbr"] = lines_df["home_team"].map(team_name_mapping)
+    lines_df["away_abbr"] = lines_df["away_team"].map(team_name_mapping)
+    return lines_df
+
+
+def validate_and_filter_rows(lines_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Validates and filters rows in the lines DataFrame.
+
+    Ensures that each row has both spread and total line data. Rows missing required
+    information are excluded from further processing.
+
+    Args:
+        lines_df (pd.DataFrame): DataFrame containing NFL lines with spreads and totals.
+
+    Returns:
+        pd.DataFrame: Validated DataFrame with only rows containing necessary data.
+    """
+    # Check for presence of spread data
+    mask_spread_present = (
+        lines_df["home_spread_last"].notna() | lines_df["home_spread_open"].notna()
+    )
+    # Check for presence of total line data
+    mask_total_line_present = (
+        lines_df["total_line_last"].notna() | lines_df["total_line_open"].notna()
+    )
+    # Identify invalid rows missing either spread or total line data
+    mask_invalid = ~(mask_spread_present & mask_total_line_present)
+    # Identify valid rows
+    mask_valid = ~mask_invalid
+
+    invalid_count = mask_invalid.sum()
+    if invalid_count > 0:
+        log.warning(
+            "%s rows are missing required spread or total line data and will be excluded.",
+            invalid_count,
+        )
+    # Return only valid rows
+    return lines_df[mask_valid].copy()
+
+
+def assign_spreads_total_and_moneylines(lines_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Assigns spread, total line, and moneyline values to the lines DataFrame.
+
+    This function processes the lines DataFrame by:
+    1. Assigning home and away spreads based on last or open spread data.
+    2. Assigning total lines based on last or open total line data.
+    3. Assigning moneyline odds corresponding to the combined spread and total line data sources.
+
+    Args:
+        lines_df (pd.DataFrame): DataFrame containing NFL lines.
+
+    Returns:
+        pd.DataFrame: DataFrame with updated NFL lines, including spread, total line, and moneyline.
+    """
+    # Assign spreads
+    # Condition for valid last spread data
+    condition_last_spread = (
+        lines_df["home_spread_last"].notna()
+        & (
+            lines_df["home_spread_last_price"].isna()
+            | lines_df["home_spread_last_price"].between(-400, 400, inclusive="both")
+        )
+        & (
+            lines_df["away_spread_last_price"].isna()
+            | lines_df["away_spread_last_price"].between(-400, 400, inclusive="both")
+        )
+    )
+    # Assign home spread from last spread data
+    lines_df.loc[condition_last_spread, "home_spread"] = lines_df.loc[
+        condition_last_spread, "home_spread_last"
+    ]
+    lines_df.loc[condition_last_spread, "spread_source"] = "last"
+
+    # Condition for valid open spread data when last spread is invalid
+    condition_open_spread = (
+        ~condition_last_spread
+        & lines_df["home_spread_open"].notna()
+        & (
+            lines_df["home_spread_open_price"].isna()
+            | lines_df["home_spread_open_price"].between(-400, 400, inclusive="both")
+        )
+        & (
+            lines_df["away_spread_open_price"].isna()
+            | lines_df["away_spread_open_price"].between(-400, 400, inclusive="both")
+        )
+    )
+    # Assign home spread from open spread data
+    lines_df.loc[condition_open_spread, "home_spread"] = lines_df.loc[
+        condition_open_spread, "home_spread_open"
+    ]
+    lines_df.loc[condition_open_spread, "spread_source"] = "open"
+
+    # Handle rows with missing spread data by setting default spread to 0.0
+    condition_default_spread = lines_df["home_spread"].isna()
+    if condition_default_spread.any():
+        log.warning(
+            "%s rows have invalid spread data. Setting 'home_spread' to 0.0.",
+            condition_default_spread.sum(),
+        )
+        lines_df.loc[condition_default_spread, "home_spread"] = 0.0
+        lines_df.loc[condition_default_spread, "spread_source"] = "default"
+
+    # Assign away spread as the negative of home spread
+    lines_df["away_spread"] = -lines_df["home_spread"]
+
+    # Assign total lines
+    # Condition for valid last total line data
+    condition_last_total = (
+        lines_df["total_line_last"].notna()
+        & (
+            lines_df["under_price_last"].isna()
+            | lines_df["under_price_last"].between(-400, 400, inclusive="both")
+        )
+        & (
+            lines_df["over_price_last"].isna()
+            | lines_df["over_price_last"].between(-400, 400, inclusive="both")
+        )
+    )
+    # Assign total line from last total line data
+    lines_df.loc[condition_last_total, "total_line"] = lines_df.loc[
+        condition_last_total, "total_line_last"
+    ].fillna(44)
+    lines_df.loc[condition_last_total, "total_line_source"] = "last"
+
+    # Condition for valid open total line data when last total line is invalid
+    condition_open_total = (
+        ~condition_last_total
+        & lines_df["total_line_open"].notna()
+        & (
+            lines_df["under_price_open"].isna()
+            | lines_df["under_price_open"].between(-400, 400, inclusive="both")
+        )
+        & (
+            lines_df["over_price_open"].isna()
+            | lines_df["over_price_open"].between(-400, 400, inclusive="both")
+        )
+    )
+    # Assign total line from open total line data
+    lines_df.loc[condition_open_total, "total_line"] = lines_df.loc[
+        condition_open_total, "total_line_open"
+    ].fillna(44)
+    lines_df.loc[condition_open_total, "total_line_source"] = "open"
+
+    # Handle rows with missing total line data by setting default total line to 44
+    condition_default_total = lines_df["total_line"].isna()
+    if condition_default_total.any():
+        log.warning(
+            "%s rows have invalid total_line data. Setting 'total_line' to 44.",
+            condition_default_total.sum(),
+        )
+        lines_df.loc[condition_default_total, "total_line"] = 44
+        lines_df.loc[condition_default_total, "total_line_source"] = "default"
+
+    # Determine moneyline_source based on spread_source and total_line_source
+    # If either source is 'open', set moneyline_source to 'open'
+    # Otherwise, follow spread_source
+    lines_df["moneyline_source"] = lines_df.apply(
+        lambda row: (
+            "open"
+            if row["spread_source"] == "open" or row["total_line_source"] == "open"
+            else row["spread_source"]
+        ),
+        axis=1,
+    )
+
+    # Assign moneylines based on the moneyline_source
+    # If 'moneyline_source' is 'last', use last moneyline; if 'open', use open moneyline
+    # If 'default', calculate moneyline from spread
+    # Assign moneyline from last moneyline data
+    condition_moneyline_last = lines_df["moneyline_source"] == "last"
+    lines_df.loc[condition_moneyline_last, "home_moneyline"] = lines_df.loc[
+        condition_moneyline_last, "home_ml_last"
+    ]
+    lines_df.loc[condition_moneyline_last, "away_moneyline"] = lines_df.loc[
+        condition_moneyline_last, "away_ml_last"
+    ]
+
+    # Assign moneyline from open moneyline data
+    condition_moneyline_open = lines_df["moneyline_source"] == "open"
+    lines_df.loc[condition_moneyline_open, "home_moneyline"] = lines_df.loc[
+        condition_moneyline_open, "home_ml_open"
+    ]
+    lines_df.loc[condition_moneyline_open, "away_moneyline"] = lines_df.loc[
+        condition_moneyline_open, "away_ml_open"
+    ]
+
+    # Calculate missing home_moneyline using spread_to_moneyline function
+    condition_calculate_home_ml = lines_df["home_moneyline"].isna()
+    if condition_calculate_home_ml.any():
+        log.debug(
+            "Calculating %s missing home_moneylines using spread_to_moneyline.",
+            condition_calculate_home_ml.sum(),
+        )
+        lines_df.loc[condition_calculate_home_ml, "home_moneyline"] = lines_df.loc[
+            condition_calculate_home_ml
+        ].apply(lambda row: spread_to_moneyline(row["home_spread"]), axis=1)
+
+    # Calculate missing away_moneyline using spread_to_moneyline function
+    condition_calculate_away_ml = lines_df["away_moneyline"].isna()
+    if condition_calculate_away_ml.any():
+        log.debug(
+            "Calculating %s missing away_moneylines using spread_to_moneyline.",
+            condition_calculate_away_ml.sum(),
+        )
+        lines_df.loc[condition_calculate_away_ml, "away_moneyline"] = lines_df.loc[
+            condition_calculate_away_ml
+        ].apply(lambda row: spread_to_moneyline(row["away_spread"]), axis=1)
+
+    # Drop temporary source columns
+    lines_df = lines_df.drop(
+        columns=["spread_source", "total_line_source", "moneyline_source"], errors="ignore"
+    )
+
+    return lines_df
+
+
+def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
+    """
+    Converts an NFL point spread to a moneyline, including the effect of vig.
+
+    Args:
+        spread (float): The point spread (negative for favorites, positive for underdogs).
+        vig (float): The vig percentage as a decimal (default is 0.05 for 5%).
+
+    Returns:
+        int: The moneyline corresponding to the given spread.
+    """
+    # Calculate the implied probability based on the normal distribution
+    implied_probability = stats.norm.cdf(-spread, 0, constants.SCORE_DIFF_STD_DEV)
+
+    # Calculate the complementary probability for the other side of the moneyline
+    complementary_probability = 1 - implied_probability
+
+    # Scale probabilities to include the vig
+    total_probability = implied_probability + complementary_probability
+    adjusted_implied_probability = implied_probability / total_probability * (1 + vig)
+
+    # Convert probabilities back to moneyline odds
+    if spread < 0:
+        # Favorite moneyline (negative)
+        moneyline = -100 * (adjusted_implied_probability / (1 - adjusted_implied_probability))
+    else:
+        # Underdog moneyline (positive)
+        moneyline = 100 * ((1 - adjusted_implied_probability) / adjusted_implied_probability)
+
+    # Round to the nearest whole number and return
+    return int(round(moneyline))
+
+
+def select_and_reorder_columns(lines_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Selects and reorders columns in the lines DataFrame.
+
+    Ensures that the DataFrame has a consistent column order for further analysis.
+
+    Args:
+        lines_df (pd.DataFrame): DataFrame containing NFL lines with various columns.
+
+    Returns:
+        pd.DataFrame: DataFrame with selected columns ordered as desired.
+    """
+    desired_columns = [
+        "away_abbr",
+        "home_abbr",
+        "season",
+        "week",
+        "away_spread",
+        "home_spread",
+        "away_moneyline",
+        "home_moneyline",
+        "total_line",
+    ]
+    return lines_df[desired_columns]
 
 
 # Function to check if the game is a division game

@@ -34,26 +34,8 @@ from bs4 import BeautifulSoup
 from sportsipy.nfl.boxscore import Boxscore
 
 from nfl_predictor import constants
-from nfl_predictor.utils.csv_utils import read_df_from_csv, read_write_data, write_df_to_csv
+from nfl_predictor.utils import csv_utils, nfl_utils
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.nfl_utils import (
-    calculate_stats,
-    compute_game_outcomes,
-    create_stats_dfs_from_boxscore,
-    determine_nfl_week_by_date,
-    determine_weeks_to_scrape,
-    fetch_game_boxscore,
-    fetch_nfl_elo_ratings,
-    fetch_nfl_lines,
-    fetch_week_boxscores,
-    get_week_dates,
-    init_team_stats_dfs,
-    is_division_game,
-    merge_and_finalize,
-    merge_and_format_df,
-    prepare_data_for_week,
-    spread_to_moneyline,
-)
 
 SEASONS_TO_SCRAPE = [
     2003,
@@ -82,11 +64,11 @@ SEASONS_TO_SCRAPE = [
 REFRESH_SEASON_DATA = False
 REFRESH_WEEKLY_DATA = False
 REFRESH_SCHEDULE = False
-REFRESH_AGGREGATE_DATA = False
+REFRESH_AGGREGATE_DATA = True
 REFRESH_SEASON_TEAM_RANKINGS = False
 REFRESH_WEEKLY_TEAM_RANKINGS = False
 REFRESH_ELO_SEASON = False
-REFRESH_LINES_SEASON = False
+REFRESH_LINES_SEASON = True
 
 
 def main() -> None:
@@ -99,17 +81,19 @@ def main() -> None:
     3. Identifies and stores upcoming games for predictions.
     """
     # Collect and consolidate data from multiple seasons
-    combined_data_df = read_write_data("all_data", collect_data, force_refresh=True)
+    combined_data_df = csv_utils.read_write_data("all_data", collect_data, force_refresh=True)
 
     # Filter and store data for completed games
-    read_write_data("completed_games", parse_completed_games, combined_data_df, force_refresh=True)
+    csv_utils.read_write_data(
+        "completed_games", parse_completed_games, combined_data_df, force_refresh=True
+    )
 
     # Determine today's date and the current NFL week
     today = date.today()
-    current_week = determine_nfl_week_by_date(today)
+    current_week = nfl_utils.determine_nfl_week_by_date(today)
 
     # Identify and store upcoming games for the current week for predictions
-    read_write_data(
+    csv_utils.read_write_data(
         f"predict/week_{current_week:>02}_games_to_predict",
         parse_upcoming_games_to_predict,
         combined_data_df,
@@ -130,10 +114,12 @@ def collect_data() -> pd.DataFrame:
         pd.DataFrame: Combined and cleaned data from all processed seasons.
     """
     # Fetch and save the latest ELO ratings for NFL teams
-    elo_df = read_write_data("nfl_elo", fetch_nfl_elo_ratings, force_refresh=True)
+    elo_df = csv_utils.read_write_data(
+        "nfl_elo", nfl_utils.fetch_nfl_elo_ratings, force_refresh=True
+    )
 
     # Fetch and save the latest NFL lines for games
-    lines_df = read_write_data("nfl_lines", fetch_nfl_lines, force_refresh=True)
+    lines_df = csv_utils.read_write_data("nfl_lines", nfl_utils.fetch_nfl_lines, force_refresh=True)
 
     # Process game data for each season, using the ELO ratings for enhancement
     combined_data_list = process_seasons(elo_df, lines_df)
@@ -181,14 +167,14 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
 
     for season in SEASONS_TO_SCRAPE:
         # Determine which weeks of the season to scrape
-        weeks = determine_weeks_to_scrape(season)
+        weeks = nfl_utils.determine_weeks_to_scrape(season)
 
         # Set force_refresh to True if the season is the current season
         force_refresh = season == current_season
 
         # Collect game data for the season
         log.info("Collecting game data for the %s season...", season)
-        season_games_df = read_write_data(
+        season_games_df = csv_utils.read_write_data(
             f"{season}/{season}_season_games",
             scrape_season_data,
             season,
@@ -198,7 +184,7 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
 
         # Collect the schedule for the season
         log.info("Collecting schedule for %s...", season)
-        schedule_df = read_write_data(
+        schedule_df = csv_utils.read_write_data(
             f"{season}/{season}_schedule",
             get_schedule,
             season,
@@ -207,7 +193,7 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
 
         # Aggregate game data for the season
         log.info("Aggregating data for the %s season...", season)
-        agg_games_df = read_write_data(
+        agg_games_df = csv_utils.read_write_data(
             f"{season}/{season}_agg_games",
             aggregate_season_data,
             season,
@@ -219,7 +205,7 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
 
         # Fetch team rankings for the season
         log.info("Collecting team rankings for the %s season...", season)
-        team_rankings_df = read_write_data(
+        team_rankings_df = csv_utils.read_write_data(
             f"{season}/{season}_team_rankings",
             scrape_team_rankings_for_season,
             season,
@@ -228,7 +214,7 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
 
         # Fetch ELO ratings for the season
         log.info("Collecting ELO ratings for the %s season...", season)
-        season_elo_df = read_write_data(
+        season_elo_df = csv_utils.read_write_data(
             f"{season}/{season}_elo",
             get_season_elo,
             elo_df,
@@ -238,7 +224,7 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
 
         # Fetch NFL odds for the season
         log.info("Collecting NFL odds for the %s season...", season)
-        season_lines_df = read_write_data(
+        season_lines_df = csv_utils.read_write_data(
             f"{season}/{season}_lines",
             get_season_lines,
             lines_df,
@@ -248,7 +234,7 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
 
         # Combine all collected and processed data for the season into a single DataFrame
         log.info("Combining all data for the %s season...", season)
-        combined_data_df = read_write_data(
+        combined_data_df = csv_utils.read_write_data(
             f"{season}/{season}_combined_data",
             combine_data,
             agg_games_df,
@@ -286,7 +272,7 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
     # Determine the current season year and NFL week
     today = date.today()
     current_season = today.year
-    current_week = determine_nfl_week_by_date(today)
+    current_week = nfl_utils.determine_nfl_week_by_date(today)
 
     for week in weeks:
         # Set force_refresh to True if the season is the current season and the week is the current
@@ -295,7 +281,7 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
 
         log.info("Collecting game data for Week %s...", week)
         # Scrape and save game data for the week
-        week_games_df = read_write_data(
+        week_games_df = csv_utils.read_write_data(
             f"{season}/{season}_week_{week:>02}_game_data",
             scrape_weekly_game_data,
             season,
@@ -337,7 +323,7 @@ def scrape_weekly_game_data(season: int, week: int) -> pd.DataFrame:
     # Initialize a list to store game data DataFrames
     games_data = []
 
-    week_scores, error = fetch_week_boxscores(season, week)
+    week_scores, error = nfl_utils.fetch_week_boxscores(season, week)
     if error or week_scores is None:
         log.warning("Failed to fetch week scores for Week %s of the %s season!", week, season)
         return pd.DataFrame()  # Return empty DataFrame if fetching week scores fails
@@ -354,7 +340,7 @@ def scrape_weekly_game_data(season: int, week: int) -> pd.DataFrame:
             log.info("Game %s has not finished yet.", game_info["boxscore"])
             game_stats = None  # Set game_stats to None for unfinished games
         else:
-            game_stats, error = fetch_game_boxscore(game_info["boxscore"])
+            game_stats, error = nfl_utils.fetch_game_boxscore(game_info["boxscore"])
             if error or game_stats is None:
                 log.warning(
                     "Failed to fetch game stats for %s in Week %s!", game_info["boxscore"], week
@@ -391,17 +377,17 @@ def extract_team_statistics_from_game(
         tuple[pd.DataFrame, pd.DataFrame]: DataFrames for away and home team statistics.
     """
     # Prepare team data frames
-    away_team_df, home_team_df = init_team_stats_dfs(game_df)
+    away_team_df, home_team_df = nfl_utils.init_team_stats_dfs(game_df)
 
     # Calculate win, loss, and tie outcomes
-    away_team_df, home_team_df = compute_game_outcomes(away_team_df, home_team_df)
+    away_team_df, home_team_df = nfl_utils.compute_game_outcomes(away_team_df, home_team_df)
 
     # Handle detailed game statistics
-    away_stats_df, home_stats_df = create_stats_dfs_from_boxscore(boxscore)
+    away_stats_df, home_stats_df = nfl_utils.create_stats_dfs_from_boxscore(boxscore)
 
     # Merge team stats with opponent stats and format DataFrames
-    away_team_df = merge_and_format_df(away_team_df, away_stats_df, home_stats_df)
-    home_team_df = merge_and_format_df(home_team_df, home_stats_df, away_stats_df)
+    away_team_df = nfl_utils.merge_and_format_df(away_team_df, away_stats_df, home_stats_df)
+    home_team_df = nfl_utils.merge_and_format_df(home_team_df, home_stats_df, away_stats_df)
 
     return away_team_df, home_team_df
 
@@ -419,13 +405,13 @@ def get_schedule(season: int) -> pd.DataFrame:
                         abbreviations, winning team name and abbreviation (if available), and the
                         week of the season.
     """
-    weeks = determine_weeks_to_scrape(season)  # Determine weeks to scrape for the season
+    weeks = nfl_utils.determine_weeks_to_scrape(season)  # Determine weeks to scrape for the season
     all_games_data = []  # Initialize a list to store game data for all weeks
 
     log.info("Scraping %s schedule...", season)
     for week in weeks:
         log.info("Week %s...", week)
-        week_scores, error = fetch_week_boxscores(season, week)
+        week_scores, error = nfl_utils.fetch_week_boxscores(season, week)
         if error or week_scores is None:
             continue  # Skip to the next week if fetching week scores fails
 
@@ -502,7 +488,9 @@ def aggregate_season_data(
     for week in weeks:
         log.info("Aggregating game data for Week %s...", week)
         # Prepare data for the current week
-        week_games_df, results_df = prepare_data_for_week(week, schedule_df, season_games_df)
+        week_games_df, results_df = nfl_utils.prepare_data_for_week(
+            week, schedule_df, season_games_df
+        )
         if week == 1:
             # Load previous season's game data if not the first season in SEASONS_TO_SCRAPE
             if season != SEASONS_TO_SCRAPE[0]:
@@ -510,7 +498,7 @@ def aggregate_season_data(
                 prev_season_file = (
                     f"{constants.DATA_PATH}/{prev_season}/{prev_season}_season_games.csv"
                 )
-                previous_weeks_df = read_df_from_csv(prev_season_file)
+                previous_weeks_df = csv_utils.read_df_from_csv(prev_season_file)
                 previous_weeks_df["team_abbr"] = previous_weeks_df["team_abbr"].replace(
                     constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
                 )
@@ -531,7 +519,7 @@ def aggregate_season_data(
                     prev_season_file = (
                         f"{constants.DATA_PATH}/{prev_season}/{prev_season}_season_games.csv"
                     )
-                    previous_season_df = read_df_from_csv(prev_season_file)
+                    previous_season_df = csv_utils.read_df_from_csv(prev_season_file)
                     previous_season_df["team_abbr"] = previous_season_df["team_abbr"].replace(
                         constants.PFR_TEAM_ABBR, constants.TEAM_ABBR
                     )
@@ -566,9 +554,9 @@ def aggregate_season_data(
         )
         previous_weeks_df = previous_weeks_df.drop(columns=["game_number_x", "game_number_y"])
 
-        agg_weekly_df = calculate_stats(previous_weeks_df)
+        agg_weekly_df = nfl_utils.calculate_stats(previous_weeks_df)
         # Merge current week's data with results and add to the list
-        merged_df = merge_and_finalize(week_games_df, agg_weekly_df, results_df)
+        merged_df = nfl_utils.merge_and_finalize(week_games_df, agg_weekly_df, results_df)
         agg_games_list.append(merged_df)
     # Concatenate all weekly aggregated data into a single DataFrame
     final_agg_df = pd.concat(agg_games_list, ignore_index=True)
@@ -590,12 +578,12 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
         pd.DataFrame: A DataFrame containing the compiled team rankings for the entire season.
     """
     # Get list of dates for each week in the season
-    week_dates = get_week_dates(season)
+    week_dates = nfl_utils.get_week_dates(season)
 
     # Determine the current season year and NFL week
     today = date.today()
     current_season = today.year
-    current_week = determine_nfl_week_by_date(today)
+    current_week = nfl_utils.determine_nfl_week_by_date(today)
 
     # Initialize list to hold weekly rankings DataFrames
     season_rankings = []
@@ -610,12 +598,12 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
             current_week_file = f"{data_path}/{season}_week_{current_week:>02}_team_rankings.csv"
             future_week_file = f"{data_path}/{season}_week_{week_number:>02}_team_rankings.csv"
             log.info("Copying rankings from Week %s to Week %s...", current_week, week_number)
-            week_rankings_df = read_df_from_csv(current_week_file, check_exists=True)
+            week_rankings_df = csv_utils.read_df_from_csv(current_week_file, check_exists=True)
             week_rankings_df["week"] = week_number
-            write_df_to_csv(week_rankings_df, future_week_file)
+            csv_utils.write_df_to_csv(week_rankings_df, future_week_file)
         else:
             # Attempt to scrape and retrieve team rankings for the week
-            week_rankings_df = read_write_data(
+            week_rankings_df = csv_utils.read_write_data(
                 f"{season}/{season}_week_{week_number:>02}_team_rankings",
                 scrape_team_rankings_for_week,
                 week_number,
@@ -737,7 +725,7 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     # Convert 'date' column to datetime, then to date for efficient filtering
     elo_df["date"] = pd.to_datetime(elo_df["date"]).dt.date
     # Get the start and end dates for the specified season
-    week_dates = get_week_dates(season)
+    week_dates = nfl_utils.get_week_dates(season)
     # Extend the date range to include the end of the last week
     week_dates.append((week_dates[-1] + pd.DateOffset(weeks=1)).date())
     # Create a mask to filter rows within the season date range
@@ -766,80 +754,42 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
 
 def get_season_lines(lines_df: pd.DataFrame, season: int) -> pd.DataFrame:
     """
-    Filters and adjusts NFL lines for a specific season from a DataFrame containing lines across
-    multiple seasons. This function optimizes data handling by dropping unnecessary columns early,
-    mapping team abbreviations to standard formats, handling missing values, and organizing columns
-    for consistency.
+    Filters and adjusts NFL lines for a specific season.
+
+    This function processes the lines DataFrame by performing the following steps:
+    1. Drops unnecessary columns.
+    2. Filters lines for the specified season.
+    3. Maps team abbreviations to standardized formats.
+    4. Validates and filters rows based on required data.
+    5. Assigns spreads based on available data.
+    6. Assigns total lines based on available data.
+    7. Assigns moneyline odds, calculating missing values if necessary.
+    8. Selects and reorders columns for consistency.
 
     Args:
-        lines_df (pd.DataFrame): DataFrame containing weekly NFL lines for all teams across seasons.
-        season (int): The NFL season year for which to filter and adjust lines.
+        lines_df (pd.DataFrame): DataFrame containing NFL lines across multiple seasons.
+        season (int): The NFL season year to filter and adjust lines for.
 
     Returns:
-        pd.DataFrame:   Adjusted DataFrame with NFL lines for the specified season, including
-                        re-mapping of team names and organized columns.
+        pd.DataFrame: Adjusted DataFrame with NFL lines for the specified season.
     """
-    # Drop columns not needed for analysis to reduce memory usage
-    lines_df = lines_df.drop(columns=constants.LINES_DROP_COLS, errors="ignore")
+    # Drop columns that are not needed for the analysis
+    lines_df = nfl_utils.drop_unneeded_columns(lines_df)
 
-    # Filter lines for the specified season
-    lines_df = lines_df[lines_df["season"] == season]
+    # Filter the lines DataFrame for the specified season
+    lines_df = nfl_utils.filter_season(lines_df, season)
 
-    # Map team abbreviations to standard abbreviations using a predefined mapping
-    team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
-    lines_df["home_abbr"] = lines_df["home_team"].map(team_name_mapping)
-    lines_df["away_abbr"] = lines_df["away_team"].map(team_name_mapping)
+    # Map team names to their abbreviations
+    lines_df = nfl_utils.map_team_abbreviations(lines_df)
 
-    # Check if 'open' columns are all populated, including 'home_spread_open'
-    open_columns = ["home_ml_open", "away_ml_open", "home_spread_open", "total_line_open"]
-    mask = lines_df[open_columns].notnull().all(axis=1)
+    # Validate rows to ensure required spread and total line data are present
+    lines_df = nfl_utils.validate_and_filter_rows(lines_df)
 
-    # Use 'open' columns where all are present
-    lines_df.loc[mask, "home_moneyline"] = lines_df.loc[mask, "home_ml_open"]
-    lines_df.loc[mask, "away_moneyline"] = lines_df.loc[mask, "away_ml_open"]
-    lines_df.loc[mask, "home_spread"] = lines_df.loc[mask, "home_spread_open"]
-    lines_df.loc[mask, "total_line"] = lines_df.loc[mask, "total_line_open"]
+    # Assign spread, moneyline, and total line values based on available data
+    lines_df = nfl_utils.assign_spreads_total_and_moneylines(lines_df)
 
-    # For rows with any missing 'open' columns, use 'last' columns
-    lines_df.loc[~mask, "home_moneyline"] = lines_df.loc[~mask, "home_ml_last"]
-    lines_df.loc[~mask, "away_moneyline"] = lines_df.loc[~mask, "away_ml_last"]
-    lines_df.loc[~mask, "home_spread"] = lines_df.loc[~mask, "home_spread_last"]
-    lines_df.loc[~mask, "total_line"] = lines_df.loc[~mask, "total_line_last"].fillna(44)
-
-    # Set 'away_spread' as the opposite of 'home_spread'
-    lines_df["away_spread"] = -lines_df["home_spread"]
-
-    # Calculate moneylines where missing using the spread
-    lines_df["home_moneyline"] = lines_df.apply(
-        lambda row: (
-            row["home_moneyline"]
-            if pd.notnull(row["home_moneyline"])
-            else spread_to_moneyline(row["home_spread"])
-        ),
-        axis=1,
-    )
-    lines_df["away_moneyline"] = lines_df.apply(
-        lambda row: (
-            row["away_moneyline"]
-            if pd.notnull(row["away_moneyline"])
-            else spread_to_moneyline(row["away_spread"])
-        ),
-        axis=1,
-    )
-
-    # Select and reorder columns as specified
-    desired_columns = [
-        "away_abbr",
-        "home_abbr",
-        "season",
-        "week",
-        "away_spread",
-        "away_moneyline",
-        "home_spread",
-        "home_moneyline",
-        "total_line",
-    ]
-    lines_df = lines_df[desired_columns]
+    # Select and reorder columns to maintain consistency
+    lines_df = nfl_utils.select_and_reorder_columns(lines_df)
 
     return lines_df
 
@@ -911,40 +861,20 @@ def combine_data(
     combined_df = combined_df.rename(columns=constants.ELO_RENAME_COLS)
 
     # Add a column to indicate if the game is a divisional matchup
-    combined_df["division"] = combined_df.apply(is_division_game, axis=1)
+    combined_df["division"] = combined_df.apply(nfl_utils.is_division_game, axis=1)
 
     # Reorder columns to improve readability, placing scores and result at the end
-    first_columns = [
-        "away_name",
-        "away_abbr",
-        "home_name",
-        "home_abbr",
-        "away_qb",
-        "home_qb",
-        "season",
-        "week",
-        "date",
-        "away_game_number",
-        "home_game_number",
-        "neutral",
-        "division",
-    ]
-    lines_columns = [
-        "away_spread",
-        "away_moneyline",
-        "home_spread",
-        "home_moneyline",
-        "total_line",
-    ]
-    result_columns = ["away_score", "home_score", "result"]
     data_columns = sorted(
         [
             col
             for col in combined_df.columns
-            if col not in first_columns + lines_columns + result_columns
+            if col
+            not in constants.FIRST_COLUMNS + constants.LINES_COLUMNS + constants.RESULT_COLUMNS
         ]
     )
-    combined_df = combined_df[first_columns + data_columns + lines_columns + result_columns]
+    combined_df = combined_df[
+        constants.FIRST_COLUMNS + data_columns + constants.LINES_COLUMNS + constants.RESULT_COLUMNS
+    ]
 
     # Rename legacy teams to modern team names using constants.MODERN_TEAM_NAMES
     combined_df["away_name"] = combined_df["away_name"].replace(constants.MODERN_TEAM_NAMES)
@@ -984,7 +914,7 @@ def parse_upcoming_games_to_predict(combined_data_df: pd.DataFrame) -> pd.DataFr
     current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
     # Determine the current week for the current season
-    current_week = determine_nfl_week_by_date(today)
+    current_week = nfl_utils.determine_nfl_week_by_date(today)
 
     # Filter for games to predict in the current week of the current season
     games_to_predict_df = combined_data_df[

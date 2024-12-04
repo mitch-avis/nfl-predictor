@@ -74,7 +74,7 @@ def predict_games_new(completed_games: pd.DataFrame, week_games_to_predict: pd.D
     """
     # pylint: disable=too-many-locals
     # Preprocessing
-    features = completed_games.drop(columns=constants.ML_DROP_COLS)
+    features = completed_games.drop(columns=constants.FIRST_COLUMNS + constants.RESULT_COLUMNS)
     target_regression_away = completed_games["away_score"].astype(int)
     target_regression_home = completed_games["home_score"].astype(int)
     # target_regression_total = (
@@ -152,7 +152,9 @@ def predict_games_new(completed_games: pd.DataFrame, week_games_to_predict: pd.D
     log.info("Home Score RMAE: %s", mae_home)
 
     # Predict upcoming games
-    week_games_features = week_games_to_predict.drop(columns=constants.ML_DROP_COLS)
+    week_games_features = week_games_to_predict.drop(
+        columns=constants.FIRST_COLUMNS + constants.RESULT_COLUMNS
+    )
     week_games_scaled = np.empty_like(week_games_features)
     week_games_scaled[:, normal_features] = STANDARD_SCALER.transform(
         week_games_features.iloc[:, normal_features]

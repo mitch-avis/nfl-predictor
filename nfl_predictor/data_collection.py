@@ -64,11 +64,12 @@ SEASONS_TO_SCRAPE = [
 REFRESH_SEASON_DATA = False
 REFRESH_WEEKLY_DATA = False
 REFRESH_SCHEDULE = False
-REFRESH_AGGREGATE_DATA = True
+REFRESH_AGGREGATE_DATA = False
 REFRESH_SEASON_TEAM_RANKINGS = False
 REFRESH_WEEKLY_TEAM_RANKINGS = False
 REFRESH_ELO_SEASON = False
-REFRESH_LINES_SEASON = True
+REFRESH_LINES_SEASON = False
+SKIP_CURRENT_WEEK = False
 
 
 def main() -> None:
@@ -277,7 +278,9 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
     for week in weeks:
         # Set force_refresh to True if the season is the current season and the week is the current
         # week, plus/minus one week to account for potential delays in data availability
-        force_refresh = season == current_season and abs(week - current_week) <= 1
+        force_refresh = (
+            season == current_season and abs(week - current_week) <= 1 and not SKIP_CURRENT_WEEK
+        )
 
         log.info("Collecting game data for Week %s...", week)
         # Scrape and save game data for the week
@@ -287,7 +290,6 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
             season,
             week,
             force_refresh=force_refresh or REFRESH_WEEKLY_DATA,
-            # force_refresh=False,
         )
         # Append the week's game data to the season list if it's not empty
         if not week_games_df.empty:
@@ -608,7 +610,8 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
                 scrape_team_rankings_for_week,
                 week_number,
                 week_date,
-                force_refresh=week_number == current_week or REFRESH_WEEKLY_TEAM_RANKINGS,
+                force_refresh=(week_number == current_week or REFRESH_WEEKLY_TEAM_RANKINGS)
+                and not SKIP_CURRENT_WEEK,
             )
 
         # Append the week's rankings to the season list if data is present

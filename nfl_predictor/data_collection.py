@@ -2,21 +2,7 @@
 This module, data_collection.py, is designed for the collection, processing, and storage of NFL game
 data, crucial for making accurate game predictions. It offers a wide range of functionalities,
 including scraping historical NFL game data, fetching the latest ELO ratings for teams, and
-preparing datasets for analysis. It leverages pandas for data manipulation, sportsipy for scraping,
-and custom utilities for efficient data I/O and logging, making it a core component for keeping NFL
-data current and analytically valuable.
-
-Main Functionalities:
-- Scraping historical NFL game data to provide a rich historical dataset.
-- Fetching current ELO ratings for teams to assess performance.
-- Processing and cleaning data to ready it for analysis.
-- Storing data in a structured format for easy access and analysis.
-
-Dependencies:
-- pandas: For data manipulation and analysis.
-- numpy: For numerical operations.
-- sportsipy: For scraping sports data.
-- custom utilities: For logging, data I/O, and NFL-specific tasks.
+preparing datasets for analysis.
 
 Usage:
 This module is primarily used for updating the data foundation for NFL game predictions, handling
@@ -77,11 +63,11 @@ def main() -> None:
     Orchestrates the data collection, processing, and storage for NFL game predictions.
 
     This function performs the following steps:
-    1. Consolidates data from multiple seasons.
+    1. Consolidates data from one or more seasons.
     2. Filters and stores data for completed games.
     3. Identifies and stores upcoming games for predictions.
     """
-    # Collect and consolidate data from multiple seasons
+    # Collect and consolidate data from one or more seasons
     combined_data_df = csv_utils.read_write_data("all_data", collect_data, force_refresh=True)
 
     # Filter and store data for completed games

@@ -7,11 +7,14 @@ isort
 lxml
 numpy
 pandas
+playwright
 pyarrow
 pylint
 requests
 scikit-learn
 scipy
+setuptools
+wheel
 xgboost
 
 # Local package

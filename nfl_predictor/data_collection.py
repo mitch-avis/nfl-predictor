@@ -13,6 +13,7 @@ processing.
 from datetime import date
 from io import StringIO
 from time import sleep
+from typing import Optional
 
 import pandas as pd
 import requests
@@ -46,6 +47,7 @@ SEASONS_TO_SCRAPE = [
     2022,
     2023,
     2024,
+    2025,
 ]
 REFRESH_SEASON_DATA = False
 REFRESH_WEEKLY_DATA = False
@@ -55,7 +57,7 @@ REFRESH_SEASON_TEAM_RANKINGS = False
 REFRESH_WEEKLY_TEAM_RANKINGS = False
 REFRESH_ELO_SEASON = False
 REFRESH_LINES_SEASON = False
-SKIP_CURRENT_WEEK = False
+SKIP_CURRENT_WEEK = True
 
 
 def main() -> None:
@@ -150,7 +152,8 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
     # Holds the combined data for each season
     combined_data_list = []
     # Determine the current season year
-    current_season = date.today().year
+    today = date.today()
+    current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
     for season in SEASONS_TO_SCRAPE:
         # Determine which weeks of the season to scrape
@@ -258,7 +261,7 @@ def scrape_season_data(season: int, weeks: list) -> pd.DataFrame:
 
     # Determine the current season year and NFL week
     today = date.today()
-    current_season = today.year
+    current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
     current_week = nfl_utils.determine_nfl_week_by_date(today)
 
     for week in weeks:
@@ -324,6 +327,12 @@ def scrape_weekly_game_data(season: int, week: int) -> pd.DataFrame:
 
     # Iterate through each game in the week, scraping data
     for game_info in week_scores.games[game_key]:
+        if nfl_utils.is_game_from_different_season(game_info, season):
+            log.warning(
+                "Skipping game %s as it appears to be from a different season",
+                game_info["boxscore"],
+            )
+            continue
         if game_info["home_score"] is None and game_info["away_score"] is None:
             log.info("Game %s has not finished yet.", game_info["boxscore"])
             game_stats = None  # Set game_stats to None for unfinished games
@@ -352,7 +361,7 @@ def scrape_weekly_game_data(season: int, week: int) -> pd.DataFrame:
 
 
 def extract_team_statistics_from_game(
-    game_df: pd.DataFrame, boxscore: Boxscore
+    game_df: pd.DataFrame, boxscore: Optional[Boxscore]
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Parses game data and boxscore information, returning DataFrames for away and home team stats.
@@ -371,7 +380,12 @@ def extract_team_statistics_from_game(
     away_team_df, home_team_df = nfl_utils.compute_game_outcomes(away_team_df, home_team_df)
 
     # Handle detailed game statistics
-    away_stats_df, home_stats_df = nfl_utils.create_stats_dfs_from_boxscore(boxscore)
+    if boxscore is not None:
+        away_stats_df, home_stats_df = nfl_utils.create_stats_dfs_from_boxscore(boxscore)
+    else:
+        # If boxscore is None, create empty DataFrames with the expected structure
+        away_stats_df = pd.DataFrame()
+        home_stats_df = pd.DataFrame()
 
     # Merge team stats with opponent stats and format DataFrames
     away_team_df = nfl_utils.merge_and_format_df(away_team_df, away_stats_df, home_stats_df)
@@ -409,6 +423,12 @@ def get_schedule(season: int) -> pd.DataFrame:
             continue
 
         for game in week_scores.games[game_key]:
+            if nfl_utils.is_game_from_different_season(game, season):
+                log.warning(
+                    "Skipping game %s as it appears to be from a different season",
+                    game["boxscore"],
+                )
+                continue
             game_data = {
                 "away_name": game["away_name"],
                 "away_abbr": game["away_abbr"],
@@ -570,7 +590,7 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
 
     # Determine the current season year and NFL week
     today = date.today()
-    current_season = today.year
+    current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
     current_week = nfl_utils.determine_nfl_week_by_date(today)
 
     # Initialize list to hold weekly rankings DataFrames

@@ -7,6 +7,7 @@ specific weeks, and fetching ELO ratings for teams.
 
 from datetime import date, timedelta
 from time import sleep
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -81,8 +82,8 @@ def determine_nfl_week_by_date(given_date: date) -> int:
         given_date (date): The date for which the NFL week number is to be determined.
 
     Returns:
-        int:    The NFL week number, ranging from 1 (offseason or first week) to 18 (end of the
-                regular season).
+        int: The NFL week number, ranging from 1 (offseason or first week) to 18 (end of the regular
+             season).
     """
 
     def adjust_to_tuesday(start_date: date) -> date:
@@ -172,7 +173,7 @@ def get_week_dates(season: int) -> list[date]:
     return week_dates
 
 
-def fetch_week_boxscores(season: int, week: int) -> tuple[Boxscores, Exception]:
+def fetch_week_boxscores(season: int, week: int) -> Tuple[Optional[Boxscores], Optional[Exception]]:
     """
     Fetches box scores for all games in a specified week and season, retrying on failure.
 
@@ -189,19 +190,20 @@ def fetch_week_boxscores(season: int, week: int) -> tuple[Boxscores, Exception]:
         tuple[Boxscores, Exception]:    A tuple containing the Boxscores object and an Exception
                                         object if an error occurred, or None for both if successful.
     """
-    # pylint: disable=broad-except
-    for attempt in range(3):
+    for attempt in range(10):
         try:
+            if attempt > 0:
+                sleep(10)  # Wait 10 seconds between retries
+
             return Boxscores(week, season), None
-        except Exception as e:
-            log.warning("Failed to fetch week scores on attempt %s: %s", attempt + 1, e)
+        except Exception as e:  # pylint: disable=broad-except
+            log.warning("Failed to fetch week %s scores on attempt %s", week, attempt + 1)
             if attempt == 2:
-                return None, e  # Return the exception on the final attempt
-            sleep(2**attempt)  # Exponential backoff between retries
+                return None, e
     return None, Exception("Unable to fetch week scores after multiple attempts.")
 
 
-def fetch_game_boxscore(game_info: str) -> tuple[Boxscore, Exception]:
+def fetch_game_boxscore(game_info: str) -> Tuple[Optional[Boxscore], Optional[Exception]]:
     """
     Fetches individual game stats with retries on failure.
 
@@ -214,24 +216,67 @@ def fetch_game_boxscore(game_info: str) -> tuple[Boxscore, Exception]:
         game_info (str): The boxscore URL segment for the game.
 
     Returns:
-        tuple[Boxscore, Exception]: A tuple containing the Boxscore object and an Exception
-                                    object if an error occurred, or None for both if successful.
+        Tuple[Optional[Boxscore], Optional[Exception]]: A tuple containing the Boxscore object and
+                                                        an Exception object if an error occurred,
+                                                        or None for both if successful.
     """
-    # pylint: disable=broad-except
-    for attempt in range(3):
+    for attempt in range(10):
         try:
+            if attempt > 0:
+                sleep(10)  # Wait 10 seconds between retries
+
             return Boxscore(game_info), None
-        except Exception as e:
-            log.warning(
-                "Failed to fetch game stats for %s on attempt %s: %s",
-                game_info,
-                attempt + 1,
-                e,
-            )
+        except Exception as e:  # pylint: disable=broad-except
+            log.warning("Failed to fetch game stats for %s on attempt %s", game_info, attempt + 1)
             if attempt == 2:
-                return None, e  # Return the exception on the final attempt
-            sleep(2**attempt)  # Exponential backoff between retries
+                return None, e
     return None, Exception("Unable to fetch game stats after multiple attempts.")
+
+
+def is_game_from_different_season(game_info: dict, expected_season: int) -> bool:
+    """
+    Check if a game belongs to a different season than expected.
+
+    Args:
+        game_info (dict): Game information dictionary
+        expected_season (int): The season we expect the game to be from
+
+    Returns:
+        bool: True if the game is from a different season
+    """
+    # Check if the boxscore URI contains a different year
+    boxscore_uri = game_info.get("boxscore", "")
+
+    # The boxscore URI format is typically YYYYMMDDXXX
+    if len(boxscore_uri) >= 8:
+        try:
+            game_year = int(boxscore_uri[:4])
+            game_month = int(boxscore_uri[4:6])
+
+            # Handle games from the expected season that occur in January of the following year
+            # (Week 17, Week 18, Wild Card weekend)
+            if game_year == expected_season + 1 and game_month == 1:
+                return False  # These are valid games for the expected season
+
+            # If the game is from the expected season year but before August,
+            # it's likely from the previous season (e.g., Super Bowl in February)
+            if game_year == expected_season and game_month < 8:
+                return True
+
+            # If the game is from a completely different year (not expected season or expected+1)
+            if game_year != expected_season and game_year != expected_season + 1:
+                return True
+
+            # If the game is from the year after expected season but not in January,
+            # it's from a different season
+            if game_year == expected_season + 1 and game_month != 1:
+                return True
+
+        except ValueError:
+            # If we can't parse the year/month, be cautious and allow the game
+            pass
+
+    return False
 
 
 def init_team_stats_dfs(game_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -244,8 +289,8 @@ def init_team_stats_dfs(game_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFra
         game_df (pd.DataFrame): The DataFrame containing basic game information.
 
     Returns:
-        tuple[pd.DataFrame, pd.DataFrame]:  Two DataFrames for away and home teams, respectively,
-                                            with standardized column names.
+        tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames for away and home teams, respectively,
+                                           with standardized column names.
     """
     # Select and rename columns for the away team to standardize the structure. The renaming
     # aligns with a base format for easier comparison and analysis of team performance.
@@ -269,14 +314,14 @@ def compute_game_outcomes(
     In the event of a tie, both 'game_won' and 'game_lost' are set to 0.5.
 
     Args:
-        away_team_df (pd.DataFrame):    DataFrame containing the away team's game statistics,
-                                        including 'points_scored' and 'points_allowed'.
-        home_team_df (pd.DataFrame):    DataFrame containing the home team's game statistics,
-                                        including 'points_scored' and 'points_allowed'.
+        away_team_df (pd.DataFrame): DataFrame containing the away team's game statistics, including
+                                     'points_scored' and 'points_allowed'.
+        home_team_df (pd.DataFrame): DataFrame containing the home team's game statistics, including
+                                     'points_scored' and 'points_allowed'.
 
     Returns:
-        tuple[pd.DataFrame, pd.DataFrame]:  A tuple containing the updated away and home team
-                                            DataFrames with new columns for game outcomes.
+        tuple[pd.DataFrame, pd.DataFrame]: A tuple containing the updated away and home team
+                                           DataFrames with new columns for game outcomes.
     """
     # Identify unplayed games by checking for NaN in 'points_scored'
     unplayed_games = away_team_df["points_scored"].isna() | home_team_df["points_scored"].isna()
@@ -324,8 +369,8 @@ def create_stats_dfs_from_boxscore(
         boxscore (Boxscore): The Boxscore object containing detailed game statistics.
 
     Returns:
-        tuple[pd.DataFrame, pd.DataFrame]:  Two DataFrames containing statistics for away and home
-                                            teams.
+        tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing statistics for away and home
+                                           teams.
     """
     # Check if the Boxscore object is valid and contains a dataframe with game statistics. This
     # step ensures that the function can handle cases where the Boxscore might be incomplete or
@@ -356,12 +401,12 @@ def create_stats_df(game_stats_df: pd.DataFrame, team_prefix: str) -> pd.DataFra
 
     Args:
         game_stats_df (pd.DataFrame): DataFrame containing detailed game statistics.
-        team_prefix (str):  Prefix indicating whether the statistics are for the away team ('away')
-                            or the home team ('home'), used to select relevant columns.
+        team_prefix (str): Prefix indicating whether the statistics are for the away team ('away')
+                           or the home team ('home'), used to select relevant columns.
 
     Returns:
-        pd.DataFrame:   A DataFrame with standardized and correctly labeled columns, facilitating
-                        uniform data analysis.
+        pd.DataFrame: A DataFrame with standardized and correctly labeled columns, facilitating
+                      uniform data analysis.
     """
     # Create a mapping of prefixed column names (e.g., 'away_points_scored') to standard column
     # names (e.g., 'points_scored'). This step is crucial for ensuring that data from both home
@@ -393,8 +438,8 @@ def merge_and_format_df(
         opponent_stats_df (pd.DataFrame): DataFrame containing detailed statistics for the opponent.
 
     Returns:
-        pd.DataFrame:   A comprehensive DataFrame that combines team and opponent statistics, with
-                        specific formatting applied to ensure data consistency and readability.
+        pd.DataFrame: A comprehensive DataFrame that combines team and opponent statistics, with
+                      specific formatting applied to ensure data consistency and readability.
     """
     # Rename opponent's statistics columns for clarity, prefixing them to distinguish from the
     # team's stats
@@ -422,8 +467,8 @@ def convert_top_to_seconds_in_df(team_df: pd.DataFrame) -> pd.DataFrame:
         team_df (pd.DataFrame): DataFrame containing team data, including TOP in "MM:SS" format.
 
     Returns:
-        pd.DataFrame:   Updated DataFrame with TOP converted from "MM:SS" to seconds, ensuring
-                        consistency in data format for analysis.
+        pd.DataFrame: Updated DataFrame with TOP converted from "MM:SS" to seconds, ensuring
+                      consistency in data format for analysis.
     """
     # Check for 'time_of_possession' column and convert non-NaN TOP values from "MM:SS" to seconds.
     # NaN values are left unchanged, preserving data integrity for entries without TOP information.
@@ -510,10 +555,8 @@ def calculate_stats(previous_weeks_df: pd.DataFrame) -> pd.DataFrame:
     each stat for each team's first game of the season.
 
     Args:
-        previous_weeks_df (pd.DataFrame):   DataFrame containing each team's statistics for each
-                                            week prior to the current week.
-        previous_season (bool): Flag indicating if the data represents the entire previous season's
-                                stats.
+        previous_weeks_df (pd.DataFrame): DataFrame containing each team's statistics for each week
+                                          prior to the current week.
 
     Returns:
         pd.DataFrame: DataFrame with aggregated statistics for each team.
@@ -534,7 +577,9 @@ def calculate_stats(previous_weeks_df: pd.DataFrame) -> pd.DataFrame:
     }
 
     # Identify columns to calculate mean values
-    mean_columns = previous_weeks_df.columns.difference(excluded_columns)
+    # Convert set to list for pandas DataFrame.difference() method
+    excluded_columns_list = list(excluded_columns)
+    mean_columns = previous_weeks_df.columns.difference(excluded_columns_list)
 
     # Calculate mean stats for each team
     agg_means_df = previous_weeks_df.groupby(["team_name", "team_abbr"], as_index=False)[
@@ -545,18 +590,29 @@ def calculate_stats(previous_weeks_df: pd.DataFrame) -> pd.DataFrame:
     agg_stats_df = pd.merge(agg_ratios_df, agg_means_df, on=["team_name", "team_abbr"])
 
     # Regress each team's mean stats towards the league mean for their first game of the season
-    mean_columns = agg_stats_df.columns.difference(list(excluded_columns))
-    league_means = agg_stats_df[mean_columns].mean()
+    # Use the excluded_columns_list consistently
+    mean_columns_final = agg_stats_df.columns.difference(excluded_columns_list)
+
+    # Filter to only numeric columns for regression calculation
+    numeric_columns = []
+    for column in mean_columns_final:
+        if pd.api.types.is_numeric_dtype(agg_stats_df[column]):
+            numeric_columns.append(column)
+
+    # Calculate league means only for numeric columns
+    league_means = agg_stats_df[numeric_columns].mean()
     regression_factor = 1 / 3  # Degree of regression towards the league mean
 
     for team in previous_weeks_df["team_abbr"].unique():
         team_df = previous_weeks_df[previous_weeks_df["team_abbr"] == team]
-        if team_df["game_number"].iloc[0] == 1:
-            for column in mean_columns:
-                agg_stats_df.loc[agg_stats_df["team_abbr"] == team, column] = (
+        if len(team_df) > 0 and team_df["game_number"].iloc[0] == 1:
+            # Use vectorized operations directly - pandas handles scalar-to-Series operations
+            team_mask = agg_stats_df["team_abbr"] == team
+            for column in numeric_columns:  # Only process numeric columns
+                # Simple vectorized calculation - pandas handles the scalar-to-Series arithmetic
+                agg_stats_df.loc[team_mask, column] = (
                     regression_factor * league_means[column]
-                    + (1.0 - regression_factor)
-                    * agg_stats_df.loc[agg_stats_df["team_abbr"] == team, column]
+                    + (1.0 - regression_factor) * agg_stats_df.loc[team_mask, column]
                 )
 
     return agg_stats_df
@@ -1064,6 +1120,14 @@ def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
     else:
         # Underdog moneyline (positive)
         moneyline = 100 * ((1 - adjusted_implied_probability) / adjusted_implied_probability)
+
+    # Convert numpy scalar to Python float before rounding
+    if isinstance(moneyline, np.ndarray):
+        moneyline = float(moneyline.item())
+    elif hasattr(moneyline, "item"):
+        moneyline = float(moneyline.item())
+    else:
+        moneyline = float(moneyline)
 
     # Round to the nearest whole number and return
     return int(round(moneyline))

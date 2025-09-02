@@ -5,6 +5,7 @@ statistical DataFrame generation from boxscore data, NFL week determination, dat
 specific weeks, and fetching ELO ratings for teams.
 """
 
+import os
 from datetime import date, timedelta
 from time import sleep
 from typing import Optional, Tuple
@@ -18,19 +19,46 @@ from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 
 
-def fetch_nfl_elo_ratings() -> pd.DataFrame:
+def fetch_nfl_elo_ratings(local_qb_file: Optional[str] = None) -> pd.DataFrame:
     """
-    Fetches the latest ELO ratings for NFL teams from a specified URL.
+    Fetches the latest ELO ratings for NFL teams from a specified URL or local file.
 
-    This function uses pandas to read a CSV file containing ELO ratings directly from a URL into
-    a DataFrame. The ELO ratings are used to assess the relative skill levels of teams.
+    This function first attempts to read the ELO ratings from a local CSV file if provided or
+    available in the default data path. If the local file is not found, it falls back to fetching
+    the data from a remote URL. The function also normalizes the DataFrame by removing any
+    accidental index columns that may have been included in the CSV file.
+
+    Args:
+        local_qb_file (Optional[str]): Path to a local CSV file containing ELO ratings. If None,
+                                       the function will look for a default local file before
+                                       falling back to the remote URL.
 
     Returns:
         pd.DataFrame: A DataFrame containing the ELO ratings for NFL teams.
     """
-    # Utilize pandas to directly read the ELO ratings CSV from the URL into a DataFrame
-    elo_df = pd.read_csv(constants.ELO_DATA_URL)
-    return elo_df
+    candidates: list[Optional[str]] = []
+    # Allow explicit path override if wanted
+    if local_qb_file:
+        candidates.append(local_qb_file)
+
+    # Default local path
+    candidates.append(os.path.join(constants.DATA_PATH, "qb_elos.csv"))
+
+    for path in candidates:
+        if path and os.path.exists(path):
+            df = pd.read_csv(path)
+            # Drop accidental index column if present
+            first_col = str(df.columns[0])
+            if first_col.lower().startswith("unnamed") or first_col == "":
+                df = df.drop(columns=[df.columns[0]])
+            return df
+
+    # Fallback to original remote source
+    df = pd.read_csv(constants.ELO_DATA_URL)
+    first_col = str(df.columns[0])
+    if first_col.lower().startswith("unnamed") or first_col == "":
+        df = df.drop(columns=[df.columns[0]])
+    return df
 
 
 def fetch_nfl_lines() -> pd.DataFrame:

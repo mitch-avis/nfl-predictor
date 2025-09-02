@@ -589,7 +589,16 @@ def calculate_stats(previous_weeks_df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame with aggregated statistics for each team.
     """
-    # Aggregate ratios and calculate win and conversion rates
+    # If there's nothing to aggregate, return an empty result quickly
+    if previous_weeks_df is None or previous_weeks_df.empty:
+        return pd.DataFrame(columns=["team_name", "team_abbr"])
+
+    # Ensure required ratio columns exist to avoid KeyError during groupby.agg
+    for col in constants.RATIOS_DICT:
+        if col not in previous_weeks_df.columns:
+            previous_weeks_df[col] = 0.0
+
+    # Proceed with existing aggregation flow
     agg_ratios_df = previous_weeks_df.groupby(["team_name", "team_abbr"], as_index=False).agg(
         constants.RATIOS_DICT
     )

@@ -10,11 +10,12 @@ both historical data and current ELO ratings. It supports conditional data refre
 processing.
 """
 
-from datetime import date
+from datetime import date, datetime
 from io import StringIO
 from time import sleep
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -49,12 +50,12 @@ SEASONS_TO_SCRAPE = [
     2024,
     2025,
 ]
-REFRESH_SEASON_DATA = False
+REFRESH_SEASON_DATA = True
 REFRESH_SCHEDULE = False
-REFRESH_AGGREGATE_DATA = False
+REFRESH_AGGREGATE_DATA = True
 REFRESH_SEASON_TEAM_RANKINGS = False
-REFRESH_ELO_SEASON = False
-REFRESH_LINES_SEASON = False
+REFRESH_ELO_SEASON = True
+REFRESH_LINES_SEASON = True
 SKIP_CURRENT_WEEK = False
 REFRESH_WEEKLY_DATA = False
 REFRESH_WEEKLY_TEAM_RANKINGS = False
@@ -325,32 +326,66 @@ def scrape_weekly_game_data(season: int, week: int) -> pd.DataFrame:
         log.info("No games found for Week %s of the %s season.", week, season)
         return pd.DataFrame()
 
-    # Iterate through each game in the week, scraping data
+    # Helper to parse YYYYMMDD from boxscore id
+    def parse_boxscore_date(boxscore_id: str) -> Optional[date]:
+        try:
+            return datetime.strptime(boxscore_id[:8], "%Y%m%d").date()
+        except Exception:
+            return None
+
+    # Iterate through each game in the week, scraping data or creating placeholders
     for game_info in week_scores.games[game_key]:
+        # Skip bogus entries (e.g., unrelated season artifacts)
         if nfl_utils.is_game_from_different_season(game_info, season):
             log.warning(
                 "Skipping game %s as it appears to be from a different season",
-                game_info["boxscore"],
+                game_info.get("boxscore"),
             )
             continue
-        if game_info["home_score"] is None and game_info["away_score"] is None:
-            log.info("Game %s has not finished yet.", game_info["boxscore"])
-            game_stats = None  # Set game_stats to None for unfinished games
-        else:
-            game_stats, error = nfl_utils.fetch_game_boxscore(game_info["boxscore"])
+
+        box_id = game_info.get("boxscore", "")
+        scheduled_date = parse_boxscore_date(box_id)
+        today = date.today()
+
+        # Decide whether to fetch boxscore or create placeholders
+        fetch_stats = True
+        # Skip truly future games (tomorrow or later) and create placeholders
+        if scheduled_date and scheduled_date > today:
+            log.info(
+                "Skipping game %s scheduled for %s (future).",
+                box_id,
+                scheduled_date,
+            )
+            fetch_stats = False
+        # If both scores are None (unplayed), do not fetch stats, just placeholders
+        if game_info.get("home_score") is None and game_info.get("away_score") is None:
+            fetch_stats = False
+
+        # Build a one-row frame for the basic game info
+        game_row = {
+            "away_name": game_info.get("away_name"),
+            "away_abbr": game_info.get("away_abbr"),
+            "away_score": game_info.get("away_score"),
+            "home_name": game_info.get("home_name"),
+            "home_abbr": game_info.get("home_abbr"),
+            "home_score": game_info.get("home_score"),
+        }
+        game_df = pd.DataFrame([game_row])
+
+        boxscore_obj: Optional[Boxscore] = None
+        if fetch_stats:
+            # Try to fetch stats; if it fails, fall back to placeholders
+            game_stats, error = nfl_utils.fetch_game_boxscore(box_id)
             if error or game_stats is None:
-                log.warning(
-                    "Failed to fetch game stats for %s in Week %s!", game_info["boxscore"], week
-                )
-                continue  # Skip to the next game if fetching game stats fails
+                log.warning("Failed to fetch game stats for %s in Week %s!", box_id, week)
+                boxscore_obj = None
+            else:
+                boxscore_obj = game_stats
 
-        log.info("Scraping game data for %s...", game_info["boxscore"])
-        # Call parse_game_data even if the game has not finished
-        away_team_df, home_team_df = extract_team_statistics_from_game(
-            pd.DataFrame(game_info, index=[0]), game_stats
-        )
+        # Extract team-level rows (will become placeholders if boxscore_obj is None)
+        away_team_df, home_team_df = extract_team_statistics_from_game(game_df, boxscore_obj)
 
-        # Append team data with week and season information
+        # Stamp week and season and append
         for team_df in (away_team_df, home_team_df):
             team_df["week"] = week
             team_df["season"] = season
@@ -383,9 +418,10 @@ def extract_team_statistics_from_game(
     if boxscore is not None:
         away_stats_df, home_stats_df = nfl_utils.create_stats_dfs_from_boxscore(boxscore)
     else:
-        # If boxscore is None, create empty DataFrames with the expected structure
-        away_stats_df = pd.DataFrame()
-        home_stats_df = pd.DataFrame()
+        # Create empty stats frames with the required columns as NaN
+        empty_stats = {stat: np.nan for stat in constants.BOXSCORE_STATS}
+        away_stats_df = pd.DataFrame([empty_stats])
+        home_stats_df = pd.DataFrame([empty_stats])
 
     # Merge team stats with opponent stats and format DataFrames
     away_team_df = nfl_utils.merge_and_format_df(away_team_df, away_stats_df, home_stats_df)
@@ -429,15 +465,22 @@ def get_schedule(season: int) -> pd.DataFrame:
                     game["boxscore"],
                 )
                 continue
-            game_data = {
-                "away_name": game["away_name"],
-                "away_abbr": game["away_abbr"],
-                "home_name": game["home_name"],
-                "home_abbr": game["home_abbr"],
-                "season": season,
-                "week": week,
-            }
-            all_games_data.append(game_data)
+            # Parse scheduled date if possible (not required in schedule CSV)
+            try:
+                _ = datetime.strptime(game.get("boxscore", "")[:8], "%Y%m%d").date()
+            except (ValueError, TypeError):
+                _ = None
+
+            all_games_data.append(
+                {
+                    "away_name": game.get("away_name"),
+                    "away_abbr": game.get("away_abbr"),
+                    "home_name": game.get("home_name"),
+                    "home_abbr": game.get("home_abbr"),
+                    "season": season,
+                    "week": week,
+                }
+            )
 
     # Convert the list of dictionaries to a DataFrame in one operation
     schedule_df = pd.DataFrame(all_games_data)
@@ -562,10 +605,12 @@ def aggregate_season_data(
         )
         previous_weeks_df = previous_weeks_df.drop(columns=["game_number_x", "game_number_y"])
 
+        # Compute aggregated stats and finalize
         agg_weekly_df = nfl_utils.calculate_stats(previous_weeks_df)
         # Merge current week's data with results and add to the list
         merged_df = nfl_utils.merge_and_finalize(week_games_df, agg_weekly_df, results_df)
         agg_games_list.append(merged_df)
+
     # Concatenate all weekly aggregated data into a single DataFrame
     final_agg_df = pd.concat(agg_games_list, ignore_index=True)
     return final_agg_df
@@ -734,37 +779,48 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
         pd.DataFrame:   Adjusted DataFrame with ELO ratings for the specified season, including
                         handling of neutral games and re-mapping of team names.
     """
-    # Drop columns not needed for analysis to reduce memory usage
-    elo_df = elo_df.drop(columns=constants.ELO_DROP_COLS, errors="ignore")
-
-    # Convert 'date' column to datetime, then to date for efficient filtering
+    # Ensure date type and slice to season window
     elo_df["date"] = pd.to_datetime(elo_df["date"]).dt.date
-    # Get the start and end dates for the specified season
     week_dates = nfl_utils.get_week_dates(season)
-    # Extend the date range to include the end of the last week
     week_dates.append((week_dates[-1] + pd.DateOffset(weeks=1)).date())
-    # Create a mask to filter rows within the season date range
     mask = (elo_df["date"] >= week_dates[0]) & (elo_df["date"] <= week_dates[-1])
     filtered_elo_df = elo_df.loc[mask].copy()
 
-    # Map ELO team names to standard team names using a predefined mapping
-    team_name_mapping = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
-    filtered_elo_df["team1"] = filtered_elo_df["team1"].map(team_name_mapping)
-    filtered_elo_df["team2"] = filtered_elo_df["team2"].map(team_name_mapping)
+    # Build a robust mapping:
+    # - legacy -> modern from constants.ELO_TEAM_ABBR -> constants.TEAM_ABBR
+    # - identity mapping for already-modern codes (e.g., LV stays LV)
+    legacy_to_modern = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
+    identity_modern = {abbr: abbr for abbr in constants.TEAM_ABBR}
+    team_name_mapping = {**identity_modern, **legacy_to_modern}
 
-    # Create swapped rows to account for neutral games
-    duplicate_rows = filtered_elo_df.copy()
-    # Swap columns for team names and related ELO ratings according to constants.ELO_SWAP_COLS
-    swapped_rows = duplicate_rows.rename(columns=constants.ELO_SWAP_COLS)
-
-    # Concatenate original and swapped rows, then clean up the DataFrame
-    season_elo_df = (
-        pd.concat([swapped_rows, filtered_elo_df], ignore_index=True)
-        .sort_values(by=["date"])  # Sort by date for chronological order
-        .reset_index(drop=True)  # Reset index for a clean DataFrame
+    # Normalize case and replace; do NOT use Series.map (which NAs unknowns)
+    filtered_elo_df["team1"] = (
+        filtered_elo_df["team1"].astype(str).str.upper().replace(team_name_mapping)
+    )
+    filtered_elo_df["team2"] = (
+        filtered_elo_df["team2"].astype(str).str.upper().replace(team_name_mapping)
     )
 
-    return season_elo_df
+    # If upstream ELO contains a 'season' column, drop it to avoid season_x/season_y later
+    if "season" in filtered_elo_df.columns:
+        filtered_elo_df = filtered_elo_df.drop(columns=["season"])
+
+    # Drop rows still missing team codes and log how many (should be zero)
+    missing_mask = filtered_elo_df["team1"].eq("") | filtered_elo_df["team2"].eq("")
+    missing_mask |= filtered_elo_df["team1"].isna() | filtered_elo_df["team2"].isna()
+    if missing_mask.any():
+        log.warning(
+            "Dropping %s ELO rows with unmapped team codes (e.g., %s).",
+            int(missing_mask.sum()),
+            filtered_elo_df.loc[missing_mask, ["team1", "team2"]].head(3).to_dict("records"),
+        )
+        filtered_elo_df = filtered_elo_df.loc[~missing_mask].copy()
+
+    # Keep only columns we need later; ensure week as int
+    filtered_elo_df["week"] = filtered_elo_df["week"].astype(int)
+
+    # Return trimmed dataset with needed columns (rest is handled later by rename and merge)
+    return filtered_elo_df
 
 
 def get_season_lines(lines_df: pd.DataFrame, season: int) -> pd.DataFrame:
@@ -863,6 +919,21 @@ def combine_data(
     combined_df["elo_dif"] = combined_df["elo2_pre"] - combined_df["elo1_pre"]
     combined_df["qb_dif"] = combined_df["qb2_value_pre"] - combined_df["qb1_value_pre"]
     combined_df["qb_elo_dif"] = combined_df["qbelo2_pre"] - combined_df["qbelo1_pre"]
+
+    # Normalize/collapse season column before merging lines
+    if "season" not in combined_df.columns:
+        if "season_x" in combined_df.columns or "season_y" in combined_df.columns:
+            if "season_x" in combined_df.columns and "season_y" in combined_df.columns:
+                combined_df["season"] = combined_df["season_x"].combine_first(
+                    combined_df["season_y"]
+                )
+            elif "season_x" in combined_df.columns:
+                combined_df["season"] = combined_df["season_x"]
+            elif "season_y" in combined_df.columns:
+                combined_df["season"] = combined_df["season_y"]
+            combined_df = combined_df.drop(
+                columns=[c for c in ["season_x", "season_y"] if c in combined_df.columns]
+            )
 
     # Merge with NFL lines
     combined_df = pd.merge(

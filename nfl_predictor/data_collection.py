@@ -50,15 +50,16 @@ SEASONS_TO_SCRAPE = [
     2024,
     2025,
 ]
-REFRESH_SEASON_DATA = True
+REFRESH_SEASON_DATA = False
 REFRESH_SCHEDULE = False
 REFRESH_AGGREGATE_DATA = True
 REFRESH_SEASON_TEAM_RANKINGS = False
 REFRESH_ELO_SEASON = True
-REFRESH_LINES_SEASON = True
-SKIP_CURRENT_WEEK = False
+REFRESH_LINES_SEASON = False
 REFRESH_WEEKLY_DATA = False
 REFRESH_WEEKLY_TEAM_RANKINGS = False
+
+SKIP_CURRENT_WEEK = False
 
 
 def main() -> None:
@@ -779,48 +780,80 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
         pd.DataFrame:   Adjusted DataFrame with ELO ratings for the specified season, including
                         handling of neutral games and re-mapping of team names.
     """
-    # Ensure date type and slice to season window
+    # Drop columns not needed for analysis to reduce memory usage
+    elo_df = elo_df.drop(columns=constants.ELO_DROP_COLS, errors="ignore")
+
+    # Convert 'date' column to datetime, then to date for efficient filtering
     elo_df["date"] = pd.to_datetime(elo_df["date"]).dt.date
+    # Get the start and end dates for the specified season
     week_dates = nfl_utils.get_week_dates(season)
+    # Extend the date range to include the end of the last week
     week_dates.append((week_dates[-1] + pd.DateOffset(weeks=1)).date())
+    # Create a mask to filter rows within the season date range
     mask = (elo_df["date"] >= week_dates[0]) & (elo_df["date"] <= week_dates[-1])
     filtered_elo_df = elo_df.loc[mask].copy()
 
-    # Build a robust mapping:
-    # - legacy -> modern from constants.ELO_TEAM_ABBR -> constants.TEAM_ABBR
-    # - identity mapping for already-modern codes (e.g., LV stays LV)
-    legacy_to_modern = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
-    identity_modern = {abbr: abbr for abbr in constants.TEAM_ABBR}
-    team_name_mapping = {**identity_modern, **legacy_to_modern}
+    # Build a robust mapping that:
+    # 1) passes through already-standard codes (e.g., LV, NE, KC, etc.)
+    # 2) handles common aliases from historical/alternate datasets
+    base_pass_through = {abbr: abbr for abbr in constants.TEAM_ABBR}
 
-    # Normalize case and replace; do NOT use Series.map (which NAs unknowns)
-    filtered_elo_df["team1"] = (
-        filtered_elo_df["team1"].astype(str).str.upper().replace(team_name_mapping)
+    aliases = {
+        # Raiders
+        "LV": "LV",
+        "LVR": "LV",
+        "OAK": "LV",
+        # Rams
+        "LA": "LAR",
+        "STL": "LAR",
+        "RAM": "LAR",
+        # Chargers
+        "SD": "LAC",
+        "SDG": "LAC",
+        # Washington
+        "WAS": "WSH",
+        "WSH": "WSH",
+        # Common PFR-style codes that sometimes leak
+        "GNB": "GB",
+        "KAN": "KC",
+        "NWE": "NE",
+        "NOR": "NO",
+        "TAM": "TB",
+        "SFO": "SF",
+        "OTI": "TEN",
+        "JAC": "JAX",
+        "CLT": "IND",
+        "HTX": "HOU",
+        "RAI": "LV",
+    }
+
+    # Keep original zip mapping but allow newer aliases and pass-through to take precedence
+    old_map = dict(zip(constants.ELO_TEAM_ABBR, constants.TEAM_ABBR))
+    team_name_mapping = {**old_map, **base_pass_through, **aliases}
+
+    def to_std(code):
+        if pd.isna(code):
+            return code
+        code = str(code).strip()
+        # Try robust mapping first; if not found, leave as-is
+        return team_name_mapping.get(code, code)
+
+    filtered_elo_df["team1"] = filtered_elo_df["team1"].apply(to_std)
+    filtered_elo_df["team2"] = filtered_elo_df["team2"].apply(to_std)
+
+    # Create swapped rows to account for neutral games
+    duplicate_rows = filtered_elo_df.copy()
+    # Swap columns for team names and related ELO ratings according to constants.ELO_SWAP_COLS
+    swapped_rows = duplicate_rows.rename(columns=constants.ELO_SWAP_COLS)
+
+    # Concatenate original and swapped rows, then clean up the DataFrame
+    season_elo_df = (
+        pd.concat([swapped_rows, filtered_elo_df], ignore_index=True)
+        .sort_values(by=["date"])  # Sort by date for chronological order
+        .reset_index(drop=True)  # Reset index for a clean DataFrame
     )
-    filtered_elo_df["team2"] = (
-        filtered_elo_df["team2"].astype(str).str.upper().replace(team_name_mapping)
-    )
 
-    # If upstream ELO contains a 'season' column, drop it to avoid season_x/season_y later
-    if "season" in filtered_elo_df.columns:
-        filtered_elo_df = filtered_elo_df.drop(columns=["season"])
-
-    # Drop rows still missing team codes and log how many (should be zero)
-    missing_mask = filtered_elo_df["team1"].eq("") | filtered_elo_df["team2"].eq("")
-    missing_mask |= filtered_elo_df["team1"].isna() | filtered_elo_df["team2"].isna()
-    if missing_mask.any():
-        log.warning(
-            "Dropping %s ELO rows with unmapped team codes (e.g., %s).",
-            int(missing_mask.sum()),
-            filtered_elo_df.loc[missing_mask, ["team1", "team2"]].head(3).to_dict("records"),
-        )
-        filtered_elo_df = filtered_elo_df.loc[~missing_mask].copy()
-
-    # Keep only columns we need later; ensure week as int
-    filtered_elo_df["week"] = filtered_elo_df["week"].astype(int)
-
-    # Return trimmed dataset with needed columns (rest is handled later by rename and merge)
-    return filtered_elo_df
+    return season_elo_df
 
 
 def get_season_lines(lines_df: pd.DataFrame, season: int) -> pd.DataFrame:
@@ -919,21 +952,6 @@ def combine_data(
     combined_df["elo_dif"] = combined_df["elo2_pre"] - combined_df["elo1_pre"]
     combined_df["qb_dif"] = combined_df["qb2_value_pre"] - combined_df["qb1_value_pre"]
     combined_df["qb_elo_dif"] = combined_df["qbelo2_pre"] - combined_df["qbelo1_pre"]
-
-    # Normalize/collapse season column before merging lines
-    if "season" not in combined_df.columns:
-        if "season_x" in combined_df.columns or "season_y" in combined_df.columns:
-            if "season_x" in combined_df.columns and "season_y" in combined_df.columns:
-                combined_df["season"] = combined_df["season_x"].combine_first(
-                    combined_df["season_y"]
-                )
-            elif "season_x" in combined_df.columns:
-                combined_df["season"] = combined_df["season_x"]
-            elif "season_y" in combined_df.columns:
-                combined_df["season"] = combined_df["season_y"]
-            combined_df = combined_df.drop(
-                columns=[c for c in ["season_x", "season_y"] if c in combined_df.columns]
-            )
 
     # Merge with NFL lines
     combined_df = pd.merge(

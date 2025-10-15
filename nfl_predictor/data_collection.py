@@ -336,6 +336,7 @@ def scrape_weekly_game_data(season: int, week: int) -> pd.DataFrame:
 
     # Iterate through each game in the week, scraping data or creating placeholders
     for game_info in week_scores.games[game_key]:
+        log.debug("Processing game: %s", game_info.get("boxscore"))
         # Skip bogus entries (e.g., unrelated season artifacts)
         if nfl_utils.is_game_from_different_season(game_info, season):
             log.warning(

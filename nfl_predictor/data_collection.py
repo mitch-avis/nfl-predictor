@@ -158,8 +158,14 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
     current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
     for season in SEASONS_TO_SCRAPE:
-        # Determine which weeks of the season to scrape
-        weeks = nfl_utils.determine_weeks_to_scrape(season)
+        # Scrape actual game data only through the current week (avoid future-week boxscore fetches)
+        weeks_for_games = nfl_utils.determine_weeks_to_scrape(season)
+
+        # Include future matchups (placeholders) for the current season in the dataset
+        include_future = season == current_season
+        weeks_for_dataset = nfl_utils.determine_weeks_to_scrape(
+            season, include_future_weeks=include_future
+        )
 
         # Set force_refresh to True if the season is the current season
         force_refresh = season == current_season
@@ -170,7 +176,7 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
             f"{season}/{season}_season_games",
             scrape_season_data,
             season,
-            weeks,
+            weeks_for_games,
             force_refresh=force_refresh or REFRESH_SEASON_DATA,
         )
 
@@ -189,7 +195,7 @@ def process_seasons(elo_df: pd.DataFrame, lines_df: pd.DataFrame) -> list:
             f"{season}/{season}_agg_games",
             aggregate_season_data,
             season,
-            weeks,
+            weeks_for_dataset,
             season_games_df,
             schedule_df,
             force_refresh=force_refresh or REFRESH_AGGREGATE_DATA,
@@ -445,7 +451,11 @@ def get_schedule(season: int) -> pd.DataFrame:
                         abbreviations, winning team name and abbreviation (if available), and the
                         week of the season.
     """
-    weeks = nfl_utils.determine_weeks_to_scrape(season)  # Determine weeks to scrape for the season
+    today = date.today()
+    current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
+    weeks = nfl_utils.determine_weeks_to_scrape(
+        season, include_future_weeks=season == current_season
+    )  # Determine weeks to scrape for the season
     all_games_data = []  # Initialize a list to store game data for all weeks
 
     log.info("Scraping %s schedule...", season)
@@ -632,13 +642,13 @@ def scrape_team_rankings_for_season(season: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing the compiled team rankings for the entire season.
     """
-    # Get list of dates for each week in the season
-    week_dates = nfl_utils.get_week_dates(season)
-
     # Determine the current season year and NFL week
     today = date.today()
     current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
     current_week = nfl_utils.determine_nfl_week_by_date(today)
+
+    # Get list of dates for each week in the season (include future weeks for current season)
+    week_dates = nfl_utils.get_week_dates(season, include_future_weeks=season == current_season)
 
     # Initialize list to hold weekly rankings DataFrames
     season_rankings = []
@@ -787,7 +797,9 @@ def get_season_elo(elo_df: pd.DataFrame, season: int) -> pd.DataFrame:
     # Convert 'date' column to datetime, then to date for efficient filtering
     elo_df["date"] = pd.to_datetime(elo_df["date"]).dt.date
     # Get the start and end dates for the specified season
-    week_dates = nfl_utils.get_week_dates(season)
+    today = date.today()
+    current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
+    week_dates = nfl_utils.get_week_dates(season, include_future_weeks=season == current_season)
     # Extend the date range to include the end of the last week
     week_dates.append((week_dates[-1] + pd.DateOffset(weeks=1)).date())
     # Create a mask to filter rows within the season date range
@@ -942,7 +954,7 @@ def combine_data(
     combined_df = pd.merge(
         combined_df,
         elo_df,
-        how="inner",
+        how="left",
         left_on=["home_abbr", "away_abbr", "week"],
         right_on=["team1", "team2", "week"],
     ).drop(
@@ -968,18 +980,45 @@ def combine_data(
     # Add a column to indicate if the game is a divisional matchup
     combined_df["division"] = combined_df.apply(nfl_utils.is_division_game, axis=1)
 
-    # Reorder columns to improve readability, placing scores and result at the end
-    data_columns = sorted(
-        [
-            col
-            for col in combined_df.columns
-            if col
-            not in constants.FIRST_COLUMNS + constants.LINES_COLUMNS + constants.RESULT_COLUMNS
-        ]
-    )
-    combined_df = combined_df[
-        constants.FIRST_COLUMNS + data_columns + constants.LINES_COLUMNS + constants.RESULT_COLUMNS
-    ]
+    # Reorder columns to improve readability:
+    # - keep the identifying/game-context columns first (FIRST_COLUMNS)
+    # - group metrics by prefix (away_, home_), then place derived diffs
+    # - keep odds and outcomes at the end (LINES_COLUMNS + RESULT_COLUMNS)
+    head_columns = constants.FIRST_COLUMNS
+    tail_columns = constants.LINES_COLUMNS + constants.RESULT_COLUMNS
+
+    feature_columns = [col for col in combined_df.columns if col not in head_columns + tail_columns]
+
+    away_cols = [col for col in feature_columns if col.startswith("away_")]
+    home_cols = [col for col in feature_columns if col.startswith("home_")]
+
+    def is_diff_col(col: str) -> bool:
+        return col.startswith("diff_") or col.endswith("_diff") or col.endswith("_dif")
+
+    # Avoid double-counting if a future column happens to match multiple patterns
+    assigned = set(home_cols) | set(away_cols)
+    diff_cols = [col for col in feature_columns if col not in assigned and is_diff_col(col)]
+    assigned |= set(diff_cols)
+    other_cols = [col for col in feature_columns if col not in assigned]
+
+    away_cols = sorted(away_cols, key=lambda c: c.removeprefix("away_"))
+    home_cols = sorted(home_cols, key=lambda c: c.removeprefix("home_"))
+
+    def diff_sort_key(col: str) -> str:
+        if col.startswith("diff_"):
+            return col.removeprefix("diff_")
+        if col.endswith("_diff"):
+            return col[: -len("_diff")]
+        if col.endswith("_dif"):
+            return col[: -len("_dif")]
+        return col
+
+    diff_cols = sorted(diff_cols, key=diff_sort_key)
+    other_cols = sorted(other_cols)
+
+    ordered_columns = head_columns + away_cols + home_cols + diff_cols + other_cols + tail_columns
+    # Defensive: only keep columns that exist (in case upstream changes columns).
+    combined_df = combined_df[[col for col in ordered_columns if col in combined_df.columns]]
 
     # Rename legacy teams to modern team names using constants.MODERN_TEAM_NAMES
     combined_df["away_name"] = combined_df["away_name"].replace(constants.MODERN_TEAM_NAMES)

@@ -8,7 +8,7 @@ specific weeks, and fetching ELO ratings for teams.
 import os
 from datetime import date, timedelta
 from time import sleep
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -17,6 +17,48 @@ from sportsipy.nfl.boxscore import Boxscore, Boxscores
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
+
+T = TypeVar("T")
+
+
+def _call_with_retries(
+    func: Callable[[], T],
+    *,
+    description: str,
+    max_attempts: int = 3,
+    base_delay_seconds: float = 10.0,
+) -> Tuple[Optional[T], Optional[Exception]]:
+    """Call a zero-arg function with retries.
+
+    Returns a tuple of (result, error). On success, error is None.
+    On failure after all attempts, result is None.
+
+    Retries use exponential backoff: base_delay_seconds * 2^(attempt-1).
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be >= 1")
+    if base_delay_seconds < 0:
+        raise ValueError("base_delay_seconds must be >= 0")
+
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return func(), None
+        except Exception as exc:  # pylint: disable=broad-except
+            last_exc = exc
+            log.warning(
+                "Failed to %s on attempt %s/%s",
+                description,
+                attempt,
+                max_attempts,
+                exc_info=attempt == max_attempts,
+            )
+
+            if attempt < max_attempts and base_delay_seconds > 0:
+                delay = base_delay_seconds * (2 ** (attempt - 1))
+                sleep(delay)
+
+    return None, last_exc
 
 
 def fetch_nfl_elo_ratings(local_qb_file: Optional[str] = None) -> pd.DataFrame:
@@ -158,28 +200,27 @@ def determine_weeks_to_scrape(season: int, include_future_weeks: bool = False) -
     current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
     if season < 2021:
-        # For seasons before 2021, the NFL had 17 weeks. This accounts for the schedule prior to
-        # the expansion to an 18-week season.
-        weeks_to_scrape = list(range(1, constants.WEEKS_BEFORE_2021 + 1))
-    elif season <= current_season or include_future_weeks:
-        # For past seasons from 2021 onwards, including the current season if include_future_weeks
-        # is True, and for future seasons if include_future_weeks is True, the NFL has 18 weeks.
-        weeks_to_scrape = list(range(1, constants.WEEKS_FROM_2021_ONWARDS + 1))
-    else:
-        # For the current season without including future weeks, scrape up to the current week.
-        # This ensures data is only collected for weeks that have potentially completed.
-        if season == current_season:
-            current_week = determine_nfl_week_by_date(today)
-            weeks_to_scrape = list(range(1, current_week + 1))
-        else:
-            # For future seasons without including future weeks, there are no weeks to scrape
-            # since the season hasn't started or we're avoiding future data collection.
-            weeks_to_scrape = []
+        # For seasons before 2021, the NFL had 17 weeks.
+        return list(range(1, constants.WEEKS_BEFORE_2021 + 1))
 
-    return weeks_to_scrape
+    if season < current_season:
+        # Completed seasons from 2021 onwards have 18 weeks.
+        return list(range(1, constants.WEEKS_FROM_2021_ONWARDS + 1))
+
+    if season == current_season:
+        # Current season: include future weeks only when explicitly requested.
+        if include_future_weeks:
+            return list(range(1, constants.WEEKS_FROM_2021_ONWARDS + 1))
+        current_week = determine_nfl_week_by_date(today)
+        return list(range(1, current_week + 1))
+
+    # Future seasons
+    if include_future_weeks:
+        return list(range(1, constants.WEEKS_FROM_2021_ONWARDS + 1))
+    return []
 
 
-def get_week_dates(season: int) -> list[date]:
+def get_week_dates(season: int, include_future_weeks: bool = False) -> list[date]:
     """
     Generate a list of dates representing the start of each week to scrape for a given season.
 
@@ -195,7 +236,7 @@ def get_week_dates(season: int) -> list[date]:
     # Calculate the initial date to start from, which is 8 days before the season start date
     season_start_date = get_season_start(season) - timedelta(days=8)
     # Determine the number of weeks to scrape for the given season
-    weeks_to_scrape = determine_weeks_to_scrape(season)
+    weeks_to_scrape = determine_weeks_to_scrape(season, include_future_weeks=include_future_weeks)
     # Use list comprehension to generate the list of week start dates
     week_dates = [season_start_date + timedelta(weeks=week) for week in weeks_to_scrape]
     return week_dates
@@ -218,17 +259,10 @@ def fetch_week_boxscores(season: int, week: int) -> Tuple[Optional[Boxscores], O
         tuple[Boxscores, Exception]:    A tuple containing the Boxscores object and an Exception
                                         object if an error occurred, or None for both if successful.
     """
-    for attempt in range(10):
-        try:
-            if attempt > 0:
-                sleep(10)  # Wait 10 seconds between retries
-
-            return Boxscores(week, season), None
-        except Exception as e:  # pylint: disable=broad-except
-            log.warning("Failed to fetch week %s scores on attempt %s", week, attempt + 1)
-            if attempt == 2:
-                return None, e
-    return None, Exception("Unable to fetch week scores after multiple attempts.")
+    return _call_with_retries(
+        lambda: Boxscores(week, season),
+        description=f"fetch Week {week} boxscores for season {season}",
+    )
 
 
 def fetch_game_boxscore(game_info: str) -> Tuple[Optional[Boxscore], Optional[Exception]]:
@@ -248,17 +282,10 @@ def fetch_game_boxscore(game_info: str) -> Tuple[Optional[Boxscore], Optional[Ex
                                                         an Exception object if an error occurred,
                                                         or None for both if successful.
     """
-    for attempt in range(10):
-        try:
-            if attempt > 0:
-                sleep(10)  # Wait 10 seconds between retries
-
-            return Boxscore(game_info), None
-        except Exception as e:  # pylint: disable=broad-except
-            log.warning("Failed to fetch game stats for %s on attempt %s", game_info, attempt + 1)
-            if attempt == 2:
-                return None, e
-    return None, Exception("Unable to fetch game stats after multiple attempts.")
+    return _call_with_retries(
+        lambda: Boxscore(game_info),
+        description=f"fetch boxscore for game {game_info}",
+    )
 
 
 def is_game_from_different_season(game_info: dict, expected_season: int) -> bool:
@@ -646,10 +673,12 @@ def calculate_stats(previous_weeks_df: pd.DataFrame) -> pd.DataFrame:
             # Use vectorized operations directly - pandas handles scalar-to-Series operations
             team_mask = agg_stats_df["team_abbr"] == team
             for column in numeric_columns:  # Only process numeric columns
-                # Simple vectorized calculation - pandas handles the scalar-to-Series arithmetic
-                agg_stats_df.loc[team_mask, column] = (
-                    regression_factor * league_means[column]
-                    + (1.0 - regression_factor) * agg_stats_df.loc[team_mask, column]
+                # Force numeric types for both runtime safety and static type checking
+                current_series = pd.to_numeric(agg_stats_df.loc[team_mask, column], errors="coerce")
+                league_mean = float(league_means[column])
+
+                agg_stats_df.loc[team_mask, column] = (regression_factor * league_mean) + (
+                    (1.0 - regression_factor) * current_series
                 )
 
     return agg_stats_df

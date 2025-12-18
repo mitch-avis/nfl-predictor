@@ -71,23 +71,16 @@ TEAM_RANKINGS_RATINGS = {
 }
 
 # Team Rankings subpaths for different statistics
+# NOTE: We only scrape stats that can't be calculated from nflreadpy data.
+# Third/fourth down and red zone percentages are not in nflreadpy team_stats.
+# Other stats (points per game, yards per point, etc.) are calculated from nflreadpy.
 TEAM_RANKINGS_STATS = {
-    "points-per-game": "points_scored_per_game",
-    "opponents-points-per-game": "points_allowed_per_game",
-    "average-scoring-margin": "average_scoring_margin",
-    "yards-per-point-margin": "yards_per_point_margin",
-    "points-per-play-margin": "points_per_play_margin",
     "third-down-conversion-pct": "third_down_pct",
     "opponent-third-down-conversion-pct": "opponent_third_down_pct",
     "fourth-down-conversion-pct": "fourth_down_pct",
     "opponent-fourth-down-conversion-pct": "opponent_fourth_down_pct",
     "red-zone-scoring-pct": "red_zone_td_pct",
     "opponent-red-zone-scoring-pct": "opponent_red_zone_td_pct",
-    "turnover-margin-per-game": "turnover_margin_per_game",
-    "penalty-yards-per-game": "penalty_yards_per_game",
-    "opponent-penalty-yards-per-game": "opponent_penalty_yards_per_game",
-    "penalty-yards-per-penalty": "penalty_yards_per_penalty",
-    "opponent-penalty-yards-per-penalty": "opponent_penalty_yards_per_penalty",
 }
 
 # Unified team mapping table: canonical abbreviation -> all known aliases
@@ -839,22 +832,34 @@ POLARS_TR_RATINGS = [
 ]
 
 # TeamRankings stat columns (per team) - these get prefixed with away_/home_
+# NOTE: Only includes stats we must scrape from TR (can't calculate from nflreadpy)
 POLARS_TR_STATS = [
-    "points_scored_per_game",
-    "average_scoring_margin",
-    "yards_per_point_margin",
-    "points_per_play_margin",
     "third_down_pct",
     "opponent_third_down_pct",
     "fourth_down_pct",
     "opponent_fourth_down_pct",
     "red_zone_td_pct",
     "opponent_red_zone_td_pct",
-    "turnover_margin_per_game",
-    "penalty_yards_per_game",
-    "opponent_penalty_yards_per_game",
-    "penalty_yards_per_penalty",
-    "opponent_penalty_yards_per_penalty",
+]
+
+# Calculated stats (computed from nflreadpy data during aggregation)
+# These were previously scraped from TR but are now calculated to save scraping time
+POLARS_CALCULATED_STATS = [
+    # Per-game averages (stats already aggregated as means)
+    "points_scored",  # Already in NFLREADPY_STATS - avg points per game
+    "points_allowed",  # Already in NFLREADPY_STATS - avg points allowed per game
+    "scoring_margin",  # Already in NFLREADPY_STATS - avg scoring margin per game
+    "turnover_margin",  # Already in NFLREADPY_STATS - avg turnover margin per game
+    "penalty_yards",  # Already in NFLREADPY_STATS - avg penalty yards per game
+    # Ratio metrics (computed in _compute_derived_metrics)
+    "yards_per_point",  # total_yards / points_scored
+    "opponent_yards_per_point",  # opponent_total_yards / points_allowed
+    "yards_per_point_margin",  # yards_per_point - opponent_yards_per_point
+    "points_per_play",  # points_scored / total_plays
+    "opponent_points_per_play",  # points_allowed / opponent_total_plays
+    "points_per_play_margin",  # points_per_play - opponent_points_per_play
+    "penalty_yards_per_penalty",  # penalty_yards / penalties
+    "opponent_penalty_yards_per_penalty",  # opp_penalty_yards / opp_penalties
 ]
 
 # nflreadpy stats to use (per team) - these get prefixed with away_/home_
@@ -903,10 +908,15 @@ POLARS_NFLREADPY_STATS = [
     "points_scored",  # Team's score for the game
     "points_allowed",  # Opponent's score for the game
     "scoring_margin",  # Computed: points_scored - points_allowed
-    # Derived ratio metrics (computed during aggregation)
+    # Derived ratio metrics (computed during aggregation in _compute_derived_metrics)
     "yards_per_point",  # Computed: total_yards / points_scored
     "opponent_yards_per_point",  # Computed: opponent_total_yards / points_allowed
-    # Note: penalty_yards_per_penalty is in TR_STATS, computed there or from TR scrapes
+    "yards_per_point_margin",  # Computed: yards_per_point - opponent_yards_per_point
+    "points_per_play",  # Computed: points_scored / total_plays
+    "opponent_points_per_play",  # Computed: points_allowed / opponent_total_plays
+    "points_per_play_margin",  # Computed: points_per_play - opponent_points_per_play
+    "penalty_yards_per_penalty",  # Computed: penalty_yards / penalties
+    "opponent_penalty_yards_per_penalty",  # Computed: opponent equivalent
 ]
 
 # Lines/Odds columns (5 total)

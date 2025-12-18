@@ -36,7 +36,7 @@ from typing import Optional
 import polars as pl
 
 from nfl_predictor import constants
-from nfl_predictor.utils import polars_utils
+from nfl_predictor.utils import game_utils, polars_utils
 from nfl_predictor.utils.logger import log
 
 # Configuration: Seasons to process (inclusive range)
@@ -125,6 +125,10 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
     else:
         team_stats_df = polars_utils.add_scoring_data_to_team_stats(team_stats_df, schedule_df)
 
+    # Add per-game opponent stats AFTER scoring data is added
+    # This ensures opponent_points_scored, opponent_points_allowed, etc. are included
+    team_stats_df = polars_utils.add_per_game_opponent_stats(team_stats_df)
+
     # Load ELO ratings
     elo_df = polars_utils.load_elo_ratings(seasons)
     if elo_df.height > 0:
@@ -135,19 +139,23 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
     # Load raw ELO data for QB lookups (needed for fill_future_qb_data)
     raw_elo_df = polars_utils.load_raw_elo_data()
 
+    # Determine current season and week for TR scraping decisions
+    current_season, current_week = polars_utils.get_current_nfl_week()
+    log.info("Current season: %d, week: %d (for TR scraping)", current_season, current_week)
+
     # Process each season
     all_seasons_data = []
 
     for season in seasons:
         log.info("Processing season %d...", season)
 
-        # Load TeamRankings for this season
-        tr_df = polars_utils.load_team_rankings(season)
+        # Load TeamRankings for this season (will scrape if current/future week)
+        tr_df = polars_utils.load_team_rankings(season, current_season, current_week)
 
         # Load previous season's TeamRankings for week 1 regression
         prev_tr_df = None
         if season > min(seasons):
-            prev_tr_df = polars_utils.load_team_rankings(season - 1)
+            prev_tr_df = polars_utils.load_team_rankings(season - 1, current_season, current_week)
 
         season_data = process_season(season, schedule_df, team_stats_df, elo_df, tr_df, prev_tr_df)
         if season_data.height > 0:
@@ -160,11 +168,11 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
         if "date" in combined_df.columns:
             combined_df = combined_df.sort("date", descending=True)
         # Fill in QB data for future games using most recent starters
-        combined_df = polars_utils.fill_future_qb_data(combined_df, raw_elo_df)
+        combined_df = game_utils.fill_future_qb_data(combined_df, raw_elo_df)
         # Fill in lines for future games from SurvivorGrid
-        combined_df = polars_utils.fill_future_game_lines(combined_df)
+        combined_df = game_utils.fill_future_game_lines(combined_df)
         # Fill missing moneylines by calculating from spreads
-        combined_df = polars_utils.fill_missing_moneylines(combined_df)
+        combined_df = game_utils.fill_missing_moneylines(combined_df)
         # Select final columns in correct order
         combined_df = polars_utils.select_final_columns(combined_df)
         return combined_df
@@ -388,7 +396,8 @@ def _merge_team_rankings(
     Handles three scenarios:
     1. Regular season (week 2+): Use current season's TR for that week
     2. Week 1: Use previous season's final TR values
-    3. Playoffs (week > regular season weeks): Use current season's most recent TR values
+    3. Playoffs (week > regular season weeks): Use TR data for that specific playoff week
+       (which should be freshly scraped during the playoff week)
 
     Note: Before 2021, playoffs started in week 18 (17-week season).
           From 2021 onwards, playoffs start in week 19 (18-week season).
@@ -411,16 +420,20 @@ def _merge_team_rankings(
         # Week 1: Use previous season's final TR values
         tr_to_use = polars_utils.get_latest_team_rankings(prev_tr_df)
         log.debug("Using previous season TR for week 1")
-    elif week > regular_season_weeks and tr_df is not None and tr_df.height > 0:
-        # Playoffs: Use current season's most recent (end of regular season) TR
-        tr_to_use = polars_utils.get_latest_team_rankings(tr_df)
-        log.debug("Using end-of-season TR for playoff week %d", week)
     elif tr_df is not None and tr_df.height > 0 and "week" in tr_df.columns:
-        # Regular season: Use specific week's TR
+        # Try to get specific week's TR data (works for regular season AND playoffs)
         week_tr = tr_df.filter(pl.col("week") == week)
         if week_tr.height > 0:
             # Drop week column since we're joining on team only
             tr_to_use = week_tr.drop("week")
+            if week > regular_season_weeks:
+                log.debug("Using scraped TR for playoff week %d", week)
+            else:
+                log.debug("Using TR for regular season week %d", week)
+        elif week > regular_season_weeks:
+            # Fallback for playoffs: use most recent available TR data
+            tr_to_use = polars_utils.get_latest_team_rankings(tr_df)
+            log.debug("Using latest available TR for playoff week %d (fallback)", week)
 
     # Merge TR data if available
     if tr_to_use is not None and tr_to_use.height > 0:

@@ -17,6 +17,22 @@ SEASON_END_MONTH = 2  # NFL season typically ends in February
 WEEKS_BEFORE_2021 = 17  # Number of weeks in NFL seasons before 2021
 WEEKS_FROM_2021_ONWARDS = 18  # Number of weeks in NFL seasons from 2021 onwards
 
+
+def get_regular_season_weeks(season: int) -> int:
+    """Return the number of regular season weeks for a given season.
+
+    Before 2021, the NFL had 17-week regular seasons.
+    From 2021 onwards, the NFL has 18-week regular seasons.
+
+    Args:
+        season: The NFL season year
+
+    Returns:
+        Number of regular season weeks (17 before 2021, 18 from 2021 onwards)
+    """
+    return WEEKS_FROM_2021_ONWARDS if season >= 2021 else WEEKS_BEFORE_2021
+
+
 # Median values for key statistics
 MEDIAN_THIRD_DOWN = 0.4  # Median third down conversion rate for analysis
 MEDIAN_FOURTH_DOWN = 0.5  # Median fourth down conversion rate for analysis
@@ -28,6 +44,13 @@ SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for 
 # URL for ELO ratings data
 ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
 ELO_LINES_URL = "https://github.com/greerreNFL/nfelomarket_data/raw/main/Data/lines.csv"
+
+# URL for SurvivorGrid spreads (future games)
+SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"
+DEFAULT_TOTAL_LINE = 45.6  # Average total score across 20+ seasons
+
+# Minimum season for data collection (CPOE data starts Week 2 of 2006)
+MIN_SEASON = 2006
 
 # URL for Team Rankings data
 TEAM_RANKINGS_URL = "https://www.teamrankings.com/nfl"
@@ -41,13 +64,25 @@ TEAM_RANKINGS_RATINGS = {
     "schedule-strength-by-other": "strength_of_schedule_rating",
     "future-sos-by-other": "future_sos_rating",
     "last-5-games-by-other": "last_5_games_rating",
+    "last-10-games-by-other": "last_10_games_rating",
+    "in-division-by-other": "in_division_rating",
+    "non-division-by-other": "non_division_rating",
+    "luck-by-other": "luck_rating",
 }
 
 # Team Rankings subpaths for different statistics
 TEAM_RANKINGS_STATS = {
+    "points-per-game": "points_scored_per_game",
+    "opponents-points-per-game": "points_allowed_per_game",
     "average-scoring-margin": "average_scoring_margin",
     "yards-per-point-margin": "yards_per_point_margin",
     "points-per-play-margin": "points_per_play_margin",
+    "third-down-conversion-pct": "third_down_pct",
+    "opponent-third-down-conversion-pct": "opponent_third_down_pct",
+    "fourth-down-conversion-pct": "fourth_down_pct",
+    "opponent-fourth-down-conversion-pct": "opponent_fourth_down_pct",
+    "red-zone-scoring-pct": "red_zone_td_pct",
+    "opponent-red-zone-scoring-pct": "opponent_red_zone_td_pct",
     "turnover-margin-per-game": "turnover_margin_per_game",
     "penalty-yards-per-game": "penalty_yards_per_game",
     "opponent-penalty-yards-per-game": "opponent_penalty_yards_per_game",
@@ -55,43 +90,240 @@ TEAM_RANKINGS_STATS = {
     "opponent-penalty-yards-per-penalty": "opponent_penalty_yards_per_penalty",
 }
 
-# Dictionary used to map team names to abbreviations
-TEAMS_TO_ABBR = {
-    "Arizona": "ARI",
-    "Atlanta": "ATL",
-    "Baltimore": "BAL",
-    "Buffalo": "BUF",
-    "Carolina": "CAR",
-    "Chicago": "CHI",
-    "Cincinnati": "CIN",
-    "Cleveland": "CLE",
-    "Dallas": "DAL",
-    "Denver": "DEN",
-    "Detroit": "DET",
-    "Green Bay": "GB",
-    "Houston": "HOU",
-    "Indianapolis": "IND",
-    "Jacksonville": "JAX",
-    "Kansas City": "KC",
-    "LA Chargers": "LAC",
-    "LA Rams": "LAR",
-    "Las Vegas": "LV",
-    "Miami": "MIA",
-    "Minnesota": "MIN",
-    "New England": "NE",
-    "New Orleans": "NO",
-    "NY Giants": "NYG",
-    "NY Jets": "NYJ",
-    "Philadelphia": "PHI",
-    "Pittsburgh": "PIT",
-    "San Francisco": "SF",
-    "Seattle": "SEA",
-    "Tampa Bay": "TB",
-    "Tennessee": "TEN",
-    "Washington": "WSH",
+# Unified team mapping table: canonical abbreviation -> all known aliases
+# The canonical abbreviation is the standardized form used throughout this project
+TEAM_MAPPING = {
+    "ARI": {
+        "canonical": "ARI",
+        "name": "Arizona Cardinals",
+        "city": "Arizona",
+        "aliases": ["ARI", "crd", "CRD"],
+    },
+    "ATL": {
+        "canonical": "ATL",
+        "name": "Atlanta Falcons",
+        "city": "Atlanta",
+        "aliases": ["ATL", "atl"],
+    },
+    "BAL": {
+        "canonical": "BAL",
+        "name": "Baltimore Ravens",
+        "city": "Baltimore",
+        "aliases": ["BAL", "rav", "RAV"],
+    },
+    "BUF": {
+        "canonical": "BUF",
+        "name": "Buffalo Bills",
+        "city": "Buffalo",
+        "aliases": ["BUF", "buf"],
+    },
+    "CAR": {
+        "canonical": "CAR",
+        "name": "Carolina Panthers",
+        "city": "Carolina",
+        "aliases": ["CAR", "car"],
+    },
+    "CHI": {
+        "canonical": "CHI",
+        "name": "Chicago Bears",
+        "city": "Chicago",
+        "aliases": ["CHI", "chi"],
+    },
+    "CIN": {
+        "canonical": "CIN",
+        "name": "Cincinnati Bengals",
+        "city": "Cincinnati",
+        "aliases": ["CIN", "cin"],
+    },
+    "CLE": {
+        "canonical": "CLE",
+        "name": "Cleveland Browns",
+        "city": "Cleveland",
+        "aliases": ["CLE", "cle"],
+    },
+    "DAL": {
+        "canonical": "DAL",
+        "name": "Dallas Cowboys",
+        "city": "Dallas",
+        "aliases": ["DAL", "dal"],
+    },
+    "DEN": {
+        "canonical": "DEN",
+        "name": "Denver Broncos",
+        "city": "Denver",
+        "aliases": ["DEN", "den"],
+    },
+    "DET": {
+        "canonical": "DET",
+        "name": "Detroit Lions",
+        "city": "Detroit",
+        "aliases": ["DET", "det"],
+    },
+    "GB": {
+        "canonical": "GB",
+        "name": "Green Bay Packers",
+        "city": "Green Bay",
+        "aliases": ["GB", "gnb", "GNB", "GBP"],
+    },
+    "HOU": {
+        "canonical": "HOU",
+        "name": "Houston Texans",
+        "city": "Houston",
+        "aliases": ["HOU", "htx", "HTX"],
+    },
+    "IND": {
+        "canonical": "IND",
+        "name": "Indianapolis Colts",
+        "city": "Indianapolis",
+        "aliases": ["IND", "clt", "CLT"],
+    },
+    "JAX": {
+        "canonical": "JAX",
+        "name": "Jacksonville Jaguars",
+        "city": "Jacksonville",
+        "aliases": ["JAX", "jax", "JAC"],
+    },
+    "KC": {
+        "canonical": "KC",
+        "name": "Kansas City Chiefs",
+        "city": "Kansas City",
+        "aliases": ["KC", "kan", "KAN"],
+    },
+    "LAC": {
+        "canonical": "LAC",
+        "name": "Los Angeles Chargers",
+        "city": "LA Chargers",
+        "aliases": ["LAC", "sdg", "SDG", "SD"],
+        "former_names": ["San Diego Chargers"],
+    },
+    "LAR": {
+        "canonical": "LAR",
+        "name": "Los Angeles Rams",
+        "city": "LA Rams",
+        "aliases": ["LAR", "LA", "ram", "RAM", "STL"],
+        "former_names": ["St. Louis Rams"],
+    },
+    "LV": {
+        "canonical": "LV",
+        "name": "Las Vegas Raiders",
+        "city": "Las Vegas",
+        "aliases": ["LV", "LVR", "OAK", "rai", "RAI"],
+        "former_names": ["Oakland Raiders"],
+    },
+    "MIA": {
+        "canonical": "MIA",
+        "name": "Miami Dolphins",
+        "city": "Miami",
+        "aliases": ["MIA", "mia"],
+    },
+    "MIN": {
+        "canonical": "MIN",
+        "name": "Minnesota Vikings",
+        "city": "Minnesota",
+        "aliases": ["MIN", "min"],
+    },
+    "NE": {
+        "canonical": "NE",
+        "name": "New England Patriots",
+        "city": "New England",
+        "aliases": ["NE", "nwe", "NWE"],
+    },
+    "NO": {
+        "canonical": "NO",
+        "name": "New Orleans Saints",
+        "city": "New Orleans",
+        "aliases": ["NO", "nor", "NOR"],
+    },
+    "NYG": {
+        "canonical": "NYG",
+        "name": "New York Giants",
+        "city": "NY Giants",
+        "aliases": ["NYG", "nyg"],
+    },
+    "NYJ": {
+        "canonical": "NYJ",
+        "name": "New York Jets",
+        "city": "NY Jets",
+        "aliases": ["NYJ", "nyj"],
+    },
+    "PHI": {
+        "canonical": "PHI",
+        "name": "Philadelphia Eagles",
+        "city": "Philadelphia",
+        "aliases": ["PHI", "phi"],
+    },
+    "PIT": {
+        "canonical": "PIT",
+        "name": "Pittsburgh Steelers",
+        "city": "Pittsburgh",
+        "aliases": ["PIT", "pit"],
+    },
+    "SEA": {
+        "canonical": "SEA",
+        "name": "Seattle Seahawks",
+        "city": "Seattle",
+        "aliases": ["SEA", "sea"],
+    },
+    "SF": {
+        "canonical": "SF",
+        "name": "San Francisco 49ers",
+        "city": "San Francisco",
+        "aliases": ["SF", "sfo", "SFO"],
+    },
+    "TB": {
+        "canonical": "TB",
+        "name": "Tampa Bay Buccaneers",
+        "city": "Tampa Bay",
+        "aliases": ["TB", "tam", "TAM"],
+    },
+    "TEN": {
+        "canonical": "TEN",
+        "name": "Tennessee Titans",
+        "city": "Tennessee",
+        "aliases": ["TEN", "oti", "OTI"],
+    },
+    "WSH": {
+        "canonical": "WSH",
+        "name": "Washington Commanders",
+        "city": "Washington",
+        "aliases": ["WSH", "WAS", "was"],
+        "former_names": ["Washington Football Team", "Washington Redskins"],
+    },
 }
 
-# Team abbreviations in various formats for compatibility across datasets
+
+def _build_alias_to_canonical() -> dict[str, str]:
+    """Build a reverse lookup from any alias to canonical abbreviation."""
+    mapping = {}
+    for canonical, info in TEAM_MAPPING.items():
+        for alias in info["aliases"]:
+            mapping[alias] = canonical
+            mapping[alias.upper()] = canonical
+            mapping[alias.lower()] = canonical
+    return mapping
+
+
+# Reverse lookup: any alias -> canonical abbreviation
+ALIAS_TO_CANONICAL = _build_alias_to_canonical()
+
+
+def normalize_team_abbr(abbr: str) -> str:
+    """Normalize any team abbreviation to its canonical form."""
+    if abbr is None:
+        return abbr
+    return ALIAS_TO_CANONICAL.get(abbr, ALIAS_TO_CANONICAL.get(abbr.upper(), abbr))
+
+
+# List of all canonical team abbreviations
+TEAM_ABBR = list(TEAM_MAPPING.keys())
+
+# Dictionary used to map team names/cities to abbreviations (for TeamRankings scraping)
+TEAMS_TO_ABBR = {info["city"]: canonical for canonical, info in TEAM_MAPPING.items()}
+
+# Dictionary used to map full team names to abbreviations (for SurvivorGrid scraping)
+TEAM_NAME_TO_ABBR = {info["name"]: canonical for canonical, info in TEAM_MAPPING.items()}
+
+# Legacy mappings for backward compatibility with existing code
 PFR_TEAM_ABBR = [
     "crd",
     "atl",
@@ -126,41 +358,6 @@ PFR_TEAM_ABBR = [
     "oti",
     "was",
     "was",
-]
-TEAM_ABBR = [
-    "ARI",
-    "ATL",
-    "BAL",
-    "BUF",
-    "CAR",
-    "CHI",
-    "CIN",
-    "CLE",
-    "DAL",
-    "DEN",
-    "DET",
-    "GB",
-    "HOU",
-    "IND",
-    "JAX",
-    "KC",
-    "LAC",
-    "LAR",
-    "LV",
-    "MIA",
-    "MIN",
-    "NE",
-    "NO",
-    "NYG",
-    "NYJ",
-    "PHI",
-    "PIT",
-    "SEA",
-    "SF",
-    "TB",
-    "TEN",
-    "WSH",
-    "WSH",
 ]
 ELO_TEAM_ABBR = [
     "ARI",
@@ -248,7 +445,7 @@ DIVISION_TEAMS = {
     "AFC North": ["BAL", "CIN", "CLE", "PIT"],
     "AFC South": ["HOU", "IND", "JAX", "TEN"],
     "AFC West": ["DEN", "KC", "LV", "LAC"],
-    "NFC East": ["DAL", "NYG", "PHI", "WAS"],
+    "NFC East": ["DAL", "NYG", "PHI", "WSH"],
     "NFC North": ["CHI", "DET", "GB", "MIN"],
     "NFC South": ["ATL", "CAR", "NO", "TB"],
     "NFC West": ["ARI", "LAR", "SF", "SEA"],
@@ -341,6 +538,85 @@ AGG_DROP_COLS = [
     "opponent_fourth_down_conversions",
     "opponent_fourth_down_attempts",
 ]
+
+# ============================================================================
+# nflreadpy Column Mappings
+# ============================================================================
+
+# Mapping from nflreadpy team_stats columns to our internal column names
+# This maps nflreadpy's load_team_stats() output to our feature names
+NFLREADPY_TEAM_STATS_MAPPING = {
+    # Pass offense
+    "completions": "pass_completions",
+    "attempts": "pass_attempts",
+    "passing_yards": "pass_yards",
+    "passing_tds": "pass_touchdowns",
+    "passing_interceptions": "interceptions_thrown",
+    "sacks_suffered": "times_sacked",
+    "sack_yards_lost": "yards_lost_from_sacks",
+    "passing_air_yards": "passing_air_yards",
+    "passing_yards_after_catch": "passing_yac",
+    "passing_first_downs": "passing_first_downs",
+    "passing_epa": "passing_epa",
+    "passing_cpoe": "passing_cpoe",
+    # Rush offense
+    "carries": "rush_attempts",
+    "rushing_yards": "rush_yards",
+    "rushing_tds": "rush_touchdowns",
+    "rushing_fumbles": "rushing_fumbles",
+    "rushing_fumbles_lost": "rushing_fumbles_lost",
+    "rushing_first_downs": "rushing_first_downs",
+    "rushing_epa": "rushing_epa",
+    # Receiving (team-level aggregates)
+    "receiving_yards": "receiving_yards",
+    "receiving_tds": "receiving_touchdowns",
+    "receiving_fumbles": "receiving_fumbles",
+    "receiving_fumbles_lost": "receiving_fumbles_lost",
+    "receiving_air_yards": "receiving_air_yards",
+    "receiving_yards_after_catch": "receiving_yac",
+    "receiving_first_downs": "receiving_first_downs",
+    "receiving_epa": "receiving_epa",
+    # Special teams
+    "special_teams_tds": "special_teams_tds",
+}
+
+# Columns to select from nflreadpy schedule for our use
+NFLREADPY_SCHEDULE_COLUMNS = [
+    "game_id",
+    "season",
+    "game_type",  # REG, WC, DIV, CON, SB for filtering
+    "week",
+    "gameday",
+    "away_team",
+    "home_team",
+    "away_score",
+    "home_score",
+    "location",
+    "result",
+    "total",
+    "overtime",
+    "away_rest",
+    "home_rest",
+    "away_moneyline",
+    "home_moneyline",
+    "spread_line",
+    "away_spread_odds",
+    "home_spread_odds",
+    "total_line",
+    "under_odds",
+    "over_odds",
+    "div_game",
+]
+
+# nflreadpy schedule column renames to match our internal naming
+NFLREADPY_SCHEDULE_RENAME = {
+    "gameday": "date",
+    "away_team": "away_abbr",
+    "home_team": "home_abbr",
+    "location": "neutral",  # Will need to transform: "Home" -> 0, "Neutral" -> 1
+    "div_game": "division",
+    "spread_line": "home_spread",  # nflreadpy uses home perspective for spread
+}
 
 # Columns to exclude from the ELO dataset for streamlined analysis
 ELO_DROP_COLS = [
@@ -447,6 +723,209 @@ RESULT_COLUMNS = [
     "home_score",
     "result",
 ]
+
+# ============================================================================
+# Stadium Location Mapping (stadium_id -> city, state)
+# ============================================================================
+
+# Maps nflreadpy stadium_id to city and state/country
+# Stadium IDs follow pattern: CITY## or ABBR## where ## is a version number
+STADIUM_LOCATIONS = {
+    # AFC East
+    "BOS00": {"city": "Foxborough", "state": "MA"},  # Gillette Stadium
+    "BUF00": {"city": "Orchard Park", "state": "NY"},  # Highmark Stadium/New Era Field
+    "BUF01": {"city": "Toronto", "state": "ON"},  # Rogers Centre (Toronto games)
+    "MIA00": {"city": "Miami Gardens", "state": "FL"},  # Hard Rock Stadium
+    "NYC00": {"city": "East Rutherford", "state": "NJ"},  # Giants Stadium (old)
+    "NYC01": {"city": "East Rutherford", "state": "NJ"},  # MetLife Stadium
+    # AFC North
+    "BAL00": {"city": "Baltimore", "state": "MD"},  # M&T Bank Stadium
+    "CIN00": {"city": "Cincinnati", "state": "OH"},  # Paycor Stadium
+    "CLE00": {"city": "Cleveland", "state": "OH"},  # Cleveland Browns Stadium
+    "PIT00": {"city": "Pittsburgh", "state": "PA"},  # Acrisure Stadium/Heinz Field
+    # AFC South
+    "HOU00": {"city": "Houston", "state": "TX"},  # NRG Stadium/Reliant Stadium
+    "IND00": {"city": "Indianapolis", "state": "IN"},  # Lucas Oil Stadium
+    "IND99": {"city": "Indianapolis", "state": "IN"},  # RCA Dome (old)
+    "JAX00": {"city": "Jacksonville", "state": "FL"},  # EverBank Stadium
+    "NAS00": {"city": "Nashville", "state": "TN"},  # Nissan Stadium/LP Field
+    # AFC West
+    "DEN00": {"city": "Denver", "state": "CO"},  # Empower Field at Mile High
+    "KAN00": {"city": "Kansas City", "state": "MO"},  # Arrowhead Stadium
+    "LAX01": {"city": "Inglewood", "state": "CA"},  # SoFi Stadium
+    "LAX97": {"city": "Carson", "state": "CA"},  # StubHub Center (Chargers temp)
+    "LAX99": {"city": "Los Angeles", "state": "CA"},  # LA Memorial Coliseum (Rams temp)
+    "OAK00": {"city": "Oakland", "state": "CA"},  # Oakland Coliseum (historical)
+    "SDG00": {"city": "San Diego", "state": "CA"},  # Qualcomm Stadium (historical)
+    "VEG00": {"city": "Las Vegas", "state": "NV"},  # Allegiant Stadium
+    # NFC East
+    "DAL00": {"city": "Arlington", "state": "TX"},  # AT&T Stadium/Cowboys Stadium
+    "DAL99": {"city": "Irving", "state": "TX"},  # Texas Stadium (old)
+    "PHI00": {"city": "Philadelphia", "state": "PA"},  # Lincoln Financial Field
+    "WAS00": {"city": "Landover", "state": "MD"},  # Northwest Stadium/FedEx Field
+    # NFC North
+    "CHI98": {"city": "Chicago", "state": "IL"},  # Soldier Field
+    "DET00": {"city": "Detroit", "state": "MI"},  # Ford Field
+    "GNB00": {"city": "Green Bay", "state": "WI"},  # Lambeau Field
+    "MIN00": {"city": "Minneapolis", "state": "MN"},  # Metrodome/Mall of America Field
+    "MIN01": {"city": "Minneapolis", "state": "MN"},  # U.S. Bank Stadium
+    "MIN98": {"city": "Minneapolis", "state": "MN"},  # TCF Bank Stadium (temp)
+    # NFC South
+    "ATL00": {"city": "Atlanta", "state": "GA"},  # Georgia Dome (old)
+    "ATL97": {"city": "Atlanta", "state": "GA"},  # Mercedes-Benz Stadium
+    "BRG00": {"city": "Baton Rouge", "state": "LA"},  # Tiger Stadium LSU (Katrina)
+    "CAR00": {"city": "Charlotte", "state": "NC"},  # Bank of America Stadium
+    "NOR00": {"city": "New Orleans", "state": "LA"},  # Caesars Superdome
+    "SAN00": {"city": "San Antonio", "state": "TX"},  # Alamo Dome (neutral/Katrina)
+    "TAM00": {"city": "Tampa", "state": "FL"},  # Raymond James Stadium
+    # NFC West
+    "PHO00": {"city": "Glendale", "state": "AZ"},  # State Farm Stadium
+    "PHO99": {"city": "Tempe", "state": "AZ"},  # Sun Devil Stadium (old)
+    "SEA00": {"city": "Seattle", "state": "WA"},  # Lumen Field
+    "SFO00": {"city": "San Francisco", "state": "CA"},  # Candlestick Park (old)
+    "SFO01": {"city": "Santa Clara", "state": "CA"},  # Levi's Stadium
+    "STL00": {"city": "St. Louis", "state": "MO"},  # The Dome at America's Center
+    # International Venues
+    "FRA00": {"city": "Frankfurt", "state": "DE"},  # Deutsche Bank Park
+    "GER00": {"city": "Munich", "state": "DE"},  # Allianz Arena
+    "LON00": {"city": "London", "state": "UK"},  # Wembley Stadium
+    "LON01": {"city": "London", "state": "UK"},  # Twickenham Stadium
+    "LON02": {"city": "London", "state": "UK"},  # Tottenham Hotspur Stadium
+    "MEX00": {"city": "Mexico City", "state": "MX"},  # Estadio Azteca
+    "SAO00": {"city": "São Paulo", "state": "BR"},  # Arena Corinthians
+}
+
+
+# ============================================================================
+# Polars Data Collection Column Definitions
+# ============================================================================
+
+# Metadata columns (24 total) - includes game info, teams, venue, and conditions
+POLARS_METADATA_COLUMNS = [
+    "game_id",
+    "season",
+    "week",
+    "game_type",  # REG, WC, DIV, CON, SB
+    "date",
+    "away_abbr",
+    "home_abbr",
+    "away_qb",
+    "home_qb",
+    "away_rest",
+    "home_rest",
+    "neutral",
+    "division",
+]
+
+# ELO rating columns (per team) - these get prefixed with away_/home_
+POLARS_ELO_COLUMNS = [
+    "elo_pre",
+    "qb_value_pre",
+    "qb_elo_pre",
+]
+
+# TeamRankings rating columns (per team) - these get prefixed with away_/home_
+POLARS_TR_RATINGS = [
+    "predictive_rating",
+    "home_rating",
+    "away_rating",
+    "strength_of_schedule_rating",
+    "future_sos_rating",
+    "last_5_games_rating",
+    "last_10_games_rating",
+    "in_division_rating",
+    "non_division_rating",
+    "luck_rating",
+]
+
+# TeamRankings stat columns (per team) - these get prefixed with away_/home_
+POLARS_TR_STATS = [
+    "points_scored_per_game",
+    "average_scoring_margin",
+    "yards_per_point_margin",
+    "points_per_play_margin",
+    "third_down_pct",
+    "opponent_third_down_pct",
+    "fourth_down_pct",
+    "opponent_fourth_down_pct",
+    "red_zone_td_pct",
+    "opponent_red_zone_td_pct",
+    "turnover_margin_per_game",
+    "penalty_yards_per_game",
+    "opponent_penalty_yards_per_game",
+    "penalty_yards_per_penalty",
+    "opponent_penalty_yards_per_penalty",
+]
+
+# nflreadpy stats to use (per team) - these get prefixed with away_/home_
+POLARS_NFLREADPY_STATS = [
+    # Passing offense
+    "pass_completions",
+    "pass_attempts",
+    "pass_yards",
+    "pass_touchdowns",
+    "interceptions_thrown",
+    "times_sacked",
+    "passing_epa",
+    "passing_cpoe",
+    # Rushing offense
+    "rush_attempts",
+    "rush_yards",
+    "rush_touchdowns",
+    # Receiving (team level)
+    "receptions",
+    "receiving_touchdowns",
+    # Combined stats
+    "fumbles",  # Combined: sack + rushing + receiving fumbles
+    "fumbles_lost",  # Combined: sack + rushing + receiving fumbles_lost
+    "first_downs",  # Combined: passing + rushing first_downs (not receiving)
+    "2pt_conversions",  # Combined: passing + rushing + receiving 2pt_conversions
+    "turnover_margin",  # Computed: (def_interceptions + fumble_recovery_opp) - (INT + fumbles_lost)
+    "total_yards",  # Computed: pass_yards + rush_yards - sack_yards_lost
+    # Defense stats
+    "def_tackles_for_loss",
+    "def_fumbles_forced",
+    "def_sacks",
+    "def_qb_hits",
+    "def_interceptions",
+    "def_pass_defended",
+    "def_tds",
+    "def_fumbles",
+    "def_safeties",
+    "fumble_recoveries",  # Combined: fumble_recovery_own + fumble_recovery_opp
+    "fumble_recovery_tds",
+    # Penalties
+    "penalties",
+    "penalty_yards",
+    # Special teams
+    "special_teams_tds",
+    # Scoring (from schedule)
+    "points_scored",  # Team's score for the game
+    "points_allowed",  # Opponent's score for the game
+    "scoring_margin",  # Computed: points_scored - points_allowed
+    # Derived ratio metrics (computed during aggregation)
+    "yards_per_point",  # Computed: total_yards / points_scored
+    "opponent_yards_per_point",  # Computed: opponent_total_yards / points_allowed
+    # Note: penalty_yards_per_penalty is in TR_STATS, computed there or from TR scrapes
+]
+
+# Lines/Odds columns (5 total)
+POLARS_LINES_COLUMNS = [
+    "total_line",
+    "home_spread",
+    "away_spread",
+    "away_moneyline",
+    "home_moneyline",
+]
+
+# Result columns (2 total)
+POLARS_RESULT_COLUMNS = [
+    "away_score",
+    "home_score",
+]
+
+# Regression factor for week-1 stats toward league mean
+WEEK1_REGRESSION_FACTOR = 1 / 3
 
 # Active quarterback IDs: names, draft years, and numbers for player tracking
 ACTIVE_QB_IDS = {

@@ -28,19 +28,23 @@ Example:
     >>> agg_stats = polars_utils.aggregate_team_stats_to_week(team_stats, week=10, season=2024)
 """
 
-import math
 import os
-import re
 from typing import Optional
 
 import nflreadpy as nfl
 import polars as pl
-import requests
-from bs4 import BeautifulSoup
 from polars.datatypes import DataType
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.scraping_utils import (
+    get_current_nfl_week,
+    get_week_date,
+    normalize_team_column,
+    save_team_rankings_week,
+    scrape_team_rankings_for_week,
+    update_season_team_rankings,
+)
 
 NUMERIC_DTYPES = {
     pl.Int8,
@@ -59,20 +63,6 @@ NUMERIC_DTYPES = {
 def _is_numeric_dtype(dtype: DataType) -> bool:
     """Return True if dtype is numeric."""
     return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES
-
-
-def normalize_team_column(df: pl.DataFrame, column: str) -> pl.DataFrame:
-    """
-    Normalize team abbreviations in a column to canonical form.
-
-    Args:
-        df: Polars DataFrame
-        column: Name of the column containing team abbreviations
-
-    Returns:
-        DataFrame with normalized team abbreviations
-    """
-    return df.with_columns(pl.col(column).replace(constants.ALIAS_TO_CANONICAL).alias(column))
 
 
 def load_schedule(seasons: list[int]) -> pl.DataFrame:
@@ -194,10 +184,6 @@ def load_team_stats(seasons: list[int], regular_season_only: bool = True) -> pl.
 
     # Combine stats as specified
     team_stats_df = combine_stats(team_stats_df)
-
-    # Add per-game opponent stats (opponent's stats in each game)
-    # This allows aggregating "stats of teams this team has faced"
-    team_stats_df = add_per_game_opponent_stats(team_stats_df)
 
     return team_stats_df
 
@@ -689,32 +675,189 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
     return latest_elo
 
 
-def load_team_rankings(season: int) -> pl.DataFrame:
+def _get_required_tr_columns() -> set[str]:
+    """Get the set of required TeamRankings columns."""
+    required = {"team_abbr", "week"}
+    required.update(constants.POLARS_TR_RATINGS)
+    required.update(constants.POLARS_TR_STATS)
+    return required
+
+
+def _validate_tr_dataframe(tr_df: pl.DataFrame) -> tuple[bool, list[str]]:
     """
-    Load TeamRankings data for a season from CSV files.
+    Validate that a TeamRankings DataFrame has all required columns.
+
+    Args:
+        tr_df: TeamRankings DataFrame to validate
+
+    Returns:
+        Tuple of (is_valid, list of missing columns)
+    """
+    if tr_df.height == 0:
+        return False, list(_get_required_tr_columns())
+
+    required_cols = _get_required_tr_columns()
+    actual_cols = set(tr_df.columns)
+    missing = required_cols - actual_cols
+
+    return len(missing) == 0, list(missing)
+
+
+def load_team_rankings(
+    season: int,
+    current_season: Optional[int] = None,
+    current_week: Optional[int] = None,
+) -> pl.DataFrame:
+    """
+    Load TeamRankings data for a season, scraping fresh data for current/future weeks.
+
+    For historical weeks (past seasons or completed weeks of current season), this loads
+    from cached CSV files. For current week or future weeks of the current season, it
+    scrapes fresh data from TeamRankings.com.
+
+    If cached data is missing required columns, it will be re-scraped.
 
     Args:
         season: Season year to load
+        current_season: Current NFL season (if None, will be determined)
+        current_week: Current NFL week (if None, will be determined)
 
     Returns:
         Polars DataFrame with TeamRankings ratings/stats per team per week
     """
-    tr_path = os.path.join(constants.DATA_PATH, str(season), f"{season}_team_rankings.csv")
+    # Determine current season/week if not provided
+    if current_season is None or current_week is None:
+        current_season, current_week = get_current_nfl_week()
 
-    if not os.path.exists(tr_path):
-        log.debug("TeamRankings file not found: %s", tr_path)
-        return pl.DataFrame()
+    season_dir = os.path.join(constants.DATA_PATH, str(season))
+    os.makedirs(season_dir, exist_ok=True)
 
-    log.debug("Loading TeamRankings for season %d", season)
-    tr_df = pl.read_csv(tr_path)
+    # Determine weeks to load for this season
+    regular_season_weeks = constants.get_regular_season_weeks(season)
+    if season < current_season:
+        # Past season: load weeks 1 through end of regular season
+        weeks_to_load = list(range(1, regular_season_weeks + 1))
+    else:
+        # Current season: load weeks 1 through current week + future weeks
+        max_week = regular_season_weeks + 4  # Include playoff weeks
+        weeks_to_load = list(range(1, min(current_week, max_week) + 1))
 
+    existing_data = []
+    weeks_to_scrape = []
+
+    # Check each week file for validity
+    for week in weeks_to_load:
+        week_file = os.path.join(season_dir, f"{season}_week_{week:02d}_team_rankings.csv")
+
+        if os.path.exists(week_file):
+            week_df = pl.read_csv(week_file)
+            week_df = _normalize_tr_dataframe(week_df)
+
+            is_valid, missing_cols = _validate_tr_dataframe(week_df)
+            if is_valid:
+                existing_data.append(week_df)
+            else:
+                log.info(
+                    "Week %d TR file missing columns %s, will re-scrape",
+                    week,
+                    missing_cols[:5],
+                )
+                weeks_to_scrape.append(week)
+        else:
+            # Only scrape historical weeks for past seasons, not for current season
+            if season < current_season:
+                weeks_to_scrape.append(week)
+            elif week <= current_week:
+                weeks_to_scrape.append(week)
+            # Future weeks of current season will get current week's data copied
+
+    # Scrape missing/invalid weeks
+    if weeks_to_scrape:
+        log.info(
+            "Scraping %d weeks of TR data for season %d: %s",
+            len(weeks_to_scrape),
+            season,
+            weeks_to_scrape[:5],
+        )
+        for week in weeks_to_scrape:
+            week_date = get_week_date(season, week)
+            scraped_df = scrape_team_rankings_for_week(week, week_date)
+
+            if scraped_df.height > 0:
+                save_team_rankings_week(scraped_df, season, week)
+                existing_data.append(scraped_df)
+            else:
+                log.warning("Failed to scrape TR data for season %d week %d", season, week)
+
+        # Update the consolidated season file
+        update_season_team_rankings(season)
+
+    # For current season, copy current week data to future weeks if needed
+    if season == current_season and existing_data:
+        # Get the latest scraped data (current week)
+        current_week_data = None
+        for df in existing_data:
+            if "week" in df.columns:
+                max_week_in_df = df.select(pl.col("week").max()).item()
+                if max_week_in_df == current_week:
+                    current_week_data = df.filter(pl.col("week") == current_week)
+                    break
+
+        if current_week_data is not None and current_week_data.height > 0:
+            max_week = regular_season_weeks + 4
+            for future_week in range(current_week + 1, max_week + 1):
+                future_file = os.path.join(
+                    season_dir, f"{season}_week_{future_week:02d}_team_rankings.csv"
+                )
+                # Only create future week files if they don't exist or are invalid
+                needs_future = False
+                if not os.path.exists(future_file):
+                    needs_future = True
+                else:
+                    future_df = pl.read_csv(future_file)
+                    future_df = _normalize_tr_dataframe(future_df)
+                    is_valid, _ = _validate_tr_dataframe(future_df)
+                    if not is_valid:
+                        needs_future = True
+
+                if needs_future:
+                    future_data = current_week_data.with_columns(pl.lit(future_week).alias("week"))
+                    save_team_rankings_week(future_data, season, future_week)
+                    existing_data.append(future_data)
+
+    # Combine all data
+    if existing_data:
+        # Cast week column to consistent type before concat
+        existing_data = [df.cast({"week": pl.Int64}) for df in existing_data]
+        combined = pl.concat(existing_data, how="diagonal")
+        # Remove duplicates by keeping latest data for each team/week
+        combined = combined.unique(subset=["team_abbr", "week"], keep="last")
+        return combined.sort(["week", "team_abbr"])
+
+    log.debug("No TeamRankings data found for season %d", season)
+    return pl.DataFrame()
+
+
+def _normalize_tr_dataframe(tr_df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Normalize a TeamRankings DataFrame.
+
+    Args:
+        tr_df: Raw TeamRankings DataFrame
+
+    Returns:
+        Normalized DataFrame
+    """
     # Drop unnamed index column if present
     if "" in tr_df.columns:
         tr_df = tr_df.drop("")
 
-    # Rename 'abbr' to 'team_abbr' for consistency
-    if "abbr" in tr_df.columns:
+    # Rename 'abbr' to 'team_abbr' for consistency (only if abbr exists and team_abbr doesn't)
+    if "abbr" in tr_df.columns and "team_abbr" not in tr_df.columns:
         tr_df = tr_df.rename({"abbr": "team_abbr"})
+    elif "abbr" in tr_df.columns and "team_abbr" in tr_df.columns:
+        # If both exist, drop abbr
+        tr_df = tr_df.drop("abbr")
 
     # Normalize team abbreviations
     if "team_abbr" in tr_df.columns:
@@ -828,6 +971,16 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
     These metrics require division and should be computed after averaging
     raw stats to avoid ratio-of-averages issues.
 
+    Metrics computed:
+        - yards_per_point: total_yards / points_scored
+        - opponent_yards_per_point: opponent_total_yards / points_allowed
+        - yards_per_point_margin: yards_per_point - opponent_yards_per_point
+        - points_per_play: points_scored / (pass_attempts + rush_attempts + times_sacked)
+        - opponent_points_per_play: points_allowed / opponent_total_plays
+        - points_per_play_margin: points_per_play - opponent_points_per_play
+        - penalty_yards_per_penalty: penalty_yards / penalties
+        - opponent_penalty_yards_per_penalty: opponent equivalent
+
     Args:
         agg_df: DataFrame with averaged team statistics
 
@@ -836,6 +989,7 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
     """
     derived_cols = []
 
+    # --- Yards per point metrics ---
     # Yards per point = total_yards / points_scored
     if "total_yards" in agg_df.columns and "points_scored" in agg_df.columns:
         derived_cols.append(
@@ -854,6 +1008,63 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
             .alias("opponent_yards_per_point")
         )
 
+    # Apply yards_per_point metrics first so we can calculate margin
+    if derived_cols:
+        agg_df = agg_df.with_columns(derived_cols)
+        derived_cols = []
+
+    # Yards per point margin = yards_per_point - opponent_yards_per_point
+    if "yards_per_point" in agg_df.columns and "opponent_yards_per_point" in agg_df.columns:
+        derived_cols.append(
+            (pl.col("yards_per_point") - pl.col("opponent_yards_per_point")).alias(
+                "yards_per_point_margin"
+            )
+        )
+
+    # --- Points per play metrics ---
+    # Total plays = pass_attempts + rush_attempts + times_sacked
+    has_plays = all(c in agg_df.columns for c in ["pass_attempts", "rush_attempts", "times_sacked"])
+    if has_plays and "points_scored" in agg_df.columns:
+        total_plays = pl.col("pass_attempts") + pl.col("rush_attempts") + pl.col("times_sacked")
+        derived_cols.append(
+            pl.when(total_plays > 0)
+            .then(pl.col("points_scored") / total_plays)
+            .otherwise(pl.lit(0.0))
+            .alias("points_per_play")
+        )
+
+    # Opponent points per play
+    has_opp_plays = all(
+        c in agg_df.columns
+        for c in ["opponent_pass_attempts", "opponent_rush_attempts", "opponent_times_sacked"]
+    )
+    if has_opp_plays and "points_allowed" in agg_df.columns:
+        opp_total_plays = (
+            pl.col("opponent_pass_attempts")
+            + pl.col("opponent_rush_attempts")
+            + pl.col("opponent_times_sacked")
+        )
+        derived_cols.append(
+            pl.when(opp_total_plays > 0)
+            .then(pl.col("points_allowed") / opp_total_plays)
+            .otherwise(pl.lit(0.0))
+            .alias("opponent_points_per_play")
+        )
+
+    # Apply points_per_play metrics first so we can calculate margin
+    if derived_cols:
+        agg_df = agg_df.with_columns(derived_cols)
+        derived_cols = []
+
+    # Points per play margin
+    if "points_per_play" in agg_df.columns and "opponent_points_per_play" in agg_df.columns:
+        derived_cols.append(
+            (pl.col("points_per_play") - pl.col("opponent_points_per_play")).alias(
+                "points_per_play_margin"
+            )
+        )
+
+    # --- Penalty efficiency metrics ---
     # Penalty yards per penalty = penalty_yards / penalties
     if "penalty_yards" in agg_df.columns and "penalties" in agg_df.columns:
         derived_cols.append(
@@ -1283,600 +1494,3 @@ def select_final_columns(df: pl.DataFrame) -> pl.DataFrame:
         log.debug("Missing expected columns: %s", missing_cols[:10])
 
     return df.select(available_cols)
-
-
-def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
-    """
-    Convert an NFL point spread to a moneyline, including the effect of vig.
-
-    Uses the normal distribution to model score differentials and convert
-    spreads to implied probabilities, then to moneyline odds.
-
-    Args:
-        spread: The point spread (negative for favorites, positive for underdogs)
-        vig: The vig percentage as a decimal (default is 0.05 for 5%)
-
-    Returns:
-        The moneyline corresponding to the given spread
-    """
-    # Use the standard deviation of NFL score differences
-    std_dev = constants.SCORE_DIFF_STD_DEV
-
-    # Calculate the implied probability using normal CDF
-    # This is equivalent to: stats.norm.cdf(-spread, 0, std_dev)
-    z_score = -spread / std_dev
-    implied_probability = 0.5 * (1 + math.erf(z_score / math.sqrt(2)))
-
-    # Scale probabilities to include the vig
-    adjusted_implied_probability = implied_probability * (1 + vig)
-
-    # Clamp probability to avoid division by zero
-    adjusted_implied_probability = max(0.01, min(0.99, adjusted_implied_probability))
-
-    # Convert probabilities back to moneyline odds
-    if spread < 0:
-        # Favorite moneyline (negative)
-        moneyline = -100 * (adjusted_implied_probability / (1 - adjusted_implied_probability))
-    elif spread > 0:
-        # Underdog moneyline (positive)
-        moneyline = 100 * ((1 - adjusted_implied_probability) / adjusted_implied_probability)
-    else:
-        # Pick'em (spread = 0): slight underdog due to vig
-        moneyline = 100 * ((1 - adjusted_implied_probability) / adjusted_implied_probability)
-
-    return int(round(moneyline))
-
-
-def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Fill in missing moneylines by calculating them from spreads.
-
-    For games where moneyline is missing but spread is available,
-    calculates the moneyline using spread_to_moneyline conversion.
-
-    Args:
-        df: DataFrame with home_spread, away_spread, home_moneyline, away_moneyline columns
-
-    Returns:
-        DataFrame with moneylines filled in where possible
-    """
-    if "home_spread" not in df.columns:
-        return df
-
-    # Check if we have missing moneylines but valid spreads
-    has_home_ml = "home_moneyline" in df.columns
-    has_away_ml = "away_moneyline" in df.columns
-
-    # For rows with spread but missing moneyline, calculate it
-    if has_home_ml and has_away_ml:
-        # Count missing moneylines with valid spreads
-        missing_count = df.filter(
-            pl.col("home_spread").is_not_null()
-            & (pl.col("home_moneyline").is_null() | pl.col("away_moneyline").is_null())
-        ).height
-
-        if missing_count > 0:
-            log.debug("Calculating %d missing moneylines from spreads", missing_count)
-
-            # Calculate moneylines for all rows, then fill only where missing
-            df = df.with_columns(
-                [
-                    pl.when(
-                        pl.col("home_moneyline").is_null() & pl.col("home_spread").is_not_null()
-                    )
-                    .then(
-                        pl.col("home_spread").map_elements(
-                            lambda s: spread_to_moneyline(s) if s is not None else None,
-                            return_dtype=pl.Int64,
-                        )
-                    )
-                    .otherwise(pl.col("home_moneyline"))
-                    .alias("home_moneyline"),
-                    pl.when(
-                        pl.col("away_moneyline").is_null() & pl.col("away_spread").is_not_null()
-                    )
-                    .then(
-                        pl.col("away_spread").map_elements(
-                            lambda s: spread_to_moneyline(s) if s is not None else None,
-                            return_dtype=pl.Int64,
-                        )
-                    )
-                    .otherwise(pl.col("away_moneyline"))
-                    .alias("away_moneyline"),
-                ]
-            )
-
-    return df
-
-
-def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Get the most recent starting QB for each team from ELO data.
-
-    Uses the qb_elos.csv data to find the most recent game where each team
-    had a recorded starting QB.
-
-    Args:
-        elo_df: Raw ELO DataFrame with qb1, qb2, team1, team2 columns
-
-    Returns:
-        DataFrame with columns: team_abbr, qb_name, qb_value_pre, qb_elo_pre
-    """
-    required_cols = ["qb1", "qb2", "team1", "team2"]
-    if not all(c in elo_df.columns for c in required_cols):
-        return pl.DataFrame()
-
-    # Normalize team abbreviations if needed
-    elo_df = elo_df.with_columns(
-        [
-            pl.col("team1").replace(constants.ALIAS_TO_CANONICAL).alias("team1"),
-            pl.col("team2").replace(constants.ALIAS_TO_CANONICAL).alias("team2"),
-        ]
-    )
-
-    # Get home team QBs (team1 = home, qb1 = home QB)
-    home_qbs = elo_df.filter(pl.col("qb1").is_not_null() & (pl.col("qb1") != "")).select(
-        [
-            pl.col("date"),
-            pl.col("team1").alias("team_abbr"),
-            pl.col("qb1").alias("qb_name"),
-            pl.col("qb1_value_pre").alias("qb_value_pre"),
-            pl.col("qbelo1_pre").alias("qb_elo_pre"),
-        ]
-    )
-
-    # Get away team QBs (team2 = away, qb2 = away QB)
-    away_qbs = elo_df.filter(pl.col("qb2").is_not_null() & (pl.col("qb2") != "")).select(
-        [
-            pl.col("date"),
-            pl.col("team2").alias("team_abbr"),
-            pl.col("qb2").alias("qb_name"),
-            pl.col("qb2_value_pre").alias("qb_value_pre"),
-            pl.col("qbelo2_pre").alias("qb_elo_pre"),
-        ]
-    )
-
-    # Combine and sort by date descending
-    all_qbs = pl.concat([home_qbs, away_qbs])
-    all_qbs = all_qbs.sort("date", descending=True)
-
-    # Get most recent QB per team
-    latest_qbs = all_qbs.group_by("team_abbr").agg(
-        [
-            pl.col("qb_name").first(),
-            pl.col("qb_value_pre").first(),
-            pl.col("qb_elo_pre").first(),
-        ]
-    )
-
-    return latest_qbs
-
-
-def get_qb_elo_by_name(elo_df: pl.DataFrame, qb_name: str) -> dict:
-    """
-    Get the most recent ELO values for a specific QB by name.
-
-    Searches both qb1 and qb2 columns to find the most recent game
-    the QB started, then returns their pre-game ELO values.
-
-    Args:
-        elo_df: Full ELO DataFrame
-        qb_name: Name of the QB to search for
-
-    Returns:
-        Dict with qb_value_pre and qb_elo_pre, or empty dict if not found
-    """
-    if elo_df.height == 0 or not qb_name:
-        return {}
-
-    # Search in qb1 column (home QB)
-    qb1_games = elo_df.filter(pl.col("qb1") == qb_name)
-    if qb1_games.height > 0:
-        # Sort by date descending, take first
-        latest = qb1_games.sort("date", descending=True).head(1)
-        qb_value = latest.select("qb1_value_pre").item()
-        qb_elo = latest.select("qbelo1_pre").item()
-        return {"qb_value_pre": qb_value, "qb_elo_pre": qb_elo}
-
-    # Search in qb2 column (away QB)
-    qb2_games = elo_df.filter(pl.col("qb2") == qb_name)
-    if qb2_games.height > 0:
-        latest = qb2_games.sort("date", descending=True).head(1)
-        qb_value = latest.select("qb2_value_pre").item()
-        qb_elo = latest.select("qbelo2_pre").item()
-        return {"qb_value_pre": qb_value, "qb_elo_pre": qb_elo}
-
-    return {}
-
-
-def fill_future_qb_data(
-    df: pl.DataFrame,
-    elo_df: pl.DataFrame,
-) -> pl.DataFrame:
-    """
-    Fill in QB data for future games using each team's most recent starter.
-
-    For games where away_qb/home_qb are null, looks up the most recent QB
-    for each team from the ELO data and fills in their name and ELO values.
-
-    Args:
-        df: Combined data DataFrame with potential null QBs
-        elo_df: Raw ELO DataFrame (to look up QB-specific ELO values)
-
-    Returns:
-        DataFrame with QB data filled in for future games
-    """
-    required_cols = ["away_abbr", "home_abbr"]
-    if not all(c in df.columns for c in required_cols):
-        return df
-
-    # Check if away_qb column exists; if not, all games need QB data
-    has_away_qb = "away_qb" in df.columns
-    has_home_qb = "home_qb" in df.columns
-
-    if has_away_qb:
-        null_away = df.filter(pl.col("away_qb").is_null())
-    else:
-        null_away = df  # All rows need QB data
-
-    if has_home_qb:
-        null_home = df.filter(pl.col("home_qb").is_null())
-    else:
-        null_home = df
-
-    if null_away.height == 0 and null_home.height == 0:
-        return df
-
-    log.debug(
-        "Filling QB data for %d away nulls and %d home nulls",
-        null_away.height,
-        null_home.height,
-    )
-
-    # Get latest QB per team from ELO data
-    latest_qbs = get_latest_qb_by_team(elo_df)
-
-    if latest_qbs.height == 0:
-        return df
-
-    # Build lookup dict for QBs
-    qb_lookup = {}
-    for row in latest_qbs.iter_rows(named=True):
-        team = row["team_abbr"]
-        qb_lookup[team] = {
-            "qb_name": row["qb_name"],
-            "qb_value_pre": row["qb_value_pre"],
-            "qb_elo_pre": row["qb_elo_pre"],
-        }
-
-    # Fill in away QB data
-    if null_away.height > 0:
-        new_cols = [
-            pl.when(pl.col("away_qb").is_null() if has_away_qb else pl.lit(True))
-            .then(
-                pl.col("away_abbr").map_elements(
-                    lambda t: qb_lookup.get(t, {}).get("qb_name"), return_dtype=pl.Utf8
-                )
-            )
-            .otherwise(pl.col("away_qb") if has_away_qb else pl.lit(None))
-            .alias("away_qb"),
-        ]
-        # Only fill ELO values if columns exist and are null
-        if "away_qb_value_pre" in df.columns:
-            new_cols.append(
-                pl.when(pl.col("away_qb_value_pre").is_null())
-                .then(
-                    pl.col("away_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_value_pre"), return_dtype=pl.Float64
-                    )
-                )
-                .otherwise(pl.col("away_qb_value_pre"))
-                .alias("away_qb_value_pre")
-            )
-        if "away_qb_elo_pre" in df.columns:
-            new_cols.append(
-                pl.when(pl.col("away_qb_elo_pre").is_null())
-                .then(
-                    pl.col("away_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_elo_pre"), return_dtype=pl.Float64
-                    )
-                )
-                .otherwise(pl.col("away_qb_elo_pre"))
-                .alias("away_qb_elo_pre")
-            )
-        df = df.with_columns(new_cols)
-
-    # Fill in home QB data
-    if null_home.height > 0:
-        new_cols = [
-            pl.when(pl.col("home_qb").is_null() if has_home_qb else pl.lit(True))
-            .then(
-                pl.col("home_abbr").map_elements(
-                    lambda t: qb_lookup.get(t, {}).get("qb_name"), return_dtype=pl.Utf8
-                )
-            )
-            .otherwise(pl.col("home_qb") if has_home_qb else pl.lit(None))
-            .alias("home_qb"),
-        ]
-        if "home_qb_value_pre" in df.columns:
-            new_cols.append(
-                pl.when(pl.col("home_qb_value_pre").is_null())
-                .then(
-                    pl.col("home_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_value_pre"), return_dtype=pl.Float64
-                    )
-                )
-                .otherwise(pl.col("home_qb_value_pre"))
-                .alias("home_qb_value_pre")
-            )
-        if "home_qb_elo_pre" in df.columns:
-            new_cols.append(
-                pl.when(pl.col("home_qb_elo_pre").is_null())
-                .then(
-                    pl.col("home_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_elo_pre"), return_dtype=pl.Float64
-                    )
-                )
-                .otherwise(pl.col("home_qb_elo_pre"))
-                .alias("home_qb_elo_pre")
-            )
-        df = df.with_columns(new_cols)
-
-    return df
-
-
-def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
-    """
-    Scrape weekly spreads from SurvivorGrid.com for future games.
-
-    The site provides spreads for remaining weeks in the current NFL season.
-    Each team row shows the team name and spreads for upcoming weeks.
-
-    Returns:
-        Dictionary mapping team abbreviation to dict of week -> spread.
-        Example: {"BUF": {16: -10.5, 17: -3.0, 18: -14.0}, ...}
-        Returns empty dict if scraping fails.
-    """
-    try:
-        response = requests.get(constants.SURVIVOR_GRID_URL, timeout=10)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        log.warning("Failed to fetch SurvivorGrid data: %s", e)
-        return {}
-
-    soup = BeautifulSoup(response.text, "lxml")
-
-    # Find the main data table
-    tables = soup.find_all("table")
-    if not tables:
-        log.warning("No tables found on SurvivorGrid page")
-        return {}
-
-    # The main grid table is typically the first/largest table
-    data_table = None
-    for table in tables:
-        rows = table.find_all("tr")
-        if len(rows) >= 32:  # Should have all 32 teams
-            data_table = table
-            break
-
-    if not data_table:
-        log.warning("Could not find SurvivorGrid data table")
-        return {}
-
-    # Parse header row to get week numbers
-    header_row = data_table.find("tr")
-    if not header_row:
-        return {}
-
-    headers = []
-    for th in header_row.find_all(["th", "td"]):
-        text = th.get_text(strip=True)
-        headers.append(text)
-
-    # Find which columns contain week numbers and which has Team
-    week_columns = {}  # index -> week number
-    team_col_idx = None
-    for i, header in enumerate(headers):
-        if header.isdigit():
-            week_columns[i] = int(header)
-        elif header == "Team":
-            team_col_idx = i
-
-    if not week_columns:
-        log.warning("No week columns found in SurvivorGrid table")
-        return {}
-
-    if team_col_idx is None:
-        log.warning("No Team column found in SurvivorGrid table")
-        return {}
-
-    log.debug("Found SurvivorGrid week columns: %s", list(week_columns.values()))
-
-    # Parse team rows
-    spreads = {}
-    rows = data_table.find_all("tr")[1:]  # Skip header
-
-    for row in rows:
-        cells = row.find_all(["th", "td"])
-        if len(cells) <= team_col_idx:
-            continue
-
-        # Get team abbreviation from the Team column
-        team_cell = cells[team_col_idx].get_text(strip=True)
-
-        # Extract team abbr (may have record in parentheses like "BUF(10-4)")
-        if "(" in team_cell:
-            team_abbr_raw = team_cell.split("(")[0].strip()
-        else:
-            team_abbr_raw = team_cell.strip()
-
-        # Normalize to canonical abbreviation
-        team_abbr = constants.normalize_team_abbr(team_abbr_raw)
-        if team_abbr not in constants.TEAM_ABBR:
-            continue  # Not a valid team
-
-        team_spreads = {}
-
-        for col_idx, week in week_columns.items():
-            if col_idx >= len(cells):
-                continue
-
-            cell = cells[col_idx]
-            # Get cell text - format is like "@CLE-10.5" or "LV-14" or "@KC+3.5"
-            cell_text = cell.get_text(strip=True)
-
-            # Skip bye weeks and empty cells
-            if not cell_text or cell_text == "BYE":
-                continue
-
-            # Extract spread from cell text
-            # The spread is at the end, after the opponent indicator
-            # Patterns: "@CLE-10.5", "LV+3", "@KC-7", "PK"
-            # Look for spread pattern: optional sign followed by number or PK
-            match = re.search(r"([+-]?\d+\.?\d*|PK)$", cell_text)
-            if not match:
-                continue
-
-            spread_text = match.group(1)
-            if spread_text == "PK":
-                team_spreads[week] = 0.0
-            else:
-                try:
-                    spread_val = float(spread_text)
-                    team_spreads[week] = spread_val
-                except ValueError:
-                    continue
-
-        if team_spreads:
-            spreads[team_abbr] = team_spreads
-
-    log.info("Scraped SurvivorGrid spreads for %d teams", len(spreads))
-    return spreads
-
-
-def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Fill in lines (spreads, moneylines, totals) for future games using SurvivorGrid data.
-
-    Scrapes current spreads from SurvivorGrid.com and applies them to future games
-    that don't have lines data. Also calculates moneylines from spreads and uses
-    the historical average for total lines.
-
-    Args:
-        df: DataFrame with games, some of which may be missing lines data
-        current_week: Current week number (auto-detected from schedule if not provided)
-
-    Returns:
-        DataFrame with lines filled in for future games
-    """
-    # Only process if we have the required columns
-    required_cols = ["week", "away_abbr", "home_abbr"]
-    if not all(c in df.columns for c in required_cols):
-        return df
-
-    # Identify future games (no score data)
-    if "away_score" in df.columns:
-        future_mask = pl.col("away_score").is_null()
-    else:
-        # Fall back to checking if lines are missing
-        if "home_spread" in df.columns:
-            future_mask = pl.col("home_spread").is_null()
-        else:
-            return df
-
-    future_games = df.filter(future_mask)
-    if future_games.height == 0:
-        return df
-
-    log.debug("Found %d future games to fill lines for", future_games.height)
-
-    # Scrape current spreads
-    spreads_data = scrape_survivor_grid_spreads()
-
-    if not spreads_data:
-        log.warning("No spreads data available from SurvivorGrid")
-        return df
-
-    # Build lookup function for home spread
-    # SurvivorGrid shows spread from perspective of the team listed
-    # Positive = underdog, Negative = favorite
-    # We need to convert to home_spread perspective
-    def get_home_spread(week: int, home_abbr: str, away_abbr: str) -> float | None:
-        home_spread = spreads_data.get(home_abbr, {}).get(week)
-        if home_spread is not None:
-            return home_spread
-        # Try getting from away perspective (negate)
-        away_spread = spreads_data.get(away_abbr, {}).get(week)
-        if away_spread is not None:
-            return -away_spread
-        return None
-
-    # Apply spreads to future games
-    updates = []
-    for row in df.iter_rows(named=True):
-        week = row.get("week")
-        home_abbr = row.get("home_abbr")
-        away_abbr = row.get("away_abbr")
-        away_score = row.get("away_score")
-
-        # Only update future games (no score) with missing spreads
-        is_future = away_score is None
-        has_spread = row.get("home_spread") is not None
-
-        if is_future and not has_spread and week and home_abbr and away_abbr:
-            home_spread = get_home_spread(week, home_abbr, away_abbr)
-            if home_spread is not None:
-                updates.append(
-                    {
-                        "game_id": row.get("game_id"),
-                        "new_home_spread": home_spread,
-                        "new_away_spread": -home_spread,
-                        "new_total_line": constants.DEFAULT_TOTAL_LINE,
-                    }
-                )
-
-    if not updates:
-        return df
-
-    log.info("Filling lines for %d future games from SurvivorGrid", len(updates))
-
-    # Create updates DataFrame
-    updates_df = pl.DataFrame(updates)
-
-    # Join and update
-    df = df.join(updates_df, on="game_id", how="left")
-
-    # Apply updates where we have new values
-    if "new_home_spread" in df.columns:
-        df = df.with_columns(
-            [
-                pl.when(pl.col("new_home_spread").is_not_null())
-                .then(pl.col("new_home_spread"))
-                .otherwise(pl.col("home_spread") if "home_spread" in df.columns else pl.lit(None))
-                .alias("home_spread"),
-                pl.when(pl.col("new_away_spread").is_not_null())
-                .then(pl.col("new_away_spread"))
-                .otherwise(pl.col("away_spread") if "away_spread" in df.columns else pl.lit(None))
-                .alias("away_spread"),
-                pl.when(
-                    pl.col("new_total_line").is_not_null()
-                    & (
-                        pl.col("total_line").is_null()
-                        if "total_line" in df.columns
-                        else pl.lit(True)
-                    )
-                )
-                .then(pl.col("new_total_line"))
-                .otherwise(pl.col("total_line") if "total_line" in df.columns else pl.lit(None))
-                .alias("total_line"),
-            ]
-        )
-
-        # Drop temporary columns
-        df = df.drop(["new_home_spread", "new_away_spread", "new_total_line"])
-
-    # Now calculate moneylines from the new spreads
-    df = fill_missing_moneylines(df)
-
-    return df

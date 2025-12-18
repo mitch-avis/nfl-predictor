@@ -5,9 +5,11 @@ coloredlogs
 flake8
 isort
 lxml
+nflreadpy
 numpy
 pandas
 playwright
+polars
 pyarrow
 pylint
 requests
@@ -16,6 +18,3 @@ scipy
 setuptools
 wheel
 xgboost
-
-# Local package
-./wheels/sportsipy-0.6.0-py3-none-any.whl

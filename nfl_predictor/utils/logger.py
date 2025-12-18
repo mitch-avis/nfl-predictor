@@ -42,9 +42,24 @@ LOGGING_CONFIG = {
         },
     },
     "loggers": {
+        "": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "root": {
             "handlers": ["default"],
             "level": "DEBUG",
+            "propagate": False,
+        },
+        "urllib3": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "urllib3.connectionpool": {
+            "handlers": ["default"],
+            "level": "INFO",
             "propagate": False,
         },
     },

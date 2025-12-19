@@ -106,9 +106,9 @@ def load_schedule(seasons: list[int]) -> pl.DataFrame:
             .alias("neutral")
         )
 
-    # Calculate away_spread from home_spread (nflreadpy uses home perspective)
-    if "home_spread" in schedule_df.columns:
-        schedule_df = schedule_df.with_columns((-pl.col("home_spread")).alias("away_spread"))
+    # Calculate home_spread from away_spread (nflreadpy spread_line is away perspective)
+    if "away_spread" in schedule_df.columns:
+        schedule_df = schedule_df.with_columns((-pl.col("away_spread")).alias("home_spread"))
 
     # Parse date column
     if "date" in schedule_df.columns:
@@ -1512,6 +1512,7 @@ def build_final_column_order() -> list[str]:
     8. Result columns
 
     Note: Deduplicates columns and excludes opponent stats that are duplicates.
+    Opponent versions are only generated for nflreadpy stats, not for ELO or TR columns.
 
     Returns:
         Ordered list of column names
@@ -1521,11 +1522,16 @@ def build_final_column_order() -> list[str]:
     # 1. Metadata columns (fixed order)
     columns.extend(constants.POLARS_METADATA_COLUMNS)
 
-    # Build the base stat columns (non-opponent)
+    # Get each column category separately
+    elo_cols = get_elo_columns()
+    tr_cols = get_tr_columns()
+    nflreadpy_stats = get_stat_columns()
+
+    # Build the base stat columns (non-opponent): ELO + TR + nflreadpy stats
     base_stats = []
-    base_stats.extend(get_elo_columns())
-    base_stats.extend(get_tr_columns())
-    base_stats.extend(get_stat_columns())
+    base_stats.extend(elo_cols)
+    base_stats.extend(tr_cols)
+    base_stats.extend(nflreadpy_stats)
 
     # Deduplicate
     seen = set()
@@ -1536,12 +1542,15 @@ def build_final_column_order() -> list[str]:
             unique_base.append(col)
 
     # Separate opponent_ stats from non-opponent stats
+    # (opponent_ stats already exist in nflreadpy data like opponent_third_down_pct)
     non_opponent_stats = [s for s in unique_base if not s.startswith("opponent_")]
     opponent_stats = [s for s in unique_base if s.startswith("opponent_")]
 
-    # Also generate opponent versions of non-opponent stats (excluding duplicates)
+    # Generate opponent versions ONLY for nflreadpy stats (not ELO or TR columns)
+    # These are created by add_per_game_opponent_stats()
     excluded = set(constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS)
-    for stat in non_opponent_stats:
+    nflreadpy_non_opponent = [s for s in nflreadpy_stats if not s.startswith("opponent_")]
+    for stat in nflreadpy_non_opponent:
         opp_stat = f"opponent_{stat}"
         if stat not in excluded and opp_stat not in opponent_stats:
             opponent_stats.append(opp_stat)

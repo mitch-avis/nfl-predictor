@@ -288,13 +288,6 @@ def process_week(
 
     # If any teams need fallback (week 1, or teams with postponed first games like MIA/TB 2017)
     if teams_needing_fallback and season > min(SEASONS_TO_PROCESS):
-        log.debug(
-            "Teams needing previous season fallback for season %d week %d: %s",
-            season,
-            week,
-            teams_needing_fallback,
-        )
-
         prev_season_stats = team_stats_df.filter(pl.col("season") == season - 1)
 
         if prev_season_stats.height > 0:
@@ -419,21 +412,15 @@ def _merge_team_rankings(
     if week == 1 and prev_tr_df is not None and prev_tr_df.height > 0:
         # Week 1: Use previous season's final TR values
         tr_to_use = polars_utils.get_latest_team_rankings(prev_tr_df)
-        log.debug("Using previous season TR for week 1")
     elif tr_df is not None and tr_df.height > 0 and "week" in tr_df.columns:
         # Try to get specific week's TR data (works for regular season AND playoffs)
         week_tr = tr_df.filter(pl.col("week") == week)
         if week_tr.height > 0:
             # Drop week column since we're joining on team only
             tr_to_use = week_tr.drop("week")
-            if week > regular_season_weeks:
-                log.debug("Using scraped TR for playoff week %d", week)
-            else:
-                log.debug("Using TR for regular season week %d", week)
         elif week > regular_season_weeks:
             # Fallback for playoffs: use most recent available TR data
             tr_to_use = polars_utils.get_latest_team_rankings(tr_df)
-            log.debug("Using latest available TR for playoff week %d (fallback)", week)
 
     # Merge TR data if available
     if tr_to_use is not None and tr_to_use.height > 0:
@@ -450,13 +437,6 @@ def _merge_team_rankings(
 
         # Select only the columns we want plus team_abbr
         tr_to_use = tr_to_use.select(["team_abbr"] + available_tr_cols)
-
-        log.debug(
-            "Merging %d TR columns for week %d: %s",
-            len(available_tr_cols),
-            week,
-            available_tr_cols[:5],
-        )
 
         # Join for away team
         away_tr = tr_to_use.rename(

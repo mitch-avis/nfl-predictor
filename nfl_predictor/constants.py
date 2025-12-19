@@ -81,6 +81,8 @@ TEAM_RANKINGS_STATS = {
     "opponent-fourth-down-conversion-pct": "opponent_fourth_down_pct",
     "red-zone-scoring-pct": "red_zone_td_pct",
     "opponent-red-zone-scoring-pct": "opponent_red_zone_td_pct",
+    "two-point-conversion-pct": "two_point_conversion_pct",
+    "opponent-two-point-conversion-pct": "opponent_two_point_conversion_pct",
 }
 
 # Unified team mapping table: canonical abbreviation -> all known aliases
@@ -840,6 +842,8 @@ POLARS_TR_STATS = [
     "opponent_fourth_down_pct",
     "red_zone_td_pct",
     "opponent_red_zone_td_pct",
+    "two_point_conversion_pct",
+    "opponent_two_point_conversion_pct",
 ]
 
 # Calculated stats (computed from nflreadpy data during aggregation)
@@ -862,6 +866,30 @@ POLARS_CALCULATED_STATS = [
     "opponent_penalty_yards_per_penalty",  # opp_penalty_yards / opp_penalties
 ]
 
+# Stats to EXCLUDE from opponent stat generation (they create duplicates)
+# These stats are duplicates when viewed from opponent's perspective:
+# - scoring_margin: opponent_scoring_margin = -scoring_margin
+# - points_scored: opponent_points_scored = points_allowed
+# - points_allowed: opponent_points_allowed = points_scored
+# - def_interceptions: opponent_def_interceptions = interceptions_thrown
+# - interceptions_thrown: opponent_interceptions_thrown = def_interceptions
+# - turnover_margin: opponent_turnover_margin = -turnover_margin
+# - Also exclude computed ratio stats that use the above
+POLARS_EXCLUDE_FROM_OPPONENT_STATS = [
+    "scoring_margin",
+    "points_scored",
+    "points_allowed",
+    "def_interceptions",
+    "interceptions_thrown",
+    "turnover_margin",
+    # Derived ratio metrics that would be duplicates
+    "yards_per_point",
+    "yards_per_point_margin",
+    "points_per_play",
+    "points_per_play_margin",
+    "penalty_yards_per_penalty",
+]
+
 # nflreadpy stats to use (per team) - these get prefixed with away_/home_
 POLARS_NFLREADPY_STATS = [
     # Passing offense
@@ -877,9 +905,6 @@ POLARS_NFLREADPY_STATS = [
     "rush_attempts",
     "rush_yards",
     "rush_touchdowns",
-    # Receiving (team level)
-    "receptions",
-    "receiving_touchdowns",
     # Combined stats
     "fumbles",  # Combined: sack + rushing + receiving fumbles
     "fumbles_lost",  # Combined: sack + rushing + receiving fumbles_lost

@@ -12,6 +12,7 @@ import os
 import re
 from datetime import date, timedelta
 from time import sleep
+from typing import Optional
 
 import polars as pl
 import requests
@@ -98,27 +99,52 @@ def normalize_team_column(df: pl.DataFrame, column: str) -> pl.DataFrame:
     return df.with_columns(pl.col(column).replace(constants.ALIAS_TO_CANONICAL).alias(column))
 
 
-def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pl.DataFrame:
+def scrape_team_rankings_for_week(
+    week_number: int,
+    week_date: date,
+    ratings_to_scrape: Optional[dict[str, str]] = None,
+    stats_to_scrape: Optional[dict[str, str]] = None,
+) -> pl.DataFrame:
     """
     Scrape team rankings for a specific week from TeamRankings.com.
 
     This function iterates over each team ranking type defined in constants, constructs URLs,
     parses HTML to extract ranking information, and compiles it into a DataFrame.
 
+    Each table on TeamRankings is sorted by that metric's value, so teams appear in different
+    orders across tables. We use a team-keyed dictionary to ensure proper matching.
+
     Args:
         week_number: The week number for which to scrape rankings.
         week_date: The date corresponding to the week of interest.
+        ratings_to_scrape: Optional dict of {url_path: column_name} for ratings.
+                           If None, scrapes all ratings from constants.TEAM_RANKINGS_RATINGS.
+        stats_to_scrape: Optional dict of {url_path: column_name} for stats.
+                         If None, scrapes all stats from constants.TEAM_RANKINGS_STATS.
 
     Returns:
         A Polars DataFrame containing team rankings for the specified week.
     """
-    log.info("Scraping TeamRankings for Week %d (date: %s)...", week_number, week_date)
+    # Use defaults if not specified
+    if ratings_to_scrape is None:
+        ratings_to_scrape = constants.TEAM_RANKINGS_RATINGS
+    if stats_to_scrape is None:
+        stats_to_scrape = constants.TEAM_RANKINGS_STATS
 
-    # Initialize with team abbreviations column
-    all_ratings: dict[str, list] = {"team_abbr": []}
+    total_items = len(ratings_to_scrape) + len(stats_to_scrape)
+    log.info(
+        "Scraping %d items for Week %d (date: %s)...",
+        total_items,
+        week_number,
+        week_date,
+    )
+
+    # Use a team-keyed dictionary to properly match data across tables
+    # Each team maps to a dict of {column_name: value}
+    team_data: dict[str, dict[str, float]] = {}
 
     # Scrape ratings
-    for rating, rating_name in constants.TEAM_RANKINGS_RATINGS.items():
+    for rating, rating_name in ratings_to_scrape.items():
         log.debug("Scraping rating: %s", rating_name)
         url = f"{constants.TEAM_RANKINGS_URL}/ranking/{rating}?date={week_date}"
 
@@ -131,11 +157,11 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pl.DataF
             if table:
                 teams, ratings = _parse_tr_rating_table(table)
 
-                # If this is the first iteration, populate team_abbr
-                if not all_ratings["team_abbr"]:
-                    all_ratings["team_abbr"] = teams
-
-                all_ratings[rating_name] = ratings
+                # Store each team's rating, keyed by team abbreviation
+                for team_abbr, rating_value in zip(teams, ratings):
+                    if team_abbr not in team_data:
+                        team_data[team_abbr] = {}
+                    team_data[team_abbr][rating_name] = rating_value
             else:
                 log.warning("No data found for %s on %s", rating_name, week_date)
 
@@ -147,7 +173,7 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pl.DataF
         sleep(constants.TEAM_RANKINGS_SLEEP)
 
     # Scrape statistics
-    for statistic, stat_name in constants.TEAM_RANKINGS_STATS.items():
+    for statistic, stat_name in stats_to_scrape.items():
         log.debug("Scraping statistic: %s", stat_name)
         url = f"{constants.TEAM_RANKINGS_URL}/stat/{statistic}?date={week_date}"
 
@@ -158,8 +184,13 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pl.DataF
             table = soup.find("table")
 
             if table:
-                stats = _parse_tr_stat_table(table)
-                all_ratings[stat_name] = stats
+                teams, stats = _parse_tr_stat_table(table)
+
+                # Store each team's stat, keyed by team abbreviation
+                for team_abbr, stat_value in zip(teams, stats):
+                    if team_abbr not in team_data:
+                        team_data[team_abbr] = {}
+                    team_data[team_abbr][stat_name] = stat_value
             else:
                 log.warning("No data found for %s on %s", stat_name, week_date)
 
@@ -170,9 +201,15 @@ def scrape_team_rankings_for_week(week_number: int, week_date: date) -> pl.DataF
 
         sleep(constants.TEAM_RANKINGS_SLEEP)
 
-    # Build DataFrame
-    if all_ratings["team_abbr"]:
-        tr_df = pl.DataFrame(all_ratings)
+    # Build DataFrame from team-keyed dictionary
+    if team_data:
+        # Convert team_data dict to columnar format
+        rows = []
+        for team_abbr, metrics in team_data.items():
+            row = {"team_abbr": team_abbr, **metrics}
+            rows.append(row)
+
+        tr_df = pl.DataFrame(rows)
         tr_df = tr_df.with_columns(pl.lit(week_number).alias("week"))
 
         # Normalize team abbreviations
@@ -206,8 +243,8 @@ def _parse_tr_rating_table(table) -> tuple[list[str], list[float]]:
             team_text = cells[1].get_text(strip=True)
             rating_text = cells[2].get_text(strip=True)
 
-            # Strip win-loss records from team names
-            team_str = re.sub(r"\s+\(\d+-\d+(-\d+)*\)$", "", team_text)
+            # Strip win-loss records from team names (with or without space)
+            team_str = re.sub(r"\s*\(\d+-\d+(-\d+)*\)$", "", team_text)
             abbr = constants.TEAMS_TO_ABBR.get(team_str, team_str)
             teams.append(abbr)
 
@@ -220,7 +257,7 @@ def _parse_tr_rating_table(table) -> tuple[list[str], list[float]]:
     return teams, ratings
 
 
-def _parse_tr_stat_table(table) -> list[float]:
+def _parse_tr_stat_table(table) -> tuple[list[str], list[float]]:
     """
     Parse a TeamRankings statistics table using BeautifulSoup.
 
@@ -228,16 +265,23 @@ def _parse_tr_stat_table(table) -> list[float]:
         table: BeautifulSoup table element
 
     Returns:
-        List of statistic values
+        Tuple of (team_abbreviations, stat_values)
     """
+    teams = []
     stats = []
 
     rows = table.find_all("tr")
     for row in rows[1:]:  # Skip header row
         cells = row.find_all("td")
         if len(cells) >= 3:
-            # Column 2 is the stat value
+            # Column 1 is team name, column 2 is stat value
+            team_text = cells[1].get_text(strip=True)
             stat_text = cells[2].get_text(strip=True)
+
+            # Strip win-loss records from team names (with or without space)
+            team_str = re.sub(r"\s*\(\d+-\d+(-\d+)*\)$", "", team_text)
+            abbr = constants.TEAMS_TO_ABBR.get(team_str, team_str)
+            teams.append(abbr)
 
             # Parse stat value (handle percentages, remove % sign)
             stat_text = stat_text.replace("%", "")
@@ -246,7 +290,77 @@ def _parse_tr_stat_table(table) -> list[float]:
             except ValueError:
                 stats.append(0.0)
 
-    return stats
+    return teams, stats
+
+
+def get_missing_tr_columns(existing_df: pl.DataFrame) -> tuple[dict[str, str], dict[str, str]]:
+    """
+    Determine which TR ratings and stats are missing from an existing DataFrame.
+
+    Compares the columns in the existing DataFrame against the required columns
+    defined in constants.TEAM_RANKINGS_RATINGS and constants.TEAM_RANKINGS_STATS.
+
+    Args:
+        existing_df: Existing TeamRankings DataFrame to check
+
+    Returns:
+        Tuple of (missing_ratings, missing_stats) where each is a dict of
+        {url_path: column_name} for items that need to be scraped.
+    """
+    existing_cols = set(existing_df.columns)
+
+    missing_ratings = {}
+    for url_path, col_name in constants.TEAM_RANKINGS_RATINGS.items():
+        if col_name not in existing_cols:
+            missing_ratings[url_path] = col_name
+
+    missing_stats = {}
+    for url_path, col_name in constants.TEAM_RANKINGS_STATS.items():
+        if col_name not in existing_cols:
+            missing_stats[url_path] = col_name
+
+    return missing_ratings, missing_stats
+
+
+def merge_tr_data(
+    existing_df: pl.DataFrame,
+    new_df: pl.DataFrame,
+) -> pl.DataFrame:
+    """
+    Merge newly scraped TR data into an existing DataFrame.
+
+    Joins the new columns to the existing data on team_abbr and week columns.
+
+    Args:
+        existing_df: Existing TR DataFrame
+        new_df: Newly scraped TR DataFrame with additional columns
+
+    Returns:
+        Combined DataFrame with all columns
+    """
+    if existing_df.height == 0:
+        return new_df
+    if new_df.height == 0:
+        return existing_df
+
+    # Get columns to add (excluding team_abbr and week)
+    existing_cols = set(existing_df.columns)
+    new_cols = [c for c in new_df.columns if c not in existing_cols]
+
+    if not new_cols:
+        return existing_df
+
+    # Select only the columns we need to add, plus join keys
+    join_cols = ["team_abbr"]
+    if "week" in new_df.columns and "week" in existing_df.columns:
+        join_cols.append("week")
+
+    new_df_subset = new_df.select(join_cols + new_cols)
+
+    # Join the new data
+    merged = existing_df.join(new_df_subset, on=join_cols, how="left")
+
+    return merged
 
 
 def save_team_rankings_week(tr_df: pl.DataFrame, season: int, week: int) -> None:

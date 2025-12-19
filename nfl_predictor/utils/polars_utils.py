@@ -39,7 +39,9 @@ from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.scraping_utils import (
     get_current_nfl_week,
+    get_missing_tr_columns,
     get_week_date,
+    merge_tr_data,
     normalize_team_column,
     save_team_rankings_week,
     scrape_team_rankings_for_week,
@@ -378,14 +380,20 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
     and adds them as opponent_* columns. This allows aggregating "stats of teams
     this team has faced" when computing rolling averages.
 
+    Note: Some stats are excluded from opponent generation because they would be
+    exact duplicates or inverses of existing stats.
+    See constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS.
+
     Args:
         team_stats_df: DataFrame with per-game team statistics
 
     Returns:
         DataFrame with added opponent_* columns for each game
     """
-    # Identify stat columns to copy from opponent (exclude identifiers)
+    # Identify stat columns to copy from opponent (exclude identifiers and duplicate-prone stats)
     exclude_cols = {"season", "week", "team_abbr", "opponent_abbr", "season_type", "games_played"}
+    exclude_cols.update(constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS)
+
     stat_cols = [col for col in team_stats_df.columns if col not in exclude_cols]
 
     # Create a lookup table with opponent stats
@@ -715,7 +723,10 @@ def load_team_rankings(
     from cached CSV files. For current week or future weeks of the current season, it
     scrapes fresh data from TeamRankings.com.
 
-    If cached data is missing required columns, it will be re-scraped.
+    If cached data is missing required columns, only the missing columns will be scraped
+    and merged with the existing data (smart scraping).
+
+    Supports playoff weeks (weeks 19-22 for seasons 2021+, weeks 18-21 for earlier seasons).
 
     Args:
         season: Season year to load
@@ -732,54 +743,71 @@ def load_team_rankings(
     season_dir = os.path.join(constants.DATA_PATH, str(season))
     os.makedirs(season_dir, exist_ok=True)
 
-    # Determine weeks to load for this season
+    # Determine weeks to load for this season (including playoffs)
     regular_season_weeks = constants.get_regular_season_weeks(season)
+    # Playoff weeks: WC, DIV, CON, SB = 4 additional weeks
+    max_playoff_week = regular_season_weeks + 4
+
     if season < current_season:
-        # Past season: load weeks 1 through end of regular season
-        weeks_to_load = list(range(1, regular_season_weeks + 1))
+        # Past season: load all regular season weeks plus playoff weeks
+        weeks_to_load = list(range(1, max_playoff_week + 1))
+    elif season == current_season:
+        # Current season: load weeks 1 through current week + a few future weeks
+        # Future weeks use current week's data as a placeholder
+        weeks_to_load = list(range(1, min(current_week + 3, max_playoff_week + 1)))
     else:
-        # Current season: load weeks 1 through current week + future weeks
-        max_week = regular_season_weeks + 4  # Include playoff weeks
-        weeks_to_load = list(range(1, min(current_week, max_week) + 1))
+        # Future season: no data to load
+        return pl.DataFrame()
 
     existing_data = []
-    weeks_to_scrape = []
+    weeks_to_full_scrape = []  # Weeks that need complete scraping (no file or empty)
+    weeks_to_partial_scrape = []  # Weeks with files that need additional columns
 
     # Check each week file for validity
     for week in weeks_to_load:
         week_file = os.path.join(season_dir, f"{season}_week_{week:02d}_team_rankings.csv")
 
         if os.path.exists(week_file):
-            week_df = pl.read_csv(week_file)
+            try:
+                week_df = pl.read_csv(week_file)
+            except (pl.exceptions.ComputeError, pl.exceptions.NoDataError, OSError) as e:
+                log.warning("Failed to read TR file for week %d: %s", week, e)
+                weeks_to_full_scrape.append((week, None))
+                continue
+
             week_df = _normalize_tr_dataframe(week_df)
+
+            if week_df.height == 0:
+                # Empty file, need full scrape
+                weeks_to_full_scrape.append((week, None))
+                continue
 
             is_valid, missing_cols = _validate_tr_dataframe(week_df)
             if is_valid:
                 existing_data.append(week_df)
             else:
-                log.info(
-                    "Week %d TR file missing columns %s, will re-scrape",
+                # File exists but missing columns - need partial scrape
+                log.debug(
+                    "Week %d TR file missing %d columns: %s",
                     week,
-                    missing_cols[:5],
+                    len(missing_cols),
+                    missing_cols[:3],
                 )
-                weeks_to_scrape.append(week)
+                weeks_to_partial_scrape.append((week, week_df, missing_cols))
         else:
-            # Only scrape historical weeks for past seasons, not for current season
-            if season < current_season:
-                weeks_to_scrape.append(week)
-            elif week <= current_week:
-                weeks_to_scrape.append(week)
-            # Future weeks of current season will get current week's data copied
+            # No file - need full scrape for past weeks
+            if season < current_season or week <= current_week:
+                weeks_to_full_scrape.append((week, None))
+            # Future weeks of current season will get current week's data copied later
 
-    # Scrape missing/invalid weeks
-    if weeks_to_scrape:
+    # Full scrape for weeks without any data
+    if weeks_to_full_scrape:
         log.info(
-            "Scraping %d weeks of TR data for season %d: %s",
-            len(weeks_to_scrape),
+            "Full scraping %d weeks of TR data for season %d",
+            len(weeks_to_full_scrape),
             season,
-            weeks_to_scrape[:5],
         )
-        for week in weeks_to_scrape:
+        for week, _ in weeks_to_full_scrape:
             week_date = get_week_date(season, week)
             scraped_df = scrape_team_rankings_for_week(week, week_date)
 
@@ -789,7 +817,53 @@ def load_team_rankings(
             else:
                 log.warning("Failed to scrape TR data for season %d week %d", season, week)
 
-        # Update the consolidated season file
+    # Partial scrape for weeks with files missing some columns
+    if weeks_to_partial_scrape:
+        log.info(
+            "Partial scraping %d weeks of TR data for season %d (missing columns only)",
+            len(weeks_to_partial_scrape),
+            season,
+        )
+        for week, existing_week_df, missing_cols in weeks_to_partial_scrape:
+            # Determine which ratings and stats to scrape
+            missing_ratings, missing_stats = get_missing_tr_columns(existing_week_df)
+
+            if not missing_ratings and not missing_stats:
+                # No columns to scrape, use existing data
+                existing_data.append(existing_week_df)
+                continue
+
+            log.debug(
+                "Week %d: scraping %d ratings, %d stats",
+                week,
+                len(missing_ratings),
+                len(missing_stats),
+            )
+
+            week_date = get_week_date(season, week)
+            scraped_df = scrape_team_rankings_for_week(
+                week,
+                week_date,
+                ratings_to_scrape=missing_ratings,
+                stats_to_scrape=missing_stats,
+            )
+
+            if scraped_df.height > 0:
+                # Merge new columns with existing data
+                merged_df = merge_tr_data(existing_week_df, scraped_df)
+                save_team_rankings_week(merged_df, season, week)
+                existing_data.append(merged_df)
+            else:
+                # Scraping failed, use existing data anyway
+                log.warning(
+                    "Failed to scrape missing columns for season %d week %d, using existing data",
+                    season,
+                    week,
+                )
+                existing_data.append(existing_week_df)
+
+    # Update the consolidated season file if we scraped anything
+    if weeks_to_full_scrape or weeks_to_partial_scrape:
         update_season_team_rankings(season)
 
     # For current season, copy current week data to future weeks if needed
@@ -798,14 +872,13 @@ def load_team_rankings(
         current_week_data = None
         for df in existing_data:
             if "week" in df.columns:
-                max_week_in_df = df.select(pl.col("week").max()).item()
-                if max_week_in_df == current_week:
+                week_vals = df.select(pl.col("week")).to_series().to_list()
+                if current_week in week_vals:
                     current_week_data = df.filter(pl.col("week") == current_week)
                     break
 
         if current_week_data is not None and current_week_data.height > 0:
-            max_week = regular_season_weeks + 4
-            for future_week in range(current_week + 1, max_week + 1):
+            for future_week in range(current_week + 1, max_playoff_week + 1):
                 future_file = os.path.join(
                     season_dir, f"{season}_week_{future_week:02d}_team_rankings.csv"
                 )
@@ -814,10 +887,13 @@ def load_team_rankings(
                 if not os.path.exists(future_file):
                     needs_future = True
                 else:
-                    future_df = pl.read_csv(future_file)
-                    future_df = _normalize_tr_dataframe(future_df)
-                    is_valid, _ = _validate_tr_dataframe(future_df)
-                    if not is_valid:
+                    try:
+                        future_df = pl.read_csv(future_file)
+                        future_df = _normalize_tr_dataframe(future_df)
+                        is_valid, _ = _validate_tr_dataframe(future_df)
+                        if not is_valid:
+                            needs_future = True
+                    except (pl.exceptions.ComputeError, pl.exceptions.NoDataError, OSError):
                         needs_future = True
 
                 if needs_future:
@@ -1388,16 +1464,21 @@ def get_stats_for_diff() -> list[str]:
     """
     Get list of stats that should have differentials calculated.
 
+    Excludes opponent stats that are duplicates of their non-opponent counterparts.
+
     Returns:
         List of stat names (without prefix) to calculate diffs for
     """
     all_stats = []
 
-    # nflreadpy stats
+    # nflreadpy stats (base stats)
     all_stats.extend(get_stat_columns())
 
-    # Opponent stats
-    all_stats.extend([f"opponent_{s}" for s in get_stat_columns()])
+    # Opponent stats (excluding duplicates)
+    excluded = set(constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS)
+    for stat in get_stat_columns():
+        if stat not in excluded:
+            all_stats.append(f"opponent_{stat}")
 
     # ELO columns
     all_stats.extend(get_elo_columns())
@@ -1405,7 +1486,15 @@ def get_stats_for_diff() -> list[str]:
     # TeamRankings columns
     all_stats.extend(get_tr_columns())
 
-    return all_stats
+    # Deduplicate
+    seen = set()
+    unique_stats = []
+    for stat in all_stats:
+        if stat not in seen:
+            seen.add(stat)
+            unique_stats.append(stat)
+
+    return unique_stats
 
 
 def build_final_column_order() -> list[str]:
@@ -1413,61 +1502,74 @@ def build_final_column_order() -> list[str]:
     Build the final column order according to specification.
 
     Order:
-    1. Metadata columns
-    2. ALL away_ columns (ELO, TR ratings, TR stats, nflreadpy stats, opponent stats)
-    3. ALL home_ columns (ELO, TR ratings, TR stats, nflreadpy stats, opponent stats)
-    4. ALL diff columns
-    5. Lines/odds columns
-    6. Result columns
+    1. Metadata columns (as defined in constants)
+    2. away_<stat> columns (alphabetically sorted)
+    3. away_opponent_<stat> columns (alphabetically sorted)
+    4. home_<stat> columns (alphabetically sorted)
+    5. home_opponent_<stat> columns (alphabetically sorted)
+    6. <stat>_diff columns (alphabetically sorted)
+    7. Lines/odds columns
+    8. Result columns
 
-    Note: Deduplicates columns that appear in multiple source lists
-    (e.g., penalty_yards_per_penalty in both TR and computed stats).
+    Note: Deduplicates columns and excludes opponent stats that are duplicates.
 
     Returns:
         Ordered list of column names
     """
     columns = []
 
-    # 1. Metadata
+    # 1. Metadata columns (fixed order)
     columns.extend(constants.POLARS_METADATA_COLUMNS)
 
-    # Build the per-team column list (ELO, TR, stats, opponent stats)
-    per_team_cols = []
+    # Build the base stat columns (non-opponent)
+    base_stats = []
+    base_stats.extend(get_elo_columns())
+    base_stats.extend(get_tr_columns())
+    base_stats.extend(get_stat_columns())
 
-    # ELO columns
-    per_team_cols.extend(get_elo_columns())
-
-    # TeamRankings ratings and stats
-    per_team_cols.extend(get_tr_columns())
-
-    # nflreadpy stats (may overlap with TR - will be deduplicated)
-    per_team_cols.extend(get_stat_columns())
-
-    # Opponent stats (from nflreadpy)
-    per_team_cols.extend([f"opponent_{s}" for s in get_stat_columns()])
-
-    # Deduplicate while preserving order
+    # Deduplicate
     seen = set()
-    unique_per_team = []
-    for col in per_team_cols:
+    unique_base = []
+    for col in base_stats:
         if col not in seen:
             seen.add(col)
-            unique_per_team.append(col)
-    per_team_cols = unique_per_team
+            unique_base.append(col)
 
-    # 2. ALL away_ columns
-    columns.extend([f"away_{s}" for s in per_team_cols])
+    # Separate opponent_ stats from non-opponent stats
+    non_opponent_stats = [s for s in unique_base if not s.startswith("opponent_")]
+    opponent_stats = [s for s in unique_base if s.startswith("opponent_")]
 
-    # 3. ALL home_ columns
-    columns.extend([f"home_{s}" for s in per_team_cols])
+    # Also generate opponent versions of non-opponent stats (excluding duplicates)
+    excluded = set(constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS)
+    for stat in non_opponent_stats:
+        opp_stat = f"opponent_{stat}"
+        if stat not in excluded and opp_stat not in opponent_stats:
+            opponent_stats.append(opp_stat)
 
-    # 4. ALL diff columns (same order as per_team_cols)
-    columns.extend([f"{s}_diff" for s in per_team_cols])
+    # Sort both lists alphabetically
+    non_opponent_stats_sorted = sorted(non_opponent_stats)
+    opponent_stats_sorted = sorted(opponent_stats)
 
-    # 5. Lines/odds
+    # 2. away_<stat> columns (alphabetically)
+    columns.extend([f"away_{s}" for s in non_opponent_stats_sorted])
+
+    # 3. away_opponent_<stat> columns (alphabetically)
+    columns.extend([f"away_{s}" for s in opponent_stats_sorted])
+
+    # 4. home_<stat> columns (alphabetically)
+    columns.extend([f"home_{s}" for s in non_opponent_stats_sorted])
+
+    # 5. home_opponent_<stat> columns (alphabetically)
+    columns.extend([f"home_{s}" for s in opponent_stats_sorted])
+
+    # 6. diff columns (all stats, alphabetically)
+    all_stats_for_diff = non_opponent_stats_sorted + opponent_stats_sorted
+    columns.extend([f"{s}_diff" for s in sorted(all_stats_for_diff)])
+
+    # 7. Lines/odds
     columns.extend(constants.POLARS_LINES_COLUMNS)
 
-    # 6. Results
+    # 8. Results
     columns.extend(constants.POLARS_RESULT_COLUMNS)
 
     return columns

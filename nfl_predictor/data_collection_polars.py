@@ -437,6 +437,27 @@ def _merge_team_rankings(
 
     # Merge TR data if available
     if tr_to_use is not None and tr_to_use.height > 0:
+        # Only include the TR columns we actually want (ratings + stats)
+        expected_tr_cols = set(polars_utils.get_tr_columns())
+        available_tr_cols = [c for c in tr_to_use.columns if c in expected_tr_cols]
+
+        if not available_tr_cols:
+            log.warning(
+                "TR data has no expected columns. Available: %s",
+                tr_to_use.columns[:5],
+            )
+            return merged
+
+        # Select only the columns we want plus team_abbr
+        tr_to_use = tr_to_use.select(["team_abbr"] + available_tr_cols)
+
+        log.debug(
+            "Merging %d TR columns for week %d: %s",
+            len(available_tr_cols),
+            week,
+            available_tr_cols[:5],
+        )
+
         # Join for away team
         away_tr = tr_to_use.rename(
             {c: f"away_{c}" for c in tr_to_use.columns if c != "team_abbr"}

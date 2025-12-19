@@ -610,7 +610,7 @@ NFLREADPY_SCHEDULE_RENAME = {
     "home_team": "home_abbr",
     "location": "neutral",  # Will need to transform: "Home" -> 0, "Neutral" -> 1
     "div_game": "division",
-    "spread_line": "home_spread",  # nflreadpy uses home perspective for spread
+    "spread_line": "away_spread",  # nflreadpy spread_line is from away team perspective
 }
 
 # Columns to exclude from the ELO dataset for streamlined analysis
@@ -947,8 +947,8 @@ POLARS_NFLREADPY_STATS = [
 # Lines/Odds columns (5 total)
 POLARS_LINES_COLUMNS = [
     "total_line",
-    "home_spread",
     "away_spread",
+    "home_spread",
     "away_moneyline",
     "home_moneyline",
 ]

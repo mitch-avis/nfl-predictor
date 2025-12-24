@@ -595,6 +595,11 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
     rename_map = {k: v for k, v in rename_map.items() if k in elo_df.columns}
     elo_df = elo_df.rename(rename_map)
 
+    # Deduplicate any repeated games in the source ELO data
+    subset_cols = [c for c in ["season", "week", "home_abbr", "away_abbr"] if c in elo_df.columns]
+    if subset_cols:
+        elo_df = elo_df.unique(subset=subset_cols, keep="last")
+
     return elo_df
 
 
@@ -621,6 +626,10 @@ def load_raw_elo_data() -> pl.DataFrame:
     for col in numeric_cols:
         if col in elo_df.columns:
             elo_df = elo_df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
+
+    subset_cols = [c for c in ["season", "week", "team1", "team2"] if c in elo_df.columns]
+    if subset_cols:
+        elo_df = elo_df.unique(subset=subset_cols, keep="last")
 
     return elo_df
 

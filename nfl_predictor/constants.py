@@ -290,11 +290,11 @@ TEAM_MAPPING = {
 def _build_alias_to_canonical() -> dict[str, str]:
     """Build a reverse lookup from any alias to canonical abbreviation."""
     mapping = {}
-    for canonical, info in TEAM_MAPPING.items():
-        for alias in info["aliases"]:
-            mapping[alias] = canonical
-            mapping[alias.upper()] = canonical
-            mapping[alias.lower()] = canonical
+    for team_abbr, team_meta in TEAM_MAPPING.items():
+        for alias in team_meta["aliases"]:
+            mapping[alias] = team_abbr
+            mapping[alias.upper()] = team_abbr
+            mapping[alias.lower()] = team_abbr
     return mapping
 
 
@@ -314,12 +314,12 @@ TEAM_ABBR = list(TEAM_MAPPING.keys())
 
 # Dictionary used to map team names/cities to abbreviations (for TeamRankings scraping)
 TEAMS_TO_ABBR = {}
-for canonical, info in TEAM_MAPPING.items():
-    TEAMS_TO_ABBR[info["city"]] = canonical
-    TEAMS_TO_ABBR[info["name"]] = canonical
+for canonical_abbr, team_info in TEAM_MAPPING.items():
+    TEAMS_TO_ABBR[team_info["city"]] = canonical_abbr
+    TEAMS_TO_ABBR[team_info["name"]] = canonical_abbr
 
 # Dictionary used to map full team names to abbreviations (for SurvivorGrid scraping)
-TEAM_NAME_TO_ABBR = {info["name"]: canonical for canonical, info in TEAM_MAPPING.items()}
+TEAM_NAME_TO_ABBR = {team_info["name"]: abbr for abbr, team_info in TEAM_MAPPING.items()}
 
 # Legacy mappings for backward compatibility with existing code
 PFR_TEAM_ABBR = [

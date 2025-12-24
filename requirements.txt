@@ -12,6 +12,7 @@ playwright
 polars
 pyarrow
 pylint
+pytest
 requests
 scikit-learn
 scipy

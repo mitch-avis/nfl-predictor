@@ -22,7 +22,8 @@ class ValidationResult:
     errors: list[str]
     warnings: list[str]
 
-    def ok(self) -> bool:
+    def is_valid(self) -> bool:
+        """Return True if no errors were found."""
         return not self.errors
 
 

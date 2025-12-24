@@ -313,7 +313,10 @@ def normalize_team_abbr(abbr: str) -> str:
 TEAM_ABBR = list(TEAM_MAPPING.keys())
 
 # Dictionary used to map team names/cities to abbreviations (for TeamRankings scraping)
-TEAMS_TO_ABBR = {info["city"]: canonical for canonical, info in TEAM_MAPPING.items()}
+TEAMS_TO_ABBR = {}
+for canonical, info in TEAM_MAPPING.items():
+    TEAMS_TO_ABBR[info["city"]] = canonical
+    TEAMS_TO_ABBR[info["name"]] = canonical
 
 # Dictionary used to map full team names to abbreviations (for SurvivorGrid scraping)
 TEAM_NAME_TO_ABBR = {info["name"]: canonical for canonical, info in TEAM_MAPPING.items()}

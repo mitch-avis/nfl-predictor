@@ -167,6 +167,14 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
         # Sort by date, newest first
         if "date" in combined_df.columns:
             combined_df = combined_df.sort("date", descending=True)
+        # Remove exact duplicate games if any exist (defensive cleanup)
+        if "game_id" in combined_df.columns:
+            combined_df = combined_df.unique(subset=["game_id"], keep="first")
+        else:
+            combined_df = combined_df.unique(
+                subset=["season", "week", "away_abbr", "home_abbr"],
+                keep="first",
+            )
         # Fill in QB data for future games using most recent starters
         combined_df = game_utils.fill_future_qb_data(combined_df, raw_elo_df)
         # Fill in lines for future games from SurvivorGrid
@@ -175,6 +183,9 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
         combined_df = game_utils.fill_missing_moneylines(combined_df)
         # Select final columns in correct order
         combined_df = polars_utils.select_final_columns(combined_df)
+        # Ensure final ordering by date after any dedupe/transforms
+        if "date" in combined_df.columns:
+            combined_df = combined_df.sort("date", descending=True)
         return combined_df
 
     return pl.DataFrame()

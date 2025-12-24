@@ -56,6 +56,9 @@
 - **Primary product goals:** support **Confidence pools** and **Pick ’Em** decisions.
   - Confidence pools require *good win-probability ranking* (separation + calibration).
   - “Realistic scores” matter, but are secondary to expected confidence points.
+- **Confidence pool deliverable (important):**
+  - Each week, output a **1–N unique ranking** across that week’s games (no repeated numbers).
+  - Highest number = highest confidence in the predicted winner; lowest number = closest to a toss-up.
 - **ML Code Status:** `ml_model.py` and `ml_utils.py` are known to be outdated. It is acceptable to pivot to a new modeling approach (regression/classification/both) as long as:
   - it consumes the existing datasets under `data/` (not spreadsheets), and
   - it avoids training on future data (time-aware splits), and
@@ -67,7 +70,23 @@
   - For pick’em / win probability: optimize and report **log loss** or **Brier score** for win probs.
   - For “realistic scores”: report **MAE** on `margin` and `total` (and optionally team scores).
   - For confidence pools: backtest “confidence points” using predicted win probs (ranking by |p-0.5| or implied margin) and report expected/actual points over seasons.
-- **Confidence Pool Logic (separation of concerns):**
+  - **Confidence pool scoring (authoritative):**
+    - Each week, assign unique confidence values **1..N** to your chosen winner in each matchup.
+    - Weekly **max points** = `1 + 2 + ... + N = N*(N+1)/2` (e.g., 16 games → 136).
+    - Weekly **realized points** = `sum(conf_i * 1[pick_i_correct])`.
+      - Equivalent: **points lost** = `sum(conf_i * 1[pick_i_wrong])`.
+    - **Tie games:** treat as incorrect for both sides → you lose the confidence points assigned to either team.
+- **Betting market features (spreads/totals/moneylines): allowed, but avoid “market dominates everything”:**
+  - Treat market columns as **strong priors**, not the whole model.
+  - Prefer approaches that make the contribution explicit and tunable, e.g.:
+    - **Two-signal blend:** build a *market-only* predictor and a *team-feature* predictor, then blend via a simple calibration/blending layer validated by season-based splits.
+    - **Regularization / constrained models:** if using linear/logistic baselines, use strong regularization so market features don’t trivially drown out others.
+  - Keep “market vs non-market” logic in modeling code (not in data pipeline). The pipeline should continue emitting all available columns.
++ **Pick submission timing (important constraint):**
+  - All picks/ranks are submitted **before the first game of the week** (typically TNF).
+  - The “production” workflow is: refresh data + run model **Thursday afternoon**, then submit picks.
+  - Therefore weekly optimization/backtests should assume **no in-week updates** (single-shot picks).
+**Confidence Pool Logic (separation of concerns):**
   - Determine predicted winner via predicted scores or win probability.
   - Compute confidence strength via win probability (preferred) or predicted margin.
   - Rank games by descending confidence; keep this separate from the model training code.

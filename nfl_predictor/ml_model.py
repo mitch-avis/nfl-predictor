@@ -1070,8 +1070,10 @@ def _run_optuna_search(
 ) -> dict[str, Any]:
     if optuna is None:  # pragma: no cover
         raise ImportError("Optuna is required for hyperparameter tuning.")
+    optuna_module = optuna
+    assert optuna_module is not None
 
-    sampler = optuna.samplers.TPESampler(seed=42)
+    sampler = optuna_module.samplers.TPESampler(seed=42)
     study_kwargs: dict[str, Any] = {
         "direction": _optuna_direction(optuna_config.objective),
         "sampler": sampler,
@@ -1080,7 +1082,7 @@ def _run_optuna_search(
         study_kwargs["storage"] = optuna_config.storage
         study_kwargs["study_name"] = optuna_config.study_name
         study_kwargs["load_if_exists"] = True
-    study = optuna.create_study(**study_kwargs)
+    study = optuna_module.create_study(**study_kwargs)
 
     def objective_fn(trial: Any) -> float:
         trial_params = {
@@ -1117,7 +1119,7 @@ def _run_optuna_search(
     def _persist_best_params(study: Any, trial: Any) -> None:
         if optuna_config.best_params_out is None:
             return
-        if trial.state != optuna.trial.TrialState.COMPLETE:
+        if trial.state != optuna_module.trial.TrialState.COMPLETE:
             return
         best_params_out = optuna_config.best_params_out
         if best_params_out is None:
@@ -1132,7 +1134,7 @@ def _run_optuna_search(
         best_params_out.write_text(json.dumps(payload, indent=2, sort_keys=True))
 
     def _trial_logger(study: Any, trial: Any) -> None:
-        if trial.state != optuna.trial.TrialState.COMPLETE:
+        if trial.state != optuna_module.trial.TrialState.COMPLETE:
             return
         log.info(
             "Optuna trial %d complete: value=%.4f | best=%.4f",

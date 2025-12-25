@@ -76,6 +76,8 @@ def display_weekly_predictions(predictions: pd.DataFrame) -> None:
     sorted_df = predictions.copy()
     if "confidence_rank" in sorted_df.columns:
         sorted_df = sorted_df.sort_values("confidence_rank", ascending=False)
+    elif "confidence_strength" in sorted_df.columns:
+        sorted_df = sorted_df.sort_values("confidence_strength", ascending=False)
 
     season = sorted_df["season"].iloc[0] if "season" in sorted_df.columns else None
     week = sorted_df["week"].iloc[0] if "week" in sorted_df.columns else None
@@ -109,13 +111,13 @@ def display_weekly_predictions(predictions: pd.DataFrame) -> None:
         prob_str = f"{win_prob * 100:>5.1f}%" if win_prob is not None else "  n/a"
 
         log.info(
-            "#%s %s %s @ %s %s | pick %s | win %s",
+            "#%s (%s) %s %s @ %s %s | win %s",
             rank_str,
+            winner,
             away_team,
             away_score_str,
             home_team,
             home_score_str,
-            winner,
             prob_str,
         )
 

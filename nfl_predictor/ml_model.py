@@ -5,6 +5,8 @@ This module uses time-aware splits by season, trains separate models for away/ho
 reports score-focused metrics, and can generate weekly predictions with confidence ranks.
 """
 
+# pylint: disable=too-many-lines
+
 from __future__ import annotations
 
 import argparse
@@ -66,6 +68,13 @@ DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 
+MARKET_DERIVED_COLUMNS = (
+    "market_home_margin",
+    "market_total_line",
+    "home_market_prob",
+    "away_market_prob",
+)
+
 
 @dataclass
 class _RuntimeState:
@@ -124,6 +133,7 @@ class MarginTotalModel:
     total_model: xgb.XGBRegressor
     target_columns: tuple[str, str]
     calibrator: Optional[WinProbCalibrator]
+    market_anchor: bool = False
 
 
 @dataclass(frozen=True)
@@ -195,6 +205,47 @@ def _get_feature_range_columns(
     return feature_range, metadata_columns, post_feature_columns
 
 
+def _implied_prob_from_moneyline(values: pd.Series | np.ndarray) -> np.ndarray:
+    if isinstance(values, pd.Series):
+        moneyline_series = pd.to_numeric(values, errors="coerce")
+    else:
+        moneyline_series = pd.to_numeric(pd.Series(values), errors="coerce")
+    moneyline = moneyline_series.to_numpy(dtype=float)
+    probs = np.full_like(moneyline, np.nan, dtype=float)
+    neg_mask = moneyline < 0
+    pos_mask = moneyline > 0
+    probs[neg_mask] = -moneyline[neg_mask] / (-moneyline[neg_mask] + 100)
+    probs[pos_mask] = 100 / (moneyline[pos_mask] + 100)
+    return probs
+
+
+def _add_market_transforms(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "market_home_margin" not in df.columns:
+        if "home_spread" in df.columns:
+            df["market_home_margin"] = -pd.to_numeric(df["home_spread"], errors="coerce")
+        elif "away_spread" in df.columns:
+            df["market_home_margin"] = pd.to_numeric(df["away_spread"], errors="coerce")
+    if "market_total_line" not in df.columns and "total_line" in df.columns:
+        df["market_total_line"] = pd.to_numeric(df["total_line"], errors="coerce")
+    if "home_market_prob" not in df.columns and "home_moneyline" in df.columns:
+        df["home_market_prob"] = _implied_prob_from_moneyline(df["home_moneyline"])
+    if "away_market_prob" not in df.columns and "away_moneyline" in df.columns:
+        df["away_market_prob"] = _implied_prob_from_moneyline(df["away_moneyline"])
+    return df
+
+
+def _get_market_baseline(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    df = _add_market_transforms(df)
+    if "market_home_margin" not in df.columns or "market_total_line" not in df.columns:
+        raise ValueError("Market anchor requested but spread/total columns are missing.")
+    baseline_margin = pd.to_numeric(df["market_home_margin"], errors="coerce").to_numpy(dtype=float)
+    baseline_total = pd.to_numeric(df["market_total_line"], errors="coerce").to_numpy(dtype=float)
+    if np.isnan(baseline_margin).any() or np.isnan(baseline_total).any():
+        raise ValueError("Market anchor requested but spread/total contains missing values.")
+    return baseline_margin, baseline_total
+
+
 def _drop_identifier_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     id_columns = [col for col in df.columns if col.endswith("_id")]
     if not id_columns:
@@ -231,7 +282,11 @@ def _build_feature_spec(
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
     market_only: bool = False,
+    market_transform: bool = False,
 ) -> FeatureSpec:
+    if market_transform:
+        df = _add_market_transforms(df)
+
     feature_range, metadata_columns, post_feature_columns = _get_feature_range_columns(
         df, feature_start, feature_end
     )
@@ -239,13 +294,24 @@ def _build_feature_spec(
     result_columns = _available_columns(df, constants.RESULT_COLUMNS)
     drop_columns = set(result_columns)
 
-    market_columns = [col for col in feature_range if col in constants.LINES_COLUMNS]
+    derived_market_columns = [col for col in MARKET_DERIVED_COLUMNS if col in df.columns]
+    if market_transform:
+        feature_range = feature_range + [
+            col for col in derived_market_columns if col not in feature_range
+        ]
+
+    raw_market_columns = [col for col in feature_range if col in constants.LINES_COLUMNS]
+    market_feature_columns = derived_market_columns if market_transform else raw_market_columns
     excluded_market_columns: list[str] = []
+    dropped_raw_market_columns: list[str] = []
     if market_only:
-        selected_columns = market_columns
+        selected_columns = market_feature_columns
     else:
+        if market_transform and raw_market_columns:
+            drop_columns.update(raw_market_columns)
+            dropped_raw_market_columns = raw_market_columns
         if not include_market:
-            excluded_market_columns = market_columns
+            excluded_market_columns = market_feature_columns
             drop_columns.update(excluded_market_columns)
         selected_columns = [col for col in feature_range if col not in drop_columns]
 
@@ -265,17 +331,20 @@ def _build_feature_spec(
     log.debug("Feature range columns (%d): %s", len(feature_range), feature_range)
     if market_only:
         log.debug("Market-only feature selection enabled.")
+    if market_transform:
+        log.debug("Market feature transforms enabled: %s", derived_market_columns)
     log.debug("Dropped metadata columns (%d): %s", len(metadata_columns), metadata_columns)
     log.debug(
         "Dropped post-feature columns (%d): %s", len(post_feature_columns), post_feature_columns
     )
     if result_columns:
         log.debug("Target/result columns present (%d): %s", len(result_columns), result_columns)
-    if excluded_market_columns:
+    dropped_market_columns = sorted(set(excluded_market_columns + dropped_raw_market_columns))
+    if dropped_market_columns:
         log.debug(
             "Dropped market columns (%d): %s",
-            len(excluded_market_columns),
-            excluded_market_columns,
+            len(dropped_market_columns),
+            dropped_market_columns,
         )
     if id_columns:
         log.debug("Dropped identifier columns (%d): %s", len(id_columns), id_columns)
@@ -304,12 +373,14 @@ def _build_feature_spec(
         feature_end=feature_end,
         metadata_columns=metadata_columns,
         post_feature_columns=post_feature_columns,
-        market_columns=market_columns,
+        market_columns=market_feature_columns,
     )
 
 
 def _apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
     df = df.copy()
+    if any(col in spec.feature_columns for col in MARKET_DERIVED_COLUMNS):
+        df = _add_market_transforms(df)
     missing = [col for col in spec.feature_columns if col not in df.columns]
     if missing:
         log.debug(
@@ -433,10 +504,7 @@ def _split_train_calibration_holdout(
             raise ValueError("Expected a week column for in-season calibration.")
         inseason_calibration_season = base_pool[-1]
         season_weeks = (
-            df.loc[df["season"] == inseason_calibration_season, "week"]
-            .dropna()
-            .unique()
-            .tolist()
+            df.loc[df["season"] == inseason_calibration_season, "week"].dropna().unique().tolist()
         )
         season_weeks = sorted(int(week) for week in season_weeks)
         if len(season_weeks) < calibration_weeks:
@@ -455,9 +523,7 @@ def _split_train_calibration_holdout(
 
     if calibration_seasons and len(calibration_candidates) <= calibration_seasons:
         raise ValueError("Not enough seasons to create train/calibration/holdout splits.")
-    calibration = (
-        calibration_candidates[-calibration_seasons:] if calibration_seasons else []
-    )
+    calibration = calibration_candidates[-calibration_seasons:] if calibration_seasons else []
     train = [season for season in base_pool if season not in calibration]
 
     train_df = df[df["season"].isin(train)].copy()
@@ -568,6 +634,18 @@ def _prepare_margin_total_targets(
     margin = df[home_col].to_numpy() - df[away_col].to_numpy()
     total = df[home_col].to_numpy() + df[away_col].to_numpy()
     return margin, total
+
+
+def _prepare_margin_total_targets_with_anchor(
+    df: pd.DataFrame,
+    target_columns: tuple[str, str],
+    market_anchor: bool,
+) -> tuple[np.ndarray, np.ndarray, Optional[np.ndarray], Optional[np.ndarray]]:
+    margin, total = _prepare_margin_total_targets(df, target_columns)
+    if not market_anchor:
+        return margin, total, None, None
+    baseline_margin, baseline_total = _get_market_baseline(df)
+    return margin - baseline_margin, total - baseline_total, baseline_margin, baseline_total
 
 
 def _derive_scores_from_margin_total(
@@ -686,6 +764,10 @@ def _predict_margin_total_from_model(
     x_games = model.preprocessor.transform(feature_df)
     pred_margin = model.margin_model.predict(x_games)
     pred_total = model.total_model.predict(x_games)
+    if getattr(model, "market_anchor", False):
+        baseline_margin, baseline_total = _get_market_baseline(games_df)
+        pred_margin = pred_margin + baseline_margin
+        pred_total = pred_total + baseline_total
     return pred_margin, pred_total
 
 
@@ -1009,6 +1091,8 @@ def _evaluate_margin_total_cv(
     early_stopping_rounds: int,
     objective: str,
     market_only: bool = False,
+    market_transform: bool = False,
+    market_anchor: bool = False,
 ) -> float:
     seasons = sorted(df["season"].dropna().unique())
     folds = _build_time_series_folds(seasons, n_splits=cv_splits)
@@ -1025,14 +1109,25 @@ def _evaluate_margin_total_cv(
             feature_start=feature_start,
             feature_end=feature_end,
             market_only=market_only,
+            market_transform=market_transform,
         )
         preprocessor = _build_preprocessor(feature_spec)
 
         x_train = preprocessor.fit_transform(_apply_feature_spec(train_df, feature_spec))
         x_val = preprocessor.transform(_apply_feature_spec(val_df, feature_spec))
 
-        y_margin_train, y_total_train = _prepare_margin_total_targets(train_df, target_columns)
-        y_margin_val, y_total_val = _prepare_margin_total_targets(val_df, target_columns)
+        (
+            y_margin_train,
+            y_total_train,
+            _,
+            _,
+        ) = _prepare_margin_total_targets_with_anchor(train_df, target_columns, market_anchor)
+        (
+            y_margin_val,
+            y_total_val,
+            baseline_margin_val,
+            baseline_total_val,
+        ) = _prepare_margin_total_targets_with_anchor(val_df, target_columns, market_anchor)
 
         margin_model, total_model = _fit_margin_total_models(
             x_train,
@@ -1047,6 +1142,9 @@ def _evaluate_margin_total_cv(
 
         pred_margin = margin_model.predict(x_val)
         pred_total = total_model.predict(x_val)
+        if market_anchor:
+            pred_margin = pred_margin + baseline_margin_val
+            pred_total = pred_total + baseline_total_val
         home_win_prob = _margin_to_home_win_prob(pred_margin)
 
         metrics = _evaluate_margin_total_predictions(
@@ -1067,6 +1165,8 @@ def _run_optuna_search(
     feature_end: str,
     optuna_config: OptunaConfig,
     market_only: bool = False,
+    market_transform: bool = False,
+    market_anchor: bool = False,
 ) -> dict[str, Any]:
     if optuna is None:  # pragma: no cover
         raise ImportError("Optuna is required for hyperparameter tuning.")
@@ -1114,6 +1214,8 @@ def _run_optuna_search(
             early_stopping_rounds=optuna_config.early_stopping_rounds,
             objective=optuna_config.objective,
             market_only=market_only,
+            market_transform=market_transform,
+            market_anchor=market_anchor,
         )
 
     def _persist_best_params(study: Any, trial: Any) -> None:
@@ -1228,6 +1330,8 @@ def train_margin_total_model(
     max_cardinality_ratio: float,
     win_prob_calibration: str,
     optuna_config: OptunaConfig,
+    market_transform: bool,
+    market_anchor: bool,
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -1267,6 +1371,13 @@ def train_margin_total_model(
         len(calibration_df),
         len(holdout_df),
     )
+    if market_transform:
+        log.info("Market feature transforms enabled.")
+    if market_anchor:
+        _get_market_baseline(train_df)
+        log.info("Market anchor enabled: training residuals vs spread/total.")
+    if market_transform:
+        log.info("Market feature transforms enabled.")
 
     tuned_params: dict[str, Any] = {}
     if optuna_config.enabled:
@@ -1278,6 +1389,8 @@ def train_margin_total_model(
             feature_start=feature_start,
             feature_end=feature_end,
             optuna_config=optuna_config,
+            market_transform=market_transform,
+            market_anchor=market_anchor,
         )
 
     params = _resolve_xgb_params(
@@ -1293,6 +1406,7 @@ def train_margin_total_model(
         max_cardinality_ratio=max_cardinality_ratio,
         feature_start=feature_start,
         feature_end=feature_end,
+        market_transform=market_transform,
     )
     log.info(
         "Feature columns: %d (numeric=%d, categorical=%d)",
@@ -1303,16 +1417,25 @@ def train_margin_total_model(
 
     preprocessor = _build_preprocessor(feature_spec)
     x_train = preprocessor.fit_transform(_apply_feature_spec(train_df, feature_spec))
-    y_margin_train, y_total_train = _prepare_margin_total_targets(train_df, target_columns)
+    (
+        y_margin_train,
+        y_total_train,
+        _,
+        _,
+    ) = _prepare_margin_total_targets_with_anchor(train_df, target_columns, market_anchor)
 
     x_calibration = None
     y_margin_calibration = None
     y_total_calibration = None
+    baseline_margin_calibration = None
     if not calibration_df.empty:
         x_calibration = preprocessor.transform(_apply_feature_spec(calibration_df, feature_spec))
-        y_margin_calibration, y_total_calibration = _prepare_margin_total_targets(
-            calibration_df, target_columns
-        )
+        (
+            y_margin_calibration,
+            y_total_calibration,
+            baseline_margin_calibration,
+            _,
+        ) = _prepare_margin_total_targets_with_anchor(calibration_df, target_columns, market_anchor)
 
     margin_model, total_model = _fit_margin_total_models(
         x_train,
@@ -1330,6 +1453,10 @@ def train_margin_total_model(
         if calibration_df.empty:
             raise ValueError("Calibration requested but no calibration seasons configured.")
         pred_margin_calib = margin_model.predict(x_calibration)
+        if market_anchor:
+            if baseline_margin_calibration is None:
+                raise ValueError("Market anchor baseline missing for calibration data.")
+            pred_margin_calib = pred_margin_calib + baseline_margin_calibration
         away_col, home_col = target_columns
         actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
         calibrator = _fit_win_prob_calibrator(
@@ -1340,6 +1467,10 @@ def train_margin_total_model(
         x_holdout = preprocessor.transform(_apply_feature_spec(holdout_df, feature_spec))
         pred_margin = margin_model.predict(x_holdout)
         pred_total = total_model.predict(x_holdout)
+        if market_anchor:
+            baseline_margin_holdout, baseline_total_holdout = _get_market_baseline(holdout_df)
+            pred_margin = pred_margin + baseline_margin_holdout
+            pred_total = pred_total + baseline_total_holdout
         home_win_prob = _predict_home_win_prob(pred_margin, calibrator)
 
         metrics = _evaluate_margin_total_predictions(
@@ -1365,6 +1496,7 @@ def train_margin_total_model(
         total_model=total_model,
         target_columns=target_columns,
         calibrator=calibrator,
+        market_anchor=market_anchor,
     )
 
 
@@ -1376,6 +1508,8 @@ def train_blended_margin_total_model(
     max_cardinality_ratio: float,
     win_prob_calibration: str,
     optuna_config: OptunaConfig,
+    market_transform: bool,
+    market_anchor: bool,
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -1384,6 +1518,8 @@ def train_blended_margin_total_model(
     """Train blended margin/total models using team vs market signals."""
     if calibration_seasons <= 0 and calibration_weeks <= 0:
         raise ValueError("Blended models require calibration seasons or calibration weeks.")
+    if market_anchor:
+        raise ValueError("Market anchoring is only supported for margin_total models.")
 
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
@@ -1502,6 +1638,7 @@ def train_blended_margin_total_model(
                 feature_end=feature_end,
                 optuna_config=team_optuna,
                 market_only=False,
+                market_transform=market_transform,
             )
         if tune_scope in {"market", "both"}:
             log.info("Tuning market-only model hyperparameters...")
@@ -1514,6 +1651,7 @@ def train_blended_margin_total_model(
                 feature_end=feature_end,
                 optuna_config=market_optuna,
                 market_only=True,
+                market_transform=market_transform,
             )
 
     team_xgb_params = _resolve_xgb_params(
@@ -1535,6 +1673,7 @@ def train_blended_margin_total_model(
         max_cardinality_ratio=max_cardinality_ratio,
         feature_start=feature_start,
         feature_end=feature_end,
+        market_transform=market_transform,
     )
     market_spec = _build_feature_spec(
         train_df,
@@ -1543,6 +1682,7 @@ def train_blended_margin_total_model(
         feature_start=feature_start,
         feature_end=feature_end,
         market_only=True,
+        market_transform=market_transform,
     )
 
     team_preprocessor = _build_preprocessor(team_spec)
@@ -1768,6 +1908,18 @@ def _parse_args() -> argparse.Namespace:
         "--exclude-market",
         action="store_true",
         help="Exclude market features like spreads/totals/moneylines.",
+    )
+    parser.add_argument(
+        "--market-transform",
+        action="store_true",
+        help=("Use transformed market features (implied probs, home margin) instead of raw lines."),
+    )
+    parser.add_argument(
+        "--market-anchor",
+        action="store_true",
+        help=(
+            "Train on residuals vs market spread/total and add market baseline at prediction time."
+        ),
     )
     parser.add_argument(
         "--min-season",
@@ -2005,6 +2157,8 @@ def main() -> None:
             max_cardinality_ratio=args.max_cardinality_ratio,
             win_prob_calibration=args.win_prob_calibration,
             optuna_config=optuna_config,
+            market_transform=args.market_transform,
+            market_anchor=args.market_anchor,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,
@@ -2028,6 +2182,8 @@ def main() -> None:
             max_cardinality_ratio=args.max_cardinality_ratio,
             win_prob_calibration=args.win_prob_calibration,
             optuna_config=optuna_config,
+            market_transform=args.market_transform,
+            market_anchor=args.market_anchor,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,

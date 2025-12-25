@@ -30,6 +30,7 @@ setup(
         "coloredlogs",
         "lxml",
         "numpy",
+        "optuna",
         "pandas",
         "pyarrow",
         "requests",

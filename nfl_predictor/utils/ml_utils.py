@@ -50,6 +50,76 @@ def display_predictions(y_pred: np.ndarray, x_test: pd.DataFrame) -> None:
         log.info(display_string)
 
 
+def display_weekly_predictions(predictions: pd.DataFrame) -> None:
+    """
+    Displays weekly score predictions with confidence ranks and win probabilities.
+
+    Args:
+        predictions (pd.DataFrame): DataFrame containing predicted scores, win probabilities,
+            and confidence ranks.
+    """
+    if predictions.empty:
+        log.info("No predictions to display.")
+        return
+
+    team_columns = None
+    for candidates in (("away_abbr", "home_abbr"), ("away_name", "home_name")):
+        if all(col in predictions.columns for col in candidates):
+            team_columns = candidates
+            break
+
+    if team_columns is None:
+        log.info("Missing team columns for pretty output.")
+        return
+
+    away_col, home_col = team_columns
+    sorted_df = predictions.copy()
+    if "confidence_rank" in sorted_df.columns:
+        sorted_df = sorted_df.sort_values("confidence_rank", ascending=False)
+
+    season = sorted_df["season"].iloc[0] if "season" in sorted_df.columns else None
+    week = sorted_df["week"].iloc[0] if "week" in sorted_df.columns else None
+    if season is not None and week is not None:
+        log.info("Weekly predictions (season %s week %s)", season, week)
+    else:
+        log.info("Weekly predictions")
+
+    for _, row in sorted_df.iterrows():
+        away_team = str(row[away_col])
+        home_team = str(row[home_col])
+        away_score = row.get("predicted_away_score", np.nan)
+        home_score = row.get("predicted_home_score", np.nan)
+        rank = row.get("confidence_rank", np.nan)
+        winner = row.get("predicted_winner")
+
+        if winner is None or pd.isna(winner):
+            winner = home_team if home_score >= away_score else away_team
+
+        home_prob = row.get("home_win_prob")
+        away_prob = row.get("away_win_prob")
+        win_prob = None
+        if winner == home_team and pd.notna(home_prob):
+            win_prob = home_prob
+        if winner == away_team and pd.notna(away_prob):
+            win_prob = away_prob
+
+        rank_str = f"{int(rank):>2}" if pd.notna(rank) else "--"
+        away_score_str = f"{away_score:>5.1f}" if pd.notna(away_score) else "  n/a"
+        home_score_str = f"{home_score:>5.1f}" if pd.notna(home_score) else "  n/a"
+        prob_str = f"{win_prob * 100:>5.1f}%" if win_prob is not None else "  n/a"
+
+        log.info(
+            "#%s %s %s @ %s %s | pick %s | win %s",
+            rank_str,
+            away_team,
+            away_score_str,
+            home_team,
+            home_score_str,
+            winner,
+            prob_str,
+        )
+
+
 def flatten_dict(nested_dict):
     """
     Recursively flattens a nested dictionary.

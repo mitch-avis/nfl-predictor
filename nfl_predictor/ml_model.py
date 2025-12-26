@@ -328,7 +328,6 @@ def _build_feature_spec(
     categorical_columns = feature_df.select_dtypes(include=["object", "category"]).columns.tolist()
     numeric_columns = [col for col in feature_df.columns if col not in categorical_columns]
 
-    log.debug("Feature range columns (%d): %s", len(feature_range), feature_range)
     if market_only:
         log.debug("Market-only feature selection enabled.")
     if market_transform:
@@ -357,9 +356,6 @@ def _build_feature_spec(
             max_cardinality_ratio,
             high_cardinality_columns,
         )
-    log.debug(
-        "Final feature columns (%d): %s", len(feature_df.columns), feature_df.columns.tolist()
-    )
 
     return FeatureSpec(
         feature_columns=feature_df.columns.tolist(),

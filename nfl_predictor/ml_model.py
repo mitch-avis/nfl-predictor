@@ -1328,7 +1328,6 @@ def train_margin_total_model(
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
-    refit_after_calibration: bool,
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -1373,10 +1372,6 @@ def train_margin_total_model(
     if market_anchor:
         _get_market_baseline(train_df)
         log.info("Market anchor enabled: training residuals vs spread/total.")
-    if refit_after_calibration:
-        if calibration_df.empty:
-            raise ValueError("Refit-after-calibration requires calibration seasons or weeks.")
-        log.info("Refit-after-calibration enabled: training on calibration data before final fit.")
 
     tuned_params: dict[str, Any] = {}
     if optuna_config.enabled:
@@ -1481,7 +1476,7 @@ def train_margin_total_model(
     ) = _train_models(train_df, calibration_df)
 
     calibrator = None
-    if win_prob_calibration != "none" and not refit_after_calibration:
+    if win_prob_calibration != "none":
         if calibration_df.empty:
             raise ValueError("Calibration requested but no calibration seasons configured.")
         if x_calibration is None:
@@ -1496,31 +1491,6 @@ def train_margin_total_model(
         calibrator = _fit_win_prob_calibrator(
             pred_margin_calib, actual_home_win.to_numpy(), win_prob_calibration
         )
-
-    if refit_after_calibration:
-        full_train_df = pd.concat([train_df, calibration_df], axis=0)
-        (
-            preprocessor,
-            feature_spec,
-            margin_model,
-            total_model,
-            x_calibration,
-            baseline_margin_calibration,
-        ) = _train_models(full_train_df, calibration_df)
-
-        if win_prob_calibration != "none":
-            if x_calibration is None:
-                raise ValueError("Calibration features are unavailable after refit.")
-            pred_margin_calib = margin_model.predict(x_calibration)
-            if market_anchor:
-                if baseline_margin_calibration is None:
-                    raise ValueError("Market anchor baseline missing for calibration data.")
-                pred_margin_calib = pred_margin_calib + baseline_margin_calibration
-            away_col, home_col = target_columns
-            actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
-            calibrator = _fit_win_prob_calibrator(
-                pred_margin_calib, actual_home_win.to_numpy(), win_prob_calibration
-            )
 
     if not holdout_df.empty:
         x_holdout = preprocessor.transform(_apply_feature_spec(holdout_df, feature_spec))
@@ -2023,11 +1993,6 @@ def _parse_args() -> argparse.Namespace:
         help="Number of weeks from the latest season reserved for calibration.",
     )
     parser.add_argument(
-        "--refit-after-calibration",
-        action="store_true",
-        help="Refit the model on train+calibration data before calibrating probabilities.",
-    )
-    parser.add_argument(
         "--win-prob-calibration",
         choices=["none", "platt", "isotonic"],
         default="isotonic",
@@ -2223,7 +2188,6 @@ def main() -> None:
             optuna_config=optuna_config,
             market_transform=args.market_transform,
             market_anchor=args.market_anchor,
-            refit_after_calibration=args.refit_after_calibration,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,

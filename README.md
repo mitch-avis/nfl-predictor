@@ -49,13 +49,34 @@ The model expects `data/completed_games_ml.csv` by default. Feature selection is
 - `away_score` and `home_score` are the target columns.
 - `--exclude-market` removes spread/total/moneyline features.
 
+### Market transforms and anchoring
+
+For more realistic predictions that still allow your team features to move the line, use:
+
+- `--market-transform` to drop raw lines and add:
+  - `market_home_margin` (from spreads)
+  - `market_total_line`
+  - `home_market_prob`, `away_market_prob` (from moneylines)
+- `--market-anchor` to train on residuals vs the market spread/total, then add the market
+  baseline back at prediction time.
+
+Example:
+
+```bash
+python -m nfl_predictor.ml_model \
+  --model-kind margin_total \
+  --market-transform \
+  --market-anchor
+```
+
 ### Splits: train, calibration, holdout
 
 Splits are time-aware by season.
 
 - `--holdout-seasons` keeps the most recent seasons for evaluation only.
 - `--calibration-seasons` reserves seasons just before the holdout for calibration/blending.
-- `--calibration-weeks` reserves the most recent weeks from the latest season for calibration.
+- `--calibration-weeks` reserves the most recent weeks from the latest season for calibration
+  (those weeks are excluded from training).
 - Use `--min-season` / `--max-season` to bound the dataset.
 
 Example: hold out 2025 for evaluation, calibrate on 2024:
@@ -111,6 +132,27 @@ python -m nfl_predictor.ml_model \
 
 You can save a trained model for reuse with `--model-out` and load it later with `--model-in`.
 
+### Market win-prob adjustment (blend + clamp)
+
+To reduce contrarian picks while still using your model, adjust win probabilities after
+calibration using the market implied probabilities:
+
+- `--market-prob-blend` (0.0–1.0) controls how much of the market to blend in.
+- `--market-prob-clamp` (0.0–0.5) clamps final probs within ±delta of the market.
+
+Example (recommended starting point):
+
+```bash
+python -m nfl_predictor.ml_model \
+  --model-kind margin_total \
+  --market-transform \
+  --market-anchor \
+  --market-prob-blend 0.65 \
+  --market-prob-clamp 0.2
+```
+
+These adjustments are used in holdout metrics, expected-points tuning, and prediction output.
+
 ### Persist Optuna across runs
 
 To keep improving across runs, use a persistent study:
@@ -164,6 +206,25 @@ To ensure GPU support:
 - Verify by running a small training run with `--xgb-tree-method gpu_hist`.
 
 XGBoost does not blend CPU and GPU in a single training run; you choose one via `tree_method`.
+If you see a warning about mismatched devices during prediction, it means the model is on
+GPU while the input array is on CPU; the code uses DMatrix prediction to avoid this, but
+the warning can still appear in some XGBoost builds.
+
+## Backtest + power rankings
+
+Score every historical matchup, compute weekly confidence ranks, and produce weekly/season/all-time
+confidence pool summaries plus weekly power rankings:
+
+```bash
+python scripts/backtest_predictions.py \
+  --model-in models/anchor72h.joblib \
+  --model-kind margin_total \
+  --data-path data/completed_games_ml.csv \
+  --output-dir data/backtest
+```
+
+To include future games (for preseason-style outlook power rankings), use `data/all_data_ml.csv`.
+Playoff games are excluded automatically when `game_type` is present.
 
 ## Testing
 

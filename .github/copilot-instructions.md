@@ -1,128 +1,203 @@
 # Copilot Instructions for nfl-predictor
 
-## Project Shape (Big Picture)
-- **Primary Pipeline:** The project uses **Polars** for data processing, combined with **nflreadpy** to fetch raw data (schedule, team stats, Elo ratings, etc.). The pipeline integrates multiple data sources (schedule results, team statistics, ELO ratings, TeamRankings stats, betting odds) to produce a rich, ML-ready dataset for predictions.
-- **Orchestration Script:** The main data assembly is done in [`nfl_predictor/data_collection_polars.py`](../nfl_predictor/data_collection_polars.py) (run as a module). This orchestrator pulls the data, applies all transformations, and saves output CSVs.
-- **Core Data Transforms:** Polars transformations and helper functions live in [`nfl_predictor/utils/polars_utils.py`](../nfl_predictor/utils/polars_utils.py). This includes functions to normalize team names, compute derived feature columns (offensive/defensive metrics, matchup deltas, rolling stats), and other Polars DataFrame manipulations.
-- **Game-Specific Enrichments:** Additional domain-specific calculations (e.g., filling missing QB data, computing SurvivorGrid spreads, adding moneyline odds) are in [`nfl_predictor/utils/game_utils.py`](../nfl_predictor/utils/game_utils.py). These enrich the dataset after core data assembly.
-- **External Data Scraping/Caching:** Data from external sites (TeamRankings stats, SurvivorGrid lines, etc.) is handled via [`nfl_predictor/utils/scraping_utils.py`](../nfl_predictor/utils/scraping_utils.py). This module fetches and caches web data so that it can be reused without unnecessary network calls.
+## 0) Mission + Non-Negotiables
+This repo predicts NFL outcomes and scores for **Confidence Pools / Pick ’Em**. The primary objective is **reliable win probabilities and rankings**; realistic score outputs are secondary but must be coherent.
 
-## Modeling Philosophy (Important Context for Code Generation)
-- This project no longer relies on spreadsheets or spreadsheet formulas for implementation.
-- However, the **modeling philosophy** is informed by years of structured analytical work:
-  - Teams are represented by **composite offensive and defensive ratings**, derived from aggregated statistics.
-  - Matchups are evaluated by **comparing offensive strength vs opponent defensive strength**, and vice versa.
-  - Overall team strength (e.g., Elo or power rating) provides a baseline expectation, while matchup-specific deltas capture stylistic advantages.
-  - Historical game data is used to **learn relationships** between these features and actual outcomes (scores, spreads, totals).
-- These ideas should be implemented **purely in Python**, using statistical or ML methods (e.g., regression, gradient boosting), **not by recreating spreadsheet logic**.
-- When generating code, Copilot/GPT should:
-  - Translate these concepts into **features and models**
-  - Prefer **learned relationships** over hardcoded weights
-  - Treat all feature weighting and interactions as data-driven unless explicitly stated otherwise
+**Non-negotiables**
+- **No data leakage**: never train/evaluate using information from after the game week being predicted.
+- **Time-aware evaluation**: backtests must reflect “known at prediction time.”
+- **Reproducible artifacts**: models must be loadable and comparable across runs.
+- **Polars-first pipeline**: prefer Polars for ETL. Pandas/Numpy are acceptable inside ML modules only as needed.
 
-## Data Inputs/Outputs (Repo Conventions)
-- **Data Directory:** All data files reside under the `data/` directory (see `constants.DATA_PATH` in [`nfl_predictor/constants.py`](../nfl_predictor/constants.py)). The pipeline reads from and writes to this location.
-- **Key Output Files:**
-  - `data/all_data_ml.csv` – Master dataset for machine learning (includes game results with engineered features and target variables such as team scores, point differentials, or totals).
-  - `data/all_data.csv` – Combined dataset without ML-only columns.
-  - `data/completed_games_ml.csv` and `data/completed_games.csv` – Subsets of completed games used for training, validation, and evaluation.
-  - `data/predict/week_XX_games_to_predict.csv` – Upcoming games for the current week with all features prepared for prediction.
-- **TeamRankings Cache:** TeamRankings data is cached per season/week:
-  - `data/<season>/<season>_week_<WW>_team_rankings.csv` (weekly snapshot)
-  - `data/<season>/<season>_team_rankings.csv` (season-to-date)
-  - Prefer cached data for historical weeks; scrape only when missing.
-- **Loading/Saving Functions (Current Reality):**
-  - For CSV IO in the Polars pipeline, prefer `df.write_csv(...)` / `pl.read_csv(...)` via
-    `save_dataframe()` / `load_dataframe()` in [`nfl_predictor/data_collection_polars.py`](../nfl_predictor/data_collection_polars.py).
-  - `utils/csv_utils.py` exists but is **legacy/outdated** (pandas-based). Do not extend it without first converting it to Polars.
+## 1) Project Shape (Big Picture)
+- **Primary Pipeline:** Polars + nflreadpy + multiple sources (schedule, stats, Elo, TeamRankings, odds) to create ML-ready datasets.
+- **Orchestration:** `nfl_predictor/data_collection_polars.py` pulls/transforms data; writes CSVs under `data/`.
+- **Core Polars transforms:** `nfl_predictor/utils/polars_utils.py`
+- **Game enrichments:** `nfl_predictor/utils/game_utils.py`
+- **Scraping/caching:** `nfl_predictor/utils/scraping_utils.py` (cache-first)
 
-## Column & Schema Rules (Source of Truth)
-- **Constants Module:** Always refer to [`nfl_predictor/constants.py`](../nfl_predictor/constants.py) for authoritative definitions of column names and schema:
-  - **nflreadpy Columns:** `NFLREADPY_SCHEDULE_COLUMNS`, `NFLREADPY_SCHEDULE_RENAME`
-  - **Output Ordering:** `FIRST_COLUMNS`, `LINES_COLUMNS`, `RESULT_COLUMNS`
-  - **Polars Dataset Schema:** `POLARS_METADATA_COLUMNS`, `POLARS_LINES_COLUMNS`, `POLARS_RESULT_COLUMNS`, and stat field lists
-- **Do not hard-code column names.** Use constants to avoid schema drift.
-- **Team Name Normalization:** Always normalize team abbreviations/names via `constants.ALIAS_TO_CANONICAL`. Use `normalize_team_column(df, col)` whenever ingesting team identifiers.
+## 2) Data Inputs/Outputs (Repo Conventions)
+- All data lives under `data/` (`constants.DATA_PATH`).
+- Key outputs (examples, do not hard-code filenames):
+  - `data/all_data_ml.csv` (master ML dataset)
+  - `data/completed_games_ml.csv` (training/eval subset)
+  - `data/predict/week_XX_games_to_predict.csv` (prediction inputs)
 
-## Season/Week Logic & Edge Cases
-- **Season Length Variations:** Use `constants.get_regular_season_weeks(season)` to determine the correct number of regular-season weeks. Do not hard-code week counts.
-- **Start-of-Season Edge Case:** In Week 1 (or when a team has no prior games), features requiring historical context must fall back to previous-season values with regression-to-mean. Tests in [`tests/test_data_collection_polars.py`](../tests/test_data_collection_polars.py) assert this behavior.
-- **Historical vs Current Week:**
-  - Historical weeks should load fully from cached data.
-  - The current week may require live scraping for certain sources.
-- **Future Weeks:** Upcoming games will have missing outcome data. Code must gracefully handle nulls/NaNs and still output a structurally complete dataset suitable for prediction.
+**I/O rules**
+- Prefer the project’s Polars-based load/save helpers in `data_collection_polars.py`.
+- `utils/csv_utils.py` is legacy (pandas). Do not extend it; migrate call sites toward Polars.
 
-## Prediction & Modeling Logic
-- **Primary product goals:** support **Confidence pools** and **Pick ’Em** decisions.
-  - Confidence pools require *good win-probability ranking* (separation + calibration).
-  - “Realistic scores” matter, but are secondary to expected confidence points.
-- **Confidence pool deliverable (important):**
-  - Each week, output a **1–N unique ranking** across that week’s games (no repeated numbers).
-  - Highest number = highest confidence in the predicted winner; lowest number = closest to a toss-up.
-- **ML Code Status:** `ml_model.py` and `ml_utils.py` are known to be outdated. It is acceptable to pivot to a new modeling approach (regression/classification/both) as long as:
-  - it consumes the existing datasets under `data/` (not spreadsheets), and
-  - it avoids training on future data (time-aware splits), and
-  - it outputs reproducible predictions suitable for confidence ranking.
-- **Targets (allowed approaches):**
-  - Predict `home_score` & `away_score` directly **or**
-  - Predict `margin` and `total` and derive scores (preferred if it improves realism/consistency).
-- **Evaluation (project-relevant metrics):**
-  - For pick’em / win probability: optimize and report **log loss** or **Brier score** for win probs.
-  - For “realistic scores”: report **MAE** on `margin` and `total` (and optionally team scores).
-  - For confidence pools: backtest “confidence points” using predicted win probs (ranking by |p-0.5| or implied margin) and report expected/actual points over seasons.
-  - **Confidence pool scoring (authoritative):**
-    - Each week, assign unique confidence values **1..N** to your chosen winner in each matchup.
-    - Weekly **max points** = `1 + 2 + ... + N = N*(N+1)/2` (e.g., 16 games → 136).
-    - Weekly **realized points** = `sum(conf_i * 1[pick_i_correct])`.
-      - Equivalent: **points lost** = `sum(conf_i * 1[pick_i_wrong])`.
-    - **Tie games:** treat as incorrect for both sides → you lose the confidence points assigned to either team.
-- **Betting market features (spreads/totals/moneylines): allowed, but avoid “market dominates everything”:**
-  - Treat market columns as **strong priors**, not the whole model.
-  - Prefer approaches that make the contribution explicit and tunable, e.g.:
-    - **Two-signal blend:** build a *market-only* predictor and a *team-feature* predictor, then blend via a simple calibration/blending layer validated by season-based splits.
-    - **Regularization / constrained models:** if using linear/logistic baselines, use strong regularization so market features don’t trivially drown out others.
-  - Keep “market vs non-market” logic in modeling code (not in data pipeline). The pipeline should continue emitting all available columns.
-+ **Pick submission timing (important constraint):**
-  - All picks/ranks are submitted **before the first game of the week** (typically TNF).
-  - The “production” workflow is: refresh data + run model **Thursday afternoon**, then submit picks.
-  - Therefore weekly optimization/backtests should assume **no in-week updates** (single-shot picks).
-**Confidence Pool Logic (separation of concerns):**
-  - Determine predicted winner via predicted scores or win probability.
-  - Compute confidence strength via win probability (preferred) or predicted margin.
-  - Rank games by descending confidence; keep this separate from the model training code.
+## 3) Column & Schema Rules (Source of Truth)
+- Always use `nfl_predictor/constants.py` for column names and schema lists.
+- Do not hard-code columns; use constants to prevent schema drift.
+- Always normalize team identifiers via `constants.ALIAS_TO_CANONICAL` and `normalize_team_column(df, col)`.
 
-## Dev Workflows (How to Run Things)
-- **Refresh Data:**  
-  `python -m nfl_predictor.data_collection_polars`
-- **Testing:**  
-  `pytest`
-  - `tests/test_polars_utils.py`
-  - `tests/test_data_collection_polars.py`
-- **Validation Scripts:**
-  - `scripts/validate_offline.py`
-  - `scripts/validate_live.py`
-- **Train & Predict (Legacy):**  
-  `python -m nfl_predictor.ml_model` (legacy/outdated; may be replaced)
+## 4) Season/Week Logic & Edge Cases
+- Use `constants.get_regular_season_weeks(season)`; never hard-code week counts.
+- Week 1 / no-prior-games: regress to prior season values + global mean (or documented fallback), consistent with tests.
+- Historical weeks: use cached data; current week may require live scrape for missing sources.
+- Future games: handle missing results gracefully (null targets).
 
-## Logging & Coding Style
-- **Logging:** Use the project logger (`from nfl_predictor.utils.logger import log`). Avoid `print`.
-- **Formatting & Linting:**
+## 5) Modeling Philosophy (What to Build)
+### 5.1 Canonical approach (preferred)
+**Use a Margin/Total model**:
+- Predict:
+  - `margin = home_score - away_score`
+  - `total = home_score + away_score`
+- Derive scores:
+  - `home = (total + margin)/2`
+  - `away = (total - margin)/2`
+
+Direct home/away score regressors are allowed only as secondary ensemble members.
+
+### 5.2 Market integration (required capabilities)
+Market features are **strong priors** but must be explicit and configurable.
+
+Support:
+- **Market transforms** (derived columns):
+  - `market_home_margin` from spread
+  - `market_total_line`
+  - `home_market_prob`, `away_market_prob` from moneyline
+- **Market anchoring** (preferred):
+  - Train residuals: `target_resid = target - market_baseline`
+  - Predict: `pred = market_baseline + pred_resid`
+- Optional **market clamp/blend** for win probability:
+  - Combine calibrated model probability with market implied probability via an explicit weight.
+  - Weight must be configurable and validated in time-aware evaluation.
+
+### 5.3 Calibration (required)
+Win probabilities must be calibrated and evaluated using:
+- **Brier score** and **log loss**
+- Calibration methods:
+  - Platt scaling (logistic regression)
+  - Isotonic regression
+- A normal-CDF mapping from margin is allowed as a baseline only; if calibration is enabled, calibrated output is the default.
+
+### 5.4 Uncertainty (high priority)
+Add **prediction intervals** for margin and total:
+- Train quantile models (e.g., P10/P50/P90) or equivalent approach.
+- Outputs must include median and at least one interval.
+
+### 5.5 Realistic score outputs (optional but encouraged)
+If implementing score “realism”:
+- Apply post-processing only after core predictions:
+  - rounding/snapping policies must be configurable
+  - never change training targets to enforce “NFL score lattice” unless explicitly designed and documented
+- Keep this logic separate from model training and evaluation.
+
+## 6) Evaluation & Backtesting (Required)
+### 6.1 Time-aware evaluation modes
+Maintain and/or implement:
+1) **Season-blocked CV** (acceptable baseline)
+2) **Walk-forward evaluation** (required)
+   - For each season in an eval range:
+     - for each week `w` (e.g., 3..end):
+       - train on all games strictly before week `w` (plus all prior seasons if configured)
+       - predict games in week `w`
+       - record metrics
+
+### 6.2 Required metrics (report all)
+- Margin/Total:
+  - MAE for margin
+  - MAE for total
+- Win probabilities:
+  - Brier score
+  - log loss
+  - calibration summary (binned reliability table)
+- Pool utility:
+  - weekly confidence ranking score:
+    - rank by confidence strength (default: `abs(p-0.5)`)
+    - compute realized confidence points using Section 7 rules
+- Market-relative:
+  - residual MAE vs market baseline (if market anchoring enabled)
+  - optional: edge metrics vs spread/total (do not claim profit unless robustly backtested and clearly caveated)
+
+### 6.3 Output artifacts (required)
+Every training/backtest run must produce:
+- a saved model artifact
+- a metadata JSON (Section 9)
+- a metrics report JSON (walk-forward aggregated + per-season/per-week summaries)
+- plots optional (do not block CI)
+
+## 7) Confidence Pool Rules (Authoritative)
+- Each week assign unique confidence values `1..N` to the chosen winner in each matchup.
+- Max weekly points = `N*(N+1)/2`
+- Realized points = `sum(conf_i * 1[pick_i_correct])`
+- Tie games: treat as incorrect for both sides.
+
+**Production constraint**
+- Picks are submitted **before the first game of the week** (typically TNF).
+- Backtests must assume **single-shot picks** (no in-week updates).
+
+## 8) ML Implementation Standards (How to Code It)
+### 8.1 Preprocessing rules
+- Tree-based models (XGBoost):
+  - Do **not** use `StandardScaler` unless a non-tree model requires it.
+  - Missing values: XGBoost can handle; impute only if required for consistency.
+- Use `ColumnTransformer` for categorical one-hot + numeric passthrough/impute.
+- Avoid densifying large sparse matrices unintentionally.
+
+### 8.2 Training rules
+- Use early stopping and set `eval_metric` explicitly (aligned to objective).
+- Tune hyperparameters consistently with evaluation metric (Optuna optional but supported).
+- Use `random_state` everywhere applicable.
+- Do not hardcode `n_jobs`; prefer `os.cpu_count()` or a config default.
+
+### 8.3 Blending rules
+If blending signals (team model + market model):
+- Prefer explicit, interpretable blends:
+  - residual model via market anchoring (often sufficient)
+  - simple linear blend with regularization
+- If using a blender/regressor:
+  - avoid unstable unconstrained weights; prefer non-negative or sum-to-1 if implemented
+- Validate blends using time-aware splits.
+
+### 8.4 Leakage audit (required)
+Add/maintain a leakage audit tool/mode:
+- Checks for target/label columns in features
+- Flags suspiciously predictive columns (e.g., absurd correlations)
+- Validates “season-to-date” features exclude the current game row
+
+## 9) Reproducibility & Model Artifact Contract (Required)
+Every saved model must include adjacent metadata JSON with:
+- created timestamp
+- git commit hash (if available)
+- dataset fingerprint (hash of training CSV and/or stable row ids)
+- library versions (xgboost, sklearn, numpy, pandas, polars, scipy)
+- training config (CLI args / config object)
+- season/week ranges used for train/calibration/holdout
+- feature list used
+- best params (if tuned) and early-stopping info
+
+Artifacts must be loadable without hidden external state.
+
+## 10) Dependency & Environment Hygiene (Required)
+- Pin key ML dependencies for reproducibility:
+  - xgboost, scikit-learn, numpy, pandas, polars, scipy, optuna (if used)
+- Document supported Python version(s) and GPU/CPU constraints if applicable.
+- Avoid optional GPU paths that break CPU-only execution unless explicitly guarded.
+
+## 11) Coding Style, Formatting, and Logging
+- Use `from nfl_predictor.utils.logger import log` (no `print`).
+- Formatting:
   - Black (line length 100)
   - isort (Black profile)
   - flake8 (E402 ignored)
-- **Type Hints:** Use type annotations consistently.
-- **Performance:** Prefer Polars expressions over Python loops.
-- **Avoid pandas in Polars pipeline.** pandas is acceptable only in ML modules where required by libraries.
+- Type hints required in new/modified ML modules.
+- Keep functions small, testable, and documented.
+- Prefer explicit configuration over “magic defaults”.
 
-## Choosing APIs & Libraries
-- **Polars First:** All data transformation and feature engineering should use Polars.
-- **nflreadpy:** Primary source for schedules, team stats, and Elo.
-- **Machine Learning:** scikit-learn and XGBoost are preferred.
-  - pandas/numpy usage is acceptable within modeling modules.
-- **No Magic Numbers:** Avoid hardcoded assumptions about teams, games, or seasons.
+## 12) Safety, Scope, and Prohibited Behaviors
+- Do not introduce offensive/unsafe content or harmful instructions.
+- Do not add unrelated features (UI dashboards, new scrapers, unrelated pipelines).
+- Do not remove existing pipeline behavior without updating tests and documentation.
+- Avoid introducing new external services or network dependencies beyond existing scraping utilities.
+- Do not claim betting profitability; report metrics and uncertainty honestly.
 
-## GPT-5.2 Codex Guidance
-- Use existing project utilities whenever possible.
-- Generate idiomatic code consistent with this repository.
-- Prioritize clarity, correctness, and maintainability over brevity.
-- Assume no access to external artifacts beyond this repository and its data outputs.
+## 13) Dev Workflows
+- Refresh data: `python -m nfl_predictor.data_collection_polars`
+- Tests: `pytest`
+- Validation scripts:
+  - `scripts/validate_offline.py`
+  - `scripts/validate_live.py`
+- Training/prediction entrypoints may be updated/replaced, but must remain runnable and documented.

@@ -1,0 +1,136 @@
+#!/usr/bin/env python
+"""
+Walk-forward backtest for margin/total NFL predictions.
+
+This script trains a new model for each week in the evaluation window,
+predicts that week, and reports per-week and aggregate metrics.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nfl_predictor import constants  # noqa: E402, pylint: disable=wrong-import-position
+from nfl_predictor.ml import walk_forward  # noqa: E402, pylint: disable=wrong-import-position
+from nfl_predictor.utils.logger import log  # noqa: E402, pylint: disable=wrong-import-position
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run walk-forward backtests.")
+    parser.add_argument(
+        "--data-path",
+        type=Path,
+        default=Path(constants.DATA_PATH) / "completed_games_ml.csv",
+        help="Path to completed games dataset.",
+    )
+    parser.add_argument(
+        "--eval-last-n-seasons",
+        type=int,
+        default=3,
+        help="Evaluate the last N seasons in the dataset.",
+    )
+    parser.add_argument(
+        "--eval-seasons",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Explicit seasons to evaluate (overrides --eval-last-n-seasons).",
+    )
+    parser.add_argument(
+        "--wf-start-week",
+        type=int,
+        default=3,
+        help="Walk-forward start week.",
+    )
+    parser.add_argument(
+        "--calibration",
+        choices=["platt", "isotonic", "none"],
+        default="platt",
+        help="Win-prob calibration method.",
+    )
+    parser.add_argument(
+        "--wf-calibration-weeks",
+        type=int,
+        default=walk_forward.DEFAULT_CALIBRATION_WEEKS,
+        help="Number of prior-season weeks for calibration.",
+    )
+    parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=walk_forward.DEFAULT_RANDOM_SEED,
+        help="Random seed for reproducibility.",
+    )
+    parser.add_argument(
+        "--market-anchor",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable market anchoring when spread/total lines exist.",
+    )
+    parser.add_argument(
+        "--market-transform",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Use transformed market features when odds columns exist.",
+    )
+    parser.add_argument(
+        "--out-json",
+        type=Path,
+        default=None,
+        help="Path to metrics_report.json (default: models/<run_id>/metrics_report.json).",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+
+    df = walk_forward.load_games(args.data_path)
+    config = walk_forward.WalkForwardConfig(
+        eval_seasons=args.eval_seasons,
+        eval_last_n_seasons=args.eval_last_n_seasons,
+        wf_start_week=args.wf_start_week,
+        calibration=args.calibration,
+        calibration_weeks=args.wf_calibration_weeks,
+        random_seed=args.random_seed,
+        market_anchor=args.market_anchor,
+        market_transform=args.market_transform,
+    )
+
+    dataset_hash = walk_forward.dataset_fingerprint(args.data_path)
+    run_id = walk_forward.generate_run_id(dataset_hash, config)
+    created_at = datetime.now(timezone.utc).isoformat()
+
+    results = walk_forward.run_walk_forward_backtest(df, config)
+
+    run_dir = Path(constants.ROOT_DIR) / "models" / run_id
+    out_json = args.out_json or (run_dir / "metrics_report.json")
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+
+    config_payload = config.to_dict()
+    config_payload["data_path"] = str(args.data_path)
+    config_payload["out_json"] = str(out_json)
+    config_payload.update(results.get("resolved_settings", {}))
+    if "resolved_eval_seasons" in results:
+        config_payload["resolved_eval_seasons"] = results["resolved_eval_seasons"]
+
+    report = walk_forward.build_metrics_report(run_id, created_at, config_payload, results)
+    metadata = walk_forward.build_metadata(created_at, dataset_hash, config_payload)
+
+    out_json.write_text(json.dumps(report, indent=2, sort_keys=True))
+    metadata_path = out_json.parent / "metadata.json"
+    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True))
+
+    log.info("Saved metrics report to %s", out_json)
+    log.info("Saved metadata to %s", metadata_path)
+
+
+if __name__ == "__main__":
+    main()

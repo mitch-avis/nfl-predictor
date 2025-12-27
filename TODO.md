@@ -27,14 +27,18 @@ Unless explicitly overridden by CLI/config:
 - Walk-forward start week: `3`
 - Walk-forward eval seasons: last `N` seasons available (default `N=3`), OR explicit
   `--eval-seasons` list
+- Walk-forward data path: `data/completed_games_ml.csv` via `--data-path`
 - Calibration method: `platt` (options: `platt`, `isotonic`, `none`)
+- Walk-forward calibration weeks: `4` via `--wf-calibration-weeks`
+- Walk-forward report path: `models/<run_id>/metrics_report.json` via `--out-json`
 - Market usage:
-  - market transforms: `enabled` if odds columns exist
-  - market anchoring: `enabled` by default (configurable)
+  - market transforms: `enabled` if odds columns exist (`--market-transform/--no-market-transform`)
+  - market anchoring: `enabled` by default (`--market-anchor/--no-market-anchor`)
   - market prob blend/clamp: `disabled` by default (configurable via `--market-prob-weight`)
 - Quantiles: `p10/p50/p90` for margin and total
-- Random seed: fixed default (e.g., `42`) and configurable
+- Random seed: fixed default (`42`) via `--random-seed` and configurable
 - CPU-only must work; optional GPU paths must be guarded
+- XGBoost parallelism: `os.cpu_count()` (or 1) default, configurable via `--xgb-n-jobs`
 
 ---
 
@@ -70,15 +74,17 @@ Where:
 
 ## Milestone 0 — Repo scan & plan (no behavior change)
 
-- [ ] Identify current ML entrypoints (train, predict, backtest scripts).
-- [ ] Identify where margin/total and win prob calibration currently live.
-- [ ] List the current artifact outputs and what metadata is missing.
-- [ ] Confirm where `data/all_data_ml.csv`, `data/completed_games_ml.csv`, and
+- [x] Identify current ML entrypoints (train, predict, backtest scripts).
+- [x] Identify where margin/total and win prob calibration currently live.
+- [x] List the current artifact outputs and what metadata is missing.
+- [x] Confirm where `data/all_data_ml.csv`, `data/completed_games_ml.csv`, and
   week prediction inputs are produced.
 - [ ] Primary files likely touched:
-  - ML code (e.g., `nfl_predictor/ml_model.py` or equivalent)
-  - scripts for training/backtesting/prediction in `scripts/`
-  - constants/config locations (e.g., `nfl_predictor/constants.py`)
+  - `nfl_predictor/ml_model.py`
+  - `scripts/backtest_predictions.py`
+  - `nfl_predictor/data_collection_polars.py`
+  - `nfl_predictor/constants.py`
+  - `README.md`
 
 ### Milestone 0 — Acceptance
 
@@ -88,20 +94,20 @@ Where:
 
 ## Milestone 1 — Canonical Margin/Total pipeline (core correctness)
 
-- [ ] Ensure margin/total modeling is the primary path:
+- [x] Ensure margin/total modeling is the primary path:
   - predict `margin = home - away`
   - predict `total = home + away`
   - derive home/away scores from those
-- [ ] Ensure score derivation is numerically stable and well-tested.
-- [ ] If direct score models exist, demote them to optional/secondary ensemble components.
+- [x] Ensure score derivation is numerically stable and well-tested.
+- [x] If direct score models exist, demote them to optional/secondary ensemble components.
 - [ ] Primary files likely touched:
-  - core model implementation module(s)
-  - prediction output formatting/serialization code
+  - `nfl_predictor/ml_model.py`
+  - `tests/test_ml_model_margin_total.py`
 
 ### Milestone 1 — Tests
 
-- [ ] Unit test: converting (margin, total) -> (home, away) round-trips for synthetic values.
-- [ ] Unit test: prediction outputs contain required columns.
+- [x] Unit test: converting (margin, total) -> (home, away) round-trips for synthetic values.
+- [x] Unit test: prediction outputs contain required columns.
 
 ### Milestone 1 — Acceptance
 
@@ -111,17 +117,16 @@ Where:
 
 ## Milestone 2 — Preprocessing cleanup (XGBoost-friendly)
 
-- [ ] Remove/avoid `StandardScaler` for XGBoost paths.
-- [ ] Ensure `ColumnTransformer` does not densify sparse matrices unintentionally.
-- [ ] Ensure missing values behavior is intentional (XGB supports missing natively).
+- [x] Remove/avoid `StandardScaler` for XGBoost paths.
+- [x] Ensure `ColumnTransformer` does not densify sparse matrices unintentionally.
+- [x] Ensure missing values behavior is intentional (XGB supports missing natively).
 - [ ] Primary files likely touched:
-  - preprocessing/pipeline construction in ML module(s)
-  - any shared feature encoding utilities
+  - `nfl_predictor/ml_model.py`
 
 ### Milestone 2 — Tests
 
-- [ ] Unit test: training pipeline produces sparse matrix when categoricals are present (if applicable).
-- [ ] Unit test: training works with missing numeric values.
+- [x] Unit test: training pipeline produces sparse matrix when categoricals are present (if applicable).
+- [x] Unit test: training works with missing numeric values.
 
 ### Milestone 2 — Acceptance
 
@@ -131,17 +136,17 @@ Where:
 
 ## Milestone 3 — Training improvements (early stopping + aligned metrics)
 
-- [ ] Use early stopping for XGB models (margin and total).
-- [ ] Set `eval_metric` explicitly and align it with optimization target (MAE if optimizing MAE).
-- [ ] Avoid hard-coded `n_jobs`; use `os.cpu_count()` or config.
+- [x] Use early stopping for XGB models (margin and total).
+- [x] Set `eval_metric` explicitly and align it with optimization target (MAE if optimizing MAE).
+- [x] Avoid hard-coded `n_jobs`; use `os.cpu_count()` or config.
 - [ ] Optional: extend Optuna tuning to any remaining untuned core models.
 - [ ] Primary files likely touched:
-  - training routine(s) for margin/total
-  - config parsing / CLI args for training
+  - `nfl_predictor/ml_model.py`
+  - `tests/test_ml_model_training_smoke.py`
 
 ### Milestone 3 — Tests
 
-- [ ] Unit test: early stopping triggers with a small dataset (smoke test).
+- [x] Unit test: early stopping triggers with a small dataset (smoke test).
 - [ ] Unit test: model config is serialized into metadata (Milestone 9).
 
 ### Milestone 3 — Acceptance
@@ -160,11 +165,11 @@ Implement a true walk-forward backtest:
     - predict games in week `w`
     - record metrics
 - Must expose config knobs:
-  - [ ] `--wf-start-week` (default `3`)
-  - [ ] `--eval-seasons` or `--eval-last-n-seasons` (default `3`)
+- [x] `--wf-start-week` (default `3`)
+- [x] `--eval-seasons` or `--eval-last-n-seasons` (default `3`)
 - [ ] Primary files likely touched:
-  - backtest script(s) in `scripts/`
-  - split/build-fold logic in ML module(s)
+  - `scripts/walk_forward_backtest.py`
+  - `nfl_predictor/ml/walk_forward.py`
 
 ### Milestone 4 — Metrics Required
 
@@ -176,8 +181,8 @@ Implement a true walk-forward backtest:
 
 ### Milestone 4 — Tests
 
-- [ ] Unit test: walk-forward split never includes same-week games in training.
-- [ ] Unit test: walk-forward deterministic with fixed random_state.
+- [x] Unit test: walk-forward split never includes same-week games in training.
+- [x] Unit test: walk-forward deterministic with fixed random_state.
 
 ### Milestone 4 — Acceptance
 
@@ -187,26 +192,26 @@ Implement a true walk-forward backtest:
 
 ## Milestone 5 — Probability calibration + diagnostics (required reliability)
 
-- [ ] Implement calibration options:
+- [x] Implement calibration options:
   - Platt scaling (logistic regression)
   - Isotonic regression
   - None (no calibration)
-- [ ] Derive raw win prob from predicted margin baseline (normal-CDF mapping ok as baseline).
-- [ ] If calibration enabled, calibrated probability is the default output.
-- [ ] Add diagnostics to reports:
+- [x] Derive raw win prob from predicted margin baseline (normal-CDF mapping ok as baseline).
+- [x] If calibration enabled, calibrated probability is the default output.
+- [x] Add diagnostics to reports:
   - Brier score
   - log loss
   - binned calibration summary (reliability table)
 - Must expose config knobs:
-  - [ ] `--calibration` (default `platt`; options `platt|isotonic|none`)
+- [x] `--calibration` (default `platt`; options `platt|isotonic|none`)
 - [ ] Primary files likely touched:
-  - probability computation + calibration code
-  - backtest reporting code
+  - `nfl_predictor/ml_model.py`
+  - `nfl_predictor/ml/metrics.py`
 
 ### Milestone 5 — Tests
 
-- [ ] Unit test: probabilities always in [0, 1].
-- [ ] Unit test: calibration uses time-aware splits only.
+- [x] Unit test: probabilities always in [0, 1].
+- [x] Unit test: calibration uses time-aware splits only.
 
 ### Milestone 5 — Acceptance
 
@@ -272,8 +277,8 @@ Implement a true walk-forward backtest:
   - validates season-to-date features exclude the current game row (when possible)
 - [ ] Output a structured audit report (JSON) with clear pass/fail.
 - [ ] Primary files likely touched:
-  - new audit module or new subcommand in an existing script
-  - reporting utilities
+  - `scripts/leakage_audit.py`
+  - `tests/`
 
 ### Milestone 8 — Tests
 
@@ -306,8 +311,9 @@ Metadata keys must include:
 - best params and early stopping info
 
 - [ ] Primary files likely touched:
-  - artifact save/load utilities
-  - training/backtest entrypoints (to emit run directory outputs)
+  - `nfl_predictor/ml/artifacts.py`
+  - `nfl_predictor/ml_model.py`
+  - `scripts/walk_forward_backtest.py`
 
 ### Milestone 9 — Tests
 
@@ -328,8 +334,8 @@ Metadata keys must include:
   - generate current-week predictions
   - write artifacts + reports
 - [ ] Primary files likely touched:
-  - a single new script entrypoint (or consolidation of existing scripts)
-  - README/docs snippet for usage
+  - `scripts/golden_command.py`
+  - `README.md`
 
 ### Milestone 10 — Acceptance
 
@@ -343,8 +349,9 @@ Metadata keys must include:
 - [ ] Document supported Python version(s) and CPU/GPU notes.
 - [ ] Ensure CPU-only path works.
 - [ ] Primary files likely touched:
-  - dependency files (`requirements.txt` / `pyproject.toml` / lockfile)
-  - README/docs
+  - `requirements.txt`
+  - `pyproject.toml`
+  - `README.md`
 
 ### Milestone 11 — Acceptance
 

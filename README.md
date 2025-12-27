@@ -98,6 +98,22 @@ python -m nfl_predictor.ml_model \
   --calibration-weeks 4
 ```
 
+### Walk-forward backtest
+
+Run walk-forward evaluation (train each week on prior games only) and write a metrics report plus
+metadata to `models/<run_id>/`:
+
+```bash
+python scripts/walk_forward_backtest.py \
+  --data-path data/completed_games_ml.csv \
+  --eval-last-n-seasons 3 \
+  --wf-start-week 3 \
+  --calibration platt \
+  --wf-calibration-weeks 4
+```
+
+This writes `metrics_report.json` and `metadata.json` under `models/<run_id>/`.
+
 ### Optuna hyperparameter tuning
 
 Optuna is a hyperparameter search library. Use it to optimize for your pool objective.

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
+import os
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
@@ -57,8 +58,7 @@ DEFAULT_XGB_PARAMS = {
     "colsample_bytree": 0.9,
     "reg_lambda": 1.0,
     "random_state": 42,
-    "n_jobs": 24,
-    "device": "cuda",
+    "n_jobs": os.cpu_count() or 1,
     "verbosity": 2,
 }
 
@@ -183,6 +183,7 @@ class OptunaConfig:
     storage: Optional[str]
     study_name: Optional[str]
     best_params_out: Optional[Path]
+    xgb_n_jobs: Optional[int] = None
 
 
 def _available_columns(df: pd.DataFrame, candidates: Iterable[str]) -> list[str]:
@@ -399,19 +400,18 @@ def _apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
     return df.reindex(columns=spec.feature_columns)
 
 
-def _build_preprocessor(spec: FeatureSpec) -> ColumnTransformer:
+def _build_preprocessor(spec: FeatureSpec, *, for_tree: bool = True) -> ColumnTransformer:
     encoder_params: dict[str, Any] = {"handle_unknown": "ignore"}
     if "sparse_output" in inspect.signature(OneHotEncoder).parameters:
-        encoder_params["sparse_output"] = False
+        encoder_params["sparse_output"] = for_tree
     else:
-        encoder_params["sparse"] = False
+        encoder_params["sparse"] = for_tree
 
-    numeric_transformer = Pipeline(
-        steps=[
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-        ]
-    )
+    numeric_steps: list[tuple[str, Any]] = [("imputer", SimpleImputer(strategy="median"))]
+    if not for_tree:
+        numeric_steps.append(("scaler", StandardScaler()))
+    numeric_transformer = Pipeline(steps=numeric_steps)
+
     categorical_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
@@ -427,6 +427,8 @@ def _build_preprocessor(spec: FeatureSpec) -> ColumnTransformer:
     if not transformers:
         raise ValueError("No feature columns available after preprocessing.")
 
+    if for_tree:
+        return ColumnTransformer(transformers=transformers, remainder="drop", sparse_threshold=1.0)
     return ColumnTransformer(transformers=transformers, remainder="drop")
 
 
@@ -591,10 +593,12 @@ def _fit_models(
     x_train: np.ndarray | spmatrix,
     y_train: pd.DataFrame,
     target_columns: tuple[str, str],
+    params: Optional[dict[str, Any]] = None,
 ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
     away_col, home_col = target_columns
-    away_model = xgb.XGBRegressor(**DEFAULT_XGB_PARAMS)
-    home_model = xgb.XGBRegressor(**DEFAULT_XGB_PARAMS)
+    resolved_params = params or _resolve_xgb_params(DEFAULT_XGB_PARAMS)
+    away_model = xgb.XGBRegressor(**resolved_params)
+    home_model = xgb.XGBRegressor(**resolved_params)
 
     away_model.fit(x_train, y_train[away_col])
     home_model.fit(x_train, y_train[home_col])
@@ -1266,7 +1270,7 @@ def _evaluate_margin_total_cv(
             market_only=market_only,
             market_transform=market_transform,
         )
-        preprocessor = _build_preprocessor(feature_spec)
+        preprocessor = _build_preprocessor(feature_spec, for_tree=True)
 
         x_train = preprocessor.fit_transform(_apply_feature_spec(train_df, feature_spec))
         x_val = preprocessor.transform(_apply_feature_spec(val_df, feature_spec))
@@ -1353,6 +1357,8 @@ def _run_optuna_search(
             "gamma": trial.suggest_float("gamma", 0.0, 5.0),
             "n_estimators": trial.suggest_int("n_estimators", 200, 1200),
         }
+        if optuna_config.xgb_n_jobs is not None:
+            trial_params["n_jobs"] = optuna_config.xgb_n_jobs
         params = _resolve_xgb_params(
             DEFAULT_XGB_PARAMS,
             overrides=trial_params,
@@ -1426,6 +1432,9 @@ def train_score_model(
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
+    xgb_tree_method: Optional[str] = None,
+    xgb_device: Optional[str] = None,
+    xgb_n_jobs: Optional[int] = None,
 ) -> ScoreModel:
     """Train score models using time-aware season splits."""
     df = _load_games(data_path)
@@ -1457,9 +1466,18 @@ def train_score_model(
     x_train_df = _apply_feature_spec(train_df, feature_spec)
     x_holdout_df = _apply_feature_spec(holdout_df, feature_spec)
 
-    preprocessor = _build_preprocessor(feature_spec)
+    preprocessor = _build_preprocessor(feature_spec, for_tree=True)
     x_train = preprocessor.fit_transform(x_train_df)
-    away_model, home_model = _fit_models(x_train, train_df, target_columns)
+    xgb_overrides: dict[str, Any] = {}
+    if xgb_n_jobs is not None:
+        xgb_overrides["n_jobs"] = xgb_n_jobs
+    params = _resolve_xgb_params(
+        DEFAULT_XGB_PARAMS,
+        overrides=xgb_overrides or None,
+        tree_method=xgb_tree_method,
+        device=xgb_device,
+    )
+    away_model, home_model = _fit_models(x_train, train_df, target_columns, params=params)
 
     if not holdout_df.empty:
         x_holdout = preprocessor.transform(x_holdout_df)
@@ -1565,9 +1583,12 @@ def train_margin_total_model(
             market_prob_config=market_prob_config,
         )
 
+    params_overrides = tuned_params.copy()
+    if optuna_config.xgb_n_jobs is not None:
+        params_overrides["n_jobs"] = optuna_config.xgb_n_jobs
     params = _resolve_xgb_params(
         DEFAULT_XGB_PARAMS,
-        overrides=tuned_params,
+        overrides=params_overrides or None,
         tree_method=optuna_config.tree_method,
         device=optuna_config.device,
     )
@@ -1598,7 +1619,7 @@ def train_margin_total_model(
             len(local_spec.categorical_columns),
         )
 
-        local_preprocessor = _build_preprocessor(local_spec)
+        local_preprocessor = _build_preprocessor(local_spec, for_tree=True)
         x_train = local_preprocessor.fit_transform(_apply_feature_spec(train_frame, local_spec))
         (
             y_margin_train,
@@ -1787,6 +1808,7 @@ def train_blended_margin_total_model(
                 storage=optuna_config.storage,
                 study_name=optuna_config.study_name,
                 best_params_out=optuna_config.best_params_out,
+                xgb_n_jobs=optuna_config.xgb_n_jobs,
             )
             market_optuna = OptunaConfig(
                 enabled=True,
@@ -1801,6 +1823,7 @@ def train_blended_margin_total_model(
                 storage=optuna_config.storage,
                 study_name=optuna_config.study_name,
                 best_params_out=optuna_config.best_params_out,
+                xgb_n_jobs=optuna_config.xgb_n_jobs,
             )
 
         if optuna_config.storage:
@@ -1818,6 +1841,7 @@ def train_blended_margin_total_model(
                 storage=team_optuna.storage,
                 study_name=f"{team_optuna.study_name}{suffix}" if team_optuna.study_name else None,
                 best_params_out=team_optuna.best_params_out,
+                xgb_n_jobs=team_optuna.xgb_n_jobs,
             )
             suffix = "_market" if tune_scope in {"market", "both"} else ""
             market_optuna = OptunaConfig(
@@ -1835,6 +1859,7 @@ def train_blended_margin_total_model(
                     f"{market_optuna.study_name}{suffix}" if market_optuna.study_name else None
                 ),
                 best_params_out=market_optuna.best_params_out,
+                xgb_n_jobs=market_optuna.xgb_n_jobs,
             )
 
         if tune_scope in {"team", "both"}:
@@ -1866,15 +1891,21 @@ def train_blended_margin_total_model(
                 market_prob_config=market_prob_config,
             )
 
+    team_overrides = team_params.copy()
+    if optuna_config.xgb_n_jobs is not None:
+        team_overrides["n_jobs"] = optuna_config.xgb_n_jobs
     team_xgb_params = _resolve_xgb_params(
         DEFAULT_XGB_PARAMS,
-        overrides=team_params,
+        overrides=team_overrides or None,
         tree_method=optuna_config.tree_method,
         device=optuna_config.device,
     )
+    market_overrides = market_params.copy()
+    if optuna_config.xgb_n_jobs is not None:
+        market_overrides["n_jobs"] = optuna_config.xgb_n_jobs
     market_xgb_params = _resolve_xgb_params(
         DEFAULT_XGB_PARAMS,
-        overrides=market_params,
+        overrides=market_overrides or None,
         tree_method=optuna_config.tree_method,
         device=optuna_config.device,
     )
@@ -1897,8 +1928,8 @@ def train_blended_margin_total_model(
         market_transform=market_transform,
     )
 
-    team_preprocessor = _build_preprocessor(team_spec)
-    market_preprocessor = _build_preprocessor(market_spec)
+    team_preprocessor = _build_preprocessor(team_spec, for_tree=True)
+    market_preprocessor = _build_preprocessor(market_spec, for_tree=True)
 
     team_train = team_preprocessor.fit_transform(_apply_feature_spec(train_df, team_spec))
     market_train = market_preprocessor.fit_transform(_apply_feature_spec(train_df, market_spec))
@@ -2261,6 +2292,12 @@ def _parse_args() -> argparse.Namespace:
         help="XGBoost device (e.g., cpu, cuda, cuda:0).",
     )
     parser.add_argument(
+        "--xgb-n-jobs",
+        type=int,
+        default=None,
+        help="XGBoost parallel threads (default: os.cpu_count()).",
+    )
+    parser.add_argument(
         "--tune-scope",
         choices=["team", "market", "both"],
         default="both",
@@ -2339,6 +2376,7 @@ def main() -> None:
         storage=args.tune_storage,
         study_name=study_name,
         best_params_out=args.tune_best_params_out,
+        xgb_n_jobs=args.xgb_n_jobs,
     )
 
     market_prob_config = MarketProbConfig(
@@ -2385,6 +2423,9 @@ def main() -> None:
             max_season=args.max_season,
             feature_start=args.feature_start,
             feature_end=args.feature_end,
+            xgb_tree_method=args.xgb_tree_method,
+            xgb_device=args.xgb_device,
+            xgb_n_jobs=args.xgb_n_jobs,
         )
 
         if args.model_out is not None:

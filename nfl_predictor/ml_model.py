@@ -12,11 +12,12 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
+import __main__
 import joblib
 import numpy as np
 import pandas as pd
@@ -113,6 +114,7 @@ class ScoreModel:
     away_model: xgb.XGBRegressor
     home_model: xgb.XGBRegressor
     target_columns: tuple[str, str]
+    market_prob_config: Optional["MarketProbConfig"] = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +136,7 @@ class MarginTotalModel:
     target_columns: tuple[str, str]
     calibrator: Optional[WinProbCalibrator]
     market_anchor: bool = False
+    market_prob_config: Optional["MarketProbConfig"] = None
 
 
 @dataclass(frozen=True)
@@ -153,6 +156,15 @@ class BlendedMarginTotalModel:
     blend_layer: BlendLayer
     calibrator: Optional[WinProbCalibrator]
     target_columns: tuple[str, str]
+    market_prob_config: Optional["MarketProbConfig"] = None
+
+
+@dataclass(frozen=True)
+class MarketProbConfig:
+    """Configuration for blending/clamping win probabilities vs market implied odds."""
+
+    blend_weight: float
+    clamp_delta: float
 
 
 @dataclass(frozen=True)
@@ -752,14 +764,67 @@ def _predict_home_win_prob(
     return np.clip(probs, 0.0, 1.0)
 
 
+def _adjust_home_win_prob(
+    games_df: pd.DataFrame,
+    home_win_prob: np.ndarray,
+    market_prob_config: Optional[MarketProbConfig],
+) -> np.ndarray:
+    if market_prob_config is None:
+        return home_win_prob
+
+    blend_weight = market_prob_config.blend_weight
+    clamp_delta = market_prob_config.clamp_delta
+    if blend_weight < 0 or blend_weight > 1:
+        raise ValueError("Market blend weight must be between 0 and 1.")
+    if clamp_delta < 0 or clamp_delta > 0.5:
+        raise ValueError("Market clamp delta must be between 0 and 0.5.")
+    if blend_weight == 0 and clamp_delta == 0:
+        return home_win_prob
+
+    df = _add_market_transforms(games_df)
+    if "home_market_prob" not in df.columns:
+        log.debug("Market probabilities missing; skipping win-prob adjustments.")
+        return home_win_prob
+
+    market_prob = pd.to_numeric(df["home_market_prob"], errors="coerce").to_numpy(dtype=float)
+    adjusted = home_win_prob.astype(float, copy=True)
+    valid_mask = ~np.isnan(market_prob)
+    if not valid_mask.any():
+        return adjusted
+
+    if blend_weight:
+        adjusted[valid_mask] = (
+            blend_weight * market_prob[valid_mask] + (1 - blend_weight) * adjusted[valid_mask]
+        )
+
+    if clamp_delta:
+        lower = market_prob[valid_mask] - clamp_delta
+        upper = market_prob[valid_mask] + clamp_delta
+        adjusted[valid_mask] = np.clip(adjusted[valid_mask], lower, upper)
+
+    return np.clip(adjusted, 0.0, 1.0)
+
+
+def _predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
+    dmatrix = xgb.DMatrix(data)
+    best_iteration = getattr(model, "best_iteration", None)
+    iteration_range = None
+    if best_iteration is not None:
+        iteration_range = (0, best_iteration + 1)
+    booster = model.get_booster()
+    if iteration_range is not None:
+        return booster.predict(dmatrix, iteration_range=iteration_range)
+    return booster.predict(dmatrix)
+
+
 def _predict_margin_total_from_model(
     model: MarginTotalModel, games_df: pd.DataFrame
 ) -> tuple[np.ndarray, np.ndarray]:
     feature_df = _apply_feature_spec(games_df, model.feature_spec)
     log.debug("Prediction feature matrix: %d rows x %d columns", *feature_df.shape)
     x_games = model.preprocessor.transform(feature_df)
-    pred_margin = model.margin_model.predict(x_games)
-    pred_total = model.total_model.predict(x_games)
+    pred_margin = _predict_xgb(model.margin_model, x_games)
+    pred_total = _predict_xgb(model.total_model, x_games)
     if getattr(model, "market_anchor", False):
         baseline_margin, baseline_total = _get_market_baseline(games_df)
         pred_margin = pred_margin + baseline_margin
@@ -890,6 +955,17 @@ def _save_model_checkpoint(model: Any, path: Path) -> None:
 
 
 def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
+    for cls in (
+        FeatureSpec,
+        ScoreModel,
+        MarginTotalModel,
+        BlendedMarginTotalModel,
+        MarketProbConfig,
+        WinProbCalibrator,
+        BlendLayer,
+    ):
+        setattr(__main__, cls.__name__, cls)
+
     model = joblib.load(path)
     expected_types = {
         "score": ScoreModel,
@@ -903,6 +979,88 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
         raise ValueError(f"Model checkpoint type mismatch; expected {expected_type.__name__}.")
     log.info("Loaded model checkpoint from %s", path)
     return model
+
+
+def _with_market_prob_config(model: Any, config: Optional[MarketProbConfig]) -> Any:
+    if config is None:
+        return model
+    if isinstance(model, ScoreModel):
+        return replace(model, market_prob_config=config)
+    if isinstance(model, MarginTotalModel):
+        return replace(model, market_prob_config=config)
+    if isinstance(model, BlendedMarginTotalModel):
+        return replace(
+            model,
+            market_prob_config=config,
+            team_model=replace(model.team_model, market_prob_config=config),
+            market_model=replace(model.market_model, market_prob_config=config),
+        )
+    return model
+
+
+def load_model_checkpoint(path: Path, model_kind: str) -> Any:
+    """Load a saved model checkpoint with type validation."""
+    return _load_model_checkpoint(path, model_kind)
+
+
+def get_target_columns(df: pd.DataFrame) -> tuple[str, str]:
+    """Return away/home score column names."""
+    return _get_target_columns(df)
+
+
+def apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
+    """Apply a feature spec to an input DataFrame."""
+    return _apply_feature_spec(df, spec)
+
+
+def margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
+    """Convert predicted margin to home win probability."""
+    return _margin_to_home_win_prob(margin)
+
+
+def predict_margin_total_from_model(
+    model: MarginTotalModel, games_df: pd.DataFrame
+) -> tuple[np.ndarray, np.ndarray]:
+    """Predict margin and total from a margin/total model."""
+    return _predict_margin_total_from_model(model, games_df)
+
+
+def derive_scores_from_margin_total(
+    pred_margin: np.ndarray, pred_total: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Derive away/home scores from margin and total."""
+    return _derive_scores_from_margin_total(pred_margin, pred_total)
+
+
+def predict_home_win_prob(
+    pred_margin: np.ndarray, calibrator: Optional[WinProbCalibrator]
+) -> np.ndarray:
+    """Predict home win probability from margin predictions."""
+    return _predict_home_win_prob(pred_margin, calibrator)
+
+
+def adjust_home_win_prob(
+    games_df: pd.DataFrame,
+    home_win_prob: np.ndarray,
+    market_prob_config: Optional[MarketProbConfig],
+) -> np.ndarray:
+    """Adjust win probabilities using market blend/clamp settings."""
+    return _adjust_home_win_prob(games_df, home_win_prob, market_prob_config)
+
+
+def predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
+    """Predict using an XGBoost model with DMatrix inputs."""
+    return _predict_xgb(model, data)
+
+
+def build_prediction_output(
+    games_df: pd.DataFrame,
+    pred_away: np.ndarray,
+    pred_home: np.ndarray,
+    home_win_prob: np.ndarray,
+) -> pd.DataFrame:
+    """Build the prediction output DataFrame."""
+    return _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
 
 
 def _resolve_xgb_params(
@@ -1089,6 +1247,7 @@ def _evaluate_margin_total_cv(
     market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
+    market_prob_config: Optional[MarketProbConfig] = None,
 ) -> float:
     seasons = sorted(df["season"].dropna().unique())
     folds = _build_time_series_folds(seasons, n_splits=cv_splits)
@@ -1136,12 +1295,13 @@ def _evaluate_margin_total_cv(
             early_stopping_rounds=early_stopping_rounds,
         )
 
-        pred_margin = margin_model.predict(x_val)
-        pred_total = total_model.predict(x_val)
+        pred_margin = _predict_xgb(margin_model, x_val)
+        pred_total = _predict_xgb(total_model, x_val)
         if market_anchor:
             pred_margin = pred_margin + baseline_margin_val
             pred_total = pred_total + baseline_total_val
         home_win_prob = _margin_to_home_win_prob(pred_margin)
+        home_win_prob = _adjust_home_win_prob(val_df, home_win_prob, market_prob_config)
 
         metrics = _evaluate_margin_total_predictions(
             val_df, pred_margin, pred_total, target_columns, home_win_prob
@@ -1163,6 +1323,7 @@ def _run_optuna_search(
     market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
+    market_prob_config: Optional[MarketProbConfig] = None,
 ) -> dict[str, Any]:
     if optuna is None:  # pragma: no cover
         raise ImportError("Optuna is required for hyperparameter tuning.")
@@ -1212,6 +1373,7 @@ def _run_optuna_search(
             market_only=market_only,
             market_transform=market_transform,
             market_anchor=market_anchor,
+            market_prob_config=market_prob_config,
         )
 
     def _persist_best_params(study: Any, trial: Any) -> None:
@@ -1259,6 +1421,7 @@ def train_score_model(
     holdout_seasons: int,
     include_market: bool,
     max_cardinality_ratio: float,
+    market_prob_config: Optional[MarketProbConfig],
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -1300,8 +1463,8 @@ def train_score_model(
 
     if not holdout_df.empty:
         x_holdout = preprocessor.transform(x_holdout_df)
-        pred_away = away_model.predict(x_holdout)
-        pred_home = home_model.predict(x_holdout)
+        pred_away = _predict_xgb(away_model, x_holdout)
+        pred_home = _predict_xgb(home_model, x_holdout)
 
         metrics = _evaluate_predictions(holdout_df, pred_away, pred_home, target_columns)
         log.info("Holdout metrics: %s", {k: round(v, 4) for k, v in metrics.items()})
@@ -1314,6 +1477,7 @@ def train_score_model(
         away_model=away_model,
         home_model=home_model,
         target_columns=target_columns,
+        market_prob_config=market_prob_config,
     )
 
 
@@ -1328,6 +1492,7 @@ def train_margin_total_model(
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
+    market_prob_config: Optional[MarketProbConfig],
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -1369,9 +1534,21 @@ def train_margin_total_model(
     )
     if market_transform:
         log.info("Market feature transforms enabled.")
+    if market_prob_config is not None:
+        log.info(
+            "Market win-prob adjustment: blend=%.2f clamp=%.2f",
+            market_prob_config.blend_weight,
+            market_prob_config.clamp_delta,
+        )
     if market_anchor:
         _get_market_baseline(train_df)
         log.info("Market anchor enabled: training residuals vs spread/total.")
+    if market_prob_config is not None:
+        log.info(
+            "Market win-prob adjustment: blend=%.2f clamp=%.2f",
+            market_prob_config.blend_weight,
+            market_prob_config.clamp_delta,
+        )
 
     tuned_params: dict[str, Any] = {}
     if optuna_config.enabled:
@@ -1385,6 +1562,7 @@ def train_margin_total_model(
             optuna_config=optuna_config,
             market_transform=market_transform,
             market_anchor=market_anchor,
+            market_prob_config=market_prob_config,
         )
 
     params = _resolve_xgb_params(
@@ -1481,7 +1659,7 @@ def train_margin_total_model(
             raise ValueError("Calibration requested but no calibration seasons configured.")
         if x_calibration is None:
             raise ValueError("Calibration features are unavailable.")
-        pred_margin_calib = margin_model.predict(x_calibration)
+        pred_margin_calib = _predict_xgb(margin_model, x_calibration)
         if market_anchor:
             if baseline_margin_calibration is None:
                 raise ValueError("Market anchor baseline missing for calibration data.")
@@ -1494,13 +1672,14 @@ def train_margin_total_model(
 
     if not holdout_df.empty:
         x_holdout = preprocessor.transform(_apply_feature_spec(holdout_df, feature_spec))
-        pred_margin = margin_model.predict(x_holdout)
-        pred_total = total_model.predict(x_holdout)
+        pred_margin = _predict_xgb(margin_model, x_holdout)
+        pred_total = _predict_xgb(total_model, x_holdout)
         if market_anchor:
             baseline_margin_holdout, baseline_total_holdout = _get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
         home_win_prob = _predict_home_win_prob(pred_margin, calibrator)
+        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, market_prob_config)
 
         metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, target_columns, home_win_prob
@@ -1526,6 +1705,7 @@ def train_margin_total_model(
         target_columns=target_columns,
         calibrator=calibrator,
         market_anchor=market_anchor,
+        market_prob_config=market_prob_config,
     )
 
 
@@ -1539,6 +1719,7 @@ def train_blended_margin_total_model(
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
+    market_prob_config: Optional[MarketProbConfig],
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -1668,6 +1849,7 @@ def train_blended_margin_total_model(
                 optuna_config=team_optuna,
                 market_only=False,
                 market_transform=market_transform,
+                market_prob_config=market_prob_config,
             )
         if tune_scope in {"market", "both"}:
             log.info("Tuning market-only model hyperparameters...")
@@ -1681,6 +1863,7 @@ def train_blended_margin_total_model(
                 optuna_config=market_optuna,
                 market_only=True,
                 market_transform=market_transform,
+                market_prob_config=market_prob_config,
             )
 
     team_xgb_params = _resolve_xgb_params(
@@ -1746,10 +1929,10 @@ def train_blended_margin_total_model(
         early_stopping_rounds=optuna_config.early_stopping_rounds,
     )
 
-    team_margin_calib = team_margin_model.predict(team_calib)
-    team_total_calib = team_total_model.predict(team_calib)
-    market_margin_calib = market_margin_model.predict(market_calib)
-    market_total_calib = market_total_model.predict(market_calib)
+    team_margin_calib = _predict_xgb(team_margin_model, team_calib)
+    team_total_calib = _predict_xgb(team_total_model, team_calib)
+    market_margin_calib = _predict_xgb(market_margin_model, market_calib)
+    market_total_calib = _predict_xgb(market_total_model, market_calib)
 
     margin_blender = Ridge(alpha=1.0)
     total_blender = Ridge(alpha=1.0)
@@ -1771,10 +1954,10 @@ def train_blended_margin_total_model(
         team_holdout = team_preprocessor.transform(_apply_feature_spec(holdout_df, team_spec))
         market_holdout = market_preprocessor.transform(_apply_feature_spec(holdout_df, market_spec))
 
-        team_margin_holdout = team_margin_model.predict(team_holdout)
-        team_total_holdout = team_total_model.predict(team_holdout)
-        market_margin_holdout = market_margin_model.predict(market_holdout)
-        market_total_holdout = market_total_model.predict(market_holdout)
+        team_margin_holdout = _predict_xgb(team_margin_model, team_holdout)
+        team_total_holdout = _predict_xgb(team_total_model, team_holdout)
+        market_margin_holdout = _predict_xgb(market_margin_model, market_holdout)
+        market_total_holdout = _predict_xgb(market_total_model, market_holdout)
 
         blended_margin = margin_blender.predict(
             np.column_stack([team_margin_holdout, market_margin_holdout])
@@ -1783,6 +1966,7 @@ def train_blended_margin_total_model(
             np.column_stack([team_total_holdout, market_total_holdout])
         )
         home_win_prob = _predict_home_win_prob(blended_margin, calibrator)
+        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, market_prob_config)
 
         metrics = _evaluate_margin_total_predictions(
             holdout_df, blended_margin, blended_total, target_columns, home_win_prob
@@ -1807,6 +1991,7 @@ def train_blended_margin_total_model(
         total_model=team_total_model,
         target_columns=target_columns,
         calibrator=None,
+        market_prob_config=market_prob_config,
     )
     market_model = MarginTotalModel(
         preprocessor=market_preprocessor,
@@ -1815,6 +2000,7 @@ def train_blended_margin_total_model(
         total_model=market_total_model,
         target_columns=target_columns,
         calibrator=None,
+        market_prob_config=market_prob_config,
     )
 
     return BlendedMarginTotalModel(
@@ -1823,6 +2009,7 @@ def train_blended_margin_total_model(
         blend_layer=BlendLayer(margin_model=margin_blender, total_model=total_blender),
         calibrator=calibrator,
         target_columns=target_columns,
+        market_prob_config=market_prob_config,
     )
 
 
@@ -1838,10 +2025,13 @@ def predict_week(
     log.debug("Prediction feature matrix: %d rows x %d columns", *feature_df.shape)
     x_games = model.preprocessor.transform(feature_df)
 
-    pred_away = model.away_model.predict(x_games)
-    pred_home = model.home_model.predict(x_games)
+    pred_away = _predict_xgb(model.away_model, x_games)
+    pred_home = _predict_xgb(model.home_model, x_games)
 
     home_win_prob = _margin_to_home_win_prob(pred_home - pred_away)
+    home_win_prob = _adjust_home_win_prob(
+        games_df, home_win_prob, getattr(model, "market_prob_config", None)
+    )
     output_df = _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
 
     if output_path:
@@ -1866,6 +2056,9 @@ def predict_week_margin_total(
     pred_margin, pred_total = _predict_margin_total_from_model(model, games_df)
     pred_away, pred_home = _derive_scores_from_margin_total(pred_margin, pred_total)
     home_win_prob = _predict_home_win_prob(pred_margin, model.calibrator)
+    home_win_prob = _adjust_home_win_prob(
+        games_df, home_win_prob, getattr(model, "market_prob_config", None)
+    )
     output_df = _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
 
     if output_path:
@@ -1899,6 +2092,9 @@ def predict_week_blended(
     )
     pred_away, pred_home = _derive_scores_from_margin_total(blended_margin, blended_total)
     home_win_prob = _predict_home_win_prob(blended_margin, model.calibrator)
+    home_win_prob = _adjust_home_win_prob(
+        games_df, home_win_prob, getattr(model, "market_prob_config", None)
+    )
 
     output_df = _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
 
@@ -1949,6 +2145,18 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Train on residuals vs market spread/total and add market baseline at prediction time."
         ),
+    )
+    parser.add_argument(
+        "--market-prob-blend",
+        type=float,
+        default=0.0,
+        help="Market probability weight for post-processing (0=off, 1=market only).",
+    )
+    parser.add_argument(
+        "--market-prob-clamp",
+        type=float,
+        default=0.0,
+        help="Clamp model probability within +/- this delta of market (0=off).",
     )
     parser.add_argument(
         "--min-season",
@@ -2133,6 +2341,13 @@ def main() -> None:
         best_params_out=args.tune_best_params_out,
     )
 
+    market_prob_config = MarketProbConfig(
+        blend_weight=args.market_prob_blend,
+        clamp_delta=args.market_prob_clamp,
+    )
+    if args.market_prob_blend == 0 and args.market_prob_clamp == 0:
+        market_prob_config = None
+
     output_path = args.output_path
     if args.predict_path and output_path is None:
         output_path = args.predict_path.with_name(f"{args.predict_path.stem}_predictions.csv")
@@ -2141,6 +2356,7 @@ def main() -> None:
         if args.tune:
             log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
         model = _load_model_checkpoint(args.model_in, args.model_kind)
+        model = _with_market_prob_config(model, market_prob_config)
         if not args.predict_path:
             log.info("No --predict-path provided; exiting after loading model.")
             return
@@ -2164,6 +2380,7 @@ def main() -> None:
             holdout_seasons=args.holdout_seasons,
             include_market=not args.exclude_market,
             max_cardinality_ratio=args.max_cardinality_ratio,
+            market_prob_config=market_prob_config,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,
@@ -2188,6 +2405,7 @@ def main() -> None:
             optuna_config=optuna_config,
             market_transform=args.market_transform,
             market_anchor=args.market_anchor,
+            market_prob_config=market_prob_config,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,
@@ -2213,6 +2431,7 @@ def main() -> None:
             optuna_config=optuna_config,
             market_transform=args.market_transform,
             market_anchor=args.market_anchor,
+            market_prob_config=market_prob_config,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,

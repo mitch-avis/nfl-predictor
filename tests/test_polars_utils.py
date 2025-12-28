@@ -1,3 +1,5 @@
+"""Tests for Polars-based utility transforms."""
+
 import polars as pl
 import pytest
 
@@ -6,6 +8,7 @@ from nfl_predictor.utils import polars_utils
 
 
 def test_combine_stats_creates_combined_and_drops() -> None:
+    """Derived columns are computed and source columns are dropped."""
     df = pl.DataFrame(
         {
             "sack_fumbles": [1],
@@ -58,6 +61,7 @@ def test_combine_stats_creates_combined_and_drops() -> None:
 
 
 def test_add_scoring_data_to_team_stats() -> None:
+    """Schedule scores are joined into per-team stats."""
     team_stats = pl.DataFrame(
         {
             "season": [2024, 2024],
@@ -90,6 +94,7 @@ def test_add_scoring_data_to_team_stats() -> None:
 
 
 def test_add_per_game_opponent_stats() -> None:
+    """Opponent stats are attached per game based on opponent_abbr."""
     team_stats = pl.DataFrame(
         {
             "season": [2024, 2024],
@@ -110,6 +115,7 @@ def test_add_per_game_opponent_stats() -> None:
 
 
 def test_aggregate_team_stats_to_week_regular() -> None:
+    """Rolling averages aggregate correctly up to a target week."""
     team_stats = pl.DataFrame(
         {
             "season": [2024, 2024, 2024, 2024],
@@ -131,6 +137,7 @@ def test_aggregate_team_stats_to_week_regular() -> None:
 
 
 def test_calculate_stat_differentials_skips_non_numeric() -> None:
+    """Stat differentials are only computed for numeric columns."""
     df = pl.DataFrame(
         {
             "away_elo_pre": [1500.0],
@@ -148,6 +155,7 @@ def test_calculate_stat_differentials_skips_non_numeric() -> None:
 
 
 def test_build_final_column_order_metadata_first() -> None:
+    """Final column ordering starts with metadata columns."""
     final_order = polars_utils.build_final_column_order()
     assert (
         final_order[: len(constants.POLARS_METADATA_COLUMNS)] == constants.POLARS_METADATA_COLUMNS

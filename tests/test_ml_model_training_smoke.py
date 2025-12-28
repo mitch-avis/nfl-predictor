@@ -1,11 +1,16 @@
+"""Smoke tests for margin/total model training wiring."""
+
 from __future__ import annotations
 
 import numpy as np
 
 from nfl_predictor import ml_model
 
+# pylint: disable=protected-access
+
 
 def test_margin_total_early_stopping_wired() -> None:
+    """Early stopping should be wired through to XGBoost training."""
     rng = np.random.default_rng(42)
     x_train = rng.normal(size=(20, 3))
     x_eval = rng.normal(size=(6, 3))

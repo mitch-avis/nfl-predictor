@@ -1,18 +1,26 @@
+"""Tests for scraping utilities (HTML parsing and SurvivorGrid spreads)."""
+
 from bs4 import BeautifulSoup
 
 from nfl_predictor.utils import scraping_utils
 
+# pylint: disable=protected-access
+
 
 class DummyResponse:
+    """Minimal requests-like response for monkeypatched HTML downloads."""
+
     def __init__(self, text: str) -> None:
         self.text = text
         self.content = text.encode("utf-8")
 
     def raise_for_status(self) -> None:
+        """No-op for dummy response."""
         return None
 
 
 def test_parse_tr_rating_table() -> None:
+    """TeamRankings rating table parsing returns canonical team abbr + float rating."""
     html = """
     <table>
         <tr><th>Rank</th><th>Team</th><th>Rating</th></tr>
@@ -28,6 +36,7 @@ def test_parse_tr_rating_table() -> None:
 
 
 def test_parse_tr_stat_table() -> None:
+    """TeamRankings stat table parsing returns canonical team abbr + numeric stat."""
     html = """
     <table>
         <tr><th>Rank</th><th>Team</th><th>Value</th></tr>
@@ -43,6 +52,7 @@ def test_parse_tr_stat_table() -> None:
 
 
 def test_scrape_survivor_grid_spreads_parses(monkeypatch) -> None:
+    """SurvivorGrid spread table parsing extracts per-week spreads."""
     rows = [
         """
         <tr>

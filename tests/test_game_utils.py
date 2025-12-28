@@ -1,3 +1,5 @@
+"""Tests for game utility helpers (spreads, moneylines, QB fills)."""
+
 from datetime import datetime
 
 import polars as pl
@@ -7,12 +9,14 @@ from nfl_predictor.utils import game_utils
 
 
 def test_spread_to_moneyline_signs() -> None:
+    """Spread sign conventions map to moneyline sign conventions."""
     assert game_utils.spread_to_moneyline(-7.0) < 0
     assert game_utils.spread_to_moneyline(7.0) > 0
     assert game_utils.spread_to_moneyline(0.0) > 0
 
 
 def test_fill_missing_moneylines() -> None:
+    """Missing moneylines are filled from spreads."""
     df = pl.DataFrame(
         {
             "home_spread": [-3.5],
@@ -33,6 +37,7 @@ def test_fill_missing_moneylines() -> None:
 
 
 def test_fill_future_qb_data() -> None:
+    """Future games use the latest available QB rows for missing QB fields."""
     df = pl.DataFrame(
         {
             "away_abbr": ["BUF"],

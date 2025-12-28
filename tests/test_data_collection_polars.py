@@ -1,3 +1,5 @@
+"""Tests for the Polars data collection pipeline."""
+
 import polars as pl
 import pytest
 
@@ -5,6 +7,7 @@ from nfl_predictor.data_collection_polars import _merge_team_rankings, process_w
 
 
 def test_process_week_uses_fallback_stats_for_week1() -> None:
+    """Week 1 uses prior-season fallbacks when no prior games exist."""
     schedule_df = pl.DataFrame(
         {
             "season": [2007],
@@ -44,6 +47,7 @@ def test_process_week_uses_fallback_stats_for_week1() -> None:
 
 
 def test_merge_team_rankings_week1_uses_prev() -> None:
+    """Week 1 TeamRankings merge can fall back to prior-season week 18."""
     merged = pl.DataFrame({"away_abbr": ["BUF"], "home_abbr": ["KC"]})
     prev_tr_df = pl.DataFrame(
         {

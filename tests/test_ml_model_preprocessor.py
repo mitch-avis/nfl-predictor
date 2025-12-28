@@ -1,4 +1,8 @@
+"""Tests for the tree-friendly preprocessing pipeline."""
+
 from __future__ import annotations
+
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -6,8 +10,11 @@ from scipy import sparse
 
 from nfl_predictor import ml_model
 
+# pylint: disable=protected-access
+
 
 def _make_feature_spec() -> ml_model.FeatureSpec:
+    """Build a minimal FeatureSpec with one numeric and one categorical feature."""
     return ml_model.FeatureSpec(
         feature_columns=["num_feature", "cat_feature"],
         categorical_columns=["cat_feature"],
@@ -25,6 +32,7 @@ def _make_feature_spec() -> ml_model.FeatureSpec:
 
 
 def test_preprocessor_sparse_with_categorical() -> None:
+    """One-hot categoricals should keep the transformed matrix sparse for trees."""
     df = pd.DataFrame({"num_feature": [1.0, 2.0], "cat_feature": ["A", "B"]})
     spec = _make_feature_spec()
 
@@ -35,6 +43,7 @@ def test_preprocessor_sparse_with_categorical() -> None:
 
 
 def test_preprocessor_handles_missing_numeric() -> None:
+    """Numeric NaNs are imputed so downstream training can proceed."""
     df = pd.DataFrame({"num_feature": [1.0, np.nan, 3.0, 4.0]})
     spec = ml_model.FeatureSpec(
         feature_columns=["num_feature"],
@@ -54,7 +63,14 @@ def test_preprocessor_handles_missing_numeric() -> None:
     preprocessor = ml_model._build_preprocessor(spec, for_tree=True)
     features = preprocessor.fit_transform(df)
 
-    assert not np.isnan(features).any()
+    if sparse.issparse(features):
+        to_csr = getattr(features, "tocsr", None)
+        csr_matrix = cast(Any, to_csr)() if to_csr is not None else features
+        data = getattr(csr_matrix, "data")
+        assert not np.isnan(np.asarray(data, dtype=float)).any()
+    else:
+        dense = np.asarray(features, dtype=float)
+        assert not np.isnan(dense).any()
     params = ml_model._resolve_xgb_params(
         ml_model.DEFAULT_XGB_PARAMS,
         overrides={
@@ -75,4 +91,5 @@ def test_preprocessor_handles_missing_numeric() -> None:
     )
 
     assert hasattr(margin_model, "feature_importances_")
+    assert hasattr(total_model, "feature_importances_")
     assert hasattr(total_model, "feature_importances_")

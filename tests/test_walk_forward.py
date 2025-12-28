@@ -1,3 +1,5 @@
+"""Tests for walk-forward split correctness, determinism, and calibration time-awareness."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -7,6 +9,7 @@ from nfl_predictor.ml import walk_forward
 
 
 def _fixture_df() -> pd.DataFrame:
+    """Create a tiny deterministic dataset spanning multiple seasons/weeks."""
     rows = []
     for season in (2022, 2023):
         for week in (1, 2, 3):
@@ -39,6 +42,7 @@ def _fixture_df() -> pd.DataFrame:
 
 
 def _base_config() -> walk_forward.WalkForwardConfig:
+    """Return a walk-forward config suitable for unit tests."""
     return walk_forward.WalkForwardConfig(
         eval_seasons=[2023],
         eval_last_n_seasons=1,
@@ -61,6 +65,7 @@ def _base_config() -> walk_forward.WalkForwardConfig:
 
 
 def test_walk_forward_split_excludes_eval_week() -> None:
+    """Train set must exclude any games from the predicted eval week."""
     df = _fixture_df()
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 
@@ -71,6 +76,7 @@ def test_walk_forward_split_excludes_eval_week() -> None:
 
 
 def test_walk_forward_deterministic_outputs() -> None:
+    """Fixed seeds yield identical per-fold outputs."""
     df = _fixture_df()
     config = _base_config()
 
@@ -82,6 +88,7 @@ def test_walk_forward_deterministic_outputs() -> None:
 
 
 def test_walk_forward_probabilities_in_bounds() -> None:
+    """Home win probabilities are always in [0, 1]."""
     df = _fixture_df()
     config = _base_config()
 
@@ -93,6 +100,7 @@ def test_walk_forward_probabilities_in_bounds() -> None:
 
 
 def test_calibration_data_is_time_aware() -> None:
+    """Calibration data must come from weeks strictly before the eval week."""
     df = _fixture_df()
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 

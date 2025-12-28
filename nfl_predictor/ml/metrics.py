@@ -1,3 +1,12 @@
+"""Metrics helpers for walk-forward evaluation.
+
+This module centralizes evaluation metrics used by the walk-forward backtest:
+- margin/total regression metrics
+- win probability metrics (Brier + log loss)
+- confidence pool summaries
+- calibration reliability table
+"""
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -21,6 +30,7 @@ def margin_total_metrics(
     pred_margin: np.ndarray,
     pred_total: np.ndarray,
 ) -> dict[str, float]:
+    """Compute MAE for margin and total."""
     return {
         "margin_mae": float(mean_absolute_error(actual_margin, pred_margin)),
         "total_mae": float(mean_absolute_error(actual_total, pred_total)),
@@ -28,6 +38,7 @@ def margin_total_metrics(
 
 
 def probability_metrics(actual_home_win: np.ndarray, home_win_prob: np.ndarray) -> dict[str, float]:
+    """Compute Brier score and log loss for home win probabilities."""
     probs = clip_probabilities(home_win_prob)
     probs_eps = clip_probabilities(probs, eps=PROB_EPSILON)
     return {
@@ -39,6 +50,10 @@ def probability_metrics(actual_home_win: np.ndarray, home_win_prob: np.ndarray) 
 def confidence_pool_columns(
     home_win_prob: np.ndarray, home_score: np.ndarray, away_score: np.ndarray
 ) -> dict[str, np.ndarray]:
+    """Return per-game confidence pool columns.
+
+    Uses confidence strength = abs(p - 0.5) to assign unique ranks 1..N.
+    """
     strength = np.abs(home_win_prob - 0.5)
     order = np.argsort(strength, kind="mergesort")
     ranks = np.empty_like(order)
@@ -62,6 +77,7 @@ def confidence_pool_columns(
 
 
 def confidence_pool_summary(confidence_cols: dict[str, np.ndarray]) -> dict[str, Any]:
+    """Aggregate confidence-pool points across a week (or any set of games)."""
     return {
         "expected_points": float(confidence_cols["expected_points"].sum()),
         "actual_points": float(confidence_cols["actual_points"].sum()),
@@ -73,6 +89,7 @@ def confidence_pool_summary(confidence_cols: dict[str, np.ndarray]) -> dict[str,
 def reliability_table(
     home_win_prob: np.ndarray, actual_home_win: np.ndarray, bins: int = 10
 ) -> list[dict[str, Any]]:
+    """Return a binned calibration reliability table."""
     probs = clip_probabilities(home_win_prob)
     actual = actual_home_win.astype(float)
     edges = np.linspace(0.0, 1.0, bins + 1)

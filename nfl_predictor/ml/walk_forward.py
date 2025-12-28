@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import hashlib
 import importlib
 import json
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
@@ -295,9 +295,7 @@ def run_walk_forward_backtest(
                 if market_anchor and baseline_margin_calibration is not None:
                     pred_margin_calibration = pred_margin_calibration + baseline_margin_calibration
                 away_col, home_col = target_columns
-                actual_home_win = (
-                    calibration_df[home_col] > calibration_df[away_col]
-                ).astype(int)
+                actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
                 calibrator = _fit_calibrator(
                     pred_margin_calibration,
                     actual_home_win.to_numpy(),

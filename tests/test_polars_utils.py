@@ -149,4 +149,6 @@ def test_calculate_stat_differentials_skips_non_numeric() -> None:
 
 def test_build_final_column_order_metadata_first() -> None:
     final_order = polars_utils.build_final_column_order()
-    assert final_order[: len(constants.POLARS_METADATA_COLUMNS)] == constants.POLARS_METADATA_COLUMNS
+    assert (
+        final_order[: len(constants.POLARS_METADATA_COLUMNS)] == constants.POLARS_METADATA_COLUMNS
+    )

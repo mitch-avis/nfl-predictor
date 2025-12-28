@@ -52,9 +52,7 @@ def test_scrape_survivor_grid_spreads_parses(monkeypatch) -> None:
         </tr>
         """
     ]
-    rows.extend(
-        f"<tr><td>XXX{i}</td><td>BYE</td><td>BYE</td></tr>" for i in range(30)
-    )
+    rows.extend(f"<tr><td>XXX{i}</td><td>BYE</td><td>BYE</td></tr>" for i in range(30))
     html = f"""
     <html>
         <body>

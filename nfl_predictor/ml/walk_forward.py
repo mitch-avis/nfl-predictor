@@ -1,3 +1,14 @@
+"""Walk-forward backtesting for margin/total models.
+
+Implements time-aware walk-forward training/evaluation:
+- trains only on games strictly before the evaluated (season, week)
+- optional time-aware calibration using the last K training weeks of the eval season
+- produces metrics summaries plus a calibration reliability table
+
+This module is intentionally small and importable so tests can validate split correctness
+and determinism.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -15,6 +26,9 @@ from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.utils.logger import log
 
+# pylint: disable=protected-access
+
+
 DEFAULT_CALIBRATION_WEEKS = 4
 DEFAULT_RANDOM_SEED = 42
 RELIABILITY_BINS = 10
@@ -22,6 +36,8 @@ RELIABILITY_BINS = 10
 
 @dataclass(frozen=True)
 class WalkForwardConfig:
+    """Configuration for walk-forward evaluation."""
+
     eval_seasons: Optional[Sequence[int]] = None
     eval_last_n_seasons: int = 3
     wf_start_week: int = 3
@@ -38,6 +54,7 @@ class WalkForwardConfig:
     xgb_params_overrides: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable dict representation of the config."""
         return {
             "eval_seasons": list(self.eval_seasons) if self.eval_seasons else None,
             "eval_last_n_seasons": self.eval_last_n_seasons,
@@ -58,6 +75,11 @@ class WalkForwardConfig:
 
 @dataclass(frozen=True)
 class WalkForwardFold:
+    """One walk-forward fold.
+
+    Train data is strictly before (season, week); eval data is at (season, week).
+    """
+
     season: int
     week: int
     train_df: pd.DataFrame
@@ -65,12 +87,14 @@ class WalkForwardFold:
 
 
 def load_games(data_path: Path) -> pd.DataFrame:
+    """Load a CSV dataset into a pandas DataFrame."""
     df = pd.read_csv(data_path)
     log.info("Loaded %d rows from %s", len(df), data_path)
     return df
 
 
 def filter_regular_season(df: pd.DataFrame) -> pd.DataFrame:
+    """Filter to regular season games when game_type exists."""
     if "game_type" not in df.columns:
         return df
     filtered = df[df["game_type"].astype(str).str.upper() == "REG"].copy()
@@ -82,6 +106,7 @@ def filter_regular_season(df: pd.DataFrame) -> pd.DataFrame:
 def resolve_eval_seasons(
     df: pd.DataFrame, eval_seasons: Optional[Sequence[int]], eval_last_n: int
 ) -> list[int]:
+    """Resolve which seasons to evaluate based on dataset contents and config."""
     seasons = sorted(df["season"].dropna().unique())
     if not seasons:
         raise ValueError("No seasons available in dataset.")
@@ -106,6 +131,7 @@ def resolve_eval_seasons(
 def build_walk_forward_folds(
     df: pd.DataFrame, eval_seasons: Sequence[int], start_week: int
 ) -> list[WalkForwardFold]:
+    """Build time-aware walk-forward folds for each eval season and week."""
     if "season" not in df.columns or "week" not in df.columns:
         raise ValueError("season and week columns are required for walk-forward splits.")
 
@@ -131,6 +157,11 @@ def build_walk_forward_folds(
 def select_calibration_data(
     train_df: pd.DataFrame, eval_season: int, eval_week: int, calibration_weeks: int
 ) -> pd.DataFrame:
+    """Select time-aware calibration data from the training window.
+
+    Uses the last `calibration_weeks` weeks of the eval season strictly before `eval_week`.
+    Returns empty when insufficient or unavailable.
+    """
     if calibration_weeks <= 0:
         return train_df.iloc[0:0].copy()
     season_df = train_df[train_df["season"] == eval_season].copy()
@@ -162,6 +193,7 @@ def resolve_market_settings(
     market_transform: Optional[bool],
     market_anchor: bool,
 ) -> tuple[bool, bool, bool]:
+    """Resolve market feature/transform/anchor settings based on columns present."""
     has_market = _has_market_lines(df)
     resolved_transform = market_transform if market_transform is not None else has_market
     resolved_include = include_market and has_market
@@ -206,6 +238,7 @@ def run_walk_forward_backtest(
     df: pd.DataFrame,
     config: WalkForwardConfig,
 ) -> dict[str, Any]:
+    """Run walk-forward training/evaluation and return metrics plus per-game predictions."""
     np.random.seed(config.random_seed)
     df = filter_regular_season(df)
     target_columns = ml_model.get_target_columns(df)
@@ -409,6 +442,7 @@ def build_metrics_report(
     config_payload: dict[str, Any],
     results: dict[str, Any],
 ) -> dict[str, Any]:
+    """Build the JSON-serializable metrics report payload."""
     return {
         "run_id": run_id,
         "created_at": created_at,
@@ -471,6 +505,7 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
 
 
 def dataset_fingerprint(path: Path) -> str:
+    """Compute a SHA-256 fingerprint of the dataset file bytes."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -479,6 +514,7 @@ def dataset_fingerprint(path: Path) -> str:
 
 
 def generate_run_id(dataset_hash: str, config: WalkForwardConfig) -> str:
+    """Generate a stable-ish run id from timestamp + config hash."""
     created = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     payload = json.dumps(config.to_dict(), sort_keys=True)
     short_hash = hashlib.sha256(f"{dataset_hash}:{payload}".encode("utf-8")).hexdigest()[:8]
@@ -488,6 +524,7 @@ def generate_run_id(dataset_hash: str, config: WalkForwardConfig) -> str:
 def build_metadata(
     created_at: str, dataset_hash: str, config_payload: dict[str, Any]
 ) -> dict[str, Any]:
+    """Build a minimal metadata payload adjacent to the metrics report."""
     return {
         "created_at": created_at,
         "dataset_hash": dataset_hash,

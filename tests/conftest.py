@@ -1,3 +1,5 @@
+"""Pytest configuration for nfl-predictor."""
+
 from __future__ import annotations
 
 import sys

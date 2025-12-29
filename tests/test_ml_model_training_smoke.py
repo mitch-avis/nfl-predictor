@@ -43,3 +43,21 @@ def test_margin_total_early_stopping_wired() -> None:
 
     assert hasattr(margin_model, "evals_result_")
     assert hasattr(total_model, "evals_result_")
+
+
+def test_blend_layer_coefficients_constrained() -> None:
+    """Blend layer coefficients are non-negative and sum to 1."""
+    rng = np.random.default_rng(7)
+    team = rng.normal(size=200)
+    market = rng.normal(size=200)
+    x = np.column_stack([team, market])
+    y = 0.8 * team + 0.2 * market + rng.normal(scale=0.05, size=200)
+
+    model = ml_model._fit_blend_ridge_constrained(x, y, alpha=1.0)
+
+    assert model.coef_.shape == (2,)
+    assert float(model.coef_[0]) >= 0
+    assert float(model.coef_[1]) >= 0
+    assert abs(float(model.coef_.sum()) - 1.0) < 1e-6
+    preds = model.predict(x)
+    assert preds.shape == (200,)

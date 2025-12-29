@@ -13,6 +13,12 @@
 - `scripts/validate_offline.py` / `scripts/validate_live.py`: data validation against
   `data/all_data.csv`.
 
+## Files likely to change during the overhaul
+
+- `nfl_predictor/constants.py`: column/schema source of truth; changes here must be reflected
+  across ETL + modeling.
+- `README.md`: document the canonical commands and artifact outputs.
+
 ## Current artifacts
 
 - Model checkpoint only: `joblib` saved via `--model-out` in `nfl_predictor/ml_model.py`.

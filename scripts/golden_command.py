@@ -131,6 +131,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Run walk-forward, train a model, and optionally generate predictions."""
     args = _parse_args()
     if not args.data_path.exists():
         log.error("Missing dataset: %s", args.data_path)

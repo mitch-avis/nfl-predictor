@@ -21,10 +21,10 @@
 
 ## Current artifacts
 
-- Model checkpoint only: `joblib` saved via `--model-out` in `nfl_predictor/ml_model.py`.
-- Backtest outputs: CSV/JSON summaries in `data/backtest/` (not run-scoped).
-- Missing metadata: no dataset hash, library versions, training config, or season/week ranges
-  saved alongside the model.
+- Run-scoped artifacts are written under `models/<run_id>/`:
+  - `model.joblib`
+  - `metadata.json` (dataset hash, library versions, config, splits, feature list, etc.)
+  - `metrics_report.json` (walk-forward metrics + calibration summary)
 
 ## Margin/total + calibration
 

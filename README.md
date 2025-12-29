@@ -1,5 +1,12 @@
 # nfl-predictor
 
+## Environment
+
+- Python: 3.12 (tested with 3.12.3).
+- CPU-only: supported and the default path.
+- GPU (optional): if you install an XGBoost build with CUDA support, you can try
+  `--xgb-tree-method gpu_hist`. GPU is not required.
+
 ## ML Model Usage
 
 ### Quickstart (train + predict)
@@ -113,6 +120,29 @@ python scripts/walk_forward_backtest.py \
 ```
 
 This writes `metrics_report.json` and `metadata.json` under `models/<run_id>/`.
+
+### Golden command (train + walk-forward + predict)
+
+Use the golden command to generate a single run directory containing:
+
+- `model.joblib`
+- `metrics_report.json` (walk-forward)
+- `metadata.json` (walk-forward + config)
+- `predictions.csv` (only if `--predict-path` is provided)
+
+Example:
+
+```bash
+python scripts/golden_command.py \
+  --data-path data/completed_games_ml.csv \
+  --eval-seasons 2024 \
+  --wf-start-week 3 \
+  --calibration platt \
+  --wf-calibration-weeks 4 \
+  --predict-path data/predict/week_17_games_to_predict.csv
+```
+
+Outputs are written to `models/<run_id>/` (the script prints the resolved run directory).
 
 ### Optuna hyperparameter tuning
 

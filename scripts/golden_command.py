@@ -46,6 +46,12 @@ def _parse_args() -> argparse.Namespace:
         help="Optional upcoming games CSV to generate predictions.",
     )
     parser.add_argument(
+        "--score-rounding",
+        choices=["none", "int", "half"],
+        default="none",
+        help="Optional post-processing for predicted scores: none|int|half.",
+    )
+    parser.add_argument(
         "--run-id",
         type=str,
         default=None,
@@ -143,6 +149,7 @@ def main() -> int:
     config_payload = {
         "data_path": str(args.data_path),
         "predict_path": str(args.predict_path) if args.predict_path else None,
+        "score_rounding": args.score_rounding,
         "walk_forward": {
             "wf_start_week": args.wf_start_week,
             "eval_seasons": args.eval_seasons,
@@ -246,6 +253,7 @@ def main() -> int:
             games_path=args.predict_path,
             output_path=out_path,
             pretty_output=False,
+            score_rounding=args.score_rounding,
         )
 
     log.info("Golden run directory: %s", run_dir)

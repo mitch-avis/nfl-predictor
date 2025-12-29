@@ -740,6 +740,7 @@ def _fit_margin_total_models(
     def _train_with_params(
         active_params: dict[str, Any],
     ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
+        active_params = _with_xgb_early_stopping_params(active_params, early_stopping_rounds)
         margin_model = xgb.XGBRegressor(**active_params)
         total_model = xgb.XGBRegressor(**active_params)
 
@@ -793,6 +794,7 @@ def _fit_quantile_models(
             q_params = active_params.copy()
             q_params["objective"] = "reg:quantileerror"
             q_params["quantile_alpha"] = quantile
+            q_params = _with_xgb_early_stopping_params(q_params, early_stopping_rounds)
             model = xgb.XGBRegressor(**q_params)
             fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_eval, early_stopping_rounds)
             model.fit(x_train, y_train, **fit_kwargs)
@@ -1306,23 +1308,39 @@ def _build_xgb_fit_kwargs(
 
     if _xgb_fit_supports("early_stopping_rounds"):
         fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
-        return fit_kwargs
-
-    if _xgb_fit_supports("callbacks"):
-        early_stop = None
-        callback_module = getattr(xgb, "callback", None)
-        if callback_module is not None:
-            early_stop_cls = getattr(callback_module, "EarlyStopping", None)
-            if early_stop_cls is not None:
-                early_stop = early_stop_cls(rounds=early_stopping_rounds, save_best=True)
-        if early_stop is not None:
-            fit_kwargs["callbacks"] = [early_stop]
-            return fit_kwargs
-
-    _log_early_stopping_fallback(
-        "XGBoost early stopping not supported by this version; continuing without it."
-    )
+    # Newer XGBoost sklearn wrappers moved early-stopping to model params (init kwargs).
+    # We handle that in `_with_xgb_early_stopping_params`.
     return fit_kwargs
+
+
+def _with_xgb_early_stopping_params(
+    params: dict[str, Any],
+    early_stopping_rounds: Optional[int],
+) -> dict[str, Any]:
+    if not early_stopping_rounds:
+        return params
+    if _xgb_fit_supports("early_stopping_rounds"):
+        return params
+    if not _xgb_param_supported("early_stopping_rounds"):
+        _log_early_stopping_fallback(
+            "XGBoost early stopping not supported by this version; continuing without it."
+        )
+        return params
+
+    updated = params.copy()
+    updated.setdefault("early_stopping_rounds", int(early_stopping_rounds))
+
+    if _xgb_param_supported("callbacks"):
+        callback_module = getattr(xgb, "callback", None)
+        early_stop_cls = (
+            getattr(callback_module, "EarlyStopping", None) if callback_module else None
+        )
+        if early_stop_cls is not None:
+            updated.setdefault(
+                "callbacks",
+                [early_stop_cls(rounds=int(early_stopping_rounds), save_best=True)],
+            )
+    return updated
 
 
 def _coerce_tree_method_on_error(

@@ -77,6 +77,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Run the leakage audit and write a JSON report."""
     args = _parse_args()
     if not args.data_path.exists():
         log.error("Missing data file: %s", args.data_path)

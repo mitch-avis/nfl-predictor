@@ -45,6 +45,7 @@ except ImportError:  # pragma: no cover
     optuna = None
 
 from nfl_predictor import constants
+from nfl_predictor.ml import artifacts
 from nfl_predictor.utils import ml_utils
 from nfl_predictor.utils.logger import log
 
@@ -68,6 +69,8 @@ DEFAULT_FEATURE_END_COLUMN = "home_moneyline"
 DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
+
+DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
 
 MARKET_DERIVED_COLUMNS = (
     "market_home_margin",
@@ -115,6 +118,7 @@ class ScoreModel:
     home_model: xgb.XGBRegressor
     target_columns: tuple[str, str]
     market_prob_config: Optional["MarketProbConfig"] = None
+    xgb_params: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -135,8 +139,13 @@ class MarginTotalModel:
     total_model: xgb.XGBRegressor
     target_columns: tuple[str, str]
     calibrator: Optional[WinProbCalibrator]
+    margin_quantile_models: Optional[dict[float, xgb.XGBRegressor]] = None
+    total_quantile_models: Optional[dict[float, xgb.XGBRegressor]] = None
+    quantiles: Optional[tuple[float, ...]] = None
     market_anchor: bool = False
     market_prob_config: Optional["MarketProbConfig"] = None
+    xgb_params: Optional[dict[str, Any]] = None
+    tuned_params: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -157,6 +166,8 @@ class BlendedMarginTotalModel:
     calibrator: Optional[WinProbCalibrator]
     target_columns: tuple[str, str]
     market_prob_config: Optional["MarketProbConfig"] = None
+    xgb_params: Optional[dict[str, Any]] = None
+    tuned_params: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -165,6 +176,19 @@ class MarketProbConfig:
 
     blend_weight: float
     clamp_delta: float
+
+
+@dataclass(frozen=True)
+class TrainingResult:
+    """Training output bundle used for artifact writing."""
+
+    model: Any
+    metrics_report: dict[str, Any]
+    splits: dict[str, Any]
+    params: dict[str, Any]
+    tuned_params: Optional[dict[str, Any]]
+    feature_list: list[str]
+    early_stopping: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -736,6 +760,56 @@ def _fit_margin_total_models(
         return _train_with_params(fallback_params)
 
 
+def _validate_quantiles(quantiles: Sequence[float]) -> tuple[float, ...]:
+    if not quantiles:
+        raise ValueError("Quantiles must be non-empty.")
+    normalized = tuple(float(q) for q in quantiles)
+    for q in normalized:
+        if not 0.0 < q < 1.0:
+            raise ValueError(f"Quantile must be in (0, 1): {q}")
+    return normalized
+
+
+def _fit_quantile_models(
+    x_train: np.ndarray | spmatrix,
+    y_train: np.ndarray,
+    params: dict[str, Any],
+    quantiles: Sequence[float],
+    x_eval: Optional[np.ndarray | spmatrix] = None,
+    y_eval: Optional[np.ndarray] = None,
+    early_stopping_rounds: Optional[int] = None,
+) -> dict[float, xgb.XGBRegressor]:
+    """Fit one XGBoost quantile regressor per requested quantile.
+
+    Uses `objective='reg:quantileerror'` and passes `quantile_alpha` via model params.
+    """
+
+    resolved = _validate_quantiles(quantiles)
+    models: dict[float, xgb.XGBRegressor] = {}
+
+    def _train_with_params(active_params: dict[str, Any]) -> dict[float, xgb.XGBRegressor]:
+        fitted: dict[float, xgb.XGBRegressor] = {}
+        for quantile in resolved:
+            q_params = active_params.copy()
+            q_params["objective"] = "reg:quantileerror"
+            q_params["quantile_alpha"] = quantile
+            model = xgb.XGBRegressor(**q_params)
+            fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_eval, early_stopping_rounds)
+            model.fit(x_train, y_train, **fit_kwargs)
+            fitted[quantile] = model
+        return fitted
+
+    try:
+        models = _train_with_params(params)
+    except xgb.core.XGBoostError as exc:
+        fallback_params = _coerce_tree_method_on_error(params, exc)
+        if fallback_params is None:
+            raise
+        models = _train_with_params(fallback_params)
+
+    return models
+
+
 def _fit_win_prob_calibrator(
     pred_margin: np.ndarray,
     actual_home_win: np.ndarray,
@@ -836,6 +910,35 @@ def _predict_margin_total_from_model(
     return pred_margin, pred_total
 
 
+def _predict_margin_total_quantiles_from_model(
+    model: MarginTotalModel,
+    games_df: pd.DataFrame,
+) -> tuple[dict[float, np.ndarray], dict[float, np.ndarray]]:
+    margin_models = getattr(model, "margin_quantile_models", None)
+    total_models = getattr(model, "total_quantile_models", None)
+    if not margin_models or not total_models:
+        return {}, {}
+
+    feature_df = _apply_feature_spec(games_df, model.feature_spec)
+    x_games = model.preprocessor.transform(feature_df)
+
+    margin_preds: dict[float, np.ndarray] = {
+        q: _predict_xgb(q_model, x_games) for q, q_model in margin_models.items()
+    }
+    total_preds: dict[float, np.ndarray] = {
+        q: _predict_xgb(q_model, x_games) for q, q_model in total_models.items()
+    }
+
+    if getattr(model, "market_anchor", False):
+        baseline_margin, baseline_total = _get_market_baseline(games_df)
+        for q in list(margin_preds.keys()):
+            margin_preds[q] = margin_preds[q] + baseline_margin
+        for q in list(total_preds.keys()):
+            total_preds[q] = total_preds[q] + baseline_total
+
+    return margin_preds, total_preds
+
+
 def _summarize_confidence_pool(
     df: pd.DataFrame,
     home_win_prob: np.ndarray,
@@ -851,7 +954,7 @@ def _summarize_confidence_pool(
 
     summary_df = df[["season", "week", away_col, home_col]].copy()
     summary_df["home_win_prob"] = home_win_prob
-    summary_df["away_win_prob"] = 1 - home_win_prob
+    summary_df["away_win_prob"] = 1.0 - home_win_prob
     summary_df["predicted_winner"] = np.where(home_win_prob >= 0.5, "home", "away")
     summary_df["actual_winner"] = np.where(
         summary_df[home_col] > summary_df[away_col],
@@ -931,7 +1034,7 @@ def _build_prediction_output(
     output_df["predicted_total"] = np.round(pred_away + pred_home, 1)
     output_df["predicted_margin"] = np.round(pred_home - pred_away, 1)
     output_df["home_win_prob"] = np.round(home_win_prob, 4)
-    output_df["away_win_prob"] = np.round(1 - home_win_prob, 4)
+    output_df["away_win_prob"] = np.round(1.0 - home_win_prob, 4)
 
     team_cols = [
         col
@@ -958,6 +1061,34 @@ def _save_model_checkpoint(model: Any, path: Path) -> None:
     log.info("Saved model checkpoint to %s", path)
 
 
+def _early_stopping_info(model: Any) -> dict[str, Any]:
+    info: dict[str, Any] = {}
+
+    def _capture(prefix: str, estimator: Any) -> None:
+        for key in ("best_iteration", "best_score", "best_ntree_limit"):
+            if hasattr(estimator, key):
+                info[f"{prefix}.{key}"] = getattr(estimator, key)
+
+    if isinstance(model, ScoreModel):
+        _capture("away_model", model.away_model)
+        _capture("home_model", model.home_model)
+    elif isinstance(model, MarginTotalModel):
+        _capture("margin_model", model.margin_model)
+        _capture("total_model", model.total_model)
+        if model.margin_quantile_models:
+            for q, est in model.margin_quantile_models.items():
+                _capture(f"margin_q{q}", est)
+        if model.total_quantile_models:
+            for q, est in model.total_quantile_models.items():
+                _capture(f"total_q{q}", est)
+    elif isinstance(model, BlendedMarginTotalModel):
+        _capture("team.margin_model", model.team_model.margin_model)
+        _capture("team.total_model", model.team_model.total_model)
+        _capture("market.margin_model", model.market_model.margin_model)
+        _capture("market.total_model", model.market_model.total_model)
+    return info
+
+
 def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
     for cls in (
         FeatureSpec,
@@ -971,6 +1102,7 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
         setattr(__main__, cls.__name__, cls)
 
     model = joblib.load(path)
+    model = _ensure_backward_compatible_model(model)
     expected_types = {
         "score": ScoreModel,
         "margin_total": MarginTotalModel,
@@ -982,6 +1114,27 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
     if not isinstance(model, expected_type):
         raise ValueError(f"Model checkpoint type mismatch; expected {expected_type.__name__}.")
     log.info("Loaded model checkpoint from %s", path)
+    return model
+
+
+def _ensure_backward_compatible_model(model: Any) -> Any:
+    """Patch older pickled models missing newer fields."""
+
+    def _ensure_margin_total(instance: Any) -> None:
+        if not hasattr(instance, "margin_quantile_models"):
+            setattr(instance, "margin_quantile_models", None)
+        if not hasattr(instance, "total_quantile_models"):
+            setattr(instance, "total_quantile_models", None)
+        if not hasattr(instance, "quantiles"):
+            setattr(instance, "quantiles", None)
+
+    if isinstance(model, MarginTotalModel):
+        _ensure_margin_total(model)
+        return model
+    if isinstance(model, BlendedMarginTotalModel):
+        _ensure_margin_total(model.team_model)
+        _ensure_margin_total(model.market_model)
+        return model
     return model
 
 
@@ -1496,6 +1649,47 @@ def train_score_model(
         home_model=home_model,
         target_columns=target_columns,
         market_prob_config=market_prob_config,
+        xgb_params=params,
+    )
+
+
+def train_score_model_with_report(
+    **kwargs: Any,
+) -> TrainingResult:
+    data_path: Path = kwargs["data_path"]
+    model: ScoreModel = train_score_model(**kwargs)
+    df = _load_games(data_path)
+    df = df.dropna(subset=list(model.target_columns))
+    df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
+    metrics: dict[str, Any] = {}
+    if not holdout_df.empty:
+        x_holdout = model.preprocessor.transform(
+            _apply_feature_spec(holdout_df, model.feature_spec)
+        )
+        pred_away = _predict_xgb(model.away_model, x_holdout)
+        pred_home = _predict_xgb(model.home_model, x_holdout)
+        metrics = _evaluate_predictions(holdout_df, pred_away, pred_home, model.target_columns)
+
+    report = {
+        "kind": "train",
+        "model_kind": "score",
+        "metrics": {"holdout": metrics or None},
+    }
+    splits = {
+        "train_seasons": sorted(train_df["season"].dropna().unique().tolist()),
+        "holdout_seasons": holdout,
+    }
+    params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
+    feature_list = list(model.feature_spec.feature_columns)
+    return TrainingResult(
+        model=model,
+        metrics_report=report,
+        splits=splits,
+        params=params,
+        tuned_params=None,
+        feature_list=feature_list,
+        early_stopping=_early_stopping_info(model),
     )
 
 
@@ -1601,6 +1795,9 @@ def train_margin_total_model(
         FeatureSpec,
         xgb.XGBRegressor,
         xgb.XGBRegressor,
+        dict[float, xgb.XGBRegressor],
+        dict[float, xgb.XGBRegressor],
+        tuple[float, ...],
         Optional[np.ndarray | spmatrix],
         Optional[np.ndarray],
     ]:
@@ -1656,11 +1853,34 @@ def train_margin_total_model(
             early_stopping_rounds=optuna_config.early_stopping_rounds,
         )
 
+        quantiles = _validate_quantiles(DEFAULT_QUANTILES)
+        margin_quantiles = _fit_quantile_models(
+            x_train,
+            y_margin_train,
+            params,
+            quantiles,
+            x_eval=x_calibration,
+            y_eval=y_margin_calibration,
+            early_stopping_rounds=optuna_config.early_stopping_rounds,
+        )
+        total_quantiles = _fit_quantile_models(
+            x_train,
+            y_total_train,
+            params,
+            quantiles,
+            x_eval=x_calibration,
+            y_eval=y_total_calibration,
+            early_stopping_rounds=optuna_config.early_stopping_rounds,
+        )
+
         return (
             local_preprocessor,
             local_spec,
             margin_model,
             total_model,
+            margin_quantiles,
+            total_quantiles,
+            quantiles,
             x_calibration,
             baseline_margin_calibration,
         )
@@ -1670,6 +1890,9 @@ def train_margin_total_model(
         feature_spec,
         margin_model,
         total_model,
+        margin_quantile_models,
+        total_quantile_models,
+        quantiles,
         x_calibration,
         baseline_margin_calibration,
     ) = _train_models(train_df, calibration_df)
@@ -1725,8 +1948,89 @@ def train_margin_total_model(
         total_model=total_model,
         target_columns=target_columns,
         calibrator=calibrator,
+        margin_quantile_models=margin_quantile_models,
+        total_quantile_models=total_quantile_models,
+        quantiles=quantiles,
         market_anchor=market_anchor,
         market_prob_config=market_prob_config,
+        xgb_params=params,
+        tuned_params=tuned_params or None,
+    )
+
+
+def train_margin_total_model_with_report(
+    **kwargs: Any,
+) -> TrainingResult:
+    data_path: Path = kwargs["data_path"]
+    holdout_seasons: int = kwargs["holdout_seasons"]
+    calibration_seasons: int = kwargs["calibration_seasons"]
+    calibration_weeks: int = kwargs["calibration_weeks"]
+
+    df = _load_games(data_path)
+    target_columns = _get_target_columns(df)
+    df = df.dropna(subset=list(target_columns))
+    df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    (
+        train_df,
+        calibration_df,
+        holdout_df,
+        train_seasons,
+        calibration,
+        holdout,
+        calibration_season_inseason,
+        calibration_weeks_inseason,
+    ) = _split_train_calibration_holdout(
+        df, holdout_seasons, calibration_seasons, calibration_weeks
+    )
+
+    # Train the actual model (this will also log holdout metrics).
+    model: MarginTotalModel = train_margin_total_model(**kwargs)
+
+    holdout_metrics: Optional[dict[str, Any]] = None
+    pool_summary: Optional[dict[str, Any]] = None
+    if not holdout_df.empty:
+        x_holdout = model.preprocessor.transform(
+            _apply_feature_spec(holdout_df, model.feature_spec)
+        )
+        pred_margin = _predict_xgb(model.margin_model, x_holdout)
+        pred_total = _predict_xgb(model.total_model, x_holdout)
+        if model.market_anchor:
+            baseline_margin_holdout, baseline_total_holdout = _get_market_baseline(holdout_df)
+            pred_margin = pred_margin + baseline_margin_holdout
+            pred_total = pred_total + baseline_total_holdout
+        home_win_prob = _predict_home_win_prob(pred_margin, model.calibrator)
+        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, model.market_prob_config)
+        holdout_metrics = _evaluate_margin_total_predictions(
+            holdout_df, pred_margin, pred_total, model.target_columns, home_win_prob
+        )
+        pool_summary = _summarize_confidence_pool(holdout_df, home_win_prob, model.target_columns)
+
+    report = {
+        "kind": "train",
+        "model_kind": "margin_total",
+        "metrics": {"holdout": holdout_metrics},
+        "pool": pool_summary,
+    }
+
+    splits: dict[str, Any] = {
+        "train_seasons": train_seasons,
+        "calibration_seasons": calibration,
+        "holdout_seasons": holdout,
+        "calibration_inseason": {
+            "season": calibration_season_inseason,
+            "weeks": calibration_weeks_inseason,
+        },
+    }
+    params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
+    feature_list = list(model.feature_spec.feature_columns)
+    return TrainingResult(
+        model=model,
+        metrics_report=report,
+        splits=splits,
+        params=params,
+        tuned_params=model.tuned_params,
+        feature_list=feature_list,
+        early_stopping=_early_stopping_info(model),
     )
 
 
@@ -2041,6 +2345,77 @@ def train_blended_margin_total_model(
         calibrator=calibrator,
         target_columns=target_columns,
         market_prob_config=market_prob_config,
+        xgb_params={"team": team_xgb_params, "market": market_xgb_params},
+        tuned_params={"team": team_params, "market": market_params},
+    )
+
+
+def train_blended_margin_total_model_with_report(
+    **kwargs: Any,
+) -> TrainingResult:
+    data_path: Path = kwargs["data_path"]
+    model: BlendedMarginTotalModel = train_blended_margin_total_model(**kwargs)
+    df = _load_games(data_path)
+    df = df.dropna(subset=list(model.target_columns))
+    df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    (
+        train_df,
+        calibration_df,
+        holdout_df,
+        train_seasons,
+        calibration,
+        holdout,
+        calibration_season_inseason,
+        calibration_weeks_inseason,
+    ) = _split_train_calibration_holdout(
+        df,
+        kwargs["holdout_seasons"],
+        kwargs["calibration_seasons"],
+        kwargs["calibration_weeks"],
+    )
+
+    holdout_metrics: Optional[dict[str, Any]] = None
+    if not holdout_df.empty:
+        team_margin, team_total = _predict_margin_total_from_model(model.team_model, holdout_df)
+        market_margin, market_total = _predict_margin_total_from_model(
+            model.market_model, holdout_df
+        )
+        blended_margin = model.blend_layer.margin_model.predict(
+            np.column_stack([team_margin, market_margin])
+        )
+        blended_total = model.blend_layer.total_model.predict(
+            np.column_stack([team_total, market_total])
+        )
+        home_win_prob = _predict_home_win_prob(blended_margin, model.calibrator)
+        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, model.market_prob_config)
+        holdout_metrics = _evaluate_margin_total_predictions(
+            holdout_df, blended_margin, blended_total, model.target_columns, home_win_prob
+        )
+
+    report = {
+        "kind": "train",
+        "model_kind": "blend",
+        "metrics": {"holdout": holdout_metrics},
+    }
+    splits = {
+        "train_seasons": train_seasons,
+        "calibration_seasons": calibration,
+        "holdout_seasons": holdout,
+        "calibration_inseason": {
+            "season": calibration_season_inseason,
+            "weeks": calibration_weeks_inseason,
+        },
+    }
+    params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
+    feature_list = list(model.team_model.feature_spec.feature_columns)
+    return TrainingResult(
+        model=model,
+        metrics_report=report,
+        splits=splits,
+        params=params,
+        tuned_params=model.tuned_params,
+        feature_list=feature_list,
+        early_stopping=_early_stopping_info(model),
     )
 
 
@@ -2085,12 +2460,18 @@ def predict_week_margin_total(
     """Generate weekly predictions from a margin/total model."""
     games_df = _load_games(games_path)
     pred_margin, pred_total = _predict_margin_total_from_model(model, games_df)
+    margin_quantiles, total_quantiles = _predict_margin_total_quantiles_from_model(model, games_df)
     pred_away, pred_home = _derive_scores_from_margin_total(pred_margin, pred_total)
     home_win_prob = _predict_home_win_prob(pred_margin, model.calibrator)
     home_win_prob = _adjust_home_win_prob(
         games_df, home_win_prob, getattr(model, "market_prob_config", None)
     )
     output_df = _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
+
+    for q in sorted(margin_quantiles.keys()):
+        output_df[f"predicted_margin_p{int(round(q * 100)):02d}"] = np.round(margin_quantiles[q], 1)
+    for q in sorted(total_quantiles.keys()):
+        output_df[f"predicted_total_p{int(round(q * 100)):02d}"] = np.round(total_quantiles[q], 1)
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2175,6 +2556,15 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Train on residuals vs market spread/total and add market baseline at prediction time."
+        ),
+    )
+    parser.add_argument(
+        "--market-prob-weight",
+        type=float,
+        default=None,
+        help=(
+            "Market probability weight for post-processing (0=off, 1=market only). "
+            "Alias for --market-prob-blend."
         ),
     )
     parser.add_argument(
@@ -2334,6 +2724,21 @@ def _parse_args() -> argparse.Namespace:
         help="Optional path to save the trained model checkpoint.",
     )
     parser.add_argument(
+        "--run-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional run directory to write model.joblib, metadata.json, and metrics_report.json. "
+            "If set, --model-out must be inside this directory (or omitted)."
+        ),
+    )
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Optional run id used when writing --run-dir (defaults to directory name).",
+    )
+    parser.add_argument(
         "--predict-path",
         type=Path,
         default=None,
@@ -2358,6 +2763,13 @@ def main() -> None:
     """CLI entry point for training and prediction."""
     args = _parse_args()
 
+    created_at = artifacts.now_utc_iso()
+    dataset_hash = artifacts.sha256_file(args.data_path)
+
+    config_payload: dict[str, Any] = {
+        k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
+    }
+
     study_name = args.tune_study_name
     if args.tune_storage and study_name is None:
         study_name = f"nfl_predictor_{args.model_kind}_{args.tune_metric}"
@@ -2379,11 +2791,15 @@ def main() -> None:
         xgb_n_jobs=args.xgb_n_jobs,
     )
 
+    market_prob_weight = args.market_prob_weight
+    if market_prob_weight is None:
+        market_prob_weight = args.market_prob_blend
+
     market_prob_config = MarketProbConfig(
-        blend_weight=args.market_prob_blend,
-        clamp_delta=args.market_prob_clamp,
+        blend_weight=float(market_prob_weight),
+        clamp_delta=float(args.market_prob_clamp),
     )
-    if args.market_prob_blend == 0 and args.market_prob_clamp == 0:
+    if float(market_prob_weight) == 0.0 and float(args.market_prob_clamp) == 0.0:
         market_prob_config = None
 
     output_path = args.output_path
@@ -2412,8 +2828,40 @@ def main() -> None:
             raise ValueError(f"Unknown model kind: {args.model_kind}")
         return
 
+    def _write_artifacts(result: TrainingResult, model_out: Path) -> None:
+        run_dir = args.run_dir or model_out.parent
+        if args.run_dir is not None and model_out.parent != args.run_dir:
+            raise ValueError("--model-out must be inside --run-dir")
+
+        run_id = args.run_id or run_dir.name
+        paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
+
+        artifacts.save_model(paths.model_path, result.model)
+
+        metrics_report = {
+            "run_id": run_id,
+            "created_at": created_at,
+            "config": config_payload,
+            "splits": result.splits,
+            "metrics": result.metrics_report,
+        }
+        artifacts.write_json(paths.metrics_path, metrics_report)
+
+        metadata = artifacts.build_metadata(
+            created_at=created_at,
+            run_id=run_id,
+            dataset_hash=dataset_hash,
+            config=config_payload,
+            feature_list=result.feature_list,
+            splits=result.splits,
+            params=result.params,
+            tuned_params=result.tuned_params,
+            early_stopping=result.early_stopping,
+        )
+        artifacts.write_json(paths.metadata_path, metadata)
+
     if args.model_kind == "score":
-        model = train_score_model(
+        result = train_score_model_with_report(
             data_path=args.data_path,
             holdout_seasons=args.holdout_seasons,
             include_market=not args.exclude_market,
@@ -2428,14 +2876,21 @@ def main() -> None:
             xgb_n_jobs=args.xgb_n_jobs,
         )
 
+        if args.run_dir is not None and args.model_out is None:
+            args.model_out = args.run_dir / "model.joblib"
         if args.model_out is not None:
-            _save_model_checkpoint(model, args.model_out)
+            _write_artifacts(result, args.model_out)
         if args.predict_path:
-            predict_week(model, args.predict_path, output_path, pretty_output=args.pretty_output)
+            predict_week(
+                result.model,
+                args.predict_path,
+                output_path,
+                pretty_output=args.pretty_output,
+            )
         return
 
     if args.model_kind == "margin_total":
-        model = train_margin_total_model(
+        result = train_margin_total_model_with_report(
             data_path=args.data_path,
             holdout_seasons=args.holdout_seasons,
             calibration_seasons=args.calibration_seasons,
@@ -2453,16 +2908,18 @@ def main() -> None:
             feature_end=args.feature_end,
         )
 
+        if args.run_dir is not None and args.model_out is None:
+            args.model_out = args.run_dir / "model.joblib"
         if args.model_out is not None:
-            _save_model_checkpoint(model, args.model_out)
+            _write_artifacts(result, args.model_out)
         if args.predict_path:
             predict_week_margin_total(
-                model, args.predict_path, output_path, pretty_output=args.pretty_output
+                result.model, args.predict_path, output_path, pretty_output=args.pretty_output
             )
         return
 
     if args.model_kind == "blend":
-        model = train_blended_margin_total_model(
+        result = train_blended_margin_total_model_with_report(
             data_path=args.data_path,
             holdout_seasons=args.holdout_seasons,
             calibration_seasons=args.calibration_seasons,
@@ -2479,11 +2936,13 @@ def main() -> None:
             feature_end=args.feature_end,
         )
 
+        if args.run_dir is not None and args.model_out is None:
+            args.model_out = args.run_dir / "model.joblib"
         if args.model_out is not None:
-            _save_model_checkpoint(model, args.model_out)
+            _write_artifacts(result, args.model_out)
         if args.predict_path:
             predict_week_blended(
-                model, args.predict_path, output_path, pretty_output=args.pretty_output
+                result.model, args.predict_path, output_path, pretty_output=args.pretty_output
             )
         return
 

@@ -1331,10 +1331,7 @@ def _with_xgb_early_stopping_params(
     updated.setdefault("early_stopping_rounds", int(early_stopping_rounds))
 
     if _xgb_param_supported("callbacks"):
-        callback_module = getattr(xgb, "callback", None)
-        early_stop_cls = (
-            getattr(callback_module, "EarlyStopping", None) if callback_module else None
-        )
+        early_stop_cls = getattr(getattr(xgb, "callback", None), "EarlyStopping", None)
         if early_stop_cls is not None:
             updated.setdefault(
                 "callbacks",
@@ -1674,12 +1671,13 @@ def train_score_model(
 def train_score_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
+    """Train a score model and return a structured metrics report payload."""
     data_path: Path = kwargs["data_path"]
     model: ScoreModel = train_score_model(**kwargs)
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
-    train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
+    _train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
     metrics: dict[str, Any] = {}
     if not holdout_df.empty:
         x_holdout = model.preprocessor.transform(
@@ -1695,7 +1693,7 @@ def train_score_model_with_report(
         "metrics": {"holdout": metrics or None},
     }
     splits = {
-        "train_seasons": sorted(train_df["season"].dropna().unique().tolist()),
+        "train_seasons": sorted(_train_df["season"].dropna().unique().tolist()),
         "holdout_seasons": holdout,
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
@@ -1979,6 +1977,7 @@ def train_margin_total_model(
 def train_margin_total_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
+    """Train a margin/total model and return a structured metrics report payload."""
     data_path: Path = kwargs["data_path"]
     holdout_seasons: int = kwargs["holdout_seasons"]
     calibration_seasons: int = kwargs["calibration_seasons"]
@@ -1988,18 +1987,15 @@ def train_margin_total_model_with_report(
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
-    (
-        train_df,
-        calibration_df,
-        holdout_df,
-        train_seasons,
-        calibration,
-        holdout,
-        calibration_season_inseason,
-        calibration_weeks_inseason,
-    ) = _split_train_calibration_holdout(
+    split = _split_train_calibration_holdout(
         df, holdout_seasons, calibration_seasons, calibration_weeks
     )
+    holdout_df = split[2]
+    train_seasons = split[3]
+    calibration = split[4]
+    holdout = split[5]
+    calibration_season_inseason = split[6]
+    calibration_weeks_inseason = split[7]
 
     # Train the actual model (this will also log holdout metrics).
     model: MarginTotalModel = train_margin_total_model(**kwargs)
@@ -2371,26 +2367,24 @@ def train_blended_margin_total_model(
 def train_blended_margin_total_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
+    """Train a blended model and return a structured metrics report payload."""
     data_path: Path = kwargs["data_path"]
     model: BlendedMarginTotalModel = train_blended_margin_total_model(**kwargs)
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
-    (
-        train_df,
-        calibration_df,
-        holdout_df,
-        train_seasons,
-        calibration,
-        holdout,
-        calibration_season_inseason,
-        calibration_weeks_inseason,
-    ) = _split_train_calibration_holdout(
+    split = _split_train_calibration_holdout(
         df,
         kwargs["holdout_seasons"],
         kwargs["calibration_seasons"],
         kwargs["calibration_weeks"],
     )
+    holdout_df = split[2]
+    train_seasons = split[3]
+    calibration = split[4]
+    holdout = split[5]
+    calibration_season_inseason = split[6]
+    calibration_weeks_inseason = split[7]
 
     holdout_metrics: Optional[dict[str, Any]] = None
     if not holdout_df.empty:

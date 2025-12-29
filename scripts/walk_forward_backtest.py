@@ -10,17 +10,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from nfl_predictor import constants  # noqa: E402, pylint: disable=wrong-import-position
-from nfl_predictor.ml import walk_forward  # noqa: E402, pylint: disable=wrong-import-position
-from nfl_predictor.utils.logger import log  # noqa: E402, pylint: disable=wrong-import-position
+from nfl_predictor import constants
+from nfl_predictor.ml import walk_forward
+from nfl_predictor.utils.logger import log
 
 
 def _parse_args() -> argparse.Namespace:

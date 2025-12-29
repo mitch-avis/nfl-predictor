@@ -18,9 +18,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
-import __main__
 import joblib
 import numpy as np
+import optuna
 import pandas as pd
 import xgboost as xgb
 from scipy.sparse import spmatrix
@@ -29,21 +29,16 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression, Ridge
-from sklearn.metrics import brier_score_loss, mean_absolute_error, mean_squared_error
-
-try:
-    # sklearn>=1.4
-    from sklearn.metrics import root_mean_squared_error
-except ImportError:  # pragma: no cover
-    root_mean_squared_error = None
+from sklearn.metrics import (
+    brier_score_loss,
+    mean_absolute_error,
+    mean_squared_error,
+    root_mean_squared_error,
+)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-try:
-    import optuna
-except ImportError:  # pragma: no cover
-    optuna = None
-
+import __main__
 from nfl_predictor import constants
 from nfl_predictor.ml import artifacts
 from nfl_predictor.utils import ml_utils
@@ -161,7 +156,7 @@ class BlendedMarginTotalModel:
     """Blended margin/total model that combines team and market signals."""
 
     team_model: MarginTotalModel
-    market_model: MarginTotalModel
+    market_model: Optional[MarginTotalModel]
     blend_layer: BlendLayer
     calibrator: Optional[WinProbCalibrator]
     target_columns: tuple[str, str]
@@ -272,7 +267,8 @@ def _add_market_transforms(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _get_market_baseline(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+def get_market_baseline(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Return market baseline margin and total arrays from input DataFrame."""
     df = _add_market_transforms(df)
     if "market_home_margin" not in df.columns or "market_total_line" not in df.columns:
         raise ValueError("Market anchor requested but spread/total columns are missing.")
@@ -680,7 +676,7 @@ def _prepare_margin_total_targets_with_anchor(
     margin, total = _prepare_margin_total_targets(df, target_columns)
     if not market_anchor:
         return margin, total, None, None
-    baseline_margin, baseline_total = _get_market_baseline(df)
+    baseline_margin, baseline_total = get_market_baseline(df)
     return margin - baseline_margin, total - baseline_total, baseline_margin, baseline_total
 
 
@@ -812,6 +808,34 @@ def _fit_quantile_models(
     return models
 
 
+def _fit_blend_ridge_constrained(
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    alpha: float = 1.0,
+) -> Ridge:
+    model = Ridge(alpha=alpha)
+    model.fit(x, y)
+
+    coef = np.asarray(model.coef_, dtype=float)
+    if coef.shape != (2,):
+        raise ValueError(f"Expected blend coefficients shape (2,), got {coef.shape}")
+
+    coef = np.maximum(coef, 0.0)
+    coef_sum = float(coef.sum())
+    if coef_sum <= 0:
+        coef = np.array([0.5, 0.5], dtype=float)
+    else:
+        coef = coef / coef_sum
+
+    # Keep an intercept term but recompute it after constraining weights.
+    intercept = float(np.mean(y - x @ coef))
+
+    model.coef_ = coef
+    model.intercept_ = intercept
+    return model
+
+
 def _fit_win_prob_calibrator(
     pred_margin: np.ndarray,
     actual_home_win: np.ndarray,
@@ -906,7 +930,7 @@ def _predict_margin_total_from_model(
     pred_margin = _predict_xgb(model.margin_model, x_games)
     pred_total = _predict_xgb(model.total_model, x_games)
     if getattr(model, "market_anchor", False):
-        baseline_margin, baseline_total = _get_market_baseline(games_df)
+        baseline_margin, baseline_total = get_market_baseline(games_df)
         pred_margin = pred_margin + baseline_margin
         pred_total = pred_total + baseline_total
     return pred_margin, pred_total
@@ -932,7 +956,7 @@ def _predict_margin_total_quantiles_from_model(
     }
 
     if getattr(model, "market_anchor", False):
-        baseline_margin, baseline_total = _get_market_baseline(games_df)
+        baseline_margin, baseline_total = get_market_baseline(games_df)
         for q in list(margin_preds.keys()):
             margin_preds[q] = margin_preds[q] + baseline_margin
         for q in list(total_preds.keys()):
@@ -1108,8 +1132,9 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
     elif isinstance(model, BlendedMarginTotalModel):
         _capture("team.margin_model", model.team_model.margin_model)
         _capture("team.total_model", model.team_model.total_model)
-        _capture("market.margin_model", model.market_model.margin_model)
-        _capture("market.total_model", model.market_model.total_model)
+        if model.market_model is not None:
+            _capture("market.margin_model", model.market_model.margin_model)
+            _capture("market.total_model", model.market_model.total_model)
     return info
 
 
@@ -1157,7 +1182,8 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
         return model
     if isinstance(model, BlendedMarginTotalModel):
         _ensure_margin_total(model.team_model)
-        _ensure_margin_total(model.market_model)
+        if model.market_model is not None:
+            _ensure_margin_total(model.market_model)
         return model
     return model
 
@@ -1170,11 +1196,16 @@ def _with_market_prob_config(model: Any, config: Optional[MarketProbConfig]) -> 
     if isinstance(model, MarginTotalModel):
         return replace(model, market_prob_config=config)
     if isinstance(model, BlendedMarginTotalModel):
+        market_model = (
+            replace(model.market_model, market_prob_config=config)
+            if model.market_model is not None
+            else None
+        )
         return replace(
             model,
             market_prob_config=config,
             team_model=replace(model.team_model, market_prob_config=config),
-            market_model=replace(model.market_model, market_prob_config=config),
+            market_model=market_model,
         )
     return model
 
@@ -1798,7 +1829,7 @@ def train_margin_total_model(
             market_prob_config.clamp_delta,
         )
     if market_anchor:
-        _get_market_baseline(train_df)
+        get_market_baseline(train_df)
         log.info("Market anchor enabled: training residuals vs spread/total.")
     if market_prob_config is not None:
         log.info(
@@ -1964,7 +1995,7 @@ def train_margin_total_model(
         pred_margin = _predict_xgb(margin_model, x_holdout)
         pred_total = _predict_xgb(total_model, x_holdout)
         if market_anchor:
-            baseline_margin_holdout, baseline_total_holdout = _get_market_baseline(holdout_df)
+            baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
         home_win_prob = _predict_home_win_prob(pred_margin, calibrator)
@@ -2038,7 +2069,7 @@ def train_margin_total_model_with_report(
         pred_margin = _predict_xgb(model.margin_model, x_holdout)
         pred_total = _predict_xgb(model.total_model, x_holdout)
         if model.market_anchor:
-            baseline_margin_holdout, baseline_total_holdout = _get_market_baseline(holdout_df)
+            baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
         home_win_prob = _predict_home_win_prob(pred_margin, model.calibrator)
@@ -2134,7 +2165,6 @@ def train_blended_margin_total_model(
     )
 
     team_params: dict[str, Any] = {}
-    market_params: dict[str, Any] = {}
     if optuna_config.enabled:
         tune_scope = optuna_config.tune_scope
         timeout = optuna_config.timeout_seconds
@@ -2224,18 +2254,8 @@ def train_blended_margin_total_model(
                 market_prob_config=market_prob_config,
             )
         if tune_scope in {"market", "both"}:
-            log.info("Tuning market-only model hyperparameters...")
-            market_params = _run_optuna_search(
-                train_df,
-                target_columns=target_columns,
-                include_market=True,
-                max_cardinality_ratio=max_cardinality_ratio,
-                feature_start=feature_start,
-                feature_end=feature_end,
-                optuna_config=market_optuna,
-                market_only=True,
-                market_transform=market_transform,
-                market_prob_config=market_prob_config,
+            log.info(
+                "Skipping market-only model tuning: blended models now use market baseline only."
             )
 
     team_overrides = team_params.copy()
@@ -2247,16 +2267,6 @@ def train_blended_margin_total_model(
         tree_method=optuna_config.tree_method,
         device=optuna_config.device,
     )
-    market_overrides = market_params.copy()
-    if optuna_config.xgb_n_jobs is not None:
-        market_overrides["n_jobs"] = optuna_config.xgb_n_jobs
-    market_xgb_params = _resolve_xgb_params(
-        DEFAULT_XGB_PARAMS,
-        overrides=market_overrides or None,
-        tree_method=optuna_config.tree_method,
-        device=optuna_config.device,
-    )
-
     team_spec = _build_feature_spec(
         train_df,
         include_market=False,
@@ -2265,26 +2275,14 @@ def train_blended_margin_total_model(
         feature_end=feature_end,
         market_transform=market_transform,
     )
-    market_spec = _build_feature_spec(
-        train_df,
-        include_market=True,
-        max_cardinality_ratio=max_cardinality_ratio,
-        feature_start=feature_start,
-        feature_end=feature_end,
-        market_only=True,
-        market_transform=market_transform,
-    )
-
     team_preprocessor = _build_preprocessor(team_spec, for_tree=True)
-    market_preprocessor = _build_preprocessor(market_spec, for_tree=True)
 
     team_train = team_preprocessor.fit_transform(_apply_feature_spec(train_df, team_spec))
-    market_train = market_preprocessor.fit_transform(_apply_feature_spec(train_df, market_spec))
     y_margin_train, y_total_train = _prepare_margin_total_targets(train_df, target_columns)
 
     team_calib = team_preprocessor.transform(_apply_feature_spec(calibration_df, team_spec))
-    market_calib = market_preprocessor.transform(_apply_feature_spec(calibration_df, market_spec))
     y_margin_calib, y_total_calib = _prepare_margin_total_targets(calibration_df, target_columns)
+    market_margin_calib, market_total_calib = get_market_baseline(calibration_df)
 
     team_margin_model, team_total_model = _fit_margin_total_models(
         team_train,
@@ -2296,26 +2294,19 @@ def train_blended_margin_total_model(
         y_total_eval=y_total_calib,
         early_stopping_rounds=optuna_config.early_stopping_rounds,
     )
-    market_margin_model, market_total_model = _fit_margin_total_models(
-        market_train,
-        y_margin_train,
-        y_total_train,
-        market_xgb_params,
-        x_eval=market_calib,
-        y_margin_eval=y_margin_calib,
-        y_total_eval=y_total_calib,
-        early_stopping_rounds=optuna_config.early_stopping_rounds,
-    )
-
     team_margin_calib = _predict_xgb(team_margin_model, team_calib)
     team_total_calib = _predict_xgb(team_total_model, team_calib)
-    market_margin_calib = _predict_xgb(market_margin_model, market_calib)
-    market_total_calib = _predict_xgb(market_total_model, market_calib)
 
-    margin_blender = Ridge(alpha=1.0)
-    total_blender = Ridge(alpha=1.0)
-    margin_blender.fit(np.column_stack([team_margin_calib, market_margin_calib]), y_margin_calib)
-    total_blender.fit(np.column_stack([team_total_calib, market_total_calib]), y_total_calib)
+    margin_blender = _fit_blend_ridge_constrained(
+        np.column_stack([team_margin_calib, market_margin_calib]),
+        y_margin_calib,
+        alpha=1.0,
+    )
+    total_blender = _fit_blend_ridge_constrained(
+        np.column_stack([team_total_calib, market_total_calib]),
+        y_total_calib,
+        alpha=1.0,
+    )
 
     blended_margin_calib = margin_blender.predict(
         np.column_stack([team_margin_calib, market_margin_calib])
@@ -2330,12 +2321,10 @@ def train_blended_margin_total_model(
 
     if not holdout_df.empty:
         team_holdout = team_preprocessor.transform(_apply_feature_spec(holdout_df, team_spec))
-        market_holdout = market_preprocessor.transform(_apply_feature_spec(holdout_df, market_spec))
+        market_margin_holdout, market_total_holdout = get_market_baseline(holdout_df)
 
         team_margin_holdout = _predict_xgb(team_margin_model, team_holdout)
         team_total_holdout = _predict_xgb(team_total_model, team_holdout)
-        market_margin_holdout = _predict_xgb(market_margin_model, market_holdout)
-        market_total_holdout = _predict_xgb(market_total_model, market_holdout)
 
         blended_margin = margin_blender.predict(
             np.column_stack([team_margin_holdout, market_margin_holdout])
@@ -2371,25 +2360,15 @@ def train_blended_margin_total_model(
         calibrator=None,
         market_prob_config=market_prob_config,
     )
-    market_model = MarginTotalModel(
-        preprocessor=market_preprocessor,
-        feature_spec=market_spec,
-        margin_model=market_margin_model,
-        total_model=market_total_model,
-        target_columns=target_columns,
-        calibrator=None,
-        market_prob_config=market_prob_config,
-    )
-
     return BlendedMarginTotalModel(
         team_model=team_model,
-        market_model=market_model,
+        market_model=None,
         blend_layer=BlendLayer(margin_model=margin_blender, total_model=total_blender),
         calibrator=calibrator,
         target_columns=target_columns,
         market_prob_config=market_prob_config,
-        xgb_params={"team": team_xgb_params, "market": market_xgb_params},
-        tuned_params={"team": team_params, "market": market_params},
+        xgb_params={"team": team_xgb_params},
+        tuned_params={"team": team_params or None},
     )
 
 
@@ -2418,9 +2397,12 @@ def train_blended_margin_total_model_with_report(
     holdout_metrics: Optional[dict[str, Any]] = None
     if not holdout_df.empty:
         team_margin, team_total = _predict_margin_total_from_model(model.team_model, holdout_df)
-        market_margin, market_total = _predict_margin_total_from_model(
-            model.market_model, holdout_df
-        )
+        if model.market_model is None:
+            market_margin, market_total = get_market_baseline(holdout_df)
+        else:
+            market_margin, market_total = _predict_margin_total_from_model(
+                model.market_model, holdout_df
+            )
         blended_margin = model.blend_layer.margin_model.predict(
             np.column_stack([team_margin, market_margin])
         )
@@ -2550,7 +2532,10 @@ def predict_week_blended(
     games_df = _load_games(games_path)
 
     team_margin, team_total = _predict_margin_total_from_model(model.team_model, games_df)
-    market_margin, market_total = _predict_margin_total_from_model(model.market_model, games_df)
+    if model.market_model is None:
+        market_margin, market_total = get_market_baseline(games_df)
+    else:
+        market_margin, market_total = _predict_margin_total_from_model(model.market_model, games_df)
 
     blended_margin = model.blend_layer.margin_model.predict(
         np.column_stack([team_margin, market_margin])

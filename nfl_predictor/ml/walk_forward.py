@@ -379,7 +379,7 @@ def run_walk_forward_backtest(
         baseline_margin_eval = None
         baseline_total_eval = None
         if market_anchor:
-            baseline_margin_eval, baseline_total_eval = ml_model._get_market_baseline(fold.eval_df)
+            baseline_margin_eval, baseline_total_eval = ml_model.get_market_baseline(fold.eval_df)
             pred_margin = pred_margin + baseline_margin_eval
             pred_total = pred_total + baseline_total_eval
             for q in list(pred_margin_quantiles.keys()):

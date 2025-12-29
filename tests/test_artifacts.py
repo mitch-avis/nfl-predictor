@@ -10,6 +10,7 @@ from nfl_predictor.ml import artifacts
 
 
 def test_artifacts_write_and_load_roundtrip(tmp_path: Path) -> None:
+    """Artifacts write/read should be a lossless round-trip."""
     run_id = "unit_test_run"
     paths = artifacts.resolve_run_paths(run_id, run_dir=tmp_path / run_id)
 

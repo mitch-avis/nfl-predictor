@@ -221,19 +221,19 @@ Implement a true walk-forward backtest:
 
 ## Milestone 6 — Quantile intervals (uncertainty outputs)
 
-- [ ] Add quantile regressors for margin and total:
+- [x] Add quantile regressors for margin and total:
   - at least P10, P50, P90
-- [ ] Add interval columns to prediction outputs and reports:
-  - `margin_p10`, `margin_p50`, `margin_p90`
-  - `total_p10`, `total_p50`, `total_p90`
-- [ ] Primary files likely touched:
+- [x] Add interval columns to prediction outputs and reports:
+  - `predicted_margin_p10`, `predicted_margin_p50`, `predicted_margin_p90`
+  - `predicted_total_p10`, `predicted_total_p50`, `predicted_total_p90`
+- [x] Primary files likely touched:
   - model training code (to train quantiles)
   - prediction output schema/report schema
 
 ### Milestone 6 — Tests
 
-- [ ] Unit test: p10 <= p50 <= p90 for margin/total.
-- [ ] Unit test: interval columns exist.
+- [x] Unit test: p10 <= p50 <= p90 for margin/total.
+- [x] Unit test: interval columns exist.
 
 ### Milestone 6 — Acceptance
 
@@ -243,16 +243,16 @@ Implement a true walk-forward backtest:
 
 ## Milestone 7 — Market transforms + anchoring + (optional) clamp/blend
 
-- [ ] Ensure market transforms are explicit and configurable.
-- [ ] Implement/verify market anchoring:
+- [x] Ensure market transforms are explicit and configurable.
+- [x] Implement/verify market anchoring:
   - train on residuals vs market baseline
   - add baseline back at prediction time
-- [ ] Optional: implement market probability clamp/blend:
+- [x] Optional: implement market probability clamp/blend:
   - `p_final = w * p_model + (1 - w) * p_market`
   - `w` configurable; validated via walk-forward.
 - Must expose config knobs:
-  - [ ] `--market-anchor` (default `true`)
-  - [ ] `--market-prob-weight` (default disabled; when set, enable blending)
+  - [x] `--market-anchor` (default `true`)
+  - [x] `--market-prob-weight` (default disabled; when set, enable blending)
 - [ ] Primary files likely touched:
   - market feature transform utilities
   - training target transform logic
@@ -260,8 +260,8 @@ Implement a true walk-forward backtest:
 
 ### Milestone 7 — Tests
 
-- [ ] Unit test: anchoring math correct (baseline + residual).
-- [ ] Unit test: market blend weight boundaries and behavior.
+- [x] Unit test: anchoring math correct (baseline + residual).
+- [x] Unit test: market blend weight boundaries and behavior.
 
 ### Milestone 7 — Acceptance
 
@@ -271,19 +271,19 @@ Implement a true walk-forward backtest:
 
 ## Milestone 8 — Leakage audit tool/mode (required safety)
 
-- [ ] Add a leakage audit mode that:
+- [x] Add a leakage audit mode that:
   - asserts target columns are not used as features
   - flags suspicious predictors (e.g., extreme correlations)
   - validates season-to-date features exclude the current game row (when possible)
-- [ ] Output a structured audit report (JSON) with clear pass/fail.
+- [x] Output a structured audit report (JSON) with clear pass/fail.
 - [ ] Primary files likely touched:
   - `scripts/leakage_audit.py`
   - `tests/`
 
 ### Milestone 8 — Tests
 
-- [ ] Unit test: intentionally leaked column is detected.
-- [ ] Unit test: audit runs on a small fixture dataset.
+- [x] Unit test: intentionally leaked column is detected.
+- [x] Unit test: audit runs on a small fixture dataset.
 
 ### Milestone 8 — Acceptance
 

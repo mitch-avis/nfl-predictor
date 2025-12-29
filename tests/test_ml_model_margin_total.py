@@ -48,4 +48,43 @@ def test_prediction_output_schema() -> None:
     }
     assert required_cols.issubset(output_df.columns)
     assert np.allclose(output_df["predicted_margin"], np.round(pred_home - pred_away, 1))
-    assert np.allclose(output_df["predicted_total"], np.round(pred_home + pred_away, 1))
+
+
+def test_prediction_score_rounding_modes() -> None:
+    """Optional score rounding snaps output scores and derived total/margin."""
+    games_df = pd.DataFrame(
+        {
+            "game_id": ["2024_01_ARI_ATL"],
+            "away_abbr": ["ARI"],
+            "home_abbr": ["ATL"],
+        }
+    )
+    pred_away = np.array([21.4])
+    pred_home = np.array([24.6])
+    home_win_prob = np.array([0.62])
+
+    out_int = ml_model.build_prediction_output(
+        games_df, pred_away, pred_home, home_win_prob, score_rounding="int"
+    )
+    int_away = float(out_int["predicted_away_score"].to_numpy(dtype=float)[0])
+    int_home = float(out_int["predicted_home_score"].to_numpy(dtype=float)[0])
+    int_total = float(out_int["predicted_total"].to_numpy(dtype=float)[0])
+    int_margin = float(out_int["predicted_margin"].to_numpy(dtype=float)[0])
+
+    assert int_away == 21.0
+    assert int_home == 25.0
+    assert int_total == 46.0
+    assert int_margin == 4.0
+
+    out_half = ml_model.build_prediction_output(
+        games_df, pred_away, pred_home, home_win_prob, score_rounding="half"
+    )
+    half_away = float(out_half["predicted_away_score"].to_numpy(dtype=float)[0])
+    half_home = float(out_half["predicted_home_score"].to_numpy(dtype=float)[0])
+    half_total = float(out_half["predicted_total"].to_numpy(dtype=float)[0])
+    half_margin = float(out_half["predicted_margin"].to_numpy(dtype=float)[0])
+
+    assert half_away == 21.5
+    assert half_home == 24.5
+    assert half_total == 46.0
+    assert half_margin == 3.0

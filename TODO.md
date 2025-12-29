@@ -356,13 +356,13 @@ Metadata keys must include:
 
 ### Milestone 11 — Acceptance
 
-- [ ] Fresh venv install produces stable training/backtest outputs (within tolerance).
+- [x] Fresh venv install produces stable training/backtest outputs (within tolerance).
 
 ---
 
 ## Optional Enhancements (after required milestones)
 
-- [ ] Score realism post-processing (configurable rounding/snapping) after predictions.
-- [ ] Remove market-only model if anchoring suffices (simplify).
-- [ ] Constrain blending weights (non-negative or sum-to-1) if blender remains.
+- [x] Score realism post-processing (configurable rounding/snapping) after predictions.
+- [x] Remove market-only model if anchoring suffices (simplify).
+- [x] Constrain blending weights (non-negative or sum-to-1) if blender remains.
 - [x] Coverage diagnostics: how often true margin/total falls inside P10–P90.

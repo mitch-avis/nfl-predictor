@@ -18,6 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
+import __main__
 import joblib
 import numpy as np
 import optuna
@@ -38,7 +39,6 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-import __main__
 from nfl_predictor import constants
 from nfl_predictor.ml import artifacts
 from nfl_predictor.utils import ml_utils
@@ -736,14 +736,18 @@ def _fit_margin_total_models(
     def _train_with_params(
         active_params: dict[str, Any],
     ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
-        active_params = _with_xgb_early_stopping_params(active_params, early_stopping_rounds)
+        resolved_early_stopping = early_stopping_rounds
+        if x_eval is None or y_margin_eval is None or y_total_eval is None:
+            resolved_early_stopping = None
+
+        active_params = _with_xgb_early_stopping_params(active_params, resolved_early_stopping)
         margin_model = xgb.XGBRegressor(**active_params)
         total_model = xgb.XGBRegressor(**active_params)
 
-        fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_margin_eval, early_stopping_rounds)
+        fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_margin_eval, resolved_early_stopping)
         margin_model.fit(x_train, y_margin, **fit_kwargs)
 
-        fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_total_eval, early_stopping_rounds)
+        fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_total_eval, resolved_early_stopping)
         total_model.fit(x_train, y_total, **fit_kwargs)
 
         return margin_model, total_model
@@ -784,15 +788,19 @@ def _fit_quantile_models(
     resolved = _validate_quantiles(quantiles)
     models: dict[float, xgb.XGBRegressor] = {}
 
+    resolved_early_stopping = early_stopping_rounds
+    if x_eval is None or y_eval is None:
+        resolved_early_stopping = None
+
     def _train_with_params(active_params: dict[str, Any]) -> dict[float, xgb.XGBRegressor]:
         fitted: dict[float, xgb.XGBRegressor] = {}
         for quantile in resolved:
             q_params = active_params.copy()
             q_params["objective"] = "reg:quantileerror"
             q_params["quantile_alpha"] = quantile
-            q_params = _with_xgb_early_stopping_params(q_params, early_stopping_rounds)
+            q_params = _with_xgb_early_stopping_params(q_params, resolved_early_stopping)
             model = xgb.XGBRegressor(**q_params)
-            fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_eval, early_stopping_rounds)
+            fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_eval, resolved_early_stopping)
             model.fit(x_train, y_train, **fit_kwargs)
             fitted[quantile] = model
         return fitted

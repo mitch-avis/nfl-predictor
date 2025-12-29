@@ -58,6 +58,16 @@ def _parse_args() -> argparse.Namespace:
         help="Walk-forward start week.",
     )
     parser.add_argument(
+        "--eval-seasons",
+        type=int,
+        nargs="+",
+        default=None,
+        help=(
+            "Optional explicit seasons to evaluate (overrides --eval-last-n-seasons). "
+            "Useful when the latest season is incomplete."
+        ),
+    )
+    parser.add_argument(
         "--eval-last-n-seasons",
         type=int,
         default=3,
@@ -134,6 +144,7 @@ def main() -> int:
         "predict_path": str(args.predict_path) if args.predict_path else None,
         "walk_forward": {
             "wf_start_week": args.wf_start_week,
+            "eval_seasons": args.eval_seasons,
             "eval_last_n_seasons": args.eval_last_n_seasons,
             "calibration": args.calibration,
             "calibration_weeks": args.wf_calibration_weeks,
@@ -156,7 +167,7 @@ def main() -> int:
     # 1) Walk-forward backtest
     wf_df = walk_forward.load_games(args.data_path)
     wf_config = walk_forward.WalkForwardConfig(
-        eval_seasons=None,
+        eval_seasons=args.eval_seasons,
         eval_last_n_seasons=args.eval_last_n_seasons,
         wf_start_week=args.wf_start_week,
         calibration=args.calibration,

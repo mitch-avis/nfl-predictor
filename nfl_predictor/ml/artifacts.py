@@ -37,6 +37,7 @@ class RunPaths:
 
 
 def now_utc_iso() -> str:
+    """Return an ISO-8601 UTC timestamp string."""
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -50,11 +51,13 @@ def sha256_file(path: Path) -> str:
 
 
 def stable_short_hash(payload: Any) -> str:
+    """Return a stable short hash for a JSON-serializable payload."""
     encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:8]
 
 
 def generate_run_id(prefix: str, dataset_hash: str, config: dict[str, Any]) -> str:
+    """Generate a run id using timestamp + dataset/config hash."""
     created = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     short_hash = stable_short_hash({"dataset_hash": dataset_hash, "config": config})
     return f"{prefix}_{created}_{short_hash}"
@@ -67,6 +70,7 @@ def resolve_run_paths(
     metadata_filename: str = "metadata.json",
     metrics_filename: str = "metrics_report.json",
 ) -> RunPaths:
+    """Resolve default artifact paths for a given run id."""
     base = run_dir if run_dir is not None else (Path(constants.ROOT_DIR) / "models" / run_id)
     return RunPaths(
         run_id=run_id,
@@ -150,12 +154,14 @@ def build_metadata(
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write JSON to disk with stable formatting."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True))
     log.info("Wrote %s", path)
 
 
 def save_model(path: Path, model: Any) -> None:
+    """Persist a model artifact via joblib."""
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)
     log.info("Saved model checkpoint to %s", path)

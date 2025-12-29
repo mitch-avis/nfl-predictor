@@ -1029,12 +1029,32 @@ def _build_prediction_output(
     pred_away: np.ndarray,
     pred_home: np.ndarray,
     home_win_prob: np.ndarray,
+    score_rounding: str = "none",
 ) -> pd.DataFrame:
+    """Build a prediction output table with optional score post-processing.
+
+    Score post-processing is applied only to emitted score columns (and their derived
+    total/margin) and never affects training targets or the underlying model outputs.
+    """
+
+    def _apply_score_rounding(values: np.ndarray, mode: str) -> np.ndarray:
+        mode_norm = (mode or "none").strip().lower()
+        if mode_norm == "none":
+            return values
+        if mode_norm in {"int", "integer"}:
+            return np.round(values, 0)
+        if mode_norm in {"half", "0.5", "nearest_half"}:
+            return np.round(values * 2.0, 0) / 2.0
+        raise ValueError(f"Unknown score rounding mode: {mode}")
+
     output_df = games_df.copy()
-    output_df["predicted_away_score"] = np.round(pred_away, 1)
-    output_df["predicted_home_score"] = np.round(pred_home, 1)
-    output_df["predicted_total"] = np.round(pred_away + pred_home, 1)
-    output_df["predicted_margin"] = np.round(pred_home - pred_away, 1)
+    away_scores = _apply_score_rounding(np.asarray(pred_away, dtype=float), score_rounding)
+    home_scores = _apply_score_rounding(np.asarray(pred_home, dtype=float), score_rounding)
+
+    output_df["predicted_away_score"] = np.round(away_scores, 1)
+    output_df["predicted_home_score"] = np.round(home_scores, 1)
+    output_df["predicted_total"] = np.round(away_scores + home_scores, 1)
+    output_df["predicted_margin"] = np.round(home_scores - away_scores, 1)
     output_df["home_win_prob"] = np.round(home_win_prob, 4)
     output_df["away_win_prob"] = np.round(1.0 - home_win_prob, 4)
 
@@ -1047,7 +1067,9 @@ def _build_prediction_output(
     home_team_col = next((col for col in team_cols if col.startswith("home_")), None)
     if away_team_col and home_team_col:
         output_df["predicted_winner"] = np.where(
-            pred_home >= pred_away, output_df[home_team_col], output_df[away_team_col]
+            home_scores >= away_scores,
+            output_df[home_team_col],
+            output_df[away_team_col],
         )
 
     confidence_strength = np.abs(home_win_prob - 0.5)
@@ -1217,9 +1239,16 @@ def build_prediction_output(
     pred_away: np.ndarray,
     pred_home: np.ndarray,
     home_win_prob: np.ndarray,
+    score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Build the prediction output DataFrame."""
-    return _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
+    return _build_prediction_output(
+        games_df,
+        pred_away,
+        pred_home,
+        home_win_prob,
+        score_rounding=score_rounding,
+    )
 
 
 def _resolve_xgb_params(
@@ -2436,6 +2465,7 @@ def predict_week(
     games_path: Path,
     output_path: Optional[Path] = None,
     pretty_output: bool = True,
+    score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Generate weekly predictions and optional confidence ranks."""
     games_df = _load_games(games_path)
@@ -2450,7 +2480,13 @@ def predict_week(
     home_win_prob = _adjust_home_win_prob(
         games_df, home_win_prob, getattr(model, "market_prob_config", None)
     )
-    output_df = _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
+    output_df = _build_prediction_output(
+        games_df,
+        pred_away,
+        pred_home,
+        home_win_prob,
+        score_rounding=score_rounding,
+    )
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2468,6 +2504,7 @@ def predict_week_margin_total(
     games_path: Path,
     output_path: Optional[Path] = None,
     pretty_output: bool = True,
+    score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Generate weekly predictions from a margin/total model."""
     games_df = _load_games(games_path)
@@ -2478,7 +2515,13 @@ def predict_week_margin_total(
     home_win_prob = _adjust_home_win_prob(
         games_df, home_win_prob, getattr(model, "market_prob_config", None)
     )
-    output_df = _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
+    output_df = _build_prediction_output(
+        games_df,
+        pred_away,
+        pred_home,
+        home_win_prob,
+        score_rounding=score_rounding,
+    )
 
     for q in sorted(margin_quantiles.keys()):
         output_df[f"predicted_margin_p{int(round(q * 100)):02d}"] = np.round(margin_quantiles[q], 1)
@@ -2501,6 +2544,7 @@ def predict_week_blended(
     games_path: Path,
     output_path: Optional[Path] = None,
     pretty_output: bool = True,
+    score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Generate weekly predictions from a blended margin/total model."""
     games_df = _load_games(games_path)
@@ -2520,7 +2564,13 @@ def predict_week_blended(
         games_df, home_win_prob, getattr(model, "market_prob_config", None)
     )
 
-    output_df = _build_prediction_output(games_df, pred_away, pred_home, home_win_prob)
+    output_df = _build_prediction_output(
+        games_df,
+        pred_away,
+        pred_home,
+        home_win_prob,
+        score_rounding=score_rounding,
+    )
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2768,6 +2818,15 @@ def _parse_args() -> argparse.Namespace:
         default=True,
         help="Log a formatted weekly summary when predicting.",
     )
+    parser.add_argument(
+        "--score-rounding",
+        choices=["none", "int", "half"],
+        default="none",
+        help=(
+            "Optional post-processing for predicted scores (does not change training): "
+            "none|int|half."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -2827,14 +2886,28 @@ def main() -> None:
             log.info("No --predict-path provided; exiting after loading model.")
             return
         if args.model_kind == "score":
-            predict_week(model, args.predict_path, output_path, pretty_output=args.pretty_output)
+            predict_week(
+                model,
+                args.predict_path,
+                output_path,
+                pretty_output=args.pretty_output,
+                score_rounding=args.score_rounding,
+            )
         elif args.model_kind == "margin_total":
             predict_week_margin_total(
-                model, args.predict_path, output_path, pretty_output=args.pretty_output
+                model,
+                args.predict_path,
+                output_path,
+                pretty_output=args.pretty_output,
+                score_rounding=args.score_rounding,
             )
         elif args.model_kind == "blend":
             predict_week_blended(
-                model, args.predict_path, output_path, pretty_output=args.pretty_output
+                model,
+                args.predict_path,
+                output_path,
+                pretty_output=args.pretty_output,
+                score_rounding=args.score_rounding,
             )
         else:
             raise ValueError(f"Unknown model kind: {args.model_kind}")
@@ -2898,6 +2971,7 @@ def main() -> None:
                 args.predict_path,
                 output_path,
                 pretty_output=args.pretty_output,
+                score_rounding=args.score_rounding,
             )
         return
 
@@ -2926,7 +3000,11 @@ def main() -> None:
             _write_artifacts(result, args.model_out)
         if args.predict_path:
             predict_week_margin_total(
-                result.model, args.predict_path, output_path, pretty_output=args.pretty_output
+                result.model,
+                args.predict_path,
+                output_path,
+                pretty_output=args.pretty_output,
+                score_rounding=args.score_rounding,
             )
         return
 
@@ -2954,7 +3032,11 @@ def main() -> None:
             _write_artifacts(result, args.model_out)
         if args.predict_path:
             predict_week_blended(
-                result.model, args.predict_path, output_path, pretty_output=args.pretty_output
+                result.model,
+                args.predict_path,
+                output_path,
+                pretty_output=args.pretty_output,
+                score_rounding=args.score_rounding,
             )
         return
 

@@ -7,6 +7,15 @@
 - GPU (optional): if you install an XGBoost build with CUDA support, you can try
   `--xgb-tree-method gpu_hist`. GPU is not required.
 
+To set up a clean environment:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+pytest
+```
+
 ## ML Model Usage
 
 ### Quickstart (train + predict)

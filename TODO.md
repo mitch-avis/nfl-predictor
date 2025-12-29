@@ -334,25 +334,25 @@ Metadata keys must include:
   - [x] run walk-forward backtest
   - [x] generate current-week predictions
   - [x] write artifacts + reports
-- [ ] Primary files likely touched:
+- [x] Primary files likely touched:
   - [x] `scripts/golden_command.py`
-  - [ ] `README.md`
+  - [x] `README.md`
 
 ### Milestone 10 — Acceptance
 
-- [ ] README snippet includes exact commands + expected outputs.
+- [x] README snippet includes exact commands + expected outputs.
 
 ---
 
 ## Milestone 11 — Dependency pinning & documentation (reproducibility)
 
-- [ ] Pin ML dependencies in the repo’s dependency system (requirements/pyproject/lockfile).
-- [ ] Document supported Python version(s) and CPU/GPU notes.
-- [ ] Ensure CPU-only path works.
+- [x] Pin ML dependencies in the repo’s dependency system (requirements/pyproject/lockfile).
+- [x] Document supported Python version(s) and CPU/GPU notes.
+- [x] Ensure CPU-only path works.
 - [ ] Primary files likely touched:
-  - `requirements.txt`
-  - `pyproject.toml`
-  - `README.md`
+  - [x] `requirements.txt`
+  - [ ] `pyproject.toml`
+  - [x] `README.md`
 
 ### Milestone 11 — Acceptance
 

@@ -1,0 +1,161 @@
+"""Artifact helpers for reproducible runs.
+
+This module centralizes writing run-scoped artifacts:
+- model checkpoint (joblib)
+- metadata.json
+- metrics_report.json
+
+The goal is to make training/backtest outputs self-describing and comparable.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+import joblib
+
+from nfl_predictor import constants
+from nfl_predictor.utils.logger import log
+
+
+@dataclass(frozen=True)
+class RunPaths:
+    """Resolved artifact locations for a run."""
+
+    run_id: str
+    run_dir: Path
+    model_path: Path
+    metadata_path: Path
+    metrics_path: Path
+
+
+def now_utc_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def sha256_file(path: Path) -> str:
+    """Compute a SHA-256 fingerprint of a file's bytes."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def stable_short_hash(payload: Any) -> str:
+    encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:8]
+
+
+def generate_run_id(prefix: str, dataset_hash: str, config: dict[str, Any]) -> str:
+    created = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    short_hash = stable_short_hash({"dataset_hash": dataset_hash, "config": config})
+    return f"{prefix}_{created}_{short_hash}"
+
+
+def resolve_run_paths(
+    run_id: str,
+    run_dir: Optional[Path] = None,
+    model_filename: str = "model.joblib",
+    metadata_filename: str = "metadata.json",
+    metrics_filename: str = "metrics_report.json",
+) -> RunPaths:
+    base = run_dir if run_dir is not None else (Path(constants.ROOT_DIR) / "models" / run_id)
+    return RunPaths(
+        run_id=run_id,
+        run_dir=base,
+        model_path=base / model_filename,
+        metadata_path=base / metadata_filename,
+        metrics_path=base / metrics_filename,
+    )
+
+
+def git_commit_hash() -> Optional[str]:
+    """Return current git commit hash if available."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(constants.ROOT_DIR),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:  # pragma: no cover
+        return None
+
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    return value or None
+
+
+def _module_version(module_name: str) -> Optional[str]:
+    try:
+        module = __import__(module_name)
+    except ImportError:  # pragma: no cover
+        return None
+    return getattr(module, "__version__", None)
+
+
+def library_versions() -> dict[str, Optional[str]]:
+    """Return versions of key libraries for reproducibility."""
+    return {
+        "python": sys.version,
+        "python_executable": sys.executable,
+        "numpy": _module_version("numpy"),
+        "pandas": _module_version("pandas"),
+        "polars": _module_version("polars"),
+        "scipy": _module_version("scipy"),
+        "sklearn": _module_version("sklearn"),
+        "xgboost": _module_version("xgboost"),
+        "optuna": _module_version("optuna"),
+    }
+
+
+def build_metadata(
+    *,
+    created_at: str,
+    run_id: str,
+    dataset_hash: str,
+    config: dict[str, Any],
+    feature_list: Optional[list[str]] = None,
+    splits: Optional[dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
+    tuned_params: Optional[dict[str, Any]] = None,
+    early_stopping: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Build a metadata payload meeting the repo's artifact contract."""
+
+    payload: dict[str, Any] = {
+        "created_at": created_at,
+        "run_id": run_id,
+        "git_commit_hash": git_commit_hash(),
+        "dataset_hash": dataset_hash,
+        "library_versions": library_versions(),
+        "config": config,
+        "feature_list": feature_list,
+        "splits": splits,
+        "params": params,
+        "tuned_params": tuned_params,
+        "early_stopping": early_stopping,
+    }
+    return payload
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    log.info("Wrote %s", path)
+
+
+def save_model(path: Path, model: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, path)
+    log.info("Saved model checkpoint to %s", path)

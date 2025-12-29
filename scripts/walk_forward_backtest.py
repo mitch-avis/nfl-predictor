@@ -81,6 +81,27 @@ def _parse_args() -> argparse.Namespace:
         help="Use transformed market features when odds columns exist.",
     )
     parser.add_argument(
+        "--market-prob-weight",
+        type=float,
+        default=None,
+        help=(
+            "Blend weight for market implied probability (0=off, 1=market only). "
+            "Alias for --market-prob-blend."
+        ),
+    )
+    parser.add_argument(
+        "--market-prob-blend",
+        type=float,
+        default=0.0,
+        help="Blend weight for market implied probability (0=off, 1=market only).",
+    )
+    parser.add_argument(
+        "--market-prob-clamp",
+        type=float,
+        default=0.0,
+        help="Clamp model probability within +/- this delta of market (0=off).",
+    )
+    parser.add_argument(
         "--out-json",
         type=Path,
         default=None,
@@ -94,6 +115,11 @@ def main() -> None:
     args = _parse_args()
 
     df = walk_forward.load_games(args.data_path)
+
+    market_prob_weight = args.market_prob_weight
+    if market_prob_weight is None:
+        market_prob_weight = args.market_prob_blend
+
     config = walk_forward.WalkForwardConfig(
         eval_seasons=args.eval_seasons,
         eval_last_n_seasons=args.eval_last_n_seasons,
@@ -103,6 +129,8 @@ def main() -> None:
         random_seed=args.random_seed,
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
+        market_prob_weight=float(market_prob_weight),
+        market_prob_clamp=float(args.market_prob_clamp),
     )
 
     dataset_hash = walk_forward.dataset_fingerprint(args.data_path)
@@ -123,6 +151,12 @@ def main() -> None:
         config_payload["resolved_eval_seasons"] = results["resolved_eval_seasons"]
 
     report = walk_forward.build_metrics_report(run_id, created_at, config_payload, results)
+    config_payload["run_id"] = run_id
+    config_payload["feature_list"] = results.get("feature_list")
+    config_payload["splits"] = {
+        "resolved_eval_seasons": results.get("resolved_eval_seasons"),
+        "wf_start_week": config_payload.get("wf_start_week"),
+    }
     metadata = walk_forward.build_metadata(created_at, dataset_hash, config_payload)
 
     out_json.write_text(json.dumps(report, indent=2, sort_keys=True))

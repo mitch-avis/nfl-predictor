@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pandas.testing as pdt
 
@@ -24,6 +25,7 @@ def _fixture_df() -> pd.DataFrame:
                         "feat2": float(season % 2000) - week + game_idx,
                         "away_score": 17 + week + (game_idx * 3),
                         "home_score": 24 + week - (game_idx * 5),
+                        "home_moneyline": -110,
                     }
                 )
     df = pd.DataFrame(rows)
@@ -35,6 +37,7 @@ def _fixture_df() -> pd.DataFrame:
             "game_id",
             "feat1",
             "feat2",
+            "home_moneyline",
             "away_score",
             "home_score",
         ]
@@ -52,6 +55,8 @@ def _base_config() -> walk_forward.WalkForwardConfig:
         random_seed=7,
         include_market=False,
         market_anchor=False,
+        market_prob_weight=0.0,
+        market_prob_clamp=0.0,
         feature_start="feat1",
         feature_end="feat2",
         xgb_params_overrides={
@@ -110,3 +115,47 @@ def test_calibration_data_is_time_aware() -> None:
         )
         if not calibration_df.empty:
             assert calibration_df["week"].max() < fold.week
+
+
+def test_walk_forward_quantile_intervals_monotonic() -> None:
+    """Walk-forward outputs include monotonic quantile intervals for margin/total."""
+    df = _fixture_df()
+    config = _base_config()
+
+    result = walk_forward.run_walk_forward_backtest(df, config)
+    preds = result["predictions"]
+
+    required = {
+        "predicted_margin_p10",
+        "predicted_margin_p50",
+        "predicted_margin_p90",
+        "predicted_total_p10",
+        "predicted_total_p50",
+        "predicted_total_p90",
+    }
+    assert required.issubset(preds.columns)
+
+    assert (preds["predicted_margin_p10"] <= preds["predicted_margin_p50"]).all()
+    assert (preds["predicted_margin_p50"] <= preds["predicted_margin_p90"]).all()
+    assert (preds["predicted_total_p10"] <= preds["predicted_total_p50"]).all()
+    assert (preds["predicted_total_p50"] <= preds["predicted_total_p90"]).all()
+
+
+def test_wf_market_prob_weight_overrides_probs() -> None:
+    """When market_prob_weight=1, home_win_prob should match implied market prob."""
+    df = _fixture_df()
+    config = _base_config()
+    config = walk_forward.WalkForwardConfig(
+        **{
+            **config.to_dict(),
+            "eval_seasons": [2023],
+            "market_prob_weight": 1.0,
+            "market_prob_clamp": 0.0,
+        }
+    )
+
+    result = walk_forward.run_walk_forward_backtest(df, config)
+    probs = result["predictions"]["home_win_prob"].to_numpy(dtype=float)
+
+    market_prob = 110.0 / (110.0 + 100.0)
+    assert np.allclose(probs, market_prob)

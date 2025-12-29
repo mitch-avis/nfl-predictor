@@ -37,6 +37,7 @@ def test_artifacts_write_and_load_roundtrip(tmp_path: Path) -> None:
 
     # Required keys present.
     assert "created_at" in metadata
+    assert "run_id" in metadata
     assert "git_commit_hash" in metadata
     assert "dataset_hash" in metadata
     assert "library_versions" in metadata
@@ -44,4 +45,5 @@ def test_artifacts_write_and_load_roundtrip(tmp_path: Path) -> None:
     assert "feature_list" in metadata
     assert "splits" in metadata
     assert "params" in metadata
+    assert "tuned_params" in metadata
     assert "early_stopping" in metadata

@@ -6,19 +6,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from nfl_predictor import constants, ml_model  # noqa: E402, pylint: disable=wrong-import-position
-from nfl_predictor.utils.logger import log  # noqa: E402, pylint: disable=wrong-import-position
+from nfl_predictor import constants, ml_model
+from nfl_predictor.utils.logger import log
 
 
 def _resolve_team_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
@@ -41,9 +36,12 @@ def _predict_all(model: Any, df: pd.DataFrame) -> pd.DataFrame:
         home_win_prob = ml_model.predict_home_win_prob(pred_margin, model.calibrator)
     elif isinstance(model, ml_model.BlendedMarginTotalModel):
         team_margin, team_total = ml_model.predict_margin_total_from_model(model.team_model, df)
-        market_margin, market_total = ml_model.predict_margin_total_from_model(
-            model.market_model, df
-        )
+        if model.market_model is None:
+            market_margin, market_total = ml_model.get_market_baseline(df)
+        else:
+            market_margin, market_total = ml_model.predict_margin_total_from_model(
+                model.market_model, df
+            )
         blended_margin = model.blend_layer.margin_model.predict(
             np.column_stack([team_margin, market_margin])
         )
@@ -366,7 +364,5 @@ def main() -> None:
         log.info("Saved pregame power rankings to %s", pre_out)
 
 
-if __name__ == "__main__":
-    main()
 if __name__ == "__main__":
     main()

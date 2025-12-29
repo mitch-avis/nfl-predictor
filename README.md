@@ -13,8 +13,12 @@ To set up a clean environment:
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 pytest
 ```
+
+`pip install -e .` ensures `import nfl_predictor` works even when your working directory
+is not the repo root.
 
 ## ML Model Usage
 
@@ -52,9 +56,17 @@ This prints a weekly summary and writes `*_predictions.csv` next to the input fi
 
 `--model-kind blend`
 
-- Trains two models: team-feature only and market-only.
-- Learns a blending layer on the calibration seasons.
+- Trains a team-feature model and uses the market baseline (spread/total) directly.
+- Learns a blending layer on the calibration seasons to combine team signal + market baseline.
 - Requires at least one calibration season.
+
+### Score rounding (optional output post-processing)
+
+Predicted scores can optionally be snapped after prediction (this does not change training targets):
+
+- `--score-rounding none` (default)
+- `--score-rounding int` (round to whole numbers)
+- `--score-rounding half` (round to nearest 0.5)
 
 ### Data and feature selection
 
@@ -301,4 +313,30 @@ Live validation against the latest schedule (may require network access):
 
 ```bash
 python scripts/validate_live.py
+```
+
+## Reproducibility smoke check (fresh venv)
+
+This is a lightweight “does it run end-to-end?” check intended to catch packaging/dependency
+issues and obvious nondeterminism.
+
+```bash
+python -m venv .venv_check
+. .venv_check/bin/activate
+pip install -r requirements.txt
+pip install -e .
+pytest
+
+# Small walk-forward run (repeat twice to sanity-check stability)
+python scripts/walk_forward_backtest.py \
+  --eval-seasons 2024 \
+  --wf-start-week 3 \
+  --random-seed 1337 \
+  --out-json /tmp/wf_run1.json
+
+python scripts/walk_forward_backtest.py \
+  --eval-seasons 2024 \
+  --wf-start-week 3 \
+  --random-seed 1337 \
+  --out-json /tmp/wf_run2.json
 ```

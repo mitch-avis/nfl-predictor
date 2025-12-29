@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +48,8 @@ class WalkForwardConfig:
     include_market: bool = True
     market_transform: Optional[bool] = None
     market_anchor: bool = True
+    market_prob_weight: float = 0.0
+    market_prob_clamp: float = 0.0
     max_cardinality_ratio: float = 0.5
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
     feature_end: str = ml_model.DEFAULT_FEATURE_END_COLUMN
@@ -65,6 +68,8 @@ class WalkForwardConfig:
             "include_market": self.include_market,
             "market_transform": self.market_transform,
             "market_anchor": self.market_anchor,
+            "market_prob_weight": self.market_prob_weight,
+            "market_prob_clamp": self.market_prob_clamp,
             "max_cardinality_ratio": self.max_cardinality_ratio,
             "feature_start": self.feature_start,
             "feature_end": self.feature_end,
@@ -251,6 +256,8 @@ def run_walk_forward_backtest(
         "include_market": include_market,
         "market_transform": market_transform,
         "market_anchor": market_anchor,
+        "market_prob_weight": config.market_prob_weight,
+        "market_prob_clamp": config.market_prob_clamp,
     }
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
@@ -263,6 +270,7 @@ def run_walk_forward_backtest(
 
     per_week_metrics: list[dict[str, Any]] = []
     prediction_frames: list[pd.DataFrame] = []
+    feature_list: list[str] | None = None
 
     for fold in folds:
         feature_spec = ml_model._build_feature_spec(
@@ -273,6 +281,8 @@ def run_walk_forward_backtest(
             feature_end=config.feature_end,
             market_transform=market_transform,
         )
+        if feature_list is None:
+            feature_list = list(feature_spec.feature_columns)
         preprocessor = ml_model._build_preprocessor(feature_spec, for_tree=True)
 
         x_train = preprocessor.fit_transform(
@@ -313,6 +323,26 @@ def run_walk_forward_backtest(
             early_stopping_rounds=config.early_stopping_rounds,
         )
 
+        quantiles = ml_model._validate_quantiles(ml_model.DEFAULT_QUANTILES)
+        margin_quantiles = ml_model._fit_quantile_models(
+            x_train,
+            y_margin_train,
+            params,
+            quantiles,
+            x_eval=x_calibration,
+            y_eval=y_margin_calibration,
+            early_stopping_rounds=config.early_stopping_rounds,
+        )
+        total_quantiles = ml_model._fit_quantile_models(
+            x_train,
+            y_total_train,
+            params,
+            quantiles,
+            x_eval=x_calibration,
+            y_eval=y_total_calibration,
+            early_stopping_rounds=config.early_stopping_rounds,
+        )
+
         calibrator = None
         calibration_method = config.calibration
         if config.calibration.lower() != "none":
@@ -340,15 +370,33 @@ def run_walk_forward_backtest(
         x_eval = preprocessor.transform(ml_model.apply_feature_spec(fold.eval_df, feature_spec))
         pred_margin = ml_model._predict_xgb(margin_model, x_eval)
         pred_total = ml_model._predict_xgb(total_model, x_eval)
+        pred_margin_quantiles = {
+            q: ml_model._predict_xgb(q_model, x_eval) for q, q_model in margin_quantiles.items()
+        }
+        pred_total_quantiles = {
+            q: ml_model._predict_xgb(q_model, x_eval) for q, q_model in total_quantiles.items()
+        }
         baseline_margin_eval = None
         baseline_total_eval = None
         if market_anchor:
             baseline_margin_eval, baseline_total_eval = ml_model._get_market_baseline(fold.eval_df)
             pred_margin = pred_margin + baseline_margin_eval
             pred_total = pred_total + baseline_total_eval
+            for q in list(pred_margin_quantiles.keys()):
+                pred_margin_quantiles[q] = pred_margin_quantiles[q] + baseline_margin_eval
+            for q in list(pred_total_quantiles.keys()):
+                pred_total_quantiles[q] = pred_total_quantiles[q] + baseline_total_eval
 
         pred_away, pred_home = ml_model.derive_scores_from_margin_total(pred_margin, pred_total)
         home_win_prob = ml_model.predict_home_win_prob(pred_margin, calibrator)
+        if config.market_prob_weight or config.market_prob_clamp:
+            market_prob_config = ml_model.MarketProbConfig(
+                blend_weight=config.market_prob_weight,
+                clamp_delta=config.market_prob_clamp,
+            )
+            home_win_prob = ml_model.adjust_home_win_prob(
+                fold.eval_df, home_win_prob, market_prob_config
+            )
         home_win_prob = metrics_utils.clip_probabilities(home_win_prob)
 
         away_col, home_col = target_columns
@@ -365,6 +413,12 @@ def run_walk_forward_backtest(
         fold_predictions = fold.eval_df.copy()
         fold_predictions["predicted_margin"] = pred_margin
         fold_predictions["predicted_total"] = pred_total
+        for q in sorted(pred_margin_quantiles.keys()):
+            column = f"predicted_margin_p{int(round(q * 100)):02d}"
+            fold_predictions[column] = pred_margin_quantiles[q]
+        for q in sorted(pred_total_quantiles.keys()):
+            column = f"predicted_total_p{int(round(q * 100)):02d}"
+            fold_predictions[column] = pred_total_quantiles[q]
         fold_predictions["predicted_home_score"] = pred_home
         fold_predictions["predicted_away_score"] = pred_away
         fold_predictions["home_win_prob"] = home_win_prob
@@ -433,6 +487,7 @@ def run_walk_forward_backtest(
         "predictions": predictions,
         "resolved_settings": resolved_settings,
         "resolved_eval_seasons": resolved_eval_seasons,
+        "feature_list": feature_list,
     }
 
 
@@ -501,6 +556,24 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
             np.mean(np.abs(actual_total_resid - pred_total_resid))
         )
 
+    # Optional diagnostics: interval coverage (P10–P90).
+    margin_p10 = "predicted_margin_p10"
+    margin_p90 = "predicted_margin_p90"
+    total_p10 = "predicted_total_p10"
+    total_p90 = "predicted_total_p90"
+    if margin_p10 in frame.columns and margin_p90 in frame.columns:
+        lo = frame[margin_p10].to_numpy(dtype=float)
+        hi = frame[margin_p90].to_numpy(dtype=float)
+        metrics["margin_p10_p90_coverage"] = float(
+            np.mean((actual_margin >= lo) & (actual_margin <= hi))
+        )
+    if total_p10 in frame.columns and total_p90 in frame.columns:
+        lo = frame[total_p10].to_numpy(dtype=float)
+        hi = frame[total_p90].to_numpy(dtype=float)
+        metrics["total_p10_p90_coverage"] = float(
+            np.mean((actual_total >= lo) & (actual_total <= hi))
+        )
+
     return metrics
 
 
@@ -524,18 +597,39 @@ def generate_run_id(dataset_hash: str, config: WalkForwardConfig) -> str:
 def build_metadata(
     created_at: str, dataset_hash: str, config_payload: dict[str, Any]
 ) -> dict[str, Any]:
-    """Build a minimal metadata payload adjacent to the metrics report."""
+    """Build a metadata payload adjacent to the metrics report."""
     return {
         "created_at": created_at,
+        "run_id": config_payload.get("run_id"),
+        "git_commit_hash": _git_commit_hash(),
         "dataset_hash": dataset_hash,
         "library_versions": _library_versions(),
         "config": config_payload,
+        "feature_list": config_payload.get("feature_list"),
+        "splits": config_payload.get("splits"),
     }
+
+
+def _git_commit_hash() -> Optional[str]:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(constants.ROOT_DIR),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:  # pragma: no cover
+        return None
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    return value or None
 
 
 def _library_versions() -> dict[str, Optional[str]]:
     versions: dict[str, Optional[str]] = {}
-    for module_name in ("numpy", "pandas", "polars", "sklearn", "xgboost"):
+    for module_name in ("numpy", "pandas", "polars", "scipy", "sklearn", "xgboost", "optuna"):
         try:
             module = importlib.import_module(module_name)
         except ImportError:  # pragma: no cover

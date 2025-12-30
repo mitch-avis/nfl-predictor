@@ -1,342 +1,167 @@
 # nfl-predictor
 
-## Environment
+Predict NFL game outcomes and scores using a **margin/total** ML pipeline + walk-forward evaluation,
+with optional market anchoring and probability calibration.
 
-- Python: 3.12 (tested with 3.12.3).
-- CPU-only: supported and the default path.
-- GPU (optional): if you install an XGBoost build with CUDA support, you can try
-  `--xgb-tree-method gpu_hist`. GPU is not required.
+This repo is geared toward:
 
-To set up a clean environment:
+- **Pick 'Em** and **Confidence Pools** (primary)
+- sports-betting research (secondary; no profit claims)
+
+---
+
+## Quickstart
+
+### 1) Create an environment
 
 ```bash
 python -m venv .venv
-. .venv/bin/activate
+source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 pytest
 ```
 
-`pip install -e .` ensures `import nfl_predictor` works even when your working directory
-is not the repo root.
-
-## ML Model Usage
-
-### Quickstart (train + predict)
-
-Train a margin/total model on all available seasons and generate predictions for the weekly file:
+### 2) Build/refresh datasets (Polars + nflreadpy)
 
 ```bash
-python -m nfl_predictor.ml_model \
-  --model-kind margin_total \
-  --holdout-seasons 0 \
-  --calibration-seasons 0 \
-  --win-prob-calibration none \
-  --tune \
-  --tune-timeout 600 \
-  --tune-metric expected_points \
-  --xgb-tree-method hist \
-  --predict-path data/predict/week_17_games_to_predict.csv
+python -m nfl_predictor.data_collection_polars
 ```
 
-This prints a weekly summary and writes `*_predictions.csv` next to the input file.
+Outputs are written under `data/` (CSV). Primary files:
 
-### Model kinds
+- `data/all_data.csv` and `data/all_data_ml.csv`
+- `data/completed_games.csv` and `data/completed_games_ml.csv`
+- `data/predict/week_##_games_to_predict.csv`
 
-`--model-kind score`
+> Note: `*_ml.csv` files include model-ready engineered features (including differential features).
 
-- Predicts `away_score` and `home_score` directly.
-- Uses a season holdout for evaluation (if configured).
-
-`--model-kind margin_total` (default)
-
-- Predicts margin and total, then derives scores.
-- Optional win-probability calibration (Platt or isotonic).
-- Reports confidence-pool metrics on the holdout (if configured).
-
-`--model-kind blend`
-
-- Trains a team-feature model and uses the market baseline (spread/total) directly.
-- Learns a blending layer on the calibration seasons to combine team signal + market baseline.
-- Requires at least one calibration season.
-
-### Score rounding (optional output post-processing)
-
-Predicted scores can optionally be snapped after prediction (this does not change training targets):
-
-- `--score-rounding none` (default)
-- `--score-rounding int` (round to whole numbers)
-- `--score-rounding half` (round to nearest 0.5)
-
-### Data and feature selection
-
-The model expects `data/completed_games_ml.csv` by default. Feature selection is rule-based:
-
-- All columns between `away_rest` and `home_moneyline` (inclusive) are used as features.
-- Columns before `away_rest` are treated as metadata and dropped.
-- `away_score` and `home_score` are the target columns.
-- `--exclude-market` removes spread/total/moneyline features.
-
-### Market transforms and anchoring
-
-For more realistic predictions that still allow your team features to move the line, use:
-
-- `--market-transform` to drop raw lines and add:
-  - `market_home_margin` (from spreads)
-  - `market_total_line`
-  - `home_market_prob`, `away_market_prob` (from moneylines)
-- `--market-anchor` to train on residuals vs the market spread/total, then add the market
-  baseline back at prediction time.
-
-Example:
+### 3) Train + predict (simple)
 
 ```bash
 python -m nfl_predictor.ml_model \
-  --model-kind margin_total \
-  --market-transform \
-  --market-anchor
-```
-
-### Splits: train, calibration, holdout
-
-Splits are time-aware by season.
-
-- `--holdout-seasons` keeps the most recent seasons for evaluation only.
-- `--calibration-seasons` reserves seasons just before the holdout for calibration/blending.
-- `--calibration-weeks` reserves the most recent weeks from the latest season for calibration
-  (those weeks are excluded from training).
-- Use `--min-season` / `--max-season` to bound the dataset.
-
-Example: hold out 2025 for evaluation, calibrate on 2024:
-
-```bash
-python -m nfl_predictor.ml_model \
+  --data-path data/completed_games_ml.csv \
   --model-kind margin_total \
   --holdout-seasons 1 \
-  --calibration-seasons 1
-```
-
-Example: blended model with in-season calibration from the latest four weeks:
-
-```bash
-python -m nfl_predictor.ml_model \
-  --model-kind blend \
-  --holdout-seasons 0 \
-  --calibration-seasons 0 \
-  --calibration-weeks 4
-```
-
-### Walk-forward backtest
-
-Run walk-forward evaluation (train each week on prior games only) and write a metrics report plus
-metadata to `models/<run_id>/`:
-
-```bash
-python scripts/walk_forward_backtest.py \
-  --data-path data/completed_games_ml.csv \
-  --eval-last-n-seasons 3 \
-  --wf-start-week 3 \
-  --calibration platt \
-  --wf-calibration-weeks 4
-```
-
-This writes `metrics_report.json` and `metadata.json` under `models/<run_id>/`.
-
-### Golden command (train + walk-forward + predict)
-
-Use the golden command to generate a single run directory containing:
-
-- `model.joblib`
-- `metrics_report.json` (walk-forward)
-- `metadata.json` (walk-forward + config)
-- `predictions.csv` (only if `--predict-path` is provided)
-
-Example:
-
-```bash
-python scripts/golden_command.py \
-  --data-path data/completed_games_ml.csv \
-  --eval-seasons 2024 \
-  --wf-start-week 3 \
-  --calibration platt \
-  --wf-calibration-weeks 4 \
+  --win-prob-calibration platt \
   --predict-path data/predict/week_17_games_to_predict.csv
 ```
 
-Outputs are written to `models/<run_id>/` (the script prints the resolved run directory).
+This writes:
 
-### Optuna hyperparameter tuning
+- a predictions CSV alongside the input predict file
+- a run folder under `models/` containing a model artifact + `metadata.json` + (if evaluated) `metrics_report.json`
 
-Optuna is a hyperparameter search library. Use it to optimize for your pool objective.
+---
 
-```bash
-python -m nfl_predictor.ml_model \
-  --model-kind margin_total \
-  --tune \
-  --tune-timeout 600 \
-  --tune-metric expected_points
-```
+## Modeling approach
 
-Available tuning objectives:
+### Margin/Total is the canonical target
 
-- `margin_mae`, `total_mae`, `combined_mae`
-- `winner_accuracy`, `brier`, `expected_points`
+We predict:
 
-### Monitoring and checkpoints
+- `margin = home_score - away_score`
+- `total  = home_score + away_score`
 
-Optuna prints a line per trial. For long runs, persist the study and write the best params
-to a JSON file as training progresses:
+Then derive scores:
 
-```bash
-python -m nfl_predictor.ml_model \
-  --model-kind blend \
-  --tune \
-  --tune-timeout 14400 \
-  --tune-storage sqlite:///optuna.db \
-  --tune-study-name blend_gpu_4h \
-  --tune-best-params-out models/best_params.json
-```
+- `home = (total + margin) / 2`
+- `away = (total - margin) / 2`
 
-You can save a trained model for reuse with `--model-out` and load it later with `--model-in`.
+This keeps predictions internally consistent and makes it easy to derive win probabilities from the
+margin distribution.
 
-### Market win-prob adjustment (blend + clamp)
+### Win probability calibration
 
-To reduce contrarian picks while still using your model, adjust win probabilities after
-calibration using the market implied probabilities:
+Raw margin → win probability mappings tend to be miscalibrated. This repo supports:
 
-- `--market-prob-blend` (0.0–1.0) controls how much of the market to blend in.
-- `--market-prob-clamp` (0.0–0.5) clamps final probs within ±delta of the market.
+- **Platt scaling** (logistic regression)
+- **Isotonic regression**
 
-Example (recommended starting point):
+Calibration must be **time-aware** (fit only on past data relative to the evaluation window).
 
-```bash
-python -m nfl_predictor.ml_model \
-  --model-kind margin_total \
-  --market-transform \
-  --market-anchor \
-  --market-prob-blend 0.65 \
-  --market-prob-clamp 0.2
-```
+### Market anchoring (recommended)
 
-These adjustments are used in holdout metrics, expected-points tuning, and prediction output.
+If spreads/totals/moneylines are present, you can train on **residuals vs market** (anchor) so the
+model learns “how to beat the line” rather than re-learning what the market already priced.
 
-### Persist Optuna across runs
+---
 
-To keep improving across runs, use a persistent study:
+## Evaluation: avoid in-sample overfitting traps
 
-```bash
-python -m nfl_predictor.ml_model \
-  --model-kind margin_total \
-  --tune \
-  --tune-timeout 600 \
-  --tune-storage sqlite:///optuna.db \
-  --tune-study-name margin_total_all_2025
-```
+The project includes realistic evaluation modes:
 
-### Model checkpoints
+1) **Holdout seasons** (`--holdout-seasons N`): reserve the last N seasons for evaluation.
+2) **Walk-forward backtest** (`scripts/walk_forward_backtest.py`): week-by-week rolling-origin
+   evaluation (best realism).
+3) (Planned) **Blocked CV** across seasons/weeks for tuning stability (see TODO).
 
-Save a trained model and reuse it later without retraining:
+If you see “great” performance on the exact data the model trained on, that is **not** evidence the
+model is good — it’s evidence the model can memorize patterns. Prefer walk-forward metrics.
 
-```bash
-python -m nfl_predictor.ml_model \
-  --model-kind margin_total \
-  --model-out models/margin_total.joblib
-```
+---
 
-```bash
-python -m nfl_predictor.ml_model \
-  --model-kind margin_total \
-  --model-in models/margin_total.joblib \
-  --predict-path data/predict/week_17_games_to_predict.csv
-```
+## Core scripts
 
-### GPU usage
+- `python -m nfl_predictor.data_collection_polars`  
+  Build datasets via nflreadpy + Polars
 
-XGBoost uses the GPU only when built with CUDA support and when you set:
+- `python -m nfl_predictor.ml_model`  
+  Train/evaluate/predict (main entrypoint)
 
-```bash
---xgb-device cuda --xgb-tree-method hist
-```
+- `python scripts/walk_forward_backtest.py`  
+  Walk-forward evaluation + reports
 
-If your XGBoost build is CPU-only, `cuda` will fail and the CLI falls back to CPU `hist`.
-Passing `--xgb-tree-method gpu_hist` is also accepted and will be coerced to `hist` + `device=cuda`
-for XGBoost 3.x compatibility.
+- `python scripts/backtest_predictions.py`  
+  Evaluate a saved model on historical rows
 
-For a Python venv without conda, GPU support requires building XGBoost from source with CUDA
-enabled and installing it into the venv.
+- `python scripts/leakage_audit.py`  
+  Detect obvious feature leakage patterns
 
-To ensure GPU support:
+---
 
-- Install NVIDIA drivers and a compatible CUDA toolkit.
-- Prefer a GPU-enabled package (e.g., conda-forge `xgboost` with CUDA), or build XGBoost
-  from source with CUDA enabled.
-- Verify by running a small training run with `--xgb-tree-method gpu_hist`.
+## Artifacts
 
-XGBoost does not blend CPU and GPU in a single training run; you choose one via `tree_method`.
-If you see a warning about mismatched devices during prediction, it means the model is on
-GPU while the input array is on CPU; the code uses DMatrix prediction to avoid this, but
-the warning can still appear in some XGBoost builds.
+Runs write to `models/<run_id>/`:
 
-## Backtest + power rankings
+- `model.joblib` (or similar)
+- `metadata.json` (required)
+- `metrics_report.json` (required for backtests)
 
-Score every historical matchup, compute weekly confidence ranks, and produce weekly/season/all-time
-confidence pool summaries plus weekly power rankings:
+Metadata includes:
 
-```bash
-python scripts/backtest_predictions.py \
-  --model-in models/anchor72h.joblib \
-  --model-kind margin_total \
-  --data-path data/completed_games_ml.csv \
-  --output-dir data/backtest
-```
+- timestamp
+- dataset fingerprint/hash
+- key package versions
+- training config / CLI args
+- feature list
+- tuning / early stopping info (when used)
 
-To include future games (for preseason-style outlook power rankings), use `data/all_data_ml.csv`.
-Playoff games are excluded automatically when `game_type` is present.
+---
 
-## Testing
+## Feature roadmap (high-level)
 
-Run the test suite with:
+This repo already uses:
 
-```bash
-pytest
-```
+- team performance stats (season-to-date)
+- rest/travel context (where available)
+- TeamRankings ratings
+- optional betting markets
 
-## Validation
+Planned features to apply **to all matchups** (not only late-season):
 
-Offline validation against the latest dataset:
+- **Team health burden** (injury report aggregation → team-week features)
+- **Divisional rivalry flag** (same-division matchups)
+- **Lookahead / trap indicators** (next-week opponent strength + travel/rest context)
+- **Motivational asymmetry** (playoff leverage and clinch/elimination context, late-season-heavy but
+  still generic)
 
-```bash
-python scripts/validate_offline.py
-```
+See `TODO.md` for the actionable plan.
 
-Live validation against the latest schedule (may require network access):
+---
 
-```bash
-python scripts/validate_live.py
-```
+## Notes on responsible use
 
-## Reproducibility smoke check (fresh venv)
-
-This is a lightweight “does it run end-to-end?” check intended to catch packaging/dependency
-issues and obvious nondeterminism.
-
-```bash
-python -m venv .venv_check
-. .venv_check/bin/activate
-pip install -r requirements.txt
-pip install -e .
-pytest
-
-# Small walk-forward run (repeat twice to sanity-check stability)
-python scripts/walk_forward_backtest.py \
-  --eval-seasons 2024 \
-  --wf-start-week 3 \
-  --random-seed 1337 \
-  --out-json /tmp/wf_run1.json
-
-python scripts/walk_forward_backtest.py \
-  --eval-seasons 2024 \
-  --wf-start-week 3 \
-  --random-seed 1337 \
-  --out-json /tmp/wf_run2.json
-```
+This project produces statistical forecasts. It does not guarantee accuracy, profit, or betting
+success. Use predictions as one input among many, and treat performance metrics as probabilistic,
+not deterministic.

@@ -141,6 +141,7 @@ class MarginTotalModel:
     market_prob_config: Optional["MarketProbConfig"] = None
     xgb_params: Optional[dict[str, Any]] = None
     tuned_params: Optional[dict[str, Any]] = None
+    tuned_cv_summary: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +164,7 @@ class BlendedMarginTotalModel:
     market_prob_config: Optional["MarketProbConfig"] = None
     xgb_params: Optional[dict[str, Any]] = None
     tuned_params: Optional[dict[str, Any]] = None
+    tuned_cv_summary: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -427,14 +429,28 @@ def _build_preprocessor(spec: FeatureSpec, *, for_tree: bool = True) -> ColumnTr
     else:
         encoder_params["sparse"] = for_tree
 
-    numeric_steps: list[tuple[str, Any]] = [("imputer", SimpleImputer(strategy="median"))]
+    numeric_steps: list[tuple[str, Any]] = [
+        (
+            "imputer",
+            SimpleImputer(
+                strategy="median",
+                keep_empty_features=True,
+            ),
+        )
+    ]
     if not for_tree:
         numeric_steps.append(("scaler", StandardScaler()))
     numeric_transformer = Pipeline(steps=numeric_steps)
 
     categorical_transformer = Pipeline(
         steps=[
-            ("imputer", SimpleImputer(strategy="most_frequent")),
+            (
+                "imputer",
+                SimpleImputer(
+                    strategy="most_frequent",
+                    keep_empty_features=True,
+                ),
+            ),
             ("onehot", OneHotEncoder(**encoder_params)),
         ]
     )
@@ -606,6 +622,50 @@ def _build_time_series_folds(
         folds.append((train_seasons, val_seasons))
     if not folds:
         raise ValueError("Unable to create valid CV folds with the provided settings.")
+    return folds
+
+
+def _build_season_week_timepoints(df: pd.DataFrame) -> list[int]:
+    if "season" not in df.columns or "week" not in df.columns:
+        raise ValueError("Expected 'season' and 'week' columns for time-series CV.")
+    season = pd.to_numeric(df["season"], errors="coerce").astype("Int64")
+    week = pd.to_numeric(df["week"], errors="coerce").astype("Int64")
+    timepoint = (season * 100 + week).dropna().astype(int)
+    unique = sorted(timepoint.unique().tolist())
+    return unique
+
+
+def _build_blocked_timepoint_folds(
+    timepoints: Sequence[int],
+    n_splits: int,
+    *,
+    min_train_timepoints: int = 10,
+) -> list[tuple[list[int], list[int]]]:
+    """Blocked time-series CV over ordered season-week timepoints.
+
+    Each fold validates on a contiguous block of timepoints; training uses all
+    strictly earlier timepoints.
+    """
+    points = list(timepoints)
+    if n_splits <= 0:
+        raise ValueError("n_splits must be positive.")
+    if len(points) < (min_train_timepoints + n_splits):
+        raise ValueError("Not enough timepoints to create requested CV folds.")
+
+    test_size = max(1, len(points) // (n_splits + 1))
+    folds: list[tuple[list[int], list[int]]] = []
+    for split_idx in range(n_splits):
+        train_end = test_size * (split_idx + 1)
+        val_start = train_end
+        val_end = min(val_start + test_size, len(points))
+        train_pts = points[:train_end]
+        val_pts = points[val_start:val_end]
+        if len(train_pts) < min_train_timepoints or not val_pts:
+            continue
+        folds.append((train_pts, val_pts))
+
+    if not folds:
+        raise ValueError("Unable to create valid time-series CV folds with the provided settings.")
     return folds
 
 
@@ -1473,6 +1533,76 @@ def _select_objective_score(
     raise ValueError(f"Unknown objective metric: {objective}")
 
 
+def _score_margin_total_fold(
+    *,
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    target_columns: tuple[str, str],
+    include_market: bool,
+    max_cardinality_ratio: float,
+    feature_start: str,
+    feature_end: str,
+    params: dict[str, Any],
+    early_stopping_rounds: int,
+    objective: str,
+    market_only: bool = False,
+    market_transform: bool = False,
+    market_anchor: bool = False,
+    market_prob_config: Optional[MarketProbConfig] = None,
+) -> float:
+    feature_spec = _build_feature_spec(
+        train_df,
+        include_market=include_market,
+        max_cardinality_ratio=max_cardinality_ratio,
+        feature_start=feature_start,
+        feature_end=feature_end,
+        market_only=market_only,
+        market_transform=market_transform,
+    )
+    preprocessor = _build_preprocessor(feature_spec, for_tree=True)
+
+    x_train = preprocessor.fit_transform(_apply_feature_spec(train_df, feature_spec))
+    x_val = preprocessor.transform(_apply_feature_spec(val_df, feature_spec))
+
+    (
+        y_margin_train,
+        y_total_train,
+        _,
+        _,
+    ) = _prepare_margin_total_targets_with_anchor(train_df, target_columns, market_anchor)
+    (
+        y_margin_val,
+        y_total_val,
+        baseline_margin_val,
+        baseline_total_val,
+    ) = _prepare_margin_total_targets_with_anchor(val_df, target_columns, market_anchor)
+
+    margin_model, total_model = _fit_margin_total_models(
+        x_train,
+        y_margin_train,
+        y_total_train,
+        params,
+        x_eval=x_val,
+        y_margin_eval=y_margin_val,
+        y_total_eval=y_total_val,
+        early_stopping_rounds=early_stopping_rounds,
+    )
+
+    pred_margin = _predict_xgb(margin_model, x_val)
+    pred_total = _predict_xgb(total_model, x_val)
+    if market_anchor:
+        pred_margin = pred_margin + baseline_margin_val
+        pred_total = pred_total + baseline_total_val
+    home_win_prob = _margin_to_home_win_prob(pred_margin)
+    home_win_prob = _adjust_home_win_prob(val_df, home_win_prob, market_prob_config)
+
+    metrics = _evaluate_margin_total_predictions(
+        val_df, pred_margin, pred_total, target_columns, home_win_prob
+    )
+    pool_summary = _summarize_confidence_pool(val_df, home_win_prob, target_columns)
+    return _select_objective_score(metrics, pool_summary, objective)
+
+
 def _evaluate_margin_total_cv(
     df: pd.DataFrame,
     target_columns: tuple[str, str],
@@ -1489,67 +1619,94 @@ def _evaluate_margin_total_cv(
     market_anchor: bool = False,
     market_prob_config: Optional[MarketProbConfig] = None,
 ) -> float:
-    seasons = sorted(df["season"].dropna().unique())
-    folds = _build_time_series_folds(seasons, n_splits=cv_splits)
+    timepoints = _build_season_week_timepoints(df)
+    folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
     fold_scores: list[float] = []
 
-    for train_seasons, val_seasons in folds:
-        train_df = df[df["season"].isin(train_seasons)].copy()
-        val_df = df[df["season"].isin(val_seasons)].copy()
+    for train_points, val_points in folds:
+        point_series = df["season"].astype(int) * 100 + df["week"].astype(int)
+        train_mask = point_series.isin(train_points)
+        val_mask = point_series.isin(val_points)
+        train_df = df[train_mask].copy()
+        val_df = df[val_mask].copy()
 
-        feature_spec = _build_feature_spec(
-            train_df,
-            include_market=include_market,
-            max_cardinality_ratio=max_cardinality_ratio,
-            feature_start=feature_start,
-            feature_end=feature_end,
-            market_only=market_only,
-            market_transform=market_transform,
+        fold_scores.append(
+            float(
+                _score_margin_total_fold(
+                    train_df=train_df,
+                    val_df=val_df,
+                    target_columns=target_columns,
+                    include_market=include_market,
+                    max_cardinality_ratio=max_cardinality_ratio,
+                    feature_start=feature_start,
+                    feature_end=feature_end,
+                    params=params,
+                    early_stopping_rounds=early_stopping_rounds,
+                    objective=objective,
+                    market_only=market_only,
+                    market_transform=market_transform,
+                    market_anchor=market_anchor,
+                    market_prob_config=market_prob_config,
+                )
+            )
         )
-        preprocessor = _build_preprocessor(feature_spec, for_tree=True)
-
-        x_train = preprocessor.fit_transform(_apply_feature_spec(train_df, feature_spec))
-        x_val = preprocessor.transform(_apply_feature_spec(val_df, feature_spec))
-
-        (
-            y_margin_train,
-            y_total_train,
-            _,
-            _,
-        ) = _prepare_margin_total_targets_with_anchor(train_df, target_columns, market_anchor)
-        (
-            y_margin_val,
-            y_total_val,
-            baseline_margin_val,
-            baseline_total_val,
-        ) = _prepare_margin_total_targets_with_anchor(val_df, target_columns, market_anchor)
-
-        margin_model, total_model = _fit_margin_total_models(
-            x_train,
-            y_margin_train,
-            y_total_train,
-            params,
-            x_eval=x_val,
-            y_margin_eval=y_margin_val,
-            y_total_eval=y_total_val,
-            early_stopping_rounds=early_stopping_rounds,
-        )
-
-        pred_margin = _predict_xgb(margin_model, x_val)
-        pred_total = _predict_xgb(total_model, x_val)
-        if market_anchor:
-            pred_margin = pred_margin + baseline_margin_val
-            pred_total = pred_total + baseline_total_val
-        home_win_prob = _margin_to_home_win_prob(pred_margin)
-        home_win_prob = _adjust_home_win_prob(val_df, home_win_prob, market_prob_config)
-
-        metrics = _evaluate_margin_total_predictions(
-            val_df, pred_margin, pred_total, target_columns, home_win_prob
-        )
-        pool_summary = _summarize_confidence_pool(val_df, home_win_prob, target_columns)
-        fold_scores.append(_select_objective_score(metrics, pool_summary, objective))
 
     return float(np.mean(fold_scores))
+
+
+def _evaluate_margin_total_cv_summary(
+    df: pd.DataFrame,
+    target_columns: tuple[str, str],
+    include_market: bool,
+    max_cardinality_ratio: float,
+    feature_start: str,
+    feature_end: str,
+    params: dict[str, Any],
+    cv_splits: int,
+    early_stopping_rounds: int,
+    objective: str,
+    market_only: bool = False,
+    market_transform: bool = False,
+    market_anchor: bool = False,
+    market_prob_config: Optional[MarketProbConfig] = None,
+) -> dict[str, Any]:
+    timepoints = _build_season_week_timepoints(df)
+    folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
+    fold_scores: list[float] = []
+    for train_points, val_points in folds:
+        point_series = df["season"].astype(int) * 100 + df["week"].astype(int)
+        train_mask = point_series.isin(train_points)
+        val_mask = point_series.isin(val_points)
+        train_df = df[train_mask].copy()
+        val_df = df[val_mask].copy()
+        fold_scores.append(
+            float(
+                _score_margin_total_fold(
+                    train_df=train_df,
+                    val_df=val_df,
+                    target_columns=target_columns,
+                    include_market=include_market,
+                    max_cardinality_ratio=max_cardinality_ratio,
+                    feature_start=feature_start,
+                    feature_end=feature_end,
+                    params=params,
+                    early_stopping_rounds=early_stopping_rounds,
+                    objective=objective,
+                    market_only=market_only,
+                    market_transform=market_transform,
+                    market_anchor=market_anchor,
+                    market_prob_config=market_prob_config,
+                )
+            )
+        )
+
+    return {
+        "cv_splits": int(len(fold_scores)),
+        "objective": objective,
+        "fold_scores": fold_scores,
+        "mean": float(np.mean(fold_scores)) if fold_scores else None,
+        "std": float(np.std(fold_scores)) if fold_scores else None,
+    }
 
 
 def _run_optuna_search(
@@ -1564,7 +1721,7 @@ def _run_optuna_search(
     market_transform: bool = False,
     market_anchor: bool = False,
     market_prob_config: Optional[MarketProbConfig] = None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     if optuna is None:  # pragma: no cover
         raise ImportError("Optuna is required for hyperparameter tuning.")
     optuna_module = optuna
@@ -1655,7 +1812,31 @@ def _run_optuna_search(
 
     log.info("Optuna best %s: %.4f", optuna_config.objective, study.best_value)
     log.info("Optuna best params: %s", study.best_params)
-    return study.best_params
+
+    best_params = dict(study.best_params)
+    resolved_best = _resolve_xgb_params(
+        DEFAULT_XGB_PARAMS,
+        overrides=best_params,
+        tree_method=optuna_config.tree_method,
+        device=optuna_config.device,
+    )
+    cv_summary = _evaluate_margin_total_cv_summary(
+        df,
+        target_columns=target_columns,
+        include_market=include_market,
+        max_cardinality_ratio=max_cardinality_ratio,
+        feature_start=feature_start,
+        feature_end=feature_end,
+        params=resolved_best,
+        cv_splits=optuna_config.cv_splits,
+        early_stopping_rounds=optuna_config.early_stopping_rounds,
+        objective=optuna_config.objective,
+        market_only=market_only,
+        market_transform=market_transform,
+        market_anchor=market_anchor,
+        market_prob_config=market_prob_config,
+    )
+    return best_params, cv_summary
 
 
 def train_score_model(
@@ -1847,8 +2028,9 @@ def train_margin_total_model(
         )
 
     tuned_params: dict[str, Any] = {}
+    tuned_cv_summary: Optional[dict[str, Any]] = None
     if optuna_config.enabled:
-        tuned_params = _run_optuna_search(
+        tuned_params, tuned_cv_summary = _run_optuna_search(
             train_df,
             target_columns=target_columns,
             include_market=include_market,
@@ -2039,6 +2221,7 @@ def train_margin_total_model(
         market_prob_config=market_prob_config,
         xgb_params=params,
         tuned_params=tuned_params or None,
+        tuned_cv_summary=tuned_cv_summary,
     )
 
 
@@ -2092,6 +2275,7 @@ def train_margin_total_model_with_report(
         "model_kind": "margin_total",
         "metrics": {"holdout": holdout_metrics},
         "pool": pool_summary,
+        "tuning_cv": model.tuned_cv_summary,
     }
 
     splits: dict[str, Any] = {
@@ -2173,6 +2357,7 @@ def train_blended_margin_total_model(
     )
 
     team_params: dict[str, Any] = {}
+    tuned_cv_summary: dict[str, Any] = {}
     if optuna_config.enabled:
         tune_scope = optuna_config.tune_scope
         timeout = optuna_config.timeout_seconds
@@ -2249,7 +2434,7 @@ def train_blended_margin_total_model(
 
         if tune_scope in {"team", "both"}:
             log.info("Tuning team-feature model hyperparameters...")
-            team_params = _run_optuna_search(
+            team_params, tuned_cv_summary["team"] = _run_optuna_search(
                 train_df,
                 target_columns=target_columns,
                 include_market=False,
@@ -2367,6 +2552,8 @@ def train_blended_margin_total_model(
         target_columns=target_columns,
         calibrator=None,
         market_prob_config=market_prob_config,
+        tuned_params=team_params or None,
+        tuned_cv_summary=tuned_cv_summary.get("team"),
     )
     return BlendedMarginTotalModel(
         team_model=team_model,
@@ -2377,6 +2564,7 @@ def train_blended_margin_total_model(
         market_prob_config=market_prob_config,
         xgb_params={"team": team_xgb_params},
         tuned_params={"team": team_params or None},
+        tuned_cv_summary=tuned_cv_summary or None,
     )
 
 
@@ -2427,6 +2615,7 @@ def train_blended_margin_total_model_with_report(
         "kind": "train",
         "model_kind": "blend",
         "metrics": {"holdout": holdout_metrics},
+        "tuning_cv": model.tuned_cv_summary,
     }
     splits = {
         "train_seasons": train_seasons,

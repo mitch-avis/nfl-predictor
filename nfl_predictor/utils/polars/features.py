@@ -30,6 +30,7 @@ Example:
 
 import nflreadpy as nfl
 import polars as pl
+from polars.datatypes.classes import DataTypeClass
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
@@ -559,21 +560,22 @@ def add_lookahead_features(
         `games_df` with all `constants.LOOKAHEAD_FEATURE_COLUMNS` present.
     """
 
+    def _expected_dtype(column: str) -> DataTypeClass:
+        if column.endswith("_abbr"):
+            return pl.Utf8
+        if column.endswith("_win_pct"):
+            return pl.Float32
+        return pl.Int32
+
     def _ensure_null_cols(df: pl.DataFrame) -> pl.DataFrame:
-        return df.with_columns(
-            [
-                (
-                    pl.col(c)
-                    if c in df.columns
-                    else (
-                        pl.lit(None, dtype=pl.Utf8).alias(c)
-                        if c.endswith("_abbr")
-                        else pl.lit(None, dtype=pl.Float32).alias(c)
-                    )
-                )
-                for c in constants.LOOKAHEAD_FEATURE_COLUMNS
-            ]
-        )
+        exprs: list[pl.Expr] = []
+        for col in constants.LOOKAHEAD_FEATURE_COLUMNS:
+            dtype = _expected_dtype(col)
+            if col in df.columns:
+                exprs.append(pl.col(col).cast(dtype, strict=False).alias(col))
+            else:
+                exprs.append(pl.lit(None, dtype=dtype).alias(col))
+        return df.with_columns(exprs)
 
     try:
         team_context = compute_team_next_week_context(

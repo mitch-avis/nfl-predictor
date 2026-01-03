@@ -61,6 +61,23 @@ from nfl_predictor.ml.ml_model_core import (
 from nfl_predictor.utils.logger import log
 
 
+def _filter_to_regular_season_for_training(df: pd.DataFrame) -> pd.DataFrame:
+    """Filter a dataset to regular season rows when `game_type` exists.
+
+    This is the default for training and evaluation splits. Prediction can still be run on
+    postseason rows (or any rows) as long as features are available.
+    """
+
+    if "game_type" not in df.columns:
+        return df
+
+    filtered = df[df["game_type"].astype(str).str.upper() == "REG"].copy()
+    dropped = len(df) - len(filtered)
+    if dropped:
+        log.info("Filtering to regular season for training: dropped %d rows.", dropped)
+    return filtered
+
+
 def train_score_model(
     data_path: Path,
     holdout_seasons: int,
@@ -87,6 +104,7 @@ def train_score_model(
             log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
+    df = _filter_to_regular_season_for_training(df)
     train_df, holdout_df, holdout = _split_by_season(df, holdout_seasons)
     log.info("Training seasons: %s", sorted(train_df["season"].unique()))
     log.info("Holdout seasons: %s", holdout)
@@ -156,6 +174,7 @@ def train_score_model_with_report(
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    df = _filter_to_regular_season_for_training(df)
 
     missing_data_summary = _summarize_missing_data(df)
     _train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
@@ -220,6 +239,7 @@ def train_margin_total_model(
             log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
+    df = _filter_to_regular_season_for_training(df)
     (
         train_df,
         calibration_df,

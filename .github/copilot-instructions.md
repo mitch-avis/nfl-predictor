@@ -19,6 +19,18 @@ Rules that are always enforced:
 - Reproducible artifacts. Training and backtests write run directories with metadata and metrics.
 - Tests are required. New functionality includes unit tests and improves or maintains code coverage.
 
+## Engineering Standards (Logic, Docs, Lint, Coverage)
+
+- Docstrings are required for every module, class, and function (including tests).
+- Address linter and type-checker findings as they arise; avoid leaving new warnings behind.
+- Do not reference temporary planning artifacts in code: do not mention roadmap items, milestone
+  numbers, or TODO goal labels in any code, comments, docstrings, or test descriptions.
+- Aim for maximum test coverage where practical; prefer small, deterministic unit tests.
+- If a Python file grows beyond ~2000 lines, propose a refactor plan to split it into smaller
+  focused modules (e.g., helpers/utils), and implement the split when it reduces complexity.
+- Keep `TODO.md` accurate: verify items before checking them off.
+- Keep `README.md` current: update it when behavior, CLI usage, features, or outputs change.
+
 ## Project Shape (Big Picture)
 
 - **Primary Pipeline:** Polars for data processing + `nflreadpy` for NFLverse sources (schedule,

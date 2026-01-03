@@ -15,7 +15,6 @@ import xgboost as xgb
 from scipy.sparse import spmatrix
 from sklearn.compose import ColumnTransformer
 
-from nfl_predictor import ml_model as _ml_model
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_END_COLUMN,
     DEFAULT_FEATURE_START_COLUMN,
@@ -153,10 +152,11 @@ def train_score_model_with_report(
     data_path: Path = kwargs["data_path"]
     kwargs.setdefault("include_injuries", True)
 
-    model: ScoreModel = _ml_model.train_score_model(**kwargs)
+    model: ScoreModel = train_score_model(**kwargs)
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+
     missing_data_summary = _summarize_missing_data(df)
     _train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
     metrics: dict[str, Any] = {}
@@ -491,7 +491,7 @@ def train_margin_total_model_with_report(
     calibration_weeks_inseason = split[7]
 
     # Train the actual model (this will also log holdout metrics).
-    model: MarginTotalModel = _ml_model.train_margin_total_model(**kwargs)
+    model: MarginTotalModel = train_margin_total_model(**kwargs)
 
     holdout_metrics: Optional[dict[str, Any]] = None
     pool_summary: Optional[dict[str, Any]] = None
@@ -824,7 +824,7 @@ def train_blended_margin_total_model_with_report(
     data_path: Path = kwargs["data_path"]
     kwargs.setdefault("include_injuries", True)
 
-    model: BlendedMarginTotalModel = _ml_model.train_blended_margin_total_model(**kwargs)
+    model: BlendedMarginTotalModel = train_blended_margin_total_model(**kwargs)
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))

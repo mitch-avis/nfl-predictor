@@ -119,47 +119,47 @@ Rules:
 
 ## Milestone 16 - Divisional rivalry feature
 
-- [ ] Add a `is_divisional_matchup` feature for each game.
-- [ ] Implement using a division mapping table in `constants.py`.
-- [ ] Ensure this applies to all seasons and teams.
-- [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/constants.py`
-  - [ ] `nfl_predictor/utils/polars_utils.py`
-  - [ ] `tests/test_divisional_matchups.py`
+- [x] Add a `is_divisional_matchup` feature for each game.
+- [x] Implement using a division mapping table in `constants.py`.
+- [x] Ensure this applies to all seasons and teams.
+- [x] Primary files touched:
+  - [x] `nfl_predictor/constants.py`
+  - [x] `nfl_predictor/utils/polars_utils.py`
+  - [x] `tests/test_divisional_matchups.py`
 
 ### Tests (Milestone 16)
 
-- [ ] Unit test: known divisional pairings are flagged correctly.
-- [ ] Unit test: cross-division pairings are not flagged.
+- [x] Unit test: known divisional pairings are flagged correctly.
+- [x] Unit test: cross-division pairings are not flagged.
 
 ### Acceptance (Milestone 16)
 
-- [ ] All game rows contain the divisional indicator and it is stable across seasons.
+- [x] All game rows contain the divisional indicator and it is stable across seasons.
 
 ---
 
 ## Milestone 17 - Team health and injury burden features
 
-- [ ] Pull injury data via `nflreadpy` (NFLverse).
-- [ ] Define team-week aggregates and positional aggregates (QB/RB/WR/TE/OL/DL/LB/DB).
-- [ ] Implement a numeric "health burden" score per team-week.
-- [ ] Join team-week health into each game row for away/home teams.
-- [ ] Provide explicit missing-data behavior for pre-coverage seasons (null/default + logged fallback).
-- [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection.py`
-  - [ ] `nfl_predictor/utils/polars_utils.py`
-  - [ ] `nfl_predictor/constants.py`
-  - [ ] `tests/test_injury_features.py`
+- [x] Pull injury data via `nflreadpy` (NFLverse).
+- [x] Define team-week aggregates and positional aggregates (QB/RB/WR/TE/OL/DL/LB/DB).
+- [x] Implement a numeric "health burden" score per team-week.
+- [x] Join team-week health into each game row for away/home teams.
+- [x] Provide explicit missing-data behavior for pre-coverage seasons (null/default + logged fallback).
+- [x] Primary files touched:
+  - [x] `nfl_predictor/data_collection.py`
+  - [x] `nfl_predictor/utils/polars_utils.py`
+  - [x] `nfl_predictor/constants.py`
+  - [x] `tests/test_injury_features.py`
 
 ### Tests (Milestone 17)
 
-- [ ] Unit test: injury pipeline produces deterministic outputs for a fixed historical week.
-- [ ] Unit test: injury features are null/default for seasons before injury coverage begins.
-- [ ] Unit test: joining team-week injury aggregates produces the expected columns per game.
+- [x] Unit test: injury pipeline produces deterministic outputs for a fixed historical week.
+- [x] Unit test: injury features are null/default for seasons before injury coverage begins.
+- [x] Unit test: joining team-week injury aggregates produces the expected columns per game.
 
 ### Acceptance (Milestone 17)
 
-- [ ] Injury features exist for all games (null/default where unavailable) and are included in the ML
+- [x] Injury features exist for all games (null/default where unavailable) and are included in the ML
   dataset.
 
 ---
@@ -172,21 +172,21 @@ Trap-style indicators are computed for every game:
 - rest/travel and short-week context
 - game location changes (home/away) between weeks
 
-- [ ] Build next-week opponent features using the schedule.
-- [ ] Add per-team "lookahead pressure" features and join to games for away/home teams.
-- [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection.py`
-  - [ ] `nfl_predictor/utils/polars_utils.py`
-  - [ ] `tests/test_lookahead_features.py`
+- [x] Build next-week opponent features using the schedule.
+- [x] Add per-team lookahead features and join to games for away/home teams.
+- [x] Primary files touched:
+  - [x] `nfl_predictor/data_collection.py`
+  - [x] `nfl_predictor/utils/polars_utils.py`
+  - [x] `tests/test_lookahead_features.py`
 
 ### Tests (Milestone 18)
 
-- [ ] Unit test: next-week opponent lookup is correct for a fixed season/week range.
-- [ ] Unit test: missing next-week opponent (end of season) yields null/default.
+- [x] Unit test: next-week opponent lookup is correct for a fixed season/week range.
+- [x] Unit test: missing next-week opponent (end of season) yields null/default.
 
 ### Acceptance (Milestone 18)
 
-- [ ] Lookahead features exist in the ML dataset for all games with defined fallbacks.
+- [x] Lookahead features exist in the ML dataset for all games with defined fallbacks.
 
 ---
 
@@ -199,8 +199,8 @@ Implement features that quantify each team's incentive level for a given game:
 - seeding leverage
 - late-season weighting where appropriate, but features exist for all matchups
 
-- [ ] Create a playoff-incentive feature set computed from standings and tiebreak proxies.
-- [ ] Integrate into ETL as season-to-date features available prior to each game.
+- [x] Create a playoff-incentive feature set computed from standings and tiebreak proxies.
+- [x] Integrate into ETL as season-to-date features available prior to each game.
 - [ ] Primary files likely touched:
   - [ ] `nfl_predictor/data_collection.py`
   - [ ] `nfl_predictor/utils/polars_utils.py`
@@ -208,12 +208,12 @@ Implement features that quantify each team's incentive level for a given game:
 
 ### Tests (Milestone 19)
 
-- [ ] Unit test: incentive state features do not use future games.
+- [x] Unit test: incentive state features do not use future games.
 - [ ] Unit test: known clinch/elimination scenarios in a fixture season produce expected flags.
 
 ### Acceptance (Milestone 19)
 
-- [ ] Motivation features are available for all games and improve walk-forward metrics without leakage.
+- [x] Motivation features are available for all games and improve walk-forward metrics without leakage.
 
 ---
 

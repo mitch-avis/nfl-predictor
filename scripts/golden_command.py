@@ -52,12 +52,16 @@ def _add_ratings(df: pd.DataFrame, target_columns: tuple[str, str]) -> pd.DataFr
     rated["pregame_home_rating"] = (rated["home_win_prob"] * 10).round(2)
     rated["pregame_away_rating"] = ((1 - rated["home_win_prob"]) * 10).round(2)
 
+    rated["postgame_home_rating"] = np.nan
+    rated["postgame_away_rating"] = np.nan
+
     away_col, home_col = target_columns
     if away_col in rated.columns and home_col in rated.columns:
         actual_margin = rated[home_col] - rated[away_col]
-        actual_home_prob = ml_model.margin_to_home_win_prob(actual_margin.to_numpy())
-        rated["postgame_home_rating"] = (actual_home_prob * 10).round(2)
-        rated["postgame_away_rating"] = ((1 - actual_home_prob) * 10).round(2)
+        if actual_margin.notna().any():
+            actual_home_prob = ml_model.margin_to_home_win_prob(actual_margin.to_numpy())
+            rated["postgame_home_rating"] = (actual_home_prob * 10).round(2)
+            rated["postgame_away_rating"] = ((1 - actual_home_prob) * 10).round(2)
     return rated
 
 
@@ -556,19 +560,17 @@ def main() -> int:
     # 4) Power rankings for the predicted week (optional)
     if bool(args.write_power_rankings) and args.predict_path is not None:
         try:
-            completed_df = pd.read_csv(args.data_path)
+            predict_df = pd.read_csv(args.predict_path)
             scored = ml_model.predict_week_margin_total(
                 train_result.model,
-                games_path=args.data_path,
+                games_path=args.predict_path,
                 output_path=None,
                 pretty_output=False,
                 score_rounding="none",
             )
-            target_columns = ml_model.get_target_columns(completed_df)
+            target_columns = ml_model.get_target_columns(predict_df)
             scored = _add_ratings(scored, target_columns)
             rankings = _build_pregame_power_rankings(scored)
-
-            predict_df = pd.read_csv(args.predict_path)
             if "season" in predict_df.columns and "week" in predict_df.columns:
                 season = int(predict_df["season"].iloc[0])
                 week = int(predict_df["week"].iloc[0])

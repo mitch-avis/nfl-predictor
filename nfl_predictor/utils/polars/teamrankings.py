@@ -629,10 +629,9 @@ def calculate_game_result(row_dict: dict) -> Optional[float]:
 
     if away_score > home_score:
         return 1.0
-    elif away_score < home_score:
+    if away_score < home_score:
         return 0.0
-    else:
-        return 0.5
+    return 0.5
 
 
 def merge_schedule_with_team_stats(

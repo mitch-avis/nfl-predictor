@@ -160,3 +160,12 @@ def test_build_final_column_order_metadata_first() -> None:
     assert (
         final_order[: len(constants.POLARS_METADATA_COLUMNS)] == constants.POLARS_METADATA_COLUMNS
     )
+
+
+def test_build_final_column_order_has_no_duplicates_and_includes_lines_results() -> None:
+    """Final column ordering has no duplicates and includes lines/result columns."""
+    final_order = polars_utils.build_final_column_order()
+    assert len(final_order) == len(set(final_order))
+
+    for col in (*constants.POLARS_LINES_COLUMNS, *constants.POLARS_RESULT_COLUMNS):
+        assert col in final_order

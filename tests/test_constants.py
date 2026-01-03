@@ -18,6 +18,16 @@ def test_team_division_mapping_covers_all_canonical_teams() -> None:
     assert set(constants.TEAM_TO_CONFERENCE.values()) == {"AFC", "NFC"}
 
 
+def test_team_alias_mapping_normalizes_to_canonical() -> None:
+    """Ensure team aliases normalize to canonical abbreviations."""
+    for canonical_abbr, meta in constants.TEAM_MAPPING.items():
+        assert constants.normalize_team_abbr(canonical_abbr) == canonical_abbr
+        for alias in meta["aliases"]:
+            assert constants.normalize_team_abbr(alias) == canonical_abbr
+            assert constants.normalize_team_abbr(alias.upper()) == canonical_abbr
+            assert constants.normalize_team_abbr(alias.lower()) == canonical_abbr
+
+
 def test_polars_metadata_columns_are_unique_and_include_new_feature_columns() -> None:
     """Ensure that POLARS_METADATA_COLUMNS has no duplicates and includes all feature columns."""
     cols = constants.POLARS_METADATA_COLUMNS

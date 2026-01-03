@@ -108,6 +108,8 @@ def load_team_rankings(
     for week in weeks_to_load:
         week_file = os.path.join(season_dir, f"{season}_week_{week:02d}_team_rankings.csv")
 
+        force_refresh = season == current_season and week == current_week
+
         if os.path.exists(week_file):
             try:
                 week_df = pl.read_csv(week_file)
@@ -124,17 +126,22 @@ def load_team_rankings(
                 continue
 
             is_valid, missing_cols = _validate_tr_dataframe(week_df)
-            if is_valid:
-                existing_data.append(week_df)
+            if force_refresh:
+                # Always refresh the current week for the in-progress season; keep cached
+                # data as a fallback if scraping fails.
+                weeks_to_full_scrape.append((week, week_df if is_valid else None))
             else:
-                # File exists but missing columns - need partial scrape
-                log.debug(
-                    "Week %d TR file missing %d columns: %s",
-                    week,
-                    len(missing_cols),
-                    missing_cols[:3],
-                )
-                weeks_to_partial_scrape.append((week, week_df, missing_cols))
+                if is_valid:
+                    existing_data.append(week_df)
+                else:
+                    # File exists but missing columns - need partial scrape
+                    log.debug(
+                        "Week %d TR file missing %d columns: %s",
+                        week,
+                        len(missing_cols),
+                        missing_cols[:3],
+                    )
+                    weeks_to_partial_scrape.append((week, week_df, missing_cols))
         else:
             # No file - need full scrape for past weeks
             if season < current_season or week <= current_week:
@@ -148,7 +155,7 @@ def load_team_rankings(
             len(weeks_to_full_scrape),
             season,
         )
-        for week, _ in weeks_to_full_scrape:
+        for week, fallback_df in weeks_to_full_scrape:
             week_date = get_week_date(season, week)
             scraped_df = scrape_team_rankings_for_week(week, week_date)
 
@@ -156,7 +163,15 @@ def load_team_rankings(
                 save_team_rankings_week(scraped_df, season, week)
                 existing_data.append(scraped_df)
             else:
-                log.warning("Failed to scrape TR data for season %d week %d", season, week)
+                if fallback_df is not None and fallback_df.height > 0:
+                    log.warning(
+                        "Failed to scrape TR data for season %d week %d; using cached fallback",
+                        season,
+                        week,
+                    )
+                    existing_data.append(fallback_df)
+                else:
+                    log.warning("Failed to scrape TR data for season %d week %d", season, week)
 
     # Partial scrape for weeks with files missing some columns
     if weeks_to_partial_scrape:
@@ -220,27 +235,11 @@ def load_team_rankings(
 
         if current_week_data is not None and current_week_data.height > 0:
             for future_week in range(current_week + 1, max_playoff_week + 1):
-                future_file = os.path.join(
-                    season_dir, f"{season}_week_{future_week:02d}_team_rankings.csv"
-                )
-                # Only create future week files if they don't exist or are invalid
-                needs_future = False
-                if not os.path.exists(future_file):
-                    needs_future = True
-                else:
-                    try:
-                        future_df = pl.read_csv(future_file)
-                        future_df = _normalize_tr_dataframe(future_df)
-                        is_valid, _ = _validate_tr_dataframe(future_df)
-                        if not is_valid:
-                            needs_future = True
-                    except (pl.exceptions.ComputeError, pl.exceptions.NoDataError, OSError):
-                        needs_future = True
-
-                if needs_future:
-                    future_data = current_week_data.with_columns(pl.lit(future_week).alias("week"))
-                    save_team_rankings_week(future_data, season, future_week)
-                    existing_data.append(future_data)
+                # Always overwrite future-week caches with the most recently scraped week.
+                # This prevents stale future-week placeholders from persisting across runs.
+                future_data = current_week_data.with_columns(pl.lit(future_week).alias("week"))
+                save_team_rankings_week(future_data, season, future_week)
+                existing_data.append(future_data)
 
     # Combine all data
     if existing_data:

@@ -104,11 +104,11 @@ def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
     city_map = {k: v["city"] for k, v in constants.STADIUM_LOCATIONS.items()}
     state_map = {k: v["state"] for k, v in constants.STADIUM_LOCATIONS.items()}
 
-    # Add city and state columns using replace
+    # Add city and state columns using replace_strict (Polars >=1.0)
     df = df.with_columns(
         [
-            pl.col("stadium_id").replace(city_map, default=None).alias("stadium_city"),
-            pl.col("stadium_id").replace(state_map, default=None).alias("stadium_state"),
+            pl.col("stadium_id").replace_strict(city_map, default=None).alias("stadium_city"),
+            pl.col("stadium_id").replace_strict(state_map, default=None).alias("stadium_state"),
         ]
     )
 

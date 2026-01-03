@@ -18,9 +18,114 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+from pandas.errors import ParserError
+
 from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import artifacts, walk_forward
 from nfl_predictor.utils.logger import log
+
+
+def _resolve_team_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
+    """Resolve the (away, home) team columns used for rankings."""
+
+    for away_col, home_col in (("away_abbr", "home_abbr"), ("away_name", "home_name")):
+        if away_col in df.columns and home_col in df.columns:
+            return away_col, home_col
+    return None, None
+
+
+def _add_ratings(df: pd.DataFrame, target_columns: tuple[str, str]) -> pd.DataFrame:
+    """Add lightweight pre/post-game rating columns for power rankings."""
+
+    rated = df.copy()
+    rated["pregame_home_rating"] = (rated["home_win_prob"] * 10).round(2)
+    rated["pregame_away_rating"] = ((1 - rated["home_win_prob"]) * 10).round(2)
+
+    away_col, home_col = target_columns
+    if away_col in rated.columns and home_col in rated.columns:
+        actual_margin = rated[home_col] - rated[away_col]
+        actual_home_prob = ml_model.margin_to_home_win_prob(actual_margin.to_numpy())
+        rated["postgame_home_rating"] = (actual_home_prob * 10).round(2)
+        rated["postgame_away_rating"] = ((1 - actual_home_prob) * 10).round(2)
+    return rated
+
+
+def _build_pregame_power_rankings(df: pd.DataFrame) -> pd.DataFrame:
+    """Build per-week pregame power rankings from rating columns.
+
+    The produced rating for a given (season, week) is based on:
+    - pregame ratings for games at/after that week
+    - postgame ratings for games strictly before that week
+
+    This is intentionally simple and deterministic; it is a display artifact and does not
+    affect model training or win probabilities.
+    """
+
+    if "season" not in df.columns or "week" not in df.columns:
+        return pd.DataFrame()
+
+    if "game_type" in df.columns:
+        df = df[df["game_type"].astype(str).str.upper() == "REG"]
+
+    away_team_col, home_team_col = _resolve_team_columns(df)
+    if away_team_col is None or home_team_col is None:
+        return pd.DataFrame()
+
+    required_cols = {
+        "pregame_away_rating",
+        "pregame_home_rating",
+        "postgame_away_rating",
+        "postgame_home_rating",
+    }
+    if not required_cols.issubset(df.columns):
+        return pd.DataFrame()
+
+    home_rows = df[
+        ["season", "week", home_team_col, "pregame_home_rating", "postgame_home_rating"]
+    ].rename(
+        columns={
+            home_team_col: "team",
+            "pregame_home_rating": "pregame_rating",
+            "postgame_home_rating": "postgame_rating",
+        }
+    )
+    away_rows = df[
+        ["season", "week", away_team_col, "pregame_away_rating", "postgame_away_rating"]
+    ].rename(
+        columns={
+            away_team_col: "team",
+            "pregame_away_rating": "pregame_rating",
+            "postgame_away_rating": "postgame_rating",
+        }
+    )
+    long_df = pd.concat([home_rows, away_rows], ignore_index=True)
+    long_df = long_df.dropna(subset=["pregame_rating", "week"])
+    long_df["week"] = long_df["week"].astype(int)
+    if long_df.empty:
+        return pd.DataFrame()
+
+    ranking_rows: list[pd.DataFrame] = []
+    for season, season_df in long_df.groupby("season"):
+        season_weeks = sorted(season_df["week"].dropna().unique())
+        for week in season_weeks:
+            ratings = season_df.copy()
+            played_mask = (ratings["week"] < week) & ratings["postgame_rating"].notna()
+            ratings["rating"] = ratings["pregame_rating"]
+            ratings.loc[played_mask, "rating"] = ratings.loc[played_mask, "postgame_rating"]
+
+            team_ratings = (
+                ratings.groupby("team", as_index=False)["rating"].mean().assign(season=season)
+            )
+            team_ratings["week"] = week
+            team_ratings = team_ratings.sort_values(["rating", "team"], ascending=[False, True])
+            team_ratings["rank"] = np.arange(1, len(team_ratings) + 1)
+            ranking_rows.append(team_ratings)
+
+    if not ranking_rows:
+        return pd.DataFrame()
+    return pd.concat(ranking_rows, ignore_index=True)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -107,6 +212,80 @@ def _parse_args() -> argparse.Namespace:
         default=0.0,
         help="Clamp model probability within +/- this delta of market.",
     )
+
+    parser.add_argument(
+        "--train-tune",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Enable Optuna tuning for the production model (time-aware CV). "
+            "Use --train-tune-timeout-seconds to cap tuning time."
+        ),
+    )
+    parser.add_argument(
+        "--train-tune-timeout-seconds",
+        type=int,
+        default=0,
+        help=(
+            "Optuna tuning timeout (seconds) for the production model. "
+            "Example for 8 hours: 28800. Ignored unless --train-tune is enabled."
+        ),
+    )
+    parser.add_argument(
+        "--train-tune-trials",
+        type=int,
+        default=None,
+        help="Optional maximum number of Optuna trials (default: unlimited until timeout).",
+    )
+    parser.add_argument(
+        "--train-tune-metric",
+        choices=[
+            "margin_mae",
+            "total_mae",
+            "combined_mae",
+            "winner_accuracy",
+            "brier",
+            "expected_points",
+        ],
+        default="combined_mae",
+        help="Objective metric for Optuna tuning.",
+    )
+    parser.add_argument(
+        "--train-cv-splits",
+        type=int,
+        default=ml_model.DEFAULT_OPTUNA_CV_SPLITS,
+        help="Number of time-series CV folds for Optuna tuning.",
+    )
+    parser.add_argument(
+        "--train-early-stopping-rounds",
+        type=int,
+        default=ml_model.DEFAULT_EARLY_STOPPING_ROUNDS,
+        help="Early stopping rounds for XGBoost during production training.",
+    )
+    parser.add_argument(
+        "--train-xgb-tree-method",
+        type=str,
+        default="auto",
+        help="XGBoost tree_method for production training (e.g., hist, auto).",
+    )
+    parser.add_argument(
+        "--train-xgb-device",
+        type=str,
+        default="auto",
+        help="XGBoost device for production training (e.g., cpu, cuda).",
+    )
+    parser.add_argument(
+        "--train-xgb-n-jobs",
+        type=int,
+        default=None,
+        help="XGBoost parallel threads for production training (default: os.cpu_count()).",
+    )
+    parser.add_argument(
+        "--write-power-rankings",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write power_rankings.csv for the predicted week into the run directory.",
+    )
     parser.add_argument(
         "--train-holdout-seasons",
         type=int,
@@ -157,6 +336,15 @@ def main() -> int:
             "holdout_seasons": args.train_holdout_seasons,
             "calibration_seasons": args.train_calibration_seasons,
             "calibration_weeks": args.train_calibration_weeks,
+            "tune": bool(args.train_tune),
+            "tune_timeout_seconds": int(args.train_tune_timeout_seconds),
+            "tune_trials": args.train_tune_trials,
+            "tune_metric": args.train_tune_metric,
+            "cv_splits": int(args.train_cv_splits),
+            "early_stopping_rounds": int(args.train_early_stopping_rounds),
+            "xgb_tree_method": args.train_xgb_tree_method,
+            "xgb_device": args.train_xgb_device,
+            "xgb_n_jobs": args.train_xgb_n_jobs,
         },
     }
 
@@ -196,6 +384,22 @@ def main() -> int:
     (run_dir / "metadata.json").write_text(json.dumps(wf_metadata, indent=2, sort_keys=True))
 
     # 2) Train model and save checkpoint into same run dir
+    train_optuna = ml_model.OptunaConfig(
+        enabled=bool(args.train_tune),
+        timeout_seconds=int(args.train_tune_timeout_seconds),
+        n_trials=args.train_tune_trials,
+        cv_splits=int(args.train_cv_splits),
+        objective=str(args.train_tune_metric),
+        early_stopping_rounds=int(args.train_early_stopping_rounds),
+        tree_method=str(args.train_xgb_tree_method),
+        device=str(args.train_xgb_device),
+        tune_scope="both",
+        storage=None,
+        study_name=None,
+        best_params_out=None,
+        xgb_n_jobs=args.train_xgb_n_jobs,
+    )
+
     train_result = ml_model.train_margin_total_model_with_report(
         data_path=args.data_path,
         holdout_seasons=args.train_holdout_seasons,
@@ -204,21 +408,7 @@ def main() -> int:
         include_market=True,
         max_cardinality_ratio=0.5,
         win_prob_calibration="isotonic",
-        optuna_config=ml_model.OptunaConfig(
-            enabled=False,
-            timeout_seconds=0,
-            n_trials=None,
-            cv_splits=0,
-            objective="combined_mae",
-            early_stopping_rounds=ml_model.DEFAULT_EARLY_STOPPING_ROUNDS,
-            tree_method="auto",
-            device="auto",
-            tune_scope="both",
-            storage=None,
-            study_name=None,
-            best_params_out=None,
-            xgb_n_jobs=None,
-        ),
+        optuna_config=train_optuna,
         market_transform=(
             bool(args.market_transform) if args.market_transform is not None else False
         ),
@@ -247,6 +437,31 @@ def main() -> int:
             pretty_output=False,
             score_rounding=args.score_rounding,
         )
+
+    # 4) Power rankings for the predicted week (optional)
+    if bool(args.write_power_rankings) and args.predict_path is not None:
+        try:
+            completed_df = pd.read_csv(args.data_path)
+            scored = ml_model.predict_week_margin_total(
+                train_result.model,
+                games_path=args.data_path,
+                output_path=None,
+                pretty_output=False,
+                score_rounding="none",
+            )
+            target_columns = ml_model.get_target_columns(completed_df)
+            scored = _add_ratings(scored, target_columns)
+            rankings = _build_pregame_power_rankings(scored)
+
+            predict_df = pd.read_csv(args.predict_path)
+            if "season" in predict_df.columns and "week" in predict_df.columns:
+                season = int(predict_df["season"].iloc[0])
+                week = int(predict_df["week"].iloc[0])
+                rankings = rankings[(rankings["season"] == season) & (rankings["week"] == week)]
+            out_rankings = run_dir / "power_rankings.csv"
+            rankings.to_csv(out_rankings, index=False)
+        except (OSError, ValueError, KeyError, ParserError) as exc:  # pragma: no cover
+            log.warning("Power rankings generation failed: %s", exc)
 
     log.info("Golden run directory: %s", run_dir)
     return 0

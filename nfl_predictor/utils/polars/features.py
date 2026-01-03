@@ -704,10 +704,39 @@ def compute_team_standings_before_week(
         ]
     )
 
-    # Remaining games proxy (regular season only).
-    reg_weeks = constants.get_regular_season_weeks(season)
+    # Remaining games proxy: use schedule-based total games when available.
+    # Note: regular-season weeks are not the same as games played (e.g., 18-week season but 17
+    # games per team). We count scheduled REG games per team from the schedule to avoid
+    # over/under-stating games remaining.
+    expected_games_per_team = 17 if season >= 2021 else 16
+    season_schedule = schedule_df.filter(pl.col("season") == season)
+    if not include_postseason:
+        season_schedule = season_schedule.filter(pl.col("game_type") == "REG")
+
+    scheduled = pl.concat(
+        [
+            season_schedule.select(pl.col("away_abbr").alias("team_abbr")),
+            season_schedule.select(pl.col("home_abbr").alias("team_abbr")),
+        ],
+        how="vertical",
+    )
+    scheduled_games = scheduled.group_by("team_abbr").agg(
+        pl.len().cast(pl.Int32).alias("season_games_scheduled")
+    )
+
+    records = records.join(scheduled_games, on="team_abbr", how="left").with_columns(
+        pl.col("season_games_scheduled")
+        .fill_null(pl.lit(expected_games_per_team, dtype=pl.Int32))
+        .cast(pl.Int32)
+    )
     records = records.with_columns(
-        (pl.lit(reg_weeks, dtype=pl.Int32) - pl.col("games_played")).alias("games_remaining")
+        (
+            pl.when(pl.col("season_games_scheduled") - pl.col("games_played") < 0)
+            .then(pl.lit(0, dtype=pl.Int32))
+            .otherwise(pl.col("season_games_scheduled") - pl.col("games_played"))
+        )
+        .cast(pl.Int32)
+        .alias("games_remaining")
     ).with_columns((pl.col("wins") + pl.col("games_remaining")).alias("max_wins"))
 
     # Division rank by win_pct then wins.
@@ -758,6 +787,7 @@ def compute_team_standings_before_week(
             [
                 pl.col("conference"),
                 pl.col("wins").alias("seed7_wins"),
+                pl.col("max_wins").alias("seed7_max_wins"),
             ]
         )
     )
@@ -767,17 +797,36 @@ def compute_team_standings_before_week(
         )
     )
 
-    # Division clinch/elimination proxies using wins + remaining games.
-    division_max_other = records.group_by("division").agg(
-        pl.col("max_wins").max().alias("division_max_wins_any")
+    # Division clinch proxy: clinched when the current division leader has more *current* wins
+    # than any other team can possibly reach.
+    top2 = records.group_by("division").agg(
+        pl.col("max_wins").sort(descending=True).head(2).alias("division_top2_max_wins")
     )
-    # To compute "max wins among others", join back and compare.
-    records = records.join(division_max_other, on="division", how="left")
+    records = records.join(top2, on="division", how="left").with_columns(
+        [
+            pl.col("division_top2_max_wins")
+            .list.get(0)
+            .cast(pl.Int32)
+            .alias("division_max_wins_1"),
+            pl.col("division_top2_max_wins")
+            .list.get(1)
+            .cast(pl.Int32)
+            .alias("division_max_wins_2"),
+        ]
+    )
+    records = records.with_columns(
+        pl.when(pl.col("max_wins") == pl.col("division_max_wins_1"))
+        .then(pl.col("division_max_wins_2"))
+        .otherwise(pl.col("division_max_wins_1"))
+        .fill_null(pl.col("division_max_wins_1"))
+        .cast(pl.Int32)
+        .alias("division_max_wins_other")
+    )
     records = records.with_columns(
         [
             pl.when(
                 (pl.col("division_rank") == 1)
-                & (pl.col("wins") > (pl.col("division_max_wins_any") - pl.col("games_remaining")))
+                & (pl.col("wins") > pl.col("division_max_wins_other"))
             )
             .then(1)
             .otherwise(0)
@@ -799,11 +848,9 @@ def compute_team_standings_before_week(
             .then(pl.lit(None, dtype=pl.Int32))
             .otherwise((pl.col("max_wins") < pl.col("seed7_wins")).cast(pl.Int32))
             .alias("conference_eliminated_proxy"),
-            pl.when(pl.col("seed7_wins").is_null())
+            pl.when(pl.col("seed7_max_wins").is_null())
             .then(pl.lit(None, dtype=pl.Int32))
-            .otherwise(
-                (pl.col("wins") > pl.col("seed7_wins") + pl.col("games_remaining")).cast(pl.Int32)
-            )
+            .otherwise((pl.col("wins") > pl.col("seed7_max_wins")).cast(pl.Int32))
             .alias("conference_clinched_proxy"),
         ]
     )

@@ -36,7 +36,10 @@ pytest
 Run tests with coverage:
 
 ```bash
-pytest --cov=nfl_predictor --cov-report=term-missing
+pytest \
+  --cov=nfl_predictor \
+  --cov-report=term-missing \
+  --cov-fail-under=80
 ```
 
 ## Data collection (Polars + nflreadpy)

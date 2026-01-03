@@ -78,3 +78,70 @@ def test_compare_latest_week_scores() -> None:
 
     mismatches = validation_utils.compare_latest_week_scores(all_data, schedule)
     assert mismatches.height == 1
+
+
+def test_validate_scores_and_unique_keys() -> None:
+    """Invalid scores and duplicate games are flagged."""
+    df = pl.DataFrame(
+        {
+            "season": [2024, 2024],
+            "week": [1, 1],
+            "away_abbr": ["BUF", "BUF"],
+            "home_abbr": ["KC", "KC"],
+            "away_score": [-1, 3],
+            "home_score": [10, 10],
+        }
+    )
+
+    score_issues = validation_utils.validate_scores(df)
+    assert score_issues
+
+    dup_issues = validation_utils.validate_unique_games(df)
+    assert dup_issues
+
+
+def test_validate_dataframe_collects_errors() -> None:
+    """DataFrame validation collects multiple error types."""
+    df = pl.DataFrame(
+        {
+            "season": [2024],
+            "week": [25],
+            "away_abbr": ["XXX"],
+            "home_abbr": ["KC"],
+            "away_score": [3],
+            "home_score": [7],
+        }
+    )
+    result = validation_utils.validate_dataframe(df)
+    assert not result.is_valid()
+    assert result.errors
+
+
+def test_compare_latest_week_scores_missing_columns() -> None:
+    """Missing score columns are handled gracefully."""
+    df = pl.DataFrame({"season": [2024], "week": [1]})
+    mismatches = validation_utils.compare_latest_week_scores(df, None)
+    assert mismatches.height == 0
+
+
+def test_compare_latest_week_scores_load_failure(monkeypatch) -> None:
+    """Schedule load failure is handled gracefully."""
+    df = pl.DataFrame(
+        {
+            "season": [2024],
+            "week": [1],
+            "away_abbr": ["BUF"],
+            "home_abbr": ["KC"],
+            "away_score": [21],
+            "home_score": [17],
+        }
+    )
+
+    monkeypatch.setattr(
+        validation_utils.polars_utils,
+        "load_schedule",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("fail")),
+    )
+
+    mismatches = validation_utils.compare_latest_week_scores(df, None)
+    assert mismatches.height == 0

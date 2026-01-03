@@ -24,7 +24,7 @@ Rules that are always enforced:
 - **Primary Pipeline:** Polars for data processing + `nflreadpy` for NFLverse sources (schedule,
   team stats, Elo, etc.). The pipeline integrates schedule/results, team statistics, Elo ratings,
   TeamRankings stats, and market odds to produce ML-ready datasets.
-- **Orchestration Script:** `nfl_predictor/data_collection_polars.py` (run as a module). This
+- **Orchestration Script:** `nfl_predictor/data_collection.py` (run as a module). This
   orchestrator fetches data, applies transformations, and writes output CSVs.
 - **Core Data Transforms:** `nfl_predictor/utils/polars_utils.py` holds Polars expressions and
   feature-building helpers.
@@ -55,7 +55,7 @@ Rules that are always enforced:
 
 I/O rules:
 
-- Prefer the project’s Polars-based load/save helpers in `nfl_predictor/data_collection_polars.py`.
+- Prefer the project’s Polars-based load/save helpers in `nfl_predictor/data_collection.py`.
 - `nfl_predictor/utils/csv_utils.py` is legacy (pandas). Do not extend it; migrate call sites toward
   Polars when touching related code.
 
@@ -278,7 +278,7 @@ Unused constants are removed and the file remains organized into clear sections.
 ## Dev Workflows (How to Run Things)
 
 - Refresh data:
-  - `python -m nfl_predictor.data_collection_polars`
+  - `python -m nfl_predictor.data_collection`
 - Testing:
   - `pytest`
   - `pytest --cov=nfl_predictor --cov-report=term-missing`

@@ -22,10 +22,10 @@ Output Files:
 
 Usage:
     Run directly to collect and process all data:
-        python -m nfl_predictor.data_collection_polars
+        python -m nfl_predictor.data_collection
 
     Or import and call programmatically:
-        from nfl_predictor.data_collection_polars import collect_all_data
+        from nfl_predictor.data_collection import collect_all_data
         df = collect_all_data([2023, 2024])
 """
 

@@ -44,7 +44,7 @@ python -m pytest --cov=nfl_predictor --cov-report=term-missing --cov-fail-under=
 The authoritative data build pipeline is:
 
 ```bash
-python -m nfl_predictor.data_collection_polars
+python -m nfl_predictor.data_collection
 ```
 
 This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`).

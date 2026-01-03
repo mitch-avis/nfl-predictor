@@ -382,7 +382,7 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
 
     Note: Some stats are excluded from opponent generation because they would be
     exact duplicates or inverses of existing stats.
-    See constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS.
+    See constants.EXCLUDE_FROM_OPPONENT_STATS.
 
     Args:
         team_stats_df: DataFrame with per-game team statistics

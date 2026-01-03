@@ -24,7 +24,7 @@ Execution loop for each milestone:
 ## Milestone 12 - Documentation + repository cleanup (Polars-only narrative)
 
 - [ ] Remove documentation references to deprecated data collection and utility modules.
-- [ ] Ensure all docs describe `nfl_predictor/data_collection_polars.py` as the authoritative ETL entrypoint.
+- [ ] Ensure all docs describe `nfl_predictor/data_collection.py` as the authoritative ETL entrypoint.
 - [ ] Add a short "Data sources + missing data" section describing fallbacks and season coverage limits.
 - [ ] Primary files likely touched:
   - [ ] `.github/copilot-instructions.md`
@@ -66,7 +66,7 @@ Execution loop for each milestone:
 - [ ] Implement ETL fallbacks so output schema is invariant across seasons.
 - [ ] Ensure ML preprocessing handles nulls explicitly and logs fallback usage counts.
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection_polars.py`
+  - [ ] `nfl_predictor/data_collection.py`
   - [ ] `nfl_predictor/utils/polars_utils.py`
   - [ ] `nfl_predictor/ml_model.py`
   - [ ] `tests/test_missing_data_policy.py`
@@ -100,7 +100,7 @@ Rules:
 - [ ] Implement record features for away and home teams (prefix columns `away_` and `home_`).
 - [ ] Add schema entries in `constants.py` and include in the ML feature set.
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection_polars.py`
+  - [ ] `nfl_predictor/data_collection.py`
   - [ ] `nfl_predictor/utils/polars_utils.py`
   - [ ] `nfl_predictor/constants.py`
   - [ ] `tests/test_record_features.py`
@@ -147,7 +147,7 @@ Rules:
 - [ ] Join team-week health into each game row for away/home teams.
 - [ ] Provide explicit missing-data behavior for pre-coverage seasons (null/default + logged fallback).
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection_polars.py`
+  - [ ] `nfl_predictor/data_collection.py`
   - [ ] `nfl_predictor/utils/polars_utils.py`
   - [ ] `nfl_predictor/constants.py`
   - [ ] `tests/test_injury_features.py`
@@ -176,7 +176,7 @@ Trap-style indicators are computed for every game:
 - [ ] Build next-week opponent features using the schedule.
 - [ ] Add per-team "lookahead pressure" features and join to games for away/home teams.
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection_polars.py`
+  - [ ] `nfl_predictor/data_collection.py`
   - [ ] `nfl_predictor/utils/polars_utils.py`
   - [ ] `tests/test_lookahead_features.py`
 
@@ -203,7 +203,7 @@ Implement features that quantify each team's incentive level for a given game:
 - [ ] Create a playoff-incentive feature set computed from standings and tiebreak proxies.
 - [ ] Integrate into ETL as season-to-date features available prior to each game.
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection_polars.py`
+  - [ ] `nfl_predictor/data_collection.py`
   - [ ] `nfl_predictor/utils/polars_utils.py`
   - [ ] `tests/test_motivation_features.py`
 

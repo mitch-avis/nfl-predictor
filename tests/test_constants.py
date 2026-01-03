@@ -29,10 +29,10 @@ def test_team_alias_mapping_normalizes_to_canonical() -> None:
 
 
 def test_polars_metadata_columns_are_unique_and_include_new_feature_columns() -> None:
-    """Ensure that POLARS_METADATA_COLUMNS has no duplicates and includes all feature columns."""
+    """Ensure that METADATA_COLUMNS has no duplicates and includes all feature columns."""
     cols = constants.METADATA_COLUMNS
 
-    assert len(cols) == len(set(cols)), "POLARS_METADATA_COLUMNS contains duplicates"
+    assert len(cols) == len(set(cols)), "METADATA_COLUMNS contains duplicates"
 
     # Spot-check that milestone feature groups are wired into the schema.
     for required in (

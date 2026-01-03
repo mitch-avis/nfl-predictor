@@ -498,6 +498,14 @@ INJURY_POSITION_GROUPS: dict[str, tuple[str, ...]] = {
     "db": ("CB", "DB", "FS", "SS", "S"),
 }
 
+# Maps NFLverse `report_status` strings to a numeric burden weight. Unknown statuses default to 0.
+INJURY_REPORT_STATUS_WEIGHTS: dict[str, float] = {
+    "out": 1.0,
+    "doubtful": 0.75,
+    "questionable": 0.5,
+    "probable": 0.25,
+}
+
 INJURY_FEATURE_COLUMNS = [
     "away_injury_burden_total",
     "home_injury_burden_total",

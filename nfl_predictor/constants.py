@@ -568,7 +568,7 @@ METADATA_COLUMNS = [
     "home_rest",
     "neutral",
     "division",
-    # Milestones 15-19 feature additions
+    # Feature column groups (joined into game rows)
     *DIVISIONAL_FEATURE_COLUMNS,
     *RECORD_FEATURE_COLUMNS,
     *INJURY_FEATURE_COLUMNS,

@@ -7,12 +7,19 @@ preserving the public API expected by scripts and unit tests.
 
 from __future__ import annotations
 
+import importlib
 from typing import TYPE_CHECKING, Any
 
 from nfl_predictor.ml import ml_model_core as _core
 from nfl_predictor.ml import ml_model_predict as _predict
 from nfl_predictor.ml import ml_model_training as _training
-from nfl_predictor.ml.ml_model_cli import main
+
+
+def main() -> None:
+    """CLI entrypoint wrapper for the legacy `nfl_predictor.ml_model` path."""
+
+    _module = importlib.import_module("nfl_predictor.ml.ml_model_cli")
+    _module.main()
 
 
 def __getattr__(name: str) -> Any:

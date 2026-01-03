@@ -38,12 +38,19 @@ Rules that are always enforced:
   TeamRankings stats, and market odds to produce ML-ready datasets.
 - **Orchestration Script:** `nfl_predictor/data_collection.py` (run as a module). This
   orchestrator fetches data, applies transformations, and writes output CSVs.
-- **Core Data Transforms:** `nfl_predictor/utils/polars_utils.py` holds Polars expressions and
-  feature-building helpers.
+- **Core Data Transforms:** Polars ETL helpers live under `nfl_predictor/utils/polars/`.
+  `nfl_predictor/utils/polars_utils.py` is a compatibility facade that forwards imports to the
+  split modules.
 - **Game-Specific Enrichments:** `nfl_predictor/utils/game_utils.py` contains domain-specific
   calculations and dataset enrichments.
 - **External Data Scraping/Caching:** `nfl_predictor/utils/scraping_utils.py` fetches and caches
   external web data used by the pipeline.
+
+ML implementation layout:
+
+- `nfl_predictor/ml/` contains the split ML implementation modules.
+- `nfl_predictor/ml_model.py` is a compatibility facade for legacy imports and the CLI entrypoint.
+- XGBoost version/build compatibility helpers live in `nfl_predictor/ml/ml_model_xgb_utils.py`.
 
 ## Modeling Philosophy (Important Context for Code Generation)
 

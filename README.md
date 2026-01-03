@@ -30,16 +30,13 @@ pip install -e .
 ### Run tests
 
 ```bash
-pytest
+python -m pytest
 ```
 
 Run tests with coverage:
 
 ```bash
-pytest \
-  --cov=nfl_predictor \
-  --cov-report=term-missing \
-  --cov-fail-under=80
+python -m pytest --cov=nfl_predictor --cov-report=term-missing --cov-fail-under=80
 ```
 
 ## Data collection (Polars + nflreadpy)

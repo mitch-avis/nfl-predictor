@@ -249,11 +249,21 @@ def process_season(
     # Get unique weeks in the schedule
     weeks = sorted(season_schedule.select("week").unique().to_series().to_list())
 
+    # Load injuries once per season (may be empty for seasons without coverage)
+    injuries_df = polars_utils.load_injuries([season])
+
     # Process each week
     weekly_data = []
     for week in weeks:
         week_data = process_week(
-            season, week, season_schedule, team_stats_df, elo_df, tr_df, prev_tr_df
+            season,
+            week,
+            season_schedule,
+            team_stats_df,
+            elo_df,
+            tr_df,
+            prev_tr_df,
+            injuries_df,
         )
         if week_data.height > 0:
             weekly_data.append(week_data)
@@ -272,6 +282,7 @@ def process_week(
     elo_df: Optional[pl.DataFrame] = None,
     tr_df: Optional[pl.DataFrame] = None,
     prev_tr_df: Optional[pl.DataFrame] = None,
+    injuries_df: Optional[pl.DataFrame] = None,
 ) -> pl.DataFrame:
     """
     Process a single week's games with aggregated stats from prior weeks.
@@ -449,6 +460,46 @@ def process_week(
 
     # Divisional rivalry feature
     merged = polars_utils.add_divisional_matchup_feature(merged)
+
+    # Injury burden features (null for seasons without coverage)
+    merged = polars_utils.add_injury_burden_features(
+        merged,
+        injuries_df,
+        season=season,
+        week=week,
+    )
+
+    # Lookahead / next-week context features (null when schedule context is unavailable)
+    try:
+        merged = polars_utils.add_lookahead_features(
+            merged,
+            schedule_df,
+            season=season,
+            week=week,
+            include_postseason=False,
+        )
+    except ValueError:
+        log.debug(
+            "Skipping lookahead features for season %d week %d (schedule incomplete)",
+            season,
+            week,
+        )
+
+    # Motivation / standings proxy features (null when schedule results are unavailable)
+    try:
+        merged = polars_utils.add_motivation_features(
+            merged,
+            schedule_df,
+            season=season,
+            week=week,
+            include_postseason=False,
+        )
+    except ValueError:
+        log.debug(
+            "Skipping motivation features for season %d week %d (schedule incomplete)",
+            season,
+            week,
+        )
 
     # Calculate stat differentials
     stats_to_diff = polars_utils.get_stats_for_diff()

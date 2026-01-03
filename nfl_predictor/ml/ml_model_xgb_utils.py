@@ -178,7 +178,7 @@ def _with_xgb_early_stopping_params(
         if early_stop_cls is not None:
             updated.setdefault(
                 "callbacks",
-                [early_stop_cls(rounds=int(early_stopping_rounds), save_best=True)],
+                [early_stop_cls(rounds=int(early_stopping_rounds))],
             )
     return updated
 

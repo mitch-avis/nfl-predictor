@@ -33,13 +33,18 @@ pip install -e .
 python -m pytest
 ```
 
-Run tests with coverage:
+By default, `pytest` runs with coverage and enforces a minimum threshold (configured in
+`setup.cfg`). To disable coverage for a quick local run:
 
 ```bash
-python -m pytest --cov=nfl_predictor --cov-report=term-missing
+python -m pytest --no-cov
 ```
 
-Note: enforcing a high `--cov-fail-under` threshold is tracked in `TODO.md` and may not pass yet.
+To run explicitly with coverage (same behavior as the default config):
+
+```bash
+python -m pytest --cov=nfl_predictor --cov-report=term-missing --cov-fail-under=80
+```
 
 ## Data collection (Polars + nflreadpy)
 
@@ -48,6 +53,8 @@ The authoritative data build pipeline is:
 ```bash
 python -m nfl_predictor.data_collection
 ```
+
+The default season range is controlled by `constants.MIN_SEASON` (currently 2006).
 
 This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`).
 

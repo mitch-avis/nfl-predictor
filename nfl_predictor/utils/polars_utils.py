@@ -106,6 +106,8 @@ def compute_team_records_before_week(
                 "wins": pl.Series([], dtype=pl.Int32),
                 "losses": pl.Series([], dtype=pl.Int32),
                 "ties": pl.Series([], dtype=pl.Int32),
+                "games_played": pl.Series([], dtype=pl.Int32),
+                "win_pct": pl.Series([], dtype=pl.Float32),
                 "division_wins": pl.Series([], dtype=pl.Int32),
                 "division_losses": pl.Series([], dtype=pl.Int32),
                 "division_ties": pl.Series([], dtype=pl.Int32),
@@ -165,53 +167,67 @@ def compute_team_records_before_week(
         ]
     )
 
-    return (
-        team_games.group_by("team_abbr")
-        .agg(
-            [
-                pl.col("win").sum().cast(pl.Int32).alias("wins"),
-                pl.col("loss").sum().cast(pl.Int32).alias("losses"),
-                pl.col("tie").sum().cast(pl.Int32).alias("ties"),
-                pl.when(pl.col("is_division_game"))
-                .then(pl.col("win"))
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int32)
-                .alias("division_wins"),
-                pl.when(pl.col("is_division_game"))
-                .then(pl.col("loss"))
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int32)
-                .alias("division_losses"),
-                pl.when(pl.col("is_division_game"))
-                .then(pl.col("tie"))
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int32)
-                .alias("division_ties"),
-                pl.when(pl.col("is_conference_game"))
-                .then(pl.col("win"))
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int32)
-                .alias("conference_wins"),
-                pl.when(pl.col("is_conference_game"))
-                .then(pl.col("loss"))
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int32)
-                .alias("conference_losses"),
-                pl.when(pl.col("is_conference_game"))
-                .then(pl.col("tie"))
-                .otherwise(0)
-                .sum()
-                .cast(pl.Int32)
-                .alias("conference_ties"),
-            ]
-        )
-        .sort("team_abbr")
+    aggregated = team_games.group_by("team_abbr").agg(
+        [
+            pl.col("win").sum().cast(pl.Int32).alias("wins"),
+            pl.col("loss").sum().cast(pl.Int32).alias("losses"),
+            pl.col("tie").sum().cast(pl.Int32).alias("ties"),
+            pl.when(pl.col("is_division_game"))
+            .then(pl.col("win"))
+            .otherwise(0)
+            .sum()
+            .cast(pl.Int32)
+            .alias("division_wins"),
+            pl.when(pl.col("is_division_game"))
+            .then(pl.col("loss"))
+            .otherwise(0)
+            .sum()
+            .cast(pl.Int32)
+            .alias("division_losses"),
+            pl.when(pl.col("is_division_game"))
+            .then(pl.col("tie"))
+            .otherwise(0)
+            .sum()
+            .cast(pl.Int32)
+            .alias("division_ties"),
+            pl.when(pl.col("is_conference_game"))
+            .then(pl.col("win"))
+            .otherwise(0)
+            .sum()
+            .cast(pl.Int32)
+            .alias("conference_wins"),
+            pl.when(pl.col("is_conference_game"))
+            .then(pl.col("loss"))
+            .otherwise(0)
+            .sum()
+            .cast(pl.Int32)
+            .alias("conference_losses"),
+            pl.when(pl.col("is_conference_game"))
+            .then(pl.col("tie"))
+            .otherwise(0)
+            .sum()
+            .cast(pl.Int32)
+            .alias("conference_ties"),
+        ]
     )
+
+    aggregated = aggregated.with_columns(
+        [
+            (pl.col("wins") + pl.col("losses") + pl.col("ties")).cast(pl.Int32).alias(
+                "games_played"
+            ),
+            pl.when(pl.col("wins") + pl.col("losses") + pl.col("ties") > 0)
+            .then(
+                (pl.col("wins") / (pl.col("wins") + pl.col("losses") + pl.col("ties"))).cast(
+                    pl.Float32
+                )
+            )
+            .otherwise(pl.lit(0.0, dtype=pl.Float32))
+            .alias("win_pct"),
+        ]
+    )
+
+    return aggregated.sort("team_abbr")
 
 
 def _is_numeric_dtype(dtype: DataType) -> bool:

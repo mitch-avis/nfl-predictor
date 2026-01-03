@@ -244,19 +244,34 @@ Training/backtests can write a run directory containing reproducible artifacts.
 - Realized points: `sum(confidence_value * 1[pick_correct])`.
 - Ties count as incorrect.
 
-## Planned feature roadmap
+## Repository layout notes
 
-All new features are defined so they apply to **every matchup**, not only end-of-season games.
+Some modules are split to keep files under lint `max-module-lines` limits while preserving legacy
+import paths.
 
-Planned feature areas (see `TODO.md`):
+- Polars ETL helpers live under `nfl_predictor/utils/polars/` with a compatibility facade at
+  `nfl_predictor/utils/polars_utils.py`.
+- ML implementation lives under `nfl_predictor/ml/` with a compatibility facade at
+  `nfl_predictor/ml_model.py`.
 
-- season-to-date record features (overall, division, conference W-L-T)
-- divisional rivalry indicator
-- injury/health burden features (team-week and positional)
-- lookahead/trap indicators (next-week opponent strength + rest/travel context)
-- motivational asymmetry features (playoff leverage and clinch/elimination context)
-- blocked/time-series cross-validation for tuning stability
-- missing data policies for partial-coverage sources (consistent schema across seasons)
+## Implemented feature areas
+
+All engineered features are defined so they apply to **every matchup**, not only end-of-season
+games.
+
+- Invariant-schema missing-data handling across seasons.
+- Season-to-date record features (overall/division/conference).
+- Divisional rivalry indicator.
+- Injury/health burden features (with in-season gating by default when inputs are unavailable).
+- Lookahead / next-week context features.
+- Standings-based motivation proxy features (clinch/elimination proxies).
+
+## Open work
+
+Active tasks are tracked in `TODO.md`. Current focus areas:
+
+- Add unit tests for the blocked/time-series CV utilities used in tuning.
+- Harden test coverage and enforce a coverage threshold.
 
 ## Development notes
 

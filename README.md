@@ -1,62 +1,123 @@
 # nfl-predictor
 
-Predict NFL game outcomes and scores using a **margin/total** ML pipeline + walk-forward evaluation,
-with optional market anchoring and probability calibration.
+NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities,
+and tooling for Pick 'Em and Confidence Pools.
 
 This repo is geared toward:
 
 - **Pick 'Em** and **Confidence Pools** (primary)
 - sports-betting research (secondary; no profit claims)
 
----
+## What this project produces
 
-## Quickstart
+- **Predicted margin and total** for each game (canonical targets).
+- **Predicted home/away scores** derived from margin/total.
+- **Calibrated win probabilities** for confidence ranking.
+- **Weekly confidence ranks** (1..N unique values) suitable for pool submission.
+- **Backtest summaries** for pool points and probability calibration.
 
-### 1) Create an environment
+## Setup
+
+### Python environment
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
+```
+
+### Run tests
+
+```bash
 pytest
 ```
 
-### 2) Build/refresh datasets (Polars + nflreadpy)
+Run tests with coverage:
+
+```bash
+pytest --cov=nfl_predictor --cov-report=term-missing
+```
+
+## Data collection (Polars + nflreadpy)
+
+The authoritative data build pipeline is:
 
 ```bash
 python -m nfl_predictor.data_collection_polars
 ```
 
-Outputs are written under `data/` (CSV). Primary files:
+This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`).
+
+Typical outputs:
 
 - `data/all_data.csv` and `data/all_data_ml.csv`
 - `data/completed_games.csv` and `data/completed_games_ml.csv`
-- `data/predict/week_##_games_to_predict.csv`
+- `data/predict/week_XX_games_to_predict.csv`
 
-> Note: `*_ml.csv` files include model-ready engineered features (including differential features).
+Note: `*_ml.csv` files include model-ready engineered features.
 
-### 3) Train + predict (simple)
+Historical weeks load from cached artifacts where available; the current week may require network
+access for external sources handled by `nfl_predictor/utils/scraping_utils.py`.
+
+## Training + prediction
+
+The primary entrypoint is:
+
+```bash
+python -m nfl_predictor.ml_model --help
+```
+
+### Quickstart (train + predict)
+
+Train a margin/total model and generate predictions for a weekly input file:
+
+```bash
+python -m nfl_predictor.ml_model \
+  --model-kind margin_total \
+  --holdout-seasons 0 \
+  --calibration-seasons 0 \
+  --win-prob-calibration none \
+  --tune \
+  --tune-timeout 600 \
+  --tune-metric expected_points \
+  --xgb-tree-method hist \
+  --predict-path data/predict/week_17_games_to_predict.csv
+```
+
+This prints a weekly summary and writes `*_predictions.csv` next to the input file.
+
+If you want a minimal run without tuning (and with explicit input paths):
 
 ```bash
 python -m nfl_predictor.ml_model \
   --data-path data/completed_games_ml.csv \
   --model-kind margin_total \
   --holdout-seasons 1 \
-  --win-prob-calibration platt \
+  --calibration-seasons 1 \
+  --win-prob-calibration isotonic \
   --predict-path data/predict/week_17_games_to_predict.csv
 ```
 
-This writes:
+### Splits: train, calibration, holdout
 
-- a predictions CSV alongside the input predict file
-- a run folder under `models/` containing a model artifact + `metadata.json` + (if evaluated) `metrics_report.json`
+Splits are time-aware by season and (optionally) by in-season week.
 
----
+- `--holdout-seasons` reserves the most recent seasons for evaluation only.
+- `--calibration-seasons` reserves seasons just before the holdout for calibration/blending.
+- `--calibration-weeks` reserves the most recent weeks from the latest season for calibration.
+
+Example: hold out the most recent season for evaluation and calibrate on the season before it:
+
+```bash
+python -m nfl_predictor.ml_model \
+  --model-kind margin_total \
+  --holdout-seasons 1 \
+  --calibration-seasons 1
 
 ## Modeling approach
 
-### Margin/Total is the canonical target
+### Margin/Total targets (canonical)
 
 We predict:
 
@@ -68,100 +129,110 @@ Then derive scores:
 - `home = (total + margin) / 2`
 - `away = (total - margin) / 2`
 
-This keeps predictions internally consistent and makes it easy to derive win probabilities from the
-margin distribution.
+This keeps score predictions internally consistent and makes win probability derivation
+straightforward.
 
 ### Win probability calibration
 
-Raw margin → win probability mappings tend to be miscalibrated. This repo supports:
+Raw margin -> win probability mappings tend to be miscalibrated. This repo supports:
 
 - **Platt scaling** (logistic regression)
 - **Isotonic regression**
 
-Calibration must be **time-aware** (fit only on past data relative to the evaluation window).
+Calibration is time-aware: it fits only on historical data relative to the evaluation window.
 
-### Market anchoring (recommended)
+### Market integration (optional, recommended)
 
-If spreads/totals/moneylines are present, you can train on **residuals vs market** (anchor) so the
-model learns “how to beat the line” rather than re-learning what the market already priced.
+If spreads/totals/moneylines are present, you can:
 
----
+- use market-derived features (`--market-transform`)
+- train on residuals vs market baselines (`--market-anchor`) so the model learns deviations rather
+  than re-learning what the market already priced
 
-## Evaluation: avoid in-sample overfitting traps
+Win probability can also be blended or clamped vs market implied probabilities via
+`--market-prob-blend` / `--market-prob-clamp`.
 
-The project includes realistic evaluation modes:
+## Backtesting
 
-1) **Holdout seasons** (`--holdout-seasons N`): reserve the last N seasons for evaluation.
-2) **Walk-forward backtest** (`scripts/walk_forward_backtest.py`): week-by-week rolling-origin
-   evaluation (best realism).
-3) (Planned) **Blocked CV** across seasons/weeks for tuning stability (see TODO).
+Backtest and produce weekly confidence ranks and summary metrics:
 
-If you see “great” performance on the exact data the model trained on, that is **not** evidence the
-model is good — it’s evidence the model can memorize patterns. Prefer walk-forward metrics.
+```bash
+python scripts/backtest_predictions.py \
+  --model-in models/your_model.joblib \
+  --model-kind margin_total \
+  --data-path data/completed_games_ml.csv \
+  --output-dir data/backtest
+```
 
----
+For the most realistic evaluation, use walk-forward (rolling-origin) backtesting:
 
-## Core scripts
+```bash
+python scripts/walk_forward_backtest.py --help
+```
 
-- `python -m nfl_predictor.data_collection_polars`  
-  Build datasets via nflreadpy + Polars
+If you see great performance on the exact data a model trained on, that is not evidence the model
+generalizes. Prefer holdout and walk-forward metrics.
 
-- `python -m nfl_predictor.ml_model`  
-  Train/evaluate/predict (main entrypoint)
+## Validation
 
-- `python scripts/walk_forward_backtest.py`  
-  Walk-forward evaluation + reports
+Offline validation:
 
-- `python scripts/backtest_predictions.py`  
-  Evaluate a saved model on historical rows
+```bash
+python scripts/validate_offline.py
+```
 
-- `python scripts/leakage_audit.py`  
-  Detect obvious feature leakage patterns
+Live validation (may require network access):
 
----
+```bash
+python scripts/validate_live.py
+```
+
+## Leakage audit
+
+To detect obvious feature leakage patterns:
+
+```bash
+python scripts/leakage_audit.py
+```
 
 ## Artifacts
 
-Runs write to `models/<run_id>/`:
+Training/backtests can write a run directory containing reproducible artifacts.
 
-- `model.joblib` (or similar)
-- `metadata.json` (required)
-- `metrics_report.json` (required for backtests)
+- Use `--run-dir` to write `model.joblib`, `metadata.json`, and (when evaluated)
+  `metrics_report.json`.
+- Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
+  args, feature list, and tuning/early-stopping info (when used).
 
-Metadata includes:
+## Confidence pool rules (implemented)
 
-- timestamp
-- dataset fingerprint/hash
-- key package versions
-- training config / CLI args
-- feature list
-- tuning / early stopping info (when used)
+- Each week assigns unique confidence values `1..N` to each picked winner.
+- Max weekly points: `N*(N+1)/2`.
+- Realized points: `sum(confidence_value * 1[pick_correct])`.
+- Ties count as incorrect.
 
----
+## Planned feature roadmap
 
-## Feature roadmap (high-level)
+All new features are defined so they apply to **every matchup**, not only end-of-season games.
 
-This repo already uses:
+Planned feature areas (see `TODO.md`):
 
-- team performance stats (season-to-date)
-- rest/travel context (where available)
-- TeamRankings ratings
-- optional betting markets
+- season-to-date record features (overall, division, conference W-L-T)
+- divisional rivalry indicator
+- injury/health burden features (team-week and positional)
+- lookahead/trap indicators (next-week opponent strength + rest/travel context)
+- motivational asymmetry features (playoff leverage and clinch/elimination context)
+- blocked/time-series cross-validation for tuning stability
+- missing data policies for partial-coverage sources (consistent schema across seasons)
 
-Planned features to apply **to all matchups** (not only late-season):
+## Development notes
 
-- **Team health burden** (injury report aggregation → team-week features)
-- **Divisional rivalry flag** (same-division matchups)
-- **Lookahead / trap indicators** (next-week opponent strength + travel/rest context)
-- **Motivational asymmetry** (playoff leverage and clinch/elimination context, late-season-heavy but
-  still generic)
+- ETL and feature engineering run in Polars.
+- All NFLverse data is pulled via `nflreadpy`.
+- Logging uses the project logger; avoid `print`.
+- Formatting is enforced via Black/isort/flake8.
 
-See `TODO.md` for the actionable plan.
+## Safety and claims
 
----
-
-## Notes on responsible use
-
-This project produces statistical forecasts. It does not guarantee accuracy, profit, or betting
-success. Use predictions as one input among many, and treat performance metrics as probabilistic,
-not deterministic.
+This project outputs statistical forecasts and backtest metrics. It does not guarantee accuracy,
+profit, or betting success.

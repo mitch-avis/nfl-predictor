@@ -142,6 +142,10 @@ python -m nfl_predictor.ml_model \
 
 Splits are time-aware by season and (optionally) by in-season week.
 
+By default, training/evaluation uses **regular season** games only when the input data includes a
+`game_type` column (i.e., postseason rows are filtered out). You can still generate predictions
+for playoff games as long as the feature row exists.
+
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
 - `--calibration-seasons` reserves seasons just before the holdout for calibration/blending.
 - `--calibration-weeks` reserves the most recent weeks from the latest season for calibration.
@@ -275,10 +279,11 @@ games.
 
 ## Open work
 
-Active tasks are tracked in `TODO.md`. Current focus areas:
+Active tasks are tracked in `TODO.md`.
 
-- Add unit tests for the blocked/time-series CV utilities used in tuning.
-- Harden test coverage and enforce a coverage threshold.
+At the moment, `TODO.md` contains a **guardrails checklist** (time-aware/no-leakage, Polars-first
+ETL, reproducible artifacts, and tests/coverage expectations). Completed milestones and past work
+live in `ARCHIVE.md`.
 
 ## Development notes
 

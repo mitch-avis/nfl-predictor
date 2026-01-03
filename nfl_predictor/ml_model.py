@@ -474,6 +474,47 @@ def _load_games(path: Path) -> pd.DataFrame:
     return df
 
 
+def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
+    """Summarize missing-data prevalence for key feature groups.
+
+    When some sources are missing historically, the schema remains invariant and these counters make
+    the impact visible in metrics.
+    """
+
+    def _group_summary(columns: list[str]) -> dict[str, Any]:
+        present = [c for c in columns if c in df.columns]
+        missing = [c for c in columns if c not in df.columns]
+        if not present:
+            return {
+                "present_columns": 0,
+                "missing_columns": len(missing),
+                "null_cells": None,
+                "rows_with_any_null": None,
+                "columns_all_null": None,
+            }
+        view = df[present]
+        is_null = view.isna()
+        return {
+            "present_columns": len(present),
+            "missing_columns": len(missing),
+            "null_cells": int(is_null.to_numpy().sum()),
+            "rows_with_any_null": int(is_null.any(axis=1).sum()),
+            "columns_all_null": int(is_null.all(axis=0).sum()),
+        }
+
+    groups: dict[str, list[str]] = {
+        "lines": list(constants.LINES_COLUMNS),
+        "injuries": list(constants.INJURY_FEATURE_COLUMNS),
+        "records": list(constants.RECORD_FEATURE_COLUMNS),
+        "lookahead": list(constants.LOOKAHEAD_FEATURE_COLUMNS),
+        "motivation": list(constants.MOTIVATION_FEATURE_COLUMNS),
+    }
+    return {
+        "total_rows": int(len(df)),
+        "groups": {name: _group_summary(cols) for name, cols in groups.items()},
+    }
+
+
 def _filter_season_bounds(
     df: pd.DataFrame,
     min_season: Optional[int],
@@ -1926,6 +1967,7 @@ def train_score_model_with_report(
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    missing_data_summary = _summarize_missing_data(df)
     _train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
     metrics: dict[str, Any] = {}
     if not holdout_df.empty:
@@ -1940,6 +1982,7 @@ def train_score_model_with_report(
         "kind": "train",
         "model_kind": "score",
         "metrics": {"holdout": metrics or None},
+        "missing_data": missing_data_summary,
     }
     splits = {
         "train_seasons": sorted(_train_df["season"].dropna().unique().tolist()),
@@ -2238,6 +2281,7 @@ def train_margin_total_model_with_report(
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    missing_data_summary = _summarize_missing_data(df)
     split = _split_train_calibration_holdout(
         df, holdout_seasons, calibration_seasons, calibration_weeks
     )
@@ -2276,6 +2320,7 @@ def train_margin_total_model_with_report(
         "metrics": {"holdout": holdout_metrics},
         "pool": pool_summary,
         "tuning_cv": model.tuned_cv_summary,
+        "missing_data": missing_data_summary,
     }
 
     splits: dict[str, Any] = {
@@ -2577,6 +2622,7 @@ def train_blended_margin_total_model_with_report(
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    missing_data_summary = _summarize_missing_data(df)
     split = _split_train_calibration_holdout(
         df,
         kwargs["holdout_seasons"],
@@ -2616,6 +2662,7 @@ def train_blended_margin_total_model_with_report(
         "model_kind": "blend",
         "metrics": {"holdout": holdout_metrics},
         "tuning_cv": model.tuned_cv_summary,
+        "missing_data": missing_data_summary,
     }
     splits = {
         "train_seasons": train_seasons,

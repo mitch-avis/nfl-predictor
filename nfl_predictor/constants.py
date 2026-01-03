@@ -798,6 +798,154 @@ STADIUM_LOCATIONS = {
 # Polars Data Collection Column Definitions
 # ============================================================================
 
+# Team division/conference mapping (modern alignment; applies to all seasons in this repo).
+# Used for record splits (division/conference), divisional matchup indicator,
+# and motivation proxies.
+TEAM_TO_DIVISION: dict[str, str] = {
+    # AFC East
+    "BUF": "AFC East",
+    "MIA": "AFC East",
+    "NE": "AFC East",
+    "NYJ": "AFC East",
+    # AFC North
+    "BAL": "AFC North",
+    "CIN": "AFC North",
+    "CLE": "AFC North",
+    "PIT": "AFC North",
+    # AFC South
+    "HOU": "AFC South",
+    "IND": "AFC South",
+    "JAX": "AFC South",
+    "TEN": "AFC South",
+    # AFC West
+    "DEN": "AFC West",
+    "KC": "AFC West",
+    "LAC": "AFC West",
+    "LV": "AFC West",
+    # NFC East
+    "DAL": "NFC East",
+    "NYG": "NFC East",
+    "PHI": "NFC East",
+    "WSH": "NFC East",
+    # NFC North
+    "CHI": "NFC North",
+    "DET": "NFC North",
+    "GB": "NFC North",
+    "MIN": "NFC North",
+    # NFC South
+    "ATL": "NFC South",
+    "CAR": "NFC South",
+    "NO": "NFC South",
+    "TB": "NFC South",
+    # NFC West
+    "ARI": "NFC West",
+    "LAR": "NFC West",
+    "SEA": "NFC West",
+    "SF": "NFC West",
+}
+
+TEAM_TO_CONFERENCE: dict[str, str] = {
+    team: "AFC" if div.startswith("AFC") else "NFC" for team, div in TEAM_TO_DIVISION.items()
+}
+
+RECORD_FEATURE_COLUMNS = [
+    # Overall
+    "away_wins",
+    "away_losses",
+    "away_ties",
+    "away_games_played",
+    "away_win_pct",
+    "home_wins",
+    "home_losses",
+    "home_ties",
+    "home_games_played",
+    "home_win_pct",
+    # Division
+    "away_division_wins",
+    "away_division_losses",
+    "away_division_ties",
+    "home_division_wins",
+    "home_division_losses",
+    "home_division_ties",
+    # Conference
+    "away_conference_wins",
+    "away_conference_losses",
+    "away_conference_ties",
+    "home_conference_wins",
+    "home_conference_losses",
+    "home_conference_ties",
+]
+
+DIVISIONAL_FEATURE_COLUMNS = [
+    "is_divisional_matchup",
+]
+
+INJURY_POSITION_GROUPS: dict[str, tuple[str, ...]] = {
+    "qb": ("QB",),
+    "rb": ("RB", "FB"),
+    "wr": ("WR",),
+    "te": ("TE",),
+    "ol": ("C", "G", "OG", "OT", "T"),
+    "dl": ("DT", "DE", "DL", "NT"),
+    "lb": ("LB", "ILB", "OLB"),
+    "db": ("CB", "DB", "FS", "SS", "S"),
+}
+
+INJURY_FEATURE_COLUMNS = [
+    "away_injury_burden_total",
+    "home_injury_burden_total",
+    "away_injury_burden_qb",
+    "away_injury_burden_rb",
+    "away_injury_burden_wr",
+    "away_injury_burden_te",
+    "away_injury_burden_ol",
+    "away_injury_burden_dl",
+    "away_injury_burden_lb",
+    "away_injury_burden_db",
+    "home_injury_burden_qb",
+    "home_injury_burden_rb",
+    "home_injury_burden_wr",
+    "home_injury_burden_te",
+    "home_injury_burden_ol",
+    "home_injury_burden_dl",
+    "home_injury_burden_lb",
+    "home_injury_burden_db",
+]
+
+LOOKAHEAD_FEATURE_COLUMNS = [
+    "away_next_opponent_abbr",
+    "away_next_is_home",
+    "away_days_to_next_game",
+    "away_next_location_change",
+    "away_next_is_divisional_matchup",
+    "away_next_opponent_win_pct",
+    "home_next_opponent_abbr",
+    "home_next_is_home",
+    "home_days_to_next_game",
+    "home_next_location_change",
+    "home_next_is_divisional_matchup",
+    "home_next_opponent_win_pct",
+]
+
+MOTIVATION_FEATURE_COLUMNS = [
+    "away_division_rank",
+    "home_division_rank",
+    "away_conference_rank",
+    "home_conference_rank",
+    "away_division_games_behind",
+    "home_division_games_behind",
+    "away_conference_games_behind_seed7",
+    "home_conference_games_behind_seed7",
+    "away_division_clinched_proxy",
+    "home_division_clinched_proxy",
+    "away_division_eliminated_proxy",
+    "home_division_eliminated_proxy",
+    "away_conference_clinched_proxy",
+    "home_conference_clinched_proxy",
+    "away_conference_eliminated_proxy",
+    "home_conference_eliminated_proxy",
+]
+
 # Metadata columns (24 total) - includes game info, teams, venue, and conditions
 POLARS_METADATA_COLUMNS = [
     "game_id",
@@ -813,6 +961,12 @@ POLARS_METADATA_COLUMNS = [
     "home_rest",
     "neutral",
     "division",
+    # Milestones 15-19 feature additions
+    *DIVISIONAL_FEATURE_COLUMNS,
+    *RECORD_FEATURE_COLUMNS,
+    *INJURY_FEATURE_COLUMNS,
+    *LOOKAHEAD_FEATURE_COLUMNS,
+    *MOTIVATION_FEATURE_COLUMNS,
 ]
 
 # ELO rating columns (per team) - these get prefixed with away_/home_

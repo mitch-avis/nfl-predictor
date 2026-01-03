@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,9 +23,17 @@ import numpy as np
 import pandas as pd
 from pandas.errors import ParserError
 
-from nfl_predictor import constants, ml_model
-from nfl_predictor.ml import artifacts, walk_forward
-from nfl_predictor.utils.logger import log
+try:
+    from nfl_predictor import constants, ml_model
+    from nfl_predictor.ml import artifacts, walk_forward
+    from nfl_predictor.utils.logger import log
+except ModuleNotFoundError:  # pragma: no cover
+    # Allow running as a script: `python scripts/golden_command.py`.
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root))
+    from nfl_predictor import constants, ml_model
+    from nfl_predictor.ml import artifacts, walk_forward
+    from nfl_predictor.utils.logger import log
 
 
 def _resolve_team_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
@@ -187,6 +196,52 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=walk_forward.DEFAULT_CALIBRATION_WEEKS,
         help="Walk-forward calibration weeks.",
+    )
+    parser.add_argument(
+        "--reuse-wf-run-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional path to an existing walk-forward run directory containing "
+            "metrics_report.json and metadata.json. If provided, golden_command will copy "
+            "and re-stamp those artifacts instead of re-running walk-forward."
+        ),
+    )
+    parser.add_argument(
+        "--reuse-wf-allow-mismatch",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow reusing a walk-forward run whose metadata dataset_hash does not match the "
+            "current --data-path. Not recommended."
+        ),
+    )
+    parser.add_argument(
+        "--wf-xgb-tree-method",
+        type=str,
+        default=None,
+        help=(
+            "Optional XGBoost tree_method override for walk-forward (e.g., gpu_hist, hist). "
+            "If set, is applied via walk-forward xgb_params_overrides."
+        ),
+    )
+    parser.add_argument(
+        "--wf-xgb-device",
+        type=str,
+        default=None,
+        help=(
+            "Optional XGBoost device override for walk-forward (e.g., cuda, cpu). "
+            "If set, is applied via walk-forward xgb_params_overrides."
+        ),
+    )
+    parser.add_argument(
+        "--wf-xgb-n-jobs",
+        type=int,
+        default=None,
+        help=(
+            "Optional XGBoost n_jobs override for walk-forward. If set, is applied via "
+            "walk-forward xgb_params_overrides."
+        ),
     )
     parser.add_argument(
         "--market-anchor",
@@ -353,35 +408,95 @@ def main() -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # 1) Walk-forward backtest
-    wf_df = walk_forward.load_games(args.data_path)
-    wf_config = walk_forward.WalkForwardConfig(
-        eval_seasons=args.eval_seasons,
-        eval_last_n_seasons=args.eval_last_n_seasons,
-        wf_start_week=args.wf_start_week,
-        calibration=args.calibration,
-        calibration_weeks=args.wf_calibration_weeks,
-        market_anchor=args.market_anchor,
-        market_transform=args.market_transform,
-        market_prob_weight=float(args.market_prob_weight),
-        market_prob_clamp=float(args.market_prob_clamp),
-    )
-    wf_results = walk_forward.run_walk_forward_backtest(wf_df, wf_config)
+    if args.reuse_wf_run_dir is not None:
+        src_dir = Path(args.reuse_wf_run_dir)
+        src_report_path = src_dir / "metrics_report.json"
+        src_metadata_path = src_dir / "metadata.json"
+        if not src_report_path.exists() or not src_metadata_path.exists():
+            log.error(
+                (
+                    "Reuse requested but missing artifacts in %s "
+                    "(expected metrics_report.json and metadata.json)"
+                ),
+                src_dir,
+            )
+            return 2
 
-    wf_config_payload = wf_config.to_dict()
-    wf_config_payload.update({"run_id": run_id, "data_path": str(args.data_path)})
-    wf_config_payload.update(wf_results.get("resolved_settings", {}))
-    wf_config_payload["resolved_eval_seasons"] = wf_results.get("resolved_eval_seasons")
-    wf_config_payload["feature_list"] = wf_results.get("feature_list")
+        src_report = json.loads(src_report_path.read_text())
+        src_metadata = json.loads(src_metadata_path.read_text())
+        src_dataset_hash = src_metadata.get("dataset_hash")
+        if src_dataset_hash != dataset_hash and not bool(args.reuse_wf_allow_mismatch):
+            log.error(
+                "Refusing to reuse walk-forward run: dataset_hash mismatch (src=%s current=%s).",
+                src_dataset_hash,
+                dataset_hash,
+            )
+            log.error("Re-run walk-forward or pass --reuse-wf-allow-mismatch (not recommended).")
+            return 2
 
-    wf_report = walk_forward.build_metrics_report(run_id, created_at, wf_config_payload, wf_results)
-    (run_dir / "metrics_report.json").write_text(json.dumps(wf_report, indent=2, sort_keys=True))
+        reused_from = src_metadata.get("run_id")
+        src_report["run_id"] = run_id
+        src_report["created_at"] = created_at
+        if isinstance(src_report.get("config"), dict):
+            src_report["config"]["run_id"] = run_id
+            src_report["config"]["reused_from"] = reused_from
 
-    wf_config_payload["splits"] = {
-        "resolved_eval_seasons": wf_results.get("resolved_eval_seasons"),
-        "wf_start_week": args.wf_start_week,
-    }
-    wf_metadata = walk_forward.build_metadata(created_at, dataset_hash, wf_config_payload)
-    (run_dir / "metadata.json").write_text(json.dumps(wf_metadata, indent=2, sort_keys=True))
+        src_metadata["run_id"] = run_id
+        src_metadata["created_at"] = created_at
+        if isinstance(src_metadata.get("config"), dict):
+            src_metadata["config"]["run_id"] = run_id
+            src_metadata["config"]["reused_from"] = reused_from
+            src_metadata["config"]["data_path"] = str(args.data_path)
+        src_metadata["dataset_hash"] = dataset_hash
+
+        (run_dir / "metrics_report.json").write_text(
+            json.dumps(src_report, indent=2, sort_keys=True)
+        )
+        (run_dir / "metadata.json").write_text(json.dumps(src_metadata, indent=2, sort_keys=True))
+        log.info("Reused walk-forward artifacts from %s", src_dir)
+    else:
+        wf_overrides: dict[str, object] = {}
+        if args.wf_xgb_tree_method is not None:
+            wf_overrides["tree_method"] = str(args.wf_xgb_tree_method)
+        if args.wf_xgb_device is not None:
+            wf_overrides["device"] = str(args.wf_xgb_device)
+        if args.wf_xgb_n_jobs is not None:
+            wf_overrides["n_jobs"] = int(args.wf_xgb_n_jobs)
+
+        wf_df = walk_forward.load_games(args.data_path)
+        wf_config = walk_forward.WalkForwardConfig(
+            eval_seasons=args.eval_seasons,
+            eval_last_n_seasons=args.eval_last_n_seasons,
+            wf_start_week=args.wf_start_week,
+            calibration=args.calibration,
+            calibration_weeks=args.wf_calibration_weeks,
+            market_anchor=args.market_anchor,
+            market_transform=args.market_transform,
+            market_prob_weight=float(args.market_prob_weight),
+            market_prob_clamp=float(args.market_prob_clamp),
+            xgb_params_overrides=(wf_overrides or None),
+        )
+        wf_results = walk_forward.run_walk_forward_backtest(wf_df, wf_config)
+
+        wf_config_payload = wf_config.to_dict()
+        wf_config_payload.update({"run_id": run_id, "data_path": str(args.data_path)})
+        wf_config_payload.update(wf_results.get("resolved_settings", {}))
+        wf_config_payload["resolved_eval_seasons"] = wf_results.get("resolved_eval_seasons")
+        wf_config_payload["feature_list"] = wf_results.get("feature_list")
+
+        wf_report = walk_forward.build_metrics_report(
+            run_id, created_at, wf_config_payload, wf_results
+        )
+        (run_dir / "metrics_report.json").write_text(
+            json.dumps(wf_report, indent=2, sort_keys=True)
+        )
+
+        wf_config_payload["splits"] = {
+            "resolved_eval_seasons": wf_results.get("resolved_eval_seasons"),
+            "wf_start_week": args.wf_start_week,
+        }
+        wf_metadata = walk_forward.build_metadata(created_at, dataset_hash, wf_config_payload)
+        (run_dir / "metadata.json").write_text(json.dumps(wf_metadata, indent=2, sort_keys=True))
 
     # 2) Train model and save checkpoint into same run dir
     train_optuna = ml_model.OptunaConfig(

@@ -336,6 +336,77 @@ def process_week(
     # Merge schedule with aggregated team stats
     merged = polars_utils.merge_schedule_with_team_stats(week_games, agg_stats)
 
+    # Season-to-date W-L-T record features (time-safe: strictly before this week)
+    records_df = pl.DataFrame()
+    try:
+        records_df = polars_utils.compute_team_records_before_week(
+            schedule_df,
+            season=season,
+            week=week,
+            include_postseason=False,
+        )
+    except ValueError:
+        # Some unit tests use a minimal schedule fixture without scores/game_type.
+        log.debug(
+            "Skipping record feature computation for season %d week %d (schedule incomplete)",
+            season,
+            week,
+        )
+
+    if records_df.height > 0:
+        away_records = records_df.rename(
+            {
+                "team_abbr": "away_abbr",
+                "wins": "away_wins",
+                "losses": "away_losses",
+                "ties": "away_ties",
+                "games_played": "away_games_played",
+                "win_pct": "away_win_pct",
+                "division_wins": "away_division_wins",
+                "division_losses": "away_division_losses",
+                "division_ties": "away_division_ties",
+                "conference_wins": "away_conference_wins",
+                "conference_losses": "away_conference_losses",
+                "conference_ties": "away_conference_ties",
+            }
+        )
+        home_records = records_df.rename(
+            {
+                "team_abbr": "home_abbr",
+                "wins": "home_wins",
+                "losses": "home_losses",
+                "ties": "home_ties",
+                "games_played": "home_games_played",
+                "win_pct": "home_win_pct",
+                "division_wins": "home_division_wins",
+                "division_losses": "home_division_losses",
+                "division_ties": "home_division_ties",
+                "conference_wins": "home_conference_wins",
+                "conference_losses": "home_conference_losses",
+                "conference_ties": "home_conference_ties",
+            }
+        )
+        merged = merged.join(away_records, on="away_abbr", how="left").join(
+            home_records, on="home_abbr", how="left"
+        )
+
+    # Week 1 (and edge cases) may have no record rows; ensure columns exist and fill with 0.
+    merged = merged.with_columns(
+        [
+            (
+                pl.col(c)
+                .fill_null(0.0 if c.endswith("_win_pct") else 0)
+                .cast(pl.Float32 if c.endswith("_win_pct") else pl.Int32)
+                if c in merged.columns
+                else pl.lit(
+                    0.0 if c.endswith("_win_pct") else 0,
+                    dtype=pl.Float32 if c.endswith("_win_pct") else pl.Int32,
+                ).alias(c)
+            )
+            for c in constants.RECORD_FEATURE_COLUMNS
+        ]
+    )
+
     # Merge with ELO ratings
     if elo_df is not None and elo_df.height > 0:
         season_elo = elo_df.filter(pl.col("season") == season)

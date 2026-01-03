@@ -1,4 +1,4 @@
-"""Tests for Milestone 14 missing-data policy.
+"""Tests for missing-data policy.
 
 These tests focus on:
 - invariant ETL schema (missing expected columns are kept as nulls)

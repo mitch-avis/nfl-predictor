@@ -46,6 +46,32 @@ SEASONS_TO_PROCESS = list(range(constants.MIN_SEASON, 2026))
 FORCE_REFRESH = False
 
 
+def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFrame:
+    """Return a record DataFrame with columns prefixed for a specific team side.
+
+    Args:
+        records_df: DataFrame returned by `polars_utils.compute_team_records_before_week`.
+        team_side: Either "away" or "home".
+
+    Returns:
+        DataFrame with `team_abbr` renamed to `{team_side}_abbr` and record columns renamed to
+        `{team_side}_<field>`.
+    """
+
+    if team_side not in {"away", "home"}:
+        raise ValueError(f"team_side must be 'away' or 'home', got: {team_side}")
+
+    prefix = f"{team_side}_"
+    base_cols = [
+        col[len(prefix) :] for col in constants.RECORD_FEATURE_COLUMNS if col.startswith(prefix)
+    ]
+    rename_map = {
+        "team_abbr": f"{team_side}_abbr",
+        **{col: f"{prefix}{col}" for col in base_cols},
+    }
+    return records_df.rename(rename_map)
+
+
 def main() -> None:
     """
     Main entry point for data collection using nflreadpy.
@@ -354,38 +380,8 @@ def process_week(
         )
 
     if records_df.height > 0:
-        away_records = records_df.rename(
-            {
-                "team_abbr": "away_abbr",
-                "wins": "away_wins",
-                "losses": "away_losses",
-                "ties": "away_ties",
-                "games_played": "away_games_played",
-                "win_pct": "away_win_pct",
-                "division_wins": "away_division_wins",
-                "division_losses": "away_division_losses",
-                "division_ties": "away_division_ties",
-                "conference_wins": "away_conference_wins",
-                "conference_losses": "away_conference_losses",
-                "conference_ties": "away_conference_ties",
-            }
-        )
-        home_records = records_df.rename(
-            {
-                "team_abbr": "home_abbr",
-                "wins": "home_wins",
-                "losses": "home_losses",
-                "ties": "home_ties",
-                "games_played": "home_games_played",
-                "win_pct": "home_win_pct",
-                "division_wins": "home_division_wins",
-                "division_losses": "home_division_losses",
-                "division_ties": "home_division_ties",
-                "conference_wins": "home_conference_wins",
-                "conference_losses": "home_conference_losses",
-                "conference_ties": "home_conference_ties",
-            }
-        )
+        away_records = _prefix_team_records(records_df, "away")
+        home_records = _prefix_team_records(records_df, "home")
         merged = merged.join(away_records, on="away_abbr", how="left").join(
             home_records, on="home_abbr", how="left"
         )
@@ -450,6 +446,9 @@ def process_week(
 
     # Merge with TeamRankings
     merged = _merge_team_rankings(merged, season, week, tr_df, prev_tr_df)
+
+    # Divisional rivalry feature
+    merged = polars_utils.add_divisional_matchup_feature(merged)
 
     # Calculate stat differentials
     stats_to_diff = polars_utils.get_stats_for_diff()

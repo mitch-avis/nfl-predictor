@@ -34,7 +34,7 @@ def test_polars_metadata_columns_are_unique_and_include_new_feature_columns() ->
 
     assert len(cols) == len(set(cols)), "METADATA_COLUMNS contains duplicates"
 
-    # Spot-check that milestone feature groups are wired into the schema.
+    # Spot-check that feature groups are wired into the schema.
     for required in (
         *constants.RECORD_FEATURE_COLUMNS,
         *constants.DIVISIONAL_FEATURE_COLUMNS,

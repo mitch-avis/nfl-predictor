@@ -163,6 +163,12 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
     season_dir = tmp_path / str(season)
     season_dir.mkdir(parents=True, exist_ok=True)
 
+    monkeypatch.setattr(
+        teamrankings,
+        "_get_required_tr_columns",
+        lambda: {"team_abbr", "week", "predictive_rating"},
+    )
+
     week1_df = pl.DataFrame(
         {
             "team_abbr": ["AAA", "BBB"],
@@ -172,12 +178,34 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
     )
     week1_df.write_csv(season_dir / f"{season}_week_01_team_rankings.csv")
 
+    # Seed cached current week and a future week with stale values.
+    week2_cached = pl.DataFrame(
+        {
+            "team_abbr": ["AAA", "BBB"],
+            "week": [2, 2],
+            "predictive_rating": [0.5, 0.6],
+        }
+    )
+    week2_cached.write_csv(season_dir / f"{season}_week_02_team_rankings.csv")
+
+    week3_cached = pl.DataFrame(
+        {
+            "team_abbr": ["AAA", "BBB"],
+            "week": [3, 3],
+            "predictive_rating": [9.9, 9.8],
+        }
+    )
+    week3_cached.write_csv(season_dir / f"{season}_week_03_team_rankings.csv")
+
     monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
     monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 3)
     monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
 
+    scraped_weeks: list[int] = []
+
     def fake_scrape(week, _week_date, **_kwargs):
         """Fake scrape function returning dummy data."""
+        scraped_weeks.append(int(week))
         return pl.DataFrame(
             {
                 "team_abbr": ["AAA", "BBB"],
@@ -194,7 +222,23 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
         current_week=2,
     )
 
+    # Only the current week should be scraped; future weeks should be filled from it.
+    assert scraped_weeks == [2]
+
     weeks = sorted(combined["week"].unique().to_list())
     assert 1 in weeks
     assert 2 in weeks
     assert 3 in weeks
+
+    # Current week should reflect the fresh scrape (not the seeded cached values).
+    w2 = combined.filter(pl.col("week") == 2).sort("team_abbr")
+    assert w2["predictive_rating"].to_list() == [1.1, 2.2]
+
+    # Future week should be overwritten to match current week's freshly scraped values.
+    w3 = combined.filter(pl.col("week") == 3).sort("team_abbr")
+    assert w3["predictive_rating"].to_list() == [1.1, 2.2]
+
+    # And the cached file should be overwritten on disk as well.
+    week3_path = season_dir / f"{season}_week_03_team_rankings.csv"
+    reloaded_week3 = pl.read_csv(week3_path).sort("team_abbr")
+    assert reloaded_week3["predictive_rating"].to_list() == [1.1, 2.2]

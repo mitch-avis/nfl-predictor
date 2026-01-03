@@ -69,6 +69,12 @@ def test_with_xgb_early_stopping_params_with_callbacks(monkeypatch) -> None:
     assert updated["early_stopping_rounds"] == 7
     assert "callbacks" in updated
 
+    callbacks = cast(list[Any], updated["callbacks"])
+    assert callbacks
+    callback = callbacks[0]
+    if hasattr(callback, "save_best"):
+        assert callback.save_best is False
+
 
 def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:
     """XGB params early stopping fallback logs when needed."""

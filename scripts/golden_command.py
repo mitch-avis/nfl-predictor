@@ -561,20 +561,49 @@ def main() -> int:
     if bool(args.write_power_rankings) and args.predict_path is not None:
         try:
             predict_df = pd.read_csv(args.predict_path)
-            scored = ml_model.predict_week_margin_total(
-                train_result.model,
-                games_path=args.predict_path,
-                output_path=None,
-                pretty_output=False,
-                score_rounding="none",
-            )
-            target_columns = ml_model.get_target_columns(predict_df)
-            scored = _add_ratings(scored, target_columns)
-            rankings = _build_pregame_power_rankings(scored)
             if "season" in predict_df.columns and "week" in predict_df.columns:
                 season = int(predict_df["season"].iloc[0])
                 week = int(predict_df["week"].iloc[0])
+
+                completed_df = pd.read_csv(args.data_path)
+                completed_df = completed_df[
+                    (completed_df["season"] == season)
+                    & (completed_df["game_type"].astype(str).str.upper() == "REG")
+                ]
+                completed_season_path = run_dir / "_rankings_completed_season.csv"
+                completed_df.to_csv(completed_season_path, index=False)
+
+                completed_scored = ml_model.predict_week_margin_total(
+                    train_result.model,
+                    games_path=completed_season_path,
+                    output_path=None,
+                    pretty_output=False,
+                    score_rounding="none",
+                )
+                completed_scored = _add_ratings(
+                    completed_scored, ml_model.get_target_columns(completed_df)
+                )
+
+                future_scored = ml_model.predict_week_margin_total(
+                    train_result.model,
+                    games_path=args.predict_path,
+                    output_path=None,
+                    pretty_output=False,
+                    score_rounding="none",
+                )
+                future_scored = _add_ratings(future_scored, ml_model.get_target_columns(predict_df))
+
+                season_scored = pd.concat(
+                    [completed_scored, future_scored], ignore_index=True, sort=False
+                )
+                rankings = _build_pregame_power_rankings(season_scored)
                 rankings = rankings[(rankings["season"] == season) & (rankings["week"] == week)]
+            else:
+                log.warning(
+                    "Power rankings require season/week columns in predict CSV: %s",
+                    args.predict_path,
+                )
+                rankings = pd.DataFrame()
             out_rankings = run_dir / "power_rankings.csv"
             rankings.to_csv(out_rankings, index=False)
         except (OSError, ValueError, KeyError, ParserError) as exc:  # pragma: no cover

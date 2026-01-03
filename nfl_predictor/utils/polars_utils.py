@@ -156,12 +156,12 @@ def compute_team_records_before_week(
         ]
     ).with_columns(
         [
-            (pl.col("team_division") == pl.col("opp_division")).fill_null(False).alias(
-                "is_division_game"
-            ),
-            (pl.col("team_conference") == pl.col("opp_conference")).fill_null(False).alias(
-                "is_conference_game"
-            ),
+            (pl.col("team_division") == pl.col("opp_division"))
+            .fill_null(False)
+            .alias("is_division_game"),
+            (pl.col("team_conference") == pl.col("opp_conference"))
+            .fill_null(False)
+            .alias("is_conference_game"),
         ]
     )
 

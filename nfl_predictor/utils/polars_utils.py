@@ -1605,12 +1605,14 @@ def select_final_columns(df: pl.DataFrame) -> pl.DataFrame:
     """
     final_order = build_final_column_order()
 
-    # Filter to columns that exist in the DataFrame
-    available_cols = [c for c in final_order if c in df.columns]
-
-    # Log any expected columns that are missing
     missing_cols = [c for c in final_order if c not in df.columns]
     if missing_cols:
-        log.debug("Missing expected columns: %s", missing_cols[:10])
+        # Enforce invariant schema: add missing expected columns as nulls.
+        df = df.with_columns([pl.lit(None).alias(c) for c in missing_cols])
+        log.info(
+            "Schema enforcement: added %d missing columns as nulls (showing up to 10): %s",
+            len(missing_cols),
+            missing_cols[:10],
+        )
 
-    return df.select(available_cols)
+    return df.select(final_order)

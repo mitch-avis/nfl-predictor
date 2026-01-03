@@ -83,7 +83,9 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
 
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
     monkeypatch.setattr(
-        ml_model_training._ml_model, "train_margin_total_model", fake_train_margin_total_model
+        ml_model_training,
+        "train_margin_total_model",
+        fake_train_margin_total_model,
     )
     monkeypatch.setattr(ml_model_training, "_predict_xgb", fake_predict_xgb)
 

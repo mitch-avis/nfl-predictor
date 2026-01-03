@@ -15,6 +15,7 @@ import pandas as pd
 import polars as pl
 
 from nfl_predictor import constants, ml_model
+from nfl_predictor.ml import ml_model_training
 from nfl_predictor.utils import polars_utils
 
 
@@ -104,7 +105,7 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
             market_columns=[],
         )
 
-    monkeypatch.setattr(ml_model, "train_margin_total_model", lambda **_: _DummyModel())
+    monkeypatch.setattr(ml_model_training, "train_margin_total_model", lambda **_: _DummyModel())
 
     optuna = ml_model.OptunaConfig(
         enabled=False,

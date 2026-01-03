@@ -62,6 +62,158 @@ NUMERIC_DTYPES = {
 }
 
 
+def compute_team_records_before_week(
+    schedule_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    include_postseason: bool = False,
+) -> pl.DataFrame:
+    """Compute season-to-date W-L-T records for each team strictly before a week.
+
+    This function is time-safe: it only uses games with `week < week` and requires scores
+    to be present.
+
+    Args:
+        schedule_df: Schedule DataFrame containing at least season/week/team/score columns.
+        season: Season year to compute records for.
+        week: Week number for which records should reflect games strictly before this week.
+        include_postseason: If True, include non-REG games in the record computation.
+
+    Returns:
+        DataFrame with one row per team (`team_abbr`) and record columns:
+        wins/losses/ties, division_*, conference_*.
+    """
+
+    required = {"season", "week", "game_type", "away_abbr", "home_abbr", "away_score", "home_score"}
+    missing = sorted(required - set(schedule_df.columns))
+    if missing:
+        raise ValueError(f"schedule_df missing required columns: {missing}")
+
+    prior_games = schedule_df.filter(
+        (pl.col("season") == season)
+        & (pl.col("week") < week)
+        & (pl.col("away_score").is_not_null())
+        & (pl.col("home_score").is_not_null())
+    )
+    if not include_postseason:
+        prior_games = prior_games.filter(pl.col("game_type") == "REG")
+
+    if prior_games.height == 0:
+        return pl.DataFrame(
+            {
+                "team_abbr": pl.Series([], dtype=pl.Utf8),
+                "wins": pl.Series([], dtype=pl.Int32),
+                "losses": pl.Series([], dtype=pl.Int32),
+                "ties": pl.Series([], dtype=pl.Int32),
+                "division_wins": pl.Series([], dtype=pl.Int32),
+                "division_losses": pl.Series([], dtype=pl.Int32),
+                "division_ties": pl.Series([], dtype=pl.Int32),
+                "conference_wins": pl.Series([], dtype=pl.Int32),
+                "conference_losses": pl.Series([], dtype=pl.Int32),
+                "conference_ties": pl.Series([], dtype=pl.Int32),
+            }
+        )
+
+    base = prior_games.select(
+        [
+            "away_abbr",
+            "home_abbr",
+            "away_score",
+            "home_score",
+        ]
+    )
+
+    home_rows = base.select(
+        [
+            pl.col("home_abbr").alias("team_abbr"),
+            pl.col("away_abbr").alias("opponent_abbr"),
+            (pl.col("home_score") > pl.col("away_score")).cast(pl.Int32).alias("win"),
+            (pl.col("home_score") < pl.col("away_score")).cast(pl.Int32).alias("loss"),
+            (pl.col("home_score") == pl.col("away_score")).cast(pl.Int32).alias("tie"),
+        ]
+    )
+    away_rows = base.select(
+        [
+            pl.col("away_abbr").alias("team_abbr"),
+            pl.col("home_abbr").alias("opponent_abbr"),
+            (pl.col("away_score") > pl.col("home_score")).cast(pl.Int32).alias("win"),
+            (pl.col("away_score") < pl.col("home_score")).cast(pl.Int32).alias("loss"),
+            (pl.col("away_score") == pl.col("home_score")).cast(pl.Int32).alias("tie"),
+        ]
+    )
+
+    team_games = pl.concat([home_rows, away_rows], how="vertical")
+
+    division_map = constants.TEAM_TO_DIVISION
+    conference_map = constants.TEAM_TO_CONFERENCE
+    team_games = team_games.with_columns(
+        [
+            pl.col("team_abbr").replace(division_map, default=None).alias("team_division"),
+            pl.col("opponent_abbr").replace(division_map, default=None).alias("opp_division"),
+            pl.col("team_abbr").replace(conference_map, default=None).alias("team_conference"),
+            pl.col("opponent_abbr").replace(conference_map, default=None).alias("opp_conference"),
+        ]
+    ).with_columns(
+        [
+            (pl.col("team_division") == pl.col("opp_division")).fill_null(False).alias(
+                "is_division_game"
+            ),
+            (pl.col("team_conference") == pl.col("opp_conference")).fill_null(False).alias(
+                "is_conference_game"
+            ),
+        ]
+    )
+
+    return (
+        team_games.group_by("team_abbr")
+        .agg(
+            [
+                pl.col("win").sum().cast(pl.Int32).alias("wins"),
+                pl.col("loss").sum().cast(pl.Int32).alias("losses"),
+                pl.col("tie").sum().cast(pl.Int32).alias("ties"),
+                pl.when(pl.col("is_division_game"))
+                .then(pl.col("win"))
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int32)
+                .alias("division_wins"),
+                pl.when(pl.col("is_division_game"))
+                .then(pl.col("loss"))
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int32)
+                .alias("division_losses"),
+                pl.when(pl.col("is_division_game"))
+                .then(pl.col("tie"))
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int32)
+                .alias("division_ties"),
+                pl.when(pl.col("is_conference_game"))
+                .then(pl.col("win"))
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int32)
+                .alias("conference_wins"),
+                pl.when(pl.col("is_conference_game"))
+                .then(pl.col("loss"))
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int32)
+                .alias("conference_losses"),
+                pl.when(pl.col("is_conference_game"))
+                .then(pl.col("tie"))
+                .otherwise(0)
+                .sum()
+                .cast(pl.Int32)
+                .alias("conference_ties"),
+            ]
+        )
+        .sort("team_abbr")
+    )
+
+
 def _is_numeric_dtype(dtype: DataType) -> bool:
     """Return True if dtype is numeric."""
     return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES

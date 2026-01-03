@@ -1,3 +1,5 @@
+"""Quarterback IDs for NFL player tracking data."""
+
 # Active quarterback IDs: names, draft years, and numbers for player tracking
 ACTIVE_QB_IDS = {
     "00-0007059": {"draft_number": 263, "draft_year": 2000, "name": "Mark Hartsell"},

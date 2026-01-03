@@ -266,6 +266,11 @@ def add_divisional_matchup_feature(df: pl.DataFrame) -> pl.DataFrame:
 def load_injuries(seasons: list[int]) -> pl.DataFrame:
     """Load NFLverse injuries via nflreadpy.
 
+    Note:
+        NFLverse participation/injury data for in-progress seasons is not updated during the
+        season (recent seasons are published after the postseason completes). Therefore, this
+        loader intentionally skips the current season by default.
+
     Args:
         seasons: Seasons to load.
 
@@ -273,10 +278,22 @@ def load_injuries(seasons: list[int]) -> pl.DataFrame:
         Polars DataFrame of injuries. If injuries are unavailable, returns an empty DataFrame.
     """
 
+    current_season, _ = get_current_nfl_week()
+    completed_seasons = [s for s in seasons if s < current_season]
+    skipped = [s for s in seasons if s >= current_season]
+    if skipped:
+        log.info(
+            "Skipping injuries for in-progress season(s) %s (current_season=%d)",
+            skipped,
+            current_season,
+        )
+    if not completed_seasons:
+        return pl.DataFrame()
+
     try:
-        return nfl.load_injuries(seasons=seasons)
+        return nfl.load_injuries(seasons=completed_seasons)
     except (OSError, RuntimeError, ValueError) as exc:  # pragma: no cover
-        log.warning("Failed to load injuries for seasons=%s: %s", seasons, exc)
+        log.warning("Failed to load injuries for seasons=%s: %s", completed_seasons, exc)
         return pl.DataFrame()
 
 

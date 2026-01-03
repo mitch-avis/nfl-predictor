@@ -6,7 +6,7 @@ for use in prediction models. It uses nflreadpy as the primary data source and
 Polars for high-performance data manipulation.
 
 Key Features:
-    - Collects historical game data from 2003 to present
+    - Collects historical game data from 2006 to present (configurable via `constants.MIN_SEASON`)
     - Includes both regular season (weeks 1-18) and playoff games (WC, DIV, CON, SB)
     - Aggregates per-game team statistics into rolling averages
     - Merges ELO ratings and TeamRankings data for enhanced features

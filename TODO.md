@@ -97,24 +97,23 @@ Rules:
 - week 1 values are zero
 - postseason is excluded unless explicitly enabled
 
-- [ ] Implement record features for away and home teams (prefix columns `away_` and `home_`).
-- [ ] Add schema entries in `constants.py` and include in the ML feature set.
-- [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection.py`
-  - [ ] `nfl_predictor/utils/polars_utils.py`
-  - [ ] `nfl_predictor/constants.py`
-  - [ ] `tests/test_record_features.py`
+- [x] Implement record features for away and home teams (prefix columns `away_` and `home_`).
+- [x] Record columns are defined in `constants.py` and included in the ML feature range.
+- [x] Primary files touched:
+  - [x] `nfl_predictor/data_collection.py`
+  - [x] `nfl_predictor/utils/polars_utils.py`
+  - [x] `tests/test_record_features.py`
 
 ### Tests (Milestone 15)
 
-- [ ] Unit test: computed season-to-date records match known records for a small fixture season/week
+- [x] Unit test: computed season-to-date records match known records for a small fixture season/week
   range.
-- [ ] Unit test: `division_* + non_division_*` reconciles to `overall_*` when applicable.
-- [ ] Unit test: week 1 records are zero for all teams.
+- [x] Unit test: divisional records reconcile with overall when a team's prior games are divisional.
+- [x] Unit test: week 1 records are zero for all teams.
 
 ### Acceptance (Milestone 15)
 
-- [ ] Datasets include record features and they are available for training and prediction.
+- [x] Datasets include record features and they are available for training and prediction.
 
 ---
 

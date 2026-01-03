@@ -217,3 +217,56 @@ Acceptance:
 - [x] Market-only model removed when anchoring sufficed.
 - [x] Blending weights constrained where applicable.
 - [x] Interval coverage diagnostics implemented.
+
+---
+
+## Completed milestones (20-22)
+
+### Milestone 20 - Blocked/time-series cross-validation for tuning
+
+- [x] Implement blocked CV at the season-week level for hyperparameter tuning and model selection.
+- [x] Ensure folds are strictly time-ordered (train < validation).
+- [x] Integrate CV into Optuna objectives so tuning does not overfit a single season holdout.
+- [x] Report CV mean/std metrics in tuning CV summary (stored under `metrics_report.json`).
+
+Tests:
+
+- [x] CV fold generation is strictly time-ordered.
+- [x] CV fold generation is deterministic.
+
+Acceptance:
+
+- [x] Optuna tuning evaluates parameters using time-series CV over season-week timepoints.
+
+Primary files:
+
+- [x] `nfl_predictor/ml/ml_model_core.py`
+- [x] `tests/test_time_series_cv.py`
+
+### Milestone 21 - Unit tests and code coverage hardening
+
+- [x] `pytest-cov` is configured and coverage is reported by default.
+- [x] Coverage threshold is enforced (current floor: 80%).
+- [x] Tests exist across ETL joins and feature derivations introduced in prior milestones.
+
+Acceptance:
+
+- [x] `pytest --cov=nfl_predictor --cov-report=term-missing --cov-fail-under=80` passes.
+
+Primary files:
+
+- [x] `setup.cfg`
+- [x] `tests/`
+
+### Milestone 22 - Remove deprecated modules from the import surface
+
+- [x] No code or docs reference deprecated modules.
+- [x] Compatibility facades import cleanly.
+
+Acceptance:
+
+- [x] The package imports cleanly and no deprecated modules are referenced.
+
+Primary files:
+
+- [x] `tests/test_imports.py`

@@ -392,7 +392,7 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
     """
     # Identify stat columns to copy from opponent (exclude identifiers and duplicate-prone stats)
     exclude_cols = {"season", "week", "team_abbr", "opponent_abbr", "season_type", "games_played"}
-    exclude_cols.update(constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS)
+    exclude_cols.update(constants.EXCLUDE_FROM_OPPONENT_STATS)
 
     stat_cols = [col for col in team_stats_df.columns if col not in exclude_cols]
 
@@ -695,8 +695,8 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
 def _get_required_tr_columns() -> set[str]:
     """Get the set of required TeamRankings columns."""
     required = {"team_abbr", "week"}
-    required.update(constants.POLARS_TR_RATINGS)
-    required.update(constants.POLARS_TR_STATS)
+    required.update(constants.TR_RATINGS)
+    required.update(constants.TR_STATS)
     return required
 
 
@@ -1256,7 +1256,7 @@ def get_stat_columns() -> list[str]:
     Returns:
         List of stat column names
     """
-    return constants.POLARS_NFLREADPY_STATS.copy()
+    return constants.NFLREADPY_STATS.copy()
 
 
 def get_elo_columns() -> list[str]:
@@ -1266,7 +1266,7 @@ def get_elo_columns() -> list[str]:
     Returns:
         List of ELO column names
     """
-    return constants.POLARS_ELO_COLUMNS.copy()
+    return constants.ELO_COLUMNS.copy()
 
 
 def get_tr_columns() -> list[str]:
@@ -1276,7 +1276,7 @@ def get_tr_columns() -> list[str]:
     Returns:
         List of TeamRankings column names
     """
-    return constants.POLARS_TR_RATINGS.copy() + constants.POLARS_TR_STATS.copy()
+    return constants.TR_RATINGS.copy() + constants.TR_STATS.copy()
 
 
 def calculate_game_result(row_dict: dict) -> Optional[float]:
@@ -1484,7 +1484,7 @@ def get_stats_for_diff() -> list[str]:
     all_stats.extend(get_stat_columns())
 
     # Opponent stats (excluding duplicates)
-    excluded = set(constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS)
+    excluded = set(constants.EXCLUDE_FROM_OPPONENT_STATS)
     for stat in get_stat_columns():
         if stat not in excluded:
             all_stats.append(f"opponent_{stat}")
@@ -1529,7 +1529,7 @@ def build_final_column_order() -> list[str]:
     columns = []
 
     # 1. Metadata columns (fixed order)
-    columns.extend(constants.POLARS_METADATA_COLUMNS)
+    columns.extend(constants.METADATA_COLUMNS)
 
     # Get each column category separately
     elo_cols = get_elo_columns()
@@ -1557,7 +1557,7 @@ def build_final_column_order() -> list[str]:
 
     # Generate opponent versions ONLY for nflreadpy stats (not ELO or TR columns)
     # These are created by add_per_game_opponent_stats()
-    excluded = set(constants.POLARS_EXCLUDE_FROM_OPPONENT_STATS)
+    excluded = set(constants.EXCLUDE_FROM_OPPONENT_STATS)
     nflreadpy_non_opponent = [s for s in nflreadpy_stats if not s.startswith("opponent_")]
     for stat in nflreadpy_non_opponent:
         opp_stat = f"opponent_{stat}"
@@ -1585,10 +1585,10 @@ def build_final_column_order() -> list[str]:
     columns.extend([f"{s}_diff" for s in sorted(all_stats_for_diff)])
 
     # 7. Lines/odds
-    columns.extend(constants.POLARS_LINES_COLUMNS)
+    columns.extend(constants.LINES_COLUMNS)
 
     # 8. Results
-    columns.extend(constants.POLARS_RESULT_COLUMNS)
+    columns.extend(constants.RESULT_COLUMNS)
 
     return columns
 

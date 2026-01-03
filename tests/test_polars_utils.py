@@ -157,9 +157,7 @@ def test_calculate_stat_differentials_skips_non_numeric() -> None:
 def test_build_final_column_order_metadata_first() -> None:
     """Final column ordering starts with metadata columns."""
     final_order = polars_utils.build_final_column_order()
-    assert (
-        final_order[: len(constants.POLARS_METADATA_COLUMNS)] == constants.POLARS_METADATA_COLUMNS
-    )
+    assert final_order[: len(constants.METADATA_COLUMNS)] == constants.METADATA_COLUMNS
 
 
 def test_build_final_column_order_has_no_duplicates_and_includes_lines_results() -> None:
@@ -167,5 +165,5 @@ def test_build_final_column_order_has_no_duplicates_and_includes_lines_results()
     final_order = polars_utils.build_final_column_order()
     assert len(final_order) == len(set(final_order))
 
-    for col in (*constants.POLARS_LINES_COLUMNS, *constants.POLARS_RESULT_COLUMNS):
+    for col in (*constants.LINES_COLUMNS, *constants.RESULT_COLUMNS):
         assert col in final_order

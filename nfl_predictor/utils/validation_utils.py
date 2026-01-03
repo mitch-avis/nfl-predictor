@@ -134,11 +134,7 @@ def validate_dataframe(df: pl.DataFrame) -> ValidationResult:
     errors = []
     warnings = []
 
-    required = (
-        constants.POLARS_METADATA_COLUMNS
-        + constants.POLARS_LINES_COLUMNS
-        + constants.POLARS_RESULT_COLUMNS
-    )
+    required = constants.METADATA_COLUMNS + constants.LINES_COLUMNS + constants.RESULT_COLUMNS
     missing = validate_required_columns(df, required)
     if missing:
         errors.append(f"missing required columns: {missing}")

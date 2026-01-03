@@ -1152,7 +1152,7 @@ def _build_prediction_output(
 
     team_cols = [
         col
-        for col in constants.POLARS_METADATA_COLUMNS
+        for col in constants.METADATA_COLUMNS
         if col.endswith("_abbr") and col in output_df.columns
     ]
     away_team_col = next((col for col in team_cols if col.startswith("away_")), None)

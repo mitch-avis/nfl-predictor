@@ -151,10 +151,16 @@ def compute_team_records_before_week(
     conference_map = constants.TEAM_TO_CONFERENCE
     team_games = team_games.with_columns(
         [
-            pl.col("team_abbr").replace(division_map, default=None).alias("team_division"),
-            pl.col("opponent_abbr").replace(division_map, default=None).alias("opp_division"),
-            pl.col("team_abbr").replace(conference_map, default=None).alias("team_conference"),
-            pl.col("opponent_abbr").replace(conference_map, default=None).alias("opp_conference"),
+            pl.col("team_abbr").replace_strict(division_map, default=None).alias("team_division"),
+            pl.col("opponent_abbr")
+            .replace_strict(division_map, default=None)
+            .alias("opp_division"),
+            pl.col("team_abbr")
+            .replace_strict(conference_map, default=None)
+            .alias("team_conference"),
+            pl.col("opponent_abbr")
+            .replace_strict(conference_map, default=None)
+            .alias("opp_conference"),
         ]
     ).with_columns(
         [
@@ -213,9 +219,9 @@ def compute_team_records_before_week(
 
     aggregated = aggregated.with_columns(
         [
-            (pl.col("wins") + pl.col("losses") + pl.col("ties")).cast(pl.Int32).alias(
-                "games_played"
-            ),
+            (pl.col("wins") + pl.col("losses") + pl.col("ties"))
+            .cast(pl.Int32)
+            .alias("games_played"),
             pl.when(pl.col("wins") + pl.col("losses") + pl.col("ties") > 0)
             .then(
                 (pl.col("wins") / (pl.col("wins") + pl.col("losses") + pl.col("ties"))).cast(
@@ -228,6 +234,33 @@ def compute_team_records_before_week(
     )
 
     return aggregated.sort("team_abbr")
+
+
+def add_divisional_matchup_feature(df: pl.DataFrame) -> pl.DataFrame:
+    """Add an `is_divisional_matchup` feature for each game.
+
+    A divisional matchup is defined as away/home teams sharing the same division, based on
+    `constants.TEAM_TO_DIVISION`.
+
+    Args:
+        df: DataFrame containing `away_abbr` and `home_abbr`.
+
+    Returns:
+        DataFrame with `is_divisional_matchup` added as an Int32 0/1 column.
+    """
+
+    required = {"away_abbr", "home_abbr"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"df missing required columns: {missing}")
+
+    division_map = constants.TEAM_TO_DIVISION
+    away_div = pl.col("away_abbr").replace_strict(division_map, default=None)
+    home_div = pl.col("home_abbr").replace_strict(division_map, default=None)
+
+    return df.with_columns(
+        [(away_div == home_div).fill_null(False).cast(pl.Int32).alias("is_divisional_matchup")]
+    )
 
 
 def _is_numeric_dtype(dtype: DataType) -> bool:

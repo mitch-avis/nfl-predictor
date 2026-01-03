@@ -43,6 +43,7 @@ from nfl_predictor import constants
 from nfl_predictor.ml import artifacts
 from nfl_predictor.utils import ml_utils
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.scraping_utils import get_current_nfl_week
 
 DEFAULT_XGB_PARAMS = {
     "objective": "reg:squarederror",
@@ -513,6 +514,59 @@ def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
         "total_rows": int(len(df)),
         "groups": {name: _group_summary(cols) for name, cols in groups.items()},
     }
+
+
+def _should_enable_injury_features(
+    injury_features: Optional[bool],
+    predict_df: Optional[pd.DataFrame],
+    *,
+    current_season: int,
+) -> bool:
+    """Resolve whether injury burden features should be used.
+
+    When predicting an in-progress season, NFLverse participation/injury data does not update
+    during the season, so the prediction dataset will typically have all-null injury columns.
+    In that case, we default to disabling injury features to avoid training a model that depends
+    on unavailable in-season inputs.
+
+    Args:
+        injury_features: Explicit user override (True/False) or None for auto.
+        predict_df: Optional prediction dataset DataFrame.
+        current_season: Current NFL season inferred from today's date.
+
+    Returns:
+        True if injury features should be enabled.
+    """
+
+    if injury_features is not None:
+        return bool(injury_features)
+    if predict_df is None:
+        return True
+
+    cols = [c for c in constants.INJURY_FEATURE_COLUMNS if c in predict_df.columns]
+    if cols and predict_df[cols].isna().to_numpy().all():
+        return False
+
+    if "season" in predict_df.columns:
+        season_values = pd.to_numeric(predict_df["season"], errors="coerce")
+        max_season = season_values.max() if not season_values.empty else None
+        if pd.notna(max_season) and int(max_season) >= int(current_season):
+            return False
+
+    return True
+
+
+def _drop_injury_feature_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Remove injury burden feature columns from a dataset.
+
+    This is used to hard-disable the injury feature group for training/tuning so the resulting
+    preprocessor and model never rely on them.
+    """
+
+    present = [c for c in constants.INJURY_FEATURE_COLUMNS if c in df.columns]
+    if not present:
+        return df, []
+    return df.drop(columns=present), present
 
 
 def _filter_season_bounds(
@@ -1884,6 +1938,7 @@ def train_score_model(
     data_path: Path,
     holdout_seasons: int,
     include_market: bool,
+    include_injuries: bool,
     max_cardinality_ratio: float,
     market_prob_config: Optional[MarketProbConfig],
     min_season: Optional[int] = None,
@@ -1898,6 +1953,11 @@ def train_score_model(
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
+
+    if not include_injuries:
+        df, dropped = _drop_injury_feature_columns(df)
+        if dropped:
+            log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
     train_df, holdout_df, holdout = _split_by_season(df, holdout_seasons)
@@ -2007,6 +2067,7 @@ def train_margin_total_model(
     calibration_seasons: int,
     calibration_weeks: int,
     include_market: bool,
+    include_injuries: bool,
     max_cardinality_ratio: float,
     win_prob_calibration: str,
     optuna_config: OptunaConfig,
@@ -2022,6 +2083,11 @@ def train_margin_total_model(
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
+
+    if not include_injuries:
+        df, dropped = _drop_injury_feature_columns(df)
+        if dropped:
+            log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
     (
@@ -2356,6 +2422,7 @@ def train_blended_margin_total_model(
     market_transform: bool,
     market_anchor: bool,
     market_prob_config: Optional[MarketProbConfig],
+    include_injuries: bool,
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -2370,6 +2437,11 @@ def train_blended_margin_total_model(
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
+
+    if not include_injuries:
+        df, dropped = _drop_injury_feature_columns(df)
+        if dropped:
+            log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
     (
@@ -2838,6 +2910,15 @@ def _parse_args() -> argparse.Namespace:
         help="Exclude market features like spreads/totals/moneylines.",
     )
     parser.add_argument(
+        "--injury-features",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Include injury burden features. Default: auto (disabled when predicting an "
+            "in-progress season where injury inputs are unavailable)."
+        ),
+    )
+    parser.add_argument(
         "--market-transform",
         action="store_true",
         help=("Use transformed market features (implied probs, home margin) instead of raw lines."),
@@ -3063,6 +3144,23 @@ def main() -> None:
     """CLI entry point for training and prediction."""
     args = _parse_args()
 
+    predict_df: Optional[pd.DataFrame] = None
+    if args.predict_path is not None:
+        predict_df = _load_games(args.predict_path)
+
+    current_season, _ = get_current_nfl_week()
+    include_injuries = _should_enable_injury_features(
+        args.injury_features,
+        predict_df,
+        current_season=current_season,
+    )
+    if not include_injuries:
+        log.info(
+            "Injury features disabled (auto=%s). QB Elo remains available as a QB availability "
+            "proxy.",
+            args.injury_features is None,
+        )
+
     created_at = artifacts.now_utc_iso()
     dataset_hash = artifacts.sha256_file(args.data_path)
 
@@ -3179,6 +3277,7 @@ def main() -> None:
             data_path=args.data_path,
             holdout_seasons=args.holdout_seasons,
             include_market=not args.exclude_market,
+            include_injuries=include_injuries,
             max_cardinality_ratio=args.max_cardinality_ratio,
             market_prob_config=market_prob_config,
             min_season=args.min_season,
@@ -3211,6 +3310,7 @@ def main() -> None:
             calibration_seasons=args.calibration_seasons,
             calibration_weeks=args.calibration_weeks,
             include_market=not args.exclude_market,
+            include_injuries=include_injuries,
             max_cardinality_ratio=args.max_cardinality_ratio,
             win_prob_calibration=args.win_prob_calibration,
             optuna_config=optuna_config,
@@ -3249,6 +3349,7 @@ def main() -> None:
             market_transform=args.market_transform,
             market_anchor=args.market_anchor,
             market_prob_config=market_prob_config,
+            include_injuries=include_injuries,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,

@@ -263,6 +263,637 @@ def add_divisional_matchup_feature(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def load_injuries(seasons: list[int]) -> pl.DataFrame:
+    """Load NFLverse injuries via nflreadpy.
+
+    Args:
+        seasons: Seasons to load.
+
+    Returns:
+        Polars DataFrame of injuries. If injuries are unavailable, returns an empty DataFrame.
+    """
+
+    try:
+        return nfl.load_injuries(seasons=seasons)
+    except (OSError, RuntimeError, ValueError) as exc:  # pragma: no cover
+        log.warning("Failed to load injuries for seasons=%s: %s", seasons, exc)
+        return pl.DataFrame()
+
+
+def compute_team_week_injury_burdens(
+    injuries_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    include_postseason: bool = False,
+) -> pl.DataFrame:
+    """Compute per-team injury burden aggregates for a given season/week.
+
+    Burden is computed from NFLverse `report_status` using
+    `constants.INJURY_REPORT_STATUS_WEIGHTS`.
+
+    Args:
+        injuries_df: Injuries DataFrame from nflreadpy.
+        season: Season year.
+        week: Week number.
+        include_postseason: If True, include non-REG injury rows.
+
+    Returns:
+        DataFrame with columns: team_abbr, injury_burden_total, and positional burden columns.
+    """
+
+    required = {"season", "week", "game_type", "team", "position", "report_status"}
+    missing = sorted(required - set(injuries_df.columns))
+    if missing:
+        raise ValueError(f"injuries_df missing required columns: {missing}")
+
+    df = injuries_df.filter((pl.col("season") == season) & (pl.col("week") == week))
+    if not include_postseason:
+        df = df.filter(pl.col("game_type") == "REG")
+
+    if df.height == 0:
+        return pl.DataFrame()
+
+    df = normalize_team_column(df, "team").rename({"team": "team_abbr"})
+
+    weights = {k.lower(): float(v) for k, v in constants.INJURY_REPORT_STATUS_WEIGHTS.items()}
+    df = df.with_columns(
+        [
+            pl.col("report_status")
+            .cast(pl.Utf8)
+            .str.to_lowercase()
+            .replace_strict(weights, default=0.0)
+            .cast(pl.Float32)
+            .alias("burden_weight")
+        ]
+    )
+
+    group_aggs: list[pl.Expr] = []
+    for group, positions in constants.INJURY_POSITION_GROUPS.items():
+        group_aggs.append(
+            pl.when(pl.col("position").is_in(list(positions)))
+            .then(pl.col("burden_weight"))
+            .otherwise(0.0)
+            .sum()
+            .cast(pl.Float32)
+            .alias(f"injury_burden_{group}")
+        )
+
+    return (
+        df.group_by("team_abbr")
+        .agg(
+            [
+                pl.col("burden_weight").sum().cast(pl.Float32).alias("injury_burden_total"),
+                *group_aggs,
+            ]
+        )
+        .sort("team_abbr")
+    )
+
+
+def add_injury_burden_features(
+    games_df: pl.DataFrame,
+    injuries_df: pl.DataFrame | None,
+    *,
+    season: int,
+    week: int,
+) -> pl.DataFrame:
+    """Join away/home injury burden features onto a game DataFrame.
+
+    Missing-data behavior:
+    - If injuries are unavailable (None/empty or no rows for the season/week), the injury columns
+      are added as nulls.
+    - If injuries are available, teams with no listed injuries in that week get 0.0 burden.
+
+    Args:
+        games_df: Game rows with `away_abbr` and `home_abbr`.
+        injuries_df: Injuries DataFrame, or None if unavailable.
+        season: Season year.
+        week: Week number.
+
+    Returns:
+        `games_df` with all `constants.INJURY_FEATURE_COLUMNS` present.
+    """
+
+    def _ensure_null_cols(df: pl.DataFrame) -> pl.DataFrame:
+        return df.with_columns(
+            [
+                (pl.col(c) if c in df.columns else pl.lit(None, dtype=pl.Float32).alias(c))
+                for c in constants.INJURY_FEATURE_COLUMNS
+            ]
+        )
+
+    if injuries_df is None or injuries_df.height == 0:
+        return _ensure_null_cols(games_df)
+
+    try:
+        team_week = compute_team_week_injury_burdens(injuries_df, season=season, week=week)
+    except ValueError:
+        return _ensure_null_cols(games_df)
+
+    if team_week.height == 0:
+        return _ensure_null_cols(games_df)
+
+    def _prefixed(team_side: str) -> pl.DataFrame:
+        prefix = f"{team_side}_"
+        base_cols = [
+            col[len(prefix) :] for col in constants.INJURY_FEATURE_COLUMNS if col.startswith(prefix)
+        ]
+        rename_map = {
+            "team_abbr": f"{team_side}_abbr",
+            **{col: f"{prefix}{col}" for col in base_cols},
+        }
+        return team_week.rename(rename_map)
+
+    away = _prefixed("away")
+    home = _prefixed("home")
+    out = games_df.join(away, on="away_abbr", how="left").join(home, on="home_abbr", how="left")
+
+    out = out.with_columns(
+        [pl.col(c).fill_null(0.0).cast(pl.Float32) for c in constants.INJURY_FEATURE_COLUMNS]
+    )
+    return out
+
+
+def compute_team_next_week_context(
+    schedule_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    include_postseason: bool = False,
+) -> pl.DataFrame:
+    """Compute per-team next-week opponent context for a given season/week.
+
+    This uses only schedule information (no game results) and is time-safe.
+
+    Args:
+        schedule_df: Schedule DataFrame with season/week/game_type/date/away_abbr/home_abbr.
+        season: Season year.
+        week: Current week number.
+        include_postseason: If True, include non-REG schedule rows.
+
+    Returns:
+        DataFrame keyed by `team_abbr` with next-week opponent fields.
+    """
+
+    required = {"season", "week", "game_type", "date", "away_abbr", "home_abbr"}
+    missing = sorted(required - set(schedule_df.columns))
+    if missing:
+        raise ValueError(f"schedule_df missing required columns: {missing}")
+
+    schedule = schedule_df.filter(pl.col("season") == season)
+    if not include_postseason:
+        schedule = schedule.filter(pl.col("game_type") == "REG")
+
+    current = schedule.filter(pl.col("week") == week).select(["date", "away_abbr", "home_abbr"])
+    nxt = schedule.filter(pl.col("week") == week + 1).select(["date", "away_abbr", "home_abbr"])
+
+    current_team = pl.concat(
+        [
+            current.select(
+                [
+                    pl.col("date").alias("current_date"),
+                    pl.col("away_abbr").alias("team_abbr"),
+                    pl.col("home_abbr").alias("opponent_abbr"),
+                    pl.lit(0, dtype=pl.Int32).alias("current_is_home"),
+                ]
+            ),
+            current.select(
+                [
+                    pl.col("date").alias("current_date"),
+                    pl.col("home_abbr").alias("team_abbr"),
+                    pl.col("away_abbr").alias("opponent_abbr"),
+                    pl.lit(1, dtype=pl.Int32).alias("current_is_home"),
+                ]
+            ),
+        ],
+        how="vertical",
+    )
+
+    next_team = pl.concat(
+        [
+            nxt.select(
+                [
+                    pl.col("date").alias("next_date"),
+                    pl.col("away_abbr").alias("team_abbr"),
+                    pl.col("home_abbr").alias("next_opponent_abbr"),
+                    pl.lit(0, dtype=pl.Int32).alias("next_is_home"),
+                ]
+            ),
+            nxt.select(
+                [
+                    pl.col("date").alias("next_date"),
+                    pl.col("home_abbr").alias("team_abbr"),
+                    pl.col("away_abbr").alias("next_opponent_abbr"),
+                    pl.lit(1, dtype=pl.Int32).alias("next_is_home"),
+                ]
+            ),
+        ],
+        how="vertical",
+    )
+
+    joined = current_team.join(next_team, on="team_abbr", how="left")
+
+    division_map = constants.TEAM_TO_DIVISION
+    next_is_div = pl.col("team_abbr").replace_strict(division_map, default=None) == pl.col(
+        "next_opponent_abbr"
+    ).replace_strict(division_map, default=None)
+
+    return joined.with_columns(
+        [
+            (pl.col("next_date") - pl.col("current_date"))
+            .dt.total_days()
+            .cast(pl.Int32)
+            .alias("days_to_next_game"),
+            (pl.col("current_is_home") != pl.col("next_is_home"))
+            .cast(pl.Int32)
+            .alias("next_location_change"),
+            pl.when(pl.col("next_opponent_abbr").is_null())
+            .then(pl.lit(None, dtype=pl.Int32))
+            .otherwise(next_is_div.fill_null(False).cast(pl.Int32))
+            .alias("next_is_divisional_matchup"),
+        ]
+    ).select(
+        [
+            "team_abbr",
+            "next_opponent_abbr",
+            "next_is_home",
+            "days_to_next_game",
+            "next_location_change",
+            "next_is_divisional_matchup",
+        ]
+    )
+
+
+def add_lookahead_features(
+    games_df: pl.DataFrame,
+    schedule_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    include_postseason: bool = False,
+) -> pl.DataFrame:
+    """Join lookahead/trap-style features (next-week context) onto game rows.
+
+    Next opponent win% is taken from the current week’s pre-game record features present in
+    `games_df` (e.g., `away_win_pct` / `home_win_pct`), avoiding any use of future results.
+
+    Missing-data behavior:
+    - If schedule context is missing for the week or the next week, columns are added as nulls.
+
+    Args:
+        games_df: Game rows for a single week.
+        schedule_df: Season schedule.
+        season: Season year.
+        week: Week number.
+        include_postseason: If True, include non-REG schedule rows.
+
+    Returns:
+        `games_df` with all `constants.LOOKAHEAD_FEATURE_COLUMNS` present.
+    """
+
+    def _ensure_null_cols(df: pl.DataFrame) -> pl.DataFrame:
+        return df.with_columns(
+            [
+                (
+                    pl.col(c)
+                    if c in df.columns
+                    else (
+                        pl.lit(None, dtype=pl.Utf8).alias(c)
+                        if c.endswith("_abbr")
+                        else pl.lit(None, dtype=pl.Float32).alias(c)
+                    )
+                )
+                for c in constants.LOOKAHEAD_FEATURE_COLUMNS
+            ]
+        )
+
+    try:
+        team_context = compute_team_next_week_context(
+            schedule_df,
+            season=season,
+            week=week,
+            include_postseason=include_postseason,
+        )
+    except ValueError:
+        return _ensure_null_cols(games_df)
+
+    if team_context.height == 0:
+        return _ensure_null_cols(games_df)
+
+    # Build a per-team win% table from the current week’s rows.
+    win_pct_rows = []
+    if "away_abbr" in games_df.columns and "away_win_pct" in games_df.columns:
+        win_pct_rows.append(
+            games_df.select(
+                pl.col("away_abbr").alias("team_abbr"),
+                pl.col("away_win_pct").cast(pl.Float32).alias("win_pct"),
+            )
+        )
+    if "home_abbr" in games_df.columns and "home_win_pct" in games_df.columns:
+        win_pct_rows.append(
+            games_df.select(
+                pl.col("home_abbr").alias("team_abbr"),
+                pl.col("home_win_pct").cast(pl.Float32).alias("win_pct"),
+            )
+        )
+
+    if win_pct_rows:
+        team_win_pct = pl.concat(win_pct_rows, how="vertical").unique(subset=["team_abbr"])
+        team_context = team_context.join(
+            team_win_pct.rename(
+                {"team_abbr": "next_opponent_abbr", "win_pct": "next_opponent_win_pct"}
+            ),
+            on="next_opponent_abbr",
+            how="left",
+        )
+    else:
+        team_context = team_context.with_columns(
+            pl.lit(None, dtype=pl.Float32).alias("next_opponent_win_pct")
+        )
+
+    away_ctx = team_context.rename(
+        {
+            "team_abbr": "away_abbr",
+            "next_opponent_abbr": "away_next_opponent_abbr",
+            "next_is_home": "away_next_is_home",
+            "days_to_next_game": "away_days_to_next_game",
+            "next_location_change": "away_next_location_change",
+            "next_is_divisional_matchup": "away_next_is_divisional_matchup",
+            "next_opponent_win_pct": "away_next_opponent_win_pct",
+        }
+    )
+    home_ctx = team_context.rename(
+        {
+            "team_abbr": "home_abbr",
+            "next_opponent_abbr": "home_next_opponent_abbr",
+            "next_is_home": "home_next_is_home",
+            "days_to_next_game": "home_days_to_next_game",
+            "next_location_change": "home_next_location_change",
+            "next_is_divisional_matchup": "home_next_is_divisional_matchup",
+            "next_opponent_win_pct": "home_next_opponent_win_pct",
+        }
+    )
+
+    out = games_df.join(away_ctx, on="away_abbr", how="left").join(
+        home_ctx, on="home_abbr", how="left"
+    )
+    return _ensure_null_cols(out)
+
+
+def compute_team_standings_before_week(
+    schedule_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    include_postseason: bool = False,
+) -> pl.DataFrame:
+    """Compute standings-based features strictly before a week.
+
+    This function is time-safe: it only uses games with `week < week` and requires scores.
+
+    Args:
+        schedule_df: Schedule DataFrame with season/week/game_type/teams/scores.
+        season: Season year.
+        week: Week number.
+        include_postseason: If True, include non-REG games.
+
+    Returns:
+        Per-team standings table with ranks, games-behind, and simple clinch/elimination proxies.
+    """
+
+    required = {"season", "week", "game_type", "away_abbr", "home_abbr", "away_score", "home_score"}
+    missing = sorted(required - set(schedule_df.columns))
+    if missing:
+        raise ValueError(f"schedule_df missing required columns: {missing}")
+
+    # Base records from prior games; then expand to all teams with 0s.
+    records = compute_team_records_before_week(
+        schedule_df,
+        season=season,
+        week=week,
+        include_postseason=include_postseason,
+    )
+    all_teams = pl.DataFrame({"team_abbr": constants.TEAM_ABBR})
+    records = all_teams.join(records, on="team_abbr", how="left")
+    records = records.with_columns(
+        [
+            pl.col("wins").fill_null(0).cast(pl.Int32),
+            pl.col("losses").fill_null(0).cast(pl.Int32),
+            pl.col("ties").fill_null(0).cast(pl.Int32),
+            pl.col("games_played").fill_null(0).cast(pl.Int32),
+            pl.col("win_pct").fill_null(0.0).cast(pl.Float32),
+        ]
+    )
+
+    records = records.with_columns(
+        [
+            pl.col("team_abbr")
+            .replace_strict(constants.TEAM_TO_DIVISION, default=None)
+            .alias("division"),
+            pl.col("team_abbr")
+            .replace_strict(constants.TEAM_TO_CONFERENCE, default=None)
+            .alias("conference"),
+        ]
+    )
+
+    # Remaining games proxy (regular season only).
+    reg_weeks = constants.get_regular_season_weeks(season)
+    records = records.with_columns(
+        (pl.lit(reg_weeks, dtype=pl.Int32) - pl.col("games_played")).alias("games_remaining")
+    ).with_columns((pl.col("wins") + pl.col("games_remaining")).alias("max_wins"))
+
+    # Division rank by win_pct then wins.
+    records = records.with_columns(
+        pl.struct(["win_pct", "wins"])
+        .rank(method="dense", descending=True)
+        .over("division")
+        .cast(pl.Int32)
+        .alias("division_rank")
+    )
+    records = records.with_columns(
+        pl.struct(["win_pct", "wins"])
+        .rank(method="dense", descending=True)
+        .over("conference")
+        .cast(pl.Int32)
+        .alias("conference_rank")
+    )
+
+    # Division games behind: (leader_w - team_w + team_l - leader_l) / 2
+    division_leaders = (
+        records.sort(["division", "win_pct", "wins"], descending=[False, True, True])
+        .group_by("division")
+        .agg(
+            [
+                pl.col("wins").first().alias("division_leader_wins"),
+                pl.col("losses").first().alias("division_leader_losses"),
+            ]
+        )
+    )
+    records = records.join(division_leaders, on="division", how="left").with_columns(
+        (
+            (
+                (pl.col("division_leader_wins") - pl.col("wins"))
+                + (pl.col("losses") - pl.col("division_leader_losses"))
+            )
+            / 2.0
+        )
+        .cast(pl.Float32)
+        .alias("division_games_behind")
+    )
+
+    # Conference cutoff (seed 7) by win_pct then wins.
+    seed7 = (
+        records.sort(["conference", "win_pct", "wins"], descending=[False, True, True])
+        .with_columns(pl.int_range(1, pl.len() + 1).over("conference").alias("conf_order"))
+        .filter(pl.col("conf_order") == 7)
+        .select(
+            [
+                pl.col("conference"),
+                pl.col("wins").alias("seed7_wins"),
+            ]
+        )
+    )
+    records = records.join(seed7, on="conference", how="left").with_columns(
+        (((pl.col("seed7_wins") - pl.col("wins")).cast(pl.Float32))).alias(
+            "conference_games_behind_seed7"
+        )
+    )
+
+    # Division clinch/elimination proxies using wins + remaining games.
+    division_max_other = records.group_by("division").agg(
+        pl.col("max_wins").max().alias("division_max_wins_any")
+    )
+    # To compute "max wins among others", join back and compare.
+    records = records.join(division_max_other, on="division", how="left")
+    records = records.with_columns(
+        [
+            pl.when(
+                (pl.col("division_rank") == 1)
+                & (pl.col("wins") > (pl.col("division_max_wins_any") - pl.col("games_remaining")))
+            )
+            .then(1)
+            .otherwise(0)
+            .cast(pl.Int32)
+            .alias("division_clinched_proxy"),
+            pl.when(pl.col("max_wins") < pl.col("division_leader_wins"))
+            .then(1)
+            .otherwise(0)
+            .cast(pl.Int32)
+            .alias("division_eliminated_proxy"),
+        ]
+    )
+
+    # Conference clinch/elimination proxies relative to seed7 wins.
+    # If a team cannot reach the current seed7 wins, mark eliminated.
+    records = records.with_columns(
+        [
+            pl.when(pl.col("seed7_wins").is_null())
+            .then(pl.lit(None, dtype=pl.Int32))
+            .otherwise((pl.col("max_wins") < pl.col("seed7_wins")).cast(pl.Int32))
+            .alias("conference_eliminated_proxy"),
+            pl.when(pl.col("seed7_wins").is_null())
+            .then(pl.lit(None, dtype=pl.Int32))
+            .otherwise(
+                (pl.col("wins") > pl.col("seed7_wins") + pl.col("games_remaining")).cast(pl.Int32)
+            )
+            .alias("conference_clinched_proxy"),
+        ]
+    )
+
+    return records.select(
+        [
+            "team_abbr",
+            "division_rank",
+            "conference_rank",
+            "division_games_behind",
+            "conference_games_behind_seed7",
+            "division_clinched_proxy",
+            "division_eliminated_proxy",
+            "conference_clinched_proxy",
+            "conference_eliminated_proxy",
+        ]
+    )
+
+
+def add_motivation_features(
+    games_df: pl.DataFrame,
+    schedule_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    include_postseason: bool = False,
+) -> pl.DataFrame:
+    """Join motivation/standings proxy features onto game rows.
+
+    Missing-data behavior:
+    - If schedule schema is incomplete (e.g., missing scores), motivation columns are added as
+      nulls.
+
+    Args:
+        games_df: Week game rows.
+        schedule_df: Season schedule.
+        season: Season year.
+        week: Week number.
+        include_postseason: If True, include non-REG games.
+
+    Returns:
+        `games_df` with `constants.MOTIVATION_FEATURE_COLUMNS` present.
+    """
+
+    def _ensure_null_cols(df: pl.DataFrame) -> pl.DataFrame:
+        return df.with_columns(
+            [
+                (
+                    pl.col(c)
+                    if c in df.columns
+                    else pl.lit(None, dtype=pl.Float32 if "behind" in c else pl.Int32).alias(c)
+                )
+                for c in constants.MOTIVATION_FEATURE_COLUMNS
+            ]
+        )
+
+    try:
+        standings = compute_team_standings_before_week(
+            schedule_df,
+            season=season,
+            week=week,
+            include_postseason=include_postseason,
+        )
+    except ValueError:
+        return _ensure_null_cols(games_df)
+
+    away = standings.rename(
+        {
+            "team_abbr": "away_abbr",
+            "division_rank": "away_division_rank",
+            "conference_rank": "away_conference_rank",
+            "division_games_behind": "away_division_games_behind",
+            "conference_games_behind_seed7": "away_conference_games_behind_seed7",
+            "division_clinched_proxy": "away_division_clinched_proxy",
+            "division_eliminated_proxy": "away_division_eliminated_proxy",
+            "conference_clinched_proxy": "away_conference_clinched_proxy",
+            "conference_eliminated_proxy": "away_conference_eliminated_proxy",
+        }
+    )
+    home = standings.rename(
+        {
+            "team_abbr": "home_abbr",
+            "division_rank": "home_division_rank",
+            "conference_rank": "home_conference_rank",
+            "division_games_behind": "home_division_games_behind",
+            "conference_games_behind_seed7": "home_conference_games_behind_seed7",
+            "division_clinched_proxy": "home_division_clinched_proxy",
+            "division_eliminated_proxy": "home_division_eliminated_proxy",
+            "conference_clinched_proxy": "home_conference_clinched_proxy",
+            "conference_eliminated_proxy": "home_conference_eliminated_proxy",
+        }
+    )
+
+    out = games_df.join(away, on="away_abbr", how="left").join(home, on="home_abbr", how="left")
+    return _ensure_null_cols(out)
+
+
 def _is_numeric_dtype(dtype: DataType) -> bool:
     """Return True if dtype is numeric."""
     return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES

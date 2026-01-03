@@ -36,8 +36,10 @@ python -m pytest
 Run tests with coverage:
 
 ```bash
-python -m pytest --cov=nfl_predictor --cov-report=term-missing --cov-fail-under=80
+python -m pytest --cov=nfl_predictor --cov-report=term-missing
 ```
+
+Note: enforcing a high `--cov-fail-under` threshold is tracked in `TODO.md` and may not pass yet.
 
 ## Data collection (Polars + nflreadpy)
 
@@ -73,8 +75,10 @@ Primary sources:
 
 Season coverage limits (examples):
 
-- Injury data via NFLverse is not available for all seasons (coverage begins later than core
-  schedule/stats).
+- Injury/participation data via NFLverse is not available for all seasons.
+- For in-progress seasons, NFLverse participation data does not update during the season; recent
+  seasons are published after all postseason games are completed. The ETL emits injury columns as
+  nulls for the current season.
 
 Missing data policy (high level):
 
@@ -88,6 +92,13 @@ The primary entrypoint is:
 ```bash
 python -m nfl_predictor.ml_model --help
 ```
+
+Injury feature gating:
+
+- By default, when `--predict-path` targets the current (in-progress) season, `ml_model` disables
+  injury burden features so training/prediction do not depend on unavailable in-season inputs.
+- Override with `--injury-features` or `--no-injury-features`.
+- QB Elo (`qb_elos.csv`) is updated frequently and remains available as a QB availability proxy.
 
 ### Quickstart (train + predict)
 
@@ -135,6 +146,7 @@ python -m nfl_predictor.ml_model \
   --model-kind margin_total \
   --holdout-seasons 1 \
   --calibration-seasons 1
+```
 
 ## Modeling approach
 

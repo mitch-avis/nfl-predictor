@@ -60,6 +60,27 @@ Note: `*_ml.csv` files include model-ready engineered features.
 Historical weeks load from cached artifacts where available; the current week may require network
 access for external sources handled by `nfl_predictor/utils/scraping_utils.py`.
 
+## Data sources + missing data
+
+This project is designed to keep an invariant output schema across seasons, even when some
+sources are missing historically.
+
+Primary sources:
+
+- `nflreadpy` (NFLverse): schedules, results, and team-level stats.
+- Local cached CSVs under `data/` for Elo/market data when present.
+- TeamRankings web scrape for select rates not available in NFLverse (see ETL logs).
+
+Season coverage limits (examples):
+
+- Injury data via NFLverse is not available for all seasons (coverage begins later than core
+  schedule/stats).
+
+Missing data policy (high level):
+
+- ETL emits all expected columns; missing sources become nulls and/or defined defaults.
+- The ML pipeline is expected to tolerate nulls (imputation and/or model-native missing handling).
+
 ## Training + prediction
 
 The primary entrypoint is:

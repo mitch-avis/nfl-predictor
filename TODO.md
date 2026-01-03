@@ -23,63 +23,63 @@ Execution loop for each milestone:
 
 ## Milestone 12 - Documentation + repository cleanup (Polars-only narrative)
 
-- [ ] Remove documentation references to deprecated data collection and utility modules.
-- [ ] Ensure all docs describe `nfl_predictor/data_collection.py` as the authoritative ETL entrypoint.
-- [ ] Add a short "Data sources + missing data" section describing fallbacks and season coverage limits.
+- [x] Remove documentation references to deprecated data collection and utility modules.
+- [x] Ensure all docs describe `nfl_predictor/data_collection.py` as the authoritative ETL entrypoint.
+- [x] Add a short "Data sources + missing data" section describing fallbacks and season coverage limits.
 - [ ] Primary files likely touched:
-  - [ ] `.github/copilot-instructions.md`
-  - [ ] `README.md`
-  - [ ] `TODO.md`
+  - [x] `.github/copilot-instructions.md`
+  - [x] `README.md`
+  - [x] `TODO.md`
   - [ ] `ARCHIVE.md`
 
 ### Acceptance (Milestone 12)
 
-- [ ] Docs reference only the Polars+nflreadpy pipeline and current ML entrypoints.
+- [x] Docs reference only the Polars+nflreadpy pipeline and current ML entrypoints.
 
 ---
 
 ## Milestone 13 - constants.py cleanup and organization
 
-- [ ] Audit `nfl_predictor/constants.py` for unused constants and remove them.
-- [ ] Group constants into clear sections (paths, season/week rules, team mappings, feature names, defaults).
-- [ ] Ensure schema/feature lists are centralized and used everywhere (no hard-coded columns).
+- [x] Audit `nfl_predictor/constants.py` for unused constants and remove them.
+- [x] Group constants into clear sections (paths, season/week rules, team mappings, feature names, defaults).
+- [x] Ensure schema/feature lists are centralized and used everywhere (no hard-coded columns).
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/constants.py`
-  - [ ] `tests/test_constants.py`
+  - [x] `nfl_predictor/constants.py`
+  - [x] `tests/test_constants.py`
 
 ### Tests (Milestone 13)
 
-- [ ] Unit test: team alias mapping resolves to canonical abbreviations.
-- [ ] Unit test: schema lists contain no duplicates.
-- [ ] Unit test: required output columns exist in the ML datasets.
+- [x] Unit test: team alias mapping resolves to canonical abbreviations.
+- [x] Unit test: schema lists contain no duplicates.
+- [x] Unit test: required output columns exist in the ML datasets.
 
 ### Acceptance (Milestone 13)
 
-- [ ] `constants.py` is organized, minimal, and referenced consistently across ETL/ML/docs.
+- [x] `constants.py` is organized, minimal, and referenced consistently across ETL/ML/docs.
 
 ---
 
 ## Milestone 14 - Missing data handling across seasons
 
-- [ ] Inventory sources with limited historical coverage (injuries, markets, etc.).
-- [ ] Define a per-feature-group missing-data policy: null, default, or carry-forward.
-- [ ] Implement ETL fallbacks so output schema is invariant across seasons.
-- [ ] Ensure ML preprocessing handles nulls explicitly and logs fallback usage counts.
+- [x] Inventory sources with limited historical coverage (injuries, markets, etc.).
+- [x] Define a per-feature-group missing-data policy: null, default, or carry-forward.
+- [x] Implement ETL fallbacks so output schema is invariant across seasons.
+- [x] Ensure ML preprocessing handles nulls explicitly and logs fallback usage counts.
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/data_collection.py`
-  - [ ] `nfl_predictor/utils/polars_utils.py`
-  - [ ] `nfl_predictor/ml_model.py`
-  - [ ] `tests/test_missing_data_policy.py`
+  - [x] `nfl_predictor/data_collection.py`
+  - [x] `nfl_predictor/utils/polars_utils.py`
+  - [x] `nfl_predictor/ml_model.py`
+  - [x] `tests/test_missing_data_policy.py`
 
 ### Tests (Milestone 14)
 
-- [ ] Unit test: ETL produces the same columns for a season with missing sources and one without.
-- [ ] Unit test: model train/predict completes when injury/market fields are null.
-- [ ] Unit test: fallback counters appear in metrics/report outputs.
+- [x] Unit test: ETL produces the same columns for a season with missing sources and one without.
+- [x] Unit test: model train/predict completes when injury/market fields are null.
+- [x] Unit test: fallback counters appear in metrics/report outputs.
 
 ### Acceptance (Milestone 14)
 
-- [ ] Pipeline and ML runs succeed across the full historical range with consistent schema.
+- [x] Pipeline and ML runs succeed across the full historical range with consistent schema.
 
 ---
 

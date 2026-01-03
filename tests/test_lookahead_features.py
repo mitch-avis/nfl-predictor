@@ -87,6 +87,13 @@ def test_add_lookahead_features_missing_next_week_yields_nulls() -> None:
 
     out = polars_utils.add_lookahead_features(games_df, schedule_df, season=2024, week=18)
 
+    assert out.schema["away_next_opponent_abbr"] == pl.Utf8
+    assert out.schema["away_next_is_home"] == pl.Int32
+    assert out.schema["away_days_to_next_game"] == pl.Int32
+    assert out.schema["away_next_location_change"] == pl.Int32
+    assert out.schema["away_next_is_divisional_matchup"] == pl.Int32
+    assert out.schema["away_next_opponent_win_pct"] == pl.Float32
+
     row = out.row(0, named=True)
     assert row["away_next_opponent_abbr"] is None
     assert row["away_next_is_home"] is None

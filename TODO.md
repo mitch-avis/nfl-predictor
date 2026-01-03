@@ -28,46 +28,46 @@ Execution loop for each milestone:
 - [x] Integrate CV into Optuna objectives so tuning does not overfit a single season holdout.
 - [x] Report CV mean/std metrics in `metrics_report.json`.
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/ml_model.py`
-  - [ ] `tests/test_time_series_cv.py`
+  - [x] `nfl_predictor/ml_model.py`
+  - [x] `tests/test_time_series_cv.py`
 
 ### Tests (Milestone 20)
 
-- [ ] Unit test: CV split generator never places a later week in training for an
+- [x] Unit test: CV split generator never places a later week in training for an
   earlier-week validation fold.
-- [ ] Unit test: CV is deterministic under a fixed random seed.
+- [x] Unit test: CV is deterministic under a fixed random seed.
 
 ### Acceptance (Milestone 20)
 
-- [ ] Tuning uses time-series CV and produces more stable out-of-sample results.
+- [x] Tuning uses time-series CV and produces more stable out-of-sample results.
 
 ---
 
 ## Milestone 21 - Unit tests and code coverage hardening
 
-- [ ] Add `pytest-cov` configuration to report coverage locally and in CI.
-- [ ] Set and enforce a coverage threshold (target: 80%+; raise over time).
-- [ ] Add tests for critical ETL joins and feature derivations introduced in Milestones 14-20.
+- [x] Add `pytest-cov` configuration to report coverage locally and in CI.
+- [x] Set and enforce a coverage threshold (target: 80%+; raise over time).
+- [x] Add tests for critical ETL joins and feature derivations introduced in Milestones 14-20.
 - [ ] Primary files likely touched:
-  - [ ] `tests/`
-  - [ ] `pyproject.toml` and/or `setup.cfg`
+  - [x] `tests/`
+  - [x] `pyproject.toml` and/or `setup.cfg`
   - [ ] CI config (if present)
 
 ### Acceptance (Milestone 21)
 
-- [ ] Running `pytest --cov=nfl_predictor --cov-report=term-missing` passes and meets the coverage threshold.
+- [x] Running `pytest --cov=nfl_predictor --cov-report=term-missing` passes and meets the coverage threshold.
 
 ---
 
 ## Milestone 22 - Remove deprecated modules from the import surface
 
-- [ ] Ensure no imports reference deprecated modules.
-- [ ] Remove deprecated modules from packaging/exports if they remain unused.
+- [x] Ensure no imports reference deprecated modules.
+- [x] Remove deprecated modules from packaging/exports if they remain unused.
 - [ ] Primary files likely touched:
-  - [ ] `nfl_predictor/__init__.py`
-  - [ ] `setup.cfg` / `setup.py`
-  - [ ] `tests/test_imports.py`
+  - [x] `nfl_predictor/__init__.py`
+  - [x] `setup.cfg` / `setup.py`
+  - [x] `tests/test_imports.py`
 
 ### Acceptance (Milestone 22)
 
-- [ ] The package imports cleanly and no deprecated modules are referenced in code or docs.
+- [x] The package imports cleanly and no deprecated modules are referenced in code or docs.

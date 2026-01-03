@@ -104,3 +104,46 @@ def test_motivation_features_invariant_schema_on_missing_scores() -> None:
     for col in constants.MOTIVATION_FEATURE_COLUMNS:
         assert col in out.columns
         assert out[col].to_list() == [None]
+
+
+def test_motivation_division_clinch_proxy_uses_max_wins_other() -> None:
+    """Division clinch proxy should consider other teams' max possible wins.
+
+    This test uses a minimal scheduled season for the AFC East teams so the leader can clinch
+    early in a toy setup.
+    """
+
+    season = 2024
+
+    schedule = _schedule_rows(
+        {
+            "season": season,
+            "week": 1,
+            "game_type": "REG",
+            "away_abbr": "BUF",
+            "home_abbr": "MIA",
+            "away_score": 21,
+            "home_score": 14,
+        },
+        {
+            "season": season,
+            "week": 1,
+            "game_type": "REG",
+            "away_abbr": "NE",
+            "home_abbr": "NYJ",
+            "away_score": 0,
+            "home_score": 0,
+        },
+    )
+
+    games_df = _games_to_predict("BUF", "MIA")
+    out = polars_utils.add_motivation_features(
+        games_df,
+        schedule,
+        season=season,
+        week=2,
+        include_postseason=False,
+    )
+
+    assert out["away_division_rank"].to_list() == [1]
+    assert out["away_division_clinched_proxy"].to_list() == [1]

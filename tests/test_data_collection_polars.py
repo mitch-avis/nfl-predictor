@@ -3,7 +3,7 @@
 import polars as pl
 import pytest
 
-from nfl_predictor.data_collection_polars import _merge_team_rankings, process_week
+from nfl_predictor.data_collection import _merge_team_rankings, process_week
 
 
 def test_process_week_uses_fallback_stats_for_week1() -> None:

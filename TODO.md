@@ -81,6 +81,10 @@ Execution loop for each milestone:
 
 - [x] Pipeline and ML runs succeed across the full historical range with consistent schema.
 
+Note: NFLverse participation/injury data for in-progress seasons does not update during the
+season; recent seasons are published after postseason. In-season runs will emit injury columns as
+nulls and the ML pipeline should not rely on them by default.
+
 ---
 
 ## Milestone 15 - Season-to-date record features (W-L-T, division, conference)

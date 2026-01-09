@@ -12,12 +12,20 @@ Example:
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
 
-from nfl_predictor.ml import leakage_audit
-from nfl_predictor.utils.logger import log
+try:
+    from nfl_predictor.ml import leakage_audit
+    from nfl_predictor.utils.logger import log
+except ModuleNotFoundError:  # pragma: no cover
+    # Allow running as a script: `python scripts/golden_command.py`.
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root))
+    from nfl_predictor.ml import leakage_audit
+    from nfl_predictor.utils.logger import log
 
 
 def _parse_args() -> argparse.Namespace:

@@ -6,14 +6,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from nfl_predictor import constants, ml_model
-from nfl_predictor.utils.logger import log
+try:
+    from nfl_predictor import constants, ml_model
+    from nfl_predictor.utils.logger import log
+except ModuleNotFoundError:  # pragma: no cover
+    # Allow running as a script: `python scripts/golden_command.py`.
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root))
+    from nfl_predictor import constants, ml_model
+    from nfl_predictor.utils.logger import log
 
 
 def _resolve_team_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
@@ -365,4 +373,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    main()
     main()

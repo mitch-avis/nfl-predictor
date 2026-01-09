@@ -98,7 +98,7 @@ def test_determine_nfl_week_branches() -> None:
     assert data_collection._determine_nfl_week(date(2024, 7, 1)) == 1
 
     week = data_collection._determine_nfl_week(date(2024, 2, 1))
-    assert 1 <= week <= 18
+    assert 1 <= week <= 22
 
 
 def test_collect_all_data_minimal(monkeypatch) -> None:

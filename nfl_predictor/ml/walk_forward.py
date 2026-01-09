@@ -50,6 +50,7 @@ class WalkForwardConfig:
     market_anchor: bool = True
     market_prob_weight: float = 0.0
     market_prob_clamp: float = 0.0
+    include_quantiles: bool = True
     max_cardinality_ratio: float = 0.5
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
     feature_end: str = ml_model.DEFAULT_FEATURE_END_COLUMN
@@ -70,6 +71,7 @@ class WalkForwardConfig:
             "market_anchor": self.market_anchor,
             "market_prob_weight": self.market_prob_weight,
             "market_prob_clamp": self.market_prob_clamp,
+            "include_quantiles": self.include_quantiles,
             "max_cardinality_ratio": self.max_cardinality_ratio,
             "feature_start": self.feature_start,
             "feature_end": self.feature_end,
@@ -258,6 +260,7 @@ def run_walk_forward_backtest(
         "market_anchor": market_anchor,
         "market_prob_weight": config.market_prob_weight,
         "market_prob_clamp": config.market_prob_clamp,
+        "include_quantiles": config.include_quantiles,
     }
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
@@ -323,25 +326,29 @@ def run_walk_forward_backtest(
             early_stopping_rounds=config.early_stopping_rounds,
         )
 
-        quantiles = ml_model._validate_quantiles(ml_model.DEFAULT_QUANTILES)
-        margin_quantiles = ml_model._fit_quantile_models(
-            x_train,
-            y_margin_train,
-            params,
-            quantiles,
-            x_eval=x_calibration,
-            y_eval=y_margin_calibration,
-            early_stopping_rounds=config.early_stopping_rounds,
-        )
-        total_quantiles = ml_model._fit_quantile_models(
-            x_train,
-            y_total_train,
-            params,
-            quantiles,
-            x_eval=x_calibration,
-            y_eval=y_total_calibration,
-            early_stopping_rounds=config.early_stopping_rounds,
-        )
+        quantiles: tuple[float, ...] | None = None
+        margin_quantiles: dict[float, Any] = {}
+        total_quantiles: dict[float, Any] = {}
+        if config.include_quantiles:
+            quantiles = ml_model._validate_quantiles(ml_model.DEFAULT_QUANTILES)
+            margin_quantiles = ml_model._fit_quantile_models(
+                x_train,
+                y_margin_train,
+                params,
+                quantiles,
+                x_eval=x_calibration,
+                y_eval=y_margin_calibration,
+                early_stopping_rounds=config.early_stopping_rounds,
+            )
+            total_quantiles = ml_model._fit_quantile_models(
+                x_train,
+                y_total_train,
+                params,
+                quantiles,
+                x_eval=x_calibration,
+                y_eval=y_total_calibration,
+                early_stopping_rounds=config.early_stopping_rounds,
+            )
 
         calibrator = None
         calibration_method = config.calibration

@@ -88,3 +88,16 @@ def test_prediction_score_rounding_modes() -> None:
     assert half_home == 24.5
     assert half_total == 46.0
     assert half_margin == 3.0
+
+    out_nfl = ml_model.build_prediction_output(
+        games_df, pred_away, pred_home, home_win_prob, score_rounding="nfl"
+    )
+    nfl_away = float(out_nfl["predicted_away_score"].to_numpy(dtype=float)[0])
+    nfl_home = float(out_nfl["predicted_home_score"].to_numpy(dtype=float)[0])
+    nfl_total = float(out_nfl["predicted_total"].to_numpy(dtype=float)[0])
+    nfl_margin = float(out_nfl["predicted_margin"].to_numpy(dtype=float)[0])
+
+    assert nfl_away == 21.0
+    assert nfl_home == 24.0
+    assert nfl_total == 45.0
+    assert nfl_margin == 3.0

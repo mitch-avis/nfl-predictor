@@ -997,6 +997,9 @@ def _fit_win_prob_calibrator(
     method = method.lower()
     if method == "none":
         return None
+    if method == "elo":
+        # Deterministic mapping; no fitting.
+        return WinProbCalibrator(method=method, model=None)
     if method == "platt":
         model = LogisticRegression(solver="lbfgs")
         model.fit(pred_margin.reshape(-1, 1), actual_home_win)
@@ -1014,6 +1017,8 @@ def _predict_home_win_prob(
 ) -> np.ndarray:
     if calibrator is None:
         return _margin_to_home_win_prob(pred_margin)
+    if calibrator.method == "elo":
+        return np.clip(_margin_to_home_win_prob_elo_style(pred_margin), 0.0, 1.0)
     if calibrator.method == "isotonic":
         probs = calibrator.model.predict(pred_margin)
     else:
@@ -1172,6 +1177,29 @@ def _margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
     return norm.cdf(margin / constants.SCORE_DIFF_STD_DEV)
 
 
+def _margin_to_home_win_prob_elo_style(
+    margin: np.ndarray,
+    *,
+    points_per_400_elo: float = 16.0,
+) -> np.ndarray:
+    """Map predicted margin to win probability via an Elo-style logistic.
+
+    This is a deterministic mapping:
+
+        p(home win) = 1 / (1 + 10 ** (-margin / points_per_400_elo))
+
+    where `margin` is in points (home_score - away_score).
+
+    Compared to Platt scaling, this tends to produce less extreme probabilities for
+    large-but-plausible margins and can be useful as an alternative for pool display.
+    """
+
+    if points_per_400_elo <= 0:
+        raise ValueError("points_per_400_elo must be positive.")
+    margin = np.asarray(margin, dtype=float)
+    return 1.0 / (1.0 + np.power(10.0, -margin / points_per_400_elo))
+
+
 def _rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     if root_mean_squared_error is not None:
         return float(root_mean_squared_error(y_true, y_pred))
@@ -1210,6 +1238,59 @@ def _build_prediction_output(
             return np.round(values, 0)
         if mode_norm in {"half", "0.5", "nearest_half"}:
             return np.round(values * 2.0, 0) / 2.0
+        if mode_norm in {"nfl", "football"}:
+            # Snap to plausible NFL team scores (for display only).
+            #
+            # We model score plausibility with a lightweight cost function:
+            # - TD (7) and FG (3) have cost 0 (common)
+            # - TD-without-XP (6) and TD+2 (8) have cost 1
+            # - safety (2) has cost 2 (rarer)
+            #
+            # Then we choose the candidate with minimal:
+            #   abs(candidate - value) + penalty * cost
+            max_score = 70
+            # Penalize both rarity (2pt/safety) and also the number of scoring events.
+            event_penalty = 0.35
+            increments = [
+                (3, 0.0 + event_penalty),
+                (7, 0.0 + event_penalty),
+                (6, 1.0 + event_penalty),
+                (8, 1.0 + event_penalty),
+                (2, 2.0 + event_penalty),
+            ]
+
+            # Compute minimal "rarity" cost for each reachable score.
+            # Use Dijkstra to guarantee correctness regardless of increment/cost structure.
+            import heapq
+
+            best_cost = np.full(max_score + 1, np.inf, dtype=float)
+            best_cost[0] = 0.0
+            heap: list[tuple[float, int]] = [(0.0, 0)]
+            while heap:
+                cost, score = heapq.heappop(heap)
+                if cost != best_cost[score]:
+                    continue
+                for inc, inc_cost in increments:
+                    nxt = score + inc
+                    if nxt > max_score:
+                        continue
+                    new_cost = cost + inc_cost
+                    if new_cost < best_cost[nxt]:
+                        best_cost[nxt] = new_cost
+                        heapq.heappush(heap, (new_cost, nxt))
+
+            candidates = np.where(np.isfinite(best_cost))[0]
+            penalty = 1.0
+            snapped: list[float] = []
+            for v in np.asarray(values, dtype=float):
+                if not np.isfinite(v):
+                    snapped.append(float(v))
+                    continue
+                v_clip = float(np.clip(v, 0.0, float(max_score)))
+                diffs = np.abs(candidates.astype(float) - v_clip)
+                scores = diffs + penalty * best_cost[candidates]
+                snapped.append(float(candidates[int(np.argmin(scores))]))
+            return np.asarray(snapped, dtype=float)
         raise ValueError(f"Unknown score rounding mode: {mode}")
 
     output_df = games_df.copy()

@@ -61,13 +61,54 @@ from nfl_predictor.ml.ml_model_core import (
 from nfl_predictor.utils.logger import log
 
 
-def _filter_to_regular_season_for_training(df: pd.DataFrame) -> pd.DataFrame:
+def _compute_postseason_sample_weight(
+    df: pd.DataFrame,
+    *,
+    include_postseason: bool,
+    postseason_weight: float,
+) -> Optional[np.ndarray]:
+    """Compute per-row sample weights with optional postseason upweighting.
+
+    When `game_type` exists and `include_postseason` is True, any row whose
+    `game_type` is not REG is treated as postseason and assigned `postseason_weight`.
+    Regular season rows keep weight 1.0.
+
+    Returns None when weights are unnecessary (all ones).
+    """
+
+    if postseason_weight <= 0:
+        raise ValueError("postseason_weight must be positive.")
+
+    if not include_postseason:
+        return None
+    if "game_type" not in df.columns:
+        return None
+
+    game_type = df["game_type"].astype(str).str.upper()
+    is_postseason = game_type != "REG"
+    if not bool(is_postseason.any()):
+        return None
+
+    weights = np.ones(len(df), dtype=float)
+    weights[is_postseason.to_numpy()] = float(postseason_weight)
+    if np.allclose(weights, 1.0):
+        return None
+    return weights
+
+
+def _filter_to_regular_season_for_training(
+    df: pd.DataFrame,
+    *,
+    include_postseason: bool,
+) -> pd.DataFrame:
     """Filter a dataset to regular season rows when `game_type` exists.
 
     This is the default for training and evaluation splits. Prediction can still be run on
     postseason rows (or any rows) as long as features are available.
     """
 
+    if include_postseason:
+        return df
     if "game_type" not in df.columns:
         return df
 
@@ -85,6 +126,8 @@ def train_score_model(
     include_injuries: bool,
     max_cardinality_ratio: float,
     market_prob_config: Optional[MarketProbConfig],
+    include_postseason: bool = False,
+    postseason_weight: float = 1.0,
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -104,7 +147,7 @@ def train_score_model(
             log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
-    df = _filter_to_regular_season_for_training(df)
+    df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
     train_df, holdout_df, holdout = _split_by_season(df, holdout_seasons)
     log.info("Training seasons: %s", sorted(train_df["season"].unique()))
     log.info("Holdout seasons: %s", holdout)
@@ -131,6 +174,12 @@ def train_score_model(
 
     preprocessor = _build_preprocessor(feature_spec, for_tree=True)
     x_train = preprocessor.fit_transform(x_train_df)
+
+    train_weight = _compute_postseason_sample_weight(
+        train_df,
+        include_postseason=include_postseason,
+        postseason_weight=postseason_weight,
+    )
     xgb_overrides: dict[str, Any] = {}
     if xgb_n_jobs is not None:
         xgb_overrides["n_jobs"] = xgb_n_jobs
@@ -140,7 +189,13 @@ def train_score_model(
         tree_method=xgb_tree_method,
         device=xgb_device,
     )
-    away_model, home_model = _fit_models(x_train, train_df, target_columns, params=params)
+    away_model, home_model = _fit_models(
+        x_train,
+        train_df,
+        target_columns,
+        params=params,
+        sample_weight=train_weight,
+    )
 
     if not holdout_df.empty:
         x_holdout = preprocessor.transform(x_holdout_df)
@@ -174,7 +229,10 @@ def train_score_model_with_report(
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
-    df = _filter_to_regular_season_for_training(df)
+    df = _filter_to_regular_season_for_training(
+        df,
+        include_postseason=bool(kwargs.get("include_postseason", False)),
+    )
 
     missing_data_summary = _summarize_missing_data(df)
     _train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
@@ -223,6 +281,8 @@ def train_margin_total_model(
     market_transform: bool,
     market_anchor: bool,
     market_prob_config: Optional[MarketProbConfig],
+    include_postseason: bool = False,
+    postseason_weight: float = 1.0,
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -239,7 +299,7 @@ def train_margin_total_model(
             log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
-    df = _filter_to_regular_season_for_training(df)
+    df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
     (
         train_df,
         calibration_df,
@@ -343,6 +403,11 @@ def train_margin_total_model(
 
         local_preprocessor = _build_preprocessor(local_spec, for_tree=True)
         x_train = local_preprocessor.fit_transform(_apply_feature_spec(train_frame, local_spec))
+        train_weight = _compute_postseason_sample_weight(
+            train_frame,
+            include_postseason=include_postseason,
+            postseason_weight=postseason_weight,
+        )
         (
             y_margin_train,
             y_total_train,
@@ -376,6 +441,7 @@ def train_margin_total_model(
             y_margin_eval=y_margin_calibration,
             y_total_eval=y_total_calibration,
             early_stopping_rounds=optuna_config.early_stopping_rounds,
+            sample_weight=train_weight,
         )
 
         quantiles = _validate_quantiles(DEFAULT_QUANTILES)
@@ -387,6 +453,7 @@ def train_margin_total_model(
             x_eval=x_calibration,
             y_eval=y_margin_calibration,
             early_stopping_rounds=optuna_config.early_stopping_rounds,
+            sample_weight=train_weight,
         )
         total_quantiles = _fit_quantile_models(
             x_train,
@@ -396,6 +463,7 @@ def train_margin_total_model(
             x_eval=x_calibration,
             y_eval=y_total_calibration,
             early_stopping_rounds=optuna_config.early_stopping_rounds,
+            sample_weight=train_weight,
         )
 
         return (
@@ -423,7 +491,13 @@ def train_margin_total_model(
     ) = _train_models(train_df, calibration_df)
 
     calibrator = None
-    if win_prob_calibration != "none":
+    if win_prob_calibration == "elo":
+        calibrator = _fit_win_prob_calibrator(
+            np.array([0.0], dtype=float),
+            np.array([0], dtype=int),
+            win_prob_calibration,
+        )
+    elif win_prob_calibration != "none":
         if calibration_df.empty:
             raise ValueError("Calibration requested but no calibration seasons configured.")
         if x_calibration is None:
@@ -435,8 +509,16 @@ def train_margin_total_model(
             pred_margin_calib = pred_margin_calib + baseline_margin_calibration
         away_col, home_col = target_columns
         actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
+        calibration_weight = _compute_postseason_sample_weight(
+            calibration_df,
+            include_postseason=include_postseason,
+            postseason_weight=postseason_weight,
+        )
         calibrator = _fit_win_prob_calibrator(
-            pred_margin_calib, actual_home_win.to_numpy(), win_prob_calibration
+            pred_margin_calib,
+            actual_home_win.to_numpy(),
+            win_prob_calibration,
+            sample_weight=calibration_weight,
         )
 
     if not holdout_df.empty:
@@ -499,6 +581,10 @@ def train_margin_total_model_with_report(
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    df = _filter_to_regular_season_for_training(
+        df,
+        include_postseason=bool(kwargs.get("include_postseason", False)),
+    )
     missing_data_summary = _summarize_missing_data(df)
     split = _split_train_calibration_holdout(
         df, holdout_seasons, calibration_seasons, calibration_weeks
@@ -575,6 +661,8 @@ def train_blended_margin_total_model(
     market_anchor: bool,
     market_prob_config: Optional[MarketProbConfig],
     include_injuries: bool = True,
+    include_postseason: bool = False,
+    postseason_weight: float = 1.0,
     min_season: Optional[int] = None,
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
@@ -596,6 +684,7 @@ def train_blended_margin_total_model(
             log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
+    df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
     (
         train_df,
         calibration_df,
@@ -741,6 +830,11 @@ def train_blended_margin_total_model(
 
     team_train = team_preprocessor.fit_transform(_apply_feature_spec(train_df, team_spec))
     y_margin_train, y_total_train = _prepare_margin_total_targets(train_df, target_columns)
+    train_weight = _compute_postseason_sample_weight(
+        train_df,
+        include_postseason=include_postseason,
+        postseason_weight=postseason_weight,
+    )
 
     team_calib = team_preprocessor.transform(_apply_feature_spec(calibration_df, team_spec))
     y_margin_calib, y_total_calib = _prepare_margin_total_targets(calibration_df, target_columns)
@@ -755,6 +849,7 @@ def train_blended_margin_total_model(
         y_margin_eval=y_margin_calib,
         y_total_eval=y_total_calib,
         early_stopping_rounds=optuna_config.early_stopping_rounds,
+        sample_weight=train_weight,
     )
     team_margin_calib = _predict_xgb(team_margin_model, team_calib)
     team_total_calib = _predict_xgb(team_total_model, team_calib)
@@ -777,8 +872,16 @@ def train_blended_margin_total_model(
     actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
     calibrator = None
     if win_prob_calibration != "none":
+        calibration_weight = _compute_postseason_sample_weight(
+            calibration_df,
+            include_postseason=include_postseason,
+            postseason_weight=postseason_weight,
+        )
         calibrator = _fit_win_prob_calibrator(
-            blended_margin_calib, actual_home_win.to_numpy(), win_prob_calibration
+            blended_margin_calib,
+            actual_home_win.to_numpy(),
+            win_prob_calibration,
+            sample_weight=calibration_weight,
         )
 
     if not holdout_df.empty:
@@ -848,6 +951,10 @@ def train_blended_margin_total_model_with_report(
     df = _load_games(data_path)
     df = df.dropna(subset=list(model.target_columns))
     df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
+    df = _filter_to_regular_season_for_training(
+        df,
+        include_postseason=bool(kwargs.get("include_postseason", False)),
+    )
     missing_data_summary = _summarize_missing_data(df)
     split = _split_train_calibration_holdout(
         df,

@@ -146,6 +146,9 @@ By default, training/evaluation uses **regular season** games only when the inpu
 `game_type` column (i.e., postseason rows are filtered out). You can still generate predictions
 for playoff games as long as the feature row exists.
 
+To include postseason games in training, pass `--include-postseason`. To emphasize postseason
+games, also set `--postseason-weight` (e.g., `--postseason-weight 1.5`).
+
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
 - `--calibration-seasons` reserves seasons just before the holdout for calibration/blending.
 - `--calibration-weeks` reserves the most recent weeks from the latest season for calibration.

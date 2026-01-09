@@ -68,6 +68,24 @@ def _parse_args() -> argparse.Namespace:
         help="Exclude market features like spreads/totals/moneylines.",
     )
     parser.add_argument(
+        "--include-postseason",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Include postseason games in training when a game_type column exists. "
+            "Default: False (train on regular season only)."
+        ),
+    )
+    parser.add_argument(
+        "--postseason-weight",
+        type=float,
+        default=1.0,
+        help=(
+            "Sample-weight multiplier for postseason rows when --include-postseason is enabled. "
+            "Default: 1.0 (no upweight)."
+        ),
+    )
+    parser.add_argument(
         "--injury-features",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -438,6 +456,8 @@ def main() -> None:
             include_injuries=include_injuries,
             max_cardinality_ratio=args.max_cardinality_ratio,
             market_prob_config=market_prob_config,
+            include_postseason=args.include_postseason,
+            postseason_weight=args.postseason_weight,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,
@@ -475,6 +495,8 @@ def main() -> None:
             market_transform=args.market_transform,
             market_anchor=args.market_anchor,
             market_prob_config=market_prob_config,
+            include_postseason=args.include_postseason,
+            postseason_weight=args.postseason_weight,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,
@@ -508,6 +530,8 @@ def main() -> None:
             market_anchor=args.market_anchor,
             market_prob_config=market_prob_config,
             include_injuries=include_injuries,
+            include_postseason=args.include_postseason,
+            postseason_weight=args.postseason_weight,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,

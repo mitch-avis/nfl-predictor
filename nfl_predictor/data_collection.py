@@ -630,7 +630,10 @@ def _determine_nfl_week(given_date: date) -> int:
         given_date: Date to check
 
     Returns:
-        Week number (1-18)
+        Week number (1..regular season weeks + playoff weeks).
+
+        For in-season dates in January/February, this can return playoff weeks
+        (e.g., 19-22 for seasons with an 18-week regular season).
     """
 
     def get_season_start(year: int) -> date:
@@ -643,18 +646,23 @@ def _determine_nfl_week(given_date: date) -> int:
 
     season_start = adjust_to_tuesday(get_season_start(given_date.year))
 
+    current_season = (
+        given_date.year if given_date.month > constants.SEASON_END_MONTH else given_date.year - 1
+    )
+    max_week = constants.get_regular_season_weeks(current_season) + 4
+
     if given_date < season_start:
         if given_date.month in (1, 2):
             previous_season_start = adjust_to_tuesday(get_season_start(given_date.year - 1))
             week_number = ((given_date - previous_season_start).days // 7) + 1
-            return max(1, min(week_number, 18))
+            return max(1, min(week_number, max_week))
         previous_season_start = adjust_to_tuesday(get_season_start(given_date.year - 1))
         if given_date >= previous_season_start:
             return 1
         return 0
 
     week_number = ((given_date - season_start).days // 7) + 1
-    return max(1, min(week_number, 18))
+    return max(1, min(week_number, max_week))
 
 
 if __name__ == "__main__":

@@ -153,7 +153,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--win-prob-calibration",
-        choices=["none", "platt", "isotonic"],
+        choices=["none", "platt", "isotonic", "elo"],
         default="isotonic",
         help="Calibration method for win probabilities.",
     )
@@ -288,11 +288,11 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--score-rounding",
-        choices=["none", "int", "half"],
+        choices=["none", "int", "half", "nfl"],
         default="none",
         help=(
             "Optional post-processing for predicted scores (does not change training): "
-            "none|int|half."
+            "none|int|half|nfl."
         ),
     )
     return parser.parse_args()

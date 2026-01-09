@@ -141,6 +141,27 @@ def test_walk_forward_quantile_intervals_monotonic() -> None:
     assert (preds["predicted_total_p50"] <= preds["predicted_total_p90"]).all()
 
 
+def test_walk_forward_can_disable_quantiles() -> None:
+    """Walk-forward can skip quantile model training for faster comparisons."""
+    df = _fixture_df()
+    config = _base_config()
+    config = walk_forward.WalkForwardConfig(
+        **{
+            **config.to_dict(),
+            "eval_seasons": [2023],
+            "include_quantiles": False,
+        }
+    )
+
+    result = walk_forward.run_walk_forward_backtest(df, config)
+    preds = result["predictions"]
+
+    assert "predicted_margin" in preds.columns
+    assert "predicted_total" in preds.columns
+    assert "predicted_margin_p10" not in preds.columns
+    assert "predicted_total_p90" not in preds.columns
+
+
 def test_wf_market_prob_weight_overrides_probs() -> None:
     """When market_prob_weight=1, home_win_prob should match implied market prob."""
     df = _fixture_df()

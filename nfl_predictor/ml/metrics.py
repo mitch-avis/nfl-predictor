@@ -48,14 +48,23 @@ def probability_metrics(actual_home_win: np.ndarray, home_win_prob: np.ndarray) 
 
 
 def confidence_pool_columns(
-    home_win_prob: np.ndarray, home_score: np.ndarray, away_score: np.ndarray
+    home_win_prob: np.ndarray,
+    home_score: np.ndarray,
+    away_score: np.ndarray,
+    tiebreaker: Optional[np.ndarray] = None,
 ) -> dict[str, np.ndarray]:
     """Return per-game confidence pool columns.
 
     Uses confidence strength = abs(p - 0.5) to assign unique ranks 1..N.
+
+    When `tiebreaker` is provided, it is used to deterministically break ties in
+    confidence strength (important because some workflows round probabilities for output).
     """
     strength = np.abs(home_win_prob - 0.5)
-    order = np.argsort(strength, kind="mergesort")
+    if tiebreaker is None:
+        order = np.argsort(strength, kind="mergesort")
+    else:
+        order = np.lexsort((tiebreaker, strength))
     ranks = np.empty_like(order)
     ranks[order] = np.arange(1, len(strength) + 1)
 

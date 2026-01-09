@@ -7,6 +7,7 @@ reports score-focused metrics, and can generate weekly predictions with confiden
 
 from __future__ import annotations
 
+import heapq
 import inspect
 import json
 import os
@@ -759,14 +760,15 @@ def _fit_models(
     y_train: pd.DataFrame,
     target_columns: tuple[str, str],
     params: Optional[dict[str, Any]] = None,
+    sample_weight: Optional[np.ndarray] = None,
 ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
     away_col, home_col = target_columns
     resolved_params = params or _resolve_xgb_params(DEFAULT_XGB_PARAMS)
     away_model = xgb.XGBRegressor(**resolved_params)
     home_model = xgb.XGBRegressor(**resolved_params)
 
-    away_model.fit(x_train, y_train[away_col])
-    home_model.fit(x_train, y_train[home_col])
+    away_model.fit(x_train, y_train[away_col], sample_weight=sample_weight)
+    home_model.fit(x_train, y_train[home_col], sample_weight=sample_weight)
 
     return away_model, home_model
 
@@ -877,6 +879,7 @@ def _fit_margin_total_models(
     y_margin_eval: Optional[np.ndarray] = None,
     y_total_eval: Optional[np.ndarray] = None,
     early_stopping_rounds: Optional[int] = None,
+    sample_weight: Optional[np.ndarray] = None,
 ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
     def _train_with_params(
         active_params: dict[str, Any],
@@ -890,10 +893,10 @@ def _fit_margin_total_models(
         total_model = xgb.XGBRegressor(**active_params)
 
         fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_margin_eval, resolved_early_stopping)
-        margin_model.fit(x_train, y_margin, **fit_kwargs)
+        margin_model.fit(x_train, y_margin, sample_weight=sample_weight, **fit_kwargs)
 
         fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_total_eval, resolved_early_stopping)
-        total_model.fit(x_train, y_total, **fit_kwargs)
+        total_model.fit(x_train, y_total, sample_weight=sample_weight, **fit_kwargs)
 
         return margin_model, total_model
 
@@ -924,6 +927,7 @@ def _fit_quantile_models(
     x_eval: Optional[np.ndarray | spmatrix] = None,
     y_eval: Optional[np.ndarray] = None,
     early_stopping_rounds: Optional[int] = None,
+    sample_weight: Optional[np.ndarray] = None,
 ) -> dict[float, xgb.XGBRegressor]:
     """Fit one XGBoost quantile regressor per requested quantile.
 
@@ -946,7 +950,7 @@ def _fit_quantile_models(
             q_params = _with_xgb_early_stopping_params(q_params, resolved_early_stopping)
             model = xgb.XGBRegressor(**q_params)
             fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_eval, resolved_early_stopping)
-            model.fit(x_train, y_train, **fit_kwargs)
+            model.fit(x_train, y_train, sample_weight=sample_weight, **fit_kwargs)
             fitted[quantile] = model
         return fitted
 
@@ -993,6 +997,7 @@ def _fit_win_prob_calibrator(
     pred_margin: np.ndarray,
     actual_home_win: np.ndarray,
     method: str,
+    sample_weight: Optional[np.ndarray] = None,
 ) -> Optional[WinProbCalibrator]:
     method = method.lower()
     if method == "none":
@@ -1002,11 +1007,11 @@ def _fit_win_prob_calibrator(
         return WinProbCalibrator(method=method, model=None)
     if method == "platt":
         model = LogisticRegression(solver="lbfgs")
-        model.fit(pred_margin.reshape(-1, 1), actual_home_win)
+        model.fit(pred_margin.reshape(-1, 1), actual_home_win, sample_weight=sample_weight)
         return WinProbCalibrator(method=method, model=model)
     if method == "isotonic":
         model = IsotonicRegression(out_of_bounds="clip")
-        model.fit(pred_margin, actual_home_win)
+        model.fit(pred_margin, actual_home_win, sample_weight=sample_weight)
         return WinProbCalibrator(method=method, model=model)
     raise ValueError(f"Unknown win probability calibration method: {method}")
 
@@ -1261,8 +1266,6 @@ def _build_prediction_output(
 
             # Compute minimal "rarity" cost for each reachable score.
             # Use Dijkstra to guarantee correctness regardless of increment/cost structure.
-            import heapq
-
             best_cost = np.full(max_score + 1, np.inf, dtype=float)
             best_cost[0] = 0.0
             heap: list[tuple[float, int]] = [(0.0, 0)]

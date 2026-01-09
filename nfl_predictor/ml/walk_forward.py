@@ -406,8 +406,11 @@ def run_walk_forward_backtest(
         actual_total = home_score + away_score
         actual_home_win = (home_score > away_score).astype(int)
 
+        tiebreaker = (
+            fold.eval_df["game_id"].to_numpy() if "game_id" in fold.eval_df.columns else None
+        )
         confidence_cols = metrics_utils.confidence_pool_columns(
-            home_win_prob, home_score, away_score
+            home_win_prob, home_score, away_score, tiebreaker=tiebreaker
         )
 
         fold_predictions = fold.eval_df.copy()

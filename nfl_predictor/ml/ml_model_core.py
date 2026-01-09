@@ -1220,8 +1220,12 @@ def _build_prediction_output(
     output_df["predicted_home_score"] = np.round(home_scores, 1)
     output_df["predicted_total"] = np.round(away_scores + home_scores, 1)
     output_df["predicted_margin"] = np.round(home_scores - away_scores, 1)
-    output_df["home_win_prob"] = np.round(home_win_prob, 4)
-    output_df["away_win_prob"] = np.round(1.0 - home_win_prob, 4)
+
+    # Round first (for stable output), then clip so values don't collapse to 0.0/1.0
+    # at 4-decimal precision (which can distort pool rankings and log-loss stability).
+    home_win_prob_out = np.clip(np.round(home_win_prob, 4), 0.0001, 0.9999)
+    output_df["home_win_prob"] = home_win_prob_out
+    output_df["away_win_prob"] = np.round(1.0 - home_win_prob_out, 4)
 
     team_cols = [
         col
@@ -1232,12 +1236,13 @@ def _build_prediction_output(
     home_team_col = next((col for col in team_cols if col.startswith("home_")), None)
     if away_team_col and home_team_col:
         output_df["predicted_winner"] = np.where(
-            home_scores >= away_scores,
+            home_win_prob_out >= 0.5,
             output_df[home_team_col],
             output_df[away_team_col],
         )
 
-    confidence_strength = np.abs(home_win_prob - 0.5)
+    confidence_strength = np.abs(home_win_prob_out - 0.5)
+    output_df["confidence_strength"] = confidence_strength
     tiebreaker = output_df["game_id"].to_numpy() if "game_id" in output_df.columns else None
     output_df["confidence_rank"] = _rank_confidence(confidence_strength, tiebreaker)
 

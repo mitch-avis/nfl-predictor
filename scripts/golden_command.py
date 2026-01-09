@@ -157,9 +157,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--score-rounding",
-        choices=["none", "int", "half"],
+        choices=["none", "int", "half", "nfl"],
         default="none",
-        help="Optional post-processing for predicted scores: none|int|half.",
+        help="Optional post-processing for predicted scores: none|int|half|nfl.",
     )
     parser.add_argument(
         "--run-id",
@@ -191,7 +191,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--calibration",
-        choices=["platt", "isotonic", "none"],
+        choices=["platt", "isotonic", "none", "elo"],
         default="platt",
         help="Walk-forward calibration method.",
     )

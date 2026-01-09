@@ -52,16 +52,18 @@ def get_current_nfl_week() -> tuple[int, int]:
     def adjust_to_tuesday(start_date: date) -> date:
         return start_date - timedelta(days=(start_date.weekday() - 1) % 7)
 
-    season_start = adjust_to_tuesday(get_season_start(today.year))
+    season_start = adjust_to_tuesday(get_season_start(current_season))
+    max_week = constants.get_regular_season_weeks(current_season) + 4
 
     if today < season_start:
         # Before current year's season starts, we're in offseason
         # Return last week of previous season (or playoffs)
-        prev_season = today.year - 1
-        return prev_season, 22  # Allow playoff weeks
+        prev_season = current_season - 1
+        prev_max_week = constants.get_regular_season_weeks(prev_season) + 4
+        return prev_season, prev_max_week
 
     week_number = ((today - season_start).days // 7) + 1
-    return current_season, min(week_number, 22)  # Allow playoff weeks
+    return current_season, min(max(1, week_number), max_week)
 
 
 def get_week_date(season: int, week: int) -> date:

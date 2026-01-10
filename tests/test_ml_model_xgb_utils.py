@@ -29,7 +29,7 @@ def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
 
     params = xgb_utils._resolve_xgb_params(
         {"max_depth": 3},
-        tree_method="gpu_hist",
+        tree_method="gpu",
         device="auto",
     )
 
@@ -106,11 +106,11 @@ def test_coerce_tree_method_on_error_device_cuda() -> None:
     assert "predictor" not in updated
 
 
-def test_coerce_tree_method_on_error_gpu_hist() -> None:
-    """tree_method and device are coerced on ValueError with gpu_hist."""
+def test_coerce_tree_method_on_error_gpu_tree_method() -> None:
+    """tree_method and device are coerced on ValueError with GPU tree_method."""
     _reset_runtime_state()
 
-    params = {"tree_method": "gpu_hist", "predictor": "gpu_predictor"}
+    params = {"tree_method": "gpu", "predictor": "gpu_predictor"}
     updated = xgb_utils._coerce_tree_method_on_error(params, ValueError("tree_method"))
 
     assert updated is not None

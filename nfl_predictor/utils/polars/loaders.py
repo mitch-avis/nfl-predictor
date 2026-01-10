@@ -248,7 +248,11 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
         )
 
     # Fumbles lost (sack + rushing + receiving)
-    fumble_lost_cols = ["sack_fumbles_lost", "rushing_fumbles_lost", "receiving_fumbles_lost"]
+    fumble_lost_cols = [
+        "sack_fumbles_lost",
+        "rushing_fumbles_lost",
+        "receiving_fumbles_lost",
+    ]
     if all(c in df.columns for c in fumble_lost_cols):
         combine_operations.append(
             (
@@ -357,7 +361,14 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
         DataFrame with added opponent_* columns for each game
     """
     # Identify stat columns to copy from opponent (exclude identifiers and duplicate-prone stats)
-    exclude_cols = {"season", "week", "team_abbr", "opponent_abbr", "season_type", "games_played"}
+    exclude_cols = {
+        "season",
+        "week",
+        "team_abbr",
+        "opponent_abbr",
+        "season_type",
+        "games_played",
+    }
     exclude_cols.update(constants.EXCLUDE_FROM_OPPONENT_STATS)
 
     stat_cols = [col for col in team_stats_df.columns if col not in exclude_cols]

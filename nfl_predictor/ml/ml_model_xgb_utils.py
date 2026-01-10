@@ -206,11 +206,7 @@ def _coerce_tree_method_on_error(
 
     if not tree_method or "gpu" not in str(tree_method):
         return None
-    if (
-        "gpu_hist" not in message
-        and "tree_method" not in message
-        and "invalid input" not in lower_message
-    ):
+    if "tree_method" not in lower_message and "invalid input" not in lower_message:
         return None
 
     new_params = params.copy()

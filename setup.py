@@ -31,6 +31,7 @@ setup(
         "lxml",
         "numpy",
         "optuna",
+        "openpyxl",
         "pandas",
         "pyarrow",
         "requests",

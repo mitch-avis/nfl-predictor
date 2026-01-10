@@ -24,6 +24,6 @@ def test_ml_model_main_delegates_to_cli(monkeypatch: MonkeyPatch) -> None:
 def test_ml_model_getattr_and_dir_forwarding() -> None:
     """Exposes symbols from split implementation modules via __getattr__/__dir__."""
 
-    assert callable(getattr(ml_model, "get_target_columns"))
+    assert callable(ml_model.get_target_columns)
     names = dir(ml_model)
     assert "get_target_columns" in names

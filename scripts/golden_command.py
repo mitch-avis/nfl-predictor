@@ -226,7 +226,7 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help=(
-            "Optional XGBoost tree_method override for walk-forward (e.g., gpu_hist, hist). "
+            "Optional XGBoost tree_method override for walk-forward (e.g., auto, hist, approx). "
             "If set, is applied via walk-forward xgb_params_overrides."
         ),
     )

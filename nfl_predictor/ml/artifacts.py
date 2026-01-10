@@ -14,7 +14,7 @@ import hashlib
 import json
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -52,8 +52,59 @@ def sha256_file(path: Path) -> str:
 
 def stable_short_hash(payload: Any) -> str:
     """Return a stable short hash for a JSON-serializable payload."""
-    encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    encoded = json.dumps(_to_jsonable(payload), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:8]
+
+
+def _to_jsonable(value: Any) -> Any:
+    """Convert a nested payload into JSON-serializable Python primitives.
+
+    This avoids brittle failures when payloads contain NumPy/Polars/Pandas scalar types
+    (e.g., numpy.int64) or other objects that the stdlib JSON encoder can't handle.
+    """
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+
+    if isinstance(value, Path):
+        return str(value)
+
+    if is_dataclass(value):
+        # dataclasses.is_dataclass() returns True for both instances and classes.
+        # dataclasses.asdict() only accepts instances.
+        if isinstance(value, type):
+            return str(value)
+        return _to_jsonable(asdict(value))
+
+    if isinstance(value, dict):
+        return {str(k): _to_jsonable(v) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [_to_jsonable(v) for v in value]
+
+    # NumPy / Polars scalars typically implement .item(); ndarrays often implement .tolist().
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return _to_jsonable(item())
+        except Exception:  # pragma: no cover
+            pass
+
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        try:
+            return _to_jsonable(tolist())
+        except Exception:  # pragma: no cover
+            pass
+
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        try:
+            return str(isoformat())
+        except Exception:  # pragma: no cover
+            pass
+
+    return str(value)
 
 
 def generate_run_id(prefix: str, dataset_hash: str, config: dict[str, Any]) -> str:
@@ -156,7 +207,8 @@ def build_metadata(
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     """Write JSON to disk with stable formatting."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str))
+    safe_payload = _to_jsonable(payload)
+    path.write_text(json.dumps(safe_payload, indent=2, sort_keys=True), encoding="utf-8")
     log.info("Wrote %s", path)
 
 

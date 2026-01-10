@@ -27,9 +27,8 @@ import numpy as np
 import pandas as pd
 
 from nfl_predictor import constants
-from nfl_predictor.ml import artifacts
+from nfl_predictor.ml import artifacts, walk_forward
 from nfl_predictor.ml import metrics as metrics_utils
-from nfl_predictor.ml import walk_forward
 from nfl_predictor.ml.ml_model_core import (
     BlendedMarginTotalModel,
     MarginTotalModel,

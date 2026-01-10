@@ -217,6 +217,20 @@ For the most realistic evaluation, use walk-forward (rolling-origin) backtesting
 python scripts/walk_forward_backtest.py --help
 ```
 
+## Scripts
+
+Repo utilities under `scripts/`:
+
+- `scripts/betting_pipeline.py`: end-to-end orchestration (walk-forward compare -> resumable
+  tuning -> final train -> weekly predictions + betting_report.csv). See `--help`.
+- `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
+  and artifact stamping.
+- `scripts/wf_compare.py`: sweep calibration + market-prob post-processing variants and summarize
+  walk-forward metrics.
+- `scripts/backtest_predictions.py`: run a backtest using a saved model artifact.
+
+GPU note (XGBoost 2.x): prefer `--xgb-tree-method hist --xgb-device cuda`.
+
 If you see great performance on the exact data a model trained on, that is not evidence the model
 generalizes. Prefer holdout and walk-forward metrics.
 

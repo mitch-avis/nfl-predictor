@@ -739,7 +739,9 @@ def main() -> int:
         log.info("Stage 2: reuse tuning artifacts (%s exists)", tuned_marker)
     else:
         log.info(
-            "Stage 2: Optuna tuning (timeout=%ss, metric=%s)", args.tune_timeout, args.tune_metric
+            "Stage 2: Optuna tuning (timeout=%ss, metric=%s)",
+            args.tune_timeout,
+            args.tune_metric,
         )
 
         if args.market_anchor:
@@ -809,18 +811,14 @@ def main() -> int:
             prefix="tuned",
         )
 
-        tuned_marker.write_text(
-            json.dumps(
-                {
-                    "created_at": created_at,
-                    "optuna_storage": storage,
-                    "study_name": args.tune_study_name,
-                    "wf_best": best_row,
-                },
-                indent=2,
-                sort_keys=True,
-            ),
-            encoding="utf-8",
+        artifacts.write_json(
+            tuned_marker,
+            {
+                "created_at": created_at,
+                "optuna_storage": storage,
+                "study_name": args.tune_study_name,
+                "wf_best": best_row,
+            },
         )
 
     # ----------------------------------------------

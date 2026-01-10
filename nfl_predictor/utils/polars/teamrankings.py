@@ -184,7 +184,7 @@ def load_team_rankings(
             len(weeks_to_partial_scrape),
             season,
         )
-        for week, existing_week_df, missing_cols in weeks_to_partial_scrape:
+        for week, existing_week_df, _missing_cols in weeks_to_partial_scrape:
             # Determine which ratings and stats to scrape
             missing_ratings, missing_stats = get_missing_tr_columns(existing_week_df)
 

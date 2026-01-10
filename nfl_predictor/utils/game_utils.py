@@ -305,7 +305,8 @@ def fill_future_qb_data(
                 pl.when(pl.col("away_qb_value_pre").is_null())
                 .then(
                     pl.col("away_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_value_pre"), return_dtype=pl.Float64
+                        lambda t: qb_lookup.get(t, {}).get("qb_value_pre"),
+                        return_dtype=pl.Float64,
                     )
                 )
                 .otherwise(pl.col("away_qb_value_pre"))
@@ -316,7 +317,8 @@ def fill_future_qb_data(
                 pl.when(pl.col("away_qb_elo_pre").is_null())
                 .then(
                     pl.col("away_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_elo_pre"), return_dtype=pl.Float64
+                        lambda t: qb_lookup.get(t, {}).get("qb_elo_pre"),
+                        return_dtype=pl.Float64,
                     )
                 )
                 .otherwise(pl.col("away_qb_elo_pre"))
@@ -341,7 +343,8 @@ def fill_future_qb_data(
                 pl.when(pl.col("home_qb_value_pre").is_null())
                 .then(
                     pl.col("home_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_value_pre"), return_dtype=pl.Float64
+                        lambda t: qb_lookup.get(t, {}).get("qb_value_pre"),
+                        return_dtype=pl.Float64,
                     )
                 )
                 .otherwise(pl.col("home_qb_value_pre"))
@@ -352,7 +355,8 @@ def fill_future_qb_data(
                 pl.when(pl.col("home_qb_elo_pre").is_null())
                 .then(
                     pl.col("home_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_elo_pre"), return_dtype=pl.Float64
+                        lambda t: qb_lookup.get(t, {}).get("qb_elo_pre"),
+                        return_dtype=pl.Float64,
                     )
                 )
                 .otherwise(pl.col("home_qb_elo_pre"))

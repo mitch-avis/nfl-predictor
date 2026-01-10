@@ -35,7 +35,7 @@ LOGGING_CONFIG = {
     },
     "handlers": {
         "default": {
-            "level": "DEBUG",
+            "level": "INFO",
             "formatter": "default",
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stderr",
@@ -49,7 +49,7 @@ LOGGING_CONFIG = {
         },
         "root": {
             "handlers": ["default"],
-            "level": "DEBUG",
+            "level": "INFO",
             "propagate": False,
         },
         "urllib3": {

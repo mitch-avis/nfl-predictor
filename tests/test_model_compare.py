@@ -341,7 +341,7 @@ def test_fit_margin_total_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> Non
         lambda *_: (True, False, True),
     )
     monkeypatch.setattr(ml_model, "_build_feature_spec", lambda *_, **__: object())
-    monkeypatch.setattr(ml_model, "_build_preprocessor", lambda *_ , **__: _DummyPreprocessor())
+    monkeypatch.setattr(ml_model, "_build_preprocessor", lambda *_, **__: _DummyPreprocessor())
     monkeypatch.setattr(ml_model, "apply_feature_spec", lambda df, spec: df)
 
     def _prep_targets(df: pd.DataFrame, *_args: object, **_kwargs: object):
@@ -446,7 +446,7 @@ def test_fit_blended_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> None:
         lambda *_: pd.DataFrame({"away_pts": [10.0], "home_pts": [13.0]}),
     )
     monkeypatch.setattr(core, "_build_feature_spec", lambda *_, **__: object())
-    monkeypatch.setattr(core, "_build_preprocessor", lambda *_ , **__: _DummyPreprocessor())
+    monkeypatch.setattr(core, "_build_preprocessor", lambda *_, **__: _DummyPreprocessor())
     monkeypatch.setattr(core, "_apply_feature_spec", lambda df, spec: df)
     monkeypatch.setattr(
         core,

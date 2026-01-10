@@ -269,7 +269,6 @@ Feature areas tracked in `TODO.md` include:
 
 - season-to-date record features (overall, division, conference W-L-T)
 - divisional rivalry indicator
-- team health and injury burden features (team-week and positional aggregations)
 - lookahead/trap indicators (next-week opponent strength + rest/travel context)
 - motivational asymmetry features (playoff leverage and clinch/elimination context)
 

@@ -295,7 +295,9 @@ def _parse_tr_stat_table(table) -> tuple[list[str], list[float]]:
     return teams, stats
 
 
-def get_missing_tr_columns(existing_df: pl.DataFrame) -> tuple[dict[str, str], dict[str, str]]:
+def get_missing_tr_columns(
+    existing_df: pl.DataFrame,
+) -> tuple[dict[str, str], dict[str, str]]:
     """
     Determine which TR ratings and stats are missing from an existing DataFrame.
 

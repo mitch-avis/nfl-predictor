@@ -26,6 +26,7 @@ try:
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
 except ModuleNotFoundError:  # pragma: no cover
+    # Allow running as a script: `python scripts/wf_compare.py`.
     import sys
 
     repo_root = Path(__file__).resolve().parents[1]

@@ -70,7 +70,15 @@ def compute_team_records_before_week(
         wins/losses/ties, division_*, conference_*.
     """
 
-    required = {"season", "week", "game_type", "away_abbr", "home_abbr", "away_score", "home_score"}
+    required = {
+        "season",
+        "week",
+        "game_type",
+        "away_abbr",
+        "home_abbr",
+        "away_score",
+        "home_score",
+    }
     missing = sorted(required - set(schedule_df.columns))
     if missing:
         raise ValueError(f"schedule_df missing required columns: {missing}")
@@ -496,7 +504,15 @@ def compute_team_standings_before_week(
         Per-team standings table with ranks, games-behind, and simple clinch/elimination proxies.
     """
 
-    required = {"season", "week", "game_type", "away_abbr", "home_abbr", "away_score", "home_score"}
+    required = {
+        "season",
+        "week",
+        "game_type",
+        "away_abbr",
+        "home_abbr",
+        "away_score",
+        "home_score",
+    }
     missing = sorted(required - set(schedule_df.columns))
     if missing:
         raise ValueError(f"schedule_df missing required columns: {missing}")
@@ -619,7 +635,7 @@ def compute_team_standings_before_week(
         )
     )
     records = records.join(seed7, on="conference", how="left").with_columns(
-        (((pl.col("seed7_wins") - pl.col("wins")).cast(pl.Float32))).alias(
+        ((pl.col("seed7_wins") - pl.col("wins")).cast(pl.Float32)).alias(
             "conference_games_behind_seed7"
         )
     )

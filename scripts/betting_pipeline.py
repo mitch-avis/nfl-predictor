@@ -21,7 +21,8 @@ Important limitations (read this):
     features. It does not directly “tune” fitted calibrators (Platt/Isotonic), which are
     trained after the margin model.
 - Stage 3 defaults to win-prob calibration='elo' so you can train on *all* rows without
-    holding out calibration seasons.
+    holding out calibration seasons. Note: blended models still require a small
+    time-aware calibration window to fit the blend layer.
 
 Outputs (written under the run directory):
 - wf_compare.csv: stage-1 comparison table
@@ -741,6 +742,12 @@ def main() -> int:
             "Stage 2: Optuna tuning (timeout=%ss, metric=%s)", args.tune_timeout, args.tune_metric
         )
 
+        if args.market_anchor:
+            log.warning(
+                "Blended model training does not support market anchoring; continuing with "
+                "market_anchor=False (blend layer uses market baselines)."
+            )
+
         storage = args.tune_storage
         if storage is None:
             # Optuna expects an absolute path for reliability.
@@ -771,13 +778,13 @@ def main() -> int:
         tune_result = train_blended_margin_total_model_with_report(
             data_path=args.data_path,
             holdout_seasons=2,
-            calibration_seasons=1 if best_calibration in {"platt", "isotonic"} else 0,
+            calibration_seasons=1,
             calibration_weeks=0,
             max_cardinality_ratio=0.5,
             win_prob_calibration=best_calibration,
             optuna_config=optuna_config,
             market_transform=bool(args.market_transform),
-            market_anchor=bool(args.market_anchor),
+            market_anchor=False,
             market_prob_config=best_market_prob_config,
             include_injuries=None,
             include_postseason=bool(args.include_postseason),
@@ -839,11 +846,18 @@ def main() -> int:
             final_calibration = "elo"
 
         log.info("Stage 3: training final model (calibration=%s)", final_calibration)
+
+        final_calibration_weeks = max(1, int(args.wf_calibration_weeks))
+        if args.wf_calibration_weeks <= 0:
+            log.warning(
+                "Blended models require calibration; using %s in-season calibration weeks.",
+                final_calibration_weeks,
+            )
         final_result = train_blended_margin_total_model_with_report(
             data_path=args.data_path,
             holdout_seasons=0,
             calibration_seasons=0,
-            calibration_weeks=0,
+            calibration_weeks=final_calibration_weeks,
             max_cardinality_ratio=0.5,
             win_prob_calibration=final_calibration,
             optuna_config=OptunaConfig(
@@ -862,7 +876,7 @@ def main() -> int:
                 xgb_n_jobs=args.xgb_n_jobs,
             ),
             market_transform=bool(args.market_transform),
-            market_anchor=bool(args.market_anchor),
+            market_anchor=False,
             market_prob_config=best_market_prob_config,
             include_injuries=None,
             include_postseason=bool(args.include_postseason),

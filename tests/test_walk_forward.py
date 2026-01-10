@@ -196,10 +196,10 @@ def test_dataset_fingerprint_matches_sha256(tmp_path: "Path") -> None:
     assert walk_forward.dataset_fingerprint(path) == expected
 
 
-def test_generate_run_id_is_deterministic_under_fixed_time(monkeypatch: "pytest.MonkeyPatch") -> None:
+def test_generate_run_id_is_deterministic_under_fixed_time(
+    monkeypatch: "pytest.MonkeyPatch",
+) -> None:
     """Builds a stable run_id when datetime is fixed."""
-
-    import pytest
 
     class _FixedDatetime:
         @staticmethod
@@ -285,8 +285,6 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
 def test_git_commit_hash_returns_none_on_failure(monkeypatch: "pytest.MonkeyPatch") -> None:
     """Returns None when git command fails or returns non-zero."""
 
-    import pytest
-
     class _Result:
         returncode = 1
         stdout = ""
@@ -297,8 +295,6 @@ def test_git_commit_hash_returns_none_on_failure(monkeypatch: "pytest.MonkeyPatc
 
 def test_library_versions_handles_import_error(monkeypatch: "pytest.MonkeyPatch") -> None:
     """Records None version when a dependency import fails."""
-
-    import pytest
 
     def _fake_import(name: str):
         if name == "optuna":

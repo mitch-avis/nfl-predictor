@@ -25,6 +25,17 @@ import pandas as pd
 
 from nfl_predictor.utils.logger import log
 
+# For a Normal distribution, sigma can be estimated from p10/p90 via:
+#   sigma ≈ (p90 - p10) / (2 * z0.90)
+# where z0.90 ≈ 1.281551565545.
+NORMAL_Z_P90 = 1.281551565545
+P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
+
+# Fallback uncertainty when quantiles are missing.
+# These match the defaults used on the Live sheet.
+DEFAULT_SIGMA_MARGIN = 13
+DEFAULT_SIGMA_TOTAL = 16
+
 
 @dataclass(frozen=True)
 class ExcelTemplateConfig:
@@ -149,7 +160,6 @@ def write_betting_template_xlsx(
         "total_live",
         "total_over_odds_live",
         "total_under_odds_live",
-        "total_live_odds",
         # Quick deltas
         "spread_edge_points_home",
         # Market probabilities (from moneyline live)
@@ -178,6 +188,23 @@ def write_betting_template_xlsx(
         "total_action",
         "total_confidence_1_10",
         "total_ev",
+        # Hidden helper columns to keep recommendation formulas simple.
+        "spread_mu_margin",
+        "spread_sigma_margin",
+        "spread_p_home_cover",
+        "spread_p_away_cover",
+        "spread_implied_home_prob",
+        "spread_implied_away_prob",
+        "spread_edge_home",
+        "spread_edge_away",
+        "total_mu",
+        "total_sigma",
+        "total_p_over",
+        "total_p_under",
+        "total_implied_over_prob",
+        "total_implied_under_prob",
+        "total_edge_over",
+        "total_edge_under",
     ]
 
     ws.append(columns)
@@ -248,7 +275,6 @@ def write_betting_template_xlsx(
     df["away_spread_odds_live"] = pd.NA
     df["total_over_odds_live"] = pd.NA
     df["total_under_odds_live"] = pd.NA
-    df["total_live_odds"] = pd.NA
 
     # Computed outputs (filled by formulas).
     for c in (
@@ -358,43 +384,54 @@ def write_betting_template_xlsx(
         margin_p50_cell = addr(excel_row, "predicted_margin_p50")
         margin_p90_cell = addr(excel_row, "predicted_margin_p90")
 
-        mu_margin = f"IF(ISBLANK({margin_p50_cell}),{predicted_margin},{margin_p50_cell})"
-        sigma_margin = (
-            f"IF(OR(ISBLANK({margin_p10_cell}),ISBLANK({margin_p90_cell})),NA(),"
-            f"({margin_p90_cell}-{margin_p10_cell})/(2*1.281551565545))"
+        spread_mu = addr(excel_row, "spread_mu_margin")
+        spread_sigma = addr(excel_row, "spread_sigma_margin")
+        spread_p_home = addr(excel_row, "spread_p_home_cover")
+        spread_p_away = addr(excel_row, "spread_p_away_cover")
+        spread_implied_home = addr(excel_row, "spread_implied_home_prob")
+        spread_implied_away = addr(excel_row, "spread_implied_away_prob")
+        spread_edge_home = addr(excel_row, "spread_edge_home")
+        spread_edge_away = addr(excel_row, "spread_edge_away")
+
+        ws[spread_mu].value = (
+            f"=IF(ISBLANK({margin_p50_cell}),{predicted_margin},{margin_p50_cell})"
+        )
+        ws[spread_sigma].value = (
+            f"=IF(OR(ISBLANK({margin_p10_cell}),ISBLANK({margin_p90_cell})),{DEFAULT_SIGMA_MARGIN},"
+            f"({margin_p90_cell}-{margin_p10_cell})/({P10_P90_TO_SIGMA_DENOM}))"
         )
 
         # P(home covers) = P(margin > -home_spread)
-        p_home_cover = (
-            f"IF(OR(ISNA({sigma_margin}),{sigma_margin}<=0,ISBLANK({home_spread_live})),NA(),"
-            f"1-NORM.S.DIST(((-{home_spread_live})-({mu_margin}))/({sigma_margin}),TRUE))"
+        ws[spread_p_home].value = (
+            f"=IF(OR(ISNA({spread_sigma}),{spread_sigma}<=0,ISBLANK({home_spread_live})),NA(),"
+            f"1-NORM.S.DIST(((-{home_spread_live})-({spread_mu}))/({spread_sigma}),TRUE))"
         )
         # P(away covers) = P(margin < away_spread)
-        p_away_cover = (
-            f"IF(OR(ISNA({sigma_margin}),{sigma_margin}<=0,ISBLANK({away_spread_live})),NA(),"
-            f"NORM.S.DIST((({away_spread_live})-({mu_margin}))/({sigma_margin}),TRUE))"
+        ws[spread_p_away].value = (
+            f"=IF(OR(ISNA({spread_sigma}),{spread_sigma}<=0,ISBLANK({away_spread_live})),NA(),"
+            f"NORM.S.DIST((({away_spread_live})-({spread_mu}))/({spread_sigma}),TRUE))"
         )
 
-        # Break-even probs from spread odds
-        implied_home_spread = (
-            f"IF(OR(ISBLANK({home_spread_odds}),{home_spread_odds}=0),NA(),"
+        # Break-even probs from spread odds (vig included)
+        ws[spread_implied_home].value = (
+            f"=IF(OR(ISBLANK({home_spread_odds}),{home_spread_odds}=0),NA(),"
             f"IF({home_spread_odds}>0,100/({home_spread_odds}+100),-({home_spread_odds})/(-({home_spread_odds})+100)))"
         )
-        implied_away_spread = (
-            f"IF(OR(ISBLANK({away_spread_odds}),{away_spread_odds}=0),NA(),"
+        ws[spread_implied_away].value = (
+            f"=IF(OR(ISBLANK({away_spread_odds}),{away_spread_odds}=0),NA(),"
             f"IF({away_spread_odds}>0,100/({away_spread_odds}+100),-({away_spread_odds})/(-({away_spread_odds})+100)))"
         )
 
-        edge_home_spread = f"({p_home_cover})-({implied_home_spread})"
-        edge_away_spread = f"({p_away_cover})-({implied_away_spread})"
+        ws[spread_edge_home].value = f"={spread_p_home}-{spread_implied_home}"
+        ws[spread_edge_away].value = f"={spread_p_away}-{spread_implied_away}"
 
         spread_value_side = addr(excel_row, "spread_value_side")
         ws[spread_value_side].value = (
-            f"=IF({edge_home_spread}>={edge_away_spread},{home_abbr},{away_abbr})"
+            f"=IF({spread_edge_home}>={spread_edge_away},{home_abbr},{away_abbr})"
         )
 
         spread_edge_prob = addr(excel_row, "spread_edge_prob")
-        ws[spread_edge_prob].value = f"=MAX(0,{edge_home_spread},{edge_away_spread})"
+        ws[spread_edge_prob].value = f"=MAX(0,{spread_edge_home},{spread_edge_away})"
 
         spread_action = addr(excel_row, "spread_action")
         ws[spread_action].value = (
@@ -413,8 +450,8 @@ def write_betting_template_xlsx(
         away_spread_profit = (
             f"IF({away_spread_odds}>0,{away_spread_odds}/100,100/ABS({away_spread_odds}))"
         )
-        ev_spread_home = f"({p_home_cover})*({home_spread_profit})-(1-({p_home_cover}))"
-        ev_spread_away = f"({p_away_cover})*({away_spread_profit})-(1-({p_away_cover}))"
+        ev_spread_home = f"({spread_p_home})*({home_spread_profit})-(1-({spread_p_home}))"
+        ev_spread_away = f"({spread_p_away})*({away_spread_profit})-(1-({spread_p_away}))"
         ws[spread_ev].value = (
             f"=IF({spread_value_side}={home_abbr},{ev_spread_home},{ev_spread_away})"
         )
@@ -451,48 +488,57 @@ def write_betting_template_xlsx(
 
         # --- Total recommendation using live line + odds (approx prob from quantiles) ---
         total_live = addr(excel_row, "total_live")
-        total_odds_fallback = addr(excel_row, "total_live_odds")
         total_over_odds = addr(excel_row, "total_over_odds_live")
         total_under_odds = addr(excel_row, "total_under_odds_live")
 
-        over_odds_used = f"IF(ISBLANK({total_over_odds}),{total_odds_fallback},{total_over_odds})"
-        under_odds_used = (
-            f"IF(ISBLANK({total_under_odds}),{total_odds_fallback},{total_under_odds})"
-        )
+        over_odds_used = total_over_odds
+        under_odds_used = total_under_odds
 
         total_p10_cell = addr(excel_row, "predicted_total_p10")
         total_p50_cell = addr(excel_row, "predicted_total_p50")
         total_p90_cell = addr(excel_row, "predicted_total_p90")
 
         predicted_total_cell = addr(excel_row, "predicted_total")
-        mu_total = f"IF(ISBLANK({total_p50_cell}),{predicted_total_cell},{total_p50_cell})"
-        sigma_total = (
-            f"IF(OR(ISBLANK({total_p10_cell}),ISBLANK({total_p90_cell})),NA(),"
-            f"({total_p90_cell}-{total_p10_cell})/(2*1.281551565545))"
+        total_mu = addr(excel_row, "total_mu")
+        total_sigma = addr(excel_row, "total_sigma")
+        total_p_over = addr(excel_row, "total_p_over")
+        total_p_under = addr(excel_row, "total_p_under")
+        total_implied_over = addr(excel_row, "total_implied_over_prob")
+        total_implied_under = addr(excel_row, "total_implied_under_prob")
+        total_edge_over = addr(excel_row, "total_edge_over")
+        total_edge_under = addr(excel_row, "total_edge_under")
+
+        ws[total_mu].value = (
+            f"=IF(ISBLANK({total_p50_cell}),{predicted_total_cell},{total_p50_cell})"
+        )
+        ws[total_sigma].value = (
+            f"=IF(OR(ISBLANK({total_p10_cell}),ISBLANK({total_p90_cell})),{DEFAULT_SIGMA_TOTAL},"
+            f"({total_p90_cell}-{total_p10_cell})/({P10_P90_TO_SIGMA_DENOM}))"
         )
 
-        p_over = (
-            f"IF(OR(ISNA({sigma_total}),{sigma_total}<=0,ISBLANK({total_live})),NA(),"
-            f"1-NORM.S.DIST((({total_live})-({mu_total}))/({sigma_total}),TRUE))"
+        ws[total_p_over].value = (
+            f"=IF(OR(ISNA({total_sigma}),{total_sigma}<=0,ISBLANK({total_live})),NA(),"
+            f"1-NORM.S.DIST((({total_live})-({total_mu}))/({total_sigma}),TRUE))"
         )
-        p_under = f"IF(ISNA({p_over}),NA(),1-({p_over}))"
+        ws[total_p_under].value = f"=IF(ISNA({total_p_over}),NA(),1-({total_p_over}))"
 
-        implied_over = (
-            f"IF(OR(ISBLANK({over_odds_used}),{over_odds_used}=0),NA(),"
+        ws[total_implied_over].value = (
+            f"=IF(OR(ISBLANK({over_odds_used}),{over_odds_used}=0),NA(),"
             f"IF({over_odds_used}>0,100/({over_odds_used}+100),-({over_odds_used})/(-({over_odds_used})+100)))"
         )
-        implied_under = (
-            f"IF(OR(ISBLANK({under_odds_used}),{under_odds_used}=0),NA(),"
+        ws[total_implied_under].value = (
+            f"=IF(OR(ISBLANK({under_odds_used}),{under_odds_used}=0),NA(),"
             f"IF({under_odds_used}>0,100/({under_odds_used}+100),-({under_odds_used})/(-({under_odds_used})+100)))"
         )
-        edge_over = f"({p_over})-({implied_over})"
-        edge_under = f"({p_under})-({implied_under})"
+
+        ws[total_edge_over].value = f"={total_p_over}-{total_implied_over}"
+        ws[total_edge_under].value = f"={total_p_under}-{total_implied_under}"
 
         total_value_side = addr(excel_row, "total_value_side")
-        ws[total_value_side].value = f'=IF({edge_over}>={edge_under},"OVER","UNDER")'
+        ws[total_value_side].value = f'=IF({total_edge_over}>={total_edge_under},"OVER","UNDER")'
 
         total_edge_prob = addr(excel_row, "total_edge_prob")
-        ws[total_edge_prob].value = f"=MAX(0,{edge_over},{edge_under})"
+        ws[total_edge_prob].value = f"=MAX(0,{total_edge_over},{total_edge_under})"
 
         total_action = addr(excel_row, "total_action")
         ws[total_action].value = (
@@ -507,8 +553,8 @@ def write_betting_template_xlsx(
         total_ev = addr(excel_row, "total_ev")
         over_profit = f"IF({over_odds_used}>0,{over_odds_used}/100,100/ABS({over_odds_used}))"
         under_profit = f"IF({under_odds_used}>0,{under_odds_used}/100,100/ABS({under_odds_used}))"
-        ev_over = f"({p_over})*({over_profit})-(1-({p_over}))"
-        ev_under = f"({p_under})*({under_profit})-(1-({p_under}))"
+        ev_over = f"({total_p_over})*({over_profit})-(1-({total_p_over}))"
+        ev_under = f"({total_p_under})*({under_profit})-(1-({total_p_under}))"
         ws[total_ev].value = f'=IF({total_value_side}="OVER",{ev_over},{ev_under})'
 
         # --- Highlight model vs live input areas for usability ---
@@ -524,7 +570,6 @@ def write_betting_template_xlsx(
             "total_live",
             "total_over_odds_live",
             "total_under_odds_live",
-            "total_live_odds",
         ):
             j = col_index[col_name]
             ws.cell(row=excel_row, column=j + 1).fill = live_fill
@@ -541,6 +586,8 @@ def write_betting_template_xlsx(
         "away_abbr",
         "home_abbr",
         # User inputs
+        "quarter",
+        "minutes_remaining_in_quarter",
         "minutes_remaining",
         "away_score_live",
         "home_score_live",
@@ -555,7 +602,7 @@ def write_betting_template_xlsx(
         "live_sigma_margin",
         "live_home_win_prob",
         "live_away_win_prob",
-        # Lines/odds (referenced from Bets)
+        # In-play lines/odds (user editable; initialized to pregame values)
         "home_spread_live",
         "away_spread_live",
         "home_spread_odds_live",
@@ -565,7 +612,6 @@ def write_betting_template_xlsx(
         "total_live",
         "total_over_odds_live",
         "total_under_odds_live",
-        "total_live_odds",
         # Live spread probabilities + recommendations
         "live_p_home_cover",
         "live_p_away_cover",
@@ -592,6 +638,15 @@ def write_betting_template_xlsx(
         "live_total_action",
         "live_total_confidence_1_10",
         "live_total_ev",
+        # Hidden helper columns to keep recommendation formulas simple.
+        "live_spread_implied_home_prob",
+        "live_spread_implied_away_prob",
+        "live_spread_edge_home",
+        "live_spread_edge_away",
+        "live_total_implied_over_prob",
+        "live_total_implied_under_prob",
+        "live_total_edge_over",
+        "live_total_edge_under",
     ]
 
     ws_live.append(live_columns)
@@ -627,12 +682,24 @@ def write_betting_template_xlsx(
             ws_live[live_addr(live_row, name)].value = bets_ref(bets_row, name)
 
         # User inputs (blank by default)
-        for name in ("minutes_remaining", "away_score_live", "home_score_live"):
+        for name in (
+            "quarter",
+            "minutes_remaining_in_quarter",
+            "away_score_live",
+            "home_score_live",
+        ):
             cell = ws_live[live_addr(live_row, name)]
             cell.value = None
             cell.fill = live_input_fill
 
+        quarter = live_addr(live_row, "quarter")
+        minutes_in_quarter = live_addr(live_row, "minutes_remaining_in_quarter")
         minutes_remaining = live_addr(live_row, "minutes_remaining")
+        ws_live[minutes_remaining].value = (
+            f"=IF(OR(ISBLANK({quarter}),ISBLANK({minutes_in_quarter})),NA(),"
+            f"MAX(0,MIN(60,(4-({quarter}))*15+({minutes_in_quarter}))))"
+        )
+
         away_score_live = live_addr(live_row, "away_score_live")
         home_score_live = live_addr(live_row, "home_score_live")
 
@@ -662,8 +729,13 @@ def write_betting_template_xlsx(
             f"=IF(ISBLANK({bets_margin_p50}),{bets_margin},{bets_margin_p50})"
         )
         ws_live[pre_sigma_margin].value = (
-            "=IF(OR(ISBLANK({p10}),ISBLANK({p90})),${default_sigma},({p90}-{p10})/(2*1.281551565545))"
-        ).format(p10=bets_margin_p10, p90=bets_margin_p90, default_sigma="AB$1")
+            "=IF(OR(ISBLANK({p10}),ISBLANK({p90})),${default_sigma},({p90}-{p10})/({denom}))"
+        ).format(
+            p10=bets_margin_p10,
+            p90=bets_margin_p90,
+            default_sigma="AB$1",
+            denom=str(P10_P90_TO_SIGMA_DENOM),
+        )
 
         live_mu_margin = live_addr(live_row, "live_mu_margin")
         live_sigma_margin = live_addr(live_row, "live_sigma_margin")
@@ -681,7 +753,9 @@ def write_betting_template_xlsx(
         )
         ws_live[live_away_win].value = f"=IF(ISNA({live_home_win}),NA(),1-({live_home_win}))"
 
-        # Bring in lines/odds from Bets
+        # Initialize in-play lines/odds to the pregame values from the input data,
+        # but keep them editable (no cross-sheet formula dependency).
+        rec = records[i]
         for name in (
             "home_spread_live",
             "away_spread_live",
@@ -692,9 +766,13 @@ def write_betting_template_xlsx(
             "total_live",
             "total_over_odds_live",
             "total_under_odds_live",
-            "total_live_odds",
         ):
-            ws_live[live_addr(live_row, name)].value = bets_ref(bets_row, name)
+            cell = ws_live[live_addr(live_row, name)]
+            val = rec.get(name)
+            if val is pd.NA or (hasattr(pd, "isna") and pd.isna(val)):
+                val = None
+            cell.value = val
+            cell.fill = live_input_fill
 
         # Live spread probabilities
         home_spread_live = live_addr(live_row, "home_spread_live")
@@ -721,8 +799,16 @@ def write_betting_template_xlsx(
             f"IF(OR(ISBLANK({away_spread_odds}),{away_spread_odds}=0),NA(),"
             f"IF({away_spread_odds}>0,100/({away_spread_odds}+100),-({away_spread_odds})/(-({away_spread_odds})+100)))"
         )
-        edge_home_spread = f"({p_home_cover})-({implied_home_spread})"
-        edge_away_spread = f"({p_away_cover})-({implied_away_spread})"
+
+        spread_implied_home = live_addr(live_row, "live_spread_implied_home_prob")
+        spread_implied_away = live_addr(live_row, "live_spread_implied_away_prob")
+        spread_edge_home = live_addr(live_row, "live_spread_edge_home")
+        spread_edge_away = live_addr(live_row, "live_spread_edge_away")
+
+        ws_live[spread_implied_home].value = f"={implied_home_spread}"
+        ws_live[spread_implied_away].value = f"={implied_away_spread}"
+        ws_live[spread_edge_home].value = f"={p_home_cover}-{spread_implied_home}"
+        ws_live[spread_edge_away].value = f"={p_away_cover}-{spread_implied_away}"
 
         away_abbr = live_addr(live_row, "away_abbr")
         home_abbr = live_addr(live_row, "home_abbr")
@@ -733,9 +819,9 @@ def write_betting_template_xlsx(
         spread_ev = live_addr(live_row, "live_spread_ev")
 
         ws_live[spread_value_side].value = (
-            f"=IF({edge_home_spread}>={edge_away_spread},{home_abbr},{away_abbr})"
+            f"=IF({spread_edge_home}>={spread_edge_away},{home_abbr},{away_abbr})"
         )
-        ws_live[spread_edge_prob].value = f"=MAX(0,{edge_home_spread},{edge_away_spread})"
+        ws_live[spread_edge_prob].value = f"=MAX(0,{spread_edge_home},{spread_edge_away})"
         ws_live[spread_action].value = (
             f'=IF({spread_edge_prob}<=0,"PASS",IF({spread_edge_prob}<0.02,"PASS",IF({spread_edge_prob}<0.04,"LEAN",IF({spread_edge_prob}<0.07,"SMALL",IF({spread_edge_prob}<0.10,"MEDIUM","STRONG")))))'
         )
@@ -800,8 +886,13 @@ def write_betting_template_xlsx(
             f"=IF(ISBLANK({bets_total_p50}),{bets_total},{bets_total_p50})"
         )
         ws_live[pre_sigma_total].value = (
-            "=IF(OR(ISBLANK({p10}),ISBLANK({p90})),${default_sigma},({p90}-{p10})/(2*1.281551565545))"
-        ).format(p10=bets_total_p10, p90=bets_total_p90, default_sigma="AB$2")
+            "=IF(OR(ISBLANK({p10}),ISBLANK({p90})),${default_sigma},({p90}-{p10})/({denom}))"
+        ).format(
+            p10=bets_total_p10,
+            p90=bets_total_p90,
+            default_sigma="AB$2",
+            denom=str(P10_P90_TO_SIGMA_DENOM),
+        )
 
         live_mu_total = live_addr(live_row, "live_mu_total")
         live_sigma_total = live_addr(live_row, "live_sigma_total")
@@ -813,13 +904,10 @@ def write_betting_template_xlsx(
         )
 
         total_live = live_addr(live_row, "total_live")
-        total_odds_fallback = live_addr(live_row, "total_live_odds")
         total_over_odds = live_addr(live_row, "total_over_odds_live")
         total_under_odds = live_addr(live_row, "total_under_odds_live")
-        over_odds_used = f"IF(ISBLANK({total_over_odds}),{total_odds_fallback},{total_over_odds})"
-        under_odds_used = (
-            f"IF(ISBLANK({total_under_odds}),{total_odds_fallback},{total_under_odds})"
-        )
+        over_odds_used = total_over_odds
+        under_odds_used = total_under_odds
 
         p_over = live_addr(live_row, "live_p_over")
         p_under = live_addr(live_row, "live_p_under")
@@ -837,8 +925,16 @@ def write_betting_template_xlsx(
             f"IF(OR(ISBLANK({under_odds_used}),{under_odds_used}=0),NA(),"
             f"IF({under_odds_used}>0,100/({under_odds_used}+100),-({under_odds_used})/(-({under_odds_used})+100)))"
         )
-        edge_over = f"({p_over})-({implied_over})"
-        edge_under = f"({p_under})-({implied_under})"
+
+        total_implied_over = live_addr(live_row, "live_total_implied_over_prob")
+        total_implied_under = live_addr(live_row, "live_total_implied_under_prob")
+        total_edge_over = live_addr(live_row, "live_total_edge_over")
+        total_edge_under = live_addr(live_row, "live_total_edge_under")
+
+        ws_live[total_implied_over].value = f"={implied_over}"
+        ws_live[total_implied_under].value = f"={implied_under}"
+        ws_live[total_edge_over].value = f"={p_over}-{total_implied_over}"
+        ws_live[total_edge_under].value = f"={p_under}-{total_implied_under}"
 
         total_value_side = live_addr(live_row, "live_total_value_side")
         total_edge_prob = live_addr(live_row, "live_total_edge_prob")
@@ -846,8 +942,10 @@ def write_betting_template_xlsx(
         total_conf = live_addr(live_row, "live_total_confidence_1_10")
         total_ev = live_addr(live_row, "live_total_ev")
 
-        ws_live[total_value_side].value = f'=IF({edge_over}>={edge_under},"OVER","UNDER")'
-        ws_live[total_edge_prob].value = f"=MAX(0,{edge_over},{edge_under})"
+        ws_live[total_value_side].value = (
+            f'=IF({total_edge_over}>={total_edge_under},"OVER","UNDER")'
+        )
+        ws_live[total_edge_prob].value = f"=MAX(0,{total_edge_over},{total_edge_under})"
         ws_live[total_action].value = (
             f'=IF({total_edge_prob}<=0,"PASS",IF({total_edge_prob}<0.02,"PASS",IF({total_edge_prob}<0.04,"LEAN",IF({total_edge_prob}<0.07,"SMALL",IF({total_edge_prob}<0.10,"MEDIUM","STRONG")))))'
         )
@@ -881,6 +979,41 @@ def write_betting_template_xlsx(
     for name, w in width_map.items():
         if name in col_index:
             ws.column_dimensions[col_letter(col_index[name])].width = w
+
+    # Hide helper columns (they exist only to keep other formulas short).
+    for name in (
+        "spread_mu_margin",
+        "spread_sigma_margin",
+        "spread_p_home_cover",
+        "spread_p_away_cover",
+        "spread_implied_home_prob",
+        "spread_implied_away_prob",
+        "spread_edge_home",
+        "spread_edge_away",
+        "total_mu",
+        "total_sigma",
+        "total_p_over",
+        "total_p_under",
+        "total_implied_over_prob",
+        "total_implied_under_prob",
+        "total_edge_over",
+        "total_edge_under",
+    ):
+        if name in col_index:
+            ws.column_dimensions[col_letter(col_index[name])].hidden = True
+
+    for name in (
+        "live_spread_implied_home_prob",
+        "live_spread_implied_away_prob",
+        "live_spread_edge_home",
+        "live_spread_edge_away",
+        "live_total_implied_over_prob",
+        "live_total_implied_under_prob",
+        "live_total_edge_over",
+        "live_total_edge_under",
+    ):
+        if name in live_col_index:
+            ws_live.column_dimensions[col_letter(live_col_index[name])].hidden = True
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

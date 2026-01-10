@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +16,9 @@ try:
     from nfl_predictor import constants, ml_model
     from nfl_predictor.utils.logger import log
 except ModuleNotFoundError:  # pragma: no cover
-    # Allow running as a script: `python scripts/golden_command.py`.
+    # Allow running as a script: `python scripts/backtest_predictions.py`.
+    import sys
+
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
     from nfl_predictor import constants, ml_model

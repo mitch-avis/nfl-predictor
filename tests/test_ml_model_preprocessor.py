@@ -66,7 +66,7 @@ def test_preprocessor_handles_missing_numeric() -> None:
     if sparse.issparse(features):
         to_csr = getattr(features, "tocsr", None)
         csr_matrix = cast(Any, to_csr)() if to_csr is not None else features
-        data = getattr(csr_matrix, "data")
+        data = csr_matrix.data
         assert not np.isnan(np.asarray(data, dtype=float)).any()
     else:
         dense = np.asarray(features, dtype=float)

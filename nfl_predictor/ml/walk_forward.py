@@ -639,7 +639,15 @@ def _git_commit_hash() -> Optional[str]:
 
 def _library_versions() -> dict[str, Optional[str]]:
     versions: dict[str, Optional[str]] = {}
-    for module_name in ("numpy", "pandas", "polars", "scipy", "sklearn", "xgboost", "optuna"):
+    for module_name in (
+        "numpy",
+        "pandas",
+        "polars",
+        "scipy",
+        "sklearn",
+        "xgboost",
+        "optuna",
+    ):
         try:
             module = importlib.import_module(module_name)
         except ImportError:  # pragma: no cover

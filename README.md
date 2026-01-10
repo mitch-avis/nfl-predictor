@@ -80,13 +80,6 @@ Primary sources:
 - Local cached CSVs under `data/` for Elo/market data when present.
 - TeamRankings web scrape for select rates not available in NFLverse (see ETL logs).
 
-Season coverage limits (examples):
-
-- Injury/participation data via NFLverse is not available for all seasons.
-- For in-progress seasons, NFLverse participation data does not update during the season; recent
-  seasons are published after all postseason games are completed. The ETL emits injury columns as
-  nulls for the current season.
-
 Missing data policy (high level):
 
 - ETL emits all expected columns; missing sources become nulls and/or defined defaults.
@@ -99,13 +92,6 @@ The primary entrypoint is:
 ```bash
 python -m nfl_predictor.ml_model --help
 ```
-
-Injury feature gating:
-
-- By default, when `--predict-path` targets the current (in-progress) season, `ml_model` disables
-  injury burden features so training/prediction do not depend on unavailable in-season inputs.
-- Override with `--injury-features` or `--no-injury-features`.
-- QB Elo (`qb_elos.csv`) is updated frequently and remains available as a QB availability proxy.
 
 ### Quickstart (train + predict)
 
@@ -290,7 +276,6 @@ games.
 - Invariant-schema missing-data handling across seasons.
 - Season-to-date record features (overall/division/conference).
 - Divisional rivalry indicator.
-- Injury/health burden features (with in-season gating by default when inputs are unavailable).
 - Lookahead / next-week context features.
 - Standings-based motivation proxy features (clinch/elimination proxies).
 

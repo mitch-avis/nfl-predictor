@@ -1,2 +1,46 @@
 [tool.black]
 line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312", "py313"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+lint.select = ["E", "F", "W", "I", "B"]
+lint.ignore = [
+    "E203", # space before ':' (conflicts with black)
+]
+extend-exclude = [
+    ".venv",
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    "build",
+    "dist",
+]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",                       # show extra summary for (s)kipped, (x)failed
+    "--strict-markers",
+    "--cov=nfl_predictor",
+    "--cov-report=term-missing",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+branch = true
+source = ["nfl_predictor"]
+omit = ["config.py", "config-*.py", "*/config.py", "*/config-*.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]

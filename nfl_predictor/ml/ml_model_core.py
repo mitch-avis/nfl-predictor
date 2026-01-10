@@ -15,7 +15,6 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
-import __main__
 import joblib
 import numpy as np
 import optuna
@@ -36,6 +35,7 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+import __main__
 from nfl_predictor import constants
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,
@@ -361,10 +361,16 @@ def _build_feature_spec(
         log.debug("Market feature transforms enabled: %s", derived_market_columns)
     log.debug("Dropped metadata columns (%d): %s", len(metadata_columns), metadata_columns)
     log.debug(
-        "Dropped post-feature columns (%d): %s", len(post_feature_columns), post_feature_columns
+        "Dropped post-feature columns (%d): %s",
+        len(post_feature_columns),
+        post_feature_columns,
     )
     if result_columns:
-        log.debug("Target/result columns present (%d): %s", len(result_columns), result_columns)
+        log.debug(
+            "Target/result columns present (%d): %s",
+            len(result_columns),
+            result_columns,
+        )
     dropped_market_columns = sorted(set(excluded_market_columns + dropped_raw_market_columns))
     if dropped_market_columns:
         log.debug(
@@ -770,7 +776,12 @@ def _prepare_margin_total_targets_with_anchor(
     if not market_anchor:
         return margin, total, None, None
     baseline_margin, baseline_total = get_market_baseline(df)
-    return margin - baseline_margin, total - baseline_total, baseline_margin, baseline_total
+    return (
+        margin - baseline_margin,
+        total - baseline_total,
+        baseline_margin,
+        baseline_total,
+    )
 
 
 def _derive_scores_from_margin_total(
@@ -887,7 +898,9 @@ def _fit_quantile_models(
     if x_eval is None or y_eval is None:
         resolved_early_stopping = None
 
-    def _train_with_params(active_params: dict[str, Any]) -> dict[float, xgb.XGBRegressor]:
+    def _train_with_params(
+        active_params: dict[str, Any],
+    ) -> dict[float, xgb.XGBRegressor]:
         fitted: dict[float, xgb.XGBRegressor] = {}
         for quantile in resolved:
             q_params = active_params.copy()
@@ -1287,12 +1300,6 @@ def _build_prediction_output(
     return output_df
 
 
-def _save_model_checkpoint(model: Any, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, path)
-    log.info("Saved model checkpoint to %s", path)
-
-
 def _early_stopping_info(model: Any) -> dict[str, Any]:
     info: dict[str, Any] = {}
 
@@ -1323,6 +1330,8 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
 
 
 def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
+    import warnings
+
     for cls in (
         FeatureSpec,
         ScoreModel,
@@ -1334,7 +1343,34 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
     ):
         setattr(__main__, cls.__name__, cls)
 
-    model = joblib.load(path)
+    # XGBoost can emit a noisy warning when unpickling models across versions.
+    # We keep our own reproducibility metadata; for most same-env runs this warning
+    # is not actionable. If versions differ materially, we log a clearer message below.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*If you are loading a serialized model.*",
+            category=UserWarning,
+        )
+        model = joblib.load(path)
+
+    # If a sibling metadata.json exists, surface version mismatch in a targeted way.
+    try:
+        meta_path = path.with_name("metadata.json")
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            saved_xgb = (meta.get("library_versions") or {}).get("xgboost")
+            current_xgb = xgb.__version__
+            if saved_xgb and saved_xgb != current_xgb:
+                log.info(
+                    "Loaded checkpoint saved with xgboost=%s (current=%s). "
+                    "For maximum portability, prefer retraining in the current environment.",
+                    saved_xgb,
+                    current_xgb,
+                )
+    except Exception:  # pragma: no cover
+        pass
+
     model = _ensure_backward_compatible_model(model)
     expected_types = {
         "score": ScoreModel,
@@ -1355,11 +1391,11 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
 
     def _ensure_margin_total(instance: Any) -> None:
         if not hasattr(instance, "margin_quantile_models"):
-            setattr(instance, "margin_quantile_models", None)
+            instance.margin_quantile_models = None
         if not hasattr(instance, "total_quantile_models"):
-            setattr(instance, "total_quantile_models", None)
+            instance.total_quantile_models = None
         if not hasattr(instance, "quantiles"):
-            setattr(instance, "quantiles", None)
+            instance.quantiles = None
 
     if isinstance(model, MarginTotalModel):
         _ensure_margin_total(model)

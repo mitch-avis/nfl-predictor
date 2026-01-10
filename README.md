@@ -33,8 +33,8 @@ pip install -e .
 python -m pytest
 ```
 
-By default, `pytest` runs with coverage and enforces a minimum threshold (configured in
-`setup.cfg`). To disable coverage for a quick local run:
+By default, pytest runs with coverage enabled (configured in `pyproject.toml`). To disable
+coverage for a quick local run:
 
 ```bash
 python -m pytest --no-cov
@@ -43,7 +43,13 @@ python -m pytest --no-cov
 To run explicitly with coverage (same behavior as the default config):
 
 ```bash
-python -m pytest --cov=nfl_predictor --cov-report=term-missing --cov-fail-under=80
+python -m pytest --cov=nfl_predictor --cov-report=term-missing
+```
+
+To enforce a minimum coverage threshold locally, add `--cov-fail-under`:
+
+```bash
+python -m pytest --cov-fail-under=80
 ```
 
 ## Data collection (Polars + nflreadpy)
@@ -209,6 +215,9 @@ Repo utilities under `scripts/`:
 
 - `scripts/betting_pipeline.py`: end-to-end orchestration (walk-forward compare -> resumable
   tuning -> final train -> weekly predictions + betting_report.csv). See `--help`.
+- `scripts/objective_compare_models.py`: objective walk-forward comparison of two saved models
+  by retraining per fold under identical splits.
+- `scripts/betting_report_excel.py`: generate an Excel betting template/report.
 - `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
   and artifact stamping.
 - `scripts/wf_compare.py`: sweep calibration + market-prob post-processing variants and summarize
@@ -292,7 +301,7 @@ live in `ARCHIVE.md`.
 - ETL and feature engineering run in Polars.
 - All NFLverse data is pulled via `nflreadpy`.
 - Logging uses the project logger; avoid `print`.
-- Formatting is enforced via Black/isort/flake8.
+- Formatting is enforced via Black/isort, and lint is enforced via Ruff.
 
 ## Safety and claims
 

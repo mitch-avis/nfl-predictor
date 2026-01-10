@@ -156,7 +156,7 @@ def build_metadata(
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     """Write JSON to disk with stable formatting."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str))
     log.info("Wrote %s", path)
 
 

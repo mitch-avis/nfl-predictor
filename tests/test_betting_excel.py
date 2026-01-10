@@ -73,7 +73,6 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
         "total_live",
         "total_over_odds_live",
         "total_under_odds_live",
-        "total_live_odds",
         "money_action",
         "spread_action",
         "total_action",

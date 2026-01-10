@@ -41,8 +41,9 @@ Resuming / stopping / restarting:
     - stage 3 is skipped if final_model.joblib + predictions.csv exist
 
 GPU notes:
-- For XGBoost GPU training, use:
-    --xgb-tree-method gpu_hist --xgb-device cuda:0
+- For XGBoost >= 2.0, GPU is selected via `device=cuda` with `tree_method=hist`.
+    Recommended:
+        --xgb-tree-method hist --xgb-device cuda
 - Even with GPU, CPU work still happens (feature preprocessing, data movement).
     --xgb-n-jobs controls XGBoost CPU thread usage; it may still matter a bit for throughput.
 
@@ -60,7 +61,7 @@ One-shot end-to-end run (2h tuning, GPU, Week 19 predictions):
 
     python scripts/betting_pipeline.py \
         --tune-timeout 7200 \
-        --xgb-tree-method gpu_hist --xgb-device cuda:0 \
+        --xgb-tree-method hist --xgb-device cuda \
         --include-postseason --postseason-weight 1.15 \
         --predict-path data/predict/week_19_games_to_predict.csv \
         --output-predictions data/predict/week_19_wildcard_predictions.csv
@@ -414,14 +415,17 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--xgb-tree-method",
         type=str,
-        default="gpu_hist",
-        help="XGBoost tree_method (e.g., gpu_hist, hist).",
+        default="hist",
+        help=(
+            "XGBoost tree_method (valid: auto, hist, approx, exact; recommended: hist; "
+            "GPU selected via --xgb-device cuda)."
+        ),
     )
     parser.add_argument(
         "--xgb-device",
         type=str,
-        default="cuda:0",
-        help="XGBoost device (e.g., cuda, cuda:0, cpu).",
+        default="cuda",
+        help="XGBoost device (e.g., cuda, cpu).",
     )
     parser.add_argument(
         "--xgb-n-jobs",
@@ -647,7 +651,7 @@ def main() -> int:
         best_row = json.loads(wf_best_json.read_text(encoding="utf-8"))
     else:
         log.info(
-            "Stage 1: running walk-forward comparison (GPU=%s, device=%s)",
+            "Stage 1: running walk-forward comparison (tree_method=%s, device=%s)",
             args.xgb_tree_method,
             args.xgb_device,
         )

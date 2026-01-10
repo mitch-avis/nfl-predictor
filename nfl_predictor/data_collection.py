@@ -122,12 +122,20 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
     Returns:
         Combined DataFrame with all game data and features
     """
-    log.info("Collecting data for %d seasons: %s - %s", len(seasons), min(seasons), max(seasons))
+    log.info(
+        "Collecting data for %d seasons: %s - %s",
+        len(seasons),
+        min(seasons),
+        max(seasons),
+    )
 
     # Load full schedule with lines/odds directly from nflreadpy
     # Includes both regular season (REG) and playoff games (WC, DIV, CON, SB)
     schedule_df = polars_utils.load_schedule(seasons)
-    log.info("Loaded schedule: %d total games (regular season + playoffs)", schedule_df.height)
+    log.info(
+        "Loaded schedule: %d total games (regular season + playoffs)",
+        schedule_df.height,
+    )
 
     # Determine seasons to load for team stats
     # Include previous season for week 1 regression if not processing from the beginning
@@ -300,7 +308,11 @@ def process_week(
     """
     # Skip the very first week of the first processed season (no prior data to aggregate)
     if season == min(SEASONS_TO_PROCESS) and week == 1:
-        log.info("Skipping season %d week %d (no prior games to build features)", season, week)
+        log.info(
+            "Skipping season %d week %d (no prior games to build features)",
+            season,
+            week,
+        )
         return pl.DataFrame()
 
     # Get this week's games

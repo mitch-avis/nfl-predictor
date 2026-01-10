@@ -180,3 +180,133 @@ def test_wf_market_prob_weight_overrides_probs() -> None:
 
     market_prob = 110.0 / (110.0 + 100.0)
     assert np.allclose(probs, market_prob)
+
+
+def test_dataset_fingerprint_matches_sha256(tmp_path: "Path") -> None:
+    """Computes SHA-256 fingerprint of file contents."""
+
+    import hashlib
+    from pathlib import Path
+
+    path = Path(tmp_path) / "data.bin"
+    payload = b"abc\x00def"
+    path.write_bytes(payload)
+
+    expected = hashlib.sha256(payload).hexdigest()
+    assert walk_forward.dataset_fingerprint(path) == expected
+
+
+def test_generate_run_id_is_deterministic_under_fixed_time(monkeypatch: "pytest.MonkeyPatch") -> None:
+    """Builds a stable run_id when datetime is fixed."""
+
+    import pytest
+
+    class _FixedDatetime:
+        @staticmethod
+        def now(_tz: object) -> "_FixedDatetime":  # noqa: ANN401
+            return _FixedDatetime()
+
+        def strftime(self, _fmt: str) -> str:
+            return "20260110_000000"
+
+    monkeypatch.setattr(walk_forward, "datetime", _FixedDatetime)
+
+    cfg = walk_forward.WalkForwardConfig(
+        eval_seasons=[2024],
+        eval_last_n_seasons=1,
+        wf_start_week=3,
+        calibration="none",
+        include_market=False,
+        market_anchor=False,
+        include_quantiles=False,
+    )
+    run_id_a = walk_forward.generate_run_id("deadbeef", cfg)
+    run_id_b = walk_forward.generate_run_id("deadbeef", cfg)
+
+    assert run_id_a == run_id_b
+    assert run_id_a.startswith("wf_20260110_000000_")
+    assert len(run_id_a.split("_")[-1]) == 8
+
+
+def test_build_metrics_report_shape() -> None:
+    """Builds a JSON-serializable metrics report envelope."""
+
+    report = walk_forward.build_metrics_report(
+        run_id="wf_test",
+        created_at="2026-01-10T00:00:00Z",
+        config_payload={"foo": "bar"},
+        results={
+            "per_week": [{"week": 3, "games": 1}],
+            "per_season": [{"season": 2024, "games": 1}],
+            "overall": {"games": 1},
+            "reliability": [{"bin_lower": 0.0, "bin_upper": 0.1, "count": 1}],
+        },
+    )
+
+    assert report["run_id"] == "wf_test"
+    assert report["metrics"]["overall"]["games"] == 1
+    assert report["calibration"]["bin_count"] == walk_forward.RELIABILITY_BINS
+
+
+def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> None:
+    """Computes optional market residual MAE and interval coverage diagnostics."""
+
+    frame = pd.DataFrame(
+        {
+            "season": [2024, 2024],
+            "week": [3, 3],
+            "actual_margin": [3.0, -7.0],
+            "predicted_margin": [2.0, -6.0],
+            "actual_total": [41.0, 38.0],
+            "predicted_total": [40.0, 39.0],
+            "actual_home_win": [1, 0],
+            "home_win_prob": [0.7, 0.3],
+            "expected_points": [1.5, 2.0],
+            "actual_points": [1.0, 2.0],
+            "pick_correct": [True, True],
+            "market_baseline_margin": [1.0, -5.0],
+            "market_baseline_total": [39.0, 37.0],
+            "predicted_margin_p10": [0.0, -9.0],
+            "predicted_margin_p90": [5.0, -3.0],
+            "predicted_total_p10": [35.0, 33.0],
+            "predicted_total_p90": [47.0, 45.0],
+        }
+    )
+
+    metrics = walk_forward._aggregate_metrics(frame, market_anchor=True)
+    assert metrics["season"] == 2024
+    assert metrics["games"] == 2
+    assert "market_margin_resid_mae" in metrics
+    assert "market_total_resid_mae" in metrics
+    assert "margin_p10_p90_coverage" in metrics
+    assert "total_p10_p90_coverage" in metrics
+
+
+def test_git_commit_hash_returns_none_on_failure(monkeypatch: "pytest.MonkeyPatch") -> None:
+    """Returns None when git command fails or returns non-zero."""
+
+    import pytest
+
+    class _Result:
+        returncode = 1
+        stdout = ""
+
+    monkeypatch.setattr(walk_forward.subprocess, "run", lambda *_args, **_kwargs: _Result())
+    assert walk_forward._git_commit_hash() is None
+
+
+def test_library_versions_handles_import_error(monkeypatch: "pytest.MonkeyPatch") -> None:
+    """Records None version when a dependency import fails."""
+
+    import pytest
+
+    def _fake_import(name: str):
+        if name == "optuna":
+            raise ImportError("missing")
+        module = type("M", (), {"__version__": "1.0.0"})
+        return module
+
+    monkeypatch.setattr(walk_forward.importlib, "import_module", _fake_import)
+    versions = walk_forward._library_versions()
+    assert versions["optuna"] is None
+    assert versions["numpy"] == "1.0.0"

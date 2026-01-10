@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import joblib
+import numpy as np
 
 from nfl_predictor.ml import artifacts
 
@@ -48,3 +49,17 @@ def test_artifacts_write_and_load_roundtrip(tmp_path: Path) -> None:
     assert "params" in metadata
     assert "tuned_params" in metadata
     assert "early_stopping" in metadata
+
+
+def test_write_json_handles_numpy_scalars(tmp_path: Path) -> None:
+    """write_json should tolerate numpy scalar types like numpy.int64."""
+
+    path = tmp_path / "payload.json"
+    payload = {
+        "a": np.int64(7),
+        "b": [np.int64(1), np.float64(2.5)],
+        "c": {"nested": np.int64(3)},
+    }
+    artifacts.write_json(path, payload)
+    text = path.read_text(encoding="utf-8")
+    assert '"a"' in text

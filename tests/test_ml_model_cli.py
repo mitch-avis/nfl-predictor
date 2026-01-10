@@ -82,7 +82,13 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         pretty_output: bool,
         score_rounding: str,
     ) -> pd.DataFrame:
-        calls["predict_args"] = (model, games_path, output_path, pretty_output, score_rounding)
+        calls["predict_args"] = (
+            model,
+            games_path,
+            output_path,
+            pretty_output,
+            score_rounding,
+        )
         return pd.DataFrame()
 
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
@@ -302,7 +308,9 @@ def test_main_blend_training_predict(monkeypatch, tmp_path: Path) -> None:
     calls: dict[str, Any] = {}
 
     monkeypatch.setattr(
-        ml_model_cli, "train_blended_margin_total_model_with_report", lambda **_kwargs: result
+        ml_model_cli,
+        "train_blended_margin_total_model_with_report",
+        lambda **_kwargs: result,
     )
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")

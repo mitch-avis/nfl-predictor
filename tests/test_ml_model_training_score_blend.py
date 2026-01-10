@@ -77,20 +77,28 @@ def test_train_score_model_minimal(monkeypatch) -> None:
 
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
     monkeypatch.setattr(
-        ml_model_training, "_build_feature_spec", lambda *_args, **_kwargs: _feature_spec()
+        ml_model_training,
+        "_build_feature_spec",
+        lambda *_args, **_kwargs: _feature_spec(),
     )
     monkeypatch.setattr(
         ml_model_training, "_apply_feature_spec", lambda frame, _spec: frame[["feat1"]]
     )
     monkeypatch.setattr(
-        ml_model_training, "_build_preprocessor", lambda *_args, **_kwargs: _DummyPreprocessor()
+        ml_model_training,
+        "_build_preprocessor",
+        lambda *_args, **_kwargs: _DummyPreprocessor(),
     )
     monkeypatch.setattr(
-        ml_model_training, "_fit_models", lambda *_args, **_kwargs: ("away_model", "home_model")
+        ml_model_training,
+        "_fit_models",
+        lambda *_args, **_kwargs: ("away_model", "home_model"),
     )
     monkeypatch.setattr(ml_model_training, "_predict_xgb", lambda _model, _x: np.array([10.0]))
     monkeypatch.setattr(
-        ml_model_training, "_evaluate_predictions", lambda *_args, **_kwargs: {"mae": 1.0}
+        ml_model_training,
+        "_evaluate_predictions",
+        lambda *_args, **_kwargs: {"mae": 1.0},
     )
 
     model = ml_model_training.train_score_model(

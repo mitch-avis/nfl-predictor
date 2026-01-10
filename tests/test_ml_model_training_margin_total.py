@@ -69,13 +69,17 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
 
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
     monkeypatch.setattr(
-        ml_model_training, "_build_feature_spec", lambda *_args, **_kwargs: _feature_spec()
+        ml_model_training,
+        "_build_feature_spec",
+        lambda *_args, **_kwargs: _feature_spec(),
     )
     monkeypatch.setattr(
         ml_model_training, "_apply_feature_spec", lambda frame, _spec: frame[["feat1"]]
     )
     monkeypatch.setattr(
-        ml_model_training, "_build_preprocessor", lambda *_args, **_kwargs: _DummyPreprocessor()
+        ml_model_training,
+        "_build_preprocessor",
+        lambda *_args, **_kwargs: _DummyPreprocessor(),
     )
     monkeypatch.setattr(
         ml_model_training,

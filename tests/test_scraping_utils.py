@@ -72,7 +72,7 @@ def test_scrape_survivor_grid_spreads_parses(monkeypatch) -> None:
         <body>
             <table>
                 <tr><th>Team</th><th>16</th><th>17</th></tr>
-                {''.join(rows)}
+                {"".join(rows)}
             </table>
         </body>
     </html>

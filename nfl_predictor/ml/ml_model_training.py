@@ -160,7 +160,10 @@ def train_score_model(
         len(feature_spec.categorical_columns),
     )
     if feature_spec.high_cardinality_columns:
-        log.info("Dropped high-cardinality columns: %s", feature_spec.high_cardinality_columns)
+        log.info(
+            "Dropped high-cardinality columns: %s",
+            feature_spec.high_cardinality_columns,
+        )
 
     x_train_df = _apply_feature_spec(train_df, feature_spec)
     x_holdout_df = _apply_feature_spec(holdout_df, feature_spec)
@@ -964,7 +967,11 @@ def train_blended_margin_total_model_with_report(
         home_win_prob = _predict_home_win_prob(blended_margin, model.calibrator)
         home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, model.market_prob_config)
         holdout_metrics = _evaluate_margin_total_predictions(
-            holdout_df, blended_margin, blended_total, model.target_columns, home_win_prob
+            holdout_df,
+            blended_margin,
+            blended_total,
+            model.target_columns,
+            home_win_prob,
         )
 
     report = {

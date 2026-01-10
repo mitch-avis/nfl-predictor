@@ -42,6 +42,7 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     wb = openpyxl.load_workbook(out)
     assert "README" in wb.sheetnames
     assert "Bets" in wb.sheetnames
+    assert "Live" in wb.sheetnames
 
     ws = wb["Bets"]
     headers = [c.value for c in ws[1]]
@@ -70,12 +71,22 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
         "away_moneyline_live",
         "home_moneyline_live",
         "total_live",
+        "total_over_odds_live",
+        "total_under_odds_live",
         "total_live_odds",
-        "action",
+        "money_action",
         "spread_action",
         "total_action",
     ):
         assert col in headers
+
+    # Live sheet should include a win-probability formula cell.
+    ws_live = wb["Live"]
+    live_headers = [c.value for c in ws_live[1]]
+    assert "live_home_win_prob" in live_headers
+    live_prob_cell = ws_live.cell(row=2, column=live_headers.index("live_home_win_prob") + 1)
+    assert isinstance(live_prob_cell.value, str)
+    assert "NORM.S.DIST" in live_prob_cell.value
 
     # Date should be present for sorting.
     date_cell = ws.cell(row=2, column=headers.index("date") + 1)

@@ -172,7 +172,14 @@ def compare_latest_week_scores(
     Returns:
         DataFrame of mismatched games (empty if none or if schedule unavailable).
     """
-    required_cols = {"season", "week", "away_abbr", "home_abbr", "away_score", "home_score"}
+    required_cols = {
+        "season",
+        "week",
+        "away_abbr",
+        "home_abbr",
+        "away_score",
+        "home_score",
+    }
     if not required_cols.issubset(all_data_df.columns):
         log.warning("all_data_df missing required score columns for comparison")
         return pl.DataFrame()

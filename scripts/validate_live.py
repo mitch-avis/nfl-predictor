@@ -8,7 +8,6 @@ Network access may be required depending on the nflreadpy backend.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import polars as pl
@@ -17,7 +16,9 @@ try:
     from nfl_predictor import constants
     from nfl_predictor.utils import validation_utils
 except ModuleNotFoundError:  # pragma: no cover
-    # Allow running as a script: `python scripts/golden_command.py`.
+    # Allow running as a script: `python scripts/validate_live.py`.
+    import sys
+
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
     from nfl_predictor import constants

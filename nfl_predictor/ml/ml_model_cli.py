@@ -221,13 +221,13 @@ def _parse_args() -> argparse.Namespace:
         "--xgb-tree-method",
         type=str,
         default="auto",
-        help="XGBoost tree_method (e.g., hist, gpu_hist, auto).",
+        help="XGBoost tree_method (e.g., auto, hist, approx, exact).",
     )
     parser.add_argument(
         "--xgb-device",
         type=str,
         default="auto",
-        help="XGBoost device (e.g., cpu, cuda, cuda:0).",
+        help="XGBoost device (e.g., cpu, cuda).",
     )
     parser.add_argument(
         "--xgb-n-jobs",

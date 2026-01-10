@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,6 +28,8 @@ try:
     from nfl_predictor.utils.logger import log
 except ModuleNotFoundError:  # pragma: no cover
     # Allow running as a script: `python scripts/golden_command.py`.
+    import sys
+
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
     from nfl_predictor import constants, ml_model

@@ -113,7 +113,11 @@ def load_team_rankings(
         if os.path.exists(week_file):
             try:
                 week_df = pl.read_csv(week_file)
-            except (pl.exceptions.ComputeError, pl.exceptions.NoDataError, OSError) as e:
+            except (
+                pl.exceptions.ComputeError,
+                pl.exceptions.NoDataError,
+                OSError,
+            ) as e:
                 log.warning("Failed to read TR file for week %d: %s", week, e)
                 weeks_to_full_scrape.append((week, None))
                 continue
@@ -452,7 +456,11 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
     # Opponent points per play
     has_opp_plays = all(
         c in agg_df.columns
-        for c in ["opponent_pass_attempts", "opponent_rush_attempts", "opponent_times_sacked"]
+        for c in [
+            "opponent_pass_attempts",
+            "opponent_rush_attempts",
+            "opponent_times_sacked",
+        ]
     )
     if has_opp_plays and "points_allowed" in agg_df.columns:
         opp_total_plays = (

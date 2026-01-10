@@ -15,6 +15,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
+import __main__
 import joblib
 import numpy as np
 import optuna
@@ -35,7 +36,6 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-import __main__
 from nfl_predictor import constants
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,

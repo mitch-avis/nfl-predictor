@@ -54,8 +54,8 @@ def test_betting_pipeline_stage2_passes_calibration_for_blend(tmp_path, monkeypa
     (run_dir / "wf_compare.csv").write_text("label,brier,log_loss\n", encoding="utf-8")
     (run_dir / "wf_best.json").write_text(
         (
-            "{\"label\":\"elo_base\",\"calibration\":\"elo\","
-            "\"market_prob_weight\":0.0,\"market_prob_clamp\":0.0}"
+            '{"label":"elo_base","calibration":"elo",'
+            '"market_prob_weight":0.0,"market_prob_clamp":0.0}'
         ),
         encoding="utf-8",
     )

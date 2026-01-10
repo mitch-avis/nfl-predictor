@@ -32,7 +32,6 @@ from nfl_predictor.ml.ml_model_core import (
     _apply_feature_spec,
     _build_feature_spec,
     _build_preprocessor,
-    _drop_injury_feature_columns,
     _early_stopping_info,
     _evaluate_margin_total_predictions,
     _evaluate_predictions,
@@ -123,7 +122,6 @@ def train_score_model(
     data_path: Path,
     holdout_seasons: int,
     include_market: bool,
-    include_injuries: bool,
     max_cardinality_ratio: float,
     market_prob_config: Optional[MarketProbConfig],
     include_postseason: bool = False,
@@ -140,11 +138,6 @@ def train_score_model(
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
-
-    if not include_injuries:
-        df, dropped = _drop_injury_feature_columns(df)
-        if dropped:
-            log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
     df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
@@ -223,7 +216,6 @@ def train_score_model_with_report(
 ) -> TrainingResult:
     """Train a score model and return a structured metrics report payload."""
     data_path: Path = kwargs["data_path"]
-    kwargs.setdefault("include_injuries", True)
 
     model: ScoreModel = train_score_model(**kwargs)
     df = _load_games(data_path)
@@ -274,7 +266,6 @@ def train_margin_total_model(
     calibration_seasons: int,
     calibration_weeks: int,
     include_market: bool,
-    include_injuries: bool,
     max_cardinality_ratio: float,
     win_prob_calibration: str,
     optuna_config: OptunaConfig,
@@ -292,11 +283,6 @@ def train_margin_total_model(
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
-
-    if not include_injuries:
-        df, dropped = _drop_injury_feature_columns(df)
-        if dropped:
-            log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
     df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
@@ -575,8 +561,6 @@ def train_margin_total_model_with_report(
     calibration_seasons: int = kwargs["calibration_seasons"]
     calibration_weeks: int = kwargs["calibration_weeks"]
 
-    kwargs.setdefault("include_injuries", True)
-
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
@@ -660,7 +644,6 @@ def train_blended_margin_total_model(
     market_transform: bool,
     market_anchor: bool,
     market_prob_config: Optional[MarketProbConfig],
-    include_injuries: bool = True,
     include_postseason: bool = False,
     postseason_weight: float = 1.0,
     min_season: Optional[int] = None,
@@ -677,11 +660,6 @@ def train_blended_margin_total_model(
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
-
-    if not include_injuries:
-        df, dropped = _drop_injury_feature_columns(df)
-        if dropped:
-            log.info("Injury features disabled; dropping %d columns.", len(dropped))
 
     df = _filter_season_bounds(df, min_season, max_season)
     df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
@@ -945,7 +923,6 @@ def train_blended_margin_total_model_with_report(
 ) -> TrainingResult:
     """Train a blended model and return a structured metrics report payload."""
     data_path: Path = kwargs["data_path"]
-    kwargs.setdefault("include_injuries", True)
 
     model: BlendedMarginTotalModel = train_blended_margin_total_model(**kwargs)
     df = _load_games(data_path)

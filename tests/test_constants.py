@@ -38,7 +38,6 @@ def test_polars_metadata_columns_are_unique_and_include_new_feature_columns() ->
     for required in (
         *constants.RECORD_FEATURE_COLUMNS,
         *constants.DIVISIONAL_FEATURE_COLUMNS,
-        *constants.INJURY_FEATURE_COLUMNS,
         *constants.LOOKAHEAD_FEATURE_COLUMNS,
         *constants.MOTIVATION_FEATURE_COLUMNS,
     ):
@@ -50,7 +49,6 @@ def test_feature_column_groups_have_no_duplicates() -> None:
     groups = (
         constants.RECORD_FEATURE_COLUMNS,
         constants.DIVISIONAL_FEATURE_COLUMNS,
-        constants.INJURY_FEATURE_COLUMNS,
         constants.LOOKAHEAD_FEATURE_COLUMNS,
         constants.MOTIVATION_FEATURE_COLUMNS,
     )

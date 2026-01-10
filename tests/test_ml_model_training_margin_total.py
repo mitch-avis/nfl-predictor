@@ -147,7 +147,6 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
         calibration_seasons=1,
         calibration_weeks=0,
         include_market=True,
-        include_injuries=True,
         max_cardinality_ratio=0.5,
         win_prob_calibration="isotonic",
         optuna_config=optuna_config,

@@ -53,12 +53,10 @@ if TYPE_CHECKING:
         TrainingResult,
         WinProbCalibrator,
         _build_preprocessor,
-        _drop_injury_feature_columns,
         _fit_blend_ridge_constrained,
         _fit_margin_total_models,
         _prepare_margin_total_targets_with_anchor,
         _resolve_xgb_params,
-        _should_enable_injury_features,
     )
 
 

@@ -249,9 +249,6 @@ def process_season(
     # Get unique weeks in the schedule
     weeks = sorted(season_schedule.select("week").unique().to_series().to_list())
 
-    # Load injuries once per season (may be empty for seasons without coverage)
-    injuries_df = polars_utils.load_injuries([season])
-
     # Process each week
     weekly_data = []
     for week in weeks:
@@ -263,7 +260,6 @@ def process_season(
             elo_df,
             tr_df,
             prev_tr_df,
-            injuries_df,
         )
         if week_data.height > 0:
             weekly_data.append(week_data)
@@ -282,7 +278,6 @@ def process_week(
     elo_df: Optional[pl.DataFrame] = None,
     tr_df: Optional[pl.DataFrame] = None,
     prev_tr_df: Optional[pl.DataFrame] = None,
-    injuries_df: Optional[pl.DataFrame] = None,
 ) -> pl.DataFrame:
     """
     Process a single week's games with aggregated stats from prior weeks.
@@ -460,14 +455,6 @@ def process_week(
 
     # Divisional rivalry feature
     merged = polars_utils.add_divisional_matchup_feature(merged)
-
-    # Injury burden features (null for seasons without coverage)
-    merged = polars_utils.add_injury_burden_features(
-        merged,
-        injuries_df,
-        season=season,
-        week=week,
-    )
 
     # Lookahead / next-week context features (null when schedule context is unavailable)
     try:

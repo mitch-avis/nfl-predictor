@@ -42,7 +42,6 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
     monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", fake_with_market_prob_config)
-    monkeypatch.setattr(ml_model_cli, "get_current_nfl_week", lambda: (2024, 1))
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
@@ -67,10 +66,6 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
     predict_path = tmp_path / "week.csv"
     calls: dict[str, Any] = {}
 
-    def fake_load_games(path: Path) -> pd.DataFrame:
-        calls["load_games"] = path
-        return pd.DataFrame()
-
     def fake_load_model_checkpoint(path: Path, kind: str) -> str:
         calls["model"] = (path, kind)
         return "model"
@@ -90,11 +85,9 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         calls["predict_args"] = (model, games_path, output_path, pretty_output, score_rounding)
         return pd.DataFrame()
 
-    monkeypatch.setattr(ml_model_cli, "_load_games", fake_load_games)
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
     monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", fake_with_market_prob_config)
     monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", fake_predict)
-    monkeypatch.setattr(ml_model_cli, "get_current_nfl_week", lambda: (2024, 1))
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
@@ -156,7 +149,6 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
     monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-    monkeypatch.setattr(ml_model_cli, "get_current_nfl_week", lambda: (2024, 1))
 
     monkeypatch.setattr(
         sys,
@@ -197,18 +189,14 @@ def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ml_model_cli.log, "info", fake_log)
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args, **_kwargs: "model")
     monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", lambda model, _cfg: model)
-    monkeypatch.setattr(
-        ml_model_cli, "_should_enable_injury_features", lambda *_args, **_kwargs: False
-    )
-    monkeypatch.setattr(ml_model_cli, "get_current_nfl_week", lambda: (2024, 1))
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     monkeypatch.setattr(sys, "argv", ["prog", "--model-in", str(model_path), "--tune"])
     ml_model_cli.main()
 
-    assert any("Injury features disabled" in msg for msg in messages)
-    assert any("ignoring training" in msg for msg in messages)
+    assert any("Model checkpoint provided; ignoring training" in msg for msg in messages)
+    assert any("No --predict-path provided" in msg for msg in messages)
 
 
 def test_main_model_in_predict_score(monkeypatch, tmp_path: Path) -> None:
@@ -218,10 +206,8 @@ def test_main_model_in_predict_score(monkeypatch, tmp_path: Path) -> None:
     predict_path = tmp_path / "week.csv"
     calls: dict[str, Any] = {}
 
-    monkeypatch.setattr(ml_model_cli, "_load_games", lambda _path: pd.DataFrame())
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args, **_kwargs: "model")
     monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", lambda model, _cfg: model)
-    monkeypatch.setattr(ml_model_cli, "get_current_nfl_week", lambda: (2024, 1))
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
@@ -266,7 +252,6 @@ def test_main_score_training_predicts_and_writes(monkeypatch, tmp_path: Path) ->
     )
     calls: dict[str, Any] = {}
 
-    monkeypatch.setattr(ml_model_cli, "_load_games", lambda _path: pd.DataFrame())
     monkeypatch.setattr(ml_model_cli, "train_score_model_with_report", lambda **_kwargs: result)
     monkeypatch.setattr(
         ml_model_cli.artifacts,
@@ -276,7 +261,6 @@ def test_main_score_training_predicts_and_writes(monkeypatch, tmp_path: Path) ->
     monkeypatch.setattr(ml_model_cli.artifacts, "write_json", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-    monkeypatch.setattr(ml_model_cli, "get_current_nfl_week", lambda: (2024, 1))
 
     def fake_predict(*_args: object, **_kwargs: object) -> pd.DataFrame:
         calls["predicted"] = True
@@ -317,13 +301,11 @@ def test_main_blend_training_predict(monkeypatch, tmp_path: Path) -> None:
     )
     calls: dict[str, Any] = {}
 
-    monkeypatch.setattr(ml_model_cli, "_load_games", lambda _path: pd.DataFrame())
     monkeypatch.setattr(
         ml_model_cli, "train_blended_margin_total_model_with_report", lambda **_kwargs: result
     )
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-    monkeypatch.setattr(ml_model_cli, "get_current_nfl_week", lambda: (2024, 1))
 
     def fake_predict(*_args: object, **_kwargs: object) -> pd.DataFrame:
         calls["predicted"] = True
@@ -365,7 +347,6 @@ def test_main_model_outside_run_dir_raises(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ml_model_cli, "train_score_model_with_report", lambda **_kwargs: result)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-    monkeypatch.setattr(ml_model_cli, "get_current_nfl_week", lambda: (2024, 1))
 
     monkeypatch.setattr(
         sys,

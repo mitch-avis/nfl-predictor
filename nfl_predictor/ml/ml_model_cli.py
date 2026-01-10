@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any, Optional
-
-import pandas as pd
+from typing import Any
 
 from nfl_predictor import constants
 from nfl_predictor.ml import artifacts
@@ -23,9 +21,7 @@ from nfl_predictor.ml.ml_model_core import (
     MarketProbConfig,
     OptunaConfig,
     TrainingResult,
-    _load_games,
     _load_model_checkpoint,
-    _should_enable_injury_features,
     _with_market_prob_config,
 )
 from nfl_predictor.ml.ml_model_predict import (
@@ -39,7 +35,6 @@ from nfl_predictor.ml.ml_model_training import (
     train_score_model_with_report,
 )
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.scraping_utils import get_current_nfl_week
 
 
 def _parse_args() -> argparse.Namespace:
@@ -83,15 +78,6 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Sample-weight multiplier for postseason rows when --include-postseason is enabled. "
             "Default: 1.0 (no upweight)."
-        ),
-    )
-    parser.add_argument(
-        "--injury-features",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help=(
-            "Include injury burden features. Default: auto (disabled when predicting an "
-            "in-progress season where injury inputs are unavailable)."
         ),
     )
     parser.add_argument(
@@ -320,23 +306,6 @@ def main() -> None:
     """CLI entry point for training and prediction."""
     args = _parse_args()
 
-    predict_df: Optional[pd.DataFrame] = None
-    if args.predict_path is not None:
-        predict_df = _load_games(args.predict_path)
-
-    current_season, _ = get_current_nfl_week()
-    include_injuries = _should_enable_injury_features(
-        args.injury_features,
-        predict_df,
-        current_season=current_season,
-    )
-    if not include_injuries:
-        log.info(
-            "Injury features disabled (auto=%s). QB Elo remains available as a QB availability "
-            "proxy.",
-            args.injury_features is None,
-        )
-
     created_at = artifacts.now_utc_iso()
     dataset_hash = artifacts.sha256_file(args.data_path)
 
@@ -453,7 +422,6 @@ def main() -> None:
             data_path=args.data_path,
             holdout_seasons=args.holdout_seasons,
             include_market=not args.exclude_market,
-            include_injuries=include_injuries,
             max_cardinality_ratio=args.max_cardinality_ratio,
             market_prob_config=market_prob_config,
             include_postseason=args.include_postseason,
@@ -488,7 +456,6 @@ def main() -> None:
             calibration_seasons=args.calibration_seasons,
             calibration_weeks=args.calibration_weeks,
             include_market=not args.exclude_market,
-            include_injuries=include_injuries,
             max_cardinality_ratio=args.max_cardinality_ratio,
             win_prob_calibration=args.win_prob_calibration,
             optuna_config=optuna_config,
@@ -529,7 +496,6 @@ def main() -> None:
             market_transform=args.market_transform,
             market_anchor=args.market_anchor,
             market_prob_config=market_prob_config,
-            include_injuries=include_injuries,
             include_postseason=args.include_postseason,
             postseason_weight=args.postseason_weight,
             min_season=args.min_season,

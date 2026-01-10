@@ -95,7 +95,6 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         calibration_seasons=1,
         calibration_weeks=0,
         include_market=True,
-        include_injuries=True,
         max_cardinality_ratio=0.5,
         win_prob_calibration="none",
         optuna_config=OptunaConfig(

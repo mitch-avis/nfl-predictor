@@ -487,46 +487,6 @@ DIVISIONAL_FEATURE_COLUMNS = [
     "is_divisional_matchup",
 ]
 
-INJURY_POSITION_GROUPS: dict[str, tuple[str, ...]] = {
-    "qb": ("QB",),
-    "rb": ("RB", "FB"),
-    "wr": ("WR",),
-    "te": ("TE",),
-    "ol": ("C", "G", "OG", "OT", "T"),
-    "dl": ("DT", "DE", "DL", "NT"),
-    "lb": ("LB", "ILB", "OLB"),
-    "db": ("CB", "DB", "FS", "SS", "S"),
-}
-
-# Maps NFLverse `report_status` strings to a numeric burden weight. Unknown statuses default to 0.
-INJURY_REPORT_STATUS_WEIGHTS: dict[str, float] = {
-    "out": 1.0,
-    "doubtful": 0.75,
-    "questionable": 0.5,
-    "probable": 0.25,
-}
-
-INJURY_FEATURE_COLUMNS = [
-    "away_injury_burden_total",
-    "home_injury_burden_total",
-    "away_injury_burden_qb",
-    "away_injury_burden_rb",
-    "away_injury_burden_wr",
-    "away_injury_burden_te",
-    "away_injury_burden_ol",
-    "away_injury_burden_dl",
-    "away_injury_burden_lb",
-    "away_injury_burden_db",
-    "home_injury_burden_qb",
-    "home_injury_burden_rb",
-    "home_injury_burden_wr",
-    "home_injury_burden_te",
-    "home_injury_burden_ol",
-    "home_injury_burden_dl",
-    "home_injury_burden_lb",
-    "home_injury_burden_db",
-]
-
 LOOKAHEAD_FEATURE_COLUMNS = [
     "away_next_opponent_abbr",
     "away_next_is_home",
@@ -579,7 +539,6 @@ METADATA_COLUMNS = [
     # Feature column groups (joined into game rows)
     *DIVISIONAL_FEATURE_COLUMNS,
     *RECORD_FEATURE_COLUMNS,
-    *INJURY_FEATURE_COLUMNS,
     *LOOKAHEAD_FEATURE_COLUMNS,
     *MOTIVATION_FEATURE_COLUMNS,
 ]

@@ -66,6 +66,10 @@ def test_prediction_score_rounding_modes() -> None:
     out_int = ml_model.build_prediction_output(
         games_df, pred_away, pred_home, home_win_prob, score_rounding="int"
     )
+    assert float(out_int["predicted_away_score_raw"].to_numpy(dtype=float)[0]) == 21.4
+    assert float(out_int["predicted_home_score_raw"].to_numpy(dtype=float)[0]) == 24.6
+    assert float(out_int["predicted_total_raw"].to_numpy(dtype=float)[0]) == 46.0
+    assert float(out_int["predicted_margin_raw"].to_numpy(dtype=float)[0]) == 3.2
     int_away = float(out_int["predicted_away_score"].to_numpy(dtype=float)[0])
     int_home = float(out_int["predicted_home_score"].to_numpy(dtype=float)[0])
     int_total = float(out_int["predicted_total"].to_numpy(dtype=float)[0])
@@ -79,6 +83,10 @@ def test_prediction_score_rounding_modes() -> None:
     out_half = ml_model.build_prediction_output(
         games_df, pred_away, pred_home, home_win_prob, score_rounding="half"
     )
+    assert float(out_half["predicted_away_score_raw"].to_numpy(dtype=float)[0]) == 21.4
+    assert float(out_half["predicted_home_score_raw"].to_numpy(dtype=float)[0]) == 24.6
+    assert float(out_half["predicted_total_raw"].to_numpy(dtype=float)[0]) == 46.0
+    assert float(out_half["predicted_margin_raw"].to_numpy(dtype=float)[0]) == 3.2
     half_away = float(out_half["predicted_away_score"].to_numpy(dtype=float)[0])
     half_home = float(out_half["predicted_home_score"].to_numpy(dtype=float)[0])
     half_total = float(out_half["predicted_total"].to_numpy(dtype=float)[0])
@@ -92,6 +100,10 @@ def test_prediction_score_rounding_modes() -> None:
     out_nfl = ml_model.build_prediction_output(
         games_df, pred_away, pred_home, home_win_prob, score_rounding="nfl"
     )
+    assert float(out_nfl["predicted_away_score_raw"].to_numpy(dtype=float)[0]) == 21.4
+    assert float(out_nfl["predicted_home_score_raw"].to_numpy(dtype=float)[0]) == 24.6
+    assert float(out_nfl["predicted_total_raw"].to_numpy(dtype=float)[0]) == 46.0
+    assert float(out_nfl["predicted_margin_raw"].to_numpy(dtype=float)[0]) == 3.2
     nfl_away = float(out_nfl["predicted_away_score"].to_numpy(dtype=float)[0])
     nfl_home = float(out_nfl["predicted_home_score"].to_numpy(dtype=float)[0])
     nfl_total = float(out_nfl["predicted_total"].to_numpy(dtype=float)[0])

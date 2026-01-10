@@ -35,13 +35,8 @@ def test_select_final_columns_enforces_invariant_schema() -> None:
         }
     )
 
-    # Richer input includes an injury feature.
-    df_rich = df_min.with_columns(
-        [
-            pl.lit(1.5).alias("away_injury_burden_total"),
-            pl.lit(None).alias("home_moneyline"),
-        ]
-    )
+    # Richer input includes a market field.
+    df_rich = df_min.with_columns([pl.lit(None).alias("home_moneyline")])
 
     out_min = polars_utils.select_final_columns(df_min)
     out_rich = polars_utils.select_final_columns(df_rich)
@@ -57,26 +52,19 @@ def test_select_final_columns_enforces_invariant_schema() -> None:
     }
     assert required_cols.issubset(set(out_min.columns))
 
-    # Injury columns should always exist. When missing from input, they remain null.
-    for col in constants.INJURY_FEATURE_COLUMNS:
-        assert col in out_min.columns
-        assert out_min.select(pl.col(col).is_null().all()).item() is True
-
-    # Provided injury values should be preserved.
-    assert out_rich.select(pl.col("away_injury_burden_total").is_null().any()).item() is False
+    # Spot-check some columns that should be null when absent from input.
+    assert out_min.select(pl.col("home_moneyline").is_null().all()).item() is True
 
 
 def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypatch) -> None:
     """Training report includes missing-data prevalence summary."""
     # Minimal training CSV that includes the default feature range endpoints.
-    # We leave injury and market fields entirely null to simulate historical missing coverage.
+    # We leave market fields entirely null to simulate historical missing coverage.
     df = pd.DataFrame(
         {
             "season": [2020, 2020, 2020],
             "week": [1, 2, 3],
             "away_rest": [7, 7, 7],
-            "away_injury_burden_total": [None, None, None],
-            "home_injury_burden_total": [None, None, None],
             "total_line": [None, None, None],
             "home_moneyline": [None, None, None],
             "away_score": [20, 17, 24],
@@ -139,7 +127,5 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
 
     missing = result.metrics_report["missing_data"]
     assert missing["total_rows"] == 3
-    assert missing["groups"]["injuries"]["columns_all_null"] is not None
-    assert missing["groups"]["injuries"]["columns_all_null"] >= 2
     assert missing["groups"]["lines"]["columns_all_null"] is not None
     assert missing["groups"]["lines"]["columns_all_null"] >= 2

@@ -72,7 +72,6 @@ def test_train_score_model_minimal(monkeypatch) -> None:
             "away_score": [10, 14],
             "home_score": [20, 17],
             "feat1": [1.0, 2.0],
-            "away_injury_burden_total": [0.2, 0.3],
         }
     )
 
@@ -98,7 +97,6 @@ def test_train_score_model_minimal(monkeypatch) -> None:
         data_path=Path("dummy.csv"),
         holdout_seasons=1,
         include_market=True,
-        include_injuries=False,
         max_cardinality_ratio=0.5,
         market_prob_config=None,
     )
@@ -142,7 +140,6 @@ def test_train_score_model_with_report(monkeypatch) -> None:
         data_path=Path("dummy.csv"),
         holdout_seasons=1,
         include_market=True,
-        include_injuries=True,
         max_cardinality_ratio=0.5,
         market_prob_config=None,
     )

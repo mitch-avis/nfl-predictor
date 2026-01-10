@@ -496,7 +496,6 @@ def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
 
     groups: dict[str, list[str]] = {
         "lines": list(constants.LINES_COLUMNS),
-        "injuries": list(constants.INJURY_FEATURE_COLUMNS),
         "records": list(constants.RECORD_FEATURE_COLUMNS),
         "lookahead": list(constants.LOOKAHEAD_FEATURE_COLUMNS),
         "motivation": list(constants.MOTIVATION_FEATURE_COLUMNS),
@@ -505,59 +504,6 @@ def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
         "total_rows": int(len(df)),
         "groups": {name: _group_summary(cols) for name, cols in groups.items()},
     }
-
-
-def _should_enable_injury_features(
-    injury_features: Optional[bool],
-    predict_df: Optional[pd.DataFrame],
-    *,
-    current_season: int,
-) -> bool:
-    """Resolve whether injury burden features should be used.
-
-    When predicting an in-progress season, NFLverse participation/injury data does not update
-    during the season, so the prediction dataset will typically have all-null injury columns.
-    In that case, we default to disabling injury features to avoid training a model that depends
-    on unavailable in-season inputs.
-
-    Args:
-        injury_features: Explicit user override (True/False) or None for auto.
-        predict_df: Optional prediction dataset DataFrame.
-        current_season: Current NFL season inferred from today's date.
-
-    Returns:
-        True if injury features should be enabled.
-    """
-
-    if injury_features is not None:
-        return bool(injury_features)
-    if predict_df is None:
-        return True
-
-    cols = [c for c in constants.INJURY_FEATURE_COLUMNS if c in predict_df.columns]
-    if cols and predict_df[cols].isna().to_numpy().all():
-        return False
-
-    if "season" in predict_df.columns:
-        season_values = pd.to_numeric(predict_df["season"], errors="coerce")
-        max_season = season_values.max() if not season_values.empty else None
-        if pd.notna(max_season) and int(max_season) >= int(current_season):
-            return False
-
-    return True
-
-
-def _drop_injury_feature_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """Remove injury burden feature columns from a dataset.
-
-    This is used to hard-disable the injury feature group for training/tuning so the resulting
-    preprocessor and model never rely on them.
-    """
-
-    present = [c for c in constants.INJURY_FEATURE_COLUMNS if c in df.columns]
-    if not present:
-        return df, []
-    return df.drop(columns=present), present
 
 
 def _filter_season_bounds(
@@ -1297,13 +1243,21 @@ def _build_prediction_output(
         raise ValueError(f"Unknown score rounding mode: {mode}")
 
     output_df = games_df.copy()
-    away_scores = _apply_score_rounding(np.asarray(pred_away, dtype=float), score_rounding)
-    home_scores = _apply_score_rounding(np.asarray(pred_home, dtype=float), score_rounding)
 
-    output_df["predicted_away_score"] = np.round(away_scores, 1)
-    output_df["predicted_home_score"] = np.round(home_scores, 1)
-    output_df["predicted_total"] = np.round(away_scores + home_scores, 1)
-    output_df["predicted_margin"] = np.round(home_scores - away_scores, 1)
+    raw_away_scores = np.asarray(pred_away, dtype=float)
+    raw_home_scores = np.asarray(pred_home, dtype=float)
+    output_df["predicted_away_score_raw"] = np.round(raw_away_scores, 1)
+    output_df["predicted_home_score_raw"] = np.round(raw_home_scores, 1)
+    output_df["predicted_total_raw"] = np.round(raw_away_scores + raw_home_scores, 1)
+    output_df["predicted_margin_raw"] = np.round(raw_home_scores - raw_away_scores, 1)
+
+    display_away_scores = _apply_score_rounding(raw_away_scores, score_rounding)
+    display_home_scores = _apply_score_rounding(raw_home_scores, score_rounding)
+
+    output_df["predicted_away_score"] = np.round(display_away_scores, 1)
+    output_df["predicted_home_score"] = np.round(display_home_scores, 1)
+    output_df["predicted_total"] = np.round(display_away_scores + display_home_scores, 1)
+    output_df["predicted_margin"] = np.round(display_home_scores - display_away_scores, 1)
 
     # Round first (for stable output), then clip so values don't collapse to 0.0/1.0
     # at 4-decimal precision (which can distort pool rankings and log-loss stability).

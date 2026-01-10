@@ -207,9 +207,6 @@ def test_process_week_fallback(monkeypatch) -> None:
     )
 
     monkeypatch.setattr(polars_utils, "add_divisional_matchup_feature", lambda df: df)
-    monkeypatch.setattr(
-        polars_utils, "add_injury_burden_features", lambda df, *_args, **_kwargs: df
-    )
 
     def raise_value_error(*_args, **_kwargs):
         """Raise ValueError for testing fallback."""
@@ -228,7 +225,6 @@ def test_process_week_fallback(monkeypatch) -> None:
         elo_df=elo_df,
         tr_df=tr_df,
         prev_tr_df=None,
-        injuries_df=None,
     )
 
     assert "away_elo_pre" in out.columns

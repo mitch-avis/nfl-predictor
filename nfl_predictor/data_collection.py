@@ -78,6 +78,7 @@ def main() -> None:
 
     Orchestrates the data collection, processing, and storage for NFL game predictions.
     """
+
     log.info("Starting data collection with nflreadpy...")
 
     # Determine current season and week
@@ -122,6 +123,7 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
     Returns:
         Combined DataFrame with all game data and features
     """
+
     log.info(
         "Collecting data for %d seasons: %s - %s",
         len(seasons),
@@ -247,6 +249,7 @@ def process_season(
     Returns:
         Processed DataFrame for the season
     """
+
     # Filter to this season
     season_schedule = schedule_df.filter(pl.col("season") == season)
 
@@ -306,6 +309,7 @@ def process_week(
     Returns:
         DataFrame with week's games and features
     """
+
     # Skip the very first week of the first processed season (no prior data to aggregate)
     if season == min(SEASONS_TO_PROCESS) and week == 1:
         log.info(
@@ -536,6 +540,7 @@ def _merge_team_rankings(
     Returns:
         DataFrame with TR columns merged
     """
+
     tr_to_use = None
     regular_season_weeks = constants.get_regular_season_weeks(season)
 
@@ -592,6 +597,7 @@ def save_dataframe(df: pl.DataFrame, name: str) -> None:
         df: DataFrame to save
         name: Base name for the file (without extension)
     """
+
     file_path = f"{constants.DATA_PATH}/{name}.csv"
 
     # Create directory if needed
@@ -612,6 +618,7 @@ def load_dataframe(name: str) -> Optional[pl.DataFrame]:
     Returns:
         DataFrame or None if file doesn't exist
     """
+
     file_path = f"{constants.DATA_PATH}/{name}.csv"
 
     if not os.path.isfile(file_path):

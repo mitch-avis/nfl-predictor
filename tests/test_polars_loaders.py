@@ -51,6 +51,7 @@ def test_load_schedule_transforms(monkeypatch) -> None:
                 "game_type": ["REG"],
                 "week": [1],
                 "gameday": ["2023-09-10"],
+                "gametime": ["20:20"],
                 "away_team": ["AAA"],
                 "home_team": ["BBB"],
                 "location": ["Neutral"],
@@ -68,6 +69,8 @@ def test_load_schedule_transforms(monkeypatch) -> None:
     assert df["neutral"][0] == 1
     assert df["home_spread"][0] == 3.5
     assert df["date"].dtype == pl.Date
+    assert df["gametime"][0] == "20:20"
+    assert "game_datetime" in df.columns
 
 
 def test_load_team_stats_combines(monkeypatch) -> None:

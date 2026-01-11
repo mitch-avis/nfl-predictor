@@ -35,6 +35,7 @@ def build_final_column_order() -> list[str]:
     Returns:
         Ordered list of column names
     """
+
     columns = []
 
     # 1. Metadata columns (fixed order)
@@ -112,6 +113,7 @@ def select_final_columns(df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         DataFrame with only specified columns in correct order
     """
+
     final_order = build_final_column_order()
 
     missing_cols = [c for c in final_order if c not in df.columns]

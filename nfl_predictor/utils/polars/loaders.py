@@ -30,6 +30,7 @@ NUMERIC_DTYPES = {
 
 def _is_numeric_dtype(dtype: DataType) -> bool:
     """Return True if dtype is numeric."""
+
     return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES
 
 
@@ -43,6 +44,7 @@ def load_schedule(seasons: list[int]) -> pl.DataFrame:
     Returns:
         Polars DataFrame with schedule data including lines/odds
     """
+
     log.info("Loading schedule for seasons: %s", seasons)
     schedule_df = nfl.load_schedules(seasons=seasons)
 
@@ -59,7 +61,11 @@ def load_schedule(seasons: list[int]) -> pl.DataFrame:
 
     # Normalize kickoff time columns.
     # nflreadpy schedule schemas vary a bit across versions; coalesce to `gametime`.
-    time_candidates = [c for c in ("gametime", "game_time", "kickoff_time", "start_time") if c in schedule_df.columns]
+    time_candidates = [
+        c
+        for c in ("gametime", "game_time", "kickoff_time", "start_time")
+        if c in schedule_df.columns
+    ]
     if time_candidates:
         # Prefer an existing `gametime` column when present.
         exprs = [pl.col(c).cast(pl.Utf8) for c in time_candidates]
@@ -99,7 +105,9 @@ def load_schedule(seasons: list[int]) -> pl.DataFrame:
         dt_24 = dt_str.str.strptime(pl.Datetime, "%Y-%m-%d %H:%M", strict=False)
         dt_ampm = dt_str.str.strptime(pl.Datetime, "%Y-%m-%d %I:%M%p", strict=False)
         dt_ampm_sp = dt_str.str.strptime(pl.Datetime, "%Y-%m-%d %I:%M %p", strict=False)
-        schedule_df = schedule_df.with_columns(pl.coalesce([dt_24, dt_ampm, dt_ampm_sp]).alias("game_datetime"))
+        schedule_df = schedule_df.with_columns(
+            pl.coalesce([dt_24, dt_ampm, dt_ampm_sp]).alias("game_datetime")
+        )
 
     # Add stadium city and state from stadium_id
     if "stadium_id" in schedule_df.columns:
@@ -121,6 +129,7 @@ def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         DataFrame with stadium_city and stadium_state columns added
     """
+
     # Create mapping dictionaries for city and state
     city_map = {k: v["city"] for k, v in constants.STADIUM_LOCATIONS.items()}
     state_map = {k: v["state"] for k, v in constants.STADIUM_LOCATIONS.items()}
@@ -147,6 +156,7 @@ def load_team_stats(seasons: list[int], regular_season_only: bool = True) -> pl.
     Returns:
         Polars DataFrame with team statistics per game
     """
+
     log.info("Loading team stats for seasons: %s", seasons)
     team_stats_df = nfl.load_team_stats(seasons=seasons)
 
@@ -195,6 +205,7 @@ def add_scoring_data_to_team_stats(
     Returns:
         team_stats_df with points_scored and points_allowed columns added
     """
+
     if schedule_df.height == 0:
         return team_stats_df
 
@@ -257,6 +268,7 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         DataFrame with combined stats
     """
+
     combine_operations = []
 
     # Fumbles (sack + rushing + receiving)
@@ -381,6 +393,7 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         DataFrame with added opponent_* columns for each game
     """
+
     # Identify stat columns to copy from opponent (exclude identifiers and duplicate-prone stats)
     exclude_cols = {
         "season",
@@ -424,6 +437,7 @@ def load_pbp(seasons: list[int]) -> pl.DataFrame:
     Returns:
         Polars DataFrame with play-by-play data
     """
+
     log.info("Loading play-by-play for seasons: %s", seasons)
     pbp_df = nfl.load_pbp(seasons=seasons)
 
@@ -457,6 +471,7 @@ def aggregate_pbp_stats(
     Returns:
         DataFrame with columns: season, week, team_abbr, and computed stats
     """
+
     if pbp_df.height == 0:
         return pl.DataFrame()
 
@@ -523,6 +538,7 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
     Returns:
         Polars DataFrame with ELO ratings per game
     """
+
     elo_path = os.path.join(constants.DATA_PATH, "qb_elos.csv")
 
     if not os.path.exists(elo_path):
@@ -611,6 +627,7 @@ def load_raw_elo_data() -> pl.DataFrame:
     Returns:
         Raw Polars DataFrame with ELO data
     """
+
     elo_path = os.path.join(constants.DATA_PATH, "qb_elos.csv")
 
     if not os.path.exists(elo_path):
@@ -647,6 +664,7 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
         DataFrame with columns: team_abbr, elo_pre, qb_value_pre, qb_elo_pre
         One row per team with their most recent ELO values
     """
+
     if elo_df.height == 0:
         return pl.DataFrame()
 

@@ -17,11 +17,18 @@ Implementation notes:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import date as _date
+from datetime import datetime as _datetime
 from pathlib import Path
 from typing import Any, Optional
 
+import openpyxl
 import pandas as pd
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from nfl_predictor.utils.logger import log
 
@@ -81,16 +88,6 @@ def write_betting_template_xlsx(
     if missing:
         raise ValueError(f"Predictions missing required columns: {missing}")
 
-    try:
-        import openpyxl
-        from openpyxl.formatting.rule import FormulaRule
-        from openpyxl.styles import Alignment, Font, PatternFill
-        from openpyxl.utils import get_column_letter
-    except ImportError as exc:  # pragma: no cover
-        raise ImportError(
-            "openpyxl is required to write .xlsx templates. Install it via pip."
-        ) from exc
-
     wb = openpyxl.Workbook()
 
     # README / instructions.
@@ -133,6 +130,8 @@ def write_betting_template_xlsx(
         "season",
         "week",
         "date",
+        "gametime",
+        "game_datetime",
         "game_id",
         "away_abbr",
         "home_abbr",
@@ -219,11 +218,16 @@ def write_betting_template_xlsx(
 
     # Build a display DataFrame with safe columns.
     df = predictions.copy()
-    for c in ("season", "week", "date", "game_id"):
+    for c in ("season", "week", "date", "gametime", "game_datetime", "game_id"):
         if c not in df.columns:
             df[c] = pd.NA
 
-    df["date"] = df["date"].astype(str)
+    # Use pandas string dtype so missing stays <NA> (avoid literal "nan" strings).
+    df["date"] = df["date"].astype("string")
+    df["gametime"] = df["gametime"].astype("string")
+
+    # Prefer a true datetime typed column for Excel display and sorting.
+    df["game_datetime"] = pd.to_datetime(df["game_datetime"], errors="coerce")
 
     df["model_home_prob"] = df["home_win_prob"].astype(float)
     df["model_away_prob"] = 1.0 - df["model_home_prob"]
@@ -256,7 +260,7 @@ def write_betting_template_xlsx(
     df["predicted_total"] = df.get("predicted_total_raw", df.get("predicted_total"))
 
     # Stable sort for consistent sheet ordering.
-    # Prefer datetime-like columns when available; otherwise sort by date (YYYY-MM-DD) then game_id.
+    # Prefer kickoff datetime when available; otherwise try date+gametime; else date.
     sort_game_id = "game_id" if "game_id" in df.columns else None
     sort_dt = None
     for candidate in (
@@ -272,7 +276,15 @@ def write_betting_template_xlsx(
                 sort_dt = parsed
                 break
     if sort_dt is None:
-        sort_dt = pd.to_datetime(df["date"], errors="coerce")
+        if "gametime" in df.columns:
+            parsed = pd.to_datetime(
+                df["date"].astype("string") + " " + df["gametime"].astype("string"),
+                errors="coerce",
+            )
+            if parsed.notna().any():
+                sort_dt = parsed
+        if sort_dt is None:
+            sort_dt = pd.to_datetime(df["date"], errors="coerce")
     df["_sort_dt"] = sort_dt
     sort_keys = ["_sort_dt"]
     if sort_game_id is not None:
@@ -610,6 +622,8 @@ def write_betting_template_xlsx(
         "season",
         "week",
         "date",
+        "gametime",
+        "game_datetime",
         "game_id",
         "away_abbr",
         "home_abbr",
@@ -706,7 +720,16 @@ def write_betting_template_xlsx(
         ws_live.append([None] * len(live_columns))
 
         # Identifiers
-        for name in ("season", "week", "date", "game_id", "away_abbr", "home_abbr"):
+        for name in (
+            "season",
+            "week",
+            "date",
+            "gametime",
+            "game_datetime",
+            "game_id",
+            "away_abbr",
+            "home_abbr",
+        ):
             ws_live[live_addr(live_row, name)].value = bets_ref(bets_row, name)
 
         # User inputs (defaults for quick live entry)
@@ -1059,6 +1082,8 @@ def write_betting_template_xlsx(
         idx_map: dict[str, int],
         col_name: str,
     ) -> None:
+        """Add conditional formatting to an action column."""
+
         idx = idx_map.get(col_name)
         if idx is None:
             return
@@ -1111,11 +1136,14 @@ def write_betting_template_xlsx(
     fmt_1 = "0.0"
     fmt_2 = "0.00"
     fmt_4 = "0.0000"
+    fmt_dt = "yyyy-mm-dd hh:mm"
 
     def apply_formats(
         sheet: Any,
         mapping: dict[str, str],
     ) -> None:
+        """Apply number formats to specified columns."""
+
         for col_name, fmt in mapping.items():
             if sheet is ws:
                 idx = col_index.get(col_name)
@@ -1128,6 +1156,8 @@ def write_betting_template_xlsx(
                 sheet.cell(row=row_num, column=col_num).number_format = fmt
 
     bets_formats: dict[str, str] = {}
+    for name in ("game_datetime",):
+        bets_formats[name] = fmt_dt
     for name in (
         "away_spread_model_input",
         "home_spread_model_input",
@@ -1202,6 +1232,8 @@ def write_betting_template_xlsx(
         bets_formats[name] = fmt_4
 
     live_formats: dict[str, str] = {}
+    for name in ("game_datetime",):
+        live_formats[name] = fmt_dt
     for name in (
         "away_spread_live",
         "home_spread_live",
@@ -1274,20 +1306,62 @@ def write_betting_template_xlsx(
         max_row = sheet.max_row
         if max_row < 1:
             return
+
+        def display_len(cell: Any) -> int:
+            value = cell.value
+            if value is None:
+                return 0
+            if isinstance(value, str):
+                if value.startswith("="):
+                    return 0
+                return len(value)
+            if isinstance(value, _datetime):
+                return 16  # YYYY-MM-DD HH:MM
+            if isinstance(value, _date):
+                return 10  # YYYY-MM-DD
+            if hasattr(value, "to_pydatetime"):
+                try:
+                    dt = value.to_pydatetime()
+                    return 16 if isinstance(dt, _datetime) else len(str(value))
+                except Exception:
+                    return len(str(value))
+            if isinstance(value, (int,)):
+                return len(str(value))
+            if isinstance(value, (float,)):
+                fmt = getattr(cell, "number_format", "") or ""
+                m = re.search(r"0\\.([0]+)", fmt)
+                decimals = len(m.group(1)) if m else 4
+                try:
+                    return len(f"{value:.{decimals}f}")
+                except Exception:
+                    return len(str(value))
+            return len(str(value))
+
+        min_width = 6
+        max_width = 26
+        padding = 1
+
         for col_num in range(1, sheet.max_column + 1):
             letter = get_column_letter(col_num)
             if sheet.column_dimensions[letter].hidden:
                 continue
-            header_val = sheet.cell(row=1, column=col_num).value
-            max_len = len(str(header_val)) if header_val is not None else 0
+
+            header_cell = sheet.cell(row=1, column=col_num)
+            header_val = header_cell.value
+            header_len = len(str(header_val)) if header_val is not None else 0
+
+            # Headers are rotated 90 degrees in this workbook; do not let long
+            # header names force huge widths.
+            rotation = getattr(getattr(header_cell, "alignment", None), "textRotation", 0)
+            if rotation not in (None, 0):
+                header_len = min(header_len, 4)
+
+            max_len = header_len
             for row_num in range(2, max_row + 1):
-                value = sheet.cell(row=row_num, column=col_num).value
-                if value is None:
-                    continue
-                if isinstance(value, str) and value.startswith("="):
-                    continue
-                max_len = max(max_len, len(str(value)))
-            width = max(8, min(50, max_len + 2))
+                cell = sheet.cell(row=row_num, column=col_num)
+                max_len = max(max_len, display_len(cell))
+
+            width = max(min_width, min(max_width, max_len + padding))
             sheet.column_dimensions[letter].width = width
 
     # Apply after formats + hidden columns.

@@ -87,9 +87,15 @@ import pandas as pd
 try:
     from nfl_predictor import constants
     from nfl_predictor.ml import artifacts, walk_forward
-    from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig, TrainingResult
+    from nfl_predictor.ml.ml_model_core import (
+        MarketProbConfig,
+        OptunaConfig,
+        TrainingResult,
+    )
     from nfl_predictor.ml.ml_model_predict import predict_week_blended
-    from nfl_predictor.ml.ml_model_training import train_blended_margin_total_model_with_report
+    from nfl_predictor.ml.ml_model_training import (
+        train_blended_margin_total_model_with_report,
+    )
     from nfl_predictor.utils.logger import log
 except ModuleNotFoundError:  # pragma: no cover
     # Allow running as a script: `python scripts/betting_pipeline.py`.
@@ -99,9 +105,15 @@ except ModuleNotFoundError:  # pragma: no cover
     sys.path.insert(0, str(repo_root))
     from nfl_predictor import constants
     from nfl_predictor.ml import artifacts, walk_forward
-    from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig, TrainingResult
+    from nfl_predictor.ml.ml_model_core import (
+        MarketProbConfig,
+        OptunaConfig,
+        TrainingResult,
+    )
     from nfl_predictor.ml.ml_model_predict import predict_week_blended
-    from nfl_predictor.ml.ml_model_training import train_blended_margin_total_model_with_report
+    from nfl_predictor.ml.ml_model_training import (
+        train_blended_margin_total_model_with_report,
+    )
     from nfl_predictor.utils.logger import log
 
 

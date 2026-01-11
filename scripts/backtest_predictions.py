@@ -304,6 +304,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """CLI entry point for running full backtests and power rankings."""
+
     args = _parse_args()
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -374,5 +375,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
     main()

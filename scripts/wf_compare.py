@@ -165,6 +165,7 @@ def _run_one(
 
 def main() -> int:
     """Main CLI entrypoint."""
+
     args = _parse_args()
 
     if not args.data_path.exists():

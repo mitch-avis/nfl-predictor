@@ -27,6 +27,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 def main() -> int:
     """Run live validation and report any score mismatches."""
+
     data_path = Path(constants.DATA_PATH) / "all_data.csv"
     if not data_path.exists():
         print(f"Missing data file: {data_path}")
@@ -45,5 +46,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    main()
     main()

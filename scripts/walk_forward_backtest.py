@@ -117,6 +117,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """CLI entrypoint for walk-forward backtests."""
+
     args = _parse_args()
 
     df = walk_forward.load_games(args.data_path)

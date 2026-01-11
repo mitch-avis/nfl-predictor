@@ -15,14 +15,14 @@ from scripts import betting_pipeline
 def test_moneyline_to_implied_prob_negative() -> None:
     """-110 should be about 0.5238."""
 
-    p = betting_pipeline._moneyline_to_implied_prob(-110)  # pylint: disable=protected-access
+    p = betting_pipeline._moneyline_to_implied_prob(-110)
     assert abs(p - (110 / 210)) < 1e-6
 
 
 def test_moneyline_to_implied_prob_positive() -> None:
     """+150 should be 0.4."""
 
-    p = betting_pipeline._moneyline_to_implied_prob(150)  # pylint: disable=protected-access
+    p = betting_pipeline._moneyline_to_implied_prob(150)
     assert abs(p - 0.4) < 1e-6
 
 
@@ -30,15 +30,15 @@ def test_implied_prob_to_moneyline_round_trip_close() -> None:
     """Converting p->ml->p should be approximately consistent."""
 
     p = 0.62
-    ml = betting_pipeline._implied_prob_to_moneyline(p)  # pylint: disable=protected-access
-    p2 = betting_pipeline._moneyline_to_implied_prob(ml)  # pylint: disable=protected-access
+    ml = betting_pipeline._implied_prob_to_moneyline(p)
+    p2 = betting_pipeline._moneyline_to_implied_prob(ml)
     assert abs(p2 - p) < 1e-6
 
 
 def test_novig_pair_sums_to_one() -> None:
     """No-vig normalization should sum to 1."""
 
-    ph, pa = betting_pipeline._novig_pair(0.55, 0.52)  # pylint: disable=protected-access
+    ph, pa = betting_pipeline._novig_pair(0.55, 0.52)
     assert abs((ph + pa) - 1.0) < 1e-12
 
 

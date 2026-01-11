@@ -7,6 +7,7 @@ from nfl_predictor.utils import validation_utils
 
 def test_validate_required_columns_missing() -> None:
     """Missing required columns are reported."""
+
     df = pl.DataFrame({"season": [2024], "week": [1]})
     missing = validation_utils.validate_required_columns(df, ["season", "week", "away_abbr"])
     assert missing == ["away_abbr"]
@@ -14,6 +15,7 @@ def test_validate_required_columns_missing() -> None:
 
 def test_validate_team_abbrs() -> None:
     """Invalid team abbreviations are flagged."""
+
     df = pl.DataFrame({"away_abbr": ["BUF", "XXX"], "home_abbr": ["KC", "NYJ"]})
     invalid = validation_utils.validate_team_abbrs(df)
     assert "away_abbr:XXX" in invalid
@@ -22,6 +24,7 @@ def test_validate_team_abbrs() -> None:
 
 def test_validate_week_range() -> None:
     """Out-of-range weeks are flagged."""
+
     df = pl.DataFrame({"season": [2024, 2024], "week": [1, 25]})
     issues = validation_utils.validate_week_range(df)
     assert any("week 25" in issue for issue in issues)
@@ -29,6 +32,7 @@ def test_validate_week_range() -> None:
 
 def test_validate_unique_games() -> None:
     """Duplicate game ids with conflicting rows are flagged."""
+
     df = pl.DataFrame(
         {
             "game_id": ["2024_01_BUF_KC", "2024_01_BUF_KC"],
@@ -42,6 +46,7 @@ def test_validate_unique_games() -> None:
 
 def test_validate_unique_games_identical_rows() -> None:
     """Duplicate game ids with identical rows are allowed."""
+
     df = pl.DataFrame(
         {
             "game_id": ["2024_01_BUF_KC", "2024_01_BUF_KC"],
@@ -55,6 +60,7 @@ def test_validate_unique_games_identical_rows() -> None:
 
 def test_compare_latest_week_scores() -> None:
     """Latest-week score mismatches vs schedule are detected."""
+
     all_data = pl.DataFrame(
         {
             "season": [2024],
@@ -82,6 +88,7 @@ def test_compare_latest_week_scores() -> None:
 
 def test_validate_scores_and_unique_keys() -> None:
     """Invalid scores and duplicate games are flagged."""
+
     df = pl.DataFrame(
         {
             "season": [2024, 2024],
@@ -102,6 +109,7 @@ def test_validate_scores_and_unique_keys() -> None:
 
 def test_validate_dataframe_collects_errors() -> None:
     """DataFrame validation collects multiple error types."""
+
     df = pl.DataFrame(
         {
             "season": [2024],
@@ -119,6 +127,7 @@ def test_validate_dataframe_collects_errors() -> None:
 
 def test_compare_latest_week_scores_missing_columns() -> None:
     """Missing score columns are handled gracefully."""
+
     df = pl.DataFrame({"season": [2024], "week": [1]})
     mismatches = validation_utils.compare_latest_week_scores(df, None)
     assert mismatches.height == 0
@@ -126,6 +135,7 @@ def test_compare_latest_week_scores_missing_columns() -> None:
 
 def test_compare_latest_week_scores_load_failure(monkeypatch) -> None:
     """Schedule load failure is handled gracefully."""
+
     df = pl.DataFrame(
         {
             "season": [2024],

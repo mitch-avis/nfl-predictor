@@ -9,8 +9,6 @@ import xgboost as xgb
 
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
 
-# pylint: disable=protected-access
-
 
 def _reset_runtime_state() -> None:
     xgb_utils._RUNTIME_STATE.early_stopping_fallback_logged = False
@@ -20,6 +18,7 @@ def _reset_runtime_state() -> None:
 
 def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
     """GPU tree_method and device are coerced properly."""
+
     _reset_runtime_state()
 
     def fake_supported(param: str) -> bool:
@@ -40,6 +39,7 @@ def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
 
 def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch) -> None:
     """XGB fit kwargs include early stopping when supported."""
+
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: True)
 
     kwargs = xgb_utils._build_xgb_fit_kwargs(
@@ -55,6 +55,7 @@ def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch) -> None:
 
 def test_with_xgb_early_stopping_params_with_callbacks(monkeypatch) -> None:
     """XGB params are updated with early stopping using callbacks when needed."""
+
     _reset_runtime_state()
 
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
@@ -78,6 +79,7 @@ def test_with_xgb_early_stopping_params_with_callbacks(monkeypatch) -> None:
 
 def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:
     """XGB params early stopping fallback logs when needed."""
+
     _reset_runtime_state()
 
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
@@ -95,6 +97,7 @@ def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:
 
 def test_coerce_tree_method_on_error_device_cuda() -> None:
     """tree_method and device are coerced on RuntimeError with device=cuda."""
+
     _reset_runtime_state()
 
     params = {"device": "cuda", "tree_method": "hist", "predictor": "gpu_predictor"}
@@ -108,6 +111,7 @@ def test_coerce_tree_method_on_error_device_cuda() -> None:
 
 def test_coerce_tree_method_on_error_gpu_tree_method() -> None:
     """tree_method and device are coerced on ValueError with GPU tree_method."""
+
     _reset_runtime_state()
 
     params = {"tree_method": "gpu", "predictor": "gpu_predictor"}
@@ -130,6 +134,7 @@ def test_predict_xgb_uses_best_iteration() -> None:
 
         def predict(self, dmatrix, iteration_range=None):
             """Capture iteration_range calls for inspection."""
+
             self.calls.append(iteration_range)
             return np.zeros(dmatrix.num_row())
 
@@ -142,6 +147,7 @@ def test_predict_xgb_uses_best_iteration() -> None:
 
         def get_booster(self):
             """Return the dummy booster."""
+
             return self._booster
 
     data = np.zeros((2, 1))

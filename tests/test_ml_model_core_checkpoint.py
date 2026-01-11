@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import joblib
 import pytest
 
 from nfl_predictor.ml import ml_model_core as core
@@ -34,8 +35,6 @@ def _dummy_feature_spec() -> core.FeatureSpec:
 
 def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
     """Loads a MarginTotalModel checkpoint when model_kind matches."""
-
-    import joblib
 
     model_path = tmp_path / "model.joblib"
     meta_path = tmp_path / "metadata.json"
@@ -66,8 +65,6 @@ def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
 def test_load_model_checkpoint_type_mismatch_raises(tmp_path: Path) -> None:
     """Raises when a checkpoint type doesn't match the requested model_kind."""
 
-    import joblib
-
     model_path = tmp_path / "model.joblib"
 
     score_model = core.ScoreModel(
@@ -85,8 +82,6 @@ def test_load_model_checkpoint_type_mismatch_raises(tmp_path: Path) -> None:
 
 def test_load_model_checkpoint_unknown_kind_raises(tmp_path: Path) -> None:
     """Raises ValueError for unknown model_kind values."""
-
-    import joblib
 
     model_path = tmp_path / "model.joblib"
     joblib.dump({"x": 1}, model_path)

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 from pytest import MonkeyPatch
 
-from nfl_predictor.ml import walk_forward
+from nfl_predictor import ml_model
+from nfl_predictor.ml import ml_model_core as core
+from nfl_predictor.ml import model_compare, walk_forward
 from nfl_predictor.ml.ml_model_core import (
     BlendedMarginTotalModel,
     BlendLayer,
@@ -146,8 +149,6 @@ def test_bootstrap_overall_metrics_produces_percentiles() -> None:
 def test_load_model_from_dir_or_file(tmp_path: Path) -> None:
     """Loads a joblib model from either a direct file path or a run directory."""
 
-    import joblib
-
     obj = {"hello": "world", "n": 1}
     model_file = tmp_path / "model.joblib"
     joblib.dump(obj, model_file)
@@ -158,9 +159,6 @@ def test_load_model_from_dir_or_file(tmp_path: Path) -> None:
 
 def test_run_objective_compare_aligns_by_game_key(monkeypatch: MonkeyPatch) -> None:
     """Aligns predictions by common game keys and records skipped blended folds."""
-
-    from nfl_predictor import ml_model
-    from nfl_predictor.ml import model_compare
 
     base = pd.DataFrame(
         {
@@ -321,14 +319,11 @@ def test_write_compare_outputs_writes_all_files(tmp_path: Path) -> None:
 def test_fit_margin_total_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> None:
     """Runs the margin/total fold path with stubbed training and calibration."""
 
-    from nfl_predictor import ml_model
-    from nfl_predictor.ml import model_compare
-
     class _DummyPreprocessor:
-        def fit_transform(self, x: pd.DataFrame) -> np.ndarray:  # noqa: ANN001
+        def fit_transform(self, x: pd.DataFrame) -> np.ndarray:
             return np.ones((len(x), 2), dtype=float)
 
-        def transform(self, x: pd.DataFrame) -> np.ndarray:  # noqa: ANN001
+        def transform(self, x: pd.DataFrame) -> np.ndarray:
             return np.ones((len(x), 2), dtype=float)
 
     class _DummyModel:
@@ -364,7 +359,7 @@ def test_fit_margin_total_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> Non
         lambda *_args, **_kwargs: (_DummyModel("margin"), _DummyModel("total")),
     )
 
-    def _predict_xgb(model: _DummyModel, x: np.ndarray) -> np.ndarray:  # noqa: ANN001
+    def _predict_xgb(model: _DummyModel, x: np.ndarray) -> np.ndarray:
         if model.name == "margin":
             return np.full(len(x), 3.0)
         return np.full(len(x), 44.0)
@@ -417,14 +412,11 @@ def test_fit_margin_total_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> Non
 def test_fit_blended_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> None:
     """Runs the blended fold path with stubbed team models and blenders."""
 
-    from nfl_predictor.ml import ml_model_core as core
-    from nfl_predictor.ml import model_compare
-
     class _DummyPreprocessor:
-        def fit_transform(self, x: pd.DataFrame) -> np.ndarray:  # noqa: ANN001
+        def fit_transform(self, x: pd.DataFrame) -> np.ndarray:
             return np.ones((len(x), 2), dtype=float)
 
-        def transform(self, x: pd.DataFrame) -> np.ndarray:  # noqa: ANN001
+        def transform(self, x: pd.DataFrame) -> np.ndarray:
             return np.ones((len(x), 2), dtype=float)
 
     class _DummyModel:
@@ -432,7 +424,7 @@ def test_fit_blended_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> None:
             self.name = name
 
     class _DummyBlender:
-        def predict(self, x: np.ndarray) -> np.ndarray:  # noqa: ANN001
+        def predict(self, x: np.ndarray) -> np.ndarray:
             return x.mean(axis=1)
 
     monkeypatch.setattr(
@@ -459,7 +451,7 @@ def test_fit_blended_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> None:
         lambda *_args, **_kwargs: (_DummyModel("margin"), _DummyModel("total")),
     )
 
-    def _predict_xgb(model: _DummyModel, x: np.ndarray) -> np.ndarray:  # noqa: ANN001
+    def _predict_xgb(model: _DummyModel, x: np.ndarray) -> np.ndarray:
         if model.name == "margin":
             return np.full(len(x), 4.0)
         return np.full(len(x), 46.0)

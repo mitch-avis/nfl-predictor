@@ -22,16 +22,16 @@ from nfl_predictor.ml.ml_model_core import (
     ScoreModel,
 )
 
-# pylint: disable=protected-access
-
 
 class _DummyPreprocessor:
     def fit_transform(self, df: pd.DataFrame) -> np.ndarray:
         """Return a stable dummy feature matrix for tests."""
+
         return np.zeros((len(df), 1))
 
     def transform(self, df: pd.DataFrame) -> np.ndarray:
         """Return a stable dummy feature matrix for tests."""
+
         return np.zeros((len(df), 1))
 
 
@@ -65,6 +65,7 @@ def _import_ml_model_training(monkeypatch):
 
 def test_train_score_model_minimal(monkeypatch) -> None:
     """Score model training works with minimal data and settings."""
+
     ml_model_training = _import_ml_model_training(monkeypatch)
     df = pd.DataFrame(
         {
@@ -115,6 +116,7 @@ def test_train_score_model_minimal(monkeypatch) -> None:
 
 def test_train_score_model_with_report(monkeypatch) -> None:
     """Score model training with report works as expected."""
+
     ml_model_training = _import_ml_model_training(monkeypatch)
     df = pd.DataFrame(
         {
@@ -158,6 +160,7 @@ def test_train_score_model_with_report(monkeypatch) -> None:
 
 def test_train_blended_margin_total_model_with_report(monkeypatch) -> None:
     """Blended margin/total model training with report works as expected."""
+
     ml_model_training = _import_ml_model_training(monkeypatch)
     df = pd.DataFrame(
         {

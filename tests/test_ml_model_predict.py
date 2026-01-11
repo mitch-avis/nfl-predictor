@@ -24,16 +24,19 @@ from nfl_predictor.ml.ml_model_core import (
 class _DummyPreprocessor:
     def transform(self, df: pd.DataFrame) -> np.ndarray:
         """Return a stable dummy feature matrix for tests."""
+
         return np.zeros((len(df), 1))
 
 
 class _BlendModel:
     def __init__(self, weights: np.ndarray) -> None:
         """Minimal sklearn-like model with a predict method."""
+
         self.weights = weights
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         """Apply a fixed linear transformation."""
+
         return x @ self.weights
 
 
@@ -56,6 +59,7 @@ def _feature_spec() -> FeatureSpec:
 
 def test_predict_week_writes_output_and_pretty(monkeypatch, tmp_path: Path) -> None:
     """Predict week generates output file and pretty-prints when requested."""
+
     games_df = pd.DataFrame(
         {
             "game_id": [1, 2],
@@ -78,6 +82,7 @@ def test_predict_week_writes_output_and_pretty(monkeypatch, tmp_path: Path) -> N
 
     def fake_predict_xgb(model: Any, features: np.ndarray) -> np.ndarray:
         """Return canned predictions keyed by model identity."""
+
         _ = features
         return predictions[model]
 
@@ -86,6 +91,8 @@ def test_predict_week_writes_output_and_pretty(monkeypatch, tmp_path: Path) -> N
     displayed: dict[str, pd.DataFrame] = {}
 
     def fake_display(df: pd.DataFrame) -> None:
+        """Capture displayed DataFrame for later inspection."""
+
         displayed["df"] = df
 
     monkeypatch.setattr(ml_model_predict.ml_utils, "display_weekly_predictions", fake_display)
@@ -122,6 +129,7 @@ def test_predict_week_writes_output_and_pretty(monkeypatch, tmp_path: Path) -> N
 
 def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -> None:
     """Predict week margin/total adds quantile predictions when models are present."""
+
     games_df = pd.DataFrame(
         {
             "game_id": [1],
@@ -191,6 +199,7 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
 
 def test_predict_week_blended_uses_market_baseline(monkeypatch, tmp_path: Path) -> None:
     """Predict week blended model uses market baseline predictions."""
+
     games_df = pd.DataFrame(
         {
             "game_id": [1],
@@ -262,6 +271,7 @@ def test_predict_week_blended_uses_market_baseline(monkeypatch, tmp_path: Path) 
 
 def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     """Predict week margin/total pretty-prints output when requested."""
+
     games_df = pd.DataFrame(
         {
             "game_id": [1],
@@ -326,6 +336,7 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
 
 def test_predict_week_blended_with_market_model_pretty(monkeypatch) -> None:
     """Predict week blended pretty-prints output when requested."""
+
     games_df = pd.DataFrame(
         {
             "game_id": [1],

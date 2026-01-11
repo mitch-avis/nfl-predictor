@@ -10,6 +10,7 @@ from nfl_predictor.utils import game_utils
 
 def test_spread_to_moneyline_signs() -> None:
     """Spread sign conventions map to moneyline sign conventions."""
+
     assert game_utils.spread_to_moneyline(-7.0) < 0
     assert game_utils.spread_to_moneyline(7.0) > 0
     assert game_utils.spread_to_moneyline(0.0) > 0
@@ -17,6 +18,7 @@ def test_spread_to_moneyline_signs() -> None:
 
 def test_fill_missing_moneylines() -> None:
     """Missing moneylines are filled from spreads."""
+
     df = pl.DataFrame(
         {
             "home_spread": [-3.5],
@@ -38,6 +40,7 @@ def test_fill_missing_moneylines() -> None:
 
 def test_fill_future_qb_data() -> None:
     """Future games use the latest available QB rows for missing QB fields."""
+
     df = pl.DataFrame(
         {
             "away_abbr": ["BUF"],
@@ -78,6 +81,7 @@ def test_fill_future_qb_data() -> None:
 
 def test_get_latest_qb_by_team() -> None:
     """Latest QB per team is selected correctly."""
+
     elo_df = pl.DataFrame(
         {
             "date": [datetime(2024, 9, 1), datetime(2024, 9, 2)],
@@ -100,6 +104,7 @@ def test_get_latest_qb_by_team() -> None:
 
 def test_get_qb_elo_by_name() -> None:
     """QB elo lookup by name returns latest values and empty for missing."""
+
     elo_df = pl.DataFrame(
         {
             "date": [datetime(2024, 9, 1), datetime(2024, 9, 2)],
@@ -123,6 +128,7 @@ def test_get_qb_elo_by_name() -> None:
 
 def test_fill_future_game_lines(monkeypatch) -> None:
     """Future games are filled from SurvivorGrid spreads."""
+
     df = pl.DataFrame(
         {
             "game_id": ["game1"],

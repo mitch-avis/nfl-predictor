@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,7 @@ from nfl_predictor.ml import walk_forward
 
 def _fixture_df() -> pd.DataFrame:
     """Create a tiny deterministic dataset spanning multiple seasons/weeks."""
+
     rows = []
     for season in (2022, 2023):
         for week in (1, 2, 3):
@@ -49,6 +51,7 @@ def _fixture_df() -> pd.DataFrame:
 
 def _base_config() -> walk_forward.WalkForwardConfig:
     """Return a walk-forward config suitable for unit tests."""
+
     return walk_forward.WalkForwardConfig(
         eval_seasons=[2023],
         eval_last_n_seasons=1,
@@ -74,6 +77,7 @@ def _base_config() -> walk_forward.WalkForwardConfig:
 
 def test_walk_forward_split_excludes_eval_week() -> None:
     """Train set must exclude any games from the predicted eval week."""
+
     df = _fixture_df()
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 
@@ -85,6 +89,7 @@ def test_walk_forward_split_excludes_eval_week() -> None:
 
 def test_walk_forward_deterministic_outputs() -> None:
     """Fixed seeds yield identical per-fold outputs."""
+
     df = _fixture_df()
     config = _base_config()
 
@@ -97,6 +102,7 @@ def test_walk_forward_deterministic_outputs() -> None:
 
 def test_walk_forward_probabilities_in_bounds() -> None:
     """Home win probabilities are always in [0, 1]."""
+
     df = _fixture_df()
     config = _base_config()
 
@@ -109,6 +115,7 @@ def test_walk_forward_probabilities_in_bounds() -> None:
 
 def test_calibration_data_is_time_aware() -> None:
     """Calibration data must come from weeks strictly before the eval week."""
+
     df = _fixture_df()
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 
@@ -122,6 +129,7 @@ def test_calibration_data_is_time_aware() -> None:
 
 def test_walk_forward_quantile_intervals_monotonic() -> None:
     """Walk-forward outputs include monotonic quantile intervals for margin/total."""
+
     df = _fixture_df()
     config = _base_config()
 
@@ -146,6 +154,7 @@ def test_walk_forward_quantile_intervals_monotonic() -> None:
 
 def test_walk_forward_can_disable_quantiles() -> None:
     """Walk-forward can skip quantile model training for faster comparisons."""
+
     df = _fixture_df()
     config = _base_config()
     config = walk_forward.WalkForwardConfig(
@@ -167,6 +176,7 @@ def test_walk_forward_can_disable_quantiles() -> None:
 
 def test_wf_market_prob_weight_overrides_probs() -> None:
     """When market_prob_weight=1, home_win_prob should match implied market prob."""
+
     df = _fixture_df()
     config = _base_config()
     config = walk_forward.WalkForwardConfig(
@@ -188,8 +198,6 @@ def test_wf_market_prob_weight_overrides_probs() -> None:
 def test_dataset_fingerprint_matches_sha256(tmp_path: Path) -> None:
     """Computes SHA-256 fingerprint of file contents."""
 
-    import hashlib
-
     path = Path(tmp_path) / "data.bin"
     payload = b"abc\x00def"
     path.write_bytes(payload)
@@ -205,10 +213,14 @@ def test_generate_run_id_is_deterministic_under_fixed_time(
 
     class _FixedDatetime:
         @staticmethod
-        def now(_tz: object) -> "_FixedDatetime":  # noqa: ANN401
+        def now(_tz: object) -> "_FixedDatetime":
+            """Return a fixed datetime for testing."""
+
             return _FixedDatetime()
 
         def strftime(self, _fmt: str) -> str:
+            """Return a fixed timestamp string for testing."""
+
             return "20260110_000000"
 
     monkeypatch.setattr(walk_forward, "datetime", _FixedDatetime)

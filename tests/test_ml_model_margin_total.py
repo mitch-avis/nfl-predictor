@@ -10,6 +10,7 @@ from nfl_predictor import ml_model
 
 def test_margin_total_round_trip() -> None:
     """Derived scores round-trip back to the original margin/total."""
+
     margins = np.array([3.5, -7.0, 0.0, 10.25])
     totals = np.array([45.5, 38.0, 41.0, 52.25])
 
@@ -24,6 +25,7 @@ def test_margin_total_round_trip() -> None:
 
 def test_prediction_output_schema() -> None:
     """Prediction output includes required derived fields for pools."""
+
     games_df = pd.DataFrame(
         {
             "game_id": ["2024_01_ARI_ATL", "2024_01_BAL_CIN"],
@@ -52,6 +54,7 @@ def test_prediction_output_schema() -> None:
 
 def test_prediction_score_rounding_modes() -> None:
     """Optional score rounding snaps output scores and derived total/margin."""
+
     games_df = pd.DataFrame(
         {
             "game_id": ["2024_01_ARI_ATL"],

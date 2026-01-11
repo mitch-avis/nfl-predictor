@@ -28,15 +28,20 @@ def _import_ml_model_cli(monkeypatch):
 
 def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
     """Loading model without prediction works and skips prediction steps."""
+
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     model_path = tmp_path / "model.joblib"
     calls: dict[str, Any] = {}
 
     def fake_load_model_checkpoint(path: Path, kind: str) -> str:
+        """Record path/kind and return model."""
+
         calls["model"] = (path, kind)
         return "model"
 
     def fake_with_market_prob_config(model: str, config: Any) -> str:
+        """Record config and return model."""
+
         calls["config"] = config
         return model
 
@@ -46,6 +51,8 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     def fail_predict(*_args: object, **_kwargs: object) -> None:
+        """Fail if prediction is attempted."""
+
         raise AssertionError("prediction should not run without --predict-path")
 
     monkeypatch.setattr(ml_model_cli, "predict_week", fail_predict)
@@ -61,16 +68,21 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
 
 def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> None:
     """Loading model with prediction runs prediction with expected args and output path."""
+
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     model_path = tmp_path / "model.joblib"
     predict_path = tmp_path / "week.csv"
     calls: dict[str, Any] = {}
 
     def fake_load_model_checkpoint(path: Path, kind: str) -> str:
+        """Record path/kind and return model."""
+
         calls["model"] = (path, kind)
         return "model"
 
     def fake_with_market_prob_config(model: str, config: Any) -> str:
+        """Record config and return model."""
+
         calls["config"] = config
         return model
 
@@ -82,6 +94,8 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         pretty_output: bool,
         score_rounding: str,
     ) -> pd.DataFrame:
+        """Record args and return empty DataFrame."""
+
         calls["predict_args"] = (
             model,
             games_path,
@@ -119,6 +133,7 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
 
 def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path: Path) -> None:
     """Training run writes artifacts and defaults Optuna study name and storage."""
+
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     run_dir = tmp_path / "run_001"
     result = TrainingResult(
@@ -133,14 +148,20 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
     calls: dict[str, Any] = {}
 
     def fake_train_margin_total_model_with_report(**kwargs: object) -> TrainingResult:
+        """Record Optuna config and return training result."""
+
         calls["optuna_config"] = kwargs["optuna_config"]
         return result
 
     def fake_save_model(path: Path, model: object) -> None:
+        """Record model path and model."""
+
         calls["model_path"] = path
         calls["model"] = model
 
     def fake_write_json(path: Path, payload: dict[str, object]) -> None:
+        """Record metrics and metadata payloads."""
+
         if path.name == "metrics_report.json":
             calls["metrics_payload"] = payload
         elif path.name == "metadata.json":
@@ -185,11 +206,14 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
 
 def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
     """Loading model with --tune logs appropriate messages."""
+
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     model_path = tmp_path / "model.joblib"
     messages: list[str] = []
 
     def fake_log(fmt: str, *args: object) -> None:
+        """Capture logged messages."""
+
         messages.append(fmt % args if args else fmt)
 
     monkeypatch.setattr(ml_model_cli.log, "info", fake_log)
@@ -207,6 +231,7 @@ def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
 
 def test_main_model_in_predict_score(monkeypatch, tmp_path: Path) -> None:
     """Loading score model with prediction runs prediction with expected args."""
+
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     model_path = tmp_path / "model.joblib"
     predict_path = tmp_path / "week.csv"
@@ -218,6 +243,8 @@ def test_main_model_in_predict_score(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     def fake_predict(*args: object, **kwargs: object) -> pd.DataFrame:
+        """Record args and return empty DataFrame."""
+
         calls["args"] = args
         calls["kwargs"] = kwargs
         return pd.DataFrame()
@@ -244,6 +271,7 @@ def test_main_model_in_predict_score(monkeypatch, tmp_path: Path) -> None:
 
 def test_main_score_training_predicts_and_writes(monkeypatch, tmp_path: Path) -> None:
     """Training score model runs prediction and writes artifacts."""
+
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     run_dir = tmp_path / "run_002"
     predict_path = tmp_path / "games.csv"
@@ -269,6 +297,8 @@ def test_main_score_training_predicts_and_writes(monkeypatch, tmp_path: Path) ->
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     def fake_predict(*_args: object, **_kwargs: object) -> pd.DataFrame:
+        """Record that prediction was called and return empty DataFrame."""
+
         calls["predicted"] = True
         return pd.DataFrame()
 
@@ -295,6 +325,7 @@ def test_main_score_training_predicts_and_writes(monkeypatch, tmp_path: Path) ->
 
 def test_main_blend_training_predict(monkeypatch, tmp_path: Path) -> None:
     """Training blended model runs prediction."""
+
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     result = TrainingResult(
         model={"model": "stub"},
@@ -316,6 +347,8 @@ def test_main_blend_training_predict(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     def fake_predict(*_args: object, **_kwargs: object) -> pd.DataFrame:
+        """Record that prediction was called and return empty DataFrame."""
+
         calls["predicted"] = True
         return pd.DataFrame()
 
@@ -339,6 +372,7 @@ def test_main_blend_training_predict(monkeypatch, tmp_path: Path) -> None:
 
 def test_main_model_outside_run_dir_raises(monkeypatch, tmp_path: Path) -> None:
     """Training with model output outside run dir raises error."""
+
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     run_dir = tmp_path / "run_003"
     model_out = tmp_path / "model.joblib"

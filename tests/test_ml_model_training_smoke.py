@@ -6,11 +6,10 @@ import numpy as np
 
 from nfl_predictor import ml_model
 
-# pylint: disable=protected-access
-
 
 def test_margin_total_early_stopping_wired() -> None:
     """Early stopping should be wired through to XGBoost training."""
+
     rng = np.random.default_rng(42)
     x_train = rng.normal(size=(20, 3))
     x_eval = rng.normal(size=(6, 3))
@@ -47,6 +46,7 @@ def test_margin_total_early_stopping_wired() -> None:
 
 def test_blend_layer_coefficients_constrained() -> None:
     """Blend layer coefficients are non-negative and sum to 1."""
+
     rng = np.random.default_rng(7)
     team = rng.normal(size=200)
     market = rng.normal(size=200)

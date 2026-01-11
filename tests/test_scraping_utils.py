@@ -8,8 +8,6 @@ from bs4 import BeautifulSoup
 from nfl_predictor import constants
 from nfl_predictor.utils import scraping_utils
 
-# pylint: disable=protected-access
-
 
 class DummyResponse:
     """Minimal requests-like response for monkeypatched HTML downloads."""
@@ -20,11 +18,13 @@ class DummyResponse:
 
     def raise_for_status(self) -> None:
         """No-op for dummy response."""
+
         return None
 
 
 def test_parse_tr_rating_table() -> None:
     """TeamRankings rating table parsing returns canonical team abbr + float rating."""
+
     html = """
     <table>
         <tr><th>Rank</th><th>Team</th><th>Rating</th></tr>
@@ -41,6 +41,7 @@ def test_parse_tr_rating_table() -> None:
 
 def test_parse_tr_stat_table() -> None:
     """TeamRankings stat table parsing returns canonical team abbr + numeric stat."""
+
     html = """
     <table>
         <tr><th>Rank</th><th>Team</th><th>Value</th></tr>
@@ -57,6 +58,7 @@ def test_parse_tr_stat_table() -> None:
 
 def test_scrape_survivor_grid_spreads_parses(monkeypatch) -> None:
     """SurvivorGrid spread table parsing extracts per-week spreads."""
+
     rows = [
         """
         <tr>
@@ -90,6 +92,7 @@ def test_scrape_survivor_grid_spreads_parses(monkeypatch) -> None:
 
 def test_get_season_start_and_week_date() -> None:
     """Season start and week date calculations are correct."""
+
     start = scraping_utils.get_season_start(2023)
     assert start == date(2023, 9, 7)
 
@@ -99,6 +102,7 @@ def test_get_season_start_and_week_date() -> None:
 
 def test_normalize_team_column() -> None:
     """Team column normalization maps known variants to canonical abbreviations."""
+
     df = pl.DataFrame({"team": ["JAC"]})
     out = scraping_utils.normalize_team_column(df, "team")
     assert out["team"][0] == "JAX"
@@ -106,6 +110,7 @@ def test_normalize_team_column() -> None:
 
 def test_get_missing_tr_columns_and_merge() -> None:
     """Missing TR columns are identified and merged correctly."""
+
     existing = pl.DataFrame({"team_abbr": ["AAA"], "week": [1], "predictive_rating": [1.0]})
     missing_ratings, missing_stats = scraping_utils.get_missing_tr_columns(existing)
     assert missing_ratings
@@ -118,6 +123,7 @@ def test_get_missing_tr_columns_and_merge() -> None:
 
 def test_save_and_update_team_rankings(tmp_path, monkeypatch) -> None:
     """TeamRankings weekly data is saved and season update combines correctly."""
+
     monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
     df = pl.DataFrame({"team_abbr": ["AAA"], "week": [1], "predictive_rating": [1.0]})
 
@@ -130,6 +136,7 @@ def test_save_and_update_team_rankings(tmp_path, monkeypatch) -> None:
 
 def test_scrape_team_rankings_for_week(monkeypatch) -> None:
     """TeamRankings ratings and stats are scraped correctly from HTML."""
+
     html = """
     <table>
         <tr><th>Rank</th><th>Team</th><th>Value</th></tr>
@@ -139,6 +146,8 @@ def test_scrape_team_rankings_for_week(monkeypatch) -> None:
     """
 
     def fake_get(*_args, **_kwargs):
+        """Return dummy HTML response."""
+
         return DummyResponse(html)
 
     monkeypatch.setattr(scraping_utils.requests, "get", fake_get)

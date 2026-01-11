@@ -11,6 +11,7 @@ from nfl_predictor import constants
 
 def test_team_division_mapping_covers_all_canonical_teams() -> None:
     """Ensure that all canonical teams are mapped to divisions/conferences."""
+
     canonical = set(constants.TEAM_ABBR)
     mapped = set(constants.TEAM_TO_DIVISION.keys())
 
@@ -20,6 +21,7 @@ def test_team_division_mapping_covers_all_canonical_teams() -> None:
 
 def test_team_alias_mapping_normalizes_to_canonical() -> None:
     """Ensure team aliases normalize to canonical abbreviations."""
+
     for canonical_abbr, meta in constants.TEAM_MAPPING.items():
         assert constants.normalize_team_abbr(canonical_abbr) == canonical_abbr
         for alias in meta["aliases"]:
@@ -30,6 +32,7 @@ def test_team_alias_mapping_normalizes_to_canonical() -> None:
 
 def test_polars_metadata_columns_are_unique_and_include_new_feature_columns() -> None:
     """Ensure that METADATA_COLUMNS has no duplicates and includes all feature columns."""
+
     cols = constants.METADATA_COLUMNS
 
     assert len(cols) == len(set(cols)), "METADATA_COLUMNS contains duplicates"
@@ -46,6 +49,7 @@ def test_polars_metadata_columns_are_unique_and_include_new_feature_columns() ->
 
 def test_feature_column_groups_have_no_duplicates() -> None:
     """Ensure that feature column groups have no duplicates and are all non-empty strings."""
+
     groups = (
         constants.RECORD_FEATURE_COLUMNS,
         constants.DIVISIONAL_FEATURE_COLUMNS,

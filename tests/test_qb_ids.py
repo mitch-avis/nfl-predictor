@@ -7,11 +7,11 @@ consistent for a few representative entries.
 
 from __future__ import annotations
 
+from nfl_predictor import qb_ids
+
 
 def test_active_qb_ids_import_and_shape() -> None:
     """Importing qb_ids exposes a non-empty ACTIVE_QB_IDS mapping."""
-
-    from nfl_predictor import qb_ids
 
     assert isinstance(qb_ids.ACTIVE_QB_IDS, dict)
     assert qb_ids.ACTIVE_QB_IDS
@@ -24,8 +24,6 @@ def test_active_qb_ids_import_and_shape() -> None:
 
 def test_active_qb_ids_contains_tom_brady() -> None:
     """The QB ID mapping contains a few well-known canonical entries."""
-
-    from nfl_predictor import qb_ids
 
     # This ID is present near the top of the file; it should be stable.
     brady = qb_ids.ACTIVE_QB_IDS["00-0019596"]

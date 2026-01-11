@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 
 from nfl_predictor.ml import artifacts
@@ -16,8 +18,6 @@ def test_now_utc_iso_parses_as_isoformat() -> None:
     parsed = value.replace("Z", "+00:00")
     assert parsed
     # datetime.fromisoformat is strict, so this catches malformed strings.
-    from datetime import datetime
-
     datetime.fromisoformat(parsed)
 
 
@@ -27,8 +27,6 @@ def test_sha256_file_matches_known_digest(tmp_path: Path) -> None:
     path = tmp_path / "payload.bin"
     payload = b"hello world\n"
     path.write_bytes(payload)
-
-    import hashlib
 
     expected = hashlib.sha256(payload).hexdigest()
     assert artifacts.sha256_file(path) == expected

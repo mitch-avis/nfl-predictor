@@ -16,10 +16,10 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: MonkeyPatch) -> None:
     """Scores a fold end-to-end using stubbed preprocess/training/prediction."""
 
     class _DummyPreprocessor:
-        def fit_transform(self, x: pd.DataFrame) -> np.ndarray:  # noqa: ANN001
+        def fit_transform(self, x: pd.DataFrame) -> np.ndarray:
             return np.ones((len(x), 2), dtype=float)
 
-        def transform(self, x: pd.DataFrame) -> np.ndarray:  # noqa: ANN001
+        def transform(self, x: pd.DataFrame) -> np.ndarray:
             return np.ones((len(x), 2), dtype=float)
 
     class _DummyModel:
@@ -43,7 +43,7 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: MonkeyPatch) -> None:
         lambda *_args, **_kwargs: (_DummyModel("margin"), _DummyModel("total")),
     )
 
-    def _predict(model: _DummyModel, x: np.ndarray) -> np.ndarray:  # noqa: ANN001
+    def _predict(model: _DummyModel, x: np.ndarray) -> np.ndarray:
         if model.name == "margin":
             return np.full(len(x), 3.0)
         return np.full(len(x), 44.0)

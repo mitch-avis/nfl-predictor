@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
-
 import numpy as np
 import pandas as pd
 from scipy import sparse
 
 from nfl_predictor import ml_model
-
-# pylint: disable=protected-access
 
 
 def _make_feature_spec() -> ml_model.FeatureSpec:
@@ -44,6 +40,7 @@ def test_preprocessor_sparse_with_categorical() -> None:
 
 def test_preprocessor_handles_missing_numeric() -> None:
     """Numeric NaNs are imputed so downstream training can proceed."""
+
     df = pd.DataFrame({"num_feature": [1.0, np.nan, 3.0, 4.0]})
     spec = ml_model.FeatureSpec(
         feature_columns=["num_feature"],
@@ -64,9 +61,8 @@ def test_preprocessor_handles_missing_numeric() -> None:
     features = preprocessor.fit_transform(df)
 
     if sparse.issparse(features):
-        to_csr = getattr(features, "tocsr", None)
-        csr_matrix = cast(Any, to_csr)() if to_csr is not None else features
-        data = csr_matrix.data
+        csr = sparse.csr_matrix(features)
+        data = csr.data
         assert not np.isnan(np.asarray(data, dtype=float)).any()
     else:
         dense = np.asarray(features, dtype=float)

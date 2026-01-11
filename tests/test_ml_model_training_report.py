@@ -13,12 +13,11 @@ from sklearn.compose import ColumnTransformer
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import FeatureSpec, MarginTotalModel, OptunaConfig
 
-# pylint: disable=protected-access
-
 
 class _DummyPreprocessor:
     def transform(self, df: pd.DataFrame) -> np.ndarray:
         """Return a stable dummy feature matrix for tests."""
+
         return np.zeros((len(df), 1))
 
 
@@ -41,6 +40,7 @@ def _feature_spec() -> FeatureSpec:
 
 def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> None:
     """Training with report collects expected metrics and splits."""
+
     df = pd.DataFrame(
         {
             "season": [2020, 2020, 2021, 2021, 2022, 2022],
@@ -72,10 +72,12 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
 
     def fake_train_margin_total_model(**_kwargs: object) -> MarginTotalModel:
         """Return a prebuilt model without training."""
+
         return model
 
     def fake_predict_xgb(model_name: Any, features: Any) -> np.ndarray:
         """Return canned predictions for margin vs total models."""
+
         _ = features
         if model_name is margin_sentinel:
             return np.array([3.0, -4.0])

@@ -6,8 +6,6 @@ import pandas as pd
 
 from scripts import golden_command
 
-# pylint: disable=protected-access
-
 
 def test_build_pregame_power_rankings_uses_postgame_for_prior_weeks() -> None:
     """Week w rankings should use postgame ratings for weeks < w."""

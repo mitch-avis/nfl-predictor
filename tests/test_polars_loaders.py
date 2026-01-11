@@ -10,11 +10,10 @@ from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.polars import loaders
 
-# pylint: disable=protected-access
-
 
 def test_is_numeric_dtype() -> None:
     """Check numeric dtype detection works as expected."""
+
     assert loaders._is_numeric_dtype(pl.Int32())
     assert loaders._is_numeric_dtype(pl.Float64())
     assert not loaders._is_numeric_dtype(pl.Utf8())
@@ -22,12 +21,14 @@ def test_is_numeric_dtype() -> None:
 
 def test_polars_utils_facade() -> None:
     """Polars utils facade exposes expected functions."""
+
     assert hasattr(polars_utils, "load_schedule")
     assert "load_schedule" in dir(polars_utils)
 
 
 def test_add_stadium_location() -> None:
     """Stadium location data is added correctly based on stadium_id."""
+
     stadium_id = next(iter(constants.STADIUM_LOCATIONS.keys()))
     df = pl.DataFrame({"stadium_id": [stadium_id]})
 
@@ -43,6 +44,7 @@ def test_load_schedule_transforms(monkeypatch) -> None:
 
     def fake_load_schedules(seasons):
         """Fake schedule loader for testing."""
+
         _ = seasons
         return pl.DataFrame(
             {
@@ -78,6 +80,7 @@ def test_load_team_stats_combines(monkeypatch) -> None:
 
     def fake_load_team_stats(seasons):
         """Fake team stats loader for testing."""
+
         _ = seasons
         return pl.DataFrame(
             {
@@ -105,6 +108,7 @@ def test_load_team_stats_combines(monkeypatch) -> None:
 
 def test_add_scoring_data_to_team_stats() -> None:
     """Schedule scores are joined into per-team stats."""
+
     team_stats = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -131,6 +135,7 @@ def test_add_scoring_data_to_team_stats() -> None:
 
 def test_combine_stats_turnovers_and_yards() -> None:
     """Combining stats computes turnovers and total yards correctly."""
+
     df = pl.DataFrame(
         {
             "sack_fumbles": [1],
@@ -167,6 +172,7 @@ def test_combine_stats_turnovers_and_yards() -> None:
 
 def test_add_per_game_opponent_stats() -> None:
     """Per-game opponent stats are added correctly."""
+
     df = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -185,6 +191,7 @@ def test_add_per_game_opponent_stats() -> None:
 
 def test_aggregate_pbp_stats() -> None:
     """Play-by-play stats are aggregated correctly."""
+
     pbp = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -213,6 +220,7 @@ def test_aggregate_pbp_stats() -> None:
 
 def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
     """Elo ratings loading and latest extraction work as expected."""
+
     qb_path = tmp_path / "qb_elos.csv"
     qb_path.write_text(
         "season,week,team1,team2,elo1_pre,elo2_pre,qb1,qb2,qb1_value_pre,"

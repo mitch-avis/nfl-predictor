@@ -7,11 +7,10 @@ import pandas as pd
 
 from nfl_predictor import ml_model
 
-# pylint: disable=protected-access
-
 
 def test_market_anchor_targets_residualize_baseline() -> None:
     """Market anchoring should train on residuals vs market baseline."""
+
     df = pd.DataFrame(
         {
             "away_score": [20, 10],
@@ -41,6 +40,7 @@ def test_market_anchor_targets_residualize_baseline() -> None:
 
 def test_market_prob_adjust_blend_and_clamp() -> None:
     """Blend/clamp should move probabilities toward market implied odds."""
+
     games_df = pd.DataFrame(
         {
             "home_moneyline": [-110, -110],

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import openpyxl
 import pandas as pd
+from openpyxl.utils import get_column_letter
 
 from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
 
@@ -12,13 +14,15 @@ from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
 def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     """Writes a workbook with expected sheets and formulas."""
 
-    # Intentionally unsorted input; template should sort by date then game_id.
+    # Intentionally unsorted input; template should sort by kickoff datetime, then game_id.
     df = pd.DataFrame(
         [
             {
                 "season": 2025,
                 "week": 19,
                 "date": "2026-01-12",
+                "gametime": "20:00",
+                "game_datetime": "2026-01-12T20:00:00",
                 "game_id": "2025_19_X_Y",
                 "away_abbr": "X",
                 "home_abbr": "Y",
@@ -35,6 +39,8 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
                 "season": 2025,
                 "week": 19,
                 "date": "2026-01-11",
+                "gametime": "20:00",
+                "game_datetime": "2026-01-11T20:00:00",
                 "game_id": "2025_19_M_N",
                 "away_abbr": "M",
                 "home_abbr": "N",
@@ -51,6 +57,8 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
                 "season": 2025,
                 "week": 19,
                 "date": "2026-01-11",
+                "gametime": "13:00",
+                "game_datetime": "2026-01-11T13:00:00",
                 "game_id": "2025_19_A_B",
                 "away_abbr": "A",
                 "home_abbr": "B",
@@ -70,9 +78,6 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     write_betting_template_xlsx(predictions=df, out_path=out)
     assert out.exists()
 
-    import openpyxl
-    from openpyxl.utils import get_column_letter
-
     wb = openpyxl.load_workbook(out)
     assert "README" in wb.sheetnames
     assert "Bets" in wb.sheetnames
@@ -81,10 +86,12 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     ws = wb["Bets"]
     headers = [c.value for c in ws[1]]
 
-    assert headers[:6] == [
+    assert headers[:8] == [
         "season",
         "week",
         "date",
+        "gametime",
+        "game_datetime",
         "game_id",
         "away_abbr",
         "home_abbr",
@@ -119,7 +126,7 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     ):
         assert col in headers
 
-    # Sorted order: 2026-01-11 games first (game_id A_B then M_N), then 2026-01-12.
+    # Sorted order: earliest kickoff first (A_B at 13:00, then M_N at 20:00), then 2026-01-12.
     game_id_col = headers.index("game_id") + 1
     assert ws.cell(row=2, column=game_id_col).value == "2025_19_A_B"
     assert ws.cell(row=3, column=game_id_col).value == "2025_19_M_N"
@@ -135,12 +142,12 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     live_game_id_col = live_headers.index("game_id") + 1
     live_away_abbr_col = live_headers.index("away_abbr") + 1
     live_home_abbr_col = live_headers.index("home_abbr") + 1
-    assert ws_live.cell(row=2, column=live_game_id_col).value == "='Bets'!D2"
-    assert ws_live.cell(row=2, column=live_away_abbr_col).value == "='Bets'!E2"
-    assert ws_live.cell(row=2, column=live_home_abbr_col).value == "='Bets'!F2"
-    assert ws_live.cell(row=3, column=live_game_id_col).value == "='Bets'!D3"
-    assert ws_live.cell(row=3, column=live_away_abbr_col).value == "='Bets'!E3"
-    assert ws_live.cell(row=3, column=live_home_abbr_col).value == "='Bets'!F3"
+    assert ws_live.cell(row=2, column=live_game_id_col).value == "='Bets'!F2"
+    assert ws_live.cell(row=2, column=live_away_abbr_col).value == "='Bets'!G2"
+    assert ws_live.cell(row=2, column=live_home_abbr_col).value == "='Bets'!H2"
+    assert ws_live.cell(row=3, column=live_game_id_col).value == "='Bets'!F3"
+    assert ws_live.cell(row=3, column=live_away_abbr_col).value == "='Bets'!G3"
+    assert ws_live.cell(row=3, column=live_home_abbr_col).value == "='Bets'!H3"
 
     # Live user-input defaults for fast in-game updates.
     assert ws_live.cell(row=2, column=live_headers.index("quarter") + 1).value == 1
@@ -167,6 +174,9 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     # Date should be present for sorting.
     date_cell = ws.cell(row=2, column=headers.index("date") + 1)
     assert str(date_cell.value) == "2026-01-11"
+
+    kickoff_cell = ws.cell(row=2, column=headers.index("game_datetime") + 1)
+    assert str(kickoff_cell.value).startswith("2026-01-11")
 
     # Autofit should write explicit widths for visible columns.
     assert ws.column_dimensions["A"].width is not None

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -83,7 +83,9 @@ def write_betting_template_xlsx(
 
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill
+        from openpyxl.formatting.rule import FormulaRule
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "openpyxl is required to write .xlsx templates. Install it via pip."
@@ -114,7 +116,8 @@ def write_betting_template_xlsx(
     )
     ws_readme["A11"].value = (
         "- Live recommendations use live odds + model probabilities. "
-        "Spread/total cover probs are approximated from p10/p50/p90 quantiles when available."
+        "Spread/total cover probs are approximated from point predictions (mu) "
+        "and p10/p90 quantiles (sigma) when available."
     )
     ws_readme["A12"].value = (
         "- The Live tab is a lightweight heuristic: enter score + minutes remaining to get "
@@ -252,6 +255,30 @@ def write_betting_template_xlsx(
     df["predicted_margin"] = df.get("predicted_margin_raw", df.get("predicted_margin"))
     df["predicted_total"] = df.get("predicted_total_raw", df.get("predicted_total"))
 
+    # Stable sort for consistent sheet ordering.
+    # Prefer datetime-like columns when available; otherwise sort by date (YYYY-MM-DD) then game_id.
+    sort_game_id = "game_id" if "game_id" in df.columns else None
+    sort_dt = None
+    for candidate in (
+        "game_datetime",
+        "kickoff",
+        "kickoff_time",
+        "start_time",
+        "start_datetime",
+    ):
+        if candidate in df.columns:
+            parsed = pd.to_datetime(df[candidate], errors="coerce")
+            if parsed.notna().any():
+                sort_dt = parsed
+                break
+    if sort_dt is None:
+        sort_dt = pd.to_datetime(df["date"], errors="coerce")
+    df["_sort_dt"] = sort_dt
+    sort_keys = ["_sort_dt"]
+    if sort_game_id is not None:
+        sort_keys.append(sort_game_id)
+    df.sort_values(by=sort_keys, kind="mergesort", inplace=True)
+
     # Quantiles (optional): keep for probability approximations.
     for q in (
         "predicted_margin_p10",
@@ -383,9 +410,11 @@ def write_betting_template_xlsx(
         away_spread_odds = addr(excel_row, "away_spread_odds_live")
         away_spread_live = addr(excel_row, "away_spread_live")
 
+        # Keep home/away spread lines consistent by default.
+        ws[home_spread_live].value = f"=-{away_spread_live}"
+
         # Estimate sigma from p10/p90 when available.
         margin_p10_cell = addr(excel_row, "predicted_margin_p10")
-        margin_p50_cell = addr(excel_row, "predicted_margin_p50")
         margin_p90_cell = addr(excel_row, "predicted_margin_p90")
 
         spread_mu = addr(excel_row, "spread_mu_margin")
@@ -397,9 +426,7 @@ def write_betting_template_xlsx(
         spread_edge_home = addr(excel_row, "spread_edge_home")
         spread_edge_away = addr(excel_row, "spread_edge_away")
 
-        ws[spread_mu].value = (
-            f"=IF(ISBLANK({margin_p50_cell}),{predicted_margin},{margin_p50_cell})"
-        )
+        ws[spread_mu].value = f"={predicted_margin}"
         ws[spread_sigma].value = (
             f"=IF(OR(ISBLANK({margin_p10_cell}),ISBLANK({margin_p90_cell})),{DEFAULT_SIGMA_MARGIN},"
             f"({margin_p90_cell}-{margin_p10_cell})/({P10_P90_TO_SIGMA_DENOM}))"
@@ -499,7 +526,6 @@ def write_betting_template_xlsx(
         under_odds_used = total_under_odds
 
         total_p10_cell = addr(excel_row, "predicted_total_p10")
-        total_p50_cell = addr(excel_row, "predicted_total_p50")
         total_p90_cell = addr(excel_row, "predicted_total_p90")
 
         predicted_total_cell = addr(excel_row, "predicted_total")
@@ -512,9 +538,7 @@ def write_betting_template_xlsx(
         total_edge_over = addr(excel_row, "total_edge_over")
         total_edge_under = addr(excel_row, "total_edge_under")
 
-        ws[total_mu].value = (
-            f"=IF(ISBLANK({total_p50_cell}),{predicted_total_cell},{total_p50_cell})"
-        )
+        ws[total_mu].value = f"={predicted_total_cell}"
         ws[total_sigma].value = (
             f"=IF(OR(ISBLANK({total_p10_cell}),ISBLANK({total_p90_cell})),{DEFAULT_SIGMA_TOTAL},"
             f"({total_p90_cell}-{total_p10_cell})/({P10_P90_TO_SIGMA_DENOM}))"
@@ -604,21 +628,21 @@ def write_betting_template_xlsx(
         "pregame_sigma_margin",
         "live_mu_margin",
         "live_sigma_margin",
-        "live_home_win_prob",
         "live_away_win_prob",
+        "live_home_win_prob",
         # In-play lines/odds (user editable; initialized to pregame values)
-        "home_spread_live",
         "away_spread_live",
-        "home_spread_odds_live",
         "away_spread_odds_live",
-        "home_moneyline_live",
+        "home_spread_live",
+        "home_spread_odds_live",
         "away_moneyline_live",
+        "home_moneyline_live",
         "total_live",
         "total_over_odds_live",
         "total_under_odds_live",
         # Live spread probabilities + recommendations
-        "live_p_home_cover",
         "live_p_away_cover",
+        "live_p_home_cover",
         "live_spread_value_side",
         "live_spread_edge_prob",
         "live_spread_action",
@@ -643,10 +667,10 @@ def write_betting_template_xlsx(
         "live_total_confidence_1_10",
         "live_total_ev",
         # Hidden helper columns to keep recommendation formulas simple.
-        "live_spread_implied_home_prob",
         "live_spread_implied_away_prob",
-        "live_spread_edge_home",
+        "live_spread_implied_home_prob",
         "live_spread_edge_away",
+        "live_spread_edge_home",
         "live_total_implied_over_prob",
         "live_total_implied_under_prob",
         "live_total_edge_over",
@@ -657,15 +681,13 @@ def write_betting_template_xlsx(
     for cell in ws_live[1]:
         cell.font = Font(bold=True)
 
-    live_col_index = {name: j for j, name in enumerate(live_columns)}
+    header_alignment = Alignment(textRotation=90, vertical="top", horizontal="left")
+    for header_cell in ws[1]:
+        header_cell.alignment = header_alignment
+    for header_cell in ws_live[1]:
+        header_cell.alignment = header_alignment
 
-    # Heuristic constants (place to the right of the main table).
-    const_label_col = col_letter(len(live_columns))
-    const_value_col = col_letter(len(live_columns) + 1)
-    ws_live[f"{const_label_col}1"].value = "DEFAULT_SIGMA_MARGIN"
-    ws_live[f"{const_value_col}1"].value = DEFAULT_SIGMA_MARGIN
-    ws_live[f"{const_label_col}2"].value = "DEFAULT_SIGMA_TOTAL"
-    ws_live[f"{const_value_col}2"].value = DEFAULT_SIGMA_TOTAL
+    live_col_index = {name: j for j, name in enumerate(live_columns)}
 
     def live_addr(row: int, col_name: str) -> str:
         return f"{col_letter(live_col_index[col_name])}{row}"
@@ -730,18 +752,15 @@ def write_betting_template_xlsx(
         pre_sigma_margin = live_addr(live_row, "pregame_sigma_margin")
         bets_margin = f"{sheet_bets}!{addr(bets_row, 'predicted_margin')}"
         bets_margin_p10 = f"{sheet_bets}!{addr(bets_row, 'predicted_margin_p10')}"
-        bets_margin_p50 = f"{sheet_bets}!{addr(bets_row, 'predicted_margin_p50')}"
         bets_margin_p90 = f"{sheet_bets}!{addr(bets_row, 'predicted_margin_p90')}"
 
-        ws_live[pre_mu_margin].value = (
-            f"=IF(ISBLANK({bets_margin_p50}),{bets_margin},{bets_margin_p50})"
-        )
+        ws_live[pre_mu_margin].value = f"={bets_margin}"
         ws_live[pre_sigma_margin].value = (
-            "=IF(OR(ISBLANK({p10}),ISBLANK({p90})),${default_sigma},({p90}-{p10})/({denom}))"
+            "=IF(OR(ISBLANK({p10}),ISBLANK({p90})),{default_sigma},({p90}-{p10})/({denom}))"
         ).format(
             p10=bets_margin_p10,
             p90=bets_margin_p90,
-            default_sigma=f"{const_value_col}$1",
+            default_sigma=str(DEFAULT_SIGMA_MARGIN),
             denom=str(P10_P90_TO_SIGMA_DENOM),
         )
 
@@ -756,33 +775,59 @@ def write_betting_template_xlsx(
 
         live_home_win = live_addr(live_row, "live_home_win_prob")
         live_away_win = live_addr(live_row, "live_away_win_prob")
+        bets_model_home_prob = f"{sheet_bets}!{addr(bets_row, 'model_home_prob')}"
         ws_live[live_home_win].value = (
-            f"=IF(OR(ISNA({live_sigma_margin}),{live_sigma_margin}<=0),NA(),1-NORMSDIST((0-({live_mu_margin}))/({live_sigma_margin})))"
+            f"=IF(ISNA({w_time}),NA(),"
+            f"IF({w_time}>=0.999999,{bets_model_home_prob},"
+            f"IF(OR(ISNA({live_sigma_margin}),{live_sigma_margin}<=0),NA(),"
+            f"1-NORMSDIST((0-({live_mu_margin}))/({live_sigma_margin})))"
+            f"))"
         )
         ws_live[live_away_win].value = f"=IF(ISNA({live_home_win}),NA(),1-({live_home_win}))"
 
-        # Initialize in-play lines/odds to the pregame values from the input data,
-        # but keep them editable (no cross-sheet formula dependency).
+        # Initialize in-play lines/odds.
+        # Lines are initialized from the pregame values; odds default to -110 for quick editing.
+        # No cross-sheet formula dependency.
         rec = records[i]
+        # Lines
         for name in (
-            "home_spread_live",
             "away_spread_live",
-            "home_spread_odds_live",
-            "away_spread_odds_live",
-            "home_moneyline_live",
-            "away_moneyline_live",
             "total_live",
-            "total_over_odds_live",
-            "total_under_odds_live",
         ):
             cell = ws_live[live_addr(live_row, name)]
             val = rec.get(name)
             if val is pd.NA or (hasattr(pd, "isna") and pd.isna(val)):
                 val = None
-
-            if val is None and (name.endswith("_odds_live") or name.endswith("_moneyline_live")):
-                val = DEFAULT_SPREAD_TOTAL_ODDS
             cell.value = val
+            cell.fill = live_input_fill
+
+        # Moneylines (initialize from the dataset/model inputs)
+        for name in (
+            "away_moneyline_live",
+            "home_moneyline_live",
+        ):
+            cell = ws_live[live_addr(live_row, name)]
+            val = rec.get(name)
+            if val is pd.NA or (hasattr(pd, "isna") and pd.isna(val)):
+                val = None
+            cell.value = val
+            cell.fill = live_input_fill
+
+        # Auto-populate home spread as the negative of away spread.
+        away_spread_cell = live_addr(live_row, "away_spread_live")
+        home_spread_cell = live_addr(live_row, "home_spread_live")
+        ws_live[home_spread_cell].value = f"=-{away_spread_cell}"
+        ws_live[home_spread_cell].fill = live_input_fill
+
+        # Odds (default to -110)
+        for name in (
+            "away_spread_odds_live",
+            "home_spread_odds_live",
+            "total_over_odds_live",
+            "total_under_odds_live",
+        ):
+            cell = ws_live[live_addr(live_row, name)]
+            cell.value = DEFAULT_SPREAD_TOTAL_ODDS
             cell.fill = live_input_fill
 
         # Live spread probabilities
@@ -891,17 +936,14 @@ def write_betting_template_xlsx(
         pre_sigma_total = live_addr(live_row, "pregame_sigma_total")
         bets_total = f"{sheet_bets}!{addr(bets_row, 'predicted_total')}"
         bets_total_p10 = f"{sheet_bets}!{addr(bets_row, 'predicted_total_p10')}"
-        bets_total_p50 = f"{sheet_bets}!{addr(bets_row, 'predicted_total_p50')}"
         bets_total_p90 = f"{sheet_bets}!{addr(bets_row, 'predicted_total_p90')}"
-        ws_live[pre_mu_total].value = (
-            f"=IF(ISBLANK({bets_total_p50}),{bets_total},{bets_total_p50})"
-        )
+        ws_live[pre_mu_total].value = f"={bets_total}"
         ws_live[pre_sigma_total].value = (
-            "=IF(OR(ISBLANK({p10}),ISBLANK({p90})),${default_sigma},({p90}-{p10})/({denom}))"
+            "=IF(OR(ISBLANK({p10}),ISBLANK({p90})),{default_sigma},({p90}-{p10})/({denom}))"
         ).format(
             p10=bets_total_p10,
             p90=bets_total_p90,
-            default_sigma=f"{const_value_col}$2",
+            default_sigma=str(DEFAULT_SIGMA_TOTAL),
             denom=str(P10_P90_TO_SIGMA_DENOM),
         )
 
@@ -977,20 +1019,6 @@ def write_betting_template_xlsx(
     ws.freeze_panes = "G2"
     ws.auto_filter.ref = f"A1:{col_letter(len(columns) - 1)}1"
 
-    # Light column sizing for readability (best-effort).
-    width_map = {
-        "date": 12,
-        "game_id": 18,
-        "away_abbr": 10,
-        "home_abbr": 10,
-        "money_action": 12,
-        "spread_action": 12,
-        "total_action": 12,
-    }
-    for name, w in width_map.items():
-        if name in col_index:
-            ws.column_dimensions[col_letter(col_index[name])].width = w
-
     # Hide helper columns (they exist only to keep other formulas short).
     for name in (
         "spread_mu_margin",
@@ -1025,6 +1053,246 @@ def write_betting_template_xlsx(
     ):
         if name in live_col_index:
             ws_live.column_dimensions[col_letter(live_col_index[name])].hidden = True
+
+    def add_action_conditional_formatting(
+        sheet: Any,
+        idx_map: dict[str, int],
+        col_name: str,
+    ) -> None:
+        idx = idx_map.get(col_name)
+        if idx is None:
+            return
+        letter = col_letter(idx)
+        cell_range = f"{letter}2:{letter}{sheet.max_row}"
+        if sheet.max_row < 2:
+            return
+
+        # PASS/LEAN/SMALL/MEDIUM/STRONG
+        rules = [
+            (
+                "PASS",
+                PatternFill(start_color="FFD9D9D9", end_color="FFD9D9D9", fill_type="solid"),
+            ),
+            (
+                "LEAN",
+                PatternFill(start_color="FFF4CCCC", end_color="FFF4CCCC", fill_type="solid"),
+            ),
+            (
+                "SMALL",
+                PatternFill(start_color="FFFFF2CC", end_color="FFFFF2CC", fill_type="solid"),
+            ),
+            (
+                "MEDIUM",
+                PatternFill(start_color="FFD9EAD3", end_color="FFD9EAD3", fill_type="solid"),
+            ),
+            (
+                "STRONG",
+                PatternFill(start_color="FFD0E0FF", end_color="FFD0E0FF", fill_type="solid"),
+            ),
+        ]
+        for label, fill in rules:
+            sheet.conditional_formatting.add(
+                cell_range,
+                FormulaRule(
+                    formula=[f'${letter}2="{label}"'],
+                    fill=fill,
+                    stopIfTrue=True,
+                ),
+            )
+
+    # Conditional formatting on recommendation columns.
+    for action_col in ("money_action", "spread_action", "total_action"):
+        add_action_conditional_formatting(ws, col_index, action_col)
+    for action_col in ("live_money_action", "live_spread_action", "live_total_action"):
+        add_action_conditional_formatting(ws_live, live_col_index, action_col)
+
+    # Number formats
+    fmt_int = "0"
+    fmt_1 = "0.0"
+    fmt_2 = "0.00"
+    fmt_4 = "0.0000"
+
+    def apply_formats(
+        sheet: Any,
+        mapping: dict[str, str],
+    ) -> None:
+        for col_name, fmt in mapping.items():
+            if sheet is ws:
+                idx = col_index.get(col_name)
+            else:
+                idx = live_col_index.get(col_name)
+            if idx is None:
+                continue
+            col_num = idx + 1
+            for row_num in range(2, sheet.max_row + 1):
+                sheet.cell(row=row_num, column=col_num).number_format = fmt
+
+    bets_formats: dict[str, str] = {}
+    for name in (
+        "away_spread_model_input",
+        "home_spread_model_input",
+        "total_model_input",
+        "predicted_away_score",
+        "predicted_home_score",
+        "predicted_margin",
+        "predicted_total",
+        "predicted_margin_p10",
+        "predicted_margin_p50",
+        "predicted_margin_p90",
+        "predicted_total_p10",
+        "predicted_total_p50",
+        "predicted_total_p90",
+        "away_spread_live",
+        "home_spread_live",
+        "total_live",
+        "spread_edge_points_home",
+        "spread_mu_margin",
+        "total_mu",
+    ):
+        bets_formats[name] = fmt_1
+    for name in (
+        "spread_sigma_margin",
+        "total_sigma",
+    ):
+        bets_formats[name] = fmt_2
+    for name in (
+        "season",
+        "week",
+        "away_moneyline_model_input",
+        "home_moneyline_model_input",
+        "away_moneyline_live",
+        "home_moneyline_live",
+        "away_spread_odds_live",
+        "home_spread_odds_live",
+        "total_over_odds_live",
+        "total_under_odds_live",
+        "spread_confidence_1_10",
+        "money_confidence_1_10",
+        "total_confidence_1_10",
+    ):
+        bets_formats[name] = fmt_int
+    for name in (
+        "model_away_prob",
+        "model_home_prob",
+        "market_away_prob_raw",
+        "market_home_prob_raw",
+        "market_away_prob_novig",
+        "market_home_prob_novig",
+        "edge_away_prob",
+        "edge_home_prob",
+        "spread_p_home_cover",
+        "spread_p_away_cover",
+        "spread_implied_home_prob",
+        "spread_implied_away_prob",
+        "spread_edge_home",
+        "spread_edge_away",
+        "spread_edge_prob",
+        "spread_ev",
+        "money_edge_prob",
+        "moneyline_ev",
+        "total_p_over",
+        "total_p_under",
+        "total_implied_over_prob",
+        "total_implied_under_prob",
+        "total_edge_over",
+        "total_edge_under",
+        "total_edge_prob",
+        "total_ev",
+    ):
+        bets_formats[name] = fmt_4
+
+    live_formats: dict[str, str] = {}
+    for name in (
+        "away_spread_live",
+        "home_spread_live",
+        "total_live",
+        "current_margin",
+        "current_total",
+        "pregame_mu_margin",
+        "live_mu_margin",
+        "pregame_mu_total",
+        "live_mu_total",
+    ):
+        live_formats[name] = fmt_1
+    for name in (
+        "pregame_sigma_margin",
+        "live_sigma_margin",
+        "pregame_sigma_total",
+        "live_sigma_total",
+    ):
+        live_formats[name] = fmt_2
+    for name in (
+        "season",
+        "week",
+        "quarter",
+        "minutes_remaining_in_quarter",
+        "minutes_remaining",
+        "away_score_live",
+        "home_score_live",
+        "away_spread_odds_live",
+        "home_spread_odds_live",
+        "away_moneyline_live",
+        "home_moneyline_live",
+        "total_over_odds_live",
+        "total_under_odds_live",
+        "live_spread_confidence_1_10",
+        "live_money_confidence_1_10",
+        "live_total_confidence_1_10",
+    ):
+        live_formats[name] = fmt_int
+    for name in (
+        "w_time",
+        "live_home_win_prob",
+        "live_away_win_prob",
+        "live_p_home_cover",
+        "live_p_away_cover",
+        "live_spread_edge_prob",
+        "live_spread_ev",
+        "live_money_edge_prob",
+        "live_moneyline_ev",
+        "live_p_over",
+        "live_p_under",
+        "live_total_edge_prob",
+        "live_total_ev",
+        "live_spread_implied_home_prob",
+        "live_spread_implied_away_prob",
+        "live_spread_edge_home",
+        "live_spread_edge_away",
+        "live_total_implied_over_prob",
+        "live_total_implied_under_prob",
+        "live_total_edge_over",
+        "live_total_edge_under",
+    ):
+        live_formats[name] = fmt_4
+
+    apply_formats(ws, bets_formats)
+    apply_formats(ws_live, live_formats)
+
+    def autofit_visible_columns(sheet: Any) -> None:
+        """Best-effort auto width: ignores formulas and hidden columns."""
+
+        max_row = sheet.max_row
+        if max_row < 1:
+            return
+        for col_num in range(1, sheet.max_column + 1):
+            letter = get_column_letter(col_num)
+            if sheet.column_dimensions[letter].hidden:
+                continue
+            header_val = sheet.cell(row=1, column=col_num).value
+            max_len = len(str(header_val)) if header_val is not None else 0
+            for row_num in range(2, max_row + 1):
+                value = sheet.cell(row=row_num, column=col_num).value
+                if value is None:
+                    continue
+                if isinstance(value, str) and value.startswith("="):
+                    continue
+                max_len = max(max_len, len(str(value)))
+            width = max(8, min(50, max_len + 2))
+            sheet.column_dimensions[letter].width = width
+
+    # Apply after formats + hidden columns.
+    autofit_visible_columns(ws)
+    autofit_visible_columns(ws_live)
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

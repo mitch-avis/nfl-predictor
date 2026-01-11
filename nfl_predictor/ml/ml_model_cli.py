@@ -304,6 +304,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """CLI entry point for training and prediction."""
+
     args = _parse_args()
 
     created_at = artifacts.now_utc_iso()

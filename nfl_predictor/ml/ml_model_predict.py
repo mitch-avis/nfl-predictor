@@ -40,6 +40,7 @@ def predict_week(
     score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Generate weekly predictions and optional confidence ranks."""
+
     games_df = _load_games(games_path)
     feature_df = _apply_feature_spec(games_df, model.feature_spec)
     log.debug("Prediction feature matrix: %d rows x %d columns", *feature_df.shape)
@@ -79,6 +80,7 @@ def predict_week_margin_total(
     score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Generate weekly predictions from a margin/total model."""
+
     games_df = _load_games(games_path)
     pred_margin, pred_total = _predict_margin_total_from_model(model, games_df)
     margin_quantiles, total_quantiles = _predict_margin_total_quantiles_from_model(model, games_df)
@@ -119,6 +121,7 @@ def predict_week_blended(
     score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Generate weekly predictions from a blended margin/total model."""
+
     games_df = _load_games(games_path)
 
     team_margin, team_total = _predict_margin_total_from_model(model.team_model, games_df)

@@ -135,6 +135,7 @@ def train_score_model(
     xgb_n_jobs: Optional[int] = None,
 ) -> ScoreModel:
     """Train score models using time-aware season splits."""
+
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
@@ -218,6 +219,7 @@ def train_score_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
     """Train a score model and return a structured metrics report payload."""
+
     data_path: Path = kwargs["data_path"]
 
     model: ScoreModel = train_score_model(**kwargs)
@@ -283,6 +285,7 @@ def train_margin_total_model(
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
 ) -> MarginTotalModel:
     """Train margin/total models with optional calibration."""
+
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
@@ -559,6 +562,7 @@ def train_margin_total_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
     """Train a margin/total model and return a structured metrics report payload."""
+
     data_path: Path = kwargs["data_path"]
     holdout_seasons: int = kwargs["holdout_seasons"]
     calibration_seasons: int = kwargs["calibration_seasons"]
@@ -655,6 +659,7 @@ def train_blended_margin_total_model(
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
 ) -> BlendedMarginTotalModel:
     """Train blended margin/total models using team vs market signals."""
+
     if calibration_seasons <= 0 and calibration_weeks <= 0:
         raise ValueError("Blended models require calibration seasons or calibration weeks.")
     if market_anchor:
@@ -925,6 +930,7 @@ def train_blended_margin_total_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
     """Train a blended model and return a structured metrics report payload."""
+
     data_path: Path = kwargs["data_path"]
 
     model: BlendedMarginTotalModel = train_blended_margin_total_model(**kwargs)

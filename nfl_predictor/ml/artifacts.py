@@ -38,11 +38,13 @@ class RunPaths:
 
 def now_utc_iso() -> str:
     """Return an ISO-8601 UTC timestamp string."""
+
     return datetime.now(timezone.utc).isoformat()
 
 
 def sha256_file(path: Path) -> str:
     """Compute a SHA-256 fingerprint of a file's bytes."""
+
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -52,6 +54,7 @@ def sha256_file(path: Path) -> str:
 
 def stable_short_hash(payload: Any) -> str:
     """Return a stable short hash for a JSON-serializable payload."""
+
     encoded = json.dumps(_to_jsonable(payload), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:8]
 
@@ -109,6 +112,7 @@ def _to_jsonable(value: Any) -> Any:
 
 def generate_run_id(prefix: str, dataset_hash: str, config: dict[str, Any]) -> str:
     """Generate a run id using timestamp + dataset/config hash."""
+
     created = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     short_hash = stable_short_hash({"dataset_hash": dataset_hash, "config": config})
     return f"{prefix}_{created}_{short_hash}"
@@ -122,6 +126,7 @@ def resolve_run_paths(
     metrics_filename: str = "metrics_report.json",
 ) -> RunPaths:
     """Resolve default artifact paths for a given run id."""
+
     base = run_dir if run_dir is not None else (Path(constants.ROOT_DIR) / "models" / run_id)
     return RunPaths(
         run_id=run_id,
@@ -134,6 +139,7 @@ def resolve_run_paths(
 
 def git_commit_hash() -> Optional[str]:
     """Return current git commit hash if available."""
+
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -161,6 +167,7 @@ def _module_version(module_name: str) -> Optional[str]:
 
 def library_versions() -> dict[str, Optional[str]]:
     """Return versions of key libraries for reproducibility."""
+
     return {
         "python": sys.version,
         "python_executable": sys.executable,
@@ -206,6 +213,7 @@ def build_metadata(
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     """Write JSON to disk with stable formatting."""
+
     path.parent.mkdir(parents=True, exist_ok=True)
     safe_payload = _to_jsonable(payload)
     path.write_text(json.dumps(safe_payload, indent=2, sort_keys=True), encoding="utf-8")
@@ -214,6 +222,7 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def save_model(path: Path, model: Any) -> None:
     """Persist a model artifact via joblib."""
+
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)
     log.info("Saved model checkpoint to %s", path)

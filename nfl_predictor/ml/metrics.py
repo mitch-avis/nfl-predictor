@@ -19,6 +19,7 @@ PROB_EPSILON = 1e-15
 
 def clip_probabilities(probs: np.ndarray, eps: Optional[float] = None) -> np.ndarray:
     """Clip probabilities to [0, 1] or [eps, 1-eps] for stability."""
+
     if eps is None:
         return np.clip(probs, 0.0, 1.0)
     return np.clip(probs, eps, 1.0 - eps)
@@ -31,6 +32,7 @@ def margin_total_metrics(
     pred_total: np.ndarray,
 ) -> dict[str, float]:
     """Compute MAE for margin and total."""
+
     return {
         "margin_mae": float(mean_absolute_error(actual_margin, pred_margin)),
         "total_mae": float(mean_absolute_error(actual_total, pred_total)),
@@ -39,6 +41,7 @@ def margin_total_metrics(
 
 def probability_metrics(actual_home_win: np.ndarray, home_win_prob: np.ndarray) -> dict[str, float]:
     """Compute Brier score and log loss for home win probabilities."""
+
     probs = clip_probabilities(home_win_prob)
     probs_eps = clip_probabilities(probs, eps=PROB_EPSILON)
     return {
@@ -60,6 +63,7 @@ def confidence_pool_columns(
     When `tiebreaker` is provided, it is used to deterministically break ties in
     confidence strength (important because some workflows round probabilities for output).
     """
+
     strength = np.abs(home_win_prob - 0.5)
     if tiebreaker is None:
         order = np.argsort(strength, kind="mergesort")
@@ -87,6 +91,7 @@ def confidence_pool_columns(
 
 def confidence_pool_summary(confidence_cols: dict[str, np.ndarray]) -> dict[str, Any]:
     """Aggregate confidence-pool points across a week (or any set of games)."""
+
     return {
         "expected_points": float(confidence_cols["expected_points"].sum()),
         "actual_points": float(confidence_cols["actual_points"].sum()),
@@ -99,6 +104,7 @@ def reliability_table(
     home_win_prob: np.ndarray, actual_home_win: np.ndarray, bins: int = 10
 ) -> list[dict[str, Any]]:
     """Return a binned calibration reliability table."""
+
     probs = clip_probabilities(home_win_prob)
     actual = actual_home_win.astype(float)
     edges = np.linspace(0.0, 1.0, bins + 1)

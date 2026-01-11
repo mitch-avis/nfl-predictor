@@ -21,8 +21,6 @@ import pandas as pd
 from nfl_predictor import ml_model
 from nfl_predictor.utils.logger import log
 
-# pylint: disable=protected-access
-
 
 @dataclass(frozen=True)
 class LeakageAuditConfig:

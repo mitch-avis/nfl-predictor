@@ -11,6 +11,7 @@ import heapq
 import inspect
 import json
 import os
+import warnings
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
@@ -62,13 +63,10 @@ DEFAULT_XGB_PARAMS = {
 
 DEFAULT_FEATURE_START_COLUMN = "away_rest"
 DEFAULT_FEATURE_END_COLUMN = "home_moneyline"
-
 DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
-
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
-
 MARKET_DERIVED_COLUMNS = (
     "market_home_margin",
     "market_total_line",
@@ -225,9 +223,9 @@ def _get_feature_range_columns(
     end_idx = columns.index(feature_end)
     if start_idx > end_idx:
         raise ValueError(f"Feature start column '{feature_start}' occurs after '{feature_end}'.")
-    feature_range = columns[start_idx : end_idx + 1]  # noqa: E203
+    feature_range = columns[start_idx : end_idx + 1]
     metadata_columns = columns[:start_idx]
-    post_feature_columns = columns[end_idx + 1 :]  # noqa: E203
+    post_feature_columns = columns[end_idx + 1 :]
     return feature_range, metadata_columns, post_feature_columns
 
 
@@ -263,6 +261,7 @@ def _add_market_transforms(df: pd.DataFrame) -> pd.DataFrame:
 
 def get_market_baseline(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """Return market baseline margin and total arrays from input DataFrame."""
+
     df = _add_market_transforms(df)
     if "market_home_margin" not in df.columns or "market_total_line" not in df.columns:
         raise ValueError("Market anchor requested but spread/total columns are missing.")
@@ -684,6 +683,7 @@ def _build_blocked_timepoint_folds(
     Each fold validates on a contiguous block of timepoints; training uses all
     strictly earlier timepoints.
     """
+
     points = list(timepoints)
     if n_splits <= 0:
         raise ValueError("n_splits must be positive.")
@@ -1330,8 +1330,6 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
 
 
 def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
-    import warnings
-
     for cls in (
         FeatureSpec,
         ScoreModel,
@@ -1432,21 +1430,25 @@ def _with_market_prob_config(model: Any, config: Optional[MarketProbConfig]) -> 
 
 def load_model_checkpoint(path: Path, model_kind: str) -> Any:
     """Load a saved model checkpoint with type validation."""
+
     return _load_model_checkpoint(path, model_kind)
 
 
 def get_target_columns(df: pd.DataFrame) -> tuple[str, str]:
     """Return away/home score column names."""
+
     return _get_target_columns(df)
 
 
 def apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
     """Apply a feature spec to an input DataFrame."""
+
     return _apply_feature_spec(df, spec)
 
 
 def margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
     """Convert predicted margin to home win probability."""
+
     return _margin_to_home_win_prob(margin)
 
 
@@ -1454,6 +1456,7 @@ def predict_margin_total_from_model(
     model: MarginTotalModel, games_df: pd.DataFrame
 ) -> tuple[np.ndarray, np.ndarray]:
     """Predict margin and total from a margin/total model."""
+
     return _predict_margin_total_from_model(model, games_df)
 
 
@@ -1461,6 +1464,7 @@ def derive_scores_from_margin_total(
     pred_margin: np.ndarray, pred_total: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     """Derive away/home scores from margin and total."""
+
     return _derive_scores_from_margin_total(pred_margin, pred_total)
 
 
@@ -1468,6 +1472,7 @@ def predict_home_win_prob(
     pred_margin: np.ndarray, calibrator: Optional[WinProbCalibrator]
 ) -> np.ndarray:
     """Predict home win probability from margin predictions."""
+
     return _predict_home_win_prob(pred_margin, calibrator)
 
 
@@ -1477,11 +1482,13 @@ def adjust_home_win_prob(
     market_prob_config: Optional[MarketProbConfig],
 ) -> np.ndarray:
     """Adjust win probabilities using market blend/clamp settings."""
+
     return _adjust_home_win_prob(games_df, home_win_prob, market_prob_config)
 
 
 def predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
     """Predict using an XGBoost model with DMatrix inputs."""
+
     return _predict_xgb(model, data)
 
 
@@ -1493,6 +1500,7 @@ def build_prediction_output(
     score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Build the prediction output DataFrame."""
+
     return _build_prediction_output(
         games_df,
         pred_away,
@@ -1734,6 +1742,8 @@ def _run_optuna_search(
     study = optuna_module.create_study(**study_kwargs)
 
     def objective_fn(trial: Any) -> float:
+        """Optuna objective function for margin/total model tuning."""
+
         trial_params = {
             "max_depth": trial.suggest_int("max_depth", 3, 8),
             "min_child_weight": trial.suggest_float("min_child_weight", 1.0, 10.0),

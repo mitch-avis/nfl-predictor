@@ -19,24 +19,25 @@ training helpers.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+import joblib
 import numpy as np
 import pandas as pd
 
-from nfl_predictor import constants
+from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import artifacts, walk_forward
 from nfl_predictor.ml import metrics as metrics_utils
+from nfl_predictor.ml import ml_model_core as core
 from nfl_predictor.ml.ml_model_core import (
     BlendedMarginTotalModel,
     MarginTotalModel,
     MarketProbConfig,
 )
 from nfl_predictor.utils.logger import log
-
-# pylint: disable=protected-access
 
 
 @dataclass(frozen=True)
@@ -73,10 +74,6 @@ class ModelRecipe:
 
 def load_model(path_or_dir: Path) -> Any:
     """Load a joblib model from a file or a run directory."""
-
-    import warnings
-
-    import joblib
 
     path = Path(path_or_dir)
     if path.is_dir():
@@ -175,8 +172,6 @@ def _fit_margin_total_fold(
     target_columns: tuple[str, str],
 ) -> pd.DataFrame:
     """Train/evaluate one fold for a margin/total model."""
-
-    from nfl_predictor import ml_model
 
     include_market, market_transform, market_anchor = _resolve_market_settings_for_recipe(
         fold.train_df, recipe
@@ -284,8 +279,6 @@ def _fit_blended_fold(
     target_columns: tuple[str, str],
 ) -> pd.DataFrame:
     """Train/evaluate one fold for a blended model (team model + market baseline)."""
-
-    from nfl_predictor.ml import ml_model_core as core
 
     include_market, market_transform, _market_anchor = _resolve_market_settings_for_recipe(
         fold.train_df, recipe
@@ -467,8 +460,6 @@ def run_objective_compare(
 
     np.random.seed(cfg.random_seed)
     df = walk_forward.filter_regular_season(df)
-
-    from nfl_predictor import ml_model
 
     target_columns = ml_model.get_target_columns(df)
     df = df.dropna(subset=list(target_columns)).copy()

@@ -57,6 +57,18 @@ def load_schedule(seasons: list[int]) -> pl.DataFrame:
     }
     schedule_df = schedule_df.rename(rename_mapping)
 
+    # Normalize kickoff time columns.
+    # nflreadpy schedule schemas vary a bit across versions; coalesce to `gametime`.
+    time_candidates = [c for c in ("gametime", "game_time", "kickoff_time", "start_time") if c in schedule_df.columns]
+    if time_candidates:
+        # Prefer an existing `gametime` column when present.
+        exprs = [pl.col(c).cast(pl.Utf8) for c in time_candidates]
+        schedule_df = schedule_df.with_columns(pl.coalesce(exprs).alias("gametime"))
+        # Drop alternate raw time columns to avoid schema clutter.
+        drop_cols = [c for c in time_candidates if c != "gametime"]
+        if drop_cols:
+            schedule_df = schedule_df.drop(drop_cols)
+
     # Normalize team abbreviations
     if "away_abbr" in schedule_df.columns:
         schedule_df = normalize_team_column(schedule_df, "away_abbr")
@@ -79,6 +91,15 @@ def load_schedule(seasons: list[int]) -> pl.DataFrame:
     # Parse date column
     if "date" in schedule_df.columns:
         schedule_df = schedule_df.with_columns(pl.col("date").str.to_date("%Y-%m-%d").alias("date"))
+
+    # Optional: combine date + gametime into a sortable datetime.
+    # We keep `gametime` as the raw string and add `game_datetime` when parsing succeeds.
+    if "date" in schedule_df.columns and "gametime" in schedule_df.columns:
+        dt_str = pl.concat_str([pl.col("date").cast(pl.Utf8), pl.col("gametime")], separator=" ")
+        dt_24 = dt_str.str.strptime(pl.Datetime, "%Y-%m-%d %H:%M", strict=False)
+        dt_ampm = dt_str.str.strptime(pl.Datetime, "%Y-%m-%d %I:%M%p", strict=False)
+        dt_ampm_sp = dt_str.str.strptime(pl.Datetime, "%Y-%m-%d %I:%M %p", strict=False)
+        schedule_df = schedule_df.with_columns(pl.coalesce([dt_24, dt_ampm, dt_ampm_sp]).alias("game_datetime"))
 
     # Add stadium city and state from stadium_id
     if "stadium_id" in schedule_df.columns:

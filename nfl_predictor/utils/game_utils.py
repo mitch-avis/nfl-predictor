@@ -31,6 +31,7 @@ def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
     Returns:
         The moneyline corresponding to the given spread
     """
+
     # Use the standard deviation of NFL score differences
     std_dev = constants.SCORE_DIFF_STD_DEV
 
@@ -72,6 +73,7 @@ def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         DataFrame with moneylines filled in where possible
     """
+
     if "home_spread" not in df.columns:
         return df
 
@@ -140,6 +142,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         DataFrame with columns: team_abbr, qb_name, qb_value_pre, qb_elo_pre
     """
+
     required_cols = ["qb1", "qb2", "team1", "team2"]
     if not all(c in elo_df.columns for c in required_cols):
         return pl.DataFrame()
@@ -204,6 +207,7 @@ def get_qb_elo_by_name(elo_df: pl.DataFrame, qb_name: str) -> dict:
     Returns:
         Dict with qb_value_pre and qb_elo_pre, or empty dict if not found
     """
+
     if elo_df.height == 0 or not qb_name:
         return {}
 
@@ -244,6 +248,7 @@ def fill_future_qb_data(
     Returns:
         DataFrame with QB data filled in for future games
     """
+
     required_cols = ["away_abbr", "home_abbr"]
     if not all(c in df.columns for c in required_cols):
         return df
@@ -381,6 +386,7 @@ def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         DataFrame with lines filled in for future games
     """
+
     # Only process if we have the required columns
     required_cols = ["week", "away_abbr", "home_abbr"]
     if not all(c in df.columns for c in required_cols):
@@ -414,6 +420,8 @@ def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
     # Positive = underdog, Negative = favorite
     # We need to convert to home_spread perspective
     def get_home_spread(week: int, home_abbr: str, away_abbr: str) -> float | None:
+        """Get the home spread for a given game from SurvivorGrid data."""
+
         home_spread = spreads_data.get(home_abbr, {}).get(week)
         if home_spread is not None:
             return home_spread

@@ -24,11 +24,13 @@ class ValidationResult:
 
     def is_valid(self) -> bool:
         """Return True if no errors were found."""
+
         return not self.errors
 
 
 def validate_required_columns(df: pl.DataFrame, required_cols: Iterable[str]) -> list[str]:
     """Return a list of missing required columns."""
+
     required = list(required_cols)
     missing = [col for col in required if col not in df.columns]
     return missing
@@ -39,6 +41,7 @@ def validate_team_abbrs(
     columns: Iterable[str] = ("away_abbr", "home_abbr"),
 ) -> list[str]:
     """Return a list of invalid team abbreviations in the given columns."""
+
     valid = set(constants.TEAM_ABBR)
     invalid = []
     for col in columns:
@@ -59,6 +62,7 @@ def validate_week_range(
     week_col: str = "week",
 ) -> list[str]:
     """Return a list of week values outside the expected range for their season."""
+
     if season_col not in df.columns or week_col not in df.columns:
         return []
 
@@ -76,6 +80,7 @@ def validate_week_range(
 
 def validate_unique_games(df: pl.DataFrame) -> list[str]:
     """Return a list of duplicate game identifiers with conflicting data."""
+
     if "game_id" in df.columns:
         duplicates = (
             df.filter(pl.col("game_id").is_not_null())
@@ -119,6 +124,7 @@ def validate_unique_games(df: pl.DataFrame) -> list[str]:
 
 def validate_scores(df: pl.DataFrame) -> list[str]:
     """Return a list of score-related issues."""
+
     issues = []
     for col in ("away_score", "home_score"):
         if col not in df.columns:
@@ -131,6 +137,7 @@ def validate_scores(df: pl.DataFrame) -> list[str]:
 
 def validate_dataframe(df: pl.DataFrame) -> ValidationResult:
     """Run a standard validation suite for a collected dataset."""
+
     errors = []
     warnings = []
 
@@ -172,6 +179,7 @@ def compare_latest_week_scores(
     Returns:
         DataFrame of mismatched games (empty if none or if schedule unavailable).
     """
+
     required_cols = {
         "season",
         "week",
@@ -202,7 +210,7 @@ def compare_latest_week_scores(
     if schedule_df is None:
         try:
             schedule_df = polars_utils.load_schedule([latest_season])
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             log.warning("Failed to load schedule for validation: %s", exc)
             return pl.DataFrame()
 

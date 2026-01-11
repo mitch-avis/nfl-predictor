@@ -34,6 +34,7 @@ def get_season_start(year: int) -> date:
     Returns:
         The season start date.
     """
+
     sept_first = date(year, 9, 1)
     first_monday = sept_first + timedelta((7 - sept_first.weekday()) % 7)
     return first_monday + timedelta(days=3)
@@ -46,6 +47,7 @@ def get_current_nfl_week() -> tuple[int, int]:
     Returns:
         Tuple of (season, week)
     """
+
     today = date.today()
     current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
@@ -79,6 +81,7 @@ def get_week_date(season: int, week: int) -> date:
     Returns:
         Date to use for TR scraping
     """
+
     season_start = get_season_start(season)
     # Go back 8 days from season start to get the base date
     base_date = season_start - timedelta(days=8)
@@ -98,6 +101,7 @@ def normalize_team_column(df: pl.DataFrame, column: str) -> pl.DataFrame:
     Returns:
         DataFrame with normalized team abbreviations
     """
+
     return df.with_columns(pl.col(column).replace(constants.ALIAS_TO_CANONICAL).alias(column))
 
 
@@ -127,6 +131,7 @@ def scrape_team_rankings_for_week(
     Returns:
         A Polars DataFrame containing team rankings for the specified week.
     """
+
     # Use defaults if not specified
     if ratings_to_scrape is None:
         ratings_to_scrape = constants.TEAM_RANKINGS_RATINGS
@@ -234,6 +239,7 @@ def _parse_tr_rating_table(table) -> tuple[list[str], list[float]]:
     Returns:
         Tuple of (team_abbreviations, ratings)
     """
+
     teams = []
     ratings = []
 
@@ -269,6 +275,7 @@ def _parse_tr_stat_table(table) -> tuple[list[str], list[float]]:
     Returns:
         Tuple of (team_abbreviations, stat_values)
     """
+
     teams = []
     stats = []
 
@@ -311,6 +318,7 @@ def get_missing_tr_columns(
         Tuple of (missing_ratings, missing_stats) where each is a dict of
         {url_path: column_name} for items that need to be scraped.
     """
+
     existing_cols = set(existing_df.columns)
 
     missing_ratings = {}
@@ -342,6 +350,7 @@ def merge_tr_data(
     Returns:
         Combined DataFrame with all columns
     """
+
     if existing_df.height == 0:
         return new_df
     if new_df.height == 0:
@@ -376,6 +385,7 @@ def save_team_rankings_week(tr_df: pl.DataFrame, season: int, week: int) -> None
         season: Season year
         week: Week number
     """
+
     season_dir = os.path.join(constants.DATA_PATH, str(season))
     os.makedirs(season_dir, exist_ok=True)
 
@@ -391,6 +401,7 @@ def update_season_team_rankings(season: int) -> None:
     Args:
         season: Season year
     """
+
     season_dir = os.path.join(constants.DATA_PATH, str(season))
     all_weeks_data = []
 
@@ -421,6 +432,7 @@ def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
         Example: {"BUF": {16: -10.5, 17: -3.0, 18: -14.0}, ...}
         Returns empty dict if scraping fails.
     """
+
     try:
         response = requests.get(constants.SURVIVOR_GRID_URL, timeout=10)
         response.raise_for_status()

@@ -12,6 +12,7 @@ from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
 def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     """Writes a workbook with expected sheets and formulas."""
 
+    # Intentionally unsorted input; template should sort by date then game_id.
     df = pd.DataFrame(
         [
             {
@@ -29,7 +30,39 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
                 "home_spread": -2.5,
                 "away_spread": 2.5,
                 "total_line": 44.5,
-            }
+            },
+            {
+                "season": 2025,
+                "week": 19,
+                "date": "2026-01-11",
+                "game_id": "2025_19_M_N",
+                "away_abbr": "M",
+                "home_abbr": "N",
+                "home_win_prob": 0.53,
+                "predicted_margin": 1.0,
+                "predicted_total": 41.0,
+                "home_moneyline": -110,
+                "away_moneyline": -110,
+                "home_spread": -1.0,
+                "away_spread": 1.0,
+                "total_line": 41.5,
+            },
+            {
+                "season": 2025,
+                "week": 19,
+                "date": "2026-01-11",
+                "game_id": "2025_19_A_B",
+                "away_abbr": "A",
+                "home_abbr": "B",
+                "home_win_prob": 0.41,
+                "predicted_margin": -2.0,
+                "predicted_total": 51.0,
+                "home_moneyline": 120,
+                "away_moneyline": -140,
+                "home_spread": 3.0,
+                "away_spread": -3.0,
+                "total_line": 50.5,
+            },
         ]
     )
 
@@ -38,6 +71,7 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     assert out.exists()
 
     import openpyxl
+    from openpyxl.utils import get_column_letter
 
     wb = openpyxl.load_workbook(out)
     assert "README" in wb.sheetnames
@@ -85,11 +119,28 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     ):
         assert col in headers
 
+    # Sorted order: 2026-01-11 games first (game_id A_B then M_N), then 2026-01-12.
+    game_id_col = headers.index("game_id") + 1
+    assert ws.cell(row=2, column=game_id_col).value == "2025_19_A_B"
+    assert ws.cell(row=3, column=game_id_col).value == "2025_19_M_N"
+    assert ws.cell(row=4, column=game_id_col).value == "2025_19_X_Y"
+
     # Live sheet should include a win-probability formula cell.
     ws_live = wb["Live"]
     live_headers = [c.value for c in ws_live[1]]
     assert "live_home_win_prob" in live_headers
     assert "total_over_odds_live" in live_headers
+
+    # Live identifiers should reference the matching Bets rows (no matchup misalignment).
+    live_game_id_col = live_headers.index("game_id") + 1
+    live_away_abbr_col = live_headers.index("away_abbr") + 1
+    live_home_abbr_col = live_headers.index("home_abbr") + 1
+    assert ws_live.cell(row=2, column=live_game_id_col).value == "='Bets'!D2"
+    assert ws_live.cell(row=2, column=live_away_abbr_col).value == "='Bets'!E2"
+    assert ws_live.cell(row=2, column=live_home_abbr_col).value == "='Bets'!F2"
+    assert ws_live.cell(row=3, column=live_game_id_col).value == "='Bets'!D3"
+    assert ws_live.cell(row=3, column=live_away_abbr_col).value == "='Bets'!E3"
+    assert ws_live.cell(row=3, column=live_home_abbr_col).value == "='Bets'!F3"
 
     # Live user-input defaults for fast in-game updates.
     assert ws_live.cell(row=2, column=live_headers.index("quarter") + 1).value == 1
@@ -105,10 +156,22 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     assert ws_live.cell(row=2, column=live_headers.index("away_spread_odds_live") + 1).value == -110
     assert ws_live.cell(row=2, column=live_headers.index("total_over_odds_live") + 1).value == -110
     assert ws_live.cell(row=2, column=live_headers.index("total_under_odds_live") + 1).value == -110
+
+    # Live moneylines should initialize from the dataset/model inputs (not -110).
+    assert ws_live.cell(row=2, column=live_headers.index("away_moneyline_live") + 1).value == -140
+    assert ws_live.cell(row=2, column=live_headers.index("home_moneyline_live") + 1).value == 120
     live_prob_cell = ws_live.cell(row=2, column=live_headers.index("live_home_win_prob") + 1)
     assert isinstance(live_prob_cell.value, str)
     assert "NORMSDIST" in live_prob_cell.value
 
     # Date should be present for sorting.
     date_cell = ws.cell(row=2, column=headers.index("date") + 1)
-    assert str(date_cell.value) == "2026-01-12"
+    assert str(date_cell.value) == "2026-01-11"
+
+    # Autofit should write explicit widths for visible columns.
+    assert ws.column_dimensions["A"].width is not None
+
+    # Helper columns should remain hidden.
+    helper_idx = headers.index("spread_mu_margin") + 1
+    helper_letter = get_column_letter(helper_idx)
+    assert ws.column_dimensions[helper_letter].hidden is True

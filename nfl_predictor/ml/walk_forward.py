@@ -572,7 +572,7 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
             np.mean(np.abs(actual_total_resid - pred_total_resid))
         )
 
-    # Optional diagnostics: interval coverage (P10–P90).
+    # Optional diagnostics: interval coverage (P10-P90).
     margin_p10 = "predicted_margin_p10"
     margin_p90 = "predicted_margin_p90"
     total_p10 = "predicted_total_p10"

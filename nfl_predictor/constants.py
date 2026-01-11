@@ -370,6 +370,11 @@ NFLREADPY_SCHEDULE_COLUMNS = [
     "game_type",  # REG, WC, DIV, CON, SB for filtering
     "week",
     "gameday",
+    # Kickoff time fields (availability depends on nflreadpy/nflverse version)
+    "gametime",
+    "game_time",
+    "kickoff_time",
+    "start_time",
     "away_team",
     "home_team",
     "away_score",
@@ -521,13 +526,16 @@ MOTIVATION_FEATURE_COLUMNS = [
     "home_conference_eliminated_proxy",
 ]
 
-# Metadata columns (24 total) - includes game info, teams, venue, and conditions
+# Metadata columns - includes game info, teams, venue, and conditions
 METADATA_COLUMNS = [
     "game_id",
     "season",
     "week",
     "game_type",  # REG, WC, DIV, CON, SB
     "date",
+    # Kickoff time fields (when available)
+    "gametime",
+    "game_datetime",
     "away_abbr",
     "home_abbr",
     "away_qb",

@@ -62,6 +62,12 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     assert isinstance(cell.value, str)
     assert cell.value.startswith("=IF(")
 
+    # Spread/total odds should default to -110 so downstream formulas don't start as N/A.
+    assert ws.cell(row=2, column=headers.index("home_spread_odds_live") + 1).value == -110
+    assert ws.cell(row=2, column=headers.index("away_spread_odds_live") + 1).value == -110
+    assert ws.cell(row=2, column=headers.index("total_over_odds_live") + 1).value == -110
+    assert ws.cell(row=2, column=headers.index("total_under_odds_live") + 1).value == -110
+
     # Key live-input columns should exist for usability.
     for col in (
         "away_spread_live",
@@ -83,9 +89,25 @@ def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     ws_live = wb["Live"]
     live_headers = [c.value for c in ws_live[1]]
     assert "live_home_win_prob" in live_headers
+    assert "total_over_odds_live" in live_headers
+
+    # Live user-input defaults for fast in-game updates.
+    assert ws_live.cell(row=2, column=live_headers.index("quarter") + 1).value == 1
+    assert (
+        ws_live.cell(row=2, column=live_headers.index("minutes_remaining_in_quarter") + 1).value
+        == 15
+    )
+    assert ws_live.cell(row=2, column=live_headers.index("away_score_live") + 1).value == 0
+    assert ws_live.cell(row=2, column=live_headers.index("home_score_live") + 1).value == 0
+
+    # Live odds defaults.
+    assert ws_live.cell(row=2, column=live_headers.index("home_spread_odds_live") + 1).value == -110
+    assert ws_live.cell(row=2, column=live_headers.index("away_spread_odds_live") + 1).value == -110
+    assert ws_live.cell(row=2, column=live_headers.index("total_over_odds_live") + 1).value == -110
+    assert ws_live.cell(row=2, column=live_headers.index("total_under_odds_live") + 1).value == -110
     live_prob_cell = ws_live.cell(row=2, column=live_headers.index("live_home_win_prob") + 1)
     assert isinstance(live_prob_cell.value, str)
-    assert "NORM.S.DIST" in live_prob_cell.value
+    assert "NORMSDIST" in live_prob_cell.value
 
     # Date should be present for sorting.
     date_cell = ws.cell(row=2, column=headers.index("date") + 1)

@@ -36,6 +36,9 @@ P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
 DEFAULT_SIGMA_MARGIN = 13
 DEFAULT_SIGMA_TOTAL = 16
 
+# Default market odds for spread/total when not provided.
+DEFAULT_SPREAD_TOTAL_ODDS = -110
+
 
 @dataclass(frozen=True)
 class ExcelTemplateConfig:
@@ -270,11 +273,12 @@ def write_betting_template_xlsx(
 
     df["total_live"] = df.get("total_line", df["total_model_input"])
 
-    # Live odds inputs (default blank).
-    df["home_spread_odds_live"] = pd.NA
-    df["away_spread_odds_live"] = pd.NA
-    df["total_over_odds_live"] = pd.NA
-    df["total_under_odds_live"] = pd.NA
+    # Live odds inputs.
+    # Default spread/total odds to -110 to avoid N/A propagation in dependent formulas.
+    df["home_spread_odds_live"] = DEFAULT_SPREAD_TOTAL_ODDS
+    df["away_spread_odds_live"] = DEFAULT_SPREAD_TOTAL_ODDS
+    df["total_over_odds_live"] = DEFAULT_SPREAD_TOTAL_ODDS
+    df["total_under_odds_live"] = DEFAULT_SPREAD_TOTAL_ODDS
 
     # Computed outputs (filled by formulas).
     for c in (
@@ -404,12 +408,12 @@ def write_betting_template_xlsx(
         # P(home covers) = P(margin > -home_spread)
         ws[spread_p_home].value = (
             f"=IF(OR(ISNA({spread_sigma}),{spread_sigma}<=0,ISBLANK({home_spread_live})),NA(),"
-            f"1-NORM.S.DIST(((-{home_spread_live})-({spread_mu}))/({spread_sigma}),TRUE))"
+            f"1-NORMSDIST(((-{home_spread_live})-({spread_mu}))/({spread_sigma})))"
         )
         # P(away covers) = P(margin < away_spread)
         ws[spread_p_away].value = (
             f"=IF(OR(ISNA({spread_sigma}),{spread_sigma}<=0,ISBLANK({away_spread_live})),NA(),"
-            f"NORM.S.DIST((({away_spread_live})-({spread_mu}))/({spread_sigma}),TRUE))"
+            f"NORMSDIST((({away_spread_live})-({spread_mu}))/({spread_sigma})))"
         )
 
         # Break-even probs from spread odds (vig included)
@@ -518,7 +522,7 @@ def write_betting_template_xlsx(
 
         ws[total_p_over].value = (
             f"=IF(OR(ISNA({total_sigma}),{total_sigma}<=0,ISBLANK({total_live})),NA(),"
-            f"1-NORM.S.DIST((({total_live})-({total_mu}))/({total_sigma}),TRUE))"
+            f"1-NORMSDIST((({total_live})-({total_mu}))/({total_sigma})))"
         )
         ws[total_p_under].value = f"=IF(ISNA({total_p_over}),NA(),1-({total_p_over}))"
 
@@ -653,13 +657,15 @@ def write_betting_template_xlsx(
     for cell in ws_live[1]:
         cell.font = Font(bold=True)
 
-    # Heuristic constants (keep out of the main table to avoid clobbering headers).
-    ws_live["AA1"].value = "DEFAULT_SIGMA_MARGIN"
-    ws_live["AB1"].value = 13
-    ws_live["AA2"].value = "DEFAULT_SIGMA_TOTAL"
-    ws_live["AB2"].value = 16
-
     live_col_index = {name: j for j, name in enumerate(live_columns)}
+
+    # Heuristic constants (place to the right of the main table).
+    const_label_col = col_letter(len(live_columns))
+    const_value_col = col_letter(len(live_columns) + 1)
+    ws_live[f"{const_label_col}1"].value = "DEFAULT_SIGMA_MARGIN"
+    ws_live[f"{const_value_col}1"].value = DEFAULT_SIGMA_MARGIN
+    ws_live[f"{const_label_col}2"].value = "DEFAULT_SIGMA_TOTAL"
+    ws_live[f"{const_value_col}2"].value = DEFAULT_SIGMA_TOTAL
 
     def live_addr(row: int, col_name: str) -> str:
         return f"{col_letter(live_col_index[col_name])}{row}"
@@ -681,16 +687,18 @@ def write_betting_template_xlsx(
         for name in ("season", "week", "date", "game_id", "away_abbr", "home_abbr"):
             ws_live[live_addr(live_row, name)].value = bets_ref(bets_row, name)
 
-        # User inputs (blank by default)
+        # User inputs (defaults for quick live entry)
+        ws_live[live_addr(live_row, "quarter")].value = 1
+        ws_live[live_addr(live_row, "minutes_remaining_in_quarter")].value = 15
+        ws_live[live_addr(live_row, "away_score_live")].value = 0
+        ws_live[live_addr(live_row, "home_score_live")].value = 0
         for name in (
             "quarter",
             "minutes_remaining_in_quarter",
             "away_score_live",
             "home_score_live",
         ):
-            cell = ws_live[live_addr(live_row, name)]
-            cell.value = None
-            cell.fill = live_input_fill
+            ws_live[live_addr(live_row, name)].fill = live_input_fill
 
         quarter = live_addr(live_row, "quarter")
         minutes_in_quarter = live_addr(live_row, "minutes_remaining_in_quarter")
@@ -733,7 +741,7 @@ def write_betting_template_xlsx(
         ).format(
             p10=bets_margin_p10,
             p90=bets_margin_p90,
-            default_sigma="AB$1",
+            default_sigma=f"{const_value_col}$1",
             denom=str(P10_P90_TO_SIGMA_DENOM),
         )
 
@@ -749,7 +757,7 @@ def write_betting_template_xlsx(
         live_home_win = live_addr(live_row, "live_home_win_prob")
         live_away_win = live_addr(live_row, "live_away_win_prob")
         ws_live[live_home_win].value = (
-            f"=IF(OR(ISNA({live_sigma_margin}),{live_sigma_margin}<=0),NA(),1-NORM.S.DIST((0-({live_mu_margin}))/({live_sigma_margin}),TRUE))"
+            f"=IF(OR(ISNA({live_sigma_margin}),{live_sigma_margin}<=0),NA(),1-NORMSDIST((0-({live_mu_margin}))/({live_sigma_margin})))"
         )
         ws_live[live_away_win].value = f"=IF(ISNA({live_home_win}),NA(),1-({live_home_win}))"
 
@@ -771,6 +779,9 @@ def write_betting_template_xlsx(
             val = rec.get(name)
             if val is pd.NA or (hasattr(pd, "isna") and pd.isna(val)):
                 val = None
+
+            if val is None and (name.endswith("_odds_live") or name.endswith("_moneyline_live")):
+                val = DEFAULT_SPREAD_TOTAL_ODDS
             cell.value = val
             cell.fill = live_input_fill
 
@@ -781,11 +792,11 @@ def write_betting_template_xlsx(
         p_away_cover = live_addr(live_row, "live_p_away_cover")
         ws_live[p_home_cover].value = (
             f"=IF(OR(ISNA({live_sigma_margin}),{live_sigma_margin}<=0,ISBLANK({home_spread_live})),NA(),"
-            f"1-NORM.S.DIST(((-{home_spread_live})-({live_mu_margin}))/({live_sigma_margin}),TRUE))"
+            f"1-NORMSDIST(((-{home_spread_live})-({live_mu_margin}))/({live_sigma_margin})))"
         )
         ws_live[p_away_cover].value = (
             f"=IF(OR(ISNA({live_sigma_margin}),{live_sigma_margin}<=0,ISBLANK({away_spread_live})),NA(),"
-            f"NORM.S.DIST((({away_spread_live})-({live_mu_margin}))/({live_sigma_margin}),TRUE))"
+            f"NORMSDIST((({away_spread_live})-({live_mu_margin}))/({live_sigma_margin})))"
         )
 
         # Spread edge/action/EV vs odds
@@ -890,7 +901,7 @@ def write_betting_template_xlsx(
         ).format(
             p10=bets_total_p10,
             p90=bets_total_p90,
-            default_sigma="AB$2",
+            default_sigma=f"{const_value_col}$2",
             denom=str(P10_P90_TO_SIGMA_DENOM),
         )
 
@@ -913,7 +924,7 @@ def write_betting_template_xlsx(
         p_under = live_addr(live_row, "live_p_under")
         ws_live[p_over].value = (
             f"=IF(OR(ISNA({live_sigma_total}),{live_sigma_total}<=0,ISBLANK({total_live})),NA(),"
-            f"1-NORM.S.DIST((({total_live})-({live_mu_total}))/({live_sigma_total}),TRUE))"
+            f"1-NORMSDIST((({total_live})-({live_mu_total}))/({live_sigma_total})))"
         )
         ws_live[p_under].value = f"=IF(ISNA({p_over}),NA(),1-({p_over}))"
 

@@ -91,6 +91,7 @@ try:
         MarketProbConfig,
         OptunaConfig,
         TrainingResult,
+        normalize_win_prob_calibration_method,
     )
     from nfl_predictor.ml.ml_model_predict import predict_week_blended
     from nfl_predictor.ml.ml_model_training import (
@@ -109,6 +110,7 @@ except ModuleNotFoundError:  # pragma: no cover
         MarketProbConfig,
         OptunaConfig,
         TrainingResult,
+        normalize_win_prob_calibration_method,
     )
     from nfl_predictor.ml.ml_model_predict import predict_week_blended
     from nfl_predictor.ml.ml_model_training import (
@@ -508,10 +510,11 @@ def _parse_args() -> argparse.Namespace:
     # Final step win-prob calibration: default to elo to allow calibration_seasons=0
     parser.add_argument(
         "--final-win-prob-calibration",
-        choices=["elo", "isotonic", "platt", "none"],
+        choices=["elo", "isotonic", "platt", "none", "auto", "logistic"],
         default="elo",
         help=(
-            "Win-prob calibration for final training. Default elo enables calibration_seasons=0."
+            "Win-prob calibration for final training (logistic is an alias for platt). "
+            "Default elo enables calibration_seasons=0."
         ),
     )
     parser.add_argument(
@@ -842,7 +845,9 @@ def main() -> int:
     if args.resume and final_model_path.exists() and final_predictions_path.exists():
         log.info("Stage 3: reuse %s and %s", final_model_path, final_predictions_path)
     else:
-        final_calibration = str(args.final_win_prob_calibration).lower()
+        final_calibration = normalize_win_prob_calibration_method(
+            str(args.final_win_prob_calibration)
+        )
 
         # If the user asked for a fitted calibrator but also wants full-history/no calibration,
         # we force elo (deterministic) to avoid needing to hold out rows.

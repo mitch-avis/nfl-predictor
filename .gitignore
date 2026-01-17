@@ -220,3 +220,6 @@ data/
 
 # Models folder
 models/
+
+# Optuna database
+**/optuna.db

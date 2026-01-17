@@ -350,6 +350,24 @@ Repo utilities under `scripts/`:
   walk-forward metrics.
 - `scripts/backtest_predictions.py`: run a backtest using a saved model artifact.
 
+`wf_compare` examples:
+
+```bash
+.venv/bin/python scripts/wf_compare.py \
+  --eval-last-n-seasons 3 \
+  --market-mode hybrid \
+  --market-prob-source raw \
+  --market-prob-blend-method prob
+```
+
+```bash
+.venv/bin/python scripts/wf_compare.py \
+  --eval-last-n-seasons 3 \
+  --market-mode all \
+  --market-prob-source both \
+  --market-prob-blend-method both
+```
+
 GPU note (XGBoost 2.x): prefer `--xgb-tree-method hist --xgb-device cuda`.
 
 If you see great performance on the exact data a model trained on, that is not evidence the model

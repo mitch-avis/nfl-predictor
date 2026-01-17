@@ -146,6 +146,7 @@ def _load_current_records(schedule_path: Path, *, season: int, through_week: int
 
     # Only count games up through the specified week that have scores.
     df = df.filter(pl.col("week") <= through_week)
+    df = df.filter(pl.col("game_type") == "REG")
     df = df.filter(pl.col("away_score").is_not_null() & pl.col("home_score").is_not_null())
 
     # Compute per-team record.
@@ -182,6 +183,41 @@ def _load_current_records(schedule_path: Path, *, season: int, through_week: int
     return _pl_to_pandas(rec)
 
 
+def _missing_market_inputs(
+    required_features: list[str],
+    available_cols: set[str],
+) -> list[str]:
+    """Return market-derived feature names that lack required raw inputs."""
+
+    required = set(required_features)
+    missing: list[str] = []
+
+    if "market_home_margin" in required and "market_home_margin" not in available_cols:
+        if not {"home_spread", "away_spread"} & available_cols:
+            missing.append("market_home_margin")
+    if "market_total_line" in required and "market_total_line" not in available_cols:
+        if "total_line" not in available_cols:
+            missing.append("market_total_line")
+    if "home_market_prob" in required and "home_market_prob" not in available_cols:
+        if "home_moneyline" not in available_cols:
+            missing.append("home_market_prob")
+    if "away_market_prob" in required and "away_market_prob" not in available_cols:
+        if "away_moneyline" not in available_cols:
+            missing.append("away_market_prob")
+
+    return missing
+
+
+def _format_missing_columns(missing: list[str], *, limit: int = 10) -> str:
+    """Format a missing-column list for error messages."""
+
+    unique = sorted(set(missing))
+    if len(unique) <= limit:
+        return ", ".join(unique)
+    shown = ", ".join(unique[:limit])
+    return f"{shown} (+{len(unique) - limit} more)"
+
+
 def _predict_future_games(
     model: Any,
     *,
@@ -197,6 +233,15 @@ def _predict_future_games(
         raise ValueError("Model is missing feature_spec; cannot predict")
 
     available_cols = set(pl.read_csv(data_ml, n_rows=0).columns)
+    derived_cols = set(ml_model_core.MARKET_DERIVED_COLUMNS)
+    required_features = list(getattr(spec, "feature_columns", []))
+    missing_required = set(required_features) - available_cols - derived_cols
+    missing_required.update(_missing_market_inputs(required_features, available_cols))
+    if missing_required:
+        missing_text = _format_missing_columns(sorted(missing_required))
+        raise ValueError(
+            "Missing required feature columns " f"({len(missing_required)}): {missing_text}"
+        )
     base_cols = ["season", "week", "game_type", "away_abbr", "home_abbr"]
     market_raw_cols = [
         "home_spread",
@@ -255,7 +300,11 @@ def _predict_future_games(
         x = sm.preprocessor.transform(feature_df)
         pred_away = ml_model_core.predict_xgb(sm.away_model, x)
         pred_home = ml_model_core.predict_xgb(sm.home_model, x)
-        home_win_prob = ml_model_core.margin_to_home_win_prob(pred_home - pred_away)
+        pred_margin = pred_home - pred_away
+        home_win_prob = ml_model_core.predict_home_win_prob(
+            pred_margin,
+            getattr(sm, "calibrator", None),
+        )
         home_win_prob = ml_model_core.adjust_home_win_prob(
             games, home_win_prob, getattr(sm, "market_prob_config", None)
         )
@@ -314,6 +363,15 @@ def _build_games_for_ratings(
     games = pd.concat(
         [past[["season", "week", "away_abbr", "home_abbr", "p_home"]], fut],
         ignore_index=True,
+    )
+    effective_min_season = ratings_min_season
+    if effective_min_season is None and not sched.empty:
+        effective_min_season = int(sched["season"].min())
+    log.info(
+        "Ratings fit diagnostics: past_games=%d future_games=%d ratings_min_season=%s",
+        len(past),
+        len(fut),
+        effective_min_season,
     )
     return games.dropna(subset=["p_home", "away_abbr", "home_abbr"]).copy()
 

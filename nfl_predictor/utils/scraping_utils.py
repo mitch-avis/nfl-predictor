@@ -165,7 +165,20 @@ def scrape_team_rankings_for_week(
                 teams, ratings = _parse_tr_rating_table(table)
 
                 # Store each team's rating, keyed by team abbreviation
-                for team_abbr, rating_value in zip(teams, ratings):
+                try:
+                    pairs = zip(teams, ratings, strict=True)
+                except ValueError:
+                    log.warning(
+                        "TeamRankings parse length mismatch for %s on %s "
+                        "(teams=%d, values=%d); truncating",
+                        rating_name,
+                        week_date,
+                        len(teams),
+                        len(ratings),
+                    )
+                    pairs = zip(teams, ratings, strict=False)
+
+                for team_abbr, rating_value in pairs:
                     if team_abbr not in team_data:
                         team_data[team_abbr] = {}
                     team_data[team_abbr][rating_name] = rating_value
@@ -194,7 +207,20 @@ def scrape_team_rankings_for_week(
                 teams, stats = _parse_tr_stat_table(table)
 
                 # Store each team's stat, keyed by team abbreviation
-                for team_abbr, stat_value in zip(teams, stats):
+                try:
+                    pairs = zip(teams, stats, strict=True)
+                except ValueError:
+                    log.warning(
+                        "TeamRankings parse length mismatch for %s on %s "
+                        "(teams=%d, values=%d); truncating",
+                        stat_name,
+                        week_date,
+                        len(teams),
+                        len(stats),
+                    )
+                    pairs = zip(teams, stats, strict=False)
+
+                for team_abbr, stat_value in pairs:
                     if team_abbr not in team_data:
                         team_data[team_abbr] = {}
                     team_data[team_abbr][stat_name] = stat_value

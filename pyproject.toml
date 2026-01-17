@@ -36,11 +36,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/mitch-avis/nfl-predictor"
 
-[tool.hatch.version]
-source = "regex"
-path = "VERSION"
-pattern = "(?P<version>\\d+\\.\\d+\\.\\d+)"
-
 [tool.hatch.build.targets.wheel]
 packages = ["nfl_predictor"]
 

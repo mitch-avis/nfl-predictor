@@ -98,7 +98,11 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
     monkeypatch.setattr(
         ml_model_training,
         "_run_optuna_search",
-        lambda *_args, **_kwargs: ({"max_depth": 2}, {"cv_splits": 2}),
+        lambda *_args, **_kwargs: (
+            {"max_depth": 2},
+            {"cv_splits": 2},
+            {"best_params": {"max_depth": 2}},
+        ),
     )
 
     def fake_predict_xgb(model: object, x: np.ndarray) -> np.ndarray:

@@ -62,7 +62,6 @@ extend-exclude = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["nfl_predictor"]
-known-third-party = ["__main__"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
@@ -84,4 +83,4 @@ omit = ["config.py", "config-*.py", "*/config.py", "*/config-*.py"]
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
-exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]
+exclude_lines = ["pragma: no cover", "if __name__ == \"__main__\":"]

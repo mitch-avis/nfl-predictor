@@ -87,6 +87,24 @@ def test_walk_forward_split_excludes_eval_week() -> None:
         assert (same_season["week"] < fold.week).all()
 
 
+def test_summarize_eval_window_flags_incomplete_regular_season() -> None:
+    """Summarize eval window reports incomplete regular seasons when data is partial."""
+
+    df = _fixture_df()
+    summary = walk_forward.summarize_eval_window(
+        df,
+        eval_seasons=[2023],
+        start_week=2,
+        include_postseason=False,
+    )
+
+    assert summary["include_postseason"] is False
+    assert 2023 in summary["incomplete_seasons"]
+    season_summary = summary["seasons"]["2023"]
+    assert season_summary["eval_start_week"] == 2
+    assert season_summary["incomplete_regular_season"] is True
+
+
 def test_walk_forward_deterministic_outputs() -> None:
     """Fixed seeds yield identical per-fold outputs."""
 
@@ -254,12 +272,15 @@ def test_build_metrics_report_shape() -> None:
             "per_season": [{"season": 2024, "games": 1}],
             "overall": {"games": 1},
             "reliability": [{"bin_lower": 0.0, "bin_upper": 0.1, "count": 1}],
+            "eval_window": {"include_postseason": False, "seasons": {}},
         },
     )
 
     assert report["run_id"] == "wf_test"
     assert report["metrics"]["overall"]["games"] == 1
+    assert report["metrics"]["fold_summary"]["folds"] == 1
     assert report["calibration"]["bin_count"] == walk_forward.RELIABILITY_BINS
+    assert report["splits"]["eval_window"]["include_postseason"] is False
 
 
 def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> None:

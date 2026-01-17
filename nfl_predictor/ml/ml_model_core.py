@@ -68,6 +68,9 @@ DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
 AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES = 200
+NORMAL_Z_P90 = 1.281551565545
+P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
+MIN_WIN_PROB_SIGMA = 0.5
 MARKET_DERIVED_COLUMNS = (
     "market_home_margin",
     "market_total_line",
@@ -133,6 +136,7 @@ class MarginTotalModel:
     xgb_params: Optional[dict[str, Any]] = None
     tuned_params: Optional[dict[str, Any]] = None
     tuned_cv_summary: Optional[dict[str, Any]] = None
+    win_prob_use_uncertainty: bool = False
 
 
 @dataclass(frozen=True)
@@ -1003,15 +1007,31 @@ def resolve_win_prob_calibration_method(method: str, sample_count: int) -> str:
 def _predict_home_win_prob(
     pred_margin: np.ndarray,
     calibrator: Optional[WinProbCalibrator],
+    *,
+    sigma: Optional[np.ndarray] = None,
+    use_uncertainty: bool = False,
 ) -> np.ndarray:
-    if calibrator is None:
-        return _margin_to_home_win_prob(pred_margin)
-    if calibrator.method == "elo":
-        return np.clip(_margin_to_home_win_prob_elo_style(pred_margin), 0.0, 1.0)
+    if not use_uncertainty:
+        if calibrator is None:
+            return _margin_to_home_win_prob(pred_margin)
+        if calibrator.method == "elo":
+            return np.clip(_margin_to_home_win_prob_elo_style(pred_margin), 0.0, 1.0)
+        if calibrator.method == "isotonic":
+            probs = calibrator.model.predict(pred_margin)
+        else:
+            probs = calibrator.model.predict_proba(pred_margin.reshape(-1, 1))[:, 1]
+        return np.clip(probs, 0.0, 1.0)
+
+    sigma_arr = _coerce_sigma(pred_margin, sigma)
+    sigma_arr = np.clip(sigma_arr, MIN_WIN_PROB_SIGMA, None)
+    z_score = np.asarray(pred_margin, dtype=float) / sigma_arr
+
+    if calibrator is None or calibrator.method == "elo":
+        return _margin_to_home_win_prob_with_sigma(pred_margin, sigma_arr)
     if calibrator.method == "isotonic":
-        probs = calibrator.model.predict(pred_margin)
+        probs = calibrator.model.predict(z_score)
     else:
-        probs = calibrator.model.predict_proba(pred_margin.reshape(-1, 1))[:, 1]
+        probs = calibrator.model.predict_proba(z_score.reshape(-1, 1))[:, 1]
     return np.clip(probs, 0.0, 1.0)
 
 
@@ -1208,6 +1228,76 @@ def _margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
     if constants.SCORE_DIFF_STD_DEV <= 0:
         raise ValueError("SCORE_DIFF_STD_DEV must be positive.")
     return norm.cdf(margin / constants.SCORE_DIFF_STD_DEV)
+
+
+def _margin_to_home_win_prob_with_sigma(
+    margin: np.ndarray,
+    sigma: np.ndarray,
+) -> np.ndarray:
+    """Map margin to win probability using per-game sigma."""
+
+    margin = np.asarray(margin, dtype=float)
+    sigma_arr = np.asarray(sigma, dtype=float)
+    sigma_arr = np.clip(sigma_arr, MIN_WIN_PROB_SIGMA, None)
+    return norm.cdf(margin / sigma_arr)
+
+
+def _estimate_sigma_from_quantiles(
+    p10: np.ndarray,
+    p90: np.ndarray,
+    *,
+    fallback: float,
+    min_sigma: float = MIN_WIN_PROB_SIGMA,
+) -> np.ndarray:
+    """Estimate sigma from p10/p90 quantiles with a fallback."""
+
+    if fallback <= 0:
+        raise ValueError("fallback sigma must be positive.")
+    p10_arr = np.asarray(p10, dtype=float)
+    p90_arr = np.asarray(p90, dtype=float)
+    sigma = (p90_arr - p10_arr) / P10_P90_TO_SIGMA_DENOM
+    fallback_arr = np.full_like(p10_arr, float(fallback), dtype=float)
+    sigma = np.where(np.isfinite(sigma) & (sigma > 0), sigma, fallback_arr)
+    return np.clip(sigma, min_sigma, None)
+
+
+def _resolve_margin_sigma(
+    pred_margin: np.ndarray,
+    pred_margin_quantiles: Optional[dict[float, np.ndarray]],
+    *,
+    fallback: float,
+    min_sigma: float = MIN_WIN_PROB_SIGMA,
+) -> np.ndarray:
+    """Resolve per-game sigma using p10/p90 quantiles when available."""
+
+    if pred_margin_quantiles is not None:
+        p10 = pred_margin_quantiles.get(0.1)
+        p90 = pred_margin_quantiles.get(0.9)
+        if p10 is not None and p90 is not None:
+            return _estimate_sigma_from_quantiles(
+                p10,
+                p90,
+                fallback=fallback,
+                min_sigma=min_sigma,
+            )
+
+    margin = np.asarray(pred_margin, dtype=float)
+    return np.full_like(margin, float(fallback), dtype=float)
+
+
+def _coerce_sigma(
+    pred_margin: np.ndarray,
+    sigma: Optional[np.ndarray],
+) -> np.ndarray:
+    """Return a sigma array aligned to pred_margin."""
+
+    margin = np.asarray(pred_margin, dtype=float)
+    if sigma is None:
+        return np.full_like(margin, constants.SCORE_DIFF_STD_DEV, dtype=float)
+    sigma_arr = np.asarray(sigma, dtype=float)
+    if sigma_arr.shape != margin.shape:
+        return np.full_like(margin, float(sigma_arr), dtype=float)
+    return sigma_arr
 
 
 def _margin_to_home_win_prob_elo_style(
@@ -1538,11 +1628,24 @@ def derive_scores_from_margin_total(
 
 
 def predict_home_win_prob(
-    pred_margin: np.ndarray, calibrator: Optional[WinProbCalibrator]
+    pred_margin: np.ndarray,
+    calibrator: Optional[WinProbCalibrator],
+    *,
+    sigma: Optional[np.ndarray] = None,
+    use_uncertainty: bool = False,
 ) -> np.ndarray:
-    """Predict home win probability from margin predictions."""
+    """Predict home win probability from margin predictions.
 
-    return _predict_home_win_prob(pred_margin, calibrator)
+    When `use_uncertainty` is True, the margin is normalized by `sigma` before
+    computing probabilities (and any calibrator is fit/predicted on that scale).
+    """
+
+    return _predict_home_win_prob(
+        pred_margin,
+        calibrator,
+        sigma=sigma,
+        use_uncertainty=use_uncertainty,
+    )
 
 
 def adjust_home_win_prob(

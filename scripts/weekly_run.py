@@ -30,6 +30,7 @@ import pandas as pd
 try:
     from nfl_predictor import constants, data_collection
     from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
+    from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
     from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
     from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
@@ -43,6 +44,7 @@ except ModuleNotFoundError:  # pragma: no cover
     sys.path.insert(0, str(repo_root))
     from nfl_predictor import constants, data_collection
     from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
+    from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
     from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
     from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
@@ -592,25 +594,6 @@ def _build_confidence_picks(predictions: pd.DataFrame) -> pd.DataFrame:
     return trimmed.reset_index(drop=True)
 
 
-def _reliability_ece(bins: list[dict[str, Any]]) -> float:
-    """Compute expected calibration error from reliability bins."""
-
-    total = sum(int(row.get("count", 0) or 0) for row in bins)
-    if total <= 0:
-        return float("nan")
-    ece = 0.0
-    for row in bins:
-        count = int(row.get("count", 0) or 0)
-        if count <= 0:
-            continue
-        avg_pred = row.get("avg_pred")
-        avg_actual = row.get("avg_actual")
-        if avg_pred is None or avg_actual is None:
-            continue
-        ece += (count / total) * abs(float(avg_pred) - float(avg_actual))
-    return float(ece)
-
-
 def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
     """Resolve which market modes to evaluate."""
 
@@ -716,7 +699,7 @@ def _run_wf_compare(
                                 "market_mode": mode_label,
                                 "brier": float(overall.get("brier", float("nan"))),
                                 "log_loss": float(overall.get("log_loss", float("nan"))),
-                                "reliability_ece": _reliability_ece(reliability),
+                                "reliability_ece": metrics_utils.reliability_ece(reliability),
                                 "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
                                 "margin_mae": float(overall.get("margin_mae", float("nan"))),
                                 "total_mae": float(overall.get("total_mae", float("nan"))),

@@ -112,6 +112,18 @@ def _parse_args() -> argparse.Namespace:
         help="Clamp model probability within +/- this delta of market (0=off).",
     )
     parser.add_argument(
+        "--market-prob-source",
+        choices=["raw", "novig"],
+        default="raw",
+        help="Market probability source for blending/clamping.",
+    )
+    parser.add_argument(
+        "--market-prob-blend-method",
+        choices=["prob", "logit"],
+        default="prob",
+        help="Blend method for market probabilities (prob or logit space).",
+    )
+    parser.add_argument(
         "--out-json",
         type=Path,
         default=None,
@@ -143,6 +155,8 @@ def main() -> None:
         market_transform=args.market_transform,
         market_prob_weight=float(market_prob_weight),
         market_prob_clamp=float(args.market_prob_clamp),
+        market_prob_source=args.market_prob_source,
+        market_prob_blend_method=args.market_prob_blend_method,
     )
 
     dataset_hash = walk_forward.dataset_fingerprint(args.data_path)

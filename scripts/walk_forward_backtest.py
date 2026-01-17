@@ -65,13 +65,18 @@ def _parse_args() -> argparse.Namespace:
         "--wf-calibration-weeks",
         type=int,
         default=walk_forward.DEFAULT_CALIBRATION_WEEKS,
-        help="Number of prior-season weeks for calibration.",
+        help="Number of prior weeks (same season) used for time-aware calibration.",
     )
     parser.add_argument(
         "--random-seed",
         type=int,
         default=walk_forward.DEFAULT_RANDOM_SEED,
         help="Random seed for reproducibility.",
+    )
+    parser.add_argument(
+        "--include-postseason",
+        action="store_true",
+        help="Include postseason games in walk-forward evaluation.",
     )
     parser.add_argument(
         "--market-anchor",
@@ -133,6 +138,7 @@ def main() -> None:
         calibration=args.calibration,
         calibration_weeks=args.wf_calibration_weeks,
         random_seed=args.random_seed,
+        include_postseason=args.include_postseason,
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
         market_prob_weight=float(market_prob_weight),
@@ -155,6 +161,8 @@ def main() -> None:
     config_payload.update(results.get("resolved_settings", {}))
     if "resolved_eval_seasons" in results:
         config_payload["resolved_eval_seasons"] = results["resolved_eval_seasons"]
+    if "eval_window" in results:
+        config_payload["eval_window"] = results["eval_window"]
 
     report = walk_forward.build_metrics_report(run_id, created_at, config_payload, results)
     config_payload["run_id"] = run_id
@@ -162,6 +170,7 @@ def main() -> None:
     config_payload["splits"] = {
         "resolved_eval_seasons": results.get("resolved_eval_seasons"),
         "wf_start_week": config_payload.get("wf_start_week"),
+        "eval_window": results.get("eval_window"),
     }
     metadata = walk_forward.build_metadata(created_at, dataset_hash, config_payload)
 

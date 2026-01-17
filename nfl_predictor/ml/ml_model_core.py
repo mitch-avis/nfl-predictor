@@ -67,6 +67,7 @@ DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
+AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES = 200
 MARKET_DERIVED_COLUMNS = (
     "market_home_margin",
     "market_total_line",
@@ -958,7 +959,7 @@ def _fit_win_prob_calibrator(
     method: str,
     sample_weight: Optional[np.ndarray] = None,
 ) -> Optional[WinProbCalibrator]:
-    method = method.lower()
+    method = resolve_win_prob_calibration_method(method, len(pred_margin))
     if method == "none":
         return None
     if method == "elo":
@@ -973,6 +974,28 @@ def _fit_win_prob_calibrator(
         model.fit(pred_margin, actual_home_win, sample_weight=sample_weight)
         return WinProbCalibrator(method=method, model=model)
     raise ValueError(f"Unknown win probability calibration method: {method}")
+
+
+def normalize_win_prob_calibration_method(method: str) -> str:
+    """Normalize calibration method names (e.g., logistic -> platt)."""
+
+    method = method.lower()
+    if method == "logistic":
+        return "platt"
+    return method
+
+
+def resolve_win_prob_calibration_method(method: str, sample_count: int) -> str:
+    """Resolve calibration method with support for auto selection."""
+
+    method = normalize_win_prob_calibration_method(method)
+    if method != "auto":
+        return method
+    if sample_count <= 0:
+        return "none"
+    if sample_count >= AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES:
+        return "isotonic"
+    return "platt"
 
 
 def _predict_home_win_prob(

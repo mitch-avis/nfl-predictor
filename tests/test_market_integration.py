@@ -66,3 +66,56 @@ def test_market_prob_adjust_blend_and_clamp() -> None:
     lower = market_prob - 0.05
     upper = market_prob + 0.05
     assert np.all((clamped >= lower) & (clamped <= upper))
+
+
+def test_market_prob_adjust_no_vig() -> None:
+    """No-vig source should normalize home/away implied probs."""
+
+    games_df = pd.DataFrame(
+        {
+            "home_moneyline": [-150],
+            "away_moneyline": [130],
+        }
+    )
+    base = np.array([0.6], dtype=float)
+
+    home_raw = 150.0 / (150.0 + 100.0)
+    away_raw = 100.0 / (130.0 + 100.0)
+    expected = home_raw / (home_raw + away_raw)
+
+    adjusted = ml_model.adjust_home_win_prob(
+        games_df,
+        base,
+        ml_model.MarketProbConfig(
+            blend_weight=1.0,
+            clamp_delta=0.0,
+            prob_source="novig",
+            blend_method="prob",
+        ),
+    )
+    assert np.allclose(adjusted, expected)
+
+
+def test_market_prob_adjust_logit_blend() -> None:
+    """Logit blending should average in log-odds space."""
+
+    games_df = pd.DataFrame({"home_market_prob": [0.2]})
+    base = np.array([0.8], dtype=float)
+
+    def logit(p: float) -> float:
+        p = np.clip(p, 1e-6, 1 - 1e-6)
+        return float(np.log(p / (1 - p)))
+
+    expected = 1.0 / (1.0 + np.exp(-0.5 * (logit(0.2) + logit(0.8))))
+
+    adjusted = ml_model.adjust_home_win_prob(
+        games_df,
+        base,
+        ml_model.MarketProbConfig(
+            blend_weight=0.5,
+            clamp_delta=0.0,
+            prob_source="raw",
+            blend_method="logit",
+        ),
+    )
+    assert np.allclose(adjusted, expected)

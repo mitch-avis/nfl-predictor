@@ -161,22 +161,22 @@ Goal: prevent accidental misuse of evaluation methods and clarify the intended w
 
 Options in code today: `none`, `platt`, `isotonic`, `elo`.
 
-- [ ] Add a **calibration comparison harness** that evaluates calibration choices under the
+- [x] Add a **calibration comparison harness** that evaluates calibration choices under the
   canonical walk-forward protocol (Milestone 23).
   - At minimum: compare Brier, log loss, and reliability.
   - Include pool metrics as tie-breakers.
-- [ ] Implement **"auto" calibration** (optional but recommended):
+- [x] Implement **"auto" calibration** (optional but recommended):
   - Use isotonic only when calibration sample size is large enough.
   - Fall back to Platt when calibration data is small/noisy.
   - Always keep an explicit override.
-- [ ] Add CLI **compatibility alias**: accept `logistic` as a synonym for `platt`.
-- [ ] Validate that calibrators are trained only on time-appropriate rows.
+- [x] Add CLI **compatibility alias**: accept `logistic` as a synonym for `platt`.
+- [x] Validate that calibrators are trained only on time-appropriate rows.
 
 Acceptance:
 
-- [ ] Walk-forward results clearly show which calibration choice is best (and how sensitive it is
+- [x] Walk-forward results clearly show which calibration choice is best (and how sensitive it is
   by season/week).
-- [ ] `--win-prob-calibration logistic` behaves identically to `--win-prob-calibration platt`.
+- [x] `--win-prob-calibration logistic` behaves identically to `--win-prob-calibration platt`.
 
 ---
 

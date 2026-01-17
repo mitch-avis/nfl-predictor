@@ -35,6 +35,7 @@ SUMMARY_METRICS = (
     "total_mae",
     "brier",
     "log_loss",
+    "reliability_ece",
     "expected_points",
     "actual_points",
     "picks_correct",
@@ -578,6 +579,16 @@ def run_walk_forward_backtest(
             **metrics_utils.confidence_pool_summary(confidence_cols),
             "calibration_method": calibration_method,
         }
+        metrics["reliability_ece"] = metrics_utils.reliability_ece(
+            metrics_utils.reliability_table(
+                home_win_prob,
+                actual_home_win,
+                bins=RELIABILITY_BINS,
+            )
+        )
+        metrics["pick_accuracy"] = (
+            metrics["picks_correct"] / metrics["games"] if metrics["games"] else 0.0
+        )
 
         if market_anchor and baseline_margin_eval is not None and baseline_total_eval is not None:
             actual_margin_resid = actual_margin - baseline_margin_eval
@@ -608,12 +619,16 @@ def run_walk_forward_backtest(
         predictions["actual_home_win"].to_numpy(),
         bins=RELIABILITY_BINS,
     )
+    season_win_totals = _season_win_totals(predictions)
+    calibration_drift = _calibration_drift(predictions)
 
     return {
         "per_week": per_week_metrics,
         "per_season": per_season_metrics,
         "overall": overall_metrics,
         "reliability": reliability,
+        "season_win_totals": season_win_totals,
+        "calibration_drift": calibration_drift,
         "predictions": predictions,
         "resolved_settings": resolved_settings,
         "resolved_eval_seasons": resolved_eval_seasons,
@@ -635,19 +650,27 @@ def build_metrics_report(
 ) -> dict[str, Any]:
     """Build the JSON-serializable metrics report payload."""
 
+    fold_summary = _summarize_fold_metrics(results["per_week"])
+    summary_table = _build_metrics_summary_table(results["overall"], fold_summary)
     return {
         "run_id": run_id,
         "created_at": created_at,
         "config": config_payload,
+        "metric_strategy": metrics_utils.METRIC_STRATEGY,
         "metrics": {
             "per_week": results["per_week"],
             "per_season": results["per_season"],
             "overall": results["overall"],
-            "fold_summary": _summarize_fold_metrics(results["per_week"]),
+            "fold_summary": fold_summary,
+            "summary_table": summary_table,
         },
         "calibration": {
             "bins": results["reliability"],
             "bin_count": RELIABILITY_BINS,
+        },
+        "diagnostics": {
+            "season_win_totals": results.get("season_win_totals"),
+            "calibration_drift": results.get("calibration_drift"),
         },
         "splits": {
             "eval_window": results.get("eval_window"),
@@ -702,6 +725,12 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
         "actual_points": float(frame["actual_points"].sum()),
         "picks_correct": int(frame["pick_correct"].sum()),
     }
+    reliability_bins = metrics_utils.reliability_table(
+        home_win_prob,
+        actual_home_win,
+        bins=RELIABILITY_BINS,
+    )
+    metrics["reliability_ece"] = metrics_utils.reliability_ece(reliability_bins)
     metrics["pick_accuracy"] = (
         metrics["picks_correct"] / metrics["games"] if metrics["games"] else 0.0
     )
@@ -742,6 +771,165 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
         )
 
     return metrics
+
+
+def _resolve_team_columns(frame: pd.DataFrame) -> Optional[tuple[str, str]]:
+    """Resolve team identifier columns for diagnostics."""
+
+    for candidates in (("away_abbr", "home_abbr"), ("away_name", "home_name")):
+        if all(col in frame.columns for col in candidates):
+            return candidates
+    return None
+
+
+def _season_win_totals(predictions: pd.DataFrame) -> dict[str, Any]:
+    """Compute per-team season win totals vs expected wins."""
+
+    if predictions.empty:
+        return {"per_team": [], "per_season": [], "overall": None}
+    team_cols = _resolve_team_columns(predictions)
+    required = {"season", "home_win_prob", "actual_margin"}
+    if team_cols is None or not required.issubset(predictions.columns):
+        return {"per_team": [], "per_season": [], "overall": None}
+
+    away_col, home_col = team_cols
+    home_win_prob = predictions["home_win_prob"].to_numpy(dtype=float)
+    actual_margin = predictions["actual_margin"].to_numpy(dtype=float)
+    actual_home_win = np.where(
+        actual_margin > 0,
+        1.0,
+        np.where(actual_margin < 0, 0.0, 0.5),
+    )
+
+    home_rows = pd.DataFrame(
+        {
+            "season": predictions["season"].to_numpy(),
+            "team": predictions[home_col].to_numpy(),
+            "expected_wins": home_win_prob,
+            "actual_wins": actual_home_win,
+        }
+    )
+    away_rows = pd.DataFrame(
+        {
+            "season": predictions["season"].to_numpy(),
+            "team": predictions[away_col].to_numpy(),
+            "expected_wins": 1.0 - home_win_prob,
+            "actual_wins": 1.0 - actual_home_win,
+        }
+    )
+    combined = pd.concat([home_rows, away_rows], ignore_index=True)
+    combined = combined.dropna(subset=["season", "team"])
+    if combined.empty:
+        return {"per_team": [], "per_season": [], "overall": None}
+
+    grouped = combined.groupby(["season", "team"], as_index=False).agg(
+        expected_wins=("expected_wins", "sum"),
+        actual_wins=("actual_wins", "sum"),
+        games=("expected_wins", "size"),
+    )
+    grouped["error"] = grouped["expected_wins"] - grouped["actual_wins"]
+    grouped["abs_error"] = grouped["error"].abs()
+
+    per_team = [
+        {
+            "season": int(row["season"]),
+            "team": str(row["team"]),
+            "expected_wins": float(row["expected_wins"]),
+            "actual_wins": float(row["actual_wins"]),
+            "games": int(row["games"]),
+            "error": float(row["error"]),
+            "abs_error": float(row["abs_error"]),
+        }
+        for _, row in grouped.sort_values(["season", "team"]).iterrows()
+    ]
+
+    def _summarize_totals(frame: pd.DataFrame, season: Optional[int]) -> dict[str, Any]:
+        errors = frame["error"].to_numpy(dtype=float)
+        abs_errors = frame["abs_error"].to_numpy(dtype=float)
+        rmse = float(np.sqrt(np.mean(errors**2))) if len(errors) else None
+        return {
+            "season": season,
+            "teams": int(frame["team"].nunique()),
+            "games": int(frame["games"].sum()),
+            "mean_abs_error": float(np.mean(abs_errors)) if len(abs_errors) else None,
+            "median_abs_error": float(np.median(abs_errors)) if len(abs_errors) else None,
+            "max_abs_error": float(np.max(abs_errors)) if len(abs_errors) else None,
+            "rmse": rmse,
+        }
+
+    per_season = [
+        _summarize_totals(season_df, int(season)) for season, season_df in grouped.groupby("season")
+    ]
+    overall = _summarize_totals(grouped, None)
+
+    return {"per_team": per_team, "per_season": per_season, "overall": overall}
+
+
+def _calibration_drift(predictions: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    """Summarize calibration drift by season and week."""
+
+    required = {"season", "week", "home_win_prob", "actual_home_win"}
+    if predictions.empty or not required.issubset(predictions.columns):
+        return {"per_week": [], "per_season": []}
+
+    def _summarize(frame: pd.DataFrame) -> dict[str, Any]:
+        home_win_prob = frame["home_win_prob"].to_numpy(dtype=float)
+        actual_home_win = frame["actual_home_win"].to_numpy(dtype=float)
+        prob_metrics = metrics_utils.probability_metrics(actual_home_win, home_win_prob)
+        avg_pred = float(np.mean(home_win_prob)) if len(home_win_prob) else None
+        avg_actual = float(np.mean(actual_home_win)) if len(actual_home_win) else None
+        bias = avg_pred - avg_actual if avg_pred is not None and avg_actual is not None else None
+        return {
+            "games": int(len(frame)),
+            "avg_pred": avg_pred,
+            "avg_actual": avg_actual,
+            "bias": bias,
+            "abs_bias": abs(bias) if bias is not None else None,
+            **prob_metrics,
+        }
+
+    per_week: list[dict[str, Any]] = []
+    for (season, week), frame in predictions.groupby(["season", "week"]):
+        row = _summarize(frame)
+        row["season"] = int(season)
+        row["week"] = int(week)
+        per_week.append(row)
+
+    per_season: list[dict[str, Any]] = []
+    for season, frame in predictions.groupby("season"):
+        row = _summarize(frame)
+        row["season"] = int(season)
+        per_season.append(row)
+
+    per_week.sort(key=lambda item: (item["season"], item["week"]))
+    per_season.sort(key=lambda item: item["season"])
+
+    return {"per_week": per_week, "per_season": per_season}
+
+
+def _build_metrics_summary_table(
+    overall: dict[str, Any],
+    fold_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Build a summary table for first-class metrics."""
+
+    rows: list[dict[str, Any]] = []
+    fold_metrics = fold_summary.get("metrics", {}) if fold_summary else {}
+    for priority, specs in metrics_utils.METRIC_STRATEGY.items():
+        for spec in specs:
+            metric = spec["metric"]
+            stats = fold_metrics.get(metric, {})
+            rows.append(
+                {
+                    "metric": metric,
+                    "priority": priority,
+                    "direction": spec.get("direction"),
+                    "overall": overall.get(metric),
+                    "fold_mean": stats.get("mean"),
+                    "fold_variance": stats.get("variance"),
+                }
+            )
+    return rows
 
 
 def dataset_fingerprint(path: Path) -> str:

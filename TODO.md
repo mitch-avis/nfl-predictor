@@ -281,8 +281,8 @@ Acceptance:
 ## Milestone 29 - Hyperparameter optimization (Optuna) hygiene
 
 - [ ] Run a “full” Optuna sweep for the current best configuration (time-series CV objective).
-- [ ] Persist best params + study metadata into the run artifacts.
-- [ ] Add guardrails to prevent accidental tuning on holdout.
+- [x] Persist best params + study metadata into the run artifacts.
+- [x] Add guardrails to prevent accidental tuning on holdout.
 
 Acceptance:
 

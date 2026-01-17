@@ -402,6 +402,18 @@ def _parse_args() -> argparse.Namespace:
         help="Time-aware calibration weeks for walk-forward.",
     )
     parser.add_argument(
+        "--market-prob-source",
+        choices=["raw", "novig"],
+        default="raw",
+        help="Market probability source for blending/clamping.",
+    )
+    parser.add_argument(
+        "--market-prob-blend-method",
+        choices=["prob", "logit"],
+        default="prob",
+        help="Blend method for market probabilities (prob or logit space).",
+    )
+    parser.add_argument(
         "--wf-n-estimators",
         type=int,
         default=200,
@@ -705,6 +717,8 @@ def main() -> int:
                 market_anchor=True,
                 market_prob_weight=float(weight),
                 market_prob_clamp=float(clamp),
+                market_prob_source=args.market_prob_source,
+                market_prob_blend_method=args.market_prob_blend_method,
                 include_quantiles=False,
                 max_cardinality_ratio=0.5,
                 feature_start="away_rest",
@@ -720,6 +734,8 @@ def main() -> int:
                     "calibration": calibration,
                     "market_prob_weight": float(weight),
                     "market_prob_clamp": float(clamp),
+                    "market_prob_source": args.market_prob_source,
+                    "market_prob_blend_method": args.market_prob_blend_method,
                     "brier": float(overall.get("brier", float("nan"))),
                     "log_loss": float(overall.get("log_loss", float("nan"))),
                     "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
@@ -742,6 +758,8 @@ def main() -> int:
     best_market_prob_config = MarketProbConfig(
         blend_weight=float(best_row["market_prob_weight"]),
         clamp_delta=float(best_row["market_prob_clamp"]),
+        prob_source=str(best_row.get("market_prob_source", args.market_prob_source)),
+        blend_method=str(best_row.get("market_prob_blend_method", args.market_prob_blend_method)),
     )
 
     best_calibration = str(best_row["calibration"]).lower()

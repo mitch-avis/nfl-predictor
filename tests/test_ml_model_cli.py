@@ -204,6 +204,56 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
     assert metadata_payload["run_id"] == run_dir.name
 
 
+def test_main_training_logistic_alias(monkeypatch, tmp_path: Path) -> None:
+    """Logistic alias should map to platt for training."""
+
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    run_dir = tmp_path / "run_alias"
+    result = TrainingResult(
+        model={"model": "stub"},
+        metrics_report={"kind": "train"},
+        splits={"train_seasons": [2020], "holdout_seasons": [2021]},
+        params={"n_estimators": 1},
+        tuned_params=None,
+        feature_list=["feat1"],
+        early_stopping={"best_iteration": 1},
+    )
+    calls: dict[str, Any] = {}
+
+    def fake_train_margin_total_model_with_report(**kwargs: object) -> TrainingResult:
+        """Record win-prob calibration argument."""
+
+        calls["win_prob_calibration"] = kwargs["win_prob_calibration"]
+        return result
+
+    monkeypatch.setattr(
+        ml_model_cli,
+        "train_margin_total_model_with_report",
+        fake_train_margin_total_model_with_report,
+    )
+    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ml_model_cli.artifacts, "write_json", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda *_: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--model-kind",
+            "margin_total",
+            "--win-prob-calibration",
+            "logistic",
+            "--run-dir",
+            str(run_dir),
+        ],
+    )
+    ml_model_cli.main()
+
+    assert calls["win_prob_calibration"] == "platt"
+
+
 def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
     """Loading model with --tune logs appropriate messages."""
 

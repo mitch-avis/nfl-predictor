@@ -49,6 +49,7 @@ class CompareConfig:
     wf_start_week: int = 3
     calibration_weeks: int = walk_forward.DEFAULT_CALIBRATION_WEEKS
     random_seed: int = walk_forward.DEFAULT_RANDOM_SEED
+    include_postseason: bool = False
     max_cardinality_ratio: float = 0.5
     feature_start: str = "away_rest"
     feature_end: str = "home_moneyline"
@@ -459,13 +460,15 @@ def run_objective_compare(
     """Run an objective walk-forward comparison for two recipes."""
 
     np.random.seed(cfg.random_seed)
-    df = walk_forward.filter_regular_season(df)
+    df = walk_forward.filter_regular_season(df, include_postseason=cfg.include_postseason)
 
     target_columns = ml_model.get_target_columns(df)
     df = df.dropna(subset=list(target_columns)).copy()
 
     eval_seasons = walk_forward.resolve_eval_seasons(df, cfg.eval_seasons, cfg.eval_last_n_seasons)
-    folds = walk_forward.build_walk_forward_folds(df, eval_seasons, cfg.wf_start_week)
+    folds = walk_forward.build_walk_forward_folds(
+        df, eval_seasons, cfg.wf_start_week, include_postseason=cfg.include_postseason
+    )
     if not folds:
         raise ValueError("No folds available for objective comparison.")
 

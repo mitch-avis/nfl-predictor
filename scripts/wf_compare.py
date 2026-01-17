@@ -66,6 +66,24 @@ def _parse_args() -> argparse.Namespace:
         help="Number of prior weeks used for time-aware calibration.",
     )
     parser.add_argument(
+        "--market-mode",
+        choices=["features", "anchor", "hybrid", "all"],
+        default="hybrid",
+        help="Market mode to evaluate (features, anchor, hybrid, or all).",
+    )
+    parser.add_argument(
+        "--market-prob-source",
+        choices=["raw", "novig", "both"],
+        default="raw",
+        help="Market probability source for blending/clamping.",
+    )
+    parser.add_argument(
+        "--market-prob-blend-method",
+        choices=["prob", "logit", "both"],
+        default="prob",
+        help="Blend method for market probabilities (prob or logit space).",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
         default=None,
@@ -118,6 +136,11 @@ def _run_one(
     wf_start_week: int,
     calibration: str,
     calibration_weeks: int,
+    include_market: bool,
+    market_anchor: bool,
+    market_mode: str,
+    market_prob_source: str,
+    market_prob_blend_method: str,
     market_prob_weight: float,
     market_prob_clamp: float,
     xgb_params_overrides: dict[str, Any],
@@ -131,11 +154,13 @@ def _run_one(
         calibration=calibration,
         calibration_weeks=calibration_weeks,
         random_seed=42,
-        include_market=True,
+        include_market=include_market,
         market_transform=None,
-        market_anchor=True,
+        market_anchor=market_anchor,
         market_prob_weight=market_prob_weight,
         market_prob_clamp=market_prob_clamp,
+        market_prob_source=market_prob_source,
+        market_prob_blend_method=market_prob_blend_method,
         include_quantiles=include_quantiles,
         max_cardinality_ratio=0.5,
         feature_start="away_rest",
@@ -152,6 +177,9 @@ def _run_one(
         "calibration": calibration,
         "market_prob_weight": market_prob_weight,
         "market_prob_clamp": market_prob_clamp,
+        "market_prob_source": market_prob_source,
+        "market_prob_blend_method": market_prob_blend_method,
+        "market_mode": market_mode,
         "brier": float(overall.get("brier", float("nan"))),
         "log_loss": float(overall.get("log_loss", float("nan"))),
         "reliability_ece": _reliability_ece(reliability),
@@ -182,6 +210,18 @@ def _reliability_ece(bins: list[dict[str, Any]]) -> float:
             continue
         ece += (count / total) * abs(float(avg_pred) - float(avg_actual))
     return float(ece)
+
+
+def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
+    """Resolve which market modes to evaluate."""
+
+    if mode == "features":
+        return [("features", True, False)]
+    if mode == "anchor":
+        return [("anchor", False, True)]
+    if mode == "hybrid":
+        return [("hybrid", True, True)]
+    return [("features", True, False), ("anchor", False, True), ("hybrid", True, True)]
 
 
 def main() -> int:
@@ -218,28 +258,45 @@ def main() -> int:
     ]
 
     rows: list[dict[str, Any]] = []
-    for label, calib, weight, clamp in matrix:
-        log.info(
-            "Running %s (calib=%s, market_weight=%.2f, market_clamp=%.2f)",
-            label,
-            calib,
-            weight,
-            clamp,
-        )
-        row = _run_one(
-            df,
-            label=label,
-            eval_last_n_seasons=args.eval_last_n_seasons,
-            wf_start_week=args.wf_start_week,
-            calibration=calib,
-            calibration_weeks=args.calibration_weeks,
-            market_prob_weight=weight,
-            market_prob_clamp=clamp,
-            xgb_params_overrides=xgb_params_overrides,
-            early_stopping_rounds=args.early_stopping_rounds,
-            include_quantiles=bool(args.include_quantiles),
-        )
-        rows.append(row)
+    market_sources = (
+        ["raw", "novig"] if args.market_prob_source == "both" else [args.market_prob_source]
+    )
+    blend_methods = (
+        ["prob", "logit"]
+        if args.market_prob_blend_method == "both"
+        else [args.market_prob_blend_method]
+    )
+    for mode_label, include_market, market_anchor in _market_modes(args.market_mode):
+        for source in market_sources:
+            for method in blend_methods:
+                for label, calib, weight, clamp in matrix:
+                    run_label = f"{mode_label}_{source}_{method}_{label}"
+                    log.info(
+                        "Running %s (calib=%s, market_weight=%.2f, market_clamp=%.2f)",
+                        run_label,
+                        calib,
+                        weight,
+                        clamp,
+                    )
+                    row = _run_one(
+                        df,
+                        label=run_label,
+                        eval_last_n_seasons=args.eval_last_n_seasons,
+                        wf_start_week=args.wf_start_week,
+                        calibration=calib,
+                        calibration_weeks=args.calibration_weeks,
+                        include_market=include_market,
+                        market_anchor=market_anchor,
+                        market_mode=mode_label,
+                        market_prob_source=source,
+                        market_prob_blend_method=method,
+                        market_prob_weight=weight,
+                        market_prob_clamp=clamp,
+                        xgb_params_overrides=xgb_params_overrides,
+                        early_stopping_rounds=args.early_stopping_rounds,
+                        include_quantiles=bool(args.include_quantiles),
+                    )
+                    rows.append(row)
 
     result_df = pd.DataFrame(rows)
     result_df = result_df.sort_values(["brier", "log_loss"], ascending=[True, True])
@@ -260,6 +317,9 @@ def main() -> int:
     # Keep console output short and scannable.
     display_cols = [
         "label",
+        "market_mode",
+        "market_prob_source",
+        "market_prob_blend_method",
         "brier",
         "log_loss",
         "reliability_ece",

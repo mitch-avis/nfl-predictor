@@ -4,39 +4,53 @@
 
 This repository predicts NFL outcomes and scores for **Pick 'Em** and **Confidence Pools**.
 
-- Primary objective: calibrated win probabilities and weekly confidence rankings.
-- Secondary objective: realistic score outputs for display.
+- **Primary objective:** calibrated win probabilities and weekly confidence rankings.
+- **Secondary objective:** realistic score outputs for display and reporting.
 
 Rules that are always enforced:
 
-- No data leakage. Features, splits, calibration, and evaluation only use information available
-  before the predicted games (“known at prediction time” for the specific week, including
-  calibration).
-- Time-aware evaluation. Hyperparameter tuning and model selection use blocked, time-ordered splits.
-- Polars-first ETL. Dataset creation and feature engineering run in Polars; pandas/numpy are
+- **No data leakage.** Features, splits, calibration, blending, and evaluation only use information
+  available before the predicted games ("known at prediction time" for the specific week).
+- **Time-aware evaluation.** Hyperparameter tuning and model selection use blocked, time-ordered
+  splits (season/week aware).
+- **Polars-first ETL.** Dataset creation and feature engineering run in Polars; pandas/numpy are
   acceptable inside ML modules only as needed.
-- nflreadpy is the data source. NFLverse data is pulled via `nflreadpy`.
-- Reproducible artifacts. Training and backtests write run directories with metadata and metrics.
-- Tests are required. New functionality includes unit tests and improves or maintains code coverage.
+- **NFLverse via nflreadpy is the core data source.**
+- **Reproducible artifacts.** Training and backtests write run directories with metadata and
+  metrics.
+- **Tests are required.** New functionality includes unit tests and improves or maintains coverage.
 
 ## Engineering Standards (Logic, Docs, Lint, Coverage)
 
 - Docstrings are required for every module, class, and function (including tests).
-- Address linter and type-checker findings as they arise; avoid leaving new warnings behind.
+- Type hints are required for new/modified code.
+- Fix linter findings introduced by your changes. Do not leave new warnings behind.
 - Do not reference temporary planning artifacts in code: do not mention roadmap items, milestone
   numbers, or TODO goal labels in any code, comments, docstrings, or test descriptions.
-- Aim for maximum test coverage where practical; prefer small, deterministic unit tests.
-- If a Python file grows beyond ~2000 lines, propose a refactor plan to split it into smaller
-  focused modules (e.g., helpers/utils), and implement the split when it reduces complexity.
+- Prefer small, deterministic unit tests.
+- If a Python file grows beyond ~2000 lines, propose a refactor plan to split it into smaller,
+  focused modules (helpers/utils) and implement the split if it reduces complexity.
 - Keep `TODO.md` accurate: verify items before checking them off.
 - Keep `README.md` current: update it when behavior, CLI usage, features, or outputs change.
+
+### Formatting, linting, and style
+
+- **Black** formatting (line length 100).
+- **Ruff** linting (including import sorting).
+- PEP 8 / PEP 257 conventions unless explicitly overridden by repo tooling.
+
+Recommended local commands:
+
+- `black .`
+- `ruff check .` (and optionally `ruff check . --fix`)
+- `python -m pytest`
 
 ## Project Shape (Big Picture)
 
 - **Primary Pipeline:** Polars for data processing + `nflreadpy` for NFLverse sources (schedule,
-  team stats, Elo, etc.). The pipeline integrates schedule/results, team statistics, Elo ratings,
+  team stats, etc.). The pipeline integrates schedule/results, team statistics, Elo/QB ratings,
   TeamRankings stats, and market odds to produce ML-ready datasets.
-- **Orchestration Script:** `nfl_predictor/data_collection.py` (run as a module). This
+- **Orchestration Script (ETL):** `nfl_predictor/data_collection.py` (run as a module). This
   orchestrator fetches data, applies transformations, and writes output CSVs.
 - **Core Data Transforms:** Polars ETL helpers live under `nfl_predictor/utils/polars/`.
   `nfl_predictor/utils/polars_utils.py` is a compatibility facade that forwards imports to the
@@ -49,10 +63,21 @@ Rules that are always enforced:
 ML implementation layout:
 
 - `nfl_predictor/ml/` contains the split ML implementation modules.
-- `nfl_predictor/ml_model.py` is a compatibility facade for legacy imports and the CLI entrypoint.
+- `nfl_predictor/ml_model.py` is a compatibility facade for legacy imports and a primary CLI
+  entrypoint.
 - XGBoost version/build compatibility helpers live in `nfl_predictor/ml/ml_model_xgb_utils.py`.
 
-## Modeling Philosophy (Important Context for Code Generation)
+Repo scripts (operational entrypoints):
+
+- `scripts/golden_command.py`: train + walk-forward + (optional) weekly predictions and artifact
+  stamping.
+- `scripts/betting_pipeline.py`: end-to-end orchestration for selecting calibration/probability
+  post-processing, resumable Optuna tuning, final training, week predictions, and betting report
+  outputs.
+- `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
+- `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
+
+## Modeling Philosophy (Important Context)
 
 - Implementation is purely in Python.
 - Team strength is represented by learned relationships between engineered features and outcomes.
@@ -61,22 +86,20 @@ ML implementation layout:
 
 ## Data Inputs/Outputs (Repo Conventions)
 
-- **Data Directory:** all datasets live under `data/` (see `constants.DATA_PATH` in
+- **Data directory:** all datasets live under `data/` (see `constants.DATA_PATH` in
   `nfl_predictor/constants.py`).
-- **Key Output Files (examples; do not hard-code filenames):**
+- **Key output files (examples; do not hard-code filenames):**
   - `data/all_data_ml.csv` - master ML dataset (includes engineered features and targets where
     available)
   - `data/all_data.csv` - combined dataset without ML-only targets
   - `data/completed_games_ml.csv` and `data/completed_games.csv` - completed games subsets
   - `data/predict/week_XX_games_to_predict.csv` - upcoming week games with engineered features
-- **Caching:** historical weeks use cached files when available; the current week may require live
-  refresh for supported sources.
 
 I/O rules:
 
 - Prefer the project’s Polars-based load/save helpers in `nfl_predictor/data_collection.py`.
-- `nfl_predictor/utils/csv_utils.py` is legacy (pandas). Do not extend it; migrate call sites toward
-  Polars when touching related code.
+- `nfl_predictor/utils/csv_utils.py` is legacy (pandas). Do not extend it; migrate call sites
+  toward Polars when touching related code.
 
 ## Column & Schema Rules (Source of Truth)
 
@@ -94,6 +117,8 @@ I/O rules:
   (regression-to-mean and/or previous-season values + global mean).
 - Future games have missing outcomes; the pipeline still outputs a structurally complete row
   suitable for prediction.
+- Postseason rows may exist. Training/evaluation defaults should be explicit about whether
+  postseason is included and (if included) how it is weighted.
 
 ## Prediction & Modeling Logic
 
@@ -117,13 +142,19 @@ Direct home/away score regressors are allowed only as secondary ensemble members
 - Win probabilities are calibrated using time-aware calibration data.
 - Calibration metrics (Brier, log loss, reliability table) are reported in evaluation.
 
-Calibration methods:
+Calibration methods (canonical names):
 
-- Support Platt scaling (logistic regression) and isotonic regression.
-- A normal-CDF mapping from margin is acceptable as a baseline only; if calibration is enabled,
-  calibrated output is the default.
+- `none`: deterministic margin->prob mapping (baseline)
+- `platt`: logistic regression (Platt scaling)
+- `isotonic`: isotonic regression
+- `elo`: deterministic Elo-style logistic mapping
 
-### Market features
+Notes:
+
+- Prefer time-aware calibration (`platt` or `isotonic`) when enough calibration rows exist.
+- If adding new CLI options, keep names stable and document them.
+
+### Market integration
 
 When market lines exist, the system produces market-derived features and supports market anchoring:
 
@@ -139,10 +170,17 @@ Market anchoring details:
 - Prefer residual training: `target_resid = target - market_baseline` and
   `pred = market_baseline + pred_resid`.
 
+Market probability post-processing (blend/clamp):
+
+- Blending must be explicit and bounded (weights in [0, 1]).
+- Clamping must be explicit and bounded (delta in [0, 0.5]).
+- If adding "no-vig" market probability options, implement them consistently (home/away normalize
+  to sum to 1) and validate in walk-forward.
+
 ### Uncertainty
 
 - Predictions include uncertainty intervals for margin and total (p10/p50/p90 or equivalent).
-- Reports include interval diagnostics.
+- Interval outputs are evaluated (coverage/width diagnostics) and are part of the run artifacts.
 
 Minimum requirement:
 
@@ -150,17 +188,17 @@ Minimum requirement:
 
 ### Realistic score outputs
 
-- Realistic score outputs are produced as post-processing applied after margin/total predictions are
-  generated.
+- Realistic score outputs are produced as post-processing applied after margin/total predictions
+  are generated.
 - Realistic score adjustments are used for display and reporting.
-- Realistic score adjustments do not alter win probabilities, confidence rankings, pool scoring, or
-  tuning objectives.
+- Realistic score adjustments do not alter win probabilities, confidence rankings, pool scoring,
+  or tuning objectives.
 
 If implementing score “realism”:
 
 - Apply post-processing only after core predictions; rounding/snapping policies must be
   configurable.
-- Never change training targets to enforce “NFL score lattice” unless explicitly designed and
+- Never change training targets to enforce an "NFL score lattice" unless explicitly designed and
   documented.
 
 ### Confidence pool deliverable
@@ -182,10 +220,10 @@ Authoritative pool scoring rules:
 
 Required evaluation modes:
 
-- Season-blocked CV (acceptable baseline).
-- Walk-forward evaluation (required): for each season and each week `w` (e.g., `3..end`), train on
-  all games strictly before week `w` (plus prior seasons if configured), predict week `w`, and
-  record metrics.
+- **Season-blocked CV** (acceptable baseline; primarily used for hyperparameter tuning).
+- **Walk-forward evaluation (authoritative):** for each season and each week `w` (e.g., `3..end`),
+  train on all games strictly before week `w` (plus prior seasons if configured), predict week
+  `w`, and record metrics.
 
 Required metrics:
 
@@ -194,12 +232,24 @@ Required metrics:
 - win probability Brier score
 - win probability log loss
 - binned reliability summary
-- confidence pool point summaries
+- confidence pool point summaries (expected + actual)
 
 Market-relative metrics (when market anchoring is enabled):
 
-- residual MAE vs market baseline for margin/total.
-- optionally edge vs spread/total for diagnostics; do not claim profitability.
+- residual MAE vs market baseline for margin/total
+- edge vs spread/total as diagnostics only (do not claim profitability)
+
+### Model selection protocol (how to choose "best" settings)
+
+When multiple options exist (calibration method, market integration mode, probability
+blend/clamp rules, weighting choices):
+
+- Prefer selecting settings via walk-forward over multiple seasons.
+- Pick a primary selection metric (typically Brier/log loss for probability quality) and use
+  secondary tie-breakers (confidence pool expected points, then margin/total MAE).
+- Report mean and variance across folds; avoid choosing a setting that wins by a hair on one
+  season but regresses elsewhere.
+- Never use the holdout window to tune hyperparameters.
 
 Required run artifacts:
 
@@ -220,15 +270,15 @@ Preprocessing:
 Training:
 
 - Use early stopping and set `eval_metric` explicitly (aligned to objective).
-- Tune hyperparameters consistently with the evaluation metric (Optuna optional but supported).
+- Tune hyperparameters consistently with the evaluation metric (Optuna supported).
 - Use `random_state` everywhere applicable.
 - Do not hard-code `n_jobs`; prefer `os.cpu_count()` or a config default.
 
 Blending:
 
 - Prefer explicit, interpretable blends (market anchoring often sufficient).
-- If using a blender/regressor, avoid unstable unconstrained weights; prefer non-negative or
-  sum-to-1 if implemented.
+- If using a blender/regressor, avoid unstable unconstrained weights; prefer non-negative and/or
+  sum-to-1 when appropriate.
 - Validate blends using time-aware splits.
 
 ## Leakage Audit (Required)
@@ -265,7 +315,7 @@ Artifacts must be loadable without hidden external state.
 
 All engineered features apply to **every matchup**, not only end-of-season games.
 
-Feature areas tracked in `TODO.md` include:
+Feature areas tracked in `TODO.md` include (examples):
 
 - season-to-date record features (overall, division, conference W-L-T)
 - divisional rivalry indicator
@@ -297,24 +347,22 @@ Unused constants are removed and the file remains organized into clear sections.
 
 - Refresh data:
   - `python -m nfl_predictor.data_collection`
+- Train/predict (CLI):
+  - `python -m nfl_predictor.ml_model --help`
+- Walk-forward evaluation:
+  - `python scripts/walk_forward_backtest.py --help`
+- Convenience orchestration:
+  - `python scripts/golden_command.py --help`
+  - `python scripts/betting_pipeline.py --help`
 - Testing:
-  - `pytest`
-  - `pytest --cov=nfl_predictor --cov-report=term-missing`
-- Validation:
-  - `python scripts/validate_offline.py`
-  - `python scripts/validate_live.py`
+  - `python -m pytest`
 
 Training/prediction entrypoints may be updated/replaced, but must remain runnable and documented.
 
 ## Logging & Coding Style
 
 - Logging uses the project logger (`from nfl_predictor.utils.logger import log`). No `print`.
-- Formatting and linting:
-  - Black (line length 100)
-  - isort (Black profile)
-  - flake8 (E402 ignored)
-- Type hints are required for new/modified modules.
-- Prefer Polars expressions over Python loops.
+- Prefer Polars expressions over Python loops in ETL.
 
 ## Safety, Scope, and Prohibited Behaviors
 
@@ -330,7 +378,7 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
 - `nflreadpy` is used for NFLverse data.
 - scikit-learn and XGBoost are used for modeling.
 
-## GPT-5.2-Codex Guidance
+## Assistant guidance
 
 - Use existing project utilities and constants.
 - Implement changes in small, testable increments.

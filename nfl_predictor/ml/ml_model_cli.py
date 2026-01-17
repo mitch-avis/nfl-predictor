@@ -115,6 +115,18 @@ def _parse_args() -> argparse.Namespace:
         help="Clamp model probability within +/- this delta of market (0=off).",
     )
     parser.add_argument(
+        "--market-prob-source",
+        choices=["raw", "novig"],
+        default="raw",
+        help="Market probability source for blending/clamping.",
+    )
+    parser.add_argument(
+        "--market-prob-blend-method",
+        choices=["prob", "logit"],
+        default="prob",
+        help="Blend method for market probabilities (prob or logit space).",
+    )
+    parser.add_argument(
         "--min-season",
         type=int,
         default=None,
@@ -344,6 +356,8 @@ def main() -> None:
     market_prob_config = MarketProbConfig(
         blend_weight=float(market_prob_weight),
         clamp_delta=float(args.market_prob_clamp),
+        prob_source=args.market_prob_source,
+        blend_method=args.market_prob_blend_method,
     )
     if float(market_prob_weight) == 0.0 and float(args.market_prob_clamp) == 0.0:
         market_prob_config = None

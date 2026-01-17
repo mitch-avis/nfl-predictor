@@ -118,18 +118,12 @@ Acceptance:
 Tests:
 
 - [x] ETL produces the same columns for a season with missing sources and one without.
-- [x] Model train/predict completes when injury/market fields are null.
+- [x] Model train/predict completes when market fields are null.
 - [x] Fallback counters appear in metrics/report outputs.
 
 Acceptance:
 
 - [x] Pipeline and ML runs succeed across the full historical range with consistent schema.
-
-Note:
-
-- NFLverse participation/injury data for in-progress seasons does not update during the season;
-  recent seasons are published after postseason. In-season runs emit injury columns as nulls and
-  the ML pipeline should not rely on them by default.
 
 ### Milestone 15 - Season-to-date record features (W-L-T, division, conference)
 
@@ -161,27 +155,7 @@ Acceptance:
 
 - [x] All game rows contain the divisional indicator and it is stable across seasons.
 
-### Milestone 17 - Team health and injury burden features
-
-- [x] Pull injury data via `nflreadpy` (NFLverse).
-- [x] Define team-week aggregates and positional aggregates (QB/RB/WR/TE/OL/DL/LB/DB).
-- [x] Implement a numeric "health burden" score per team-week.
-- [x] Join team-week health into each game row for away/home teams.
-- [x] Provide explicit missing-data behavior for pre-coverage seasons (null/default + logged
-  fallback).
-
-Tests:
-
-- [x] Injury pipeline produces deterministic outputs for a fixed historical week.
-- [x] Injury features are null/default for seasons before injury coverage begins.
-- [x] Joining team-week injury aggregates produces the expected columns per game.
-
-Acceptance:
-
-- [x] Injury features exist for all games (null/default where unavailable) and are included in the
-  ML dataset.
-
-### Milestone 18 - Lookahead / trap indicators
+### Milestone 17 - Lookahead / trap indicators
 
 - [x] Build next-week opponent features using the schedule.
 - [x] Add per-team lookahead features and join to games for away/home teams.
@@ -195,7 +169,7 @@ Acceptance:
 
 - [x] Lookahead features exist in the ML dataset for all games with defined fallbacks.
 
-### Milestone 19 - Motivational asymmetry features
+### Milestone 18 - Motivational asymmetry features
 
 - [x] Create a playoff-incentive feature set computed from standings and tiebreak proxies.
 - [x] Integrate into ETL as season-to-date features available prior to each game.
@@ -220,9 +194,7 @@ Acceptance:
 
 ---
 
-## Completed milestones (20-22)
-
-### Milestone 20 - Blocked/time-series cross-validation for tuning
+### Milestone 19 - Blocked/time-series cross-validation for tuning
 
 - [x] Implement blocked CV at the season-week level for hyperparameter tuning and model selection.
 - [x] Ensure folds are strictly time-ordered (train < validation).
@@ -243,7 +215,7 @@ Primary files:
 - [x] `nfl_predictor/ml/ml_model_core.py`
 - [x] `tests/test_time_series_cv.py`
 
-### Milestone 21 - Unit tests and code coverage hardening
+### Milestone 20 - Unit tests and code coverage hardening
 
 - [x] `pytest-cov` is configured and coverage is reported by default.
 - [x] Coverage threshold is enforced (current floor: 80%).
@@ -258,7 +230,7 @@ Primary files:
 - [x] `setup.cfg`
 - [x] `tests/`
 
-### Milestone 22 - Remove deprecated modules from the import surface
+### Milestone 21 - Remove deprecated modules from the import surface
 
 - [x] No code or docs reference deprecated modules.
 - [x] Compatibility facades import cleanly.

@@ -51,6 +51,11 @@ def _logit(p: np.ndarray) -> np.ndarray:
     return np.log(p / (1.0 - p))
 
 
+def _sigmoid(x: np.ndarray | float) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=float)
+    return 1.0 / (1.0 + np.exp(-x_arr))
+
+
 def clamp_prob(p: pd.Series | np.ndarray, *, eps: float = 0.03) -> np.ndarray:
     """Clamp probabilities into (eps, 1-eps) to keep logits finite."""
 
@@ -152,16 +157,33 @@ def fit_bradley_terry_ratings(
 
 
 def scale_ratings_1_to_10(ratings_raw: pd.Series) -> pd.Series:
-    """Scale raw ratings to a 1-10 range."""
+    """Scale raw ratings to a stable 1-10 range.
+
+    This uses an *absolute* mapping rather than per-run min/max scaling.
+
+    Interpretation:
+    - `rating_raw` is centered so the average team is ~0.
+    - `sigmoid(rating_raw)` is the implied win probability vs an average team
+      on a neutral field (under the Bradley–Terry logit model).
+    - We map that probability into a display-friendly 1..10 scale.
+    """
 
     x = ratings_raw.astype(float)
-    if x.nunique(dropna=True) <= 1:
-        return pd.Series(np.full(len(x), 5.5), index=x.index, name="power_rating_1_10")
+    p_vs_avg = _sigmoid(x.to_numpy())
+    scaled = 1.0 + 9.0 * p_vs_avg
+    return pd.Series(scaled, index=x.index, name="power_rating_1_10").round(2)
 
-    lo = float(x.min())
-    hi = float(x.max())
-    scaled = 1.0 + 9.0 * (x - lo) / (hi - lo)
-    return scaled.round(2).rename("power_rating_1_10")
+
+def ratings_to_power_0_to_10(ratings_raw: pd.Series) -> pd.Series:
+    """Convert raw ratings to a stable 0-10 scale.
+
+    `10 * sigmoid(rating_raw)` is interpretable as a 0–10 strength score derived
+    from win probability vs an average team on a neutral field.
+    """
+
+    x = ratings_raw.astype(float)
+    scaled = 10.0 * _sigmoid(x.to_numpy())
+    return pd.Series(scaled, index=x.index, name="power_rating_0_10").round(2)
 
 
 def compute_projected_standings(
@@ -280,7 +302,8 @@ def build_power_rankings_and_standings(
 
     # Ratings fit uses a combined table with a `p_home` target.
     ratings_raw, home_adv = fit_bradley_terry_ratings(games_for_ratings)
-    power_rating = scale_ratings_1_to_10(ratings_raw)
+    power_rating_1_10 = scale_ratings_1_to_10(ratings_raw)
+    power_rating_0_10 = ratings_to_power_0_to_10(ratings_raw)
 
     team_universe = sorted(
         set(pd.Series(current_records["team_abbr"], dtype="string").dropna().astype(str))
@@ -296,7 +319,13 @@ def build_power_rankings_and_standings(
         on="team_abbr",
         how="left",
     ).merge(
-        power_rating.reset_index().rename(columns={"index": "team_abbr"}),
+        power_rating_1_10.reset_index().rename(columns={"index": "team_abbr"}),
+        on="team_abbr",
+        how="left",
+    )
+
+    pr = pr.merge(
+        power_rating_0_10.reset_index().rename(columns={"index": "team_abbr"}),
         on="team_abbr",
         how="left",
     )
@@ -308,6 +337,7 @@ def build_power_rankings_and_standings(
     ).fillna({"wins": 0, "losses": 0, "ties": 0, "games_played": 0})
 
     pr["home_advantage_logit"] = home_adv
+    pr["home_advantage_prob"] = float(_sigmoid(home_adv))
     pr["season"] = int(season)
     pr["through_week"] = int(through_week)
 

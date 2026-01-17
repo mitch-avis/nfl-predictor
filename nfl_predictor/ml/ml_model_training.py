@@ -345,8 +345,9 @@ def train_margin_total_model(
 
     tuned_params: dict[str, Any] = {}
     tuned_cv_summary: Optional[dict[str, Any]] = None
+    optuna_summary: Optional[dict[str, Any]] = None
     if optuna_config.enabled:
-        tuned_params, tuned_cv_summary = _run_optuna_search(
+        tuned_params, tuned_cv_summary, optuna_summary = _run_optuna_search(
             train_df,
             target_columns=target_columns,
             include_market=include_market,
@@ -357,6 +358,7 @@ def train_margin_total_model(
             market_transform=market_transform,
             market_anchor=market_anchor,
             market_prob_config=market_prob_config,
+            holdout_seasons=holdout,
         )
 
     params_overrides = tuned_params.copy()
@@ -607,6 +609,7 @@ def train_margin_total_model(
         tuned_params=tuned_params or None,
         tuned_cv_summary=tuned_cv_summary,
         win_prob_use_uncertainty=win_prob_use_uncertainty,
+        optuna_summary=optuna_summary,
     )
 
 
@@ -681,6 +684,7 @@ def train_margin_total_model_with_report(
         "metrics": {"holdout": holdout_metrics},
         "pool": pool_summary,
         "tuning_cv": model.tuned_cv_summary,
+        "tuning_optuna": getattr(model, "optuna_summary", None),
         "missing_data": missing_data_summary,
     }
 
@@ -768,6 +772,7 @@ def train_blended_margin_total_model(
 
     team_params: dict[str, Any] = {}
     tuned_cv_summary: dict[str, Any] = {}
+    optuna_summary: dict[str, Any] = {}
     if optuna_config.enabled:
         tune_scope = optuna_config.tune_scope
         timeout = optuna_config.timeout_seconds
@@ -844,7 +849,11 @@ def train_blended_margin_total_model(
 
         if tune_scope in {"team", "both"}:
             log.info("Tuning team-feature model hyperparameters...")
-            team_params, tuned_cv_summary["team"] = _run_optuna_search(
+            (
+                team_params,
+                tuned_cv_summary["team"],
+                optuna_summary["team"],
+            ) = _run_optuna_search(
                 train_df,
                 target_columns=target_columns,
                 include_market=False,
@@ -855,6 +864,7 @@ def train_blended_margin_total_model(
                 market_only=False,
                 market_transform=market_transform,
                 market_prob_config=market_prob_config,
+                holdout_seasons=holdout,
             )
         if tune_scope in {"market", "both"}:
             log.info(
@@ -982,6 +992,7 @@ def train_blended_margin_total_model(
         market_prob_config=market_prob_config,
         tuned_params=team_params or None,
         tuned_cv_summary=tuned_cv_summary.get("team"),
+        optuna_summary=optuna_summary.get("team") if optuna_summary else None,
     )
     return BlendedMarginTotalModel(
         team_model=team_model,
@@ -993,6 +1004,7 @@ def train_blended_margin_total_model(
         xgb_params={"team": team_xgb_params},
         tuned_params={"team": team_params or None},
         tuned_cv_summary=tuned_cv_summary or None,
+        optuna_summary=optuna_summary or None,
     )
 
 
@@ -1055,6 +1067,7 @@ def train_blended_margin_total_model_with_report(
         "model_kind": "blend",
         "metrics": {"holdout": holdout_metrics},
         "tuning_cv": model.tuned_cv_summary,
+        "tuning_optuna": getattr(model, "optuna_summary", None),
         "missing_data": missing_data_summary,
     }
     splits = {

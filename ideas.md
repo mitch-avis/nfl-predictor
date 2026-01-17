@@ -9,3 +9,5 @@
     definitely do so. I believe I already have all the historical TR data saved in `data/`, but I'm
     not sure if that's currently being used or not. I don't see any nflreadpy data saved anywhere
     except for the final outputs of the data collection.
+- Before and while adding any new features, stress that we should be caching all gathered historical
+  data as much as possible.

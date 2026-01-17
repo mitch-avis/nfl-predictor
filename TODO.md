@@ -53,29 +53,29 @@ Acceptance:
 Goal: define (and enforce) a single, defensible evaluation protocol for choosing *any* modeling
 option (features, calibration, market integration, weights, algorithms) using historical data.
 
-- [ ] Define the **primary evaluation lens** for the project:
+- [x] Define the **primary evaluation lens** for the project:
   - Walk-forward (rolling-origin) over multiple seasons is authoritative.
   - Season-blocked CV exists mainly for hyperparameter tuning.
-- [ ] Standardize the **outer evaluation window**:
+- [x] Standardize the **outer evaluation window**:
   - Default: last N seasons (configurable), regular season only by default.
   - Explicit handling for incomplete current season and postseason evaluation.
-- [ ] Standardize the **inner calibration window**:
+- [x] Standardize the **inner calibration window**:
   - Time-aware calibration weeks (e.g., last K weeks before prediction week) and/or
     calibration seasons.
   - Minimum sample size rules (see Milestone 24).
-- [ ] Decide (and document) the **selection hierarchy** for “best model”:
+- [x] Decide (and document) the **selection hierarchy** for “best model”:
   - Primary: probability quality (Brier, log loss, reliability).
   - Secondary: confidence pool expected points (and stability across weeks).
   - Tertiary: margin/total MAE (and market-relative residual MAE if anchoring).
-- [ ] Produce a single **metrics report schema** that always includes:
+- [x] Produce a single **metrics report schema** that always includes:
   - per-week, per-season, and overall aggregates
   - mean + variance across folds
   - market-relative metrics when market is present
 
 Acceptance:
 
-- [ ] There is one “blessed” evaluation command (or script) that reproduces the reported metrics.
-- [ ] A config sweep (Milestones 24/25) can run under this protocol without ad hoc code.
+- [x] There is one “blessed” evaluation command (or script) that reproduces the reported metrics.
+- [x] A config sweep (Milestones 24/25) can run under this protocol without ad hoc code.
 
 ---
 

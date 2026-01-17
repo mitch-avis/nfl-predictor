@@ -272,6 +272,18 @@ def _parse_args() -> argparse.Namespace:
         default=0.0,
         help="Clamp model probability within +/- this delta of market.",
     )
+    parser.add_argument(
+        "--market-prob-source",
+        choices=["raw", "novig"],
+        default="raw",
+        help="Market probability source for blending/clamping.",
+    )
+    parser.add_argument(
+        "--market-prob-blend-method",
+        choices=["prob", "logit"],
+        default="prob",
+        help="Blend method for market probabilities (prob or logit space).",
+    )
 
     parser.add_argument(
         "--train-tune",
@@ -480,6 +492,8 @@ def main() -> int:
             market_transform=args.market_transform,
             market_prob_weight=float(args.market_prob_weight),
             market_prob_clamp=float(args.market_prob_clamp),
+            market_prob_source=args.market_prob_source,
+            market_prob_blend_method=args.market_prob_blend_method,
             xgb_params_overrides=(wf_overrides or None),
         )
         wf_results = walk_forward.run_walk_forward_backtest(wf_df, wf_config)
@@ -538,6 +552,8 @@ def main() -> int:
             ml_model.MarketProbConfig(
                 blend_weight=float(args.market_prob_weight),
                 clamp_delta=float(args.market_prob_clamp),
+                prob_source=args.market_prob_source,
+                blend_method=args.market_prob_blend_method,
             )
             if float(args.market_prob_weight) or float(args.market_prob_clamp)
             else None

@@ -376,6 +376,14 @@ Repo utilities under `scripts/`:
   --market-prob-blend-method both
 ```
 
+Uncertainty-aware comparison:
+
+```bash
+.venv/bin/python scripts/wf_compare.py \
+  --eval-last-n-seasons 3 \
+  --win-prob-uncertainty both
+```
+
 `weekly_run` config example (JSON):
 
 ```json

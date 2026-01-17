@@ -23,7 +23,7 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import pandas as pd
 
@@ -617,7 +617,7 @@ def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
     return [("features", True, False), ("anchor", False, True), ("hybrid", True, True)]
 
 
-def _pick_best_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _pick_best_row(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Pick best row by (brier, log_loss) ascending."""
 
     if not rows:
@@ -629,7 +629,7 @@ def _pick_best_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
             float(row.get("log_loss", float("inf"))),
         )
 
-    return sorted(rows, key=key)[0]
+    return dict(sorted(rows, key=key)[0])
 
 
 def _run_wf_compare(
@@ -917,7 +917,11 @@ def main() -> int:
             include_quantiles=bool(args.wf_include_quantiles),
         )
         wf_result_df.to_csv(wf_compare_csv, index=False)
-        best_row = _pick_best_row(wf_result_df.to_dict(orient="records"))
+        best_rows = [
+            {str(key): value for key, value in row.items()}
+            for row in wf_result_df.to_dict(orient="records")
+        ]
+        best_row = _pick_best_row(best_rows)
         wf_best_json.write_text(json.dumps(best_row, indent=2, sort_keys=True), encoding="utf-8")
         _write_stage_marker(
             wf_marker,

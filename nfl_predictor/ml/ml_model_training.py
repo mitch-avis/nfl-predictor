@@ -56,6 +56,7 @@ from nfl_predictor.ml.ml_model_core import (
     _summarize_missing_data,
     _validate_quantiles,
     get_market_baseline,
+    resolve_win_prob_calibration_method,
 )
 from nfl_predictor.utils.logger import log
 
@@ -482,14 +483,18 @@ def train_margin_total_model(
         baseline_margin_calibration,
     ) = _train_models(train_df, calibration_df)
 
+    resolved_calibration = resolve_win_prob_calibration_method(
+        win_prob_calibration,
+        len(calibration_df),
+    )
     calibrator = None
-    if win_prob_calibration == "elo":
+    if resolved_calibration == "elo":
         calibrator = _fit_win_prob_calibrator(
             np.array([0.0], dtype=float),
             np.array([0], dtype=int),
-            win_prob_calibration,
+            resolved_calibration,
         )
-    elif win_prob_calibration != "none":
+    elif resolved_calibration != "none":
         if calibration_df.empty:
             raise ValueError("Calibration requested but no calibration seasons configured.")
         if x_calibration is None:
@@ -509,7 +514,7 @@ def train_margin_total_model(
         calibrator = _fit_win_prob_calibrator(
             pred_margin_calib,
             actual_home_win.to_numpy(),
-            win_prob_calibration,
+            resolved_calibration,
             sample_weight=calibration_weight,
         )
 
@@ -856,8 +861,12 @@ def train_blended_margin_total_model(
     )
     away_col, home_col = target_columns
     actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
+    resolved_calibration = resolve_win_prob_calibration_method(
+        win_prob_calibration,
+        len(calibration_df),
+    )
     calibrator = None
-    if win_prob_calibration != "none":
+    if resolved_calibration != "none":
         calibration_weight = _compute_postseason_sample_weight(
             calibration_df,
             include_postseason=include_postseason,
@@ -866,7 +875,7 @@ def train_blended_margin_total_model(
         calibrator = _fit_win_prob_calibrator(
             blended_margin_calib,
             actual_home_win.to_numpy(),
-            win_prob_calibration,
+            resolved_calibration,
             sample_weight=calibration_weight,
         )
 

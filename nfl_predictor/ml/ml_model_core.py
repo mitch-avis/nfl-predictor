@@ -1549,15 +1549,21 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
 def _ensure_backward_compatible_model(model: Any) -> Any:
     """Patch older pickled models missing newer fields."""
 
+    def _safe_set_attr(instance: Any, name: str, value: Any) -> None:
+        try:
+            object.__setattr__(instance, name, value)
+        except AttributeError:
+            setattr(instance, name, value)
+
     def _ensure_margin_total(instance: Any) -> None:
         if not hasattr(instance, "margin_quantile_models"):
-            instance.margin_quantile_models = None
+            _safe_set_attr(instance, "margin_quantile_models", None)
         if not hasattr(instance, "total_quantile_models"):
-            instance.total_quantile_models = None
+            _safe_set_attr(instance, "total_quantile_models", None)
         if not hasattr(instance, "quantiles"):
-            instance.quantiles = None
+            _safe_set_attr(instance, "quantiles", None)
         if not hasattr(instance, "optuna_summary"):
-            instance.optuna_summary = None
+            _safe_set_attr(instance, "optuna_summary", None)
 
     if isinstance(model, MarginTotalModel):
         _ensure_margin_total(model)
@@ -1567,7 +1573,7 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
         if model.market_model is not None:
             _ensure_margin_total(model.market_model)
         if not hasattr(model, "optuna_summary"):
-            model.optuna_summary = None
+            _safe_set_attr(model, "optuna_summary", None)
         return model
     return model
 
@@ -2052,9 +2058,7 @@ def _run_optuna_search(
         market_prob_config=market_prob_config,
     )
     complete_trials = sum(
-        1
-        for trial in study.trials
-        if trial.state == optuna_module.trial.TrialState.COMPLETE
+        1 for trial in study.trials if trial.state == optuna_module.trial.TrialState.COMPLETE
     )
     optuna_summary = {
         "study_name": optuna_config.study_name,

@@ -2,7 +2,7 @@
 """Generate power rankings and projected standings from a trained model.
 
 This script is meant for fan-friendly reporting:
-- A 1-10 power rating per team (relative strength vs an average team)
+- A 1-10 (and 0-10) power rating per team (absolute scale vs an average team)
 - Projected standings based on current record + expected wins in remaining REG games
 
 Method summary
@@ -12,7 +12,9 @@ Method summary
 3) Fit a simple Bradley-Terry latent-strength model using:
    - completed-game outcomes (as probability targets)
    - future-game model win probabilities (as probability targets)
-4) Scale latent strengths to a 1-10 power rating.
+4) Convert latent strengths to a stable (ultimate) power rating by mapping
+    `sigmoid(rating_raw)` (win prob vs an average team on a neutral field) onto
+    1-10 and 0-10 scales.
 
 Usage example
 -------------
@@ -98,6 +100,15 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("data/predict"),
         help="Directory to write outputs.",
+    )
+    p.add_argument(
+        "--ratings-min-season",
+        type=int,
+        default=None,
+        help=(
+            "Optional minimum season to include in the ratings fit. "
+            "Default: include all historical seasons available in --data-schedule."
+        ),
     )
     return p.parse_args()
 
@@ -259,6 +270,7 @@ def _build_games_for_ratings(
     schedule_path: Path,
     season: int,
     through_week: int,
+    ratings_min_season: int | None,
     future_games_with_probs: pd.DataFrame,
 ) -> pd.DataFrame:
     sched = (
@@ -274,13 +286,23 @@ def _build_games_for_ratings(
                 "home_score",
             ]
         )
-        .filter((pl.col("season") == season) & (pl.col("game_type") == "REG"))
+        .filter(pl.col("game_type") == "REG")
     )
+
+    if ratings_min_season is not None:
+        sched = sched.filter(pl.col("season") >= int(ratings_min_season))
 
     sched = _pl_to_pandas(sched)
 
+    # Use all historical games (prior seasons) plus current-season games through `through_week`.
+    # This makes the ratings more stable across weeks and comparable season-to-season.
     past = sched[
-        (sched["week"] <= through_week) & sched["away_score"].notna() & sched["home_score"].notna()
+        (
+            (sched["season"] < season)
+            | ((sched["season"] == season) & (sched["week"] <= through_week))
+        )
+        & sched["away_score"].notna()
+        & sched["home_score"].notna()
     ].copy()
     past["p_home"] = outcome_to_home_prob(past["home_score"], past["away_score"])
 
@@ -347,6 +369,7 @@ def main() -> int:
         schedule_path=args.data_schedule,
         season=args.season,
         through_week=args.through_week,
+        ratings_min_season=args.ratings_min_season,
         future_games_with_probs=future_games,
     )
 

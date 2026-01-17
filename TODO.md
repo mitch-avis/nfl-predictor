@@ -135,7 +135,7 @@ Goal: prevent accidental misuse of evaluation methods and clarify the intended w
 
 ### Tasks
 
-- [ ] **Add an authoritative “Weekly pipeline” section to `README.md`**
+- [x] **Add an authoritative “Weekly pipeline” section to `README.md`**
   - Clearly document:
     - data refresh step
     - canonical training/validation step (from Milestone 23)
@@ -147,7 +147,7 @@ Goal: prevent accidental misuse of evaluation methods and clarify the intended w
   Acceptance:
   - A new user can follow the README end-to-end and produce weekly outputs without guessing.
 
-- [ ] **Add a single canonical evaluation rule to `README.md`**
+- [x] **Add a single canonical evaluation rule to `README.md`**
   - Explicitly state:
     > “Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative.”
   - Reference Milestone 23 outputs as the source-of-truth evaluation.

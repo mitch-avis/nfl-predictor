@@ -15,6 +15,7 @@ import xgboost as xgb
 from scipy.sparse import spmatrix
 from sklearn.compose import ColumnTransformer
 
+from nfl_predictor import constants
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_END_COLUMN,
     DEFAULT_FEATURE_START_COLUMN,
@@ -45,9 +46,11 @@ from nfl_predictor.ml.ml_model_core import (
     _load_games,
     _predict_home_win_prob,
     _predict_margin_total_from_model,
+    _predict_margin_total_quantiles_from_model,
     _predict_xgb,
     _prepare_margin_total_targets,
     _prepare_margin_total_targets_with_anchor,
+    _resolve_margin_sigma,
     _resolve_xgb_params,
     _run_optuna_search,
     _split_by_season,
@@ -278,6 +281,7 @@ def train_margin_total_model(
     market_transform: bool,
     market_anchor: bool,
     market_prob_config: Optional[MarketProbConfig],
+    win_prob_use_uncertainty: bool = False,
     include_postseason: bool = False,
     postseason_weight: float = 1.0,
     min_season: Optional[int] = None,
@@ -487,6 +491,9 @@ def train_margin_total_model(
         win_prob_calibration,
         len(calibration_df),
     )
+    if win_prob_use_uncertainty and resolved_calibration == "elo":
+        log.info("Elo calibration ignored for uncertainty-aware probabilities; using 'none'.")
+        resolved_calibration = "none"
     calibrator = None
     if resolved_calibration == "elo":
         calibrator = _fit_win_prob_calibrator(
@@ -504,6 +511,23 @@ def train_margin_total_model(
             if baseline_margin_calibration is None:
                 raise ValueError("Market anchor baseline missing for calibration data.")
             pred_margin_calib = pred_margin_calib + baseline_margin_calibration
+        pred_margin_inputs = pred_margin_calib
+        if win_prob_use_uncertainty:
+            pred_margin_quantiles_calib = {
+                q: _predict_xgb(q_model, x_calibration)
+                for q, q_model in margin_quantile_models.items()
+            }
+            if market_anchor and baseline_margin_calibration is not None:
+                for q in list(pred_margin_quantiles_calib.keys()):
+                    pred_margin_quantiles_calib[q] = (
+                        pred_margin_quantiles_calib[q] + baseline_margin_calibration
+                    )
+            sigma_calibration = _resolve_margin_sigma(
+                pred_margin_calib,
+                pred_margin_quantiles_calib,
+                fallback=constants.SCORE_DIFF_STD_DEV,
+            )
+            pred_margin_inputs = pred_margin_calib / sigma_calibration
         away_col, home_col = target_columns
         actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
         calibration_weight = _compute_postseason_sample_weight(
@@ -512,7 +536,7 @@ def train_margin_total_model(
             postseason_weight=postseason_weight,
         )
         calibrator = _fit_win_prob_calibrator(
-            pred_margin_calib,
+            pred_margin_inputs,
             actual_home_win.to_numpy(),
             resolved_calibration,
             sample_weight=calibration_weight,
@@ -522,11 +546,33 @@ def train_margin_total_model(
         x_holdout = preprocessor.transform(_apply_feature_spec(holdout_df, feature_spec))
         pred_margin = _predict_xgb(margin_model, x_holdout)
         pred_total = _predict_xgb(total_model, x_holdout)
+        baseline_margin_holdout: Optional[np.ndarray] = None
+        baseline_total_holdout: Optional[np.ndarray] = None
         if market_anchor:
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
-        home_win_prob = _predict_home_win_prob(pred_margin, calibrator)
+        sigma_holdout = None
+        if win_prob_use_uncertainty and margin_quantile_models:
+            pred_margin_quantiles_holdout = {
+                q: _predict_xgb(q_model, x_holdout) for q, q_model in margin_quantile_models.items()
+            }
+            if market_anchor and baseline_margin_holdout is not None:
+                for q in list(pred_margin_quantiles_holdout.keys()):
+                    pred_margin_quantiles_holdout[q] = (
+                        pred_margin_quantiles_holdout[q] + baseline_margin_holdout
+                    )
+            sigma_holdout = _resolve_margin_sigma(
+                pred_margin,
+                pred_margin_quantiles_holdout,
+                fallback=constants.SCORE_DIFF_STD_DEV,
+            )
+        home_win_prob = _predict_home_win_prob(
+            pred_margin,
+            calibrator,
+            sigma=sigma_holdout,
+            use_uncertainty=win_prob_use_uncertainty,
+        )
         home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, market_prob_config)
 
         metrics = _evaluate_margin_total_predictions(
@@ -560,6 +606,7 @@ def train_margin_total_model(
         xgb_params=params,
         tuned_params=tuned_params or None,
         tuned_cv_summary=tuned_cv_summary,
+        win_prob_use_uncertainty=win_prob_use_uncertainty,
     )
 
 
@@ -569,6 +616,7 @@ def train_margin_total_model_with_report(
     """Train a margin/total model and return a structured metrics report payload."""
 
     data_path: Path = kwargs["data_path"]
+    win_prob_use_uncertainty = bool(kwargs.get("win_prob_use_uncertainty", False))
     holdout_seasons: int = kwargs["holdout_seasons"]
     calibration_seasons: int = kwargs["calibration_seasons"]
     calibration_weeks: int = kwargs["calibration_weeks"]
@@ -607,7 +655,20 @@ def train_margin_total_model_with_report(
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
-        home_win_prob = _predict_home_win_prob(pred_margin, model.calibrator)
+        sigma_holdout = None
+        if win_prob_use_uncertainty:
+            margin_quantiles, _ = _predict_margin_total_quantiles_from_model(model, holdout_df)
+            sigma_holdout = _resolve_margin_sigma(
+                pred_margin,
+                margin_quantiles,
+                fallback=constants.SCORE_DIFF_STD_DEV,
+            )
+        home_win_prob = _predict_home_win_prob(
+            pred_margin,
+            model.calibrator,
+            sigma=sigma_holdout,
+            use_uncertainty=win_prob_use_uncertainty,
+        )
         home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, model.market_prob_config)
         holdout_metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, model.target_columns, home_win_prob

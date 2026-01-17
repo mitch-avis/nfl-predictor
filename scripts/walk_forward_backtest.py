@@ -57,9 +57,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--calibration",
-        choices=["platt", "isotonic", "none"],
+        choices=["platt", "isotonic", "none", "elo", "auto", "logistic"],
         default="platt",
-        help="Win-prob calibration method.",
+        help="Win-prob calibration method (logistic is an alias for platt).",
     )
     parser.add_argument(
         "--wf-calibration-weeks",

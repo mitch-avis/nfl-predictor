@@ -98,8 +98,8 @@ Repo scripts (operational entrypoints):
 I/O rules:
 
 - Prefer the project’s Polars-based load/save helpers in `nfl_predictor/data_collection.py`.
-- `nfl_predictor/utils/csv_utils.py` is legacy (pandas). Do not extend it; migrate call sites
-  toward Polars when touching related code.
+- Any pandas-based CSV I/O utilities are legacy. Do not add new pandas-based I/O helpers; prefer the
+  Polars ETL helpers when touching related code.
 
 ## Column & Schema Rules (Source of Truth)
 
@@ -310,6 +310,14 @@ Artifacts must be loadable without hidden external state.
   scipy, optuna (if used).
 - Document supported Python version(s) and CPU/GPU constraints if applicable.
 - Avoid optional GPU paths that break CPU-only execution unless explicitly guarded.
+
+### Dependency management (uv + pinned requirements)
+
+- Do not hand-edit `requirements.txt` / `requirements-dev.txt`. Edit `requirements.in` /
+  `requirements-dev.in` and regenerate pins with `uv pip compile`.
+- Preferred install is `uv pip sync requirements.txt requirements-dev.txt`.
+- When using editable installs locally, use `pip install -e . --no-deps` (or `uv pip install -e . --no-deps`)
+  to avoid pulling unpinned dependency versions from `pyproject.toml`.
 
 ## Feature Development Rules
 

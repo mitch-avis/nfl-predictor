@@ -280,6 +280,16 @@ For the most realistic evaluation, use walk-forward (rolling-origin) backtesting
 python scripts/walk_forward_backtest.py --help
 ```
 
+This is the **canonical evaluation protocol** for model selection. By default it evaluates the
+last N seasons (regular season only) with time-aware calibration from the last K weeks of each
+eval season. Use `--include-postseason` if you want postseason folds included.
+
+Model selection hierarchy (default):
+
+- Primary: probability quality (Brier, log loss, reliability).
+- Secondary: confidence pool expected points and stability.
+- Tertiary: margin/total MAE (plus market-relative residual MAE when anchoring).
+
 ## Scripts
 
 Repo utilities under `scripts/`:

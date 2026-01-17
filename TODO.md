@@ -226,20 +226,20 @@ Outputs to include (as available):
 
 Tasks:
 
-- [ ] Create `scripts/weekly_run.py` (or equivalent) that composes existing steps:
+- [x] Create `scripts/weekly_run.py` (or equivalent) that composes existing steps:
   - data collection
   - config selection (Milestones 23–25)
   - tuning (optional)
   - final train
   - prediction + reports
-- [ ] Make it resumable (like `scripts/betting_pipeline.py`): reuse prior artifacts when inputs
+- [x] Make it resumable (like `scripts/betting_pipeline.py`): reuse prior artifacts when inputs
   match.
-- [ ] Add a config file option (YAML/JSON) to avoid 200-character CLI invocations.
+- [x] Add a config file option (YAML/JSON) to avoid 200-character CLI invocations.
 
 Acceptance:
 
-- [ ] One command produces a complete weekly output package from scratch.
-- [ ] Re-running does not redo expensive work unless inputs or config changed.
+- [x] One command produces a complete weekly output package from scratch.
+- [x] Re-running does not redo expensive work unless inputs or config changed.
 
 ---
 

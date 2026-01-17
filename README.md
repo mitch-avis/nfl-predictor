@@ -341,6 +341,9 @@ Model selection hierarchy (default):
 - Secondary: confidence pool expected points and stability.
 - Tertiary: margin/total MAE (plus market-relative residual MAE when anchoring).
 
+Metrics reports include a summary table (with metric priority + direction), plus optional
+diagnostics such as season win totals (expected vs actual) and calibration drift by season/week.
+
 ## Scripts
 
 Repo utilities under `scripts/`:

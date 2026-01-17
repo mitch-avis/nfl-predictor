@@ -79,6 +79,84 @@ Acceptance:
 
 ---
 
+## Milestone 23.5 - Reporting pipeline correctness + schema safety (blocking)
+
+Goal: ensure reporting scripts (especially `scripts/power_rankings.py`) produce correct,
+consistent outputs and fail fast on schema/config issues before downstream modeling work continues.
+
+### Tasks
+
+- [ ] **Fix REG-only consistency in record computation**
+  - Update `_load_current_records()` to explicitly filter `game_type == "REG"` before computing
+    wins/losses/ties.
+  - Add or update a unit test that includes both REG and POST games (same season/week) and verifies
+    that only REG games affect the computed record.
+
+  Acceptance:
+  - Given mixed REG/POST inputs, computed records exactly match REG-only results.
+
+- [ ] **Fail fast when required ML feature columns are missing**
+  - Replace silent column-dropping logic with explicit validation:
+    - Compute `missing_required = set(spec.feature_columns) - set(available_cols)`
+    - If non-empty, raise a `ValueError` listing missing columns (truncate list if long).
+  - Add a unit test that constructs a minimal ML dataset missing at least one required feature and
+    asserts that a clear, informative error is raised.
+
+  Acceptance:
+  - The script refuses to run when required feature columns are missing.
+  - Error messages name missing columns and indicate how many are missing.
+
+- [ ] **Apply win-prob calibration consistently for `ScoreModel`**
+  - Update the `ScoreModel` path in `scripts/power_rankings.py` so that:
+    - If a calibrator is present, win probabilities are produced via the calibrated path
+      (e.g., `predict_home_win_prob(margin, calibrator)`).
+    - If no calibrator is intended, this behavior is explicit and documented in code.
+  - Add a unit test that proves calibration is applied when a non-identity calibrator exists.
+
+  Acceptance:
+  - `ScoreModel` probabilities change appropriately when a calibrator is attached.
+  - Behavior matches `margin_total` and `blended_margin_total` semantics.
+
+- [ ] **Add minimal runtime diagnostics**
+  - Log (INFO-level, single-line):
+    - number of past games used in ratings fit
+    - number of future games used
+    - effective `ratings_min_season` value
+  - Ensure logs are stable and suitable for automation/CI logs.
+
+  Acceptance:
+  - Running the script prints these diagnostics exactly once per invocation.
+
+---
+
+## Milestone 23.6 - Operational documentation: weekly pipeline + evaluation rule
+
+Goal: prevent accidental misuse of evaluation methods and clarify the intended weekly workflow.
+
+### Tasks
+
+- [ ] **Add an authoritative “Weekly pipeline” section to `README.md`**
+  - Clearly document:
+    - data refresh step
+    - canonical training/validation step (from Milestone 23)
+    - prediction + reporting steps (including power rankings and standings)
+  - Specify:
+    - where outputs land on disk
+    - naming conventions for run folders and artifacts
+
+  Acceptance:
+  - A new user can follow the README end-to-end and produce weekly outputs without guessing.
+
+- [ ] **Add a single canonical evaluation rule to `README.md`**
+  - Explicitly state:
+    > “Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative.”
+  - Reference Milestone 23 outputs as the source-of-truth evaluation.
+
+  Acceptance:
+  - The evaluation rule is visible and unambiguous in the README.
+
+---
+
 ## Milestone 24 - Win-prob calibration: choose (and/or auto-choose) the best method
 
 Options in code today: `none`, `platt`, `isotonic`, `elo`.

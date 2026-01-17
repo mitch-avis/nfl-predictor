@@ -42,7 +42,21 @@ def _predict_all(model: Any, df: pd.DataFrame) -> pd.DataFrame:
     elif isinstance(model, ml_model.MarginTotalModel):
         pred_margin, pred_total = ml_model.predict_margin_total_from_model(model, df)
         pred_away, pred_home = ml_model.derive_scores_from_margin_total(pred_margin, pred_total)
-        home_win_prob = ml_model.predict_home_win_prob(pred_margin, model.calibrator)
+        use_uncertainty = bool(getattr(model, "win_prob_use_uncertainty", False))
+        sigma_margin = None
+        if use_uncertainty:
+            margin_quantiles, _ = ml_model._predict_margin_total_quantiles_from_model(model, df)
+            sigma_margin = ml_model._resolve_margin_sigma(
+                pred_margin,
+                margin_quantiles,
+                fallback=constants.SCORE_DIFF_STD_DEV,
+            )
+        home_win_prob = ml_model.predict_home_win_prob(
+            pred_margin,
+            model.calibrator,
+            sigma=sigma_margin,
+            use_uncertainty=use_uncertainty,
+        )
     elif isinstance(model, ml_model.BlendedMarginTotalModel):
         team_margin, team_total = ml_model.predict_margin_total_from_model(model.team_model, df)
         if model.market_model is None:

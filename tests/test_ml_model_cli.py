@@ -93,6 +93,7 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         *,
         pretty_output: bool,
         score_rounding: str,
+        win_prob_use_uncertainty: bool = False,
     ) -> pd.DataFrame:
         """Record args and return empty DataFrame."""
 

@@ -86,7 +86,7 @@ consistent outputs and fail fast on schema/config issues before downstream model
 
 ### Tasks
 
-- [ ] **Fix REG-only consistency in record computation**
+- [x] **Fix REG-only consistency in record computation**
   - Update `_load_current_records()` to explicitly filter `game_type == "REG"` before computing
     wins/losses/ties.
   - Add or update a unit test that includes both REG and POST games (same season/week) and verifies
@@ -95,7 +95,7 @@ consistent outputs and fail fast on schema/config issues before downstream model
   Acceptance:
   - Given mixed REG/POST inputs, computed records exactly match REG-only results.
 
-- [ ] **Fail fast when required ML feature columns are missing**
+- [x] **Fail fast when required ML feature columns are missing**
   - Replace silent column-dropping logic with explicit validation:
     - Compute `missing_required = set(spec.feature_columns) - set(available_cols)`
     - If non-empty, raise a `ValueError` listing missing columns (truncate list if long).
@@ -106,7 +106,7 @@ consistent outputs and fail fast on schema/config issues before downstream model
   - The script refuses to run when required feature columns are missing.
   - Error messages name missing columns and indicate how many are missing.
 
-- [ ] **Apply win-prob calibration consistently for `ScoreModel`**
+- [x] **Apply win-prob calibration consistently for `ScoreModel`**
   - Update the `ScoreModel` path in `scripts/power_rankings.py` so that:
     - If a calibrator is present, win probabilities are produced via the calibrated path
       (e.g., `predict_home_win_prob(margin, calibrator)`).
@@ -117,7 +117,7 @@ consistent outputs and fail fast on schema/config issues before downstream model
   - `ScoreModel` probabilities change appropriately when a calibrator is attached.
   - Behavior matches `margin_total` and `blended_margin_total` semantics.
 
-- [ ] **Add minimal runtime diagnostics**
+- [x] **Add minimal runtime diagnostics**
   - Log (INFO-level, single-line):
     - number of past games used in ratings fit
     - number of future games used

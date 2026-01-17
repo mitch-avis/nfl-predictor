@@ -22,6 +22,32 @@ Execution loop for each milestone:
 
 ---
 
+## Milestone 22 - Repo/tooling alignment (blocking)
+
+Goal: ensure a fresh clone can set up a reproducible dev environment and run the standard checks
+without surprises, before starting the new modeling milestones.
+
+- [ ] Update `README.md` setup instructions to use the pinned requirements workflow:
+  - install from `requirements.txt` + `requirements-dev.txt`
+  - use `--no-deps` for editable installs to avoid unpinned dependency drift
+  - document how to regenerate pins (`uv pip compile`)
+- [ ] Confirm dev requirements include:
+  `black`, `ruff`, `pytest`, `pytest-cov` (and any other test plugins required by
+  `pyproject.toml` addopts).
+- [ ] Fix minor config gotchas:
+  - Ruff isort config should not treat `__main__` as a third-party package.
+  - Coverage `exclude_lines` should match `if __name__ == "__main__":` exactly.
+- [ ] Confirm `.gitignore` covers run artifacts (models, optuna db, caches) and that `data/` being ignored
+  is intentional and documented.
+
+Acceptance:
+
+- [ ] `ruff check .` and `black --check .` pass in a clean environment.
+- [ ] `python -m pytest` passes (and `python -m pytest --no-cov` works as documented).
+- [ ] README instructions work end-to-end on a clean machine.
+
+---
+
 ## Milestone 23 - Canonical training + validation methodology (the "source of truth")
 
 Goal: define (and enforce) a single, defensible evaluation protocol for choosing *any* modeling

@@ -175,6 +175,12 @@ def _parse_args() -> argparse.Namespace:
         help="Calibration method for win probabilities (logistic is an alias for platt).",
     )
     parser.add_argument(
+        "--win-prob-uncertainty",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use margin quantiles to derive uncertainty-aware win probabilities.",
+    )
+    parser.add_argument(
         "--tune",
         action="store_true",
         help="Run Optuna hyperparameter tuning.",
@@ -320,6 +326,10 @@ def main() -> None:
 
     args = _parse_args()
     args.win_prob_calibration = normalize_win_prob_calibration_method(args.win_prob_calibration)
+    win_prob_use_uncertainty = bool(args.win_prob_uncertainty)
+    if args.model_kind != "margin_total" and win_prob_use_uncertainty:
+        log.warning("Uncertainty-aware win prob is only supported for margin_total models.")
+        win_prob_use_uncertainty = False
 
     created_at = artifacts.now_utc_iso()
     dataset_hash = artifacts.sha256_file(args.data_path)
@@ -374,6 +384,9 @@ def main() -> None:
         if not args.predict_path:
             log.info("No --predict-path provided; exiting after loading model.")
             return
+        use_uncertainty = win_prob_use_uncertainty or getattr(
+            model, "win_prob_use_uncertainty", False
+        )
         if args.model_kind == "score":
             predict_week(
                 model,
@@ -389,6 +402,7 @@ def main() -> None:
                 output_path,
                 pretty_output=args.pretty_output,
                 score_rounding=args.score_rounding,
+                win_prob_use_uncertainty=use_uncertainty,
             )
         elif args.model_kind == "blend":
             predict_week_blended(
@@ -475,6 +489,7 @@ def main() -> None:
             include_market=not args.exclude_market,
             max_cardinality_ratio=args.max_cardinality_ratio,
             win_prob_calibration=args.win_prob_calibration,
+            win_prob_use_uncertainty=win_prob_use_uncertainty,
             optuna_config=optuna_config,
             market_transform=args.market_transform,
             market_anchor=args.market_anchor,
@@ -498,6 +513,7 @@ def main() -> None:
                 output_path,
                 pretty_output=args.pretty_output,
                 score_rounding=args.score_rounding,
+                win_prob_use_uncertainty=win_prob_use_uncertainty,
             )
         return
 

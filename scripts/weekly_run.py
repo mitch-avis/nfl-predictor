@@ -231,6 +231,12 @@ def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.Argumen
         help="Walk-forward: market probability blend method.",
     )
     parser.add_argument(
+        "--wf-win-prob-uncertainty",
+        choices=["off", "on", "both"],
+        default=defaults.get("wf_win_prob_uncertainty", "off"),
+        help="Walk-forward: use uncertainty-aware win probabilities.",
+    )
+    parser.add_argument(
         "--wf-include-quantiles",
         action=argparse.BooleanOptionalAction,
         default=defaults.get("wf_include_quantiles", False),
@@ -642,6 +648,7 @@ def _run_wf_compare(
     market_mode: str,
     market_prob_source: str,
     market_prob_blend_method: str,
+    win_prob_uncertainty: str,
     xgb_params_overrides: dict[str, Any],
     early_stopping_rounds: int,
     include_quantiles: bool,
@@ -653,69 +660,76 @@ def _run_wf_compare(
     blend_methods = (
         ["prob", "logit"] if market_prob_blend_method == "both" else [market_prob_blend_method]
     )
+    uncertainty_modes = (
+        [False, True] if win_prob_uncertainty == "both" else [win_prob_uncertainty == "on"]
+    )
 
     for mode_label, include_market, market_anchor in _market_modes(market_mode):
         for source in market_sources:
             for method in blend_methods:
-                for label, calib, weight, clamp in _WF_MATRIX:
-                    run_label = f"{mode_label}_{source}_{method}_{label}"
-                    log.info(
-                        "WF %s (calib=%s, market_weight=%.2f, market_clamp=%.2f)",
-                        run_label,
-                        calib,
-                        weight,
-                        clamp,
-                    )
-                    cfg = walk_forward.WalkForwardConfig(
-                        eval_seasons=None,
-                        eval_last_n_seasons=eval_last_n_seasons,
-                        wf_start_week=wf_start_week,
-                        calibration=calib,
-                        calibration_weeks=calibration_weeks,
-                        random_seed=42,
-                        include_postseason=include_postseason,
-                        include_market=include_market,
-                        market_transform=None,
-                        market_anchor=market_anchor,
-                        market_prob_weight=weight,
-                        market_prob_clamp=clamp,
-                        market_prob_source=source,
-                        market_prob_blend_method=method,
-                        include_quantiles=include_quantiles,
-                        max_cardinality_ratio=0.5,
-                        feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
-                        feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
-                        early_stopping_rounds=early_stopping_rounds,
-                        xgb_params_overrides=xgb_params_overrides,
-                    )
-                    out = walk_forward.run_walk_forward_backtest(df, cfg)
-                    overall = out["overall"]
-                    reliability = out.get("reliability", [])
-                    rows.append(
-                        {
-                            "label": run_label,
-                            "calibration": calib,
-                            "market_prob_weight": float(weight),
-                            "market_prob_clamp": float(clamp),
-                            "market_prob_source": source,
-                            "market_prob_blend_method": method,
-                            "market_mode": mode_label,
-                            "brier": float(overall.get("brier", float("nan"))),
-                            "log_loss": float(overall.get("log_loss", float("nan"))),
-                            "reliability_ece": _reliability_ece(reliability),
-                            "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
-                            "margin_mae": float(overall.get("margin_mae", float("nan"))),
-                            "total_mae": float(overall.get("total_mae", float("nan"))),
-                            "expected_points_avg": float(
-                                overall.get("expected_points_avg", float("nan"))
-                            ),
-                            "actual_points_avg": float(
-                                overall.get("actual_points_avg", float("nan"))
-                            ),
-                            "games": int(overall.get("games", 0) or 0),
-                            "weeks": int(overall.get("weeks", 0) or 0),
-                        }
-                    )
+                for use_uncertainty in uncertainty_modes:
+                    uncertainty_label = "uncert" if use_uncertainty else "base"
+                    for label, calib, weight, clamp in _WF_MATRIX:
+                        run_label = f"{mode_label}_{source}_{method}_{uncertainty_label}_{label}"
+                        log.info(
+                            "WF %s (calib=%s, market_weight=%.2f, market_clamp=%.2f)",
+                            run_label,
+                            calib,
+                            weight,
+                            clamp,
+                        )
+                        cfg = walk_forward.WalkForwardConfig(
+                            eval_seasons=None,
+                            eval_last_n_seasons=eval_last_n_seasons,
+                            wf_start_week=wf_start_week,
+                            calibration=calib,
+                            calibration_weeks=calibration_weeks,
+                            random_seed=42,
+                            include_postseason=include_postseason,
+                            include_market=include_market,
+                            market_transform=None,
+                            market_anchor=market_anchor,
+                            market_prob_weight=weight,
+                            market_prob_clamp=clamp,
+                            market_prob_source=source,
+                            market_prob_blend_method=method,
+                            win_prob_use_uncertainty=use_uncertainty,
+                            include_quantiles=include_quantiles,
+                            max_cardinality_ratio=0.5,
+                            feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
+                            feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+                            early_stopping_rounds=early_stopping_rounds,
+                            xgb_params_overrides=xgb_params_overrides,
+                        )
+                        out = walk_forward.run_walk_forward_backtest(df, cfg)
+                        overall = out["overall"]
+                        reliability = out.get("reliability", [])
+                        rows.append(
+                            {
+                                "label": run_label,
+                                "calibration": calib,
+                                "market_prob_weight": float(weight),
+                                "market_prob_clamp": float(clamp),
+                                "market_prob_source": source,
+                                "market_prob_blend_method": method,
+                                "win_prob_use_uncertainty": bool(use_uncertainty),
+                                "market_mode": mode_label,
+                                "brier": float(overall.get("brier", float("nan"))),
+                                "log_loss": float(overall.get("log_loss", float("nan"))),
+                                "reliability_ece": _reliability_ece(reliability),
+                                "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
+                                "margin_mae": float(overall.get("margin_mae", float("nan"))),
+                                "total_mae": float(overall.get("total_mae", float("nan"))),
+                                "expected_points_avg": float(
+                                    overall.get("expected_points_avg", float("nan"))
+                                ),
+                                "actual_points_avg": float(
+                                    overall.get("actual_points_avg", float("nan"))
+                                ),
+                                "games": int(overall.get("games", 0) or 0),
+                                "weeks": int(overall.get("weeks", 0) or 0),
+                            }
+                        )
 
     result_df = pd.DataFrame(rows).sort_values(["brier", "log_loss"], ascending=[True, True])
     return result_df
@@ -875,6 +889,7 @@ def main() -> int:
         "market_mode": args.wf_market_mode,
         "market_prob_source": args.wf_market_prob_source,
         "market_prob_blend_method": args.wf_market_prob_blend_method,
+        "win_prob_uncertainty": args.wf_win_prob_uncertainty,
         "wf_matrix": _WF_MATRIX,
         "xgb_params_overrides": {
             "n_estimators": int(args.wf_n_estimators),
@@ -912,6 +927,7 @@ def main() -> int:
             market_mode=args.wf_market_mode,
             market_prob_source=args.wf_market_prob_source,
             market_prob_blend_method=args.wf_market_prob_blend_method,
+            win_prob_uncertainty=args.wf_win_prob_uncertainty,
             xgb_params_overrides=wf_config["xgb_params_overrides"],
             early_stopping_rounds=args.wf_early_stopping_rounds,
             include_quantiles=bool(args.wf_include_quantiles),
@@ -949,6 +965,7 @@ def main() -> int:
     resolved_calibration = ml_model_core.normalize_win_prob_calibration_method(
         str(best_row["calibration"])
     )
+    win_prob_use_uncertainty = bool(best_row.get("win_prob_use_uncertainty", False))
     train_calibration_weeks = (
         args.train_calibration_weeks
         if args.train_calibration_weeks is not None
@@ -996,6 +1013,7 @@ def main() -> int:
 
     train_config = {
         "calibration": resolved_calibration,
+        "win_prob_use_uncertainty": bool(win_prob_use_uncertainty),
         "market_mode": market_mode,
         "include_market": include_market,
         "market_transform": market_transform,
@@ -1054,6 +1072,7 @@ def main() -> int:
             market_transform=bool(market_transform),
             market_anchor=bool(market_anchor),
             market_prob_config=market_prob_config,
+            win_prob_use_uncertainty=win_prob_use_uncertainty,
             include_postseason=bool(args.include_postseason),
             postseason_weight=float(args.postseason_weight),
             min_season=None,
@@ -1098,6 +1117,7 @@ def main() -> int:
         "model_hash": model_hash,
         "score_rounding": args.score_rounding,
         "output_dir": str(output_dir),
+        "win_prob_use_uncertainty": bool(win_prob_use_uncertainty),
     }
     predictions_hash = artifacts.stable_short_hash(predictions_config)
     predictions_marker = _stage_marker_path(run_dir, "predictions")
@@ -1115,6 +1135,7 @@ def main() -> int:
             output_path=None,
             pretty_output=False,
             score_rounding=str(args.score_rounding),
+            win_prob_use_uncertainty=win_prob_use_uncertainty,
         )
         season, week = _infer_season_week(predictions)
         output_paths = _resolve_output_paths(output_dir, season, week)

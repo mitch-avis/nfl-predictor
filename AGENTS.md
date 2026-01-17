@@ -25,6 +25,7 @@ Rules that are always enforced:
 - Current milestones and tasks live in `TODO.md`.
 - Before starting any task: read `TODO.md` and work only on the highest-priority “blocking” items.
 - When a task is completed: move it from `TODO.md` to `ARCHIVE.md` with a short completion note.
+- After completing Milestone 23, complete Milestone 23.5 before starting Milestone 24+.
 
 ## Engineering Standards (Logic, Docs, Lint, Coverage)
 

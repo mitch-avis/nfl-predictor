@@ -20,6 +20,12 @@ Rules that are always enforced:
   metrics.
 - **Tests are required.** New functionality includes unit tests and improves or maintains coverage.
 
+## Source of truth for work
+
+- Current milestones and tasks live in `TODO.md`.
+- Before starting any task: read `TODO.md` and work only on the highest-priority “blocking” items.
+- When a task is completed: move it from `TODO.md` to `ARCHIVE.md` with a short completion note.
+
 ## Engineering Standards (Logic, Docs, Lint, Coverage)
 
 - Docstrings are required for every module, class, and function (including tests).

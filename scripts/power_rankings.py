@@ -45,6 +45,7 @@ import pandas as pd
 import polars as pl
 
 try:
+    from nfl_predictor import constants
     from nfl_predictor.ml import ml_model_core
     from nfl_predictor.reporting.power_rankings import (
         PowerRatingsResult,
@@ -57,6 +58,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
+    from nfl_predictor import constants
     from nfl_predictor.ml import ml_model_core
     from nfl_predictor.reporting.power_rankings import (
         PowerRatingsResult,
@@ -268,7 +270,23 @@ def _predict_future_games(
     if model_kind == "margin_total":
         mt = cast(ml_model_core.MarginTotalModel, model)
         pred_margin, _pred_total = ml_model_core.predict_margin_total_from_model(mt, games)
-        home_win_prob = ml_model_core.predict_home_win_prob(pred_margin, mt.calibrator)
+        use_uncertainty = bool(getattr(mt, "win_prob_use_uncertainty", False))
+        sigma_margin = None
+        if use_uncertainty:
+            margin_quantiles, _ = ml_model_core._predict_margin_total_quantiles_from_model(
+                mt, games
+            )
+            sigma_margin = ml_model_core._resolve_margin_sigma(
+                pred_margin,
+                margin_quantiles,
+                fallback=constants.SCORE_DIFF_STD_DEV,
+            )
+        home_win_prob = ml_model_core.predict_home_win_prob(
+            pred_margin,
+            mt.calibrator,
+            sigma=sigma_margin,
+            use_uncertainty=use_uncertainty,
+        )
         home_win_prob = ml_model_core.adjust_home_win_prob(
             games, home_win_prob, getattr(mt, "market_prob_config", None)
         )

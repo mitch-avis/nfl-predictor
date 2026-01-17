@@ -23,6 +23,7 @@ from nfl_predictor.ml.ml_model_core import (
     TrainingResult,
     _load_model_checkpoint,
     _with_market_prob_config,
+    normalize_win_prob_calibration_method,
 )
 from nfl_predictor.ml.ml_model_predict import (
     predict_week,
@@ -157,9 +158,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--win-prob-calibration",
-        choices=["none", "platt", "isotonic", "elo"],
+        choices=["none", "platt", "isotonic", "elo", "auto", "logistic"],
         default="isotonic",
-        help="Calibration method for win probabilities.",
+        help="Calibration method for win probabilities (logistic is an alias for platt).",
     )
     parser.add_argument(
         "--tune",
@@ -306,6 +307,7 @@ def main() -> None:
     """CLI entry point for training and prediction."""
 
     args = _parse_args()
+    args.win_prob_calibration = normalize_win_prob_calibration_method(args.win_prob_calibration)
 
     created_at = artifacts.now_utc_iso()
     dataset_hash = artifacts.sha256_file(args.data_path)

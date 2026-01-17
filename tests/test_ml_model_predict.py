@@ -159,7 +159,11 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
         "_derive_scores_from_margin_total",
         lambda _m, _t: (np.array([20.0]), np.array([23.5])),
     )
-    monkeypatch.setattr(ml_model_predict, "_predict_home_win_prob", lambda _m, _c: np.array([0.6]))
+    monkeypatch.setattr(
+        ml_model_predict,
+        "_predict_home_win_prob",
+        lambda _m, _c, **_kwargs: np.array([0.6]),
+    )
 
     model = MarginTotalModel(
         preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
@@ -221,7 +225,11 @@ def test_predict_week_blended_uses_market_baseline(monkeypatch, tmp_path: Path) 
         "get_market_baseline",
         lambda _df: (np.array([1.0]), np.array([44.0])),
     )
-    monkeypatch.setattr(ml_model_predict, "_predict_home_win_prob", lambda _m, _c: np.array([0.7]))
+    monkeypatch.setattr(
+        ml_model_predict,
+        "_predict_home_win_prob",
+        lambda _m, _c, **_kwargs: np.array([0.7]),
+    )
 
     blend_layer = BlendLayer(
         margin_model=cast(Ridge, _BlendModel(np.array([0.6, 0.4]))),
@@ -298,7 +306,11 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
         "_derive_scores_from_margin_total",
         lambda _m, _t: (np.array([14.0]), np.array([16.0])),
     )
-    monkeypatch.setattr(ml_model_predict, "_predict_home_win_prob", lambda _m, _c: np.array([0.55]))
+    monkeypatch.setattr(
+        ml_model_predict,
+        "_predict_home_win_prob",
+        lambda _m, _c, **_kwargs: np.array([0.55]),
+    )
 
     captured: dict[str, pd.DataFrame] = {}
     monkeypatch.setattr(
@@ -390,7 +402,11 @@ def test_predict_week_blended_with_market_model_pretty(monkeypatch) -> None:
     monkeypatch.setattr(
         ml_model_predict, "_predict_margin_total_from_model", fake_predict_margin_total
     )
-    monkeypatch.setattr(ml_model_predict, "_predict_home_win_prob", lambda _m, _c: np.array([0.5]))
+    monkeypatch.setattr(
+        ml_model_predict,
+        "_predict_home_win_prob",
+        lambda _m, _c, **_kwargs: np.array([0.5]),
+    )
 
     captured: dict[str, pd.DataFrame] = {}
     monkeypatch.setattr(

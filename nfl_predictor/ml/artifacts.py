@@ -192,6 +192,7 @@ def build_metadata(
     params: Optional[dict[str, Any]] = None,
     tuned_params: Optional[dict[str, Any]] = None,
     early_stopping: Optional[dict[str, Any]] = None,
+    optuna_summary: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Build a metadata payload meeting the repo's artifact contract."""
 
@@ -207,6 +208,7 @@ def build_metadata(
         "params": params,
         "tuned_params": tuned_params,
         "early_stopping": early_stopping,
+        "optuna_summary": optuna_summary,
     }
     return payload
 

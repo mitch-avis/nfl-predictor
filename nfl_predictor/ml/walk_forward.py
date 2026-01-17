@@ -62,6 +62,8 @@ class WalkForwardConfig:
     market_anchor: bool = True
     market_prob_weight: float = 0.0
     market_prob_clamp: float = 0.0
+    market_prob_source: str = "raw"
+    market_prob_blend_method: str = "prob"
     include_quantiles: bool = True
     max_cardinality_ratio: float = 0.5
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
@@ -85,6 +87,8 @@ class WalkForwardConfig:
             "market_anchor": self.market_anchor,
             "market_prob_weight": self.market_prob_weight,
             "market_prob_clamp": self.market_prob_clamp,
+            "market_prob_source": self.market_prob_source,
+            "market_prob_blend_method": self.market_prob_blend_method,
             "include_quantiles": self.include_quantiles,
             "max_cardinality_ratio": self.max_cardinality_ratio,
             "feature_start": self.feature_start,
@@ -323,6 +327,8 @@ def run_walk_forward_backtest(
         "market_anchor": market_anchor,
         "market_prob_weight": config.market_prob_weight,
         "market_prob_clamp": config.market_prob_clamp,
+        "market_prob_source": config.market_prob_source,
+        "market_prob_blend_method": config.market_prob_blend_method,
         "include_quantiles": config.include_quantiles,
     }
 
@@ -474,6 +480,8 @@ def run_walk_forward_backtest(
             market_prob_config = ml_model.MarketProbConfig(
                 blend_weight=config.market_prob_weight,
                 clamp_delta=config.market_prob_clamp,
+                prob_source=config.market_prob_source,
+                blend_method=config.market_prob_blend_method,
             )
             home_win_prob = ml_model.adjust_home_win_prob(
                 fold.eval_df, home_win_prob, market_prob_config

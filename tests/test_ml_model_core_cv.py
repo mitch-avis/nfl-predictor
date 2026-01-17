@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 from pytest import MonkeyPatch
 
 from nfl_predictor.ml import ml_model_core as core
@@ -179,3 +180,46 @@ def test_evaluate_margin_total_cv_returns_mean(monkeypatch: MonkeyPatch) -> None
     )
 
     assert mean == 3.0
+
+
+def test_run_optuna_search_rejects_holdout_seasons(monkeypatch: MonkeyPatch) -> None:
+    """Reject Optuna tuning when holdout seasons are present."""
+
+    df = pd.DataFrame(
+        {
+            "season": [2024, 2024],
+            "week": [1, 2],
+            "away_score": [10.0, 10.0],
+            "home_score": [13.0, 13.0],
+        }
+    )
+
+    monkeypatch.setattr(core, "optuna", object())
+
+    optuna_config = core.OptunaConfig(
+        enabled=True,
+        timeout_seconds=1,
+        n_trials=1,
+        cv_splits=2,
+        objective="margin_mae",
+        early_stopping_rounds=5,
+        tree_method=None,
+        device=None,
+        tune_scope="both",
+        storage=None,
+        study_name=None,
+        best_params_out=None,
+        xgb_n_jobs=None,
+    )
+
+    with pytest.raises(ValueError, match="holdout seasons"):
+        core._run_optuna_search(
+            df,
+            target_columns=("away_score", "home_score"),
+            include_market=False,
+            max_cardinality_ratio=0.5,
+            feature_start="away_score",
+            feature_end="home_score",
+            optuna_config=optuna_config,
+            holdout_seasons=[2024],
+        )

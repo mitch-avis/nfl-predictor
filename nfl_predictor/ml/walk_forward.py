@@ -47,6 +47,12 @@ SUMMARY_METRICS = (
 )
 
 
+def _scalar_to_int(value: Any) -> int:
+    """Cast a pandas/numpy scalar to a Python int."""
+
+    return int(np.asarray(value).item())
+
+
 @dataclass(frozen=True)
 class WalkForwardConfig:
     """Configuration for walk-forward evaluation."""
@@ -832,7 +838,7 @@ def _season_win_totals(predictions: pd.DataFrame) -> dict[str, Any]:
 
     per_team = [
         {
-            "season": int(row["season"]),
+            "season": _scalar_to_int(row["season"]),
             "team": str(row["team"]),
             "expected_wins": float(row["expected_wins"]),
             "actual_wins": float(row["actual_wins"]),
@@ -858,7 +864,8 @@ def _season_win_totals(predictions: pd.DataFrame) -> dict[str, Any]:
         }
 
     per_season = [
-        _summarize_totals(season_df, int(season)) for season, season_df in grouped.groupby("season")
+        _summarize_totals(season_df, _scalar_to_int(season))
+        for season, season_df in grouped.groupby("season")
     ]
     overall = _summarize_totals(grouped, None)
 
@@ -891,14 +898,14 @@ def _calibration_drift(predictions: pd.DataFrame) -> dict[str, list[dict[str, An
     per_week: list[dict[str, Any]] = []
     for (season, week), frame in predictions.groupby(["season", "week"]):
         row = _summarize(frame)
-        row["season"] = int(season)
-        row["week"] = int(week)
+        row["season"] = _scalar_to_int(season)
+        row["week"] = _scalar_to_int(week)
         per_week.append(row)
 
     per_season: list[dict[str, Any]] = []
     for season, frame in predictions.groupby("season"):
         row = _summarize(frame)
-        row["season"] = int(season)
+        row["season"] = _scalar_to_int(season)
         per_season.append(row)
 
     per_week.sort(key=lambda item: (item["season"], item["week"]))

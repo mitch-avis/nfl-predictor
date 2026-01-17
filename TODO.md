@@ -247,16 +247,16 @@ Acceptance:
 
 The repo already produces quantile intervals for margin/total. Use them more directly.
 
-- [ ] Derive a per-game uncertainty estimate (e.g., infer σ from p10/p90 width).
-- [ ] Convert margin + σ into a win probability via a distributional mapping (e.g., normal CDF),
+- [x] Derive a per-game uncertainty estimate (e.g., infer σ from p10/p90 width).
+- [x] Convert margin + σ into a win probability via a distributional mapping (e.g., normal CDF),
   then optionally calibrate.
-- [ ] Compare uncertainty-aware probabilities vs current approach via walk-forward.
-- [ ] Consider uncertainty-aware confidence ranks (e.g., prioritize higher expected points with
+- [x] Compare uncertainty-aware probabilities vs current approach via walk-forward.
+- [x] Consider uncertainty-aware confidence ranks (e.g., prioritize higher expected points with
   lower upset risk).
 
 Acceptance:
 
-- [ ] Walk-forward shows whether uncertainty-aware probabilities improve Brier/log loss and/or
+- [x] Walk-forward shows whether uncertainty-aware probabilities improve Brier/log loss and/or
   pool points.
 
 ---

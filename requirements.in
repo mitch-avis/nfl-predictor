@@ -1,0 +1,14 @@
+beautifulsoup4
+coloredlogs
+joblib
+lxml
+nflreadpy
+numpy
+openpyxl
+optuna
+pandas
+polars
+requests
+scikit-learn
+scipy
+xgboost

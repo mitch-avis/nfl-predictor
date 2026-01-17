@@ -190,20 +190,20 @@ Decide, then enforce, the objectively best usage of market inputs:
 
 Key tasks:
 
-- [ ] Evaluate market as features vs anchoring under the canonical protocol.
-- [ ] Fix/confirm the market probability source used for blending/clamping:
+- [x] Evaluate market as features vs anchoring under the canonical protocol.
+- [x] Fix/confirm the market probability source used for blending/clamping:
   - Current: implied prob from moneyline (includes vig).
   - Add: **no-vig** implied probability (normalize home/away to sum to 1).
-- [ ] Implement/validate **market probability blending** “the right way”:
+- [x] Implement/validate **market probability blending** “the right way”:
   - Consider blending in **log-odds space** (more stable than linear prob blends).
   - Add clear configuration: source (`raw` vs `novig`), blend method (`prob` vs `logit`),
     weight, and clamp delta.
-- [ ] Add a small test suite around moneyline->prob and no-vig normalization.
+- [x] Add a small test suite around moneyline->prob and no-vig normalization.
 
 Acceptance:
 
-- [ ] The selected market mode (features vs anchor vs hybrid) is chosen via walk-forward.
-- [ ] Market blending/clamping uses the intended probability definition (raw or no-vig) and is
+- [x] The selected market mode (features vs anchor vs hybrid) is chosen via walk-forward.
+- [x] Market blending/clamping uses the intended probability definition (raw or no-vig) and is
   unit-tested.
 
 ---

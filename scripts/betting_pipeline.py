@@ -592,6 +592,7 @@ def _write_training_artifacts(
         params=result.params,
         tuned_params=result.tuned_params,
         early_stopping=result.early_stopping,
+        optuna_summary=getattr(result.model, "optuna_summary", None),
     )
     artifacts.write_json(metadata_path, metadata)
 

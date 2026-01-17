@@ -263,7 +263,9 @@ If spreads/totals/moneylines are present, you can:
   than re-learning what the market already priced
 
 Win probability can also be blended or clamped vs market-implied home win probability via
-`--market-prob-blend` / `--market-prob-clamp` (alias: `--market-prob-weight`).
+`--market-prob-blend` / `--market-prob-clamp` (alias: `--market-prob-weight`). Use
+`--market-prob-source raw|novig` to choose implied-prob handling and
+`--market-prob-blend-method prob|logit` to blend in probability or log-odds space.
 
 ## Backtesting
 

@@ -187,12 +187,16 @@ def test_run_objective_compare_aligns_by_game_key(monkeypatch: MonkeyPatch) -> N
         eval_df=base.iloc[[1]].copy(),
     )
 
-    monkeypatch.setattr(model_compare.walk_forward, "filter_regular_season", lambda df: df)
+    monkeypatch.setattr(
+        model_compare.walk_forward,
+        "filter_regular_season",
+        lambda df, **_kwargs: df,
+    )
     monkeypatch.setattr(model_compare.walk_forward, "resolve_eval_seasons", lambda *_: [2024])
     monkeypatch.setattr(
         model_compare.walk_forward,
         "build_walk_forward_folds",
-        lambda *_: [fold_1, fold_2],
+        lambda *_args, **_kwargs: [fold_1, fold_2],
     )
 
     def _fake_fit_margin_total_fold(

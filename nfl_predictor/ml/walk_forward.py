@@ -419,8 +419,12 @@ def run_walk_forward_backtest(
             )
 
         calibrator = None
-        calibration_method = config.calibration
-        if config.calibration.lower() != "none":
+        resolved_calibration = ml_model.resolve_win_prob_calibration_method(
+            config.calibration,
+            len(calibration_df),
+        )
+        calibration_method = resolved_calibration
+        if resolved_calibration != "none":
             if calibration_df.empty or x_calibration is None:
                 log.info(
                     "Calibration skipped for season %s week %s: insufficient calibration data.",
@@ -437,10 +441,12 @@ def run_walk_forward_backtest(
                 calibrator = _fit_calibrator(
                     pred_margin_calibration,
                     actual_home_win.to_numpy(),
-                    config.calibration,
+                    resolved_calibration,
                 )
                 if calibrator is None:
                     calibration_method = "none"
+                else:
+                    calibration_method = calibrator.method
 
         x_eval = preprocessor.transform(ml_model.apply_feature_spec(fold.eval_df, feature_spec))
         pred_margin = ml_model._predict_xgb(margin_model, x_eval)

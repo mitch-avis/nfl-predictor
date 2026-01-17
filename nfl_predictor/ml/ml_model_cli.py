@@ -445,6 +445,7 @@ def main() -> None:
             params=result.params,
             tuned_params=result.tuned_params,
             early_stopping=result.early_stopping,
+            optuna_summary=getattr(result.model, "optuna_summary", None),
         )
         artifacts.write_json(paths.metadata_path, metadata)
 

@@ -8,6 +8,38 @@ This repo is geared toward:
 - **Pick 'Em** and **Confidence Pools** (primary)
 - sports-betting research (secondary; no profit claims)
 
+## Table of Contents
+
+- [nfl-predictor](#nfl-predictor)
+  - [Table of Contents](#table-of-contents)
+  - [What this project produces](#what-this-project-produces)
+  - [Setup](#setup)
+    - [Python environment](#python-environment)
+      - [Recommended: uv + pinned requirements](#recommended-uv--pinned-requirements)
+      - [Alternative: venv + pip](#alternative-venv--pip)
+    - [Run tests](#run-tests)
+  - [Data collection (Polars + nflreadpy)](#data-collection-polars--nflreadpy)
+  - [Data sources + missing data](#data-sources--missing-data)
+  - [Training + prediction](#training--prediction)
+    - [Quickstart (train + predict)](#quickstart-train--predict)
+    - [Splits: train, calibration, holdout](#splits-train-calibration-holdout)
+  - [Modeling approach](#modeling-approach)
+    - [Margin/Total targets (canonical)](#margintotal-targets-canonical)
+    - [Win probability calibration](#win-probability-calibration)
+    - [Market integration (optional, recommended)](#market-integration-optional-recommended)
+  - [Backtesting](#backtesting)
+  - [Scripts](#scripts)
+  - [Validation](#validation)
+  - [Leakage audit](#leakage-audit)
+  - [Artifacts](#artifacts)
+  - [Confidence pool rules (implemented)](#confidence-pool-rules-implemented)
+  - [Score rounding / realism (optional)](#score-rounding--realism-optional)
+  - [Repository layout notes](#repository-layout-notes)
+  - [Implemented feature areas](#implemented-feature-areas)
+  - [Open work](#open-work)
+  - [Development notes](#development-notes)
+  - [Safety and claims](#safety-and-claims)
+
 ## What this project produces
 
 - **Predicted margin and total** for each game (canonical targets).
@@ -20,11 +52,37 @@ This repo is geared toward:
 
 ### Python environment
 
+This project targets **Python 3.13+** (see `pyproject.toml`).
+
+#### Recommended: uv + pinned requirements
+
+This repo uses pinned requirements for reproducible runs:
+
+- `requirements.in` / `requirements-dev.in` are the sources of truth
+- `requirements.txt` / `requirements-dev.txt` are generated via `uv pip compile`
+
+```bash
+uv venv .venv
+# Linux/macOS
+source .venv/bin/activate
+# Windows (PowerShell)
+# .venv\Scripts\Activate.ps1
+
+uv pip sync requirements.txt requirements-dev.txt
+uv pip install -e . --no-deps
+```
+
+#### Alternative: venv + pip
+
 ```bash
 python -m venv .venv
+# Linux/macOS
 source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
+# Windows (PowerShell)
+# .venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt -r requirements-dev.txt
+pip install -e . --no-deps
 ```
 
 ### Run tests
@@ -70,6 +128,7 @@ Typical outputs:
 - `data/completed_games.csv` and `data/completed_games_ml.csv`
 - `data/predict/week_XX_games_to_predict.csv`
 
+Note: the `data/` directory is gitignored by default; generate it via the data collection step above.
 Note: `*_ml.csv` files include model-ready engineered features.
 
 Historical weeks load from cached artifacts where available; the current week may require network
@@ -314,7 +373,7 @@ work live in `ARCHIVE.md`.
 - Logging uses the project logger; avoid `print`.
 - Formatting is enforced via Black (line length 100).
 - Linting and import sorting are enforced via Ruff (includes isort rules).
-- Ruff is a dev dependency; install it with `pip install ruff` if needed.
+- Dev tooling (Black/Ruff/pytest/pytest-cov) is installed via `requirements-dev.txt`.
 
 Common local checks:
 

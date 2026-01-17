@@ -84,6 +84,12 @@ def _parse_args() -> argparse.Namespace:
         help="Blend method for market probabilities (prob or logit space).",
     )
     parser.add_argument(
+        "--win-prob-uncertainty",
+        choices=["off", "on", "both"],
+        default="off",
+        help="Use uncertainty-aware win probabilities (off, on, both).",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
         default=None,
@@ -141,6 +147,7 @@ def _run_one(
     market_mode: str,
     market_prob_source: str,
     market_prob_blend_method: str,
+    win_prob_use_uncertainty: bool,
     market_prob_weight: float,
     market_prob_clamp: float,
     xgb_params_overrides: dict[str, Any],
@@ -161,6 +168,7 @@ def _run_one(
         market_prob_clamp=market_prob_clamp,
         market_prob_source=market_prob_source,
         market_prob_blend_method=market_prob_blend_method,
+        win_prob_use_uncertainty=win_prob_use_uncertainty,
         include_quantiles=include_quantiles,
         max_cardinality_ratio=0.5,
         feature_start="away_rest",
@@ -179,6 +187,7 @@ def _run_one(
         "market_prob_clamp": market_prob_clamp,
         "market_prob_source": market_prob_source,
         "market_prob_blend_method": market_prob_blend_method,
+        "win_prob_use_uncertainty": bool(win_prob_use_uncertainty),
         "market_mode": market_mode,
         "brier": float(overall.get("brier", float("nan"))),
         "log_loss": float(overall.get("log_loss", float("nan"))),
@@ -266,37 +275,45 @@ def main() -> int:
         if args.market_prob_blend_method == "both"
         else [args.market_prob_blend_method]
     )
+    uncertainty_modes = (
+        [False, True]
+        if args.win_prob_uncertainty == "both"
+        else [args.win_prob_uncertainty == "on"]
+    )
     for mode_label, include_market, market_anchor in _market_modes(args.market_mode):
         for source in market_sources:
             for method in blend_methods:
-                for label, calib, weight, clamp in matrix:
-                    run_label = f"{mode_label}_{source}_{method}_{label}"
-                    log.info(
-                        "Running %s (calib=%s, market_weight=%.2f, market_clamp=%.2f)",
-                        run_label,
-                        calib,
-                        weight,
-                        clamp,
-                    )
-                    row = _run_one(
-                        df,
-                        label=run_label,
-                        eval_last_n_seasons=args.eval_last_n_seasons,
-                        wf_start_week=args.wf_start_week,
-                        calibration=calib,
-                        calibration_weeks=args.calibration_weeks,
-                        include_market=include_market,
-                        market_anchor=market_anchor,
-                        market_mode=mode_label,
-                        market_prob_source=source,
-                        market_prob_blend_method=method,
-                        market_prob_weight=weight,
-                        market_prob_clamp=clamp,
-                        xgb_params_overrides=xgb_params_overrides,
-                        early_stopping_rounds=args.early_stopping_rounds,
-                        include_quantiles=bool(args.include_quantiles),
-                    )
-                    rows.append(row)
+                for use_uncertainty in uncertainty_modes:
+                    mode_label_suffix = "uncert" if use_uncertainty else "base"
+                    for label, calib, weight, clamp in matrix:
+                        run_label = f"{mode_label}_{source}_{method}_{mode_label_suffix}_{label}"
+                        log.info(
+                            "Running %s (calib=%s, market_weight=%.2f, market_clamp=%.2f)",
+                            run_label,
+                            calib,
+                            weight,
+                            clamp,
+                        )
+                        row = _run_one(
+                            df,
+                            label=run_label,
+                            eval_last_n_seasons=args.eval_last_n_seasons,
+                            wf_start_week=args.wf_start_week,
+                            calibration=calib,
+                            calibration_weeks=args.calibration_weeks,
+                            include_market=include_market,
+                            market_anchor=market_anchor,
+                            market_mode=mode_label,
+                            market_prob_source=source,
+                            market_prob_blend_method=method,
+                            win_prob_use_uncertainty=use_uncertainty,
+                            market_prob_weight=weight,
+                            market_prob_clamp=clamp,
+                            xgb_params_overrides=xgb_params_overrides,
+                            early_stopping_rounds=args.early_stopping_rounds,
+                            include_quantiles=bool(args.include_quantiles),
+                        )
+                        rows.append(row)
 
     result_df = pd.DataFrame(rows)
     result_df = result_df.sort_values(["brier", "log_loss"], ascending=[True, True])
@@ -320,6 +337,7 @@ def main() -> int:
         "market_mode",
         "market_prob_source",
         "market_prob_blend_method",
+        "win_prob_use_uncertainty",
         "brier",
         "log_loss",
         "reliability_ece",

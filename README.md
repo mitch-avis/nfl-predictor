@@ -320,6 +320,12 @@ Authoritative weekly workflow (run in order):
 .venv/bin/python scripts/power_rankings.py --help
 ```
 
+One-command weekly orchestration (refresh + selection + train + reports):
+
+```bash
+.venv/bin/python scripts/weekly_run.py --help
+```
+
 Outputs and conventions:
 
 - Run artifacts (models/metrics/metadata) land under `models/<run_id>/` by default.
@@ -348,6 +354,8 @@ Repo utilities under `scripts/`:
   and artifact stamping.
 - `scripts/wf_compare.py`: sweep calibration + market-prob post-processing variants and summarize
   walk-forward metrics.
+- `scripts/weekly_run.py`: weekly orchestration (refresh -> wf compare -> train -> predictions +
+  reports), resumable with optional JSON/YAML config.
 - `scripts/backtest_predictions.py`: run a backtest using a saved model artifact.
 
 `wf_compare` examples:
@@ -366,6 +374,24 @@ Repo utilities under `scripts/`:
   --market-mode all \
   --market-prob-source both \
   --market-prob-blend-method both
+```
+
+`weekly_run` config example (JSON):
+
+```json
+{
+  "wf_eval_last_n_seasons": 3,
+  "wf_market_mode": "hybrid",
+  "wf_market_prob_source": "raw",
+  "wf_market_prob_blend_method": "prob",
+  "predict_path": "data/predict/week_03_games_to_predict.csv"
+}
+```
+
+Run it with:
+
+```bash
+.venv/bin/python scripts/weekly_run.py --config path/to/weekly_run.json
 ```
 
 GPU note (XGBoost 2.x): prefer `--xgb-tree-method hist --xgb-device cuda`.

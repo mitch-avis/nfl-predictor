@@ -279,6 +279,8 @@ def test_build_metrics_report_shape() -> None:
     assert report["run_id"] == "wf_test"
     assert report["metrics"]["overall"]["games"] == 1
     assert report["metrics"]["fold_summary"]["folds"] == 1
+    assert isinstance(report["metrics"]["summary_table"], list)
+    assert report["metric_strategy"]["primary"][0]["metric"] == "brier"
     assert report["calibration"]["bin_count"] == walk_forward.RELIABILITY_BINS
     assert report["splits"]["eval_window"]["include_postseason"] is False
 
@@ -315,6 +317,55 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
     assert "market_total_resid_mae" in metrics
     assert "margin_p10_p90_coverage" in metrics
     assert "total_p10_p90_coverage" in metrics
+    assert "reliability_ece" in metrics
+
+
+def test_season_win_totals_summary() -> None:
+    """Summarize expected vs actual season win totals."""
+
+    predictions = pd.DataFrame(
+        {
+            "season": [2024, 2024],
+            "week": [3, 4],
+            "away_abbr": ["AAA", "BBB"],
+            "home_abbr": ["BBB", "AAA"],
+            "home_win_prob": [0.7, 0.4],
+            "actual_margin": [3.0, -7.0],
+        }
+    )
+
+    totals = walk_forward._season_win_totals(predictions)
+    per_team = {row["team"]: row for row in totals["per_team"]}
+    assert totals["overall"]["teams"] == 2
+    assert per_team["AAA"]["expected_wins"] == pytest.approx(0.7)
+    assert per_team["AAA"]["actual_wins"] == pytest.approx(0.0)
+    assert per_team["BBB"]["expected_wins"] == pytest.approx(1.3)
+    assert per_team["BBB"]["actual_wins"] == pytest.approx(2.0)
+    assert totals["overall"]["mean_abs_error"] == pytest.approx(0.7)
+
+
+def test_calibration_drift_summary() -> None:
+    """Summarize calibration drift by season/week."""
+
+    predictions = pd.DataFrame(
+        {
+            "season": [2024, 2024],
+            "week": [3, 3],
+            "home_win_prob": [0.8, 0.2],
+            "actual_home_win": [1, 0],
+        }
+    )
+
+    drift = walk_forward._calibration_drift(predictions)
+    assert len(drift["per_week"]) == 1
+    row = drift["per_week"][0]
+    assert row["season"] == 2024
+    assert row["week"] == 3
+    assert row["games"] == 2
+    assert row["avg_pred"] == pytest.approx(0.5)
+    assert row["avg_actual"] == pytest.approx(0.5)
+    assert row["bias"] == pytest.approx(0.0)
+    assert row["brier"] == pytest.approx(0.04)
 
 
 def test_git_commit_hash_returns_none_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -40,6 +40,39 @@ Rules that are always enforced:
 - Keep `TODO.md` accurate: verify items before checking them off.
 - Keep `README.md` current: update it when behavior, CLI usage, features, or outputs change.
 
+## Command execution rules (non-negotiable)
+
+This project uses a **local virtual environment located at `.venv/`**.
+
+When running any commands, you MUST invoke tools from the virtual environment explicitly.
+Do NOT rely on shell activation, PATH inference, or system-installed binaries.
+
+### Required command forms
+
+Use these forms **at all times**:
+
+- Python:
+  - `.venv/bin/python`
+- pip:
+  - `.venv/bin/pip`
+- uv:
+  - `.venv/bin/uv`
+- pytest:
+  - `.venv/bin/python -m pytest` **or** `.venv/bin/pytest` **or** `.venv/bin/uv run pytest`
+- ruff:
+  - `.venv/bin/ruff`
+- black:
+  - `.venv/bin/black`
+
+### Explicitly forbidden
+
+- `python`, `pip`, `pytest`, `ruff`, `black`, or `uv` **without a `.venv/` prefix**
+- assuming an activated shell or implicit virtualenv
+- using system Python, Conda, pyenv, or global tools
+
+If a command is shown in documentation or tasks, assume the `.venv/bin/` prefix is required even if
+not written.
+
 ### Formatting, linting, and style
 
 - **Black** formatting (line length 100).
@@ -48,9 +81,9 @@ Rules that are always enforced:
 
 Recommended local commands:
 
-- `black .`
-- `ruff check .` (and optionally `ruff check . --fix`)
-- `python -m pytest`
+- `.venv/bin/uv run black .`
+- `.venv/bin/uv run ruff check .` (and optionally `.venv/bin/uv run ruff check . --fix`)
+- `.venv/bin/uv run pytest`
 
 ## Project Shape (Big Picture)
 

@@ -64,6 +64,7 @@ class WalkForwardConfig:
     market_prob_clamp: float = 0.0
     market_prob_source: str = "raw"
     market_prob_blend_method: str = "prob"
+    win_prob_use_uncertainty: bool = False
     include_quantiles: bool = True
     max_cardinality_ratio: float = 0.5
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
@@ -89,6 +90,7 @@ class WalkForwardConfig:
             "market_prob_clamp": self.market_prob_clamp,
             "market_prob_source": self.market_prob_source,
             "market_prob_blend_method": self.market_prob_blend_method,
+            "win_prob_use_uncertainty": self.win_prob_use_uncertainty,
             "include_quantiles": self.include_quantiles,
             "max_cardinality_ratio": self.max_cardinality_ratio,
             "feature_start": self.feature_start,
@@ -329,6 +331,7 @@ def run_walk_forward_backtest(
         "market_prob_clamp": config.market_prob_clamp,
         "market_prob_source": config.market_prob_source,
         "market_prob_blend_method": config.market_prob_blend_method,
+        "win_prob_use_uncertainty": config.win_prob_use_uncertainty,
         "include_quantiles": config.include_quantiles,
     }
 
@@ -342,6 +345,9 @@ def run_walk_forward_backtest(
     )
     if not folds:
         raise ValueError("No walk-forward folds available with the provided settings.")
+
+    if config.win_prob_use_uncertainty and not config.include_quantiles:
+        log.info("Uncertainty-aware win probs requested without quantiles; using fallback sigma.")
 
     params = _resolve_xgb_params(config)
 
@@ -429,6 +435,9 @@ def run_walk_forward_backtest(
             config.calibration,
             len(calibration_df),
         )
+        if config.win_prob_use_uncertainty and resolved_calibration == "elo":
+            log.info("Elo calibration ignored for uncertainty-aware probabilities; using 'none'.")
+            resolved_calibration = "none"
         calibration_method = resolved_calibration
         if resolved_calibration != "none":
             if calibration_df.empty or x_calibration is None:
@@ -442,10 +451,27 @@ def run_walk_forward_backtest(
                 pred_margin_calibration = ml_model._predict_xgb(margin_model, x_calibration)
                 if market_anchor and baseline_margin_calibration is not None:
                     pred_margin_calibration = pred_margin_calibration + baseline_margin_calibration
+                pred_margin_inputs = pred_margin_calibration
+                if config.win_prob_use_uncertainty:
+                    pred_margin_quantiles_calibration = {
+                        q: ml_model._predict_xgb(q_model, x_calibration)
+                        for q, q_model in margin_quantiles.items()
+                    }
+                    if market_anchor and baseline_margin_calibration is not None:
+                        for q in list(pred_margin_quantiles_calibration.keys()):
+                            pred_margin_quantiles_calibration[q] = (
+                                pred_margin_quantiles_calibration[q] + baseline_margin_calibration
+                            )
+                    sigma_calibration = ml_model._resolve_margin_sigma(
+                        pred_margin_calibration,
+                        pred_margin_quantiles_calibration,
+                        fallback=constants.SCORE_DIFF_STD_DEV,
+                    )
+                    pred_margin_inputs = pred_margin_calibration / sigma_calibration
                 away_col, home_col = target_columns
                 actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
                 calibrator = _fit_calibrator(
-                    pred_margin_calibration,
+                    pred_margin_inputs,
                     actual_home_win.to_numpy(),
                     resolved_calibration,
                 )
@@ -475,7 +501,19 @@ def run_walk_forward_backtest(
                 pred_total_quantiles[q] = pred_total_quantiles[q] + baseline_total_eval
 
         pred_away, pred_home = ml_model.derive_scores_from_margin_total(pred_margin, pred_total)
-        home_win_prob = ml_model.predict_home_win_prob(pred_margin, calibrator)
+        sigma_eval = None
+        if config.win_prob_use_uncertainty:
+            sigma_eval = ml_model._resolve_margin_sigma(
+                pred_margin,
+                pred_margin_quantiles,
+                fallback=constants.SCORE_DIFF_STD_DEV,
+            )
+        home_win_prob = ml_model.predict_home_win_prob(
+            pred_margin,
+            calibrator,
+            sigma=sigma_eval,
+            use_uncertainty=config.win_prob_use_uncertainty,
+        )
         if config.market_prob_weight or config.market_prob_clamp:
             market_prob_config = ml_model.MarketProbConfig(
                 blend_weight=config.market_prob_weight,

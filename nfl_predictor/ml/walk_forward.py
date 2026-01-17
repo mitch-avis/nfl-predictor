@@ -30,6 +30,20 @@ from nfl_predictor.utils.logger import log
 DEFAULT_CALIBRATION_WEEKS = 4
 DEFAULT_RANDOM_SEED = 42
 RELIABILITY_BINS = 10
+SUMMARY_METRICS = (
+    "margin_mae",
+    "total_mae",
+    "brier",
+    "log_loss",
+    "expected_points",
+    "actual_points",
+    "picks_correct",
+    "pick_accuracy",
+    "market_margin_resid_mae",
+    "market_total_resid_mae",
+    "margin_p10_p90_coverage",
+    "total_p10_p90_coverage",
+)
 
 
 @dataclass(frozen=True)
@@ -42,6 +56,7 @@ class WalkForwardConfig:
     calibration: str = "platt"
     calibration_weeks: int = DEFAULT_CALIBRATION_WEEKS
     random_seed: int = DEFAULT_RANDOM_SEED
+    include_postseason: bool = False
     include_market: bool = True
     market_transform: Optional[bool] = None
     market_anchor: bool = True
@@ -64,6 +79,7 @@ class WalkForwardConfig:
             "calibration": self.calibration,
             "calibration_weeks": self.calibration_weeks,
             "random_seed": self.random_seed,
+            "include_postseason": self.include_postseason,
             "include_market": self.include_market,
             "market_transform": self.market_transform,
             "market_anchor": self.market_anchor,
@@ -99,10 +115,10 @@ def load_games(data_path: Path) -> pd.DataFrame:
     return df
 
 
-def filter_regular_season(df: pd.DataFrame) -> pd.DataFrame:
+def filter_regular_season(df: pd.DataFrame, include_postseason: bool = False) -> pd.DataFrame:
     """Filter to regular season games when game_type exists."""
 
-    if "game_type" not in df.columns:
+    if include_postseason or "game_type" not in df.columns:
         return df
     filtered = df[df["game_type"].astype(str).str.upper() == "REG"].copy()
     if len(filtered) != len(df):
@@ -137,7 +153,10 @@ def resolve_eval_seasons(
 
 
 def build_walk_forward_folds(
-    df: pd.DataFrame, eval_seasons: Sequence[int], start_week: int
+    df: pd.DataFrame,
+    eval_seasons: Sequence[int],
+    start_week: int,
+    include_postseason: bool = False,
 ) -> list[WalkForwardFold]:
     """Build time-aware walk-forward folds for each eval season and week."""
 
@@ -146,7 +165,11 @@ def build_walk_forward_folds(
 
     folds: list[WalkForwardFold] = []
     for season in sorted(eval_seasons):
-        max_week = constants.get_regular_season_weeks(season)
+        season_df = df[df["season"] == season]
+        if include_postseason and not season_df.empty:
+            max_week = int(season_df["week"].max())
+        else:
+            max_week = constants.get_regular_season_weeks(season)
         for week in range(start_week, max_week + 1):
             eval_df = df[(df["season"] == season) & (df["week"] == week)].copy()
             if eval_df.empty:
@@ -183,6 +206,41 @@ def select_calibration_data(
         return season_df.iloc[0:0].copy()
     selected_weeks = eligible_weeks[-calibration_weeks:]
     return season_df[season_df["week"].isin(selected_weeks)].copy()
+
+
+def summarize_eval_window(
+    df: pd.DataFrame,
+    eval_seasons: Sequence[int],
+    *,
+    start_week: int,
+    include_postseason: bool,
+) -> dict[str, Any]:
+    """Summarize the evaluation window for reporting/metadata."""
+
+    season_rows: dict[str, dict[str, Any]] = {}
+    incomplete_seasons: list[int] = []
+
+    for season in sorted(eval_seasons):
+        season_df = df[df["season"] == season]
+        max_week = int(season_df["week"].max()) if not season_df.empty else None
+        regular_weeks = constants.get_regular_season_weeks(int(season))
+        eval_end_week = max_week if include_postseason and max_week is not None else regular_weeks
+        incomplete_regular = max_week is not None and max_week < regular_weeks
+        if incomplete_regular:
+            incomplete_seasons.append(int(season))
+        season_rows[str(season)] = {
+            "regular_season_weeks": int(regular_weeks),
+            "max_week_in_data": max_week,
+            "eval_start_week": int(start_week),
+            "eval_end_week": int(eval_end_week) if eval_end_week is not None else None,
+            "incomplete_regular_season": bool(incomplete_regular),
+        }
+
+    return {
+        "include_postseason": bool(include_postseason),
+        "incomplete_seasons": incomplete_seasons,
+        "seasons": season_rows,
+    }
 
 
 def _has_market_lines(df: pd.DataFrame) -> bool:
@@ -252,7 +310,7 @@ def run_walk_forward_backtest(
     """Run walk-forward training/evaluation and return metrics plus per-game predictions."""
 
     np.random.seed(config.random_seed)
-    df = filter_regular_season(df)
+    df = filter_regular_season(df, include_postseason=config.include_postseason)
     target_columns = ml_model.get_target_columns(df)
     df = df.dropna(subset=list(target_columns)).copy()
 
@@ -270,7 +328,12 @@ def run_walk_forward_backtest(
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
     resolved_eval_seasons = [int(season) for season in eval_seasons]
-    folds = build_walk_forward_folds(df, eval_seasons, config.wf_start_week)
+    folds = build_walk_forward_folds(
+        df,
+        eval_seasons,
+        config.wf_start_week,
+        include_postseason=config.include_postseason,
+    )
     if not folds:
         raise ValueError("No walk-forward folds available with the provided settings.")
 
@@ -503,6 +566,12 @@ def run_walk_forward_backtest(
         "resolved_settings": resolved_settings,
         "resolved_eval_seasons": resolved_eval_seasons,
         "feature_list": feature_list,
+        "eval_window": summarize_eval_window(
+            df,
+            resolved_eval_seasons,
+            start_week=config.wf_start_week,
+            include_postseason=config.include_postseason,
+        ),
     }
 
 
@@ -522,12 +591,42 @@ def build_metrics_report(
             "per_week": results["per_week"],
             "per_season": results["per_season"],
             "overall": results["overall"],
+            "fold_summary": _summarize_fold_metrics(results["per_week"]),
         },
         "calibration": {
             "bins": results["reliability"],
             "bin_count": RELIABILITY_BINS,
         },
+        "splits": {
+            "eval_window": results.get("eval_window"),
+            "calibration_window": {
+                "method": config_payload.get("calibration"),
+                "calibration_weeks": config_payload.get("calibration_weeks"),
+            },
+        },
     }
+
+
+def _summarize_fold_metrics(per_week: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize per-week metrics with mean/variance across folds."""
+
+    summary: dict[str, Any] = {"folds": int(len(per_week)), "metrics": {}}
+    if not per_week:
+        for name in SUMMARY_METRICS:
+            summary["metrics"][name] = {"mean": None, "variance": None}
+        return summary
+
+    for name in SUMMARY_METRICS:
+        values = [row.get(name) for row in per_week if row.get(name) is not None]
+        if not values:
+            summary["metrics"][name] = {"mean": None, "variance": None}
+            continue
+        arr = np.asarray(values, dtype=float)
+        summary["metrics"][name] = {
+            "mean": float(np.mean(arr)),
+            "variance": float(np.var(arr)),
+        }
+    return summary
 
 
 def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, Any]:

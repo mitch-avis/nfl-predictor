@@ -218,8 +218,14 @@ __marimo__/
 # Data folder
 data/
 
-# Models folder
+# Models folder and files
 models/
+*.model
+*.joblib
+*.pkl
+*.parquet
+*.feather
 
-# Optuna database
+# Optuna database and other database files
 **/optuna.db
+*.db

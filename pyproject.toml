@@ -1,10 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nfl-predictor"
+dynamic = ["version"]
+description = "Eventually, something useful for predicting football games"
+readme = "README.md"
+requires-python = ">=3.12"
+keywords = ["stats", "sports", "football", "machine learning"]
+authors = [{ name = "Mitch Avis", email = "mitchavis@gmail.com" }]
+license = { text = "MIT" }
+dependencies = [
+    "beautifulsoup4",
+    "coloredlogs",
+    "joblib",
+    "lxml",
+    "nflreadpy",
+    "numpy",
+    "optuna",
+    "openpyxl",
+    "pandas",
+    "polars",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "xgboost",
+]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.urls]
+Homepage = "https://github.com/mitch-avis/nfl-predictor"
+
+[tool.hatch.version]
+path = "VERSION"
+
+[tool.hatch.build.targets.wheel]
+packages = ["nfl_predictor"]
+
 [tool.black]
 line-length = 100
-target-version = ["py38", "py39", "py310", "py311", "py312", "py313"]
+target-version = ["py312", "py313"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
+target-version = "py312"
 lint.select = ["E", "F", "W", "I", "B"]
 lint.ignore = [
     "E203", # space before ':' (conflicts with black)

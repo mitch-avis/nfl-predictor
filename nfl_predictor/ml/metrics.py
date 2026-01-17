@@ -15,6 +15,24 @@ import numpy as np
 from sklearn.metrics import brier_score_loss, log_loss, mean_absolute_error
 
 PROB_EPSILON = 1e-15
+METRIC_STRATEGY: dict[str, list[dict[str, str]]] = {
+    "primary": [
+        {"metric": "brier", "direction": "lower"},
+        {"metric": "log_loss", "direction": "lower"},
+        {"metric": "reliability_ece", "direction": "lower"},
+    ],
+    "secondary": [
+        {"metric": "expected_points_avg", "direction": "higher"},
+        {"metric": "actual_points_avg", "direction": "higher"},
+        {"metric": "pick_accuracy", "direction": "higher"},
+    ],
+    "tertiary": [
+        {"metric": "margin_mae", "direction": "lower"},
+        {"metric": "total_mae", "direction": "lower"},
+        {"metric": "market_margin_resid_mae", "direction": "lower"},
+        {"metric": "market_total_resid_mae", "direction": "lower"},
+    ],
+}
 
 
 def clip_probabilities(probs: np.ndarray, eps: Optional[float] = None) -> np.ndarray:
@@ -126,3 +144,22 @@ def reliability_table(
             }
         )
     return rows
+
+
+def reliability_ece(bins: list[dict[str, Any]]) -> float:
+    """Compute expected calibration error from a reliability table."""
+
+    total = sum(int(row.get("count", 0) or 0) for row in bins)
+    if total <= 0:
+        return float("nan")
+    ece = 0.0
+    for row in bins:
+        count = int(row.get("count", 0) or 0)
+        if count <= 0:
+            continue
+        avg_pred = row.get("avg_pred")
+        avg_actual = row.get("avg_actual")
+        if avg_pred is None or avg_actual is None:
+            continue
+        ece += (count / total) * abs(float(avg_pred) - float(avg_actual))
+    return float(ece)

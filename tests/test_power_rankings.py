@@ -9,6 +9,7 @@ from nfl_predictor.reporting.power_rankings import (
     compute_projected_standings,
     fit_bradley_terry_ratings,
     outcome_to_home_prob,
+    ratings_to_power_0_to_10,
     scale_ratings_1_to_10,
 )
 
@@ -37,12 +38,24 @@ def test_fit_bradley_terry_ratings_orders_strength() -> None:
 
 
 def test_scale_ratings_1_to_10_bounds() -> None:
-    """Scaled ratings stay in [1, 10]."""
+    """Scaled ratings stay in [1, 10] with a stable mapping."""
 
     raw = pd.Series({"A": -2.0, "B": 0.0, "C": 2.0})
     scaled = scale_ratings_1_to_10(raw)
     assert scaled.min() >= 1.0
     assert scaled.max() <= 10.0
+    # Average team (~0) maps to midscale.
+    assert scaled["B"] == 5.5
+
+
+def test_ratings_to_power_0_to_10_bounds() -> None:
+    """0-10 scale stays in [0, 10] with a stable mapping."""
+
+    raw = pd.Series({"A": -10.0, "B": 0.0, "C": 10.0})
+    scaled = ratings_to_power_0_to_10(raw)
+    assert scaled.min() >= 0.0
+    assert scaled.max() <= 10.0
+    assert scaled["B"] == 5.0
 
 
 def test_build_power_rankings_and_standings_smoke() -> None:
@@ -87,7 +100,9 @@ def test_build_power_rankings_and_standings_smoke() -> None:
     )
 
     assert not result.power_rankings.empty
-    assert set(result.power_rankings.columns).issuperset({"team_abbr", "power_rating_1_10", "rank"})
+    assert set(result.power_rankings.columns).issuperset(
+        {"team_abbr", "power_rating_1_10", "power_rating_0_10", "rank"}
+    )
     assert not result.projected_standings.empty
     assert "projected_wins" in result.projected_standings.columns
     assert not result.projected_division_standings.empty

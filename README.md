@@ -330,6 +330,7 @@ Outputs and conventions:
 
 - Run artifacts (models/metrics/metadata) land under `models/<run_id>/` by default.
 - Weekly prediction outputs live next to the input prediction file (e.g., `data/predict/`).
+- `metadata.json` includes dataset fingerprint, tuned params, and Optuna summary when tuning runs.
 - Power rankings outputs:
   - `power_rankings_season_XXXX_week_YY.csv`
   - `projected_standings_season_XXXX_week_YY.csv`

@@ -23,6 +23,7 @@ from typing import Any
 import pandas as pd
 
 try:
+    from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
 except ModuleNotFoundError:  # pragma: no cover
@@ -31,6 +32,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
+    from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
 
@@ -191,7 +193,7 @@ def _run_one(
         "market_mode": market_mode,
         "brier": float(overall.get("brier", float("nan"))),
         "log_loss": float(overall.get("log_loss", float("nan"))),
-        "reliability_ece": _reliability_ece(reliability),
+        "reliability_ece": metrics_utils.reliability_ece(reliability),
         "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
         "margin_mae": float(overall.get("margin_mae", float("nan"))),
         "total_mae": float(overall.get("total_mae", float("nan"))),
@@ -200,25 +202,6 @@ def _run_one(
         "games": int(overall.get("games", 0) or 0),
         "weeks": int(overall.get("weeks", 0) or 0),
     }
-
-
-def _reliability_ece(bins: list[dict[str, Any]]) -> float:
-    """Compute expected calibration error from reliability bins."""
-
-    total = sum(int(row.get("count", 0) or 0) for row in bins)
-    if total <= 0:
-        return float("nan")
-    ece = 0.0
-    for row in bins:
-        count = int(row.get("count", 0) or 0)
-        if count <= 0:
-            continue
-        avg_pred = row.get("avg_pred")
-        avg_actual = row.get("avg_actual")
-        if avg_pred is None or avg_actual is None:
-            continue
-        ece += (count / total) * abs(float(avg_pred) - float(avg_actual))
-    return float(ece)
 
 
 def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:

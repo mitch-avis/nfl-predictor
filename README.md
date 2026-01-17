@@ -28,6 +28,7 @@ This repo is geared toward:
     - [Win probability calibration](#win-probability-calibration)
     - [Market integration (optional, recommended)](#market-integration-optional-recommended)
   - [Backtesting](#backtesting)
+  - [Weekly pipeline](#weekly-pipeline)
   - [Scripts](#scripts)
   - [Validation](#validation)
   - [Leakage audit](#leakage-audit)
@@ -283,6 +284,46 @@ python scripts/walk_forward_backtest.py --help
 This is the **canonical evaluation protocol** for model selection. By default it evaluates the
 last N seasons (regular season only) with time-aware calibration from the last K weeks of each
 eval season. Use `--include-postseason` if you want postseason folds included.
+
+Evaluation rule:
+“Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative.”
+
+## Weekly pipeline
+
+Authoritative weekly workflow (run in order):
+
+1) Refresh data (ETL):
+
+```bash
+.venv/bin/python -m nfl_predictor.data_collection
+```
+
+1) Canonical evaluation + model selection (walk-forward):
+
+```bash
+.venv/bin/python scripts/walk_forward_backtest.py --help
+```
+
+1) Train + predict for the upcoming week (writes predictions + artifacts):
+
+```bash
+.venv/bin/python -m nfl_predictor.ml_model --help
+```
+
+1) Power rankings + projected standings:
+
+```bash
+.venv/bin/python scripts/power_rankings.py --help
+```
+
+Outputs and conventions:
+
+- Run artifacts (models/metrics/metadata) land under `models/<run_id>/` by default.
+- Weekly prediction outputs live next to the input prediction file (e.g., `data/predict/`).
+- Power rankings outputs:
+  - `power_rankings_season_XXXX_week_YY.csv`
+  - `projected_standings_season_XXXX_week_YY.csv`
+  - `projected_division_standings_season_XXXX_week_YY.csv`
 
 Model selection hierarchy (default):
 

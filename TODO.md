@@ -263,18 +263,18 @@ Acceptance:
 
 ## Milestone 28 - Metric strategy: decide what "better" means (and track it)
 
-- [ ] Decide which metrics are first-class for model iteration:
+- [x] Decide which metrics are first-class for model iteration:
   - margin MAE, total MAE
   - Brier, log loss, reliability
   - confidence pool expected/actual points
   - market-relative residual metrics (when market is used)
-- [ ] Add optional season-level diagnostics:
+- [x] Add optional season-level diagnostics:
   - predicted vs actual season win totals (requires projecting remaining games)
   - calibration drift by season/week
 
 Acceptance:
 
-- [ ] Metrics are easy to compare across runs (stable JSON schema + summary table).
+- [x] Metrics are easy to compare across runs (stable JSON schema + summary table).
 
 ---
 

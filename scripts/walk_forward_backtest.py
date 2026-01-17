@@ -124,6 +124,12 @@ def _parse_args() -> argparse.Namespace:
         help="Blend method for market probabilities (prob or logit space).",
     )
     parser.add_argument(
+        "--win-prob-uncertainty",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use margin quantiles to derive uncertainty-aware win probabilities.",
+    )
+    parser.add_argument(
         "--out-json",
         type=Path,
         default=None,
@@ -157,6 +163,7 @@ def main() -> None:
         market_prob_clamp=float(args.market_prob_clamp),
         market_prob_source=args.market_prob_source,
         market_prob_blend_method=args.market_prob_blend_method,
+        win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
     )
 
     dataset_hash = walk_forward.dataset_fingerprint(args.data_path)

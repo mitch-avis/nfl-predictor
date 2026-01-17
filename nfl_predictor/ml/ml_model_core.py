@@ -11,6 +11,7 @@ import heapq
 import inspect
 import json
 import os
+import time
 import warnings
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -137,6 +138,7 @@ class MarginTotalModel:
     tuned_params: Optional[dict[str, Any]] = None
     tuned_cv_summary: Optional[dict[str, Any]] = None
     win_prob_use_uncertainty: bool = False
+    optuna_summary: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -160,6 +162,7 @@ class BlendedMarginTotalModel:
     xgb_params: Optional[dict[str, Any]] = None
     tuned_params: Optional[dict[str, Any]] = None
     tuned_cv_summary: Optional[dict[str, Any]] = None
+    optuna_summary: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -1553,6 +1556,8 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
             instance.total_quantile_models = None
         if not hasattr(instance, "quantiles"):
             instance.quantiles = None
+        if not hasattr(instance, "optuna_summary"):
+            instance.optuna_summary = None
 
     if isinstance(model, MarginTotalModel):
         _ensure_margin_total(model)
@@ -1561,6 +1566,8 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
         _ensure_margin_total(model.team_model)
         if model.market_model is not None:
             _ensure_margin_total(model.market_model)
+        if not hasattr(model, "optuna_summary"):
+            model.optuna_summary = None
         return model
     return model
 
@@ -1896,11 +1903,17 @@ def _run_optuna_search(
     market_transform: bool = False,
     market_anchor: bool = False,
     market_prob_config: Optional[MarketProbConfig] = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
+    holdout_seasons: Optional[Sequence[int]] = None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     if optuna is None:  # pragma: no cover
         raise ImportError("Optuna is required for hyperparameter tuning.")
     optuna_module = optuna
     assert optuna_module is not None
+    if holdout_seasons:
+        if "season" not in df.columns:
+            raise ValueError("Optuna tuning requires a season column for holdout checks.")
+        if df["season"].isin(holdout_seasons).any():
+            raise ValueError("Optuna tuning data includes holdout seasons.")
 
     sampler = optuna_module.samplers.TPESampler(seed=42)
     study_kwargs: dict[str, Any] = {
@@ -1980,22 +1993,35 @@ def _run_optuna_search(
         )
         _persist_best_params(study, trial)
 
+    start_time = time.monotonic()
     study.optimize(
         objective_fn,
         timeout=optuna_config.timeout_seconds,
         n_trials=optuna_config.n_trials,
         callbacks=[_trial_logger],
     )
+    duration_seconds = time.monotonic() - start_time
 
-    log.info("Optuna best %s: %.4f", optuna_config.objective, study.best_value)
-    log.info("Optuna best params: %s", study.best_params)
-
-    raw_best_params: Any = getattr(study, "best_params", {})
-    best_params: dict[str, Any] = {}
+    best_value: Optional[float]
+    best_params_raw: dict[str, Any]
+    best_trial_number: Optional[int]
     try:
-        items = raw_best_params.items()  # type: ignore[union-attr]
-    except AttributeError:
-        items = raw_best_params
+        best_value = float(study.best_value)
+        best_params_raw = dict(study.best_params)
+        best_trial_number = int(study.best_trial.number)
+    except (AttributeError, ValueError, TypeError):
+        best_value = None
+        best_params_raw = {}
+        best_trial_number = None
+
+    if best_value is None:
+        log.warning("Optuna completed without a successful trial.")
+    else:
+        log.info("Optuna best %s: %.4f", optuna_config.objective, best_value)
+        log.info("Optuna best params: %s", best_params_raw)
+
+    best_params: dict[str, Any] = {}
+    items = best_params_raw.items()
     for key, value in items:
         if isinstance(key, bytes):
             key_str = key.decode("utf-8", errors="replace")
@@ -2025,4 +2051,24 @@ def _run_optuna_search(
         market_anchor=market_anchor,
         market_prob_config=market_prob_config,
     )
-    return best_params, cv_summary
+    complete_trials = sum(
+        1
+        for trial in study.trials
+        if trial.state == optuna_module.trial.TrialState.COMPLETE
+    )
+    optuna_summary = {
+        "study_name": optuna_config.study_name,
+        "storage": optuna_config.storage,
+        "objective": optuna_config.objective,
+        "direction": _optuna_direction(optuna_config.objective),
+        "best_value": best_value,
+        "best_trial": best_trial_number,
+        "best_params": best_params_raw,
+        "n_trials": int(len(study.trials)),
+        "n_complete_trials": int(complete_trials),
+        "timeout_seconds": int(optuna_config.timeout_seconds),
+        "cv_splits": int(optuna_config.cv_splits),
+        "sampler": type(sampler).__name__,
+        "duration_seconds": float(duration_seconds),
+    }
+    return best_params, cv_summary, optuna_summary

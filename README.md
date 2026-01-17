@@ -72,6 +72,13 @@ uv pip sync requirements.txt requirements-dev.txt
 uv pip install -e . --no-deps
 ```
 
+To regenerate pinned requirements:
+
+```bash
+uv pip compile requirements.in -o requirements.txt
+uv pip compile requirements-dev.in -o requirements-dev.txt
+```
+
 #### Alternative: venv + pip
 
 ```bash
@@ -323,6 +330,8 @@ Training/backtests can write a run directory containing reproducible artifacts.
   `metrics_report.json`.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
   args, feature list, and tuning/early-stopping info (when used).
+  `models/` and `optuna.db` are gitignored by default, so keep run artifacts local unless you copy
+  them elsewhere.
 
 ## Confidence pool rules (implemented)
 

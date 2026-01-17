@@ -173,10 +173,15 @@ straightforward.
 
 ### Win probability calibration
 
-Raw margin -> win probability mappings tend to be miscalibrated. This repo supports:
+Win probabilities are derived from the predicted margin, then optionally calibrated using a
+time-aware calibration split (seasons and/or weeks immediately preceding the holdout window).
 
-- **Platt scaling** (logistic regression)
-- **Isotonic regression**
+`--win-prob-calibration` options:
+
+- `none`: deterministic Normal-CDF mapping using `constants.SCORE_DIFF_STD_DEV`.
+- `elo`: deterministic Elo-style logistic mapping (no fitting).
+- `platt`: Platt scaling via logistic regression fit on the calibration split.
+- `isotonic`: isotonic regression fit on the calibration split.
 
 Calibration is time-aware: it fits only on historical data relative to the evaluation window.
 
@@ -188,8 +193,8 @@ If spreads/totals/moneylines are present, you can:
 - train on residuals vs market baselines (`--market-anchor`) so the model learns deviations rather
   than re-learning what the market already priced
 
-Win probability can also be blended or clamped vs market implied probabilities via
-`--market-prob-blend` / `--market-prob-clamp`.
+Win probability can also be blended or clamped vs market-implied home win probability via
+`--market-prob-blend` / `--market-prob-clamp` (alias: `--market-prob-weight`).
 
 ## Backtesting
 
@@ -267,6 +272,15 @@ Training/backtests can write a run directory containing reproducible artifacts.
 - Realized points: `sum(confidence_value * 1[pick_correct])`.
 - Ties count as incorrect.
 
+## Score rounding / realism (optional)
+
+When generating predictions, you can optionally post-process **display scores** without changing
+training targets, win probabilities, or pool ranking logic:
+
+- `--score-rounding none|int|half|nfl`
+
+Use `nfl` to snap to common NFL score patterns for reporting.
+
 ## Repository layout notes
 
 Some modules are split to keep files under lint `max-module-lines` limits while preserving legacy
@@ -290,18 +304,24 @@ games.
 
 ## Open work
 
-Active tasks are tracked in `TODO.md`.
-
-At the moment, `TODO.md` contains a **guardrails checklist** (time-aware/no-leakage, Polars-first
-ETL, reproducible artifacts, and tests/coverage expectations). Completed milestones and past work
-live in `ARCHIVE.md`.
+Active tasks (milestones + guardrails) are tracked in `TODO.md`. Completed milestones and past
+work live in `ARCHIVE.md`.
 
 ## Development notes
 
 - ETL and feature engineering run in Polars.
 - All NFLverse data is pulled via `nflreadpy`.
 - Logging uses the project logger; avoid `print`.
-- Formatting is enforced via Black/isort, and lint is enforced via Ruff.
+- Formatting is enforced via Black (line length 100).
+- Linting and import sorting are enforced via Ruff (includes isort rules).
+- Ruff is a dev dependency; install it with `pip install ruff` if needed.
+
+Common local checks:
+
+```bash
+ruff check .
+black --check .
+```
 
 ## Safety and claims
 

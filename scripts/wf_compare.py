@@ -146,6 +146,7 @@ def _run_one(
 
     out = walk_forward.run_walk_forward_backtest(df, cfg)
     overall = out["overall"]
+    reliability = out.get("reliability", [])
     return {
         "label": label,
         "calibration": calibration,
@@ -153,6 +154,7 @@ def _run_one(
         "market_prob_clamp": market_prob_clamp,
         "brier": float(overall.get("brier", float("nan"))),
         "log_loss": float(overall.get("log_loss", float("nan"))),
+        "reliability_ece": _reliability_ece(reliability),
         "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
         "margin_mae": float(overall.get("margin_mae", float("nan"))),
         "total_mae": float(overall.get("total_mae", float("nan"))),
@@ -161,6 +163,25 @@ def _run_one(
         "games": int(overall.get("games", 0) or 0),
         "weeks": int(overall.get("weeks", 0) or 0),
     }
+
+
+def _reliability_ece(bins: list[dict[str, Any]]) -> float:
+    """Compute expected calibration error from reliability bins."""
+
+    total = sum(int(row.get("count", 0) or 0) for row in bins)
+    if total <= 0:
+        return float("nan")
+    ece = 0.0
+    for row in bins:
+        count = int(row.get("count", 0) or 0)
+        if count <= 0:
+            continue
+        avg_pred = row.get("avg_pred")
+        avg_actual = row.get("avg_actual")
+        if avg_pred is None or avg_actual is None:
+            continue
+        ece += (count / total) * abs(float(avg_pred) - float(avg_actual))
+    return float(ece)
 
 
 def main() -> int:
@@ -185,7 +206,9 @@ def main() -> int:
     }
 
     matrix = [
+        ("none_base", "none", 0.0, 0.0),
         ("platt_base", "platt", 0.0, 0.0),
+        ("auto_base", "auto", 0.0, 0.0),
         ("isotonic_base", "isotonic", 0.0, 0.0),
         ("elo_base", "elo", 0.0, 0.0),
         ("isotonic_clamp0.10", "isotonic", 0.0, 0.10),
@@ -239,6 +262,7 @@ def main() -> int:
         "label",
         "brier",
         "log_loss",
+        "reliability_ece",
         "pick_accuracy",
         "actual_points_avg",
         "expected_points_avg",

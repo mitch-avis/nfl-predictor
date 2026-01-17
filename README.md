@@ -249,6 +249,8 @@ time-aware calibration split (seasons and/or weeks immediately preceding the hol
 - `elo`: deterministic Elo-style logistic mapping (no fitting).
 - `platt`: Platt scaling via logistic regression fit on the calibration split.
 - `isotonic`: isotonic regression fit on the calibration split.
+- `auto`: use isotonic when calibration data is large enough; otherwise fall back to Platt.
+- `logistic`: alias for `platt`.
 
 Calibration is time-aware: it fits only on historical data relative to the evaluation window.
 

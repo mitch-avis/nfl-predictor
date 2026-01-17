@@ -164,6 +164,8 @@ class MarketProbConfig:
 
     blend_weight: float
     clamp_delta: float
+    prob_source: str = "raw"
+    blend_method: str = "prob"
 
 
 @dataclass(frozen=True)
@@ -1018,15 +1020,23 @@ def _adjust_home_win_prob(
     home_win_prob: np.ndarray,
     market_prob_config: Optional[MarketProbConfig],
 ) -> np.ndarray:
+    """Blend/clamp win probabilities toward market implied probabilities."""
+
     if market_prob_config is None:
         return home_win_prob
 
     blend_weight = market_prob_config.blend_weight
     clamp_delta = market_prob_config.clamp_delta
+    prob_source = market_prob_config.prob_source.lower()
+    blend_method = market_prob_config.blend_method.lower()
     if blend_weight < 0 or blend_weight > 1:
         raise ValueError("Market blend weight must be between 0 and 1.")
     if clamp_delta < 0 or clamp_delta > 0.5:
         raise ValueError("Market clamp delta must be between 0 and 0.5.")
+    if prob_source not in {"raw", "novig"}:
+        raise ValueError("Market probability source must be 'raw' or 'novig'.")
+    if blend_method not in {"prob", "logit"}:
+        raise ValueError("Market blend method must be 'prob' or 'logit'.")
     if blend_weight == 0 and clamp_delta == 0:
         return home_win_prob
 
@@ -1034,17 +1044,31 @@ def _adjust_home_win_prob(
     if "home_market_prob" not in df.columns:
         log.debug("Market probabilities missing; skipping win-prob adjustments.")
         return home_win_prob
+    if prob_source == "novig" and "away_market_prob" not in df.columns:
+        log.debug("Away market probabilities missing; skipping no-vig adjustments.")
+        return home_win_prob
 
-    market_prob = pd.to_numeric(df["home_market_prob"], errors="coerce").to_numpy(dtype=float)
+    if prob_source == "raw":
+        market_prob = pd.to_numeric(df["home_market_prob"], errors="coerce").to_numpy(dtype=float)
+    else:
+        home_raw = pd.to_numeric(df["home_market_prob"], errors="coerce").to_numpy(dtype=float)
+        away_raw = pd.to_numeric(df["away_market_prob"], errors="coerce").to_numpy(dtype=float)
+        market_prob = _normalize_no_vig(home_raw, away_raw)
     adjusted = home_win_prob.astype(float, copy=True)
     valid_mask = ~np.isnan(market_prob)
     if not valid_mask.any():
         return adjusted
 
     if blend_weight:
-        adjusted[valid_mask] = (
-            blend_weight * market_prob[valid_mask] + (1 - blend_weight) * adjusted[valid_mask]
-        )
+        if blend_method == "prob":
+            adjusted[valid_mask] = (
+                blend_weight * market_prob[valid_mask] + (1 - blend_weight) * adjusted[valid_mask]
+            )
+        else:
+            market_logit = _logit(market_prob[valid_mask])
+            model_logit = _logit(adjusted[valid_mask])
+            blended = (blend_weight * market_logit) + ((1 - blend_weight) * model_logit)
+            adjusted[valid_mask] = _sigmoid(blended)
 
     if clamp_delta:
         lower = market_prob[valid_mask] - clamp_delta
@@ -1052,6 +1076,28 @@ def _adjust_home_win_prob(
         adjusted[valid_mask] = np.clip(adjusted[valid_mask], lower, upper)
 
     return np.clip(adjusted, 0.0, 1.0)
+
+
+def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarray:
+    """Normalize raw implied probs so home+away sums to 1 (no-vig)."""
+
+    total = home_prob + away_prob
+    with np.errstate(invalid="ignore", divide="ignore"):
+        normalized = np.where(total > 0, home_prob / total, np.nan)
+    return np.clip(normalized, 0.0, 1.0)
+
+
+def _logit(prob: np.ndarray) -> np.ndarray:
+    """Compute logit with clipping for stability."""
+
+    clipped = np.clip(prob, 1e-6, 1 - 1e-6)
+    return np.log(clipped / (1 - clipped))
+
+
+def _sigmoid(values: np.ndarray) -> np.ndarray:
+    """Compute logistic sigmoid."""
+
+    return 1.0 / (1.0 + np.exp(-values))
 
 
 def _predict_margin_total_from_model(

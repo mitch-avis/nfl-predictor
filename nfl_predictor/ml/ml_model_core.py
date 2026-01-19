@@ -45,6 +45,8 @@ from nfl_predictor.ml.ml_model_xgb_utils import (
 )
 from nfl_predictor.utils.logger import log
 
+xgb.set_config(verbosity=0)
+
 DEFAULT_XGB_PARAMS = {
     "objective": "reg:squarederror",
     "n_estimators": 598,

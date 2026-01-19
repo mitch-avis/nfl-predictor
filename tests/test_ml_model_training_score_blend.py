@@ -22,6 +22,8 @@ from nfl_predictor.ml.ml_model_core import (
     ScoreModel,
 )
 
+xgb.set_config(verbosity=0)
+
 
 class _DummyPreprocessor:
     def fit_transform(self, df: pd.DataFrame) -> np.ndarray:

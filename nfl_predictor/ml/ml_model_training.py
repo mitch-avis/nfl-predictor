@@ -64,6 +64,8 @@ from nfl_predictor.ml.ml_model_core import (
 )
 from nfl_predictor.utils.logger import log
 
+xgb.set_config(verbosity=0)
+
 
 def _compute_postseason_sample_weight(
     df: pd.DataFrame,

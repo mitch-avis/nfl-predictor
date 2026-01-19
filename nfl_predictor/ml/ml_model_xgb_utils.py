@@ -18,6 +18,8 @@ from scipy.sparse import spmatrix
 
 from nfl_predictor.utils.logger import log
 
+xgb.set_config(verbosity=0)
+
 
 @dataclass
 class _RuntimeState:

@@ -13,6 +13,8 @@ from sklearn.compose import ColumnTransformer
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import FeatureSpec, MarginTotalModel, OptunaConfig
 
+xgb.set_config(verbosity=0)
+
 
 class _DummyPreprocessor:
     def transform(self, df: pd.DataFrame) -> np.ndarray:

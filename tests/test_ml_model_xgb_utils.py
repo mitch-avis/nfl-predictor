@@ -9,6 +9,8 @@ import xgboost as xgb
 
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
 
+xgb.set_config(verbosity=0)
+
 
 def _reset_runtime_state() -> None:
     xgb_utils._RUNTIME_STATE.early_stopping_fallback_logged = False

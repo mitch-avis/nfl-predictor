@@ -802,6 +802,13 @@ def _write_training_artifacts(
         optuna_summary=getattr(result.model, "optuna_summary", None),
     )
     artifacts.write_json(paths.metadata_path, metadata)
+    if result.feature_importance:
+        importance_payload = {
+            "run_id": run_id,
+            "created_at": created_at,
+            **result.feature_importance,
+        }
+        artifacts.write_json(paths.feature_importance_path, importance_payload)
     return paths
 
 

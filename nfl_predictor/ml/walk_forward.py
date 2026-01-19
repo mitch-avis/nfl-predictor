@@ -77,6 +77,7 @@ class WalkForwardConfig:
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
     feature_end: str = ml_model.DEFAULT_FEATURE_END_COLUMN
     early_stopping_rounds: int = ml_model.DEFAULT_EARLY_STOPPING_ROUNDS
+    disable_pruning: bool = False
     xgb_params_overrides: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -103,6 +104,7 @@ class WalkForwardConfig:
             "feature_start": self.feature_start,
             "feature_end": self.feature_end,
             "early_stopping_rounds": self.early_stopping_rounds,
+            "disable_pruning": self.disable_pruning,
             "xgb_params_overrides": self.xgb_params_overrides,
         }
 
@@ -340,6 +342,7 @@ def run_walk_forward_backtest(
         "market_prob_blend_method": config.market_prob_blend_method,
         "win_prob_use_uncertainty": config.win_prob_use_uncertainty,
         "include_quantiles": config.include_quantiles,
+        "disable_pruning": config.disable_pruning,
     }
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
@@ -370,6 +373,7 @@ def run_walk_forward_backtest(
             feature_start=config.feature_start,
             feature_end=config.feature_end,
             market_transform=market_transform,
+            disable_pruning=config.disable_pruning,
         )
         if feature_list is None:
             feature_list = list(feature_spec.feature_columns)

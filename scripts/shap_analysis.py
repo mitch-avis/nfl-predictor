@@ -135,7 +135,13 @@ def main() -> int:
         x_matrix = x_matrix[indices]
 
     if isinstance(x_matrix, spmatrix):
-        x_matrix = x_matrix.toarray()
+        to_dense = getattr(x_matrix, "toarray", None)
+        if to_dense is None:
+            to_dense = getattr(x_matrix, "todense", None)
+        if callable(to_dense):
+            x_matrix = np.asarray(to_dense())
+        else:
+            raise TypeError("Unsupported sparse matrix type for SHAP conversion.")
 
     feature_names = feature_importance.resolve_feature_names(
         base_model.preprocessor,

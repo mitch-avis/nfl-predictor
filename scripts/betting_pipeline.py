@@ -596,12 +596,23 @@ def _write_training_artifacts(
     )
     artifacts.write_json(metadata_path, metadata)
 
+    if result.feature_importance:
+        importance_payload = {
+            "run_id": run_id,
+            "created_at": created_at,
+            **result.feature_importance,
+        }
+        importance_path = run_dir / f"{prefix}_feature_importance.json"
+        artifacts.write_json(importance_path, importance_payload)
+
     # Keep the standard filenames pointing at the *final* run.
     # (We still write prefixed files so earlier stages don't clobber the final ones.)
     if prefix == "final":
         artifacts.save_model(paths.model_path, result.model)
         artifacts.write_json(paths.metrics_path, metrics_report)
         artifacts.write_json(paths.metadata_path, metadata)
+        if result.feature_importance:
+            artifacts.write_json(paths.feature_importance_path, importance_payload)
 
     return model_path
 

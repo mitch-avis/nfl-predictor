@@ -292,16 +292,16 @@ Acceptance:
 
 ## Milestone 30 - Feature importance + regularization
 
-- [ ] Add a feature-importance report (XGBoost gain/weight) for each trained run.
-- [ ] Add an optional SHAP analysis script for deeper inspection (keep it optional; do not require
+- [x] Add a feature-importance report (XGBoost gain/weight) for each trained run.
+- [x] Add an optional SHAP analysis script for deeper inspection (keep it optional; do not require
   it for CI).
-- [ ] Use importance results to:
+- [x] Use importance results to:
   - prune noisy/redundant features
   - tune regularization (L1/L2, depth, min_child_weight, etc.)
 
 Acceptance:
 
-- [ ] Feature pruning decisions are validated via walk-forward (no “it looked right” commits).
+- [x] Feature pruning decisions are validated via walk-forward (no “it looked right” commits).
 
 ---
 

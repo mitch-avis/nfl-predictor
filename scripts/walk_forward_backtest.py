@@ -12,6 +12,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 try:
     from nfl_predictor import constants
@@ -130,6 +131,24 @@ def _parse_args() -> argparse.Namespace:
         help="Use margin quantiles to derive uncertainty-aware win probabilities.",
     )
     parser.add_argument(
+        "--xgb-tree-method",
+        type=str,
+        default=None,
+        help="XGBoost tree_method override (e.g., hist).",
+    )
+    parser.add_argument(
+        "--xgb-device",
+        type=str,
+        default=None,
+        help="XGBoost device override (e.g., cuda, cpu).",
+    )
+    parser.add_argument(
+        "--xgb-n-jobs",
+        type=int,
+        default=None,
+        help="XGBoost n_jobs override.",
+    )
+    parser.add_argument(
         "--out-json",
         type=Path,
         default=None,
@@ -149,6 +168,14 @@ def main() -> None:
     if market_prob_weight is None:
         market_prob_weight = args.market_prob_blend
 
+    xgb_overrides: dict[str, Any] = {}
+    if args.xgb_tree_method is not None:
+        xgb_overrides["tree_method"] = str(args.xgb_tree_method)
+    if args.xgb_device is not None:
+        xgb_overrides["device"] = str(args.xgb_device)
+    if args.xgb_n_jobs is not None:
+        xgb_overrides["n_jobs"] = int(args.xgb_n_jobs)
+
     config = walk_forward.WalkForwardConfig(
         eval_seasons=args.eval_seasons,
         eval_last_n_seasons=args.eval_last_n_seasons,
@@ -164,6 +191,7 @@ def main() -> None:
         market_prob_source=args.market_prob_source,
         market_prob_blend_method=args.market_prob_blend_method,
         win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
+        xgb_params_overrides=xgb_overrides or None,
     )
 
     dataset_hash = walk_forward.dataset_fingerprint(args.data_path)

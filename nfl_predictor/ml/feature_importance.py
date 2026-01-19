@@ -8,7 +8,11 @@ import numpy as np
 import xgboost as xgb
 from sklearn.compose import ColumnTransformer
 
-from nfl_predictor.ml.ml_model_core import BlendedMarginTotalModel, MarginTotalModel, ScoreModel
+from nfl_predictor.ml.ml_model_core import (
+    BlendedMarginTotalModel,
+    MarginTotalModel,
+    ScoreModel,
+)
 from nfl_predictor.utils.logger import log
 
 xgb.set_config(verbosity=0)

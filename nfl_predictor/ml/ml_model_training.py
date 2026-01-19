@@ -16,6 +16,7 @@ from scipy.sparse import spmatrix
 from sklearn.compose import ColumnTransformer
 
 from nfl_predictor import constants
+from nfl_predictor.ml import feature_importance
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_END_COLUMN,
     DEFAULT_FEATURE_START_COLUMN,
@@ -258,6 +259,7 @@ def train_score_model_with_report(
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
     feature_list = list(model.feature_spec.feature_columns)
+    feature_importance_report = feature_importance.build_feature_importance_report(model)
     return TrainingResult(
         model=model,
         metrics_report=report,
@@ -266,6 +268,7 @@ def train_score_model_with_report(
         tuned_params=None,
         feature_list=feature_list,
         early_stopping=_early_stopping_info(model),
+        feature_importance=feature_importance_report,
     )
 
 
@@ -699,6 +702,7 @@ def train_margin_total_model_with_report(
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
     feature_list = list(model.feature_spec.feature_columns)
+    feature_importance_report = feature_importance.build_feature_importance_report(model)
     return TrainingResult(
         model=model,
         metrics_report=report,
@@ -707,6 +711,7 @@ def train_margin_total_model_with_report(
         tuned_params=model.tuned_params,
         feature_list=feature_list,
         early_stopping=_early_stopping_info(model),
+        feature_importance=feature_importance_report,
     )
 
 
@@ -1081,6 +1086,7 @@ def train_blended_margin_total_model_with_report(
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
     feature_list = list(model.team_model.feature_spec.feature_columns)
+    feature_importance_report = feature_importance.build_feature_importance_report(model)
     return TrainingResult(
         model=model,
         metrics_report=report,
@@ -1089,4 +1095,5 @@ def train_blended_margin_total_model_with_report(
         tuned_params=model.tuned_params,
         feature_list=feature_list,
         early_stopping=_early_stopping_info(model),
+        feature_importance=feature_importance_report,
     )

@@ -34,6 +34,7 @@ class RunPaths:
     model_path: Path
     metadata_path: Path
     metrics_path: Path
+    feature_importance_path: Path
 
 
 def now_utc_iso() -> str:
@@ -124,6 +125,7 @@ def resolve_run_paths(
     model_filename: str = "model.joblib",
     metadata_filename: str = "metadata.json",
     metrics_filename: str = "metrics_report.json",
+    feature_importance_filename: str = "feature_importance.json",
 ) -> RunPaths:
     """Resolve default artifact paths for a given run id."""
 
@@ -134,6 +136,7 @@ def resolve_run_paths(
         model_path=base / model_filename,
         metadata_path=base / metadata_filename,
         metrics_path=base / metrics_filename,
+        feature_importance_path=base / feature_importance_filename,
     )
 
 

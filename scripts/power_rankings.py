@@ -242,7 +242,7 @@ def _predict_future_games(
     if missing_required:
         missing_text = _format_missing_columns(sorted(missing_required))
         raise ValueError(
-            "Missing required feature columns " f"({len(missing_required)}): {missing_text}"
+            f"Missing required feature columns ({len(missing_required)}): {missing_text}"
         )
     base_cols = ["season", "week", "game_type", "away_abbr", "home_abbr"]
     market_raw_cols = [

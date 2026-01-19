@@ -80,7 +80,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -596,6 +596,7 @@ def _write_training_artifacts(
     )
     artifacts.write_json(metadata_path, metadata)
 
+    importance_payload: Optional[dict[str, Any]] = None
     if result.feature_importance:
         importance_payload = {
             "run_id": run_id,
@@ -611,7 +612,7 @@ def _write_training_artifacts(
         artifacts.save_model(paths.model_path, result.model)
         artifacts.write_json(paths.metrics_path, metrics_report)
         artifacts.write_json(paths.metadata_path, metadata)
-        if result.feature_importance:
+        if importance_payload:
             artifacts.write_json(paths.feature_importance_path, importance_payload)
 
     return model_path

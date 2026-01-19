@@ -131,6 +131,11 @@ def _parse_args() -> argparse.Namespace:
         help="Use margin quantiles to derive uncertainty-aware win probabilities.",
     )
     parser.add_argument(
+        "--disable-pruning",
+        action="store_true",
+        help="Disable the feature pruning list.",
+    )
+    parser.add_argument(
         "--xgb-tree-method",
         type=str,
         default=None,
@@ -191,6 +196,7 @@ def main() -> None:
         market_prob_source=args.market_prob_source,
         market_prob_blend_method=args.market_prob_blend_method,
         win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
+        disable_pruning=bool(args.disable_pruning),
         xgb_params_overrides=xgb_overrides or None,
     )
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import heapq
 import json
+import logging
 import os
 import time
 import warnings
@@ -32,6 +33,7 @@ from sklearn.metrics import (
     mean_squared_error,
     root_mean_squared_error,
 )
+from xgboost.callback import TrainingCallback
 
 import __main__
 from nfl_predictor import constants
@@ -77,6 +79,7 @@ DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
+DEFAULT_LOG_EVAL_EVERY_N = 10
 AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES = 200
 NORMAL_Z_P90 = 1.281551565545
 P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
@@ -191,6 +194,30 @@ class OptunaConfig:
     study_name: Optional[str]
     best_params_out: Optional[Path]
     xgb_n_jobs: Optional[int] = None
+
+
+class LogEvalCallback(TrainingCallback):
+    """Log evaluation metrics during XGBoost training."""
+
+    def __init__(self, logger: logging.Logger, every_n: int = 1, level: int = logging.INFO):
+        """Initialize the callback with logging cadence and level."""
+        self.logger = logger
+        self.every_n = every_n
+        self.level = level
+
+    def after_iteration(self, model, epoch: int, evals_log) -> bool:
+        """Log evaluation metrics after each iteration when due."""
+        if epoch % self.every_n != 0:
+            return False
+
+        # evals_log is like: {"train": {"rmse": [..]}, "valid": {"rmse": [..]}}
+        parts = [f"iter={epoch}"]
+        for data_name, metrics in evals_log.items():
+            for metric_name, values in metrics.items():
+                parts.append(f"{data_name}-{metric_name}={values[-1]:.6g}")
+
+        self.logger.log(self.level, " | ".join(parts))
+        return False
 
 
 def _available_columns(df: pd.DataFrame, candidates: Iterable[str]) -> list[str]:
@@ -591,10 +618,20 @@ def _fit_margin_total_models(
         margin_model = xgb.XGBRegressor(**active_params)
         total_model = xgb.XGBRegressor(**active_params)
 
-        fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_margin_eval, resolved_early_stopping)
+        fit_kwargs = _build_xgb_fit_kwargs(
+            x_eval,
+            y_margin_eval,
+            resolved_early_stopping,
+            callbacks=[LogEvalCallback(log, every_n=DEFAULT_LOG_EVAL_EVERY_N)],
+        )
         margin_model.fit(x_train, y_margin, sample_weight=sample_weight, **fit_kwargs)
 
-        fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_total_eval, resolved_early_stopping)
+        fit_kwargs = _build_xgb_fit_kwargs(
+            x_eval,
+            y_total_eval,
+            resolved_early_stopping,
+            callbacks=[LogEvalCallback(log, every_n=DEFAULT_LOG_EVAL_EVERY_N)],
+        )
         total_model.fit(x_train, y_total, sample_weight=sample_weight, **fit_kwargs)
 
         return margin_model, total_model
@@ -650,7 +687,12 @@ def _fit_quantile_models(
             q_params["quantile_alpha"] = quantile
             q_params = _with_xgb_early_stopping_params(q_params, resolved_early_stopping)
             model = xgb.XGBRegressor(**q_params)
-            fit_kwargs = _build_xgb_fit_kwargs(x_eval, y_eval, resolved_early_stopping)
+            fit_kwargs = _build_xgb_fit_kwargs(
+                x_eval,
+                y_eval,
+                resolved_early_stopping,
+                callbacks=[LogEvalCallback(log, every_n=DEFAULT_LOG_EVAL_EVERY_N)],
+            )
             model.fit(x_train, y_train, sample_weight=sample_weight, **fit_kwargs)
             fitted[quantile] = model
         return fitted

@@ -288,6 +288,7 @@ python scripts/walk_forward_backtest.py --help
 This is the **canonical evaluation protocol** for model selection. By default it evaluates the
 last N seasons (regular season only) with time-aware calibration from the last K weeks of each
 eval season. Use `--include-postseason` if you want postseason folds included.
+GPU acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`.
 
 Evaluation rule:
 “Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative.”

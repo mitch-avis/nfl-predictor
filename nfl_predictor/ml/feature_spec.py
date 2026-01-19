@@ -149,6 +149,7 @@ def _build_feature_spec(
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
     market_only: bool = False,
     market_transform: bool = False,
+    disable_pruning: bool = False,
 ) -> FeatureSpec:
     """Build a FeatureSpec describing selected and dropped columns."""
     if market_transform:
@@ -182,10 +183,14 @@ def _build_feature_spec(
             drop_columns.update(excluded_market_columns)
         selected_columns = [col for col in feature_range if col not in drop_columns]
 
-    pruned_columns = [col for col in constants.PRUNED_FEATURE_COLUMNS if col in selected_columns]
-    if pruned_columns:
-        drop_columns.update(pruned_columns)
-        selected_columns = [col for col in selected_columns if col not in pruned_columns]
+    pruned_columns: list[str] = []
+    if not disable_pruning:
+        pruned_columns = [
+            col for col in constants.PRUNED_FEATURE_COLUMNS if col in selected_columns
+        ]
+        if pruned_columns:
+            drop_columns.update(pruned_columns)
+            selected_columns = [col for col in selected_columns if col not in pruned_columns]
 
     if market_only and not selected_columns:
         raise ValueError("Market-only model requested but no market columns were found.")
@@ -223,7 +228,9 @@ def _build_feature_spec(
             len(dropped_market_columns),
             dropped_market_columns,
         )
-    if pruned_columns:
+    if disable_pruning:
+        log.debug("Feature pruning disabled.")
+    elif pruned_columns:
         log.debug("Dropped pruned columns (%d): %s", len(pruned_columns), pruned_columns)
     if id_columns:
         log.debug("Dropped identifier columns (%d): %s", len(id_columns), id_columns)

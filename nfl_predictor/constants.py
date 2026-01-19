@@ -526,6 +526,26 @@ MOTIVATION_FEATURE_COLUMNS = [
     "home_conference_eliminated_proxy",
 ]
 
+PRUNED_FEATURE_COLUMNS = [
+    "neutral",
+    "home_ties",
+    "home_games_played",
+    "away_division_ties",
+    "home_division_ties",
+    "away_conference_ties",
+    "home_conference_ties",
+    "away_next_location_change",
+    "home_next_location_change",
+    "home_division_rank",
+    "away_division_clinched_proxy",
+    "home_division_clinched_proxy",
+    "away_division_eliminated_proxy",
+    "away_conference_clinched_proxy",
+    "home_conference_clinched_proxy",
+    "away_conference_eliminated_proxy",
+    "home_conference_eliminated_proxy",
+]
+
 # Metadata columns - includes game info, teams, venue, and conditions
 METADATA_COLUMNS = [
     "game_id",

@@ -10,7 +10,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import numpy as np
 import xgboost as xgb
@@ -134,6 +134,7 @@ def _build_xgb_fit_kwargs(
     x_eval: Optional[np.ndarray | spmatrix],
     y_eval: Optional[np.ndarray],
     early_stopping_rounds: Optional[int],
+    callbacks: Optional[Sequence[Any]] = None,
 ) -> dict[str, Any]:
     """Build kwargs for `XGBRegressor.fit` across XGBoost versions."""
 
@@ -145,6 +146,8 @@ def _build_xgb_fit_kwargs(
         fit_kwargs["eval_set"] = [(x_eval, y_eval)]
     if _xgb_fit_supports("verbose"):
         fit_kwargs["verbose"] = False
+    if callbacks and _xgb_fit_supports("callbacks"):
+        fit_kwargs["callbacks"] = list(callbacks)
 
     if not early_stopping_rounds:
         return fit_kwargs

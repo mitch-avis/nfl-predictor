@@ -328,7 +328,7 @@ One-command weekly orchestration (refresh + selection + train + reports):
 
 Outputs and conventions:
 
-- Run artifacts (models/metrics/metadata) land under `models/<run_id>/` by default.
+- Run artifacts (model/metrics/metadata/feature importance) land under `models/<run_id>/` by default.
 - Weekly prediction outputs live next to the input prediction file (e.g., `data/predict/`).
 - `metadata.json` includes dataset fingerprint, tuned params, and Optuna summary when tuning runs.
 - Power rankings outputs:
@@ -356,6 +356,7 @@ Repo utilities under `scripts/`:
 - `scripts/betting_report_excel.py`: generate an Excel betting template/report.
 - `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
   and artifact stamping.
+- `scripts/shap_analysis.py`: optional SHAP feature attribution for a saved model (requires `shap`).
 - `scripts/wf_compare.py`: sweep calibration + market-prob post-processing variants and summarize
   walk-forward metrics.
 - `scripts/weekly_run.py`: weekly orchestration (refresh -> wf compare -> train -> predictions +
@@ -439,6 +440,7 @@ Training/backtests can write a run directory containing reproducible artifacts.
 
 - Use `--run-dir` to write `model.joblib`, `metadata.json`, and (when evaluated)
   `metrics_report.json`.
+- `feature_importance.json` includes XGBoost gain/weight importance per model head.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
   args, feature list, and tuning/early-stopping info (when used).
   `models/` and `optuna.db` are gitignored by default, so keep run artifacts local unless you copy

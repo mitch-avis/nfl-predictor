@@ -50,13 +50,15 @@ from nfl_predictor.utils.logger import log
 
 DEFAULT_XGB_PARAMS = {
     "objective": "reg:squarederror",
-    "n_estimators": 500,
-    "learning_rate": 0.05,
-    "max_depth": 6,
-    "min_child_weight": 1,
-    "subsample": 0.9,
-    "colsample_bytree": 0.9,
-    "reg_lambda": 1.0,
+    "n_estimators": 598,
+    "learning_rate": 0.0165,
+    "max_depth": 5,
+    "min_child_weight": 2.1878,
+    "subsample": 0.6354,
+    "colsample_bytree": 0.6098,
+    "gamma": 2.3651,
+    "reg_alpha": 1.9871,
+    "reg_lambda": 1.6467,
     "random_state": 42,
     "n_jobs": os.cpu_count() or 1,
     "verbosity": 2,
@@ -186,6 +188,7 @@ class TrainingResult:
     tuned_params: Optional[dict[str, Any]]
     feature_list: list[str]
     early_stopping: dict[str, Any]
+    feature_importance: Optional[dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -351,6 +354,11 @@ def _build_feature_spec(
             drop_columns.update(excluded_market_columns)
         selected_columns = [col for col in feature_range if col not in drop_columns]
 
+    pruned_columns = [col for col in constants.PRUNED_FEATURE_COLUMNS if col in selected_columns]
+    if pruned_columns:
+        drop_columns.update(pruned_columns)
+        selected_columns = [col for col in selected_columns if col not in pruned_columns]
+
     if market_only and not selected_columns:
         raise ValueError("Market-only model requested but no market columns were found.")
     feature_df = df[selected_columns].copy()
@@ -387,6 +395,8 @@ def _build_feature_spec(
             len(dropped_market_columns),
             dropped_market_columns,
         )
+    if pruned_columns:
+        log.debug("Dropped pruned columns (%d): %s", len(pruned_columns), pruned_columns)
     if id_columns:
         log.debug("Dropped identifier columns (%d): %s", len(id_columns), id_columns)
     if constant_columns:

@@ -22,7 +22,7 @@ from logging.config import dictConfig
 # Configure the logging format and handler
 LOGGING_CONFIG = {
     "version": 1,
-    "disable_existing_loggers": True,
+    "disable_existing_loggers": False,
     "formatters": {
         "default": {
             "format": (
@@ -58,6 +58,11 @@ LOGGING_CONFIG = {
             "propagate": False,
         },
         "urllib3.connectionpool": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "xgboost": {
             "handlers": ["default"],
             "level": "INFO",
             "propagate": False,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence
 
 import numpy as np
 import xgboost as xgb
@@ -45,30 +45,40 @@ def resolve_feature_names(
 def build_feature_importance_report(model: Any) -> Optional[dict[str, Any]]:
     """Build a feature-importance report for supported model types."""
 
-    if isinstance(model, BlendedMarginTotalModel):
-        return {
-            "model_kind": "blend",
-            "components": {
-                "team": _build_margin_total_report(model.team_model),
-                "market": (
-                    _build_margin_total_report(model.market_model)
-                    if model.market_model is not None
-                    else None
-                ),
-            },
-        }
-    if isinstance(model, MarginTotalModel):
-        report = _build_margin_total_report(model)
-        report["model_kind"] = "margin_total"
-        return report
-    if isinstance(model, ScoreModel):
-        report = _build_score_report(model)
-        report["model_kind"] = "score"
-        return report
+    try:
+        if isinstance(model, BlendedMarginTotalModel):
+            team_report = _build_margin_total_report(model.team_model)
+            if team_report is None:
+                return None
+            market_report = None
+            if model.market_model is not None:
+                market_report = _build_margin_total_report(model.market_model)
+            return {
+                "model_kind": "blend",
+                "components": {
+                    "team": team_report,
+                    "market": market_report,
+                },
+            }
+        if isinstance(model, MarginTotalModel):
+            report = _build_margin_total_report(model)
+            if report is None:
+                return None
+            report["model_kind"] = "margin_total"
+            return report
+        if isinstance(model, ScoreModel):
+            report = _build_score_report(model)
+            if report is None:
+                return None
+            report["model_kind"] = "score"
+            return report
+    except AttributeError as exc:
+        log.debug("Skipping feature importance: %s", exc)
+        return None
     return None
 
 
-def _build_margin_total_report(model: MarginTotalModel) -> dict[str, Any]:
+def _build_margin_total_report(model: MarginTotalModel) -> Optional[dict[str, Any]]:
     """Build a feature-importance report for margin/total models."""
     return _build_report_from_models(
         model.preprocessor,
@@ -79,7 +89,7 @@ def _build_margin_total_report(model: MarginTotalModel) -> dict[str, Any]:
     )
 
 
-def _build_score_report(model: ScoreModel) -> dict[str, Any]:
+def _build_score_report(model: ScoreModel) -> Optional[dict[str, Any]]:
     """Build a feature-importance report for score models."""
     return _build_report_from_models(
         model.preprocessor,
@@ -93,10 +103,14 @@ def _build_score_report(model: ScoreModel) -> dict[str, Any]:
 def _build_report_from_models(
     preprocessor: ColumnTransformer,
     models: dict[str, xgb.XGBRegressor],
-) -> dict[str, Any]:
+) -> Optional[dict[str, Any]]:
     """Build a feature-importance report for labeled XGBoost models."""
     if not models:
-        return {"feature_names": [], "models": {}}
+        return None
+
+    if not _models_support_importance(models.values()):
+        log.debug("Skipping feature importance; model lacks XGBoost boosters.")
+        return None
 
     first_model = next(iter(models.values()))
     feature_names = resolve_feature_names(preprocessor, first_model)
@@ -129,7 +143,7 @@ def _build_model_importance(
 
 
 def _score_dict_to_list(
-    scores: dict[str, float],
+    scores: Mapping[str, float | Sequence[float]],
     feature_names: Sequence[str],
 ) -> list[float]:
     """Map an XGBoost importance dict into a list aligned to feature names."""
@@ -141,8 +155,20 @@ def _score_dict_to_list(
             idx = int(key[1:])
         if idx is None or idx >= len(values):
             continue
-        values[idx] = float(value)
+        values[idx] = _coerce_score_value(value)
     return values
+
+
+def _coerce_score_value(value: float | Sequence[float]) -> float:
+    """Convert score values to a float, summing sequences when needed."""
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return float(sum(float(item) for item in value))
+    return float(value)
+
+
+def _models_support_importance(models: Iterable[object]) -> bool:
+    """Return True when all models provide XGBoost booster access."""
+    return all(hasattr(model, "get_booster") for model in models)
 
 
 def _build_base_features(

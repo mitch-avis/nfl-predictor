@@ -560,6 +560,13 @@ def main() -> int:
         ),
     )
     artifacts.save_model(run_dir / "model.joblib", train_result.model)
+    if train_result.feature_importance:
+        importance_payload = {
+            "run_id": run_id,
+            "created_at": created_at,
+            **train_result.feature_importance,
+        }
+        artifacts.write_json(run_dir / "feature_importance.json", importance_payload)
 
     # 3) Predict upcoming games (optional)
     if args.predict_path is not None:

@@ -55,6 +55,22 @@ def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch) -> None:
     assert kwargs["early_stopping_rounds"] == 5
 
 
+def test_build_xgb_fit_kwargs_with_callbacks(monkeypatch) -> None:
+    """XGB fit kwargs include callbacks when supported."""
+
+    monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: True)
+
+    sentinel = object()
+    kwargs = xgb_utils._build_xgb_fit_kwargs(
+        np.zeros((2, 1)),
+        np.array([1.0, 2.0]),
+        early_stopping_rounds=None,
+        callbacks=[sentinel],
+    )
+
+    assert kwargs["callbacks"] == [sentinel]
+
+
 def test_with_xgb_early_stopping_params_with_callbacks(monkeypatch) -> None:
     """XGB params are updated with early stopping using callbacks when needed."""
 

@@ -250,3 +250,44 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
     week3_path = season_dir / f"{season}_week_03_team_rankings.csv"
     reloaded_week3 = pl.read_csv(week3_path).sort("team_abbr")
     assert reloaded_week3["predictive_rating"].to_list() == [1.1, 2.2]
+
+
+def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> None:
+    """Min week setting skips known-missing early weeks."""
+
+    season = 2023
+    season_dir = tmp_path / str(season)
+    season_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 3)
+    monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
+    monkeypatch.setattr(teamrankings, "update_season_team_rankings", lambda _season: None)
+
+    scraped_weeks: list[int] = []
+
+    def fake_scrape(week, _week_date, **_kwargs):
+        """Fake scrape function returning dummy data."""
+
+        scraped_weeks.append(int(week))
+        return pl.DataFrame(
+            {
+                "team_abbr": ["AAA", "BBB"],
+                "week": [week, week],
+                "predictive_rating": [1.1, 2.2],
+            }
+        )
+
+    monkeypatch.setattr(teamrankings, "scrape_team_rankings_for_week", fake_scrape)
+
+    combined = teamrankings.load_team_rankings(
+        season,
+        current_season=season,
+        current_week=2,
+        min_week=2,
+    )
+
+    weeks = sorted(combined["week"].unique().to_list())
+    assert 1 not in weeks
+    assert 2 in weeks
+    assert all(week >= 2 for week in scraped_weeks)

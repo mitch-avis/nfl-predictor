@@ -301,6 +301,17 @@ Optional recency weighting is available via `--recency-half-life-weeks` or
 `--recency-half-life-seasons` (use only one).
 GPU acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`.
 
+Trend/season-phase ablation (drop trend + season-phase features while keeping everything else
+identical) is available via `--disable-trend-features`. Example 2x2 comparison matrix:
+
+```bash
+.venv/bin/python scripts/walk_forward_backtest.py --calibration platt
+.venv/bin/python scripts/walk_forward_backtest.py --calibration platt --recency-half-life-seasons 2
+.venv/bin/python scripts/walk_forward_backtest.py --calibration platt --disable-trend-features
+.venv/bin/python scripts/walk_forward_backtest.py --calibration platt --disable-trend-features \
+  --recency-half-life-seasons 2
+```
+
 Evaluation rule:
 “Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative.”
 

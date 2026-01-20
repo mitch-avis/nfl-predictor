@@ -5,6 +5,8 @@ Implementation was split out of `nfl_predictor.utils.polars_utils`.
 """
 
 import os
+from pathlib import Path
+from typing import Optional
 
 import nflreadpy as nfl
 import polars as pl
@@ -12,7 +14,7 @@ from polars.datatypes import DataType
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.scraping_utils import normalize_team_column
+from nfl_predictor.utils.scraping_utils import get_current_nfl_week, normalize_team_column
 
 NUMERIC_DTYPES = {
     pl.Int8,
@@ -34,19 +36,60 @@ def _is_numeric_dtype(dtype: DataType) -> bool:
     return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES
 
 
-def load_schedule(seasons: list[int]) -> pl.DataFrame:
-    """
-    Load NFL schedule data for specified seasons using nflreadpy.
+def _resolve_cache_dir(cache_dir: Optional[os.PathLike | str]) -> Path:
+    """Resolve the nflreadpy cache directory and ensure it exists."""
 
-    Args:
-        seasons: List of season years to load
+    resolved = Path(cache_dir) if cache_dir is not None else Path(constants.NFLREADPY_CACHE_DIR)
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
 
-    Returns:
-        Polars DataFrame with schedule data including lines/odds
-    """
 
-    log.info("Loading schedule for seasons: %s", seasons)
-    schedule_df = nfl.load_schedules(seasons=seasons)
+def _resolve_current_season(current_season: Optional[int]) -> int:
+    """Resolve the current NFL season for cache decisions."""
+
+    if current_season is not None:
+        return int(current_season)
+    season, _week = get_current_nfl_week()
+    return int(season)
+
+
+def _schedule_cache_path(cache_dir: Path, season: int) -> Path:
+    """Build the cache path for a season schedule."""
+
+    return cache_dir / f"schedule_{season}.parquet"
+
+
+def _team_stats_cache_path(cache_dir: Path, season: int, regular_season_only: bool) -> Path:
+    """Build the cache path for season team stats."""
+
+    suffix = "reg" if regular_season_only else "all"
+    return cache_dir / f"team_stats_{season}_{suffix}.parquet"
+
+
+def _read_cached_frame(path: Path) -> Optional[pl.DataFrame]:
+    """Read a cached parquet file if it exists."""
+
+    if not path.exists():
+        return None
+    try:
+        return pl.read_parquet(path)
+    except (OSError, pl.exceptions.ComputeError, pl.exceptions.NoDataError) as exc:
+        log.warning("Failed to read nflreadpy cache file %s: %s", path, exc)
+        return None
+
+
+def _write_cached_frame(df: pl.DataFrame, path: Path) -> None:
+    """Write a cached parquet file, logging any failures."""
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        df.write_parquet(path)
+    except (OSError, pl.exceptions.ComputeError) as exc:
+        log.warning("Failed to write nflreadpy cache file %s: %s", path, exc)
+
+
+def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
+    """Normalize raw nflreadpy schedule data to the project schema."""
 
     # Select only the columns we need (if they exist)
     available_cols = set(schedule_df.columns)
@@ -116,6 +159,94 @@ def load_schedule(seasons: list[int]) -> pl.DataFrame:
     return schedule_df
 
 
+def _prepare_team_stats(team_stats_df: pl.DataFrame, regular_season_only: bool) -> pl.DataFrame:
+    """Normalize raw nflreadpy team stats to the project schema."""
+
+    # Filter to regular season only (exclude preseason and postseason)
+    if regular_season_only and "season_type" in team_stats_df.columns:
+        team_stats_df = team_stats_df.filter(pl.col("season_type") == "REG")
+        log.debug("Filtered to regular season only: %d records", team_stats_df.height)
+
+    # Normalize team abbreviations
+    if "team" in team_stats_df.columns:
+        team_stats_df = normalize_team_column(team_stats_df, "team")
+        team_stats_df = team_stats_df.rename({"team": "team_abbr"})
+
+    if "opponent_team" in team_stats_df.columns:
+        team_stats_df = normalize_team_column(team_stats_df, "opponent_team")
+        team_stats_df = team_stats_df.rename({"opponent_team": "opponent_abbr"})
+
+    # Rename columns using our mapping
+    available_cols = set(team_stats_df.columns)
+    rename_mapping = {
+        k: v for k, v in constants.NFLREADPY_TEAM_STATS_MAPPING.items() if k in available_cols
+    }
+    team_stats_df = team_stats_df.rename(rename_mapping)
+
+    # Combine stats as specified
+    team_stats_df = combine_stats(team_stats_df)
+
+    return team_stats_df
+
+
+def load_schedule(
+    seasons: list[int],
+    *,
+    cache_dir: Optional[os.PathLike | str] = None,
+    force_refresh: bool = False,
+    current_season: Optional[int] = None,
+) -> pl.DataFrame:
+    """
+    Load NFL schedule data for specified seasons using nflreadpy.
+
+    Cached schedules are used for historical seasons when available. Current and future
+    seasons are always refreshed to keep upcoming games up to date.
+
+    Args:
+        seasons: List of season years to load
+        cache_dir: Optional cache directory override for nflreadpy outputs
+        force_refresh: If True, refresh schedules even when cache exists
+        current_season: Optional current season override for cache decisions
+
+    Returns:
+        Polars DataFrame with schedule data including lines/odds
+    """
+
+    if not seasons:
+        return pl.DataFrame()
+
+    resolved_cache_dir = _resolve_cache_dir(cache_dir)
+    resolved_current_season = _resolve_current_season(current_season)
+
+    log.info("Loading schedule for seasons: %s", seasons)
+
+    schedule_frames: list[pl.DataFrame] = []
+    for season in seasons:
+        cache_path = _schedule_cache_path(resolved_cache_dir, season)
+        use_cache = (season < resolved_current_season) and not force_refresh
+        cached = _read_cached_frame(cache_path) if use_cache else None
+        if cached is not None:
+            log.info(
+                "Using cached nflreadpy schedule for season %d from %s",
+                season,
+                cache_path,
+            )
+            schedule_frames.append(cached)
+            continue
+
+        if season < resolved_current_season and not force_refresh:
+            log.info("Schedule cache miss for season %d; loading via nflreadpy.", season)
+        else:
+            log.info("Refreshing schedule via nflreadpy for season %d.", season)
+
+        season_df = nfl.load_schedules(seasons=[season])
+        season_df = _prepare_schedule(season_df)
+        _write_cached_frame(season_df, cache_path)
+        schedule_frames.append(season_df)
+
+    return pl.concat(schedule_frames, how="diagonal")
+
+
 def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
     """
     Add stadium city and state columns based on stadium_id.
@@ -145,46 +276,64 @@ def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def load_team_stats(seasons: list[int], regular_season_only: bool = True) -> pl.DataFrame:
+def load_team_stats(
+    seasons: list[int],
+    regular_season_only: bool = True,
+    *,
+    cache_dir: Optional[os.PathLike | str] = None,
+    force_refresh: bool = False,
+    current_season: Optional[int] = None,
+) -> pl.DataFrame:
     """
     Load team statistics for specified seasons using nflreadpy.
+
+    Cached stats are used for historical seasons when available. Current and future
+    seasons are always refreshed to keep upcoming games up to date.
 
     Args:
         seasons: List of season years to load
         regular_season_only: If True, filter to only regular season games
+        cache_dir: Optional cache directory override for nflreadpy outputs
+        force_refresh: If True, refresh stats even when cache exists
+        current_season: Optional current season override for cache decisions
 
     Returns:
         Polars DataFrame with team statistics per game
     """
 
+    if not seasons:
+        return pl.DataFrame()
+
+    resolved_cache_dir = _resolve_cache_dir(cache_dir)
+    resolved_current_season = _resolve_current_season(current_season)
+
     log.info("Loading team stats for seasons: %s", seasons)
-    team_stats_df = nfl.load_team_stats(seasons=seasons)
 
-    # Filter to regular season only (exclude preseason and postseason)
-    if regular_season_only and "season_type" in team_stats_df.columns:
-        team_stats_df = team_stats_df.filter(pl.col("season_type") == "REG")
-        log.debug("Filtered to regular season only: %d records", team_stats_df.height)
+    team_frames: list[pl.DataFrame] = []
+    for season in seasons:
+        cache_path = _team_stats_cache_path(resolved_cache_dir, season, regular_season_only)
+        use_cache = (season < resolved_current_season) and not force_refresh
+        cached = _read_cached_frame(cache_path) if use_cache else None
+        if cached is not None:
+            log.info(
+                "Using cached nflreadpy team stats for season %d from %s",
+                season,
+                cache_path,
+            )
+            team_frames.append(cached)
+            continue
 
-    # Normalize team abbreviations
-    if "team" in team_stats_df.columns:
-        team_stats_df = normalize_team_column(team_stats_df, "team")
-        team_stats_df = team_stats_df.rename({"team": "team_abbr"})
+        if season < resolved_current_season and not force_refresh:
+            log.info("Team stats cache miss for season %d; loading via nflreadpy.", season)
+        else:
+            log.info("Refreshing team stats via nflreadpy for season %d.", season)
 
-    if "opponent_team" in team_stats_df.columns:
-        team_stats_df = normalize_team_column(team_stats_df, "opponent_team")
-        team_stats_df = team_stats_df.rename({"opponent_team": "opponent_abbr"})
+        season_df = nfl.load_team_stats(seasons=[season])
+        season_df = _prepare_team_stats(season_df, regular_season_only=regular_season_only)
+        _write_cached_frame(season_df, cache_path)
+        team_frames.append(season_df)
 
-    # Rename columns using our mapping
-    available_cols = set(team_stats_df.columns)
-    rename_mapping = {
-        k: v for k, v in constants.NFLREADPY_TEAM_STATS_MAPPING.items() if k in available_cols
-    }
-    team_stats_df = team_stats_df.rename(rename_mapping)
-
-    # Combine stats as specified
-    team_stats_df = combine_stats(team_stats_df)
-
-    return team_stats_df
+    return pl.concat(team_frames, how="diagonal")
 
 
 def add_scoring_data_to_team_stats(

@@ -215,6 +215,24 @@ def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.Argumen
         help="Walk-forward: include postseason folds.",
     )
     parser.add_argument(
+        "--wf-recency-half-life-weeks",
+        type=float,
+        default=defaults.get("wf_recency_half_life_weeks"),
+        help=(
+            "Walk-forward: optional exponential half-life in weeks for recency weighting. "
+            "Use only one of --wf-recency-half-life-weeks or --wf-recency-half-life-seasons."
+        ),
+    )
+    parser.add_argument(
+        "--wf-recency-half-life-seasons",
+        type=float,
+        default=defaults.get("wf_recency_half_life_seasons"),
+        help=(
+            "Walk-forward: optional exponential half-life in seasons for recency weighting. "
+            "Use only one of --wf-recency-half-life-weeks or --wf-recency-half-life-seasons."
+        ),
+    )
+    parser.add_argument(
         "--wf-market-mode",
         choices=["features", "anchor", "hybrid", "all"],
         default=defaults.get("wf_market_mode", "hybrid"),
@@ -303,6 +321,26 @@ def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.Argumen
         type=float,
         default=defaults.get("postseason_weight", 1.0),
         help="Training: postseason sample weight multiplier.",
+    )
+    parser.add_argument(
+        "--train-recency-half-life-weeks",
+        type=float,
+        default=defaults.get("train_recency_half_life_weeks"),
+        help=(
+            "Training: optional exponential half-life in weeks for recency weighting. "
+            "Use only one of --train-recency-half-life-weeks or "
+            "--train-recency-half-life-seasons."
+        ),
+    )
+    parser.add_argument(
+        "--train-recency-half-life-seasons",
+        type=float,
+        default=defaults.get("train_recency_half_life_seasons"),
+        help=(
+            "Training: optional exponential half-life in seasons for recency weighting. "
+            "Use only one of --train-recency-half-life-weeks or "
+            "--train-recency-half-life-seasons."
+        ),
     )
     parser.add_argument(
         "--market-transform",
@@ -628,6 +666,8 @@ def _run_wf_compare(
     wf_start_week: int,
     calibration_weeks: int,
     include_postseason: bool,
+    recency_half_life_weeks: Optional[float],
+    recency_half_life_seasons: Optional[float],
     market_mode: str,
     market_prob_source: str,
     market_prob_blend_method: str,
@@ -669,6 +709,8 @@ def _run_wf_compare(
                             calibration_weeks=calibration_weeks,
                             random_seed=42,
                             include_postseason=include_postseason,
+                            recency_half_life_weeks=recency_half_life_weeks,
+                            recency_half_life_seasons=recency_half_life_seasons,
                             include_market=include_market,
                             market_transform=None,
                             market_anchor=market_anchor,
@@ -837,6 +879,24 @@ def main() -> int:
     """CLI entrypoint."""
 
     args = _parse_args()
+    if (
+        args.wf_recency_half_life_weeks is not None
+        and args.wf_recency_half_life_seasons is not None
+    ):
+        raise ValueError(
+            "Specify only one of --wf-recency-half-life-weeks or --wf-recency-half-life-seasons."
+        )
+    if (
+        args.train_recency_half_life_weeks is not None
+        and args.train_recency_half_life_seasons is not None
+    ):
+        raise ValueError(
+            "Specify only one of --train-recency-half-life-weeks or "
+            "--train-recency-half-life-seasons."
+        )
+    if args.train_recency_half_life_weeks is None and args.train_recency_half_life_seasons is None:
+        args.train_recency_half_life_weeks = args.wf_recency_half_life_weeks
+        args.train_recency_half_life_seasons = args.wf_recency_half_life_seasons
 
     if not args.skip_data_refresh:
         log.info("Refreshing data...")
@@ -877,6 +937,8 @@ def main() -> int:
         "wf_start_week": args.wf_start_week,
         "calibration_weeks": args.wf_calibration_weeks,
         "include_postseason": args.wf_include_postseason,
+        "recency_half_life_weeks": args.wf_recency_half_life_weeks,
+        "recency_half_life_seasons": args.wf_recency_half_life_seasons,
         "market_mode": args.wf_market_mode,
         "market_prob_source": args.wf_market_prob_source,
         "market_prob_blend_method": args.wf_market_prob_blend_method,
@@ -915,6 +977,8 @@ def main() -> int:
             wf_start_week=args.wf_start_week,
             calibration_weeks=args.wf_calibration_weeks,
             include_postseason=bool(args.wf_include_postseason),
+            recency_half_life_weeks=args.wf_recency_half_life_weeks,
+            recency_half_life_seasons=args.wf_recency_half_life_seasons,
             market_mode=args.wf_market_mode,
             market_prob_source=args.wf_market_prob_source,
             market_prob_blend_method=args.wf_market_prob_blend_method,
@@ -1020,6 +1084,8 @@ def main() -> int:
         "calibration_weeks": int(train_calibration_weeks),
         "include_postseason": bool(args.include_postseason),
         "postseason_weight": float(args.postseason_weight),
+        "recency_half_life_weeks": args.train_recency_half_life_weeks,
+        "recency_half_life_seasons": args.train_recency_half_life_seasons,
         "max_cardinality_ratio": float(args.max_cardinality_ratio),
         "feature_start": str(args.feature_start),
         "feature_end": str(args.feature_end),
@@ -1066,6 +1132,8 @@ def main() -> int:
             win_prob_use_uncertainty=win_prob_use_uncertainty,
             include_postseason=bool(args.include_postseason),
             postseason_weight=float(args.postseason_weight),
+            recency_half_life_weeks=args.train_recency_half_life_weeks,
+            recency_half_life_seasons=args.train_recency_half_life_seasons,
             min_season=None,
             max_season=None,
             feature_start=str(args.feature_start),

@@ -80,6 +80,24 @@ def _parse_args() -> argparse.Namespace:
         help="Include postseason games in walk-forward evaluation.",
     )
     parser.add_argument(
+        "--recency-half-life-weeks",
+        type=float,
+        default=None,
+        help=(
+            "Optional exponential half-life in weeks for recency weighting. "
+            "Use only one of --recency-half-life-weeks or --recency-half-life-seasons."
+        ),
+    )
+    parser.add_argument(
+        "--recency-half-life-seasons",
+        type=float,
+        default=None,
+        help=(
+            "Optional exponential half-life in seasons for recency weighting. "
+            "Use only one of --recency-half-life-weeks or --recency-half-life-seasons."
+        ),
+    )
+    parser.add_argument(
         "--market-anchor",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -166,6 +184,10 @@ def main() -> None:
     """CLI entrypoint for walk-forward backtests."""
 
     args = _parse_args()
+    if args.recency_half_life_weeks is not None and args.recency_half_life_seasons is not None:
+        raise ValueError(
+            "Specify only one of --recency-half-life-weeks or --recency-half-life-seasons."
+        )
 
     df = walk_forward.load_games(args.data_path)
 
@@ -189,6 +211,8 @@ def main() -> None:
         calibration_weeks=args.wf_calibration_weeks,
         random_seed=args.random_seed,
         include_postseason=args.include_postseason,
+        recency_half_life_weeks=args.recency_half_life_weeks,
+        recency_half_life_seasons=args.recency_half_life_seasons,
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
         market_prob_weight=float(market_prob_weight),

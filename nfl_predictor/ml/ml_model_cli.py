@@ -82,6 +82,24 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--recency-half-life-weeks",
+        type=float,
+        default=None,
+        help=(
+            "Optional exponential half-life in weeks for recency weighting. "
+            "Use only one of --recency-half-life-weeks or --recency-half-life-seasons."
+        ),
+    )
+    parser.add_argument(
+        "--recency-half-life-seasons",
+        type=float,
+        default=None,
+        help=(
+            "Optional exponential half-life in seasons for recency weighting. "
+            "Use only one of --recency-half-life-weeks or --recency-half-life-seasons."
+        ),
+    )
+    parser.add_argument(
         "--market-transform",
         action="store_true",
         help=("Use transformed market features (implied probs, home margin) instead of raw lines."),
@@ -325,6 +343,10 @@ def main() -> None:
     """CLI entry point for training and prediction."""
 
     args = _parse_args()
+    if args.recency_half_life_weeks is not None and args.recency_half_life_seasons is not None:
+        raise ValueError(
+            "Specify only one of --recency-half-life-weeks or --recency-half-life-seasons."
+        )
     args.win_prob_calibration = normalize_win_prob_calibration_method(args.win_prob_calibration)
     win_prob_use_uncertainty = bool(args.win_prob_uncertainty)
     if args.model_kind != "margin_total" and win_prob_use_uncertainty:
@@ -465,6 +487,8 @@ def main() -> None:
             market_prob_config=market_prob_config,
             include_postseason=args.include_postseason,
             postseason_weight=args.postseason_weight,
+            recency_half_life_weeks=args.recency_half_life_weeks,
+            recency_half_life_seasons=args.recency_half_life_seasons,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,
@@ -504,6 +528,8 @@ def main() -> None:
             market_prob_config=market_prob_config,
             include_postseason=args.include_postseason,
             postseason_weight=args.postseason_weight,
+            recency_half_life_weeks=args.recency_half_life_weeks,
+            recency_half_life_seasons=args.recency_half_life_seasons,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,
@@ -539,6 +565,8 @@ def main() -> None:
             market_prob_config=market_prob_config,
             include_postseason=args.include_postseason,
             postseason_weight=args.postseason_weight,
+            recency_half_life_weeks=args.recency_half_life_weeks,
+            recency_half_life_seasons=args.recency_half_life_seasons,
             min_season=args.min_season,
             max_season=args.max_season,
             feature_start=args.feature_start,

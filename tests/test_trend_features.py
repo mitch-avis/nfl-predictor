@@ -127,9 +127,7 @@ def test_add_season_phase_features_caps_postseason() -> None:
     regular_weeks = constants.get_regular_season_weeks(season)
     postseason_week = regular_weeks + 2
 
-    result = polars_utils.add_season_phase_features(
-        base, season=season, week=postseason_week
-    )
+    result = polars_utils.add_season_phase_features(base, season=season, week=postseason_week)
 
     assert result["week_in_season_norm"][0] == pytest.approx(1.0)
     assert result["season_phase_early"][0] == 0

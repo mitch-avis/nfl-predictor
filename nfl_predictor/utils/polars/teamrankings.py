@@ -103,9 +103,7 @@ def load_team_rankings(
     elif season == current_season:
         # Current season: load weeks 1 through current week + a few future weeks
         # Future weeks use current week's data as a placeholder
-        weeks_to_load = list(
-            range(min_week, min(current_week + 3, max_playoff_week + 1))
-        )
+        weeks_to_load = list(range(min_week, min(current_week + 3, max_playoff_week + 1)))
     else:
         # Future season: no data to load
         return pl.DataFrame()

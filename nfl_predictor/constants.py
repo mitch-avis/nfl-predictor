@@ -34,17 +34,8 @@ def get_regular_season_weeks(season: int) -> int:
     return WEEKS_FROM_2021_ONWARDS if season >= 2021 else WEEKS_BEFORE_2021
 
 
-# Median values for key statistics
-MEDIAN_THIRD_DOWN = 0.4  # Median third down conversion rate for analysis
-MEDIAN_FOURTH_DOWN = 0.5  # Median fourth down conversion rate for analysis
-MEDIAN_WIN_PERCENTAGE = 0.5  # Median win percentage for analysis
-
 # Standard deviation of score differences
 SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for analysis
-
-# URL for ELO ratings data
-ELO_DATA_URL = "https://github.com/greerreNFL/nfeloqb/raw/main/qb_elos.csv"
-ELO_LINES_URL = "https://github.com/greerreNFL/nfelomarket_data/raw/main/Data/lines.csv"
 
 # URL for SurvivorGrid spreads (future games)
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"

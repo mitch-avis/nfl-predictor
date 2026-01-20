@@ -58,6 +58,8 @@ def load_team_rankings(
     season: int,
     current_season: Optional[int] = None,
     current_week: Optional[int] = None,
+    *,
+    min_week: int = 1,
 ) -> pl.DataFrame:
     """
     Load TeamRankings data for a season, scraping fresh data for current/future weeks.
@@ -75,6 +77,7 @@ def load_team_rankings(
         season: Season year to load
         current_season: Current NFL season (if None, will be determined)
         current_week: Current NFL week (if None, will be determined)
+        min_week: Earliest week to load (used to skip known-missing weeks)
 
     Returns:
         Polars DataFrame with TeamRankings ratings/stats per team per week
@@ -92,15 +95,22 @@ def load_team_rankings(
     # Playoff weeks: WC, DIV, CON, SB = 4 additional weeks
     max_playoff_week = regular_season_weeks + 4
 
+    min_week = max(min_week, 1)
+
     if season < current_season:
         # Past season: load all regular season weeks plus playoff weeks
-        weeks_to_load = list(range(1, max_playoff_week + 1))
+        weeks_to_load = list(range(min_week, max_playoff_week + 1))
     elif season == current_season:
         # Current season: load weeks 1 through current week + a few future weeks
         # Future weeks use current week's data as a placeholder
-        weeks_to_load = list(range(1, min(current_week + 3, max_playoff_week + 1)))
+        weeks_to_load = list(
+            range(min_week, min(current_week + 3, max_playoff_week + 1))
+        )
     else:
         # Future season: no data to load
+        return pl.DataFrame()
+
+    if not weeks_to_load:
         return pl.DataFrame()
 
     existing_data = []
@@ -247,7 +257,8 @@ def load_team_rankings(
                     break
 
         if current_week_data is not None and current_week_data.height > 0:
-            for future_week in range(current_week + 1, max_playoff_week + 1):
+            start_week = max(current_week + 1, min_week)
+            for future_week in range(start_week, max_playoff_week + 1):
                 # Always overwrite future-week caches with the most recently scraped week.
                 # This prevents stale future-week placeholders from persisting across runs.
                 future_data = current_week_data.with_columns(pl.lit(future_week).alias("week"))

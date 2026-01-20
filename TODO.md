@@ -55,9 +55,9 @@ Goal: add leakage-safe trend/recency signals plus optional time-weighted trainin
 
 ### Tests
 
-- [ ] Unit tests verifying trend features only use prior weeks.
-- [ ] Unit tests for recency weights (monotonic decay, boundary cases).
-- [ ] Unit tests for season-phase buckets and normalization.
+- [x] Unit tests verifying trend features only use prior weeks.
+- [x] Unit tests for recency weights (monotonic decay, boundary cases).
+- [x] Unit tests for season-phase buckets and normalization.
 
 ### Evaluation
 

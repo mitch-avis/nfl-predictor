@@ -24,12 +24,21 @@ Usage:
     Run directly to collect and process all data:
         python -m nfl_predictor.data_collection
 
+    Optional flags (when run as a script):
+        --timing --debug-logs --refresh-nflreadpy --min-season --max-season
+
     Or import and call programmatically:
         from nfl_predictor.data_collection import collect_all_data
         df = collect_all_data([2023, 2024])
 """
 
+import argparse
+import logging
 import os
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional
 
@@ -39,11 +48,39 @@ from nfl_predictor import constants
 from nfl_predictor.utils import game_utils, polars_utils
 from nfl_predictor.utils.logger import log
 
-# Configuration: Seasons to process (inclusive range)
-SEASONS_TO_PROCESS = list(range(constants.MIN_SEASON, 2026))
 
-# Set to True to force refresh of cached data (not currently used)
-FORCE_REFRESH = False
+def _current_nfl_season(today: date) -> int:
+    """Return the current NFL season for a given date."""
+
+    return today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
+
+
+def _default_max_season(today: Optional[date] = None) -> int:
+    """Return the default max season (inclusive) based on today's date."""
+
+    if today is None:
+        today = date.today()
+    return _current_nfl_season(today)
+
+
+# Configuration: default season bounds (inclusive)
+DEFAULT_MIN_SEASON = constants.MIN_SEASON
+
+# Data collection tuning toggles (overridable via CLI when run as a script).
+ENABLE_DATA_COLLECTION_TIMING = False
+ENABLE_DATA_COLLECTION_DEBUG = False
+FORCE_REFRESH_NFLREADPY = False
+
+
+@dataclass(frozen=True)
+class DataCollectionConfig:
+    """Runtime configuration for data collection."""
+
+    enable_timing: bool
+    enable_debug: bool
+    force_refresh_nflreadpy: bool
+    min_season: int
+    max_season: int
 
 
 def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFrame:
@@ -72,14 +109,148 @@ def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFra
     return records_df.rename(rename_map)
 
 
-def main() -> None:
+def _configure_logging(enable_debug: bool) -> None:
+    """Adjust logging verbosity for data collection runs."""
+
+    if not enable_debug:
+        return
+    log.setLevel(logging.DEBUG)
+    for handler in log.handlers:
+        handler.setLevel(logging.DEBUG)
+    log.debug("Debug logging enabled for data collection.")
+
+
+def _parse_args(argv: list[str]) -> DataCollectionConfig:
+    """Parse CLI args when data collection is run as a script."""
+
+    parser = argparse.ArgumentParser(description="Run nflreadpy data collection.")
+    parser.add_argument(
+        "--min-season",
+        type=int,
+        default=None,
+        help="Minimum season to include (inclusive).",
+    )
+    parser.add_argument(
+        "--max-season",
+        type=int,
+        default=None,
+        help="Maximum season to include (inclusive).",
+    )
+    parser.add_argument(
+        "--timing",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable per-step timing logs.",
+    )
+    parser.add_argument(
+        "--debug-logs",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable debug-level logs for data collection.",
+    )
+    parser.add_argument(
+        "--refresh-nflreadpy",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Force refresh nflreadpy data even when cache exists.",
+    )
+    args = parser.parse_args(argv)
+    default_min = DEFAULT_MIN_SEASON
+    default_max = _default_max_season()
+    min_season = default_min if args.min_season is None else args.min_season
+    max_season = default_max if args.max_season is None else args.max_season
+
+    return DataCollectionConfig(
+        enable_timing=ENABLE_DATA_COLLECTION_TIMING if args.timing is None else args.timing,
+        enable_debug=ENABLE_DATA_COLLECTION_DEBUG if args.debug_logs is None else args.debug_logs,
+        force_refresh_nflreadpy=(
+            FORCE_REFRESH_NFLREADPY if args.refresh_nflreadpy is None else args.refresh_nflreadpy
+        ),
+        min_season=int(min_season),
+        max_season=int(max_season),
+    )
+
+
+def _resolve_config(argv: Optional[list[str]]) -> DataCollectionConfig:
+    """Resolve data collection config from defaults and optional CLI args."""
+
+    if argv is None:
+        return DataCollectionConfig(
+            enable_timing=ENABLE_DATA_COLLECTION_TIMING,
+            enable_debug=ENABLE_DATA_COLLECTION_DEBUG,
+            force_refresh_nflreadpy=FORCE_REFRESH_NFLREADPY,
+            min_season=DEFAULT_MIN_SEASON,
+            max_season=_default_max_season(),
+        )
+    return _parse_args(argv)
+
+
+def _resolve_seasons(min_season: int, max_season: int) -> list[int]:
+    """Resolve the list of seasons to process (inclusive bounds)."""
+
+    if max_season < min_season:
+        raise ValueError("max_season must be >= min_season.")
+    return list(range(min_season, max_season + 1))
+
+
+@contextmanager
+def _timed_step(label: str, enabled: bool) -> Iterator[None]:
+    """Time a step and log duration when enabled."""
+
+    if not enabled:
+        yield
+        return
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        log.info("Timing: %s took %.2fs", label, elapsed)
+
+
+@contextmanager
+def _timed_substep(
+    label: str,
+    enabled: bool,
+    totals: Optional[dict[str, float]],
+) -> Iterator[None]:
+    """Accumulate timing for sub-steps without per-call logging."""
+
+    if not enabled:
+        yield
+        return
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        if totals is not None:
+            totals[label] = totals.get(label, 0.0) + elapsed
+
+
+def _log_df_stats(label: str, df: pl.DataFrame, enabled: bool) -> None:
+    """Log dataframe shape/columns when debug logging is enabled."""
+
+    if not enabled:
+        return
+    log.debug("%s: %d rows, %d cols", label, df.height, len(df.columns))
+
+
+def main(argv: Optional[list[str]] = None) -> None:
     """
     Main entry point for data collection using nflreadpy.
 
     Orchestrates the data collection, processing, and storage for NFL game predictions.
     """
 
+    config = _resolve_config(argv)
+    _configure_logging(config.enable_debug)
+
     log.info("Starting data collection with nflreadpy...")
+    log.info(
+        "NFLreadpy cache enabled (historical seasons). Force refresh: %s",
+        config.force_refresh_nflreadpy,
+    )
 
     # Determine current season and week
     today = date.today()
@@ -88,8 +259,18 @@ def main() -> None:
 
     log.info("Current season: %s, week: %s", current_season, current_week)
 
-    # Collect and process all data
-    all_data_df = collect_all_data(SEASONS_TO_PROCESS)
+    seasons_to_process = _resolve_seasons(config.min_season, config.max_season)
+    log.info(
+        "Season range: %s-%s (%d seasons)",
+        config.min_season,
+        config.max_season,
+        len(seasons_to_process),
+    )
+
+    with _timed_step("collect_all_data", config.enable_timing):
+        all_data_df = collect_all_data(seasons_to_process, config=config)
+
+    _log_df_stats("all_data", all_data_df, config.enable_debug)
 
     # Create version without diff columns (for non-ML local usage)
     no_diff_df = polars_utils.remove_diff_columns(all_data_df)
@@ -113,16 +294,32 @@ def main() -> None:
     log.info("Data collection complete.")
 
 
-def collect_all_data(seasons: list[int]) -> pl.DataFrame:
+def collect_all_data(
+    seasons: list[int],
+    *,
+    config: Optional[DataCollectionConfig] = None,
+) -> pl.DataFrame:
     """
     Collect and combine all data for specified seasons.
 
     Args:
         seasons: List of season years to process
+        config: Optional runtime config for logging/timing and cache refresh
 
     Returns:
         Combined DataFrame with all game data and features
     """
+
+    if config is None:
+        min_season = min(seasons)
+        max_season = max(seasons)
+        config = DataCollectionConfig(
+            enable_timing=ENABLE_DATA_COLLECTION_TIMING,
+            enable_debug=ENABLE_DATA_COLLECTION_DEBUG,
+            force_refresh_nflreadpy=FORCE_REFRESH_NFLREADPY,
+            min_season=min_season,
+            max_season=max_season,
+        )
 
     log.info(
         "Collecting data for %d seasons: %s - %s",
@@ -131,13 +328,22 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
         max(seasons),
     )
 
+    current_season, current_week = polars_utils.get_current_nfl_week()
+    log.info("Current season: %d, week: %d (for TR scraping)", current_season, current_week)
+
     # Load full schedule with lines/odds directly from nflreadpy
     # Includes both regular season (REG) and playoff games (WC, DIV, CON, SB)
-    schedule_df = polars_utils.load_schedule(seasons)
+    with _timed_step("load_schedule", config.enable_timing):
+        schedule_df = polars_utils.load_schedule(
+            seasons,
+            force_refresh=config.force_refresh_nflreadpy,
+            current_season=current_season,
+        )
     log.info(
         "Loaded schedule: %d total games (regular season + playoffs)",
         schedule_df.height,
     )
+    _log_df_stats("schedule_df", schedule_df, config.enable_debug)
 
     # Determine seasons to load for team stats
     # Include previous season for week 1 regression if not processing from the beginning
@@ -148,36 +354,54 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
 
     # Load team statistics (regular season only - used for building features)
     # Playoff games use cumulative stats from the regular season
-    team_stats_df = polars_utils.load_team_stats(stats_seasons, regular_season_only=True)
+    with _timed_step("load_team_stats", config.enable_timing):
+        team_stats_df = polars_utils.load_team_stats(
+            stats_seasons,
+            regular_season_only=True,
+            force_refresh=config.force_refresh_nflreadpy,
+            current_season=current_season,
+        )
     log.info("Loaded team stats: %d regular season team-game records", team_stats_df.height)
+    _log_df_stats("team_stats_df", team_stats_df, config.enable_debug)
 
     # Add scoring data (points scored/allowed) to team stats from schedule
     # This enables computing points-related metrics like scoring margin
     # Need to also load schedule for previous season for scoring data
-    if min_season > constants.MIN_SEASON - 1:
-        prev_schedule = polars_utils.load_schedule([min_season - 1])
-        full_schedule = pl.concat([prev_schedule, schedule_df], how="diagonal")
-        team_stats_df = polars_utils.add_scoring_data_to_team_stats(team_stats_df, full_schedule)
-    else:
-        team_stats_df = polars_utils.add_scoring_data_to_team_stats(team_stats_df, schedule_df)
+    with _timed_step("add_scoring_data", config.enable_timing):
+        if min_season > constants.MIN_SEASON - 1:
+            prev_schedule = polars_utils.load_schedule(
+                [min_season - 1],
+                force_refresh=config.force_refresh_nflreadpy,
+                current_season=current_season,
+            )
+            full_schedule = pl.concat([prev_schedule, schedule_df], how="diagonal")
+            team_stats_df = polars_utils.add_scoring_data_to_team_stats(
+                team_stats_df, full_schedule
+            )
+        else:
+            team_stats_df = polars_utils.add_scoring_data_to_team_stats(team_stats_df, schedule_df)
+    _log_df_stats("team_stats_with_scores", team_stats_df, config.enable_debug)
 
     # Add per-game opponent stats AFTER scoring data is added
     # This ensures opponent_points_scored, opponent_points_allowed, etc. are included
-    team_stats_df = polars_utils.add_per_game_opponent_stats(team_stats_df)
+    with _timed_step("add_per_game_opponent_stats", config.enable_timing):
+        team_stats_df = polars_utils.add_per_game_opponent_stats(team_stats_df)
+    _log_df_stats("team_stats_with_opponents", team_stats_df, config.enable_debug)
 
     # Load ELO ratings
-    elo_df = polars_utils.load_elo_ratings(seasons)
+    with _timed_step("load_elo_ratings", config.enable_timing):
+        elo_df = polars_utils.load_elo_ratings(seasons)
     if elo_df.height > 0:
         log.info("Loaded ELO ratings: %d game records", elo_df.height)
     else:
         log.warning("No ELO ratings loaded")
+    _log_df_stats("elo_df", elo_df, config.enable_debug)
 
     # Load raw ELO data for QB lookups (needed for fill_future_qb_data)
-    raw_elo_df = polars_utils.load_raw_elo_data()
+    with _timed_step("load_raw_elo_data", config.enable_timing):
+        raw_elo_df = polars_utils.load_raw_elo_data()
 
-    # Determine current season and week for TR scraping decisions
-    current_season, current_week = polars_utils.get_current_nfl_week()
-    log.info("Current season: %d, week: %d (for TR scraping)", current_season, current_week)
+    min_season = min(seasons)
 
     # Process each season
     all_seasons_data = []
@@ -186,14 +410,25 @@ def collect_all_data(seasons: list[int]) -> pl.DataFrame:
         log.info("Processing season %d...", season)
 
         # Load TeamRankings for this season (will scrape if current/future week)
-        tr_df = polars_utils.load_team_rankings(season, current_season, current_week)
+        with _timed_step(f"load_team_rankings_{season}", config.enable_timing):
+            tr_df = polars_utils.load_team_rankings(season, current_season, current_week)
 
         # Load previous season's TeamRankings for week 1 regression
         prev_tr_df = None
-        if season > min(seasons):
+        if season > min_season:
             prev_tr_df = polars_utils.load_team_rankings(season - 1, current_season, current_week)
 
-        season_data = process_season(season, schedule_df, team_stats_df, elo_df, tr_df, prev_tr_df)
+        with _timed_step(f"process_season_{season}", config.enable_timing):
+            season_data = process_season(
+                season,
+                schedule_df,
+                team_stats_df,
+                min_season=min_season,
+                timing_enabled=config.enable_timing,
+                elo_df=elo_df,
+                tr_df=tr_df,
+                prev_tr_df=prev_tr_df,
+            )
         if season_data.height > 0:
             all_seasons_data.append(season_data)
 
@@ -231,6 +466,9 @@ def process_season(
     season: int,
     schedule_df: pl.DataFrame,
     team_stats_df: pl.DataFrame,
+    *,
+    min_season: int,
+    timing_enabled: bool = False,
     elo_df: Optional[pl.DataFrame] = None,
     tr_df: Optional[pl.DataFrame] = None,
     prev_tr_df: Optional[pl.DataFrame] = None,
@@ -242,6 +480,8 @@ def process_season(
         season: Season year to process
         schedule_df: Full schedule DataFrame
         team_stats_df: Full team stats DataFrame
+        min_season: Earliest season included in this run
+        timing_enabled: Whether to accumulate per-season timing summaries
         elo_df: ELO ratings DataFrame
         tr_df: TeamRankings DataFrame for this season
         prev_tr_df: TeamRankings DataFrame for previous season (for week 1)
@@ -262,18 +502,33 @@ def process_season(
 
     # Process each week
     weekly_data = []
+    timing_totals: Optional[dict[str, float]] = {} if timing_enabled else None
     for week in weeks:
         week_data = process_week(
             season,
             week,
             season_schedule,
             team_stats_df,
-            elo_df,
-            tr_df,
-            prev_tr_df,
+            min_season=min_season,
+            timing_enabled=timing_enabled,
+            timing_totals=timing_totals,
+            elo_df=elo_df,
+            tr_df=tr_df,
+            prev_tr_df=prev_tr_df,
         )
         if week_data.height > 0:
             weekly_data.append(week_data)
+
+    if timing_enabled and timing_totals:
+        summary = ", ".join(
+            f"{label}={timing_totals[label]:.2f}s"
+            for label in sorted(
+                timing_totals,
+                key=lambda label: timing_totals[label],
+                reverse=True,
+            )
+        )
+        log.info("Timing summary season %d: %s", season, summary)
 
     if weekly_data:
         return pl.concat(weekly_data, how="diagonal")
@@ -286,6 +541,10 @@ def process_week(
     week: int,
     schedule_df: pl.DataFrame,
     team_stats_df: pl.DataFrame,
+    *,
+    min_season: int,
+    timing_enabled: bool = False,
+    timing_totals: Optional[dict[str, float]] = None,
     elo_df: Optional[pl.DataFrame] = None,
     tr_df: Optional[pl.DataFrame] = None,
     prev_tr_df: Optional[pl.DataFrame] = None,
@@ -302,6 +561,9 @@ def process_week(
         week: Week number
         schedule_df: Season schedule DataFrame
         team_stats_df: Full team stats DataFrame (all seasons for week-1 lookback)
+        min_season: Earliest season included in this run
+        timing_enabled: Whether to accumulate timing totals
+        timing_totals: Optional dict to accumulate timing totals
         elo_df: ELO ratings DataFrame
         tr_df: TeamRankings DataFrame for this season
         prev_tr_df: TeamRankings DataFrame for previous season (for week 1)
@@ -311,7 +573,7 @@ def process_week(
     """
 
     # Skip the very first week of the first processed season (no prior data to aggregate)
-    if season == min(SEASONS_TO_PROCESS) and week == 1:
+    if season == min_season and week == 1:
         log.info(
             "Skipping season %d week %d (no prior games to build features)",
             season,
@@ -329,7 +591,8 @@ def process_week(
     season_stats = team_stats_df.filter(pl.col("season") == season)
 
     # Aggregate stats from prior weeks
-    agg_stats = polars_utils.aggregate_team_stats_to_week(season_stats, week, season)
+    with _timed_substep("aggregate_team_stats", timing_enabled, timing_totals):
+        agg_stats = polars_utils.aggregate_team_stats_to_week(season_stats, week, season)
 
     # Get teams playing this week
     teams_this_week = set(
@@ -346,7 +609,7 @@ def process_week(
     teams_needing_fallback = teams_this_week - teams_with_stats
 
     # If any teams need fallback (week 1, or teams with postponed first games like MIA/TB 2017)
-    if teams_needing_fallback and season > min(SEASONS_TO_PROCESS):
+    if teams_needing_fallback and season > min_season:
         prev_season_stats = team_stats_df.filter(pl.col("season") == season - 1)
 
         if prev_season_stats.height > 0:
@@ -382,24 +645,26 @@ def process_week(
         return pl.DataFrame()
 
     # Merge schedule with aggregated team stats
-    merged = polars_utils.merge_schedule_with_team_stats(week_games, agg_stats)
+    with _timed_substep("merge_team_stats", timing_enabled, timing_totals):
+        merged = polars_utils.merge_schedule_with_team_stats(week_games, agg_stats)
 
     # Season-to-date W-L-T record features (time-safe: strictly before this week)
     records_df = pl.DataFrame()
-    try:
-        records_df = polars_utils.compute_team_records_before_week(
-            schedule_df,
-            season=season,
-            week=week,
-            include_postseason=False,
-        )
-    except ValueError:
-        # Some unit tests use a minimal schedule fixture without scores/game_type.
-        log.debug(
-            "Skipping record feature computation for season %d week %d (schedule incomplete)",
-            season,
-            week,
-        )
+    with _timed_substep("record_features", timing_enabled, timing_totals):
+        try:
+            records_df = polars_utils.compute_team_records_before_week(
+                schedule_df,
+                season=season,
+                week=week,
+                include_postseason=False,
+            )
+        except ValueError:
+            # Some unit tests use a minimal schedule fixture without scores/game_type.
+            log.debug(
+                "Skipping record feature computation for season %d week %d (schedule incomplete)",
+                season,
+                week,
+            )
 
     if records_df.height > 0:
         away_records = _prefix_team_records(records_df, "away")
@@ -427,86 +692,92 @@ def process_week(
 
     # Merge with ELO ratings
     if elo_df is not None and elo_df.height > 0:
-        season_elo = elo_df.filter(pl.col("season") == season)
-        if "week" in season_elo.columns:
-            week_elo = season_elo.filter(pl.col("week") == week)
-            if week_elo.height > 0:
-                # Exact week match - drop season/week from ELO before merge
-                elo_cols = [c for c in week_elo.columns if c not in ["season", "week"]]
-                week_elo = week_elo.select(elo_cols)
-                merged = merged.join(
-                    week_elo,
-                    on=["away_abbr", "home_abbr"],
-                    how="left",
-                )
-            else:
-                # No ELO for this specific week - use most recent ELO per team
-                # This handles future weeks and playoff games
-                latest_elo = polars_utils.get_latest_elo_by_team(elo_df, season)
-                if latest_elo.height > 0:
-                    # Join for away team
-                    away_elo = latest_elo.rename(
-                        {
-                            "team_abbr": "away_abbr",
-                            "elo_pre": "away_elo_pre",
-                            "qb_value_pre": "away_qb_value_pre",
-                            "qb_elo_pre": "away_qb_elo_pre",
-                        }
+        with _timed_substep("merge_elo", timing_enabled, timing_totals):
+            season_elo = elo_df.filter(pl.col("season") == season)
+            if "week" in season_elo.columns:
+                week_elo = season_elo.filter(pl.col("week") == week)
+                if week_elo.height > 0:
+                    # Exact week match - drop season/week from ELO before merge
+                    elo_cols = [c for c in week_elo.columns if c not in ["season", "week"]]
+                    week_elo = week_elo.select(elo_cols)
+                    merged = merged.join(
+                        week_elo,
+                        on=["away_abbr", "home_abbr"],
+                        how="left",
                     )
-                    merged = merged.join(away_elo, on="away_abbr", how="left")
+                else:
+                    # No ELO for this specific week - use most recent ELO per team
+                    # This handles future weeks and playoff games
+                    latest_elo = polars_utils.get_latest_elo_by_team(elo_df, season)
+                    if latest_elo.height > 0:
+                        # Join for away team
+                        away_elo = latest_elo.rename(
+                            {
+                                "team_abbr": "away_abbr",
+                                "elo_pre": "away_elo_pre",
+                                "qb_value_pre": "away_qb_value_pre",
+                                "qb_elo_pre": "away_qb_elo_pre",
+                            }
+                        )
+                        merged = merged.join(away_elo, on="away_abbr", how="left")
 
-                    # Join for home team
-                    home_elo = latest_elo.rename(
-                        {
-                            "team_abbr": "home_abbr",
-                            "elo_pre": "home_elo_pre",
-                            "qb_value_pre": "home_qb_value_pre",
-                            "qb_elo_pre": "home_qb_elo_pre",
-                        }
-                    )
-                    merged = merged.join(home_elo, on="home_abbr", how="left")
+                        # Join for home team
+                        home_elo = latest_elo.rename(
+                            {
+                                "team_abbr": "home_abbr",
+                                "elo_pre": "home_elo_pre",
+                                "qb_value_pre": "home_qb_value_pre",
+                                "qb_elo_pre": "home_qb_elo_pre",
+                            }
+                        )
+                        merged = merged.join(home_elo, on="home_abbr", how="left")
 
     # Merge with TeamRankings
-    merged = _merge_team_rankings(merged, season, week, tr_df, prev_tr_df)
+    with _timed_substep("merge_team_rankings", timing_enabled, timing_totals):
+        merged = _merge_team_rankings(merged, season, week, tr_df, prev_tr_df)
 
     # Divisional rivalry feature
-    merged = polars_utils.add_divisional_matchup_feature(merged)
+    with _timed_substep("add_divisional_feature", timing_enabled, timing_totals):
+        merged = polars_utils.add_divisional_matchup_feature(merged)
 
     # Lookahead / next-week context features (null when schedule context is unavailable)
-    try:
-        merged = polars_utils.add_lookahead_features(
-            merged,
-            schedule_df,
-            season=season,
-            week=week,
-            include_postseason=False,
-        )
-    except ValueError:
-        log.debug(
-            "Skipping lookahead features for season %d week %d (schedule incomplete)",
-            season,
-            week,
-        )
+    with _timed_substep("add_lookahead_features", timing_enabled, timing_totals):
+        try:
+            merged = polars_utils.add_lookahead_features(
+                merged,
+                schedule_df,
+                season=season,
+                week=week,
+                include_postseason=False,
+            )
+        except ValueError:
+            log.debug(
+                "Skipping lookahead features for season %d week %d (schedule incomplete)",
+                season,
+                week,
+            )
 
     # Motivation / standings proxy features (null when schedule results are unavailable)
-    try:
-        merged = polars_utils.add_motivation_features(
-            merged,
-            schedule_df,
-            season=season,
-            week=week,
-            include_postseason=False,
-        )
-    except ValueError:
-        log.debug(
-            "Skipping motivation features for season %d week %d (schedule incomplete)",
-            season,
-            week,
-        )
+    with _timed_substep("add_motivation_features", timing_enabled, timing_totals):
+        try:
+            merged = polars_utils.add_motivation_features(
+                merged,
+                schedule_df,
+                season=season,
+                week=week,
+                include_postseason=False,
+            )
+        except ValueError:
+            log.debug(
+                "Skipping motivation features for season %d week %d (schedule incomplete)",
+                season,
+                week,
+            )
 
     # Calculate stat differentials
-    stats_to_diff = polars_utils.get_stats_for_diff()
-    merged = polars_utils.calculate_stat_differentials(merged, stats_to_diff)
+    with _timed_substep("calculate_differentials", timing_enabled, timing_totals):
+        stats_to_diff = polars_utils.get_stats_for_diff()
+        merged = polars_utils.calculate_stat_differentials(merged, stats_to_diff)
 
     return merged
 
@@ -672,4 +943,6 @@ def _determine_nfl_week(given_date: date) -> int:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    main(sys.argv[1:])

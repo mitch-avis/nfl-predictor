@@ -139,6 +139,12 @@ def load_team_rankings(
                 weeks_to_full_scrape.append((week, week_df if is_valid else None))
             else:
                 if is_valid:
+                    log.debug(
+                        "Using cached TeamRankings data for season %d week %d (%s)",
+                        season,
+                        week,
+                        week_file,
+                    )
                     existing_data.append(week_df)
                 else:
                     # File exists but missing columns - need partial scrape

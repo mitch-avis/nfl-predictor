@@ -62,44 +62,14 @@ from nfl_predictor.ml.ml_model_core import (
     get_market_baseline,
     resolve_win_prob_calibration_method,
 )
+from nfl_predictor.ml.sample_weights import (
+    combine_sample_weights,
+    compute_postseason_sample_weight,
+    compute_recency_sample_weight,
+)
 from nfl_predictor.utils.logger import log
 
 xgb.set_config(verbosity=0)
-
-
-def _compute_postseason_sample_weight(
-    df: pd.DataFrame,
-    *,
-    include_postseason: bool,
-    postseason_weight: float,
-) -> Optional[np.ndarray]:
-    """Compute per-row sample weights with optional postseason upweighting.
-
-    When `game_type` exists and `include_postseason` is True, any row whose
-    `game_type` is not REG is treated as postseason and assigned `postseason_weight`.
-    Regular season rows keep weight 1.0.
-
-    Returns None when weights are unnecessary (all ones).
-    """
-
-    if postseason_weight <= 0:
-        raise ValueError("postseason_weight must be positive.")
-
-    if not include_postseason:
-        return None
-    if "game_type" not in df.columns:
-        return None
-
-    game_type = df["game_type"].astype(str).str.upper()
-    is_postseason = game_type != "REG"
-    if not bool(is_postseason.any()):
-        return None
-
-    weights = np.ones(len(df), dtype=float)
-    weights[is_postseason.to_numpy()] = float(postseason_weight)
-    if np.allclose(weights, 1.0):
-        return None
-    return weights
 
 
 def _filter_to_regular_season_for_training(
@@ -140,6 +110,8 @@ def train_score_model(
     xgb_tree_method: Optional[str] = None,
     xgb_device: Optional[str] = None,
     xgb_n_jobs: Optional[int] = None,
+    recency_half_life_weeks: Optional[float] = None,
+    recency_half_life_seasons: Optional[float] = None,
 ) -> ScoreModel:
     """Train score models using time-aware season splits."""
 
@@ -179,11 +151,17 @@ def train_score_model(
     preprocessor = _build_preprocessor(feature_spec, for_tree=True)
     x_train = preprocessor.fit_transform(x_train_df)
 
-    train_weight = _compute_postseason_sample_weight(
+    postseason_weights = compute_postseason_sample_weight(
         train_df,
         include_postseason=include_postseason,
         postseason_weight=postseason_weight,
     )
+    recency_weights = compute_recency_sample_weight(
+        train_df,
+        half_life_weeks=recency_half_life_weeks,
+        half_life_seasons=recency_half_life_seasons,
+    )
+    train_weight = combine_sample_weights(postseason_weights, recency_weights)
     xgb_overrides: dict[str, Any] = {}
     if xgb_n_jobs is not None:
         xgb_overrides["n_jobs"] = xgb_n_jobs
@@ -293,6 +271,8 @@ def train_margin_total_model(
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
+    recency_half_life_weeks: Optional[float] = None,
+    recency_half_life_seasons: Optional[float] = None,
 ) -> MarginTotalModel:
     """Train margin/total models with optional calibration."""
 
@@ -407,11 +387,17 @@ def train_margin_total_model(
 
         local_preprocessor = _build_preprocessor(local_spec, for_tree=True)
         x_train = local_preprocessor.fit_transform(_apply_feature_spec(train_frame, local_spec))
-        train_weight = _compute_postseason_sample_weight(
+        postseason_weights = compute_postseason_sample_weight(
             train_frame,
             include_postseason=include_postseason,
             postseason_weight=postseason_weight,
         )
+        recency_weights = compute_recency_sample_weight(
+            train_frame,
+            half_life_weeks=recency_half_life_weeks,
+            half_life_seasons=recency_half_life_seasons,
+        )
+        train_weight = combine_sample_weights(postseason_weights, recency_weights)
         (
             y_margin_train,
             y_total_train,
@@ -537,11 +523,17 @@ def train_margin_total_model(
             pred_margin_inputs = pred_margin_calib / sigma_calibration
         away_col, home_col = target_columns
         actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
-        calibration_weight = _compute_postseason_sample_weight(
+        calibration_postseason = compute_postseason_sample_weight(
             calibration_df,
             include_postseason=include_postseason,
             postseason_weight=postseason_weight,
         )
+        calibration_recency = compute_recency_sample_weight(
+            calibration_df,
+            half_life_weeks=recency_half_life_weeks,
+            half_life_seasons=recency_half_life_seasons,
+        )
+        calibration_weight = combine_sample_weights(calibration_postseason, calibration_recency)
         calibrator = _fit_win_prob_calibrator(
             pred_margin_inputs,
             actual_home_win.to_numpy(),
@@ -734,6 +726,8 @@ def train_blended_margin_total_model(
     max_season: Optional[int] = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
+    recency_half_life_weeks: Optional[float] = None,
+    recency_half_life_seasons: Optional[float] = None,
 ) -> BlendedMarginTotalModel:
     """Train blended margin/total models using team vs market signals."""
 
@@ -899,11 +893,17 @@ def train_blended_margin_total_model(
 
     team_train = team_preprocessor.fit_transform(_apply_feature_spec(train_df, team_spec))
     y_margin_train, y_total_train = _prepare_margin_total_targets(train_df, target_columns)
-    train_weight = _compute_postseason_sample_weight(
+    postseason_weights = compute_postseason_sample_weight(
         train_df,
         include_postseason=include_postseason,
         postseason_weight=postseason_weight,
     )
+    recency_weights = compute_recency_sample_weight(
+        train_df,
+        half_life_weeks=recency_half_life_weeks,
+        half_life_seasons=recency_half_life_seasons,
+    )
+    train_weight = combine_sample_weights(postseason_weights, recency_weights)
 
     team_calib = team_preprocessor.transform(_apply_feature_spec(calibration_df, team_spec))
     y_margin_calib, y_total_calib = _prepare_margin_total_targets(calibration_df, target_columns)
@@ -945,11 +945,17 @@ def train_blended_margin_total_model(
     )
     calibrator = None
     if resolved_calibration != "none":
-        calibration_weight = _compute_postseason_sample_weight(
+        calibration_postseason = compute_postseason_sample_weight(
             calibration_df,
             include_postseason=include_postseason,
             postseason_weight=postseason_weight,
         )
+        calibration_recency = compute_recency_sample_weight(
+            calibration_df,
+            half_life_weeks=recency_half_life_weeks,
+            half_life_seasons=recency_half_life_seasons,
+        )
+        calibration_weight = combine_sample_weights(calibration_postseason, calibration_recency)
         calibrator = _fit_win_prob_calibrator(
             blended_margin_calib,
             actual_home_win.to_numpy(),

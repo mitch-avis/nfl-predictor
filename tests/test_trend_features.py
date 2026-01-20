@@ -7,6 +7,7 @@ from typing import cast
 import polars as pl
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 
 
@@ -90,3 +91,47 @@ def test_build_team_stat_trends_compare_recent_to_season_mean() -> None:
 
     assert scoring_trend == pytest.approx(0.45, abs=1e-2)
     assert turnover_trend == pytest.approx(0.1, abs=1e-2)
+
+
+def test_add_season_phase_features_buckets() -> None:
+    """Season-phase buckets align with early/mid/late week ranges."""
+
+    base = pl.DataFrame({"game_id": [1]})
+    season = 2023
+    regular_weeks = constants.get_regular_season_weeks(season)
+
+    early = polars_utils.add_season_phase_features(base, season=season, week=1)
+    assert early["season_phase_early"][0] == 1
+    assert early["season_phase_mid"][0] == 0
+    assert early["season_phase_late"][0] == 0
+    assert early["week_in_season_norm"][0] == pytest.approx(1.0 / regular_weeks)
+
+    mid_week = int((regular_weeks / 3.0) + 1)
+    mid = polars_utils.add_season_phase_features(base, season=season, week=mid_week)
+    assert mid["season_phase_early"][0] == 0
+    assert mid["season_phase_mid"][0] == 1
+    assert mid["season_phase_late"][0] == 0
+
+    late_week = int((2.0 * regular_weeks / 3.0) + 1)
+    late = polars_utils.add_season_phase_features(base, season=season, week=late_week)
+    assert late["season_phase_early"][0] == 0
+    assert late["season_phase_mid"][0] == 0
+    assert late["season_phase_late"][0] == 1
+
+
+def test_add_season_phase_features_caps_postseason() -> None:
+    """Season phase caps at 1.0 for postseason weeks."""
+
+    base = pl.DataFrame({"game_id": [1]})
+    season = 2023
+    regular_weeks = constants.get_regular_season_weeks(season)
+    postseason_week = regular_weeks + 2
+
+    result = polars_utils.add_season_phase_features(
+        base, season=season, week=postseason_week
+    )
+
+    assert result["week_in_season_norm"][0] == pytest.approx(1.0)
+    assert result["season_phase_early"][0] == 0
+    assert result["season_phase_mid"][0] == 0
+    assert result["season_phase_late"][0] == 1

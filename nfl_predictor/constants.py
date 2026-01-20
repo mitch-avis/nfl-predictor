@@ -484,6 +484,13 @@ DIVISIONAL_FEATURE_COLUMNS = [
     "is_divisional_matchup",
 ]
 
+SEASON_PHASE_COLUMNS = [
+    "week_in_season_norm",
+    "season_phase_early",
+    "season_phase_mid",
+    "season_phase_late",
+]
+
 LOOKAHEAD_FEATURE_COLUMNS = [
     "away_next_opponent_abbr",
     "away_next_is_home",
@@ -554,6 +561,7 @@ METADATA_COLUMNS = [
     "home_qb",
     "away_rest",
     "home_rest",
+    *SEASON_PHASE_COLUMNS,
     "neutral",
     "division",
     # Feature column groups (joined into game rows)
@@ -568,6 +576,15 @@ ELO_COLUMNS = [
     "elo_pre",
     "qb_value_pre",
     "qb_elo_pre",
+]
+
+TREND_FEATURE_COLUMNS = [
+    "last_5_games_rating_trend",
+    "elo_4wk_trend",
+    "qb_elo_4wk_trend",
+    "qb_value_4wk_trend",
+    "scoring_margin_4wk_trend",
+    "turnover_margin_4wk_trend",
 ]
 
 # TeamRankings rating columns (per team) - these get prefixed with away_/home_

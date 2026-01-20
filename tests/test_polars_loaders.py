@@ -39,7 +39,7 @@ def test_add_stadium_location() -> None:
     assert out["stadium_city"][0] == constants.STADIUM_LOCATIONS[stadium_id]["city"]
 
 
-def test_load_schedule_transforms(monkeypatch) -> None:
+def test_load_schedule_transforms(monkeypatch, tmp_path: Path) -> None:
     """Schedule loading applies expected transformations."""
 
     def fake_load_schedules(seasons):
@@ -64,7 +64,7 @@ def test_load_schedule_transforms(monkeypatch) -> None:
     monkeypatch.setattr(loaders.nfl, "load_schedules", fake_load_schedules)
     monkeypatch.setattr(loaders, "normalize_team_column", lambda df, _col: df)
 
-    df = loaders.load_schedule([2023])
+    df = loaders.load_schedule([2023], cache_dir=tmp_path, current_season=2024)
 
     assert "away_abbr" in df.columns
     assert "home_abbr" in df.columns
@@ -75,7 +75,79 @@ def test_load_schedule_transforms(monkeypatch) -> None:
     assert "game_datetime" in df.columns
 
 
-def test_load_team_stats_combines(monkeypatch) -> None:
+def test_load_schedule_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
+    """Schedule loader prefers cache for historical seasons."""
+
+    cached = pl.DataFrame(
+        {
+            "game_id": ["cached_game"],
+            "season": [2020],
+            "game_type": ["REG"],
+            "week": [1],
+            "away_abbr": ["AAA"],
+            "home_abbr": ["BBB"],
+        }
+    )
+    cache_path = tmp_path / "schedule_2020.parquet"
+    cached.write_parquet(cache_path)
+
+    def fail_load_schedules(*_args, **_kwargs):
+        """Fail if nflreadpy is called."""
+
+        raise AssertionError("nflreadpy schedule load should not be called")
+
+    monkeypatch.setattr(loaders.nfl, "load_schedules", fail_load_schedules)
+
+    df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert df["game_id"][0] == "cached_game"
+
+
+def test_load_schedule_refreshes_current_season(monkeypatch, tmp_path: Path) -> None:
+    """Current season schedules are refreshed even when cached."""
+
+    cached = pl.DataFrame(
+        {
+            "game_id": ["old_game"],
+            "season": [2024],
+            "game_type": ["REG"],
+            "week": [1],
+            "away_abbr": ["AAA"],
+            "home_abbr": ["BBB"],
+        }
+    )
+    cache_path = tmp_path / "schedule_2024.parquet"
+    cached.write_parquet(cache_path)
+
+    def fake_load_schedules(seasons):
+        """Return a fresh schedule payload."""
+
+        _ = seasons
+        return pl.DataFrame(
+            {
+                "game_id": ["fresh_game"],
+                "season": [2024],
+                "game_type": ["REG"],
+                "week": [1],
+                "gameday": ["2024-09-10"],
+                "away_team": ["AAA"],
+                "home_team": ["BBB"],
+                "location": ["Home"],
+                "spread_line": [-2.5],
+            }
+        )
+
+    monkeypatch.setattr(loaders.nfl, "load_schedules", fake_load_schedules)
+    monkeypatch.setattr(loaders, "normalize_team_column", lambda df, _col: df)
+
+    df = loaders.load_schedule([2024], cache_dir=tmp_path, current_season=2024)
+
+    assert df["game_id"][0] == "fresh_game"
+    refreshed = pl.read_parquet(cache_path)
+    assert refreshed["game_id"][0] == "fresh_game"
+
+
+def test_load_team_stats_combines(monkeypatch, tmp_path: Path) -> None:
     """Team stats loading combines related columns correctly."""
 
     def fake_load_team_stats(seasons):
@@ -98,12 +170,87 @@ def test_load_team_stats_combines(monkeypatch) -> None:
     monkeypatch.setattr(loaders.nfl, "load_team_stats", fake_load_team_stats)
     monkeypatch.setattr(loaders, "normalize_team_column", lambda df, _col: df)
 
-    df = loaders.load_team_stats([2023], regular_season_only=True)
+    df = loaders.load_team_stats(
+        [2023], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
 
     assert "team_abbr" in df.columns
     assert "opponent_abbr" in df.columns
     assert "fumbles" in df.columns
     assert "sack_fumbles" not in df.columns
+
+
+def test_load_team_stats_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
+    """Team stats loader prefers cache for historical seasons."""
+
+    cached = pl.DataFrame(
+        {
+            "season": [2021],
+            "week": [1],
+            "team_abbr": ["AAA"],
+            "opponent_abbr": ["BBB"],
+            "fumbles": [1],
+        }
+    )
+    cache_path = tmp_path / "team_stats_2021_reg.parquet"
+    cached.write_parquet(cache_path)
+
+    def fail_load_team_stats(*_args, **_kwargs):
+        """Fail if nflreadpy is called."""
+
+        raise AssertionError("nflreadpy team stats load should not be called")
+
+    monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
+
+    df = loaders.load_team_stats(
+        [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
+
+    assert df["team_abbr"][0] == "AAA"
+
+
+def test_load_team_stats_refreshes_current_season(monkeypatch, tmp_path: Path) -> None:
+    """Current season team stats are refreshed even when cached."""
+
+    cached = pl.DataFrame(
+        {
+            "season": [2024],
+            "week": [1],
+            "team_abbr": ["OLD"],
+            "opponent_abbr": ["BBB"],
+            "fumbles": [0],
+        }
+    )
+    cache_path = tmp_path / "team_stats_2024_reg.parquet"
+    cached.write_parquet(cache_path)
+
+    def fake_load_team_stats(seasons):
+        """Return fresh team stats payload."""
+
+        _ = seasons
+        return pl.DataFrame(
+            {
+                "season": [2024],
+                "week": [1],
+                "season_type": ["REG"],
+                "team": ["NEW"],
+                "opponent_team": ["BBB"],
+                "sack_fumbles": [1],
+                "rushing_fumbles": [0],
+                "receiving_fumbles": [0],
+            }
+        )
+
+    monkeypatch.setattr(loaders.nfl, "load_team_stats", fake_load_team_stats)
+    monkeypatch.setattr(loaders, "normalize_team_column", lambda df, _col: df)
+
+    df = loaders.load_team_stats(
+        [2024], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
+
+    assert df["team_abbr"][0] == "NEW"
+    refreshed = pl.read_parquet(cache_path)
+    assert refreshed["team_abbr"][0] == "NEW"
 
 
 def test_add_scoring_data_to_team_stats() -> None:

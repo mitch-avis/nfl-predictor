@@ -28,6 +28,8 @@ Example:
     >>> agg_stats = polars_utils.aggregate_team_stats_to_week(team_stats, week=10, season=2024)
 """
 
+from typing import Sequence
+
 import polars as pl
 from polars.datatypes.classes import DataTypeClass
 
@@ -789,3 +791,285 @@ def add_motivation_features(
 
     out = games_df.join(away, on="away_abbr", how="left").join(home, on="home_abbr", how="left")
     return _ensure_null_cols(out)
+
+
+def add_season_phase_features(
+    games_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+) -> pl.DataFrame:
+    """Add normalized season phase features to game rows.
+
+    The season phase is derived from the regular-season length for the given season.
+    Postseason weeks are capped at 1.0 (late season).
+
+    Args:
+        games_df: Week game rows.
+        season: Season year.
+        week: Week number.
+
+    Returns:
+        `games_df` with season phase columns added.
+    """
+
+    regular_weeks = constants.get_regular_season_weeks(season)
+    if regular_weeks <= 0:
+        week_norm = 0.0
+    else:
+        week_norm = min(float(week) / float(regular_weeks), 1.0)
+
+    early = int(week_norm <= (1.0 / 3.0))
+    mid = int((1.0 / 3.0) < week_norm <= (2.0 / 3.0))
+    late = int(week_norm > (2.0 / 3.0))
+
+    return games_df.with_columns(
+        [
+            pl.lit(week_norm).cast(pl.Float32).alias("week_in_season_norm"),
+            pl.lit(early).cast(pl.Int8).alias("season_phase_early"),
+            pl.lit(mid).cast(pl.Int8).alias("season_phase_mid"),
+            pl.lit(late).cast(pl.Int8).alias("season_phase_late"),
+        ]
+    )
+
+
+def build_team_elo_trends(
+    elo_df: pl.DataFrame,
+    season: int,
+    *,
+    window: int = 4,
+) -> pl.DataFrame:
+    """Compute per-team ELO trends based on prior games.
+
+    The trend is defined as `elo_pre - rolling_mean(elo_pre)` over the prior `window`
+    games, with week-1 values defaulting to 0.0 (no trend signal yet).
+
+    Args:
+        elo_df: Full ELO DataFrame with away/home columns.
+        season: Season year to compute.
+        window: Rolling window size in games.
+
+    Returns:
+        DataFrame with columns: season, week, team_abbr, elo_4wk_trend.
+    """
+
+    schema = {
+        "season": pl.Int64,
+        "week": pl.Int64,
+        "team_abbr": pl.Utf8,
+        "elo_4wk_trend": pl.Float64,
+    }
+    if elo_df.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    required = {"season", "week", "away_abbr", "home_abbr", "away_elo_pre", "home_elo_pre"}
+    if not required.issubset(set(elo_df.columns)):
+        return pl.DataFrame(schema=schema)
+
+    season_elo = elo_df.filter(pl.col("season") == season)
+    if season_elo.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    away = season_elo.select(
+        [
+            "season",
+            "week",
+            pl.col("away_abbr").alias("team_abbr"),
+            pl.col("away_elo_pre").alias("elo_pre"),
+        ]
+    )
+    home = season_elo.select(
+        [
+            "season",
+            "week",
+            pl.col("home_abbr").alias("team_abbr"),
+            pl.col("home_elo_pre").alias("elo_pre"),
+        ]
+    )
+    long_df = pl.concat([away, home], how="vertical").filter(pl.col("elo_pre").is_not_null())
+    if long_df.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    long_df = long_df.sort(["team_abbr", "week"])
+    prior_mean = (
+        pl.col("elo_pre").rolling_mean(window_size=window, min_samples=1).shift(1).over("team_abbr")
+    )
+    trend = (
+        pl.when(prior_mean.is_null())
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("elo_pre") - prior_mean)
+        .alias("elo_4wk_trend")
+    )
+
+    return long_df.with_columns(trend).select(["season", "week", "team_abbr", "elo_4wk_trend"])
+
+
+def build_qb_trends(
+    elo_df: pl.DataFrame,
+    season: int,
+    *,
+    window: int = 4,
+) -> pl.DataFrame:
+    """Compute per-QB rolling trends for QB ELO/value.
+
+    Trends are calculated per QB name (not team) using prior games only.
+
+    Args:
+        elo_df: Full ELO DataFrame with away/home columns.
+        season: Season year to compute.
+        window: Rolling window size in games.
+
+    Returns:
+        DataFrame with columns: season, week, qb_name, qb_elo_4wk_trend, qb_value_4wk_trend.
+    """
+
+    schema = {
+        "season": pl.Int64,
+        "week": pl.Int64,
+        "qb_name": pl.Utf8,
+        "qb_elo_4wk_trend": pl.Float64,
+        "qb_value_4wk_trend": pl.Float64,
+    }
+    if elo_df.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    required = {"season", "week", "away_qb", "home_qb", "away_qb_elo_pre", "home_qb_elo_pre"}
+    if not required.issubset(set(elo_df.columns)):
+        return pl.DataFrame(schema=schema)
+
+    season_elo = elo_df.filter(pl.col("season") == season)
+    if season_elo.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    has_qb_value = "away_qb_value_pre" in season_elo.columns and "home_qb_value_pre" in (
+        season_elo.columns
+    )
+    away_cols = [
+        "season",
+        "week",
+        pl.col("away_qb").alias("qb_name"),
+        pl.col("away_qb_elo_pre").alias("qb_elo_pre"),
+    ]
+    home_cols = [
+        "season",
+        "week",
+        pl.col("home_qb").alias("qb_name"),
+        pl.col("home_qb_elo_pre").alias("qb_elo_pre"),
+    ]
+    if has_qb_value:
+        away_cols.append(pl.col("away_qb_value_pre").alias("qb_value_pre"))
+        home_cols.append(pl.col("home_qb_value_pre").alias("qb_value_pre"))
+    else:
+        away_cols.append(pl.lit(None).alias("qb_value_pre"))
+        home_cols.append(pl.lit(None).alias("qb_value_pre"))
+
+    away = season_elo.select(away_cols)
+    home = season_elo.select(home_cols)
+    long_df = pl.concat([away, home], how="vertical").filter(pl.col("qb_name").is_not_null())
+    if long_df.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    long_df = long_df.sort(["qb_name", "week"])
+
+    exprs = []
+    if "qb_elo_pre" in long_df.columns:
+        prior_elo = (
+            pl.col("qb_elo_pre")
+            .rolling_mean(window_size=window, min_samples=1)
+            .shift(1)
+            .over("qb_name")
+        )
+        exprs.append(
+            pl.when(prior_elo.is_null())
+            .then(pl.lit(0.0))
+            .otherwise(pl.col("qb_elo_pre") - prior_elo)
+            .alias("qb_elo_4wk_trend")
+        )
+
+    if "qb_value_pre" in long_df.columns:
+        prior_value = (
+            pl.col("qb_value_pre")
+            .rolling_mean(window_size=window, min_samples=1)
+            .shift(1)
+            .over("qb_name")
+        )
+        exprs.append(
+            pl.when(prior_value.is_null())
+            .then(pl.lit(0.0))
+            .otherwise(pl.col("qb_value_pre") - prior_value)
+            .alias("qb_value_4wk_trend")
+        )
+
+    if not exprs:
+        return pl.DataFrame(schema=schema)
+
+    out = long_df.with_columns(exprs).select(
+        [
+            "season",
+            "week",
+            "qb_name",
+            "qb_elo_4wk_trend",
+            "qb_value_4wk_trend",
+        ]
+    )
+    return out
+
+
+def build_team_stat_trends(
+    team_stats_df: pl.DataFrame,
+    season: int,
+    *,
+    stats: Sequence[str],
+    window: int = 4,
+) -> pl.DataFrame:
+    """Compute team-level performance trend features.
+
+    Trend is defined as the prior `window`-game mean minus season-to-date mean
+    (both computed strictly before the current week).
+
+    Args:
+        team_stats_df: Per-game team stats DataFrame.
+        season: Season year to compute.
+        stats: Stat column names to compute trends for.
+        window: Rolling window size in games.
+
+    Returns:
+        DataFrame with columns: season, week, team_abbr, <stat>_4wk_trend.
+    """
+
+    schema = {"season": pl.Int64, "week": pl.Int64, "team_abbr": pl.Utf8}
+    for stat in stats:
+        schema[f"{stat}_4wk_trend"] = pl.Float64
+
+    if team_stats_df.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    available_stats = [stat for stat in stats if stat in team_stats_df.columns]
+    if not available_stats:
+        return pl.DataFrame(schema=schema)
+
+    season_stats = team_stats_df.filter(pl.col("season") == season)
+    if season_stats.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    season_stats = season_stats.select(["season", "week", "team_abbr", *available_stats]).sort(
+        ["team_abbr", "week"]
+    )
+
+    exprs = []
+    for stat in available_stats:
+        shifted = pl.col(stat).shift(1)
+        recent_mean = shifted.rolling_mean(window_size=window, min_samples=1).over("team_abbr")
+        cum_sum = shifted.cum_sum().over("team_abbr")
+        cum_count = shifted.cum_count().over("team_abbr")
+        season_mean = pl.when(cum_count > 0).then(cum_sum / cum_count)
+        exprs.append(
+            pl.when(cum_count == 0)
+            .then(pl.lit(0.0))
+            .otherwise(recent_mean - season_mean)
+            .alias(f"{stat}_4wk_trend")
+        )
+
+    return season_stats.with_columns(exprs).select(
+        ["season", "week", "team_abbr", *[f"{stat}_4wk_trend" for stat in available_stats]]
+    )

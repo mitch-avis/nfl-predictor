@@ -870,6 +870,9 @@ def get_stats_for_diff() -> list[str]:
     # TeamRankings columns
     all_stats.extend(get_tr_columns())
 
+    # Trend feature columns
+    all_stats.extend(constants.TREND_FEATURE_COLUMNS)
+
     # Deduplicate
     seen = set()
     unique_stats = []

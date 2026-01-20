@@ -405,18 +405,35 @@ def collect_all_data(
 
     # Process each season
     all_seasons_data = []
+    team_rankings_cache: dict[int, pl.DataFrame] = {}
+
+    def _load_team_rankings_cached(season: int) -> pl.DataFrame:
+        """Load TeamRankings data once per season to avoid redundant scraping."""
+
+        cached_df = team_rankings_cache.get(season)
+        if cached_df is not None:
+            return cached_df
+        min_week = 2 if season == min_season and season < current_season else 1
+        with _timed_step(f"load_team_rankings_{season}", config.enable_timing):
+            tr_df = polars_utils.load_team_rankings(
+                season,
+                current_season,
+                current_week,
+                min_week=min_week,
+            )
+        team_rankings_cache[season] = tr_df
+        return tr_df
 
     for season in seasons:
         log.info("Processing season %d...", season)
 
         # Load TeamRankings for this season (will scrape if current/future week)
-        with _timed_step(f"load_team_rankings_{season}", config.enable_timing):
-            tr_df = polars_utils.load_team_rankings(season, current_season, current_week)
+        tr_df = _load_team_rankings_cached(season)
 
         # Load previous season's TeamRankings for week 1 regression
         prev_tr_df = None
         if season > min_season:
-            prev_tr_df = polars_utils.load_team_rankings(season - 1, current_season, current_week)
+            prev_tr_df = _load_team_rankings_cached(season - 1)
 
         with _timed_step(f"process_season_{season}", config.enable_timing):
             season_data = process_season(

@@ -115,6 +115,21 @@ Acceptance:
 
 ---
 
+## Milestone 35 - Pandas to Polars audit/refactor
+
+- [ ] Inventory pandas usage across the repo and classify by module (ETL vs ML vs reporting).
+- [ ] Identify pandas usage outside ML/reporting that can move to Polars safely.
+- [ ] Refactor candidate modules to Polars-first implementations.
+- [ ] Document any pandas usage that must remain (e.g., sklearn pipelines, calibration).
+- [ ] Add/update tests to confirm schema parity and no leakage.
+
+Acceptance:
+
+- [ ] ETL and feature engineering are fully Polars-first with minimal pandas use.
+- [ ] Remaining pandas usage is justified and documented.
+
+---
+
 ## Explicitly out of scope (unless the world changes)
 
 - Injury/practice participation features.

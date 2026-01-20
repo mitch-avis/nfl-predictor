@@ -11,6 +11,7 @@ from pathlib import Path
 # Project directory configurations
 ROOT_DIR = Path(__file__).parent.parent
 DATA_PATH = os.path.join(ROOT_DIR, "data")
+NFLREADPY_CACHE_DIR = os.path.join(DATA_PATH, "cache", "nflreadpy")
 
 # NFL season configurations
 SEASON_END_MONTH = 2  # NFL season typically ends in February
@@ -49,8 +50,8 @@ ELO_LINES_URL = "https://github.com/greerreNFL/nfelomarket_data/raw/main/Data/li
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"
 DEFAULT_TOTAL_LINE = 45.6  # Average total score across 20+ seasons
 
-# Minimum season for data collection (CPOE data starts Week 2 of 2006)
-MIN_SEASON = 2006
+# Minimum season for data collection
+MIN_SEASON = 2003
 
 # Regression factor for week-1 stats toward league mean
 WEEK1_REGRESSION_FACTOR = 1 / 3

@@ -46,10 +46,11 @@ def build_final_column_order() -> list[str]:
     tr_cols = get_tr_columns()
     nflreadpy_stats = get_stat_columns()
 
-    # Build the base stat columns (non-opponent): ELO + TR + nflreadpy stats
+    # Build the base stat columns (non-opponent): ELO + TR + trends + nflreadpy stats
     base_stats = []
     base_stats.extend(elo_cols)
     base_stats.extend(tr_cols)
+    base_stats.extend(constants.TREND_FEATURE_COLUMNS)
     base_stats.extend(nflreadpy_stats)
 
     # Deduplicate

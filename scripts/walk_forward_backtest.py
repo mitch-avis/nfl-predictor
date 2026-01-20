@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 try:
     from nfl_predictor import constants
     from nfl_predictor.ml import walk_forward
@@ -27,6 +29,30 @@ except ModuleNotFoundError:  # pragma: no cover
     from nfl_predictor import constants
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
+
+
+def _trend_feature_columns(df: pd.DataFrame) -> list[str]:
+    """Return trend/season-phase columns to drop for ablation runs."""
+
+    trend_bases = set(constants.TREND_FEATURE_COLUMNS)
+    drop_columns = set(constants.SEASON_PHASE_COLUMNS)
+    suffix = "_diff"
+
+    for column in df.columns:
+        if column.endswith(suffix):
+            base = column[: -len(suffix)]
+            if base in trend_bases:
+                drop_columns.add(column)
+            continue
+
+        for prefix in ("away_", "home_"):
+            if column.startswith(prefix):
+                base = column[len(prefix) :]
+                if base in trend_bases:
+                    drop_columns.add(column)
+                break
+
+    return sorted(col for col in drop_columns if col in df.columns)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -154,6 +180,11 @@ def _parse_args() -> argparse.Namespace:
         help="Disable the feature pruning list.",
     )
     parser.add_argument(
+        "--disable-trend-features",
+        action="store_true",
+        help="Drop trend + season-phase features for ablation comparisons.",
+    )
+    parser.add_argument(
         "--xgb-tree-method",
         type=str,
         default=None,
@@ -190,6 +221,15 @@ def main() -> None:
         )
 
     df = walk_forward.load_games(args.data_path)
+    drop_columns: list[str] = []
+    if args.disable_trend_features:
+        drop_columns = _trend_feature_columns(df)
+        if drop_columns:
+            df = df.drop(columns=drop_columns)
+        log.info(
+            "Trend feature ablation enabled; dropped %d columns.",
+            len(drop_columns),
+        )
 
     market_prob_weight = args.market_prob_weight
     if market_prob_weight is None:
@@ -237,6 +277,9 @@ def main() -> None:
     config_payload = config.to_dict()
     config_payload["data_path"] = str(args.data_path)
     config_payload["out_json"] = str(out_json)
+    config_payload["disable_trend_features"] = bool(args.disable_trend_features)
+    if args.disable_trend_features:
+        config_payload["dropped_trend_columns"] = drop_columns
     config_payload.update(results.get("resolved_settings", {}))
     if "resolved_eval_seasons" in results:
         config_payload["resolved_eval_seasons"] = results["resolved_eval_seasons"]

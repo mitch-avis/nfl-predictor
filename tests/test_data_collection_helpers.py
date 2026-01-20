@@ -161,6 +161,82 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
     assert combined["game_id"][0] == "game1"
 
 
+def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
+    """TeamRankings loads once per season within a collection run."""
+
+    season_one = constants.MIN_SEASON + 1
+    season_two = season_one + 1
+    schedule_df = pl.DataFrame(
+        {
+            "season": pl.Series([season_one, season_two], dtype=pl.Int64),
+            "week": [1, 1],
+            "away_abbr": ["AAA", "CCC"],
+            "home_abbr": ["BBB", "DDD"],
+            "date": [date(2023, 9, 1), date(2024, 9, 1)],
+            "game_id": ["game1", "game2"],
+        }
+    )
+    prev_schedule = pl.DataFrame(
+        {
+            "season": pl.Series([season_one - 1], dtype=pl.Int64),
+            "week": [1],
+            "away_abbr": ["AAA"],
+            "home_abbr": ["BBB"],
+            "date": [date(2022, 9, 1)],
+            "game_id": ["game0"],
+        }
+    )
+    team_stats_df = pl.DataFrame(
+        {
+            "season": [season_one - 1],
+            "week": [1],
+            "team_abbr": ["AAA"],
+        }
+    )
+    tr_df = pl.DataFrame(
+        {
+            "team_abbr": ["AAA"],
+            "week": [1],
+            "predictive_rating": [1.0],
+        }
+    )
+    tr_calls: dict[int, int] = {}
+
+    def fake_load_schedule(seasons, **_kwargs):
+        """Fake schedule loader for testing."""
+        if seasons == [season_one - 1]:
+            return prev_schedule
+        return schedule_df
+
+    def fake_load_team_rankings(season, *_args, **_kwargs):
+        """Track TeamRankings loads by season."""
+        tr_calls[season] = tr_calls.get(season, 0) + 1
+        return tr_df
+
+    def fake_process_season(season, schedule_df, *_args, **_kwargs):
+        """Return season-specific schedule rows."""
+        return schedule_df.filter(pl.col("season") == season)
+
+    monkeypatch.setattr(polars_utils, "load_schedule", fake_load_schedule)
+    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_args, **_kwargs: team_stats_df)
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_raw_elo_data", lambda: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (season_two, 1))
+    monkeypatch.setattr(polars_utils, "load_team_rankings", fake_load_team_rankings)
+    monkeypatch.setattr(data_collection, "process_season", fake_process_season)
+    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
+    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
+    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
+    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+
+    combined = data_collection.collect_all_data([season_one, season_two])
+
+    assert combined.height == 2
+    assert tr_calls == {season_one: 1, season_two: 1}
+
+
 def test_process_week_fallback(monkeypatch) -> None:
     """Week processing falls back gracefully when lookahead/motivation features fail."""
 

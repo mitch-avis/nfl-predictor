@@ -213,6 +213,9 @@ for playoff games as long as the feature row exists.
 
 To include postseason games in training, pass `--include-postseason`. To emphasize postseason
 games, also set `--postseason-weight` (e.g., `--postseason-weight 1.5`).
+Optional recency weighting is available via `--recency-half-life-weeks` or
+`--recency-half-life-seasons` (use only one) to apply exponential decay to training and
+calibration samples.
 
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
 - `--calibration-seasons` reserves seasons just before the holdout for calibration/blending.
@@ -294,6 +297,8 @@ python scripts/walk_forward_backtest.py --help
 This is the **canonical evaluation protocol** for model selection. By default it evaluates the
 last N seasons (regular season only) with time-aware calibration from the last K weeks of each
 eval season. Use `--include-postseason` if you want postseason folds included.
+Optional recency weighting is available via `--recency-half-life-weeks` or
+`--recency-half-life-seasons` (use only one).
 GPU acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`.
 
 Evaluation rule:

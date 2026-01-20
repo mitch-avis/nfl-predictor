@@ -514,6 +514,20 @@ def process_season(
         log.warning("No schedule data for season %d", season)
         return pl.DataFrame()
 
+    # Precompute trend features for the season (time-safe, prior weeks only)
+    team_elo_trends = pl.DataFrame()
+    qb_trends = pl.DataFrame()
+    team_stat_trends = pl.DataFrame()
+    if elo_df is not None and elo_df.height > 0:
+        team_elo_trends = polars_utils.build_team_elo_trends(elo_df, season)
+        qb_trends = polars_utils.build_qb_trends(elo_df, season)
+    if team_stats_df.height > 0:
+        team_stat_trends = polars_utils.build_team_stat_trends(
+            team_stats_df,
+            season,
+            stats=["scoring_margin", "turnover_margin"],
+        )
+
     # Get unique weeks in the schedule
     weeks = sorted(season_schedule.select("week").unique().to_series().to_list())
 
@@ -532,6 +546,9 @@ def process_season(
             elo_df=elo_df,
             tr_df=tr_df,
             prev_tr_df=prev_tr_df,
+            team_elo_trends=team_elo_trends,
+            qb_trends=qb_trends,
+            team_stat_trends=team_stat_trends,
         )
         if week_data.height > 0:
             weekly_data.append(week_data)
@@ -565,6 +582,9 @@ def process_week(
     elo_df: Optional[pl.DataFrame] = None,
     tr_df: Optional[pl.DataFrame] = None,
     prev_tr_df: Optional[pl.DataFrame] = None,
+    team_elo_trends: Optional[pl.DataFrame] = None,
+    qb_trends: Optional[pl.DataFrame] = None,
+    team_stat_trends: Optional[pl.DataFrame] = None,
 ) -> pl.DataFrame:
     """
     Process a single week's games with aggregated stats from prior weeks.
@@ -665,6 +685,9 @@ def process_week(
     with _timed_substep("merge_team_stats", timing_enabled, timing_totals):
         merged = polars_utils.merge_schedule_with_team_stats(week_games, agg_stats)
 
+    # Season phase features (normalized week + early/mid/late buckets)
+    merged = polars_utils.add_season_phase_features(merged, season=season, week=week)
+
     # Season-to-date W-L-T record features (time-safe: strictly before this week)
     records_df = pl.DataFrame()
     with _timed_substep("record_features", timing_enabled, timing_totals):
@@ -749,9 +772,32 @@ def process_week(
                         )
                         merged = merged.join(home_elo, on="home_abbr", how="left")
 
+    # Merge trend features derived from ELO/QB history and team stats
+    merged = _merge_team_trends(merged, team_elo_trends)
+    merged = _merge_team_trends(merged, team_stat_trends)
+    merged = _merge_qb_trends(merged, qb_trends)
+
     # Merge with TeamRankings
     with _timed_substep("merge_team_rankings", timing_enabled, timing_totals):
         merged = _merge_team_rankings(merged, season, week, tr_df, prev_tr_df)
+
+    # TeamRankings trend: last-5 vs last-10 rating
+    if {
+        "away_last_5_games_rating",
+        "away_last_10_games_rating",
+        "home_last_5_games_rating",
+        "home_last_10_games_rating",
+    }.issubset(merged.columns):
+        merged = merged.with_columns(
+            [
+                (pl.col("away_last_5_games_rating") - pl.col("away_last_10_games_rating")).alias(
+                    "away_last_5_games_rating_trend"
+                ),
+                (pl.col("home_last_5_games_rating") - pl.col("home_last_10_games_rating")).alias(
+                    "home_last_5_games_rating_trend"
+                ),
+            ]
+        )
 
     # Divisional rivalry feature
     with _timed_substep("add_divisional_feature", timing_enabled, timing_totals):
@@ -796,6 +842,73 @@ def process_week(
         stats_to_diff = polars_utils.get_stats_for_diff()
         merged = polars_utils.calculate_stat_differentials(merged, stats_to_diff)
 
+    # Fill missing trend features with neutral defaults
+    trend_cols = []
+    for base in constants.TREND_FEATURE_COLUMNS:
+        trend_cols.extend([f"away_{base}", f"home_{base}", f"{base}_diff"])
+    merged = merged.with_columns(
+        [pl.col(col).fill_null(0.0).cast(pl.Float32) for col in trend_cols if col in merged.columns]
+    )
+
+    return merged
+
+
+def _merge_team_trends(
+    merged: pl.DataFrame,
+    trend_df: Optional[pl.DataFrame],
+) -> pl.DataFrame:
+    """Merge per-team trend features for away/home teams."""
+
+    if trend_df is None or trend_df.height == 0:
+        return merged
+
+    required = {"season", "week", "team_abbr"}
+    if not required.issubset(trend_df.columns):
+        return merged
+
+    value_cols = [c for c in trend_df.columns if c not in required]
+    if not value_cols:
+        return merged
+
+    away_map = {"team_abbr": "away_abbr", **{c: f"away_{c}" for c in value_cols}}
+    home_map = {"team_abbr": "home_abbr", **{c: f"home_{c}" for c in value_cols}}
+
+    away_trends = trend_df.rename(away_map)
+    home_trends = trend_df.rename(home_map)
+
+    merged = merged.join(away_trends, on=["season", "week", "away_abbr"], how="left")
+    merged = merged.join(home_trends, on=["season", "week", "home_abbr"], how="left")
+    return merged
+
+
+def _merge_qb_trends(
+    merged: pl.DataFrame,
+    trend_df: Optional[pl.DataFrame],
+) -> pl.DataFrame:
+    """Merge per-QB trend features for away/home QBs."""
+
+    if trend_df is None or trend_df.height == 0:
+        return merged
+
+    required = {"season", "week", "qb_name"}
+    if not required.issubset(trend_df.columns):
+        return merged
+
+    if "away_qb" not in merged.columns or "home_qb" not in merged.columns:
+        return merged
+
+    value_cols = [c for c in trend_df.columns if c not in required]
+    if not value_cols:
+        return merged
+
+    away_map = {"qb_name": "away_qb", **{c: f"away_{c}" for c in value_cols}}
+    home_map = {"qb_name": "home_qb", **{c: f"home_{c}" for c in value_cols}}
+
+    away_trends = trend_df.rename(away_map)
+    home_trends = trend_df.rename(home_map)
+
+    merged = merged.join(away_trends, on=["season", "week", "away_qb"], how="left")
+    merged = merged.join(home_trends, on=["season", "week", "home_qb"], how="left")
     return merged
 
 

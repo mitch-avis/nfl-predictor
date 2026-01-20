@@ -35,6 +35,7 @@ def test_process_week_uses_fallback_stats_for_week1() -> None:
         week=1,
         schedule_df=schedule_df,
         team_stats_df=team_stats_df,
+        min_season=2006,
         elo_df=None,
         tr_df=None,
         prev_tr_df=None,

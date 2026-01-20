@@ -25,6 +25,7 @@ import pandas as pd
 
 from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import metrics as metrics_utils
+from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
 
 DEFAULT_CALIBRATION_WEEKS = 4
@@ -77,6 +78,8 @@ class WalkForwardConfig:
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
     feature_end: str = ml_model.DEFAULT_FEATURE_END_COLUMN
     early_stopping_rounds: int = ml_model.DEFAULT_EARLY_STOPPING_ROUNDS
+    recency_half_life_weeks: Optional[float] = None
+    recency_half_life_seasons: Optional[float] = None
     disable_pruning: bool = False
     xgb_params_overrides: Optional[dict[str, Any]] = None
 
@@ -104,6 +107,8 @@ class WalkForwardConfig:
             "feature_start": self.feature_start,
             "feature_end": self.feature_end,
             "early_stopping_rounds": self.early_stopping_rounds,
+            "recency_half_life_weeks": self.recency_half_life_weeks,
+            "recency_half_life_seasons": self.recency_half_life_seasons,
             "disable_pruning": self.disable_pruning,
             "xgb_params_overrides": self.xgb_params_overrides,
         }
@@ -299,6 +304,7 @@ def _fit_calibrator(
     pred_margin: np.ndarray,
     actual_home_win: np.ndarray,
     method: str,
+    sample_weight: Optional[np.ndarray] = None,
 ) -> Optional[ml_model.WinProbCalibrator]:
     method = method.lower()
     if method == "none":
@@ -307,7 +313,9 @@ def _fit_calibrator(
     if len(unique) < 2:
         log.info("Calibration skipped: only one outcome class present.")
         return None
-    return ml_model._fit_win_prob_calibrator(pred_margin, actual_home_win, method)
+    return ml_model._fit_win_prob_calibrator(
+        pred_margin, actual_home_win, method, sample_weight=sample_weight
+    )
 
 
 def _resolve_xgb_params(config: WalkForwardConfig) -> dict[str, Any]:
@@ -385,6 +393,12 @@ def run_walk_forward_backtest(
         y_margin_train, y_total_train, _, _ = ml_model._prepare_margin_total_targets_with_anchor(
             fold.train_df, target_columns, market_anchor
         )
+        train_recency = compute_recency_sample_weight(
+            fold.train_df,
+            half_life_weeks=config.recency_half_life_weeks,
+            half_life_seasons=config.recency_half_life_seasons,
+        )
+        train_weight = combine_sample_weights(train_recency)
 
         calibration_df = select_calibration_data(
             fold.train_df, fold.season, fold.week, config.calibration_weeks
@@ -415,6 +429,7 @@ def run_walk_forward_backtest(
             y_margin_eval=y_margin_calibration,
             y_total_eval=y_total_calibration,
             early_stopping_rounds=config.early_stopping_rounds,
+            sample_weight=train_weight,
         )
 
         quantiles: tuple[float, ...] | None = None
@@ -430,6 +445,7 @@ def run_walk_forward_backtest(
                 x_eval=x_calibration,
                 y_eval=y_margin_calibration,
                 early_stopping_rounds=config.early_stopping_rounds,
+                sample_weight=train_weight,
             )
             total_quantiles = ml_model._fit_quantile_models(
                 x_train,
@@ -439,6 +455,7 @@ def run_walk_forward_backtest(
                 x_eval=x_calibration,
                 y_eval=y_total_calibration,
                 early_stopping_rounds=config.early_stopping_rounds,
+                sample_weight=train_weight,
             )
 
         calibrator = None
@@ -481,10 +498,16 @@ def run_walk_forward_backtest(
                     pred_margin_inputs = pred_margin_calibration / sigma_calibration
                 away_col, home_col = target_columns
                 actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
+                calibration_recency = compute_recency_sample_weight(
+                    calibration_df,
+                    half_life_weeks=config.recency_half_life_weeks,
+                    half_life_seasons=config.recency_half_life_seasons,
+                )
                 calibrator = _fit_calibrator(
                     pred_margin_inputs,
                     actual_home_win.to_numpy(),
                     resolved_calibration,
+                    sample_weight=calibration_recency,
                 )
                 if calibrator is None:
                     calibration_method = "none"

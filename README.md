@@ -139,8 +139,14 @@ Typical outputs:
 Note: the `data/` directory is gitignored by default; generate it via the data collection step above.
 Note: `*_ml.csv` files include model-ready engineered features.
 
-Historical weeks load from cached artifacts where available; the current week may require network
-access for external sources handled by `nfl_predictor/utils/scraping_utils.py`.
+Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
+season under `data/cache/nflreadpy` (schedule + team stats). Current/future seasons are always
+refreshed to keep upcoming games and lines current. Use `--min-season`/`--max-season` to override
+the default season window (defaults to `constants.MIN_SEASON` through the current NFL season).
+
+TeamRankings data is cached under `data/<season>/` as week-level CSVs; enable debug logging to see
+cache hits. Use `--timing` to log per-step runtimes and `--debug-logs` for detailed ETL diagnostics.
+Use `--refresh-nflreadpy` to force refresh nflreadpy data even when cache exists.
 
 ## Data sources + missing data
 

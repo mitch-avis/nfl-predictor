@@ -128,7 +128,7 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
         }
     )
 
-    def fake_load_schedule(seasons):
+    def fake_load_schedule(seasons, **_kwargs):
         """Fake schedule loader for testing."""
         if seasons == [season - 1]:
             return prev_schedule
@@ -163,8 +163,6 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
 
 def test_process_week_fallback(monkeypatch) -> None:
     """Week processing falls back gracefully when lookahead/motivation features fail."""
-
-    monkeypatch.setattr(data_collection, "SEASONS_TO_PROCESS", [2022, 2023])
 
     schedule_df = pl.DataFrame(
         {
@@ -229,6 +227,7 @@ def test_process_week_fallback(monkeypatch) -> None:
         week=1,
         schedule_df=schedule_df,
         team_stats_df=team_stats_df,
+        min_season=2022,
         elo_df=elo_df,
         tr_df=tr_df,
         prev_tr_df=None,

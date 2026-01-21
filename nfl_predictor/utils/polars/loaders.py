@@ -14,7 +14,10 @@ from polars.datatypes import DataType
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.scraping_utils import get_current_nfl_week, normalize_team_column
+from nfl_predictor.utils.scraping_utils import (
+    get_current_nfl_week,
+    normalize_team_column,
+)
 
 NUMERIC_DTYPES = {
     pl.Int8,
@@ -88,6 +91,68 @@ def _write_cached_frame(df: pl.DataFrame, path: Path) -> None:
         log.warning("Failed to write nflreadpy cache file %s: %s", path, exc)
 
 
+def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
+    """Add stadium type and altitude features."""
+
+    roof_expr = pl.lit(None)
+    if "stadium_roof" in df.columns:
+        roof_raw = pl.col("stadium_roof").cast(pl.Utf8).str.to_lowercase()
+        roof_expr = (
+            pl.when(roof_raw.str.contains("retract"))
+            .then(pl.lit("retractable"))
+            .when(roof_raw.str.contains("dome|indoor|closed"))
+            .then(pl.lit("dome"))
+            .when(roof_raw.str.contains("outdoor|open"))
+            .then(pl.lit("open"))
+            .otherwise(pl.lit(None))
+        )
+
+    if "stadium_id" in df.columns:
+        altitude_map = {
+            stadium_id: meta.get("elevation_ft", 0.0)
+            for stadium_id, meta in constants.STADIUMS.items()
+        }
+        altitude = (
+            pl.col("stadium_id")
+            .replace_strict(altitude_map, default=0.0)
+            .cast(pl.Float32)
+            .alias("stadium_altitude")
+        )
+    else:
+        altitude = pl.lit(0.0, dtype=pl.Float32).alias("stadium_altitude")
+
+    stadium_type = (
+        pl.when(roof_expr.is_null())
+        .then(pl.lit("unknown"))
+        .otherwise(roof_expr)
+        .cast(pl.Utf8)
+        .alias("stadium_type")
+    )
+
+    if "stadium_city" not in df.columns:
+        df = df.with_columns(pl.lit(None).alias("stadium_city"))
+    if "stadium_state" not in df.columns:
+        df = df.with_columns(pl.lit(None).alias("stadium_state"))
+    if "stadium_name" not in df.columns:
+        df = df.with_columns(pl.lit(None).alias("stadium_name"))
+
+    if "stadium_surface" in df.columns:
+        df = df.with_columns(
+            pl.col("stadium_surface").cast(pl.Utf8).str.to_lowercase().alias("stadium_surface")
+        )
+
+    return df.with_columns([stadium_type, altitude])
+
+
+def _apply_schedule_enrichments(df: pl.DataFrame) -> pl.DataFrame:
+    """Add optional stadium features to a schedule DataFrame."""
+
+    if "stadium_id" in df.columns and "stadium_city" not in df.columns:
+        df = _add_stadium_location(df)
+    df = _add_stadium_features(df)
+    return df
+
+
 def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
     """Normalize raw nflreadpy schedule data to the project schema."""
 
@@ -152,9 +217,7 @@ def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
             pl.coalesce([dt_24, dt_ampm, dt_ampm_sp]).alias("game_datetime")
         )
 
-    # Add stadium city and state from stadium_id
-    if "stadium_id" in schedule_df.columns:
-        schedule_df = _add_stadium_location(schedule_df)
+    schedule_df = _apply_schedule_enrichments(schedule_df)
 
     return schedule_df
 
@@ -231,7 +294,7 @@ def load_schedule(
                 season,
                 cache_path,
             )
-            schedule_frames.append(cached)
+            schedule_frames.append(_apply_schedule_enrichments(cached))
             continue
 
         if season < resolved_current_season and not force_refresh:
@@ -249,25 +312,31 @@ def load_schedule(
 
 def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Add stadium city and state columns based on stadium_id.
+    Add stadium name, city, and state columns based on stadium_id.
 
-    Uses the STADIUM_LOCATIONS mapping in constants to look up
+    Uses the STADIUMS mapping in constants to look up
     city and state for each stadium.
 
     Args:
         df: DataFrame with stadium_id column
 
     Returns:
-        DataFrame with stadium_city and stadium_state columns added
+        DataFrame with stadium_name, stadium_city, and stadium_state columns added
     """
 
-    # Create mapping dictionaries for city and state
-    city_map = {k: v["city"] for k, v in constants.STADIUM_LOCATIONS.items()}
-    state_map = {k: v["state"] for k, v in constants.STADIUM_LOCATIONS.items()}
+    # Create mapping dictionaries for name/city/state
+    name_map = {k: v.get("name") for k, v in constants.STADIUMS.items()}
+    city_map = {k: v.get("city") for k, v in constants.STADIUMS.items()}
+    state_map = {k: v.get("state") for k, v in constants.STADIUMS.items()}
 
-    # Add city and state columns using replace_strict (Polars >=1.0)
+    name_expr = pl.col("stadium_id").replace_strict(name_map, default=None)
+    if "stadium_name" in df.columns:
+        name_expr = pl.coalesce([pl.col("stadium_name"), name_expr])
+
+    # Add name/city/state columns using replace_strict (Polars >=1.0)
     df = df.with_columns(
         [
+            name_expr.alias("stadium_name"),
             pl.col("stadium_id").replace_strict(city_map, default=None).alias("stadium_city"),
             pl.col("stadium_id").replace_strict(state_map, default=None).alias("stadium_state"),
         ]

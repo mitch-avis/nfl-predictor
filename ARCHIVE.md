@@ -591,11 +591,56 @@ Acceptance:
 - [x] New features are leakage-safe and schema-invariant.
 - [x] Walk-forward results show a clear improvement or documented tradeoff.
 
+### Milestone 32 - Weather + venue effects (consistent, non-leaky)
+
+Completion note: Added stadium type/altitude plus weather temp/wind/precip flags with safe
+null/zero fallbacks and tests for missing coverage.
+
+Tasks:
+
+- [x] Extend stadium metadata beyond city/state (type + altitude).
+- [x] Pull historical weather fields from NFLverse schedule data.
+- [x] Define missing-data policy and enforce invariant schema.
+- [x] Add tests for missing-weather fallbacks and schema invariance.
+
+Acceptance:
+
+- [x] Weather/venue features exist for all games with safe fallbacks; walk-forward impact pending.
+
+### Milestone 33 - Head coach features (if data is robust)
+
+Completion note: Added coach prior record features (career and team-specific) with time-safe
+aggregation and leakage tests.
+
+Tasks:
+
+- [x] Confirm coach coverage via NFLverse schedule fields.
+- [x] Add coach prior record features computed strictly to date.
+- [x] Add tests that verify no leakage in coach-derived features.
+
+Acceptance:
+
+- [x] Coach features are leakage-safe; walk-forward impact pending.
+
+### Milestone 34 - Referee features (if data is robust)
+
+Completion note: Added referee historical tendency features (home win %, margins, totals) with
+time-safe aggregation and leakage tests.
+
+Tasks:
+
+- [x] Confirm referee coverage via NFLverse schedule fields.
+- [x] Add referee historical tendency features computed strictly to date.
+- [x] Add tests that verify no leakage in ref-derived features.
+
+Acceptance:
+
+- [x] Referee features are leakage-safe; walk-forward impact pending.
+
 ### Milestone 35 - Pandas to Polars audit/refactor
 
 Completion note: Completed a pandas usage audit; ETL is Polars-first and pandas usage is confined
-to ML, reporting, and orchestration layers. Inventory and rationale documented in
-`docs/pandas_audit.md`. No safe non-ML/reporting refactors were identified.
+to ML, reporting, and orchestration layers. No safe non-ML/reporting refactors were identified.
 
 #### Tasks
 

@@ -23,47 +23,52 @@ Execution loop for each milestone:
 
 ---
 
-## Milestone 32 - Weather + venue effects (consistent, non-leaky)
+## Milestone 32B - Stadium metadata + venue features (non-leaky)
 
-- [ ] Extend stadium metadata beyond city/state:
-  - stadium type (open / dome / retractable)
-  - altitude (Denver, Mexico City, etc.)
-- [ ] Pull historical weather where available (ideally from NFLverse via `nflreadpy`):
-  - temperature, wind, precipitation flags
-- [ ] Define strict missing-data policy and ensure invariant schema across seasons.
-- [ ] Add tests for missing-weather fallbacks and schema invariance.
+Context: Weather and referee data are not reliable pre-kickoff, so focus is stadium metadata
+and coach features only.
+
+Tasks:
+
+- [x] Expand `STADIUMS` to include `name` and `elevation` (and keep city/state).
+- [ ] Update stadium feature derivation to use the new `STADIUMS` fields and drop any
+  legacy altitude map if redundant.
+- [ ] Keep stadium type/surface features derived from NFLverse schedule fields.
+- [ ] Add/adjust tests for stadium metadata parsing and safe fallbacks.
+- [ ] Update README feature list to reflect stadium-only (no weather/ref).
 
 Acceptance:
 
-- [ ] Weather/venue features exist for all games with safe fallbacks and improve metrics.
+- [ ] Stadium metadata features are present for all games with safe defaults.
 
 ---
 
-## Milestone 33 - Head coach features (if data is robust)
+## Milestone 33 - Head coach features (time-safe)
 
-- [ ] Determine availability/coverage of head coach information (ideally via NFLverse).
-- [ ] If reliable:
-  - encode coach identity (categorical) and/or tenure/experience features
-  - add coach prior record (career and with current team) computed strictly to date
-- [ ] Add tests that verify no leakage in coach-derived features.
+Tasks:
+
+- [ ] Keep coach prior record features (career + team-specific) computed strictly to date.
+- [ ] Add/adjust tests that verify no leakage in coach-derived features.
+- [ ] Run walk-forward ablation to confirm effect.
 
 Acceptance:
 
-- [ ] Coach features do not leak and demonstrate value in walk-forward.
+- [ ] Coach features are leakage-safe and show documented impact in walk-forward.
 
 ---
 
-## Milestone 34 - Referee features (if data is robust)
+## Milestone 34 - Remove weather + referee features (post-game data)
 
-- [ ] Determine availability/coverage of referee assignments historically.
-- [ ] If reliable:
-  - encode referee identity (categorical) and/or per-ref historical tendencies computed to date
-    (penalties, home bias proxies, etc.)
-- [ ] Add tests that verify no leakage in ref-derived features.
+Tasks:
+
+- [ ] Remove weather fields from constants, ETL, and tests (including any parsing logic).
+- [ ] Remove referee features and any ref-derived aggregates from ETL and tests.
+- [ ] Ensure feature ordering/schema stays invariant after removal.
+- [ ] Update README + ARCHIVE notes to reflect the rollback.
 
 Acceptance:
 
-- [ ] Ref features do not leak and improve at least one primary metric.
+- [ ] No weather/ref features exist in datasets or feature specs; tests remain green.
 
 ---
 

@@ -29,14 +29,37 @@ def test_polars_utils_facade() -> None:
 def test_add_stadium_location() -> None:
     """Stadium location data is added correctly based on stadium_id."""
 
-    stadium_id = next(iter(constants.STADIUM_LOCATIONS.keys()))
+    stadium_id = next(iter(constants.STADIUMS.keys()))
     df = pl.DataFrame({"stadium_id": [stadium_id]})
 
     out = loaders._add_stadium_location(df)
 
+    assert "stadium_name" in out.columns
     assert "stadium_city" in out.columns
     assert "stadium_state" in out.columns
-    assert out["stadium_city"][0] == constants.STADIUM_LOCATIONS[stadium_id]["city"]
+    assert out["stadium_name"][0] == constants.STADIUMS[stadium_id]["name"]
+    assert out["stadium_city"][0] == constants.STADIUMS[stadium_id]["city"]
+
+
+def test_add_stadium_features() -> None:
+    """Stadium features include type/altitude with safe defaults."""
+
+    df = pl.DataFrame(
+        {
+            "stadium_id": ["DEN00", "XXX00"],
+            "stadium_roof": ["Outdoors", "Dome"],
+            "stadium_surface": ["Grass", "FieldTurf"],
+        }
+    )
+
+    out = loaders._add_stadium_features(df)
+
+    assert out["stadium_type"].to_list() == ["open", "dome"]
+    assert out["stadium_altitude"][0] == 5280.0
+    assert out["stadium_altitude"][1] == 0.0
+    assert out["stadium_surface"].to_list() == ["grass", "fieldturf"]
+    assert out.select(pl.col("stadium_city").is_null().all()).item() is True
+    assert out.select(pl.col("stadium_state").is_null().all()).item() is True
 
 
 def test_load_schedule_transforms(monkeypatch, tmp_path: Path) -> None:

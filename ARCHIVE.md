@@ -607,10 +607,28 @@ Acceptance:
 
 - [x] Stadium metadata features are maintained; weather features were removed due to leakage risk.
 
+### Milestone 32B - Stadium metadata + venue features (non-leaky)
+
+Completion note: Stadium metadata expanded and wired through ETL/tests with safe defaults.
+
+Tasks:
+
+- [x] Expand `STADIUMS` to include `name` and `elevation` (and keep city/state).
+- [x] Update stadium feature derivation to use the new `STADIUMS` fields and drop any legacy
+  altitude map if redundant.
+- [x] Keep stadium type/surface features derived from NFLverse schedule fields.
+- [x] Add/adjust tests for stadium metadata parsing and safe fallbacks.
+- [x] Update README feature list to reflect stadium-only (no weather/ref).
+
+Acceptance:
+
+- [x] Stadium metadata features are present for all games with safe defaults.
+
 ### Milestone 33 - Head coach features (if data is robust)
 
 Completion note: Added coach prior record features (career and team-specific) with time-safe
-aggregation and leakage tests.
+aggregation and leakage tests; walk-forward ablation completed and coach_on retained for
+full-feature training.
 
 Tasks:
 
@@ -620,7 +638,7 @@ Tasks:
 
 Acceptance:
 
-- [x] Coach features are leakage-safe; walk-forward impact pending.
+- [x] Coach features are leakage-safe; walk-forward ablation completed (coach_on retained).
 
 ### Milestone 34 - Referee features (if data is robust)
 
@@ -634,6 +652,7 @@ Tasks:
 Acceptance:
 
 - [x] Referee features are removed; data is not reliable pre-kickoff.
+- [x] Feature ordering/schema remains invariant after removal.
 
 ### Milestone 35 - Pandas to Polars audit/refactor
 
@@ -652,3 +671,17 @@ Acceptance:
 
 - [x] ETL and feature engineering are fully Polars-first with minimal pandas use.
 - [x] Remaining pandas usage is justified and documented.
+
+### Milestone 36 - Data availability guards (nflreadpy + TeamRankings)
+
+Completion note: Added guardrails for nflreadpy/TeamRankings availability with tests.
+
+Tasks:
+
+- [x] Enforce nflreadpy availability (min season >= 1999) in data collection CLI.
+- [x] Skip TeamRankings loads for seasons before 2003 and use week 2 as the earliest week in 2003.
+- [x] Add unit tests for the guardrails.
+
+Acceptance:
+
+- [x] Data collection fails fast for pre-1999 seasons and skips TR pre-2003 without errors.

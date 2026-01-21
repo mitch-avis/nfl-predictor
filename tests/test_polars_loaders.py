@@ -55,8 +55,8 @@ def test_add_stadium_features() -> None:
     out = loaders._add_stadium_features(df)
 
     assert out["stadium_type"].to_list() == ["open", "dome"]
-    assert out["stadium_altitude"][0] == 5280.0
-    assert out["stadium_altitude"][1] == 0.0
+    assert out["stadium_elevation"][0] == 5280.0
+    assert out["stadium_elevation"][1] == 0.0
     assert out["stadium_surface"].to_list() == ["grass", "fieldturf"]
     assert out.select(pl.col("stadium_city").is_null().all()).item() is True
     assert out.select(pl.col("stadium_state").is_null().all()).item() is True

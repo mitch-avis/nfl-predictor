@@ -188,6 +188,11 @@ def _resolve_config(argv: Optional[list[str]]) -> DataCollectionConfig:
 def _resolve_seasons(min_season: int, max_season: int) -> list[int]:
     """Resolve the list of seasons to process (inclusive bounds)."""
 
+    if min_season < constants.NFLREADPY_MIN_SEASON:
+        raise ValueError(
+            f"min_season must be >= {constants.NFLREADPY_MIN_SEASON} "
+            "(nflreadpy data availability starts in 1999)."
+        )
     if max_season < min_season:
         raise ValueError("max_season must be >= min_season.")
     return list(range(min_season, max_season + 1))
@@ -349,7 +354,7 @@ def collect_all_data(
     # Include previous season for week 1 regression if not processing from the beginning
     stats_seasons = list(seasons)
     min_season = min(seasons)
-    if min_season > constants.MIN_SEASON - 1:  # Need prior season for week 1 regression
+    if min_season > constants.NFLREADPY_MIN_SEASON:  # Need prior season for week 1 regression
         stats_seasons = [min_season - 1] + stats_seasons
 
     # Load team statistics (regular season only - used for building features)
@@ -368,7 +373,7 @@ def collect_all_data(
     # This enables computing points-related metrics like scoring margin
     # Need to also load schedule for previous season for scoring data
     with _timed_step("add_scoring_data", config.enable_timing):
-        if min_season > constants.MIN_SEASON - 1:
+        if min_season > constants.NFLREADPY_MIN_SEASON:
             prev_schedule = polars_utils.load_schedule(
                 [min_season - 1],
                 force_refresh=config.force_refresh_nflreadpy,
@@ -413,7 +418,20 @@ def collect_all_data(
         cached_df = team_rankings_cache.get(season)
         if cached_df is not None:
             return cached_df
-        min_week = 2 if season == min_season and season < current_season else 1
+        if season < constants.TEAMRANKINGS_MIN_SEASON:
+            log.info(
+                "Skipping TeamRankings for season %d (data starts in %d).",
+                season,
+                constants.TEAMRANKINGS_MIN_SEASON,
+            )
+            team_rankings_cache[season] = pl.DataFrame()
+            return team_rankings_cache[season]
+
+        min_week = 1
+        if season == constants.TEAMRANKINGS_MIN_SEASON:
+            min_week = max(min_week, constants.TEAMRANKINGS_MIN_WEEK)
+        if season == min_season and season < current_season:
+            min_week = max(min_week, constants.TEAMRANKINGS_MIN_WEEK)
         with _timed_step(f"load_team_rankings_{season}", config.enable_timing):
             tr_df = polars_utils.load_team_rankings(
                 season,

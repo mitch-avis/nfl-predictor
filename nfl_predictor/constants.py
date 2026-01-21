@@ -362,6 +362,12 @@ NFLREADPY_SCHEDULE_COLUMNS = [
     "game_type",  # REG, WC, DIV, CON, SB for filtering
     "week",
     "gameday",
+    "stadium_id",
+    "stadium",
+    "roof",
+    "surface",
+    "home_coach",
+    "away_coach",
     # Kickoff time fields (availability depends on nflreadpy/nflverse version)
     "gametime",
     "game_time",
@@ -396,6 +402,9 @@ NFLREADPY_SCHEDULE_RENAME = {
     "location": "neutral",  # Will need to transform: "Home" -> 0, "Neutral" -> 1
     "div_game": "division",
     "spread_line": "away_spread",  # nflreadpy spread_line is from away team perspective
+    "roof": "stadium_roof",
+    "surface": "stadium_surface",
+    "stadium": "stadium_name",
 }
 
 # ============================================================================
@@ -491,6 +500,29 @@ SEASON_PHASE_COLUMNS = [
     "season_phase_late",
 ]
 
+STADIUM_FEATURE_COLUMNS = [
+    "stadium_name",
+    "stadium_city",
+    "stadium_state",
+    "stadium_surface",
+    "stadium_type",
+    "stadium_altitude",
+]
+
+COACH_FEATURE_COLUMNS = [
+    "away_coach",
+    "home_coach",
+    "away_coach_games_prior",
+    "home_coach_games_prior",
+    "away_coach_win_pct_prior",
+    "home_coach_win_pct_prior",
+    "away_coach_team_games_prior",
+    "home_coach_team_games_prior",
+    "away_coach_team_win_pct_prior",
+    "home_coach_team_win_pct_prior",
+]
+
+
 LOOKAHEAD_FEATURE_COLUMNS = [
     "away_next_opponent_abbr",
     "away_next_is_home",
@@ -561,6 +593,8 @@ METADATA_COLUMNS = [
     "home_qb",
     "away_rest",
     "home_rest",
+    *STADIUM_FEATURE_COLUMNS,
+    *COACH_FEATURE_COLUMNS,
     *SEASON_PHASE_COLUMNS,
     "neutral",
     "division",
@@ -707,73 +741,335 @@ RESULT_COLUMNS = [
     "home_score",
 ]
 
-# ============================================================================
-# Stadium Location Mapping (stadium_id -> city, state)
-# ============================================================================
-
-# Maps nflreadpy stadium_id to city and state/country
-# Stadium IDs follow pattern: CITY## or ABBR## where ## is a version number
-STADIUM_LOCATIONS = {
+# =============================================================================
+# Stadium Metadata (stadium_id -> name, city, state/country, elevation_ft)
+# =============================================================================
+STADIUMS = {
     # AFC East
-    "BOS00": {"city": "Foxborough", "state": "MA"},  # Gillette Stadium
-    "BUF00": {"city": "Orchard Park", "state": "NY"},  # Highmark Stadium/New Era Field
-    "BUF01": {"city": "Toronto", "state": "ON"},  # Rogers Centre (Toronto games)
-    "MIA00": {"city": "Miami Gardens", "state": "FL"},  # Hard Rock Stadium
-    "NYC00": {"city": "East Rutherford", "state": "NJ"},  # Giants Stadium (old)
-    "NYC01": {"city": "East Rutherford", "state": "NJ"},  # MetLife Stadium
+    "BOS00": {
+        "name": "Gillette Stadium",
+        "city": "Foxborough",
+        "state": "MA",
+        "elevation_ft": 289.0,
+    },
+    "BUF00": {
+        "name": "Highmark Stadium",
+        "city": "Orchard Park",
+        "state": "NY",
+        "elevation_ft": 866.0,
+    },
+    "BUF01": {
+        "name": "Rogers Centre",
+        "city": "Toronto",
+        "state": "ON",
+        "elevation_ft": 251.0,
+    },
+    "MIA00": {
+        "name": "Hard Rock Stadium",
+        "city": "Miami Gardens",
+        "state": "FL",
+        "elevation_ft": 10.0,
+    },
+    "NYC00": {
+        "name": "Giants Stadium",
+        "city": "East Rutherford",
+        "state": "NJ",
+        "elevation_ft": 7.0,
+    },
+    "NYC01": {
+        "name": "MetLife Stadium",
+        "city": "East Rutherford",
+        "state": "NJ",
+        "elevation_ft": 7.0,
+    },
     # AFC North
-    "BAL00": {"city": "Baltimore", "state": "MD"},  # M&T Bank Stadium
-    "CIN00": {"city": "Cincinnati", "state": "OH"},  # Paycor Stadium
-    "CLE00": {"city": "Cleveland", "state": "OH"},  # Cleveland Browns Stadium
-    "PIT00": {"city": "Pittsburgh", "state": "PA"},  # Acrisure Stadium/Heinz Field
+    "BAL00": {
+        "name": "M&T Bank Stadium",
+        "city": "Baltimore",
+        "state": "MD",
+        "elevation_ft": 10.0,
+    },
+    "CIN00": {
+        "name": "Paycor Stadium",
+        "city": "Cincinnati",
+        "state": "OH",
+        "elevation_ft": 482.0,
+    },
+    "CLE00": {
+        "name": "Cleveland Browns Stadium",
+        "city": "Cleveland",
+        "state": "OH",
+        "elevation_ft": 580.0,
+    },
+    "PIT00": {
+        "name": "Acrisure Stadium",
+        "city": "Pittsburgh",
+        "state": "PA",
+        "elevation_ft": 712.0,
+    },
     # AFC South
-    "HOU00": {"city": "Houston", "state": "TX"},  # NRG Stadium/Reliant Stadium
-    "IND00": {"city": "Indianapolis", "state": "IN"},  # Lucas Oil Stadium
-    "IND99": {"city": "Indianapolis", "state": "IN"},  # RCA Dome (old)
-    "JAX00": {"city": "Jacksonville", "state": "FL"},  # EverBank Stadium
-    "NAS00": {"city": "Nashville", "state": "TN"},  # Nissan Stadium/LP Field
+    "HOU00": {
+        "name": "NRG Stadium",
+        "city": "Houston",
+        "state": "TX",
+        "elevation_ft": 49.0,
+    },
+    "IND00": {
+        "name": "Lucas Oil Stadium",
+        "city": "Indianapolis",
+        "state": "IN",
+        "elevation_ft": 715.0,
+    },
+    "IND99": {
+        "name": "RCA Dome",
+        "city": "Indianapolis",
+        "state": "IN",
+        "elevation_ft": 715.0,
+    },
+    "JAX00": {
+        "name": "EverBank Stadium",
+        "city": "Jacksonville",
+        "state": "FL",
+        "elevation_ft": 16.0,
+    },
+    "NAS00": {
+        "name": "Nissan Stadium",
+        "city": "Nashville",
+        "state": "TN",
+        "elevation_ft": 597.0,
+    },
     # AFC West
-    "DEN00": {"city": "Denver", "state": "CO"},  # Empower Field at Mile High
-    "KAN00": {"city": "Kansas City", "state": "MO"},  # Arrowhead Stadium
-    "LAX01": {"city": "Inglewood", "state": "CA"},  # SoFi Stadium
-    "LAX97": {"city": "Carson", "state": "CA"},  # StubHub Center (Chargers temp)
-    "LAX99": {"city": "Los Angeles", "state": "CA"},  # LA Memorial Coliseum (Rams temp)
-    "OAK00": {"city": "Oakland", "state": "CA"},  # Oakland Coliseum (historical)
-    "SDG00": {"city": "San Diego", "state": "CA"},  # Qualcomm Stadium (historical)
-    "VEG00": {"city": "Las Vegas", "state": "NV"},  # Allegiant Stadium
+    "DEN00": {
+        "name": "Empower Field at Mile High",
+        "city": "Denver",
+        "state": "CO",
+        "elevation_ft": 5280.0,
+    },
+    "KAN00": {
+        "name": "Arrowhead Stadium",
+        "city": "Kansas City",
+        "state": "MO",
+        "elevation_ft": 889.0,
+    },
+    "LAX01": {
+        "name": "SoFi Stadium",
+        "city": "Inglewood",
+        "state": "CA",
+        "elevation_ft": 25.0,
+    },
+    "LAX97": {
+        "name": "StubHub Center (Chargers temp)",
+        "city": "Carson",
+        "state": "CA",
+        "elevation_ft": 39.0,
+    },
+    "LAX99": {
+        "name": "Los Angeles Memorial Coliseum (Rams temp)",
+        "city": "Los Angeles",
+        "state": "CA",
+        "elevation_ft": 305.0,
+    },
+    "OAK00": {
+        "name": "Oakland Coliseum",
+        "city": "Oakland",
+        "state": "CA",
+        "elevation_ft": 43.0,
+    },
+    "SDG00": {
+        "name": "Qualcomm Stadium",
+        "city": "San Diego",
+        "state": "CA",
+        "elevation_ft": 52.0,
+    },
+    "VEG00": {
+        "name": "Allegiant Stadium",
+        "city": "Las Vegas",
+        "state": "NV",
+        "elevation_ft": 2190.0,
+    },
     # NFC East
-    "DAL00": {"city": "Arlington", "state": "TX"},  # AT&T Stadium/Cowboys Stadium
-    "DAL99": {"city": "Irving", "state": "TX"},  # Texas Stadium (old)
-    "PHI00": {"city": "Philadelphia", "state": "PA"},  # Lincoln Financial Field
-    "WAS00": {"city": "Landover", "state": "MD"},  # Northwest Stadium/FedEx Field
+    "DAL00": {
+        "name": "AT&T Stadium",
+        "city": "Arlington",
+        "state": "TX",
+        "elevation_ft": 604.0,
+    },
+    "DAL99": {
+        "name": "Texas Stadium",
+        "city": "Irving",
+        "state": "TX",
+        "elevation_ft": 482.0,
+    },
+    "PHI00": {
+        "name": "Lincoln Financial Field",
+        "city": "Philadelphia",
+        "state": "PA",
+        "elevation_ft": 39.0,
+    },
+    "WAS00": {
+        "name": "Northwest Stadium (FedEx Field)",
+        "city": "Landover",
+        "state": "MD",
+        "elevation_ft": 207.0,
+    },
     # NFC North
-    "CHI98": {"city": "Chicago", "state": "IL"},  # Soldier Field
-    "DET00": {"city": "Detroit", "state": "MI"},  # Ford Field
-    "GNB00": {"city": "Green Bay", "state": "WI"},  # Lambeau Field
-    "MIN00": {"city": "Minneapolis", "state": "MN"},  # Metrodome/Mall of America Field
-    "MIN01": {"city": "Minneapolis", "state": "MN"},  # U.S. Bank Stadium
-    "MIN98": {"city": "Minneapolis", "state": "MN"},  # TCF Bank Stadium (temp)
+    "CHI98": {
+        "name": "Soldier Field",
+        "city": "Chicago",
+        "state": "IL",
+        "elevation_ft": 590.0,
+    },
+    "DET00": {
+        "name": "Ford Field",
+        "city": "Detroit",
+        "state": "MI",
+        "elevation_ft": 600.0,
+    },
+    "GNB00": {
+        "name": "Lambeau Field",
+        "city": "Green Bay",
+        "state": "WI",
+        "elevation_ft": 640.0,
+    },
+    "MIN00": {
+        "name": "Hubert H. Humphrey Metrodome",
+        "city": "Minneapolis",
+        "state": "MN",
+        "elevation_ft": 849.0,
+    },
+    "MIN01": {
+        "name": "U.S. Bank Stadium",
+        "city": "Minneapolis",
+        "state": "MN",
+        "elevation_ft": 830.0,
+    },
+    "MIN98": {
+        "name": "TCF Bank Stadium (temp)",
+        "city": "Minneapolis",
+        "state": "MN",
+        "elevation_ft": 830.0,
+    },
     # NFC South
-    "ATL00": {"city": "Atlanta", "state": "GA"},  # Georgia Dome (old)
-    "ATL97": {"city": "Atlanta", "state": "GA"},  # Mercedes-Benz Stadium
-    "BRG00": {"city": "Baton Rouge", "state": "LA"},  # Tiger Stadium LSU (Katrina)
-    "CAR00": {"city": "Charlotte", "state": "NC"},  # Bank of America Stadium
-    "NOR00": {"city": "New Orleans", "state": "LA"},  # Caesars Superdome
-    "SAN00": {"city": "San Antonio", "state": "TX"},  # Alamo Dome (neutral/Katrina)
-    "TAM00": {"city": "Tampa", "state": "FL"},  # Raymond James Stadium
+    "ATL00": {
+        "name": "Georgia Dome",
+        "city": "Atlanta",
+        "state": "GA",
+        "elevation_ft": 1050.0,
+    },
+    "ATL97": {
+        "name": "Mercedes-Benz Stadium",
+        "city": "Atlanta",
+        "state": "GA",
+        "elevation_ft": 997.0,
+    },
+    "BRG00": {
+        "name": "Tiger Stadium (LSU)",
+        "city": "Baton Rouge",
+        "state": "LA",
+        "elevation_ft": 82.0,
+    },
+    "CAR00": {
+        "name": "Bank of America Stadium",
+        "city": "Charlotte",
+        "state": "NC",
+        "elevation_ft": 751.0,
+    },
+    "NOR00": {
+        "name": "Caesars Superdome",
+        "city": "New Orleans",
+        "state": "LA",
+        "elevation_ft": 3.0,
+    },
+    "SAN00": {
+        "name": "Alamodome",
+        "city": "San Antonio",
+        "state": "TX",
+        "elevation_ft": 722.0,
+    },
+    "TAM00": {
+        "name": "Raymond James Stadium",
+        "city": "Tampa",
+        "state": "FL",
+        "elevation_ft": 52.0,
+    },
     # NFC West
-    "PHO00": {"city": "Glendale", "state": "AZ"},  # State Farm Stadium
-    "PHO99": {"city": "Tempe", "state": "AZ"},  # Sun Devil Stadium (old)
-    "SEA00": {"city": "Seattle", "state": "WA"},  # Lumen Field
-    "SFO00": {"city": "San Francisco", "state": "CA"},  # Candlestick Park (old)
-    "SFO01": {"city": "Santa Clara", "state": "CA"},  # Levi's Stadium
-    "STL00": {"city": "St. Louis", "state": "MO"},  # The Dome at America's Center
+    "PHO00": {
+        "name": "State Farm Stadium",
+        "city": "Glendale",
+        "state": "AZ",
+        "elevation_ft": 1070.0,
+    },
+    "PHO99": {
+        "name": "Sun Devil Stadium",
+        "city": "Tempe",
+        "state": "AZ",
+        "elevation_ft": 1181.0,
+    },
+    "SEA00": {
+        "name": "Lumen Field",
+        "city": "Seattle",
+        "state": "WA",
+        "elevation_ft": 16.0,
+    },
+    "SFO00": {
+        "name": "Candlestick Park",
+        "city": "San Francisco",
+        "state": "CA",
+        "elevation_ft": 26.0,
+    },
+    "SFO01": {
+        "name": "Levi's Stadium",
+        "city": "Santa Clara",
+        "state": "CA",
+        "elevation_ft": 176.0,
+    },
+    "STL00": {
+        "name": "The Dome at America's Center",
+        "city": "St. Louis",
+        "state": "MO",
+        "elevation_ft": 466.0,
+    },
     # International Venues
-    "FRA00": {"city": "Frankfurt", "state": "DE"},  # Deutsche Bank Park
-    "GER00": {"city": "Munich", "state": "DE"},  # Allianz Arena
-    "LON00": {"city": "London", "state": "UK"},  # Wembley Stadium
-    "LON01": {"city": "London", "state": "UK"},  # Twickenham Stadium
-    "LON02": {"city": "London", "state": "UK"},  # Tottenham Hotspur Stadium
-    "MEX00": {"city": "Mexico City", "state": "MX"},  # Estadio Azteca
-    "SAO00": {"city": "São Paulo", "state": "BR"},  # Arena Corinthians
+    "FRA00": {
+        "name": "Deutsche Bank Park",
+        "city": "Frankfurt",
+        "state": "DE",
+        "elevation_ft": 367.0,
+    },
+    "GER00": {
+        "name": "Allianz Arena",
+        "city": "Munich",
+        "state": "DE",
+        "elevation_ft": 1617.0,
+    },
+    "LON00": {
+        "name": "Wembley Stadium",
+        "city": "London",
+        "state": "UK",
+        "elevation_ft": 82.0,
+    },
+    "LON01": {
+        "name": "Twickenham Stadium",
+        "city": "London",
+        "state": "UK",
+        "elevation_ft": 82.0,
+    },
+    "LON02": {
+        "name": "Tottenham Hotspur Stadium",
+        "city": "London",
+        "state": "UK",
+        "elevation_ft": 82.0,
+    },
+    "MEX00": {
+        "name": "Estadio Azteca",
+        "city": "Mexico City",
+        "state": "MX",
+        "elevation_ft": 7380.0,
+    },
+    "SAO00": {
+        "name": "Arena Corinthians (Neo Química Arena)",
+        "city": "São Paulo",
+        "state": "BR",
+        "elevation_ft": 2490.0,
+    },
 }

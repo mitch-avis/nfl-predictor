@@ -28,6 +28,13 @@ def test_prefix_team_records_and_invalid_side() -> None:
         data_collection._prefix_team_records(records_df, "bad")
 
 
+def test_resolve_seasons_rejects_pre_nflreadpy() -> None:
+    """min_season before nflreadpy availability raises a ValueError."""
+
+    with pytest.raises(ValueError):
+        data_collection._resolve_seasons(constants.NFLREADPY_MIN_SEASON - 1, 2000)
+
+
 def test_merge_team_rankings_week_specific() -> None:
     """TeamRankings are merged correctly for the given week."""
 

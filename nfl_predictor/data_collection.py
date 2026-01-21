@@ -518,6 +518,7 @@ def process_season(
     team_elo_trends = pl.DataFrame()
     qb_trends = pl.DataFrame()
     team_stat_trends = pl.DataFrame()
+    coach_features = pl.DataFrame()
     if elo_df is not None and elo_df.height > 0:
         team_elo_trends = polars_utils.build_team_elo_trends(elo_df, season)
         qb_trends = polars_utils.build_qb_trends(elo_df, season)
@@ -527,6 +528,8 @@ def process_season(
             season,
             stats=["scoring_margin", "turnover_margin"],
         )
+    if schedule_df.height > 0:
+        coach_features = polars_utils.build_coach_features(schedule_df, season=season)
 
     # Get unique weeks in the schedule
     weeks = sorted(season_schedule.select("week").unique().to_series().to_list())
@@ -549,6 +552,7 @@ def process_season(
             team_elo_trends=team_elo_trends,
             qb_trends=qb_trends,
             team_stat_trends=team_stat_trends,
+            coach_features=coach_features,
         )
         if week_data.height > 0:
             weekly_data.append(week_data)
@@ -585,6 +589,7 @@ def process_week(
     team_elo_trends: Optional[pl.DataFrame] = None,
     qb_trends: Optional[pl.DataFrame] = None,
     team_stat_trends: Optional[pl.DataFrame] = None,
+    coach_features: Optional[pl.DataFrame] = None,
 ) -> pl.DataFrame:
     """
     Process a single week's games with aggregated stats from prior weeks.
@@ -604,6 +609,7 @@ def process_week(
         elo_df: ELO ratings DataFrame
         tr_df: TeamRankings DataFrame for this season
         prev_tr_df: TeamRankings DataFrame for previous season (for week 1)
+        coach_features: Optional per-team coach feature DataFrame
 
     Returns:
         DataFrame with week's games and features
@@ -776,6 +782,7 @@ def process_week(
     merged = _merge_team_trends(merged, team_elo_trends)
     merged = _merge_team_trends(merged, team_stat_trends)
     merged = _merge_qb_trends(merged, qb_trends)
+    merged = _merge_coach_features(merged, coach_features)
 
     # Merge with TeamRankings
     with _timed_substep("merge_team_rankings", timing_enabled, timing_totals):
@@ -850,6 +857,33 @@ def process_week(
         [pl.col(col).fill_null(0.0).cast(pl.Float32) for col in trend_cols if col in merged.columns]
     )
 
+    coach_int_cols = [
+        "away_coach_games_prior",
+        "home_coach_games_prior",
+        "away_coach_team_games_prior",
+        "home_coach_team_games_prior",
+    ]
+    coach_float_cols = [
+        "away_coach_win_pct_prior",
+        "home_coach_win_pct_prior",
+        "away_coach_team_win_pct_prior",
+        "home_coach_team_win_pct_prior",
+    ]
+    merged = merged.with_columns(
+        [
+            *[
+                pl.col(col).fill_null(0).cast(pl.Int32)
+                for col in coach_int_cols
+                if col in merged.columns
+            ],
+            *[
+                pl.col(col).fill_null(0.0).cast(pl.Float32)
+                for col in coach_float_cols
+                if col in merged.columns
+            ],
+        ]
+    )
+
     return merged
 
 
@@ -910,6 +944,38 @@ def _merge_qb_trends(
     merged = merged.join(away_trends, on=["season", "week", "away_qb"], how="left")
     merged = merged.join(home_trends, on=["season", "week", "home_qb"], how="left")
     return merged
+
+
+def _merge_coach_features(
+    merged: pl.DataFrame,
+    coach_df: Optional[pl.DataFrame],
+) -> pl.DataFrame:
+    """Merge per-coach features for away/home teams."""
+
+    if coach_df is None or coach_df.height == 0:
+        return merged
+
+    required = {"season", "week", "team_abbr"}
+    if not required.issubset(coach_df.columns):
+        return merged
+
+    drop_cols = {"season", "week", "team_abbr", "coach_name"}
+    value_cols = [c for c in coach_df.columns if c not in drop_cols]
+    if not value_cols:
+        return merged
+
+    coach_df = coach_df.select(["season", "week", "team_abbr", *value_cols])
+    away_map = {"team_abbr": "away_abbr", **{c: f"away_{c}" for c in value_cols}}
+    home_map = {"team_abbr": "home_abbr", **{c: f"home_{c}" for c in value_cols}}
+
+    away_features = coach_df.rename(away_map)
+    home_features = coach_df.rename(home_map)
+
+    merged = merged.join(away_features, on=["season", "week", "away_abbr"], how="left")
+    merged = merged.join(home_features, on=["season", "week", "home_abbr"], how="left")
+    return merged
+
+
 
 
 def _merge_team_rankings(

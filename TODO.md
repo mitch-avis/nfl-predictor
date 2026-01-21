@@ -39,7 +39,7 @@ Tasks:
 
 Acceptance:
 
-- [ ] Stadium metadata features are present for all games with safe defaults.
+- [x] Stadium metadata features are present for all games with safe defaults.
 
 ---
 

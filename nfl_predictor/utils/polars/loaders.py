@@ -116,10 +116,10 @@ def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
             pl.col("stadium_id")
             .replace_strict(altitude_map, default=0.0)
             .cast(pl.Float32)
-            .alias("stadium_altitude")
+            .alias("stadium_elevation")
         )
     else:
-        altitude = pl.lit(0.0, dtype=pl.Float32).alias("stadium_altitude")
+        altitude = pl.lit(0.0, dtype=pl.Float32).alias("stadium_elevation")
 
     stadium_type = (
         pl.when(roof_expr.is_null())

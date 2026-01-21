@@ -540,3 +540,53 @@ Acceptance:
 
 - [x] A debug/profiling run prints step timings and shows cache hits.
 - [x] A second run reuses cached data without network calls (unless refresh is forced).
+
+### Milestone 31 - Recency + trend features (non-linearity and drift)
+
+Completion note: Trend features and recency weighting shipped with ablation tooling. Walk-forward
+ablation shows trend features improve Brier/log loss and margin MAE, while recency weighting with
+half-life seasons=2 worsens probability metrics despite a small total-MAE improvement.
+
+Goal: add leakage-safe trend/recency signals plus optional time-weighted training.
+
+#### Feature design + audit
+
+- [x] Inventory existing recency signals (TR last_5/last_10 ratings, lookahead, motivation).
+- [x] Finalize minimal trend feature set and confirm they are time-safe.
+
+#### Trend features (time-safe)
+
+- [x] Rating trend: `last_5_games_rating - last_10_games_rating` for away/home + diff.
+- [x] Elo trend: `elo_pre - rolling_4wk_mean(elo_pre)` for away/home + diff.
+- [x] QB Elo trend: `qb_elo_pre - rolling_4wk_mean(qb_elo_pre)` for away/home + diff.
+- [x] Performance trend (select 1-2 stats): recent 4-week mean vs season-to-date mean
+  (scoring margin and turnover margin) for away/home + diff.
+- [x] Season-phase features: normalized `week_in_season` plus early/mid/late bucket flags.
+
+#### ETL + schema
+
+- [x] Implement rolling aggregates in Polars (per team, per season, prior weeks only).
+- [x] Add derived columns to `constants.py` and enforce schema ordering.
+- [x] Ensure missing-data policy is consistent for early weeks and short seasons.
+
+#### Recency weighting (exponential half-life)
+
+- [x] Add optional exponential half-life sample-weighting for training + calibration.
+- [x] Add CLI/config flags for half-life (weeks or seasons) in training + walk-forward.
+- [x] Keep default off and ensure weights are deterministic.
+
+#### Tests
+
+- [x] Unit tests verifying trend features only use prior weeks.
+- [x] Unit tests for recency weights (monotonic decay, boundary cases).
+- [x] Unit tests for season-phase buckets and normalization.
+
+#### Evaluation
+
+- [x] Walk-forward comparisons with/without trend features and with/without weights.
+- [x] Track Brier/log loss first; pool points as tie-breakers; MAE third.
+
+Acceptance:
+
+- [x] New features are leakage-safe and schema-invariant.
+- [x] Walk-forward results show a clear improvement or documented tradeoff.

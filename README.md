@@ -312,6 +312,24 @@ identical) is available via `--disable-trend-features`. Example 2x2 comparison m
   --recency-half-life-seasons 2
 ```
 
+Recent ablation example (2003-2025 seasons, include postseason, calibration=platt,
+recency half-life seasons=2):
+
+```text
+Setting                         Brier    LogLoss  MarginMAE  TotalMAE  ActualPts
+Trends off, recency off         0.2372   0.7772   10.0987    10.0759   210.55
+Trends on, recency off          0.2325   0.7525   10.0159    10.1254   213.35
+Trends off, recency on          0.2827   1.9775   10.2003    10.0706   211.50
+Trends on, recency on           0.2804   1.9525   10.0691    10.0670   213.55
+```
+
+Interpretation:
+
+- Trend features improve probability metrics (Brier/log loss) and margin MAE, with a small
+  tradeoff in total MAE.
+- Recency weighting (half-life seasons=2) hurts probability metrics in this run; keep it off
+  unless a future ablation shows improvement.
+
 Evaluation rule:
 “Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative.”
 

@@ -44,4 +44,3 @@ def test_build_coach_features_no_leakage() -> None:
     assert week2_bbb[0]["coach_win_pct_prior"] == 1.0
     assert week2_bbb[0]["coach_team_games_prior"] == 1
     assert week2_bbb[0]["coach_team_win_pct_prior"] == 1.0
-

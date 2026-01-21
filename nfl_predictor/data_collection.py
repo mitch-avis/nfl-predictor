@@ -976,8 +976,6 @@ def _merge_coach_features(
     return merged
 
 
-
-
 def _merge_team_rankings(
     merged: pl.DataFrame,
     season: int,

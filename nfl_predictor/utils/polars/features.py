@@ -1273,4 +1273,3 @@ def build_coach_features(
     )
 
     return combined.filter(pl.col("season") == season).select(list(schema.keys()))
-

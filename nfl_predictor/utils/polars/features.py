@@ -1073,3 +1073,204 @@ def build_team_stat_trends(
     return season_stats.with_columns(exprs).select(
         ["season", "week", "team_abbr", *[f"{stat}_4wk_trend" for stat in available_stats]]
     )
+
+
+def build_coach_features(
+    schedule_df: pl.DataFrame,
+    *,
+    season: int,
+) -> pl.DataFrame:
+    """Compute per-coach prior win-rate features (career and team-specific)."""
+
+    schema = {
+        "season": pl.Int64,
+        "week": pl.Int64,
+        "team_abbr": pl.Utf8,
+        "coach_name": pl.Utf8,
+        "coach_games_prior": pl.Int32,
+        "coach_win_pct_prior": pl.Float32,
+        "coach_team_games_prior": pl.Int32,
+        "coach_team_win_pct_prior": pl.Float32,
+    }
+
+    required = {
+        "season",
+        "week",
+        "away_abbr",
+        "home_abbr",
+        "away_score",
+        "home_score",
+        "away_coach",
+        "home_coach",
+    }
+    if not required.issubset(set(schedule_df.columns)):
+        return pl.DataFrame(schema=schema)
+
+    base = schedule_df.filter(pl.col("season") <= season).select(
+        [
+            "season",
+            "week",
+            "away_abbr",
+            "home_abbr",
+            "away_score",
+            "home_score",
+            "away_coach",
+            "home_coach",
+        ]
+    )
+    if base.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    base = base.with_columns(
+        (pl.col("away_score").is_not_null() & pl.col("home_score").is_not_null())
+        .cast(pl.Int32)
+        .alias("played")
+    )
+
+    home_rows = base.select(
+        [
+            "season",
+            "week",
+            pl.col("home_abbr").alias("team_abbr"),
+            pl.col("home_coach").alias("coach_name"),
+            (pl.col("home_score") > pl.col("away_score"))
+            .cast(pl.Int32)
+            .mul(pl.col("played"))
+            .alias("win"),
+            (pl.col("home_score") < pl.col("away_score"))
+            .cast(pl.Int32)
+            .mul(pl.col("played"))
+            .alias("loss"),
+            (pl.col("home_score") == pl.col("away_score"))
+            .cast(pl.Int32)
+            .mul(pl.col("played"))
+            .alias("tie"),
+            pl.col("played").alias("games"),
+        ]
+    )
+    away_rows = base.select(
+        [
+            "season",
+            "week",
+            pl.col("away_abbr").alias("team_abbr"),
+            pl.col("away_coach").alias("coach_name"),
+            (pl.col("away_score") > pl.col("home_score"))
+            .cast(pl.Int32)
+            .mul(pl.col("played"))
+            .alias("win"),
+            (pl.col("away_score") < pl.col("home_score"))
+            .cast(pl.Int32)
+            .mul(pl.col("played"))
+            .alias("loss"),
+            (pl.col("away_score") == pl.col("home_score"))
+            .cast(pl.Int32)
+            .mul(pl.col("played"))
+            .alias("tie"),
+            pl.col("played").alias("games"),
+        ]
+    )
+
+    long_df = (
+        pl.concat([home_rows, away_rows], how="vertical")
+        .filter(pl.col("coach_name").is_not_null())
+        .filter(pl.col("team_abbr").is_not_null())
+    )
+    if long_df.height == 0:
+        return pl.DataFrame(schema=schema)
+
+    coach_weekly = (
+        long_df.group_by(["coach_name", "season", "week"])
+        .agg(
+            [
+                pl.col("win").sum().cast(pl.Int32).alias("wins"),
+                pl.col("loss").sum().cast(pl.Int32).alias("losses"),
+                pl.col("tie").sum().cast(pl.Int32).alias("ties"),
+                pl.col("games").sum().cast(pl.Int32).alias("games"),
+            ]
+        )
+        .sort(["coach_name", "season", "week"])
+        .with_columns(
+            [
+                pl.col("games")
+                .cum_sum()
+                .shift(1)
+                .over("coach_name")
+                .fill_null(0)
+                .alias("coach_games_prior"),
+                pl.col("wins")
+                .cum_sum()
+                .shift(1)
+                .over("coach_name")
+                .fill_null(0)
+                .alias("coach_wins_prior"),
+                pl.col("ties")
+                .cum_sum()
+                .shift(1)
+                .over("coach_name")
+                .fill_null(0)
+                .alias("coach_ties_prior"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col("coach_games_prior") > 0)
+            .then(pl.col("coach_wins_prior") / pl.col("coach_games_prior"))
+            .otherwise(pl.lit(0.0))
+            .cast(pl.Float32)
+            .alias("coach_win_pct_prior")
+        )
+        .select(["coach_name", "season", "week", "coach_games_prior", "coach_win_pct_prior"])
+    )
+
+    team_weekly = (
+        long_df.group_by(["coach_name", "team_abbr", "season", "week"])
+        .agg(
+            [
+                pl.col("win").sum().cast(pl.Int32).alias("wins"),
+                pl.col("loss").sum().cast(pl.Int32).alias("losses"),
+                pl.col("tie").sum().cast(pl.Int32).alias("ties"),
+                pl.col("games").sum().cast(pl.Int32).alias("games"),
+            ]
+        )
+        .sort(["coach_name", "team_abbr", "season", "week"])
+        .with_columns(
+            [
+                pl.col("games")
+                .cum_sum()
+                .shift(1)
+                .over(["coach_name", "team_abbr"])
+                .fill_null(0)
+                .alias("coach_team_games_prior"),
+                pl.col("wins")
+                .cum_sum()
+                .shift(1)
+                .over(["coach_name", "team_abbr"])
+                .fill_null(0)
+                .alias("coach_team_wins_prior"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col("coach_team_games_prior") > 0)
+            .then(pl.col("coach_team_wins_prior") / pl.col("coach_team_games_prior"))
+            .otherwise(pl.lit(0.0))
+            .cast(pl.Float32)
+            .alias("coach_team_win_pct_prior")
+        )
+    )
+
+    combined = team_weekly.join(
+        coach_weekly, on=["coach_name", "season", "week"], how="left"
+    ).select(
+        [
+            "season",
+            "week",
+            "team_abbr",
+            "coach_name",
+            "coach_games_prior",
+            "coach_win_pct_prior",
+            "coach_team_games_prior",
+            "coach_team_win_pct_prior",
+        ]
+    )
+
+    return combined.filter(pl.col("season") == season).select(list(schema.keys()))
+

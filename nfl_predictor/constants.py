@@ -500,18 +500,24 @@ SEASON_PHASE_COLUMNS = [
     "season_phase_late",
 ]
 
-STADIUM_FEATURE_COLUMNS = [
+STADIUM_REFERENCE_COLUMNS = [
     "stadium_name",
     "stadium_city",
     "stadium_state",
+]
+
+STADIUM_FEATURE_COLUMNS = [
     "stadium_surface",
     "stadium_type",
-    "stadium_altitude",
+    "stadium_elevation",
+]
+
+COACH_REFERENCE_COLUMNS = [
+    "away_coach",
+    "home_coach",
 ]
 
 COACH_FEATURE_COLUMNS = [
-    "away_coach",
-    "home_coach",
     "away_coach_games_prior",
     "home_coach_games_prior",
     "away_coach_win_pct_prior",
@@ -591,6 +597,8 @@ METADATA_COLUMNS = [
     "home_abbr",
     "away_qb",
     "home_qb",
+    *STADIUM_REFERENCE_COLUMNS,
+    *COACH_REFERENCE_COLUMNS,
     "away_rest",
     "home_rest",
     *STADIUM_FEATURE_COLUMNS,

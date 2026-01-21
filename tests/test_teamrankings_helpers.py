@@ -291,3 +291,18 @@ def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> 
     assert 1 not in weeks
     assert 2 in weeks
     assert all(week >= 2 for week in scraped_weeks)
+
+
+def test_load_team_rankings_skips_pre_min_season(tmp_path, monkeypatch) -> None:
+    """Seasons before TR availability return empty data."""
+
+    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+
+    season = constants.TEAMRANKINGS_MIN_SEASON - 1
+    combined = teamrankings.load_team_rankings(
+        season,
+        current_season=constants.TEAMRANKINGS_MIN_SEASON,
+        current_week=2,
+    )
+
+    assert combined.height == 0

@@ -593,19 +593,19 @@ Acceptance:
 
 ### Milestone 32 - Weather + venue effects (consistent, non-leaky)
 
-Completion note: Added stadium type/altitude plus weather temp/wind/precip flags with safe
-null/zero fallbacks and tests for missing coverage.
+Completion note: Stadium metadata features were kept and expanded; weather fields were later
+removed after confirming they update post-kickoff.
 
 Tasks:
 
 - [x] Extend stadium metadata beyond city/state (type + altitude).
-- [x] Pull historical weather fields from NFLverse schedule data.
+- [x] Pull historical weather fields from NFLverse schedule data (implemented, later removed).
 - [x] Define missing-data policy and enforce invariant schema.
 - [x] Add tests for missing-weather fallbacks and schema invariance.
 
 Acceptance:
 
-- [x] Weather/venue features exist for all games with safe fallbacks; walk-forward impact pending.
+- [x] Stadium metadata features are maintained; weather features were removed due to leakage risk.
 
 ### Milestone 33 - Head coach features (if data is robust)
 
@@ -624,18 +624,16 @@ Acceptance:
 
 ### Milestone 34 - Referee features (if data is robust)
 
-Completion note: Added referee historical tendency features (home win %, margins, totals) with
-time-safe aggregation and leakage tests.
+Completion note: Referee features were removed after confirming assignments update post-kickoff.
 
 Tasks:
 
 - [x] Confirm referee coverage via NFLverse schedule fields.
-- [x] Add referee historical tendency features computed strictly to date.
-- [x] Add tests that verify no leakage in ref-derived features.
+- [x] Implemented referee features (later removed due to post-game updates).
 
 Acceptance:
 
-- [x] Referee features are leakage-safe; walk-forward impact pending.
+- [x] Referee features are removed; data is not reliable pre-kickoff.
 
 ### Milestone 35 - Pandas to Polars audit/refactor
 

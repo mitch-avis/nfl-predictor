@@ -31,11 +31,11 @@ and coach features only.
 Tasks:
 
 - [x] Expand `STADIUMS` to include `name` and `elevation` (and keep city/state).
-- [ ] Update stadium feature derivation to use the new `STADIUMS` fields and drop any
+- [x] Update stadium feature derivation to use the new `STADIUMS` fields and drop any
   legacy altitude map if redundant.
-- [ ] Keep stadium type/surface features derived from NFLverse schedule fields.
-- [ ] Add/adjust tests for stadium metadata parsing and safe fallbacks.
-- [ ] Update README feature list to reflect stadium-only (no weather/ref).
+- [x] Keep stadium type/surface features derived from NFLverse schedule fields.
+- [x] Add/adjust tests for stadium metadata parsing and safe fallbacks.
+- [x] Update README feature list to reflect stadium-only (no weather/ref).
 
 Acceptance:
 
@@ -47,8 +47,8 @@ Acceptance:
 
 Tasks:
 
-- [ ] Keep coach prior record features (career + team-specific) computed strictly to date.
-- [ ] Add/adjust tests that verify no leakage in coach-derived features.
+- [x] Keep coach prior record features (career + team-specific) computed strictly to date.
+- [x] Add/adjust tests that verify no leakage in coach-derived features.
 - [ ] Run walk-forward ablation to confirm effect.
 
 Acceptance:
@@ -61,10 +61,10 @@ Acceptance:
 
 Tasks:
 
-- [ ] Remove weather fields from constants, ETL, and tests (including any parsing logic).
-- [ ] Remove referee features and any ref-derived aggregates from ETL and tests.
+- [x] Remove weather fields from constants, ETL, and tests (including any parsing logic).
+- [x] Remove referee features and any ref-derived aggregates from ETL and tests.
 - [ ] Ensure feature ordering/schema stays invariant after removal.
-- [ ] Update README + ARCHIVE notes to reflect the rollback.
+- [x] Update README + ARCHIVE notes to reflect the rollback.
 
 Acceptance:
 

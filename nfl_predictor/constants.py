@@ -41,8 +41,13 @@ SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for 
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"
 DEFAULT_TOTAL_LINE = 45.6  # Average total score across 20+ seasons
 
-# Minimum season for data collection
+# Minimum season for data collection (default)
 MIN_SEASON = 2003
+# NFLverse (nflreadpy) schedule data availability begins in 1999.
+NFLREADPY_MIN_SEASON = 1999
+# TeamRankings availability (week 2 of 2003 is the earliest reliable week).
+TEAMRANKINGS_MIN_SEASON = 2003
+TEAMRANKINGS_MIN_WEEK = 2
 
 # Regression factor for week-1 stats toward league mean
 WEEK1_REGRESSION_FACTOR = 1 / 3

@@ -83,6 +83,14 @@ def load_team_rankings(
         Polars DataFrame with TeamRankings ratings/stats per team per week
     """
 
+    if season < constants.TEAMRANKINGS_MIN_SEASON:
+        log.info(
+            "Skipping TeamRankings for season %d (data starts in %d).",
+            season,
+            constants.TEAMRANKINGS_MIN_SEASON,
+        )
+        return pl.DataFrame()
+
     # Determine current season/week if not provided
     if current_season is None or current_week is None:
         current_season, current_week = get_current_nfl_week()
@@ -96,6 +104,8 @@ def load_team_rankings(
     max_playoff_week = regular_season_weeks + 4
 
     min_week = max(min_week, 1)
+    if season == constants.TEAMRANKINGS_MIN_SEASON:
+        min_week = max(min_week, constants.TEAMRANKINGS_MIN_WEEK)
 
     if season < current_season:
         # Past season: load all regular season weeks plus playoff weeks

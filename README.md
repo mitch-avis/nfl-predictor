@@ -523,6 +523,8 @@ games.
 - Divisional rivalry indicator.
 - Lookahead / next-week context features.
 - Standings-based motivation proxy features (clinch/elimination proxies).
+- Stadium metadata features (roof/surface/type, elevation, venue location).
+- Head coach prior record features (career and team-specific).
 
 ## Open work
 

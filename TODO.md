@@ -72,6 +72,20 @@ Acceptance:
 
 ---
 
+## Milestone 36 - Data availability guards (nflreadpy + TeamRankings)
+
+Tasks:
+
+- [ ] Enforce nflreadpy availability (min season >= 1999) in data collection CLI.
+- [ ] Skip TeamRankings loads for seasons before 2003 and use week 2 as the earliest week in 2003.
+- [ ] Add unit tests for the guardrails.
+
+Acceptance:
+
+- [ ] Data collection fails fast for pre-1999 seasons and skips TR pre-2003 without errors.
+
+---
+
 ## Explicitly out of scope (unless the world changes)
 
 - Injury/practice participation features.

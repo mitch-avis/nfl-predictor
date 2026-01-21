@@ -590,3 +590,22 @@ Acceptance:
 
 - [x] New features are leakage-safe and schema-invariant.
 - [x] Walk-forward results show a clear improvement or documented tradeoff.
+
+### Milestone 35 - Pandas to Polars audit/refactor
+
+Completion note: Completed a pandas usage audit; ETL is Polars-first and pandas usage is confined
+to ML, reporting, and orchestration layers. Inventory and rationale documented in
+`docs/pandas_audit.md`. No safe non-ML/reporting refactors were identified.
+
+#### Tasks
+
+- [x] Inventory pandas usage across the repo and classify by module (ETL vs ML vs reporting).
+- [x] Identify pandas usage that can move to Polars safely (none found outside ML/reporting).
+- [x] Refactor candidate modules to Polars-first implementations (no safe candidates).
+- [x] Document any pandas usage that must remain (e.g., sklearn pipelines, calibration).
+- [x] Confirm existing tests remain sufficient since no refactor was required.
+
+Acceptance:
+
+- [x] ETL and feature engineering are fully Polars-first with minimal pandas use.
+- [x] Remaining pandas usage is justified and documented.

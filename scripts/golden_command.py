@@ -203,6 +203,15 @@ def _parse_args() -> argparse.Namespace:
         help="Walk-forward calibration weeks.",
     )
     parser.add_argument(
+        "--wf-exclude-incomplete-seasons",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Exclude seasons whose regular season is incomplete in the dataset "
+            "during walk-forward evaluation."
+        ),
+    )
+    parser.add_argument(
         "--reuse-wf-run-dir",
         type=Path,
         default=None,
@@ -400,6 +409,7 @@ def main() -> int:
             "eval_last_n_seasons": args.eval_last_n_seasons,
             "calibration": args.calibration,
             "calibration_weeks": args.wf_calibration_weeks,
+            "exclude_incomplete_seasons": args.wf_exclude_incomplete_seasons,
             "market_anchor": args.market_anchor,
             "market_transform": args.market_transform,
             "market_prob_weight": args.market_prob_weight,
@@ -488,6 +498,7 @@ def main() -> int:
             wf_start_week=args.wf_start_week,
             calibration=args.calibration,
             calibration_weeks=args.wf_calibration_weeks,
+            exclude_incomplete_seasons=args.wf_exclude_incomplete_seasons,
             market_anchor=args.market_anchor,
             market_transform=args.market_transform,
             market_prob_weight=float(args.market_prob_weight),
@@ -503,6 +514,10 @@ def main() -> int:
         wf_config_payload.update(wf_results.get("resolved_settings", {}))
         wf_config_payload["resolved_eval_seasons"] = wf_results.get("resolved_eval_seasons")
         wf_config_payload["feature_list"] = wf_results.get("feature_list")
+        if "excluded_incomplete_seasons" in wf_results:
+            wf_config_payload["excluded_incomplete_seasons"] = wf_results[
+                "excluded_incomplete_seasons"
+            ]
 
         wf_report = walk_forward.build_metrics_report(
             run_id, created_at, wf_config_payload, wf_results

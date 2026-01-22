@@ -65,6 +65,7 @@ class WalkForwardConfig:
     calibration_weeks: int = DEFAULT_CALIBRATION_WEEKS
     random_seed: int = DEFAULT_RANDOM_SEED
     include_postseason: bool = False
+    exclude_incomplete_seasons: bool = False
     include_market: bool = True
     market_transform: Optional[bool] = None
     market_anchor: bool = True
@@ -94,6 +95,7 @@ class WalkForwardConfig:
             "calibration_weeks": self.calibration_weeks,
             "random_seed": self.random_seed,
             "include_postseason": self.include_postseason,
+            "exclude_incomplete_seasons": self.exclude_incomplete_seasons,
             "include_market": self.include_market,
             "market_transform": self.market_transform,
             "market_anchor": self.market_anchor,
@@ -170,6 +172,25 @@ def resolve_eval_seasons(
     if len(seasons) <= eval_last_n:
         return seasons
     return seasons[-eval_last_n:]
+
+
+def filter_incomplete_eval_seasons(
+    df: pd.DataFrame, eval_seasons: Sequence[int]
+) -> tuple[list[int], list[int]]:
+    """Return (kept, dropped) seasons based on regular-season completeness."""
+
+    kept: list[int] = []
+    dropped: list[int] = []
+    for season in eval_seasons:
+        season_value = int(season)
+        season_df = df[df["season"] == season_value]
+        max_week = int(season_df["week"].max()) if not season_df.empty else None
+        regular_weeks = constants.get_regular_season_weeks(season_value)
+        if max_week is None or max_week < regular_weeks:
+            dropped.append(season_value)
+        else:
+            kept.append(season_value)
+    return kept, dropped
 
 
 def build_walk_forward_folds(
@@ -351,9 +372,17 @@ def run_walk_forward_backtest(
         "win_prob_use_uncertainty": config.win_prob_use_uncertainty,
         "include_quantiles": config.include_quantiles,
         "disable_pruning": config.disable_pruning,
+        "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
     }
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
+    excluded_incomplete: list[int] = []
+    if config.exclude_incomplete_seasons:
+        eval_seasons, excluded_incomplete = filter_incomplete_eval_seasons(df, eval_seasons)
+        if excluded_incomplete:
+            log.info("Excluded incomplete seasons from eval window: %s", excluded_incomplete)
+        if not eval_seasons:
+            raise ValueError("No complete seasons available after filtering eval seasons.")
     resolved_eval_seasons = [int(season) for season in eval_seasons]
     folds = build_walk_forward_folds(
         df,
@@ -672,6 +701,7 @@ def run_walk_forward_backtest(
             start_week=config.wf_start_week,
             include_postseason=config.include_postseason,
         ),
+        "excluded_incomplete_seasons": excluded_incomplete,
     }
 
 
@@ -707,6 +737,7 @@ def build_metrics_report(
         },
         "splits": {
             "eval_window": results.get("eval_window"),
+            "excluded_incomplete_seasons": results.get("excluded_incomplete_seasons", []),
             "calibration_window": {
                 "method": config_payload.get("calibration"),
                 "calibration_weeks": config_payload.get("calibration_weeks"),

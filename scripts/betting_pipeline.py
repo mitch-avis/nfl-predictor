@@ -18,7 +18,7 @@ Important limitations (read this):
 - Stage 1 is *regular season only* by design (it is meant to pick stable calibration/
     probability post-processing settings on larger sample sizes).
 - Stage 2 Optuna tuning optimizes a fold metric based on model predictions and market
-    features. It does not directly “tune” fitted calibrators (Platt/Isotonic), which are
+    features. It does not directly "tune" fitted calibrators (Platt/Isotonic), which are
     trained after the margin model.
 - Stage 3 defaults to win-prob calibration='elo' so you can train on *all* rows without
     holding out calibration seasons. Note: blended models still require a small
@@ -49,7 +49,7 @@ GPU notes:
     --xgb-n-jobs controls XGBoost CPU thread usage; it may still matter a bit for throughput.
 
 Using the betting report with FanDuel (or any book):
-- The report includes model-derived “fair” moneylines for each side.
+- The report includes model-derived "fair" moneylines for each side.
     Compare the sportsbook line to model fair line:
     - For favorites (negative ML): -120 is better than -140.
     - For underdogs (positive ML): +170 is better than +150.

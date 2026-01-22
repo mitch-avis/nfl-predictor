@@ -283,6 +283,24 @@ def test_build_metrics_report_shape() -> None:
     assert report["metric_strategy"]["primary"][0]["metric"] == "brier"
     assert report["calibration"]["bin_count"] == walk_forward.RELIABILITY_BINS
     assert report["splits"]["eval_window"]["include_postseason"] is False
+    assert report["splits"]["excluded_incomplete_seasons"] == []
+
+
+def test_filter_incomplete_eval_seasons_tracks_drops(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Filtering incomplete seasons returns kept + dropped lists."""
+
+    df = _fixture_df()
+    eval_seasons = [2022, 2023]
+
+    monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 4)
+    kept, dropped = walk_forward.filter_incomplete_eval_seasons(df, eval_seasons)
+    assert kept == []
+    assert dropped == eval_seasons
+
+    monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 3)
+    kept, dropped = walk_forward.filter_incomplete_eval_seasons(df, eval_seasons)
+    assert kept == eval_seasons
+    assert dropped == []
 
 
 def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> None:

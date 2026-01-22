@@ -956,6 +956,16 @@ def main() -> int:
         "early_stopping_rounds": int(args.wf_early_stopping_rounds),
         "include_quantiles": bool(args.wf_include_quantiles),
     }
+
+    # Propagate GPU/CPU runtime settings to walk-forward folds too.
+    if args.xgb_tree_method:
+        wf_config["xgb_params_overrides"]["tree_method"] = args.xgb_tree_method
+    if args.xgb_device:
+        wf_config["xgb_params_overrides"]["device"] = args.xgb_device
+    wf_config["xgb_params_overrides"]["n_jobs"] = (
+        int(args.xgb_n_jobs) if args.xgb_n_jobs is not None else int(args.wf_n_jobs)
+    )
+
     wf_config_hash = artifacts.stable_short_hash(wf_config)
     wf_marker = _stage_marker_path(run_dir, "wf_compare")
 

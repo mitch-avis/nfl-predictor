@@ -22,10 +22,12 @@ Rules that are always enforced:
 
 ## Source of truth for work
 
-- Current milestones and tasks live in `TODO.md`.
-- Before starting any task: read `TODO.md` and work only on the highest-priority “blocking” items.
+- Current milestones and tasks live in `TODO.md` (authoritative active worklist).
+- Before starting any task: read `TODO.md` and work only on the highest-priority blocking items.
 - When a task is completed: move it from `TODO.md` to `ARCHIVE.md` with a short completion note.
-- After completing Milestone 23, complete Milestone 23.5 before starting Milestone 24+.
+- Milestone numbering is authoritative in `ARCHIVE.md`:
+  - Completed milestones are archived there.
+  - New milestones must continue numbering from the latest archived milestone.
 
 ## Engineering Standards (Logic, Docs, Lint, Coverage)
 
@@ -100,20 +102,21 @@ Recommended local commands:
 - **External Data Scraping/Caching:** `nfl_predictor/utils/scraping_utils.py` fetches and caches
   external web data used by the pipeline.
 
-ML implementation layout:
+### ML implementation layout
 
 - `nfl_predictor/ml/` contains the split ML implementation modules.
 - `nfl_predictor/ml_model.py` is a compatibility facade for legacy imports and a primary CLI
   entrypoint.
 - XGBoost version/build compatibility helpers live in `nfl_predictor/ml/ml_model_xgb_utils.py`.
 
-Repo scripts (operational entrypoints):
+### Repo scripts (operational entrypoints)
 
-- `scripts/golden_command.py`: train + walk-forward + (optional) weekly predictions and artifact
-  stamping.
+- `scripts/weekly_run.py`: canonical weekly orchestration (data refresh -> compare -> tune/train ->
+  predict -> reports).
+- `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
+  and artifact stamping.
 - `scripts/betting_pipeline.py`: end-to-end orchestration for selecting calibration/probability
-  post-processing, resumable Optuna tuning, final training, week predictions, and betting report
-  outputs.
+  post-processing, resumable Optuna tuning, final training, week predictions, and betting report outputs.
 - `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
 - `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
 
@@ -135,7 +138,7 @@ Repo scripts (operational entrypoints):
   - `data/completed_games_ml.csv` and `data/completed_games.csv` - completed games subsets
   - `data/predict/week_XX_games_to_predict.csv` - upcoming week games with engineered features
 
-I/O rules:
+### I/O rules
 
 - Prefer the project’s Polars-based load/save helpers in `nfl_predictor/data_collection.py`.
 - Any pandas-based CSV I/O utilities are legacy. Do not add new pandas-based I/O helpers; prefer the
@@ -234,7 +237,7 @@ Minimum requirement:
 - Realistic score adjustments do not alter win probabilities, confidence rankings, pool scoring,
   or tuning objectives.
 
-If implementing score “realism”:
+If implementing score "realism":
 
 - Apply post-processing only after core predictions; rounding/snapping policies must be
   configurable.
@@ -294,7 +297,7 @@ blend/clamp rules, weighting choices):
 Required run artifacts:
 
 - saved model artifact
-- metadata JSON (see “Model artifact contract”)
+- metadata JSON (see "Model artifact contract")
 - metrics report JSON (walk-forward aggregated + per-season/per-week summaries)
 - plots are optional and must not block CI
 

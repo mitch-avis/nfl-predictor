@@ -194,7 +194,7 @@ Minimum requirement:
 - Realistic score adjustments do not alter win probabilities, confidence rankings, pool scoring,
   or tuning objectives.
 
-If implementing score “realism”:
+If implementing score "realism":
 
 - Apply post-processing only after core predictions; rounding/snapping policies must be
   configurable.
@@ -254,7 +254,7 @@ blend/clamp rules, weighting choices):
 Required run artifacts:
 
 - saved model artifact
-- metadata JSON (see “Model artifact contract”)
+- metadata JSON (see "Model artifact contract")
 - metrics report JSON (walk-forward aggregated + per-season/per-week summaries)
 - plots are optional and must not block CI
 

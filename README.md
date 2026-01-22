@@ -303,6 +303,10 @@ eval season. Use `--include-postseason` if you want postseason folds included.
 Optional recency weighting is available via `--recency-half-life-weeks` or
 `--recency-half-life-seasons` (use only one).
 GPU acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`.
+If the latest season is incomplete, either pass `--exclude-incomplete-seasons` or specify
+`--eval-seasons` explicitly; the metrics report includes the evaluated window and any exclusions.
+Walk-forward calibration uses the last K weeks strictly before the eval week; if insufficient
+weeks or outcomes are available, calibration is skipped for that fold.
 
 Trend/season-phase ablation (drop trend + season-phase features while keeping everything else
 identical) is available via `--disable-trend-features`. Example 2x2 comparison matrix:
@@ -334,6 +338,7 @@ Interpretation:
 
 Evaluation rule:
 "Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative."
+Season-blocked CV is used for hyperparameter tuning only; walk-forward remains the source of truth.
 
 ## Weekly workflow (canonical)
 
@@ -403,6 +408,8 @@ Model selection hierarchy (default):
 
 Metrics reports include a summary table (with metric priority + direction), plus optional
 diagnostics such as season win totals (expected vs actual) and calibration drift by season/week.
+Walk-forward reports also record the evaluation window, calibration window, and any excluded
+incomplete seasons.
 
 ## Scripts
 

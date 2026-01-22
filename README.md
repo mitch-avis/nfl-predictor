@@ -28,7 +28,10 @@ This repo is geared toward:
     - [Win probability calibration](#win-probability-calibration)
     - [Market integration (optional, recommended)](#market-integration-optional-recommended)
   - [Backtesting](#backtesting)
-  - [Weekly pipeline](#weekly-pipeline)
+  - [Weekly workflow (canonical)](#weekly-workflow-canonical)
+    - [High-level stages](#high-level-stages)
+    - [Authoritative weekly workflow (runs, in this order)](#authoritative-weekly-workflow-runs-in-this-order)
+    - [Outputs and conventions](#outputs-and-conventions)
   - [Scripts](#scripts)
   - [Validation](#validation)
   - [Leakage audit](#leakage-audit)
@@ -305,11 +308,10 @@ Trend/season-phase ablation (drop trend + season-phase features while keeping ev
 identical) is available via `--disable-trend-features`. Example 2x2 comparison matrix:
 
 ```bash
-.venv/bin/python scripts/walk_forward_backtest.py --calibration platt
-.venv/bin/python scripts/walk_forward_backtest.py --calibration platt --recency-half-life-seasons 2
-.venv/bin/python scripts/walk_forward_backtest.py --calibration platt --disable-trend-features
-.venv/bin/python scripts/walk_forward_backtest.py --calibration platt --disable-trend-features \
-  --recency-half-life-seasons 2
+python scripts/walk_forward_backtest.py
+python scripts/walk_forward_backtest.py --recency-half-life-seasons 2
+python scripts/walk_forward_backtest.py --disable-trend-features
+python scripts/walk_forward_backtest.py --disable-trend-features --recency-half-life-seasons 2
 ```
 
 Recent ablation example (2003-2025 seasons, include postseason, calibration=platt,
@@ -331,11 +333,33 @@ Interpretation:
   unless a future ablation shows improvement.
 
 Evaluation rule:
-“Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative.”
+"Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative."
 
-## Weekly pipeline
+## Weekly workflow (canonical)
 
-Authoritative weekly workflow (runs, in this order):
+The canonical "do everything for this week" entrypoint is:
+
+```bash
+.venv/bin/python scripts/weekly_run.py --help
+```
+
+### High-level stages
+
+1) (optional) refresh data (`python -m nfl_predictor.data_collection`)
+2) (optional) walk-forward compare to choose market/calibration/prob-postprocess variants
+3) train + calibrate the selected configuration
+4) generate weekly predictions + betting outputs + (optional) power rankings
+
+Notes:
+
+- `--wf-*` flags control **walk-forward comparison** behavior (model selection).
+- `--train-*` flags control **final training/calibration** for the model used to produce weekly outputs.
+- `--xgb-*` flags control XGBoost runtime (GPU/CPU), and should be used for both comparison and final
+  training.
+- Outputs are written under the run directory (default: `models/<run_id>/`) unless `--output-dir` is
+  provided.
+
+### Authoritative weekly workflow (runs, in this order)
 
 1) Refresh data (ETL):
 
@@ -361,13 +385,7 @@ Authoritative weekly workflow (runs, in this order):
     .venv/bin/python scripts/power_rankings.py --help
     ```
 
-One-command weekly orchestration (refresh + selection + train + reports):
-
-```bash
-.venv/bin/python scripts/weekly_run.py --help
-```
-
-Outputs and conventions:
+### Outputs and conventions
 
 - Run artifacts (model/metrics/metadata/feature importance) land under `models/<run_id>/` by default.
 - Weekly prediction outputs live next to the input prediction file (e.g., `data/predict/`).

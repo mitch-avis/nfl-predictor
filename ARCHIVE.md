@@ -284,7 +284,7 @@ Completion note: Walk-forward evaluation protocol and metrics schema standardize
   - Time-aware calibration weeks (e.g., last K weeks before prediction week) and/or
     calibration seasons.
   - Minimum sample size rules (see Milestone 24).
-- [x] Decide (and document) the **selection hierarchy** for “best model”:
+- [x] Decide (and document) the **selection hierarchy** for "best model":
   - Primary: probability quality (Brier, log loss, reliability).
   - Secondary: confidence pool expected points (and stability across weeks).
   - Tertiary: margin/total MAE (and market-relative residual MAE if anchoring).
@@ -295,14 +295,14 @@ Completion note: Walk-forward evaluation protocol and metrics schema standardize
 
 Acceptance:
 
-- [x] There is one “blessed” evaluation command (or script) that reproduces the reported metrics.
+- [x] There is one "blessed" evaluation command (or script) that reproduces the reported metrics.
 - [x] A config sweep (Milestones 24/25) can run under this protocol without ad hoc code.
 
 ### Milestone 23.5 - Reporting pipeline correctness + schema safety (blocking)
 
 Completion note: Reporting scripts now fail fast on schema issues and apply calibration correctly.
 
-#### Tasks
+#### Tasks (Milestone 23.5)
 
 - [x] **Fix REG-only consistency in record computation**
   - Update `_load_current_records()` to explicitly filter `game_type == "REG"` before computing
@@ -349,9 +349,9 @@ Completion note: Reporting scripts now fail fast on schema issues and apply cali
 
 Completion note: README documents the weekly workflow and authoritative evaluation rule.
 
-#### Tasks
+#### Tasks (Milestone 23.6)
 
-- [x] **Add an authoritative “Weekly pipeline” section to `README.md`**
+- [x] **Add an authoritative "Weekly pipeline" section to `README.md`**
   - Clearly document:
     - data refresh step
     - canonical training/validation step (from Milestone 23)
@@ -365,8 +365,8 @@ Completion note: README documents the weekly workflow and authoritative evaluati
 
 - [x] **Add a single canonical evaluation rule to `README.md`**
   - Explicitly state:
-    > “Model selection is based on time-aware walk-forward evaluation; random CV is not
-    > authoritative.”
+    > "Model selection is based on time-aware walk-forward evaluation; random CV is not
+    > authoritative."
   - Reference Milestone 23 outputs as the source-of-truth evaluation.
 
   Acceptance:
@@ -405,13 +405,13 @@ Decide, then enforce, the objectively best usage of market inputs:
 - Market as **anchoring** (residual modeling)
 - Hybrid (anchor + selected transforms)
 
-Key tasks:
+#### Tasks (Milestone 25)
 
 - [x] Evaluate market as features vs anchoring under the canonical protocol.
 - [x] Fix/confirm the market probability source used for blending/clamping:
   - Current: implied prob from moneyline (includes vig).
   - Add: **no-vig** implied probability (normalize home/away to sum to 1).
-- [x] Implement/validate **market probability blending** “the right way”:
+- [x] Implement/validate **market probability blending** "the right way":
   - Consider blending in **log-odds space** (more stable than linear prob blends).
   - Add clear configuration: source (`raw` vs `novig`), blend method (`prob` vs `logit`),
     weight, and clamp delta.
@@ -441,7 +441,7 @@ Outputs to include (as available):
 - betting report + optional Excel template
 - (optional) projected standings / season win distributions (Milestone 28)
 
-Tasks:
+#### Tasks (Milestone 26)
 
 - [x] Create `scripts/weekly_run.py` (or equivalent) that composes existing steps:
   - data collection
@@ -497,7 +497,7 @@ Acceptance:
 
 Completion note: Full Optuna sweep run; artifacts and guardrails captured.
 
-- [x] Run a “full” Optuna sweep for the current best configuration (time-series CV objective).
+- [x] Run a "full" Optuna sweep for the current best configuration (time-series CV objective).
 - [x] Persist best params + study metadata into the run artifacts.
 - [x] Add guardrails to prevent accidental tuning on holdout.
 
@@ -519,7 +519,7 @@ via walk-forward with platt as the best calibration.
 
 Acceptance:
 
-- [x] Feature pruning decisions are validated via walk-forward (no “it looked right” commits).
+- [x] Feature pruning decisions are validated via walk-forward (no "it looked right" commits).
 
 ### Milestone 31A - Data collection performance + caching hygiene (blocking)
 
@@ -527,7 +527,7 @@ Completion note: Added nflreadpy caching, profiling toggles, and cache visibilit
 
 Goal: shorten and stabilize data-collection runs while minimizing network calls.
 
-Tasks:
+#### Tasks (Milestone 31A)
 
 - [x] Add opt-in timing/profiling logs for data collection (per major step) with a clear toggle.
 - [x] Add targeted debug logs around schedule/TeamRankings/ELO/team-stats merges so slow steps are
@@ -596,7 +596,7 @@ Acceptance:
 Completion note: Stadium metadata features were kept and expanded; weather fields were later
 removed after confirming they update post-kickoff.
 
-Tasks:
+#### Tasks (Milestone 32)
 
 - [x] Extend stadium metadata beyond city/state (type + altitude).
 - [x] Pull historical weather fields from NFLverse schedule data (implemented, later removed).
@@ -611,7 +611,7 @@ Acceptance:
 
 Completion note: Stadium metadata expanded and wired through ETL/tests with safe defaults.
 
-Tasks:
+#### Tasks (Milestone 32B)
 
 - [x] Expand `STADIUMS` to include `name` and `elevation` (and keep city/state).
 - [x] Update stadium feature derivation to use the new `STADIUMS` fields and drop any legacy
@@ -630,7 +630,7 @@ Completion note: Added coach prior record features (career and team-specific) wi
 aggregation and leakage tests; walk-forward ablation completed and coach_on retained for
 full-feature training.
 
-Tasks:
+#### Tasks (Milestone 33)
 
 - [x] Confirm coach coverage via NFLverse schedule fields.
 - [x] Add coach prior record features computed strictly to date.
@@ -644,7 +644,7 @@ Acceptance:
 
 Completion note: Referee features were removed after confirming assignments update post-kickoff.
 
-Tasks:
+#### Tasks (Milestone 34)
 
 - [x] Confirm referee coverage via NFLverse schedule fields.
 - [x] Implemented referee features (later removed due to post-game updates).
@@ -659,7 +659,7 @@ Acceptance:
 Completion note: Completed a pandas usage audit; ETL is Polars-first and pandas usage is confined
 to ML, reporting, and orchestration layers. No safe non-ML/reporting refactors were identified.
 
-#### Tasks
+#### Tasks (Milestone 35)
 
 - [x] Inventory pandas usage across the repo and classify by module (ETL vs ML vs reporting).
 - [x] Identify pandas usage that can move to Polars safely (none found outside ML/reporting).
@@ -676,7 +676,7 @@ Acceptance:
 
 Completion note: Added guardrails for nflreadpy/TeamRankings availability with tests.
 
-Tasks:
+#### Tasks (Milestone 36)
 
 - [x] Enforce nflreadpy availability (min season >= 1999) in data collection CLI.
 - [x] Skip TeamRankings loads for seasons before 2003 and use week 2 as the earliest week in 2003.

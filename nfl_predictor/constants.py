@@ -42,7 +42,7 @@ SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"
 DEFAULT_TOTAL_LINE = 45.6  # Average total score across 20+ seasons
 
 # Minimum season for data collection (default)
-MIN_SEASON = 2003
+MIN_SEASON = 1999
 # NFLverse (nflreadpy) schedule data availability begins in 1999.
 NFLREADPY_MIN_SEASON = 1999
 # TeamRankings availability (week 2 of 2003 is the earliest reliable week).

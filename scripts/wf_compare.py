@@ -11,6 +11,7 @@ Outputs:
 Notes:
 - Uses regular-season folds only (per walk_forward.filter_regular_season)
 - Disables quantile models by default for speed
+- XGBoost overrides are optional; defaults align with training settings
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from typing import Any
 import pandas as pd
 
 try:
+    from nfl_predictor import ml_model
     from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
@@ -32,6 +34,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
+    from nfl_predictor import ml_model
     from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
@@ -60,6 +63,12 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=3,
         help="Walk-forward start week.",
+    )
+    parser.add_argument(
+        "--exclude-incomplete-seasons",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Exclude seasons whose regular season is incomplete in the dataset.",
     )
     parser.add_argument(
         "--calibration-weeks",
@@ -100,32 +109,32 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--n-estimators",
         type=int,
-        default=120,
-        help="XGBoost n_estimators override (smaller = faster).",
+        default=None,
+        help="Optional XGBoost n_estimators override.",
     )
     parser.add_argument(
         "--max-depth",
         type=int,
-        default=4,
-        help="XGBoost max_depth override.",
+        default=None,
+        help="Optional XGBoost max_depth override.",
     )
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=0.07,
-        help="XGBoost learning_rate override.",
+        default=None,
+        help="Optional XGBoost learning_rate override.",
     )
     parser.add_argument(
         "--n-jobs",
         type=int,
-        default=1,
-        help="XGBoost n_jobs override (use 1 for deterministic local comparisons).",
+        default=None,
+        help="Optional XGBoost n_jobs override.",
     )
     parser.add_argument(
         "--early-stopping-rounds",
         type=int,
-        default=15,
-        help="Early stopping rounds (smaller = faster).",
+        default=ml_model.DEFAULT_EARLY_STOPPING_ROUNDS,
+        help="Early stopping rounds (default aligns with training).",
     )
     parser.add_argument(
         "--include-quantiles",
@@ -144,6 +153,7 @@ def _run_one(
     wf_start_week: int,
     calibration: str,
     calibration_weeks: int,
+    exclude_incomplete_seasons: bool,
     include_market: bool,
     market_anchor: bool,
     market_mode: str,
@@ -163,6 +173,7 @@ def _run_one(
         calibration=calibration,
         calibration_weeks=calibration_weeks,
         random_seed=42,
+        exclude_incomplete_seasons=exclude_incomplete_seasons,
         include_market=include_market,
         market_transform=None,
         market_anchor=market_anchor,
@@ -227,15 +238,15 @@ def main() -> int:
     log.info("Loading %s", args.data_path)
     df = pd.read_csv(args.data_path)
 
-    xgb_params_overrides = {
-        "n_estimators": int(args.n_estimators),
-        "max_depth": int(args.max_depth),
-        "learning_rate": float(args.learning_rate),
-        "subsample": 0.9,
-        "colsample_bytree": 0.9,
-        "n_jobs": int(args.n_jobs),
-        "verbosity": 0,
-    }
+    xgb_params_overrides: dict[str, Any] = {"verbosity": 0}
+    if args.n_estimators is not None:
+        xgb_params_overrides["n_estimators"] = int(args.n_estimators)
+    if args.max_depth is not None:
+        xgb_params_overrides["max_depth"] = int(args.max_depth)
+    if args.learning_rate is not None:
+        xgb_params_overrides["learning_rate"] = float(args.learning_rate)
+    if args.n_jobs is not None:
+        xgb_params_overrides["n_jobs"] = int(args.n_jobs)
 
     matrix = [
         ("none_base", "none", 0.0, 0.0),
@@ -284,6 +295,7 @@ def main() -> int:
                             wf_start_week=args.wf_start_week,
                             calibration=calib,
                             calibration_weeks=args.calibration_weeks,
+                            exclude_incomplete_seasons=args.exclude_incomplete_seasons,
                             include_market=include_market,
                             market_anchor=market_anchor,
                             market_mode=mode_label,

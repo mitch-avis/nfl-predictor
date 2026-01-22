@@ -20,6 +20,15 @@ Rules that are always enforced:
   metrics.
 - **Tests are required.** New functionality includes unit tests and improves or maintains coverage.
 
+## Source of truth for work
+
+- Current milestones and tasks live in `TODO.md` (authoritative active worklist).
+- Before starting any task: read `TODO.md` and work only on the highest-priority blocking items.
+- When a task is completed: move it from `TODO.md` to `ARCHIVE.md` with a short completion note.
+- Milestone numbering is authoritative in `ARCHIVE.md`:
+  - Completed milestones are archived there.
+  - New milestones must continue numbering from the latest archived milestone.
+
 ## Engineering Standards (Logic, Docs, Lint, Coverage)
 
 - Docstrings are required for every module, class, and function (including tests).
@@ -33,6 +42,39 @@ Rules that are always enforced:
 - Keep `TODO.md` accurate: verify items before checking them off.
 - Keep `README.md` current: update it when behavior, CLI usage, features, or outputs change.
 
+## Command execution rules (non-negotiable)
+
+This project uses a **local virtual environment located at `.venv/`**.
+
+When running any commands, you MUST invoke tools from the virtual environment explicitly.
+Do NOT rely on shell activation, PATH inference, or system-installed binaries.
+
+### Required command forms
+
+Use these forms **at all times**:
+
+- Python:
+  - `.venv/bin/python`
+- pip:
+  - `.venv/bin/pip`
+- uv:
+  - `.venv/bin/uv`
+- pytest:
+  - `.venv/bin/python -m pytest` **or** `.venv/bin/pytest` **or** `.venv/bin/uv run pytest`
+- ruff:
+  - `.venv/bin/ruff`
+- black:
+  - `.venv/bin/black`
+
+### Explicitly forbidden
+
+- `python`, `pip`, `pytest`, `ruff`, `black`, or `uv` **without a `.venv/` prefix**
+- assuming an activated shell or implicit virtualenv
+- using system Python, Conda, pyenv, or global tools
+
+If a command is shown in documentation or tasks, assume the `.venv/bin/` prefix is required even if
+not written.
+
 ### Formatting, linting, and style
 
 - **Black** formatting (line length 100).
@@ -41,9 +83,9 @@ Rules that are always enforced:
 
 Recommended local commands:
 
-- `black .`
-- `ruff check .` (and optionally `ruff check . --fix`)
-- `python -m pytest`
+- `.venv/bin/uv run black .`
+- `.venv/bin/uv run ruff check .` (and optionally `.venv/bin/uv run ruff check . --fix`)
+- `.venv/bin/uv run pytest`
 
 ## Project Shape (Big Picture)
 
@@ -60,20 +102,21 @@ Recommended local commands:
 - **External Data Scraping/Caching:** `nfl_predictor/utils/scraping_utils.py` fetches and caches
   external web data used by the pipeline.
 
-ML implementation layout:
+### ML implementation layout
 
 - `nfl_predictor/ml/` contains the split ML implementation modules.
 - `nfl_predictor/ml_model.py` is a compatibility facade for legacy imports and a primary CLI
   entrypoint.
 - XGBoost version/build compatibility helpers live in `nfl_predictor/ml/ml_model_xgb_utils.py`.
 
-Repo scripts (operational entrypoints):
+### Repo scripts (operational entrypoints)
 
-- `scripts/golden_command.py`: train + walk-forward + (optional) weekly predictions and artifact
-  stamping.
+- `scripts/weekly_run.py`: canonical weekly orchestration (data refresh -> compare -> tune/train ->
+  predict -> reports).
+- `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
+  and artifact stamping.
 - `scripts/betting_pipeline.py`: end-to-end orchestration for selecting calibration/probability
-  post-processing, resumable Optuna tuning, final training, week predictions, and betting report
-  outputs.
+  post-processing, resumable Optuna tuning, final training, week predictions, and betting report outputs.
 - `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
 - `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
 
@@ -95,7 +138,7 @@ Repo scripts (operational entrypoints):
   - `data/completed_games_ml.csv` and `data/completed_games.csv` - completed games subsets
   - `data/predict/week_XX_games_to_predict.csv` - upcoming week games with engineered features
 
-I/O rules:
+### I/O rules
 
 - Prefer the project’s Polars-based load/save helpers in `nfl_predictor/data_collection.py`.
 - Any pandas-based CSV I/O utilities are legacy. Do not add new pandas-based I/O helpers; prefer the

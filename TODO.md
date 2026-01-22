@@ -51,6 +51,8 @@ Tasks:
 
 - [ ] Define the **primary evaluation lens** for the project:
   - Walk-forward (rolling-origin) over multiple seasons is authoritative.
+  - Align WF early stopping with training defaults (e.g., 30–50 rounds) so evaluation doesn’t favor
+    configs tuned under a weaker/faster regime.
   - Season-blocked CV exists mainly for hyperparameter tuning.
 - [ ] Standardize the **outer evaluation window**:
   - Default: last N seasons (configurable), regular season only by default.
@@ -68,12 +70,12 @@ Tasks:
   - mean + variance across folds
   - market-relative metrics when market is present
 - [ ] Add one clear rule to docs:
-  - “We select models using time-aware walk-forward evaluation; random CV is not authoritative.”
+  - “We select models using time-aware walk-forward evaluation; random CV is not authoritative."
 
 Acceptance:
 
 - [ ] There is one “blessed” evaluation command (script) that reproduces reported metrics.
-- [ ] A config sweep (Milestones 23.5/25) can run under this protocol without ad hoc code.
+- [ ] A config sweep (Milestones 38/39) can run under this protocol without ad hoc code.
 
 ---
 

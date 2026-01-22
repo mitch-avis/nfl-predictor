@@ -215,6 +215,12 @@ def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.Argumen
         help="Walk-forward: include postseason folds.",
     )
     parser.add_argument(
+        "--wf-exclude-incomplete-seasons",
+        action=argparse.BooleanOptionalAction,
+        default=defaults.get("wf_exclude_incomplete_seasons", False),
+        help=("Walk-forward: exclude seasons whose regular season is incomplete in the dataset."),
+    )
+    parser.add_argument(
         "--wf-recency-half-life-weeks",
         type=float,
         default=defaults.get("wf_recency_half_life_weeks"),
@@ -289,8 +295,11 @@ def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.Argumen
     parser.add_argument(
         "--wf-early-stopping-rounds",
         type=int,
-        default=defaults.get("wf_early_stopping_rounds", 15),
-        help="Walk-forward: early stopping rounds.",
+        default=defaults.get(
+            "wf_early_stopping_rounds",
+            ml_model_core.DEFAULT_EARLY_STOPPING_ROUNDS,
+        ),
+        help="Walk-forward: early stopping rounds (default aligns with training).",
     )
     parser.add_argument(
         "--holdout-seasons",
@@ -666,6 +675,7 @@ def _run_wf_compare(
     wf_start_week: int,
     calibration_weeks: int,
     include_postseason: bool,
+    exclude_incomplete_seasons: bool,
     recency_half_life_weeks: Optional[float],
     recency_half_life_seasons: Optional[float],
     market_mode: str,
@@ -709,6 +719,7 @@ def _run_wf_compare(
                             calibration_weeks=calibration_weeks,
                             random_seed=42,
                             include_postseason=include_postseason,
+                            exclude_incomplete_seasons=exclude_incomplete_seasons,
                             recency_half_life_weeks=recency_half_life_weeks,
                             recency_half_life_seasons=recency_half_life_seasons,
                             include_market=include_market,
@@ -943,6 +954,7 @@ def main() -> int:
         "market_prob_source": args.wf_market_prob_source,
         "market_prob_blend_method": args.wf_market_prob_blend_method,
         "win_prob_uncertainty": args.wf_win_prob_uncertainty,
+        "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
         "wf_matrix": _WF_MATRIX,
         "xgb_params_overrides": {
             "n_estimators": int(args.wf_n_estimators),
@@ -987,6 +999,7 @@ def main() -> int:
             wf_start_week=args.wf_start_week,
             calibration_weeks=args.wf_calibration_weeks,
             include_postseason=bool(args.wf_include_postseason),
+            exclude_incomplete_seasons=bool(args.wf_exclude_incomplete_seasons),
             recency_half_life_weeks=args.wf_recency_half_life_weeks,
             recency_half_life_seasons=args.wf_recency_half_life_seasons,
             market_mode=args.wf_market_mode,

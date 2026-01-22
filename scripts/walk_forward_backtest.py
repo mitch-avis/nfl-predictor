@@ -106,6 +106,15 @@ def _parse_args() -> argparse.Namespace:
         help="Include postseason games in walk-forward evaluation.",
     )
     parser.add_argument(
+        "--exclude-incomplete-seasons",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Exclude seasons whose regular season is incomplete in the dataset "
+            "(useful when the current season is partial)."
+        ),
+    )
+    parser.add_argument(
         "--recency-half-life-weeks",
         type=float,
         default=None,
@@ -251,6 +260,7 @@ def main() -> None:
         calibration_weeks=args.wf_calibration_weeks,
         random_seed=args.random_seed,
         include_postseason=args.include_postseason,
+        exclude_incomplete_seasons=args.exclude_incomplete_seasons,
         recency_half_life_weeks=args.recency_half_life_weeks,
         recency_half_life_seasons=args.recency_half_life_seasons,
         market_anchor=args.market_anchor,
@@ -285,6 +295,8 @@ def main() -> None:
         config_payload["resolved_eval_seasons"] = results["resolved_eval_seasons"]
     if "eval_window" in results:
         config_payload["eval_window"] = results["eval_window"]
+    if "excluded_incomplete_seasons" in results:
+        config_payload["excluded_incomplete_seasons"] = results["excluded_incomplete_seasons"]
 
     report = walk_forward.build_metrics_report(run_id, created_at, config_payload, results)
     config_payload["run_id"] = run_id

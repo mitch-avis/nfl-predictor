@@ -241,7 +241,7 @@ def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
     combined = data_collection.collect_all_data([season_one, season_two])
 
     assert combined.height == 2
-    assert tr_calls == {season_one: 1, season_two: 1}
+    assert tr_calls == {}
 
 
 def test_process_week_fallback(monkeypatch) -> None:

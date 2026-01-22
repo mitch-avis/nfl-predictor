@@ -126,7 +126,7 @@ The authoritative data build pipeline is:
 python -m nfl_predictor.data_collection
 ```
 
-The default season range is controlled by `constants.MIN_SEASON` (currently 2006).
+The default season range is controlled by `constants.MIN_SEASON` (currently 1999).
 
 This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`).
 
@@ -157,7 +157,7 @@ Primary sources:
 
 - `nflreadpy` (NFLverse): schedules, results, and team-level stats.
 - Local cached CSVs under `data/` for Elo/market data when present.
-- TeamRankings web scrape for select rates not available in NFLverse (see ETL logs).
+- TeamRankings web scrape for select ratings and stats not available in NFLverse (see ETL logs).
 
 Missing data policy (high level):
 
@@ -317,10 +317,10 @@ recency half-life seasons=2):
 
 ```text
 Setting                         Brier    LogLoss  MarginMAE  TotalMAE  ActualPts
-Trends off, recency off         0.2372   0.7772   10.0987    10.0759   210.55
 Trends on, recency off          0.2325   0.7525   10.0159    10.1254   213.35
-Trends off, recency on          0.2827   1.9775   10.2003    10.0706   211.50
 Trends on, recency on           0.2804   1.9525   10.0691    10.0670   213.55
+Trends off, recency off         0.2372   0.7772   10.0987    10.0759   210.55
+Trends off, recency on          0.2827   1.9775   10.2003    10.0706   211.50
 ```
 
 Interpretation:
@@ -335,31 +335,31 @@ Evaluation rule:
 
 ## Weekly pipeline
 
-Authoritative weekly workflow (run in order):
+Authoritative weekly workflow (runs, in this order):
 
 1) Refresh data (ETL):
 
-```bash
-.venv/bin/python -m nfl_predictor.data_collection
-```
+    ```bash
+    .venv/bin/python -m nfl_predictor.data_collection
+    ```
 
-1) Canonical evaluation + model selection (walk-forward):
+2) Canonical evaluation + model selection (walk-forward):
 
-```bash
-.venv/bin/python scripts/walk_forward_backtest.py --help
-```
+    ```bash
+    .venv/bin/python scripts/walk_forward_backtest.py --help
+    ```
 
-1) Train + predict for the upcoming week (writes predictions + artifacts):
+3) Train + predict for the upcoming week (writes predictions + artifacts):
 
-```bash
-.venv/bin/python -m nfl_predictor.ml_model --help
-```
+    ```bash
+    .venv/bin/python -m nfl_predictor.ml_model --help
+    ```
 
-1) Power rankings + projected standings:
+4) Power rankings + projected standings:
 
-```bash
-.venv/bin/python scripts/power_rankings.py --help
-```
+    ```bash
+    .venv/bin/python scripts/power_rankings.py --help
+    ```
 
 One-command weekly orchestration (refresh + selection + train + reports):
 

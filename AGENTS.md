@@ -435,3 +435,7 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
 - Implement changes in small, testable increments.
 - Keep outputs deterministic under fixed seeds.
 - Do not change behavior without updating tests and documentation.
+- Do not delete `models/<run_id>/wf_compare/` during active walk-forward runs; those artifacts power
+  resume behavior.
+- To resume a walk-forward comparison, re-run the same command with `--resume` and inspect
+  `wf_compare/wf_summary.csv` for live progress.

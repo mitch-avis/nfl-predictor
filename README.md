@@ -363,6 +363,8 @@ Notes:
   training.
 - Outputs are written under the run directory (default: `models/<run_id>/`) unless `--output-dir` is
   provided.
+- Stage 1 walk-forward comparison is resumable and writes `wf_compare/` artifacts under the run
+  directory (including `wf_summary.csv` and per-candidate results).
 
 ### Authoritative weekly workflow (runs, in this order)
 

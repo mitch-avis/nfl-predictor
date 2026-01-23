@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict, cast
 
 import pandas as pd
 import pytest
@@ -12,7 +13,23 @@ from nfl_predictor.utils import fingerprints
 from scripts import weekly_run
 
 
-def _candidate(candidate_key: str) -> dict[str, object]:
+class Candidate(TypedDict):
+    """Typed candidate payload for checkpoint tests."""
+
+    candidate_key: str
+    label: str
+    calibration: str
+    market_prob_weight: float
+    market_prob_clamp: float
+    market_prob_source: str
+    market_prob_blend_method: str
+    win_prob_use_uncertainty: bool
+    market_mode: str
+    include_market: bool
+    market_anchor: bool
+
+
+def _candidate(candidate_key: str) -> Candidate:
     """Return a minimal candidate dictionary for checkpoint tests."""
 
     return {
@@ -135,7 +152,7 @@ def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(weekly_run.walk_forward, "run_walk_forward_backtest", _fake_run)
 
     summary_row = weekly_run._build_summary_row(
-        candidates[0],
+        cast(dict[str, object], candidates[0]),
         _stub_results(1),
         dataset_sha256="deadbeef",
         wf_run_fingerprint=wf_fp,

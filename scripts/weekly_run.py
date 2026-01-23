@@ -25,7 +25,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence
 
 import pandas as pd
 
@@ -996,9 +996,10 @@ def _run_wf_compare(
             ):
                 log.info("WF candidate %d/%d skipped (resume): %s", idx, total, candidate_key)
                 summary_row = payload.get("summary")
-                results_rows.append(summary_row)
-                summary_df = _upsert_summary(summary_df, summary_row)
-                _atomic_write_csv(summary_path, summary_df)
+                if isinstance(summary_row, dict):
+                    results_rows.append(summary_row)
+                    summary_df = _upsert_summary(summary_df, summary_row)
+                    _atomic_write_csv(summary_path, summary_df)
                 continue
             if artifact_path.exists():
                 _mark_corrupt_artifact(artifact_path)
@@ -1032,10 +1033,12 @@ def _run_wf_compare(
             xgb_params_overrides=xgb_params_overrides,
         )
 
-        fold_callback = None
+        fold_callback: Optional[Callable[[dict[str, Any], walk_forward.WalkForwardFold], None]] = (
+            None
+        )
         if checkpoint_per_fold:
 
-            def fold_callback(
+            def fold_progress_callback(
                 metrics: dict[str, Any],
                 _fold: walk_forward.WalkForwardFold,
                 *,
@@ -1045,6 +1048,8 @@ def _run_wf_compare(
                 """Write a per-fold progress record for the current candidate."""
 
                 _append_fold_progress(path, candidate_key=candidate_key, metrics=metrics)
+
+            fold_callback = fold_progress_callback
 
         out = walk_forward.run_walk_forward_backtest(df, cfg, fold_callback=fold_callback)
         duration = time.monotonic() - start

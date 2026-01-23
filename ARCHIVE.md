@@ -685,3 +685,39 @@ Completion note: Added guardrails for nflreadpy/TeamRankings availability with t
 Acceptance:
 
 - [x] Data collection fails fast for pre-1999 seasons and skips TR pre-2003 without errors.
+
+### Milestone 37 - Canonical training + validation methodology (the "source of truth")
+
+Completion note: Standardized walk-forward evaluation defaults and reporting, added explicit
+handling for incomplete seasons, aligned comparison defaults with training settings, and updated
+docs/tests to codify the canonical evaluation protocol.
+
+#### Tasks (Milestone 37)
+
+- [x] Define the **primary evaluation lens** for the project:
+  - Walk-forward (rolling-origin) over multiple seasons is authoritative.
+  - Align WF early stopping with training defaults (e.g., 30–50 rounds) so evaluation doesn’t favor
+    configs tuned under a weaker/faster regime.
+  - Season-blocked CV exists mainly for hyperparameter tuning.
+- [x] Standardize the **outer evaluation window**:
+  - Default: last N seasons (configurable), regular season only by default.
+  - Explicit handling for incomplete current season and postseason evaluation.
+- [x] Standardize the **inner calibration window**:
+  - Time-aware calibration weeks (e.g., last K weeks before prediction week) and/or
+    calibration seasons.
+  - Minimum sample size rules.
+- [x] Decide (and document) the **selection hierarchy** for “best model”:
+  - Primary: probability quality (Brier, log loss, reliability).
+  - Secondary: confidence pool expected points (and stability across weeks).
+  - Tertiary: margin/total MAE (and market-relative residual MAE if anchoring).
+- [x] Produce a single **metrics report schema** that always includes:
+  - per-week, per-season, and overall aggregates
+  - mean + variance across folds
+  - market-relative metrics when market is present
+- [x] Add one clear rule to docs:
+  - “We select models using time-aware walk-forward evaluation; random CV is not authoritative."
+
+Acceptance:
+
+- [x] There is one “blessed” evaluation command (script) that reproduces reported metrics.
+- [x] A config sweep (Milestones 38/39) can run under this protocol without ad hoc code.

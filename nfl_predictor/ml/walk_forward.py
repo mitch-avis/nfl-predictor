@@ -18,7 +18,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -350,6 +350,8 @@ def _resolve_xgb_params(config: WalkForwardConfig) -> dict[str, Any]:
 def run_walk_forward_backtest(
     df: pd.DataFrame,
     config: WalkForwardConfig,
+    *,
+    fold_callback: Optional[Callable[[dict[str, Any], WalkForwardFold], None]] = None,
 ) -> dict[str, Any]:
     """Run walk-forward training/evaluation and return metrics plus per-game predictions."""
 
@@ -663,6 +665,9 @@ def run_walk_forward_backtest(
             metrics["market_total_resid_mae"] = float(
                 np.mean(np.abs(actual_total_resid - pred_total_resid))
             )
+        if fold_callback is not None:
+            fold_callback(metrics, fold)
+
         per_week_metrics.append(metrics)
 
     predictions = pd.concat(prediction_frames, ignore_index=True)

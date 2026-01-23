@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -29,12 +31,13 @@ import pandas as pd
 
 try:
     from nfl_predictor import constants, data_collection
-    from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
+    from nfl_predictor.ml import artifacts, ml_model_core, walk_forward, wf_compare_utils
     from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
     from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
     from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
     from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
+    from nfl_predictor.utils import fingerprints
     from nfl_predictor.utils.logger import log
     from scripts import betting_pipeline, power_rankings
 except ModuleNotFoundError:  # pragma: no cover
@@ -43,12 +46,13 @@ except ModuleNotFoundError:  # pragma: no cover
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
     from nfl_predictor import constants, data_collection
-    from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
+    from nfl_predictor.ml import artifacts, ml_model_core, walk_forward, wf_compare_utils
     from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
     from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
     from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
     from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
+    from nfl_predictor.utils import fingerprints
     from nfl_predictor.utils.logger import log
     from scripts import betting_pipeline, power_rankings
 
@@ -213,6 +217,12 @@ def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.Argumen
         action=argparse.BooleanOptionalAction,
         default=defaults.get("wf_include_postseason", False),
         help="Walk-forward: include postseason folds.",
+    )
+    parser.add_argument(
+        "--wf-checkpoint-per-fold",
+        action=argparse.BooleanOptionalAction,
+        default=defaults.get("wf_checkpoint_per_fold", False),
+        help="Walk-forward: emit per-fold progress checkpoints (optional).",
     )
     parser.add_argument(
         "--wf-exclude-incomplete-seasons",
@@ -668,8 +678,85 @@ def _pick_best_row(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
     return dict(sorted(rows, key=key)[0])
 
 
-def _run_wf_compare(
-    df: pd.DataFrame,
+def _wf_compare_dir(run_dir: Path) -> Path:
+    """Return the walk-forward comparison artifact directory."""
+
+    return run_dir / "wf_compare"
+
+
+def _candidate_artifact_path(run_dir: Path, candidate_key: str) -> Path:
+    """Return the per-candidate artifact path for a candidate key."""
+
+    safe_key = re.sub(r"[^A-Za-z0-9_.-]+", "_", candidate_key)
+    return _wf_compare_dir(run_dir) / f"wf_candidate_{safe_key}.json"
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write JSON to disk atomically."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+    tmp_path.write_text(
+        json.dumps(fingerprints.to_jsonable(payload), indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    os.replace(tmp_path, path)
+
+
+def _atomic_write_csv(path: Path, frame: pd.DataFrame) -> None:
+    """Write CSV to disk atomically."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+    frame.to_csv(tmp_path, index=False)
+    os.replace(tmp_path, path)
+
+
+def _load_candidate_artifact(path: Path) -> dict[str, Any]:
+    """Load a candidate artifact JSON payload."""
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _mark_corrupt_artifact(path: Path) -> None:
+    """Move a corrupt artifact aside with a timestamp suffix."""
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    corrupt_path = path.with_suffix(f"{path.suffix}.corrupt.{timestamp}")
+    os.replace(path, corrupt_path)
+
+
+def _candidate_artifact_valid(
+    payload: dict[str, Any],
+    *,
+    candidate_key: str,
+    dataset_sha256: str,
+    wf_run_fingerprint: str,
+) -> bool:
+    """Return True when a candidate artifact matches the expected fingerprints."""
+
+    if not payload:
+        return False
+    if payload.get("candidate_key") != candidate_key:
+        return False
+    if payload.get("wf_run_fingerprint") != wf_run_fingerprint:
+        return False
+    dataset_fp = payload.get("dataset_fingerprint", {})
+    if dataset_fp.get("sha256") != dataset_sha256:
+        return False
+    metrics = payload.get("metrics", {})
+    if not isinstance(metrics, dict):
+        return False
+    for key in ("per_week", "per_season", "overall"):
+        if key not in metrics:
+            return False
+    summary = payload.get("summary")
+    if not isinstance(summary, dict) or not summary:
+        return False
+    return True
+
+
+def _build_wf_candidates(
     *,
     eval_last_n_seasons: int,
     wf_start_week: int,
@@ -685,8 +772,8 @@ def _run_wf_compare(
     xgb_params_overrides: dict[str, Any],
     early_stopping_rounds: int,
     include_quantiles: bool,
-) -> pd.DataFrame:
-    """Run a walk-forward comparison matrix and return the result DataFrame."""
+) -> list[dict[str, Any]]:
+    """Enumerate walk-forward candidates for comparison."""
 
     rows: list[dict[str, Any]] = []
     market_sources = ["raw", "novig"] if market_prob_source == "both" else [market_prob_source]
@@ -704,44 +791,23 @@ def _run_wf_compare(
                     uncertainty_label = "uncert" if use_uncertainty else "base"
                     for label, calib, weight, clamp in _WF_MATRIX:
                         run_label = f"{mode_label}_{source}_{method}_{uncertainty_label}_{label}"
-                        log.info(
-                            "WF %s (calib=%s, market_weight=%.2f, market_clamp=%.2f)",
-                            run_label,
-                            calib,
-                            weight,
-                            clamp,
-                        )
-                        cfg = walk_forward.WalkForwardConfig(
-                            eval_seasons=None,
-                            eval_last_n_seasons=eval_last_n_seasons,
-                            wf_start_week=wf_start_week,
+                        candidate_key = wf_compare_utils.build_candidate_key(
+                            model_kind="margin_total",
+                            feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
+                            feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
                             calibration=calib,
-                            calibration_weeks=calibration_weeks,
-                            random_seed=42,
-                            include_postseason=include_postseason,
-                            exclude_incomplete_seasons=exclude_incomplete_seasons,
-                            recency_half_life_weeks=recency_half_life_weeks,
-                            recency_half_life_seasons=recency_half_life_seasons,
-                            include_market=include_market,
-                            market_transform=None,
-                            market_anchor=market_anchor,
-                            market_prob_weight=weight,
-                            market_prob_clamp=clamp,
+                            market_mode=mode_label,
                             market_prob_source=source,
                             market_prob_blend_method=method,
                             win_prob_use_uncertainty=use_uncertainty,
+                            market_prob_weight=weight,
+                            market_prob_clamp=clamp,
                             include_quantiles=include_quantiles,
-                            max_cardinality_ratio=0.5,
-                            feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
-                            feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
-                            early_stopping_rounds=early_stopping_rounds,
                             xgb_params_overrides=xgb_params_overrides,
                         )
-                        out = walk_forward.run_walk_forward_backtest(df, cfg)
-                        overall = out["overall"]
-                        reliability = out.get("reliability", [])
                         rows.append(
                             {
+                                "candidate_key": candidate_key,
                                 "label": run_label,
                                 "calibration": calib,
                                 "market_prob_weight": float(weight),
@@ -750,24 +816,284 @@ def _run_wf_compare(
                                 "market_prob_blend_method": method,
                                 "win_prob_use_uncertainty": bool(use_uncertainty),
                                 "market_mode": mode_label,
-                                "brier": float(overall.get("brier", float("nan"))),
-                                "log_loss": float(overall.get("log_loss", float("nan"))),
-                                "reliability_ece": metrics_utils.reliability_ece(reliability),
-                                "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
-                                "margin_mae": float(overall.get("margin_mae", float("nan"))),
-                                "total_mae": float(overall.get("total_mae", float("nan"))),
-                                "expected_points_avg": float(
-                                    overall.get("expected_points_avg", float("nan"))
-                                ),
-                                "actual_points_avg": float(
-                                    overall.get("actual_points_avg", float("nan"))
-                                ),
-                                "games": int(overall.get("games", 0) or 0),
-                                "weeks": int(overall.get("weeks", 0) or 0),
+                                "include_market": include_market,
+                                "market_anchor": market_anchor,
+                                "eval_last_n_seasons": eval_last_n_seasons,
+                                "wf_start_week": wf_start_week,
+                                "calibration_weeks": calibration_weeks,
+                                "include_postseason": include_postseason,
+                                "exclude_incomplete_seasons": exclude_incomplete_seasons,
+                                "recency_half_life_weeks": recency_half_life_weeks,
+                                "recency_half_life_seasons": recency_half_life_seasons,
+                                "xgb_params_overrides": xgb_params_overrides,
+                                "early_stopping_rounds": early_stopping_rounds,
+                                "include_quantiles": include_quantiles,
+                                "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
+                                "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
                             }
                         )
 
-    result_df = pd.DataFrame(rows).sort_values(["brier", "log_loss"], ascending=[True, True])
+    return rows
+
+
+def _build_summary_row(
+    candidate: dict[str, Any],
+    results: dict[str, Any],
+    *,
+    dataset_sha256: str,
+    wf_run_fingerprint: str,
+    duration_seconds: float,
+) -> dict[str, Any]:
+    """Build a summary row from walk-forward results."""
+
+    overall = results.get("overall", {})
+    reliability = results.get("reliability", [])
+    row: dict[str, Any] = {
+        "candidate_key": candidate["candidate_key"],
+        "label": candidate.get("label"),
+        "calibration": candidate["calibration"],
+        "market_prob_weight": float(candidate["market_prob_weight"]),
+        "market_prob_clamp": float(candidate["market_prob_clamp"]),
+        "market_prob_source": candidate["market_prob_source"],
+        "market_prob_blend_method": candidate["market_prob_blend_method"],
+        "win_prob_use_uncertainty": bool(candidate["win_prob_use_uncertainty"]),
+        "market_mode": candidate["market_mode"],
+        "brier": float(overall.get("brier", float("nan"))),
+        "log_loss": float(overall.get("log_loss", float("nan"))),
+        "reliability_ece": metrics_utils.reliability_ece(reliability),
+        "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
+        "margin_mae": float(overall.get("margin_mae", float("nan"))),
+        "total_mae": float(overall.get("total_mae", float("nan"))),
+        "expected_points_avg": float(overall.get("expected_points_avg", float("nan"))),
+        "actual_points_avg": float(overall.get("actual_points_avg", float("nan"))),
+        "market_margin_resid_mae": float(overall.get("market_margin_resid_mae", float("nan"))),
+        "market_total_resid_mae": float(overall.get("market_total_resid_mae", float("nan"))),
+        "games": int(overall.get("games", 0) or 0),
+        "weeks": int(overall.get("weeks", 0) or 0),
+        "dataset_fingerprint": dataset_sha256,
+        "wf_run_fingerprint": wf_run_fingerprint,
+        "duration_seconds": float(duration_seconds),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return row
+
+
+def _append_fold_progress(
+    path: Path,
+    *,
+    candidate_key: str,
+    metrics: dict[str, Any],
+) -> None:
+    """Append a JSONL fold progress entry."""
+
+    payload = {
+        "candidate_key": candidate_key,
+        "season": metrics.get("season"),
+        "week": metrics.get("week"),
+        "metrics": metrics,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(fingerprints.to_jsonable(payload)) + "\n")
+
+
+def _upsert_summary(
+    summary_df: pd.DataFrame,
+    summary_row: Optional[dict[str, Any]],
+    *,
+    full_frame: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
+    """Insert or replace a summary row by candidate key."""
+
+    if full_frame is not None:
+        return full_frame.reset_index(drop=True)
+    if summary_row is None:
+        return summary_df
+    if summary_df.empty:
+        return pd.DataFrame([summary_row])
+    filtered = summary_df[summary_df["candidate_key"] != summary_row["candidate_key"]]
+    return pd.concat([filtered, pd.DataFrame([summary_row])], ignore_index=True)
+
+
+def _rank_summary(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add a rank column using (brier, log_loss) ordering."""
+
+    if frame.empty:
+        return frame
+    ranked = frame.sort_values(["brier", "log_loss"], ascending=[True, True]).reset_index(drop=True)
+    ranked["rank"] = range(1, len(ranked) + 1)
+    return ranked
+
+
+def _run_wf_compare(
+    df: pd.DataFrame,
+    *,
+    run_dir: Path,
+    resume: bool,
+    dataset_fingerprint: dict[str, Any],
+    wf_run_fingerprint: str,
+    checkpoint_per_fold: bool,
+    eval_last_n_seasons: int,
+    wf_start_week: int,
+    calibration_weeks: int,
+    include_postseason: bool,
+    exclude_incomplete_seasons: bool,
+    recency_half_life_weeks: Optional[float],
+    recency_half_life_seasons: Optional[float],
+    market_mode: str,
+    market_prob_source: str,
+    market_prob_blend_method: str,
+    win_prob_uncertainty: str,
+    xgb_params_overrides: dict[str, Any],
+    early_stopping_rounds: int,
+    include_quantiles: bool,
+) -> pd.DataFrame:
+    """Run a walk-forward comparison matrix with resumable checkpoints."""
+
+    wf_dir = _wf_compare_dir(run_dir)
+    wf_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = wf_dir / "wf_summary.csv"
+    fold_progress_path = wf_dir / "wf_fold_progress.jsonl"
+
+    candidates = _build_wf_candidates(
+        eval_last_n_seasons=eval_last_n_seasons,
+        wf_start_week=wf_start_week,
+        calibration_weeks=calibration_weeks,
+        include_postseason=include_postseason,
+        exclude_incomplete_seasons=exclude_incomplete_seasons,
+        recency_half_life_weeks=recency_half_life_weeks,
+        recency_half_life_seasons=recency_half_life_seasons,
+        market_mode=market_mode,
+        market_prob_source=market_prob_source,
+        market_prob_blend_method=market_prob_blend_method,
+        win_prob_uncertainty=win_prob_uncertainty,
+        xgb_params_overrides=xgb_params_overrides,
+        early_stopping_rounds=early_stopping_rounds,
+        include_quantiles=include_quantiles,
+    )
+
+    summary_df = pd.DataFrame()
+    if summary_path.exists():
+        summary_df = pd.read_csv(summary_path)
+
+    results_rows: list[dict[str, Any]] = []
+    total = len(candidates)
+    dataset_sha256 = str(dataset_fingerprint.get("sha256"))
+
+    for idx, candidate in enumerate(candidates, start=1):
+        candidate_key = candidate["candidate_key"]
+        artifact_path = _candidate_artifact_path(run_dir, candidate_key)
+        if resume and artifact_path.exists():
+            try:
+                payload = _load_candidate_artifact(artifact_path)
+            except json.JSONDecodeError:
+                payload = {}
+            if _candidate_artifact_valid(
+                payload,
+                candidate_key=candidate_key,
+                dataset_sha256=dataset_sha256,
+                wf_run_fingerprint=wf_run_fingerprint,
+            ):
+                log.info("WF candidate %d/%d skipped (resume): %s", idx, total, candidate_key)
+                summary_row = payload.get("summary")
+                results_rows.append(summary_row)
+                summary_df = _upsert_summary(summary_df, summary_row)
+                _atomic_write_csv(summary_path, summary_df)
+                continue
+            if artifact_path.exists():
+                _mark_corrupt_artifact(artifact_path)
+
+        log.info("WF candidate %d/%d starting: %s", idx, total, candidate_key)
+        start = time.monotonic()
+        cfg = walk_forward.WalkForwardConfig(
+            eval_seasons=None,
+            eval_last_n_seasons=eval_last_n_seasons,
+            wf_start_week=wf_start_week,
+            calibration=candidate["calibration"],
+            calibration_weeks=calibration_weeks,
+            random_seed=42,
+            include_postseason=include_postseason,
+            exclude_incomplete_seasons=exclude_incomplete_seasons,
+            recency_half_life_weeks=recency_half_life_weeks,
+            recency_half_life_seasons=recency_half_life_seasons,
+            include_market=bool(candidate["include_market"]),
+            market_transform=None,
+            market_anchor=bool(candidate["market_anchor"]),
+            market_prob_weight=float(candidate["market_prob_weight"]),
+            market_prob_clamp=float(candidate["market_prob_clamp"]),
+            market_prob_source=str(candidate["market_prob_source"]),
+            market_prob_blend_method=str(candidate["market_prob_blend_method"]),
+            win_prob_use_uncertainty=bool(candidate["win_prob_use_uncertainty"]),
+            include_quantiles=include_quantiles,
+            max_cardinality_ratio=0.5,
+            feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
+            feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+            early_stopping_rounds=early_stopping_rounds,
+            xgb_params_overrides=xgb_params_overrides,
+        )
+
+        fold_callback = None
+        if checkpoint_per_fold:
+
+            def fold_callback(
+                metrics: dict[str, Any],
+                _fold: walk_forward.WalkForwardFold,
+                *,
+                candidate_key: str = candidate_key,
+                path: Path = fold_progress_path,
+            ) -> None:
+                """Write a per-fold progress record for the current candidate."""
+
+                _append_fold_progress(path, candidate_key=candidate_key, metrics=metrics)
+
+        out = walk_forward.run_walk_forward_backtest(df, cfg, fold_callback=fold_callback)
+        duration = time.monotonic() - start
+        summary_row = _build_summary_row(
+            candidate,
+            out,
+            dataset_sha256=dataset_sha256,
+            wf_run_fingerprint=wf_run_fingerprint,
+            duration_seconds=duration,
+        )
+        candidate_payload = {
+            "candidate_key": candidate_key,
+            "candidate": candidate,
+            "dataset_fingerprint": dataset_fingerprint,
+            "wf_run_fingerprint": wf_run_fingerprint,
+            "metrics": {
+                "per_week": out.get("per_week"),
+                "per_season": out.get("per_season"),
+                "overall": out.get("overall"),
+                "reliability": out.get("reliability"),
+                "resolved_settings": out.get("resolved_settings"),
+            },
+            "summary": summary_row,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "duration_seconds": float(duration),
+        }
+        _atomic_write_json(artifact_path, candidate_payload)
+        summary_df = _upsert_summary(summary_df, summary_row)
+        _atomic_write_csv(summary_path, summary_df)
+
+        minutes = int(duration // 60)
+        seconds = duration - (minutes * 60)
+        log.info(
+            "WF candidate %d/%d done in %dm%.1fs: brier=%.4f logloss=%.4f",
+            idx,
+            total,
+            minutes,
+            seconds,
+            summary_row.get("brier", float("nan")),
+            summary_row.get("log_loss", float("nan")),
+        )
+        results_rows.append(summary_row)
+
+    result_df = pd.DataFrame(results_rows)
+    if not result_df.empty:
+        result_df = _rank_summary(result_df)
+        result_df = result_df.sort_values(["brier", "log_loss"], ascending=[True, True])
+        summary_df = _upsert_summary(summary_df, None, full_frame=result_df)
+        _atomic_write_csv(summary_path, summary_df)
     return result_df
 
 
@@ -917,6 +1243,7 @@ def main() -> int:
         raise FileNotFoundError(f"Missing dataset: {args.data_path}")
 
     dataset_hash = artifacts.sha256_file(args.data_path)
+    dataset_fingerprint = fingerprints.dataset_fingerprint(args.data_path)
     created_at = datetime.now(timezone.utc).isoformat()
 
     config_payload = _config_payload(args)
@@ -955,6 +1282,7 @@ def main() -> int:
         "market_prob_blend_method": args.wf_market_prob_blend_method,
         "win_prob_uncertainty": args.wf_win_prob_uncertainty,
         "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
+        "checkpoint_per_fold": bool(args.wf_checkpoint_per_fold),
         "wf_matrix": _WF_MATRIX,
         "xgb_params_overrides": {
             "n_estimators": int(args.wf_n_estimators),
@@ -978,6 +1306,29 @@ def main() -> int:
         int(args.xgb_n_jobs) if args.xgb_n_jobs is not None else int(args.wf_n_jobs)
     )
 
+    wf_run_fingerprint = fingerprints.wf_run_fingerprint(
+        dataset_fingerprint,
+        {
+            "eval_last_n_seasons": args.wf_eval_last_n_seasons,
+            "wf_start_week": args.wf_start_week,
+            "calibration_weeks": args.wf_calibration_weeks,
+            "include_postseason": bool(args.wf_include_postseason),
+            "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
+            "recency_half_life_weeks": args.wf_recency_half_life_weeks,
+            "recency_half_life_seasons": args.wf_recency_half_life_seasons,
+            "market_mode": args.wf_market_mode,
+            "market_prob_source": args.wf_market_prob_source,
+            "market_prob_blend_method": args.wf_market_prob_blend_method,
+            "win_prob_uncertainty": args.wf_win_prob_uncertainty,
+            "include_quantiles": bool(args.wf_include_quantiles),
+            "early_stopping_rounds": int(args.wf_early_stopping_rounds),
+            "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
+            "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+            "xgb_params_overrides": wf_config["xgb_params_overrides"],
+        },
+        code_version=artifacts.git_commit_hash(),
+    )
+
     wf_config_hash = artifacts.stable_short_hash(wf_config)
     wf_marker = _stage_marker_path(run_dir, "wf_compare")
 
@@ -995,6 +1346,11 @@ def main() -> int:
         df = walk_forward.load_games(args.data_path)
         wf_result_df = _run_wf_compare(
             df,
+            run_dir=run_dir,
+            resume=bool(args.resume),
+            dataset_fingerprint=dataset_fingerprint,
+            wf_run_fingerprint=wf_run_fingerprint,
+            checkpoint_per_fold=bool(args.wf_checkpoint_per_fold),
             eval_last_n_seasons=args.wf_eval_last_n_seasons,
             wf_start_week=args.wf_start_week,
             calibration_weeks=args.wf_calibration_weeks,
@@ -1010,7 +1366,9 @@ def main() -> int:
             early_stopping_rounds=args.wf_early_stopping_rounds,
             include_quantiles=bool(args.wf_include_quantiles),
         )
-        wf_result_df.to_csv(wf_compare_csv, index=False)
+        if not wf_result_df.empty:
+            wf_result_df = _rank_summary(wf_result_df)
+        _atomic_write_csv(wf_compare_csv, wf_result_df)
         best_rows = [
             {str(key): value for key, value in row.items()}
             for row in wf_result_df.to_dict(orient="records")

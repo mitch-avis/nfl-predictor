@@ -721,3 +721,25 @@ Acceptance:
 
 - [x] There is one “blessed” evaluation command (script) that reproduces reported metrics.
 - [x] A config sweep (Milestones 38/39) can run under this protocol without ad hoc code.
+
+### Milestone 38 - Walk-forward comparison checkpointing + true resumability (blocking)
+
+Completion note: Added per-candidate walk-forward checkpoints, resumable summary artifacts, and
+optional per-fold progress logging, with tests and docs updated.
+
+#### Tasks (Milestone 38)
+
+- [x] Identify where WF candidates are enumerated (weekly_run Stage 1) and define stable candidate keys.
+- [x] Add dataset + run fingerprint helpers for caching/resume decisions.
+- [x] Write per-candidate artifacts atomically and skip valid candidates on resume.
+- [x] Persist and atomically update a summary table after each candidate.
+- [x] Add optional per-fold heartbeat checkpointing.
+- [x] Wire checkpointing into Stage 1 with clear progress logging.
+- [x] Add unit + integration-ish tests for resume behavior and corrupt handling.
+- [x] Update README/AGENTS with resumable WF artifact guidance.
+
+Acceptance:
+
+- [x] Stage 1 WF writes per-candidate artifacts and an aggregated summary table.
+- [x] `--resume` continues without recomputing completed candidates.
+- [x] A forced kill/restart preserves completed work and finishes correctly after restart.

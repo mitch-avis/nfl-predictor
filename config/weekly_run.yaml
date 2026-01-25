@@ -1,0 +1,53 @@
+# weekly_run.yaml - configuration for weekly_run script
+
+# General run settings:
+run_id: weekly_2025_week_21 # unique identifier for this run
+skip_data_refresh: false # do not refresh data (use existing dataset)
+resume: true # reuse existing artifacts if inputs unchanged
+wf_checkpoint_per_fold: true # save checkpoint after each walk-forward fold
+
+# Walk-forward evaluation parameters:
+wf_eval_last_n_seasons: 10 # evaluate model on last 10 seasons
+wf_start_week: 3 # begin walk-forward at week 3 each season
+wf_calibration_weeks: 8 # 8-week calibration window for each fold
+wf_include_postseason: true # include postseason games in evaluation folds
+wf_market_mode: hybrid # use hybrid market integration mode
+wf_market_prob_source: novig # use no-vig implied probabilities for market data
+wf_market_prob_blend_method: logit # blend probabilities in log-odds space
+wf_win_prob_uncertainty: both # evaluate both with and without win prob uncertainty
+wf_include_quantiles: false # disable quantile regression models (for speed)
+
+# Walk-forward model hyperparameters:
+wf_n_estimators: 1800 # up to 1800 XGBoost boosting rounds (with early stopping)
+wf_max_depth: 4 # XGBoost tree depth for walk-forward models
+wf_learning_rate: 0.03 # XGBoost learning rate (eta) for walk-forward
+wf_early_stopping_rounds: 40 # early stopping rounds for walk-forward training
+wf_n_jobs: 12 # parallel threads for XGBoost during walk-forward
+
+# Final model training parameters:
+include_postseason: true # include postseason games in final training data
+postseason_weight: 1.3 # weight postseason games higher during training
+train_recency_half_life_seasons: 4 # recency weighting: half-life of 4 seasons
+train_early_stopping_rounds: 80 # early stopping rounds for final model training
+market_transform: true # include market-derived features in training
+train_calibration_weeks: 8 # calibrate final win probabilities on last 8 weeks of data
+
+# Optuna hyperparameter tuning settings:
+tune: true # enable Optuna hyperparameter tuning
+tune_timeout: 18000 # give Optuna 18000s (5 hours) to search for best params
+tune_cv_splits: 5 # use 5-fold cross-validation during tuning
+tune_objective: brier # optimize Brier score during tuning (probability calibration)
+
+# XGBoost runtime configuration:
+xgb_tree_method: hist # use histogram-optimized tree growth (fast on GPU)
+xgb_device: cuda # execute XGBoost on GPU (CUDA device)
+xgb_n_jobs: 12 # allow up to 12 parallel threads for XGBoost
+
+# Prediction output settings:
+predict_path: data/predict/week_21_games_to_predict.csv # upcoming games to predict
+score_rounding: nfl # round predicted scores to realistic NFL values
+betting_template_path: data/predict/week_21_betting_template.xlsx # output Excel template for betting picks
+ratings_min_season: 2025 # minimum season for team ratings used in predictions
+power_rankings_season: 2025 # generate power rankings for the 2025 season
+power_rankings_through_week: 20 # ...through week 20 of the 2025 season
+power_rankings_include_postseason: true # include postseason games in power rankings

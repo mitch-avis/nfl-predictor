@@ -198,3 +198,85 @@ Acceptance:
 
 - [ ] At least one alternative/ensemble approach is evaluated and reported under walk-forward.
 - [ ] If any approach wins, it can be enabled via config and runs end-to-end in weekly orchestration.
+
+---
+
+## Milestone 43 - Power rankings realism + recency weighting
+
+Goal: make weekly power rankings reflect **current-season strength** (and recent performance),
+instead of long-run franchise averages.
+
+Rationale:
+
+- Current rankings mix all historical seasons equally, which can swamp a breakout season.
+- Users expect “power rankings” to track the current season and recent form.
+
+### Tasks
+
+#### 43.1 - Add explicit recency/season window controls
+
+- [ ] Add config options to `scripts/power_rankings.py` (and `scripts/weekly_run.py`) such as:
+  - `--ratings-window-seasons N` (use last N seasons including current)
+  - `--ratings-half-life-seasons` or `--ratings-half-life-weeks` (optional exponential weighting)
+  - keep `--ratings-min-season` for explicit overrides
+- [ ] Define a **sane default** (e.g., last 2–3 seasons) when no overrides are provided.
+
+Acceptance:
+
+- [ ] Defaults use a recent-season window without requiring extra flags.
+
+---
+
+#### 43.2 - Weighted Bradley–Terry fit
+
+- [ ] Extend `fit_bradley_terry_ratings` to accept sample weights.
+- [ ] Compute weights from season/week age (heavier weight for recent games).
+- [ ] Ensure weighting does **not** change fold semantics or introduce leakage.
+
+Acceptance:
+
+- [ ] Weights change ratings in the expected direction on synthetic tests.
+
+---
+
+#### 43.3 - Outcome probability mapping improvements
+
+- [ ] Add an option to map completed-game outcomes to probabilities using margin-based logic
+  (e.g., `margin_to_home_win_prob`) instead of fixed 0.97/0.03.
+- [ ] Keep current binary mapping as an option for comparability.
+
+Acceptance:
+
+- [ ] A configurable mapping exists and is documented.
+
+---
+
+#### 43.4 - Tests
+
+- [ ] Add unit tests for:
+  - recency weighting shifts ratings toward recent performance
+  - season-window logic excludes older seasons
+  - new probability mapping behaves as expected
+
+Acceptance:
+
+- [ ] `pytest` passes with coverage for the new options.
+
+---
+
+#### 43.5 - Docs + usage guidance
+
+- [ ] Update README power rankings notes to describe the new defaults and flags.
+- [ ] Clarify in `scripts/power_rankings.py --help` how to reproduce “franchise” vs “current-season”
+  rankings.
+
+Acceptance:
+
+- [ ] Docs explain how to get realistic weekly rankings.
+
+---
+
+Acceptance (Milestone 43 complete)
+
+- [ ] Power rankings for a late-season week align with current-season results and recent form.
+- [ ] Users can still opt into long-run franchise ratings via explicit flags.

@@ -31,7 +31,7 @@ def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
             {
                 "season": 2024,
                 "week": 5,
-                "game_type": "POST",
+                "game_type": "WC",
                 "away_abbr": "AAA",
                 "home_abbr": "BBB",
                 "away_score": 30,
@@ -40,13 +40,53 @@ def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
         ]
     ).to_csv(schedule_path, index=False)
 
-    records = power_rankings._load_current_records(schedule_path, season=2024, through_week=5)
+    records = power_rankings._load_current_records(
+        schedule_path, season=2024, through_week=5, include_postseason=False
+    )
     records = records.set_index("team_abbr")
 
     assert records.loc["AAA", "wins"] == 0
     assert records.loc["AAA", "losses"] == 1
     assert records.loc["BBB", "wins"] == 1
     assert records.loc["BBB", "losses"] == 0
+
+
+def test_load_current_records_can_include_postseason(tmp_path) -> None:
+    """Records should include postseason games when requested."""
+
+    schedule_path = tmp_path / "schedule.csv"
+    pd.DataFrame(
+        [
+            {
+                "season": 2024,
+                "week": 5,
+                "game_type": "REG",
+                "away_abbr": "AAA",
+                "home_abbr": "BBB",
+                "away_score": 10,
+                "home_score": 20,
+            },
+            {
+                "season": 2024,
+                "week": 19,
+                "game_type": "DIV",
+                "away_abbr": "AAA",
+                "home_abbr": "BBB",
+                "away_score": 30,
+                "home_score": 10,
+            },
+        ]
+    ).to_csv(schedule_path, index=False)
+
+    records = power_rankings._load_current_records(
+        schedule_path, season=2024, through_week=19, include_postseason=True
+    )
+    records = records.set_index("team_abbr")
+
+    assert records.loc["AAA", "wins"] == 1
+    assert records.loc["AAA", "losses"] == 1
+    assert records.loc["BBB", "wins"] == 1
+    assert records.loc["BBB", "losses"] == 1
 
 
 def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
@@ -183,8 +223,49 @@ def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
         through_week=1,
         ratings_min_season=None,
         future_games_with_probs=future_games,
+        include_postseason=False,
     )
 
     messages = [record.message for record in caplog.records]
     diag = [msg for msg in messages if msg.startswith("Ratings fit diagnostics:")]
     assert len(diag) == 1
+
+
+def test_build_games_for_ratings_includes_postseason(tmp_path) -> None:
+    """Ratings fit should include postseason games when requested."""
+
+    schedule_path = tmp_path / "schedule.csv"
+    pd.DataFrame(
+        [
+            {
+                "season": 2024,
+                "week": 1,
+                "game_type": "REG",
+                "away_abbr": "AAA",
+                "home_abbr": "BBB",
+                "away_score": 10,
+                "home_score": 20,
+            },
+            {
+                "season": 2024,
+                "week": 19,
+                "game_type": "CON",
+                "away_abbr": "AAA",
+                "home_abbr": "BBB",
+                "away_score": 30,
+                "home_score": 10,
+            },
+        ]
+    ).to_csv(schedule_path, index=False)
+
+    games = power_rankings._build_games_for_ratings(
+        schedule_path=schedule_path,
+        season=2024,
+        through_week=19,
+        ratings_min_season=None,
+        future_games_with_probs=pd.DataFrame(),
+        include_postseason=True,
+    )
+
+    assert len(games) == 2
+    assert set(games["week"]) == {1, 19}

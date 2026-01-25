@@ -112,6 +112,12 @@ def _parse_args() -> argparse.Namespace:
             "Default: include all historical seasons available in --data-schedule."
         ),
     )
+    p.add_argument(
+        "--include-postseason",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Include postseason games in records/ratings (default: regular season only).",
+    )
     return p.parse_args()
 
 
@@ -129,7 +135,30 @@ def _pl_to_pandas(df: pl.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(df.to_dicts())
 
 
-def _load_current_records(schedule_path: Path, *, season: int, through_week: int) -> pd.DataFrame:
+POSTSEASON_GAME_TYPES = frozenset({"WC", "DIV", "CON", "SB", "POST"})
+
+
+def _filter_by_game_type(df: pl.DataFrame, *, include_postseason: bool) -> pl.DataFrame:
+    """Filter to regular season (or regular + postseason) games when game_type exists."""
+
+    if "game_type" not in df.columns:
+        return df
+    game_type = pl.col("game_type").cast(pl.Utf8).str.to_uppercase()
+    if include_postseason:
+        allowed = ["REG", *sorted(POSTSEASON_GAME_TYPES)]
+        return df.filter(game_type.is_in(allowed))
+    return df.filter(game_type == "REG")
+
+
+def _load_current_records(
+    schedule_path: Path,
+    *,
+    season: int,
+    through_week: int,
+    include_postseason: bool = False,
+) -> pd.DataFrame:
+    """Load current records through the specified week."""
+
     df = (
         pl.read_csv(schedule_path)
         .select(
@@ -148,7 +177,7 @@ def _load_current_records(schedule_path: Path, *, season: int, through_week: int
 
     # Only count games up through the specified week that have scores.
     df = df.filter(pl.col("week") <= through_week)
-    df = df.filter(pl.col("game_type") == "REG")
+    df = _filter_by_game_type(df, include_postseason=include_postseason)
     df = df.filter(pl.col("away_score").is_not_null() & pl.col("home_score").is_not_null())
 
     # Compute per-team record.
@@ -227,8 +256,11 @@ def _predict_future_games(
     data_ml: Path,
     season: int,
     through_week: int,
+    include_postseason: bool = False,
 ) -> pd.DataFrame:
-    # Load a season slice from the ML dataset (REG only), then predict for future games.
+    """Predict future games for the specified season."""
+
+    # Load a season slice from the ML dataset (REG only by default), then predict for future games.
     # We read only the columns required by the model's FeatureSpec.
     spec = getattr(model, "feature_spec", None)
     if spec is None:
@@ -256,11 +288,9 @@ def _predict_future_games(
     feature_cols = [c for c in list(getattr(spec, "feature_columns", [])) if c in available_cols]
     usecols = sorted(set(base_cols + feature_cols))
 
-    games = (
-        pl.read_csv(data_ml, columns=usecols)
-        .filter((pl.col("season") == season) & (pl.col("game_type") == "REG"))
-        .filter(pl.col("week") > through_week)
-    )
+    games = pl.read_csv(data_ml, columns=usecols).filter(pl.col("season") == season)
+    games = _filter_by_game_type(games, include_postseason=include_postseason)
+    games = games.filter(pl.col("week") > through_week)
 
     games = _pl_to_pandas(games)
 
@@ -339,22 +369,21 @@ def _build_games_for_ratings(
     through_week: int,
     ratings_min_season: int | None,
     future_games_with_probs: pd.DataFrame,
+    include_postseason: bool = False,
 ) -> pd.DataFrame:
-    sched = (
-        pl.read_csv(schedule_path)
-        .select(
-            [
-                "season",
-                "week",
-                "game_type",
-                "away_abbr",
-                "home_abbr",
-                "away_score",
-                "home_score",
-            ]
-        )
-        .filter(pl.col("game_type") == "REG")
+    """Assemble past + future games for the ratings fit."""
+    sched = pl.read_csv(schedule_path).select(
+        [
+            "season",
+            "week",
+            "game_type",
+            "away_abbr",
+            "home_abbr",
+            "away_score",
+            "home_score",
+        ]
     )
+    sched = _filter_by_game_type(sched, include_postseason=include_postseason)
 
     if ratings_min_season is not None:
         sched = sched.filter(pl.col("season") >= int(ratings_min_season))
@@ -432,7 +461,10 @@ def main() -> int:
     model = ml_model_core.load_model_checkpoint(args.model_in, args.model_kind)
 
     current_records = _load_current_records(
-        args.data_schedule, season=args.season, through_week=args.through_week
+        args.data_schedule,
+        season=args.season,
+        through_week=args.through_week,
+        include_postseason=bool(args.include_postseason),
     )
     future_games = _predict_future_games(
         model,
@@ -440,6 +472,7 @@ def main() -> int:
         data_ml=args.data_ml,
         season=args.season,
         through_week=args.through_week,
+        include_postseason=bool(args.include_postseason),
     )
     games_for_ratings = _build_games_for_ratings(
         schedule_path=args.data_schedule,
@@ -447,6 +480,7 @@ def main() -> int:
         through_week=args.through_week,
         ratings_min_season=args.ratings_min_season,
         future_games_with_probs=future_games,
+        include_postseason=bool(args.include_postseason),
     )
 
     result = build_power_rankings_and_standings(

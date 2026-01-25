@@ -509,6 +509,12 @@ def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.Argumen
         help="Power rankings output directory (default: output dir).",
     )
     parser.add_argument(
+        "--power-rankings-include-postseason",
+        action=argparse.BooleanOptionalAction,
+        default=defaults.get("power_rankings_include_postseason", False),
+        help="Include postseason games in power rankings (default: regular season only).",
+    )
+    parser.add_argument(
         "--ratings-min-season",
         type=int,
         default=defaults.get("ratings_min_season"),
@@ -1622,6 +1628,7 @@ def main() -> int:
         "power_rankings_data_ml": str(args.power_rankings_data_ml),
         "power_rankings_data_schedule": str(args.power_rankings_data_schedule),
         "power_rankings_out_dir": str(pr_out_dir_default),
+        "power_rankings_include_postseason": bool(args.power_rankings_include_postseason),
     }
     report_hash = artifacts.stable_short_hash(report_config)
     report_marker = _stage_marker_path(run_dir, "reports")
@@ -1669,7 +1676,10 @@ def main() -> int:
             pr_out_dir.mkdir(parents=True, exist_ok=True)
             model = ml_model_core.load_model_checkpoint(model_path, "margin_total")
             current_records = power_rankings._load_current_records(
-                args.power_rankings_data_schedule, season=pr_season, through_week=pr_week
+                args.power_rankings_data_schedule,
+                season=pr_season,
+                through_week=pr_week,
+                include_postseason=bool(args.power_rankings_include_postseason),
             )
             future_games = power_rankings._predict_future_games(
                 model,
@@ -1677,6 +1687,7 @@ def main() -> int:
                 data_ml=args.power_rankings_data_ml,
                 season=pr_season,
                 through_week=pr_week,
+                include_postseason=bool(args.power_rankings_include_postseason),
             )
             games_for_ratings = power_rankings._build_games_for_ratings(
                 schedule_path=args.power_rankings_data_schedule,
@@ -1684,6 +1695,7 @@ def main() -> int:
                 through_week=pr_week,
                 ratings_min_season=args.ratings_min_season,
                 future_games_with_probs=future_games,
+                include_postseason=bool(args.power_rankings_include_postseason),
             )
             result = power_rankings.build_power_rankings_and_standings(
                 season=pr_season,

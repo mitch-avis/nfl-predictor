@@ -14,7 +14,6 @@ from nfl_predictor.utils import polars_utils
 
 def test_prefix_team_records_and_invalid_side() -> None:
     """Team records are prefixed correctly for away/home sides, error on invalid side."""
-
     base_cols = [
         col[len("away_") :] for col in constants.RECORD_FEATURE_COLUMNS if col.startswith("away_")
     ]
@@ -30,14 +29,12 @@ def test_prefix_team_records_and_invalid_side() -> None:
 
 def test_resolve_seasons_rejects_pre_nflreadpy() -> None:
     """min_season before nflreadpy availability raises a ValueError."""
-
     with pytest.raises(ValueError):
         data_collection._resolve_seasons(constants.NFLREADPY_MIN_SEASON - 1, 2000)
 
 
 def test_merge_team_rankings_week_specific() -> None:
     """TeamRankings are merged correctly for the given week."""
-
     merged = pl.DataFrame({"away_abbr": ["AAA"], "home_abbr": ["BBB"]})
     tr_df = pl.DataFrame(
         {
@@ -61,7 +58,6 @@ def test_merge_team_rankings_week_specific() -> None:
 
 def test_merge_team_rankings_week1_prev() -> None:
     """For week 1, previous season's TeamRankings are merged."""
-
     merged = pl.DataFrame({"away_abbr": ["AAA"], "home_abbr": ["BBB"]})
     prev_tr_df = pl.DataFrame(
         {
@@ -85,7 +81,6 @@ def test_merge_team_rankings_week1_prev() -> None:
 
 def test_save_and_load_dataframe(tmp_path: Path, monkeypatch) -> None:
     """DataFrame is saved and loaded correctly."""
-
     monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
 
     df = pl.DataFrame({"a": [1], "b": [2]})
@@ -98,14 +93,12 @@ def test_save_and_load_dataframe(tmp_path: Path, monkeypatch) -> None:
 
 def test_load_dataframe_missing(tmp_path: Path, monkeypatch) -> None:
     """Loading missing DataFrame returns None."""
-
     monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
     assert data_collection.load_dataframe("missing") is None
 
 
 def test_determine_nfl_week_branches() -> None:
     """NFL week is determined correctly for various dates."""
-
     assert data_collection._determine_nfl_week(date(2024, 7, 1)) == 1
 
     week = data_collection._determine_nfl_week(date(2024, 2, 1))
@@ -114,7 +107,6 @@ def test_determine_nfl_week_branches() -> None:
 
 def test_collect_all_data_minimal(monkeypatch) -> None:
     """Data collection works end-to-end for minimal data."""
-
     season = constants.MIN_SEASON + 1
     schedule_df = pl.DataFrame(
         {
@@ -149,7 +141,6 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
 
     def fake_load_raw_elo_data() -> pl.DataFrame:
         """Fake raw Elo loader for testing."""
-
         return pl.DataFrame()
 
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", fake_load_raw_elo_data)
@@ -170,7 +161,6 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
 
 def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
     """TeamRankings loads once per season within a collection run."""
-
     season_one = constants.MIN_SEASON + 1
     season_two = season_one + 1
     schedule_df = pl.DataFrame(
@@ -246,7 +236,6 @@ def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
 
 def test_process_week_fallback(monkeypatch) -> None:
     """Week processing falls back gracefully when lookahead/motivation features fail."""
-
     schedule_df = pl.DataFrame(
         {
             "season": [2023],
@@ -297,7 +286,6 @@ def test_process_week_fallback(monkeypatch) -> None:
 
     def raise_value_error(*_args, **_kwargs):
         """Raise ValueError for testing fallback."""
-
         raise ValueError("incomplete schedule")
 
     monkeypatch.setattr(polars_utils, "add_lookahead_features", raise_value_error)

@@ -10,7 +10,6 @@ from nfl_predictor.ml import feature_importance, ml_model_core
 
 def test_feature_importance_report_margin_total() -> None:
     """Feature importance report returns aligned gain/weight arrays."""
-
     rng = np.random.default_rng(7)
     df = pd.DataFrame(
         {

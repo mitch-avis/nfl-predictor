@@ -12,7 +12,6 @@ from nfl_predictor.ml import artifacts
 
 def test_artifacts_write_and_load_roundtrip(tmp_path: Path) -> None:
     """Artifacts write/read should be a lossless round-trip."""
-
     run_id = "unit_test_run"
     paths = artifacts.resolve_run_paths(run_id, run_dir=tmp_path / run_id)
 
@@ -54,7 +53,6 @@ def test_artifacts_write_and_load_roundtrip(tmp_path: Path) -> None:
 
 def test_write_json_handles_numpy_scalars(tmp_path: Path) -> None:
     """write_json should tolerate numpy scalar types like numpy.int64."""
-
     path = tmp_path / "payload.json"
     payload = {
         "a": np.int64(7),

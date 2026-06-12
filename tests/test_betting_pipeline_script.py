@@ -16,7 +16,6 @@ from scripts import betting_pipeline
 
 def test_betting_pipeline_dry_run_exits_successfully() -> None:
     """The betting pipeline script should support a dry run without heavy work."""
-
     old_argv = sys.argv
     try:
         sys.argv = [
@@ -37,7 +36,6 @@ def test_betting_pipeline_stage2_passes_calibration_for_blend(tmp_path, monkeypa
 
     This is a lightweight regression test that avoids expensive model fitting.
     """
-
     run_dir = tmp_path / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
 

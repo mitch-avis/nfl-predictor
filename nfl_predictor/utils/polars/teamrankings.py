@@ -5,7 +5,6 @@ Implementation was split out of `nfl_predictor.utils.polars_utils`.
 """
 
 import os
-from typing import Optional
 
 import polars as pl
 
@@ -26,7 +25,6 @@ from nfl_predictor.utils.scraping_utils import (
 
 def _get_required_tr_columns() -> set[str]:
     """Get the set of required TeamRankings columns."""
-
     required = {"team_abbr", "week"}
     required.update(constants.TR_RATINGS)
     required.update(constants.TR_STATS)
@@ -34,16 +32,15 @@ def _get_required_tr_columns() -> set[str]:
 
 
 def _validate_tr_dataframe(tr_df: pl.DataFrame) -> tuple[bool, list[str]]:
-    """
-    Validate that a TeamRankings DataFrame has all required columns.
+    """Validate that a TeamRankings DataFrame has all required columns.
 
     Args:
         tr_df: TeamRankings DataFrame to validate
 
     Returns:
         Tuple of (is_valid, list of missing columns)
-    """
 
+    """
     if tr_df.height == 0:
         return False, list(_get_required_tr_columns())
 
@@ -56,13 +53,12 @@ def _validate_tr_dataframe(tr_df: pl.DataFrame) -> tuple[bool, list[str]]:
 
 def load_team_rankings(
     season: int,
-    current_season: Optional[int] = None,
-    current_week: Optional[int] = None,
+    current_season: int | None = None,
+    current_week: int | None = None,
     *,
     min_week: int = 1,
 ) -> pl.DataFrame:
-    """
-    Load TeamRankings data for a season, scraping fresh data for current/future weeks.
+    """Load TeamRankings data for a season, scraping fresh data for current/future weeks.
 
     For historical weeks (past seasons or completed weeks of current season), this loads
     from cached CSV files. For current week or future weeks of the current season, it
@@ -81,8 +77,8 @@ def load_team_rankings(
 
     Returns:
         Polars DataFrame with TeamRankings ratings/stats per team per week
-    """
 
+    """
     if season < constants.TEAMRANKINGS_MIN_SEASON:
         log.info(
             "Skipping TeamRankings for season %d (data starts in %d).",
@@ -287,16 +283,15 @@ def load_team_rankings(
 
 
 def _normalize_tr_dataframe(tr_df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Normalize a TeamRankings DataFrame.
+    """Normalize a TeamRankings DataFrame.
 
     Args:
         tr_df: Raw TeamRankings DataFrame
 
     Returns:
         Normalized DataFrame
-    """
 
+    """
     # Drop unnamed index column if present
     if "" in tr_df.columns:
         tr_df = tr_df.drop("")
@@ -316,8 +311,7 @@ def _normalize_tr_dataframe(tr_df: pl.DataFrame) -> pl.DataFrame:
 
 
 def get_latest_team_rankings(tr_df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Get the most recent TeamRankings values for each team.
+    """Get the most recent TeamRankings values for each team.
 
     This is used for:
     - Playoff games (use end-of-regular-season TR values)
@@ -328,8 +322,8 @@ def get_latest_team_rankings(tr_df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with latest TR values per team (week column removed)
-    """
 
+    """
     if tr_df.height == 0:
         return pl.DataFrame()
 
@@ -354,8 +348,7 @@ def aggregate_team_stats_to_week(
     target_week: int,
     season: int,
 ) -> pl.DataFrame:
-    """
-    Aggregate team statistics up to (but not including) a target week.
+    """Aggregate team statistics up to (but not including) a target week.
 
     This creates rolling averages of team performance metrics that can be used
     as features for predicting the target week's games.
@@ -373,8 +366,8 @@ def aggregate_team_stats_to_week(
 
     Returns:
         DataFrame with aggregated team statistics
-    """
 
+    """
     # Get the number of regular season weeks for this season
     regular_season_weeks = constants.get_regular_season_weeks(season)
 
@@ -416,8 +409,7 @@ def aggregate_team_stats_to_week(
 
 
 def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Compute derived ratio metrics from aggregated team statistics.
+    """Compute derived ratio metrics from aggregated team statistics.
 
     These metrics require division and should be computed after averaging
     raw stats to avoid ratio-of-averages issues.
@@ -437,8 +429,8 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with additional derived metric columns
-    """
 
+    """
     derived_cols = []
 
     # --- Yards per point metrics ---
@@ -548,8 +540,7 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
 
 
 def calculate_league_means(team_stats_df: pl.DataFrame, season: int) -> dict[str, float]:
-    """
-    Calculate league-wide mean statistics for a given season.
+    """Calculate league-wide mean statistics for a given season.
 
     Args:
         team_stats_df: DataFrame with per-game team statistics
@@ -557,8 +548,8 @@ def calculate_league_means(team_stats_df: pl.DataFrame, season: int) -> dict[str
 
     Returns:
         Dictionary mapping stat names to their league-wide mean values
-    """
 
+    """
     season_stats = team_stats_df.filter(pl.col("season") == season)
 
     if season_stats.height == 0:
@@ -587,8 +578,7 @@ def regress_to_mean(
     league_means: dict[str, float],
     regression_factor: float = 1 / 3,
 ) -> pl.DataFrame:
-    """
-    Regress team statistics toward league mean.
+    """Regress team statistics toward league mean.
 
     For week-1 games, we regress prior season stats toward the league mean
     to account for roster changes, coaching changes, and mean reversion.
@@ -602,8 +592,8 @@ def regress_to_mean(
 
     Returns:
         DataFrame with regressed statistics
-    """
 
+    """
     if not league_means:
         return team_stats
 
@@ -623,49 +613,45 @@ def regress_to_mean(
 
 
 def get_stat_columns() -> list[str]:
-    """
-    Get the nflreadpy stat column names to use.
+    """Get the nflreadpy stat column names to use.
 
     Returns:
         List of stat column names
-    """
 
+    """
     return constants.NFLREADPY_STATS.copy()
 
 
 def get_elo_columns() -> list[str]:
-    """
-    Get the ELO column names.
+    """Get the ELO column names.
 
     Returns:
         List of ELO column names
-    """
 
+    """
     return constants.ELO_COLUMNS.copy()
 
 
 def get_tr_columns() -> list[str]:
-    """
-    Get all TeamRankings column names (ratings + stats).
+    """Get all TeamRankings column names (ratings + stats).
 
     Returns:
         List of TeamRankings column names
-    """
 
+    """
     return constants.TR_RATINGS.copy() + constants.TR_STATS.copy()
 
 
-def calculate_game_result(row_dict: dict) -> Optional[float]:
-    """
-    Calculate game result from away team perspective.
+def calculate_game_result(row_dict: dict) -> float | None:
+    """Calculate game result from away team perspective.
 
     Args:
         row_dict: Dictionary with away_score and home_score
 
     Returns:
         1.0 if away team won, 0.0 if lost, 0.5 if tie, None if scores are missing
-    """
 
+    """
     away_score = row_dict.get("away_score")
     home_score = row_dict.get("home_score")
 
@@ -683,8 +669,7 @@ def merge_schedule_with_team_stats(
     schedule_df: pl.DataFrame,
     agg_stats_df: pl.DataFrame,
 ) -> pl.DataFrame:
-    """
-    Merge schedule data with aggregated team statistics.
+    """Merge schedule data with aggregated team statistics.
 
     Args:
         schedule_df: Schedule DataFrame with game matchups
@@ -692,8 +677,8 @@ def merge_schedule_with_team_stats(
 
     Returns:
         DataFrame with schedule and team stats merged for both away and home teams
-    """
 
+    """
     # Prepare away team stats with prefix
     away_stats = agg_stats_df.rename(
         {col: f"away_{col}" for col in agg_stats_df.columns if col != "team_abbr"}
@@ -715,8 +700,7 @@ def calculate_stat_differentials(
     df: pl.DataFrame,
     stats_to_diff: list[str],
 ) -> pl.DataFrame:
-    """
-    Calculate differentials between away and home team statistics.
+    """Calculate differentials between away and home team statistics.
 
     Args:
         df: DataFrame with away_* and home_* prefixed stat columns
@@ -724,8 +708,8 @@ def calculate_stat_differentials(
 
     Returns:
         DataFrame with added *_diff columns
-    """
 
+    """
     for stat in stats_to_diff:
         away_col = f"away_{stat}"
         home_col = f"home_{stat}"
@@ -752,33 +736,31 @@ def calculate_stat_differentials(
     return df
 
 
-def get_team_name(abbr: str) -> Optional[str]:
-    """
-    Get the full team name from an abbreviation.
+def get_team_name(abbr: str) -> str | None:
+    """Get the full team name from an abbreviation.
 
     Args:
         abbr: Team abbreviation (canonical or alias)
 
     Returns:
         Full team name or None if not found
-    """
 
+    """
     canonical = constants.normalize_team_abbr(abbr)
     team_info = constants.TEAM_MAPPING.get(canonical)
     return team_info["name"] if team_info else None
 
 
 def filter_completed_games(schedule_df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Filter schedule to only completed games (those with scores).
+    """Filter schedule to only completed games (those with scores).
 
     Args:
         schedule_df: Schedule DataFrame
 
     Returns:
         DataFrame with only completed games
-    """
 
+    """
     return schedule_df.filter(
         pl.col("away_score").is_not_null() & pl.col("home_score").is_not_null()
     )
@@ -789,8 +771,7 @@ def filter_upcoming_games(
     season: int,
     week: int,
 ) -> pl.DataFrame:
-    """
-    Filter schedule to upcoming games for a specific week.
+    """Filter schedule to upcoming games for a specific week.
 
     Args:
         schedule_df: Schedule DataFrame
@@ -799,8 +780,8 @@ def filter_upcoming_games(
 
     Returns:
         DataFrame with upcoming games (no scores yet)
-    """
 
+    """
     return schedule_df.filter(
         (pl.col("season") == season)
         & (pl.col("week") == week)
@@ -809,8 +790,7 @@ def filter_upcoming_games(
 
 
 def remove_diff_columns(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Remove all differential columns (ending in _diff) from a DataFrame.
+    """Remove all differential columns (ending in _diff) from a DataFrame.
 
     This creates a non-ML version of the data for faster local usage.
 
@@ -819,50 +799,47 @@ def remove_diff_columns(df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame without _diff columns
-    """
 
+    """
     non_diff_cols = [c for c in df.columns if not c.endswith("_diff")]
     return df.select(non_diff_cols)
 
 
 def polars_to_pandas(df: pl.DataFrame):
-    """
-    Convert a Polars DataFrame to pandas for compatibility with existing code.
+    """Convert a Polars DataFrame to pandas for compatibility with existing code.
 
     Args:
         df: Polars DataFrame
 
     Returns:
         pandas DataFrame
-    """
 
+    """
     return df.to_pandas()
 
 
 def pandas_to_polars(df) -> pl.DataFrame:
-    """
-    Convert a pandas DataFrame to Polars.
+    """Convert a pandas DataFrame to Polars.
 
     Args:
         df: pandas DataFrame
 
     Returns:
         Polars DataFrame
-    """
 
+    """
     return pl.from_pandas(df)
 
 
 def get_stats_for_diff() -> list[str]:
-    """
-    Get list of stats that should have differentials calculated.
+    """Get list of stats that should have differentials calculated.
 
     Excludes opponent stats that are duplicates of their non-opponent counterparts.
 
     Returns:
         List of stat names (without prefix) to calculate diffs for
-    """
 
+    """
     all_stats = []
 
     # nflreadpy stats (base stats)

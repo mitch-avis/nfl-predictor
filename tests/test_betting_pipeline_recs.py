@@ -14,21 +14,18 @@ from scripts import betting_pipeline
 
 def test_moneyline_to_implied_prob_negative() -> None:
     """-110 should be about 0.5238."""
-
     p = betting_pipeline._moneyline_to_implied_prob(-110)
     assert abs(p - (110 / 210)) < 1e-6
 
 
 def test_moneyline_to_implied_prob_positive() -> None:
     """+150 should be 0.4."""
-
     p = betting_pipeline._moneyline_to_implied_prob(150)
     assert abs(p - 0.4) < 1e-6
 
 
 def test_implied_prob_to_moneyline_round_trip_close() -> None:
     """Converting p->ml->p should be approximately consistent."""
-
     p = 0.62
     ml = betting_pipeline._implied_prob_to_moneyline(p)
     p2 = betting_pipeline._moneyline_to_implied_prob(ml)
@@ -37,14 +34,12 @@ def test_implied_prob_to_moneyline_round_trip_close() -> None:
 
 def test_novig_pair_sums_to_one() -> None:
     """No-vig normalization should sum to 1."""
-
     ph, pa = betting_pipeline._novig_pair(0.55, 0.52)
     assert abs((ph + pa) - 1.0) < 1e-12
 
 
 def test_build_betting_report_basic_columns() -> None:
     """The report should include key moneyline fields and sort by edge."""
-
     df = pd.DataFrame(
         {
             "game_id": ["g1", "g2"],

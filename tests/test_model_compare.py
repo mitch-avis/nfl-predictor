@@ -33,7 +33,6 @@ from nfl_predictor.ml.model_compare import (
 
 def _dummy_feature_spec(*, include_market: bool) -> FeatureSpec:
     """Build a minimal FeatureSpec suitable for unit tests."""
-
     cols = ["away_rest", "home_rest"]
     market_cols = ["home_moneyline", "away_moneyline"] if include_market else []
     return FeatureSpec(
@@ -54,12 +53,11 @@ def _dummy_feature_spec(*, include_market: bool) -> FeatureSpec:
 
 def test_recipe_from_margin_total_model() -> None:
     """Extracts recipe fields from a MarginTotalModel."""
-
     model = MarginTotalModel(
-        preprocessor=None,  # type: ignore[arg-type]
+        preprocessor=None,
         feature_spec=_dummy_feature_spec(include_market=True),
-        margin_model=None,  # type: ignore[arg-type]
-        total_model=None,  # type: ignore[arg-type]
+        margin_model=None,
+        total_model=None,
         target_columns=("away_score", "home_score"),
         calibrator=WinProbCalibrator(method="elo", model=None),
         market_anchor=True,
@@ -78,12 +76,11 @@ def test_recipe_from_margin_total_model() -> None:
 
 def test_recipe_from_blended_model() -> None:
     """Extracts team XGB params from a BlendedMarginTotalModel."""
-
     team_model = MarginTotalModel(
-        preprocessor=None,  # type: ignore[arg-type]
+        preprocessor=None,
         feature_spec=_dummy_feature_spec(include_market=False),
-        margin_model=None,  # type: ignore[arg-type]
-        total_model=None,  # type: ignore[arg-type]
+        margin_model=None,
+        total_model=None,
         target_columns=("away_score", "home_score"),
         calibrator=None,
         market_anchor=False,
@@ -94,7 +91,7 @@ def test_recipe_from_blended_model() -> None:
     model = BlendedMarginTotalModel(
         team_model=team_model,
         market_model=None,
-        blend_layer=BlendLayer(margin_model=None, total_model=None),  # type: ignore[arg-type]
+        blend_layer=BlendLayer(margin_model=None, total_model=None),
         calibrator=WinProbCalibrator(method="elo", model=None),
         target_columns=("away_score", "home_score"),
         market_prob_config=MarketProbConfig(blend_weight=0.2, clamp_delta=0.1),
@@ -111,7 +108,6 @@ def test_recipe_from_blended_model() -> None:
 
 def test_bootstrap_overall_metrics_empty_inputs() -> None:
     """Returns empty outputs for empty predictions or non-positive samples."""
-
     empty = pd.DataFrame()
     assert bootstrap_overall_metrics(empty, n_samples=10, seed=1) == {}
     df = pd.DataFrame(
@@ -128,7 +124,6 @@ def test_bootstrap_overall_metrics_empty_inputs() -> None:
 
 def test_bootstrap_overall_metrics_produces_percentiles() -> None:
     """Bootstraps basic metrics and produces p05/p50/p95 bands."""
-
     predictions = pd.DataFrame(
         {
             "away_score": [10, 14, 21, 17],
@@ -148,7 +143,6 @@ def test_bootstrap_overall_metrics_produces_percentiles() -> None:
 
 def test_load_model_from_dir_or_file(tmp_path: Path) -> None:
     """Loads a joblib model from either a direct file path or a run directory."""
-
     obj = {"hello": "world", "n": 1}
     model_file = tmp_path / "model.joblib"
     joblib.dump(obj, model_file)
@@ -159,7 +153,6 @@ def test_load_model_from_dir_or_file(tmp_path: Path) -> None:
 
 def test_run_objective_compare_aligns_by_game_key(monkeypatch: MonkeyPatch) -> None:
     """Aligns predictions by common game keys and records skipped blended folds."""
-
     base = pd.DataFrame(
         {
             "season": [2024, 2024],
@@ -289,7 +282,6 @@ def test_run_objective_compare_aligns_by_game_key(monkeypatch: MonkeyPatch) -> N
 
 def test_write_compare_outputs_writes_all_files(tmp_path: Path) -> None:
     """Writes summary, predictions, and meta json to output directory."""
-
     pred = pd.DataFrame(
         {
             "season": [2024],

@@ -10,7 +10,6 @@ from nfl_predictor import ml_model
 
 def test_market_anchor_targets_residualize_baseline() -> None:
     """Market anchoring should train on residuals vs market baseline."""
-
     df = pd.DataFrame(
         {
             "away_score": [20, 10],
@@ -40,7 +39,6 @@ def test_market_anchor_targets_residualize_baseline() -> None:
 
 def test_market_prob_adjust_blend_and_clamp() -> None:
     """Blend/clamp should move probabilities toward market implied odds."""
-
     games_df = pd.DataFrame(
         {
             "home_moneyline": [-110, -110],
@@ -70,7 +68,6 @@ def test_market_prob_adjust_blend_and_clamp() -> None:
 
 def test_market_prob_adjust_no_vig() -> None:
     """No-vig source should normalize home/away implied probs."""
-
     games_df = pd.DataFrame(
         {
             "home_moneyline": [-150],
@@ -98,7 +95,6 @@ def test_market_prob_adjust_no_vig() -> None:
 
 def test_market_prob_adjust_logit_blend() -> None:
     """Logit blending should average in log-odds space."""
-
     games_df = pd.DataFrame({"home_market_prob": [0.2]})
     base = np.array([0.8], dtype=float)
 

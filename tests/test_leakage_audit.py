@@ -25,7 +25,6 @@ def _tiny_df() -> pd.DataFrame:
 
 def test_leakage_audit_detects_target_in_features() -> None:
     """Audit should fail if a target copy is in the feature range."""
-
     df = _tiny_df()
 
     config = leakage_audit.LeakageAuditConfig(
@@ -43,7 +42,6 @@ def test_leakage_audit_detects_target_in_features() -> None:
 
 def test_leakage_audit_runs_on_fixture() -> None:
     """Audit should pass when targets are excluded from the feature range."""
-
     df = _tiny_df()
 
     config = leakage_audit.LeakageAuditConfig(

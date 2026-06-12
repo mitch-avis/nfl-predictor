@@ -8,9 +8,10 @@ and is imported by higher-level training code.
 from __future__ import annotations
 
 import inspect
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Optional, Sequence
+from typing import Any
 
 import numpy as np
 import xgboost as xgb
@@ -39,7 +40,6 @@ def _predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.nda
     Uses `best_iteration` when present (early stopping) to match sklearn wrapper behavior
     across versions.
     """
-
     dmatrix = xgb.DMatrix(data)
     best_iteration = getattr(model, "best_iteration", None)
     iteration_range = None
@@ -53,29 +53,25 @@ def _predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.nda
 
 def _xgb_fit_supports(param: str) -> bool:
     """Return True if `xgb.XGBRegressor.fit` accepts a given kwarg."""
-
     try:
         return param in inspect.signature(xgb.XGBRegressor.fit).parameters
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
 
 @lru_cache(maxsize=1)
 def _xgb_supported_params() -> set[str]:
     """Return the supported sklearn init params for the installed XGBoost."""
-
     return set(xgb.XGBRegressor().get_params().keys())
 
 
 def _xgb_param_supported(param: str) -> bool:
     """Return True if `xgb.XGBRegressor` supports a given init param."""
-
     return param in _xgb_supported_params()
 
 
 def _log_early_stopping_fallback(message: str) -> None:
     """Log the early-stopping fallback message at most once."""
-
     if _RUNTIME_STATE.early_stopping_fallback_logged:
         return
     log.info(message)
@@ -84,7 +80,6 @@ def _log_early_stopping_fallback(message: str) -> None:
 
 def _log_gpu_fallback(message: str) -> None:
     """Log the GPU fallback message at most once."""
-
     if _RUNTIME_STATE.gpu_fallback_logged:
         return
     log.info(message)
@@ -93,12 +88,11 @@ def _log_gpu_fallback(message: str) -> None:
 
 def _resolve_xgb_params(
     base_params: dict[str, Any],
-    overrides: Optional[dict[str, Any]] = None,
-    tree_method: Optional[str] = None,
-    device: Optional[str] = None,
+    overrides: dict[str, Any] | None = None,
+    tree_method: str | None = None,
+    device: str | None = None,
 ) -> dict[str, Any]:
     """Resolve XGBoost params with build-aware device/tree_method handling."""
-
     params = base_params.copy()
     supports_device = _xgb_param_supported("device")
     supports_predictor = _xgb_param_supported("predictor")
@@ -131,13 +125,12 @@ def _resolve_xgb_params(
 
 
 def _build_xgb_fit_kwargs(
-    x_eval: Optional[np.ndarray | spmatrix],
-    y_eval: Optional[np.ndarray],
-    early_stopping_rounds: Optional[int],
-    callbacks: Optional[Sequence[Any]] = None,
+    x_eval: np.ndarray | spmatrix | None,
+    y_eval: np.ndarray | None,
+    early_stopping_rounds: int | None,
+    callbacks: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
     """Build kwargs for `XGBRegressor.fit` across XGBoost versions."""
-
     fit_kwargs: dict[str, Any] = {}
     if x_eval is None or y_eval is None:
         return fit_kwargs
@@ -161,10 +154,9 @@ def _build_xgb_fit_kwargs(
 
 def _with_xgb_early_stopping_params(
     params: dict[str, Any],
-    early_stopping_rounds: Optional[int],
+    early_stopping_rounds: int | None,
 ) -> dict[str, Any]:
     """Attach early-stopping parameters for XGBoost versions that require init kwargs."""
-
     if not early_stopping_rounds:
         return params
     if _xgb_fit_supports("early_stopping_rounds"):
@@ -191,9 +183,8 @@ def _with_xgb_early_stopping_params(
 def _coerce_tree_method_on_error(
     params: dict[str, Any],
     exc: Exception,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Coerce tree_method/device when XGBoost errors imply unsupported GPU settings."""
-
     tree_method = params.get("tree_method")
     message = str(exc)
     lower_message = message.lower()

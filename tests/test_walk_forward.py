@@ -15,7 +15,6 @@ from nfl_predictor.ml import walk_forward
 
 def _fixture_df() -> pd.DataFrame:
     """Create a tiny deterministic dataset spanning multiple seasons/weeks."""
-
     rows = []
     for season in (2022, 2023):
         for week in (1, 2, 3):
@@ -51,7 +50,6 @@ def _fixture_df() -> pd.DataFrame:
 
 def _base_config() -> walk_forward.WalkForwardConfig:
     """Return a walk-forward config suitable for unit tests."""
-
     return walk_forward.WalkForwardConfig(
         eval_seasons=[2023],
         eval_last_n_seasons=1,
@@ -77,7 +75,6 @@ def _base_config() -> walk_forward.WalkForwardConfig:
 
 def test_walk_forward_split_excludes_eval_week() -> None:
     """Train set must exclude any games from the predicted eval week."""
-
     df = _fixture_df()
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 
@@ -89,7 +86,6 @@ def test_walk_forward_split_excludes_eval_week() -> None:
 
 def test_summarize_eval_window_flags_incomplete_regular_season() -> None:
     """Summarize eval window reports incomplete regular seasons when data is partial."""
-
     df = _fixture_df()
     summary = walk_forward.summarize_eval_window(
         df,
@@ -107,7 +103,6 @@ def test_summarize_eval_window_flags_incomplete_regular_season() -> None:
 
 def test_walk_forward_deterministic_outputs() -> None:
     """Fixed seeds yield identical per-fold outputs."""
-
     df = _fixture_df()
     config = _base_config()
 
@@ -120,7 +115,6 @@ def test_walk_forward_deterministic_outputs() -> None:
 
 def test_walk_forward_probabilities_in_bounds() -> None:
     """Home win probabilities are always in [0, 1]."""
-
     df = _fixture_df()
     config = _base_config()
 
@@ -133,7 +127,6 @@ def test_walk_forward_probabilities_in_bounds() -> None:
 
 def test_calibration_data_is_time_aware() -> None:
     """Calibration data must come from weeks strictly before the eval week."""
-
     df = _fixture_df()
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 
@@ -147,7 +140,6 @@ def test_calibration_data_is_time_aware() -> None:
 
 def test_walk_forward_quantile_intervals_monotonic() -> None:
     """Walk-forward outputs include monotonic quantile intervals for margin/total."""
-
     df = _fixture_df()
     config = _base_config()
 
@@ -172,7 +164,6 @@ def test_walk_forward_quantile_intervals_monotonic() -> None:
 
 def test_walk_forward_can_disable_quantiles() -> None:
     """Walk-forward can skip quantile model training for faster comparisons."""
-
     df = _fixture_df()
     config = _base_config()
     config = walk_forward.WalkForwardConfig(
@@ -194,7 +185,6 @@ def test_walk_forward_can_disable_quantiles() -> None:
 
 def test_wf_market_prob_weight_overrides_probs() -> None:
     """When market_prob_weight=1, home_win_prob should match implied market prob."""
-
     df = _fixture_df()
     config = _base_config()
     config = walk_forward.WalkForwardConfig(
@@ -215,7 +205,6 @@ def test_wf_market_prob_weight_overrides_probs() -> None:
 
 def test_dataset_fingerprint_matches_sha256(tmp_path: Path) -> None:
     """Computes SHA-256 fingerprint of file contents."""
-
     path = Path(tmp_path) / "data.bin"
     payload = b"abc\x00def"
     path.write_bytes(payload)
@@ -231,14 +220,12 @@ def test_generate_run_id_is_deterministic_under_fixed_time(
 
     class _FixedDatetime:
         @staticmethod
-        def now(_tz: object) -> "_FixedDatetime":
+        def now(_tz: object) -> _FixedDatetime:
             """Return a fixed datetime for testing."""
-
             return _FixedDatetime()
 
         def strftime(self, _fmt: str) -> str:
             """Return a fixed timestamp string for testing."""
-
             return "20260110_000000"
 
     monkeypatch.setattr(walk_forward, "datetime", _FixedDatetime)
@@ -262,7 +249,6 @@ def test_generate_run_id_is_deterministic_under_fixed_time(
 
 def test_build_metrics_report_shape() -> None:
     """Builds a JSON-serializable metrics report envelope."""
-
     report = walk_forward.build_metrics_report(
         run_id="wf_test",
         created_at="2026-01-10T00:00:00Z",
@@ -288,7 +274,6 @@ def test_build_metrics_report_shape() -> None:
 
 def test_filter_incomplete_eval_seasons_tracks_drops(monkeypatch: pytest.MonkeyPatch) -> None:
     """Filtering incomplete seasons returns kept + dropped lists."""
-
     df = _fixture_df()
     eval_seasons = [2022, 2023]
 
@@ -305,7 +290,6 @@ def test_filter_incomplete_eval_seasons_tracks_drops(monkeypatch: pytest.MonkeyP
 
 def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> None:
     """Computes optional market residual MAE and interval coverage diagnostics."""
-
     frame = pd.DataFrame(
         {
             "season": [2024, 2024],
@@ -340,7 +324,6 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
 
 def test_season_win_totals_summary() -> None:
     """Summarize expected vs actual season win totals."""
-
     predictions = pd.DataFrame(
         {
             "season": [2024, 2024],
@@ -364,7 +347,6 @@ def test_season_win_totals_summary() -> None:
 
 def test_calibration_drift_summary() -> None:
     """Summarize calibration drift by season/week."""
-
     predictions = pd.DataFrame(
         {
             "season": [2024, 2024],

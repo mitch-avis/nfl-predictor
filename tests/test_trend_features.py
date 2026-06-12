@@ -13,7 +13,6 @@ from nfl_predictor.utils import polars_utils
 
 def test_build_qb_trends_groups_by_qb_name() -> None:
     """QB trends are computed per QB name, not team."""
-
     elo_df = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -41,7 +40,6 @@ def test_build_qb_trends_groups_by_qb_name() -> None:
 
 def test_build_team_elo_trends_use_prior_games_only() -> None:
     """Team ELO trend uses prior games only and is zero for the first game."""
-
     elo_df = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -65,7 +63,6 @@ def test_build_team_elo_trends_use_prior_games_only() -> None:
 
 def test_build_team_stat_trends_compare_recent_to_season_mean() -> None:
     """Performance trends compare recent mean to season-to-date mean."""
-
     stats = pl.DataFrame(
         {
             "season": [2023] * 6,
@@ -95,7 +92,6 @@ def test_build_team_stat_trends_compare_recent_to_season_mean() -> None:
 
 def test_add_season_phase_features_buckets() -> None:
     """Season-phase buckets align with early/mid/late week ranges."""
-
     base = pl.DataFrame({"game_id": [1]})
     season = 2023
     regular_weeks = constants.get_regular_season_weeks(season)
@@ -121,7 +117,6 @@ def test_add_season_phase_features_buckets() -> None:
 
 def test_add_season_phase_features_caps_postseason() -> None:
     """Season phase caps at 1.0 for postseason weeks."""
-
     base = pl.DataFrame({"game_id": [1]})
     season = 2023
     regular_weeks = constants.get_regular_season_weeks(season)

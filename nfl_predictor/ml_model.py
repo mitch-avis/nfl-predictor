@@ -17,14 +17,12 @@ from nfl_predictor.ml import ml_model_training as _training
 
 def main() -> None:
     """CLI entrypoint wrapper for the legacy `nfl_predictor.ml_model` path."""
-
     _module = importlib.import_module("nfl_predictor.ml.ml_model_cli")
     _module.main()
 
 
 def __getattr__(name: str) -> Any:
     """Forward attribute access to the split implementation modules."""
-
     for module in (_core, _training, _predict):
         try:
             return getattr(module, name)
@@ -42,22 +40,7 @@ def __dir__() -> list[str]:
 
 if TYPE_CHECKING:
     # Import key symbols for type-checkers and IDEs.
-    from nfl_predictor.ml.ml_model_core import (  # noqa: F401
-        BlendedMarginTotalModel,
-        BlendLayer,
-        FeatureSpec,
-        MarginTotalModel,
-        MarketProbConfig,
-        OptunaConfig,
-        ScoreModel,
-        TrainingResult,
-        WinProbCalibrator,
-        _build_preprocessor,
-        _fit_blend_ridge_constrained,
-        _fit_margin_total_models,
-        _prepare_margin_total_targets_with_anchor,
-        _resolve_xgb_params,
-    )
+    pass
 
 
 if __name__ == "__main__":

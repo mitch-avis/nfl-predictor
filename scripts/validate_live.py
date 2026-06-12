@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Live validation by comparing the latest completed week against the schedule.
+"""Live validation by comparing the latest completed week against the schedule.
 
 This loads data/all_data.csv and pulls the latest season schedule via nflreadpy.
 Network access may be required depending on the nflreadpy backend.
@@ -15,7 +14,7 @@ import polars as pl
 try:
     from nfl_predictor import constants
     from nfl_predictor.utils import validation_utils
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     # Allow running as a script: `python scripts/validate_live.py`.
     import sys
 
@@ -27,7 +26,6 @@ except ModuleNotFoundError:  # pragma: no cover
 
 def main() -> int:
     """Run live validation and report any score mismatches."""
-
     data_path = Path(constants.DATA_PATH) / "all_data.csv"
     if not data_path.exists():
         print(f"Missing data file: {data_path}")

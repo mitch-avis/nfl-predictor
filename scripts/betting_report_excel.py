@@ -11,10 +11,10 @@ Note: writing `.xlsb` directly is not supported here. If you need `.xlsb`,
 open the generated `.xlsx` in Excel and use "Save As" -> `.xlsb`.
 
 Example:
-
   python scripts/betting_report_excel.py \
     --predictions models/<run_id>/predictions.csv \
     --out data/predict/week_19_betting_template.xlsx
+
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ import pandas as pd
 try:
     from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     import sys
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -55,7 +55,6 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Main entry point for betting report Excel generation script."""
-
     args = _parse_args()
     if not args.predictions.exists():
         raise FileNotFoundError(f"Missing predictions file: {args.predictions}")

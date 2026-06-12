@@ -9,7 +9,6 @@ from nfl_predictor.utils import polars_utils
 
 def test_add_divisional_matchup_feature_flags_true_for_division_game() -> None:
     """Divisional opponents should yield `is_divisional_matchup == 1`."""
-
     df = pl.DataFrame(
         {
             "away_abbr": ["PHI"],
@@ -23,7 +22,6 @@ def test_add_divisional_matchup_feature_flags_true_for_division_game() -> None:
 
 def test_add_divisional_matchup_feature_flags_false_for_non_division_game() -> None:
     """Non-divisional opponents should yield `is_divisional_matchup == 0`."""
-
     df = pl.DataFrame(
         {
             "away_abbr": ["BUF"],
@@ -37,7 +35,6 @@ def test_add_divisional_matchup_feature_flags_false_for_non_division_game() -> N
 
 def test_add_divisional_matchup_feature_unknown_team_defaults_false() -> None:
     """Unknown team abbreviations should not crash and default to non-divisional."""
-
     df = pl.DataFrame(
         {
             "away_abbr": ["XXX"],
@@ -51,7 +48,6 @@ def test_add_divisional_matchup_feature_unknown_team_defaults_false() -> None:
 
 def test_add_divisional_matchup_feature_validates_schema() -> None:
     """Helper should raise a clear error if required columns are missing."""
-
     df = pl.DataFrame({"away_abbr": ["PHI"]})
 
     try:

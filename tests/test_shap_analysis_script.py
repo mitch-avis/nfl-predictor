@@ -8,7 +8,6 @@ from pathlib import Path
 
 def test_shap_analysis_missing_shap(monkeypatch, tmp_path: Path) -> None:
     """Script should return non-zero when shap is unavailable."""
-
     from scripts import shap_analysis
 
     monkeypatch.setattr(shap_analysis, "_import_shap", lambda: None)

@@ -9,7 +9,6 @@ from scripts import walk_forward_backtest
 
 def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
     """Trend ablation drops trend and season-phase columns only."""
-
     df = pd.DataFrame(
         {
             "game_id": [1],

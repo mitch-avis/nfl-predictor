@@ -19,9 +19,4 @@ def __dir__() -> list[str]:
 
 
 if TYPE_CHECKING:
-    from nfl_predictor.ml.ml_utils import (  # noqa: F401
-        display_predictions,
-        display_weekly_predictions,
-        flatten_dict,
-        nested_dict_to_df,
-    )
+    pass

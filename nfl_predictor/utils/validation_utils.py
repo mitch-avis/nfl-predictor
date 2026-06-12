@@ -205,6 +205,11 @@ def compare_latest_week_scores(
             log.warning("Failed to load schedule for validation: %s", exc)
             return pl.DataFrame()
 
+    # Type-narrowing guard: the try block always assigns schedule_df when it
+    # doesn't raise; the except branch returns. Pyright cannot narrow through
+    # try/except so this guard makes the non-None invariant explicit.
+    if schedule_df is None:
+        return pl.DataFrame()  # pragma: no cover
     schedule_week = schedule_df.filter(
         (pl.col("season") == latest_season) & (pl.col("week") == latest_week_num)
     )

@@ -1036,7 +1036,11 @@ def build_team_stat_trends(
         DataFrame with columns: season, week, team_abbr, <stat>_4wk_trend.
 
     """
-    schema = {"season": pl.Int64, "week": pl.Int64, "team_abbr": pl.Utf8}
+    schema: dict[str, DataTypeClass] = {
+        "season": pl.Int64,
+        "week": pl.Int64,
+        "team_abbr": pl.Utf8,
+    }
     for stat in stats:
         schema[f"{stat}_4wk_trend"] = pl.Float64
 

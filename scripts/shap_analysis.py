@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from pathlib import Path
 from typing import Any
 
@@ -65,10 +66,9 @@ def _parse_args() -> argparse.Namespace:
 def _import_shap() -> Any | None:
     """Return the shap module when available; otherwise None."""
     try:
-        import shap
+        return importlib.import_module("shap")
     except ImportError:
         return None
-    return shap
 
 
 def _select_model_component(

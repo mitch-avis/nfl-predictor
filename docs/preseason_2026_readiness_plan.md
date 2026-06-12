@@ -9,18 +9,18 @@ feature work for the 2026-2027 NFL season.
 
 The following checks were run on 2026-06-12 against the refreshed `.venv`:
 
-| Check                             | Result      | Notes                                                                         |
-| --------------------------------- | ----------- | ----------------------------------------------------------------------------- |
-| `.venv/bin/ruff format --check .` | Pass        | `104 files already formatted`                                                 |
-| `.venv/bin/ruff check .`          | Pass        | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions |
-| `.venv/bin/pyright .`             | Fail        | Broad pandas-heavy typing issues                                              |
-| `.venv/bin/ty check .`            | Fail        | Broad typing issues; currently advisory                                       |
-| `.venv/bin/python -m pytest`      | Pass        | `238 passed`                                                                  |
-| Coverage from pytest              | Fail target | `78%`, below the new preseason target of `90%` or higher                      |
-| `markdownlint .`                  | Pass        | `0 error(s)`                                                                  |
-| `uv lock --check`                 | Pass        | Lockfile is in sync with `pyproject.toml`                                     |
-| `uv sync --check --active`        | Pass        | Active project environment matches `uv.lock`                                  |
-| Primary CLI help smoke checks     | Pass        | `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`            |
+| Check                             | Result      | Notes                                                                                            |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
+| `.venv/bin/ruff format --check .` | Pass        | `104 files already formatted`                                                                    |
+| `.venv/bin/ruff check .`          | Pass        | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions                    |
+| `.venv/bin/pyright .`             | **Pass**    | **0 errors** after adding `pandas-stubs` and `_fit_transform_matrix`/`_transform_matrix` helpers |
+| `.venv/bin/ty check .`            | Pass        | `0 errors`; now mandatory alongside `pyright`                                                    |
+| `.venv/bin/python -m pytest`      | Pass        | `242 passed`                                                                                     |
+| Coverage from pytest              | Fail target | `78%`, below the new preseason target of `90%` or higher                                         |
+| `markdownlint .`                  | Pass        | `0 error(s)`                                                                                     |
+| `uv lock --check`                 | Pass        | Lockfile is in sync with `pyproject.toml`                                                        |
+| `uv sync --check --active`        | Pass        | Active project environment matches `uv.lock`                                                     |
+| Primary CLI help smoke checks     | Pass        | `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`                               |
 
 ## Tooling Recommendations
 
@@ -31,31 +31,12 @@ through the `pyproject.toml` build backend.
 
 ### Pyright vs Ty
 
-Keep `pyright` as the primary blocking type checker for now. The codebase is pandas-heavy, and
-`pyright` remains the more mature and predictable gate for this style of project.
+Keep `pyright` and `ty` as mandatory local validation gates.
 
-Keep `ty` installed and run it alongside `pyright`, but treat it as advisory until the repo reaches
-parity on both checkers. Replacing `pyright` with `ty` today would lower confidence rather than
-raise it.
+`pyright` remains the more mature and predictable checker for this pandas-heavy codebase, but the
+repo now passes `ty` as well and should keep both green rather than treating `ty` as advisory.
 
-If a starter `[tool.ty]` configuration is added, keep it minimal:
-
-```toml
-[tool.ty.environment]
-python = ".venv"
-python-version = "3.14"
-
-[tool.ty.src]
-include = ["nfl_predictor", "scripts", "tests"]
-
-[[tool.ty.overrides]]
-include = ["tests/**"]
-
-[tool.ty.overrides.rules]
-all = "warn"
-```
-
-That keeps `ty` useful for signal gathering without pretending the repo is ready to gate on it.
+No repo-specific `[tool.ty]` configuration is currently required for a clean pass.
 
 ### update_requirements.sh
 
@@ -104,16 +85,30 @@ Exit criteria:
 
 ### 3. Establish a realistic type-checking baseline
 
-- Fix the current `pyright` failures in `feature_spec.py`, `leakage_audit.py`, `walk_forward.py`,
-  `power_rankings.py`, and the pandas-heavy tests.
-- Decide where typed helper wrappers, casts, or localized overrides are justified.
-- Add a minimal `[tool.ty]` section only if it improves signal.
-- Re-run `pyright` and `ty` after each cluster of fixes.
+**Complete as of 2026-06-12.**
+
+Resolution approach:
+
+- Added `pandas-stubs` to dev dependencies — reduced pyright errors from 444 to 58.
+- Added `_fit_transform_matrix` and `_transform_matrix` helpers to `ml_model_xgb_utils.py` with 2
+  narrowly-scoped `type: ignore[return-value]` comments (sklearn's `ColumnTransformer` returns a
+  broad inferred union; the helpers narrow it to `np.ndarray | spmatrix`).
+- Updated all call sites (23 across 6 files) to use the typed helpers.
+- Used `cast()` in test files where `None` was passed to non-Optional dataclass fields for
+  serialization testing.
+- Used a dead-code type-narrowing guard in `validation_utils.py` (pyright cannot narrow through
+  `try/except`).
+- Replaced the optional `shap` import with `importlib.import_module("shap")`, removing the need for
+  a direct import suppression.
+- Cleared the remaining `ty` diagnostics by tightening walk-forward metrics typing, avoiding
+  heterogeneous `WalkForwardConfig(**dict)` reconstruction in tests, and adding small helper-level
+  type clarifications in Polars and feature-importance code.
 
 Exit criteria:
 
-- `.venv/bin/pyright .` passes.
-- `ty` either passes or has a documented advisory scope with explicit next steps.
+- ~~`.venv/bin/pyright .` passes.~~ **Done: 0 errors.**
+- ~~`ty` either passes or has a documented advisory scope with explicit next steps.~~ **Done: `ty`
+  passes and is now mandatory alongside `pyright`.**
 
 ### 4. Fix high-value operational issues
 
@@ -159,16 +154,15 @@ Exit criteria:
 1. Align metadata, docs, and instructions.
 2. Fix the remaining Ruff diagnostics.
 3. Stabilize `pyright`.
-4. Decide whether to add a minimal `[tool.ty]` section and keep `ty` advisory.
-5. Fix the operational issues in scripts and checked-in config.
-6. Restore the coverage gate and document the final validation flow.
-7. Resume Milestones 39-43.
+4. Fix the operational issues in scripts and checked-in config.
+5. Restore the coverage gate and document the final validation flow.
+6. Resume Milestones 39-43.
 
 ## Definition of Ready for the 2026 Season
 
 The repo is ready to resume weekly work when all of the following are true:
 
-- Ruff format, Ruff check, Pyright, pytest, and markdownlint pass.
+- Ruff format, Ruff check, Pyright, Ty, pytest, and markdownlint pass.
 - Editable install works.
 - Checked-in configs target the current season rather than the 2025 postseason.
 - Agent instructions, TODOs, README guidance, and `CHANGELOG.md` rules match the actual toolchain.

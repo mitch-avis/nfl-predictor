@@ -28,6 +28,7 @@ from nfl_predictor.ml.ml_model_core import (
     _predict_margin_total_quantiles_from_model,
     _predict_xgb,
     _resolve_margin_sigma,
+    _transform_matrix,
     get_market_baseline,
 )
 from nfl_predictor.utils.logger import log
@@ -44,7 +45,7 @@ def predict_week(
     games_df = _load_games(games_path)
     feature_df = _apply_feature_spec(games_df, model.feature_spec)
     log.debug("Prediction feature matrix: %d rows x %d columns", *feature_df.shape)
-    x_games = model.preprocessor.transform(feature_df)
+    x_games = _transform_matrix(model.preprocessor, feature_df)
 
     pred_away = _predict_xgb(model.away_model, x_games)
     pred_home = _predict_xgb(model.home_model, x_games)

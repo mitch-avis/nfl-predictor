@@ -8,6 +8,11 @@ import pandas as pd
 from nfl_predictor.ml import feature_importance, ml_model_core
 
 
+def test_coerce_score_value_sums_sequence_inputs() -> None:
+    """Sequence-based score values are summed before conversion to float."""
+    assert feature_importance._coerce_score_value([1.25, 2.75]) == 4.0
+
+
 def test_feature_importance_report_margin_total() -> None:
     """Feature importance report returns aligned gain/weight arrays."""
     rng = np.random.default_rng(7)
@@ -32,7 +37,7 @@ def test_feature_importance_report_margin_total() -> None:
         market_columns=[],
     )
     preprocessor = ml_model_core._build_preprocessor(spec, for_tree=True)
-    x_matrix = preprocessor.fit_transform(df)
+    x_matrix = ml_model_core._fit_transform_matrix(preprocessor, df)
     y_margin = rng.normal(size=40)
     y_total = rng.normal(size=40)
     params = ml_model_core._resolve_xgb_params(

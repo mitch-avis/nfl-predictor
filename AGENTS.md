@@ -19,6 +19,9 @@ Rules that are always enforced:
 - **Reproducible artifacts.** Training and backtests write run directories with metadata and
   metrics.
 - **Tests are required.** New functionality includes unit tests and improves or maintains coverage.
+- **TDD is the default for executable code changes.** Before changing production code, verify that
+  the exact behavior and lines you plan to touch are covered; if not, add focused characterization
+  or failing tests first, then edit the production code.
 
 ## Current Preseason Focus
 
@@ -30,7 +33,9 @@ Rules that are always enforced:
   - `markdownlint .` passes.
   - `uv lock --check` passes.
   - `uv sync --check --active` passes.
-  - `.venv/bin/ruff check .`, `.venv/bin/pyright .`, and `.venv/bin/ty check .` still fail.
+  - `.venv/bin/ruff check .` passes cleanly.
+  - `.venv/bin/pyright .` passes (0 errors; fixed via `pandas-stubs` + typed transform helpers).
+  - `.venv/bin/ty check .` passes (0 diagnostics; now mandatory alongside Pyright).
 
 ## Source of truth for work
 
@@ -52,6 +57,9 @@ Rules that are always enforced:
 - Do not reference temporary planning artifacts in code: do not mention roadmap items, milestone
   numbers, or TODO goal labels in any code, comments, docstrings, or test descriptions.
 - Prefer small, deterministic unit tests.
+- Load and apply relevant skills before acting. Default to `python` for Python work; add
+  `test-driven-development`, `clean-code`, `systematic-debugging`, `code-review`, `observability`,
+  `task-orchestrator`, and the `python-*` skills when their domains apply.
 - If a Python file grows beyond ~2000 lines, propose a refactor plan to split it into smaller,
   focused modules (helpers/utils) and implement the split if it reduces complexity.
 - Keep `TODO.md` accurate: verify items before checking them off.
@@ -124,9 +132,9 @@ doc example. `uv` is expected to come from `PATH` as an external project manager
 - **Ruff** formatting (line length 100).
 - **Ruff** linting (including import sorting, docstrings, security, simplify, NumPy, and
   pygrep-hooks rules).
-- **Pyright** is the primary blocking type checker today.
-- **Ty** is installed and should be run alongside Pyright during the migration, but it is not yet a
-  drop-in replacement.
+- **Pyright** and **Ty** are both mandatory local gates today.
+- **Pyright** remains the more mature signal in pandas-heavy code, so keep both green rather than
+  replacing one with the other.
 - PEP 8 / PEP 257 conventions unless explicitly overridden by repo tooling.
 
 Recommended local commands:

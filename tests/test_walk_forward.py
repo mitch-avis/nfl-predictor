@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -166,12 +167,10 @@ def test_walk_forward_can_disable_quantiles() -> None:
     """Walk-forward can skip quantile model training for faster comparisons."""
     df = _fixture_df()
     config = _base_config()
-    config = walk_forward.WalkForwardConfig(
-        **{
-            **config.to_dict(),
-            "eval_seasons": [2023],
-            "include_quantiles": False,
-        }
+    config = replace(
+        config,
+        eval_seasons=[2023],
+        include_quantiles=False,
     )
 
     result = walk_forward.run_walk_forward_backtest(df, config)
@@ -187,13 +186,11 @@ def test_wf_market_prob_weight_overrides_probs() -> None:
     """When market_prob_weight=1, home_win_prob should match implied market prob."""
     df = _fixture_df()
     config = _base_config()
-    config = walk_forward.WalkForwardConfig(
-        **{
-            **config.to_dict(),
-            "eval_seasons": [2023],
-            "market_prob_weight": 1.0,
-            "market_prob_clamp": 0.0,
-        }
+    config = replace(
+        config,
+        eval_seasons=[2023],
+        market_prob_weight=1.0,
+        market_prob_clamp=0.0,
     )
 
     result = walk_forward.run_walk_forward_backtest(df, config)

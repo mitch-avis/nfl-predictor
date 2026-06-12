@@ -167,7 +167,7 @@ def _score_dict_to_list(
 def _coerce_score_value(value: float | Sequence[float]) -> float:
     """Convert score values to a float, summing sequences when needed."""
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return float(sum(float(item) for item in value))
+        return float(np.asarray(value, dtype=float).sum())
     return float(value)
 
 

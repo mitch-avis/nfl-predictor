@@ -11,7 +11,7 @@ import xgboost as xgb
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import Ridge
 
-from nfl_predictor.ml import ml_model_predict
+from nfl_predictor.ml import ml_model_core, ml_model_predict
 from nfl_predictor.ml.ml_model_core import (
     BlendedMarginTotalModel,
     BlendLayer,
@@ -24,8 +24,13 @@ xgb.set_config(verbosity=0)
 
 
 class _DummyPreprocessor:
+    def __init__(self) -> None:
+        """Capture transformed frames for assertions."""
+        self.frames: list[pd.DataFrame] = []
+
     def transform(self, df: pd.DataFrame) -> np.ndarray:
         """Return a stable dummy feature matrix for tests."""
+        self.frames.append(df.copy())
         return np.zeros((len(df), 1))
 
 
@@ -54,6 +59,112 @@ def _feature_spec() -> FeatureSpec:
         post_feature_columns=[],
         market_columns=[],
     )
+
+
+def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch) -> None:
+    """Core margin/total prediction helper preserves market-anchor post-processing."""
+    games_df = pd.DataFrame({"feat1": [1.0, 2.0]})
+    preprocessor = _DummyPreprocessor()
+    margin_model = cast(xgb.XGBRegressor, object())
+    total_model = cast(xgb.XGBRegressor, object())
+    predictions = {
+        margin_model: np.array([3.0, 5.0]),
+        total_model: np.array([40.0, 42.0]),
+    }
+
+    monkeypatch.setattr(ml_model_core, "_apply_feature_spec", lambda df, spec: df)
+    monkeypatch.setattr(
+        ml_model_core,
+        "_predict_xgb",
+        lambda model, _features: predictions[model],
+    )
+    monkeypatch.setattr(
+        ml_model_core,
+        "get_market_baseline",
+        lambda _df: (np.array([1.0, -0.5]), np.array([2.0, 1.0])),
+    )
+
+    model = MarginTotalModel(
+        preprocessor=cast(ColumnTransformer, preprocessor),
+        feature_spec=_feature_spec(),
+        margin_model=margin_model,
+        total_model=total_model,
+        target_columns=("away_score", "home_score"),
+        calibrator=None,
+        margin_quantile_models=None,
+        total_quantile_models=None,
+        quantiles=None,
+        market_anchor=True,
+        market_prob_config=None,
+        xgb_params=None,
+        tuned_params=None,
+        tuned_cv_summary=None,
+    )
+
+    pred_margin, pred_total = ml_model_core._predict_margin_total_from_model(model, games_df)
+
+    assert np.allclose(pred_margin, np.array([4.0, 4.5]))
+    assert np.allclose(pred_total, np.array([42.0, 43.0]))
+    assert len(preprocessor.frames) == 1
+    assert preprocessor.frames[0].equals(games_df)
+
+
+def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
+    monkeypatch,
+) -> None:
+    """Core quantile prediction helper preserves market-anchor post-processing."""
+    games_df = pd.DataFrame({"feat1": [1.0]})
+    preprocessor = _DummyPreprocessor()
+    margin_low = cast(xgb.XGBRegressor, object())
+    margin_high = cast(xgb.XGBRegressor, object())
+    total_low = cast(xgb.XGBRegressor, object())
+    total_high = cast(xgb.XGBRegressor, object())
+    predictions = {
+        margin_low: np.array([1.0]),
+        margin_high: np.array([5.0]),
+        total_low: np.array([40.0]),
+        total_high: np.array([48.0]),
+    }
+
+    monkeypatch.setattr(ml_model_core, "_apply_feature_spec", lambda df, spec: df)
+    monkeypatch.setattr(
+        ml_model_core,
+        "_predict_xgb",
+        lambda model, _features: predictions[model],
+    )
+    monkeypatch.setattr(
+        ml_model_core,
+        "get_market_baseline",
+        lambda _df: (np.array([0.5]), np.array([1.5])),
+    )
+
+    model = MarginTotalModel(
+        preprocessor=cast(ColumnTransformer, preprocessor),
+        feature_spec=_feature_spec(),
+        margin_model=cast(xgb.XGBRegressor, object()),
+        total_model=cast(xgb.XGBRegressor, object()),
+        target_columns=("away_score", "home_score"),
+        calibrator=None,
+        margin_quantile_models={0.1: margin_low, 0.9: margin_high},
+        total_quantile_models={0.1: total_low, 0.9: total_high},
+        quantiles=(0.1, 0.9),
+        market_anchor=True,
+        market_prob_config=None,
+        xgb_params=None,
+        tuned_params=None,
+        tuned_cv_summary=None,
+    )
+
+    margin_preds, total_preds = ml_model_core._predict_margin_total_quantiles_from_model(
+        model, games_df
+    )
+
+    assert np.allclose(margin_preds[0.1], np.array([1.5]))
+    assert np.allclose(margin_preds[0.9], np.array([5.5]))
+    assert np.allclose(total_preds[0.1], np.array([41.5]))
+    assert np.allclose(total_preds[0.9], np.array([49.5]))
+    assert len(preprocessor.frames) == 1
+    assert preprocessor.frames[0].equals(games_df)
 
 
 def test_predict_week_writes_output_and_pretty(monkeypatch, tmp_path: Path) -> None:

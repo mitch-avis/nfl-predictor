@@ -42,6 +42,7 @@ from nfl_predictor.ml.ml_model_core import (
     _fit_margin_total_models,
     _fit_models,
     _fit_quantile_models,
+    _fit_transform_matrix,
     _fit_win_prob_calibrator,
     _get_target_columns,
     _load_games,
@@ -58,6 +59,7 @@ from nfl_predictor.ml.ml_model_core import (
     _split_train_calibration_holdout,
     _summarize_confidence_pool,
     _summarize_missing_data,
+    _transform_matrix,
     _validate_quantiles,
     get_market_baseline,
     resolve_win_prob_calibration_method,
@@ -147,7 +149,7 @@ def train_score_model(
     x_holdout_df = _apply_feature_spec(holdout_df, feature_spec)
 
     preprocessor = _build_preprocessor(feature_spec, for_tree=True)
-    x_train = preprocessor.fit_transform(x_train_df)
+    x_train = _fit_transform_matrix(preprocessor, x_train_df)
 
     postseason_weights = compute_postseason_sample_weight(
         train_df,
@@ -178,7 +180,7 @@ def train_score_model(
     )
 
     if not holdout_df.empty:
-        x_holdout = preprocessor.transform(x_holdout_df)
+        x_holdout = _transform_matrix(preprocessor, x_holdout_df)
         pred_away = _predict_xgb(away_model, x_holdout)
         pred_home = _predict_xgb(home_model, x_holdout)
 
@@ -217,8 +219,8 @@ def train_score_model_with_report(
     _train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
     metrics: dict[str, Any] = {}
     if not holdout_df.empty:
-        x_holdout = model.preprocessor.transform(
-            _apply_feature_spec(holdout_df, model.feature_spec)
+        x_holdout = _transform_matrix(
+            model.preprocessor, _apply_feature_spec(holdout_df, model.feature_spec)
         )
         pred_away = _predict_xgb(model.away_model, x_holdout)
         pred_home = _predict_xgb(model.home_model, x_holdout)
@@ -382,7 +384,9 @@ def train_margin_total_model(
         )
 
         local_preprocessor = _build_preprocessor(local_spec, for_tree=True)
-        x_train = local_preprocessor.fit_transform(_apply_feature_spec(train_frame, local_spec))
+        x_train = _fit_transform_matrix(
+            local_preprocessor, _apply_feature_spec(train_frame, local_spec)
+        )
         postseason_weights = compute_postseason_sample_weight(
             train_frame,
             include_postseason=include_postseason,
@@ -406,8 +410,8 @@ def train_margin_total_model(
         y_margin_calibration = None
         y_total_calibration = None
         if not calib_frame.empty:
-            x_calibration = local_preprocessor.transform(
-                _apply_feature_spec(calib_frame, local_spec)
+            x_calibration = _transform_matrix(
+                local_preprocessor, _apply_feature_spec(calib_frame, local_spec)
             )
             (
                 y_margin_calibration,
@@ -538,7 +542,7 @@ def train_margin_total_model(
         )
 
     if not holdout_df.empty:
-        x_holdout = preprocessor.transform(_apply_feature_spec(holdout_df, feature_spec))
+        x_holdout = _transform_matrix(preprocessor, _apply_feature_spec(holdout_df, feature_spec))
         pred_margin = _predict_xgb(margin_model, x_holdout)
         pred_total = _predict_xgb(total_model, x_holdout)
         baseline_margin_holdout: np.ndarray | None = None
@@ -641,8 +645,8 @@ def train_margin_total_model_with_report(
     holdout_metrics: dict[str, Any] | None = None
     pool_summary: dict[str, Any] | None = None
     if not holdout_df.empty:
-        x_holdout = model.preprocessor.transform(
-            _apply_feature_spec(holdout_df, model.feature_spec)
+        x_holdout = _transform_matrix(
+            model.preprocessor, _apply_feature_spec(holdout_df, model.feature_spec)
         )
         pred_margin = _predict_xgb(model.margin_model, x_holdout)
         pred_total = _predict_xgb(model.total_model, x_holdout)
@@ -885,7 +889,7 @@ def train_blended_margin_total_model(
     )
     team_preprocessor = _build_preprocessor(team_spec, for_tree=True)
 
-    team_train = team_preprocessor.fit_transform(_apply_feature_spec(train_df, team_spec))
+    team_train = _fit_transform_matrix(team_preprocessor, _apply_feature_spec(train_df, team_spec))
     y_margin_train, y_total_train = _prepare_margin_total_targets(train_df, target_columns)
     postseason_weights = compute_postseason_sample_weight(
         train_df,
@@ -899,7 +903,9 @@ def train_blended_margin_total_model(
     )
     train_weight = combine_sample_weights(postseason_weights, recency_weights)
 
-    team_calib = team_preprocessor.transform(_apply_feature_spec(calibration_df, team_spec))
+    team_calib = _transform_matrix(
+        team_preprocessor, _apply_feature_spec(calibration_df, team_spec)
+    )
     y_margin_calib, y_total_calib = _prepare_margin_total_targets(calibration_df, target_columns)
     market_margin_calib, market_total_calib = get_market_baseline(calibration_df)
 
@@ -958,7 +964,9 @@ def train_blended_margin_total_model(
         )
 
     if not holdout_df.empty:
-        team_holdout = team_preprocessor.transform(_apply_feature_spec(holdout_df, team_spec))
+        team_holdout = _transform_matrix(
+            team_preprocessor, _apply_feature_spec(holdout_df, team_spec)
+        )
         market_margin_holdout, market_total_holdout = get_market_baseline(holdout_df)
 
         team_margin_holdout = _predict_xgb(team_margin_model, team_holdout)

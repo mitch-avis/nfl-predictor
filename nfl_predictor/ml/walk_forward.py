@@ -619,10 +619,11 @@ def run_walk_forward_backtest(
 
         prediction_frames.append(fold_predictions)
 
+        games_count = int(len(fold_predictions))
         metrics = {
             "season": int(fold.season),
             "week": int(fold.week),
-            "games": int(len(fold_predictions)),
+            "games": games_count,
             **metrics_utils.margin_total_metrics(
                 actual_margin, actual_total, pred_margin, pred_total
             ),
@@ -637,9 +638,8 @@ def run_walk_forward_backtest(
                 bins=RELIABILITY_BINS,
             )
         )
-        metrics["pick_accuracy"] = (
-            metrics["picks_correct"] / metrics["games"] if metrics["games"] else 0.0
-        )
+        picks_correct = int(metrics["picks_correct"])
+        metrics["pick_accuracy"] = picks_correct / games_count if games_count else 0.0
 
         if market_anchor and baseline_margin_eval is not None and baseline_total_eval is not None:
             actual_margin_resid = actual_margin - baseline_margin_eval
@@ -769,15 +769,20 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
     season_value = None
     if "season" in frame.columns and frame["season"].nunique() == 1:
         season_value = int(frame["season"].iloc[0])
+    weeks_count = int(frame["week"].nunique()) if "week" in frame.columns else None
+    games_count = int(len(frame))
+    expected_points_total = float(frame["expected_points"].sum())
+    actual_points_total = float(frame["actual_points"].sum())
+    picks_correct = int(frame["pick_correct"].sum())
     metrics = {
         "season": season_value,
-        "weeks": int(frame["week"].nunique()) if "week" in frame.columns else None,
-        "games": int(len(frame)),
+        "weeks": weeks_count,
+        "games": games_count,
         **metrics_utils.margin_total_metrics(actual_margin, actual_total, pred_margin, pred_total),
         **metrics_utils.probability_metrics(actual_home_win, home_win_prob),
-        "expected_points": float(frame["expected_points"].sum()),
-        "actual_points": float(frame["actual_points"].sum()),
-        "picks_correct": int(frame["pick_correct"].sum()),
+        "expected_points": expected_points_total,
+        "actual_points": actual_points_total,
+        "picks_correct": picks_correct,
     }
     reliability_bins = metrics_utils.reliability_table(
         home_win_prob,
@@ -785,12 +790,10 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
         bins=RELIABILITY_BINS,
     )
     metrics["reliability_ece"] = metrics_utils.reliability_ece(reliability_bins)
-    metrics["pick_accuracy"] = (
-        metrics["picks_correct"] / metrics["games"] if metrics["games"] else 0.0
-    )
-    if metrics.get("weeks"):
-        metrics["expected_points_avg"] = metrics["expected_points"] / metrics["weeks"]
-        metrics["actual_points_avg"] = metrics["actual_points"] / metrics["weeks"]
+    metrics["pick_accuracy"] = picks_correct / games_count if games_count else 0.0
+    if weeks_count:
+        metrics["expected_points_avg"] = expected_points_total / weeks_count
+        metrics["actual_points_avg"] = actual_points_total / weeks_count
 
     if market_anchor and "market_baseline_margin" in frame.columns:
         baseline_margin = frame["market_baseline_margin"].to_numpy()

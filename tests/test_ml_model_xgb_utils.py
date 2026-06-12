@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import numpy as np
 import xgboost as xgb
+from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
 
@@ -16,6 +17,46 @@ def _reset_runtime_state() -> None:
     xgb_utils._RUNTIME_STATE.early_stopping_fallback_logged = False
     xgb_utils._RUNTIME_STATE.gpu_fallback_logged = False
     xgb_utils._RUNTIME_STATE.gpu_tree_method_disabled = False
+
+
+class _DummyMatrixPreprocessor:
+    """Minimal preprocessor that records fit/transform calls for wrapper tests."""
+
+    def __init__(self) -> None:
+        self.fit_inputs: list[Any] = []
+        self.transform_inputs: list[Any] = []
+
+    def fit_transform(self, x: Any) -> np.ndarray:
+        """Capture the fit-transform input and return a stable matrix."""
+        self.fit_inputs.append(x)
+        return np.ones((2, 1))
+
+    def transform(self, x: Any) -> np.ndarray:
+        """Capture the transform input and return a stable matrix."""
+        self.transform_inputs.append(x)
+        return np.zeros((3, 1))
+
+
+def test_fit_transform_matrix_delegates_to_preprocessor() -> None:
+    """fit-transform wrapper preserves the preprocessor result and input."""
+    preprocessor = _DummyMatrixPreprocessor()
+    payload = object()
+
+    result = xgb_utils._fit_transform_matrix(cast(ColumnTransformer, preprocessor), payload)
+
+    assert result.shape == (2, 1)
+    assert preprocessor.fit_inputs == [payload]
+
+
+def test_transform_matrix_delegates_to_preprocessor() -> None:
+    """Transform wrapper preserves the preprocessor result and input."""
+    preprocessor = _DummyMatrixPreprocessor()
+    payload = object()
+
+    result = xgb_utils._transform_matrix(cast(ColumnTransformer, preprocessor), payload)
+
+    assert result.shape == (3, 1)
+    assert preprocessor.transform_inputs == [payload]
 
 
 def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:

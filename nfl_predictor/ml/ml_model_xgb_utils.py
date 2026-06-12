@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 import xgboost as xgb
 from scipy.sparse import spmatrix
+from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.utils.logger import log
 
@@ -49,6 +50,32 @@ def _predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.nda
     if iteration_range is not None:
         return booster.predict(dmatrix, iteration_range=iteration_range)
     return booster.predict(dmatrix)
+
+
+def _fit_transform_matrix(
+    preprocessor: ColumnTransformer,
+    x: Any,
+) -> np.ndarray | spmatrix:
+    """Fit-transform ``x`` and narrow the sklearn output type for static analysis.
+
+    ``ColumnTransformer.fit_transform()`` is inferred by pyright with a broad union
+    type that does not directly satisfy ``np.ndarray | spmatrix``. This wrapper
+    narrows the result so downstream functions receive the expected type.
+    """
+    return preprocessor.fit_transform(x)  # type: ignore[return-value]
+
+
+def _transform_matrix(
+    preprocessor: ColumnTransformer,
+    x: Any,
+) -> np.ndarray | spmatrix:
+    """Transform ``x`` and narrow the sklearn output type for static analysis.
+
+    ``ColumnTransformer.transform()`` is inferred by pyright with a broad union type
+    that does not directly satisfy ``np.ndarray | spmatrix``. This wrapper narrows
+    the result so downstream functions receive the expected type.
+    """
+    return preprocessor.transform(x)  # type: ignore[return-value]
 
 
 def _xgb_fit_supports(param: str) -> bool:

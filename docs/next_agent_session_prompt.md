@@ -18,7 +18,6 @@ Repository goals and constraints:
 - Keep outputs reproducible and artifact-friendly.
 - Do not reintroduce broad noqa, type: ignore, or pragma suppressions unless they are truly
   necessary, narrowly scoped, and justified.
-- Keep documentation current as you go: README.md, AGENTS.md, TODO.md, ARCHIVE.md, and the
 - Keep documentation current as you go: README.md, AGENTS.md, TODO.md, ARCHIVE.md, CHANGELOG.md,
   and the preseason plan if the baseline or priorities change.
 - Keep `CHANGELOG.md` in Common Changelog order: `Changed`, `Added`, `Removed`, `Fixed`.
@@ -27,36 +26,43 @@ Repository goals and constraints:
 - If asked to commit, prefer one file per commit, including deletions, unless told otherwise.
 
 Current validated baseline as of 2026-06-12:
-- .venv/bin/ruff format --check . passes
-- .venv/bin/python -m pytest passes (238 passed)
+- .venv/bin/ruff format --check . passes (104 files already formatted)
+- .venv/bin/ruff check . passes cleanly (0 diagnostics; all 69 findings resolved)
+- .venv/bin/pyright . passes (0 errors) after adding `pandas-stubs` and typed transform helpers
+- .venv/bin/ty check . passes (0 errors) after cleaning the remaining helper, walk-forward, and
+  test-surface diagnostics
+- .venv/bin/python -m pytest passes (242 passed)
 - Coverage is 78%, below the preseason target of 90% or higher
 - markdownlint passes on the maintained Markdown docs
 - uv lock --check passes
 - uv sync --check --active passes
-- .venv/bin/ruff check . fails with 69 diagnostics
-- .venv/bin/pyright . fails broadly, especially in pandas-heavy modules
-- .venv/bin/ty check . fails and remains advisory
 
 Active milestone:
 - Milestone 44 in TODO.md: Preseason 2026 repo hardening and tooling alignment
 
 Recommended first work slice:
-- Start with the remaining Ruff diagnostics, not the type-checking failures.
+- Pyright and Ty are both green. Stay on the remaining Milestone 44 items.
 - Prefer the smallest coherent cluster that can be fixed and validated end to end.
-- A strong first target is the low-risk documentation/lint cluster:
-  - package/module docstrings
-  - imperative docstring rewrites
-  - validation/logger correctness cleanup
-  - safe simplify fixes
-- Avoid starting with the large pandas typing surface unless Ruff debt is materially reduced first.
+- Strong next slices are operational correctness issues, quality-gate work, or validation/CI
+  guidance.
+- Treat TDD as mandatory for any code change: confirm the exact behavior/lines you plan to touch
+  are covered first; if they are not, add focused characterization or failing tests before editing
+  production code.
+- Load relevant skills before acting. For most repo work, start with `python` plus whichever of
+  `test-driven-development`, `clean-code`, `systematic-debugging`, `code-review`,
+  `observability`, `task-orchestrator`, and the `python-*` skills fit the slice.
+- Use localized type: ignore or cast() only when truly necessary and narrowly scoped.
+- Avoid broad suppressions; prefer typed helper wrappers or explicit annotations.
+- Treat both `.venv/bin/pyright .` and `.venv/bin/ty check .` as mandatory validation gates.
 
 Suggested execution flow:
-1. Re-run the current baseline checks you need for the selected slice.
-2. Pick one coherent lint cluster.
-3. Add or update tests first when behavior changes.
-4. Implement the smallest grounded fix set.
-5. Re-run the narrowest relevant validation immediately.
-6. Update README.md and planning docs if behavior, workflow, or baseline status changes.
+1. Identify the smallest remaining Milestone 44 cluster.
+2. Read the owning modules/tests/docs before editing.
+3. Verify direct coverage for the exact behavior/lines you plan to change; add focused tests first
+   if coverage is missing.
+4. Implement the smallest coherent change.
+5. Run the narrowest relevant tests/checks first, then the broader repo validation commands.
+6. Update planning docs if the baseline, scope, or priorities change materially.
 
 Validation commands:
 - .venv/bin/ruff format --check .
@@ -78,7 +84,7 @@ What to update as you work:
 
 Deliverables for this session:
 - Real code or documentation changes, not just analysis
-- A reduced failure surface for the chosen slice
+- A reduced risk or failure surface for the chosen slice
 - Updated planning/docs if the repo state changed
 - A concise summary of what changed, what passed, and what remains
 ```

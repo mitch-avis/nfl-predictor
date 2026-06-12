@@ -185,7 +185,9 @@ def _fit_margin_total_fold(
     )
     preprocessor = ml_model._build_preprocessor(feature_spec, for_tree=True)
 
-    x_train = preprocessor.fit_transform(ml_model.apply_feature_spec(fold.train_df, feature_spec))
+    x_train = ml_model._fit_transform_matrix(
+        preprocessor, ml_model.apply_feature_spec(fold.train_df, feature_spec)
+    )
     y_margin_train, y_total_train, _, _ = ml_model._prepare_margin_total_targets_with_anchor(
         fold.train_df, target_columns, market_anchor
     )
@@ -198,7 +200,9 @@ def _fit_margin_total_fold(
     y_total_calib = None
     baseline_margin_calib = None
     if not calibration_df.empty:
-        x_calib = preprocessor.transform(ml_model.apply_feature_spec(calibration_df, feature_spec))
+        x_calib = ml_model._transform_matrix(
+            preprocessor, ml_model.apply_feature_spec(calibration_df, feature_spec)
+        )
         y_margin_calib, y_total_calib, baseline_margin_calib, _ = (
             ml_model._prepare_margin_total_targets_with_anchor(
                 calibration_df, target_columns, market_anchor
@@ -236,7 +240,9 @@ def _fit_margin_total_fold(
             if calibrator is None:
                 calibration_method = "none"
 
-    x_eval = preprocessor.transform(ml_model.apply_feature_spec(fold.eval_df, feature_spec))
+    x_eval = ml_model._transform_matrix(
+        preprocessor, ml_model.apply_feature_spec(fold.eval_df, feature_spec)
+    )
     pred_margin = ml_model._predict_xgb(margin_model, x_eval)
     pred_total = ml_model._predict_xgb(total_model, x_eval)
 
@@ -301,12 +307,16 @@ def _fit_blended_fold(
     )
     team_preprocessor = core._build_preprocessor(team_spec, for_tree=True)
 
-    x_train = team_preprocessor.fit_transform(core._apply_feature_spec(fold.train_df, team_spec))
+    x_train = core._fit_transform_matrix(
+        team_preprocessor, core._apply_feature_spec(fold.train_df, team_spec)
+    )
     y_margin_train, y_total_train = core._prepare_margin_total_targets(
         fold.train_df, target_columns
     )
 
-    x_calib = team_preprocessor.transform(core._apply_feature_spec(calibration_df, team_spec))
+    x_calib = core._transform_matrix(
+        team_preprocessor, core._apply_feature_spec(calibration_df, team_spec)
+    )
     y_margin_calib, y_total_calib = core._prepare_margin_total_targets(
         calibration_df, target_columns
     )
@@ -355,7 +365,9 @@ def _fit_blended_fold(
         if calibrator is None:
             calibration_method = "none"
 
-    x_eval = team_preprocessor.transform(core._apply_feature_spec(fold.eval_df, team_spec))
+    x_eval = core._transform_matrix(
+        team_preprocessor, core._apply_feature_spec(fold.eval_df, team_spec)
+    )
     team_margin_eval = core._predict_xgb(team_margin_model, x_eval)
     team_total_eval = core._predict_xgb(team_total_model, x_eval)
     market_margin_eval, market_total_eval = core.get_market_baseline(fold.eval_df)

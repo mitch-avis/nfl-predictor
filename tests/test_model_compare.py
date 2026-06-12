@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import joblib
 import numpy as np
 import pandas as pd
+import xgboost as xgb
 from pytest import MonkeyPatch
+from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import Ridge
 
 from nfl_predictor import ml_model
 from nfl_predictor.ml import ml_model_core as core
@@ -54,10 +58,10 @@ def _dummy_feature_spec(*, include_market: bool) -> FeatureSpec:
 def test_recipe_from_margin_total_model() -> None:
     """Extracts recipe fields from a MarginTotalModel."""
     model = MarginTotalModel(
-        preprocessor=None,
+        preprocessor=cast(ColumnTransformer, None),
         feature_spec=_dummy_feature_spec(include_market=True),
-        margin_model=None,
-        total_model=None,
+        margin_model=cast(xgb.XGBRegressor, None),
+        total_model=cast(xgb.XGBRegressor, None),
         target_columns=("away_score", "home_score"),
         calibrator=WinProbCalibrator(method="elo", model=None),
         market_anchor=True,
@@ -77,10 +81,10 @@ def test_recipe_from_margin_total_model() -> None:
 def test_recipe_from_blended_model() -> None:
     """Extracts team XGB params from a BlendedMarginTotalModel."""
     team_model = MarginTotalModel(
-        preprocessor=None,
+        preprocessor=cast(ColumnTransformer, None),
         feature_spec=_dummy_feature_spec(include_market=False),
-        margin_model=None,
-        total_model=None,
+        margin_model=cast(xgb.XGBRegressor, None),
+        total_model=cast(xgb.XGBRegressor, None),
         target_columns=("away_score", "home_score"),
         calibrator=None,
         market_anchor=False,
@@ -91,7 +95,7 @@ def test_recipe_from_blended_model() -> None:
     model = BlendedMarginTotalModel(
         team_model=team_model,
         market_model=None,
-        blend_layer=BlendLayer(margin_model=None, total_model=None),
+        blend_layer=BlendLayer(margin_model=cast(Ridge, None), total_model=cast(Ridge, None)),
         calibrator=WinProbCalibrator(method="elo", model=None),
         target_columns=("away_score", "home_score"),
         market_prob_config=MarketProbConfig(blend_weight=0.2, clamp_delta=0.1),

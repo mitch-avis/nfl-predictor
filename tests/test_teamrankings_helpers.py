@@ -10,6 +10,13 @@ from nfl_predictor import constants
 from nfl_predictor.utils.polars import teamrankings
 
 
+def test_get_team_name_resolves_canonical_and_alias_inputs() -> None:
+    """Team names resolve for both canonical and alias abbreviations."""
+    assert teamrankings.get_team_name("KC") == constants.TEAM_MAPPING["KC"]["name"]
+    assert teamrankings.get_team_name("KAN") == constants.TEAM_MAPPING["KC"]["name"]
+    assert teamrankings.get_team_name("NOT_A_TEAM") is None
+
+
 def test_required_and_validate_tr_columns() -> None:
     """Required TR columns are identified and validation works."""
     required = teamrankings._get_required_tr_columns()

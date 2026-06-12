@@ -506,9 +506,8 @@ python scripts/leakage_audit.py
 
 ## Changelog
 
-Release history lives in `CHANGELOG.md` and follows the
-[Common Changelog](https://common-changelog.org/) format.
-The historical baseline is `0.1.0` from `main`.
+Release history lives in `CHANGELOG.md` and follows the [Common
+Changelog](https://common-changelog.org/) format. The historical baseline is `0.1.0` from `main`.
 
 When preparing the next release, add a new `## VERSION - YYYY-MM-DD` entry at the top of the file
 and keep the change groups in this order:
@@ -519,10 +518,9 @@ and keep the change groups in this order:
 - `Fixed`
 
 Keep each change to a single imperative line, link the most relevant commit or PR, and skip routine
-formatting noise.
-Update `CHANGELOG.md` whenever user-facing behavior, tooling expectations, or the operating
-workflow changes.
-If you later automate GitHub releases, keep git tags aligned with changelog versions.
+formatting noise. Update `CHANGELOG.md` whenever user-facing behavior, tooling expectations, or the
+operating workflow changes. If you later automate GitHub releases, keep git tags aligned with
+changelog versions.
 
 ## Artifacts
 
@@ -586,7 +584,7 @@ live in `ARCHIVE.md`.
 - Logging uses the project logger; avoid `print`.
 - Formatting is enforced via Ruff format (line length 100).
 - Linting and import sorting are enforced via Ruff (includes isort rules).
-- Type checking currently runs through Pyright, with Ty available as an additional advisory checker.
+- Type checking runs through both Pyright and Ty; both are required local validation gates.
 - Development dependencies are declared in `pyproject.toml` and synced via `uv.lock`.
 
 For users reading this documentation: commands are shown assuming your project virtual environment

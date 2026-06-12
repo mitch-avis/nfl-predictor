@@ -6,9 +6,12 @@ These tests avoid training by using minimal, picklable placeholder objects.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import joblib
 import pytest
+import xgboost as xgb
+from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_core as core
 
@@ -38,10 +41,10 @@ def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
     meta_path = tmp_path / "metadata.json"
 
     model = core.MarginTotalModel(
-        preprocessor=None,
+        preprocessor=cast(ColumnTransformer, None),
         feature_spec=_dummy_feature_spec(),
-        margin_model=None,
-        total_model=None,
+        margin_model=cast(xgb.XGBRegressor, None),
+        total_model=cast(xgb.XGBRegressor, None),
         target_columns=("away_score", "home_score"),
         calibrator=None,
         market_anchor=False,
@@ -65,10 +68,10 @@ def test_load_model_checkpoint_type_mismatch_raises(tmp_path: Path) -> None:
     model_path = tmp_path / "model.joblib"
 
     score_model = core.ScoreModel(
-        preprocessor=None,
+        preprocessor=cast(ColumnTransformer, None),
         feature_spec=_dummy_feature_spec(),
-        away_model=None,
-        home_model=None,
+        away_model=cast(xgb.XGBRegressor, None),
+        home_model=cast(xgb.XGBRegressor, None),
         target_columns=("away_score", "home_score"),
     )
     joblib.dump(score_model, model_path)

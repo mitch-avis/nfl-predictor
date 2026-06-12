@@ -41,8 +41,10 @@ from nfl_predictor.ml import feature_spec as _feature_spec
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,
     _coerce_tree_method_on_error,
+    _fit_transform_matrix,
     _predict_xgb,
     _resolve_xgb_params,
+    _transform_matrix,
     _with_xgb_early_stopping_params,
 )
 from nfl_predictor.utils.logger import log
@@ -891,7 +893,7 @@ def _predict_margin_total_from_model(
 ) -> tuple[np.ndarray, np.ndarray]:
     feature_df = _apply_feature_spec(games_df, model.feature_spec)
     log.debug("Prediction feature matrix: %d rows x %d columns", *feature_df.shape)
-    x_games = model.preprocessor.transform(feature_df)
+    x_games = _transform_matrix(model.preprocessor, feature_df)
     pred_margin = _predict_xgb(model.margin_model, x_games)
     pred_total = _predict_xgb(model.total_model, x_games)
     if getattr(model, "market_anchor", False):
@@ -911,7 +913,7 @@ def _predict_margin_total_quantiles_from_model(
         return {}, {}
 
     feature_df = _apply_feature_spec(games_df, model.feature_spec)
-    x_games = model.preprocessor.transform(feature_df)
+    x_games = _transform_matrix(model.preprocessor, feature_df)
 
     margin_preds: dict[float, np.ndarray] = {
         q: _predict_xgb(q_model, x_games) for q, q_model in margin_models.items()
@@ -1497,8 +1499,8 @@ def _score_margin_total_fold(
     )
     preprocessor = _build_preprocessor(feature_spec, for_tree=True)
 
-    x_train = preprocessor.fit_transform(_apply_feature_spec(train_df, feature_spec))
-    x_val = preprocessor.transform(_apply_feature_spec(val_df, feature_spec))
+    x_train = _fit_transform_matrix(preprocessor, _apply_feature_spec(train_df, feature_spec))
+    x_val = _transform_matrix(preprocessor, _apply_feature_spec(val_df, feature_spec))
 
     (
         y_margin_train,

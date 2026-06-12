@@ -351,7 +351,7 @@ def _predict_future_games(
         sm = cast(ml_model_core.ScoreModel, model)
         # ScoreModel: predict home/away scores then derive margin->prob.
         feature_df = ml_model_core.apply_feature_spec(games, sm.feature_spec)
-        x = sm.preprocessor.transform(feature_df)
+        x = ml_model_core._transform_matrix(sm.preprocessor, feature_df)
         pred_away = ml_model_core.predict_xgb(sm.away_model, x)
         pred_home = ml_model_core.predict_xgb(sm.home_model, x)
         pred_margin = pred_home - pred_away

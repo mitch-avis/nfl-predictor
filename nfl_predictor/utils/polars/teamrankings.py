@@ -748,7 +748,10 @@ def get_team_name(abbr: str) -> str | None:
     """
     canonical = constants.normalize_team_abbr(abbr)
     team_info = constants.TEAM_MAPPING.get(canonical)
-    return team_info["name"] if team_info else None
+    if team_info is None:
+        return None
+    team_name = team_info.get("name")
+    return str(team_name) if team_name is not None else None
 
 
 def filter_completed_games(schedule_df: pl.DataFrame) -> pl.DataFrame:

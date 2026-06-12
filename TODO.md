@@ -15,6 +15,8 @@ For each task:
 1. **Understand scope**: read the relevant modules/tests/docs.
 1. **Plan**: outline the smallest set of changes needed.
 1. **Test-Driven Development**: add/adjust tests for all planned changes. Aim to increase coverage.
+   For executable code, confirm the exact behavior/lines you plan to touch are covered first; if
+   not, add focused characterization or failing tests before editing production code.
 1. **Implement**: make changes incrementally (small diffs, one logical change at a time).
 1. **Run checks (venv only)**:
    - `.venv/bin/ruff format --check .`
@@ -38,13 +40,15 @@ Agents and humans should not rely on the shell activation state.
 ### Current validated baseline (2026-06-12)
 
 - `.venv/bin/ruff format --check .` passes.
-- `.venv/bin/python -m pytest` passes (`238 passed`).
+- `.venv/bin/python -m pytest` passes (`242 passed`).
 - `markdownlint .` passes.
 - `uv lock --check` passes.
 - `uv sync --check --active` passes.
 - `.venv/bin/ruff check .` passes cleanly.
-- `.venv/bin/pyright .` fails broadly in pandas-heavy modules.
-- `.venv/bin/ty check .` fails broadly and is currently advisory.
+- `.venv/bin/pyright .` **passes (0 errors)** after adding `pandas-stubs` and typed transform
+  helpers.
+- `.venv/bin/ty check .` **passes (0 errors)** after tightening walk-forward config typing, helper
+  return typing, optional SHAP imports, and small Polars schema annotations.
 - Coverage is `78%`, below the preseason target of `90%` or higher.
 
 ---
@@ -84,10 +88,11 @@ Tasks:
   - migrate development dependency declarations into `pyproject.toml` dependency groups and make
     `uv.lock` the lockfile source of truth.
   - decide whether the coverage floor remains advisory or becomes enforced again.
-- [ ] Decide the `ty` rollout strategy:
-  - keep `pyright` as the primary blocking type checker until parity is proven on this repo.
-  - evaluate a minimal `[tool.ty]` configuration for environment, include paths, and test overrides.
-  - document which checker is blocking and which checker is advisory during the transition.
+- [x] Decide the `ty` rollout strategy:
+  - keep `pyright` and `ty` as mandatory local gates.
+  - no repo-specific `[tool.ty]` configuration is currently required for a clean pass.
+  - document that `pyright` remains the more mature pandas-heavy signal, but `ty` is no longer
+    advisory.
 - [x] Close the current Ruff debt:
   - All Ruff findings (69 → 0) are resolved:
     - Docstring cluster: `package/__init__.py`, module headers, entrypoints (14 files)
@@ -99,7 +104,7 @@ Tasks:
     justified exceptions.
   - resolve long Excel-formula lines plus simplify and NumPy diagnostics, or explicitly scope any
     exceptions that remain.
-- [ ] Establish a passing type-check baseline under the refreshed dependency set:
+- [x] Establish a passing type-check baseline under the refreshed dependency set:
   - fix or intentionally scope the current `pyright` failures in pandas-heavy modules.
   - fix or intentionally scope the current `ty` failures and re-run both checkers.
 - [ ] Fix the highest-value operational correctness issues from the current audit:
@@ -117,8 +122,7 @@ Tasks:
 
 Acceptance:
 
-- [ ] Ruff format, Ruff check, Pyright, Ty, pytest, and markdownlint all pass, or any remaining
-      exceptions are documented and intentionally accepted.
+- [x] Ruff format, Ruff check, Pyright, Ty, pytest, and markdownlint all pass.
 - [ ] Editable install and primary CLI help smoke checks pass on Python 3.14.
 - [ ] Docs and agent instructions match the actual toolchain and workflow.
 - [ ] `CHANGELOG.md` is current and the intended CI/release automation path is documented.

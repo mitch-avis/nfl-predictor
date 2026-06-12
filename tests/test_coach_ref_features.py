@@ -9,7 +9,6 @@ from nfl_predictor.utils import polars_utils
 
 def _sample_schedule() -> pl.DataFrame:
     """Return a minimal schedule fixture with coaches."""
-
     return pl.DataFrame(
         {
             "season": [2024, 2024],
@@ -26,7 +25,6 @@ def _sample_schedule() -> pl.DataFrame:
 
 def test_build_coach_features_no_leakage() -> None:
     """Coach features use only prior games for win-rate calculations."""
-
     out = polars_utils.build_coach_features(_sample_schedule(), season=2024)
 
     week1 = out.filter((pl.col("week") == 1) & (pl.col("team_abbr") == "AAA")).to_dicts()

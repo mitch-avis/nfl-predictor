@@ -15,10 +15,11 @@ import hashlib
 import importlib
 import json
 import subprocess
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -50,7 +51,6 @@ SUMMARY_METRICS = (
 
 def _scalar_to_int(value: Any) -> int:
     """Cast a pandas/numpy scalar to a Python int."""
-
     return int(np.asarray(value).item())
 
 
@@ -58,7 +58,7 @@ def _scalar_to_int(value: Any) -> int:
 class WalkForwardConfig:
     """Configuration for walk-forward evaluation."""
 
-    eval_seasons: Optional[Sequence[int]] = None
+    eval_seasons: Sequence[int] | None = None
     eval_last_n_seasons: int = 3
     wf_start_week: int = 3
     calibration: str = "platt"
@@ -67,7 +67,7 @@ class WalkForwardConfig:
     include_postseason: bool = False
     exclude_incomplete_seasons: bool = False
     include_market: bool = True
-    market_transform: Optional[bool] = None
+    market_transform: bool | None = None
     market_anchor: bool = True
     market_prob_weight: float = 0.0
     market_prob_clamp: float = 0.0
@@ -79,14 +79,13 @@ class WalkForwardConfig:
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
     feature_end: str = ml_model.DEFAULT_FEATURE_END_COLUMN
     early_stopping_rounds: int = ml_model.DEFAULT_EARLY_STOPPING_ROUNDS
-    recency_half_life_weeks: Optional[float] = None
-    recency_half_life_seasons: Optional[float] = None
+    recency_half_life_weeks: float | None = None
+    recency_half_life_seasons: float | None = None
     disable_pruning: bool = False
-    xgb_params_overrides: Optional[dict[str, Any]] = None
+    xgb_params_overrides: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable dict representation of the config."""
-
         return {
             "eval_seasons": list(self.eval_seasons) if self.eval_seasons else None,
             "eval_last_n_seasons": self.eval_last_n_seasons,
@@ -131,7 +130,6 @@ class WalkForwardFold:
 
 def load_games(data_path: Path) -> pd.DataFrame:
     """Load a CSV dataset into a pandas DataFrame."""
-
     df = pd.read_csv(data_path)
     log.info("Loaded %d rows from %s", len(df), data_path)
     return df
@@ -139,7 +137,6 @@ def load_games(data_path: Path) -> pd.DataFrame:
 
 def filter_regular_season(df: pd.DataFrame, include_postseason: bool = False) -> pd.DataFrame:
     """Filter to regular season games when game_type exists."""
-
     if include_postseason or "game_type" not in df.columns:
         return df
     filtered = df[df["game_type"].astype(str).str.upper() == "REG"].copy()
@@ -149,10 +146,9 @@ def filter_regular_season(df: pd.DataFrame, include_postseason: bool = False) ->
 
 
 def resolve_eval_seasons(
-    df: pd.DataFrame, eval_seasons: Optional[Sequence[int]], eval_last_n: int
+    df: pd.DataFrame, eval_seasons: Sequence[int] | None, eval_last_n: int
 ) -> list[int]:
     """Resolve which seasons to evaluate based on dataset contents and config."""
-
     seasons = sorted(df["season"].dropna().unique())
     if not seasons:
         raise ValueError("No seasons available in dataset.")
@@ -178,7 +174,6 @@ def filter_incomplete_eval_seasons(
     df: pd.DataFrame, eval_seasons: Sequence[int]
 ) -> tuple[list[int], list[int]]:
     """Return (kept, dropped) seasons based on regular-season completeness."""
-
     kept: list[int] = []
     dropped: list[int] = []
     for season in eval_seasons:
@@ -200,7 +195,6 @@ def build_walk_forward_folds(
     include_postseason: bool = False,
 ) -> list[WalkForwardFold]:
     """Build time-aware walk-forward folds for each eval season and week."""
-
     if "season" not in df.columns or "week" not in df.columns:
         raise ValueError("season and week columns are required for walk-forward splits.")
 
@@ -235,7 +229,6 @@ def select_calibration_data(
     Uses the last `calibration_weeks` weeks of the eval season strictly before `eval_week`.
     Returns empty when insufficient or unavailable.
     """
-
     if calibration_weeks <= 0:
         return train_df.iloc[0:0].copy()
     season_df = train_df[train_df["season"] == eval_season].copy()
@@ -257,7 +250,6 @@ def summarize_eval_window(
     include_postseason: bool,
 ) -> dict[str, Any]:
     """Summarize the evaluation window for reporting/metadata."""
-
     season_rows: dict[str, dict[str, Any]] = {}
     incomplete_seasons: list[int] = []
 
@@ -299,11 +291,10 @@ def _can_market_anchor(df: pd.DataFrame) -> bool:
 def resolve_market_settings(
     df: pd.DataFrame,
     include_market: bool,
-    market_transform: Optional[bool],
+    market_transform: bool | None,
     market_anchor: bool,
 ) -> tuple[bool, bool, bool]:
     """Resolve market feature/transform/anchor settings based on columns present."""
-
     has_market = _has_market_lines(df)
     resolved_transform = market_transform if market_transform is not None else has_market
     resolved_include = include_market and has_market
@@ -325,8 +316,8 @@ def _fit_calibrator(
     pred_margin: np.ndarray,
     actual_home_win: np.ndarray,
     method: str,
-    sample_weight: Optional[np.ndarray] = None,
-) -> Optional[ml_model.WinProbCalibrator]:
+    sample_weight: np.ndarray | None = None,
+) -> ml_model.WinProbCalibrator | None:
     method = method.lower()
     if method == "none":
         return None
@@ -351,10 +342,9 @@ def run_walk_forward_backtest(
     df: pd.DataFrame,
     config: WalkForwardConfig,
     *,
-    fold_callback: Optional[Callable[[dict[str, Any], WalkForwardFold], None]] = None,
+    fold_callback: Callable[[dict[str, Any], WalkForwardFold], None] | None = None,
 ) -> dict[str, Any]:
     """Run walk-forward training/evaluation and return metrics plus per-game predictions."""
-
     np.random.seed(config.random_seed)
     df = filter_regular_season(df, include_postseason=config.include_postseason)
     target_columns = ml_model.get_target_columns(df)
@@ -717,7 +707,6 @@ def build_metrics_report(
     results: dict[str, Any],
 ) -> dict[str, Any]:
     """Build the JSON-serializable metrics report payload."""
-
     fold_summary = _summarize_fold_metrics(results["per_week"])
     summary_table = _build_metrics_summary_table(results["overall"], fold_summary)
     return {
@@ -753,7 +742,6 @@ def build_metrics_report(
 
 def _summarize_fold_metrics(per_week: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize per-week metrics with mean/variance across folds."""
-
     summary: dict[str, Any] = {"folds": int(len(per_week)), "metrics": {}}
     if not per_week:
         for name in SUMMARY_METRICS:
@@ -842,9 +830,8 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
     return metrics
 
 
-def _resolve_team_columns(frame: pd.DataFrame) -> Optional[tuple[str, str]]:
+def _resolve_team_columns(frame: pd.DataFrame) -> tuple[str, str] | None:
     """Resolve team identifier columns for diagnostics."""
-
     for candidates in (("away_abbr", "home_abbr"), ("away_name", "home_name")):
         if all(col in frame.columns for col in candidates):
             return candidates
@@ -853,7 +840,6 @@ def _resolve_team_columns(frame: pd.DataFrame) -> Optional[tuple[str, str]]:
 
 def _season_win_totals(predictions: pd.DataFrame) -> dict[str, Any]:
     """Compute per-team season win totals vs expected wins."""
-
     if predictions.empty:
         return {"per_team": [], "per_season": [], "overall": None}
     team_cols = _resolve_team_columns(predictions)
@@ -912,7 +898,7 @@ def _season_win_totals(predictions: pd.DataFrame) -> dict[str, Any]:
         for _, row in grouped.sort_values(["season", "team"]).iterrows()
     ]
 
-    def _summarize_totals(frame: pd.DataFrame, season: Optional[int]) -> dict[str, Any]:
+    def _summarize_totals(frame: pd.DataFrame, season: int | None) -> dict[str, Any]:
         errors = frame["error"].to_numpy(dtype=float)
         abs_errors = frame["abs_error"].to_numpy(dtype=float)
         rmse = float(np.sqrt(np.mean(errors**2))) if len(errors) else None
@@ -937,7 +923,6 @@ def _season_win_totals(predictions: pd.DataFrame) -> dict[str, Any]:
 
 def _calibration_drift(predictions: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
     """Summarize calibration drift by season and week."""
-
     required = {"season", "week", "home_win_prob", "actual_home_win"}
     if predictions.empty or not required.issubset(predictions.columns):
         return {"per_week": [], "per_season": []}
@@ -982,7 +967,6 @@ def _build_metrics_summary_table(
     fold_summary: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """Build a summary table for first-class metrics."""
-
     rows: list[dict[str, Any]] = []
     fold_metrics = fold_summary.get("metrics", {}) if fold_summary else {}
     for priority, specs in metrics_utils.METRIC_STRATEGY.items():
@@ -1004,7 +988,6 @@ def _build_metrics_summary_table(
 
 def dataset_fingerprint(path: Path) -> str:
     """Compute a SHA-256 fingerprint of the dataset file bytes."""
-
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -1014,10 +997,9 @@ def dataset_fingerprint(path: Path) -> str:
 
 def generate_run_id(dataset_hash: str, config: WalkForwardConfig) -> str:
     """Generate a stable-ish run id from timestamp + config hash."""
-
-    created = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    created = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     payload = json.dumps(config.to_dict(), sort_keys=True)
-    short_hash = hashlib.sha256(f"{dataset_hash}:{payload}".encode("utf-8")).hexdigest()[:8]
+    short_hash = hashlib.sha256(f"{dataset_hash}:{payload}".encode()).hexdigest()[:8]
     return f"wf_{created}_{short_hash}"
 
 
@@ -1025,7 +1007,6 @@ def build_metadata(
     created_at: str, dataset_hash: str, config_payload: dict[str, Any]
 ) -> dict[str, Any]:
     """Build a metadata payload adjacent to the metrics report."""
-
     return {
         "created_at": created_at,
         "run_id": config_payload.get("run_id"),
@@ -1038,7 +1019,7 @@ def build_metadata(
     }
 
 
-def _git_commit_hash() -> Optional[str]:
+def _git_commit_hash() -> str | None:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -1047,7 +1028,7 @@ def _git_commit_hash() -> Optional[str]:
             capture_output=True,
             text=True,
         )
-    except OSError:  # pragma: no cover
+    except OSError:
         return None
     if result.returncode != 0:
         return None
@@ -1055,8 +1036,8 @@ def _git_commit_hash() -> Optional[str]:
     return value or None
 
 
-def _library_versions() -> dict[str, Optional[str]]:
-    versions: dict[str, Optional[str]] = {}
+def _library_versions() -> dict[str, str | None]:
+    versions: dict[str, str | None] = {}
     for module_name in (
         "numpy",
         "pandas",
@@ -1068,7 +1049,7 @@ def _library_versions() -> dict[str, Optional[str]]:
     ):
         try:
             module = importlib.import_module(module_name)
-        except ImportError:  # pragma: no cover
+        except ImportError:
             versions[module_name] = None
             continue
         versions[module_name] = getattr(module, "__version__", None)

@@ -12,7 +12,6 @@ from nfl_predictor.utils.polars import teamrankings
 
 def test_required_and_validate_tr_columns() -> None:
     """Required TR columns are identified and validation works."""
-
     required = teamrankings._get_required_tr_columns()
     assert "team_abbr" in required
     assert "week" in required
@@ -36,7 +35,6 @@ def test_required_and_validate_tr_columns() -> None:
 
 def test_normalize_tr_dataframe(monkeypatch) -> None:
     """TR dataframe normalization works as expected."""
-
     monkeypatch.setattr(teamrankings, "normalize_team_column", lambda df, _col: df)
 
     df = pl.DataFrame({"": [1], "abbr": ["AAA"]})
@@ -51,7 +49,6 @@ def test_normalize_tr_dataframe(monkeypatch) -> None:
 
 def test_get_latest_team_rankings() -> None:
     """Latest week per team is selected correctly."""
-
     df = pl.DataFrame(
         {
             "team_abbr": ["AAA", "AAA", "BBB"],
@@ -67,7 +64,6 @@ def test_get_latest_team_rankings() -> None:
 
 def test_compute_derived_metrics() -> None:
     """Derived metrics are computed correctly."""
-
     df = pl.DataFrame(
         {
             "team_abbr": ["AAA"],
@@ -96,7 +92,6 @@ def test_compute_derived_metrics() -> None:
 
 def test_aggregate_team_stats_to_week() -> None:
     """Rolling averages aggregate correctly up to a target week."""
-
     stats = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -115,7 +110,6 @@ def test_aggregate_team_stats_to_week() -> None:
 
 def test_calculate_league_means_and_regress() -> None:
     """League means are calculated and regression to mean works."""
-
     stats = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -138,7 +132,6 @@ def test_calculate_league_means_and_regress() -> None:
 
 def test_merge_schedule_and_stat_differentials() -> None:
     """Schedule is merged with team stats and differentials are calculated."""
-
     schedule = pl.DataFrame({"away_abbr": ["AAA"], "home_abbr": ["BBB"]})
     agg = pl.DataFrame(
         {
@@ -157,7 +150,6 @@ def test_merge_schedule_and_stat_differentials() -> None:
 
 def test_get_tr_columns() -> None:
     """TR columns include expected ratings and stats."""
-
     cols = teamrankings.get_tr_columns()
     assert constants.TR_RATINGS[0] in cols
     assert constants.TR_STATS[0] in cols
@@ -165,7 +157,6 @@ def test_get_tr_columns() -> None:
 
 def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> None:
     """TeamRankings are loaded correctly for past and future weeks."""
-
     season = 2023
     season_dir = tmp_path / str(season)
     season_dir.mkdir(parents=True, exist_ok=True)
@@ -212,7 +203,6 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
 
     def fake_scrape(week, _week_date, **_kwargs):
         """Fake scrape function returning dummy data."""
-
         scraped_weeks.append(int(week))
         return pl.DataFrame(
             {
@@ -254,7 +244,6 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
 
 def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> None:
     """Min week setting skips known-missing early weeks."""
-
     season = 2023
     season_dir = tmp_path / str(season)
     season_dir.mkdir(parents=True, exist_ok=True)
@@ -268,7 +257,6 @@ def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> 
 
     def fake_scrape(week, _week_date, **_kwargs):
         """Fake scrape function returning dummy data."""
-
         scraped_weeks.append(int(week))
         return pl.DataFrame(
             {
@@ -295,7 +283,6 @@ def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> 
 
 def test_load_team_rankings_skips_pre_min_season(tmp_path, monkeypatch) -> None:
     """Seasons before TR availability return empty data."""
-
     monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
 
     season = constants.TEAMRANKINGS_MIN_SEASON - 1

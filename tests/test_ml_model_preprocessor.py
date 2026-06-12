@@ -40,7 +40,6 @@ def test_preprocessor_sparse_with_categorical() -> None:
 
 def test_preprocessor_handles_missing_numeric() -> None:
     """Numeric NaNs are imputed so downstream training can proceed."""
-
     df = pd.DataFrame({"num_feature": [1.0, np.nan, 3.0, 4.0]})
     spec = ml_model.FeatureSpec(
         feature_columns=["num_feature"],

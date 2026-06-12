@@ -1,13 +1,13 @@
 [build-system]
-requires = ["hatchling>=1.26"]
+requires = ["hatchling>=1.30"]
 build-backend = "hatchling.build"
 
 [project]
 name = "nfl-predictor"
-version = "0.1.0"
+version = "0.2.0"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 keywords = ["stats", "sports", "football", "machine learning"]
 authors = [{ name = "Mitch Avis", email = "mitchavis@gmail.com" }]
 license = { text = "MIT" }
@@ -28,7 +28,7 @@ dependencies = [
     "xgboost",
 ]
 classifiers = [
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
 ]
@@ -36,20 +36,31 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/mitch-avis/nfl-predictor"
 
+[dependency-groups]
+dev = [
+    "colorama",
+    "pyright",
+    "pytest",
+    "pytest-cov",
+    "pytest-html",
+    "pytest-metadata",
+    "pytest-sugar",
+    "pytest-xdist",
+    "ruff",
+    "ty",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["nfl_predictor"]
 
-[tool.black]
-line-length = 100
-target-version = ["py313"]
+[tool.uv]
+default-groups = ["dev"]
+required-version = ">=0.11.21"
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
-lint.select = ["E", "F", "W", "I", "B"]
-lint.ignore = [
-    "E203", # space before ':' (conflicts with black)
-]
+target-version = "py314"
+src = ["."]
 extend-exclude = [
     ".venv",
     ".git",
@@ -60,8 +71,77 @@ extend-exclude = [
     "dist",
 ]
 
+[tool.ruff.lint]
+select = [
+    "B",   # flake8-bugbear rules
+    "C4",  # flake8-comprehensions rules
+    "D",   # pydocstyle rules
+    "E",   # pycodestyle errors
+    "F",   # pyflakes rules
+    "I",   # isort rules
+    "N",   # pep8-naming rules
+    "S",   # bandit security rules
+    "SIM", # flake8-simplify rules
+    "UP",  # pyupgrade rules
+    "W",   # pycodestyle warnings
+    "NPY", # numpy docstring rules
+    "PGH", # pygrep-hooks rules
+]
+ignore = [
+    "D203", # Conflicts with D211 (no-blank-line-before-class)
+    "D213", # Conflicts with D212 (multi-line-summary-first-line)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"] # Use of assert is standard in pytest
+
 [tool.ruff.lint.isort]
 known-first-party = ["nfl_predictor"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ty.environment]
+python = ".venv"
+python-version = "3.14"
+
+[tool.ty.src]
+include = ["nfl_predictor", "scripts", "tests"]
+
+[tool.pyright]
+pythonVersion = "3.14"
+# Production code under nfl-predictor/ runs in strict mode (matches Pylance "Strict" in VS Code).
+# Tests stay on the standard-mode baseline below — they make heavy use of fixtures, Mock objects,
+# and monkeypatching where Unknown types are normal.
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+pythonPlatform = "Linux"
+stubPath = "stubs"
+executionEnvironments = [{ root = "." }]
+# --- Standard-mode diagnostics promoted to errors (also surfaced by Pylance) ----------
+reportMissingImports = "error"
+reportMissingModuleSource = "warning"
+reportAttributeAccessIssue = "error"
+reportAssignmentType = "error"
+reportArgumentType = "error"
+reportReturnType = "error"
+reportCallIssue = "error"
+reportIndexIssue = "error"
+reportOperatorIssue = "error"
+reportOptionalSubscript = "error"
+reportOptionalMemberAccess = "error"
+reportOptionalCall = "error"
+reportOptionalIterable = "error"
+reportOptionalContextManager = "error"
+reportOptionalOperand = "error"
+reportGeneralTypeIssues = "error"
+reportMissingTypeStubs = false
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownParameterType = "none"
+reportUnknownLambdaType = "none"
 
 [tool.pytest.ini_options]
 minversion = "7.0"

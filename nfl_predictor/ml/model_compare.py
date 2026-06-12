@@ -22,7 +22,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import joblib
 import numpy as np
@@ -44,7 +44,7 @@ from nfl_predictor.utils.logger import log
 class CompareConfig:
     """Configuration for objective comparison."""
 
-    eval_seasons: Optional[list[int]] = None
+    eval_seasons: list[int] | None = None
     eval_last_n_seasons: int = 3
     wf_start_week: int = 3
     calibration_weeks: int = walk_forward.DEFAULT_CALIBRATION_WEEKS
@@ -69,13 +69,12 @@ class ModelRecipe:
 
     # Market behavior:
     include_market_features: bool
-    market_transform: Optional[bool]
+    market_transform: bool | None
     market_anchor: bool
 
 
 def load_model(path_or_dir: Path) -> Any:
     """Load a joblib model from a file or a run directory."""
-
     path = Path(path_or_dir)
     if path.is_dir():
         path = path / "model.joblib"
@@ -101,7 +100,6 @@ def _infer_include_market_from_feature_spec(model: Any) -> bool:
 
 def recipe_from_model(model: Any, *, label: str) -> ModelRecipe:
     """Extract a comparable recipe from a loaded model object."""
-
     if isinstance(model, MarginTotalModel):
         calibration_method = getattr(getattr(model, "calibrator", None), "method", "none") or "none"
         market_prob = model.market_prob_config or MarketProbConfig(
@@ -173,7 +171,6 @@ def _fit_margin_total_fold(
     target_columns: tuple[str, str],
 ) -> pd.DataFrame:
     """Train/evaluate one fold for a margin/total model."""
-
     include_market, market_transform, market_anchor = _resolve_market_settings_for_recipe(
         fold.train_df, recipe
     )
@@ -280,7 +277,6 @@ def _fit_blended_fold(
     target_columns: tuple[str, str],
 ) -> pd.DataFrame:
     """Train/evaluate one fold for a blended model (team model + market baseline)."""
-
     include_market, market_transform, _market_anchor = _resolve_market_settings_for_recipe(
         fold.train_df, recipe
     )
@@ -417,7 +413,6 @@ def bootstrap_overall_metrics(
     This is a rough uncertainty estimate intended for comparing models on the
     same evaluation slice. It is not a time-series-aware block bootstrap.
     """
-
     if n_samples <= 0:
         return {}
     if predictions.empty:
@@ -458,7 +453,6 @@ def run_objective_compare(
     bootstrap_samples: int = 0,
 ) -> dict[str, Any]:
     """Run an objective walk-forward comparison for two recipes."""
-
     np.random.seed(cfg.random_seed)
     df = walk_forward.filter_regular_season(df, include_postseason=cfg.include_postseason)
 
@@ -556,7 +550,6 @@ def run_objective_compare(
 
 def write_compare_outputs(out_dir: Path, results: dict[str, Any]) -> None:
     """Write comparison outputs to a directory."""
-
     out_dir.mkdir(parents=True, exist_ok=True)
 
     overall: dict[str, dict[str, Any]] = results["overall"]

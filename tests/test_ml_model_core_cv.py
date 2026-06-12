@@ -97,7 +97,6 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: MonkeyPatch) -> None:
 
 def test_evaluate_margin_total_cv_summary_aggregates_folds(monkeypatch: MonkeyPatch) -> None:
     """Aggregates fold scores and returns mean/std summary."""
-
     df = pd.DataFrame(
         {
             "season": [2024, 2024, 2024, 2024],
@@ -146,7 +145,6 @@ def test_evaluate_margin_total_cv_summary_aggregates_folds(monkeypatch: MonkeyPa
 
 def test_evaluate_margin_total_cv_returns_mean(monkeypatch: MonkeyPatch) -> None:
     """Returns the mean of fold scores for the objective."""
-
     df = pd.DataFrame(
         {
             "season": [2024, 2024, 2024],
@@ -184,7 +182,6 @@ def test_evaluate_margin_total_cv_returns_mean(monkeypatch: MonkeyPatch) -> None
 
 def test_run_optuna_search_rejects_holdout_seasons(monkeypatch: MonkeyPatch) -> None:
     """Reject Optuna tuning when holdout seasons are present."""
-
     df = pd.DataFrame(
         {
             "season": [2024, 2024],

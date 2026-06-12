@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Offline validation for the latest collected dataset.
+"""Offline validation for the latest collected dataset.
 
 Runs schema, range, and consistency checks against data/all_data.csv.
 """
@@ -14,7 +13,7 @@ import polars as pl
 try:
     from nfl_predictor import constants
     from nfl_predictor.utils import validation_utils
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     # Allow running as a script: `python scripts/validate_offline.py`.
     import sys
 
@@ -26,7 +25,6 @@ except ModuleNotFoundError:  # pragma: no cover
 
 def main() -> int:
     """Run offline validation and report any issues."""
-
     data_path = Path(constants.DATA_PATH) / "all_data.csv"
     if not data_path.exists():
         print(f"Missing data file: {data_path}")

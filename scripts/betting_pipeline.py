@@ -57,7 +57,7 @@ Using the betting report with FanDuel (or any book):
     replace the market line with the live line in the same comparison.
 
 Examples
-
+--------
 One-shot end-to-end run (2h tuning, GPU, Week 19 predictions):
 
     python scripts/betting_pipeline.py \
@@ -78,9 +78,9 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -98,7 +98,7 @@ try:
         train_blended_margin_total_model_with_report,
     )
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     # Allow running as a script: `python scripts/betting_pipeline.py`.
     import sys
 
@@ -124,10 +124,9 @@ def _moneyline_to_implied_prob(moneyline: float) -> float:
 
     Returns NaN for non-finite inputs.
     """
-
     try:
         ml = float(moneyline)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return float("nan")
     if not pd.notna(ml):
         return float("nan")
@@ -143,10 +142,9 @@ def _implied_prob_to_moneyline(prob: float) -> float:
 
     Returns NaN for invalid probabilities.
     """
-
     try:
         p = float(prob)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return float("nan")
     if not 0.0 < p < 1.0:
         return float("nan")
@@ -157,7 +155,6 @@ def _implied_prob_to_moneyline(prob: float) -> float:
 
 def _novig_pair(p_home_raw: float, p_away_raw: float) -> tuple[float, float]:
     """Normalize two implied probabilities to remove vig (sum to 1)."""
-
     if not pd.notna(p_home_raw) or not pd.notna(p_away_raw):
         return float("nan"), float("nan")
     denom = float(p_home_raw) + float(p_away_raw)
@@ -171,7 +168,6 @@ def _edge_to_confidence_1_to_10(edge: float) -> int:
 
     This is a heuristic scale for readability, not bankroll management.
     """
-
     e = float(abs(edge))
     if e < 0.01:
         return 1
@@ -196,7 +192,6 @@ def _edge_to_confidence_1_to_10(edge: float) -> int:
 
 def _edge_to_action(edge: float) -> str:
     """Map absolute probability edge to a simple action label."""
-
     e = float(abs(edge))
     if e < 0.02:
         return "PASS"
@@ -217,7 +212,6 @@ def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
     The report focuses on moneyline value signals (probability calibration) and also
     includes simple spread/total deltas (without claiming cover probabilities).
     """
-
     required = {
         "away_abbr",
         "home_abbr",
@@ -564,7 +558,6 @@ def _write_training_artifacts(
     prefix: str,
 ) -> Path:
     """Write model + metadata + metrics artifacts and return model path."""
-
     paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
 
     model_path = run_dir / f"{prefix}_model.joblib"
@@ -596,7 +589,7 @@ def _write_training_artifacts(
     )
     artifacts.write_json(metadata_path, metadata)
 
-    importance_payload: Optional[dict[str, Any]] = None
+    importance_payload: dict[str, Any] | None = None
     if result.feature_importance:
         importance_payload = {
             "run_id": run_id,
@@ -620,7 +613,6 @@ def _write_training_artifacts(
 
 def _wf_compare_matrix() -> list[tuple[str, str, float, float]]:
     """Default matrix: (label, calibration, market_prob_weight, market_prob_clamp)."""
-
     return [
         ("platt_base", "platt", 0.0, 0.0),
         ("isotonic_base", "isotonic", 0.0, 0.0),
@@ -648,7 +640,6 @@ def _pick_best_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> int:
     """CLI entrypoint."""
-
     args = _parse_args()
 
     if not args.data_path.exists():
@@ -656,7 +647,7 @@ def main() -> int:
         return 2
 
     dataset_hash = artifacts.sha256_file(args.data_path)
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     # Create run directory
     config_payload: dict[str, Any] = {

@@ -6,14 +6,11 @@ _This release backfills the changelog from the historical `0.1.0` baseline on `m
 
 ### Changed
 
-- Raise the runtime baseline to Python 3.14 and adopt `uv.lock` workflows ([`240f814`],
-  [`78c732e`])
+- Raise the runtime baseline to Python 3.14 and adopt `uv.lock` workflows ([`240f814`], [`78c732e`])
 - Standardize model selection around walk-forward evaluation and resumable runs ([`4f33dd6`],
   [`83ba2a7`])
-- Replace dynamic facades with explicit exports for better IDE support ([`b98fe0a`],
-  [`6dc8910`])
-- Expand repo guidance so changelog and planning files stay synchronized ([`8f7be46`],
-  [`155088e`])
+- Replace dynamic facades with explicit exports for better IDE support ([`b98fe0a`], [`6dc8910`])
+- Expand repo guidance so changelog and planning files stay synchronized ([`8f7be46`], [`155088e`])
 - Extend data refresh defaults for 1999+ history, caching, and incomplete seasons ([`12ae377`],
   [`41b2df0`])
 

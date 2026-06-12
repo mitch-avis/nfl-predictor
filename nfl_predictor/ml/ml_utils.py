@@ -23,8 +23,8 @@ def display_predictions(y_pred: np.ndarray, x_test: pd.DataFrame) -> None:
     Args:
         y_pred: Array of predicted away-team win probabilities.
         x_test: Test dataset containing game details.
-    """
 
+    """
     x_test_reset = x_test.reset_index().drop(columns="index")
 
     for idx, game in enumerate(y_pred):
@@ -46,7 +46,6 @@ def display_predictions(y_pred: np.ndarray, x_test: pd.DataFrame) -> None:
 
 def display_weekly_predictions(predictions: pd.DataFrame) -> None:
     """Log weekly score predictions with confidence ranks and win probabilities."""
-
     if predictions.empty:
         log.info("No predictions to display.")
         return
@@ -113,7 +112,6 @@ def display_weekly_predictions(predictions: pd.DataFrame) -> None:
 
 def flatten_dict(nested_dict: Any) -> dict[tuple[Any, ...], Any]:
     """Recursively flatten a nested dict into tuple-keyed paths."""
-
     res: dict[tuple[Any, ...], Any] = {}
     if isinstance(nested_dict, dict):
         for k, v in nested_dict.items():
@@ -127,7 +125,6 @@ def flatten_dict(nested_dict: Any) -> dict[tuple[Any, ...], Any]:
 
 def nested_dict_to_df(values_dict: Any) -> pd.DataFrame:
     """Convert a nested dict into a pandas DataFrame via flattening."""
-
     flat_dict = flatten_dict(values_dict)
     df = pd.DataFrame.from_dict(flat_dict, orient="index")
     df.index = pd.MultiIndex.from_tuples(df.index)

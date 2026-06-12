@@ -16,12 +16,10 @@ from nfl_predictor.ml.ml_model_core import FeatureSpec, MarketProbConfig, Optuna
 class _DummyPreprocessor:
     def fit_transform(self, df: pd.DataFrame) -> np.ndarray:
         """Return a stable dummy feature matrix for tests."""
-
         return np.zeros((len(df), 1))
 
     def transform(self, df: pd.DataFrame) -> np.ndarray:
         """Return a stable dummy feature matrix for tests."""
-
         return np.zeros((len(df), 1))
 
 
@@ -55,7 +53,6 @@ def _import_ml_model_training(monkeypatch):
 
 def test_train_margin_total_model_full_path(monkeypatch) -> None:
     """Margin/total model training works end to end."""
-
     ml_model_training = _import_ml_model_training(monkeypatch)
 
     df = pd.DataFrame(
@@ -107,7 +104,6 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
 
     def fake_predict_xgb(model: object, x: np.ndarray) -> np.ndarray:
         """Return canned predictions for margin vs total models."""
-
         if model == "margin_model":
             return np.array([1.0] * len(x))
         return np.array([40.0] * len(x))
@@ -124,7 +120,6 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
 
         def predict(self, margin: np.ndarray) -> np.ndarray:
             """Predict dummy probabilities."""
-
             return np.full_like(margin, 0.6, dtype=float)
 
     monkeypatch.setattr(

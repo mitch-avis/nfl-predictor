@@ -13,7 +13,6 @@ from nfl_predictor.utils import polars_utils
 
 def _schedule_rows(*rows: dict) -> pl.DataFrame:
     """Create a minimal schedule DataFrame for standings computation."""
-
     return pl.DataFrame(list(rows)).with_columns(
         [
             pl.col("season").cast(pl.Int32),
@@ -26,13 +25,11 @@ def _schedule_rows(*rows: dict) -> pl.DataFrame:
 
 def _games_to_predict(away: str, home: str) -> pl.DataFrame:
     """Create a minimal games_df with required team columns."""
-
     return pl.DataFrame({"away_abbr": [away], "home_abbr": [home]})
 
 
 def test_motivation_features_use_only_prior_weeks() -> None:
     """Week N motivation must ignore results from week N and later."""
-
     season = 2024
 
     # Pick two teams in the same division to keep comparisons meaningful.
@@ -78,7 +75,6 @@ def test_motivation_features_use_only_prior_weeks() -> None:
 
 def test_motivation_features_invariant_schema_on_missing_scores() -> None:
     """When schedule scores are missing, motivation columns should exist as nulls."""
-
     season = 2024
 
     schedule_missing_scores = pl.DataFrame(
@@ -112,7 +108,6 @@ def test_motivation_division_clinch_proxy_uses_max_wins_other() -> None:
     This test uses a minimal scheduled season for the AFC East teams so the leader can clinch
     early in a toy setup.
     """
-
     season = 2024
 
     schedule = _schedule_rows(

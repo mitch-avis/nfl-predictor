@@ -58,7 +58,6 @@ def _sigmoid(x: np.ndarray | float) -> np.ndarray:
 
 def clamp_prob(p: pd.Series | np.ndarray, *, eps: float = 0.03) -> np.ndarray:
     """Clamp probabilities into (eps, 1-eps) to keep logits finite."""
-
     arr = np.asarray(p, dtype=float)
     return np.clip(arr, eps, 1.0 - eps)
 
@@ -73,7 +72,6 @@ def outcome_to_home_prob(
 
     Ties are represented as 0.5.
     """
-
     home = pd.to_numeric(home_score, errors="coerce")
     away = pd.to_numeric(away_score, errors="coerce")
     margin = home - away
@@ -106,8 +104,8 @@ def fit_bradley_terry_ratings(
 
     Returns:
         (team_rating_series, home_advantage)
-    """
 
+    """
     required = {home_team_col, away_team_col, p_home_col}
     missing = sorted(required - set(games.columns))
     if missing:
@@ -167,7 +165,6 @@ def scale_ratings_1_to_10(ratings_raw: pd.Series) -> pd.Series:
       on a neutral field (under the Bradley–Terry logit model).
     - We map that probability into a display-friendly 1..10 scale.
     """
-
     x = ratings_raw.astype(float)
     p_vs_avg = _sigmoid(x.to_numpy())
     scaled = 1.0 + 9.0 * p_vs_avg
@@ -180,7 +177,6 @@ def ratings_to_power_0_to_10(ratings_raw: pd.Series) -> pd.Series:
     `10 * sigmoid(rating_raw)` is interpretable as a 0–10 strength score derived
     from win probability vs an average team on a neutral field.
     """
-
     x = ratings_raw.astype(float)
     scaled = 10.0 * _sigmoid(x.to_numpy())
     return pd.Series(scaled, index=x.index, name="power_rating_0_10").round(2)
@@ -194,7 +190,6 @@ def compute_projected_standings(
     p_home_col: str = "home_win_prob",
 ) -> pd.DataFrame:
     """Compute expected final record = current record + expected future results."""
-
     required_records = {"team_abbr", "wins", "losses", "ties", "games_played"}
     missing = sorted(required_records - set(current_records.columns))
     if missing:
@@ -299,7 +294,6 @@ def build_power_rankings_and_standings(
     future_games_with_probs: pd.DataFrame,
 ) -> PowerRatingsResult:
     """Build power rankings and projected standings tables."""
-
     # Ratings fit uses a combined table with a `p_home` target.
     ratings_raw, home_adv = fit_bradley_terry_ratings(games_for_ratings)
     power_rating_1_10 = scale_ratings_1_to_10(ratings_raw)

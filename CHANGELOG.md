@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.2.1] - 2026-06-12
+
+### Changed
+
+- Resolve all 444 pyright type errors: add `pandas-stubs` dev dependency and introduce
+  `_fit_transform_matrix`/`_transform_matrix` helpers in `ml_model_xgb_utils.py` to narrow sklearn's
+  broad `ColumnTransformer` return type; update 23 call sites across 6 files ([`586ffb6`])
+- Tighten the repo's agent workflow around TDD-first execution and relevant skill usage in
+  `AGENTS.md`, `TODO.md`, and `docs/next_agent_session_prompt.md` ([`586ffb6`])
+- Promote `ty` to a mandatory peer gate alongside `pyright` and update repo guidance to reflect the
+  passing dual-checker baseline ([`586ffb6`])
+
+### Added
+
+- Add regression tests for typed transform wrappers and the core margin/total prediction helper
+  paths that now rely on them ([`586ffb6`])
+- Add focused characterization tests for `_coerce_score_value`, `get_team_name`, and `_import_shap`
+  before tightening their typing implementations ([`586ffb6`])
+
+### Fixed
+
+- Fix `schedule_df` type-narrowing after try/except in `validation_utils.py` ([`586ffb6`])
+- Fix the remaining `ty` diagnostics in walk-forward metrics, optional SHAP loading, feature
+  importance coercion, TeamRankings name resolution, Polars trend schema typing, and walk-forward
+  test config reconstruction ([`586ffb6`])
+- Fix `None` placeholder arguments in checkpoint and model-compare test fixtures using `cast()`
+  ([`586ffb6`])
+
 ## [0.2.0] - 2026-06-12
 
 _This release backfills the changelog from the historical `0.1.0` baseline on `main`._
@@ -49,8 +77,10 @@ _This release backfills the changelog from the historical `0.1.0` baseline on `m
 _Historical baseline on `main` before changelog adoption. Add a matching git tag before automating
 releases._
 
+[0.2.1]: https://github.com/mitch-avis/nfl-predictor/compare/9c04dc4...586ffb6
 [0.2.0]: https://github.com/mitch-avis/nfl-predictor/compare/7a4d4c7...main
 [0.1.0]: https://github.com/mitch-avis/nfl-predictor/commit/7a4d4c7
+[`586ffb6`]: https://github.com/mitch-avis/nfl-predictor/commit/586ffb6
 [`240f814`]: https://github.com/mitch-avis/nfl-predictor/commit/240f814
 [`78c732e`]: https://github.com/mitch-avis/nfl-predictor/commit/78c732e
 [`4f33dd6`]: https://github.com/mitch-avis/nfl-predictor/commit/4f33dd6

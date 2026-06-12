@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -37,7 +37,7 @@ class LeakageAuditConfig:
     equality_rate_threshold: float = 0.98
 
 
-def _safe_corr(x: np.ndarray, y: np.ndarray) -> Optional[float]:
+def _safe_corr(x: np.ndarray, y: np.ndarray) -> float | None:
     mask = np.isfinite(x) & np.isfinite(y)
     if int(mask.sum()) < 3:
         return None
@@ -51,7 +51,7 @@ def _safe_corr(x: np.ndarray, y: np.ndarray) -> Optional[float]:
     return corr
 
 
-def _equality_rate(x: np.ndarray, y: np.ndarray) -> Optional[float]:
+def _equality_rate(x: np.ndarray, y: np.ndarray) -> float | None:
     mask = np.isfinite(x) & np.isfinite(y)
     if int(mask.sum()) == 0:
         return None
@@ -60,7 +60,6 @@ def _equality_rate(x: np.ndarray, y: np.ndarray) -> Optional[float]:
 
 def run_leakage_audit(df: pd.DataFrame, config: LeakageAuditConfig) -> dict[str, Any]:
     """Run a leakage audit on a dataset and return a JSON-serializable report."""
-
     target_away, target_home = ml_model.get_target_columns(df)
     target_cols = (target_away, target_home)
 
@@ -175,7 +174,6 @@ def run_leakage_audit(df: pd.DataFrame, config: LeakageAuditConfig) -> dict[str,
 
 def write_report(report: dict[str, Any], out_path) -> None:
     """Write a leakage audit report to disk."""
-
     out_path = str(out_path)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, sort_keys=True)

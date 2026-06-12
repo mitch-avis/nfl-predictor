@@ -53,7 +53,7 @@ try:
         outcome_to_home_prob,
     )
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     import sys
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -127,7 +127,6 @@ def _pl_to_pandas(df: pl.DataFrame) -> pd.DataFrame:
     Polars' `to_pandas()` requires `pyarrow` in many environments; for this reporting script,
     using `to_dicts()` keeps the dependency surface smaller.
     """
-
     if df.is_empty():
         # Preserve the schema so downstream code can rely on column presence even when
         # there are zero rows (e.g., postseason weeks with no future REG games).
@@ -140,7 +139,6 @@ POSTSEASON_GAME_TYPES = frozenset({"WC", "DIV", "CON", "SB", "POST"})
 
 def _filter_by_game_type(df: pl.DataFrame, *, include_postseason: bool) -> pl.DataFrame:
     """Filter to regular season (or regular + postseason) games when game_type exists."""
-
     if "game_type" not in df.columns:
         return df
     game_type = pl.col("game_type").cast(pl.Utf8).str.to_uppercase()
@@ -158,7 +156,6 @@ def _load_current_records(
     include_postseason: bool = False,
 ) -> pd.DataFrame:
     """Load current records through the specified week."""
-
     df = (
         pl.read_csv(schedule_path)
         .select(
@@ -219,7 +216,6 @@ def _missing_market_inputs(
     available_cols: set[str],
 ) -> list[str]:
     """Return market-derived feature names that lack required raw inputs."""
-
     required = set(required_features)
     missing: list[str] = []
 
@@ -241,7 +237,6 @@ def _missing_market_inputs(
 
 def _format_missing_columns(missing: list[str], *, limit: int = 10) -> str:
     """Format a missing-column list for error messages."""
-
     unique = sorted(set(missing))
     if len(unique) <= limit:
         return ", ".join(unique)
@@ -259,7 +254,6 @@ def _predict_future_games(
     include_postseason: bool = False,
 ) -> pd.DataFrame:
     """Predict future games for the specified season."""
-
     # Load a season slice from the ML dataset (REG only by default), then predict for future games.
     # We read only the columns required by the model's FeatureSpec.
     spec = getattr(model, "feature_spec", None)
@@ -448,7 +442,6 @@ def _write_outputs(
 
 def main() -> int:
     """Main script entry point."""
-
     args = _parse_args()
 
     if not args.model_in.exists():

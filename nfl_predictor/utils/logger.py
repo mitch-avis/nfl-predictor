@@ -1,5 +1,4 @@
-"""
-Implements a logging system for the NFL predictor project, providing a unified approach to logging
+"""Implements a logging system for the NFL predictor project, providing a unified approach to logging
 across the application. This module configures log levels and formats, facilitating debugging and
 monitoring by recording operational events and errors.
 

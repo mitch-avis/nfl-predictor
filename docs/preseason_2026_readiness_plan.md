@@ -9,18 +9,18 @@ feature work for the 2026-2027 NFL season.
 
 The following checks were run on 2026-06-12 against the refreshed `.venv`:
 
-| Check                             | Result      | Notes                                                              |
-| --------------------------------- | ----------- | ------------------------------------------------------------------ |
-| `.venv/bin/ruff format --check .` | Pass        | `104 files already formatted`                                      |
-| `.venv/bin/ruff check .`          | Fail        | `69` remaining diagnostics                                         |
-| `.venv/bin/pyright .`             | Fail        | Broad pandas-heavy typing issues                                   |
-| `.venv/bin/ty check .`            | Fail        | Broad typing issues; currently advisory                            |
-| `.venv/bin/python -m pytest`      | Pass        | `238 passed`                                                       |
-| Coverage from pytest              | Fail target | `78%`, below the new preseason target of `90%` or higher           |
-| `markdownlint .`                  | Pass        | `0 error(s)`                                                       |
-| `uv lock --check`                 | Pass        | Lockfile is in sync with `pyproject.toml`                          |
-| `uv sync --check --active`        | Pass        | Active project environment matches `uv.lock`                       |
-| Primary CLI help smoke checks     | Pass        | `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py` |
+| Check                             | Result      | Notes                                                                         |
+| --------------------------------- | ----------- | ----------------------------------------------------------------------------- |
+| `.venv/bin/ruff format --check .` | Pass        | `104 files already formatted`                                                 |
+| `.venv/bin/ruff check .`          | Pass        | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions |
+| `.venv/bin/pyright .`             | Fail        | Broad pandas-heavy typing issues                                              |
+| `.venv/bin/ty check .`            | Fail        | Broad typing issues; currently advisory                                       |
+| `.venv/bin/python -m pytest`      | Pass        | `238 passed`                                                                  |
+| Coverage from pytest              | Fail target | `78%`, below the new preseason target of `90%` or higher                      |
+| `markdownlint .`                  | Pass        | `0 error(s)`                                                                  |
+| `uv lock --check`                 | Pass        | Lockfile is in sync with `pyproject.toml`                                     |
+| `uv sync --check --active`        | Pass        | Active project environment matches `uv.lock`                                  |
+| Primary CLI help smoke checks     | Pass        | `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`            |
 
 ## Tooling Recommendations
 
@@ -92,12 +92,10 @@ Exit criteria:
 
 ### 2. Burn down the remaining Ruff diagnostics
 
-- Add missing package docstrings.
-- Fix docstring-style issues in modules and entrypoints.
-- Address security findings such as `S110` and `S607` with code changes or explicit, justified
-  suppressions.
-- Refactor or intentionally scope the long-formula strings in `betting_excel.py`.
-- Resolve simplify and NumPy diagnostics where the change is truly safe.
+- Package/module docstrings, entrypoint docstring-style fixes, safe simplify rewrites,
+  security-justified suppressions (S110, S607, S101), NumPy RNG suppressions, and domain-appropriate
+  Excel formula line suppressions (E501) are complete. **Ruff now passes cleanly: 0 remaining
+  diagnostics.**
 - Prefer structural fixes over reintroducing broad `noqa`, `type: ignore`, or `pragma` comments.
 
 Exit criteria:

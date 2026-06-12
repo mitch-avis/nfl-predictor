@@ -721,10 +721,7 @@ def _fit_blend_ridge_constrained(
 
     coef = np.maximum(coef, 0.0)
     coef_sum = float(coef.sum())
-    if coef_sum <= 0:
-        coef = np.array([0.5, 0.5], dtype=float)
-    else:
-        coef = coef / coef_sum
+    coef = np.array([0.5, 0.5], dtype=float) if coef_sum <= 0 else coef / coef_sum
 
     # Keep an intercept term but recompute it after constraining weights.
     intercept = float(np.mean(y - x @ coef))
@@ -1289,7 +1286,7 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
                     saved_xgb,
                     current_xgb,
                 )
-    except Exception:
+    except Exception:  # noqa: S110 (silent exception on missing xgboost version is safe)
         pass
 
     model = _ensure_backward_compatible_model(model)
@@ -1665,7 +1662,8 @@ def _run_optuna_search(
     if optuna is None:
         raise ImportError("Optuna is required for hyperparameter tuning.")
     optuna_module = optuna
-    assert optuna_module is not None
+    # After the ImportError check above, this is guaranteed non-None, but Pylance may not track it.
+    # The assignment above establishes the variable in local scope for type narrowing.
     if holdout_seasons:
         if "season" not in df.columns:
             raise ValueError("Optuna tuning requires a season column for holdout checks.")
@@ -1779,10 +1777,7 @@ def _run_optuna_search(
     best_params: dict[str, Any] = {}
     items = best_params_raw.items()
     for key, value in items:
-        if isinstance(key, bytes):
-            key_str = key.decode("utf-8", errors="replace")
-        else:
-            key_str = str(key)
+        key_str = key.decode("utf-8", errors="replace") if isinstance(key, bytes) else str(key)
         best_params[key_str] = value
 
     resolved_best = _resolve_xgb_params(

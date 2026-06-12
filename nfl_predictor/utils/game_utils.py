@@ -251,15 +251,9 @@ def fill_future_qb_data(
     has_away_qb = "away_qb" in df.columns
     has_home_qb = "home_qb" in df.columns
 
-    if has_away_qb:
-        null_away = df.filter(pl.col("away_qb").is_null())
-    else:
-        null_away = df  # All rows need QB data
+    null_away = df.filter(pl.col("away_qb").is_null()) if has_away_qb else df
 
-    if has_home_qb:
-        null_home = df.filter(pl.col("home_qb").is_null())
-    else:
-        null_home = df
+    null_home = df.filter(pl.col("home_qb").is_null()) if has_home_qb else df
 
     if null_away.height == 0 and null_home.height == 0:
         return df

@@ -345,7 +345,7 @@ def run_walk_forward_backtest(
     fold_callback: Callable[[dict[str, Any], WalkForwardFold], None] | None = None,
 ) -> dict[str, Any]:
     """Run walk-forward training/evaluation and return metrics plus per-game predictions."""
-    np.random.seed(config.random_seed)
+    np.random.seed(config.random_seed)  # noqa: NPY002 (legacy for reproducibility)
     df = filter_regular_season(df, include_postseason=config.include_postseason)
     target_columns = ml_model.get_target_columns(df)
     df = df.dropna(subset=list(target_columns)).copy()
@@ -530,10 +530,7 @@ def run_walk_forward_backtest(
                     resolved_calibration,
                     sample_weight=calibration_recency,
                 )
-                if calibrator is None:
-                    calibration_method = "none"
-                else:
-                    calibration_method = calibrator.method
+                calibration_method = "none" if calibrator is None else calibrator.method
 
         x_eval = preprocessor.transform(ml_model.apply_feature_spec(fold.eval_df, feature_spec))
         pred_margin = ml_model._predict_xgb(margin_model, x_eval)
@@ -1022,7 +1019,7 @@ def build_metadata(
 def _git_commit_hash() -> str | None:
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 (git is fixed, not user-controlled)
             cwd=str(constants.ROOT_DIR),
             check=False,
             capture_output=True,

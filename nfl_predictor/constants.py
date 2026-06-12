@@ -1,7 +1,7 @@
-"""This module defines constants for the NFL predictor project, including configurations for paths,
-NFL season details, team abbreviations, and statistics for performance analysis. Centralizing these
-configurations helps maintain consistency and integrity across the project, simplifying management
-and updates.
+"""Define shared constants for the NFL predictor project.
+
+This module centralizes paths, season rules, team mappings, and schema metadata so ETL,
+modeling, and reporting code stay aligned.
 """
 
 import os

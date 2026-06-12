@@ -42,7 +42,7 @@ Agents and humans should not rely on the shell activation state.
 - `markdownlint .` passes.
 - `uv lock --check` passes.
 - `uv sync --check --active` passes.
-- `.venv/bin/ruff check .` fails with 69 diagnostics.
+- `.venv/bin/ruff check .` passes cleanly.
 - `.venv/bin/pyright .` fails broadly in pandas-heavy modules.
 - `.venv/bin/ty check .` fails broadly and is currently advisory.
 - Coverage is `78%`, below the preseason target of `90%` or higher.
@@ -74,8 +74,8 @@ Tasks:
   - remove stale Black references and `.venv/bin/pip` assumptions that do not match the `uv`
     environment layout.
   - document the intended role of `update_requirements.sh`, `uv lock`, and `uv sync`.
-  - add and maintain `CHANGELOG.md` using Common Changelog, with `0.1.0` on `main` as the
-    historical baseline for future tagged releases.
+  - add and maintain `CHANGELOG.md` using Common Changelog, with `0.1.0` on `main` as the historical
+    baseline for future tagged releases.
   - decide whether to add nested README files for `ml` and `reporting`, or add that work to the
     active plan explicitly.
 - [ ] Reconcile `pyproject.toml` metadata and tool configuration:
@@ -88,8 +88,13 @@ Tasks:
   - keep `pyright` as the primary blocking type checker until parity is proven on this repo.
   - evaluate a minimal `[tool.ty]` configuration for environment, include paths, and test overrides.
   - document which checker is blocking and which checker is advisory during the transition.
-- [ ] Close the current Ruff debt:
-  - fix missing package docstrings and docstring-style violations.
+- [x] Close the current Ruff debt:
+  - All Ruff findings (69 → 0) are resolved:
+    - Docstring cluster: `package/__init__.py`, module headers, entrypoints (14 files)
+    - Simplify cluster: ternaries and loop returns (8 files)
+    - Security cluster: S110, S607, S101 with justified suppressions (4 files)
+    - NumPy RNG cluster: NPY002 with reproducibility justification (2 files)
+    - Excel formulas cluster: E501 with domain justification for betting_excel.py (1 file, 25 lines)
   - address security findings such as `S110` and `S607` with either code changes or documented,
     justified exceptions.
   - resolve long Excel-formula lines plus simplify and NumPy diagnostics, or explicitly scope any
@@ -107,8 +112,8 @@ Tasks:
   - evaluate a GitHub Actions validation workflow that provisions `.venv` with `uv` and runs Ruff,
     Pyright, Ty, pytest, and markdownlint.
   - decide whether to add CI now or keep the gate local during the preseason hardening pass.
-  - decide whether to add a tag-driven GitHub release workflow that publishes `CHANGELOG.md`
-    entries once version tags are standardized.
+  - decide whether to add a tag-driven GitHub release workflow that publishes `CHANGELOG.md` entries
+    once version tags are standardized.
 
 Acceptance:
 

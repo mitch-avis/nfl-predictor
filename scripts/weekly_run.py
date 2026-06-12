@@ -739,9 +739,7 @@ def _candidate_artifact_valid(
         if key not in metrics:
             return False
     summary = payload.get("summary")
-    if not isinstance(summary, dict) or not summary:
-        return False
-    return True
+    return isinstance(summary, dict) and bool(summary)
 
 
 def _build_wf_candidates(
@@ -1103,10 +1101,7 @@ def _stage_can_reuse(
     if not outputs_list:
         stored = payload.get("outputs", [])
         outputs_list = [Path(item) for item in stored]
-    for path in outputs_list:
-        if not path.exists():
-            return False
-    return True
+    return all(path.exists() for path in outputs_list)
 
 
 def _write_stage_marker(

@@ -1,4 +1,4 @@
-"""Power rankings and projected standings.
+r"""Power rankings and projected standings.
 
 This module provides utilities to:
 - compute fan-friendly 1-10 power ratings per team

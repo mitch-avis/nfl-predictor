@@ -87,21 +87,21 @@ def _to_jsonable(value: Any) -> Any:
     if callable(item):
         try:
             return _to_jsonable(item())
-        except Exception:
+        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
             pass
 
     tolist = getattr(value, "tolist", None)
     if callable(tolist):
         try:
             return _to_jsonable(tolist())
-        except Exception:
+        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
             pass
 
     isoformat = getattr(value, "isoformat", None)
     if callable(isoformat):
         try:
             return str(isoformat())
-        except Exception:
+        except Exception:  # noqa: S110 (silent fallback to str() is intentional)
             pass
 
     return str(value)
@@ -138,7 +138,7 @@ def git_commit_hash() -> str | None:
     """Return current git commit hash if available."""
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 (git is fixed, not user-controlled)
             cwd=str(constants.ROOT_DIR),
             check=False,
             capture_output=True,

@@ -77,10 +77,7 @@ def _format_xgb_overrides(overrides: dict[str, Any]) -> str:
         if key not in overrides:
             continue
         value = overrides[key]
-        if isinstance(value, float):
-            value_str = _format_float(value)
-        else:
-            value_str = str(value)
+        value_str = _format_float(value) if isinstance(value, float) else str(value)
         parts.append(f"{label}{value_str}")
     if not parts:
         return "default"

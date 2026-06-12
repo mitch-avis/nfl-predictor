@@ -57,21 +57,21 @@ def to_jsonable(value: Any) -> Any:
     if callable(item):
         try:
             return to_jsonable(item())
-        except Exception:
+        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
             pass
 
     tolist = getattr(value, "tolist", None)
     if callable(tolist):
         try:
             return to_jsonable(tolist())
-        except Exception:
+        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
             pass
 
     isoformat = getattr(value, "isoformat", None)
     if callable(isoformat):
         try:
             return str(isoformat())
-        except Exception:
+        except Exception:  # noqa: S110 (silent fallback to str() is intentional)
             pass
 
     return str(value)

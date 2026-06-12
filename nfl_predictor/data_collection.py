@@ -231,7 +231,7 @@ def _log_df_stats(label: str, df: pl.DataFrame, enabled: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Main entry point for data collection using nflreadpy.
+    """Run the nflreadpy-backed data collection pipeline.
 
     Orchestrates the data collection, processing, and storage for NFL game predictions.
     """
@@ -610,6 +610,9 @@ def process_week(
         elo_df: ELO ratings DataFrame
         tr_df: TeamRankings DataFrame for this season
         prev_tr_df: TeamRankings DataFrame for previous season (for week 1)
+        team_elo_trends: Optional rolling ELO trend features for the current season
+        qb_trends: Optional rolling quarterback trend features for the current season
+        team_stat_trends: Optional rolling team-stat trend features for the current season
         coach_features: Optional per-team coach feature DataFrame
 
     Returns:

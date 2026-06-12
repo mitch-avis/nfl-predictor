@@ -228,7 +228,7 @@ def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
 
 
 def main() -> int:
-    """Main CLI entrypoint."""
+    """Run the walk-forward comparison CLI."""
     args = _parse_args()
 
     if not args.data_path.exists():

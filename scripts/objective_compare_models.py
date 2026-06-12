@@ -93,7 +93,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    """Main entry point for objective model comparison script."""
+    """Run the objective model comparison CLI."""
     args = _parse_args()
     if not args.data_path.exists():
         raise FileNotFoundError(f"Missing dataset: {args.data_path}")

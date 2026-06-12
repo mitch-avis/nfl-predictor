@@ -514,10 +514,7 @@ def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
         team_cell = cells[team_col_idx].get_text(strip=True)
 
         # Extract team abbr (may have record in parentheses like "BUF(10-4)")
-        if "(" in team_cell:
-            team_abbr_raw = team_cell.split("(")[0].strip()
-        else:
-            team_abbr_raw = team_cell.strip()
+        team_abbr_raw = team_cell.split("(")[0].strip() if "(" in team_cell else team_cell.strip()
 
         # Normalize to canonical abbreviation
         team_abbr = constants.normalize_team_abbr(team_abbr_raw)

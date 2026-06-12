@@ -453,7 +453,7 @@ def run_objective_compare(
     bootstrap_samples: int = 0,
 ) -> dict[str, Any]:
     """Run an objective walk-forward comparison for two recipes."""
-    np.random.seed(cfg.random_seed)
+    np.random.seed(cfg.random_seed)  # noqa: NPY002 (legacy for reproducibility)
     df = walk_forward.filter_regular_season(df, include_postseason=cfg.include_postseason)
 
     target_columns = ml_model.get_target_columns(df)

@@ -816,10 +816,7 @@ def add_season_phase_features(
 
     """
     regular_weeks = constants.get_regular_season_weeks(season)
-    if regular_weeks <= 0:
-        week_norm = 0.0
-    else:
-        week_norm = min(float(week) / float(regular_weeks), 1.0)
+    week_norm = 0.0 if regular_weeks <= 0 else min(float(week) / float(regular_weeks), 1.0)
 
     early = int(week_norm <= (1.0 / 3.0))
     mid = int((1.0 / 3.0) < week_norm <= (2.0 / 3.0))

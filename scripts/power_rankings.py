@@ -219,18 +219,30 @@ def _missing_market_inputs(
     required = set(required_features)
     missing: list[str] = []
 
-    if "market_home_margin" in required and "market_home_margin" not in available_cols:
-        if not {"home_spread", "away_spread"} & available_cols:
-            missing.append("market_home_margin")
-    if "market_total_line" in required and "market_total_line" not in available_cols:
-        if "total_line" not in available_cols:
-            missing.append("market_total_line")
-    if "home_market_prob" in required and "home_market_prob" not in available_cols:
-        if "home_moneyline" not in available_cols:
-            missing.append("home_market_prob")
-    if "away_market_prob" in required and "away_market_prob" not in available_cols:
-        if "away_moneyline" not in available_cols:
-            missing.append("away_market_prob")
+    if (
+        "market_home_margin" in required
+        and "market_home_margin" not in available_cols
+        and not {"home_spread", "away_spread"} & available_cols
+    ):
+        missing.append("market_home_margin")
+    if (
+        "market_total_line" in required
+        and "market_total_line" not in available_cols
+        and "total_line" not in available_cols
+    ):
+        missing.append("market_total_line")
+    if (
+        "home_market_prob" in required
+        and "home_market_prob" not in available_cols
+        and "home_moneyline" not in available_cols
+    ):
+        missing.append("home_market_prob")
+    if (
+        "away_market_prob" in required
+        and "away_market_prob" not in available_cols
+        and "away_moneyline" not in available_cols
+    ):
+        missing.append("away_market_prob")
 
     return missing
 
@@ -441,7 +453,7 @@ def _write_outputs(
 
 
 def main() -> int:
-    """Main script entry point."""
+    """Run the power rankings CLI."""
     args = _parse_args()
 
     if not args.model_in.exists():

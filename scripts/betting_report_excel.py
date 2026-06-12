@@ -54,7 +54,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    """Main entry point for betting report Excel generation script."""
+    """Run the betting report Excel generator."""
     args = _parse_args()
     if not args.predictions.exists():
         raise FileNotFoundError(f"Missing predictions file: {args.predictions}")

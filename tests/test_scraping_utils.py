@@ -13,6 +13,7 @@ class DummyResponse:
     """Minimal requests-like response for monkeypatched HTML downloads."""
 
     def __init__(self, text: str) -> None:
+        """Store HTML payload text for the response double."""
         self.text = text
         self.content = text.encode("utf-8")
 

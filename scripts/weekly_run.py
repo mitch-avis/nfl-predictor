@@ -23,9 +23,10 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timezone
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any
 
 import pandas as pd
 
@@ -40,7 +41,7 @@ try:
     from nfl_predictor.utils import fingerprints
     from nfl_predictor.utils.logger import log
     from scripts import betting_pipeline, power_rankings
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     import sys
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -86,7 +87,6 @@ _PATH_KEYS = {
 
 def _load_config(path: Path) -> dict[str, Any]:
     """Load a JSON or YAML config file into a dict."""
-
     if not path.exists():
         raise FileNotFoundError(f"Missing config file: {path}")
 
@@ -95,8 +95,8 @@ def _load_config(path: Path) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     elif suffix in {".yaml", ".yml"}:
         try:
-            import yaml  # type: ignore[import-not-found]
-        except ImportError as exc:  # pragma: no cover
+            import yaml
+        except ImportError as exc:
             raise RuntimeError("PyYAML is required to load YAML configs.") from exc
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     else:
@@ -109,7 +109,6 @@ def _load_config(path: Path) -> dict[str, Any]:
 
 def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
     """Normalize config defaults for argparse."""
-
     normalized = dict(config)
     for key in _PATH_KEYS:
         if key in normalized and normalized[key] is not None:
@@ -119,19 +118,17 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
 
 def _allowed_config_keys(parser: argparse.ArgumentParser) -> set[str]:
     """Return allowable config keys based on parser destinations."""
-
     return {action.dest for action in parser._actions if action.dest != "help"}
 
 
 def _validate_config_keys(config: dict[str, Any], allowed: set[str]) -> None:
     """Raise if config includes unsupported keys."""
-
     unknown = sorted(set(config) - allowed)
     if unknown:
         raise ValueError(f"Unknown config keys: {unknown}")
 
 
-def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.ArgumentParser:
+def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentParser:
     defaults = defaults or {}
     parser = argparse.ArgumentParser(description="Weekly orchestration runner")
     parser.add_argument(
@@ -523,9 +520,8 @@ def _build_parser(defaults: Optional[dict[str, Any]] = None) -> argparse.Argumen
     return parser
 
 
-def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI args, loading config defaults when provided."""
-
     parser = _build_parser()
     args = parser.parse_args(argv)
     if args.config:
@@ -538,7 +534,6 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 def _config_payload(args: argparse.Namespace) -> dict[str, Any]:
     """Convert argparse namespace to a JSON-friendly dict."""
-
     payload: dict[str, Any] = {}
     for key, value in vars(args).items():
         if isinstance(value, Path):
@@ -548,16 +543,15 @@ def _config_payload(args: argparse.Namespace) -> dict[str, Any]:
     return payload
 
 
-def _extract_week(path: Path) -> Optional[int]:
+def _extract_week(path: Path) -> int | None:
     match = _WEEK_FILE_RE.search(path.name)
     if not match:
         return None
     return int(match.group(1))
 
 
-def _resolve_predict_path(predict_path: Optional[Path], data_dir: Path) -> Path:
+def _resolve_predict_path(predict_path: Path | None, data_dir: Path) -> Path:
     """Resolve the default prediction file path when not provided."""
-
     if predict_path is not None:
         if not predict_path.exists():
             raise FileNotFoundError(f"Missing predict dataset: {predict_path}")
@@ -579,9 +573,8 @@ def _resolve_predict_path(predict_path: Optional[Path], data_dir: Path) -> Path:
     return candidates[-1][1]
 
 
-def _infer_season_week(df: pd.DataFrame) -> tuple[Optional[int], Optional[int]]:
+def _infer_season_week(df: pd.DataFrame) -> tuple[int | None, int | None]:
     """Infer a single season/week from a prediction frame."""
-
     season = None
     week = None
     if "season" in df.columns:
@@ -597,11 +590,10 @@ def _infer_season_week(df: pd.DataFrame) -> tuple[Optional[int], Optional[int]]:
 
 def _resolve_output_paths(
     output_dir: Path,
-    season: Optional[int],
-    week: Optional[int],
+    season: int | None,
+    week: int | None,
 ) -> dict[str, Path]:
     """Resolve output paths for predictions and reports."""
-
     if season is not None and week is not None:
         suffix = f"season_{season}_week_{week:02d}"
     else:
@@ -617,7 +609,6 @@ def _resolve_output_paths(
 
 def _build_confidence_picks(predictions: pd.DataFrame) -> pd.DataFrame:
     """Extract confidence pool picks from a predictions DataFrame."""
-
     if "home_win_prob" not in predictions.columns:
         raise ValueError("Predictions missing home_win_prob for confidence picks.")
 
@@ -659,7 +650,6 @@ def _build_confidence_picks(predictions: pd.DataFrame) -> pd.DataFrame:
 
 def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
     """Resolve which market modes to evaluate."""
-
     if mode == "features":
         return [("features", True, False)]
     if mode == "anchor":
@@ -671,7 +661,6 @@ def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
 
 def _pick_best_row(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Pick best row by (brier, log_loss) ascending."""
-
     if not rows:
         raise ValueError("No walk-forward rows produced.")
 
@@ -686,20 +675,17 @@ def _pick_best_row(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
 
 def _wf_compare_dir(run_dir: Path) -> Path:
     """Return the walk-forward comparison artifact directory."""
-
     return run_dir / "wf_compare"
 
 
 def _candidate_artifact_path(run_dir: Path, candidate_key: str) -> Path:
     """Return the per-candidate artifact path for a candidate key."""
-
     safe_key = re.sub(r"[^A-Za-z0-9_.-]+", "_", candidate_key)
     return _wf_compare_dir(run_dir) / f"wf_candidate_{safe_key}.json"
 
 
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     """Write JSON to disk atomically."""
-
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     tmp_path.write_text(
@@ -711,7 +697,6 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _atomic_write_csv(path: Path, frame: pd.DataFrame) -> None:
     """Write CSV to disk atomically."""
-
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     frame.to_csv(tmp_path, index=False)
@@ -720,14 +705,12 @@ def _atomic_write_csv(path: Path, frame: pd.DataFrame) -> None:
 
 def _load_candidate_artifact(path: Path) -> dict[str, Any]:
     """Load a candidate artifact JSON payload."""
-
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _mark_corrupt_artifact(path: Path) -> None:
     """Move a corrupt artifact aside with a timestamp suffix."""
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     corrupt_path = path.with_suffix(f"{path.suffix}.corrupt.{timestamp}")
     os.replace(path, corrupt_path)
 
@@ -740,7 +723,6 @@ def _candidate_artifact_valid(
     wf_run_fingerprint: str,
 ) -> bool:
     """Return True when a candidate artifact matches the expected fingerprints."""
-
     if not payload:
         return False
     if payload.get("candidate_key") != candidate_key:
@@ -769,8 +751,8 @@ def _build_wf_candidates(
     calibration_weeks: int,
     include_postseason: bool,
     exclude_incomplete_seasons: bool,
-    recency_half_life_weeks: Optional[float],
-    recency_half_life_seasons: Optional[float],
+    recency_half_life_weeks: float | None,
+    recency_half_life_seasons: float | None,
     market_mode: str,
     market_prob_source: str,
     market_prob_blend_method: str,
@@ -780,7 +762,6 @@ def _build_wf_candidates(
     include_quantiles: bool,
 ) -> list[dict[str, Any]]:
     """Enumerate walk-forward candidates for comparison."""
-
     rows: list[dict[str, Any]] = []
     market_sources = ["raw", "novig"] if market_prob_source == "both" else [market_prob_source]
     blend_methods = (
@@ -851,7 +832,6 @@ def _build_summary_row(
     duration_seconds: float,
 ) -> dict[str, Any]:
     """Build a summary row from walk-forward results."""
-
     overall = results.get("overall", {})
     reliability = results.get("reliability", [])
     row: dict[str, Any] = {
@@ -879,7 +859,7 @@ def _build_summary_row(
         "dataset_fingerprint": dataset_sha256,
         "wf_run_fingerprint": wf_run_fingerprint,
         "duration_seconds": float(duration_seconds),
-        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": datetime.now(UTC).isoformat(),
     }
     return row
 
@@ -891,13 +871,12 @@ def _append_fold_progress(
     metrics: dict[str, Any],
 ) -> None:
     """Append a JSONL fold progress entry."""
-
     payload = {
         "candidate_key": candidate_key,
         "season": metrics.get("season"),
         "week": metrics.get("week"),
         "metrics": metrics,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(fingerprints.to_jsonable(payload)) + "\n")
@@ -905,12 +884,11 @@ def _append_fold_progress(
 
 def _upsert_summary(
     summary_df: pd.DataFrame,
-    summary_row: Optional[dict[str, Any]],
+    summary_row: dict[str, Any] | None,
     *,
-    full_frame: Optional[pd.DataFrame] = None,
+    full_frame: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Insert or replace a summary row by candidate key."""
-
     if full_frame is not None:
         return full_frame.reset_index(drop=True)
     if summary_row is None:
@@ -923,7 +901,6 @@ def _upsert_summary(
 
 def _rank_summary(frame: pd.DataFrame) -> pd.DataFrame:
     """Add a rank column using (brier, log_loss) ordering."""
-
     if frame.empty:
         return frame
     ranked = frame.sort_values(["brier", "log_loss"], ascending=[True, True]).reset_index(drop=True)
@@ -944,8 +921,8 @@ def _run_wf_compare(
     calibration_weeks: int,
     include_postseason: bool,
     exclude_incomplete_seasons: bool,
-    recency_half_life_weeks: Optional[float],
-    recency_half_life_seasons: Optional[float],
+    recency_half_life_weeks: float | None,
+    recency_half_life_seasons: float | None,
     market_mode: str,
     market_prob_source: str,
     market_prob_blend_method: str,
@@ -955,7 +932,6 @@ def _run_wf_compare(
     include_quantiles: bool,
 ) -> pd.DataFrame:
     """Run a walk-forward comparison matrix with resumable checkpoints."""
-
     wf_dir = _wf_compare_dir(run_dir)
     wf_dir.mkdir(parents=True, exist_ok=True)
     summary_path = wf_dir / "wf_summary.csv"
@@ -1039,9 +1015,7 @@ def _run_wf_compare(
             xgb_params_overrides=xgb_params_overrides,
         )
 
-        fold_callback: Optional[Callable[[dict[str, Any], walk_forward.WalkForwardFold], None]] = (
-            None
-        )
+        fold_callback: Callable[[dict[str, Any], walk_forward.WalkForwardFold], None] | None = None
         if checkpoint_per_fold:
 
             def fold_progress_callback(
@@ -1052,7 +1026,6 @@ def _run_wf_compare(
                 path: Path = fold_progress_path,
             ) -> None:
                 """Write a per-fold progress record for the current candidate."""
-
                 _append_fold_progress(path, candidate_key=candidate_key, metrics=metrics)
 
             fold_callback = fold_progress_callback
@@ -1079,7 +1052,7 @@ def _run_wf_compare(
                 "resolved_settings": out.get("resolved_settings"),
             },
             "summary": summary_row,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "duration_seconds": float(duration),
         }
         _atomic_write_json(artifact_path, candidate_payload)
@@ -1119,7 +1092,6 @@ def _stage_can_reuse(
     outputs: list[Path],
 ) -> bool:
     """Check whether a stage marker matches and outputs exist."""
-
     if not marker_path.exists():
         return False
     payload = json.loads(marker_path.read_text(encoding="utf-8"))
@@ -1143,13 +1115,13 @@ def _write_stage_marker(
     dataset_hash: str,
     config_hash: str,
     stage: str,
-    extra: Optional[dict[str, Any]] = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     payload = {
         "stage": stage,
         "dataset_hash": dataset_hash,
         "config_hash": config_hash,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     if extra:
         payload.update(extra)
@@ -1166,7 +1138,6 @@ def _write_training_artifacts(
     config_payload: dict[str, Any],
 ) -> artifacts.RunPaths:
     """Write model, metrics, and metadata artifacts."""
-
     paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
     artifacts.save_model(paths.model_path, result.model)
 
@@ -1204,7 +1175,6 @@ def _write_training_artifacts(
 
 def _market_mode_flags(mode: str) -> tuple[bool, bool]:
     """Return include_market and market_anchor flags for a mode label."""
-
     if mode == "features":
         return True, False
     if mode == "anchor":
@@ -1225,7 +1195,6 @@ def _power_rankings_outputs(out_dir: Path, season: int, through_week: int) -> li
 
 def main() -> int:
     """CLI entrypoint."""
-
     args = _parse_args()
     if (
         args.wf_recency_half_life_weeks is not None
@@ -1255,7 +1224,7 @@ def main() -> int:
 
     dataset_hash = artifacts.sha256_file(args.data_path)
     dataset_fingerprint = fingerprints.dataset_fingerprint(args.data_path)
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     config_payload = _config_payload(args)
     run_id = args.run_id or artifacts.generate_run_id("weekly", dataset_hash, config_payload)

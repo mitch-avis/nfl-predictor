@@ -8,7 +8,6 @@ It exists specifically to avoid the common pitfall:
 - scoring a model on games it was trained on (optimistic / biased)
 
 Example:
-
   python scripts/objective_compare_models.py \
     --model-a models/week19_fullhistory_postseason_elo_gpu_24h/model.joblib \
     --model-b models/betting_20260110_065502_ede59f27/model.joblib \
@@ -19,12 +18,13 @@ Outputs are written under --out-dir (default: models/compare_<timestamp>/).
 
 Note on .xlsb:
 This script does not produce spreadsheets; see scripts/betting_report_excel.py.
+
 """
 
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -38,7 +38,7 @@ try:
         write_compare_outputs,
     )
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     import sys
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -54,7 +54,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 def _default_out_dir() -> Path:
-    stamp = datetime.now(timezone.utc).strftime("compare_%Y%m%d_%H%M%S")
+    stamp = datetime.now(UTC).strftime("compare_%Y%m%d_%H%M%S")
     return Path("models") / stamp
 
 
@@ -94,7 +94,6 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Main entry point for objective model comparison script."""
-
     args = _parse_args()
     if not args.data_path.exists():
         raise FileNotFoundError(f"Missing dataset: {args.data_path}")

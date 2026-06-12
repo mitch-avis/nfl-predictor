@@ -14,7 +14,6 @@ from nfl_predictor.ml import ml_model_core as core
 
 def test_optuna_direction_maximize_and_minimize() -> None:
     """Selects maximize for accuracy/points objectives; minimize otherwise."""
-
     assert core._optuna_direction("expected_points") == "maximize"
     assert core._optuna_direction("winner_accuracy") == "maximize"
     assert core._optuna_direction("margin_mae") == "minimize"
@@ -22,7 +21,6 @@ def test_optuna_direction_maximize_and_minimize() -> None:
 
 def test_select_objective_score_supported_metrics() -> None:
     """Selects the correct scalar objective for supported names."""
-
     metrics = {
         "margin_mae": 3.0,
         "total_mae": 7.0,
@@ -41,7 +39,6 @@ def test_select_objective_score_supported_metrics() -> None:
 
 def test_select_objective_score_missing_metrics_defaults() -> None:
     """Uses safe defaults for optional objective inputs."""
-
     metrics = {"margin_mae": 3.0, "total_mae": 7.0, "winner_accuracy": 0.55}
     pool = {}
 
@@ -51,6 +48,5 @@ def test_select_objective_score_missing_metrics_defaults() -> None:
 
 def test_select_objective_score_unknown_raises() -> None:
     """Raises ValueError for unknown objective names."""
-
     with pytest.raises(ValueError, match=r"Unknown objective metric"):
         core._select_objective_score({"margin_mae": 1.0, "total_mae": 1.0}, {}, "nope")

@@ -21,7 +21,6 @@ from nfl_predictor.utils import polars_utils
 
 def test_select_final_columns_enforces_invariant_schema() -> None:
     """select_final_columns always produces the full expected schema."""
-
     final_order = polars_utils.build_final_column_order()
 
     # Minimal input missing most columns.
@@ -59,7 +58,6 @@ def test_select_final_columns_enforces_invariant_schema() -> None:
 
 def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypatch) -> None:
     """Training report includes missing-data prevalence summary."""
-
     # Minimal training CSV that includes the default feature range endpoints.
     # We leave market fields entirely null to simulate historical missing coverage.
     df = pd.DataFrame(

@@ -12,7 +12,6 @@ from scripts import weekly_run
 
 def test_load_config_json(tmp_path: Path) -> None:
     """JSON configs should load into a dict."""
-
     config_path = tmp_path / "weekly.json"
     config_path.write_text(json.dumps({"wf_eval_last_n_seasons": 4}), encoding="utf-8")
     payload = weekly_run._load_config(config_path)
@@ -21,7 +20,6 @@ def test_load_config_json(tmp_path: Path) -> None:
 
 def test_load_config_yaml_optional(tmp_path: Path) -> None:
     """YAML configs should parse when PyYAML is available or raise a clear error."""
-
     config_path = tmp_path / "weekly.yaml"
     config_path.write_text("wf_eval_last_n_seasons: 3\n", encoding="utf-8")
     try:
@@ -34,7 +32,6 @@ def test_load_config_yaml_optional(tmp_path: Path) -> None:
 
 def test_resolve_predict_path_prefers_latest_week(tmp_path: Path) -> None:
     """When predict_path is None, the newest week file should be chosen."""
-
     predict_dir = tmp_path / "predict"
     predict_dir.mkdir()
     week_01 = predict_dir / "week_01_games_to_predict.csv"
@@ -48,7 +45,6 @@ def test_resolve_predict_path_prefers_latest_week(tmp_path: Path) -> None:
 
 def test_build_confidence_picks_adds_winner_and_rank() -> None:
     """Confidence picks should include predicted winners and ranks."""
-
     df = pd.DataFrame(
         {
             "away_abbr": ["A", "B"],
@@ -65,7 +61,6 @@ def test_build_confidence_picks_adds_winner_and_rank() -> None:
 
 def test_stage_marker_reuse(tmp_path: Path) -> None:
     """Stage markers should only reuse when hashes match and outputs exist."""
-
     marker = tmp_path / "stage_state.json"
     output_path = tmp_path / "output.csv"
     output_path.write_text("ok", encoding="utf-8")

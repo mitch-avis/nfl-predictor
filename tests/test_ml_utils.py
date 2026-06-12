@@ -20,7 +20,6 @@ def _capture_logs(messages: list[str]) -> Any:
 
 def test_display_predictions_logs(monkeypatch) -> None:
     """Predictions are logged in expected format."""
-
     messages: list[str] = []
     monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
 
@@ -42,7 +41,6 @@ def test_display_predictions_logs(monkeypatch) -> None:
 
 def test_display_weekly_predictions_empty(monkeypatch) -> None:
     """Empty predictions DataFrame logs appropriate message."""
-
     messages: list[str] = []
     monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
 
@@ -53,7 +51,6 @@ def test_display_weekly_predictions_empty(monkeypatch) -> None:
 
 def test_display_weekly_predictions_missing_team_columns(monkeypatch) -> None:
     """Missing team columns log appropriate message."""
-
     messages: list[str] = []
     monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
 
@@ -65,7 +62,6 @@ def test_display_weekly_predictions_missing_team_columns(monkeypatch) -> None:
 
 def test_display_weekly_predictions_formats(monkeypatch) -> None:
     """Weekly predictions are logged in expected format."""
-
     messages: list[str] = []
     monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
 
@@ -91,7 +87,6 @@ def test_display_weekly_predictions_formats(monkeypatch) -> None:
 
 def test_flatten_and_nested_dict_to_df() -> None:
     """Nested dicts are flattened and converted to DataFrame correctly."""
-
     nested = {"alpha": {"x": 1, "y": 2}, "beta": {"z": 3}}
     flat = ml_utils.flatten_dict(nested)
 
@@ -105,6 +100,5 @@ def test_flatten_and_nested_dict_to_df() -> None:
 
 def test_utils_ml_utils_facade() -> None:
     """Compatibility ml_utils functions are correctly mapped."""
-
     assert compat_ml_utils.flatten_dict is ml_utils.flatten_dict
     assert "display_predictions" in dir(compat_ml_utils)

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.3] - 2026-06-12
+
+### Changed
+
+- Raise the validated pytest baseline to `326 passed` / `86%` coverage after the latest preseason
+  coverage hardening slices ([`2351b2b`])
+
+### Added
+
+- Add focused coverage across sample weights, validation utilities, CLI orchestration,
+  feature-spec helpers, feature-importance fallbacks, data-collection ETL control flow, and
+  walk-forward helper branches, bringing several support modules to `100%` coverage and lifting
+  `nfl_predictor/data_collection.py` to `89%` plus `nfl_predictor/ml/walk_forward.py` to `94%`
+  ([`2351b2b`])
+
 ## [0.2.2] - 2026-06-12
 
 ### Changed
@@ -97,10 +112,12 @@ _This release backfills the changelog from the historical `0.1.0` baseline on `m
 _Historical baseline on `main` before changelog adoption. Add a matching git tag before automating
 releases._
 
+[0.2.3]: https://github.com/mitch-avis/nfl-predictor/compare/47402e2...2351b2b
 [0.2.2]: https://github.com/mitch-avis/nfl-predictor/compare/586ffb6...47402e2
 [0.2.1]: https://github.com/mitch-avis/nfl-predictor/compare/9c04dc4...586ffb6
 [0.2.0]: https://github.com/mitch-avis/nfl-predictor/compare/7a4d4c7...main
 [0.1.0]: https://github.com/mitch-avis/nfl-predictor/commit/7a4d4c7
+[`2351b2b`]: https://github.com/mitch-avis/nfl-predictor/commit/2351b2b
 [`47402e2`]: https://github.com/mitch-avis/nfl-predictor/commit/47402e2
 [`586ffb6`]: https://github.com/mitch-avis/nfl-predictor/commit/586ffb6
 [`240f814`]: https://github.com/mitch-avis/nfl-predictor/commit/240f814

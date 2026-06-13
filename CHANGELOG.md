@@ -4,8 +4,8 @@
 
 ### Changed
 
-- Raise the validated pytest baseline to `391 passed` / `90%` coverage, and confirm editable
-  install plus primary CLI help smoke checks on Python 3.14 ([`05f2931`])
+- Raise the validated pytest baseline to `391 passed` / `90%` coverage, and confirm editable install
+  plus primary CLI help smoke checks on Python 3.14 ([`05f2931`])
 
 ### Added
 
@@ -16,10 +16,9 @@
   walk-forward helper branches, bringing several support modules to `100%` coverage and lifting
   `nfl_predictor/data_collection.py` to `89%`, `nfl_predictor/ml/ml_model_core.py` to `76%`,
   `nfl_predictor/ml/ml_model_training.py` to `88%`, `nfl_predictor/ml/leakage_audit.py` to `93%`,
-  `nfl_predictor/utils/game_utils.py` to `94%`,
-  `nfl_predictor/utils/scraping_utils.py` to `96%`,
-  `nfl_predictor/utils/polars/teamrankings.py` to `90%`, and
-  `nfl_predictor/ml/walk_forward.py` to `94%` ([`05f2931`])
+  `nfl_predictor/utils/game_utils.py` to `94%`, `nfl_predictor/utils/scraping_utils.py` to `96%`,
+  `nfl_predictor/utils/polars/teamrankings.py` to `90%`, and `nfl_predictor/ml/walk_forward.py` to
+  `94%` ([`05f2931`])
 
 ### Fixed
 

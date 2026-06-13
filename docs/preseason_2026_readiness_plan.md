@@ -9,19 +9,19 @@ feature work for the 2026-2027 NFL season.
 
 The following checks were run on 2026-06-13 against the refreshed `.venv`:
 
-| Check                             | Result      | Notes                                                                                            |
-| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
-| `.venv/bin/ruff format --check .` | Pass        | `104 files already formatted`                                                                    |
-| `.venv/bin/ruff check .`          | Pass        | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions                    |
-| `.venv/bin/pyright .`             | **Pass**    | **0 errors** after adding `pandas-stubs` and `_fit_transform_matrix`/`_transform_matrix` helpers |
-| `.venv/bin/ty check .`            | Pass        | `0 errors`; now mandatory alongside `pyright`                                                    |
-| `.venv/bin/python -m pytest`      | Pass        | `391 passed`                                                                                     |
-| Coverage from pytest              | Pass        | `90%`, meeting the preseason target of `90%` or higher                                           |
-| `markdownlint .`                  | Pass        | `0 error(s)`                                                                                     |
-| `uv lock --check`                 | Pass        | Lockfile is in sync with `pyproject.toml`                                                        |
-| `uv sync --check --active`        | Pass        | Active project environment matches `uv.lock`                                                     |
-| Editable install smoke check      | Pass        | `uv pip install --python .venv/bin/python -e . --no-deps` succeeds                              |
-| Primary CLI help smoke checks     | Pass        | `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`                               |
+| Check                             | Result   | Notes                                                                                            |
+| --------------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `.venv/bin/ruff format --check .` | Pass     | `104 files already formatted`                                                                    |
+| `.venv/bin/ruff check .`          | Pass     | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions                    |
+| `.venv/bin/pyright .`             | **Pass** | **0 errors** after adding `pandas-stubs` and `_fit_transform_matrix`/`_transform_matrix` helpers |
+| `.venv/bin/ty check .`            | Pass     | `0 errors`; now mandatory alongside `pyright`                                                    |
+| `.venv/bin/python -m pytest`      | Pass     | `391 passed`                                                                                     |
+| Coverage from pytest              | Pass     | `90%`, meeting the preseason target of `90%` or higher                                           |
+| `markdownlint .`                  | Pass     | `0 error(s)`                                                                                     |
+| `uv lock --check`                 | Pass     | Lockfile is in sync with `pyproject.toml`                                                        |
+| `uv sync --check --active`        | Pass     | Active project environment matches `uv.lock`                                                     |
+| Editable install smoke check      | Pass     | `uv pip install --python .venv/bin/python -e . --no-deps` succeeds                               |
+| Primary CLI help smoke checks     | Pass     | `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`                               |
 
 ## Tooling Recommendations
 
@@ -122,8 +122,8 @@ Exit criteria:
   `scripts/betting_pipeline.py`. Complete as of 2026-06-12: weekly orchestration defaults now rely
   on runtime path/week inference instead of checked-in 2025 postseason values.
 - Re-check editable install and key CLI help flows after those updates. Complete as of 2026-06-13:
-  editable install plus the `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`
-  help entrypoints all pass on Python 3.14.
+  editable install plus the `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py` help
+  entrypoints all pass on Python 3.14.
 
 Exit criteria:
 
@@ -145,8 +145,8 @@ Exit criteria:
     orchestration, and merge-helper tests.
   - `nfl_predictor/ml/ml_model_core.py` raised to `76%` through helper-focused tests covering
     target-column selection, missing-data summaries, season bounds, and time-aware split helpers.
-  - `nfl_predictor/ml/ml_model_training.py` raised to `88%` through orchestration, calibration,
-    and guard-rail coverage.
+  - `nfl_predictor/ml/ml_model_training.py` raised to `88%` through orchestration, calibration, and
+    guard-rail coverage.
   - `nfl_predictor/ml/leakage_audit.py` raised to `93%` through helper, heuristic, and report I/O
     coverage.
   - `nfl_predictor/utils/game_utils.py` raised to `94%` through QB-fill and future-line fallback

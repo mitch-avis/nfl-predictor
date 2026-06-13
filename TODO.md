@@ -112,8 +112,8 @@ Tasks:
   - [x] stale season-specific defaults in checked-in orchestration config and scripts.
   - [ ] any command guidance that no longer matches the actual `.venv/bin` contents.
 - [ ] Re-establish quality gates and automation:
-  - coverage-focused audit and targeted test additions now meet the preseason `90%` baseline;
-    next move is the validation-script cleanup and CI workflow slices.
+  - coverage-focused audit and targeted test additions now meet the preseason `90%` baseline; next
+    move is the validation-script cleanup and CI workflow slices.
   - completed focused coverage slices so far:
     - `nfl_predictor/ml/artifacts.py`, `nfl_predictor/utils/fingerprints.py`,
       `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
@@ -126,8 +126,8 @@ Tasks:
       target selection, missing-data summaries, season bounds, and time-aware split helpers.
     - `nfl_predictor/ml/ml_model_training.py` is up to `88%` coverage after additional
       orchestration, guard-rail, no-holdout, and calibration-branch tests.
-    - `nfl_predictor/ml/leakage_audit.py` is up to `93%` coverage after helper, heuristic-flag,
-      and report-writing tests.
+    - `nfl_predictor/ml/leakage_audit.py` is up to `93%` coverage after helper, heuristic-flag, and
+      report-writing tests.
     - `nfl_predictor/utils/game_utils.py` is up to `94%` coverage after QB-fill and future-line
       fallback tests.
     - `nfl_predictor/utils/scraping_utils.py` is up to `96%` coverage after parser, fallback, and

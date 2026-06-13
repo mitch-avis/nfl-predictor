@@ -32,10 +32,9 @@ For each task:
 
 Agents and humans should not rely on the shell activation state.
 
-- Do **not** run `python`, `pip`, `uv`, `pytest`, `ruff`, `pyright`, or `ty` without the venv
-  prefix.
+- Do **not** run `python`, `pip`, `pytest`, `ruff`, `pyright`, or `ty` without the venv prefix.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
-- Prefer `uv ...` for dependency management and environment sync.
+- Use `uv ...` from `PATH` for dependency management and environment sync.
 
 ### Current validated baseline (2026-06-13)
 
@@ -110,10 +109,10 @@ Tasks:
 - [ ] Fix the highest-value operational correctness issues from the current audit:
   - [x] validation script exit codes and logger usage.
   - [x] stale season-specific defaults in checked-in orchestration config and scripts.
-  - [ ] any command guidance that no longer matches the actual `.venv/bin` contents.
+  - [x] any command guidance that no longer matches the actual `.venv/bin` contents.
 - [ ] Re-establish quality gates and automation:
   - coverage-focused audit and targeted test additions now meet the preseason `90%` baseline; next
-    move is the validation-script cleanup and CI workflow slices.
+    move is release-workflow follow-up and any remaining doc polish.
   - completed focused coverage slices so far:
     - `nfl_predictor/ml/artifacts.py`, `nfl_predictor/utils/fingerprints.py`,
       `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
@@ -141,10 +140,13 @@ Tasks:
     `nfl_predictor/utils/polars/loaders.py`, `nfl_predictor/utils/polars/features.py`, and the
     smaller parser-edge branches in `nfl_predictor/utils/scraping_utils.py`.
   - keep the coverage gate at `90%` or higher, with `100%` as the aspirational ceiling.
-  - document the canonical local validation sequence.
-  - evaluate a GitHub Actions validation workflow that provisions `.venv` with `uv` and runs Ruff,
-    Pyright, Ty, pytest, and markdownlint.
-  - decide whether to add CI now or keep the gate local during the preseason hardening pass.
+  - the canonical local validation sequence is documented in `README.md`.
+  - validation-only GitHub Actions now lives at `.github/workflows/validation.yml`; it provisions
+    `.venv` with `uv`, runs Ruff format/check, Pyright, Ty, pytest, markdownlint,
+    `uv lock --check`, `uv sync --check --active`, and the editable-install plus primary CLI help
+    smoke checks.
+  - release automation remains deferred until version tags and `CHANGELOG.md` release discipline
+    are standardized.
   - decide whether to add a tag-driven GitHub release workflow that publishes `CHANGELOG.md` entries
     once version tags are standardized.
 

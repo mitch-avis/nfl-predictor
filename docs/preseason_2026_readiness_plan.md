@@ -46,10 +46,16 @@ virtual environments.
 
 ### GitHub Actions
 
-Prefer GitHub Actions if CI is added during this hardening pass. Start with a validation-only
-workflow that creates `.venv`, runs `uv sync`, and then executes the same Ruff, Pyright, Ty, pytest,
-and markdownlint gates used locally. After version tags and `CHANGELOG.md` entries are standardized,
-a second workflow can publish GitHub releases from tagged changelog entries.
+GitHub Actions is now the first CI target through `.github/workflows/validation.yml`.
+
+The workflow is validation-only: it creates `.venv`, runs `uv sync`, checks `uv.lock`, verifies the
+synced environment, and then executes the same Ruff format/check, Pyright, Ty, pytest, and
+markdownlint gates used locally.
+It also runs the editable-install smoke check plus the primary CLI help smoke checks for
+`nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`.
+
+After version tags and `CHANGELOG.md` entries are standardized, a second workflow can publish
+GitHub releases from tagged changelog entries.
 
 ## Workstreams
 
@@ -124,6 +130,9 @@ Exit criteria:
 - Re-check editable install and key CLI help flows after those updates. Complete as of 2026-06-13:
   editable install plus the `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py` help
   entrypoints all pass on Python 3.14.
+- Clarify command guidance that drifted from the actual `.venv/bin` contents. Complete as of
+  2026-06-13: `uv` is documented as an external `PATH` tool, while Python-based tooling remains
+  explicit about `.venv/bin/...` in agent-facing docs.
 
 Exit criteria:
 
@@ -133,8 +142,8 @@ Exit criteria:
 ### 5. Re-establish quality gates
 
 - The coverage audit and targeted test-addition pass now meets the preseason `90%` target.
-- The next hardening slice should move to the remaining validation-script cleanup and CI workflow
-  decisions.
+- GitHub Actions validation is now checked in at `.github/workflows/validation.yml`.
+- The next hardening slice should move to release-workflow decisions and any remaining doc polish.
 - Completed coverage slices now include:
   - `nfl_predictor/ml/artifacts.py` and `nfl_predictor/utils/fingerprints.py` at `100%`.
   - `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
@@ -163,17 +172,15 @@ Exit criteria:
   `nfl_predictor/utils/scraping_utils.py`.
 - Keep the enforced coverage floor at the preseason target of `90%` or higher, with `100%` as the
   aspirational ceiling.
-- Document the canonical local validation sequence.
-- Decide whether to add GitHub Actions now or defer CI until the preseason hardening pass is
-  complete.
-- If CI lands, keep the first workflow focused on validation and defer deployment concerns.
+- The canonical local validation sequence is now documented in `README.md`.
+- The first GitHub Actions workflow stays focused on validation and defers deployment concerns.
 - Decide whether to add a tag-driven GitHub release workflow that uses `CHANGELOG.md`.
 
 Exit criteria:
 
 - The repository has one clearly documented validation gate.
 - Coverage expectations are explicit and the repo now meets the preseason `90%` baseline.
-- The intended CI and release-automation path is documented, even if implementation is deferred.
+- The validation workflow is implemented, and the release-automation path is documented.
 
 ### 6. Resume the feature roadmap
 

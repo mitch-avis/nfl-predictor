@@ -87,11 +87,10 @@ Rules that are always enforced:
 
 ## CI Direction
 
-- Prefer GitHub Actions as the first CI target and keep it validation-only until the local gates are
-  stable.
-- The first workflow should provision `.venv` with `uv` and run Ruff format/check, Pyright, Ty,
-  pytest, markdownlint, and the existing editable-install or CLI smoke checks once they pass
-  locally.
+- GitHub Actions is the first CI target and currently stays validation-only.
+- `.github/workflows/validation.yml` provisions `.venv` with `uv` and runs Ruff format/check,
+  Pyright, Ty, pytest, markdownlint, `uv lock --check`, `uv sync --check --active`, and the
+  existing editable-install plus primary CLI help smoke checks.
 - After release tagging is standardized, a second workflow can publish GitHub releases from the
   matching `CHANGELOG.md` entry.
 

@@ -78,6 +78,10 @@ To refresh the lockfile and sync the active virtual environment:
 ./update_requirements.sh
 ```
 
+The helper expects `uv` on your `PATH` and an activated project virtual environment.
+If `.venv` is missing, it offers to create one with `uv venv .venv` and then exits so you can
+activate the environment before re-running it.
+
 For a manual upgrade without the helper script:
 
 ```bash
@@ -502,6 +506,23 @@ python scripts/validate_live.py
 Both validation scripts exit non-zero when the input data file is missing or the validation fails,
 so they are safe to use in shell automation.
 
+Canonical local validation sequence:
+
+```bash
+ruff format --check .
+ruff check .
+pyright .
+ty check .
+python -m pytest
+markdownlint .
+uv lock --check
+uv sync --check --active
+```
+
+GitHub Actions mirrors this gate in `.github/workflows/validation.yml` and also runs the
+editable-install smoke check plus `--help` smoke checks for `nfl_predictor.ml_model`,
+`scripts/weekly_run.py`, and `scripts/power_rankings.py`.
+
 ## Leakage audit
 
 To detect obvious feature leakage patterns:
@@ -597,18 +618,7 @@ For users reading this documentation: commands are shown assuming your project v
 is already activated. Agent-specific files keep the fully qualified `.venv/bin/...` forms for
 automation reliability.
 
-Common local checks:
-
-```bash
-ruff format --check .
-ruff check .
-pyright .
-ty check .
-python -m pytest
-markdownlint .
-uv lock --check
-uv sync --check --active
-```
+See the Validation section above for the canonical local validation sequence.
 
 ## Safety and claims
 

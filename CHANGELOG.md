@@ -7,8 +7,8 @@
 - Auto-select the newest weekly prediction input in `scripts/betting_pipeline.py` when
   `--predict-path` is omitted, and make the sample `config/weekly_run.yaml` rely on runtime
   inference instead of checked-in 2025 postseason defaults ([`47402e2`])
-- Refresh README and preseason hardening guidance to reflect the current `248 passed` baseline and
-  a coverage-first next-session priority ([`47402e2`])
+- Refresh README and preseason hardening guidance to reflect the current `248 passed` baseline and a
+  coverage-first next-session priority ([`47402e2`])
 
 ### Added
 

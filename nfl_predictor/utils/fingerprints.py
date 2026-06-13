@@ -5,14 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from nfl_predictor.ml import artifacts
 
 
 def dataset_fingerprint(path: Path) -> dict[str, Any]:
     """Return a stable dataset fingerprint payload."""
-
     stat = path.stat()
     return {
         "path": str(path),
@@ -24,7 +23,6 @@ def dataset_fingerprint(path: Path) -> dict[str, Any]:
 
 def stable_fingerprint(payload: dict[str, Any]) -> str:
     """Return a full SHA-256 fingerprint for a payload."""
-
     encoded = json.dumps(to_jsonable(payload), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
@@ -33,10 +31,9 @@ def wf_run_fingerprint(
     dataset_fp: dict[str, Any],
     wf_args: dict[str, Any],
     *,
-    code_version: Optional[str] = None,
+    code_version: str | None = None,
 ) -> str:
     """Build a walk-forward run fingerprint from dataset + args."""
-
     payload = {
         "dataset_sha256": dataset_fp.get("sha256"),
         "wf_args": wf_args,
@@ -47,7 +44,6 @@ def wf_run_fingerprint(
 
 def to_jsonable(value: Any) -> Any:
     """Convert nested payloads to JSON-serializable primitives."""
-
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, Path):
@@ -61,21 +57,21 @@ def to_jsonable(value: Any) -> Any:
     if callable(item):
         try:
             return to_jsonable(item())
-        except Exception:  # pragma: no cover
+        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
             pass
 
     tolist = getattr(value, "tolist", None)
     if callable(tolist):
         try:
             return to_jsonable(tolist())
-        except Exception:  # pragma: no cover
+        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
             pass
 
     isoformat = getattr(value, "isoformat", None)
     if callable(isoformat):
         try:
             return str(isoformat())
-        except Exception:  # pragma: no cover
+        except Exception:  # noqa: S110 (silent fallback to str() is intentional)
             pass
 
     return str(value)

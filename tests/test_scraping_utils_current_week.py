@@ -14,7 +14,6 @@ def test_get_current_nfl_week_handles_playoffs(monkeypatch) -> None:
         @classmethod
         def today(cls) -> datetime.date:
             """Return a date in January 2026 (2025 season playoffs)."""
-
             return cls(2026, 1, 8)
 
     monkeypatch.setattr(scraping_utils, "date", _FakeDate)

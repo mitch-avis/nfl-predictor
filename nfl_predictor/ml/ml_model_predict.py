@@ -7,7 +7,6 @@ This module hosts the prediction entrypoints that were historically defined in
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -29,6 +28,7 @@ from nfl_predictor.ml.ml_model_core import (
     _predict_margin_total_quantiles_from_model,
     _predict_xgb,
     _resolve_margin_sigma,
+    _transform_matrix,
     get_market_baseline,
 )
 from nfl_predictor.utils.logger import log
@@ -37,16 +37,15 @@ from nfl_predictor.utils.logger import log
 def predict_week(
     model: ScoreModel,
     games_path: Path,
-    output_path: Optional[Path] = None,
+    output_path: Path | None = None,
     pretty_output: bool = True,
     score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Generate weekly predictions and optional confidence ranks."""
-
     games_df = _load_games(games_path)
     feature_df = _apply_feature_spec(games_df, model.feature_spec)
     log.debug("Prediction feature matrix: %d rows x %d columns", *feature_df.shape)
-    x_games = model.preprocessor.transform(feature_df)
+    x_games = _transform_matrix(model.preprocessor, feature_df)
 
     pred_away = _predict_xgb(model.away_model, x_games)
     pred_home = _predict_xgb(model.home_model, x_games)
@@ -77,7 +76,7 @@ def predict_week(
 def predict_week_margin_total(
     model: MarginTotalModel,
     games_path: Path,
-    output_path: Optional[Path] = None,
+    output_path: Path | None = None,
     pretty_output: bool = True,
     score_rounding: str = "none",
     win_prob_use_uncertainty: bool = False,
@@ -87,7 +86,6 @@ def predict_week_margin_total(
     When win_prob_use_uncertainty is True, margin quantiles are used to derive
     uncertainty-aware win probabilities.
     """
-
     games_df = _load_games(games_path)
     pred_margin, pred_total = _predict_margin_total_from_model(model, games_df)
     margin_quantiles, total_quantiles = _predict_margin_total_quantiles_from_model(model, games_df)
@@ -135,12 +133,11 @@ def predict_week_margin_total(
 def predict_week_blended(
     model: BlendedMarginTotalModel,
     games_path: Path,
-    output_path: Optional[Path] = None,
+    output_path: Path | None = None,
     pretty_output: bool = True,
     score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Generate weekly predictions from a blended margin/total model."""
-
     games_df = _load_games(games_path)
 
     team_margin, team_total = _predict_margin_total_from_model(model.team_model, games_df)

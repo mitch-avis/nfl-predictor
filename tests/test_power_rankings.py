@@ -16,7 +16,6 @@ from nfl_predictor.reporting.power_rankings import (
 
 def test_outcome_to_home_prob_encodes_results() -> None:
     """Encodes win/loss/tie into probability targets."""
-
     home_score = pd.Series([21, 10, 14])
     away_score = pd.Series([17, 13, 14])
     p = outcome_to_home_prob(home_score, away_score, eps=0.1)
@@ -25,7 +24,6 @@ def test_outcome_to_home_prob_encodes_results() -> None:
 
 def test_fit_bradley_terry_ratings_orders_strength() -> None:
     """A consistently winning team should rank above a losing team."""
-
     games = pd.DataFrame(
         {
             "home_abbr": ["A", "A", "B", "C"],
@@ -39,7 +37,6 @@ def test_fit_bradley_terry_ratings_orders_strength() -> None:
 
 def test_scale_ratings_1_to_10_bounds() -> None:
     """Scaled ratings stay in [1, 10] with a stable mapping."""
-
     raw = pd.Series({"A": -2.0, "B": 0.0, "C": 2.0})
     scaled = scale_ratings_1_to_10(raw)
     assert scaled.min() >= 1.0
@@ -50,7 +47,6 @@ def test_scale_ratings_1_to_10_bounds() -> None:
 
 def test_ratings_to_power_0_to_10_bounds() -> None:
     """0-10 scale stays in [0, 10] with a stable mapping."""
-
     raw = pd.Series({"A": -10.0, "B": 0.0, "C": 10.0})
     scaled = ratings_to_power_0_to_10(raw)
     assert scaled.min() >= 0.0
@@ -60,7 +56,6 @@ def test_ratings_to_power_0_to_10_bounds() -> None:
 
 def test_build_power_rankings_and_standings_smoke() -> None:
     """End-to-end smoke test on a tiny synthetic league."""
-
     current_records = pd.DataFrame(
         {
             "team_abbr": ["A", "B", "C", "D"],
@@ -110,7 +105,6 @@ def test_build_power_rankings_and_standings_smoke() -> None:
 
 def test_compute_projected_standings_no_future_games_ok() -> None:
     """Handles postseason weeks (no remaining REG games) without error."""
-
     current_records = pd.DataFrame(
         {
             "team_abbr": ["A", "B"],

@@ -19,10 +19,29 @@ Rules that are always enforced:
 - **Reproducible artifacts.** Training and backtests write run directories with metadata and
   metrics.
 - **Tests are required.** New functionality includes unit tests and improves or maintains coverage.
+- **TDD is the default for executable code changes.** Before changing production code, verify that
+  the exact behavior and lines you plan to touch are covered; if not, add focused characterization
+  or failing tests first, then edit the production code.
+
+## Current Preseason Focus
+
+- The current preseason hardening plan lives in `docs/preseason_2026_readiness_plan.md`.
+- `TODO.md` is the authoritative active checklist.
+- Validated baseline on 2026-06-13:
+  - `.venv/bin/ruff format --check .` passes.
+  - `.venv/bin/python -m pytest` passes (`406 passed`).
+  - `markdownlint .` passes.
+  - `uv lock --check` passes.
+  - `uv sync --check --active` passes.
+  - `.venv/bin/ruff check .` passes cleanly.
+  - `.venv/bin/pyright .` passes (0 errors; fixed via `pandas-stubs` + typed transform helpers).
+  - `.venv/bin/ty check .` passes (0 diagnostics; now mandatory alongside Pyright).
+  - Coverage is `90.01%`, clearing the enforced preseason target.
 
 ## Source of truth for work
 
 - Current milestones and tasks live in `TODO.md` (authoritative active worklist).
+- `CHANGELOG.md` is the authoritative release history.
 - Before starting any task: read `TODO.md` and work only on the highest-priority blocking items.
 - When a task is completed: move it from `TODO.md` to `ARCHIVE.md` with a short completion note.
 - Milestone numbering is authoritative in `ARCHIVE.md`:
@@ -34,20 +53,53 @@ Rules that are always enforced:
 - Docstrings are required for every module, class, and function (including tests).
 - Type hints are required for new/modified code.
 - Fix linter findings introduced by your changes. Do not leave new warnings behind.
+- Avoid adding new `noqa`, `type: ignore`, or `pragma: no cover` suppressions unless they are truly
+  necessary, narrowly scoped, and justified by the code rather than convenience.
 - Do not reference temporary planning artifacts in code: do not mention roadmap items, milestone
   numbers, or TODO goal labels in any code, comments, docstrings, or test descriptions.
 - Prefer small, deterministic unit tests.
+- Load and apply relevant skills before acting. Default to `python` for Python work; add
+  `test-driven-development`, `clean-code`, `systematic-debugging`, `code-review`, `observability`,
+  `task-orchestrator`, and the `python-*` skills when their domains apply.
 - If a Python file grows beyond ~2000 lines, propose a refactor plan to split it into smaller,
   focused modules (helpers/utils) and implement the split if it reduces complexity.
 - Keep `TODO.md` accurate: verify items before checking them off.
+- Keep `docs/preseason_2026_readiness_plan.md`, `TODO.md`, `ARCHIVE.md`, and `CHANGELOG.md`
+  synchronized with the actual repo state after meaningful progress, completed tasks, or validation
+  changes.
 - Keep `README.md` current: update it when behavior, CLI usage, features, or outputs change.
+- Keep project documentation current after significant changes. When a subsystem outgrows the
+  top-level `README.md`, add or update nested module README files and link them from the top-level
+  README.
+
+## Changelog and Commit Workflow
+
+- `CHANGELOG.md` follows Common Changelog: latest release first, `## VERSION - YYYY-MM-DD`, then
+  `Changed`, `Added`, `Removed`, and `Fixed` in that order.
+- The historical baseline is `0.1.0` on `main`. Add the next release entry above it and reference
+  the most relevant commits before tagging a release.
+- Keep changelog entries focused on notable user-facing, tooling, or workflow changes; skip routine
+  formatting-only noise.
+- Keep git tags aligned with changelog versions so `.github/workflows/release.yml` can publish or
+  update GitHub releases from `CHANGELOG.md`.
+- When committing work, prefer one file per commit, including deletions, unless the user explicitly
+  asks for different commit granularity.
+
+## CI Direction
+
+- GitHub Actions is the first CI target and currently stays validation-only.
+- `.github/workflows/validation.yml` provisions `.venv` with `uv` and runs Ruff format/check,
+  Pyright, Ty, pytest, markdownlint, `uv lock --check`, `uv sync --check --active`, and the existing
+  editable-install plus primary CLI help smoke checks.
+- `.github/workflows/release.yml` publishes or updates GitHub releases for `0.x.y` and `v0.x.y` tags
+  by extracting the matching `CHANGELOG.md` entry.
 
 ## Command execution rules (non-negotiable)
 
 This project uses a **local virtual environment located at `.venv/`**.
 
-When running any commands, you MUST invoke tools from the virtual environment explicitly.
-Do NOT rely on shell activation, PATH inference, or system-installed binaries.
+When running any commands, you MUST invoke tools from the virtual environment explicitly. Do NOT
+rely on shell activation, PATH inference, or system-installed binaries.
 
 ### Required command forms
 
@@ -55,37 +107,45 @@ Use these forms **at all times**:
 
 - Python:
   - `.venv/bin/python`
-- pip:
-  - `.venv/bin/pip`
 - uv:
-  - `.venv/bin/uv`
+  - `uv`
 - pytest:
-  - `.venv/bin/python -m pytest` **or** `.venv/bin/pytest` **or** `.venv/bin/uv run pytest`
+  - `.venv/bin/python -m pytest` **or** `.venv/bin/pytest` **or** `uv run pytest`
 - ruff:
   - `.venv/bin/ruff`
-- black:
-  - `.venv/bin/black`
+- pyright:
+  - `.venv/bin/pyright`
+- ty:
+  - `.venv/bin/ty`
 
 ### Explicitly forbidden
 
-- `python`, `pip`, `pytest`, `ruff`, `black`, or `uv` **without a `.venv/` prefix**
+- `python`, `pip`, `pytest`, `ruff`, `pyright`, or `ty` **without a `.venv/` prefix**
 - assuming an activated shell or implicit virtualenv
 - using system Python, Conda, pyenv, or global tools
 
-If a command is shown in documentation or tasks, assume the `.venv/bin/` prefix is required even if
-not written.
+For Python-based tooling, assume the `.venv/bin/` prefix is required even if it is not written in a
+doc example. `uv` is expected to come from `PATH` as an external project manager.
 
 ### Formatting, linting, and style
 
-- **Black** formatting (line length 100).
-- **Ruff** linting (including import sorting).
+- **Ruff** formatting (line length 100).
+- **Ruff** linting (including import sorting, docstrings, security, simplify, NumPy, and
+  pygrep-hooks rules).
+- **Pyright** and **Ty** are both mandatory local gates today.
+- **Pyright** remains the more mature signal in pandas-heavy code, so keep both green rather than
+  replacing one with the other.
 - PEP 8 / PEP 257 conventions unless explicitly overridden by repo tooling.
 
 Recommended local commands:
 
-- `.venv/bin/uv run black .`
-- `.venv/bin/uv run ruff check .` (and optionally `.venv/bin/uv run ruff check . --fix`)
-- `.venv/bin/uv run pytest`
+- `.venv/bin/ruff format .`
+- `.venv/bin/ruff check .` (and optionally `.venv/bin/ruff check . --fix`)
+- `.venv/bin/pyright .`
+- `.venv/bin/ty check .`
+- `.venv/bin/python -m pytest`
+- `uv lock --check`
+- `uv sync --check --active`
 
 ## Project Shape (Big Picture)
 
@@ -95,8 +155,8 @@ Recommended local commands:
 - **Orchestration Script (ETL):** `nfl_predictor/data_collection.py` (run as a module). This
   orchestrator fetches data, applies transformations, and writes output CSVs.
 - **Core Data Transforms:** Polars ETL helpers live under `nfl_predictor/utils/polars/`.
-  `nfl_predictor/utils/polars_utils.py` is a compatibility facade that forwards imports to the
-  split modules.
+  `nfl_predictor/utils/polars_utils.py` is a compatibility facade that forwards imports to the split
+  modules.
 - **Game-Specific Enrichments:** `nfl_predictor/utils/game_utils.py` contains domain-specific
   calculations and dataset enrichments.
 - **External Data Scraping/Caching:** `nfl_predictor/utils/scraping_utils.py` fetches and caches
@@ -116,7 +176,8 @@ Recommended local commands:
 - `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
   and artifact stamping.
 - `scripts/betting_pipeline.py`: end-to-end orchestration for selecting calibration/probability
-  post-processing, resumable Optuna tuning, final training, week predictions, and betting report outputs.
+  post-processing, resumable Optuna tuning, final training, week predictions, and betting report
+  outputs.
 - `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
 - `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
 
@@ -210,15 +271,15 @@ When market lines exist, the system produces market-derived features and support
 
 Market anchoring details:
 
-- Prefer residual training: `target_resid = target - market_baseline` and
-  `pred = market_baseline + pred_resid`.
+- Prefer residual training: `target_resid = target - market_baseline` and `pred = market_baseline +
+pred_resid`.
 
 Market probability post-processing (blend/clamp):
 
 - Blending must be explicit and bounded (weights in [0, 1]).
 - Clamping must be explicit and bounded (delta in [0, 0.5]).
-- If adding "no-vig" market probability options, implement them consistently (home/away normalize
-  to sum to 1) and validate in walk-forward.
+- If adding "no-vig" market probability options, implement them consistently (home/away normalize to
+  sum to 1) and validate in walk-forward.
 
 ### Uncertainty
 
@@ -231,11 +292,11 @@ Minimum requirement:
 
 ### Realistic score outputs
 
-- Realistic score outputs are produced as post-processing applied after margin/total predictions
-  are generated.
+- Realistic score outputs are produced as post-processing applied after margin/total predictions are
+  generated.
 - Realistic score adjustments are used for display and reporting.
-- Realistic score adjustments do not alter win probabilities, confidence rankings, pool scoring,
-  or tuning objectives.
+- Realistic score adjustments do not alter win probabilities, confidence rankings, pool scoring, or
+  tuning objectives.
 
 If implementing score "realism":
 
@@ -265,8 +326,8 @@ Required evaluation modes:
 
 - **Season-blocked CV** (acceptable baseline; primarily used for hyperparameter tuning).
 - **Walk-forward evaluation (authoritative):** for each season and each week `w` (e.g., `3..end`),
-  train on all games strictly before week `w` (plus prior seasons if configured), predict week
-  `w`, and record metrics.
+  train on all games strictly before week `w` (plus prior seasons if configured), predict week `w`,
+  and record metrics.
 
 Required metrics:
 
@@ -284,14 +345,14 @@ Market-relative metrics (when market anchoring is enabled):
 
 ### Model selection protocol (how to choose "best" settings)
 
-When multiple options exist (calibration method, market integration mode, probability
-blend/clamp rules, weighting choices):
+When multiple options exist (calibration method, market integration mode, probability blend/clamp
+rules, weighting choices):
 
 - Prefer selecting settings via walk-forward over multiple seasons.
 - Pick a primary selection metric (typically Brier/log loss for probability quality) and use
   secondary tie-breakers (confidence pool expected points, then margin/total MAE).
-- Report mean and variance across folds; avoid choosing a setting that wins by a hair on one
-  season but regresses elsewhere.
+- Report mean and variance across folds; avoid choosing a setting that wins by a hair on one season
+  but regresses elsewhere.
 - Never use the holdout window to tune hyperparameters.
 
 Required run artifacts:
@@ -349,18 +410,18 @@ Artifacts must be loadable without hidden external state.
 
 ## Dependency & Environment Hygiene
 
-- Pin key ML dependencies for reproducibility: xgboost, scikit-learn, numpy, pandas, polars,
-  scipy, optuna (if used).
+- Pin key ML dependencies for reproducibility: xgboost, scikit-learn, numpy, pandas, polars, scipy,
+  optuna (if used).
 - Document supported Python version(s) and CPU/GPU constraints if applicable.
 - Avoid optional GPU paths that break CPU-only execution unless explicitly guarded.
 
 ### Dependency management (uv + pinned requirements)
 
-- Do not hand-edit `requirements.txt` / `requirements-dev.txt`. Edit `requirements.in` /
-  `requirements-dev.in` and regenerate pins with `uv pip compile`.
-- Preferred install is `uv pip sync requirements.txt requirements-dev.txt`.
-- When using editable installs locally, use `pip install -e . --no-deps` (or `uv pip install -e . --no-deps`)
-  to avoid pulling unpinned dependency versions from `pyproject.toml`.
+- Declare runtime and development dependencies in `pyproject.toml`.
+- Treat `uv.lock` as the lockfile source of truth for reproducible environments.
+- Preferred install/update flow is `uv lock` / `uv sync`.
+- `update_requirements.sh` is the convenience wrapper for refreshing the lockfile and syncing the
+  active project environment.
 
 ## Feature Development Rules
 
@@ -397,16 +458,16 @@ Unused constants are removed and the file remains organized into clear sections.
 ## Dev Workflows (How to Run Things)
 
 - Refresh data:
-  - `python -m nfl_predictor.data_collection`
+  - `.venv/bin/python -m nfl_predictor.data_collection`
 - Train/predict (CLI):
-  - `python -m nfl_predictor.ml_model --help`
+  - `.venv/bin/python -m nfl_predictor.ml_model --help`
 - Walk-forward evaluation:
-  - `python scripts/walk_forward_backtest.py --help`
+  - `.venv/bin/python scripts/walk_forward_backtest.py --help`
 - Convenience orchestration:
-  - `python scripts/golden_command.py --help`
-  - `python scripts/betting_pipeline.py --help`
+  - `.venv/bin/python scripts/golden_command.py --help`
+  - `.venv/bin/python scripts/betting_pipeline.py --help`
 - Testing:
-  - `python -m pytest`
+  - `.venv/bin/python -m pytest`
 
 Training/prediction entrypoints may be updated/replaced, but must remain runnable and documented.
 

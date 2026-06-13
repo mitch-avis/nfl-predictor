@@ -1,5 +1,4 @@
-"""
-Web scraping utilities for NFL data collection.
+"""Web scraping utilities for NFL data collection.
 
 This module provides functions for scraping data from external sources:
     - TeamRankings.com: Team ratings and statistics
@@ -12,7 +11,6 @@ import os
 import re
 from datetime import date, timedelta
 from time import sleep
-from typing import Optional
 
 import polars as pl
 import requests
@@ -23,8 +21,7 @@ from nfl_predictor.utils.logger import log
 
 
 def get_season_start(year: int) -> date:
-    """
-    Calculate NFL season start date for a given year.
+    """Calculate NFL season start date for a given year.
 
     The NFL season traditionally starts on the Thursday following the first Monday of September.
 
@@ -33,21 +30,20 @@ def get_season_start(year: int) -> date:
 
     Returns:
         The season start date.
-    """
 
+    """
     sept_first = date(year, 9, 1)
     first_monday = sept_first + timedelta((7 - sept_first.weekday()) % 7)
     return first_monday + timedelta(days=3)
 
 
 def get_current_nfl_week() -> tuple[int, int]:
-    """
-    Get the current NFL season and week number.
+    """Get the current NFL season and week number.
 
     Returns:
         Tuple of (season, week)
-    """
 
+    """
     today = date.today()
     current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
@@ -69,8 +65,7 @@ def get_current_nfl_week() -> tuple[int, int]:
 
 
 def get_week_date(season: int, week: int) -> date:
-    """
-    Get the date representing the start of a specific week for TeamRankings scraping.
+    """Get the date representing the start of a specific week for TeamRankings scraping.
 
     This is typically the Wednesday of that week when TR data is most up-to-date.
 
@@ -80,8 +75,8 @@ def get_week_date(season: int, week: int) -> date:
 
     Returns:
         Date to use for TR scraping
-    """
 
+    """
     season_start = get_season_start(season)
     # Go back 8 days from season start to get the base date
     base_date = season_start - timedelta(days=8)
@@ -91,8 +86,7 @@ def get_week_date(season: int, week: int) -> date:
 
 
 def normalize_team_column(df: pl.DataFrame, column: str) -> pl.DataFrame:
-    """
-    Normalize team abbreviations in a column to canonical form.
+    """Normalize team abbreviations in a column to canonical form.
 
     Args:
         df: Polars DataFrame
@@ -100,19 +94,18 @@ def normalize_team_column(df: pl.DataFrame, column: str) -> pl.DataFrame:
 
     Returns:
         DataFrame with normalized team abbreviations
-    """
 
+    """
     return df.with_columns(pl.col(column).replace(constants.ALIAS_TO_CANONICAL).alias(column))
 
 
 def scrape_team_rankings_for_week(
     week_number: int,
     week_date: date,
-    ratings_to_scrape: Optional[dict[str, str]] = None,
-    stats_to_scrape: Optional[dict[str, str]] = None,
+    ratings_to_scrape: dict[str, str] | None = None,
+    stats_to_scrape: dict[str, str] | None = None,
 ) -> pl.DataFrame:
-    """
-    Scrape team rankings for a specific week from TeamRankings.com.
+    """Scrape team rankings for a specific week from TeamRankings.com.
 
     This function iterates over each team ranking type defined in constants, constructs URLs,
     parses HTML to extract ranking information, and compiles it into a DataFrame.
@@ -130,8 +123,8 @@ def scrape_team_rankings_for_week(
 
     Returns:
         A Polars DataFrame containing team rankings for the specified week.
-    """
 
+    """
     # Use defaults if not specified
     if ratings_to_scrape is None:
         ratings_to_scrape = constants.TEAM_RANKINGS_RATINGS
@@ -256,16 +249,15 @@ def scrape_team_rankings_for_week(
 
 
 def _parse_tr_rating_table(table) -> tuple[list[str], list[float]]:
-    """
-    Parse a TeamRankings rating table using BeautifulSoup.
+    """Parse a TeamRankings rating table using BeautifulSoup.
 
     Args:
         table: BeautifulSoup table element
 
     Returns:
         Tuple of (team_abbreviations, ratings)
-    """
 
+    """
     teams = []
     ratings = []
 
@@ -292,16 +284,15 @@ def _parse_tr_rating_table(table) -> tuple[list[str], list[float]]:
 
 
 def _parse_tr_stat_table(table) -> tuple[list[str], list[float]]:
-    """
-    Parse a TeamRankings statistics table using BeautifulSoup.
+    """Parse a TeamRankings statistics table using BeautifulSoup.
 
     Args:
         table: BeautifulSoup table element
 
     Returns:
         Tuple of (team_abbreviations, stat_values)
-    """
 
+    """
     teams = []
     stats = []
 
@@ -331,8 +322,7 @@ def _parse_tr_stat_table(table) -> tuple[list[str], list[float]]:
 def get_missing_tr_columns(
     existing_df: pl.DataFrame,
 ) -> tuple[dict[str, str], dict[str, str]]:
-    """
-    Determine which TR ratings and stats are missing from an existing DataFrame.
+    """Determine which TR ratings and stats are missing from an existing DataFrame.
 
     Compares the columns in the existing DataFrame against the required columns
     defined in constants.TEAM_RANKINGS_RATINGS and constants.TEAM_RANKINGS_STATS.
@@ -343,8 +333,8 @@ def get_missing_tr_columns(
     Returns:
         Tuple of (missing_ratings, missing_stats) where each is a dict of
         {url_path: column_name} for items that need to be scraped.
-    """
 
+    """
     existing_cols = set(existing_df.columns)
 
     missing_ratings = {}
@@ -364,8 +354,7 @@ def merge_tr_data(
     existing_df: pl.DataFrame,
     new_df: pl.DataFrame,
 ) -> pl.DataFrame:
-    """
-    Merge newly scraped TR data into an existing DataFrame.
+    """Merge newly scraped TR data into an existing DataFrame.
 
     Joins the new columns to the existing data on team_abbr and week columns.
 
@@ -375,8 +364,8 @@ def merge_tr_data(
 
     Returns:
         Combined DataFrame with all columns
-    """
 
+    """
     if existing_df.height == 0:
         return new_df
     if new_df.height == 0:
@@ -403,15 +392,14 @@ def merge_tr_data(
 
 
 def save_team_rankings_week(tr_df: pl.DataFrame, season: int, week: int) -> None:
-    """
-    Save scraped team rankings to a CSV file for the specific week.
+    """Save scraped team rankings to a CSV file for the specific week.
 
     Args:
         tr_df: TeamRankings DataFrame to save
         season: Season year
         week: Week number
-    """
 
+    """
     season_dir = os.path.join(constants.DATA_PATH, str(season))
     os.makedirs(season_dir, exist_ok=True)
 
@@ -421,13 +409,12 @@ def save_team_rankings_week(tr_df: pl.DataFrame, season: int, week: int) -> None
 
 
 def update_season_team_rankings(season: int) -> None:
-    """
-    Update the consolidated season team rankings file from individual week files.
+    """Update the consolidated season team rankings file from individual week files.
 
     Args:
         season: Season year
-    """
 
+    """
     season_dir = os.path.join(constants.DATA_PATH, str(season))
     all_weeks_data = []
 
@@ -447,8 +434,7 @@ def update_season_team_rankings(season: int) -> None:
 
 
 def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
-    """
-    Scrape weekly spreads from SurvivorGrid.com for future games.
+    """Scrape weekly spreads from SurvivorGrid.com for future games.
 
     The site provides spreads for remaining weeks in the current NFL season.
     Each team row shows the team name and spreads for upcoming weeks.
@@ -457,8 +443,8 @@ def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
         Dictionary mapping team abbreviation to dict of week -> spread.
         Example: {"BUF": {16: -10.5, 17: -3.0, 18: -14.0}, ...}
         Returns empty dict if scraping fails.
-    """
 
+    """
     try:
         response = requests.get(constants.SURVIVOR_GRID_URL, timeout=10)
         response.raise_for_status()
@@ -528,10 +514,7 @@ def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
         team_cell = cells[team_col_idx].get_text(strip=True)
 
         # Extract team abbr (may have record in parentheses like "BUF(10-4)")
-        if "(" in team_cell:
-            team_abbr_raw = team_cell.split("(")[0].strip()
-        else:
-            team_abbr_raw = team_cell.strip()
+        team_abbr_raw = team_cell.split("(")[0].strip() if "(" in team_cell else team_cell.strip()
 
         # Normalize to canonical abbreviation
         team_abbr = constants.normalize_team_abbr(team_abbr_raw)

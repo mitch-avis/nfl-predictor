@@ -8,7 +8,7 @@ pipeline and tests.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from nfl_predictor.utils.polars import features as _features
 from nfl_predictor.utils.polars import finalize as _finalize
@@ -18,7 +18,6 @@ from nfl_predictor.utils.polars import teamrankings as _teamrankings
 
 def __getattr__(name: str) -> Any:
     """Forward attribute access to the split implementation modules."""
-
     for module in (_features, _loaders, _teamrankings, _finalize):
         try:
             return getattr(module, name)
@@ -32,14 +31,3 @@ def __dir__() -> list[str]:
     for module in (_features, _loaders, _teamrankings, _finalize):
         names.update(dir(module))
     return sorted(names)
-
-
-if TYPE_CHECKING:
-    # Import frequently used symbols for IDEs/type-checkers.
-    from nfl_predictor.utils.polars.features import (  # noqa: F401
-        NUMERIC_DTYPES,
-        compute_team_records_before_week,
-    )
-    from nfl_predictor.utils.polars.finalize import select_final_columns  # noqa: F401
-    from nfl_predictor.utils.polars.loaders import load_schedule  # noqa: F401
-    from nfl_predictor.utils.polars.teamrankings import load_team_rankings  # noqa: F401

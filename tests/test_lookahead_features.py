@@ -12,7 +12,6 @@ from nfl_predictor.utils import polars_utils
 
 def test_add_lookahead_features_next_week_opponent_and_location_change() -> None:
     """Next-week opponent lookup and location-change flags should match schedule."""
-
     schedule_df = pl.DataFrame(
         {
             "season": [2024, 2024, 2024, 2024],
@@ -64,7 +63,6 @@ def test_add_lookahead_features_next_week_opponent_and_location_change() -> None
 
 def test_add_lookahead_features_missing_next_week_yields_nulls() -> None:
     """When there is no week+1 game, next-week fields should be null."""
-
     schedule_df = pl.DataFrame(
         {
             "season": [2024],
@@ -105,7 +103,6 @@ def test_add_lookahead_features_missing_next_week_yields_nulls() -> None:
 
 def test_compute_team_next_week_context_validates_schema() -> None:
     """Helper should raise a clear error if required schedule columns are missing."""
-
     bad_schedule_df = pl.DataFrame({"season": [2024], "week": [1]})
 
     try:

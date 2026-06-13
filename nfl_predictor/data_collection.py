@@ -1,5 +1,4 @@
-"""
-Data collection module for NFL game prediction using nflreadpy and Polars.
+"""Data collection module for NFL game prediction using nflreadpy and Polars.
 
 This module orchestrates the collection, processing, and storage of NFL game data
 for use in prediction models. It uses nflreadpy as the primary data source and
@@ -40,7 +39,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Optional
 
 import polars as pl
 
@@ -51,13 +49,11 @@ from nfl_predictor.utils.logger import log
 
 def _current_nfl_season(today: date) -> int:
     """Return the current NFL season for a given date."""
-
     return today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
 
-def _default_max_season(today: Optional[date] = None) -> int:
+def _default_max_season(today: date | None = None) -> int:
     """Return the default max season (inclusive) based on today's date."""
-
     if today is None:
         today = date.today()
     return _current_nfl_season(today)
@@ -93,8 +89,8 @@ def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFra
     Returns:
         DataFrame with `team_abbr` renamed to `{team_side}_abbr` and record columns renamed to
         `{team_side}_<field>`.
-    """
 
+    """
     if team_side not in {"away", "home"}:
         raise ValueError(f"team_side must be 'away' or 'home', got: {team_side}")
 
@@ -111,7 +107,6 @@ def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFra
 
 def _configure_logging(enable_debug: bool) -> None:
     """Adjust logging verbosity for data collection runs."""
-
     if not enable_debug:
         return
     log.setLevel(logging.DEBUG)
@@ -122,7 +117,6 @@ def _configure_logging(enable_debug: bool) -> None:
 
 def _parse_args(argv: list[str]) -> DataCollectionConfig:
     """Parse CLI args when data collection is run as a script."""
-
     parser = argparse.ArgumentParser(description="Run nflreadpy data collection.")
     parser.add_argument(
         "--min-season",
@@ -171,9 +165,8 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
     )
 
 
-def _resolve_config(argv: Optional[list[str]]) -> DataCollectionConfig:
+def _resolve_config(argv: list[str] | None) -> DataCollectionConfig:
     """Resolve data collection config from defaults and optional CLI args."""
-
     if argv is None:
         return DataCollectionConfig(
             enable_timing=ENABLE_DATA_COLLECTION_TIMING,
@@ -187,7 +180,6 @@ def _resolve_config(argv: Optional[list[str]]) -> DataCollectionConfig:
 
 def _resolve_seasons(min_season: int, max_season: int) -> list[int]:
     """Resolve the list of seasons to process (inclusive bounds)."""
-
     if min_season < constants.NFLREADPY_MIN_SEASON:
         raise ValueError(
             f"min_season must be >= {constants.NFLREADPY_MIN_SEASON} "
@@ -201,7 +193,6 @@ def _resolve_seasons(min_season: int, max_season: int) -> list[int]:
 @contextmanager
 def _timed_step(label: str, enabled: bool) -> Iterator[None]:
     """Time a step and log duration when enabled."""
-
     if not enabled:
         yield
         return
@@ -217,10 +208,9 @@ def _timed_step(label: str, enabled: bool) -> Iterator[None]:
 def _timed_substep(
     label: str,
     enabled: bool,
-    totals: Optional[dict[str, float]],
+    totals: dict[str, float] | None,
 ) -> Iterator[None]:
     """Accumulate timing for sub-steps without per-call logging."""
-
     if not enabled:
         yield
         return
@@ -235,19 +225,16 @@ def _timed_substep(
 
 def _log_df_stats(label: str, df: pl.DataFrame, enabled: bool) -> None:
     """Log dataframe shape/columns when debug logging is enabled."""
-
     if not enabled:
         return
     log.debug("%s: %d rows, %d cols", label, df.height, len(df.columns))
 
 
-def main(argv: Optional[list[str]] = None) -> None:
-    """
-    Main entry point for data collection using nflreadpy.
+def main(argv: list[str] | None = None) -> None:
+    """Run the nflreadpy-backed data collection pipeline.
 
     Orchestrates the data collection, processing, and storage for NFL game predictions.
     """
-
     config = _resolve_config(argv)
     _configure_logging(config.enable_debug)
 
@@ -302,10 +289,9 @@ def main(argv: Optional[list[str]] = None) -> None:
 def collect_all_data(
     seasons: list[int],
     *,
-    config: Optional[DataCollectionConfig] = None,
+    config: DataCollectionConfig | None = None,
 ) -> pl.DataFrame:
-    """
-    Collect and combine all data for specified seasons.
+    """Collect and combine all data for specified seasons.
 
     Args:
         seasons: List of season years to process
@@ -313,8 +299,8 @@ def collect_all_data(
 
     Returns:
         Combined DataFrame with all game data and features
-    """
 
+    """
     if config is None:
         min_season = min(seasons)
         max_season = max(seasons)
@@ -414,7 +400,6 @@ def collect_all_data(
 
     def _load_team_rankings_cached(season: int) -> pl.DataFrame:
         """Load TeamRankings data once per season to avoid redundant scraping."""
-
         cached_df = team_rankings_cache.get(season)
         if cached_df is not None:
             return cached_df
@@ -504,12 +489,11 @@ def process_season(
     *,
     min_season: int,
     timing_enabled: bool = False,
-    elo_df: Optional[pl.DataFrame] = None,
-    tr_df: Optional[pl.DataFrame] = None,
-    prev_tr_df: Optional[pl.DataFrame] = None,
+    elo_df: pl.DataFrame | None = None,
+    tr_df: pl.DataFrame | None = None,
+    prev_tr_df: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
-    """
-    Process a single season's data.
+    """Process a single season's data.
 
     Args:
         season: Season year to process
@@ -523,8 +507,8 @@ def process_season(
 
     Returns:
         Processed DataFrame for the season
-    """
 
+    """
     # Filter to this season
     season_schedule = schedule_df.filter(pl.col("season") == season)
 
@@ -554,7 +538,7 @@ def process_season(
 
     # Process each week
     weekly_data = []
-    timing_totals: Optional[dict[str, float]] = {} if timing_enabled else None
+    timing_totals: dict[str, float] | None = {} if timing_enabled else None
     for week in weeks:
         week_data = process_week(
             season,
@@ -600,17 +584,16 @@ def process_week(
     *,
     min_season: int,
     timing_enabled: bool = False,
-    timing_totals: Optional[dict[str, float]] = None,
-    elo_df: Optional[pl.DataFrame] = None,
-    tr_df: Optional[pl.DataFrame] = None,
-    prev_tr_df: Optional[pl.DataFrame] = None,
-    team_elo_trends: Optional[pl.DataFrame] = None,
-    qb_trends: Optional[pl.DataFrame] = None,
-    team_stat_trends: Optional[pl.DataFrame] = None,
-    coach_features: Optional[pl.DataFrame] = None,
+    timing_totals: dict[str, float] | None = None,
+    elo_df: pl.DataFrame | None = None,
+    tr_df: pl.DataFrame | None = None,
+    prev_tr_df: pl.DataFrame | None = None,
+    team_elo_trends: pl.DataFrame | None = None,
+    qb_trends: pl.DataFrame | None = None,
+    team_stat_trends: pl.DataFrame | None = None,
+    coach_features: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
-    """
-    Process a single week's games with aggregated stats from prior weeks.
+    """Process a single week's games with aggregated stats from prior weeks.
 
     For teams that have no prior games in the current season (e.g., Week 1, or
     teams whose games were postponed like MIA/TB in 2017), we fall back to using
@@ -627,12 +610,15 @@ def process_week(
         elo_df: ELO ratings DataFrame
         tr_df: TeamRankings DataFrame for this season
         prev_tr_df: TeamRankings DataFrame for previous season (for week 1)
+        team_elo_trends: Optional rolling ELO trend features for the current season
+        qb_trends: Optional rolling quarterback trend features for the current season
+        team_stat_trends: Optional rolling team-stat trend features for the current season
         coach_features: Optional per-team coach feature DataFrame
 
     Returns:
         DataFrame with week's games and features
-    """
 
+    """
     # Skip the very first week of the first processed season (no prior data to aggregate)
     if season == min_season and week == 1:
         log.info(
@@ -907,10 +893,9 @@ def process_week(
 
 def _merge_team_trends(
     merged: pl.DataFrame,
-    trend_df: Optional[pl.DataFrame],
+    trend_df: pl.DataFrame | None,
 ) -> pl.DataFrame:
     """Merge per-team trend features for away/home teams."""
-
     if trend_df is None or trend_df.height == 0:
         return merged
 
@@ -935,10 +920,9 @@ def _merge_team_trends(
 
 def _merge_qb_trends(
     merged: pl.DataFrame,
-    trend_df: Optional[pl.DataFrame],
+    trend_df: pl.DataFrame | None,
 ) -> pl.DataFrame:
     """Merge per-QB trend features for away/home QBs."""
-
     if trend_df is None or trend_df.height == 0:
         return merged
 
@@ -966,10 +950,9 @@ def _merge_qb_trends(
 
 def _merge_coach_features(
     merged: pl.DataFrame,
-    coach_df: Optional[pl.DataFrame],
+    coach_df: pl.DataFrame | None,
 ) -> pl.DataFrame:
     """Merge per-coach features for away/home teams."""
-
     if coach_df is None or coach_df.height == 0:
         return merged
 
@@ -998,11 +981,10 @@ def _merge_team_rankings(
     merged: pl.DataFrame,
     season: int,
     week: int,
-    tr_df: Optional[pl.DataFrame],
-    prev_tr_df: Optional[pl.DataFrame],
+    tr_df: pl.DataFrame | None,
+    prev_tr_df: pl.DataFrame | None,
 ) -> pl.DataFrame:
-    """
-    Merge TeamRankings data into the game DataFrame.
+    """Merge TeamRankings data into the game DataFrame.
 
     Handles three scenarios:
     1. Regular season (week 2+): Use current season's TR for that week
@@ -1022,8 +1004,8 @@ def _merge_team_rankings(
 
     Returns:
         DataFrame with TR columns merged
-    """
 
+    """
     tr_to_use = None
     regular_season_weeks = constants.get_regular_season_weeks(season)
 
@@ -1073,14 +1055,13 @@ def _merge_team_rankings(
 
 
 def save_dataframe(df: pl.DataFrame, name: str) -> None:
-    """
-    Save a Polars DataFrame to CSV.
+    """Save a Polars DataFrame to CSV.
 
     Args:
         df: DataFrame to save
         name: Base name for the file (without extension)
-    """
 
+    """
     file_path = f"{constants.DATA_PATH}/{name}.csv"
 
     # Create directory if needed
@@ -1091,17 +1072,16 @@ def save_dataframe(df: pl.DataFrame, name: str) -> None:
     log.info("Saved %s (%d rows) to %s", name, df.height, file_path)
 
 
-def load_dataframe(name: str) -> Optional[pl.DataFrame]:
-    """
-    Load a Polars DataFrame from CSV.
+def load_dataframe(name: str) -> pl.DataFrame | None:
+    """Load a Polars DataFrame from CSV.
 
     Args:
         name: Base name for the file (without extension)
 
     Returns:
         DataFrame or None if file doesn't exist
-    """
 
+    """
     file_path = f"{constants.DATA_PATH}/{name}.csv"
 
     if not os.path.isfile(file_path):
@@ -1112,8 +1092,7 @@ def load_dataframe(name: str) -> Optional[pl.DataFrame]:
 
 
 def _determine_nfl_week(given_date: date) -> int:
-    """
-    Determine the current NFL week for a given date.
+    """Determine the current NFL week for a given date.
 
     Args:
         given_date: Date to check
@@ -1123,6 +1102,7 @@ def _determine_nfl_week(given_date: date) -> int:
 
         For in-season dates in January/February, this can return playoff weeks
         (e.g., 19-22 for seasons with an 18-week regular season).
+
     """
 
     def get_season_start(year: int) -> date:

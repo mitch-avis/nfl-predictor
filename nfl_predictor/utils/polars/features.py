@@ -1,5 +1,4 @@
-"""
-Polars-based utility functions for NFL data processing.
+"""Polars-based utility functions for NFL data processing.
 
 This module provides functions for loading, transforming, and processing NFL game data
 using nflreadpy as the primary data source and Polars for high-performance data manipulation.
@@ -26,9 +25,10 @@ Example:
     >>> schedule = polars_utils.load_schedule([2023, 2024])
     >>> team_stats = polars_utils.load_team_stats([2023, 2024])
     >>> agg_stats = polars_utils.aggregate_team_stats_to_week(team_stats, week=10, season=2024)
+
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import polars as pl
 from polars.datatypes.classes import DataTypeClass
@@ -70,8 +70,8 @@ def compute_team_records_before_week(
     Returns:
         DataFrame with one row per team (`team_abbr`) and record columns:
         wins/losses/ties, division_*, conference_*.
-    """
 
+    """
     required = {
         "season",
         "week",
@@ -242,8 +242,8 @@ def add_divisional_matchup_feature(df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with `is_divisional_matchup` added as an Int32 0/1 column.
-    """
 
+    """
     required = {"away_abbr", "home_abbr"}
     missing = sorted(required - set(df.columns))
     if missing:
@@ -277,8 +277,8 @@ def compute_team_next_week_context(
 
     Returns:
         DataFrame keyed by `team_abbr` with next-week opponent fields.
-    """
 
+    """
     required = {"season", "week", "game_type", "date", "away_abbr", "home_abbr"}
     missing = sorted(required - set(schedule_df.columns))
     if missing:
@@ -393,6 +393,7 @@ def add_lookahead_features(
 
     Returns:
         `games_df` with all `constants.LOOKAHEAD_FEATURE_COLUMNS` present.
+
     """
 
     def _expected_dtype(column: str) -> DataTypeClass:
@@ -504,8 +505,8 @@ def compute_team_standings_before_week(
 
     Returns:
         Per-team standings table with ranks, games-behind, and simple clinch/elimination proxies.
-    """
 
+    """
     required = {
         "season",
         "week",
@@ -738,6 +739,7 @@ def add_motivation_features(
 
     Returns:
         `games_df` with `constants.MOTIVATION_FEATURE_COLUMNS` present.
+
     """
 
     def _ensure_null_cols(df: pl.DataFrame) -> pl.DataFrame:
@@ -811,13 +813,10 @@ def add_season_phase_features(
 
     Returns:
         `games_df` with season phase columns added.
-    """
 
+    """
     regular_weeks = constants.get_regular_season_weeks(season)
-    if regular_weeks <= 0:
-        week_norm = 0.0
-    else:
-        week_norm = min(float(week) / float(regular_weeks), 1.0)
+    week_norm = 0.0 if regular_weeks <= 0 else min(float(week) / float(regular_weeks), 1.0)
 
     early = int(week_norm <= (1.0 / 3.0))
     mid = int((1.0 / 3.0) < week_norm <= (2.0 / 3.0))
@@ -851,8 +850,8 @@ def build_team_elo_trends(
 
     Returns:
         DataFrame with columns: season, week, team_abbr, elo_4wk_trend.
-    """
 
+    """
     schema = {
         "season": pl.Int64,
         "week": pl.Int64,
@@ -921,8 +920,8 @@ def build_qb_trends(
 
     Returns:
         DataFrame with columns: season, week, qb_name, qb_elo_4wk_trend, qb_value_4wk_trend.
-    """
 
+    """
     schema = {
         "season": pl.Int64,
         "week": pl.Int64,
@@ -1035,9 +1034,13 @@ def build_team_stat_trends(
 
     Returns:
         DataFrame with columns: season, week, team_abbr, <stat>_4wk_trend.
-    """
 
-    schema = {"season": pl.Int64, "week": pl.Int64, "team_abbr": pl.Utf8}
+    """
+    schema: dict[str, DataTypeClass] = {
+        "season": pl.Int64,
+        "week": pl.Int64,
+        "team_abbr": pl.Utf8,
+    }
     for stat in stats:
         schema[f"{stat}_4wk_trend"] = pl.Float64
 
@@ -1081,7 +1084,6 @@ def build_coach_features(
     season: int,
 ) -> pl.DataFrame:
     """Compute per-coach prior win-rate features (career and team-specific)."""
-
     schema = {
         "season": pl.Int64,
         "week": pl.Int64,

@@ -53,7 +53,7 @@ try:
         outcome_to_home_prob,
     )
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     import sys
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -127,7 +127,6 @@ def _pl_to_pandas(df: pl.DataFrame) -> pd.DataFrame:
     Polars' `to_pandas()` requires `pyarrow` in many environments; for this reporting script,
     using `to_dicts()` keeps the dependency surface smaller.
     """
-
     if df.is_empty():
         # Preserve the schema so downstream code can rely on column presence even when
         # there are zero rows (e.g., postseason weeks with no future REG games).
@@ -140,7 +139,6 @@ POSTSEASON_GAME_TYPES = frozenset({"WC", "DIV", "CON", "SB", "POST"})
 
 def _filter_by_game_type(df: pl.DataFrame, *, include_postseason: bool) -> pl.DataFrame:
     """Filter to regular season (or regular + postseason) games when game_type exists."""
-
     if "game_type" not in df.columns:
         return df
     game_type = pl.col("game_type").cast(pl.Utf8).str.to_uppercase()
@@ -158,7 +156,6 @@ def _load_current_records(
     include_postseason: bool = False,
 ) -> pd.DataFrame:
     """Load current records through the specified week."""
-
     df = (
         pl.read_csv(schedule_path)
         .select(
@@ -219,29 +216,39 @@ def _missing_market_inputs(
     available_cols: set[str],
 ) -> list[str]:
     """Return market-derived feature names that lack required raw inputs."""
-
     required = set(required_features)
     missing: list[str] = []
 
-    if "market_home_margin" in required and "market_home_margin" not in available_cols:
-        if not {"home_spread", "away_spread"} & available_cols:
-            missing.append("market_home_margin")
-    if "market_total_line" in required and "market_total_line" not in available_cols:
-        if "total_line" not in available_cols:
-            missing.append("market_total_line")
-    if "home_market_prob" in required and "home_market_prob" not in available_cols:
-        if "home_moneyline" not in available_cols:
-            missing.append("home_market_prob")
-    if "away_market_prob" in required and "away_market_prob" not in available_cols:
-        if "away_moneyline" not in available_cols:
-            missing.append("away_market_prob")
+    if (
+        "market_home_margin" in required
+        and "market_home_margin" not in available_cols
+        and not {"home_spread", "away_spread"} & available_cols
+    ):
+        missing.append("market_home_margin")
+    if (
+        "market_total_line" in required
+        and "market_total_line" not in available_cols
+        and "total_line" not in available_cols
+    ):
+        missing.append("market_total_line")
+    if (
+        "home_market_prob" in required
+        and "home_market_prob" not in available_cols
+        and "home_moneyline" not in available_cols
+    ):
+        missing.append("home_market_prob")
+    if (
+        "away_market_prob" in required
+        and "away_market_prob" not in available_cols
+        and "away_moneyline" not in available_cols
+    ):
+        missing.append("away_market_prob")
 
     return missing
 
 
 def _format_missing_columns(missing: list[str], *, limit: int = 10) -> str:
     """Format a missing-column list for error messages."""
-
     unique = sorted(set(missing))
     if len(unique) <= limit:
         return ", ".join(unique)
@@ -259,7 +266,6 @@ def _predict_future_games(
     include_postseason: bool = False,
 ) -> pd.DataFrame:
     """Predict future games for the specified season."""
-
     # Load a season slice from the ML dataset (REG only by default), then predict for future games.
     # We read only the columns required by the model's FeatureSpec.
     spec = getattr(model, "feature_spec", None)
@@ -345,7 +351,7 @@ def _predict_future_games(
         sm = cast(ml_model_core.ScoreModel, model)
         # ScoreModel: predict home/away scores then derive margin->prob.
         feature_df = ml_model_core.apply_feature_spec(games, sm.feature_spec)
-        x = sm.preprocessor.transform(feature_df)
+        x = ml_model_core._transform_matrix(sm.preprocessor, feature_df)
         pred_away = ml_model_core.predict_xgb(sm.away_model, x)
         pred_home = ml_model_core.predict_xgb(sm.home_model, x)
         pred_margin = pred_home - pred_away
@@ -447,8 +453,7 @@ def _write_outputs(
 
 
 def main() -> int:
-    """Main script entry point."""
-
+    """Run the power rankings CLI."""
     args = _parse_args()
 
     if not args.model_in.exists():

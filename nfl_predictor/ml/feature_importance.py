@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Optional, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 import xgboost as xgb
@@ -23,8 +24,7 @@ def resolve_feature_names(
     model: xgb.XGBRegressor,
 ) -> list[str]:
     """Resolve output feature names for a fitted preprocessor/model pair."""
-
-    names: Optional[list[str]] = None
+    names: list[str] | None = None
     if hasattr(preprocessor, "get_feature_names_out"):
         try:
             names = [str(name) for name in preprocessor.get_feature_names_out()]
@@ -48,9 +48,8 @@ def resolve_feature_names(
     return [f"f{i}" for i in range(int(n_features))]
 
 
-def build_feature_importance_report(model: Any) -> Optional[dict[str, Any]]:
+def build_feature_importance_report(model: Any) -> dict[str, Any] | None:
     """Build a feature-importance report for supported model types."""
-
     try:
         if isinstance(model, BlendedMarginTotalModel):
             team_report = _build_margin_total_report(model.team_model)
@@ -84,7 +83,7 @@ def build_feature_importance_report(model: Any) -> Optional[dict[str, Any]]:
     return None
 
 
-def _build_margin_total_report(model: MarginTotalModel) -> Optional[dict[str, Any]]:
+def _build_margin_total_report(model: MarginTotalModel) -> dict[str, Any] | None:
     """Build a feature-importance report for margin/total models."""
     return _build_report_from_models(
         model.preprocessor,
@@ -95,7 +94,7 @@ def _build_margin_total_report(model: MarginTotalModel) -> Optional[dict[str, An
     )
 
 
-def _build_score_report(model: ScoreModel) -> Optional[dict[str, Any]]:
+def _build_score_report(model: ScoreModel) -> dict[str, Any] | None:
     """Build a feature-importance report for score models."""
     return _build_report_from_models(
         model.preprocessor,
@@ -109,7 +108,7 @@ def _build_score_report(model: ScoreModel) -> Optional[dict[str, Any]]:
 def _build_report_from_models(
     preprocessor: ColumnTransformer,
     models: dict[str, xgb.XGBRegressor],
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Build a feature-importance report for labeled XGBoost models."""
     if not models:
         return None
@@ -168,7 +167,7 @@ def _score_dict_to_list(
 def _coerce_score_value(value: float | Sequence[float]) -> float:
     """Convert score values to a float, summing sequences when needed."""
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return float(sum(float(item) for item in value))
+        return float(np.asarray(value, dtype=float).sum())
     return float(value)
 
 
@@ -181,7 +180,7 @@ def _build_base_features(
     preprocessor: ColumnTransformer,
     feature_names: Sequence[str],
     model_importance: dict[str, dict[str, list[float]]],
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Aggregate importance values by base (pre-encoded) feature."""
     base_map = _build_base_feature_map(preprocessor, feature_names)
     if not base_map:
@@ -234,7 +233,7 @@ def _aggregate_by_base(
 def _build_base_feature_map(
     preprocessor: ColumnTransformer,
     feature_names: Sequence[str],
-) -> Optional[dict[str, str]]:
+) -> dict[str, str] | None:
     """Map transformed feature names to their base column names."""
     if not hasattr(preprocessor, "transformers_"):
         return None

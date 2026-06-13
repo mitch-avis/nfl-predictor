@@ -13,7 +13,6 @@ from nfl_predictor.utils.polars import loaders
 
 def test_is_numeric_dtype() -> None:
     """Check numeric dtype detection works as expected."""
-
     assert loaders._is_numeric_dtype(pl.Int32())
     assert loaders._is_numeric_dtype(pl.Float64())
     assert not loaders._is_numeric_dtype(pl.Utf8())
@@ -21,14 +20,12 @@ def test_is_numeric_dtype() -> None:
 
 def test_polars_utils_facade() -> None:
     """Polars utils facade exposes expected functions."""
-
     assert hasattr(polars_utils, "load_schedule")
     assert "load_schedule" in dir(polars_utils)
 
 
 def test_add_stadium_location() -> None:
     """Stadium location data is added correctly based on stadium_id."""
-
     stadium_id = next(iter(constants.STADIUMS.keys()))
     df = pl.DataFrame({"stadium_id": [stadium_id]})
 
@@ -43,7 +40,6 @@ def test_add_stadium_location() -> None:
 
 def test_add_stadium_features() -> None:
     """Stadium features include type/altitude with safe defaults."""
-
     df = pl.DataFrame(
         {
             "stadium_id": ["DEN00", "XXX00"],
@@ -67,7 +63,6 @@ def test_load_schedule_transforms(monkeypatch, tmp_path: Path) -> None:
 
     def fake_load_schedules(seasons):
         """Fake schedule loader for testing."""
-
         _ = seasons
         return pl.DataFrame(
             {
@@ -100,7 +95,6 @@ def test_load_schedule_transforms(monkeypatch, tmp_path: Path) -> None:
 
 def test_load_schedule_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
     """Schedule loader prefers cache for historical seasons."""
-
     cached = pl.DataFrame(
         {
             "game_id": ["cached_game"],
@@ -116,7 +110,6 @@ def test_load_schedule_uses_cache_for_historical_seasons(monkeypatch, tmp_path: 
 
     def fail_load_schedules(*_args, **_kwargs):
         """Fail if nflreadpy is called."""
-
         raise AssertionError("nflreadpy schedule load should not be called")
 
     monkeypatch.setattr(loaders.nfl, "load_schedules", fail_load_schedules)
@@ -128,7 +121,6 @@ def test_load_schedule_uses_cache_for_historical_seasons(monkeypatch, tmp_path: 
 
 def test_load_schedule_refreshes_current_season(monkeypatch, tmp_path: Path) -> None:
     """Current season schedules are refreshed even when cached."""
-
     cached = pl.DataFrame(
         {
             "game_id": ["old_game"],
@@ -144,7 +136,6 @@ def test_load_schedule_refreshes_current_season(monkeypatch, tmp_path: Path) -> 
 
     def fake_load_schedules(seasons):
         """Return a fresh schedule payload."""
-
         _ = seasons
         return pl.DataFrame(
             {
@@ -175,7 +166,6 @@ def test_load_team_stats_combines(monkeypatch, tmp_path: Path) -> None:
 
     def fake_load_team_stats(seasons):
         """Fake team stats loader for testing."""
-
         _ = seasons
         return pl.DataFrame(
             {
@@ -205,7 +195,6 @@ def test_load_team_stats_combines(monkeypatch, tmp_path: Path) -> None:
 
 def test_load_team_stats_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
     """Team stats loader prefers cache for historical seasons."""
-
     cached = pl.DataFrame(
         {
             "season": [2021],
@@ -220,7 +209,6 @@ def test_load_team_stats_uses_cache_for_historical_seasons(monkeypatch, tmp_path
 
     def fail_load_team_stats(*_args, **_kwargs):
         """Fail if nflreadpy is called."""
-
         raise AssertionError("nflreadpy team stats load should not be called")
 
     monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
@@ -234,7 +222,6 @@ def test_load_team_stats_uses_cache_for_historical_seasons(monkeypatch, tmp_path
 
 def test_load_team_stats_refreshes_current_season(monkeypatch, tmp_path: Path) -> None:
     """Current season team stats are refreshed even when cached."""
-
     cached = pl.DataFrame(
         {
             "season": [2024],
@@ -249,7 +236,6 @@ def test_load_team_stats_refreshes_current_season(monkeypatch, tmp_path: Path) -
 
     def fake_load_team_stats(seasons):
         """Return fresh team stats payload."""
-
         _ = seasons
         return pl.DataFrame(
             {
@@ -278,7 +264,6 @@ def test_load_team_stats_refreshes_current_season(monkeypatch, tmp_path: Path) -
 
 def test_add_scoring_data_to_team_stats() -> None:
     """Schedule scores are joined into per-team stats."""
-
     team_stats = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -305,7 +290,6 @@ def test_add_scoring_data_to_team_stats() -> None:
 
 def test_combine_stats_turnovers_and_yards() -> None:
     """Combining stats computes turnovers and total yards correctly."""
-
     df = pl.DataFrame(
         {
             "sack_fumbles": [1],
@@ -342,7 +326,6 @@ def test_combine_stats_turnovers_and_yards() -> None:
 
 def test_add_per_game_opponent_stats() -> None:
     """Per-game opponent stats are added correctly."""
-
     df = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -361,7 +344,6 @@ def test_add_per_game_opponent_stats() -> None:
 
 def test_aggregate_pbp_stats() -> None:
     """Play-by-play stats are aggregated correctly."""
-
     pbp = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -390,7 +372,6 @@ def test_aggregate_pbp_stats() -> None:
 
 def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
     """Elo ratings loading and latest extraction work as expected."""
-
     qb_path = tmp_path / "qb_elos.csv"
     qb_path.write_text(
         "season,week,team1,team2,elo1_pre,elo2_pre,qb1,qb2,qb1_value_pre,"

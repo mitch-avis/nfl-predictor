@@ -1,5 +1,4 @@
-"""
-Train and evaluate score prediction models for NFL games.
+"""Train and evaluate score prediction models for NFL games.
 
 This module uses time-aware splits by season, trains separate models for away/home scores,
 reports score-focused metrics, and can generate weekly predictions with confidence ranks.
@@ -13,9 +12,10 @@ import logging
 import os
 import time
 import warnings
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any
 
 import joblib
 import numpy as np
@@ -41,8 +41,10 @@ from nfl_predictor.ml import feature_spec as _feature_spec
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,
     _coerce_tree_method_on_error,
+    _fit_transform_matrix,
     _predict_xgb,
     _resolve_xgb_params,
+    _transform_matrix,
     _with_xgb_early_stopping_params,
 )
 from nfl_predictor.utils.logger import log
@@ -95,8 +97,8 @@ class ScoreModel:
     away_model: xgb.XGBRegressor
     home_model: xgb.XGBRegressor
     target_columns: tuple[str, str]
-    market_prob_config: Optional["MarketProbConfig"] = None
-    xgb_params: Optional[dict[str, Any]] = None
+    market_prob_config: MarketProbConfig | None = None
+    xgb_params: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -116,17 +118,17 @@ class MarginTotalModel:
     margin_model: xgb.XGBRegressor
     total_model: xgb.XGBRegressor
     target_columns: tuple[str, str]
-    calibrator: Optional[WinProbCalibrator]
-    margin_quantile_models: Optional[dict[float, xgb.XGBRegressor]] = None
-    total_quantile_models: Optional[dict[float, xgb.XGBRegressor]] = None
-    quantiles: Optional[tuple[float, ...]] = None
+    calibrator: WinProbCalibrator | None
+    margin_quantile_models: dict[float, xgb.XGBRegressor] | None = None
+    total_quantile_models: dict[float, xgb.XGBRegressor] | None = None
+    quantiles: tuple[float, ...] | None = None
     market_anchor: bool = False
-    market_prob_config: Optional["MarketProbConfig"] = None
-    xgb_params: Optional[dict[str, Any]] = None
-    tuned_params: Optional[dict[str, Any]] = None
-    tuned_cv_summary: Optional[dict[str, Any]] = None
+    market_prob_config: MarketProbConfig | None = None
+    xgb_params: dict[str, Any] | None = None
+    tuned_params: dict[str, Any] | None = None
+    tuned_cv_summary: dict[str, Any] | None = None
     win_prob_use_uncertainty: bool = False
-    optuna_summary: Optional[dict[str, Any]] = None
+    optuna_summary: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -142,15 +144,15 @@ class BlendedMarginTotalModel:
     """Blended margin/total model that combines team and market signals."""
 
     team_model: MarginTotalModel
-    market_model: Optional[MarginTotalModel]
+    market_model: MarginTotalModel | None
     blend_layer: BlendLayer
-    calibrator: Optional[WinProbCalibrator]
+    calibrator: WinProbCalibrator | None
     target_columns: tuple[str, str]
-    market_prob_config: Optional["MarketProbConfig"] = None
-    xgb_params: Optional[dict[str, Any]] = None
-    tuned_params: Optional[dict[str, Any]] = None
-    tuned_cv_summary: Optional[dict[str, Any]] = None
-    optuna_summary: Optional[dict[str, Any]] = None
+    market_prob_config: MarketProbConfig | None = None
+    xgb_params: dict[str, Any] | None = None
+    tuned_params: dict[str, Any] | None = None
+    tuned_cv_summary: dict[str, Any] | None = None
+    optuna_summary: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -171,10 +173,10 @@ class TrainingResult:
     metrics_report: dict[str, Any]
     splits: dict[str, Any]
     params: dict[str, Any]
-    tuned_params: Optional[dict[str, Any]]
+    tuned_params: dict[str, Any] | None
     feature_list: list[str]
     early_stopping: dict[str, Any]
-    feature_importance: Optional[dict[str, Any]] = None
+    feature_importance: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -183,17 +185,17 @@ class OptunaConfig:
 
     enabled: bool
     timeout_seconds: int
-    n_trials: Optional[int]
+    n_trials: int | None
     cv_splits: int
     objective: str
     early_stopping_rounds: int
-    tree_method: Optional[str]
-    device: Optional[str]
+    tree_method: str | None
+    device: str | None
     tune_scope: str
-    storage: Optional[str]
-    study_name: Optional[str]
-    best_params_out: Optional[Path]
-    xgb_n_jobs: Optional[int] = None
+    storage: str | None
+    study_name: str | None
+    best_params_out: Path | None
+    xgb_n_jobs: int | None = None
 
 
 class LogEvalCallback(TrainingCallback):
@@ -282,8 +284,8 @@ def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
 
 def _filter_season_bounds(
     df: pd.DataFrame,
-    min_season: Optional[int],
-    max_season: Optional[int],
+    min_season: int | None,
+    max_season: int | None,
 ) -> pd.DataFrame:
     if "season" not in df.columns:
         return df
@@ -332,7 +334,7 @@ def _split_train_calibration_holdout(
     list[int],
     list[int],
     list[int],
-    Optional[int],
+    int | None,
     list[int],
 ]:
     if "season" not in df.columns:
@@ -348,7 +350,7 @@ def _split_train_calibration_holdout(
     if not base_pool:
         raise ValueError("Not enough seasons to create a training split.")
 
-    inseason_calibration_season: Optional[int] = None
+    inseason_calibration_season: int | None = None
     inseason_calibration_weeks: list[int] = []
     inseason_calibration_df = df.iloc[0:0].copy()
     if calibration_weeks:
@@ -411,7 +413,7 @@ def _build_time_series_folds(
     val_window: int = 1,
     min_train_seasons: int = 3,
 ) -> list[tuple[list[int], list[int]]]:
-    seasons = list(sorted(seasons))
+    seasons = sorted(seasons)
     if n_splits <= 0:
         raise ValueError("n_splits must be positive.")
     if len(seasons) < (min_train_seasons + n_splits * val_window):
@@ -452,7 +454,6 @@ def _build_blocked_timepoint_folds(
     Each fold validates on a contiguous block of timepoints; training uses all
     strictly earlier timepoints.
     """
-
     points = list(timepoints)
     if n_splits <= 0:
         raise ValueError("n_splits must be positive.")
@@ -480,8 +481,8 @@ def _fit_models(
     x_train: np.ndarray | spmatrix,
     y_train: pd.DataFrame,
     target_columns: tuple[str, str],
-    params: Optional[dict[str, Any]] = None,
-    sample_weight: Optional[np.ndarray] = None,
+    params: dict[str, Any] | None = None,
+    sample_weight: np.ndarray | None = None,
 ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
     away_col, home_col = target_columns
     resolved_params = params or _resolve_xgb_params(DEFAULT_XGB_PARAMS)
@@ -540,7 +541,7 @@ def _prepare_margin_total_targets_with_anchor(
     df: pd.DataFrame,
     target_columns: tuple[str, str],
     market_anchor: bool,
-) -> tuple[np.ndarray, np.ndarray, Optional[np.ndarray], Optional[np.ndarray]]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None]:
     margin, total = _prepare_margin_total_targets(df, target_columns)
     if not market_anchor:
         return margin, total, None, None
@@ -566,7 +567,7 @@ def _evaluate_margin_total_predictions(
     pred_margin: np.ndarray,
     pred_total: np.ndarray,
     target_columns: tuple[str, str],
-    home_win_prob: Optional[np.ndarray] = None,
+    home_win_prob: np.ndarray | None = None,
 ) -> dict[str, float]:
     away_col, home_col = target_columns
     away_true = y_true[away_col].to_numpy()
@@ -601,11 +602,11 @@ def _fit_margin_total_models(
     y_margin: np.ndarray,
     y_total: np.ndarray,
     params: dict[str, Any],
-    x_eval: Optional[np.ndarray | spmatrix] = None,
-    y_margin_eval: Optional[np.ndarray] = None,
-    y_total_eval: Optional[np.ndarray] = None,
-    early_stopping_rounds: Optional[int] = None,
-    sample_weight: Optional[np.ndarray] = None,
+    x_eval: np.ndarray | spmatrix | None = None,
+    y_margin_eval: np.ndarray | None = None,
+    y_total_eval: np.ndarray | None = None,
+    early_stopping_rounds: int | None = None,
+    sample_weight: np.ndarray | None = None,
 ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
     def _train_with_params(
         active_params: dict[str, Any],
@@ -660,16 +661,15 @@ def _fit_quantile_models(
     y_train: np.ndarray,
     params: dict[str, Any],
     quantiles: Sequence[float],
-    x_eval: Optional[np.ndarray | spmatrix] = None,
-    y_eval: Optional[np.ndarray] = None,
-    early_stopping_rounds: Optional[int] = None,
-    sample_weight: Optional[np.ndarray] = None,
+    x_eval: np.ndarray | spmatrix | None = None,
+    y_eval: np.ndarray | None = None,
+    early_stopping_rounds: int | None = None,
+    sample_weight: np.ndarray | None = None,
 ) -> dict[float, xgb.XGBRegressor]:
     """Fit one XGBoost quantile regressor per requested quantile.
 
     Uses `objective='reg:quantileerror'` and passes `quantile_alpha` via model params.
     """
-
     resolved = _validate_quantiles(quantiles)
     models: dict[float, xgb.XGBRegressor] = {}
 
@@ -723,10 +723,7 @@ def _fit_blend_ridge_constrained(
 
     coef = np.maximum(coef, 0.0)
     coef_sum = float(coef.sum())
-    if coef_sum <= 0:
-        coef = np.array([0.5, 0.5], dtype=float)
-    else:
-        coef = coef / coef_sum
+    coef = np.array([0.5, 0.5], dtype=float) if coef_sum <= 0 else coef / coef_sum
 
     # Keep an intercept term but recompute it after constraining weights.
     intercept = float(np.mean(y - x @ coef))
@@ -740,8 +737,8 @@ def _fit_win_prob_calibrator(
     pred_margin: np.ndarray,
     actual_home_win: np.ndarray,
     method: str,
-    sample_weight: Optional[np.ndarray] = None,
-) -> Optional[WinProbCalibrator]:
+    sample_weight: np.ndarray | None = None,
+) -> WinProbCalibrator | None:
     method = resolve_win_prob_calibration_method(method, len(pred_margin))
     if method == "none":
         return None
@@ -761,7 +758,6 @@ def _fit_win_prob_calibrator(
 
 def normalize_win_prob_calibration_method(method: str) -> str:
     """Normalize calibration method names (e.g., logistic -> platt)."""
-
     method = method.lower()
     if method == "logistic":
         return "platt"
@@ -770,7 +766,6 @@ def normalize_win_prob_calibration_method(method: str) -> str:
 
 def resolve_win_prob_calibration_method(method: str, sample_count: int) -> str:
     """Resolve calibration method with support for auto selection."""
-
     method = normalize_win_prob_calibration_method(method)
     if method != "auto":
         return method
@@ -783,9 +778,9 @@ def resolve_win_prob_calibration_method(method: str, sample_count: int) -> str:
 
 def _predict_home_win_prob(
     pred_margin: np.ndarray,
-    calibrator: Optional[WinProbCalibrator],
+    calibrator: WinProbCalibrator | None,
     *,
-    sigma: Optional[np.ndarray] = None,
+    sigma: np.ndarray | None = None,
     use_uncertainty: bool = False,
 ) -> np.ndarray:
     if not use_uncertainty:
@@ -815,10 +810,9 @@ def _predict_home_win_prob(
 def _adjust_home_win_prob(
     games_df: pd.DataFrame,
     home_win_prob: np.ndarray,
-    market_prob_config: Optional[MarketProbConfig],
+    market_prob_config: MarketProbConfig | None,
 ) -> np.ndarray:
     """Blend/clamp win probabilities toward market implied probabilities."""
-
     if market_prob_config is None:
         return home_win_prob
 
@@ -877,7 +871,6 @@ def _adjust_home_win_prob(
 
 def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarray:
     """Normalize raw implied probs so home+away sums to 1 (no-vig)."""
-
     total = home_prob + away_prob
     with np.errstate(invalid="ignore", divide="ignore"):
         normalized = np.where(total > 0, home_prob / total, np.nan)
@@ -886,14 +879,12 @@ def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarra
 
 def _logit(prob: np.ndarray) -> np.ndarray:
     """Compute logit with clipping for stability."""
-
     clipped = np.clip(prob, 1e-6, 1 - 1e-6)
     return np.log(clipped / (1 - clipped))
 
 
 def _sigmoid(values: np.ndarray) -> np.ndarray:
     """Compute logistic sigmoid."""
-
     return 1.0 / (1.0 + np.exp(-values))
 
 
@@ -902,7 +893,7 @@ def _predict_margin_total_from_model(
 ) -> tuple[np.ndarray, np.ndarray]:
     feature_df = _apply_feature_spec(games_df, model.feature_spec)
     log.debug("Prediction feature matrix: %d rows x %d columns", *feature_df.shape)
-    x_games = model.preprocessor.transform(feature_df)
+    x_games = _transform_matrix(model.preprocessor, feature_df)
     pred_margin = _predict_xgb(model.margin_model, x_games)
     pred_total = _predict_xgb(model.total_model, x_games)
     if getattr(model, "market_anchor", False):
@@ -922,7 +913,7 @@ def _predict_margin_total_quantiles_from_model(
         return {}, {}
 
     feature_df = _apply_feature_spec(games_df, model.feature_spec)
-    x_games = model.preprocessor.transform(feature_df)
+    x_games = _transform_matrix(model.preprocessor, feature_df)
 
     margin_preds: dict[float, np.ndarray] = {
         q: _predict_xgb(q_model, x_games) for q, q_model in margin_models.items()
@@ -1012,7 +1003,6 @@ def _margin_to_home_win_prob_with_sigma(
     sigma: np.ndarray,
 ) -> np.ndarray:
     """Map margin to win probability using per-game sigma."""
-
     margin = np.asarray(margin, dtype=float)
     sigma_arr = np.asarray(sigma, dtype=float)
     sigma_arr = np.clip(sigma_arr, MIN_WIN_PROB_SIGMA, None)
@@ -1027,7 +1017,6 @@ def _estimate_sigma_from_quantiles(
     min_sigma: float = MIN_WIN_PROB_SIGMA,
 ) -> np.ndarray:
     """Estimate sigma from p10/p90 quantiles with a fallback."""
-
     if fallback <= 0:
         raise ValueError("fallback sigma must be positive.")
     p10_arr = np.asarray(p10, dtype=float)
@@ -1040,13 +1029,12 @@ def _estimate_sigma_from_quantiles(
 
 def _resolve_margin_sigma(
     pred_margin: np.ndarray,
-    pred_margin_quantiles: Optional[dict[float, np.ndarray]],
+    pred_margin_quantiles: dict[float, np.ndarray] | None,
     *,
     fallback: float,
     min_sigma: float = MIN_WIN_PROB_SIGMA,
 ) -> np.ndarray:
     """Resolve per-game sigma using p10/p90 quantiles when available."""
-
     if pred_margin_quantiles is not None:
         p10 = pred_margin_quantiles.get(0.1)
         p90 = pred_margin_quantiles.get(0.9)
@@ -1064,10 +1052,9 @@ def _resolve_margin_sigma(
 
 def _coerce_sigma(
     pred_margin: np.ndarray,
-    sigma: Optional[np.ndarray],
+    sigma: np.ndarray | None,
 ) -> np.ndarray:
     """Return a sigma array aligned to pred_margin."""
-
     margin = np.asarray(pred_margin, dtype=float)
     if sigma is None:
         return np.full_like(margin, constants.SCORE_DIFF_STD_DEV, dtype=float)
@@ -1093,7 +1080,6 @@ def _margin_to_home_win_prob_elo_style(
     Compared to Platt scaling, this tends to produce less extreme probabilities for
     large-but-plausible margins and can be useful as an alternative for pool display.
     """
-
     if points_per_400_elo <= 0:
         raise ValueError("points_per_400_elo must be positive.")
     margin = np.asarray(margin, dtype=float)
@@ -1106,7 +1092,7 @@ def _rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
 
-def _rank_confidence(strength: np.ndarray, tiebreaker: Optional[np.ndarray] = None) -> np.ndarray:
+def _rank_confidence(strength: np.ndarray, tiebreaker: np.ndarray | None = None) -> np.ndarray:
     strength = np.asarray(strength)
     if tiebreaker is None:
         order = np.argsort(strength, kind="mergesort")
@@ -1302,7 +1288,7 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
                     saved_xgb,
                     current_xgb,
                 )
-    except Exception:  # pragma: no cover
+    except Exception:  # noqa: S110 (silent exception on missing xgboost version is safe)
         pass
 
     model = _ensure_backward_compatible_model(model)
@@ -1352,7 +1338,7 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
     return model
 
 
-def _with_market_prob_config(model: Any, config: Optional[MarketProbConfig]) -> Any:
+def _with_market_prob_config(model: Any, config: MarketProbConfig | None) -> Any:
     if config is None:
         return model
     if isinstance(model, ScoreModel):
@@ -1376,25 +1362,21 @@ def _with_market_prob_config(model: Any, config: Optional[MarketProbConfig]) -> 
 
 def load_model_checkpoint(path: Path, model_kind: str) -> Any:
     """Load a saved model checkpoint with type validation."""
-
     return _load_model_checkpoint(path, model_kind)
 
 
 def get_target_columns(df: pd.DataFrame) -> tuple[str, str]:
     """Return away/home score column names."""
-
     return _get_target_columns(df)
 
 
 def apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
     """Apply a feature spec to an input DataFrame."""
-
     return _apply_feature_spec(df, spec)
 
 
 def margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
     """Convert predicted margin to home win probability."""
-
     return _margin_to_home_win_prob(margin)
 
 
@@ -1402,7 +1384,6 @@ def predict_margin_total_from_model(
     model: MarginTotalModel, games_df: pd.DataFrame
 ) -> tuple[np.ndarray, np.ndarray]:
     """Predict margin and total from a margin/total model."""
-
     return _predict_margin_total_from_model(model, games_df)
 
 
@@ -1410,15 +1391,14 @@ def derive_scores_from_margin_total(
     pred_margin: np.ndarray, pred_total: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     """Derive away/home scores from margin and total."""
-
     return _derive_scores_from_margin_total(pred_margin, pred_total)
 
 
 def predict_home_win_prob(
     pred_margin: np.ndarray,
-    calibrator: Optional[WinProbCalibrator],
+    calibrator: WinProbCalibrator | None,
     *,
-    sigma: Optional[np.ndarray] = None,
+    sigma: np.ndarray | None = None,
     use_uncertainty: bool = False,
 ) -> np.ndarray:
     """Predict home win probability from margin predictions.
@@ -1426,7 +1406,6 @@ def predict_home_win_prob(
     When `use_uncertainty` is True, the margin is normalized by `sigma` before
     computing probabilities (and any calibrator is fit/predicted on that scale).
     """
-
     return _predict_home_win_prob(
         pred_margin,
         calibrator,
@@ -1438,16 +1417,14 @@ def predict_home_win_prob(
 def adjust_home_win_prob(
     games_df: pd.DataFrame,
     home_win_prob: np.ndarray,
-    market_prob_config: Optional[MarketProbConfig],
+    market_prob_config: MarketProbConfig | None,
 ) -> np.ndarray:
     """Adjust win probabilities using market blend/clamp settings."""
-
     return _adjust_home_win_prob(games_df, home_win_prob, market_prob_config)
 
 
 def predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
     """Predict using an XGBoost model with DMatrix inputs."""
-
     return _predict_xgb(model, data)
 
 
@@ -1459,7 +1436,6 @@ def build_prediction_output(
     score_rounding: str = "none",
 ) -> pd.DataFrame:
     """Build the prediction output DataFrame."""
-
     return _build_prediction_output(
         games_df,
         pred_away,
@@ -1510,7 +1486,7 @@ def _score_margin_total_fold(
     market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: Optional[MarketProbConfig] = None,
+    market_prob_config: MarketProbConfig | None = None,
 ) -> float:
     feature_spec = _build_feature_spec(
         train_df,
@@ -1523,8 +1499,8 @@ def _score_margin_total_fold(
     )
     preprocessor = _build_preprocessor(feature_spec, for_tree=True)
 
-    x_train = preprocessor.fit_transform(_apply_feature_spec(train_df, feature_spec))
-    x_val = preprocessor.transform(_apply_feature_spec(val_df, feature_spec))
+    x_train = _fit_transform_matrix(preprocessor, _apply_feature_spec(train_df, feature_spec))
+    x_val = _transform_matrix(preprocessor, _apply_feature_spec(val_df, feature_spec))
 
     (
         y_margin_train,
@@ -1579,7 +1555,7 @@ def _evaluate_margin_total_cv(
     market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: Optional[MarketProbConfig] = None,
+    market_prob_config: MarketProbConfig | None = None,
 ) -> float:
     timepoints = _build_season_week_timepoints(df)
     folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
@@ -1630,7 +1606,7 @@ def _evaluate_margin_total_cv_summary(
     market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: Optional[MarketProbConfig] = None,
+    market_prob_config: MarketProbConfig | None = None,
 ) -> dict[str, Any]:
     timepoints = _build_season_week_timepoints(df)
     folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
@@ -1682,13 +1658,14 @@ def _run_optuna_search(
     market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: Optional[MarketProbConfig] = None,
-    holdout_seasons: Optional[Sequence[int]] = None,
+    market_prob_config: MarketProbConfig | None = None,
+    holdout_seasons: Sequence[int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    if optuna is None:  # pragma: no cover
+    if optuna is None:
         raise ImportError("Optuna is required for hyperparameter tuning.")
     optuna_module = optuna
-    assert optuna_module is not None
+    # After the ImportError check above, this is guaranteed non-None, but Pylance may not track it.
+    # The assignment above establishes the variable in local scope for type narrowing.
     if holdout_seasons:
         if "season" not in df.columns:
             raise ValueError("Optuna tuning requires a season column for holdout checks.")
@@ -1708,7 +1685,6 @@ def _run_optuna_search(
 
     def objective_fn(trial: Any) -> float:
         """Optuna objective function for margin/total model tuning."""
-
         trial_params = {
             "max_depth": trial.suggest_int("max_depth", 3, 8),
             "min_child_weight": trial.suggest_float("min_child_weight", 1.0, 10.0),
@@ -1782,14 +1758,14 @@ def _run_optuna_search(
     )
     duration_seconds = time.monotonic() - start_time
 
-    best_value: Optional[float]
+    best_value: float | None
     best_params_raw: dict[str, Any]
-    best_trial_number: Optional[int]
+    best_trial_number: int | None
     try:
         best_value = float(study.best_value)
         best_params_raw = dict(study.best_params)
         best_trial_number = int(study.best_trial.number)
-    except (AttributeError, ValueError, TypeError):
+    except AttributeError, ValueError, TypeError:
         best_value = None
         best_params_raw = {}
         best_trial_number = None
@@ -1803,10 +1779,7 @@ def _run_optuna_search(
     best_params: dict[str, Any] = {}
     items = best_params_raw.items()
     for key, value in items:
-        if isinstance(key, bytes):
-            key_str = key.decode("utf-8", errors="replace")
-        else:
-            key_str = str(key)
+        key_str = key.decode("utf-8", errors="replace") if isinstance(key, bytes) else str(key)
         best_params[key_str] = value
 
     resolved_best = _resolve_xgb_params(

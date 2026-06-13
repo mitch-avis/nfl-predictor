@@ -23,7 +23,6 @@ def build_candidate_key(
     xgb_params_overrides: dict[str, Any] | None,
 ) -> str:
     """Return a stable, human-readable candidate key."""
-
     payload = {
         "model_kind": model_kind,
         "feature_start": feature_start,
@@ -55,13 +54,11 @@ def build_candidate_key(
 
 def _format_float(value: float, *, precision: int = 3) -> str:
     """Format floats consistently for candidate keys."""
-
     return f"{float(value):.{precision}f}"
 
 
 def _format_xgb_overrides(overrides: dict[str, Any]) -> str:
     """Format XGBoost override settings for candidate keys."""
-
     if not overrides:
         return "default"
 
@@ -80,10 +77,7 @@ def _format_xgb_overrides(overrides: dict[str, Any]) -> str:
         if key not in overrides:
             continue
         value = overrides[key]
-        if isinstance(value, float):
-            value_str = _format_float(value)
-        else:
-            value_str = str(value)
+        value_str = _format_float(value) if isinstance(value, float) else str(value)
         parts.append(f"{label}{value_str}")
     if not parts:
         return "default"

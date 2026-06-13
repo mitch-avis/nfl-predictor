@@ -15,7 +15,6 @@ from scripts import power_rankings
 
 def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
     """Records should exclude postseason games when computing current standings."""
-
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame(
         [
@@ -53,7 +52,6 @@ def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
 
 def test_load_current_records_can_include_postseason(tmp_path) -> None:
     """Records should include postseason games when requested."""
-
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame(
         [
@@ -91,7 +89,6 @@ def test_load_current_records_can_include_postseason(tmp_path) -> None:
 
 def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
     """Missing feature columns should raise a clear validation error."""
-
     data_path = tmp_path / "ml.csv"
     pd.DataFrame(
         [
@@ -119,7 +116,6 @@ def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
 
 def test_score_model_calibration_applied_for_win_prob(tmp_path, monkeypatch) -> None:
     """ScoreModel paths should apply a calibrator when present."""
-
     data_path = tmp_path / "ml.csv"
     pd.DataFrame(
         [
@@ -139,7 +135,6 @@ def test_score_model_calibration_applied_for_win_prob(tmp_path, monkeypatch) -> 
 
         def transform(self, _df: pd.DataFrame) -> np.ndarray:
             """Return a deterministic feature matrix."""
-
             return np.zeros((len(_df), 1), dtype=float)
 
     class DummyModel:
@@ -153,12 +148,10 @@ def test_score_model_calibration_applied_for_win_prob(tmp_path, monkeypatch) -> 
 
         def predict_proba(self, x: np.ndarray) -> np.ndarray:
             """Return a fixed 0.9 home win probability."""
-
             return np.tile(np.array([0.1, 0.9], dtype=float), (len(x), 1))
 
     def fake_predict_xgb(model: DummyModel, x: np.ndarray) -> np.ndarray:
         """Return deterministic away/home scores."""
-
         if model.name == "away":
             return np.full(len(x), 10.0)
         return np.full(len(x), 20.0)
@@ -188,7 +181,6 @@ def test_score_model_calibration_applied_for_win_prob(tmp_path, monkeypatch) -> 
 
 def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
     """Ratings diagnostics should log once per invocation."""
-
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame(
         [
@@ -233,7 +225,6 @@ def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
 
 def test_build_games_for_ratings_includes_postseason(tmp_path) -> None:
     """Ratings fit should include postseason games when requested."""
-
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame(
         [

@@ -1,0 +1,80 @@
+name: Validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Verify lockfile
+        run: uv lock --check
+
+      - name: Create virtual environment
+        run: uv venv .venv
+
+      - name: Sync dependencies
+        run: |
+          source .venv/bin/activate
+          uv sync --active
+
+      - name: Verify synced environment
+        run: |
+          source .venv/bin/activate
+          uv sync --check --active
+
+      - name: Ruff format check
+        run: .venv/bin/ruff format --check .
+
+      - name: Ruff lint
+        run: .venv/bin/ruff check .
+
+      - name: Ty
+        run: .venv/bin/ty check .
+
+      - name: Pyright
+        run: .venv/bin/pyright .
+
+      - name: Pytest
+        run: .venv/bin/python -m pytest
+
+      - name: Set up Node.js for markdownlint
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install markdownlint
+        run: npm install --global markdownlint-cli
+
+      - name: Markdownlint
+        run: markdownlint .
+
+      - name: Editable install smoke check
+        run: uv pip install --python .venv/bin/python -e . --no-deps
+
+      - name: CLI help smoke checks
+        run: |
+          .venv/bin/python -m nfl_predictor.ml_model --help >/dev/null
+          .venv/bin/python scripts/weekly_run.py --help >/dev/null
+          .venv/bin/python scripts/power_rankings.py --help >/dev/null

@@ -12,12 +12,13 @@ Notes:
 - Uses regular-season folds only (per walk_forward.filter_regular_season)
 - Disables quantile models by default for speed
 - XGBoost overrides are optional; defaults align with training settings
+
 """
 
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +29,7 @@ try:
     from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     # Allow running as a script: `python scripts/wf_compare.py`.
     import sys
 
@@ -41,7 +42,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 def _now_run_id() -> str:
-    return datetime.now(timezone.utc).strftime("wfcmp_%Y%m%d_%H%M%S")
+    return datetime.now(UTC).strftime("wfcmp_%Y%m%d_%H%M%S")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -217,7 +218,6 @@ def _run_one(
 
 def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
     """Resolve which market modes to evaluate."""
-
     if mode == "features":
         return [("features", True, False)]
     if mode == "anchor":
@@ -228,8 +228,7 @@ def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
 
 
 def main() -> int:
-    """Main CLI entrypoint."""
-
+    """Run the walk-forward comparison CLI."""
     args = _parse_args()
 
     if not args.data_path.exists():

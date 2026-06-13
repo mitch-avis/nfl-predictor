@@ -13,7 +13,6 @@ from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
 
 def test_write_betting_template_xlsx_creates_workbook(tmp_path: Path) -> None:
     """Writes a workbook with expected sheets and formulas."""
-
     # Intentionally unsorted input; template should sort by kickoff datetime, then game_id.
     df = pd.DataFrame(
         [

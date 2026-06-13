@@ -20,7 +20,6 @@ def _capture_logs(messages: list[str]) -> Any:
 
 def test_display_predictions_logs(monkeypatch) -> None:
     """Predictions are logged in expected format."""
-
     messages: list[str] = []
     monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
 
@@ -42,7 +41,6 @@ def test_display_predictions_logs(monkeypatch) -> None:
 
 def test_display_weekly_predictions_empty(monkeypatch) -> None:
     """Empty predictions DataFrame logs appropriate message."""
-
     messages: list[str] = []
     monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
 
@@ -53,7 +51,6 @@ def test_display_weekly_predictions_empty(monkeypatch) -> None:
 
 def test_display_weekly_predictions_missing_team_columns(monkeypatch) -> None:
     """Missing team columns log appropriate message."""
-
     messages: list[str] = []
     monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
 
@@ -65,7 +62,6 @@ def test_display_weekly_predictions_missing_team_columns(monkeypatch) -> None:
 
 def test_display_weekly_predictions_formats(monkeypatch) -> None:
     """Weekly predictions are logged in expected format."""
-
     messages: list[str] = []
     monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
 
@@ -89,9 +85,35 @@ def test_display_weekly_predictions_formats(monkeypatch) -> None:
     assert any(msg.startswith("#") for msg in messages if msg.startswith("#"))
 
 
+def test_display_weekly_predictions_confidence_strength_and_explicit_winner(monkeypatch) -> None:
+    """Confidence-strength sorting and explicit winners should be preserved in pretty output."""
+    messages: list[str] = []
+    monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
+
+    df = pd.DataFrame(
+        {
+            "away_name": ["Away A", "Away B"],
+            "home_name": ["Home A", "Home B"],
+            "predicted_away_score": [14.0, 20.0],
+            "predicted_home_score": [24.0, 17.0],
+            "home_win_prob": [0.7, 0.35],
+            "away_win_prob": [0.3, 0.65],
+            "confidence_strength": [0.2, 0.15],
+            "predicted_winner": ["Home A", "Away B"],
+        }
+    )
+
+    ml_utils.display_weekly_predictions(df)
+
+    assert messages[0] == "Weekly predictions"
+    assert "#-- (Home A)" in messages[1]
+    assert "70.0%" in messages[1]
+    assert "#-- (Away B)" in messages[2]
+    assert "65.0%" in messages[2]
+
+
 def test_flatten_and_nested_dict_to_df() -> None:
     """Nested dicts are flattened and converted to DataFrame correctly."""
-
     nested = {"alpha": {"x": 1, "y": 2}, "beta": {"z": 3}}
     flat = ml_utils.flatten_dict(nested)
 
@@ -105,6 +127,5 @@ def test_flatten_and_nested_dict_to_df() -> None:
 
 def test_utils_ml_utils_facade() -> None:
     """Compatibility ml_utils functions are correctly mapped."""
-
     assert compat_ml_utils.flatten_dict is ml_utils.flatten_dict
     assert "display_predictions" in dir(compat_ml_utils)

@@ -6,6 +6,40 @@ checks from the relevant section.
 
 ---
 
+## Milestone 44 - Preseason 2026 repo hardening and tooling alignment
+
+Completed 2026-06-13.
+
+- [x] Aligned repo instructions, README guidance, changelog workflow, and helper docs around the
+      Ruff-only, `.venv`-explicit toolchain.
+- [x] Reconciled `pyproject.toml` metadata for Python 3.14, kept dependency groups in
+      `pyproject.toml`, and confirmed `uv.lock` as the environment source of truth.
+- [x] Kept both Pyright and Ty as mandatory gates, with minimal checked-in `tool.ty` settings to pin
+      the repo venv and validated source roots.
+- [x] Enforced the preseason coverage floor at `90%` in `pyproject.toml` and raised the suite to
+      `406 passed` / `90.01%` coverage.
+- [x] Kept the top-level `README.md` as the canonical documentation surface; nested `ml` and
+      `reporting` README files remain unnecessary until those subsystems outgrow it.
+- [x] Validation and release workflows are both checked in, and the clean-checkout
+      `scripts/betting_pipeline.py --dry-run` regression remains covered.
+- [x] The repo is back to a season-ready baseline and roadmap work resumes at Milestone 39.
+
+---
+
+## June 2026 maintenance snapshot
+
+- [x] Rebuilt the local `.venv` on Python 3.14.6 and bumped the project version to `0.2.0`.
+- [x] Refreshed pinned dependencies, added a direct `pyyaml` dependency, and added
+      `update_requirements.sh` for repeatable dependency refreshes.
+- [x] Shifted the active toolchain baseline to Ruff, Pyright, and Ty.
+- [x] Removed duplicate TODO entries that were already completed under Milestones 23.5 and 23.6.
+- [x] Migrated dependency management to `pyproject.toml` plus `uv.lock` and removed the legacy
+      requirements files.
+- [x] Consolidated agent instructions into `AGENTS.md` and removed the duplicate
+      `.github/copilot-instructions.md` file.
+
+---
+
 ## Completed core milestones (0-11)
 
 > These items were completed and verified in prior work. They are archived here to keep `TODO.md`
@@ -83,9 +117,10 @@ checks from the relevant section.
 ### Milestone 12 - Documentation + repository cleanup (Polars-only narrative)
 
 - [x] Remove documentation references to deprecated data collection and utility modules.
-- [x] Ensure all docs describe `nfl_predictor/data_collection.py` as the authoritative ETL entrypoint.
+- [x] Ensure all docs describe `nfl_predictor/data_collection.py` as the authoritative ETL
+      entrypoint.
 - [x] Add a short "Data sources + missing data" section describing fallbacks and season coverage
-  limits.
+      limits.
 
 Acceptance:
 
@@ -95,7 +130,7 @@ Acceptance:
 
 - [x] Audit `nfl_predictor/constants.py` for unused constants and remove them.
 - [x] Group constants into clear sections (paths, season/week rules, team mappings, feature names,
-  defaults).
+      defaults).
 - [x] Ensure schema/feature lists are centralized and used everywhere (no hard-coded columns).
 
 Tests:
@@ -255,14 +290,13 @@ Completion note: Setup and tooling workflow verified; README and config alignmen
   - install from `requirements.txt` + `requirements-dev.txt`
   - use `--no-deps` for editable installs to avoid unpinned dependency drift
   - document how to regenerate pins (`uv pip compile`)
-- [x] Confirm dev requirements include:
-  `black`, `ruff`, `pytest`, `pytest-cov` (and any other test plugins required by
-  `pyproject.toml` addopts).
+- [x] Confirm dev requirements include: `black`, `ruff`, `pytest`, `pytest-cov` (and any other test
+      plugins required by `pyproject.toml` addopts).
 - [x] Fix minor config gotchas:
   - Ruff isort config should not treat `__main__` as a third-party package.
   - Coverage `exclude_lines` should match `if __name__ == "__main__":` exactly.
 - [x] Confirm `.gitignore` covers run artifacts (models, optuna db, caches) and that `data/` being
-  ignored is intentional and documented.
+      ignored is intentional and documented.
 
 Acceptance:
 
@@ -281,8 +315,8 @@ Completion note: Walk-forward evaluation protocol and metrics schema standardize
   - Default: last N seasons (configurable), regular season only by default.
   - Explicit handling for incomplete current season and postseason evaluation.
 - [x] Standardize the **inner calibration window**:
-  - Time-aware calibration weeks (e.g., last K weeks before prediction week) and/or
-    calibration seasons.
+  - Time-aware calibration weeks (e.g., last K weeks before prediction week) and/or calibration
+    seasons.
   - Minimum sample size rules (see Milestone 24).
 - [x] Decide (and document) the **selection hierarchy** for "best model":
   - Primary: probability quality (Brier, log loss, reliability).
@@ -326,8 +360,8 @@ Completion note: Reporting scripts now fail fast on schema issues and apply cali
 
 - [x] **Apply win-prob calibration consistently for `ScoreModel`**
   - Update the `ScoreModel` path in `scripts/power_rankings.py` so that:
-    - If a calibrator is present, win probabilities are produced via the calibrated path
-      (e.g., `predict_home_win_prob(margin, calibrator)`).
+    - If a calibrator is present, win probabilities are produced via the calibrated path (e.g.,
+      `predict_home_win_prob(margin, calibrator)`).
     - If no calibrator is intended, this behavior is explicit and documented in code.
   - Add a unit test that proves calibration is applied when a non-identity calibrator exists.
 
@@ -379,7 +413,7 @@ Completion note: Calibration comparison harness added; platt chosen as default.
 Options in code today: `none`, `platt`, `isotonic`, `elo`.
 
 - [x] Add a **calibration comparison harness** that evaluates calibration choices under the
-  canonical walk-forward protocol (Milestone 23).
+      canonical walk-forward protocol (Milestone 23).
   - At minimum: compare Brier, log loss, and reliability.
   - Include pool metrics as tie-breakers.
 - [x] Implement **"auto" calibration** (optional but recommended):
@@ -391,8 +425,8 @@ Options in code today: `none`, `platt`, `isotonic`, `elo`.
 
 Acceptance:
 
-- [x] Walk-forward results clearly show which calibration choice is best (and how sensitive it is
-  by season/week).
+- [x] Walk-forward results clearly show which calibration choice is best (and how sensitive it is by
+      season/week).
 - [x] `--win-prob-calibration logistic` behaves identically to `--win-prob-calibration platt`.
 
 ### Milestone 25 - Market integration decisions + correct probability blending
@@ -413,15 +447,15 @@ Decide, then enforce, the objectively best usage of market inputs:
   - Add: **no-vig** implied probability (normalize home/away to sum to 1).
 - [x] Implement/validate **market probability blending** "the right way":
   - Consider blending in **log-odds space** (more stable than linear prob blends).
-  - Add clear configuration: source (`raw` vs `novig`), blend method (`prob` vs `logit`),
-    weight, and clamp delta.
+  - Add clear configuration: source (`raw` vs `novig`), blend method (`prob` vs `logit`), weight,
+    and clamp delta.
 - [x] Add a small test suite around moneyline->prob and no-vig normalization.
 
 Acceptance:
 
 - [x] The selected market mode (features vs anchor vs hybrid) is chosen via walk-forward.
 - [x] Market blending/clamping uses the intended probability definition (raw or no-vig) and is
-  unit-tested.
+      unit-tested.
 
 ### Milestone 26 - Continuous retraining + weekly orchestration (one command, resumable)
 
@@ -429,9 +463,9 @@ Completion note: Weekly orchestration script added with resumable artifacts.
 
 Goal: a single script to run 1–2x per week that:
 
-1) runs data refresh (`python -m nfl_predictor.data_collection`)
-2) re-trains and time-validates the best-known model configuration
-3) emits all weekly outputs in a consistent, predictable place
+1. runs data refresh (`python -m nfl_predictor.data_collection`)
+2. re-trains and time-validates the best-known model configuration
+3. emits all weekly outputs in a consistent, predictable place
 
 Outputs to include (as available):
 
@@ -450,7 +484,7 @@ Outputs to include (as available):
   - final train
   - prediction + reports
 - [x] Make it resumable (like `scripts/betting_pipeline.py`): reuse prior artifacts when inputs
-  match.
+      match.
 - [x] Add a config file option (YAML/JSON) to avoid 200-character CLI invocations.
 
 Acceptance:
@@ -466,15 +500,15 @@ The repo already produces quantile intervals for margin/total. Use them more dir
 
 - [x] Derive a per-game uncertainty estimate (e.g., infer σ from p10/p90 width).
 - [x] Convert margin + σ into a win probability via a distributional mapping (e.g., normal CDF),
-  then optionally calibrate.
+      then optionally calibrate.
 - [x] Compare uncertainty-aware probabilities vs current approach via walk-forward.
 - [x] Consider uncertainty-aware confidence ranks (e.g., prioritize higher expected points with
-  lower upset risk).
+      lower upset risk).
 
 Acceptance:
 
-- [x] Walk-forward shows whether uncertainty-aware probabilities improve Brier/log loss and/or
-  pool points.
+- [x] Walk-forward shows whether uncertainty-aware probabilities improve Brier/log loss and/or pool
+      points.
 
 ### Milestone 28 - Metric strategy: decide what "better" means (and track it)
 
@@ -512,7 +546,7 @@ via walk-forward with platt as the best calibration.
 
 - [x] Add a feature-importance report (XGBoost gain/weight) for each trained run.
 - [x] Add an optional SHAP analysis script for deeper inspection (keep it optional; do not require
-  it for CI).
+      it for CI).
 - [x] Use importance results to:
   - prune noisy/redundant features
   - tune regularization (L1/L2, depth, min_child_weight, etc.)
@@ -531,7 +565,7 @@ Goal: shorten and stabilize data-collection runs while minimizing network calls.
 
 - [x] Add opt-in timing/profiling logs for data collection (per major step) with a clear toggle.
 - [x] Add targeted debug logs around schedule/TeamRankings/ELO/team-stats merges so slow steps are
-  visible.
+      visible.
 - [x] Audit TeamRankings caching behavior and document the cache hit/miss rules.
 - [x] Implement caching for nflreadpy outputs (schedule + team stats) and a clear refresh toggle.
 - [x] Document caching and expected run-time behavior in `README.md`.
@@ -559,8 +593,8 @@ Goal: add leakage-safe trend/recency signals plus optional time-weighted trainin
 - [x] Rating trend: `last_5_games_rating - last_10_games_rating` for away/home + diff.
 - [x] Elo trend: `elo_pre - rolling_4wk_mean(elo_pre)` for away/home + diff.
 - [x] QB Elo trend: `qb_elo_pre - rolling_4wk_mean(qb_elo_pre)` for away/home + diff.
-- [x] Performance trend (select 1-2 stats): recent 4-week mean vs season-to-date mean
-  (scoring margin and turnover margin) for away/home + diff.
+- [x] Performance trend (select 1-2 stats): recent 4-week mean vs season-to-date mean (scoring
+      margin and turnover margin) for away/home + diff.
 - [x] Season-phase features: normalized `week_in_season` plus early/mid/late bucket flags.
 
 #### ETL + schema
@@ -593,8 +627,8 @@ Acceptance:
 
 ### Milestone 32 - Weather + venue effects (consistent, non-leaky)
 
-Completion note: Stadium metadata features were kept and expanded; weather fields were later
-removed after confirming they update post-kickoff.
+Completion note: Stadium metadata features were kept and expanded; weather fields were later removed
+after confirming they update post-kickoff.
 
 #### Tasks (Milestone 32)
 
@@ -615,7 +649,7 @@ Completion note: Stadium metadata expanded and wired through ETL/tests with safe
 
 - [x] Expand `STADIUMS` to include `name` and `elevation` (and keep city/state).
 - [x] Update stadium feature derivation to use the new `STADIUMS` fields and drop any legacy
-  altitude map if redundant.
+      altitude map if redundant.
 - [x] Keep stadium type/surface features derived from NFLverse schedule fields.
 - [x] Add/adjust tests for stadium metadata parsing and safe fallbacks.
 - [x] Update README feature list to reflect stadium-only (no weather/ref).
@@ -656,8 +690,8 @@ Acceptance:
 
 ### Milestone 35 - Pandas to Polars audit/refactor
 
-Completion note: Completed a pandas usage audit; ETL is Polars-first and pandas usage is confined
-to ML, reporting, and orchestration layers. No safe non-ML/reporting refactors were identified.
+Completion note: Completed a pandas usage audit; ETL is Polars-first and pandas usage is confined to
+ML, reporting, and orchestration layers. No safe non-ML/reporting refactors were identified.
 
 #### Tasks (Milestone 35)
 
@@ -703,8 +737,8 @@ docs/tests to codify the canonical evaluation protocol.
   - Default: last N seasons (configurable), regular season only by default.
   - Explicit handling for incomplete current season and postseason evaluation.
 - [x] Standardize the **inner calibration window**:
-  - Time-aware calibration weeks (e.g., last K weeks before prediction week) and/or
-    calibration seasons.
+  - Time-aware calibration weeks (e.g., last K weeks before prediction week) and/or calibration
+    seasons.
   - Minimum sample size rules.
 - [x] Decide (and document) the **selection hierarchy** for “best model”:
   - Primary: probability quality (Brier, log loss, reliability).
@@ -729,7 +763,8 @@ optional per-fold progress logging, with tests and docs updated.
 
 #### Tasks (Milestone 38)
 
-- [x] Identify where WF candidates are enumerated (weekly_run Stage 1) and define stable candidate keys.
+- [x] Identify where WF candidates are enumerated (weekly_run Stage 1) and define stable candidate
+      keys.
 - [x] Add dataset + run fingerprint helpers for caching/resume decisions.
 - [x] Write per-candidate artifacts atomically and skip valid candidates on resume.
 - [x] Persist and atomically update a summary table after each candidate.

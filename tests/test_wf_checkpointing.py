@@ -31,7 +31,6 @@ class Candidate(TypedDict):
 
 def _candidate(candidate_key: str) -> Candidate:
     """Return a minimal candidate dictionary for checkpoint tests."""
-
     return {
         "candidate_key": candidate_key,
         "label": candidate_key,
@@ -49,7 +48,6 @@ def _candidate(candidate_key: str) -> Candidate:
 
 def _stub_results(tag: int) -> dict[str, object]:
     """Return stubbed walk-forward results for checkpoint tests."""
-
     return {
         "overall": {
             "brier": 0.2 + (tag * 0.01),
@@ -71,7 +69,6 @@ def _stub_results(tag: int) -> dict[str, object]:
 
 def test_candidate_key_stability() -> None:
     """Candidate keys should be stable for identical inputs."""
-
     key_a = wf_compare_utils.build_candidate_key(
         model_kind="margin_total",
         feature_start="away_rest",
@@ -119,9 +116,57 @@ def test_candidate_key_stability() -> None:
     assert key_a != key_c
 
 
+def test_candidate_key_uses_default_xgb_tag_for_missing_or_unmapped_overrides() -> None:
+    """Missing or unmapped XGBoost overrides should fall back to the default tag."""
+    base_kwargs = {
+        "model_kind": "margin_total",
+        "feature_start": "away_rest",
+        "feature_end": "home_moneyline",
+        "calibration": "none",
+        "market_mode": "features",
+        "market_prob_source": "raw",
+        "market_prob_blend_method": "prob",
+        "win_prob_use_uncertainty": False,
+        "market_prob_weight": 0.0,
+        "market_prob_clamp": 0.0,
+        "include_quantiles": False,
+    }
+
+    key_none = wf_compare_utils.build_candidate_key(
+        **base_kwargs,
+        xgb_params_overrides=None,
+    )
+    key_unmapped = wf_compare_utils.build_candidate_key(
+        **base_kwargs,
+        xgb_params_overrides={"gamma": 1.0},
+    )
+
+    assert "_xgb-default_" in key_none
+    assert "_xgb-default_" in key_unmapped
+
+
+def test_candidate_key_formats_float_and_string_xgb_overrides() -> None:
+    """Recognized float and string XGBoost overrides should be encoded in the key."""
+    key = wf_compare_utils.build_candidate_key(
+        model_kind="margin_total",
+        feature_start="away_rest",
+        feature_end="home_moneyline",
+        calibration="none",
+        market_mode="features",
+        market_prob_source="raw",
+        market_prob_blend_method="prob",
+        win_prob_use_uncertainty=False,
+        market_prob_weight=0.0,
+        market_prob_clamp=0.0,
+        include_quantiles=False,
+        xgb_params_overrides={"learning_rate": 0.125, "device": "cuda"},
+    )
+
+    assert "_xgb-lr0.125-devcuda_" in key
+
+
 def test_dataset_fingerprint_changes_on_content_change(tmp_path: Path) -> None:
     """Dataset fingerprints should change when file contents change."""
-
     path = tmp_path / "data.csv"
     path.write_text("a,b\n1,2\n", encoding="utf-8")
     fp_a = fingerprints.dataset_fingerprint(path)
@@ -135,7 +180,6 @@ def test_dataset_fingerprint_changes_on_content_change(tmp_path: Path) -> None:
 
 def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Resume should skip candidates with valid artifacts."""
-
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     dataset_fp = {"sha256": "deadbeef", "path": "x", "size": 1, "mtime": 0.0}
@@ -199,7 +243,6 @@ def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.Mo
 
 def test_corrupt_artifact_recomputes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Corrupt candidate artifacts should be moved aside and recomputed."""
-
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     dataset_fp = {"sha256": "abc123", "path": "x", "size": 1, "mtime": 0.0}
@@ -250,7 +293,6 @@ def test_corrupt_artifact_recomputes(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 def test_resume_after_interrupt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Resume should continue after a simulated interruption."""
-
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     dataset_fp = {"sha256": "abc123", "path": "x", "size": 1, "mtime": 0.0}

@@ -1,5 +1,4 @@
-"""
-Game-related utilities for NFL data processing.
+"""Game-related utilities for NFL data processing.
 
 This module provides functions for handling game-specific data:
     - Spread to moneyline conversion
@@ -18,8 +17,7 @@ from nfl_predictor.utils.scraping_utils import scrape_survivor_grid_spreads
 
 
 def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
-    """
-    Convert an NFL point spread to a moneyline, including the effect of vig.
+    """Convert an NFL point spread to a moneyline, including the effect of vig.
 
     Uses the normal distribution to model score differentials and convert
     spreads to implied probabilities, then to moneyline odds.
@@ -30,8 +28,8 @@ def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
 
     Returns:
         The moneyline corresponding to the given spread
-    """
 
+    """
     # Use the standard deviation of NFL score differences
     std_dev = constants.SCORE_DIFF_STD_DEV
 
@@ -61,8 +59,7 @@ def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
 
 
 def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Fill in missing moneylines by calculating them from spreads.
+    """Fill in missing moneylines by calculating them from spreads.
 
     For games where moneyline is missing but spread is available,
     calculates the moneyline using spread_to_moneyline conversion.
@@ -72,8 +69,8 @@ def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with moneylines filled in where possible
-    """
 
+    """
     if "home_spread" not in df.columns:
         return df
 
@@ -130,8 +127,7 @@ def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Get the most recent starting QB for each team from ELO data.
+    """Get the most recent starting QB for each team from ELO data.
 
     Uses the qb_elos.csv data to find the most recent game where each team
     had a recorded starting QB.
@@ -141,8 +137,8 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with columns: team_abbr, qb_name, qb_value_pre, qb_elo_pre
-    """
 
+    """
     required_cols = ["qb1", "qb2", "team1", "team2"]
     if not all(c in elo_df.columns for c in required_cols):
         return pl.DataFrame()
@@ -194,8 +190,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
 
 
 def get_qb_elo_by_name(elo_df: pl.DataFrame, qb_name: str) -> dict:
-    """
-    Get the most recent ELO values for a specific QB by name.
+    """Get the most recent ELO values for a specific QB by name.
 
     Searches both qb1 and qb2 columns to find the most recent game
     the QB started, then returns their pre-game ELO values.
@@ -206,8 +201,8 @@ def get_qb_elo_by_name(elo_df: pl.DataFrame, qb_name: str) -> dict:
 
     Returns:
         Dict with qb_value_pre and qb_elo_pre, or empty dict if not found
-    """
 
+    """
     if elo_df.height == 0 or not qb_name:
         return {}
 
@@ -235,8 +230,7 @@ def fill_future_qb_data(
     df: pl.DataFrame,
     elo_df: pl.DataFrame,
 ) -> pl.DataFrame:
-    """
-    Fill in QB data for future games using each team's most recent starter.
+    """Fill in QB data for future games using each team's most recent starter.
 
     For games where away_qb/home_qb are null, looks up the most recent QB
     for each team from the ELO data and fills in their name and ELO values.
@@ -247,8 +241,8 @@ def fill_future_qb_data(
 
     Returns:
         DataFrame with QB data filled in for future games
-    """
 
+    """
     required_cols = ["away_abbr", "home_abbr"]
     if not all(c in df.columns for c in required_cols):
         return df
@@ -257,15 +251,9 @@ def fill_future_qb_data(
     has_away_qb = "away_qb" in df.columns
     has_home_qb = "home_qb" in df.columns
 
-    if has_away_qb:
-        null_away = df.filter(pl.col("away_qb").is_null())
-    else:
-        null_away = df  # All rows need QB data
+    null_away = df.filter(pl.col("away_qb").is_null()) if has_away_qb else df
 
-    if has_home_qb:
-        null_home = df.filter(pl.col("home_qb").is_null())
-    else:
-        null_home = df
+    null_home = df.filter(pl.col("home_qb").is_null()) if has_home_qb else df
 
     if null_away.height == 0 and null_home.height == 0:
         return df
@@ -373,8 +361,7 @@ def fill_future_qb_data(
 
 
 def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Fill in lines (spreads, moneylines, totals) for future games using SurvivorGrid data.
+    """Fill in lines (spreads, moneylines, totals) for future games using SurvivorGrid data.
 
     Scrapes current spreads from SurvivorGrid.com and applies them to future games
     that don't have lines data. Also calculates moneylines from spreads and uses
@@ -385,8 +372,8 @@ def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with lines filled in for future games
-    """
 
+    """
     # Only process if we have the required columns
     required_cols = ["week", "away_abbr", "home_abbr"]
     if not all(c in df.columns for c in required_cols):
@@ -421,7 +408,6 @@ def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
     # We need to convert to home_spread perspective
     def get_home_spread(week: int, home_abbr: str, away_abbr: str) -> float | None:
         """Get the home spread for a given game from SurvivorGrid data."""
-
         home_spread = spreads_data.get(home_abbr, {}).get(week)
         if home_spread is not None:
             return home_spread

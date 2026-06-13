@@ -1,7 +1,7 @@
 # TODO - Active Work for nfl-predictor
 
-This file is the **authoritative worklist** for the repo.
-This file contains **active** work only. Completed milestones live in `ARCHIVE.md`.
+This file is the **authoritative worklist** for the repo. This file contains **active** work only.
+Completed milestones live in `ARCHIVE.md`.
 
 - Completed work should be moved to `ARCHIVE.md` (with dates/notes).
 - Agent workflow + guardrails live in `AGENTS.md`.
@@ -13,21 +13,42 @@ This file contains **active** work only. Completed milestones live in `ARCHIVE.m
 For each task:
 
 1. **Understand scope**: read the relevant modules/tests/docs.
-2. **Plan**: outline the smallest set of changes needed.
-3. **Test-Driven Development**: add/adjust tests for all planned changes. Aim to increase coverage.
-4. **Implement**: make changes incrementally (small diffs, one logical change at a time).
-5. **Run checks (venv only)**:
+1. **Plan**: outline the smallest set of changes needed.
+1. **Test-Driven Development**: add/adjust tests for all planned changes. Aim to increase coverage.
+   For executable code, confirm the exact behavior/lines you plan to touch are covered first; if
+   not, add focused characterization or failing tests before editing production code.
+1. **Implement**: make changes incrementally (small diffs, one logical change at a time).
+1. **Run checks (venv only)**:
+   - `.venv/bin/ruff format --check .`
    - `.venv/bin/ruff check .`
-   - `.venv/bin/black .`
+   - `.venv/bin/pyright .`
+   - `.venv/bin/ty check .`
    - `.venv/bin/python -m pytest`
-6. **Update docs** where behavior changes (README/AGENTS), and update TODO/ARCHIVE.
+   - `markdownlint .`
+
+1. **Update docs** where behavior changes (README/AGENTS/CHANGELOG), and update TODO/ARCHIVE.
 
 ### Always use the repo venv
 
 Agents and humans should not rely on the shell activation state.
 
-- Do **not** run `python`, `pip`, `uv`, `pytest`, `black`, or `ruff` without the venv prefix.
+- Do **not** run `python`, `pip`, `pytest`, `ruff`, `pyright`, or `ty` without the venv prefix.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
+- Use `uv ...` from `PATH` for dependency management and environment sync.
+
+### Current validated baseline (2026-06-13)
+
+- `.venv/bin/ruff format --check .` passes.
+- `.venv/bin/python -m pytest` passes (`406 passed`).
+- `markdownlint .` passes.
+- `uv lock --check` passes.
+- `uv sync --check --active` passes.
+- `.venv/bin/ruff check .` passes cleanly.
+- `.venv/bin/pyright .` **passes (0 errors)** after adding `pandas-stubs` and typed transform
+  helpers.
+- `.venv/bin/ty check .` **passes (0 errors)** after tightening walk-forward config typing, helper
+  return typing, optional SHAP imports, and small Polars schema annotations.
+- Coverage is `90.01%`, and `pytest` now enforces the preseason floor of `90%` or higher.
 
 ---
 
@@ -42,26 +63,33 @@ Agents and humans should not rely on the shell activation state.
 
 ---
 
+## Roadmap Status
+
+Milestone 44 completed on 2026-06-13 and now lives in `ARCHIVE.md`. Active work resumes with
+Milestone 39.
+
+---
+
+## Active roadmap (post-Milestone 44 baseline hardening)
+
 ## Milestone 39 - Off-season configuration sweep + lock default settings (GPU-first)
 
 Goal: run an **objective, repeatable sweep** of candidate modeling configurations under the
-canonical evaluation protocol, then **write out the selected best configuration** as the default
-for weekly runs.
+canonical evaluation protocol, then **write out the selected best configuration** as the default for
+weekly runs.
 
 Rationale:
 
 - Weekly results are noisy; the off-season is the right time to decide what’s “best”.
-- Walk-forward evaluation already supports the exact loop:
-  “train up through week N, predict week N+1” for every week.
+- Walk-forward evaluation already supports the exact loop: “train up through week N, predict week
+  N+1” for every week.
 
 Tasks:
 
 - [ ] Define a **sweep config schema** (JSON or YAML) that can express:
   - model kind(s): `margin_total`, `blended_margin_total`, (optional) `score`
-  - calibration: `none|elo|platt|isotonic|auto`
-  - market mode: `features|anchor|hybrid`
-  - market prob source: `raw|novig`
-  - blending: method `prob|logit`, weight grid, clamp grid
+  - calibration: `none|elo|platt|isotonic|auto` - market mode: `features|anchor|hybrid` - market
+    prob source: `raw|novig` - blending: method `prob|logit`, weight grid, clamp grid
   - uncertainty: `win_prob_uncertainty` on/off
   - tuning: on/off, timeout, objective
   - XGBoost params (including GPU preference)
@@ -78,8 +106,8 @@ Tasks:
   - support **resume** (skip configs already evaluated for the same dataset hash + config hash)
 - [ ] Add “GPU whenever possible” support:
   - allow `xgb_device=auto` (prefer `cuda` if available, else CPU)
-  - ensure the same device settings are used in both the walk-forward evaluation and the final trained
-    model
+  - ensure the same device settings are used in both the walk-forward evaluation and the final
+    trained model
 - [ ] Clarify the **ScoreModel** decision:
   - audit whether `model-kind score` is used anywhere in scripts/docs
   - if kept: document it explicitly as experimental / likely inferior to margin/total
@@ -91,8 +119,9 @@ Acceptance:
   - `sweep_summary.csv` sorted by the selection hierarchy
   - `best_config.json` (or `.yaml`)
 - [ ] `scripts/weekly_run.py` can accept `--defaults-path best_config.json` and run end-to-end
-  without manual CLI overrides.
-- [ ] The sweep report includes deltas vs a baseline (no market, no blending), so improvements are obvious.
+      without manual CLI overrides.
+- [ ] The sweep report includes deltas vs a baseline (no market, no blending), so improvements are
+      obvious.
 
 ---
 
@@ -124,10 +153,10 @@ Acceptance:
 
 Goal: a single command to run 1–2x per week that:
 
-1) refreshes data
-2) selects defaults (from the sweep, when available)
-3) trains the chosen model configuration
-4) emits all weekly outputs in a consistent place
+1. refreshes data
+2. selects defaults (from the sweep, when available)
+3. trains the chosen model configuration
+4. emits all weekly outputs in a consistent place
 
 Outputs to include (as available):
 
@@ -138,27 +167,16 @@ Outputs to include (as available):
 
 Tasks:
 
-- [ ] Ensure the orchestration script is the canonical interface (`scripts/weekly_run.py`).
 - [ ] Data refresh control:
-  - Add a `--data-min-season` / `--data-max-season` pass-through (or a generic `--data-collection-args`)
-    so orchestration can rebuild from **1999+** when desired.
+  - Add a `--data-min-season` / `--data-max-season` pass-through (or a generic
+    `--data-collection-args`) so orchestration can rebuild from **1999+** when desired.
 - [ ] Postseason considerations:
-  - Decide and document how postseason games enter evaluation and training (include flag + weighting).
+  - Decide and document how postseason games enter evaluation and training (include flag +
+    weighting).
   - If the prediction input week is postseason, default power rankings “through week” to the last
     regular-season week (`constants.get_regular_season_weeks(season)`) unless explicitly overridden.
-- [ ] Fix `scripts/power_rankings.py` correctness + ergonomics:
-  - Filter current records to `game_type == "REG"` in `_load_current_records()` so postseason games
-    cannot pollute regular-season standings.
-  - Fail fast if required model feature columns are missing (do not silently drop required features).
-  - Ensure the ScoreModel win-prob path either applies a calibrator (if present) or documents that it
-    is intentionally uncalibrated.
-  - Add/extend unit tests that cover these edge cases.
-- [ ] README “one authoritative weekly pipeline” paragraph:
-  - Document the intended weekly command(s) to:
-    - refresh data
-    - select defaults (from the sweep, when available)
-    - train + predict + generate betting outputs
-  - Document output locations and naming conventions.
+- [ ] Wire sweep-selected defaults into `scripts/weekly_run.py` once Milestone 39 lands.
+- [ ] Confirm the weekly output package and resume behavior still work with the selected defaults.
 
 Acceptance:
 
@@ -174,7 +192,8 @@ Goal: test whether alternative model families or simple ensembles produce **meas
 
 Notes:
 
-- Start with **no new heavy dependencies** (e.g., XGBoost-based classifier) so the experiment is cheap.
+- Start with **no new heavy dependencies** (e.g., XGBoost-based classifier) so the experiment is
+  cheap.
 - Only keep what wins under walk-forward (and doesn’t add fragile complexity).
 
 Tasks:
@@ -191,13 +210,15 @@ Tasks:
   - LightGBM and/or CatBoost as optional dependencies (extras) with matching feature prep.
   - Evaluate them under the same protocol and (optionally) ensemble.
 - [ ] Optional: season-phase specialization:
-  - Train separate early-season vs late-season models (or learn a gating function) and ensemble them.
+  - Train separate early-season vs late-season models (or learn a gating function) and ensemble
+    them.
   - Validate that this beats a single model and doesn’t overfit.
 
 Acceptance:
 
 - [ ] At least one alternative/ensemble approach is evaluated and reported under walk-forward.
-- [ ] If any approach wins, it can be enabled via config and runs end-to-end in weekly orchestration.
+- [ ] If any approach wins, it can be enabled via config and runs end-to-end in weekly
+      orchestration.
 
 ---
 
@@ -241,8 +262,8 @@ Acceptance:
 
 #### 43.3 - Outcome probability mapping improvements
 
-- [ ] Add an option to map completed-game outcomes to probabilities using margin-based logic
-  (e.g., `margin_to_home_win_prob`) instead of fixed 0.97/0.03.
+- [ ] Add an option to map completed-game outcomes to probabilities using margin-based logic (e.g.,
+      `margin_to_home_win_prob`) instead of fixed 0.97/0.03.
 - [ ] Keep current binary mapping as an option for comparability.
 
 Acceptance:
@@ -268,7 +289,7 @@ Acceptance:
 
 - [ ] Update README power rankings notes to describe the new defaults and flags.
 - [ ] Clarify in `scripts/power_rankings.py --help` how to reproduce “franchise” vs “current-season”
-  rankings.
+      rankings.
 
 Acceptance:
 

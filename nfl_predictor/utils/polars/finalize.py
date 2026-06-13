@@ -16,8 +16,7 @@ from nfl_predictor.utils.polars.teamrankings import (
 
 
 def build_final_column_order() -> list[str]:
-    """
-    Build the final column order according to specification.
+    """Build the final column order according to specification.
 
     Order:
     1. Metadata columns (as defined in constants)
@@ -34,8 +33,8 @@ def build_final_column_order() -> list[str]:
 
     Returns:
         Ordered list of column names
-    """
 
+    """
     columns = []
 
     # 1. Metadata columns (fixed order)
@@ -105,16 +104,15 @@ def build_final_column_order() -> list[str]:
 
 
 def select_final_columns(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Select and order final columns according to specification.
+    """Select and order final columns according to specification.
 
     Args:
         df: DataFrame with all computed columns
 
     Returns:
         DataFrame with only specified columns in correct order
-    """
 
+    """
     final_order = build_final_column_order()
 
     missing_cols = [c for c in final_order if c not in df.columns]

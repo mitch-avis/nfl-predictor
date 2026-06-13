@@ -1,6 +1,4 @@
-"""
-Backtest model predictions, confidence points, and weekly power rankings.
-"""
+"""Backtest model predictions, confidence points, and weekly power rankings."""
 
 from __future__ import annotations
 
@@ -15,7 +13,7 @@ import pandas as pd
 try:
     from nfl_predictor import constants, ml_model
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     # Allow running as a script: `python scripts/backtest_predictions.py`.
     import sys
 
@@ -318,7 +316,6 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """CLI entry point for running full backtests and power rankings."""
-
     args = _parse_args()
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)

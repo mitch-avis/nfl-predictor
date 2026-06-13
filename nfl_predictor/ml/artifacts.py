@@ -15,9 +15,9 @@ import json
 import subprocess
 import sys
 from dataclasses import asdict, dataclass, is_dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import joblib
 
@@ -39,13 +39,11 @@ class RunPaths:
 
 def now_utc_iso() -> str:
     """Return an ISO-8601 UTC timestamp string."""
-
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def sha256_file(path: Path) -> str:
     """Compute a SHA-256 fingerprint of a file's bytes."""
-
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -55,7 +53,6 @@ def sha256_file(path: Path) -> str:
 
 def stable_short_hash(payload: Any) -> str:
     """Return a stable short hash for a JSON-serializable payload."""
-
     encoded = json.dumps(_to_jsonable(payload), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:8]
 
@@ -66,7 +63,6 @@ def _to_jsonable(value: Any) -> Any:
     This avoids brittle failures when payloads contain NumPy/Polars/Pandas scalar types
     (e.g., numpy.int64) or other objects that the stdlib JSON encoder can't handle.
     """
-
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
 
@@ -91,21 +87,21 @@ def _to_jsonable(value: Any) -> Any:
     if callable(item):
         try:
             return _to_jsonable(item())
-        except Exception:  # pragma: no cover
+        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
             pass
 
     tolist = getattr(value, "tolist", None)
     if callable(tolist):
         try:
             return _to_jsonable(tolist())
-        except Exception:  # pragma: no cover
+        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
             pass
 
     isoformat = getattr(value, "isoformat", None)
     if callable(isoformat):
         try:
             return str(isoformat())
-        except Exception:  # pragma: no cover
+        except Exception:  # noqa: S110 (silent fallback to str() is intentional)
             pass
 
     return str(value)
@@ -113,22 +109,20 @@ def _to_jsonable(value: Any) -> Any:
 
 def generate_run_id(prefix: str, dataset_hash: str, config: dict[str, Any]) -> str:
     """Generate a run id using timestamp + dataset/config hash."""
-
-    created = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    created = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     short_hash = stable_short_hash({"dataset_hash": dataset_hash, "config": config})
     return f"{prefix}_{created}_{short_hash}"
 
 
 def resolve_run_paths(
     run_id: str,
-    run_dir: Optional[Path] = None,
+    run_dir: Path | None = None,
     model_filename: str = "model.joblib",
     metadata_filename: str = "metadata.json",
     metrics_filename: str = "metrics_report.json",
     feature_importance_filename: str = "feature_importance.json",
 ) -> RunPaths:
     """Resolve default artifact paths for a given run id."""
-
     base = run_dir if run_dir is not None else (Path(constants.ROOT_DIR) / "models" / run_id)
     return RunPaths(
         run_id=run_id,
@@ -140,18 +134,17 @@ def resolve_run_paths(
     )
 
 
-def git_commit_hash() -> Optional[str]:
+def git_commit_hash() -> str | None:
     """Return current git commit hash if available."""
-
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 (git is fixed, not user-controlled)
             cwd=str(constants.ROOT_DIR),
             check=False,
             capture_output=True,
             text=True,
         )
-    except OSError:  # pragma: no cover
+    except OSError:
         return None
 
     if result.returncode != 0:
@@ -160,17 +153,16 @@ def git_commit_hash() -> Optional[str]:
     return value or None
 
 
-def _module_version(module_name: str) -> Optional[str]:
+def _module_version(module_name: str) -> str | None:
     try:
         module = __import__(module_name)
-    except ImportError:  # pragma: no cover
+    except ImportError:
         return None
     return getattr(module, "__version__", None)
 
 
-def library_versions() -> dict[str, Optional[str]]:
+def library_versions() -> dict[str, str | None]:
     """Return versions of key libraries for reproducibility."""
-
     return {
         "python": sys.version,
         "python_executable": sys.executable,
@@ -190,15 +182,14 @@ def build_metadata(
     run_id: str,
     dataset_hash: str,
     config: dict[str, Any],
-    feature_list: Optional[list[str]] = None,
-    splits: Optional[dict[str, Any]] = None,
-    params: Optional[dict[str, Any]] = None,
-    tuned_params: Optional[dict[str, Any]] = None,
-    early_stopping: Optional[dict[str, Any]] = None,
-    optuna_summary: Optional[dict[str, Any]] = None,
+    feature_list: list[str] | None = None,
+    splits: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+    tuned_params: dict[str, Any] | None = None,
+    early_stopping: dict[str, Any] | None = None,
+    optuna_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a metadata payload meeting the repo's artifact contract."""
-
     payload: dict[str, Any] = {
         "created_at": created_at,
         "run_id": run_id,
@@ -218,7 +209,6 @@ def build_metadata(
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     """Write JSON to disk with stable formatting."""
-
     path.parent.mkdir(parents=True, exist_ok=True)
     safe_payload = _to_jsonable(payload)
     path.write_text(json.dumps(safe_payload, indent=2, sort_keys=True), encoding="utf-8")
@@ -227,7 +217,6 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def save_model(path: Path, model: Any) -> None:
     """Persist a model artifact via joblib."""
-
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)
     log.info("Saved model checkpoint to %s", path)

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -26,7 +26,7 @@ try:
     from nfl_predictor import constants, ml_model
     from nfl_predictor.ml import artifacts, walk_forward
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     # Allow running as a script: `python scripts/golden_command.py`.
     import sys
 
@@ -39,7 +39,6 @@ except ModuleNotFoundError:  # pragma: no cover
 
 def _resolve_team_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
     """Resolve the (away, home) team columns used for rankings."""
-
     for away_col, home_col in (("away_abbr", "home_abbr"), ("away_name", "home_name")):
         if away_col in df.columns and home_col in df.columns:
             return away_col, home_col
@@ -48,7 +47,6 @@ def _resolve_team_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
 
 def _add_ratings(df: pd.DataFrame, target_columns: tuple[str, str]) -> pd.DataFrame:
     """Add lightweight pre/post-game rating columns for power rankings."""
-
     rated = df.copy()
     rated["pregame_home_rating"] = (rated["home_win_prob"] * 10).round(2)
     rated["pregame_away_rating"] = ((1 - rated["home_win_prob"]) * 10).round(2)
@@ -76,7 +74,6 @@ def _build_pregame_power_rankings(df: pd.DataFrame) -> pd.DataFrame:
     This is intentionally simple and deterministic; it is a display artifact and does not
     affect model training or win probabilities.
     """
-
     if "season" not in df.columns or "week" not in df.columns:
         return pd.DataFrame()
 
@@ -390,14 +387,13 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Run walk-forward, train a model, and optionally generate predictions."""
-
     args = _parse_args()
     if not args.data_path.exists():
         log.error("Missing dataset: %s", args.data_path)
         return 2
 
     dataset_hash = artifacts.sha256_file(args.data_path)
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     config_payload = {
         "data_path": str(args.data_path),
@@ -646,7 +642,7 @@ def main() -> int:
                 rankings = pd.DataFrame()
             out_rankings = run_dir / "power_rankings.csv"
             rankings.to_csv(out_rankings, index=False)
-        except (OSError, ValueError, KeyError, ParserError) as exc:  # pragma: no cover
+        except (OSError, ValueError, KeyError, ParserError) as exc:
             log.warning("Power rankings generation failed: %s", exc)
 
     log.info("Golden run directory: %s", run_dir)

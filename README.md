@@ -15,8 +15,8 @@ This repo is geared toward:
   - [What this project produces](#what-this-project-produces)
   - [Setup](#setup)
     - [Python environment](#python-environment)
-      - [Recommended: uv + pinned requirements](#recommended-uv--pinned-requirements)
-      - [Alternative: venv + pip](#alternative-venv--pip)
+      - [Recommended: uv project workflow](#recommended-uv-project-workflow)
+      - [Alternative: create the venv manually](#alternative-create-the-venv-manually)
     - [Run tests](#run-tests)
   - [Data collection (Polars + nflreadpy)](#data-collection-polars--nflreadpy)
   - [Data sources + missing data](#data-sources--missing-data)
@@ -35,6 +35,7 @@ This repo is geared toward:
   - [Scripts](#scripts)
   - [Validation](#validation)
   - [Leakage audit](#leakage-audit)
+  - [Changelog](#changelog)
   - [Artifacts](#artifacts)
   - [Confidence pool rules (implemented)](#confidence-pool-rules-implemented)
   - [Score rounding / realism (optional)](#score-rounding--realism-optional)
@@ -56,34 +57,39 @@ This repo is geared toward:
 
 ### Python environment
 
-This project targets **Python 3.13+** (see `pyproject.toml`).
+This project targets **Python 3.14+** (see `pyproject.toml`).
 
-#### Recommended: uv + pinned requirements
+#### Recommended: uv project workflow
 
-This repo uses pinned requirements for reproducible runs:
+This repo uses `pyproject.toml` plus `uv.lock` for reproducible runs:
 
-- `requirements.in` / `requirements-dev.in` are the sources of truth
-- `requirements.txt` / `requirements-dev.txt` are generated via `uv pip compile`
+- `pyproject.toml` is the source of truth for runtime and development dependencies
+- `uv.lock` is the lockfile used to sync environments reproducibly
 
 ```bash
 uv venv .venv
-# Linux/macOS
 source .venv/bin/activate
-# Windows (PowerShell)
-# .venv\Scripts\Activate.ps1
-
-uv pip sync requirements.txt requirements-dev.txt
-uv pip install -e . --no-deps
+uv sync
 ```
 
-To regenerate pinned requirements:
+To refresh the lockfile and sync the active virtual environment:
 
 ```bash
-uv pip compile requirements.in -o requirements.txt
-uv pip compile requirements-dev.in -o requirements-dev.txt
+./update_requirements.sh
 ```
 
-#### Alternative: venv + pip
+The helper expects `uv` on your `PATH` and an activated project virtual environment. If `.venv` is
+missing, it offers to create one with `uv venv .venv` and then exits so you can activate the
+environment before re-running it.
+
+For a manual upgrade without the helper script:
+
+```bash
+uv lock --upgrade
+uv sync
+```
+
+#### Alternative: create the venv manually
 
 ```bash
 python -m venv .venv
@@ -92,8 +98,7 @@ source .venv/bin/activate
 # Windows (PowerShell)
 # .venv\Scripts\Activate.ps1
 
-pip install -r requirements.txt -r requirements-dev.txt
-pip install -e . --no-deps
+uv sync
 ```
 
 ### Run tests
@@ -102,8 +107,8 @@ pip install -e . --no-deps
 python -m pytest
 ```
 
-By default, pytest runs with coverage enabled (configured in `pyproject.toml`). To disable
-coverage for a quick local run:
+By default, pytest runs with coverage enabled (configured in `pyproject.toml`). To disable coverage
+for a quick local run:
 
 ```bash
 python -m pytest --no-cov
@@ -115,11 +120,15 @@ To run explicitly with coverage (same behavior as the default config):
 python -m pytest --cov=nfl_predictor --cov-report=term-missing
 ```
 
-To enforce a minimum coverage threshold locally, add `--cov-fail-under`:
+Pytest now enforces the repo coverage floor of **90%** by default via `pyproject.toml`. To try a
+stricter local target, add `--cov-fail-under` with a higher value. The preseason hardening target
+remains **90% or higher**, with **100%** as the aspirational ceiling:
 
 ```bash
-python -m pytest --cov-fail-under=80
+python -m pytest --cov-fail-under=95
 ```
+
+Current validated local baseline as of 2026-06-13: `406 passed` with `90.01%` coverage.
 
 ## Data collection (Polars + nflreadpy)
 
@@ -139,8 +148,8 @@ Typical outputs:
 - `data/completed_games.csv` and `data/completed_games_ml.csv`
 - `data/predict/week_XX_games_to_predict.csv`
 
-Note: the `data/` directory is gitignored by default; generate it via the data collection step above.
-Note: `*_ml.csv` files include model-ready engineered features.
+Note: the `data/` directory is gitignored by default; generate it via the data collection step
+above. Note: `*_ml.csv` files include model-ready engineered features.
 
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule + team stats). Current/future seasons are always
@@ -153,8 +162,8 @@ Use `--refresh-nflreadpy` to force refresh nflreadpy data even when cache exists
 
 ## Data sources + missing data
 
-This project is designed to keep an invariant output schema across seasons, even when some
-sources are missing historically.
+This project is designed to keep an invariant output schema across seasons, even when some sources
+are missing historically.
 
 Primary sources:
 
@@ -211,14 +220,13 @@ python -m nfl_predictor.ml_model \
 Splits are time-aware by season and (optionally) by in-season week.
 
 By default, training/evaluation uses **regular season** games only when the input data includes a
-`game_type` column (i.e., postseason rows are filtered out). You can still generate predictions
-for playoff games as long as the feature row exists.
+`game_type` column (i.e., postseason rows are filtered out). You can still generate predictions for
+playoff games as long as the feature row exists.
 
-To include postseason games in training, pass `--include-postseason`. To emphasize postseason
-games, also set `--postseason-weight` (e.g., `--postseason-weight 1.5`).
-Optional recency weighting is available via `--recency-half-life-weeks` or
-`--recency-half-life-seasons` (use only one) to apply exponential decay to training and
-calibration samples.
+To include postseason games in training, pass `--include-postseason`. To emphasize postseason games,
+also set `--postseason-weight` (e.g., `--postseason-weight 1.5`). Optional recency weighting is
+available via `--recency-half-life-weeks` or `--recency-half-life-seasons` (use only one) to apply
+exponential decay to training and calibration samples.
 
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
 - `--calibration-seasons` reserves seasons just before the holdout for calibration/blending.
@@ -276,8 +284,8 @@ If spreads/totals/moneylines are present, you can:
 
 Win probability can also be blended or clamped vs market-implied home win probability via
 `--market-prob-blend` / `--market-prob-clamp` (alias: `--market-prob-weight`). Use
-`--market-prob-source raw|novig` to choose implied-prob handling and
-`--market-prob-blend-method prob|logit` to blend in probability or log-odds space.
+`--market-prob-source raw|novig` to choose implied-prob handling and `--market-prob-blend-method
+prob|logit` to blend in probability or log-odds space.
 
 ## Backtesting
 
@@ -297,16 +305,15 @@ For the most realistic evaluation, use walk-forward (rolling-origin) backtesting
 python scripts/walk_forward_backtest.py --help
 ```
 
-This is the **canonical evaluation protocol** for model selection. By default it evaluates the
-last N seasons (regular season only) with time-aware calibration from the last K weeks of each
-eval season. Use `--include-postseason` if you want postseason folds included.
-Optional recency weighting is available via `--recency-half-life-weeks` or
-`--recency-half-life-seasons` (use only one).
-GPU acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`.
-If the latest season is incomplete, either pass `--exclude-incomplete-seasons` or specify
-`--eval-seasons` explicitly; the metrics report includes the evaluated window and any exclusions.
-Walk-forward calibration uses the last K weeks strictly before the eval week; if insufficient
-weeks or outcomes are available, calibration is skipped for that fold.
+This is the **canonical evaluation protocol** for model selection. By default it evaluates the last
+N seasons (regular season only) with time-aware calibration from the last K weeks of each eval
+season. Use `--include-postseason` if you want postseason folds included. Optional recency weighting
+is available via `--recency-half-life-weeks` or `--recency-half-life-seasons` (use only one). GPU
+acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`. If the latest season is
+incomplete, either pass `--exclude-incomplete-seasons` or specify `--eval-seasons` explicitly; the
+metrics report includes the evaluated window and any exclusions. Walk-forward calibration uses the
+last K weeks strictly before the eval week; if insufficient weeks or outcomes are available,
+calibration is skipped for that fold.
 
 Trend/season-phase ablation (drop trend + season-phase features while keeping everything else
 identical) is available via `--disable-trend-features`. Example 2x2 comparison matrix:
@@ -318,8 +325,8 @@ python scripts/walk_forward_backtest.py --disable-trend-features
 python scripts/walk_forward_backtest.py --disable-trend-features --recency-half-life-seasons 2
 ```
 
-Recent ablation example (2003-2025 seasons, include postseason, calibration=platt,
-recency half-life seasons=2):
+Recent ablation example (2003-2025 seasons, include postseason, calibration=platt, recency half-life
+seasons=2):
 
 ```text
 Setting                         Brier    LogLoss  MarginMAE  TotalMAE  ActualPts
@@ -331,36 +338,37 @@ Trends off, recency on          0.2827   1.9775   10.2003    10.0706   211.50
 
 Interpretation:
 
-- Trend features improve probability metrics (Brier/log loss) and margin MAE, with a small
-  tradeoff in total MAE.
-- Recency weighting (half-life seasons=2) hurts probability metrics in this run; keep it off
-  unless a future ablation shows improvement.
+- Trend features improve probability metrics (Brier/log loss) and margin MAE, with a small tradeoff
+  in total MAE.
+- Recency weighting (half-life seasons=2) hurts probability metrics in this run; keep it off unless
+  a future ablation shows improvement.
 
-Evaluation rule:
-"Model selection is based on time-aware walk-forward evaluation; random CV is not authoritative."
-Season-blocked CV is used for hyperparameter tuning only; walk-forward remains the source of truth.
+Evaluation rule: "Model selection is based on time-aware walk-forward evaluation; random CV is not
+authoritative." Season-blocked CV is used for hyperparameter tuning only; walk-forward remains the
+source of truth.
 
 ## Weekly workflow (canonical)
 
 The canonical "do everything for this week" entrypoint is:
 
 ```bash
-.venv/bin/python scripts/weekly_run.py --help
+python scripts/weekly_run.py --help
 ```
 
 ### High-level stages
 
-1) (optional) refresh data (`python -m nfl_predictor.data_collection`)
-2) (optional) walk-forward compare to choose market/calibration/prob-postprocess variants
-3) train + calibrate the selected configuration
-4) generate weekly predictions + betting outputs + (optional) power rankings
+1. (optional) refresh data (`python -m nfl_predictor.data_collection`)
+2. (optional) walk-forward compare to choose market/calibration/prob-postprocess variants
+3. train + calibrate the selected configuration
+4. generate weekly predictions + betting outputs + (optional) power rankings
 
 Notes:
 
 - `--wf-*` flags control **walk-forward comparison** behavior (model selection).
-- `--train-*` flags control **final training/calibration** for the model used to produce weekly outputs.
-- `--xgb-*` flags control XGBoost runtime (GPU/CPU), and should be used for both comparison and final
-  training.
+- `--train-*` flags control **final training/calibration** for the model used to produce weekly
+  outputs.
+- `--xgb-*` flags control XGBoost runtime (GPU/CPU), and should be used for both comparison and
+  final training.
 - Outputs are written under the run directory (default: `models/<run_id>/`) unless `--output-dir` is
   provided.
 - Stage 1 walk-forward comparison is resumable and writes `wf_compare/` artifacts under the run
@@ -368,33 +376,34 @@ Notes:
 
 ### Authoritative weekly workflow (runs, in this order)
 
-1) Refresh data (ETL):
+1. Refresh data (ETL)
 
-    ```bash
-    .venv/bin/python -m nfl_predictor.data_collection
-    ```
+   ```bash
+   python -m nfl_predictor.data_collection
+   ```
 
-2) Canonical evaluation + model selection (walk-forward):
+2. Canonical evaluation + model selection (walk-forward)
 
-    ```bash
-    .venv/bin/python scripts/walk_forward_backtest.py --help
-    ```
+   ```bash
+   python scripts/walk_forward_backtest.py --help
+   ```
 
-3) Train + predict for the upcoming week (writes predictions + artifacts):
+3. Train + predict for the upcoming week (writes predictions + artifacts)
 
-    ```bash
-    .venv/bin/python -m nfl_predictor.ml_model --help
-    ```
+   ```bash
+   python -m nfl_predictor.ml_model --help
+   ```
 
-4) Power rankings + projected standings:
+4. Power rankings + projected standings
 
-    ```bash
-    .venv/bin/python scripts/power_rankings.py --help
-    ```
+   ```bash
+   python scripts/power_rankings.py --help
+   ```
 
 ### Outputs and conventions
 
-- Run artifacts (model/metrics/metadata/feature importance) land under `models/<run_id>/` by default.
+- Run artifacts (model/metrics/metadata/feature importance) land under `models/<run_id>/` by
+  default.
 - Weekly prediction outputs live next to the input prediction file (e.g., `data/predict/`).
 - `metadata.json` includes dataset fingerprint, tuned params, and Optuna summary when tuning runs.
 - Power rankings outputs:
@@ -417,10 +426,13 @@ incomplete seasons.
 
 Repo utilities under `scripts/`:
 
-- `scripts/betting_pipeline.py`: end-to-end orchestration (walk-forward compare -> resumable
-  tuning -> final train -> weekly predictions + betting_report.csv). See `--help`.
-- `scripts/objective_compare_models.py`: objective walk-forward comparison of two saved models
-  by retraining per fold under identical splits.
+- `scripts/betting_pipeline.py`: end-to-end orchestration (walk-forward compare -> resumable tuning
+  -> final train -> weekly predictions + betting_report.csv). If `--predict-path` is omitted, the
+  newest `data/predict/week_XX_games_to_predict.csv` file is selected automatically. `--dry-run`
+  previews the planned paths/stages even in a clean checkout before local `data/` files exist. See
+  `--help`.
+- `scripts/objective_compare_models.py`: objective walk-forward comparison of two saved models by
+  retraining per fold under identical splits.
 - `scripts/betting_report_excel.py`: generate an Excel betting template/report.
 - `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
   and artifact stamping.
@@ -434,7 +446,7 @@ Repo utilities under `scripts/`:
 `wf_compare` examples:
 
 ```bash
-.venv/bin/python scripts/wf_compare.py \
+python scripts/wf_compare.py \
   --eval-last-n-seasons 3 \
   --market-mode hybrid \
   --market-prob-source raw \
@@ -442,7 +454,7 @@ Repo utilities under `scripts/`:
 ```
 
 ```bash
-.venv/bin/python scripts/wf_compare.py \
+python scripts/wf_compare.py \
   --eval-last-n-seasons 3 \
   --market-mode all \
   --market-prob-source both \
@@ -452,7 +464,7 @@ Repo utilities under `scripts/`:
 Uncertainty-aware comparison:
 
 ```bash
-.venv/bin/python scripts/wf_compare.py \
+python scripts/wf_compare.py \
   --eval-last-n-seasons 3 \
   --win-prob-uncertainty both
 ```
@@ -472,7 +484,7 @@ Uncertainty-aware comparison:
 Run it with:
 
 ```bash
-.venv/bin/python scripts/weekly_run.py --config path/to/weekly_run.json
+python scripts/weekly_run.py --config path/to/weekly_run.json
 ```
 
 GPU note (XGBoost 2.x): prefer `--xgb-tree-method hist --xgb-device cuda`.
@@ -494,6 +506,26 @@ Live validation (may require network access):
 python scripts/validate_live.py
 ```
 
+Both validation scripts exit non-zero when the input data file is missing or the validation fails,
+so they are safe to use in shell automation.
+
+Canonical local validation sequence:
+
+```bash
+ruff format --check .
+ruff check .
+pyright .
+ty check .
+python -m pytest
+markdownlint .
+uv lock --check
+uv sync --check --active
+```
+
+GitHub Actions mirrors this gate in `.github/workflows/validation.yml` and also runs the
+editable-install smoke check plus `--help` smoke checks for `nfl_predictor.ml_model`,
+`scripts/weekly_run.py`, and `scripts/power_rankings.py`.
+
 ## Leakage audit
 
 To detect obvious feature leakage patterns:
@@ -501,6 +533,25 @@ To detect obvious feature leakage patterns:
 ```bash
 python scripts/leakage_audit.py
 ```
+
+## Changelog
+
+Release history lives in `CHANGELOG.md` and follows the [Common
+Changelog](https://common-changelog.org/) format. The historical baseline is `0.1.0` from `main`.
+
+When preparing the next release, add a new `## VERSION - YYYY-MM-DD` entry at the top of the file
+and keep the change groups in this order:
+
+- `Changed`
+- `Added`
+- `Removed`
+- `Fixed`
+
+Keep each change to a single imperative line, link the most relevant commit or PR, and skip routine
+formatting noise. Update `CHANGELOG.md` whenever user-facing behavior, tooling expectations, or the
+operating workflow changes. Pushing a `0.x.y` or `v0.x.y` tag triggers
+`.github/workflows/release.yml`, which extracts the matching `CHANGELOG.md` section and creates or
+updates the GitHub release. Keep git tags aligned with changelog versions.
 
 ## Artifacts
 
@@ -510,9 +561,8 @@ Training/backtests can write a run directory containing reproducible artifacts.
   `metrics_report.json`.
 - `feature_importance.json` includes XGBoost gain/weight importance per model head.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
-  args, feature list, and tuning/early-stopping info (when used).
-  `models/` and `optuna.db` are gitignored by default, so keep run artifacts local unless you copy
-  them elsewhere.
+  args, feature list, and tuning/early-stopping info (when used). `models/` and `optuna.db` are
+  gitignored by default, so keep run artifacts local unless you copy them elsewhere.
 
 ## Confidence pool rules (implemented)
 
@@ -555,24 +605,24 @@ games.
 
 ## Open work
 
-Active tasks (milestones + guardrails) are tracked in `TODO.md`. Completed milestones and past
-work live in `ARCHIVE.md`.
+Active tasks (milestones + guardrails) are tracked in `TODO.md`. Completed milestones and past work
+live in `ARCHIVE.md`.
 
 ## Development notes
 
 - ETL and feature engineering run in Polars.
 - All NFLverse data is pulled via `nflreadpy`.
 - Logging uses the project logger; avoid `print`.
-- Formatting is enforced via Black (line length 100).
+- Formatting is enforced via Ruff format (line length 100).
 - Linting and import sorting are enforced via Ruff (includes isort rules).
-- Dev tooling (Black/Ruff/pytest/pytest-cov) is installed via `requirements-dev.txt`.
+- Type checking runs through both Pyright and Ty; both are required local validation gates.
+- Development dependencies are declared in `pyproject.toml` and synced via `uv.lock`.
 
-Common local checks:
+For users reading this documentation: commands are shown assuming your project virtual environment
+is already activated. Agent-specific files keep the fully qualified `.venv/bin/...` forms for
+automation reliability.
 
-```bash
-ruff check .
-black --check .
-```
+See the Validation section above for the canonical local validation sequence.
 
 ## Safety and claims
 

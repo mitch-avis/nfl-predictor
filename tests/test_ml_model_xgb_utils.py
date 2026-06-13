@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import numpy as np
 import xgboost as xgb
+from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
 
@@ -18,9 +19,48 @@ def _reset_runtime_state() -> None:
     xgb_utils._RUNTIME_STATE.gpu_tree_method_disabled = False
 
 
+class _DummyMatrixPreprocessor:
+    """Minimal preprocessor that records fit/transform calls for wrapper tests."""
+
+    def __init__(self) -> None:
+        self.fit_inputs: list[Any] = []
+        self.transform_inputs: list[Any] = []
+
+    def fit_transform(self, x: Any) -> np.ndarray:
+        """Capture the fit-transform input and return a stable matrix."""
+        self.fit_inputs.append(x)
+        return np.ones((2, 1))
+
+    def transform(self, x: Any) -> np.ndarray:
+        """Capture the transform input and return a stable matrix."""
+        self.transform_inputs.append(x)
+        return np.zeros((3, 1))
+
+
+def test_fit_transform_matrix_delegates_to_preprocessor() -> None:
+    """fit-transform wrapper preserves the preprocessor result and input."""
+    preprocessor = _DummyMatrixPreprocessor()
+    payload = object()
+
+    result = xgb_utils._fit_transform_matrix(cast(ColumnTransformer, preprocessor), payload)
+
+    assert result.shape == (2, 1)
+    assert preprocessor.fit_inputs == [payload]
+
+
+def test_transform_matrix_delegates_to_preprocessor() -> None:
+    """Transform wrapper preserves the preprocessor result and input."""
+    preprocessor = _DummyMatrixPreprocessor()
+    payload = object()
+
+    result = xgb_utils._transform_matrix(cast(ColumnTransformer, preprocessor), payload)
+
+    assert result.shape == (3, 1)
+    assert preprocessor.transform_inputs == [payload]
+
+
 def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
     """GPU tree_method and device are coerced properly."""
-
     _reset_runtime_state()
 
     def fake_supported(param: str) -> bool:
@@ -41,7 +81,6 @@ def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
 
 def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch) -> None:
     """XGB fit kwargs include early stopping when supported."""
-
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: True)
 
     kwargs = xgb_utils._build_xgb_fit_kwargs(
@@ -57,7 +96,6 @@ def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch) -> None:
 
 def test_build_xgb_fit_kwargs_with_callbacks(monkeypatch) -> None:
     """XGB fit kwargs include callbacks when supported."""
-
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: True)
 
     sentinel = object()
@@ -73,7 +111,6 @@ def test_build_xgb_fit_kwargs_with_callbacks(monkeypatch) -> None:
 
 def test_with_xgb_early_stopping_params_with_callbacks(monkeypatch) -> None:
     """XGB params are updated with early stopping using callbacks when needed."""
-
     _reset_runtime_state()
 
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
@@ -97,7 +134,6 @@ def test_with_xgb_early_stopping_params_with_callbacks(monkeypatch) -> None:
 
 def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:
     """XGB params early stopping fallback logs when needed."""
-
     _reset_runtime_state()
 
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
@@ -115,7 +151,6 @@ def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:
 
 def test_coerce_tree_method_on_error_device_cuda() -> None:
     """tree_method and device are coerced on RuntimeError with device=cuda."""
-
     _reset_runtime_state()
 
     params = {"device": "cuda", "tree_method": "hist", "predictor": "gpu_predictor"}
@@ -129,7 +164,6 @@ def test_coerce_tree_method_on_error_device_cuda() -> None:
 
 def test_coerce_tree_method_on_error_gpu_tree_method() -> None:
     """tree_method and device are coerced on ValueError with GPU tree_method."""
-
     _reset_runtime_state()
 
     params = {"tree_method": "gpu", "predictor": "gpu_predictor"}
@@ -152,7 +186,6 @@ def test_predict_xgb_uses_best_iteration() -> None:
 
         def predict(self, dmatrix, iteration_range=None):
             """Capture iteration_range calls for inspection."""
-
             self.calls.append(iteration_range)
             return np.zeros(dmatrix.num_row())
 
@@ -165,7 +198,6 @@ def test_predict_xgb_uses_best_iteration() -> None:
 
         def get_booster(self):
             """Return the dummy booster."""
-
             return self._booster
 
     data = np.zeros((2, 1))

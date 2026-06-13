@@ -7,6 +7,7 @@ Example:
     python scripts/leakage_audit.py \
       --data-path data/completed_games_ml.csv \
       --out-json models/leakage_audit.json
+
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import pandas as pd
 try:
     from nfl_predictor.ml import leakage_audit
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     # Allow running as a script: `python scripts/leakage_audit.py`.
     import sys
 
@@ -82,7 +83,6 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Run the leakage audit and write a JSON report."""
-
     args = _parse_args()
     if not args.data_path.exists():
         log.error("Missing data file: %s", args.data_path)

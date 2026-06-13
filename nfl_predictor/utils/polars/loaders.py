@@ -6,7 +6,6 @@ Implementation was split out of `nfl_predictor.utils.polars_utils`.
 
 import os
 from pathlib import Path
-from typing import Optional
 
 import nflreadpy as nfl
 import polars as pl
@@ -35,21 +34,18 @@ NUMERIC_DTYPES = {
 
 def _is_numeric_dtype(dtype: DataType) -> bool:
     """Return True if dtype is numeric."""
-
     return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES
 
 
-def _resolve_cache_dir(cache_dir: Optional[os.PathLike | str]) -> Path:
+def _resolve_cache_dir(cache_dir: os.PathLike | str | None) -> Path:
     """Resolve the nflreadpy cache directory and ensure it exists."""
-
     resolved = Path(cache_dir) if cache_dir is not None else Path(constants.NFLREADPY_CACHE_DIR)
     resolved.mkdir(parents=True, exist_ok=True)
     return resolved
 
 
-def _resolve_current_season(current_season: Optional[int]) -> int:
+def _resolve_current_season(current_season: int | None) -> int:
     """Resolve the current NFL season for cache decisions."""
-
     if current_season is not None:
         return int(current_season)
     season, _week = get_current_nfl_week()
@@ -58,20 +54,17 @@ def _resolve_current_season(current_season: Optional[int]) -> int:
 
 def _schedule_cache_path(cache_dir: Path, season: int) -> Path:
     """Build the cache path for a season schedule."""
-
     return cache_dir / f"schedule_{season}.parquet"
 
 
 def _team_stats_cache_path(cache_dir: Path, season: int, regular_season_only: bool) -> Path:
     """Build the cache path for season team stats."""
-
     suffix = "reg" if regular_season_only else "all"
     return cache_dir / f"team_stats_{season}_{suffix}.parquet"
 
 
-def _read_cached_frame(path: Path) -> Optional[pl.DataFrame]:
+def _read_cached_frame(path: Path) -> pl.DataFrame | None:
     """Read a cached parquet file if it exists."""
-
     if not path.exists():
         return None
     try:
@@ -83,7 +76,6 @@ def _read_cached_frame(path: Path) -> Optional[pl.DataFrame]:
 
 def _write_cached_frame(df: pl.DataFrame, path: Path) -> None:
     """Write a cached parquet file, logging any failures."""
-
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         df.write_parquet(path)
@@ -93,7 +85,6 @@ def _write_cached_frame(df: pl.DataFrame, path: Path) -> None:
 
 def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
     """Add stadium type and altitude features."""
-
     roof_expr = pl.lit(None)
     if "stadium_roof" in df.columns:
         roof_raw = pl.col("stadium_roof").cast(pl.Utf8).str.to_lowercase()
@@ -146,7 +137,6 @@ def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
 
 def _apply_schedule_enrichments(df: pl.DataFrame) -> pl.DataFrame:
     """Add optional stadium features to a schedule DataFrame."""
-
     if "stadium_id" in df.columns and "stadium_city" not in df.columns:
         df = _add_stadium_location(df)
     df = _add_stadium_features(df)
@@ -155,7 +145,6 @@ def _apply_schedule_enrichments(df: pl.DataFrame) -> pl.DataFrame:
 
 def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
     """Normalize raw nflreadpy schedule data to the project schema."""
-
     # Select only the columns we need (if they exist)
     available_cols = set(schedule_df.columns)
     cols_to_select = [c for c in constants.NFLREADPY_SCHEDULE_COLUMNS if c in available_cols]
@@ -224,7 +213,6 @@ def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
 
 def _prepare_team_stats(team_stats_df: pl.DataFrame, regular_season_only: bool) -> pl.DataFrame:
     """Normalize raw nflreadpy team stats to the project schema."""
-
     # Filter to regular season only (exclude preseason and postseason)
     if regular_season_only and "season_type" in team_stats_df.columns:
         team_stats_df = team_stats_df.filter(pl.col("season_type") == "REG")
@@ -255,12 +243,11 @@ def _prepare_team_stats(team_stats_df: pl.DataFrame, regular_season_only: bool) 
 def load_schedule(
     seasons: list[int],
     *,
-    cache_dir: Optional[os.PathLike | str] = None,
+    cache_dir: os.PathLike | str | None = None,
     force_refresh: bool = False,
-    current_season: Optional[int] = None,
+    current_season: int | None = None,
 ) -> pl.DataFrame:
-    """
-    Load NFL schedule data for specified seasons using nflreadpy.
+    """Load NFL schedule data for specified seasons using nflreadpy.
 
     Cached schedules are used for historical seasons when available. Current and future
     seasons are always refreshed to keep upcoming games up to date.
@@ -273,8 +260,8 @@ def load_schedule(
 
     Returns:
         Polars DataFrame with schedule data including lines/odds
-    """
 
+    """
     if not seasons:
         return pl.DataFrame()
 
@@ -311,8 +298,7 @@ def load_schedule(
 
 
 def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Add stadium name, city, and state columns based on stadium_id.
+    """Add stadium name, city, and state columns based on stadium_id.
 
     Uses the STADIUMS mapping in constants to look up
     city and state for each stadium.
@@ -322,8 +308,8 @@ def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with stadium_name, stadium_city, and stadium_state columns added
-    """
 
+    """
     # Create mapping dictionaries for name/city/state
     name_map = {k: v.get("name") for k, v in constants.STADIUMS.items()}
     city_map = {k: v.get("city") for k, v in constants.STADIUMS.items()}
@@ -349,12 +335,11 @@ def load_team_stats(
     seasons: list[int],
     regular_season_only: bool = True,
     *,
-    cache_dir: Optional[os.PathLike | str] = None,
+    cache_dir: os.PathLike | str | None = None,
     force_refresh: bool = False,
-    current_season: Optional[int] = None,
+    current_season: int | None = None,
 ) -> pl.DataFrame:
-    """
-    Load team statistics for specified seasons using nflreadpy.
+    """Load team statistics for specified seasons using nflreadpy.
 
     Cached stats are used for historical seasons when available. Current and future
     seasons are always refreshed to keep upcoming games up to date.
@@ -368,8 +353,8 @@ def load_team_stats(
 
     Returns:
         Polars DataFrame with team statistics per game
-    """
 
+    """
     if not seasons:
         return pl.DataFrame()
 
@@ -409,8 +394,7 @@ def add_scoring_data_to_team_stats(
     team_stats_df: pl.DataFrame,
     schedule_df: pl.DataFrame,
 ) -> pl.DataFrame:
-    """
-    Add points scored and points allowed from schedule to team stats.
+    """Add points scored and points allowed from schedule to team stats.
 
     The schedule has per-game scores (away_score, home_score). This function
     extracts that into per-team format and merges with team_stats so we can
@@ -422,8 +406,8 @@ def add_scoring_data_to_team_stats(
 
     Returns:
         team_stats_df with points_scored and points_allowed columns added
-    """
 
+    """
     if schedule_df.height == 0:
         return team_stats_df
 
@@ -470,8 +454,7 @@ def add_scoring_data_to_team_stats(
 
 
 def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Combine related stats into single columns and remove originals.
+    """Combine related stats into single columns and remove originals.
 
     Combines:
     - sack + rushing + receiving fumbles -> fumbles
@@ -485,8 +468,8 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with combined stats
-    """
 
+    """
     combine_operations = []
 
     # Fumbles (sack + rushing + receiving)
@@ -594,8 +577,7 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Add opponent's stats for each game to the team's record.
+    """Add opponent's stats for each game to the team's record.
 
     For each team-game record, looks up the opponent's stats for that same game
     and adds them as opponent_* columns. This allows aggregating "stats of teams
@@ -610,8 +592,8 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         DataFrame with added opponent_* columns for each game
-    """
 
+    """
     # Identify stat columns to copy from opponent (exclude identifiers and duplicate-prone stats)
     exclude_cols = {
         "season",
@@ -646,16 +628,15 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
 
 
 def load_pbp(seasons: list[int]) -> pl.DataFrame:
-    """
-    Load play-by-play data for specified seasons using nflreadpy.
+    """Load play-by-play data for specified seasons using nflreadpy.
 
     Args:
         seasons: List of season years to load
 
     Returns:
         Polars DataFrame with play-by-play data
-    """
 
+    """
     log.info("Loading play-by-play for seasons: %s", seasons)
     pbp_df = nfl.load_pbp(seasons=seasons)
 
@@ -672,8 +653,7 @@ def aggregate_pbp_stats(
     pbp_df: pl.DataFrame,
     seasons: list[int],
 ) -> pl.DataFrame:
-    """
-    Aggregate play-by-play data into per-team per-week statistics.
+    """Aggregate play-by-play data into per-team per-week statistics.
 
     Computes statistics that aren't directly available in load_team_stats:
     - Third down attempts and conversions
@@ -688,8 +668,8 @@ def aggregate_pbp_stats(
 
     Returns:
         DataFrame with columns: season, week, team_abbr, and computed stats
-    """
 
+    """
     if pbp_df.height == 0:
         return pl.DataFrame()
 
@@ -747,16 +727,15 @@ def aggregate_pbp_stats(
 
 
 def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
-    """
-    Load ELO ratings from qb_elos.csv file.
+    """Load ELO ratings from qb_elos.csv file.
 
     Args:
         seasons: List of season years to load
 
     Returns:
         Polars DataFrame with ELO ratings per game
-    """
 
+    """
     elo_path = os.path.join(constants.DATA_PATH, "qb_elos.csv")
 
     if not os.path.exists(elo_path):
@@ -836,16 +815,15 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
 
 
 def load_raw_elo_data() -> pl.DataFrame:
-    """
-    Load raw ELO data from qb_elos.csv file without transformations.
+    """Load raw ELO data from qb_elos.csv file without transformations.
 
     This is used for QB-specific lookups where we need the original
     column names (qb1, qb2, qb1_value_pre, etc.).
 
     Returns:
         Raw Polars DataFrame with ELO data
-    """
 
+    """
     elo_path = os.path.join(constants.DATA_PATH, "qb_elos.csv")
 
     if not os.path.exists(elo_path):
@@ -868,8 +846,7 @@ def load_raw_elo_data() -> pl.DataFrame:
 
 
 def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
-    """
-    Get the most recent ELO ratings for each team from a given season.
+    """Get the most recent ELO ratings for each team from a given season.
 
     This is used for future games that don't yet have specific week ELO data.
     For each team, finds their most recent ELO rating from the season.
@@ -881,8 +858,8 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
     Returns:
         DataFrame with columns: team_abbr, elo_pre, qb_value_pre, qb_elo_pre
         One row per team with their most recent ELO values
-    """
 
+    """
     if elo_df.height == 0:
         return pl.DataFrame()
 

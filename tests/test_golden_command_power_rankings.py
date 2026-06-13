@@ -9,7 +9,6 @@ from scripts import golden_command
 
 def test_build_pregame_power_rankings_uses_postgame_for_prior_weeks() -> None:
     """Week w rankings should use postgame ratings for weeks < w."""
-
     df = pd.DataFrame(
         {
             "season": [2025, 2025],

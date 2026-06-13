@@ -9,7 +9,6 @@ from nfl_predictor.utils import polars_utils
 
 def _row_by_team(records_df: pl.DataFrame) -> dict[str, dict[str, int | float]]:
     """Return a dict mapping team -> record values for easy assertions."""
-
     out: dict[str, dict[str, int | float]] = {}
     for row in records_df.iter_rows(named=True):
         team = row["team_abbr"]
@@ -29,7 +28,6 @@ def _row_by_team(records_df: pl.DataFrame) -> dict[str, dict[str, int | float]]:
 
 def test_compute_team_records_before_week_week1_empty() -> None:
     """Week 1 should have no prior games, so record table is empty."""
-
     schedule_df = pl.DataFrame(
         {
             "season": [2024],
@@ -48,7 +46,6 @@ def test_compute_team_records_before_week_week1_empty() -> None:
 
 def test_compute_team_records_before_week_overall_div_conf() -> None:
     """Records should be computed from prior weeks only and split by division/conference."""
-
     schedule_df = pl.DataFrame(
         {
             "season": [2024, 2024, 2024],
@@ -115,7 +112,6 @@ def test_compute_team_records_before_week_overall_div_conf() -> None:
 
 def test_compute_team_records_before_week_validates_schema() -> None:
     """Helper should raise a clear error if the schedule schema is incomplete."""
-
     bad_schedule_df = pl.DataFrame({"season": [2024], "week": [1]})
 
     try:

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import joblib
 import numpy as np
@@ -62,13 +63,12 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _import_shap() -> Optional[Any]:
+def _import_shap() -> Any | None:
     """Return the shap module when available; otherwise None."""
     try:
-        import shap  # type: ignore
+        return importlib.import_module("shap")
     except ImportError:
         return None
-    return shap
 
 
 def _select_model_component(
@@ -107,12 +107,11 @@ def _resolve_head(model: Any, target: str) -> tuple[Any, str]:
 
 def main() -> int:
     """Run optional SHAP analysis; requires the `shap` library."""
-
     args = _parse_args()
 
     shap = _import_shap()
     if shap is None:
-        log.warning("SHAP is not installed. Install with: .venv/bin/pip install shap (optional).")
+        log.warning("SHAP is not installed. Install with: python -m pip install shap (optional).")
         return 2
 
     if not args.model_path.exists():

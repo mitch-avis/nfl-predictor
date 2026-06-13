@@ -7,7 +7,7 @@ This module hosts the training entrypoints that were historically defined in
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -42,6 +42,7 @@ from nfl_predictor.ml.ml_model_core import (
     _fit_margin_total_models,
     _fit_models,
     _fit_quantile_models,
+    _fit_transform_matrix,
     _fit_win_prob_calibrator,
     _get_target_columns,
     _load_games,
@@ -58,6 +59,7 @@ from nfl_predictor.ml.ml_model_core import (
     _split_train_calibration_holdout,
     _summarize_confidence_pool,
     _summarize_missing_data,
+    _transform_matrix,
     _validate_quantiles,
     get_market_baseline,
     resolve_win_prob_calibration_method,
@@ -82,7 +84,6 @@ def _filter_to_regular_season_for_training(
     This is the default for training and evaluation splits. Prediction can still be run on
     postseason rows (or any rows) as long as features are available.
     """
-
     if include_postseason:
         return df
     if "game_type" not in df.columns:
@@ -100,21 +101,20 @@ def train_score_model(
     holdout_seasons: int,
     include_market: bool,
     max_cardinality_ratio: float,
-    market_prob_config: Optional[MarketProbConfig],
+    market_prob_config: MarketProbConfig | None,
     include_postseason: bool = False,
     postseason_weight: float = 1.0,
-    min_season: Optional[int] = None,
-    max_season: Optional[int] = None,
+    min_season: int | None = None,
+    max_season: int | None = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
-    xgb_tree_method: Optional[str] = None,
-    xgb_device: Optional[str] = None,
-    xgb_n_jobs: Optional[int] = None,
-    recency_half_life_weeks: Optional[float] = None,
-    recency_half_life_seasons: Optional[float] = None,
+    xgb_tree_method: str | None = None,
+    xgb_device: str | None = None,
+    xgb_n_jobs: int | None = None,
+    recency_half_life_weeks: float | None = None,
+    recency_half_life_seasons: float | None = None,
 ) -> ScoreModel:
     """Train score models using time-aware season splits."""
-
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
@@ -149,7 +149,7 @@ def train_score_model(
     x_holdout_df = _apply_feature_spec(holdout_df, feature_spec)
 
     preprocessor = _build_preprocessor(feature_spec, for_tree=True)
-    x_train = preprocessor.fit_transform(x_train_df)
+    x_train = _fit_transform_matrix(preprocessor, x_train_df)
 
     postseason_weights = compute_postseason_sample_weight(
         train_df,
@@ -180,7 +180,7 @@ def train_score_model(
     )
 
     if not holdout_df.empty:
-        x_holdout = preprocessor.transform(x_holdout_df)
+        x_holdout = _transform_matrix(preprocessor, x_holdout_df)
         pred_away = _predict_xgb(away_model, x_holdout)
         pred_home = _predict_xgb(home_model, x_holdout)
 
@@ -204,7 +204,6 @@ def train_score_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
     """Train a score model and return a structured metrics report payload."""
-
     data_path: Path = kwargs["data_path"]
 
     model: ScoreModel = train_score_model(**kwargs)
@@ -220,8 +219,8 @@ def train_score_model_with_report(
     _train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
     metrics: dict[str, Any] = {}
     if not holdout_df.empty:
-        x_holdout = model.preprocessor.transform(
-            _apply_feature_spec(holdout_df, model.feature_spec)
+        x_holdout = _transform_matrix(
+            model.preprocessor, _apply_feature_spec(holdout_df, model.feature_spec)
         )
         pred_away = _predict_xgb(model.away_model, x_holdout)
         pred_home = _predict_xgb(model.home_model, x_holdout)
@@ -263,19 +262,18 @@ def train_margin_total_model(
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
-    market_prob_config: Optional[MarketProbConfig],
+    market_prob_config: MarketProbConfig | None,
     win_prob_use_uncertainty: bool = False,
     include_postseason: bool = False,
     postseason_weight: float = 1.0,
-    min_season: Optional[int] = None,
-    max_season: Optional[int] = None,
+    min_season: int | None = None,
+    max_season: int | None = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
-    recency_half_life_weeks: Optional[float] = None,
-    recency_half_life_seasons: Optional[float] = None,
+    recency_half_life_weeks: float | None = None,
+    recency_half_life_seasons: float | None = None,
 ) -> MarginTotalModel:
     """Train margin/total models with optional calibration."""
-
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
@@ -329,8 +327,8 @@ def train_margin_total_model(
         )
 
     tuned_params: dict[str, Any] = {}
-    tuned_cv_summary: Optional[dict[str, Any]] = None
-    optuna_summary: Optional[dict[str, Any]] = None
+    tuned_cv_summary: dict[str, Any] | None = None
+    optuna_summary: dict[str, Any] | None = None
     if optuna_config.enabled:
         tuned_params, tuned_cv_summary, optuna_summary = _run_optuna_search(
             train_df,
@@ -367,8 +365,8 @@ def train_margin_total_model(
         dict[float, xgb.XGBRegressor],
         dict[float, xgb.XGBRegressor],
         tuple[float, ...],
-        Optional[np.ndarray | spmatrix],
-        Optional[np.ndarray],
+        np.ndarray | spmatrix | None,
+        np.ndarray | None,
     ]:
         local_spec = _build_feature_spec(
             train_frame,
@@ -386,7 +384,9 @@ def train_margin_total_model(
         )
 
         local_preprocessor = _build_preprocessor(local_spec, for_tree=True)
-        x_train = local_preprocessor.fit_transform(_apply_feature_spec(train_frame, local_spec))
+        x_train = _fit_transform_matrix(
+            local_preprocessor, _apply_feature_spec(train_frame, local_spec)
+        )
         postseason_weights = compute_postseason_sample_weight(
             train_frame,
             include_postseason=include_postseason,
@@ -410,8 +410,8 @@ def train_margin_total_model(
         y_margin_calibration = None
         y_total_calibration = None
         if not calib_frame.empty:
-            x_calibration = local_preprocessor.transform(
-                _apply_feature_spec(calib_frame, local_spec)
+            x_calibration = _transform_matrix(
+                local_preprocessor, _apply_feature_spec(calib_frame, local_spec)
             )
             (
                 y_margin_calibration,
@@ -542,11 +542,11 @@ def train_margin_total_model(
         )
 
     if not holdout_df.empty:
-        x_holdout = preprocessor.transform(_apply_feature_spec(holdout_df, feature_spec))
+        x_holdout = _transform_matrix(preprocessor, _apply_feature_spec(holdout_df, feature_spec))
         pred_margin = _predict_xgb(margin_model, x_holdout)
         pred_total = _predict_xgb(total_model, x_holdout)
-        baseline_margin_holdout: Optional[np.ndarray] = None
-        baseline_total_holdout: Optional[np.ndarray] = None
+        baseline_margin_holdout: np.ndarray | None = None
+        baseline_total_holdout: np.ndarray | None = None
         if market_anchor:
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
@@ -614,7 +614,6 @@ def train_margin_total_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
     """Train a margin/total model and return a structured metrics report payload."""
-
     data_path: Path = kwargs["data_path"]
     win_prob_use_uncertainty = bool(kwargs.get("win_prob_use_uncertainty", False))
     holdout_seasons: int = kwargs["holdout_seasons"]
@@ -643,11 +642,11 @@ def train_margin_total_model_with_report(
     # Train the actual model (this will also log holdout metrics).
     model: MarginTotalModel = train_margin_total_model(**kwargs)
 
-    holdout_metrics: Optional[dict[str, Any]] = None
-    pool_summary: Optional[dict[str, Any]] = None
+    holdout_metrics: dict[str, Any] | None = None
+    pool_summary: dict[str, Any] | None = None
     if not holdout_df.empty:
-        x_holdout = model.preprocessor.transform(
-            _apply_feature_spec(holdout_df, model.feature_spec)
+        x_holdout = _transform_matrix(
+            model.preprocessor, _apply_feature_spec(holdout_df, model.feature_spec)
         )
         pred_margin = _predict_xgb(model.margin_model, x_holdout)
         pred_total = _predict_xgb(model.total_model, x_holdout)
@@ -719,18 +718,17 @@ def train_blended_margin_total_model(
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
-    market_prob_config: Optional[MarketProbConfig],
+    market_prob_config: MarketProbConfig | None,
     include_postseason: bool = False,
     postseason_weight: float = 1.0,
-    min_season: Optional[int] = None,
-    max_season: Optional[int] = None,
+    min_season: int | None = None,
+    max_season: int | None = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
-    recency_half_life_weeks: Optional[float] = None,
-    recency_half_life_seasons: Optional[float] = None,
+    recency_half_life_weeks: float | None = None,
+    recency_half_life_seasons: float | None = None,
 ) -> BlendedMarginTotalModel:
     """Train blended margin/total models using team vs market signals."""
-
     if calibration_seasons <= 0 and calibration_weeks <= 0:
         raise ValueError("Blended models require calibration seasons or calibration weeks.")
     if market_anchor:
@@ -891,7 +889,7 @@ def train_blended_margin_total_model(
     )
     team_preprocessor = _build_preprocessor(team_spec, for_tree=True)
 
-    team_train = team_preprocessor.fit_transform(_apply_feature_spec(train_df, team_spec))
+    team_train = _fit_transform_matrix(team_preprocessor, _apply_feature_spec(train_df, team_spec))
     y_margin_train, y_total_train = _prepare_margin_total_targets(train_df, target_columns)
     postseason_weights = compute_postseason_sample_weight(
         train_df,
@@ -905,7 +903,9 @@ def train_blended_margin_total_model(
     )
     train_weight = combine_sample_weights(postseason_weights, recency_weights)
 
-    team_calib = team_preprocessor.transform(_apply_feature_spec(calibration_df, team_spec))
+    team_calib = _transform_matrix(
+        team_preprocessor, _apply_feature_spec(calibration_df, team_spec)
+    )
     y_margin_calib, y_total_calib = _prepare_margin_total_targets(calibration_df, target_columns)
     market_margin_calib, market_total_calib = get_market_baseline(calibration_df)
 
@@ -964,7 +964,9 @@ def train_blended_margin_total_model(
         )
 
     if not holdout_df.empty:
-        team_holdout = team_preprocessor.transform(_apply_feature_spec(holdout_df, team_spec))
+        team_holdout = _transform_matrix(
+            team_preprocessor, _apply_feature_spec(holdout_df, team_spec)
+        )
         market_margin_holdout, market_total_holdout = get_market_baseline(holdout_df)
 
         team_margin_holdout = _predict_xgb(team_margin_model, team_holdout)
@@ -1025,7 +1027,6 @@ def train_blended_margin_total_model_with_report(
     **kwargs: Any,
 ) -> TrainingResult:
     """Train a blended model and return a structured metrics report payload."""
-
     data_path: Path = kwargs["data_path"]
 
     model: BlendedMarginTotalModel = train_blended_margin_total_model(**kwargs)
@@ -1050,7 +1051,7 @@ def train_blended_margin_total_model_with_report(
     calibration_season_inseason = split[6]
     calibration_weeks_inseason = split[7]
 
-    holdout_metrics: Optional[dict[str, Any]] = None
+    holdout_metrics: dict[str, Any] | None = None
     if not holdout_df.empty:
         team_margin, team_total = _predict_margin_total_from_model(model.team_model, holdout_df)
         if model.market_model is None:

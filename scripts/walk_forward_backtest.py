@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Walk-forward backtest for margin/total NFL predictions.
+"""Walk-forward backtest for margin/total NFL predictions.
 
 This script trains a new model for each week in the evaluation window,
 predicts that week, and reports per-week and aggregate metrics.
@@ -10,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +19,7 @@ try:
     from nfl_predictor import constants
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     # Allow running as a script: `python scripts/walk_forward_backtest.py`.
     import sys
 
@@ -33,7 +32,6 @@ except ModuleNotFoundError:  # pragma: no cover
 
 def _trend_feature_columns(df: pd.DataFrame) -> list[str]:
     """Return trend/season-phase columns to drop for ablation runs."""
-
     trend_bases = set(constants.TREND_FEATURE_COLUMNS)
     drop_columns = set(constants.SEASON_PHASE_COLUMNS)
     suffix = "_diff"
@@ -222,7 +220,6 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """CLI entrypoint for walk-forward backtests."""
-
     args = _parse_args()
     if args.recency_half_life_weeks is not None and args.recency_half_life_seasons is not None:
         raise ValueError(
@@ -276,7 +273,7 @@ def main() -> None:
 
     dataset_hash = walk_forward.dataset_fingerprint(args.data_path)
     run_id = walk_forward.generate_run_id(dataset_hash, config)
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     results = walk_forward.run_walk_forward_backtest(df, config)
 

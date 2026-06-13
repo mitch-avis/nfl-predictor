@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ def compute_postseason_sample_weight(
     *,
     include_postseason: bool,
     postseason_weight: float,
-) -> Optional[np.ndarray]:
+) -> np.ndarray | None:
     """Compute per-row sample weights with optional postseason upweighting.
 
     When `game_type` exists and `include_postseason` is True, any row whose
@@ -22,7 +22,6 @@ def compute_postseason_sample_weight(
 
     Returns None when weights are unnecessary (all ones).
     """
-
     if postseason_weight <= 0:
         raise ValueError("postseason_weight must be positive.")
 
@@ -46,11 +45,10 @@ def compute_postseason_sample_weight(
 def compute_recency_sample_weight(
     df: pd.DataFrame,
     *,
-    half_life_weeks: Optional[float] = None,
-    half_life_seasons: Optional[float] = None,
-) -> Optional[np.ndarray]:
+    half_life_weeks: float | None = None,
+    half_life_seasons: float | None = None,
+) -> np.ndarray | None:
     """Compute exponential recency weights using weeks or seasons as the age unit."""
-
     if half_life_weeks is None and half_life_seasons is None:
         return None
     if half_life_weeks is not None and half_life_seasons is not None:
@@ -95,17 +93,15 @@ def compute_recency_sample_weight(
     week_index = season_int.map(offsets).astype(int) + week_int
     max_index = week_index.max()
     age = max_index - week_index
-    if half_life_weeks is None:
-        raise ValueError("half_life_weeks must be provided for week-based weighting.")
-    weights = 0.5 ** (age.to_numpy() / float(half_life_weeks))
+    half_life_weeks_value = float(cast(float, half_life_weeks))
+    weights = 0.5 ** (age.to_numpy() / half_life_weeks_value)
     if np.allclose(weights, 1.0):
         return None
     return weights.astype(float)
 
 
-def combine_sample_weights(*weights: Optional[np.ndarray]) -> Optional[np.ndarray]:
+def combine_sample_weights(*weights: np.ndarray | None) -> np.ndarray | None:
     """Combine multiple weight vectors by multiplication."""
-
     active = [w for w in weights if w is not None]
     if not active:
         return None

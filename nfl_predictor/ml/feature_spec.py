@@ -98,7 +98,6 @@ def _add_market_transforms(df: pd.DataFrame) -> pd.DataFrame:
 
 def get_market_baseline(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """Return market baseline margin and total arrays from input DataFrame."""
-
     df = _add_market_transforms(df)
     if "market_home_margin" not in df.columns or "market_total_line" not in df.columns:
         raise ValueError("Market anchor requested but spread/total columns are missing.")

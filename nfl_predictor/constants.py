@@ -1,8 +1,7 @@
-"""
-This module defines constants for the NFL predictor project, including configurations for paths,
-NFL season details, team abbreviations, and statistics for performance analysis. Centralizing these
-configurations helps maintain consistency and integrity across the project, simplifying management
-and updates.
+"""Define shared constants for the NFL predictor project.
+
+This module centralizes paths, season rules, team mappings, and schema metadata so ETL,
+modeling, and reporting code stay aligned.
 """
 
 import os
@@ -30,6 +29,7 @@ def get_regular_season_weeks(season: int) -> int:
 
     Returns:
         Number of regular season weeks (17 before 2021, 18 from 2021 onwards)
+
     """
     return WEEKS_FROM_2021_ONWARDS if season >= 2021 else WEEKS_BEFORE_2021
 

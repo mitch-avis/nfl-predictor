@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -13,69 +16,72 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
 
     steps:
-    - name: Check out repository
-      uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v6
 
-    - name: Set up Python 3.14
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.14"
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
 
-    - name: Set up uv
-      uses: astral-sh/setup-uv@v6
-      with:
-        version: "0.11.21"
-        enable-cache: true
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          version: "latest"
+          enable-cache: true
 
-    - name: Set up Node.js for markdownlint
-      uses: actions/setup-node@v4
-      with:
-        node-version: "24"
+      - name: Verify lockfile
+        run: uv lock --check
 
-    - name: Install markdownlint
-      run: npm install --global markdownlint-cli
+      - name: Create virtual environment
+        run: uv venv .venv
 
-    - name: Verify lockfile
-      run: uv lock --check
+      - name: Sync dependencies
+        run: |
+          source .venv/bin/activate
+          uv sync --active
 
-    - name: Create virtual environment
-      run: uv venv .venv
+      - name: Verify synced environment
+        run: |
+          source .venv/bin/activate
+          uv sync --check --active
 
-    - name: Sync dependencies
-      run: |
-        source .venv/bin/activate
-        uv sync --active
+      - name: Ruff format check
+        run: .venv/bin/ruff format --check .
 
-    - name: Verify synced environment
-      run: |
-        source .venv/bin/activate
-        uv sync --check --active
+      - name: Ruff lint
+        run: .venv/bin/ruff check .
 
-    - name: Ruff format check
-      run: .venv/bin/ruff format --check .
+      - name: Ty
+        run: .venv/bin/ty check .
 
-    - name: Ruff lint
-      run: .venv/bin/ruff check .
+      - name: Pyright
+        run: .venv/bin/pyright .
 
-    - name: Pyright
-      run: .venv/bin/pyright .
+      - name: Pytest
+        run: .venv/bin/python -m pytest
 
-    - name: Ty
-      run: .venv/bin/ty check .
+      - name: Set up Node.js for markdownlint
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
 
-    - name: Pytest
-      run: .venv/bin/python -m pytest
+      - name: Install markdownlint
+        run: npm install --global markdownlint-cli
 
-    - name: Markdownlint
-      run: markdownlint .
+      - name: Markdownlint
+        run: markdownlint .
 
-    - name: Editable install smoke check
-      run: uv pip install --python .venv/bin/python -e . --no-deps
+      - name: Editable install smoke check
+        run: uv pip install --python .venv/bin/python -e . --no-deps
 
-    - name: CLI help smoke checks
-      run: |
-        .venv/bin/python -m nfl_predictor.ml_model --help >/dev/null
-        .venv/bin/python scripts/weekly_run.py --help >/dev/null
-        .venv/bin/python scripts/power_rankings.py --help >/dev/null
+      - name: CLI help smoke checks
+        run: |
+          .venv/bin/python -m nfl_predictor.ml_model --help >/dev/null
+          .venv/bin/python scripts/weekly_run.py --help >/dev/null
+          .venv/bin/python scripts/power_rankings.py --help >/dev/null

@@ -9,9 +9,9 @@
 
 ### Added
 
-- Add focused coverage across sample weights, validation utilities, CLI orchestration,
-  feature-spec helpers, feature-importance fallbacks, data-collection ETL control flow, and
-  walk-forward helper branches, bringing several support modules to `100%` coverage and lifting
+- Add focused coverage across sample weights, validation utilities, CLI orchestration, feature-spec
+  helpers, feature-importance fallbacks, data-collection ETL control flow, and walk-forward helper
+  branches, bringing several support modules to `100%` coverage and lifting
   `nfl_predictor/data_collection.py` to `89%` plus `nfl_predictor/ml/walk_forward.py` to `94%`
   ([`2351b2b`])
 

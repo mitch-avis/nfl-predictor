@@ -42,8 +42,11 @@ Active milestone:
 
 Recommended first work slice:
 - Pyright and Ty are both green. Stay on the remaining Milestone 44 items.
-- The preseason `90%` coverage target is met and the validation script cleanup is done; move next
-  to the remaining doc/toolchain mismatches and the GitHub Actions validation workflow decision.
+- The preseason `90%` coverage target is met, the validation workflow is checked in, and the
+  clean-checkout `scripts/betting_pipeline.py --dry-run` regression is fixed locally.
+- If a fresh push exists, inspect the newest GitHub Actions validation run first.
+- After CI is green, move next to the remaining Milestone 44 wrap-up items: release-workflow
+  decisions and any final doc polish.
 - Treat TDD as mandatory for any code change: confirm the exact behavior/lines you plan to touch
   are covered first; if they are not, add focused characterization or failing tests before editing
   production code.

@@ -39,13 +39,17 @@ def test_betting_pipeline_resolve_predict_path_prefers_latest_week(tmp_path: Pat
     assert resolved == week_11
 
 
-def test_betting_pipeline_dry_run_exits_successfully() -> None:
+def test_betting_pipeline_dry_run_exits_successfully(tmp_path: Path) -> None:
     """The betting pipeline script should support a dry run without heavy work."""
+    missing_data_path = tmp_path / "missing_completed_games_ml.csv"
+
     old_argv = sys.argv
     try:
         sys.argv = [
             "betting_pipeline.py",
             "--dry-run",
+            "--data-path",
+            str(missing_data_path),
             "--run-id",
             "test_betting_pipeline",
         ]

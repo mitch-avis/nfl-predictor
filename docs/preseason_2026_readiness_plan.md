@@ -133,6 +133,9 @@ Exit criteria:
 - Clarify command guidance that drifted from the actual `.venv/bin` contents. Complete as of
   2026-06-13: `uv` is documented as an external `PATH` tool, while Python-based tooling remains
   explicit about `.venv/bin/...` in agent-facing docs.
+- Fix `scripts/betting_pipeline.py --dry-run` for clean checkouts. Complete as of 2026-06-13:
+  dry-run planning now exits successfully even when `data/completed_games_ml.csv` is absent, which
+  keeps the validation workflow compatible with repos that do not commit local `data/` artifacts.
 
 Exit criteria:
 
@@ -143,6 +146,8 @@ Exit criteria:
 
 - The coverage audit and targeted test-addition pass now meets the preseason `90%` target.
 - GitHub Actions validation is now checked in at `.github/workflows/validation.yml`.
+- The first clean-checkout Actions run surfaced a `betting_pipeline --dry-run` dataset assumption;
+  that regression is now fixed and covered by a targeted CLI test.
 - The next hardening slice should move to release-workflow decisions and any remaining doc polish.
 - Completed coverage slices now include:
   - `nfl_predictor/ml/artifacts.py` and `nfl_predictor/utils/fingerprints.py` at `100%`.

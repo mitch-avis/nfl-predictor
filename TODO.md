@@ -106,13 +106,18 @@ Tasks:
 - [x] Establish a passing type-check baseline under the refreshed dependency set:
   - fix or intentionally scope the current `pyright` failures in pandas-heavy modules.
   - fix or intentionally scope the current `ty` failures and re-run both checkers.
-- [ ] Fix the highest-value operational correctness issues from the current audit:
+- [x] Fix the highest-value operational correctness issues from the current audit:
   - [x] validation script exit codes and logger usage.
   - [x] stale season-specific defaults in checked-in orchestration config and scripts.
   - [x] any command guidance that no longer matches the actual `.venv/bin` contents.
+  - [x] `scripts/betting_pipeline.py --dry-run` now succeeds in clean checkouts without tracked
+    `data/` files.
 - [ ] Re-establish quality gates and automation:
   - coverage-focused audit and targeted test additions now meet the preseason `90%` baseline; next
     move is release-workflow follow-up and any remaining doc polish.
+  - the first clean-checkout GitHub Actions run exposed a `betting_pipeline --dry-run` assumption
+    about committed `data/` files; that path is now covered by a regression test and exits cleanly
+    without the dataset.
   - completed focused coverage slices so far:
     - `nfl_predictor/ml/artifacts.py`, `nfl_predictor/utils/fingerprints.py`,
       `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and

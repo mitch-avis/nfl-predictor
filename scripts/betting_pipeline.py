@@ -680,20 +680,16 @@ def main() -> int:
     """CLI entrypoint."""
     args = _parse_args()
 
-    if not args.data_path.exists():
-        log.error("Missing dataset: %s", args.data_path)
-        return 2
-
-    dataset_hash = artifacts.sha256_file(args.data_path)
-    created_at = datetime.now(UTC).isoformat()
-
     # Create run directory
     config_payload: dict[str, Any] = {
         k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
     }
+    dataset_exists = args.data_path.exists()
+    dataset_hash = (
+        artifacts.sha256_file(args.data_path) if dataset_exists else "missing-dataset-for-dry-run"
+    )
     run_id = args.run_id or artifacts.generate_run_id("betting", dataset_hash, config_payload)
     run_dir = args.run_dir or (Path(constants.ROOT_DIR) / "models" / run_id)
-    run_dir.mkdir(parents=True, exist_ok=True)
 
     log.info("Run id: %s", run_id)
     log.info("Run dir: %s", run_dir)
@@ -702,6 +698,8 @@ def main() -> int:
     wf_best_json = run_dir / "wf_best.json"
 
     if args.dry_run:
+        if not dataset_exists:
+            log.info("Dry-run: dataset does not exist yet: %s", args.data_path)
         log.info("Dry-run enabled; exiting after planning.")
         log.info("Stage 1 would write: %s", wf_compare_csv)
         log.info("Stage 2 would use Optuna storage under run dir unless overridden.")
@@ -714,6 +712,13 @@ def main() -> int:
         else:
             log.info("Stage 3 would use explicit predict dataset: %s", args.predict_path)
         return 0
+
+    if not dataset_exists:
+        log.error("Missing dataset: %s", args.data_path)
+        return 2
+
+    created_at = datetime.now(UTC).isoformat()
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     # Load data once (used by stage 1)
     log.info("Loading %s", args.data_path)

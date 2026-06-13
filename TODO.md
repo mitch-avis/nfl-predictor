@@ -37,10 +37,10 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Prefer `uv ...` for dependency management and environment sync.
 
-### Current validated baseline (2026-06-12)
+### Current validated baseline (2026-06-13)
 
 - `.venv/bin/ruff format --check .` passes.
-- `.venv/bin/python -m pytest` passes (`326 passed`).
+- `.venv/bin/python -m pytest` passes (`391 passed`).
 - `markdownlint .` passes.
 - `uv lock --check` passes.
 - `uv sync --check --active` passes.
@@ -49,7 +49,7 @@ Agents and humans should not rely on the shell activation state.
   helpers.
 - `.venv/bin/ty check .` **passes (0 errors)** after tightening walk-forward config typing, helper
   return typing, optional SHAP imports, and small Polars schema annotations.
-- Coverage is `86%`, below the preseason target of `90%` or higher.
+- Coverage is `90%`, meeting the preseason target of `90%` or higher.
 
 ---
 
@@ -108,12 +108,12 @@ Tasks:
   - fix or intentionally scope the current `pyright` failures in pandas-heavy modules.
   - fix or intentionally scope the current `ty` failures and re-run both checkers.
 - [ ] Fix the highest-value operational correctness issues from the current audit:
-  - [ ] validation script exit codes and logger usage.
+  - [x] validation script exit codes and logger usage.
   - [x] stale season-specific defaults in checked-in orchestration config and scripts.
   - [ ] any command guidance that no longer matches the actual `.venv/bin` contents.
 - [ ] Re-establish quality gates and automation:
-  - start with a coverage-focused audit and targeted test additions before the validation-script
-    cleanup and CI workflow slices.
+  - coverage-focused audit and targeted test additions now meet the preseason `90%` baseline;
+    next move is the validation-script cleanup and CI workflow slices.
   - completed focused coverage slices so far:
     - `nfl_predictor/ml/artifacts.py`, `nfl_predictor/utils/fingerprints.py`,
       `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
@@ -122,13 +122,25 @@ Tasks:
     - `nfl_predictor/ml/feature_importance.py` is up to `98%` coverage.
     - `nfl_predictor/data_collection.py` is up to `89%` coverage after deeper ETL control-flow,
       merge-helper, and orchestration tests.
+    - `nfl_predictor/ml/ml_model_core.py` is up to `76%` coverage after helper-focused tests for
+      target selection, missing-data summaries, season bounds, and time-aware split helpers.
+    - `nfl_predictor/ml/ml_model_training.py` is up to `88%` coverage after additional
+      orchestration, guard-rail, no-holdout, and calibration-branch tests.
+    - `nfl_predictor/ml/leakage_audit.py` is up to `93%` coverage after helper, heuristic-flag,
+      and report-writing tests.
+    - `nfl_predictor/utils/game_utils.py` is up to `94%` coverage after QB-fill and future-line
+      fallback tests.
+    - `nfl_predictor/utils/scraping_utils.py` is up to `96%` coverage after parser, fallback, and
+      SurvivorGrid edge-case tests.
+    - `nfl_predictor/utils/polars/teamrankings.py` is up to `90%` coverage after aggregation,
+      filtering, conversion, and cache-fallback tests.
     - `nfl_predictor/ml/walk_forward.py` is up to `94%` coverage after helper-edge-case and
       market-aware backtest tests.
-  - next likely coverage targets are `nfl_predictor/ml/ml_model_core.py`, then
-    `nfl_predictor/ml/ml_model_training.py`, followed by the remaining tail cases in
-    `nfl_predictor/ml/feature_importance.py`, `nfl_predictor/data_collection.py`, and
-    `nfl_predictor/ml/walk_forward.py`.
-  - raise the coverage gate toward `90%` or higher, with `100%` as the aspirational ceiling.
+  - remaining coverage tails worth future cleanup live primarily in
+    `nfl_predictor/ml/ml_model_core.py`, `nfl_predictor/ml/ml_model_training.py`,
+    `nfl_predictor/utils/polars/loaders.py`, `nfl_predictor/utils/polars/features.py`, and the
+    smaller parser-edge branches in `nfl_predictor/utils/scraping_utils.py`.
+  - keep the coverage gate at `90%` or higher, with `100%` as the aspirational ceiling.
   - document the canonical local validation sequence.
   - evaluate a GitHub Actions validation workflow that provisions `.venv` with `uv` and runs Ruff,
     Pyright, Ty, pytest, and markdownlint.
@@ -139,9 +151,9 @@ Tasks:
 Acceptance:
 
 - [x] Ruff format, Ruff check, Pyright, Ty, pytest, and markdownlint all pass.
-- [ ] Editable install and primary CLI help smoke checks pass on Python 3.14.
-- [ ] Docs and agent instructions match the actual toolchain and workflow.
-- [ ] `CHANGELOG.md` is current and the intended CI/release automation path is documented.
+- [x] Editable install and primary CLI help smoke checks pass on Python 3.14.
+- [x] Docs and agent instructions match the actual toolchain and workflow.
+- [x] `CHANGELOG.md` is current and the intended CI/release automation path is documented.
 
 ---
 

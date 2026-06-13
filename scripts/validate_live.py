@@ -14,6 +14,7 @@ import polars as pl
 try:
     from nfl_predictor import constants
     from nfl_predictor.utils import validation_utils
+    from nfl_predictor.utils.logger import log
 except ModuleNotFoundError:
     # Allow running as a script: `python scripts/validate_live.py`.
     import sys
@@ -22,26 +23,27 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(repo_root))
     from nfl_predictor import constants
     from nfl_predictor.utils import validation_utils
+    from nfl_predictor.utils.logger import log
 
 
 def main() -> int:
     """Run live validation and report any score mismatches."""
     data_path = Path(constants.DATA_PATH) / "all_data.csv"
     if not data_path.exists():
-        print(f"Missing data file: {data_path}")
+        log.error("Missing data file: %s", data_path)
         return 2
 
     df = pl.read_csv(data_path)
     mismatches = validation_utils.compare_latest_week_scores(df)
 
     if mismatches.height == 0:
-        print("No mismatches found")
+        log.info("No mismatches found")
         return 0
 
-    print("Score mismatches detected:")
-    print(mismatches)
+    log.error("Score mismatches detected:")
+    log.error("%s", mismatches)
     return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

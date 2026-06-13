@@ -7,7 +7,7 @@ feature work for the 2026-2027 NFL season.
 
 ## Validated Baseline
 
-The following checks were run on 2026-06-12 against the refreshed `.venv`:
+The following checks were run on 2026-06-13 against the refreshed `.venv`:
 
 | Check                             | Result      | Notes                                                                                            |
 | --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
@@ -15,11 +15,12 @@ The following checks were run on 2026-06-12 against the refreshed `.venv`:
 | `.venv/bin/ruff check .`          | Pass        | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions                    |
 | `.venv/bin/pyright .`             | **Pass**    | **0 errors** after adding `pandas-stubs` and `_fit_transform_matrix`/`_transform_matrix` helpers |
 | `.venv/bin/ty check .`            | Pass        | `0 errors`; now mandatory alongside `pyright`                                                    |
-| `.venv/bin/python -m pytest`      | Pass        | `326 passed`                                                                                     |
-| Coverage from pytest              | Fail target | `86%`, below the new preseason target of `90%` or higher                                         |
+| `.venv/bin/python -m pytest`      | Pass        | `391 passed`                                                                                     |
+| Coverage from pytest              | Pass        | `90%`, meeting the preseason target of `90%` or higher                                           |
 | `markdownlint .`                  | Pass        | `0 error(s)`                                                                                     |
 | `uv lock --check`                 | Pass        | Lockfile is in sync with `pyproject.toml`                                                        |
 | `uv sync --check --active`        | Pass        | Active project environment matches `uv.lock`                                                     |
+| Editable install smoke check      | Pass        | `uv pip install --python .venv/bin/python -e . --no-deps` succeeds                              |
 | Primary CLI help smoke checks     | Pass        | `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`                               |
 
 ## Tooling Recommendations
@@ -112,22 +113,28 @@ Exit criteria:
 
 ### 4. Fix high-value operational issues
 
-- Correct validation script exit-code propagation.
-- Replace validation-script `print` usage with the project logger when appropriate.
+- Correct validation script exit-code propagation. Complete as of 2026-06-13: both validation
+  scripts now raise `SystemExit(main())` so shell automation sees the correct non-zero status.
+- Replace validation-script `print` usage with the project logger when appropriate. Complete as of
+  2026-06-13: `scripts/validate_offline.py` and `scripts/validate_live.py` now log missing-data,
+  warning, success, and mismatch states through the project logger.
 - Refresh stale season-specific defaults in `config/weekly_run.yaml` and
   `scripts/betting_pipeline.py`. Complete as of 2026-06-12: weekly orchestration defaults now rely
   on runtime path/week inference instead of checked-in 2025 postseason values.
-- Re-check editable install and key CLI help flows after those updates.
+- Re-check editable install and key CLI help flows after those updates. Complete as of 2026-06-13:
+  editable install plus the `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`
+  help entrypoints all pass on Python 3.14.
 
 Exit criteria:
 
-- Validation scripts fail correctly in shell automation.
+- Validation scripts fail correctly in shell automation. Complete as of 2026-06-13.
 - Checked-in config defaults no longer point at the 2025 postseason.
 
 ### 5. Re-establish quality gates
 
-- Start the next hardening pass with a coverage audit and targeted test additions before taking the
-  remaining validation-script cleanup and CI workflow slices.
+- The coverage audit and targeted test-addition pass now meets the preseason `90%` target.
+- The next hardening slice should move to the remaining validation-script cleanup and CI workflow
+  decisions.
 - Completed coverage slices now include:
   - `nfl_predictor/ml/artifacts.py` and `nfl_predictor/utils/fingerprints.py` at `100%`.
   - `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
@@ -136,14 +143,26 @@ Exit criteria:
     `98%`.
   - `nfl_predictor/data_collection.py` raised to `89%` through deeper ETL control-flow,
     orchestration, and merge-helper tests.
+  - `nfl_predictor/ml/ml_model_core.py` raised to `76%` through helper-focused tests covering
+    target-column selection, missing-data summaries, season bounds, and time-aware split helpers.
+  - `nfl_predictor/ml/ml_model_training.py` raised to `88%` through orchestration, calibration,
+    and guard-rail coverage.
+  - `nfl_predictor/ml/leakage_audit.py` raised to `93%` through helper, heuristic, and report I/O
+    coverage.
+  - `nfl_predictor/utils/game_utils.py` raised to `94%` through QB-fill and future-line fallback
+    coverage.
+  - `nfl_predictor/utils/scraping_utils.py` raised to `96%` through TeamRankings parser,
+    SurvivorGrid, and fallback-branch coverage.
+  - `nfl_predictor/utils/polars/teamrankings.py` raised to `90%` through aggregation,
+    filtering/conversion, and cache-fallback coverage.
   - `nfl_predictor/ml/walk_forward.py` raised to `94%` through helper-edge-case and market-aware
     backtest tests.
-- The next best risk-reduction targets are `nfl_predictor/ml/ml_model_core.py`, then
-  `nfl_predictor/ml/ml_model_training.py`, followed by the remaining tail cases in
-  `nfl_predictor/ml/feature_importance.py`, `nfl_predictor/data_collection.py`, and
-  `nfl_predictor/ml/walk_forward.py`.
-- Raise the enforced coverage floor from the old `80%` target toward the new preseason target of
-  `90%` or higher, with `100%` as the aspirational ceiling.
+- Remaining optional coverage tails now concentrate in `nfl_predictor/ml/ml_model_core.py`,
+  `nfl_predictor/ml/ml_model_training.py`, `nfl_predictor/utils/polars/loaders.py`,
+  `nfl_predictor/utils/polars/features.py`, and a few parser-edge branches in
+  `nfl_predictor/utils/scraping_utils.py`.
+- Keep the enforced coverage floor at the preseason target of `90%` or higher, with `100%` as the
+  aspirational ceiling.
 - Document the canonical local validation sequence.
 - Decide whether to add GitHub Actions now or defer CI until the preseason hardening pass is
   complete.
@@ -153,7 +172,7 @@ Exit criteria:
 Exit criteria:
 
 - The repository has one clearly documented validation gate.
-- Coverage expectations are explicit and enforced or intentionally deferred.
+- Coverage expectations are explicit and the repo now meets the preseason `90%` baseline.
 - The intended CI and release-automation path is documented, even if implementation is deferred.
 
 ### 6. Resume the feature roadmap

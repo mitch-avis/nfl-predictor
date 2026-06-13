@@ -123,6 +123,8 @@ is **90% or higher**, with **100%** as the aspirational ceiling:
 python -m pytest --cov-fail-under=90
 ```
 
+Current validated local baseline as of 2026-06-13: `391 passed` with `90%` coverage.
+
 ## Data collection (Polars + nflreadpy)
 
 The authoritative data build pipeline is:
@@ -497,6 +499,9 @@ Live validation (may require network access):
 python scripts/validate_live.py
 ```
 
+Both validation scripts exit non-zero when the input data file is missing or the validation fails,
+so they are safe to use in shell automation.
+
 ## Leakage audit
 
 To detect obvious feature leakage patterns:
@@ -601,6 +606,8 @@ pyright .
 ty check .
 python -m pytest
 markdownlint .
+uv lock --check
+uv sync --check --active
 ```
 
 ## Safety and claims

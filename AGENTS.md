@@ -27,15 +27,16 @@ Rules that are always enforced:
 
 - The current preseason hardening plan lives in `docs/preseason_2026_readiness_plan.md`.
 - `TODO.md` is the authoritative active checklist.
-- Validated baseline on 2026-06-12:
+- Validated baseline on 2026-06-13:
   - `.venv/bin/ruff format --check .` passes.
-  - `.venv/bin/python -m pytest` passes.
+  - `.venv/bin/python -m pytest` passes (`391 passed`).
   - `markdownlint .` passes.
   - `uv lock --check` passes.
   - `uv sync --check --active` passes.
   - `.venv/bin/ruff check .` passes cleanly.
   - `.venv/bin/pyright .` passes (0 errors; fixed via `pandas-stubs` + typed transform helpers).
   - `.venv/bin/ty check .` passes (0 diagnostics; now mandatory alongside Pyright).
+  - Coverage is `90%`, meeting the preseason target.
 
 ## Source of truth for work
 

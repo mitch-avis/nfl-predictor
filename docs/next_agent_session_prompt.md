@@ -25,14 +25,14 @@ Repository goals and constraints:
 - Agent-facing docs may continue using explicit `.venv/bin/python`-style commands for Python tools.
 - If asked to commit, prefer one file per commit, including deletions, unless told otherwise.
 
-Current validated baseline as of 2026-06-12:
+Current validated baseline as of 2026-06-13:
 - `.venv/bin/ruff format --check .` passes (104 files already formatted)
 - `.venv/bin/ruff check .` passes cleanly (0 diagnostics; all 69 findings resolved)
 - `.venv/bin/pyright .` passes (0 errors) after adding `pandas-stubs` and typed transform helpers
 - `.venv/bin/ty check .` passes (0 errors) after cleaning the remaining helper, walk-forward, and
   test-surface diagnostics
-- `.venv/bin/python -m pytest` passes (326 passed)
-- Coverage is 86%, below the preseason target of 90% or higher
+- `.venv/bin/python -m pytest` passes (391 passed)
+- Coverage is 90%, meeting the preseason target of 90% or higher
 - `markdownlint` passes on the maintained Markdown docs
 - `uv lock --check` passes
 - `uv sync --check --active` passes
@@ -42,17 +42,8 @@ Active milestone:
 
 Recommended first work slice:
 - Pyright and Ty are both green. Stay on the remaining Milestone 44 items.
-- Start with the next deliberate coverage-improvement pass before the other Milestone 44 slices.
-- The highest-yield completed slices so far are now: artifact/repro helpers, validation utilities,
-  sample weights, `ml_model_cli`, `feature_spec`, `feature_importance`, `data_collection`, and
-  `walk_forward`.
-- The next best targets are `nfl_predictor/ml/ml_model_core.py` first, then
-  `nfl_predictor/ml/ml_model_training.py`, with small cleanup tails remaining in
-  `nfl_predictor/ml/feature_importance.py`, `nfl_predictor/data_collection.py`, and
-  `nfl_predictor/ml/walk_forward.py`.
-- After the coverage slice, take the validation script exit-code/logger cleanup slice.
-- After that, evaluate and implement the GitHub Actions validation workflow if it still belongs in
-  Milestone 44.
+- The preseason `90%` coverage target is met and the validation script cleanup is done; move next
+  to the remaining doc/toolchain mismatches and the GitHub Actions validation workflow decision.
 - Treat TDD as mandatory for any code change: confirm the exact behavior/lines you plan to touch
   are covered first; if they are not, add focused characterization or failing tests before editing
   production code.
@@ -64,15 +55,12 @@ Recommended first work slice:
 - Treat both `.venv/bin/pyright .` and `.venv/bin/ty check .` as mandatory validation gates.
 
 Suggested execution flow:
-1. Start with a coverage audit: inspect the latest pytest coverage output and identify the highest-
-  value low-coverage modules.
-2. Pick the smallest coherent coverage slice that improves risk, not just percentage.
-3. Read the owning modules/tests/docs before editing.
-4. Verify direct coverage for the exact behavior/lines you plan to change; add focused tests first
+1. Read the owning modules/tests/docs before editing.
+2. Verify direct coverage for the exact behavior/lines you plan to change; add focused tests first
   if coverage is missing.
-5. Implement the smallest coherent change.
-6. Run the narrowest relevant tests/checks first, then the broader repo validation commands.
-7. Update planning docs if the baseline, scope, or priorities change materially.
+3. Implement the smallest coherent change.
+4. Run the narrowest relevant tests/checks first, then the broader repo validation commands.
+5. Update planning docs if the baseline, scope, or priorities change materially.
 
 Validation commands:
 - `.venv/bin/ruff format --check .`
@@ -95,7 +83,7 @@ What to update as you work:
 Deliverables for this session:
 - Real code or documentation changes, not just analysis
 - A reduced risk or failure surface for the chosen slice
-- A concrete coverage improvement plan or measurable coverage increase for the selected modules
+- A concrete correctness, documentation, or workflow improvement for the selected slice
 - Updated planning/docs if the repo state changed
 - A concise summary of what changed, what passed, and what remains
 ```

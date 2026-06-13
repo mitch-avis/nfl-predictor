@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.2.4] - 2026-06-13
+
+### Changed
+
+- Raise the validated pytest baseline to `391 passed` / `90%` coverage, and confirm editable
+  install plus primary CLI help smoke checks on Python 3.14 ([`05f2931`])
+
+### Added
+
+- Add focused coverage across sample weights, validation utilities, CLI orchestration, feature-spec
+  helpers, feature-importance fallbacks, data-collection ETL control flow, `ml_model_core`
+  helper/split branches, `ml_model_training` orchestration branches, leakage-audit helpers,
+  game/scraping utility fallbacks, TeamRankings helper paths, validation-script entrypoints, and
+  walk-forward helper branches, bringing several support modules to `100%` coverage and lifting
+  `nfl_predictor/data_collection.py` to `89%`, `nfl_predictor/ml/ml_model_core.py` to `76%`,
+  `nfl_predictor/ml/ml_model_training.py` to `88%`, `nfl_predictor/ml/leakage_audit.py` to `93%`,
+  `nfl_predictor/utils/game_utils.py` to `94%`,
+  `nfl_predictor/utils/scraping_utils.py` to `96%`,
+  `nfl_predictor/utils/polars/teamrankings.py` to `90%`, and
+  `nfl_predictor/ml/walk_forward.py` to `94%` ([`05f2931`])
+
+### Fixed
+
+- Propagate non-zero exit codes from `scripts/validate_offline.py` and `scripts/validate_live.py`
+  via `SystemExit(main())`, and route validation output through the project logger for safer shell
+  automation ([`05f2931`])
+
 ## [0.2.3] - 2026-06-12
 
 ### Changed
@@ -112,11 +139,13 @@ _This release backfills the changelog from the historical `0.1.0` baseline on `m
 _Historical baseline on `main` before changelog adoption. Add a matching git tag before automating
 releases._
 
+[0.2.4]: https://github.com/mitch-avis/nfl-predictor/compare/3a9ca82...05f2931
 [0.2.3]: https://github.com/mitch-avis/nfl-predictor/compare/47402e2...2351b2b
 [0.2.2]: https://github.com/mitch-avis/nfl-predictor/compare/586ffb6...47402e2
 [0.2.1]: https://github.com/mitch-avis/nfl-predictor/compare/9c04dc4...586ffb6
 [0.2.0]: https://github.com/mitch-avis/nfl-predictor/compare/7a4d4c7...main
 [0.1.0]: https://github.com/mitch-avis/nfl-predictor/commit/7a4d4c7
+[`05f2931`]: https://github.com/mitch-avis/nfl-predictor/commit/05f2931
 [`2351b2b`]: https://github.com/mitch-avis/nfl-predictor/commit/2351b2b
 [`47402e2`]: https://github.com/mitch-avis/nfl-predictor/commit/47402e2
 [`586ffb6`]: https://github.com/mitch-avis/nfl-predictor/commit/586ffb6

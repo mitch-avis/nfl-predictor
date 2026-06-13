@@ -13,11 +13,16 @@
 - Add `.github/workflows/validation.yml` to mirror the local validation gate in GitHub Actions,
   including Ruff format/check, Pyright, Ty, pytest, markdownlint, lockfile/environment checks,
   editable install, and primary CLI help smoke checks ([`ac95abd`])
+- Add a deterministic regression test for `scripts/betting_pipeline.py --dry-run` when the default
+  dataset path is absent in a clean checkout ([`8d6f49f`])
 
 ### Fixed
 
 - Refresh `uv.lock` so `uv lock --check` agrees with project version `0.2.5` and the new CI gate
   ([`ac95abd`])
+- Allow `scripts/betting_pipeline.py --dry-run` to exit successfully without
+  `data/completed_games_ml.csv`, keeping GitHub Actions green in repos that do not commit local
+  `data/` artifacts ([`8d6f49f`])
 
 ## [0.2.4] - 2026-06-13
 
@@ -165,6 +170,7 @@ releases._
 [0.2.0]: https://github.com/mitch-avis/nfl-predictor/compare/7a4d4c7...main
 [0.1.0]: https://github.com/mitch-avis/nfl-predictor/commit/7a4d4c7
 [`ac95abd`]: https://github.com/mitch-avis/nfl-predictor/commit/ac95abd
+[`8d6f49f`]: https://github.com/mitch-avis/nfl-predictor/commit/8d6f49f
 [`05f2931`]: https://github.com/mitch-avis/nfl-predictor/commit/05f2931
 [`2351b2b`]: https://github.com/mitch-avis/nfl-predictor/commit/2351b2b
 [`47402e2`]: https://github.com/mitch-avis/nfl-predictor/commit/47402e2

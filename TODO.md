@@ -40,7 +40,7 @@ Agents and humans should not rely on the shell activation state.
 ### Current validated baseline (2026-06-12)
 
 - `.venv/bin/ruff format --check .` passes.
-- `.venv/bin/python -m pytest` passes (`242 passed`).
+- `.venv/bin/python -m pytest` passes (`248 passed`).
 - `markdownlint .` passes.
 - `uv lock --check` passes.
 - `uv sync --check --active` passes.
@@ -108,10 +108,12 @@ Tasks:
   - fix or intentionally scope the current `pyright` failures in pandas-heavy modules.
   - fix or intentionally scope the current `ty` failures and re-run both checkers.
 - [ ] Fix the highest-value operational correctness issues from the current audit:
-  - validation script exit codes and logger usage.
-  - stale season-specific defaults in checked-in orchestration config and scripts.
-  - any command guidance that no longer matches the actual `.venv/bin` contents.
+  - [ ] validation script exit codes and logger usage.
+  - [x] stale season-specific defaults in checked-in orchestration config and scripts.
+  - [ ] any command guidance that no longer matches the actual `.venv/bin` contents.
 - [ ] Re-establish quality gates and automation:
+  - start with a coverage-focused audit and targeted test additions before the validation-script
+    cleanup and CI workflow slices.
   - raise the coverage gate toward `90%` or higher, with `100%` as the aspirational ceiling.
   - document the canonical local validation sequence.
   - evaluate a GitHub Actions validation workflow that provisions `.venv` with `uv` and runs Ruff,

@@ -58,14 +58,17 @@ Using the betting report with FanDuel (or any book):
 
 Examples
 --------
-One-shot end-to-end run (2h tuning, GPU, Week 19 predictions):
+One-shot end-to-end run (2h tuning, GPU, explicit weekly input):
 
     python scripts/betting_pipeline.py \
         --tune-timeout 7200 \
         --xgb-tree-method hist --xgb-device cuda \
         --include-postseason --postseason-weight 1.15 \
-        --predict-path data/predict/week_19_games_to_predict.csv \
-        --output-predictions data/predict/week_19_wildcard_predictions.csv
+    --predict-path data/predict/week_<week>_games_to_predict.csv \
+    --output-predictions data/predict/week_<week>_predictions.csv
+
+If `--predict-path` is omitted, the newest `data/predict/week_XX_games_to_predict.csv`
+file is used automatically.
 
 Dry-run (prints planned paths; does not train):
 
@@ -77,6 +80,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -117,6 +121,9 @@ except ModuleNotFoundError:
         train_blended_margin_total_model_with_report,
     )
     from nfl_predictor.utils.logger import log
+
+
+_WEEK_FILE_RE = re.compile(r"week_(\d+)_games_to_predict", re.IGNORECASE)
 
 
 def _moneyline_to_implied_prob(moneyline: float) -> float:
@@ -324,6 +331,37 @@ def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
     return report
 
 
+def _extract_week(path: Path) -> int | None:
+    """Extract the numeric week from a weekly prediction filename."""
+    match = _WEEK_FILE_RE.search(path.name)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _resolve_predict_path(predict_path: Path | None, data_dir: Path) -> Path:
+    """Resolve an explicit prediction path or pick the newest weekly input file."""
+    if predict_path is not None:
+        if not predict_path.exists():
+            raise FileNotFoundError(f"Missing predict dataset: {predict_path}")
+        return predict_path
+
+    predict_dir = data_dir / "predict"
+    if not predict_dir.exists():
+        raise FileNotFoundError(f"Missing predict directory: {predict_dir}")
+
+    candidates: list[tuple[int, Path]] = []
+    for candidate in predict_dir.glob("week_*_games_to_predict.csv"):
+        week = _extract_week(candidate)
+        if week is not None:
+            candidates.append((week, candidate))
+    if not candidates:
+        raise FileNotFoundError(f"No week_XX_games_to_predict.csv files found in {predict_dir}")
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[-1][1]
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -339,8 +377,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--predict-path",
         type=Path,
-        default=Path(constants.DATA_PATH) / "predict" / "week_19_games_to_predict.csv",
-        help="Path to games-to-predict CSV.",
+        default=None,
+        help="Optional games-to-predict CSV (defaults to newest in data/predict/).",
     )
     parser.add_argument(
         "--run-id",
@@ -489,7 +527,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tune-study-name",
         type=str,
-        default="week19_blend_brier",
+        default="betting_blend_brier",
         help="Optuna study name.",
     )
     parser.add_argument(
@@ -668,6 +706,13 @@ def main() -> int:
         log.info("Stage 1 would write: %s", wf_compare_csv)
         log.info("Stage 2 would use Optuna storage under run dir unless overridden.")
         log.info("Stage 3 would write final model + predictions under: %s", run_dir)
+        if args.predict_path is None:
+            log.info(
+                "Stage 3 would use the newest week_XX_games_to_predict.csv file under %s.",
+                Path(constants.DATA_PATH) / "predict",
+            )
+        else:
+            log.info("Stage 3 would use explicit predict dataset: %s", args.predict_path)
         return 0
 
     # Load data once (used by stage 1)
@@ -867,6 +912,13 @@ def main() -> int:
     if args.resume and final_model_path.exists() and final_predictions_path.exists():
         log.info("Stage 3: reuse %s and %s", final_model_path, final_predictions_path)
     else:
+        try:
+            predict_path = _resolve_predict_path(args.predict_path, Path(constants.DATA_PATH))
+        except FileNotFoundError as exc:
+            log.error("%s", exc)
+            return 2
+        config_payload["predict_path"] = str(predict_path)
+
         final_calibration = normalize_win_prob_calibration_method(
             str(args.final_win_prob_calibration)
         )
@@ -932,13 +984,10 @@ def main() -> int:
             prefix="final",
         )
 
-        if not args.predict_path.exists():
-            log.error("Missing predict dataset: %s", args.predict_path)
-            return 2
-        log.info("Predicting %s -> %s", args.predict_path, final_predictions_path)
+        log.info("Predicting %s -> %s", predict_path, final_predictions_path)
         output_df = predict_week_blended(
             final_result.model,
-            games_path=args.predict_path,
+            games_path=predict_path,
             output_path=final_predictions_path,
             pretty_output=False,
             score_rounding=str(args.score_rounding),

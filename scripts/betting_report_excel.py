@@ -13,7 +13,7 @@ open the generated `.xlsx` in Excel and use "Save As" -> `.xlsb`.
 Example:
   python scripts/betting_report_excel.py \
     --predictions models/<run_id>/predictions.csv \
-    --out data/predict/week_19_betting_template.xlsx
+        --out data/predict/week_<week>_betting_template.xlsx
 
 """
 

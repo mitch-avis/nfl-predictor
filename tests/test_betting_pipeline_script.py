@@ -14,6 +14,31 @@ import pandas as pd
 from scripts import betting_pipeline
 
 
+def test_betting_pipeline_parse_args_leaves_predict_path_unset() -> None:
+    """The CLI should not hardcode a season-specific prediction file."""
+    old_argv = sys.argv
+    try:
+        sys.argv = ["betting_pipeline.py"]
+        args = betting_pipeline._parse_args()
+    finally:
+        sys.argv = old_argv
+
+    assert args.predict_path is None
+
+
+def test_betting_pipeline_resolve_predict_path_prefers_latest_week(tmp_path: Path) -> None:
+    """When no prediction path is provided, the newest weekly file should be used."""
+    predict_dir = tmp_path / "predict"
+    predict_dir.mkdir()
+    week_03 = predict_dir / "week_03_games_to_predict.csv"
+    week_11 = predict_dir / "week_11_games_to_predict.csv"
+    week_03.write_text("season,week\n2026,3\n", encoding="utf-8")
+    week_11.write_text("season,week\n2026,11\n", encoding="utf-8")
+
+    resolved = betting_pipeline._resolve_predict_path(None, tmp_path)
+    assert resolved == week_11
+
+
 def test_betting_pipeline_dry_run_exits_successfully() -> None:
     """The betting pipeline script should support a dry run without heavy work."""
     old_argv = sys.argv

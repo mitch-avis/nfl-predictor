@@ -15,7 +15,7 @@ The following checks were run on 2026-06-12 against the refreshed `.venv`:
 | `.venv/bin/ruff check .`          | Pass        | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions                    |
 | `.venv/bin/pyright .`             | **Pass**    | **0 errors** after adding `pandas-stubs` and `_fit_transform_matrix`/`_transform_matrix` helpers |
 | `.venv/bin/ty check .`            | Pass        | `0 errors`; now mandatory alongside `pyright`                                                    |
-| `.venv/bin/python -m pytest`      | Pass        | `242 passed`                                                                                     |
+| `.venv/bin/python -m pytest`      | Pass        | `248 passed`                                                                                     |
 | Coverage from pytest              | Fail target | `78%`, below the new preseason target of `90%` or higher                                         |
 | `markdownlint .`                  | Pass        | `0 error(s)`                                                                                     |
 | `uv lock --check`                 | Pass        | Lockfile is in sync with `pyproject.toml`                                                        |
@@ -115,7 +115,8 @@ Exit criteria:
 - Correct validation script exit-code propagation.
 - Replace validation-script `print` usage with the project logger when appropriate.
 - Refresh stale season-specific defaults in `config/weekly_run.yaml` and
-  `scripts/betting_pipeline.py`.
+  `scripts/betting_pipeline.py`. Complete as of 2026-06-12: weekly orchestration defaults now rely
+  on runtime path/week inference instead of checked-in 2025 postseason values.
 - Re-check editable install and key CLI help flows after those updates.
 
 Exit criteria:
@@ -125,6 +126,8 @@ Exit criteria:
 
 ### 5. Re-establish quality gates
 
+- Start the next hardening pass with a coverage audit and targeted test additions before taking the
+  remaining validation-script cleanup and CI workflow slices.
 - Raise the enforced coverage floor from the old `80%` target toward the new preseason target of
   `90%` or higher, with `100%` as the aspirational ceiling.
 - Document the canonical local validation sequence.
@@ -155,8 +158,10 @@ Exit criteria:
 2. Fix the remaining Ruff diagnostics.
 3. Stabilize `pyright`.
 4. Fix the operational issues in scripts and checked-in config.
-5. Restore the coverage gate and document the final validation flow.
-6. Resume Milestones 39-43.
+5. Audit and improve coverage, then restore the coverage gate and document the final validation
+   flow.
+6. Finish the remaining validation-script cleanup and CI decisions.
+7. Resume Milestones 39-43.
 
 ## Definition of Ready for the 2026 Season
 

@@ -1,8 +1,7 @@
 ## weekly_run.yaml - configuration for weekly_run script
 
 ## General run settings:
-# unique identifier for this weekly run (default: generated)
-run_id: weekly_2025_week_22
+# run_id omitted so weekly_run generates a fresh artifact-friendly id by default.
 # whether to skip data collection stage (default: false)
 skip_data_refresh: false
 # resume from previous run or start fresh (default: true)
@@ -76,17 +75,11 @@ xgb_device: cuda
 xgb_n_jobs: 12
 
 ## Prediction output settings:
-# path to CSV file with games to predict
-predict_path: data/predict/week_22_games_to_predict.csv
+# predict_path omitted so weekly_run picks the newest data/predict/week_XX_games_to_predict.csv.
 # optional score rounding method for predictions (options: none, int, half, nfl, default: none)
 score_rounding: nfl
-# path to Excel betting template for predictions
-betting_template_path: data/predict/week_22_betting_template.xlsx
-# minimum season for including historical ratings in prediction output
-ratings_min_season: 2025
-# minimum season for power rankings inclusion
-power_rankings_season: 2025
-# most recent week to include in power rankings
-power_rankings_through_week: 21
+# set betting_template_path explicitly if you want an Excel copy outside the run directory.
+# ratings_min_season omitted so ratings can use the full available history by default.
+# power_rankings_season and power_rankings_through_week are inferred from the prediction input.
 # whether to include postseason games in power rankings (default: false)
 power_rankings_include_postseason: true

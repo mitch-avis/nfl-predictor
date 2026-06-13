@@ -420,7 +420,8 @@ incomplete seasons.
 Repo utilities under `scripts/`:
 
 - `scripts/betting_pipeline.py`: end-to-end orchestration (walk-forward compare -> resumable tuning
-  -> final train -> weekly predictions + betting_report.csv). See `--help`.
+  -> final train -> weekly predictions + betting_report.csv). If `--predict-path` is omitted, the
+  newest `data/predict/week_XX_games_to_predict.csv` file is selected automatically. See `--help`.
 - `scripts/objective_compare_models.py`: objective walk-forward comparison of two saved models by
   retraining per fold under identical splits.
 - `scripts/betting_report_excel.py`: generate an Excel betting template/report.

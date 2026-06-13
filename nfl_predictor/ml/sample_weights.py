@@ -93,9 +93,8 @@ def compute_recency_sample_weight(
     week_index = season_int.map(offsets).astype(int) + week_int
     max_index = week_index.max()
     age = max_index - week_index
-    if half_life_weeks is None:
-        raise ValueError("half_life_weeks must be provided for week-based weighting.")
-    weights = 0.5 ** (age.to_numpy() / float(half_life_weeks))
+    half_life_weeks_value = float(cast(float, half_life_weeks))
+    weights = 0.5 ** (age.to_numpy() / half_life_weeks_value)
     if np.allclose(weights, 1.0):
         return None
     return weights.astype(float)

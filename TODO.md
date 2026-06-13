@@ -40,7 +40,7 @@ Agents and humans should not rely on the shell activation state.
 ### Current validated baseline (2026-06-12)
 
 - `.venv/bin/ruff format --check .` passes.
-- `.venv/bin/python -m pytest` passes (`248 passed`).
+- `.venv/bin/python -m pytest` passes (`326 passed`).
 - `markdownlint .` passes.
 - `uv lock --check` passes.
 - `uv sync --check --active` passes.
@@ -49,7 +49,7 @@ Agents and humans should not rely on the shell activation state.
   helpers.
 - `.venv/bin/ty check .` **passes (0 errors)** after tightening walk-forward config typing, helper
   return typing, optional SHAP imports, and small Polars schema annotations.
-- Coverage is `78%`, below the preseason target of `90%` or higher.
+- Coverage is `86%`, below the preseason target of `90%` or higher.
 
 ---
 
@@ -114,6 +114,20 @@ Tasks:
 - [ ] Re-establish quality gates and automation:
   - start with a coverage-focused audit and targeted test additions before the validation-script
     cleanup and CI workflow slices.
+  - completed focused coverage slices so far:
+    - `nfl_predictor/ml/artifacts.py`, `nfl_predictor/utils/fingerprints.py`,
+      `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
+      `nfl_predictor/ml/ml_model_cli.py` now sit at `100%` coverage.
+    - `nfl_predictor/ml/feature_spec.py` now sits at `100%` coverage.
+    - `nfl_predictor/ml/feature_importance.py` is up to `98%` coverage.
+    - `nfl_predictor/data_collection.py` is up to `89%` coverage after deeper ETL control-flow,
+      merge-helper, and orchestration tests.
+    - `nfl_predictor/ml/walk_forward.py` is up to `94%` coverage after helper-edge-case and
+      market-aware backtest tests.
+  - next likely coverage targets are `nfl_predictor/ml/ml_model_core.py`, then
+    `nfl_predictor/ml/ml_model_training.py`, followed by the remaining tail cases in
+    `nfl_predictor/ml/feature_importance.py`, `nfl_predictor/data_collection.py`, and
+    `nfl_predictor/ml/walk_forward.py`.
   - raise the coverage gate toward `90%` or higher, with `100%` as the aspirational ceiling.
   - document the canonical local validation sequence.
   - evaluate a GitHub Actions validation workflow that provisions `.venv` with `uv` and runs Ruff,

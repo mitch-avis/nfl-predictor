@@ -31,8 +31,8 @@ Current validated baseline as of 2026-06-12:
 - `.venv/bin/pyright .` passes (0 errors) after adding `pandas-stubs` and typed transform helpers
 - `.venv/bin/ty check .` passes (0 errors) after cleaning the remaining helper, walk-forward, and
   test-surface diagnostics
-- `.venv/bin/python -m pytest` passes (248 passed)
-- Coverage is 78%, below the preseason target of 90% or higher
+- `.venv/bin/python -m pytest` passes (326 passed)
+- Coverage is 86%, below the preseason target of 90% or higher
 - `markdownlint` passes on the maintained Markdown docs
 - `uv lock --check` passes
 - `uv sync --check --active` passes
@@ -42,11 +42,14 @@ Active milestone:
 
 Recommended first work slice:
 - Pyright and Ty are both green. Stay on the remaining Milestone 44 items.
-- Start with a deliberate coverage-improvement pass before the other Milestone 44 slices.
-- First audit the lowest-covered modules and identify the best near-term test targets, with the
-  long-term goal of 100% coverage in mind.
-- Prefer focused coverage gains that reduce real risk: CLI entrypoints, validation utilities,
-  orchestration helpers, and other operational surfaces that still have thin direct coverage.
+- Start with the next deliberate coverage-improvement pass before the other Milestone 44 slices.
+- The highest-yield completed slices so far are now: artifact/repro helpers, validation utilities,
+  sample weights, `ml_model_cli`, `feature_spec`, `feature_importance`, `data_collection`, and
+  `walk_forward`.
+- The next best targets are `nfl_predictor/ml/ml_model_core.py` first, then
+  `nfl_predictor/ml/ml_model_training.py`, with small cleanup tails remaining in
+  `nfl_predictor/ml/feature_importance.py`, `nfl_predictor/data_collection.py`, and
+  `nfl_predictor/ml/walk_forward.py`.
 - After the coverage slice, take the validation script exit-code/logger cleanup slice.
 - After that, evaluate and implement the GitHub Actions validation workflow if it still belongs in
   Milestone 44.

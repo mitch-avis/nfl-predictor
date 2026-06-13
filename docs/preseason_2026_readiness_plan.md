@@ -15,8 +15,8 @@ The following checks were run on 2026-06-12 against the refreshed `.venv`:
 | `.venv/bin/ruff check .`          | Pass        | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions                    |
 | `.venv/bin/pyright .`             | **Pass**    | **0 errors** after adding `pandas-stubs` and `_fit_transform_matrix`/`_transform_matrix` helpers |
 | `.venv/bin/ty check .`            | Pass        | `0 errors`; now mandatory alongside `pyright`                                                    |
-| `.venv/bin/python -m pytest`      | Pass        | `248 passed`                                                                                     |
-| Coverage from pytest              | Fail target | `78%`, below the new preseason target of `90%` or higher                                         |
+| `.venv/bin/python -m pytest`      | Pass        | `326 passed`                                                                                     |
+| Coverage from pytest              | Fail target | `86%`, below the new preseason target of `90%` or higher                                         |
 | `markdownlint .`                  | Pass        | `0 error(s)`                                                                                     |
 | `uv lock --check`                 | Pass        | Lockfile is in sync with `pyproject.toml`                                                        |
 | `uv sync --check --active`        | Pass        | Active project environment matches `uv.lock`                                                     |
@@ -128,6 +128,20 @@ Exit criteria:
 
 - Start the next hardening pass with a coverage audit and targeted test additions before taking the
   remaining validation-script cleanup and CI workflow slices.
+- Completed coverage slices now include:
+  - `nfl_predictor/ml/artifacts.py` and `nfl_predictor/utils/fingerprints.py` at `100%`.
+  - `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
+    `nfl_predictor/ml/ml_model_cli.py` at `100%`.
+  - `nfl_predictor/ml/feature_spec.py` at `100%` and `nfl_predictor/ml/feature_importance.py` at
+    `98%`.
+  - `nfl_predictor/data_collection.py` raised to `89%` through deeper ETL control-flow,
+    orchestration, and merge-helper tests.
+  - `nfl_predictor/ml/walk_forward.py` raised to `94%` through helper-edge-case and market-aware
+    backtest tests.
+- The next best risk-reduction targets are `nfl_predictor/ml/ml_model_core.py`, then
+  `nfl_predictor/ml/ml_model_training.py`, followed by the remaining tail cases in
+  `nfl_predictor/ml/feature_importance.py`, `nfl_predictor/data_collection.py`, and
+  `nfl_predictor/ml/walk_forward.py`.
 - Raise the enforced coverage floor from the old `80%` target toward the new preseason target of
   `90%` or higher, with `100%` as the aspirational ceiling.
 - Document the canonical local validation sequence.

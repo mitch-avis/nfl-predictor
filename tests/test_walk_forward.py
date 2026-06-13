@@ -389,3 +389,232 @@ def test_library_versions_handles_import_error(monkeypatch: pytest.MonkeyPatch) 
     versions = walk_forward._library_versions()
     assert versions["optuna"] is None
     assert versions["numpy"] == "1.0.0"
+
+
+def test_load_games_and_filter_regular_season_cover_helper_branches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Game loading and season filtering should handle regular and passthrough paths."""
+    path = tmp_path / "games.csv"
+    path.write_text("season,week,game_type\n2024,1,REG\n2024,2,WC\n", encoding="utf-8")
+
+    messages: list[str] = []
+    monkeypatch.setattr(
+        walk_forward.log,
+        "info",
+        lambda message, *args: messages.append(message % args if args else message),
+    )
+
+    loaded = walk_forward.load_games(path)
+    assert len(loaded) == 2
+    assert any(str(path) in message for message in messages)
+
+    filtered = walk_forward.filter_regular_season(loaded)
+    assert len(filtered) == 1
+    assert filtered["game_type"].iloc[0] == "REG"
+    assert any("Filtered to regular-season games" in message for message in messages)
+
+    assert walk_forward.filter_regular_season(loaded, include_postseason=True) is loaded
+    no_game_type = loaded.drop(columns=["game_type"])
+    assert walk_forward.filter_regular_season(no_game_type) is no_game_type
+
+
+def test_resolve_eval_seasons_and_fold_building_edge_cases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Evaluation-season and fold helpers should cover missing-data and skip branches."""
+    empty_df = pd.DataFrame(columns=["season", "week"])
+    with pytest.raises(ValueError, match="No seasons available"):
+        walk_forward.resolve_eval_seasons(empty_df, None, 1)
+
+    df = _fixture_df()
+    messages: list[str] = []
+    monkeypatch.setattr(
+        walk_forward.log,
+        "info",
+        lambda message, *args: messages.append(message % args if args else message),
+    )
+
+    assert walk_forward.resolve_eval_seasons(df, [2021, 2023], 1) == [2023]
+    assert any("Dropping missing eval seasons" in message for message in messages)
+
+    with pytest.raises(ValueError, match="None of the requested eval seasons"):
+        walk_forward.resolve_eval_seasons(df, [1999], 1)
+
+    with pytest.raises(ValueError, match="eval_last_n_seasons must be positive"):
+        walk_forward.resolve_eval_seasons(df, None, 0)
+
+    assert walk_forward.resolve_eval_seasons(df, None, 5) == [2022, 2023]
+
+    with pytest.raises(ValueError, match="season and week columns are required"):
+        walk_forward.build_walk_forward_folds(pd.DataFrame({"season": [2024]}), [2024], 1)
+
+    single_week_df = pd.DataFrame(
+        {
+            "season": [2024],
+            "week": [1],
+            "game_type": ["REG"],
+            "away_score": [17],
+            "home_score": [24],
+        }
+    )
+    assert walk_forward.build_walk_forward_folds(single_week_df, [2024], 1) == []
+    assert any("no training data" in message for message in messages)
+
+    postseason_df = pd.DataFrame(
+        {
+            "season": [2024, 2024],
+            "week": [18, 20],
+            "game_type": ["REG", "SB"],
+            "away_score": [17, 20],
+            "home_score": [24, 27],
+        }
+    )
+    postseason_folds = walk_forward.build_walk_forward_folds(
+        postseason_df,
+        [2024],
+        20,
+        include_postseason=True,
+    )
+    assert len(postseason_folds) == 1
+    assert postseason_folds[0].week == 20
+
+
+def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Calibration, market, and XGBoost helper branches should resolve edge cases cleanly."""
+    df = _fixture_df()
+
+    assert walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=0).empty
+    assert walk_forward.select_calibration_data(df, 2030, 2, calibration_weeks=1).empty
+    assert walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=5).empty
+
+    postseason_summary = walk_forward.summarize_eval_window(
+        pd.DataFrame({"season": [2024], "week": [20]}),
+        eval_seasons=[2024],
+        start_week=19,
+        include_postseason=True,
+    )
+    assert postseason_summary["seasons"]["2024"]["eval_end_week"] == 20
+
+    messages: list[str] = []
+    monkeypatch.setattr(
+        walk_forward.log,
+        "info",
+        lambda message, *args: messages.append(message % args if args else message),
+    )
+
+    no_market_df = pd.DataFrame({"season": [2024], "week": [1]})
+    assert walk_forward.resolve_market_settings(no_market_df, True, None, True) == (
+        False,
+        False,
+        False,
+    )
+    assert any("Market columns missing" in message for message in messages)
+    assert any("Market anchor requested" in message for message in messages)
+
+    market_df = pd.DataFrame({"home_spread": [-3.0], "total_line": [44.5]})
+    assert walk_forward.resolve_market_settings(market_df, False, None, True) == (
+        False,
+        True,
+        True,
+    )
+
+    assert walk_forward._fit_calibrator(np.array([1.0]), np.array([1]), "none") is None
+    assert walk_forward._fit_calibrator(np.array([1.0, 2.0]), np.array([1, 1]), "platt") is None
+
+    sentinel = object()
+    monkeypatch.setattr(
+        walk_forward.ml_model,
+        "_fit_win_prob_calibrator",
+        lambda *args, **kwargs: sentinel,
+    )
+    assert (
+        walk_forward._fit_calibrator(
+            np.array([1.0, 2.0]),
+            np.array([0, 1]),
+            "platt",
+            sample_weight=np.array([1.0, 0.5]),
+        )
+        is sentinel
+    )
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        walk_forward.ml_model,
+        "_resolve_xgb_params",
+        lambda _defaults, overrides: (
+            captured.setdefault("overrides", dict(overrides)) or dict(overrides)
+        ),
+    )
+    config = replace(_base_config(), xgb_params_overrides={"max_depth": 4}, random_seed=99)
+    walk_forward._resolve_xgb_params(config)
+    assert captured["overrides"] == {"max_depth": 4, "random_state": 99}
+
+
+def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -> None:
+    """A market-aware walk-forward run should exercise calibration, quantiles, and callbacks."""
+    df = _fixture_df().copy()
+    df["home_spread"] = -3.0
+    df["total_line"] = 44.5
+    df["away_moneyline"] = 100
+
+    config = replace(
+        _base_config(),
+        calibration="platt",
+        include_market=True,
+        market_anchor=True,
+        market_prob_weight=0.25,
+        market_prob_clamp=0.05,
+        win_prob_use_uncertainty=True,
+        include_quantiles=True,
+    )
+
+    folds: list[tuple[int, int, str]] = []
+
+    def _capture(metrics: dict[str, object], fold: walk_forward.WalkForwardFold) -> None:
+        """Record the fold callback payload for assertions."""
+        folds.append((fold.season, fold.week, str(metrics["calibration_method"])))
+
+    result = walk_forward.run_walk_forward_backtest(df, config, fold_callback=_capture)
+
+    assert len(folds) == 2
+    assert result["resolved_settings"]["market_anchor"] is True
+    assert result["resolved_settings"]["win_prob_use_uncertainty"] is True
+    assert "market_baseline_margin" in result["predictions"].columns
+    assert "market_baseline_total" in result["predictions"].columns
+    assert "predicted_margin_p10" in result["predictions"].columns
+    assert result["excluded_incomplete_seasons"] == []
+    assert result["eval_window"]["include_postseason"] is False
+    assert set(result["predictions"]["calibration_method"].unique()) == {"platt"}
+
+
+def test_walk_forward_backtest_handles_elo_uncertainty_and_incomplete_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Walk-forward should downgrade unsupported elo uncertainty.
+
+    It should also fail cleanly when incomplete-season filtering removes every eval season.
+    """
+    df = _fixture_df()
+    info_messages: list[str] = []
+    monkeypatch.setattr(
+        walk_forward.log,
+        "info",
+        lambda message, *args: info_messages.append(message % args if args else message),
+    )
+
+    elo_config = replace(
+        _base_config(),
+        calibration="elo",
+        win_prob_use_uncertainty=True,
+        include_quantiles=True,
+    )
+    elo_result = walk_forward.run_walk_forward_backtest(df, elo_config)
+    assert set(elo_result["predictions"]["calibration_method"].unique()) == {"none"}
+    assert any("Elo calibration ignored" in message for message in info_messages)
+
+    monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 99)
+    incomplete_config = replace(_base_config(), exclude_incomplete_seasons=True)
+    with pytest.raises(ValueError, match="No complete seasons available"):
+        walk_forward.run_walk_forward_backtest(df, incomplete_config)

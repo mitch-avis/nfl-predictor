@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.5] - 2026-06-13
+
+### Changed
+
+- Bump the project version to `0.2.5` and align the hardening docs around the canonical
+  validation path plus the rule that `uv` remains an external `PATH` tool while Python tooling
+  stays under `.venv/bin/...` ([`ac95abd`])
+
+### Added
+
+- Add `.github/workflows/validation.yml` to mirror the local validation gate in GitHub Actions,
+  including Ruff format/check, Pyright, Ty, pytest, markdownlint, lockfile/environment checks,
+  editable install, and primary CLI help smoke checks ([`ac95abd`])
+
+### Fixed
+
+- Refresh `uv.lock` so `uv lock --check` agrees with project version `0.2.5` and the new CI gate
+  ([`ac95abd`])
+
 ## [0.2.4] - 2026-06-13
 
 ### Changed
@@ -138,12 +157,14 @@ _This release backfills the changelog from the historical `0.1.0` baseline on `m
 _Historical baseline on `main` before changelog adoption. Add a matching git tag before automating
 releases._
 
+[0.2.5]: https://github.com/mitch-avis/nfl-predictor/compare/05f2931...ac95abd
 [0.2.4]: https://github.com/mitch-avis/nfl-predictor/compare/3a9ca82...05f2931
 [0.2.3]: https://github.com/mitch-avis/nfl-predictor/compare/47402e2...2351b2b
 [0.2.2]: https://github.com/mitch-avis/nfl-predictor/compare/586ffb6...47402e2
 [0.2.1]: https://github.com/mitch-avis/nfl-predictor/compare/9c04dc4...586ffb6
 [0.2.0]: https://github.com/mitch-avis/nfl-predictor/compare/7a4d4c7...main
 [0.1.0]: https://github.com/mitch-avis/nfl-predictor/commit/7a4d4c7
+[`ac95abd`]: https://github.com/mitch-avis/nfl-predictor/commit/ac95abd
 [`05f2931`]: https://github.com/mitch-avis/nfl-predictor/commit/05f2931
 [`2351b2b`]: https://github.com/mitch-avis/nfl-predictor/commit/2351b2b
 [`47402e2`]: https://github.com/mitch-avis/nfl-predictor/commit/47402e2

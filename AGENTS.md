@@ -29,14 +29,14 @@ Rules that are always enforced:
 - `TODO.md` is the authoritative active checklist.
 - Validated baseline on 2026-06-13:
   - `.venv/bin/ruff format --check .` passes.
-  - `.venv/bin/python -m pytest` passes (`391 passed`).
+  - `.venv/bin/python -m pytest` passes (`406 passed`).
   - `markdownlint .` passes.
   - `uv lock --check` passes.
   - `uv sync --check --active` passes.
   - `.venv/bin/ruff check .` passes cleanly.
   - `.venv/bin/pyright .` passes (0 errors; fixed via `pandas-stubs` + typed transform helpers).
   - `.venv/bin/ty check .` passes (0 diagnostics; now mandatory alongside Pyright).
-  - Coverage is `90%`, meeting the preseason target.
+  - Coverage is `90.01%`, clearing the enforced preseason target.
 
 ## Source of truth for work
 
@@ -80,8 +80,8 @@ Rules that are always enforced:
   the most relevant commits before tagging a release.
 - Keep changelog entries focused on notable user-facing, tooling, or workflow changes; skip routine
   formatting-only noise.
-- If release automation is added later, keep git tags aligned with changelog versions so GitHub
-  releases can be generated from `CHANGELOG.md`.
+- Keep git tags aligned with changelog versions so `.github/workflows/release.yml` can publish or
+  update GitHub releases from `CHANGELOG.md`.
 - When committing work, prefer one file per commit, including deletions, unless the user explicitly
   asks for different commit granularity.
 
@@ -89,10 +89,10 @@ Rules that are always enforced:
 
 - GitHub Actions is the first CI target and currently stays validation-only.
 - `.github/workflows/validation.yml` provisions `.venv` with `uv` and runs Ruff format/check,
-  Pyright, Ty, pytest, markdownlint, `uv lock --check`, `uv sync --check --active`, and the
-  existing editable-install plus primary CLI help smoke checks.
-- After release tagging is standardized, a second workflow can publish GitHub releases from the
-  matching `CHANGELOG.md` entry.
+  Pyright, Ty, pytest, markdownlint, `uv lock --check`, `uv sync --check --active`, and the existing
+  editable-install plus primary CLI help smoke checks.
+- `.github/workflows/release.yml` publishes or updates GitHub releases for `0.x.y` and `v0.x.y` tags
+  by extracting the matching `CHANGELOG.md` entry.
 
 ## Command execution rules (non-negotiable)
 

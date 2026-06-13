@@ -8,7 +8,7 @@ pipeline and tests.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from nfl_predictor.utils.polars import features as _features
 from nfl_predictor.utils.polars import finalize as _finalize
@@ -31,8 +31,3 @@ def __dir__() -> list[str]:
     for module in (_features, _loaders, _teamrankings, _finalize):
         names.update(dir(module))
     return sorted(names)
-
-
-if TYPE_CHECKING:
-    # Import frequently used symbols for IDEs/type-checkers.
-    pass

@@ -6,6 +6,26 @@ checks from the relevant section.
 
 ---
 
+## Milestone 44 - Preseason 2026 repo hardening and tooling alignment
+
+Completed 2026-06-13.
+
+- [x] Aligned repo instructions, README guidance, changelog workflow, and helper docs around the
+      Ruff-only, `.venv`-explicit toolchain.
+- [x] Reconciled `pyproject.toml` metadata for Python 3.14, kept dependency groups in
+      `pyproject.toml`, and confirmed `uv.lock` as the environment source of truth.
+- [x] Kept both Pyright and Ty as mandatory gates, with minimal checked-in `tool.ty` settings to pin
+      the repo venv and validated source roots.
+- [x] Enforced the preseason coverage floor at `90%` in `pyproject.toml` and raised the suite to
+      `406 passed` / `90.01%` coverage.
+- [x] Kept the top-level `README.md` as the canonical documentation surface; nested `ml` and
+      `reporting` README files remain unnecessary until those subsystems outgrow it.
+- [x] Validation and release workflows are both checked in, and the clean-checkout
+      `scripts/betting_pipeline.py --dry-run` regression remains covered.
+- [x] The repo is back to a season-ready baseline and roadmap work resumes at Milestone 39.
+
+---
+
 ## June 2026 maintenance snapshot
 
 - [x] Rebuilt the local `.venv` on Python 3.14.6 and bumped the project version to `0.2.0`.

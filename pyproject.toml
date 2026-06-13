@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nfl-predictor"
-version = "0.2.5"
+version = "0.2.6"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -103,17 +103,18 @@ known-first-party = ["nfl_predictor"]
 docstring-code-format = true
 
 [tool.ty.environment]
+# Pin ty to the repo venv so local and CI checks resolve the same interpreter.
 python = ".venv"
 python-version = "3.14"
 
 [tool.ty.src]
+# Limit ty to the checked-in source roots we validate in CI.
 include = ["nfl_predictor", "scripts", "tests"]
 
 [tool.pyright]
 pythonVersion = "3.14"
-# Production code under nfl-predictor/ runs in strict mode (matches Pylance "Strict" in VS Code).
-# Tests stay on the standard-mode baseline below — they make heavy use of fixtures, Mock objects,
-# and monkeypatching where Unknown types are normal.
+# Keep pyright on the repo's stable standard-mode baseline, then promote the specific diagnostics we
+# rely on in CI and Pylance.
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
@@ -162,6 +163,7 @@ source = ["nfl_predictor"]
 omit = ["config.py", "config-*.py", "*/config.py", "*/config-*.py"]
 
 [tool.coverage.report]
+fail_under = 90
 show_missing = true
 skip_empty = true
 exclude_lines = ["pragma: no cover", "if __name__ == \"__main__\":"]

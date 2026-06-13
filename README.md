@@ -78,9 +78,9 @@ To refresh the lockfile and sync the active virtual environment:
 ./update_requirements.sh
 ```
 
-The helper expects `uv` on your `PATH` and an activated project virtual environment.
-If `.venv` is missing, it offers to create one with `uv venv .venv` and then exits so you can
-activate the environment before re-running it.
+The helper expects `uv` on your `PATH` and an activated project virtual environment. If `.venv` is
+missing, it offers to create one with `uv venv .venv` and then exits so you can activate the
+environment before re-running it.
 
 For a manual upgrade without the helper script:
 
@@ -120,14 +120,15 @@ To run explicitly with coverage (same behavior as the default config):
 python -m pytest --cov=nfl_predictor --cov-report=term-missing
 ```
 
-To enforce a higher local coverage threshold, add `--cov-fail-under`. The preseason hardening target
-is **90% or higher**, with **100%** as the aspirational ceiling:
+Pytest now enforces the repo coverage floor of **90%** by default via `pyproject.toml`. To try a
+stricter local target, add `--cov-fail-under` with a higher value. The preseason hardening target
+remains **90% or higher**, with **100%** as the aspirational ceiling:
 
 ```bash
-python -m pytest --cov-fail-under=90
+python -m pytest --cov-fail-under=95
 ```
 
-Current validated local baseline as of 2026-06-13: `391 passed` with `90%` coverage.
+Current validated local baseline as of 2026-06-13: `406 passed` with `90.01%` coverage.
 
 ## Data collection (Polars + nflreadpy)
 
@@ -548,8 +549,9 @@ and keep the change groups in this order:
 
 Keep each change to a single imperative line, link the most relevant commit or PR, and skip routine
 formatting noise. Update `CHANGELOG.md` whenever user-facing behavior, tooling expectations, or the
-operating workflow changes. If you later automate GitHub releases, keep git tags aligned with
-changelog versions.
+operating workflow changes. Pushing a `0.x.y` or `v0.x.y` tag triggers
+`.github/workflows/release.yml`, which extracts the matching `CHANGELOG.md` section and creates or
+updates the GitHub release. Keep git tags aligned with changelog versions.
 
 ## Artifacts
 

@@ -39,7 +39,7 @@ Agents and humans should not rely on the shell activation state.
 ### Current validated baseline (2026-06-13)
 
 - `.venv/bin/ruff format --check .` passes.
-- `.venv/bin/python -m pytest` passes (`391 passed`).
+- `.venv/bin/python -m pytest` passes (`406 passed`).
 - `markdownlint .` passes.
 - `uv lock --check` passes.
 - `uv sync --check --active` passes.
@@ -48,7 +48,7 @@ Agents and humans should not rely on the shell activation state.
   helpers.
 - `.venv/bin/ty check .` **passes (0 errors)** after tightening walk-forward config typing, helper
   return typing, optional SHAP imports, and small Polars schema annotations.
-- Coverage is `90%`, meeting the preseason target of `90%` or higher.
+- Coverage is `90.01%`, and `pytest` now enforces the preseason floor of `90%` or higher.
 
 ---
 
@@ -63,108 +63,14 @@ Agents and humans should not rely on the shell activation state.
 
 ---
 
-## Milestone 44 - Preseason 2026 repo hardening and tooling alignment
+## Roadmap Status
 
-Goal: bring the repository back to a fully coherent, season-ready baseline on Python 3.14 before
-resuming larger feature work.
-
-Tasks:
-
-- [ ] Align project instructions and docs with the current toolchain:
-  - keep `AGENTS.md` as the single instruction file and remove duplicate agent-instruction files.
-  - update `AGENTS.md`, `README.md`, and helper docs to reflect Ruff-only formatting plus the
-    current venv entrypoints for agents.
-  - remove stale Black references and `.venv/bin/pip` assumptions that do not match the `uv`
-    environment layout.
-  - document the intended role of `update_requirements.sh`, `uv lock`, and `uv sync`.
-  - add and maintain `CHANGELOG.md` using Common Changelog, with `0.1.0` on `main` as the historical
-    baseline for future tagged releases.
-  - decide whether to add nested README files for `ml` and `reporting`, or add that work to the
-    active plan explicitly.
-- [ ] Reconcile `pyproject.toml` metadata and tool configuration:
-  - align `project.requires-python`, `tool.ruff.target-version`, and `tool.pyright.pythonVersion`.
-  - remove stale copied comments that reference other repositories or outdated Python versions.
-  - migrate development dependency declarations into `pyproject.toml` dependency groups and make
-    `uv.lock` the lockfile source of truth.
-  - decide whether the coverage floor remains advisory or becomes enforced again.
-- [x] Decide the `ty` rollout strategy:
-  - keep `pyright` and `ty` as mandatory local gates.
-  - no repo-specific `[tool.ty]` configuration is currently required for a clean pass.
-  - document that `pyright` remains the more mature pandas-heavy signal, but `ty` is no longer
-    advisory.
-- [x] Close the current Ruff debt:
-  - All Ruff findings (69 → 0) are resolved:
-    - Docstring cluster: `package/__init__.py`, module headers, entrypoints (14 files)
-    - Simplify cluster: ternaries and loop returns (8 files)
-    - Security cluster: S110, S607, S101 with justified suppressions (4 files)
-    - NumPy RNG cluster: NPY002 with reproducibility justification (2 files)
-    - Excel formulas cluster: E501 with domain justification for betting_excel.py (1 file, 25 lines)
-  - address security findings such as `S110` and `S607` with either code changes or documented,
-    justified exceptions.
-  - resolve long Excel-formula lines plus simplify and NumPy diagnostics, or explicitly scope any
-    exceptions that remain.
-- [x] Establish a passing type-check baseline under the refreshed dependency set:
-  - fix or intentionally scope the current `pyright` failures in pandas-heavy modules.
-  - fix or intentionally scope the current `ty` failures and re-run both checkers.
-- [x] Fix the highest-value operational correctness issues from the current audit:
-  - [x] validation script exit codes and logger usage.
-  - [x] stale season-specific defaults in checked-in orchestration config and scripts.
-  - [x] any command guidance that no longer matches the actual `.venv/bin` contents.
-  - [x] `scripts/betting_pipeline.py --dry-run` now succeeds in clean checkouts without tracked
-    `data/` files.
-- [ ] Re-establish quality gates and automation:
-  - coverage-focused audit and targeted test additions now meet the preseason `90%` baseline; next
-    move is release-workflow follow-up and any remaining doc polish.
-  - the first clean-checkout GitHub Actions run exposed a `betting_pipeline --dry-run` assumption
-    about committed `data/` files; that path is now covered by a regression test and exits cleanly
-    without the dataset.
-  - completed focused coverage slices so far:
-    - `nfl_predictor/ml/artifacts.py`, `nfl_predictor/utils/fingerprints.py`,
-      `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
-      `nfl_predictor/ml/ml_model_cli.py` now sit at `100%` coverage.
-    - `nfl_predictor/ml/feature_spec.py` now sits at `100%` coverage.
-    - `nfl_predictor/ml/feature_importance.py` is up to `98%` coverage.
-    - `nfl_predictor/data_collection.py` is up to `89%` coverage after deeper ETL control-flow,
-      merge-helper, and orchestration tests.
-    - `nfl_predictor/ml/ml_model_core.py` is up to `76%` coverage after helper-focused tests for
-      target selection, missing-data summaries, season bounds, and time-aware split helpers.
-    - `nfl_predictor/ml/ml_model_training.py` is up to `88%` coverage after additional
-      orchestration, guard-rail, no-holdout, and calibration-branch tests.
-    - `nfl_predictor/ml/leakage_audit.py` is up to `93%` coverage after helper, heuristic-flag, and
-      report-writing tests.
-    - `nfl_predictor/utils/game_utils.py` is up to `94%` coverage after QB-fill and future-line
-      fallback tests.
-    - `nfl_predictor/utils/scraping_utils.py` is up to `96%` coverage after parser, fallback, and
-      SurvivorGrid edge-case tests.
-    - `nfl_predictor/utils/polars/teamrankings.py` is up to `90%` coverage after aggregation,
-      filtering, conversion, and cache-fallback tests.
-    - `nfl_predictor/ml/walk_forward.py` is up to `94%` coverage after helper-edge-case and
-      market-aware backtest tests.
-  - remaining coverage tails worth future cleanup live primarily in
-    `nfl_predictor/ml/ml_model_core.py`, `nfl_predictor/ml/ml_model_training.py`,
-    `nfl_predictor/utils/polars/loaders.py`, `nfl_predictor/utils/polars/features.py`, and the
-    smaller parser-edge branches in `nfl_predictor/utils/scraping_utils.py`.
-  - keep the coverage gate at `90%` or higher, with `100%` as the aspirational ceiling.
-  - the canonical local validation sequence is documented in `README.md`.
-  - validation-only GitHub Actions now lives at `.github/workflows/validation.yml`; it provisions
-    `.venv` with `uv`, runs Ruff format/check, Pyright, Ty, pytest, markdownlint,
-    `uv lock --check`, `uv sync --check --active`, and the editable-install plus primary CLI help
-    smoke checks.
-  - release automation remains deferred until version tags and `CHANGELOG.md` release discipline
-    are standardized.
-  - decide whether to add a tag-driven GitHub release workflow that publishes `CHANGELOG.md` entries
-    once version tags are standardized.
-
-Acceptance:
-
-- [x] Ruff format, Ruff check, Pyright, Ty, pytest, and markdownlint all pass.
-- [x] Editable install and primary CLI help smoke checks pass on Python 3.14.
-- [x] Docs and agent instructions match the actual toolchain and workflow.
-- [x] `CHANGELOG.md` is current and the intended CI/release automation path is documented.
+Milestone 44 completed on 2026-06-13 and now lives in `ARCHIVE.md`. Active work resumes with
+Milestone 39.
 
 ---
 
-## Deferred roadmap (resume after Milestone 44 baseline hardening)
+## Active roadmap (post-Milestone 44 baseline hardening)
 
 ## Milestone 39 - Off-season configuration sweep + lock default settings (GPU-first)
 

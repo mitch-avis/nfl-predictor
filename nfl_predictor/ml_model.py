@@ -8,7 +8,7 @@ preserving the public API expected by scripts and unit tests.
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from nfl_predictor.ml import ml_model_core as _core
 from nfl_predictor.ml import ml_model_predict as _predict
@@ -36,11 +36,6 @@ def __dir__() -> list[str]:
     for module in (_core, _training, _predict):
         names.update(dir(module))
     return sorted(names)
-
-
-if TYPE_CHECKING:
-    # Import key symbols for type-checkers and IDEs.
-    pass
 
 
 if __name__ == "__main__":

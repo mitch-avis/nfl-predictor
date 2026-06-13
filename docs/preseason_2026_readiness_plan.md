@@ -1,5 +1,8 @@
 # 2026 Preseason Readiness Plan
 
+Status: complete as of 2026-06-13. The repo is ready to resume roadmap work starting with Milestone
+39.
+
 ## Purpose
 
 Bring the repository back to a coherent, season-ready baseline on Python 3.14 before resuming larger
@@ -11,12 +14,12 @@ The following checks were run on 2026-06-13 against the refreshed `.venv`:
 
 | Check                             | Result   | Notes                                                                                            |
 | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
-| `.venv/bin/ruff format --check .` | Pass     | `104 files already formatted`                                                                    |
+| `.venv/bin/ruff format --check .` | Pass     | All checked-in Python files are already Ruff-formatted                                           |
 | `.venv/bin/ruff check .`          | Pass     | All 25 E501 findings in `betting_excel.py` scoped with justified suppressions                    |
 | `.venv/bin/pyright .`             | **Pass** | **0 errors** after adding `pandas-stubs` and `_fit_transform_matrix`/`_transform_matrix` helpers |
 | `.venv/bin/ty check .`            | Pass     | `0 errors`; now mandatory alongside `pyright`                                                    |
-| `.venv/bin/python -m pytest`      | Pass     | `391 passed`                                                                                     |
-| Coverage from pytest              | Pass     | `90%`, meeting the preseason target of `90%` or higher                                           |
+| `.venv/bin/python -m pytest`      | Pass     | `406 passed`                                                                                     |
+| Coverage from pytest              | Pass     | `90.01%`, clearing the enforced preseason target of `90%` or higher                              |
 | `markdownlint .`                  | Pass     | `0 error(s)`                                                                                     |
 | `uv lock --check`                 | Pass     | Lockfile is in sync with `pyproject.toml`                                                        |
 | `uv sync --check --active`        | Pass     | Active project environment matches `uv.lock`                                                     |
@@ -37,7 +40,8 @@ Keep `pyright` and `ty` as mandatory local validation gates.
 `pyright` remains the more mature and predictable checker for this pandas-heavy codebase, but the
 repo now passes `ty` as well and should keep both green rather than treating `ty` as advisory.
 
-No repo-specific `[tool.ty]` configuration is currently required for a clean pass.
+A minimal repo-specific `[tool.ty]` configuration pins the repo venv and validated source roots for
+consistent local and CI checks.
 
 ### update_requirements.sh
 
@@ -48,14 +52,13 @@ virtual environments.
 
 GitHub Actions is now the first CI target through `.github/workflows/validation.yml`.
 
-The workflow is validation-only: it creates `.venv`, runs `uv sync`, checks `uv.lock`, verifies the
-synced environment, and then executes the same Ruff format/check, Pyright, Ty, pytest, and
-markdownlint gates used locally.
-It also runs the editable-install smoke check plus the primary CLI help smoke checks for
-`nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`.
+The validation workflow creates `.venv`, runs `uv sync`, checks `uv.lock`, verifies the synced
+environment, and then executes the same Ruff format/check, Pyright, Ty, pytest, and markdownlint
+gates used locally. It also runs the editable-install smoke check plus the primary CLI help smoke
+checks for `nfl_predictor.ml_model`, `weekly_run.py`, and `power_rankings.py`.
 
-After version tags and `CHANGELOG.md` entries are standardized, a second workflow can publish
-GitHub releases from tagged changelog entries.
+A second workflow now publishes or updates GitHub releases from `0.x.y` and `v0.x.y` tags by
+extracting the matching `CHANGELOG.md` entry.
 
 ## Workstreams
 
@@ -68,8 +71,8 @@ GitHub releases from tagged changelog entries.
 - Remove stale Black references and `.venv/bin/pip` assumptions.
 - Align `project.requires-python`, `tool.ruff.target-version`, and `tool.pyright.pythonVersion`.
 - Remove stale comments copied from other repositories.
-- Decide where nested module README files would add real value, likely starting with the `ml` and
-  `reporting` packages.
+- Keep the top-level `README.md` as the canonical doc surface for now; revisit nested `ml` and
+  `reporting` README files only if those subsystems outgrow it.
 
 Exit criteria:
 
@@ -148,7 +151,8 @@ Exit criteria:
 - GitHub Actions validation is now checked in at `.github/workflows/validation.yml`.
 - The first clean-checkout Actions run surfaced a `betting_pipeline --dry-run` dataset assumption;
   that regression is now fixed and covered by a targeted CLI test.
-- The next hardening slice should move to release-workflow decisions and any remaining doc polish.
+- Release-workflow follow-up is complete, and the last remaining hardening step was enforcing the
+  true `90%` coverage floor.
 - Completed coverage slices now include:
   - `nfl_predictor/ml/artifacts.py` and `nfl_predictor/utils/fingerprints.py` at `100%`.
   - `nfl_predictor/ml/sample_weights.py`, `nfl_predictor/utils/validation_utils.py`, and
@@ -176,16 +180,19 @@ Exit criteria:
   `nfl_predictor/utils/polars/features.py`, and a few parser-edge branches in
   `nfl_predictor/utils/scraping_utils.py`.
 - Keep the enforced coverage floor at the preseason target of `90%` or higher, with `100%` as the
-  aspirational ceiling.
+  aspirational ceiling. The current validated baseline is `90.01%`.
 - The canonical local validation sequence is now documented in `README.md`.
-- The first GitHub Actions workflow stays focused on validation and defers deployment concerns.
-- Decide whether to add a tag-driven GitHub release workflow that uses `CHANGELOG.md`.
+- GitHub Actions now includes a validation workflow plus a lightweight tag-driven release workflow;
+  deployment remains out of scope.
+- `.github/workflows/release.yml` now uses `CHANGELOG.md` as the release-body source and fails fast
+  if the requested tag has no matching changelog entry.
 
 Exit criteria:
 
 - The repository has one clearly documented validation gate.
 - Coverage expectations are explicit and the repo now meets the preseason `90%` baseline.
-- The validation workflow is implemented, and the release-automation path is documented.
+- The validation workflow and tag-driven release workflow are implemented, and the release path is
+  documented.
 
 ### 6. Resume the feature roadmap
 
@@ -217,3 +224,5 @@ The repo is ready to resume weekly work when all of the following are true:
 - Checked-in configs target the current season rather than the 2025 postseason.
 - Agent instructions, TODOs, README guidance, and `CHANGELOG.md` rules match the actual toolchain.
 - The next active milestone can focus on forecasting capability rather than repo repair.
+
+All of the above are now true on the validated 2026-06-13 baseline.

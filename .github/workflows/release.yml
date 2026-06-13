@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Semantic version tag to publish from CHANGELOG.md
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from changelog
+        id: notes
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          python <<'PY'
+          import os
+          from pathlib import Path
+
+          from nfl_predictor.utils.changelog import extract_release_notes
+
+          release = extract_release_notes(Path("CHANGELOG.md"), os.environ["RELEASE_TAG"])
+          Path("release_notes.md").write_text(f"{release.body}\n", encoding="utf-8")
+
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          with output_path.open("a", encoding="utf-8") as output_file:
+              output_file.write(f"version={release.version}\n")
+              output_file.write(f"date={release.date}\n")
+              output_file.write(f"name={release.version} - {release.date}\n")
+          PY
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NAME: ${{ steps.notes.outputs.name }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_NAME" \
+              --notes-file release_notes.md
+          else
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_NAME" \
+              --notes-file release_notes.md
+          fi

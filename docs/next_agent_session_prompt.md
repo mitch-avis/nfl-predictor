@@ -3,7 +3,7 @@
 Use the following prompt to start the next agent session on this repository.
 
 ```text
-You are continuing preseason 2026 hardening work on the nfl-predictor repository.
+You are resuming post-hardening roadmap work on the nfl-predictor repository.
 
 Before changing code, read these files first:
 - `AGENTS.md`
@@ -26,27 +26,26 @@ Repository goals and constraints:
 - If asked to commit, prefer one file per commit, including deletions, unless told otherwise.
 
 Current validated baseline as of 2026-06-13:
-- `.venv/bin/ruff format --check .` passes (104 files already formatted)
+- `.venv/bin/ruff format --check .` passes
 - `.venv/bin/ruff check .` passes cleanly (0 diagnostics; all 69 findings resolved)
 - `.venv/bin/pyright .` passes (0 errors) after adding `pandas-stubs` and typed transform helpers
 - `.venv/bin/ty check .` passes (0 errors) after cleaning the remaining helper, walk-forward, and
   test-surface diagnostics
-- `.venv/bin/python -m pytest` passes (391 passed)
-- Coverage is 90%, meeting the preseason target of 90% or higher
+- `.venv/bin/python -m pytest` passes (406 passed)
+- Coverage is 90.01%, and pytest now enforces the preseason floor of 90% or higher
 - `markdownlint` passes on the maintained Markdown docs
 - `uv lock --check` passes
 - `uv sync --check --active` passes
 
 Active milestone:
-- Milestone 44 in `TODO.md`: Preseason 2026 repo hardening and tooling alignment
+- Milestone 39 in `TODO.md`: Off-season configuration sweep + lock default settings (GPU-first)
 
 Recommended first work slice:
-- Pyright and Ty are both green. Stay on the remaining Milestone 44 items.
-- The preseason `90%` coverage target is met, the validation workflow is checked in, and the
-  clean-checkout `scripts/betting_pipeline.py --dry-run` regression is fixed locally.
+- Keep the hardened baseline green while starting Milestone 39.
+- Begin with the sweep-config schema and long-running sweep entrypoint decisions in `TODO.md`.
+- Preserve the repo's no-leakage and time-aware evaluation guarantees while you extend orchestration
+  or model-selection surfaces.
 - If a fresh push exists, inspect the newest GitHub Actions validation run first.
-- After CI is green, move next to the remaining Milestone 44 wrap-up items: release-workflow
-  decisions and any final doc polish.
 - Treat TDD as mandatory for any code change: confirm the exact behavior/lines you plan to touch
   are covered first; if they are not, add focused characterization or failing tests before editing
   production code.

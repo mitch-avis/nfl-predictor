@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.2] - 2026-06-12
+
+### Changed
+
+- Auto-select the newest weekly prediction input in `scripts/betting_pipeline.py` when
+  `--predict-path` is omitted, and make the sample `config/weekly_run.yaml` rely on runtime
+  inference instead of checked-in 2025 postseason defaults ([`47402e2`])
+- Refresh README and preseason hardening guidance to reflect the current `248 passed` baseline and
+  a coverage-first next-session priority ([`47402e2`])
+
+### Added
+
+- Add regression tests for unset `--predict-path` handling and newest-week file selection in
+  `tests/test_betting_pipeline_script.py` ([`47402e2`])
+
+### Fixed
+
+- Fix stale week-specific CLI examples in `scripts/betting_pipeline.py` and
+  `scripts/betting_report_excel.py` ([`47402e2`])
+
 ## [0.2.1] - 2026-06-12
 
 ### Changed
@@ -77,9 +97,11 @@ _This release backfills the changelog from the historical `0.1.0` baseline on `m
 _Historical baseline on `main` before changelog adoption. Add a matching git tag before automating
 releases._
 
+[0.2.2]: https://github.com/mitch-avis/nfl-predictor/compare/586ffb6...47402e2
 [0.2.1]: https://github.com/mitch-avis/nfl-predictor/compare/9c04dc4...586ffb6
 [0.2.0]: https://github.com/mitch-avis/nfl-predictor/compare/7a4d4c7...main
 [0.1.0]: https://github.com/mitch-avis/nfl-predictor/commit/7a4d4c7
+[`47402e2`]: https://github.com/mitch-avis/nfl-predictor/commit/47402e2
 [`586ffb6`]: https://github.com/mitch-avis/nfl-predictor/commit/586ffb6
 [`240f814`]: https://github.com/mitch-avis/nfl-predictor/commit/240f814
 [`78c732e`]: https://github.com/mitch-avis/nfl-predictor/commit/78c732e

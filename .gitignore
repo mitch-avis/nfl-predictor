@@ -229,3 +229,6 @@ models/
 # Optuna database and other database files
 **/optuna.db
 *.db
+
+# Bash history
+.bash_history

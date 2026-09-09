@@ -79,6 +79,7 @@ Dry-run (prints planned paths; does not train):
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 from dataclasses import asdict
@@ -339,6 +340,35 @@ def _extract_week(path: Path) -> int | None:
     return int(match.group(1))
 
 
+def _parse_prediction_file_int(value: object) -> int | None:
+    """Parse an integer-like CSV field from a prediction file row."""
+    if not isinstance(value, str) or value == "":
+        return None
+    return int(float(value))
+
+
+def _predict_file_sort_key(path: Path) -> tuple[int, int, str]:
+    """Return a sortable `(season, week, name)` key for a prediction input file."""
+    week = _extract_week(path)
+    season = -1
+    resolved_week = week if week is not None else -1
+    try:
+        with path.open(encoding="utf-8", newline="") as handle:
+            row = next(csv.DictReader(handle), None)
+    except OSError:
+        row = None
+
+    if row is not None:
+        parsed_season = _parse_prediction_file_int(row.get("season"))
+        parsed_week = _parse_prediction_file_int(row.get("week"))
+        if parsed_season is not None:
+            season = parsed_season
+        if parsed_week is not None:
+            resolved_week = parsed_week
+
+    return season, resolved_week, path.name
+
+
 def _resolve_predict_path(predict_path: Path | None, data_dir: Path) -> Path:
     """Resolve an explicit prediction path or pick the newest weekly input file."""
     if predict_path is not None:
@@ -350,11 +380,11 @@ def _resolve_predict_path(predict_path: Path | None, data_dir: Path) -> Path:
     if not predict_dir.exists():
         raise FileNotFoundError(f"Missing predict directory: {predict_dir}")
 
-    candidates: list[tuple[int, Path]] = []
+    candidates: list[tuple[tuple[int, int, str], Path]] = []
     for candidate in predict_dir.glob("week_*_games_to_predict.csv"):
         week = _extract_week(candidate)
         if week is not None:
-            candidates.append((week, candidate))
+            candidates.append((_predict_file_sort_key(candidate), candidate))
     if not candidates:
         raise FileNotFoundError(f"No week_XX_games_to_predict.csv files found in {predict_dir}")
 

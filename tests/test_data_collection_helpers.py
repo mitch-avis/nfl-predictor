@@ -916,3 +916,75 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
     )
     assert unchanged.columns == ["away_abbr", "home_abbr"]
     assert any("TR data has no expected columns" in warning for warning in warnings)
+
+
+def _team_stats_stub() -> pl.DataFrame:
+    """Build a minimal two-team, one-week team-stats frame."""
+    return pl.DataFrame(
+        {
+            "season": [2023, 2023],
+            "week": [1, 1],
+            "team_abbr": ["AAA", "BBB"],
+            "opponent_abbr": ["BBB", "AAA"],
+            "pass_yards": [250.0, 180.0],
+        }
+    )
+
+
+def test_join_pbp_team_game_stats_attaches_counts_by_team_week() -> None:
+    """Play-by-play counts join onto the matching team-week rows."""
+    pbp_team_games = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "team_abbr": ["AAA"],
+            "opponent_abbr": ["BBB"],
+            "offensive_snaps": [64],
+            "pass_epa_sum": [5.5],
+        }
+    )
+
+    out = data_collection._join_pbp_team_game_stats(_team_stats_stub(), pbp_team_games)
+
+    assert out.height == 2
+    aaa = out.filter(pl.col("team_abbr") == "AAA").row(0, named=True)
+    bbb = out.filter(pl.col("team_abbr") == "BBB").row(0, named=True)
+    assert aaa["offensive_snaps"] == 64
+    assert aaa["pass_epa_sum"] == pytest.approx(5.5)
+    # The unmatched team keeps a null rather than a fabricated zero.
+    assert bbb["offensive_snaps"] is None
+    # The join must not duplicate the identity columns already on team stats.
+    assert out.columns.count("opponent_abbr") == 1
+    assert "opponent_abbr_right" not in out.columns
+
+
+def test_join_pbp_team_game_stats_emits_nulls_when_no_play_by_play() -> None:
+    """A season with no play-by-play still gets every count column, as nulls."""
+    out = data_collection._join_pbp_team_game_stats(_team_stats_stub(), pl.DataFrame())
+
+    for col in constants.PBP_COUNT_COLUMNS:
+        assert col in out.columns, f"{col} missing from the invariant schema"
+        assert out.select(pl.col(col).is_null().all()).item() is True
+    assert out.height == 2
+
+
+def test_join_pbp_team_game_stats_never_multiplies_rows() -> None:
+    """Duplicate play-by-play keys are collapsed instead of multiplying team-stat rows.
+
+    A malformed source that produces two rows for one `(season, week, team_abbr)` would
+    otherwise silently inflate the team-stats frame and corrupt every downstream mean.
+    """
+    duplicated = pl.DataFrame(
+        {
+            "season": [2023, 2023],
+            "week": [1, 1],
+            "team_abbr": ["AAA", "AAA"],
+            "opponent_abbr": ["BBB", ""],
+            "offensive_snaps": [64, 0],
+        }
+    )
+
+    out = data_collection._join_pbp_team_game_stats(_team_stats_stub(), duplicated)
+
+    assert out.height == 2, "the join must not multiply team-stat rows"
+    assert out.filter(pl.col("team_abbr") == "AAA")["offensive_snaps"][0] == 64

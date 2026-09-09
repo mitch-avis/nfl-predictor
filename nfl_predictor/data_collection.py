@@ -286,6 +286,90 @@ def main(argv: list[str] | None = None) -> None:
     log.info("Data collection complete.")
 
 
+def _log_pbp_null_rates(team_stats_df: pl.DataFrame, enable_debug: bool) -> None:
+    """Log the per-season null rate of the play-by-play count columns.
+
+    Args:
+        team_stats_df: Team stats after the play-by-play join
+        enable_debug: Whether debug diagnostics are enabled
+
+    """
+    if not enable_debug or team_stats_df.height == 0:
+        return
+    if "offensive_snaps" not in team_stats_df.columns:
+        return
+
+    per_season = (
+        team_stats_df.group_by("season")
+        .agg(pl.col("offensive_snaps").is_null().mean().alias("null_rate"))
+        .sort("season")
+    )
+    for row in per_season.iter_rows(named=True):
+        log.debug(
+            "Play-by-play null rate for season %s: %.4f",
+            row["season"],
+            row["null_rate"],
+        )
+
+
+def _join_pbp_team_game_stats(
+    team_stats_df: pl.DataFrame,
+    pbp_team_games: pl.DataFrame,
+) -> pl.DataFrame:
+    """Attach per-team-game play-by-play counts to the team stats frame.
+
+    The counts join on `(season, week, team_abbr)`; `opponent_abbr` is dropped from the
+    play-by-play side because team stats already carry it. Teams without play-by-play for a
+    game keep nulls, and when no play-by-play is available at all every count column is
+    still added as nulls so the downstream schema stays invariant. The join is guaranteed
+    not to change the row count: duplicate team-week keys are collapsed with a warning
+    rather than multiplying the team-stats frame.
+
+    Args:
+        team_stats_df: Per-game team statistics
+        pbp_team_games: Per-team-game play-by-play counts, possibly empty
+
+    Returns:
+        Team stats with the play-by-play count columns attached
+
+    """
+    join_keys = ["season", "week", "team_abbr"]
+
+    if pbp_team_games.height == 0:
+        log.warning("No play-by-play team-game rows available; emitting null count columns.")
+        return team_stats_df.with_columns(
+            [
+                pl.lit(None, dtype=pl.Float64).alias(col)
+                for col in constants.PBP_COUNT_COLUMNS
+                if col not in team_stats_df.columns
+            ]
+        )
+
+    countable = [col for col in pbp_team_games.columns if col not in {*join_keys, "opponent_abbr"}]
+    lookup = pbp_team_games.select([*join_keys, *countable])
+
+    # A duplicate team-week key would multiply team-stat rows and silently corrupt every
+    # downstream season-to-date mean, so collapse duplicates and say so loudly.
+    deduped = lookup.unique(subset=join_keys, keep="first")
+    if deduped.height != lookup.height:
+        log.warning(
+            "Play-by-play produced %d duplicate team-week keys; keeping the first of each.",
+            lookup.height - deduped.height,
+        )
+
+    merged = team_stats_df.join(deduped, on=join_keys, how="left")
+
+    missing = [
+        pl.lit(None, dtype=pl.Float64).alias(col)
+        for col in constants.PBP_COUNT_COLUMNS
+        if col not in merged.columns
+    ]
+    if missing:
+        merged = merged.with_columns(missing)
+
+    return merged
+
+
 def collect_all_data(
     seasons: list[int],
     *,
@@ -354,6 +438,24 @@ def collect_all_data(
         )
     log.info("Loaded team stats: %d regular season team-game records", team_stats_df.height)
     _log_df_stats("team_stats_df", team_stats_df, config.enable_debug)
+
+    # Load play-by-play and attach per-team-game counts before any downstream enrichment.
+    # Uses the same season window as team stats so the week-1 previous-season fallback is
+    # covered, and degrades to null columns when the source is unavailable.
+    with _timed_step("load_pbp", config.enable_timing):
+        pbp_df = polars_utils.load_pbp(
+            stats_seasons,
+            force_refresh=config.force_refresh_nflreadpy,
+            current_season=current_season,
+        )
+    log.info("Loaded play-by-play: %d regular season plays", pbp_df.height)
+
+    with _timed_step("aggregate_pbp_team_game_stats", config.enable_timing):
+        pbp_team_games = polars_utils.aggregate_pbp_team_game_stats(pbp_df)
+        team_stats_df = _join_pbp_team_game_stats(team_stats_df, pbp_team_games)
+    log.info("Aggregated play-by-play: %d team-game records", pbp_team_games.height)
+    _log_pbp_null_rates(team_stats_df, config.enable_debug)
+    _log_df_stats("team_stats_with_pbp", team_stats_df, config.enable_debug)
 
     # Add scoring data (points scored/allowed) to team stats from schedule
     # This enables computing points-related metrics like scoring margin
@@ -674,6 +776,10 @@ def process_week(
                     league_means,
                     constants.WEEK1_REGRESSION_FACTOR,
                 )
+
+                # Regression rewrites the summed components, so the ratios derived
+                # from them are recomputed against the regressed sums.
+                prev_agg = polars_utils.recompute_derived_metrics(prev_agg)
 
                 # Filter to only teams that need fallback
                 fallback_stats = prev_agg.filter(

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 
 from nfl_predictor.ml import ml_model_core
@@ -260,3 +263,129 @@ def test_build_games_for_ratings_includes_postseason(tmp_path) -> None:
 
     assert len(games) == 2
     assert set(games["week"]) == {1, 19}
+
+
+def test_legacy_franchise_fit_restores_the_all_seasons_equal_weight_fit() -> None:
+    """The legacy flag reproduces the historical fit: all seasons, equal weight, binary."""
+    pr = power_rankings
+
+    schedule = pl.DataFrame(
+        {
+            "season": [2022, 2022, 2023, 2023],
+            "week": [1, 2, 1, 2],
+            "game_type": ["REG"] * 4,
+            "away_abbr": ["AAA", "BBB", "AAA", "BBB"],
+            "home_abbr": ["BBB", "AAA", "BBB", "AAA"],
+            "away_score": [30.0, 10.0, 10.0, 30.0],
+            "home_score": [10.0, 30.0, 30.0, 10.0],
+        }
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "schedule.csv"
+        schedule.write_csv(path)
+
+        legacy = pr._build_games_for_ratings(
+            schedule_path=path,
+            season=2023,
+            through_week=18,
+            ratings_min_season=None,
+            future_games_with_probs=pd.DataFrame(),
+            include_postseason=False,
+            window_seasons=0,
+            prior_season_weight=1.0,
+            target="binary",
+            include_future=True,
+        )
+
+    # Every season is in the fit and every game weighs the same.
+    assert sorted(legacy["season"].unique().tolist()) == [2022, 2023]
+    assert legacy["fit_weight"].nunique() == 1
+    assert float(legacy["fit_weight"].iloc[0]) == pytest.approx(1.0)
+    # Binary targets take only two values regardless of margin.
+    assert legacy["p_home"].nunique() <= 2
+
+
+def test_default_ratings_fit_windows_seasons_and_downweights_the_past() -> None:
+    """The default fit sees a short window and weighs earlier seasons down."""
+    pr = power_rankings
+
+    schedule = pl.DataFrame(
+        {
+            "season": [2020, 2022, 2023],
+            "week": [1, 1, 1],
+            "game_type": ["REG"] * 3,
+            "away_abbr": ["AAA", "AAA", "AAA"],
+            "home_abbr": ["BBB", "BBB", "BBB"],
+            "away_score": [10.0, 10.0, 10.0],
+            "home_score": [30.0, 24.0, 13.0],
+        }
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "schedule.csv"
+        schedule.write_csv(path)
+
+        games = pr._build_games_for_ratings(
+            schedule_path=path,
+            season=2023,
+            through_week=18,
+            ratings_min_season=None,
+            future_games_with_probs=pd.DataFrame(),
+            include_postseason=False,
+        )
+
+    # 2020 falls outside the default two-season window.
+    assert sorted(games["season"].unique().tolist()) == [2022, 2023]
+    weights = dict(zip(games["season"], games["fit_weight"], strict=True))
+    assert weights[2023] == pytest.approx(1.0)
+    assert weights[2022] == pytest.approx(pr.DEFAULT_PRIOR_SEASON_WEIGHT)
+    # Margin targets distinguish the 20-point win from the 3-point win.
+    assert games["p_home"].nunique() == 2
+
+
+def test_future_games_stay_out_of_the_strength_fit_by_default() -> None:
+    """The strength fit describes results; the model's own forecasts are excluded."""
+    pr = power_rankings
+
+    schedule = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "game_type": ["REG"],
+            "away_abbr": ["AAA"],
+            "home_abbr": ["BBB"],
+            "away_score": [10.0],
+            "home_score": [30.0],
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "season": [2023],
+            "week": [2],
+            "away_abbr": ["BBB"],
+            "home_abbr": ["AAA"],
+            "home_win_prob": [0.9],
+        }
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "schedule.csv"
+        schedule.write_csv(path)
+        default = pr._build_games_for_ratings(
+            schedule_path=path,
+            season=2023,
+            through_week=1,
+            ratings_min_season=None,
+            future_games_with_probs=future,
+            include_postseason=False,
+        )
+        with_future = pr._build_games_for_ratings(
+            schedule_path=path,
+            season=2023,
+            through_week=1,
+            ratings_min_season=None,
+            future_games_with_probs=future,
+            include_postseason=False,
+            include_future=True,
+        )
+
+    assert default["week"].tolist() == [1]
+    assert sorted(with_future["week"].tolist()) == [1, 2]

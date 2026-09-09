@@ -48,6 +48,7 @@ try:
     from nfl_predictor import constants
     from nfl_predictor.ml import ml_model_core
     from nfl_predictor.reporting.power_rankings import (
+        FIT_WEIGHT_COLUMN,
         PowerRatingsResult,
         build_power_rankings_and_standings,
         outcome_to_home_prob,
@@ -61,6 +62,7 @@ except ModuleNotFoundError:
     from nfl_predictor import constants
     from nfl_predictor.ml import ml_model_core
     from nfl_predictor.reporting.power_rankings import (
+        FIT_WEIGHT_COLUMN,
         PowerRatingsResult,
         build_power_rankings_and_standings,
         outcome_to_home_prob,
@@ -118,7 +120,74 @@ def _parse_args() -> argparse.Namespace:
         default=False,
         help="Include postseason games in records/ratings (default: regular season only).",
     )
+    p.add_argument(
+        "--ratings-window-seasons",
+        type=int,
+        default=DEFAULT_RATINGS_WINDOW_SEASONS,
+        help=(
+            "How many seasons the ratings fit sees, counting the current one. "
+            f"Default {DEFAULT_RATINGS_WINDOW_SEASONS} (current plus previous). "
+            "Use 0 for every available season."
+        ),
+    )
+    p.add_argument(
+        "--ratings-prior-season-weight",
+        type=float,
+        default=DEFAULT_PRIOR_SEASON_WEIGHT,
+        help=(
+            "Weight applied to games from seasons before the current one. "
+            f"Default {DEFAULT_PRIOR_SEASON_WEIGHT}. Current-season games always weigh 1.0."
+        ),
+    )
+    p.add_argument(
+        "--ratings-target",
+        choices=("margin", "binary"),
+        default="margin",
+        help=(
+            "Target for completed games. 'margin' maps the observed point margin through "
+            "the model's win-probability curve; 'binary' scores every win the same."
+        ),
+    )
+    p.add_argument(
+        "--ratings-include-future",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Feed future games' model win probabilities into the strength fit. Off by "
+            "default: the fit should describe results, not the model's own forecasts. "
+            "Future games always remain in projected standings."
+        ),
+    )
+    p.add_argument(
+        "--legacy-franchise-fit",
+        action="store_true",
+        help=(
+            "Reproduce the historical ranking exactly: every season since 1999 weighted "
+            "equally, binary win/loss targets, and future model probabilities in the fit. "
+            "Overrides the other --ratings-* flags."
+        ),
+    )
     return p.parse_args()
+
+
+# Seasons the ratings fit sees by default, counting the current one. Two keeps a
+# full prior season of evidence for early-season weeks without letting a franchise's
+# history dominate the current one.
+DEFAULT_RATINGS_WINDOW_SEASONS = 2
+
+# Weight on games from before the current season. Low enough that the current season
+# dominates once a few games exist, high enough to stabilize week 1.
+DEFAULT_PRIOR_SEASON_WEIGHT = 0.25
+
+# Columns the ratings fit consumes.
+_RATINGS_COLUMNS = (
+    "season",
+    "week",
+    "away_abbr",
+    "home_abbr",
+    "p_home",
+    FIT_WEIGHT_COLUMN,
+)
 
 
 def _pl_to_pandas(df: pl.DataFrame) -> pd.DataFrame:
@@ -375,9 +444,38 @@ def _build_games_for_ratings(
     through_week: int,
     ratings_min_season: int | None,
     future_games_with_probs: pd.DataFrame,
-    include_postseason: bool = False,
+    include_postseason: bool,
+    window_seasons: int = DEFAULT_RATINGS_WINDOW_SEASONS,
+    prior_season_weight: float = DEFAULT_PRIOR_SEASON_WEIGHT,
+    target: str = "margin",
+    include_future: bool = False,
 ) -> pd.DataFrame:
-    """Assemble past + future games for the ratings fit."""
+    """Assemble the games the strength fit sees, with a per-game weight.
+
+    The fit answers "how strong is each team going into next week", so by default it
+    sees a short window of recent seasons rather than the whole archive, weights games
+    from before the current season down by `prior_season_weight`, and scores completed
+    games by margin rather than by a flat win/loss. Future games are excluded by
+    default: feeding the model's own forecasts back into the strength fit makes the
+    ranking partly a picture of the model rather than of results. They still drive
+    projected standings.
+
+    Args:
+        schedule_path: Schedule/results dataset.
+        season: Season being ranked.
+        through_week: Records and results are counted through this week inclusive.
+        ratings_min_season: Optional hard floor on seasons included.
+        future_games_with_probs: Future games carrying model win probabilities.
+        include_postseason: Whether postseason games count.
+        window_seasons: Seasons the fit sees, counting the current one; 0 means all.
+        prior_season_weight: Weight for games before the current season.
+        target: "margin" or "binary" target for completed games.
+        include_future: Whether future model probabilities enter the fit.
+
+    Returns:
+        Games with `season`, `week`, `away_abbr`, `home_abbr`, `p_home` and `fit_weight`.
+
+    """
     sched = pl.read_csv(schedule_path).select(
         [
             "season",
@@ -391,13 +489,17 @@ def _build_games_for_ratings(
     )
     sched = _filter_by_game_type(sched, include_postseason=include_postseason)
 
-    if ratings_min_season is not None:
-        sched = sched.filter(pl.col("season") >= int(ratings_min_season))
+    floor_season = ratings_min_season
+    if window_seasons and window_seasons > 0:
+        window_floor = season - window_seasons + 1
+        floor_season = (
+            window_floor if floor_season is None else max(int(floor_season), window_floor)
+        )
+    if floor_season is not None:
+        sched = sched.filter(pl.col("season") >= int(floor_season))
 
     sched = _pl_to_pandas(sched)
 
-    # Use all historical games (prior seasons) plus current-season games through `through_week`.
-    # This makes the ratings more stable across weeks and comparable season-to-season.
     past = sched[
         (
             (sched["season"] < season)
@@ -406,25 +508,31 @@ def _build_games_for_ratings(
         & sched["away_score"].notna()
         & sched["home_score"].notna()
     ].copy()
-    past["p_home"] = outcome_to_home_prob(past["home_score"], past["away_score"])
+    past["p_home"] = outcome_to_home_prob(past["home_score"], past["away_score"], target=target)
+    # Current-season results carry full weight; earlier seasons are evidence, not equals.
+    past[FIT_WEIGHT_COLUMN] = np.where(
+        past["season"].to_numpy() == season, 1.0, float(prior_season_weight)
+    )
 
     fut = future_games_with_probs.copy()
-    if not fut.empty:
+    if include_future and not fut.empty:
         fut = fut.rename(columns={"home_win_prob": "p_home"})
-        fut = fut[["season", "week", "away_abbr", "home_abbr", "p_home"]]
+        fut = fut[["season", "week", "away_abbr", "home_abbr", "p_home"]].copy()
+        fut[FIT_WEIGHT_COLUMN] = 1.0
+    else:
+        fut = pd.DataFrame(columns=[*_RATINGS_COLUMNS])
 
     games = pd.concat(
-        [past[["season", "week", "away_abbr", "home_abbr", "p_home"]], fut],
-        ignore_index=True,
+        [past[list(_RATINGS_COLUMNS)], fut[list(_RATINGS_COLUMNS)]], ignore_index=True
     )
-    effective_min_season = ratings_min_season
-    if effective_min_season is None and not sched.empty:
-        effective_min_season = int(sched["season"].min())
     log.info(
-        "Ratings fit diagnostics: past_games=%d future_games=%d ratings_min_season=%s",
+        "Ratings fit diagnostics: past_games=%d future_games=%d min_season=%s "
+        "prior_season_weight=%s target=%s",
         len(past),
         len(fut),
-        effective_min_season,
+        floor_season if floor_season is not None else "all",
+        prior_season_weight,
+        target,
     )
     return games.dropna(subset=["p_home", "away_abbr", "home_abbr"]).copy()
 
@@ -479,6 +587,19 @@ def main() -> int:
         through_week=args.through_week,
         include_postseason=bool(args.include_postseason),
     )
+    if args.legacy_franchise_fit:
+        # The historical behavior: every season equal, binary targets, forecasts in the fit.
+        window_seasons = 0
+        prior_season_weight = 1.0
+        ratings_target = "binary"
+        include_future = True
+        log.info("Legacy franchise fit requested; --ratings-* options are ignored.")
+    else:
+        window_seasons = int(args.ratings_window_seasons)
+        prior_season_weight = float(args.ratings_prior_season_weight)
+        ratings_target = str(args.ratings_target)
+        include_future = bool(args.ratings_include_future)
+
     games_for_ratings = _build_games_for_ratings(
         schedule_path=args.data_schedule,
         season=args.season,
@@ -486,6 +607,10 @@ def main() -> int:
         ratings_min_season=args.ratings_min_season,
         future_games_with_probs=future_games,
         include_postseason=bool(args.include_postseason),
+        window_seasons=window_seasons,
+        prior_season_weight=prior_season_weight,
+        target=ratings_target,
+        include_future=include_future,
     )
 
     result = build_power_rankings_and_standings(

@@ -54,11 +54,7 @@ def get_current_nfl_week() -> tuple[int, int]:
     max_week = constants.get_regular_season_weeks(current_season) + 4
 
     if today < season_start:
-        # Before current year's season starts, we're in offseason
-        # Return last week of previous season (or playoffs)
-        prev_season = current_season - 1
-        prev_max_week = constants.get_regular_season_weeks(prev_season) + 4
-        return prev_season, prev_max_week
+        return current_season, 1
 
     week_number = ((today - season_start).days // 7) + 1
     return current_season, min(max(1, week_number), max_week)

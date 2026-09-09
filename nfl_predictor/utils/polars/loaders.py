@@ -382,10 +382,37 @@ def load_team_stats(
         else:
             log.info("Refreshing team stats via nflreadpy for season %d.", season)
 
-        season_df = nfl.load_team_stats(seasons=[season])
+        try:
+            season_df = nfl.load_team_stats(seasons=[season])
+        except ConnectionError as exc:
+            if season < resolved_current_season:
+                raise
+
+            fallback_cached = _read_cached_frame(cache_path)
+            if fallback_cached is not None:
+                log.warning(
+                    "Current-season team stats unavailable for season %d; "
+                    "using cached data from %s. Error: %s",
+                    season,
+                    cache_path,
+                    exc,
+                )
+                team_frames.append(fallback_cached)
+            else:
+                log.warning(
+                    "Current-season team stats unavailable for season %d; "
+                    "continuing without them. Error: %s",
+                    season,
+                    exc,
+                )
+            continue
+
         season_df = _prepare_team_stats(season_df, regular_season_only=regular_season_only)
         _write_cached_frame(season_df, cache_path)
         team_frames.append(season_df)
+
+    if not team_frames:
+        return pl.DataFrame()
 
     return pl.concat(team_frames, how="diagonal")
 

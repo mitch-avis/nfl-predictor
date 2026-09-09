@@ -1,4 +1,4 @@
-# Copilot Instructions for nfl-predictor
+# Agent Instructions for nfl-predictor
 
 ## 0) Mission + Non-Negotiables
 
@@ -23,30 +23,52 @@ Rules that are always enforced:
   the exact behavior and lines you plan to touch are covered; if not, add focused characterization
   or failing tests first, then edit the production code.
 
-## Current Preseason Focus
+## Current Focus (2026 season start)
 
-- The current preseason hardening plan lives in `docs/preseason_2026_readiness_plan.md`.
-- `TODO.md` is the authoritative active checklist.
-- Validated baseline on 2026-06-13:
-  - `.venv/bin/ruff format --check .` passes.
-  - `.venv/bin/python -m pytest` passes (`406 passed`).
-  - `markdownlint .` passes.
-  - `uv lock --check` passes.
-  - `uv sync --check --active` passes.
-  - `.venv/bin/ruff check .` passes cleanly.
-  - `.venv/bin/pyright .` passes (0 errors; fixed via `pandas-stubs` + typed transform helpers).
-  - `.venv/bin/ty check .` passes (0 diagnostics; now mandatory alongside Pyright).
-  - Coverage is `90.01%`, clearing the enforced preseason target.
+- The active workstream is feature engineering for true team strength: PBP-derived per-snap EPA
+  families, weekly schedule-adjusted (ridge) team strength, QB per-dropback EPA families, and a
+  power-rankings redesign that measures current-season strength. The analysis, crosswalk, and
+  prioritized shortlist live in `.agents/feature_crosswalk.md`; the ordered milestones live in
+  `.agents/TODO.md`.
+- XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
+  families or run large tuning campaigns unless the user asks.
+- Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
+  repo as read-only reference material.
+- Validated baseline on 2026-09-09:
+  - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
+    `.venv/bin/pyright .` pass cleanly.
+  - `.venv/bin/python -m pytest` passes (`412 passed`) with coverage `90.03%` against the enforced
+    `90%` floor.
+  - `markdownlint .`, `uv lock --check`, and `uv sync --check --active` pass.
+  - ETL was rerun for `1999-2026` and the leakage audit passed on the refreshed dataset.
+- Reference walk-forward benchmark (seasons `2023-2025`, current default config): Brier `0.2312`,
+  log loss `0.7352`, pick accuracy `0.6833`, margin MAE `9.8954`, total MAE `10.1021`,
+  reliability ECE `0.1308`. New feature work must report against these numbers.
+
+### Readiness behaviors that must not regress
+
+- Pre-kickoff current-week detection resolves to the new season's Week 1, not the prior season's
+  final playoff week.
+- Current-season nflreadpy team-stat 404s are non-fatal so ETL still runs when the schedule exists
+  before weekly stats are published. Any new nflreadpy source (PBP included) must follow the same
+  cache-then-degrade pattern.
+- Default weekly prediction-file resolution uses the CSV `season`/`week` values, not the filename
+  week, so a stale `week_22` file never wins over a new `week_01` file.
 
 ## Source of truth for work
 
-- Current milestones and tasks live in `TODO.md` (authoritative active worklist).
+- Active milestones and tasks live in `.agents/TODO.md` (authoritative active worklist).
+- Completed milestones live in `.agents/ARCHIVE.md`. Milestone numbering is authoritative there,
+  and new milestones continue from the latest archived number.
+- The cross-repo feature review and prioritized shortlist live in `.agents/feature_crosswalk.md`.
+- The handoff prompt for the next session lives in `.agents/next_agent_session_prompt.md`.
+- `.agents/` is gitignored local planning state. Keep it accurate anyway; a stale plan file is a
+  repo bug.
 - `CHANGELOG.md` is the authoritative release history.
-- Before starting any task: read `TODO.md` and work only on the highest-priority blocking items.
-- When a task is completed: move it from `TODO.md` to `ARCHIVE.md` with a short completion note.
-- Milestone numbering is authoritative in `ARCHIVE.md`:
-  - Completed milestones are archived there.
-  - New milestones must continue numbering from the latest archived milestone.
+- Before starting any task: read `.agents/TODO.md` and work only on the highest-priority blocking
+  items.
+- When a task is completed: move it from `.agents/TODO.md` to `.agents/ARCHIVE.md` with a short
+  completion note.
 
 ## Engineering Standards (Logic, Docs, Lint, Coverage)
 
@@ -63,10 +85,10 @@ Rules that are always enforced:
   `task-orchestrator`, and the `python-*` skills when their domains apply.
 - If a Python file grows beyond ~2000 lines, propose a refactor plan to split it into smaller,
   focused modules (helpers/utils) and implement the split if it reduces complexity.
-- Keep `TODO.md` accurate: verify items before checking them off.
-- Keep `docs/preseason_2026_readiness_plan.md`, `TODO.md`, `ARCHIVE.md`, and `CHANGELOG.md`
-  synchronized with the actual repo state after meaningful progress, completed tasks, or validation
-  changes.
+- Keep `.agents/TODO.md` accurate: verify items before checking them off.
+- Keep `.agents/TODO.md`, `.agents/ARCHIVE.md`, `.agents/feature_crosswalk.md`, and
+  `CHANGELOG.md` synchronized with the actual repo state after meaningful progress, completed
+  tasks, or validation changes.
 - Keep `README.md` current: update it when behavior, CLI usage, features, or outputs change.
 - Keep project documentation current after significant changes. When a subsystem outgrows the
   top-level `README.md`, add or update nested module README files and link them from the top-level
@@ -180,6 +202,9 @@ Recommended local commands:
   outputs.
 - `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
 - `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
+- `scripts/power_rankings.py`: power rankings + projected standings. Today it fits Bradley-Terry
+  over every season since 1999 with equal weights; the redesign toward current-season adjusted
+  strength is Milestone 43 in `.agents/TODO.md`.
 
 ## Modeling Philosophy (Important Context)
 
@@ -204,6 +229,24 @@ Recommended local commands:
 - Prefer the project’s Polars-based load/save helpers in `nfl_predictor/data_collection.py`.
 - Any pandas-based CSV I/O utilities are legacy. Do not add new pandas-based I/O helpers; prefer the
   Polars ETL helpers when touching related code.
+
+## Neighboring Repos and Cross-Repo Contracts
+
+- `../nfeloqb` produces `qb_elos.csv` (538-style schema; `team1` is the home team).
+  `nfl-predictor` consumes a manually copied `data/qb_elos.csv`. Treat that file as a downstream
+  contract: do not propose schema changes there casually, and never edit `../nfeloqb` outputs from
+  this repo. `../nfeloqb/Other Data/meta_data.csv` maps Elo QB names to GSIS ids and is the
+  intended identity bridge for QB-level PBP features.
+- `../nfl-sos-ratings` is the reference implementation for PBP-derived per-snap EPA, success and
+  explosive rates, special-teams EPA, and simultaneous ridge opponent adjustment. Port ideas and
+  formulas into this repo's Polars ETL; do not import it as a dependency and do not modify it from
+  here. The repo-root symlink `nfl-sos-ratings -> ../nfl-sos-ratings/` is gitignored and exists
+  only for convenient reading; always state which repo you are inspecting.
+- Leave untracked local files in neighboring repos alone (for example `../nfeloqb/.bash_history`).
+- Play-by-play comes from `nflreadpy.load_pbp`. nflreadpy caches only in memory, so cache selected
+  columns per season as Parquet under `data/cache/nflreadpy/` with the same current-season refresh
+  and non-fatal failure behavior as schedules and team stats. Filter to the regular season for
+  feature inputs and normalize `posteam`, `defteam`, `home_team`, and `away_team`.
 
 ## Column & Schema Rules (Source of Truth)
 
@@ -427,12 +470,26 @@ Artifacts must be loadable without hidden external state.
 
 All engineered features apply to **every matchup**, not only end-of-season games.
 
-Feature areas tracked in `TODO.md` include (examples):
+Feature areas tracked in `.agents/TODO.md` include (examples):
 
 - season-to-date record features (overall, division, conference W-L-T)
 - divisional rivalry indicator
 - lookahead/trap indicators (next-week opponent strength + rest/travel context)
 - motivational asymmetry features (playoff leverage and clinch/elimination context)
+- PBP-derived per-snap EPA, success, explosive, and special-teams families
+- weekly schedule-adjusted (ridge) offense/defense strength and EPA-based schedule strength
+- QB per-dropback EPA families for the expected starter
+
+Rules for stat-style features:
+
+- Carry counts and sums through season-to-date aggregation and compute rates afterward (ratio of
+  sums), the way `_compute_derived_metrics` already works.
+- Name allowed/defensive metrics explicitly and add them to `EXCLUDE_FROM_OPPONENT_STATS` so the
+  generic `opponent_` mirror does not duplicate them.
+- Cite the formula in the docstring and test each self-computed metric against a hand-built
+  fixture.
+- Any schedule-adjusted or opponent-adjusted value for week `N` must be solved from games strictly
+  before week `N` in that season, with a documented prior-season fallback for early weeks.
 
 ## Missing Data Rules
 

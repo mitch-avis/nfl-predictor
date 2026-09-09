@@ -35,6 +35,13 @@ import numpy as np
 import pandas as pd
 
 from nfl_predictor import constants
+from nfl_predictor.ml.ml_model_core import margin_to_home_win_prob
+
+# Internal column used to carry per-game fit weights; never published.
+_WEIGHT_COLUMN = "__fit_weight"
+
+# Optional column on the ratings input carrying each game's weight in the fit.
+FIT_WEIGHT_COLUMN = "fit_weight"
 
 
 @dataclass(frozen=True)
@@ -67,14 +74,45 @@ def outcome_to_home_prob(
     away_score: pd.Series,
     *,
     eps: float = 0.03,
+    target: str = "binary",
 ) -> np.ndarray:
     """Convert an observed game outcome into a probability target.
 
-    Ties are represented as 0.5.
+    Two targets are supported, and ties are 0.5 under both:
+
+    - ``"binary"``: a win is ``1 - eps`` and a loss is ``eps``, so every win counts
+      the same regardless of margin. This is the historical behavior.
+    - ``"margin"``: the observed point margin is mapped through the same
+      margin-to-win-probability curve the model itself uses, so a 28-point win is
+      stronger evidence than a 1-point win. Values are clamped into
+      ``(eps, 1 - eps)`` so the logit stays finite.
+
+    Args:
+        home_score: Home team score.
+        away_score: Away team score.
+        eps: Clamp applied to keep logits finite.
+        target: Either ``"binary"`` or ``"margin"``.
+
+    Returns:
+        Array of home win probability targets.
+
+    Raises:
+        ValueError: If ``target`` is not a recognized name.
+
     """
+    if target not in {"binary", "margin"}:
+        raise ValueError(f"target must be 'binary' or 'margin', got: {target!r}")
+
     home = pd.to_numeric(home_score, errors="coerce")
     away = pd.to_numeric(away_score, errors="coerce")
     margin = home - away
+    margin_values = margin.to_numpy(dtype=float)
+
+    if target == "margin":
+        probs = np.asarray(margin_to_home_win_prob(margin_values), dtype=float)
+        probs = np.where(margin_values == 0.0, 0.5, probs)
+        probs = np.clip(probs, eps, 1.0 - eps)
+        return np.where(np.isnan(margin_values), np.nan, probs)
 
     p = np.full(len(margin), np.nan, dtype=float)
     p[margin > 0] = 1.0 - eps
@@ -91,6 +129,7 @@ def fit_bradley_terry_ratings(
     p_home_col: str = "p_home",
     include_home_advantage: bool = True,
     ridge_alpha: float = 1.0,
+    sample_weights: pd.Series | np.ndarray | None = None,
 ) -> tuple[pd.Series, float]:
     """Fit latent team ratings from per-game home win probabilities.
 
@@ -101,6 +140,11 @@ def fit_bradley_terry_ratings(
         p_home_col: Home win probability column.
         include_home_advantage: If True, fit a global home-field advantage term.
         ridge_alpha: L2 regularization strength.
+        sample_weights: Optional non-negative per-game weights. Rows are scaled by the
+            square root of their weight, which turns the solve into ordinary weighted
+            least squares. Used to down-weight older seasons so the fit describes
+            current strength rather than franchise history. Uniform weights reproduce
+            the unweighted fit exactly.
 
     Returns:
         (team_rating_series, home_advantage)
@@ -111,7 +155,13 @@ def fit_bradley_terry_ratings(
     if missing:
         raise ValueError(f"games missing required columns: {missing}")
 
-    df = games[[home_team_col, away_team_col, p_home_col]].dropna().copy()
+    df = games[[home_team_col, away_team_col, p_home_col]].copy()
+    if sample_weights is not None:
+        weights = np.asarray(sample_weights, dtype=float)
+        if weights.shape[0] != df.shape[0]:
+            raise ValueError("sample_weights must have one entry per game")
+        df[_WEIGHT_COLUMN] = weights
+    df = df.dropna().copy()
     if df.empty:
         raise ValueError("No games available after dropping nulls")
 
@@ -134,6 +184,13 @@ def fit_bradley_terry_ratings(
 
     p = clamp_prob(df[p_home_col].to_numpy())
     y = _logit(p)
+
+    if _WEIGHT_COLUMN in df.columns:
+        # Weighted least squares: scaling each row by sqrt(w) makes the ordinary normal
+        # equations below minimize the weighted squared error.
+        root_weights = np.sqrt(np.clip(df[_WEIGHT_COLUMN].to_numpy(dtype=float), 0.0, None))
+        x = x * root_weights[:, np.newaxis]
+        y = y * root_weights
 
     xtx = x.T @ x
     xty = x.T @ y
@@ -293,9 +350,18 @@ def build_power_rankings_and_standings(
     games_for_ratings: pd.DataFrame,
     future_games_with_probs: pd.DataFrame,
 ) -> PowerRatingsResult:
-    """Build power rankings and projected standings tables."""
+    """Build power rankings and projected standings tables.
+
+    When `games_for_ratings` carries a `fit_weight` column it is used as per-game
+    sample weights, which is how the caller down-weights older seasons.
+    """
     # Ratings fit uses a combined table with a `p_home` target.
-    ratings_raw, home_adv = fit_bradley_terry_ratings(games_for_ratings)
+    fit_weights = (
+        games_for_ratings[FIT_WEIGHT_COLUMN]
+        if FIT_WEIGHT_COLUMN in games_for_ratings.columns
+        else None
+    )
+    ratings_raw, home_adv = fit_bradley_terry_ratings(games_for_ratings, sample_weights=fit_weights)
     power_rating_1_10 = scale_ratings_1_to_10(ratings_raw)
     power_rating_0_10 = ratings_to_power_0_to_10(ratings_raw)
 

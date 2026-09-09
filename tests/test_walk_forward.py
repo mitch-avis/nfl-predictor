@@ -11,6 +11,7 @@ import pandas as pd
 import pandas.testing as pdt
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.ml import walk_forward
 
 
@@ -618,3 +619,117 @@ def test_walk_forward_backtest_handles_elo_uncertainty_and_incomplete_filters(
     incomplete_config = replace(_base_config(), exclude_incomplete_seasons=True)
     with pytest.raises(ValueError, match="No complete seasons available"):
         walk_forward.run_walk_forward_backtest(df, incomplete_config)
+
+
+def test_resolve_feature_group_columns_matches_configured_markers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A group with non-empty markers resolves to the columns whose names contain a marker."""
+    monkeypatch.setattr(
+        walk_forward.constants,
+        "FEATURE_GROUP_COLUMN_MARKERS",
+        {"pbp": ("epa",), "other": ("success_rate",)},
+    )
+    columns = ["away_epa_per_play", "home_success_rate", "week", "season"]
+
+    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+
+    assert resolved == ["away_epa_per_play"]
+
+
+def test_resolve_feature_group_columns_empty_markers_matches_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty marker tuple for a group resolves to zero columns, dropping nothing."""
+    monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ()})
+    columns = ["away_epa_per_play", "home_epa_per_play", "epa_per_play_diff"]
+
+    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+
+    assert resolved == []
+
+
+def test_resolve_feature_group_columns_substring_matches_prefix_and_suffix_variants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A single marker catches away_/home_/opponent_ prefixed and _diff suffixed columns."""
+    monkeypatch.setattr(
+        walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa_per_play",)}
+    )
+    columns = [
+        "away_epa_per_play",
+        "home_epa_per_play",
+        "opponent_epa_per_play",
+        "epa_per_play_diff",
+        "unrelated_column",
+    ]
+
+    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+
+    assert resolved == sorted(
+        [
+            "away_epa_per_play",
+            "home_epa_per_play",
+            "opponent_epa_per_play",
+            "epa_per_play_diff",
+        ]
+    )
+
+
+def test_resolve_feature_group_columns_unknown_group_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unknown group name raises a ValueError naming the bad group."""
+    monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
+
+    with pytest.raises(ValueError, match="not_a_real_group"):
+        walk_forward.resolve_feature_group_columns(["away_epa"], ["not_a_real_group"])
+
+
+def test_walk_forward_config_disabled_feature_groups_serializes_to_list() -> None:
+    """`disabled_feature_groups` round-trips through `to_dict` as a list, defaulting to empty."""
+    default_config = _base_config()
+    assert default_config.to_dict()["disabled_feature_groups"] == []
+
+    configured = replace(_base_config(), disabled_feature_groups=("pbp",))
+    assert configured.to_dict()["disabled_feature_groups"] == ["pbp"]
+
+
+def test_run_walk_forward_backtest_drops_disabled_feature_groups(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The config alone is enough to ablate a group, without the caller pre-filtering.
+
+    The CLI scripts drop the columns before building the config, so this guards a direct
+    caller of `run_walk_forward_backtest` against silently getting no ablation at all.
+    """
+    monkeypatch.setattr(
+        constants,
+        "FEATURE_GROUP_COLUMN_MARKERS",
+        {"demo": ("widget",)},
+    )
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_filter(df: pd.DataFrame, include_postseason: bool = False) -> pd.DataFrame:
+        captured["columns"] = list(df.columns)
+        raise RuntimeError("stop after the drop")
+
+    monkeypatch.setattr(walk_forward, "filter_regular_season", fake_filter)
+
+    df = pd.DataFrame(
+        {
+            "season": [2023],
+            "week": [3],
+            "away_widget_rate": [1.0],
+            "home_widget_rate": [2.0],
+            "widget_rate_diff": [-1.0],
+            "away_rest": [7],
+        }
+    )
+    config = walk_forward.WalkForwardConfig(disabled_feature_groups=("demo",))
+
+    with pytest.raises(RuntimeError, match="stop after the drop"):
+        walk_forward.run_walk_forward_backtest(df, config)
+
+    assert captured["columns"] == ["season", "week", "away_rest"]

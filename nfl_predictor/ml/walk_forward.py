@@ -82,6 +82,7 @@ class WalkForwardConfig:
     recency_half_life_weeks: float | None = None
     recency_half_life_seasons: float | None = None
     disable_pruning: bool = False
+    disabled_feature_groups: tuple[str, ...] = ()
     xgb_params_overrides: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -111,6 +112,7 @@ class WalkForwardConfig:
             "recency_half_life_weeks": self.recency_half_life_weeks,
             "recency_half_life_seasons": self.recency_half_life_seasons,
             "disable_pruning": self.disable_pruning,
+            "disabled_feature_groups": list(self.disabled_feature_groups),
             "xgb_params_overrides": self.xgb_params_overrides,
         }
 
@@ -143,6 +145,39 @@ def filter_regular_season(df: pd.DataFrame, include_postseason: bool = False) ->
     if len(filtered) != len(df):
         log.info("Filtered to regular-season games: %d -> %d rows", len(df), len(filtered))
     return filtered
+
+
+def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str]) -> list[str]:
+    """Resolve which columns belong to the given feature groups for ablation.
+
+    A column belongs to a group when any marker string configured for that group in
+    ``constants.FEATURE_GROUP_COLUMN_MARKERS`` is a *substring* of the column name (not a
+    prefix), so a single marker can match ``away_``/``home_``/``opponent_`` prefixed variants
+    and ``_diff`` suffixed variants of the same base name at once. A group whose marker tuple
+    is empty matches zero columns.
+
+    Raises:
+        ValueError: if any requested group name is not a key in
+            ``constants.FEATURE_GROUP_COLUMN_MARKERS``.
+
+    """
+    valid_groups = constants.FEATURE_GROUP_COLUMN_MARKERS
+    unknown = sorted({group for group in groups if group not in valid_groups})
+    if unknown:
+        raise ValueError(
+            f"Unknown feature group(s): {unknown}. Valid groups: {sorted(valid_groups)}."
+        )
+
+    matched: set[str] = set()
+    for group in groups:
+        markers = valid_groups[group]
+        if not markers:
+            continue
+        for column in columns:
+            if any(marker in column for marker in markers):
+                matched.add(column)
+
+    return sorted(matched)
 
 
 def resolve_eval_seasons(
@@ -344,8 +379,24 @@ def run_walk_forward_backtest(
     *,
     fold_callback: Callable[[dict[str, Any], WalkForwardFold], None] | None = None,
 ) -> dict[str, Any]:
-    """Run walk-forward training/evaluation and return metrics plus per-game predictions."""
+    """Run walk-forward training/evaluation and return metrics plus per-game predictions.
+
+    Any feature groups named in `config.disabled_feature_groups` are dropped here, so the
+    config alone determines the ablation. The CLI scripts also drop them before building the
+    config (to log and record exactly what went away); dropping again is a no-op.
+    """
     np.random.seed(config.random_seed)  # noqa: NPY002 (legacy for reproducibility)
+    if config.disabled_feature_groups:
+        group_columns = resolve_feature_group_columns(
+            list(df.columns), config.disabled_feature_groups
+        )
+        if group_columns:
+            log.info(
+                "Dropping %d columns for disabled feature groups: %s",
+                len(group_columns),
+                list(config.disabled_feature_groups),
+            )
+            df = df.drop(columns=group_columns)
     df = filter_regular_season(df, include_postseason=config.include_postseason)
     target_columns = ml_model.get_target_columns(df)
     df = df.dropna(subset=list(target_columns)).copy()

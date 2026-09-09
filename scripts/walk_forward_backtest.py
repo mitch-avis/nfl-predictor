@@ -53,6 +53,13 @@ def _trend_feature_columns(df: pd.DataFrame) -> list[str]:
     return sorted(col for col in drop_columns if col in df.columns)
 
 
+def _parse_feature_groups(raw: str | None) -> tuple[str, ...]:
+    """Parse a comma-separated feature group list into a tuple of stripped, non-empty names."""
+    if not raw:
+        return ()
+    return tuple(name.strip() for name in raw.split(",") if name.strip())
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run walk-forward backtests.")
     parser.add_argument(
@@ -192,6 +199,15 @@ def _parse_args() -> argparse.Namespace:
         help="Drop trend + season-phase features for ablation comparisons.",
     )
     parser.add_argument(
+        "--disable-feature-groups",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated feature group names to drop for ablation comparisons "
+            "(e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS."
+        ),
+    )
+    parser.add_argument(
         "--xgb-tree-method",
         type=str,
         default=None,
@@ -237,6 +253,20 @@ def main() -> None:
             len(drop_columns),
         )
 
+    disabled_feature_groups = _parse_feature_groups(args.disable_feature_groups)
+    dropped_feature_group_columns: list[str] = []
+    if disabled_feature_groups:
+        dropped_feature_group_columns = walk_forward.resolve_feature_group_columns(
+            list(df.columns), disabled_feature_groups
+        )
+        if dropped_feature_group_columns:
+            df = df.drop(columns=dropped_feature_group_columns)
+        log.info(
+            "Feature group ablation enabled for %s; dropped %d columns.",
+            list(disabled_feature_groups),
+            len(dropped_feature_group_columns),
+        )
+
     market_prob_weight = args.market_prob_weight
     if market_prob_weight is None:
         market_prob_weight = args.market_prob_blend
@@ -268,6 +298,7 @@ def main() -> None:
         market_prob_blend_method=args.market_prob_blend_method,
         win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
         disable_pruning=bool(args.disable_pruning),
+        disabled_feature_groups=disabled_feature_groups,
         xgb_params_overrides=xgb_overrides or None,
     )
 
@@ -287,6 +318,9 @@ def main() -> None:
     config_payload["disable_trend_features"] = bool(args.disable_trend_features)
     if args.disable_trend_features:
         config_payload["dropped_trend_columns"] = drop_columns
+    config_payload["disabled_feature_groups"] = list(disabled_feature_groups)
+    if disabled_feature_groups:
+        config_payload["dropped_feature_group_columns"] = dropped_feature_group_columns
     config_payload.update(results.get("resolved_settings", {}))
     if "resolved_eval_seasons" in results:
         config_payload["resolved_eval_seasons"] = results["resolved_eval_seasons"]

@@ -143,7 +143,23 @@ def _parse_args() -> argparse.Namespace:
         default=False,
         help="Whether to train quantile models (slow).",
     )
+    parser.add_argument(
+        "--disable-feature-groups",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated feature group names to drop for ablation comparisons "
+            "(e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS."
+        ),
+    )
     return parser.parse_args()
+
+
+def _parse_feature_groups(raw: str | None) -> tuple[str, ...]:
+    """Parse a comma-separated feature group list into a tuple of stripped, non-empty names."""
+    if not raw:
+        return ()
+    return tuple(name.strip() for name in raw.split(",") if name.strip())
 
 
 def _run_one(
@@ -166,6 +182,7 @@ def _run_one(
     xgb_params_overrides: dict[str, Any],
     early_stopping_rounds: int,
     include_quantiles: bool,
+    disabled_feature_groups: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     cfg = walk_forward.WalkForwardConfig(
         eval_seasons=None,
@@ -189,6 +206,7 @@ def _run_one(
         feature_end="home_moneyline",
         early_stopping_rounds=early_stopping_rounds,
         xgb_params_overrides=xgb_params_overrides,
+        disabled_feature_groups=disabled_feature_groups,
     )
 
     out = walk_forward.run_walk_forward_backtest(df, cfg)
@@ -236,6 +254,19 @@ def main() -> int:
 
     log.info("Loading %s", args.data_path)
     df = pd.read_csv(args.data_path)
+
+    disabled_feature_groups = _parse_feature_groups(args.disable_feature_groups)
+    if disabled_feature_groups:
+        dropped_feature_group_columns = walk_forward.resolve_feature_group_columns(
+            list(df.columns), disabled_feature_groups
+        )
+        if dropped_feature_group_columns:
+            df = df.drop(columns=dropped_feature_group_columns)
+        log.info(
+            "Feature group ablation enabled for %s; dropped %d columns.",
+            list(disabled_feature_groups),
+            len(dropped_feature_group_columns),
+        )
 
     xgb_params_overrides: dict[str, Any] = {"verbosity": 0}
     if args.n_estimators is not None:
@@ -306,6 +337,7 @@ def main() -> int:
                             xgb_params_overrides=xgb_params_overrides,
                             early_stopping_rounds=args.early_stopping_rounds,
                             include_quantiles=bool(args.include_quantiles),
+                            disabled_feature_groups=disabled_feature_groups,
                         )
                         rows.append(row)
 

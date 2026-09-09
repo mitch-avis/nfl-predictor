@@ -39,6 +39,19 @@ def test_betting_pipeline_resolve_predict_path_prefers_latest_week(tmp_path: Pat
     assert resolved == week_11
 
 
+def test_betting_pipeline_resolve_predict_path_prefers_latest_season(tmp_path: Path) -> None:
+    """When seasons differ, the newest season should win even if its week number is lower."""
+    predict_dir = tmp_path / "predict"
+    predict_dir.mkdir()
+    week_22 = predict_dir / "week_22_games_to_predict.csv"
+    week_01 = predict_dir / "week_01_games_to_predict.csv"
+    week_22.write_text("season,week\n2025,22\n", encoding="utf-8")
+    week_01.write_text("season,week\n2026,1\n", encoding="utf-8")
+
+    resolved = betting_pipeline._resolve_predict_path(None, tmp_path)
+    assert resolved == week_01
+
+
 def test_betting_pipeline_dry_run_exits_successfully(tmp_path: Path) -> None:
     """The betting pipeline script should support a dry run without heavy work."""
     missing_data_path = tmp_path / "missing_completed_games_ml.csv"

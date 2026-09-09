@@ -56,6 +56,24 @@ Rules that are always enforced:
   | both off | `0.2320` | `0.7493` | `0.6736` | `9.9772` | `10.0823` | `0.1237` |
   | strength on, prior blend off | `0.2277` | `0.7492` | `0.6847` | `9.8838` | `10.1043` | `0.1315` |
 
+  The benchmark starts at week 3 (`--wf-start-week 3`). A separate run from week 1
+  (`models/wf_strength_2023_2025_from_week1/`) measured the two weeks it skips, over 48 games
+  each:
+
+  | window | Brier | log loss | pick acc | margin MAE |
+  | --- | --- | --- | --- | --- |
+  | week 1 only | `0.2134` | `0.6151` | `0.6042` | `9.3640` |
+  | week 2 only | `0.2445` | `0.6846` | `0.5208` | `8.7838` |
+  | weeks 3-18 | `0.2277` | `0.7431` | `0.6958` | `9.9006` |
+
+  Week 1 is the **best-calibrated** week in the season: it runs entirely on the regressed prior
+  season, and both Brier and log loss beat the mid-season benchmark. Its lower pick accuracy is the
+  model correctly hedging toward 0.5 rather than being confidently wrong. **Week 2 is the weak
+  week** (`0.5208` accuracy, barely a coin flip), because season-to-date features there are
+  unshrunk one-game means: `games_played` is `17` in week 1 (the regressed prior) but `1` in week 2.
+  Keep week 3 as the headline benchmark so the recorded arms stay comparable, and re-check weeks
+  1-2 whenever early-season feature handling changes.
+
   Report new feature work against these, and only within one dataset build and code version. The
   strength group is the first family in this workstream to improve Brier and log loss rather than
   trade them for margin MAE; margin MAE and ECE do **not** improve alongside them. The early-season

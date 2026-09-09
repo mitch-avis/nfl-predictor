@@ -202,6 +202,43 @@ Open follow-ups inherited from this milestone:
 
 ---
 
+## Early-season shrinkage - highest-priority defect found 2026-09-09
+
+A walk-forward from week 1 (`models/wf_strength_2023_2025_from_week1/`, 48 games per week over
+`2023-2025`) shows week 2 is the weakest week of the season, and week 1 is one of the strongest:
+
+| window | Brier | log loss | pick acc | margin MAE |
+| --- | --- | --- | --- | --- |
+| week 1 only | `0.2134` | `0.6151` | `0.6042` | `9.3640` |
+| week 2 only | `0.2445` | `0.6846` | `0.5208` | `8.7838` |
+| weeks 3-18 | `0.2277` | `0.7431` | `0.6958` | `9.9006` |
+
+Week 1 runs entirely on the previous season regressed toward the league mean, and it beats the
+mid-season benchmark on both probability metrics. Week 2 runs on **one game with no shrinkage at
+all** and drops to `0.5208` pick accuracy.
+
+Root cause, verified: `aggregate_team_stats_to_week` takes a plain mean over prior in-season games,
+and `regress_to_mean` is only applied through the `teams_needing_fallback` path in `process_week`,
+which fires only when a team has *zero* in-season games. So `away_games_played` is `17` in week 1
+(the regressed prior season) and `1` in week 2. The resulting features are wildly overdispersed:
+`away_success_rate` in 2024 has std `0.0807` and range `0.250-0.569` at week 2, against std `0.0359`
+and range `0.375-0.490` at week 16.
+
+This is **not** specific to the schedule-adjusted strength family, whose own prior blend already
+sits at 80% prior in week 2. It affects every season-to-date feature family at once.
+
+Recommended fix: replace the all-or-nothing week-1 fallback with continuous shrinkage toward the
+regressed prior season across the early weeks, using the same `games / (games + K)` form the
+strength snapshot already uses, so week 2 is mostly prior and the in-season sample takes over as it
+accumulates. Land it as an ablatable switch and measure it with `--wf-start-week 1`, reporting weeks
+1, 2 and 3-18 separately; the aggregate hides the effect because 2 of 18 weeks change.
+
+Deliberately **not** shipped on 2026-09-09: it rewrites the semantics of every season-to-date
+feature and needs a full ETL rebuild plus a week-1 walk-forward to validate, which could not be done
+safely before a pick deadline. It also cannot improve week 1, which already uses the regressed prior.
+
+---
+
 ## Milestone 43 - Power rankings measure current-season strength (rewritten 2026-09-09)
 
 Goal: a Week `N` ranking reflects how strong teams are going into week `N`. Verified current

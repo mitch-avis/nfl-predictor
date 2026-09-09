@@ -5,6 +5,7 @@ import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
+from nfl_predictor.utils.polars import teamrankings
 
 
 def test_combine_stats_creates_combined_and_drops() -> None:
@@ -167,3 +168,159 @@ def test_build_final_column_order_has_no_duplicates_and_includes_lines_results()
 
     for col in (*constants.LINES_COLUMNS, *constants.RESULT_COLUMNS):
         assert col in final_order
+
+
+def test_get_pbp_columns_returns_a_copy_of_the_published_contract() -> None:
+    """Play-by-play stat accessor returns a defensive copy of the constant."""
+    cols = polars_utils.get_pbp_columns()
+
+    assert cols == constants.PBP_STATS
+    cols.append("mutated")
+    assert "mutated" not in constants.PBP_STATS
+
+
+def test_build_final_column_order_publishes_pbp_stats_without_opponent_mirrors() -> None:
+    """Every play-by-play stat is published per team and as a diff, with no generic mirror."""
+    final_order = polars_utils.build_final_column_order()
+    ordered = set(final_order)
+
+    for stat in constants.PBP_STATS:
+        assert f"away_{stat}" in ordered
+        assert f"home_{stat}" in ordered
+        assert f"{stat}_diff" in ordered
+        # The allowed columns are explicit, so the generic opponent mirror must not exist.
+        assert f"away_opponent_{stat}" not in ordered
+        assert f"home_opponent_{stat}" not in ordered
+        assert f"opponent_{stat}_diff" not in ordered
+
+    assert len(final_order) == len(set(final_order))
+
+
+def test_get_stats_for_diff_includes_pbp_stats() -> None:
+    """Differentials are calculated for the published play-by-play stats."""
+    stats = polars_utils.get_stats_for_diff()
+
+    for stat in constants.PBP_STATS:
+        assert stat in stats
+    assert len(stats) == len(set(stats))
+
+
+def test_pbp_derived_rates_are_ratios_of_sums() -> None:
+    """Play-by-play rates divide season-to-date mean counts, which equals a ratio of sums.
+
+    Aggregation stores the mean per-game count, so mean(numerator) / mean(denominator)
+    equals sum(numerator) / sum(denominator) because the game count cancels.
+    """
+    # Two games: 60 and 40 offensive snaps, 6.0 and 2.0 pass EPA.
+    # Ratio of sums = 8.0 / 100 = 0.08; the aggregated means are 50 snaps and 4.0 EPA.
+    agg = pl.DataFrame(
+        {
+            "team_abbr": ["AAA"],
+            "offensive_snaps": [50.0],
+            "defensive_snaps": [60.0],
+            "dropbacks": [20.0],
+            "carries": [25.0],
+            "dropbacks_allowed": [30.0],
+            "carries_allowed": [20.0],
+            "pass_epa_sum": [4.0],
+            "rush_epa_sum": [-2.0],
+            "pass_epa_allowed_sum": [3.0],
+            "rush_epa_allowed_sum": [-1.5],
+            "pass_success_count": [9.0],
+            "rush_success_count": [10.0],
+            "pass_success_allowed_count": [12.0],
+            "rush_success_allowed_count": [8.0],
+            "explosive_pass_count": [2.0],
+            "explosive_rush_count": [1.0],
+            "explosive_pass_allowed_count": [3.0],
+            "explosive_rush_allowed_count": [2.0],
+            "stuffed_rush_count": [5.0],
+            "stuffed_rush_allowed_count": [4.0],
+            "early_down_plays": [30.0],
+            "early_down_passes": [15.0],
+            "st_epa_for": [1.5],
+            "st_epa_against": [0.5],
+            "st_plays": [10.0],
+        }
+    )
+
+    out = teamrankings._compute_derived_metrics(agg)
+    row = out.row(0, named=True)
+
+    assert row["off_pass_epa_per_snap"] == pytest.approx(4.0 / 50.0)
+    assert row["off_rush_epa_per_snap"] == pytest.approx(-2.0 / 50.0)
+    assert row["def_pass_epa_allowed_per_snap"] == pytest.approx(3.0 / 60.0)
+    assert row["def_rush_epa_allowed_per_snap"] == pytest.approx(-1.5 / 60.0)
+    assert row["epa_per_dropback"] == pytest.approx(4.0 / 20.0)
+    assert row["epa_per_carry"] == pytest.approx(-2.0 / 25.0)
+    assert row["epa_per_dropback_allowed"] == pytest.approx(3.0 / 30.0)
+    assert row["epa_per_carry_allowed"] == pytest.approx(-1.5 / 20.0)
+    assert row["pass_success_rate"] == pytest.approx(9.0 / 20.0)
+    assert row["rush_success_rate"] == pytest.approx(10.0 / 25.0)
+    assert row["pass_success_rate_allowed"] == pytest.approx(12.0 / 30.0)
+    assert row["rush_success_rate_allowed"] == pytest.approx(8.0 / 20.0)
+    assert row["success_rate"] == pytest.approx(19.0 / 45.0)
+    assert row["success_rate_allowed"] == pytest.approx(20.0 / 50.0)
+    assert row["explosive_pass_rate"] == pytest.approx(2.0 / 20.0)
+    assert row["explosive_rush_rate"] == pytest.approx(1.0 / 25.0)
+    assert row["explosive_pass_rate_allowed"] == pytest.approx(3.0 / 30.0)
+    assert row["explosive_rush_rate_allowed"] == pytest.approx(2.0 / 20.0)
+    assert row["stuffed_rush_rate"] == pytest.approx(5.0 / 25.0)
+    assert row["stuffed_rush_rate_allowed"] == pytest.approx(4.0 / 20.0)
+    assert row["early_down_pass_rate"] == pytest.approx(15.0 / 30.0)
+    assert row["epa_margin_per_play"] == pytest.approx((4.0 - 2.0) / 50.0 - (3.0 - 1.5) / 60.0)
+    assert row["st_epa_margin_per_play"] == pytest.approx((1.5 - 0.5) / 10.0)
+
+
+def test_pbp_derived_rates_are_null_on_zero_denominators() -> None:
+    """A zero denominator yields a null rate rather than a divide-by-zero or a fake zero."""
+    agg = pl.DataFrame(
+        {
+            "team_abbr": ["AAA"],
+            "offensive_snaps": [0.0],
+            "defensive_snaps": [0.0],
+            "dropbacks": [0.0],
+            "carries": [0.0],
+            "dropbacks_allowed": [0.0],
+            "carries_allowed": [0.0],
+            "pass_epa_sum": [0.0],
+            "rush_epa_sum": [0.0],
+            "pass_epa_allowed_sum": [0.0],
+            "rush_epa_allowed_sum": [0.0],
+            "pass_success_count": [0.0],
+            "rush_success_count": [0.0],
+            "pass_success_allowed_count": [0.0],
+            "rush_success_allowed_count": [0.0],
+            "explosive_pass_count": [0.0],
+            "explosive_rush_count": [0.0],
+            "explosive_pass_allowed_count": [0.0],
+            "explosive_rush_allowed_count": [0.0],
+            "stuffed_rush_count": [0.0],
+            "stuffed_rush_allowed_count": [0.0],
+            "early_down_plays": [0.0],
+            "early_down_passes": [0.0],
+            "st_epa_for": [0.0],
+            "st_epa_against": [0.0],
+            "st_plays": [0.0],
+        }
+    )
+
+    out = teamrankings._compute_derived_metrics(agg)
+    row = out.row(0, named=True)
+
+    for stat in constants.PBP_STATS:
+        if stat in ("offensive_snaps", "defensive_snaps"):
+            continue
+        assert row[stat] is None, f"{stat} should be null when its denominator is zero"
+
+
+def test_pbp_derived_rates_are_null_when_source_counts_are_missing() -> None:
+    """A season without play-by-play still emits every rate column, as nulls."""
+    agg = pl.DataFrame({"team_abbr": ["AAA"], "points_scored": [21.0]})
+
+    out = teamrankings._compute_derived_metrics(agg)
+    row = out.row(0, named=True)
+
+    for stat in constants.PBP_STATS:
+        assert stat in out.columns, f"{stat} missing from the invariant schema"
+        assert row[stat] is None

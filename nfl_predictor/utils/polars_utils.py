@@ -13,12 +13,13 @@ from typing import Any
 from nfl_predictor.utils.polars import features as _features
 from nfl_predictor.utils.polars import finalize as _finalize
 from nfl_predictor.utils.polars import loaders as _loaders
+from nfl_predictor.utils.polars import pbp as _pbp
 from nfl_predictor.utils.polars import teamrankings as _teamrankings
 
 
 def __getattr__(name: str) -> Any:
     """Forward attribute access to the split implementation modules."""
-    for module in (_features, _loaders, _teamrankings, _finalize):
+    for module in (_features, _loaders, _pbp, _teamrankings, _finalize):
         try:
             return getattr(module, name)
         except AttributeError:
@@ -28,6 +29,6 @@ def __getattr__(name: str) -> Any:
 
 def __dir__() -> list[str]:
     names: set[str] = set(globals().keys())
-    for module in (_features, _loaders, _teamrankings, _finalize):
+    for module in (_features, _loaders, _pbp, _teamrankings, _finalize):
         names.update(dir(module))
     return sorted(names)

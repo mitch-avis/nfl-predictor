@@ -408,6 +408,170 @@ def aggregate_team_stats_to_week(
     return agg_df
 
 
+# Play-by-play rate specs: (output name, numerator column, denominator column).
+# Each rate is a ratio of season-to-date sums. `aggregate_team_stats_to_week` stores the
+# mean per-game count, and mean(numerator) / mean(denominator) equals
+# sum(numerator) / sum(denominator) because the game count cancels, so dividing the means
+# is the same number as the ratio of sums and never a mean of per-game rates.
+_PBP_SIMPLE_RATE_SPECS: tuple[tuple[str, str, str], ...] = (
+    ("off_pass_epa_per_snap", "pass_epa_sum", "offensive_snaps"),
+    ("off_rush_epa_per_snap", "rush_epa_sum", "offensive_snaps"),
+    ("def_pass_epa_allowed_per_snap", "pass_epa_allowed_sum", "defensive_snaps"),
+    ("def_rush_epa_allowed_per_snap", "rush_epa_allowed_sum", "defensive_snaps"),
+    ("epa_per_dropback", "pass_epa_sum", "dropbacks"),
+    ("epa_per_carry", "rush_epa_sum", "carries"),
+    ("epa_per_dropback_allowed", "pass_epa_allowed_sum", "dropbacks_allowed"),
+    ("epa_per_carry_allowed", "rush_epa_allowed_sum", "carries_allowed"),
+    ("pass_success_rate", "pass_success_count", "dropbacks"),
+    ("rush_success_rate", "rush_success_count", "carries"),
+    ("pass_success_rate_allowed", "pass_success_allowed_count", "dropbacks_allowed"),
+    ("rush_success_rate_allowed", "rush_success_allowed_count", "carries_allowed"),
+    ("explosive_pass_rate", "explosive_pass_count", "dropbacks"),
+    ("explosive_rush_rate", "explosive_rush_count", "carries"),
+    ("explosive_pass_rate_allowed", "explosive_pass_allowed_count", "dropbacks_allowed"),
+    ("explosive_rush_rate_allowed", "explosive_rush_allowed_count", "carries_allowed"),
+    ("stuffed_rush_rate", "stuffed_rush_count", "carries"),
+    ("stuffed_rush_rate_allowed", "stuffed_rush_allowed_count", "carries_allowed"),
+    ("early_down_pass_rate", "early_down_passes", "early_down_plays"),
+)
+
+
+def _safe_ratio(numerator: pl.Expr, denominator: pl.Expr, output: str) -> pl.Expr:
+    """Build a null-on-zero-denominator ratio expression.
+
+    Args:
+        numerator: Expression for the numerator
+        denominator: Expression for the denominator
+        output: Output column name
+
+    Returns:
+        Polars expression aliased to `output`, null where the denominator is not positive
+
+    """
+    return (
+        pl.when(denominator > 0)
+        .then(numerator / denominator)
+        .otherwise(None)
+        .cast(pl.Float64)
+        .alias(output)
+    )
+
+
+def _compute_pbp_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
+    """Compute play-by-play rate metrics from aggregated per-game counts.
+
+    Rates are ratios of season-to-date sums, never means of per-game rates. Because
+    aggregation stores the mean per-game count, dividing two means is exactly the ratio of
+    the underlying sums (the game count cancels).
+
+    Formulas:
+        - off_pass_epa_per_snap = pass_epa_sum / offensive_snaps
+        - off_rush_epa_per_snap = rush_epa_sum / offensive_snaps
+        - def_pass_epa_allowed_per_snap = pass_epa_allowed_sum / defensive_snaps
+        - def_rush_epa_allowed_per_snap = rush_epa_allowed_sum / defensive_snaps
+        - epa_per_dropback = pass_epa_sum / dropbacks
+        - epa_per_carry = rush_epa_sum / carries
+        - epa_per_dropback_allowed = pass_epa_allowed_sum / dropbacks_allowed
+        - epa_per_carry_allowed = rush_epa_allowed_sum / carries_allowed
+        - pass_success_rate = pass_success_count / dropbacks
+        - rush_success_rate = rush_success_count / carries
+        - pass_success_rate_allowed = pass_success_allowed_count / dropbacks_allowed
+        - rush_success_rate_allowed = rush_success_allowed_count / carries_allowed
+        - success_rate = (pass_success_count + rush_success_count) / (dropbacks + carries)
+        - success_rate_allowed = (pass_success_allowed_count + rush_success_allowed_count)
+          / (dropbacks_allowed + carries_allowed)
+        - explosive_pass_rate = explosive_pass_count / dropbacks
+        - explosive_rush_rate = explosive_rush_count / carries
+        - explosive_pass_rate_allowed = explosive_pass_allowed_count / dropbacks_allowed
+        - explosive_rush_rate_allowed = explosive_rush_allowed_count / carries_allowed
+        - stuffed_rush_rate = stuffed_rush_count / carries
+        - stuffed_rush_rate_allowed = stuffed_rush_allowed_count / carries_allowed
+        - early_down_pass_rate = early_down_passes / early_down_plays
+        - epa_margin_per_play = (pass_epa_sum + rush_epa_sum) / offensive_snaps
+          - (pass_epa_allowed_sum + rush_epa_allowed_sum) / defensive_snaps
+        - st_epa_margin_per_play = (st_epa_for - st_epa_against) / st_plays
+
+    Every rate is null when its denominator is zero or when its source counts are absent,
+    so a season without play-by-play still emits the invariant schema.
+
+    Args:
+        agg_df: DataFrame with averaged per-game play-by-play counts
+
+    Returns:
+        DataFrame with the play-by-play rate columns added
+
+    """
+    available = set(agg_df.columns)
+    derived: list[pl.Expr] = []
+
+    for output, numerator, denominator in _PBP_SIMPLE_RATE_SPECS:
+        if numerator in available and denominator in available:
+            derived.append(_safe_ratio(pl.col(numerator), pl.col(denominator), output))
+
+    # Overall success rate combines the pass and rush components on both sides.
+    success_specs = (
+        ("success_rate", ("pass_success_count", "rush_success_count"), ("dropbacks", "carries")),
+        (
+            "success_rate_allowed",
+            ("pass_success_allowed_count", "rush_success_allowed_count"),
+            ("dropbacks_allowed", "carries_allowed"),
+        ),
+    )
+    for output, numerators, denominators in success_specs:
+        if available.issuperset(numerators) and available.issuperset(denominators):
+            derived.append(
+                _safe_ratio(
+                    pl.col(numerators[0]) + pl.col(numerators[1]),
+                    pl.col(denominators[0]) + pl.col(denominators[1]),
+                    output,
+                )
+            )
+
+    # EPA margin per play: offensive EPA per offensive snap minus EPA allowed per
+    # defensive snap, so pace on either side of the ball cannot distort the margin.
+    margin_sources = (
+        "pass_epa_sum",
+        "rush_epa_sum",
+        "offensive_snaps",
+        "pass_epa_allowed_sum",
+        "rush_epa_allowed_sum",
+        "defensive_snaps",
+    )
+    if available.issuperset(margin_sources):
+        offense = pl.when(pl.col("offensive_snaps") > 0).then(
+            (pl.col("pass_epa_sum") + pl.col("rush_epa_sum")) / pl.col("offensive_snaps")
+        )
+        defense = pl.when(pl.col("defensive_snaps") > 0).then(
+            (pl.col("pass_epa_allowed_sum") + pl.col("rush_epa_allowed_sum"))
+            / pl.col("defensive_snaps")
+        )
+        derived.append((offense - defense).cast(pl.Float64).alias("epa_margin_per_play"))
+
+    # Special-teams EPA margin per special-teams play.
+    if available.issuperset(("st_epa_for", "st_epa_against", "st_plays")):
+        derived.append(
+            _safe_ratio(
+                pl.col("st_epa_for") - pl.col("st_epa_against"),
+                pl.col("st_plays"),
+                "st_epa_margin_per_play",
+            )
+        )
+
+    if derived:
+        agg_df = agg_df.with_columns(derived)
+
+    # Keep the schema invariant when a season has no play-by-play source at all.
+    missing = [
+        pl.lit(None, dtype=pl.Float64).alias(stat)
+        for stat in constants.PBP_STATS
+        if stat not in agg_df.columns
+    ]
+    if missing:
+        agg_df = agg_df.with_columns(missing)
+
+    return agg_df
+
+
 def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
     """Compute derived ratio metrics from aggregated team statistics.
 
@@ -423,6 +587,7 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
         - points_per_play_margin: points_per_play - opponent_points_per_play
         - penalty_yards_per_penalty: penalty_yards / penalties
         - opponent_penalty_yards_per_penalty: opponent equivalent
+        - the play-by-play rate family (see `_compute_pbp_derived_metrics`)
 
     Args:
         agg_df: DataFrame with averaged team statistics
@@ -536,7 +701,25 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
     if derived_cols:
         agg_df = agg_df.with_columns(derived_cols)
 
-    return agg_df
+    return _compute_pbp_derived_metrics(agg_df)
+
+
+def recompute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
+    """Recompute derived ratio metrics after the aggregated counts have been rewritten.
+
+    Regression toward the league mean rewrites the summed components a ratio is built
+    from, so every derived rate has to be recomputed from the regressed sums. Without
+    this the fallback would publish counts regressed toward the mean alongside ratios
+    still computed from the unregressed values.
+
+    Args:
+        agg_df: Aggregated team statistics whose counts have been modified
+
+    Returns:
+        DataFrame with the derived ratio metrics recomputed
+
+    """
+    return _compute_derived_metrics(agg_df)
 
 
 def calculate_league_means(team_stats_df: pl.DataFrame, season: int) -> dict[str, float]:
@@ -620,6 +803,16 @@ def get_stat_columns() -> list[str]:
 
     """
     return constants.NFLREADPY_STATS.copy()
+
+
+def get_pbp_columns() -> list[str]:
+    """Get the play-by-play derived stat column names to publish.
+
+    Returns:
+        List of stat column names
+
+    """
+    return constants.PBP_STATS.copy()
 
 
 def get_elo_columns() -> list[str]:
@@ -847,6 +1040,9 @@ def get_stats_for_diff() -> list[str]:
 
     # nflreadpy stats (base stats)
     all_stats.extend(get_stat_columns())
+
+    # Play-by-play derived stats (allowed variants are explicit, so no opponent mirror)
+    all_stats.extend(get_pbp_columns())
 
     # Opponent stats (excluding duplicates)
     excluded = set(constants.EXCLUDE_FROM_OPPONENT_STATS)

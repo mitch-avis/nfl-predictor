@@ -10,6 +10,7 @@ from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars.teamrankings import (
     get_elo_columns,
+    get_pbp_columns,
     get_stat_columns,
     get_tr_columns,
 )
@@ -29,7 +30,8 @@ def build_final_column_order() -> list[str]:
     8. Result columns
 
     Note: Deduplicates columns and excludes opponent stats that are duplicates.
-    Opponent versions are only generated for nflreadpy stats, not for ELO or TR columns.
+    Opponent versions are only generated for nflreadpy stats, not for ELO, TR, or
+    play-by-play columns.
 
     Returns:
         Ordered list of column names
@@ -44,13 +46,17 @@ def build_final_column_order() -> list[str]:
     elo_cols = get_elo_columns()
     tr_cols = get_tr_columns()
     nflreadpy_stats = get_stat_columns()
+    pbp_stats = get_pbp_columns()
 
-    # Build the base stat columns (non-opponent): ELO + TR + trends + nflreadpy stats
+    # Build the base stat columns (non-opponent): ELO + TR + trends + nflreadpy + PBP stats.
+    # Play-by-play stats name their allowed variants explicitly, so they never receive the
+    # generic opponent_ mirror generated below for nflreadpy stats.
     base_stats = []
     base_stats.extend(elo_cols)
     base_stats.extend(tr_cols)
     base_stats.extend(constants.TREND_FEATURE_COLUMNS)
     base_stats.extend(nflreadpy_stats)
+    base_stats.extend(pbp_stats)
 
     # Deduplicate
     seen = set()

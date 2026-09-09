@@ -6,6 +6,93 @@ checks from the relevant section.
 
 ---
 
+## Milestone 45 - Play-by-play foundation + per-snap team EPA families
+
+Completed 2026-09-09.
+
+Brought nflreadpy play-by-play into the Polars ETL with per-season Parquet caching, published a
+per-snap EPA / success / explosive / special-teams feature family for every matchup, and measured
+it under walk-forward with a dedicated ablation switch.
+
+### What landed
+
+- Cached PBP loader (`loaders.load_pbp`): one season at a time, guarded selection of
+  `constants.PBP_COLUMNS`, regular-season filter, team normalization, and a
+  `pbp_<season>_<reg|all>.parquet` cache. Historical failures raise; current-season failures
+  degrade to cache or continue.
+- New `nfl_predictor/utils/polars/pbp.py`: `aggregate_pbp_team_game_stats` produces one row per
+  `(season, week, team_abbr, opponent_abbr)` of counts and sums only, plus the situational counts
+  formerly in the unused `loaders.aggregate_pbp_stats` (now removed).
+- 25 published stats (`constants.PBP_STATS`) derived in `_compute_pbp_derived_metrics` as ratios
+  of season-to-date sums. Final schema grew from 384 to 465 columns (75 play-by-play + 6 for the
+  newly published `rushing_epa`).
+- `--disable-feature-groups` on `walk_forward_backtest.py` and `wf_compare.py`, resolved through
+  `constants.FEATURE_GROUP_COLUMN_MARKERS`; `WalkForwardConfig.disabled_feature_groups` is
+  authoritative inside `run_walk_forward_backtest` itself.
+
+### Validation
+
+- ETL rebuild `1999-2026`: 1,225,182 regular-season plays, 13,928 team-game records,
+  `collect_all_data` 316s (play-by-play load 0.5s warm / ~16s cold for 27 seasons, aggregation
+  0.35s). `completed_games_ml.csv` = 7260 rows x 465 columns covering `1999-2025`;
+  `predict/week_01_games_to_predict.csv` = 16 rows.
+- Season 2026 play-by-play is not published pre-kickoff; the loader degraded with a warning and the
+  run completed.
+- Leakage audit passed: 430 features, 7260 rows, 0 failures, 0 warnings, 0 flagged columns.
+- Null rate for the family is 0 for every season except 4 rows of 7260 (0.055%): the 2002 Texans'
+  first game and three 1999 games where a team had no prior in-season game and no 1998 season is
+  loaded. Those emit nulls by design.
+- League means are era-appropriate: EPA per dropback +0.0017 (1999-2000) rising to +0.0495
+  (2020-2025); success rate 0.389 rising to 0.438; early-down pass rate 0.511 rising to 0.543;
+  ~62-65 offensive snaps per game throughout.
+- Allowed columns equal the opponent's offensive columns exactly on all 544 real 2024 team-games.
+
+### Walk-forward (2023-2025, 720 games, 16 weeks per season)
+
+| metric | PBP on | PBP off | reference |
+| --- | --- | --- | --- |
+| Brier | 0.2317 | 0.2314 | 0.2312 |
+| log loss | 0.7455 | 0.7440 | 0.7352 |
+| pick accuracy | 0.6778 | 0.6708 | 0.6833 |
+| margin MAE | 9.9178 | 9.9977 | 9.8954 |
+| total MAE | 10.1295 | 10.1164 | 10.1021 |
+| reliability ECE | 0.1244 | 0.1269 | 0.1308 |
+
+The "off" arm dropped exactly 75 columns. Per season, PBP-on has the better margin MAE in 3 of 3
+seasons (-0.131, -0.000, -0.108) but the better Brier in only 1 of 3. **The family is not a win on
+the primary selection metric**: Brier and log loss are marginally worse with it on. It improves
+margin MAE consistently and calibration slightly.
+
+Two controls were run to interpret the gap against the recorded reference:
+
+- The reference default config with the group dropped reproduced the "off" arm exactly, so
+  `--xgb-tree-method hist` accounts for none of the difference.
+- **The recorded reference is not reproducible on this machine.** Re-running the default config
+  against the untouched pre-change dataset (`7260` rows x `384` columns, backed up before the
+  rebuild) gives Brier `0.2300`, log loss `0.7501`, pick accuracy `0.6833`, margin MAE `9.9705`,
+  total MAE `10.1229`, ECE `0.1331` - a *larger* log-loss gap from the recorded `0.7352` than the
+  rebuilt dataset produces. The recorded reference therefore came from a different configuration or
+  environment, and this milestone's dataset changes did not regress it. Only the on/off comparison
+  above, run on one dataset with one code version, is a valid comparison.
+
+### Defects found and fixed during the milestone
+
+- nflreadpy signals an unavailable current season with `ValueError`, not `ConnectionError`, so the
+  pre-kickoff degrade path never fired and the ETL aborted. Both directions are now pinned by
+  tests.
+- nflverse 1999-2000 play-by-play uses an empty string rather than null for a missing possession
+  team. Those rows formed phantom team-game groups, duplicating the `(season, week, team_abbr)`
+  join key and multiplying `team_stats_df` (1999: 495 -> 526 rows; 2000: 492 -> 526). Snap volumes
+  and `games_played` were understated by up to ~24% for those seasons (max `games_played` read 21
+  in a 16-game season). Fixed at the source, plus a guard so the join can never multiply rows.
+- Two-point conversion tries were counted as dropbacks and carries; the reference excludes them.
+- Derived ratios were computed before the Week-1 regression rewrote their components, so the
+  fallback published regressed counts alongside unregressed ratios. `recompute_derived_metrics`
+  now runs after regression. This also changes the Week-1 values of pre-existing derived metrics
+  (`yards_per_point`, `points_per_play`, `penalty_yards_per_penalty` and their variants).
+
+---
+
 ## Milestone 44 - Preseason 2026 repo hardening and tooling alignment
 
 Completed 2026-06-13.

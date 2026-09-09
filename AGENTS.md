@@ -104,8 +104,9 @@ Rules that are always enforced:
   formatting-only noise.
 - Keep git tags aligned with changelog versions so `.github/workflows/release.yml` can publish or
   update GitHub releases from `CHANGELOG.md`.
-- When committing work, prefer one file per commit, including deletions, unless the user explicitly
-  asks for different commit granularity.
+- When committing work, prefer one logical change per commit for multi-file schema work and one file
+  per commit for all other changes, including deletions, unless the user explicitly asks for
+  different commit granularity.
 
 ## CI Direction
 

@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.3.0] - 2026-09-09
+
+### Changed
+
+- Bump the project version to `0.3.0` for the play-by-play feature release and keep `uv.lock`
+  aligned.
+- Publish `rushing_epa` alongside `passing_epa` and grow the invariant output schema from `384` to
+  `465` columns.
+- Recompute derived ratio metrics after the Week-1 regression rewrites their summed components, so
+  the fallback no longer publishes regressed counts alongside unregressed ratios. This also changes
+  the Week-1 values of `yards_per_point`, `points_per_play`, `penalty_yards_per_penalty`, and their
+  opponent and margin variants.
+- Exclude the gitignored `nfl-sos-ratings` reference symlink from Pyright so `.venv/bin/pyright .`
+  checks this project only.
+
+### Added
+
+- Cache play-by-play per season as `data/cache/nflreadpy/pbp_<season>_<reg|all>.parquet` with the
+  same current-season refresh and non-fatal degrade behavior already used for schedules and team
+  stats.
+- Add `nfl_predictor/utils/polars/pbp.py`, aggregating play-by-play into one row per
+  `(season, week, team_abbr, opponent_abbr)` of counts and sums, including the situational counts
+  previously produced by the unused `loaders.aggregate_pbp_stats`.
+- Publish 25 play-by-play stats (`constants.PBP_STATS`): offensive and allowed EPA per snap, EPA per
+  dropback and per carry, success rates, explosive pass and rush rates, stuffed-run rate, early-down
+  pass rate, snap volume, and special-teams EPA margin per play. Every rate is a ratio of
+  season-to-date sums, and defensive metrics are named explicitly rather than mirrored.
+- Add `--disable-feature-groups` to `scripts/walk_forward_backtest.py` and `scripts/wf_compare.py`,
+  resolved through `constants.FEATURE_GROUP_COLUMN_MARKERS`, with the group also honored inside
+  `run_walk_forward_backtest` so the config alone determines the ablation.
+
+### Removed
+
+- Remove the unused, uncached `loaders.aggregate_pbp_stats` in favor of the new play-by-play module.
+
+### Fixed
+
+- Treat an unavailable current season as non-fatal in the play-by-play loader. nflreadpy raises
+  `ValueError` rather than `ConnectionError` for a season it cannot serve, so a pre-kickoff ETL run
+  aborted instead of degrading.
+- Drop play-by-play rows whose possession team is an empty string. nflverse uses `""` rather than
+  null in 1999 and 2000, which created phantom team-game rows, duplicated the
+  `(season, week, team_abbr)` join key, and multiplied team-stat rows (1999: `495` to `526`;
+  2000: `492` to `526`), understating snap volumes and games played for those seasons. The join now
+  also collapses duplicate keys with a warning so it can never change the row count.
+- Exclude two-point conversion tries from dropbacks and carries so they cannot contaminate the
+  per-attempt EPA and success denominators.
+
 ## [0.2.6] - 2026-06-13
 
 ### Changed

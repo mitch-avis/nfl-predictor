@@ -231,9 +231,6 @@ models/
 **/optuna.db
 *.db
 
-# Agents folder
-.agents/
-
 # Bash history
 .bash_history
 

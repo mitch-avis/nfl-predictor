@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
+import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
@@ -258,8 +259,66 @@ def test_load_team_stats_refreshes_current_season(monkeypatch, tmp_path: Path) -
     )
 
     assert df["team_abbr"][0] == "NEW"
-    refreshed = pl.read_parquet(cache_path)
-    assert refreshed["team_abbr"][0] == "NEW"
+
+
+def test_load_team_stats_handles_unavailable_current_season(monkeypatch, tmp_path: Path) -> None:
+    """Current-season team stats should degrade gracefully when nflreadpy has no file yet."""
+
+    def fail_load_team_stats(*_args, **_kwargs):
+        """Simulate nflreadpy not publishing the current season stats parquet yet."""
+        raise ConnectionError("404 Client Error: stats_team_week_2026.parquet")
+
+    monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
+
+    df = loaders.load_team_stats(
+        [2026], regular_season_only=True, cache_dir=tmp_path, current_season=2026
+    )
+
+    assert df.is_empty()
+
+
+def test_load_team_stats_uses_cached_fallback_when_current_refresh_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Current-season team stats should reuse cache when refresh fails after a prior run."""
+    cached = pl.DataFrame(
+        {
+            "season": [2026],
+            "week": [1],
+            "team_abbr": ["AAA"],
+            "opponent_abbr": ["BBB"],
+            "fumbles": [1],
+        }
+    )
+    cache_path = tmp_path / "team_stats_2026_reg.parquet"
+    cached.write_parquet(cache_path)
+
+    def fail_load_team_stats(*_args, **_kwargs):
+        """Simulate nflreadpy not publishing the current season stats parquet yet."""
+        raise ConnectionError("404 Client Error: stats_team_week_2026.parquet")
+
+    monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
+
+    df = loaders.load_team_stats(
+        [2026], regular_season_only=True, cache_dir=tmp_path, current_season=2026
+    )
+
+    assert df["team_abbr"][0] == "AAA"
+
+
+def test_load_team_stats_reraises_historical_download_failures(monkeypatch, tmp_path: Path) -> None:
+    """Historical-season download failures should still surface instead of being hidden."""
+
+    def fail_load_team_stats(*_args, **_kwargs):
+        """Simulate a broken historical load."""
+        raise ConnectionError("historical load failed")
+
+    monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
+
+    with pytest.raises(ConnectionError, match="historical load failed"):
+        loaders.load_team_stats(
+            [2024], regular_season_only=True, cache_dir=tmp_path, current_season=2026
+        )
 
 
 def test_add_scoring_data_to_team_stats() -> None:

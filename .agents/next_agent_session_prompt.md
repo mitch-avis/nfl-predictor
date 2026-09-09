@@ -21,7 +21,8 @@ report. Subagent claims are not results until you have re-run their tests yourse
 ## 0. Read first, in this order
 
 1. `AGENTS.md` (non-negotiables, command forms, readiness behaviors that must not regress)
-2. `.agents/TODO.md` (Milestone 46 tasks 46.1-46.7, plus the open follow-ups inherited from 45)
+2. `.agents/TODO.md` (Milestone 46 tasks 46.1-46.7, plus the open follow-ups inherited from 45,
+   which are restated with recommendations in section 4 below)
 3. `.agents/ARCHIVE.md`, the Milestone 45 entry (what exists, what it measured, what broke)
 4. `.agents/feature_crosswalk.md` sections 4.4, 4.5, and 6
 5. `README.md`, `CHANGELOG.md`
@@ -96,6 +97,67 @@ Owning modules in this repo:
 - Run subagents in the background and wait for completion notifications. Never predict a pending
   agent's result. Use `SendMessage` to continue an agent that needs a follow-up.
 
+## 4. Follow-ups inherited from the play-by-play milestone
+
+Four known issues were left open when the play-by-play work landed. None of them blocks this
+milestone. Only item D is in scope for this session (it is already Phase 2.6); the rest are recorded
+here so you can act on them if you are in the relevant file anyway, and so a later session does not
+have to rediscover them. Do not expand scope to chase A, B, or C unless the user asks.
+
+### A. `red_zone_tds` credits the wrong team's touchdown
+
+`nfl_predictor/utils/polars/pbp.py` counts a red-zone touchdown as any play inside the opponent's
+20-yard line where a touchdown occurred - it checks that `td_team` is non-null, not *who* scored. A
+red-zone interception returned for a pick-six is therefore credited to the offense that threw it.
+The logic was inherited verbatim from the deleted `loaders.aggregate_pbp_stats`, so it is not a new
+defect, and it is harmless today because the column is computed but never published.
+
+**Recommendation:** change the condition from `td_team is not null` to `td_team == posteam`, and add
+a fixture row where the defending team scores. Do this in Milestone 48, *before* that milestone
+publishes the situational counts - once published, the wrong values reach the model.
+
+### B. Eleven play-by-play counts are computed but never published
+
+`third_down_conversions/fails/attempts`, `fourth_down_*`, `red_zone_plays`, `red_zone_tds`,
+`two_point_attempts`, `two_point_successes`, and `total_plays` are in `constants.PBP_COUNT_COLUMNS`
+but not in `constants.PBP_STATS`. They are aggregated, joined, averaged, and regressed on every ETL
+run, then dropped at `select_final_columns`. Nothing reads them. They exist because Milestone 48
+plans to use them to replace the TeamRankings situational scrape, which only reaches back to 2003
+where play-by-play reaches 1999.
+
+**Recommendation:** leave them if Milestone 48 is coming soon - the overhead is small and removing
+then re-adding them is pure churn. If Milestone 48 slips or is dropped, delete them from
+`PBP_COUNT_COLUMNS` and recompute when they are actually needed.
+
+### C. The play-by-play cache can go stale invisibly
+
+Cache files are named `pbp_<season>_<reg|all>.parquet`. The name encodes the season but nothing
+about *which columns* were selected when the file was written. If a later milestone adds a column to
+`constants.PBP_COLUMNS`, every historical season keeps serving its existing cached file, so the new
+column is silently null for `1999-2025` while looking correct for the refreshed current season. No
+error is raised. Milestone 47 (QB per-dropback families) will almost certainly need more columns,
+which is when this will bite.
+
+**Recommendation:** include a short hash of the selected column list in the cache filename so that
+changing the list naturally misses the cache and triggers a re-download. `load_team_stats` has the
+same weakness, so fix the pattern once in `loaders.py` and both benefit. If you add any column to
+`PBP_COLUMNS` in this session without fixing this, you **must** delete
+`data/cache/nflreadpy/pbp_*.parquet` by hand before rebuilding, or your historical features will be
+null.
+
+### D. The leakage test only covers ordinary mid-season weeks (in scope, Phase 2.6)
+
+`test_future_week_plays_do_not_change_earlier_week_features` proves that rewriting week 3's plays
+cannot change week 2's features. Two other code paths compute features differently and neither has
+an equivalent test: **playoff rows**, which use the full regular season rather than "strictly before
+week N", and the **Week-1 fallback**, which reaches into the previous season. Both are exactly the
+branches where a leak would hide, and this milestone's schedule-adjusted ratings flow through both.
+
+**Recommendation:** add two tests in the same style as the existing one. Perturb a playoff week's
+plays and assert an earlier playoff row is unchanged; perturb current-season plays and assert a
+Week-1 row, which must only ever see the prior season, is unchanged. Write these before wiring the
+snapshot into `process_week`, so they fail for the right reason first.
+
 ## Phase 0 - Baseline (you)
 
 1. Run `.venv/bin/python -m pytest -q` and record the actual pass count and coverage.
@@ -139,7 +201,7 @@ standardized components. Model features stay in raw adjusted units.
 exclusion entries, and a `"strength"` entry in `FEATURE_GROUP_COLUMN_MARKERS`; extend
 `build_final_column_order` and `get_stats_for_diff`.
 2.6 Leakage test: perturb week `N+1` play-by-play and assert week `N` snapshot columns are unchanged.
-Add the playoff-branch and Week-1-fallback perturbation cases that Milestone 45 left uncovered.
+Also add the playoff-branch and Week-1-fallback perturbation cases described in section 4, item D.
 
 Integration checkpoint 2: full gate green, coverage at or above `90%`.
 

@@ -128,7 +128,7 @@ remains **90% or higher**, with **100%** as the aspirational ceiling:
 python -m pytest --cov-fail-under=95
 ```
 
-Current validated local baseline as of 2026-06-13: `406 passed` with `90.01%` coverage.
+Current validated local baseline as of 2026-09-09: `412 passed` with `90.03%` coverage.
 
 ## Data collection (Polars + nflreadpy)
 
@@ -605,8 +605,10 @@ games.
 
 ## Open work
 
-Active tasks (milestones + guardrails) are tracked in `TODO.md`. Completed milestones and past work
-live in `ARCHIVE.md`.
+Active tasks (milestones + guardrails) are tracked in `.agents/TODO.md`, and completed milestones
+live in `.agents/ARCHIVE.md`. Those are local planning files (the `.agents/` directory is
+gitignored). The current direction is stronger feature engineering around play-by-play EPA and
+schedule-adjusted team strength, with XGBoost margin/total remaining the primary model.
 
 ## Development notes
 

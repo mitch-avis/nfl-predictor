@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.4.0] - 2026-09-09
+
+### Changed
+
+- Bump the project version to `0.4.0` for the schedule-adjusted strength release and keep
+  `uv.lock` aligned.
+- Grow the invariant output schema from `465` to `498` columns with the schedule-adjusted team
+  strength family.
+- Emit `is_home` on the play-by-play team-game frame, derived from `posteam_type` on either
+  perspective. It is a context flag rather than a statistic: it is excluded from
+  `constants.PBP_COUNT_COLUMNS` and `constants.PBP_STATS`, added to
+  `constants.EXCLUDE_FROM_OPPONENT_STATS` so no `opponent_is_home` inverse is generated, and
+  dropped by season-to-date aggregation, so it never reaches the published schema.
+
+### Added
+
+- Add `nfl_predictor/utils/polars/adjusted_strength.py`: a NumPy simultaneous ridge
+  (`solve_team_ridge`) estimating one offense and one defense coefficient per team plus a shared
+  home-field term, centered independently per side, with `solve_srs` and an offline
+  `tune_ridge_lambda`. The design is ported from the read-only `nfl-sos-ratings` reference and
+  reproduces it numerically on identical inputs.
+- Add `nfl_predictor/utils/polars/schedule_strength.py`: `sos_played_adj` / `sos_remaining_adj`
+  from opponents' pre-week composite, and `sos_played_raw`, the one-hop companion that profiles
+  each faced opponent from only its games against the rest of the league, excluding every
+  head-to-head game with the subject.
+- Add `nfl_predictor/utils/polars/strength_snapshot.py`: the pre-week snapshot builder, with a
+  frozen ridge penalty, an early-season blend of the previous season's final snapshot regressed by
+  `constants.WEEK1_REGRESSION_FACTOR`, and a standardized display composite using the
+  `nfl-sos-ratings` published weights.
+- Publish the strength family per team (`constants.ADJUSTED_STRENGTH_STATS`) as
+  `away_`/`home_`/`_diff`, ablatable as the `strength` feature group.
+- Add `--strength-prior-blend` / `--no-strength-prior-blend` to
+  `nfl_predictor.data_collection` so the early-season prior can be ablated independently of the
+  rest of the family.
+
+### Fixed
+
+- Restrict both schedule-strength lenses to the regular season. `sos_remaining_adj` previously
+  averaged the whole remaining schedule including the postseason, so which playoff games a team
+  would play -- an outcome of the season being predicted -- reached its regular-season features.
+- Take the strength snapshot's team universe from the season schedule rather than from games
+  already played, so a Week-1 row before any game has kicked off publishes the regressed prior
+  instead of nulls. Historical Week-1 rows were unaffected; the live prediction slate was not.
+- Filter non-finite solve responses alongside nulls. `NaN` is not null, so a single bad cell
+  reached the normal equations and returned `NaN` for every team's coefficient rather than for the
+  row that caused it.
+- Add `is_home` to the null-fill used when no play-by-play is available at all, so the invariant
+  schema claim holds for that column too.
+
 ## [0.3.0] - 2026-09-09
 
 ### Changed

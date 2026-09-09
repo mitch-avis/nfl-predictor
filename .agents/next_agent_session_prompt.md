@@ -1,246 +1,180 @@
 # Next Agent Session Prompt
 
 You are the orchestrating agent (Claude Opus 5) for an implementation session in the `nfl-predictor`
-workspace (`/home/mitch/workspace/nfl-predictor`). Your deliverable is Milestone 46 from
-`.agents/TODO.md`: publish a leakage-safe, pre-week schedule-adjusted offense/defense/special-teams
-strength per team as ETL features, plus EPA-based schedule strength for games played and remaining.
+workspace (`/home/mitch/workspace/nfl-predictor`). Your deliverable is **Milestone 43** from
+`.agents/TODO.md`: make the power rankings measure current-season strength, consuming the
+schedule-adjusted snapshot that Milestone 46 just built.
 
-Milestone 45 landed the play-by-play foundation this milestone consumes. Read its archive entry
-first: the per-snap EPA family is built, ablatable and leakage-safe, but **it did not improve the
-primary metric**. Brier and log loss were marginally worse with it on; margin MAE improved in 3 of 3
-seasons. The working hypothesis for why is that raw per-snap EPA is unadjusted for opponent, so it
-adds little over the existing Elo and TeamRankings predictive ratings. **This milestone is the direct
-test of that hypothesis: the same inputs, opponent-adjusted.** If the ridge snapshot also fails to
-beat the group-off baseline, say so plainly and recommend reordering the roadmap rather than
-continuing to add unadjusted families.
+Milestone 46 landed the weekly ridge snapshot this milestone consumes. Read its archive entry
+first. Unlike the play-by-play milestone before it, **it improved the primary metric**: Brier
+`0.2277` with the strength group on versus `0.2312` with it off and `0.2320` with both feature
+groups off. The columns you are about to rank teams with are therefore known to carry real signal,
+and the gain-based importance rank puts `adj_strength_composite_diff` 6th and `adj_srs_diff` 7th of
+533 model features, behind only the three market columns and the two Elo diffs.
 
-You may spawn subagents, but only in the phases below, with the stated file ownership, and you
-remain responsible for integration, the full validation gate, and the honesty of every number you
-report. Subagent claims are not results until you have re-run their tests yourself.
+This milestone is smaller and lower-risk than the last two: it is a reporting change over columns
+that already exist in the dataset, not new feature engineering. Do not turn it into one.
 
 ## 0. Read first, in this order
 
 1. `AGENTS.md` (non-negotiables, command forms, readiness behaviors that must not regress)
-2. `.agents/TODO.md` (Milestone 46 tasks 46.1-46.7, plus the open follow-ups inherited from 45,
-   which are restated with recommendations in section 4 below)
-3. `.agents/ARCHIVE.md`, the Milestone 45 entry (what exists, what it measured, what broke)
-4. `.agents/feature_crosswalk.md` sections 4.4, 4.5, and 6
+2. `.agents/TODO.md`, Milestone 43 tasks 43.1-43.5, and the five follow-ups inherited from 46
+3. `.agents/ARCHIVE.md`, the Milestone 46 entry (what exists, what it measured, what broke)
+4. `.agents/feature_crosswalk.md` sections 3.1, 4.4, 4.5 and **6** (section 6 is the actual design
+   recommendation for this milestone)
 5. `README.md`, `CHANGELOG.md`
 
-Reference implementations (read-only; never modify or import; say which repo you are reading):
+Owning modules:
 
-- `../nfl-sos-ratings/nfl_sos_ratings/simultaneous_adjustment.py` (`solve_team_stat_ridge`, `solve_srs`)
-- `../nfl-sos-ratings/nfl_sos_ratings/validation/snapshots.py` (weekly snapshot construction)
-
-Owning modules in this repo:
-
-- `nfl_predictor/utils/polars/pbp.py`: `aggregate_pbp_team_game_stats` produces the team-game rows
-  (counts and sums only) that the ridge solve consumes. `PBP_TEAM_GAME_COLUMNS` is its contract.
-- `nfl_predictor/utils/polars/teamrankings.py`: `aggregate_team_stats_to_week` (the `week < target`
-  filter), `_compute_pbp_derived_metrics` (rate derivation), `recompute_derived_metrics`.
-- `nfl_predictor/data_collection.py`: `collect_all_data` loads and joins play-by-play via
-  `_join_pbp_team_game_stats`; `process_week` builds the per-week feature rows.
-- `nfl_predictor/constants.py`: `PBP_COUNT_COLUMNS`, `PBP_STATS`, `FEATURE_GROUP_COLUMN_MARKERS`,
-  `EXCLUDE_FROM_OPPONENT_STATS`.
-- `nfl_predictor/ml/walk_forward.py`: `resolve_feature_group_columns` and
-  `WalkForwardConfig.disabled_feature_groups` (the ablation switch, already authoritative inside
-  `run_walk_forward_backtest`).
+- `scripts/power_rankings.py`: today fits Bradley-Terry over every season since 1999 with equal
+  weights, fixed `0.97 / 0.03` targets, and future games filled with model probabilities.
+- `nfl_predictor/reporting/power_rankings.py`
+- `scripts/weekly_run.py`, `scripts/golden_command.py`
+  (`_build_pregame_power_rankings` is the duplicate ranking artifact to label or retire)
+- `nfl_predictor/utils/polars/strength_snapshot.py` (read-only for you: the snapshot builder)
 
 ## 1. Facts to trust unless your verification disproves them
 
-- Baseline 2026-09-09, version `0.3.0`: all gates green, `471 passed`, coverage `90.51%`.
-- `data/completed_games_ml.csv` covers `1999-2025` (`7260` rows, `465` columns);
+- Baseline 2026-09-09, version `0.4.0`: all gates green, `548 passed`, coverage `90.8%`.
+- `data/completed_games_ml.csv` is `7260` rows x `498` columns covering `1999-2025`;
   `data/predict/week_01_games_to_predict.csv` has `16` rows for 2026 Week 1.
-- Walk-forward (`2023-2025`, `--eval-last-n-seasons 3`, `720` games), play-by-play group **off**:
-  Brier `0.2314`, log loss `0.7440`, pick accuracy `0.6708`, margin MAE `9.9977`, total MAE
-  `10.1164`, ECE `0.1269`. Group **on**: `0.2317`, `0.7455`, `0.6778`, `9.9178`, `10.1295`, `0.1244`.
-  **Compare against these, not against the older `0.2312`/`0.7352` reference, which is not
-  reproducible** (the untouched pre-change dataset yields `0.2300`/`0.7501` under the same config).
-- A full walk-forward run at `--eval-last-n-seasons 3` takes roughly 25-30 minutes. Budget for it and
-  run arms in the background.
-- A full ETL rebuild takes about 320s warm (play-by-play cache is populated for `1999-2025`).
-- nflreadpy has no play-by-play for the current season before kickoff and signals that with
-  `ValueError`, not `ConnectionError`. Both are handled; do not regress it.
-- `markdownlint` on this machine is `markdownlint-cli2` (`/usr/local/bin/markdownlint-cli2`).
+- The strength columns you need are already in the dataset per team as `away_`/`home_`/`_diff`:
+  `adj_off_pass_epa_snap`, `adj_off_rush_epa_snap`, `adj_def_pass_epa_snap`,
+  `adj_def_rush_epa_snap`, `adj_srs`, `st_rating`, `adj_strength_composite`,
+  `strength_games_played`, `sos_played_adj`, `sos_remaining_adj`, `sos_played_raw`
+  (`constants.ADJUSTED_STRENGTH_STATS`).
+- **A higher `adj_def_*` value is a BETTER defense.** The solve models a team-game as
+  `offense[team] - defense[opponent]`, so the defense coefficient is what suppresses the opponent.
+  Getting this sign backwards in a ranking would be the single easiest way to ship a wrong artifact.
+- `adj_strength_composite` is standardized **within each snapshot**, so it is comparable across
+  weeks and seasons. The raw `adj_*` columns are **not**: the frozen ridge penalty shrinks harder
+  when fewer games have been played (about 30% of true magnitude at 4 games, about 50% by 17), so
+  their scale drifts across a season. **Rank on the composite, not on the raw components.**
+- Sanity anchor, 2024 pre-week-18: top five by composite BAL, DET, PHI, BUF, GB; bottom five TEN,
+  NYG, JAX, NE, CAR. Spearman against current-season point differential `0.966`. If your ranking
+  disagrees with this materially, your ranking is wrong, not the snapshot.
+- Walk-forward at `--eval-last-n-seasons 3` takes about 35 minutes. A full ETL rebuild takes about
+  480s warm. **You should need neither**: this milestone changes reporting, not the dataset. If you
+  think you need an ETL rebuild, stop and re-read the scope.
+- `markdownlint` on this machine is `markdownlint-cli2`
+  (`markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings"`); CI runs `markdownlint .`.
 
-## 2. Non-negotiables
+## 2. Design decisions already made (do not relitigate; record deviations)
+
+- Rank by the pre-week `adj_strength_composite` for `(season, through_week + 1)` rows, mapped onto
+  the existing 1-10 and 0-10 scales, with the components published alongside the rank so the
+  ranking is explainable and identical to the model's inputs (`feature_crosswalk.md` section 6).
+- Keep Bradley-Terry reachable as `--method bradley_terry`, and keep `--legacy-franchise-fit` for
+  the old all-seasons equal-weight behavior. Do not delete the franchise view; it answers a
+  different question.
+- Projected standings stay as they are: current record plus model win probabilities for the
+  remaining schedule. That table is the right home for forward-looking information.
+- The 43.1 Bradley-Terry defaults (window, prior-season weight, margin-based targets, excluding
+  future model-probability rows) are still worth doing, because they improve the fallback method.
+  Do 43.1 first: it is small, self-contained, and independent of the snapshot work.
+
+## 3. Non-negotiables
 
 - TDD: characterization or failing tests first, then production code, small diffs.
-- No leakage: any schedule-adjusted value for week `N` must be solved from games strictly before
-  week `N` of that season, with a documented prior-season fallback for early weeks; playoff rows use
-  the full regular season. A test must prove perturbing week `N+1` leaves week `N` unchanged.
-- All matchups: every new column exists on every row; nulls when a source is missing.
+- No leakage: a week `N` ranking may only use the snapshot for week `N`, which is solved from games
+  strictly before week `N`. Do not rank on end-of-season values and backfill them to earlier weeks.
 - Polars-first ETL; NumPy inside solvers; pandas only in ML modules.
-- Rates are ratios of sums computed after season-to-date aggregation, never mean-of-game-rates.
-- Name allowed/defensive metrics explicitly and add them to `EXCLUDE_FROM_OPPONENT_STATS`.
-- Cite the formula in each docstring; test each metric against a hand-built fixture; docstrings and
-  type hints on everything; no new `noqa`/`type: ignore`/`pragma: no cover` without a real reason;
-  no milestone numbers in code or docstrings.
+- Docstrings and type hints on everything; cite formulas; no milestone numbers in code or
+  docstrings; no new `noqa`/`type: ignore`/`pragma: no cover` without a real reason.
 - All Python tooling via `.venv/bin/...`; `uv` from PATH; never bare `python`/`pytest`/`ruff`.
-- XGBoost margin/total is the only model family; no tuning campaigns; no Week 1 production pass.
+- XGBoost margin/total is the only model family; no tuning campaigns.
 - Do not modify `../nfeloqb` or `../nfl-sos-ratings`.
-- Back up `data/*.csv` before any ETL run. `python -m nfl_predictor.data_collection` overwrites the
-  full dataset unconditionally, so a partial-window run is destructive.
+- Back up `data/*.csv` before any ETL run. `.venv/bin/python -m nfl_predictor.data_collection`
+  overwrites the full dataset unconditionally, so a partial-window run is destructive.
+- Walk-forward artifacts stay under `models/`. Every number you report must be readable from a
+  `metrics_report.json` on disk.
 - Commit only if the user asks. If asked: one file per commit, imperative message, and end the
   message with the attribution line the harness provides.
 
-## 3. Subagent rules (apply to every spawn)
+## 4. Follow-ups inherited from the schedule-adjusted strength milestone
 
-- Every subagent receives an explicit file-ownership list and may not edit any other file. If it
-  believes another file must change, it reports that instead of editing.
-- All agents work in the main working tree and share the repo `.venv`. Do not use git worktrees.
-- Subagents run `ruff format` and `ruff check` only on the files they own, and run only their own
-  test files. You run the repo-wide gate at each checkpoint.
-- Each subagent's final report must contain: files changed, tests added (names), the last 15 lines
-  of its own pytest output, formulas or thresholds it chose, and open questions.
-- Use `model: "sonnet"` for mechanical work; the default Opus for design-bearing work.
-- Run subagents in the background and wait for completion notifications. Never predict a pending
-  agent's result. Use `SendMessage` to continue an agent that needs a follow-up.
+Five items are open. **Only item A is in scope for this session** (it is a one-line schema change
+you will be in the right file for anyway). The rest are recorded so a later session does not have
+to rediscover them. Do not expand scope to chase B through E unless the user asks.
 
-## 4. Follow-ups inherited from the play-by-play milestone
+### A. `strength_games_played_diff` is a dead column (in scope)
 
-Four known issues were left open when the play-by-play work landed. None of them blocks this
-milestone. Only item D is in scope for this session (it is already Phase 2.6); the rest are recorded
-here so you can act on them if you are in the relevant file anyway, and so a later session does not
-have to rediscover them. Do not expand scope to chase A, B, or C unless the user asks.
+Gain-based importance of exactly `0.0`. The two teams in a game have almost always played the same
+number of games, so the diff is a constant zero outside bye weeks. The per-team
+`away_`/`home_strength_games_played` columns do rank (12th and 17th of 533) and should stay.
 
-### A. `red_zone_tds` credits the wrong team's touchdown
+**Recommendation:** drop the `_diff` companion only, via `get_stats_for_diff`. This changes the
+schema from `498` to `497` columns, so it needs an ETL rebuild and a walk-forward re-run to
+confirm no regression - which is why it is worth doing *now*, bundled with any other schema
+change, rather than alone later.
 
-`nfl_predictor/utils/polars/pbp.py` counts a red-zone touchdown as any play inside the opponent's
-20-yard line where a touchdown occurred - it checks that `td_team` is non-null, not *who* scored. A
-red-zone interception returned for a pick-six is therefore credited to the offense that threw it.
-The logic was inherited verbatim from the deleted `loaders.aggregate_pbp_stats`, so it is not a new
-defect, and it is harmless today because the column is computed but never published.
+### B. The raw adjusted components drift in scale across a season
 
-**Recommendation:** change the condition from `td_team is not null` to `td_team == posteam`, and add
-a fixture row where the defending team scores. Do this in Milestone 48, *before* that milestone
-publishes the situational counts - once published, the wrong values reach the model.
+The frozen ridge penalty (`STRENGTH_RIDGE_LAMBDA = 10.0`) shrinks coefficients harder when fewer
+games have been played. Ordering is unaffected, but the same numeric value means a stronger team in
+December than in September, which a tree splitting on an absolute threshold cannot reconcile. The
+raw components rank at a median of 183 of 533 while the standardized composite ranks 6th.
 
-### B. Eleven play-by-play counts are computed but never published
+**Recommendation:** measure a games-aware penalty (or publishing only the composite plus `adj_srs`)
+against the recorded arms. This is a feature-engineering experiment, not a reporting change; give it
+its own milestone rather than folding it into this one.
 
-`third_down_conversions/fails/attempts`, `fourth_down_*`, `red_zone_plays`, `red_zone_tds`,
-`two_point_attempts`, `two_point_successes`, and `total_plays` are in `constants.PBP_COUNT_COLUMNS`
-but not in `constants.PBP_STATS`. They are aggregated, joined, averaged, and regressed on every ETL
-run, then dropped at `select_final_columns`. Nothing reads them. They exist because Milestone 48
-plans to use them to replace the TeamRankings situational scrape, which only reaches back to 2003
-where play-by-play reaches 1999.
+### C. `sos_played_raw` is null for weeks 1 and 2
 
-**Recommendation:** leave them if Milestone 48 is coming soon - the overhead is small and removing
-then re-adding them is pure churn. If Milestone 48 slips or is dropped, delete them from
-`PBP_COUNT_COLUMNS` and recompute when they are actually needed.
+11.7% of the dataset. In week 2, a faced opponent's only prior game is the one against the subject,
+and the head-to-head exclusion removes it, so nothing remains to profile. This is the method being
+correct, not a defect.
 
-### C. The play-by-play cache can go stale invisibly
+**Recommendation:** a documented fallback (the prior-season profile, or the adjusted lens) would
+make the column usable in exactly the two weeks where schedule strength is least knowable. Ablate
+the fallback against the recorded arms before keeping it.
 
-Cache files are named `pbp_<season>_<reg|all>.parquet`. The name encodes the season but nothing
-about *which columns* were selected when the file was written. If a later milestone adds a column to
-`constants.PBP_COLUMNS`, every historical season keeps serving its existing cached file, so the new
-column is silently null for `1999-2025` while looking correct for the refreshed current season. No
-error is raised. Milestone 47 (QB per-dropback families) will almost certainly need more columns,
-which is when this will bite.
+### D. Schedule-strength columns are not bit-reproducible
 
-**Recommendation:** include a short hash of the selected column list in the cache filename so that
-changing the list naturally misses the cache and triggers a re-download. `load_team_stats` has the
-same weakness, so fix the pattern once in `loaders.py` and both benefit. If you add any column to
-`PBP_COLUMNS` in this session without fixing this, you **must** delete
-`data/cache/nflreadpy/pbp_*.parquet` by hand before rebuilding, or your historical features will be
-null.
+Polars parallel `group_by` summation order moves the last 1-2 ULP on `sos_*` columns across
+identical rebuilds; the ridge and SRS columns are exactly stable. Pre-existing - the same is true of
+`aggregate_team_stats_to_week` - but it means the dataset fingerprint in the model artifact contract
+changes across identical runs.
 
-### D. The leakage test only covers ordinary mid-season weeks (in scope, Phase 2.6)
+**Recommendation:** a line in the artifact-contract docs, not a code change.
 
-`test_future_week_plays_do_not_change_earlier_week_features` proves that rewriting week 3's plays
-cannot change week 2's features. Two other code paths compute features differently and neither has
-an equivalent test: **playoff rows**, which use the full regular season rather than "strictly before
-week N", and the **Week-1 fallback**, which reaches into the previous season. Both are exactly the
-branches where a leak would hide, and this milestone's schedule-adjusted ratings flow through both.
+### E. `uv sync --check --active` reports the environment is outdated
 
-**Recommendation:** add two tests in the same style as the existing one. Perturb a playoff week's
-plays and assert an earlier playoff row is unchanged; perturb current-season plays and assert a
-Week-1 row, which must only ever see the prior season, is unchanged. Write these before wiring the
-snapshot into `process_week`, so they fail for the right reason first.
+Predates this milestone and is unrelated to it: it was already failing when `pyproject.toml` and
+`uv.lock` were untouched. Needs a plain `uv sync` to clear. `uv lock --check` passes.
 
 ## Phase 0 - Baseline (you)
 
 1. Run `.venv/bin/python -m pytest -q` and record the actual pass count and coverage.
-2. Confirm the data files and the play-by-play cache under `data/cache/nflreadpy/` exist.
-3. Back up `data/*.csv` to your scratchpad before anything touches the ETL.
+2. Confirm the strength columns are present in `data/completed_games_ml.csv` (expect `33`).
+3. Run the current `scripts/power_rankings.py` for a late-season week and **save the output**, so
+   you can show a before/after and prove the change did what you claim.
 
-## Phase 1 - Parallel implementation (two background subagents, strict ownership)
+## Phase 1 - Bradley-Terry defaults (43.1)
 
-Agent A, "ridge-solver" (Opus). Owns new `nfl_predictor/utils/polars/adjusted_strength.py` and new
-`tests/test_adjusted_strength.py`. Task: `solve_team_ridge(team_games, response_col, *,
-ridge_lambda)` returning centered offense and defense coefficients per team plus a home-field term,
-via a NumPy normal-equation solve (port the design of
-`../nfl-sos-ratings/simultaneous_adjustment.py::solve_team_stat_ridge`). Add `solve_srs` for the
-point-margin companion. Tests: a synthetic round-robin recovers known strengths within tolerance;
-home-field term has the right sign and magnitude; coefficients are centered per side; empty and
-single-game inputs return typed empties rather than raising; the solve is deterministic.
+Self-contained and independent of the snapshot. Add the window, prior-season weight, margin-based
+targets, and future-row exclusion, with `--legacy-franchise-fit` reproducing today's output exactly.
+Test that recency weighting shifts ratings toward recent results and that the legacy flag is a true
+no-op against the saved baseline.
 
-Agent B, "schedule-strength" (Opus). Owns new `nfl_predictor/utils/polars/schedule_strength.py` and
-new `tests/test_schedule_strength.py`. Task: pure helpers that, given a pre-week rating per team and
-a schedule, compute `sos_played_adj` (mean opponent rating over games already played) and
-`sos_remaining_adj` (mean opponent rating over games not yet played), for every `(season, week,
-team)`. These must take ratings as an argument rather than computing them, so they stay independent
-of Agent A. Tests against a hand-built four-team schedule with known means; bye weeks; week 1 (no
-games played) yields null for played and a full-schedule mean for remaining.
+## Phase 2 - Rank on the adjusted composite (43.2)
 
-Integration checkpoint 1 (you): run the full gate. Do not start Phase 2 until green.
+Default the ranking to the pre-week composite, publish components alongside, keep
+`--method bradley_terry`. The acceptance test that matters: **a synthetic breakout team ranks first
+late in the season**, and the 2024 anchor above reproduces.
 
-## Phase 2 - Sequential wiring (you, or one Opus subagent; no parallelism)
+## Phase 3 - One canonical artifact (43.3), tests (43.4), docs (43.5)
 
-2.1 Weekly snapshot builder: for each `(season, week)`, solve on prior-week regular-season rows
-using pass and rush EPA per snap as responses. Emit `adj_off_pass_epa_snap`, `adj_off_rush_epa_snap`,
-`adj_def_pass_epa_snap`, `adj_def_rush_epa_snap`, `adj_hfa`, an SRS companion, and `st_rating` from
-the special-teams EPA margin. Fixed ridge lambda for v1; make it a named constant.
-2.2 Early-week prior: previous-season final snapshot regressed by `WEEK1_REGRESSION_FACTOR`, blended
-with the in-season solve by `games / (games + K)` with a documented `K`. Playoff weeks use the full
-regular season.
-2.3 Composite `adj_strength_composite` with documented default weights over within-season
-standardized components. Model features stay in raw adjusted units.
-2.4 Schedule strength from 2.3 via Agent B's helpers.
-2.5 Merge in `process_week` as `away_`/`home_`/`_diff`; add `constants.ADJUSTED_STRENGTH_STATS`,
-exclusion entries, and a `"strength"` entry in `FEATURE_GROUP_COLUMN_MARKERS`; extend
-`build_final_column_order` and `get_stats_for_diff`.
-2.6 Leakage test: perturb week `N+1` play-by-play and assert week `N` snapshot columns are unchanged.
-Also add the playoff-branch and Week-1-fallback perturbation cases described in section 4, item D.
-
-Integration checkpoint 2: full gate green, coverage at or above `90%`.
-
-## Phase 3 - Independent review (two background subagents, read-only)
-
-Reviewer 1 (Opus): leakage, solver correctness against the sos reference, numerical conditioning
-(singular matrices, teams with no games), schema invariance, readiness behaviors.
-Reviewer 2 (Sonnet): docstrings, type hints, test quality, dead code, lint/type cleanliness.
-Address findings yourself, then re-run the gate.
-
-## Phase 4 - Expensive validation (you, background, monitored)
-
-4.1 Back up `data/*.csv`, then `.venv/bin/python -m nfl_predictor.data_collection --timing`.
-4.2 `.venv/bin/python scripts/leakage_audit.py --data-path data/completed_games_ml.csv --out-json
-    <scratchpad>/leakage.json` must pass.
-4.3 Three walk-forward arms, in the background, each about 25-30 minutes:
-    - both groups on: `--eval-last-n-seasons 3`
-    - strength off: `--eval-last-n-seasons 3 --disable-feature-groups strength`
-    - both off: `--eval-last-n-seasons 3 --disable-feature-groups pbp,strength`
-4.4 Report all three verbatim from `metrics_report.json`, next to the Milestone 45 numbers in
-    section 1, with per-season breakdowns so a one-season fluke is visible.
-4.5 Sanity checks: a late-season snapshot must rank teams consistently with current-season point
-    differential and adjusted EPA, not prior seasons. Print the top and bottom five for a known
-    season and check them against reality.
-
-## Phase 5 - Docs and handoff (you)
-
-- `README.md`, `CHANGELOG.md` (`0.4.0`), `.agents/ARCHIVE.md`, `.agents/TODO.md`, and a regenerated
-  `.agents/next_agent_session_prompt.md` for the following session (Milestone 43, the power-rankings
-  redesign, which consumes the snapshot this milestone builds).
-- `markdownlint-cli2` on every touched Markdown file; then the full gate one last time.
+Label or retire `golden_command._build_pregame_power_rankings`. Then the full gate, and only if you
+made a schema change (item A), an ETL rebuild plus a walk-forward re-run against the four recorded
+arms in `models/wf_strength_2023_2025_*/`.
 
 ## Final report to the user (structure)
 
-1. Outcome first: what landed, gate status, and whether Phase 4 ran to completion.
-2. Walk-forward table: all three arms plus the Milestone 45 numbers, with per-season detail.
-3. Whether the opponent-adjustment hypothesis held. If the ridge snapshot also fails to beat the
-   group-off baseline, say so plainly and recommend reordering the roadmap.
-4. Feature summary: columns added, null rates, sanity-check results.
+1. Outcome first: what landed and gate status.
+2. Before/after rankings for a known week, with the 2024 anchor as the correctness check.
+3. Whether the ranking now reflects current-season strength, with evidence rather than assertion.
+4. If you changed the schema: the walk-forward comparison against the four recorded arms.
 5. What was left out or deferred, and why.
-6. The recommended first step for the next session, with the exact command to resume anything
-   unfinished.
+6. The recommended first step for the next session (Milestone 47, QB per-dropback families), with
+   the exact command to resume anything unfinished.

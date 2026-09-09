@@ -33,20 +33,34 @@ Rules that are always enforced:
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
-  repo as read-only reference material.
-- Validated baseline on 2026-09-09 (after the play-by-play feature release, version `0.3.0`):
+  repo as read-only reference material. The method being ported is its head-to-head-excluded
+  opponent profiling and the simultaneous ridge that generalizes it (see
+  `.agents/feature_crosswalk.md` section 3.1).
+- Validated baseline on 2026-09-09 (after the schedule-adjusted strength release, version
+  `0.4.0`):
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`471 passed`) with coverage `90.51%` against the enforced
+  - `.venv/bin/python -m pytest` passes (`548 passed`) with coverage `90.8%` against the enforced
     `90%` floor.
   - `markdownlint-cli2` and `uv lock --check` pass.
-  - ETL was rerun for `1999-2026` (`7260` rows, `465` columns, `1999-2025`) and the leakage audit
-    passed on the refreshed dataset (`430` features, `0` findings).
-- Working walk-forward benchmark (seasons `2023-2025`, `--eval-last-n-seasons 3`, `720` games), with
-  the play-by-play feature group **off**: Brier `0.2314`, log loss `0.7440`, pick accuracy `0.6708`,
-  margin MAE `9.9977`, total MAE `10.1164`, reliability ECE `0.1269`. With the group **on**:
-  `0.2317`, `0.7455`, `0.6778`, `9.9178`, `10.1295`, `0.1244`. Report new feature work against
-  these.
+  - ETL was rerun for `1999-2026` (`7260` rows, `498` columns, `1999-2025`) and the leakage audit
+    passed on the refreshed dataset (`463` features, `0` findings).
+- Working walk-forward benchmark (seasons `2023-2025`, `--eval-last-n-seasons 3`, `720` games),
+  measured on the `0.4.0` dataset build. Reports are on disk under
+  `models/wf_strength_2023_2025_{both_on,strength_off,both_off,prior_off}/`.
+
+  | arm | Brier | log loss | pick acc | margin MAE | total MAE | ECE |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | strength + play-by-play on | `0.2277` | `0.7431` | `0.6958` | `9.9006` | `10.1074` | `0.1321` |
+  | strength off, play-by-play on | `0.2312` | `0.7495` | `0.6819` | `9.8698` | `10.1025` | `0.1430` |
+  | both off | `0.2320` | `0.7493` | `0.6736` | `9.9772` | `10.0823` | `0.1237` |
+  | strength on, prior blend off | `0.2277` | `0.7492` | `0.6847` | `9.8838` | `10.1043` | `0.1315` |
+
+  Report new feature work against these, and only within one dataset build and code version. The
+  strength group is the first family in this workstream to improve Brier and log loss rather than
+  trade them for margin MAE; margin MAE and ECE do **not** improve alongside them. The early-season
+  prior blend is a **tie on Brier** (`0.2277` either way) and earns its place only on log loss
+  (`0.7431` vs `0.7492`) and pick accuracy (`0.6958` vs `0.6847`).
 - The older reference (Brier `0.2312`, log loss `0.7352`, pick accuracy `0.6833`, margin MAE
   `9.8954`) is **not reproducible**: re-running the default config against the untouched pre-change
   dataset gives Brier `0.2300`, log loss `0.7501`, pick accuracy `0.6833`, margin MAE `9.9705`. Do
@@ -244,8 +258,17 @@ Recommended local commands:
   contract: do not propose schema changes there casually, and never edit `../nfeloqb` outputs from
   this repo. `../nfeloqb/Other Data/meta_data.csv` maps Elo QB names to GSIS ids and is the
   intended identity bridge for QB-level PBP features.
-- `../nfl-sos-ratings` is the reference implementation for PBP-derived per-snap EPA, success and
-  explosive rates, special-teams EPA, and simultaneous ridge opponent adjustment. Port ideas and
+- `../nfl-sos-ratings` is the reference implementation for the strength-of-schedule method this
+  repo is porting: for each subject (team or QB) and each opponent it faced, build that opponent's
+  statistical profile from only its games against the rest of the league, excluding every
+  head-to-head game with the subject, so subject and opponent profiles are independent for every
+  matchup; then compare the subject to that adjusted schedule. Its simultaneous ridge solve
+  (`simultaneous_adjustment.py`) is the all-hops generalization of that one-hop method and is its
+  published backbone; the one-hop profiles remain for descriptive views. It is also the reference
+  for PBP-derived per-snap EPA, success and explosive rates, and special-teams EPA. Read its
+  `README.md`, `AGENTS.md`, and `docs/` (`methodology.md`, `validation-report.md`, both stats
+  catalogs) before designing any adjusted feature, and note that its own walk-forward puts the
+  within-season ridge at parity with SRS and raw EPA and behind prior-carrying Elo. Port ideas and
   formulas into this repo's Polars ETL; do not import it as a dependency and do not modify it from
   here. The repo-root symlink `nfl-sos-ratings -> ../nfl-sos-ratings/` is gitignored and exists
   only for convenient reading; always state which repo you are inspecting.
@@ -484,7 +507,8 @@ Feature areas tracked in `.agents/TODO.md` include (examples):
 - lookahead/trap indicators (next-week opponent strength + rest/travel context)
 - motivational asymmetry features (playoff leverage and clinch/elimination context)
 - PBP-derived per-snap EPA, success, explosive, and special-teams families
-- weekly schedule-adjusted (ridge) offense/defense strength and EPA-based schedule strength
+- weekly schedule-adjusted (ridge) offense/defense strength and EPA-based schedule strength, in
+  both the ridge form and the one-hop head-to-head-excluded form
 - QB per-dropback EPA families for the expected starter
 
 Rules for stat-style features:
@@ -562,5 +586,7 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
 - Do not change behavior without updating tests and documentation.
 - Do not delete `models/<run_id>/wf_compare/` during active walk-forward runs; those artifacts power
   resume behavior.
+- Keep walk-forward comparison artifacts under `models/` (do not point `--out-json` at a temporary
+  directory). Any number reported in `.agents/` or `AGENTS.md` must be auditable from disk.
 - To resume a walk-forward comparison, re-run the same command with `--resume` and inspect
   `wf_compare/wf_summary.csv` for live progress.

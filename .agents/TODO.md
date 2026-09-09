@@ -27,7 +27,8 @@ For each task:
    - `.venv/bin/pyright .`
    - `.venv/bin/ty check .`
    - `.venv/bin/python -m pytest`
-   - `markdownlint .`
+   - `markdownlint .` (CI installs `markdownlint-cli`; the local binary is `markdownlint-cli2`,
+     so run `markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings"` here)
    - `uv lock --check`
    - `uv sync --check --active`
 
@@ -101,12 +102,17 @@ Rules for every feature milestone:
 - Report a `2023-2025` walk-forward comparison with the group on and off before marking done.
 - Keep the invariant output schema: when a source is missing for a season, emit nulls.
 - XGBoost margin/total remains the only model family in scope.
+- The method borrowed from `nfl-sos-ratings` is its head-to-head-excluded opponent profiling
+  (`feature_crosswalk.md` section 3.1): it lands as the weekly ridge snapshot (its all-hops form)
+  plus a one-hop schedule-strength companion, and the QB milestone carries the same two lenses.
+- Keep walk-forward comparison artifacts under `models/`; numbers reported in these files must be
+  auditable from disk.
 
 ---
 
-## Milestone 45 - PBP foundation + per-snap team EPA families
+## Follow-ups inherited from Milestone 45 (completed 2026-09-09)
 
-**Completed 2026-09-09.** Moved to `ARCHIVE.md` with the walk-forward table, ETL timing, null-rate
+The milestone itself lives in `ARCHIVE.md` with the walk-forward table, ETL timing, null-rate
 summary, and the four defects found and fixed along the way.
 
 Outcome to carry forward: the family is leakage-safe, ablatable, and costs almost nothing to build
@@ -131,43 +137,68 @@ Open follow-ups inherited from this milestone:
       aggregated and regressed but never published. Publish it in Milestone 48 or stop carrying it.
 - [ ] The play-by-play cache key has no schema version, so growing `constants.PBP_COLUMNS` will not
       invalidate existing per-season caches. Same latent issue as `load_team_stats`.
-- [ ] The leakage perturbation test covers a regular-season week only; add playoff-branch and
-      Week-1-fallback equivalents.
+- [x] Resolved: the leakage perturbation test covered a regular-season week only. Playoff-branch
+      and Week-1-fallback equivalents now exist for both the play-by-play family and the
+      schedule-adjusted strength family, and each was mutation-verified by breaking the
+      corresponding cutoff and confirming the matching test fails.
+- [x] The on/off walk-forward arms were written with `--out-json` into a temporary directory and
+      are not on disk. A 2026-09-09 review re-ran both arms and reproduced the numbers exactly;
+      reports now live in `models/review_wf_2023_2025_pbp_{off,on}/`. Keep future arms under
+      `models/`.
 
 ---
 
 ## Milestone 46 - Weekly schedule-adjusted team strength
 
-Goal: publish a leakage-safe, pre-week schedule-adjusted offense/defense/special-teams strength per
-team as ETL features, plus EPA-based schedule strength for games played and games remaining.
+**Completed 2026-09-09.** Moved to `ARCHIVE.md` with the walk-forward table, the ridge-penalty
+provenance, null-rate summary, sanity checks, and the five defects found and fixed along the way
+(two of them leaks found by independent review, not by the original tests).
 
-Tasks:
+Outcome to carry forward: **the opponent-adjustment hypothesis held on the primary metric.** With
+the strength group on, Brier improves to `0.2277` from `0.2312` with it off and `0.2320` with both
+feature groups off, and log loss to `0.7431` from `0.7495` / `0.7493`. Pick accuracy gains 2.2
+points against the both-off baseline. This is the first family in the workstream to move Brier and
+log loss in the right direction rather than trading them for margin MAE.
 
-- [ ] 46.1 `nfl_predictor/utils/polars/adjusted_strength.py`: NumPy ridge solve with one offense
-      coefficient, one defense coefficient per team, and one home-field term, centered per side
-      (port the design of `nfl-sos-ratings/simultaneous_adjustment.solve_team_stat_ridge`). Tests:
-      synthetic round-robin recovers known strengths; home-field sign; centering; empty input.
-- [ ] 46.2 Weekly snapshot builder: for each `(season, week)` solve on prior-week regular-season
-      rows using pass and rush EPA per snap responses; emit `adj_off_pass_epa_snap`,
-      `adj_off_rush_epa_snap`, `adj_def_pass_epa_snap`, `adj_def_rush_epa_snap`, `adj_hfa`, an SRS
-      companion, and `st_rating` from special-teams EPA margin. Fixed ridge lambda for v1.
-- [ ] 46.3 Early-week prior: previous-season final snapshot regressed by
-      `WEEK1_REGRESSION_FACTOR`, blended with the in-season solve by `games / (games + K)` with a
-      documented `K`. Playoff weeks use the full regular season.
-- [ ] 46.4 Composite for display (`adj_strength_composite`) with documented default weights
-      (start from the sos published weights over within-season standardized components). Model
-      features stay in raw adjusted units.
-- [ ] 46.5 Schedule strength: `sos_played_adj` and `sos_remaining_adj` from opponents' pre-week
-      composite.
-- [ ] 46.6 Merge in `process_week` as `away_`/`home_`/`_diff`; constants and finalization;
-      ablation switch; leakage test that perturbs week `N+1` and asserts week `N` is unchanged.
-- [ ] 46.7 Walk-forward comparison against the Milestone 45 state; record results.
+Two things did **not** improve and should not be papered over: margin MAE is slightly worse than
+the strength-off arm (`9.9006` vs `9.8698`), and reliability ECE is worse than the both-off arm
+(`0.1321` vs `0.1237`). The gain comes from probability *ranking*, not from sharper point estimates
+or better-calibrated probabilities.
 
-Acceptance:
+Two further results worth carrying, both of which cut against the milestone's own rationale:
 
-- [ ] A late-season snapshot ranks teams consistently with current-season point differential and
-      adjusted EPA, not prior seasons.
-- [ ] Walk-forward table recorded; all gates green.
+- **The early-season prior blend is a tie on Brier** (`0.2277` with it on and off). It helps only
+  log loss (`0.7431` vs `0.7492`) and pick accuracy (`0.6958` vs `0.6847`). It stays on as the
+  default on that basis, but it is the weakest-supported piece here and `--no-strength-prior-blend`
+  remains so it can be re-measured cheaply.
+- **The pass/rush by offense/defense decomposition is not where the gain lives.**
+  `adj_strength_composite_diff` ranks 6th and `adj_srs_diff` 7th of 533 features, but the raw
+  decomposition components sit at a median rank of 183. The milestone justified itself partly on
+  the decomposition giving the model matchup structure; the importance evidence does not support
+  that. Follow-up 2 below is the experiment that would settle it.
+
+Open follow-ups inherited from this milestone:
+
+- [ ] `strength_games_played_diff` has a gain-based importance of exactly `0.0`: the two teams in a
+      game have almost always played the same number of games, so the diff is a constant zero
+      outside bye weeks. Drop the `_diff` companion (keep the per-team columns, which do rank) the
+      next time the strength schema is touched.
+- [ ] The raw `adj_off_*` / `adj_def_*` columns drift in scale across a season because the frozen
+      ridge penalty shrinks harder when fewer games have been played (about 30% of true magnitude
+      at 4 games, about 50% by 17). They rank far below the standardized composite. Consider either
+      a games-aware penalty or publishing only the composite plus `adj_srs`, and measure it.
+- [ ] `sos_played_raw` is null for every week-1 and week-2 row (11.7% of the dataset) because a
+      week-2 opponent's only prior game is the one against the subject. That is the method being
+      correct, but a documented fallback (prior-season profile, or the adjusted lens) would make
+      the column usable in the two weeks where schedule strength is least knowable.
+- [ ] Schedule-strength columns are not bit-reproducible across identical rebuilds: Polars parallel
+      `group_by` summation order moves the last 1-2 ULP. The ridge and SRS columns are exactly
+      stable. This is pre-existing (`aggregate_team_stats_to_week` has the same property) but it
+      does mean the dataset fingerprint in the model artifact contract changes across identical
+      runs. Worth a line in the artifact contract docs.
+- [ ] `uv sync --check --active` reports the environment is outdated. This predates this milestone
+      and is unrelated to it (`pyproject.toml` and `uv.lock` were untouched when it was first
+      observed); it needs a plain `uv sync` to clear.
 
 ---
 
@@ -222,7 +253,12 @@ Tasks:
       `qb_history_dropbacks` column so the model can see sample size.
 - [ ] 47.4 Join for away/home plus diffs; constants; finalization; null policy documented.
 - [ ] 47.5 Leakage audit and walk-forward ablation; record results.
-- [ ] 47.6 Optional phase 2: opponent-adjusted QB EPA via a dropback-weighted ridge against faced
+- [ ] 47.6 Schedule lenses (`feature_crosswalk.md` section 3.1 applied to QBs):
+      `qb_faced_pass_def_adj`, the dropback-weighted mean of the faced defenses' pre-week ridge
+      pass-defense coefficient from Milestone 46 (the sos `QSoS` construct), and the one-hop
+      `qb_faced_pass_def_raw`, the faced defenses' EPA per dropback allowed from prior-week games
+      excluding games against the QB's team.
+- [ ] 47.7 Optional phase 2: opponent-adjusted QB EPA via a dropback-weighted ridge against faced
       defenses (design in `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`).
 
 Acceptance:

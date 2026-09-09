@@ -6,6 +6,144 @@ checks from the relevant section.
 
 ---
 
+## Milestone 46 - Weekly schedule-adjusted team strength
+
+Completed 2026-09-09.
+
+Published a leakage-safe, pre-week schedule-adjusted offense/defense/special-teams strength per
+team, plus schedule strength for games played and remaining in both the ridge form and the one-hop
+head-to-head-excluded form. **This is the first family in this workstream to improve the primary
+selection metric**: Brier and log loss both improve with the group on.
+
+### What landed
+
+- `nfl_predictor/utils/polars/adjusted_strength.py`: simultaneous ridge (`solve_team_ridge`) with
+  one offense and one defense coefficient per team plus a shared home-field term, centered
+  independently per side; `solve_srs`; an offline `tune_ridge_lambda`; `build_team_design_matrix`.
+  Ported from the read-only `nfl-sos-ratings` reference and verified to reproduce it **exactly**
+  (max absolute difference `0.0` on both rating blocks, identical home-field term, identical
+  tuner output) on the same inputs. The port additionally drops null rows before solving, which
+  the reference does not.
+- `nfl_predictor/utils/polars/schedule_strength.py`: `sos_played_adj` / `sos_remaining_adj` from
+  opponents' pre-week composite, and `sos_played_raw`, the one-hop companion that profiles each
+  faced opponent from only its games against the rest of the league, excluding every head-to-head
+  game with the subject. Equal weight per unique opponent.
+- `nfl_predictor/utils/polars/strength_snapshot.py`: the weekly snapshot builder. Frozen
+  `STRENGTH_RIDGE_LAMBDA = 10.0`, `PRIOR_BLEND_GAMES = 4.0`, composite weights taken from the
+  `nfl-sos-ratings` published team composite.
+- `is_home` on the play-by-play team-game frame from `posteam_type`, kept out of every count and
+  stat list and added to `EXCLUDE_FROM_OPPONENT_STATS`. Verified against the 2024 schedule:
+  544 of 544 team-games agree, and season-to-date aggregation drops it, so it never reaches the
+  published schema.
+- 33 published columns (11 stats x `away_`/`home_`/`_diff`), schema `465` -> `498`, ablatable as
+  the `strength` feature group. `--no-strength-prior-blend` ablates the early-season prior at ETL
+  time.
+
+### Ridge penalty provenance
+
+`tune_ridge_lambda` (deterministic 5-fold CV over `logspace(-6, 2, 17)`) was run on 128 real
+pre-week snapshots: seasons 2005, 2010, 2015, 2019, 2021, 2022, 2023, 2024 at week cutoffs 3, 5, 7,
+9, 12, 14, 16, 18. The median selected penalty is `10.0` at **every** cutoff, early weeks included.
+
+Known property, recorded in the module: a penalty this size relative to per-snap EPA (~0.0x)
+recovers roughly 30% of true coefficient magnitude at 4 games per team, rising to about 50% by 17.
+Ordering is essentially unaffected, but the raw `adj_*` columns therefore drift in scale across a
+season while `adj_strength_composite` (standardized within each snapshot) does not. The importance
+diagnostic below is consistent with this.
+
+### Walk-forward (2023-2025, 720 games, 16 weeks per season)
+
+All four arms were run on one dataset build and one code version. Reports are on disk under
+`models/wf_strength_2023_2025_{both_on,prior_off,strength_off,both_off}/`.
+
+| metric | strength on, prior on | strength on, prior off | strength off | both off |
+| --- | --- | --- | --- | --- |
+| Brier | **0.2277** | **0.2277** | 0.2312 | 0.2320 |
+| log loss | **0.7431** | 0.7492 | 0.7495 | 0.7493 |
+| pick accuracy | **0.6958** | 0.6847 | 0.6819 | 0.6736 |
+| margin MAE | 9.9006 | 9.8838 | **9.8698** | 9.9772 |
+| total MAE | 10.1074 | 10.1043 | 10.1025 | **10.0823** |
+| reliability ECE | 0.1321 | 0.1315 | 0.1430 | **0.1237** |
+
+Per season (Brier / log loss / pick accuracy / margin MAE):
+
+| season | strength on, prior on | strength on, prior off | strength off | both off |
+| --- | --- | --- | --- | --- |
+| 2023 | 0.2457 / 0.8173 / 0.6958 / 10.3012 | 0.2427 / 0.7984 / 0.6667 / 10.2293 | 0.2439 / 0.7973 / 0.6875 / 10.1259 | 0.2471 / 0.7950 / 0.6625 / 10.3106 |
+| 2024 | 0.1901 / 0.6647 / 0.7375 / 9.3675 | 0.1902 / 0.6499 / 0.7417 / 9.3822 | 0.1925 / 0.6719 / 0.7333 / 9.3832 | 0.1960 / 0.6798 / 0.7208 / 9.5095 |
+| 2025 | 0.2474 / 0.7473 / 0.6542 / 10.0332 | 0.2502 / 0.7992 / 0.6458 / 10.0398 | 0.2572 / 0.7794 / 0.6250 / 10.1004 | 0.2530 / 0.7732 / 0.6375 / 10.1116 |
+
+**Did the hypothesis hold?** Separately for the two things the milestone set out to test:
+
+- **The opponent adjustment: yes, on the primary metric.** Brier improves to `0.2277` from `0.2312`
+  with the group off and `0.2320` with both groups off; log loss to `0.7431` from `0.7495` /
+  `0.7493`; pick accuracy gains 2.2 points over the both-off baseline. Brier improves in 2 of 3
+  seasons against the strength-off arm (2024 and 2025; 2023 is slightly worse). This is the first
+  family in the workstream to move the primary metric in the right direction.
+- **The prior-carrying early-season blend: not on Brier.** Prior on and prior off are identical to
+  four decimals (`0.2277`). The blend earns its place only on log loss (`0.7431` vs `0.7492`) and
+  pick accuracy (`0.6958` vs `0.6847`), and it is neutral on ECE. It is kept as the default on that
+  basis, but it is the weakest-supported part of the milestone and the ablation switch stays.
+
+**What did not improve.** Margin MAE is worse with the group on than with it off (`9.9006` vs
+`9.8698`), and ECE is worse than the both-off arm (`0.1321` vs `0.1237`). The gain is in probability
+*ranking*, not in sharper point estimates or better-calibrated probabilities.
+
+**Where the gain comes from.** Gain-based importance over 533 model features puts
+`adj_strength_composite_diff` **6th** and `adj_srs_diff` **7th**, behind only the three market
+columns and the two Elo diffs. The pass/rush by offense/defense decomposition ranks far lower
+(median 183). So the win comes from the aggregate adjusted rating, **not** from the decomposition
+that was half the stated rationale for the milestone. `strength_games_played_diff` has a gain of
+exactly `0.0` and is dead.
+
+### Validation
+
+- ETL rebuild `1999-2026`: `480s` (`strength_features` adds about `6s` per season). Dataset is
+  `7260` rows x `498` columns covering `1999-2025`; `predict/week_01_games_to_predict.csv` is
+  `16` rows.
+- Leakage audit passed on the refreshed dataset: `463` features, `7260` rows, `0` failures,
+  `0` warnings, `0` flagged columns.
+- Gates green: `548 passed`, coverage `90.8%`, ruff format/check, pyright, ty, markdownlint and
+  `uv lock --check` all clean.
+- Null rates, all by design: the four `adj_*` plus `adj_srs` and `st_rating` are null on the same
+  `4` of `7260` rows as the play-by-play family; `sos_played_adj` is null in week 1 only;
+  `sos_played_raw` is null through **week 2**, because a week-2 opponent's only prior game is the
+  one against the subject and the head-to-head exclusion removes it. `sos_remaining_adj` is null
+  on playoff rows, which have no remaining regular-season games.
+- Sanity check (2024, pre-week-18): top five by composite BAL, DET, PHI, BUF, GB; bottom five TEN,
+  NYG, JAX, NE, CAR. Spearman against current-season point differential `0.966` for the composite
+  and `0.987` for `adj_srs`, so the snapshot ranks on the current season rather than prior ones.
+- `sos_played_adj` vs `sos_played_raw` at 2024 week 18: Spearman `0.894`, sharing four of the top
+  five hardest schedules (SF, LAR, TB, BAL). Neither looks wrong; they are different lenses.
+- Leakage tests cover all three branches (regular season, playoff, Week 1) for both the
+  play-by-play and the strength families, and each was **mutation-verified**: breaking the
+  matching cutoff makes the matching test fail.
+
+### Defects found and fixed during the milestone
+
+- **`sos_remaining_adj` leaked the postseason bracket into regular-season rows.** The remaining
+  lens averaged the whole remaining schedule, so which playoff games a team would play - an
+  outcome of the season being predicted - reached its week-`N` features. Reproduced: the same
+  regular season with a weak vs a strong playoff opponent moved a week-2 value from `1.0` to
+  `4.0`. Both lenses are now restricted to the regular season. Found by independent review; the
+  original leakage tests missed it because they perturbed play data only, never schedule
+  structure.
+- **Pre-kickoff Week 1 published nothing.** The snapshot drew its team universe from games already
+  played, so a new season with a published schedule and no games produced zero rows: all 33
+  strength columns were null across the live 2026 Week-1 slate, the exact week the prior blend
+  exists to serve, and a train/serve skew against every historical Week-1 training row. The
+  universe now comes from the schedule. The module docstring had already claimed this behavior,
+  so the code did not match its own contract.
+- **`NaN` responses poisoned every team's rating.** `NaN` is not null, so `drop_nulls` let one bad
+  cell reach the normal equations and return `NaN` for all 32 teams rather than for the offending
+  row. Non-finite values are now filtered alongside nulls.
+- `is_home` was missing from the null-fill used when no play-by-play exists at all, so the
+  invariant-schema claim did not hold for that column.
+- A weak playoff leakage test: the playoff games sat *after* the target week, so the cutoff never
+  mattered and mutating it did not fail the test. Rewritten to place them before the target week.
+
+---
+
 ## Milestone 45 - Play-by-play foundation + per-snap team EPA families
 
 Completed 2026-09-09.
@@ -58,7 +196,12 @@ it under walk-forward with a dedicated ablation switch.
 | total MAE | 10.1295 | 10.1164 | 10.1021 |
 | reliability ECE | 0.1244 | 0.1269 | 0.1308 |
 
-The "off" arm dropped exactly 75 columns. Per season, PBP-on has the better margin MAE in 3 of 3
+The "off" arm dropped exactly 75 columns. The original reports were written to a temporary
+directory and lost; a 2026-09-09 review re-ran both arms with the default config and reproduced
+every number above to four decimals (per season, PBP on vs off: 2023 Brier `0.2431` vs `0.2470`,
+2024 `0.1946` vs `0.1918`, 2025 `0.2572` vs `0.2554`; margin MAE `10.2188` vs `10.3494`, `9.4179`
+vs `9.4183`, `10.1168` vs `10.2252`). Reports: `models/review_wf_2023_2025_pbp_off/` and
+`models/review_wf_2023_2025_pbp_on/`. Per season, PBP-on has the better margin MAE in 3 of 3
 seasons (-0.131, -0.000, -0.108) but the better Brier in only 1 of 3. **The family is not a win on
 the primary selection metric**: Brier and log loss are marginally worse with it on. It improves
 margin MAE consistently and calibration slightly.

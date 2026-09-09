@@ -37,6 +37,11 @@ of any stat; the only opponent-adjusted strength inputs are Elo (`nfeloqb`) and 
 two-point, total plays) but are not called anywhere in the ETL path. They are a starting point, not
 a finished loader: no caching, no column selection, no current-season 404 handling.
 
+Status 2026-09-09: Milestone 45 landed (see `ARCHIVE.md`). The loader is now cached per season,
+`aggregate_pbp_stats` was replaced by `nfl_predictor/utils/polars/pbp.py`, and the 25 stats in
+`constants.PBP_STATS` are published for every matchup. The paragraph above describes the state
+this review started from.
+
 ## 2. Power rankings: verified behavior and verdict
 
 `scripts/power_rankings.py::_build_games_for_ratings` fits `fit_bradley_terry_ratings` on:
@@ -85,7 +90,8 @@ Sources: `nfl-sos-ratings/nfl_sos_ratings/team_stats.py`, `team_stats_expanded.p
 | Special teams | `special_teams_tds` only | ST EPA margin per play, `SaSTR` | port ST EPA margin, medium |
 | Schedule-adjusted offense/defense (ridge, simultaneous, with HFA) | no | yes (`solve_team_stat_ridge`) | port as weekly snapshot, highest priority |
 | Strength of schedule from EPA ratings (played, remaining) | TeamRankings SOS + future SOS only | `sos` (played-game mean opponent `SaCR`) | port once ridge snapshot exists |
-| Opponent profiles excluding head-to-head, `diff_*` surfaces | no | yes (season-level, descriptive) | do not port as-is; redundant once ridge snapshot exists |
+| Opponent profiles built from games excluding head-to-head (the sos repo's founding method; section 3.1) | no | yes (`opponent_stats.py`, one hop, season-level) | port the construct: the weekly ridge snapshot (4.4) is its all-hops form, and a one-hop companion ships with schedule strength (4.5) |
+| Season-level `diff_*` comparison surfaces | no | yes (descriptive UI views) | do not port; display only |
 | SRS (point-margin simultaneous) | no | yes (`solve_srs`) | cheap companion to the ridge snapshot |
 | Team Elo | yes (`elo_pre`, `qb_elo_pre` from `nfeloqb`) | external baseline only | present |
 | QB per-dropback EPA, CPOE, sack rate, ANY/A, TD-INT rate | no (only `qb_value_pre`, `qb_elo_pre`) | yes (`qb_*` game logs) | port, high, needs identity bridge |
@@ -96,6 +102,58 @@ Sources: `nfl-sos-ratings/nfl_sos_ratings/team_stats.py`, `team_stats_expanded.p
 | Pooled `_alltime` companions | no | yes | reject |
 | ESPN QBR, PFR, NGS aggregates | no | loaders exist, mostly unimplemented | defer (2006+/2016+ floors, external assets) |
 | Receiving display mirrors, time of possession, tackle accounting | no | display only / deferred | reject |
+
+### 3.1 The founding idea of nfl-sos-ratings and how it maps here
+
+**Status 2026-09-09:** both forms landed in Milestone 46. The ridge snapshot and the one-hop
+`sos_played_raw` ship side by side, and the two agree at Spearman `0.894` on 2024 week 18 without
+being redundant. The corrected expectation below held up: the composite did **not** need to beat
+Elo, and it did not. What it did was improve Brier and log loss on top of Elo, which is what the
+decomposition was supposed to buy. The gain-based importance rank puts `adj_strength_composite_diff`
+6th and `adj_srs_diff` 7th of 533 model features, behind only the three market columns and the two
+Elo diffs; the raw decomposition components rank far lower (median 183), consistent with the ridge
+penalty attenuating their scale across the season while the standardized composite is immune.
+
+The method the sos repo was built around (its first commits: `opponent_stats.py` and
+`team_stats.compute_team_stats_excluding_opponent`) is not "adjust for opponent record". It is:
+
+1. Take a subject (team or QB) and its list of unique regular-season opponents.
+2. For each opponent, build that opponent's statistical profile from **only its games against the
+   rest of the league**, excluding every head-to-head game with the subject, so the opponent
+   profile is independent of the subject's own performance.
+3. Average those profiles with equal weight per unique opponent (a division rival played twice
+   counts once) and compare the subject's own per-game and per-play rates against that averaged
+   opponent profile. The same rules apply to QBs against the defenses they actually faced.
+
+That is a one-hop adjustment: the opponent's profile is independent of the subject, but it is not
+itself adjusted for the opponent's opponents. The simultaneous ridge solve the sos repo later
+adopted as its published backbone (`solve_team_stat_ridge`, `solve_qb_stat_ridge`) is the
+all-hops generalization of the same idea: every team's offense and defense coefficient is estimated
+jointly with every opponent's, so no game contaminates a rating through the team it was played
+against, at any depth. The sos repo kept the one-hop profiles for its descriptive `diff_*` views
+and moved the published ratings to the ridge because the ridge was more stable year over year.
+
+Earlier versions of this document recorded the one-hop method only as a rejected row. That
+undersold it: the ridge milestone below is its direct descendant, and the one-hop form still does
+distinct work in a pre-game feature. How the idea lands in nfl-predictor, in order:
+
+- Milestone 46 ports the ridge form as the weekly, pre-week snapshot (4.4). Docs and docstrings
+  should describe it as the generalization of the head-to-head-exclusion method, not as an
+  unrelated technique.
+- Milestone 46 also ships the one-hop form where it matters in a pre-game setting:
+  `sos_played_raw`, the mean over opponents already faced of their raw EPA margin per play
+  computed from prior-week games **excluding games against the subject**, next to the
+  ridge-based `sos_played_adj` (4.5). The exclusion matters because every faced opponent's
+  season-to-date profile contains the game against the subject, which is exactly the game that
+  produced the subject's own stats. The two constructs are ablated against each other rather than
+  assumed equivalent.
+- Milestone 47 gives QBs the same two lenses: a faced-pass-defense strength from the team ridge
+  (the sos `QSoS` construct, dropback-weighted) and a one-hop companion built from faced defenses'
+  EPA per dropback allowed excluding games against the QB's team, before the optional QB ridge.
+- Not ported: excluding an earlier head-to-head meeting from the two teams' own profiles on a
+  rematch row. Pre-week profiles contain a head-to-head game only for divisional rematches, and
+  for prediction the earlier meeting is evidence about both teams rather than contamination. This
+  is a falsifiable choice; revisit it with a flag if the ridge features underperform.
 
 ## 4. Prioritized shortlist to port
 
@@ -147,15 +205,33 @@ implementation complexity, and owning layer.
 
 ### 4.4 Weekly schedule-adjusted team strength (ridge snapshot)
 
+**Status: landed 2026-09-09** (see `ARCHIVE.md`, Milestone 46).
+
 - What: for each (season, week), solve offense, defense, and home-field coefficients
   simultaneously on the per-snap pass and rush EPA responses using only games with `week < N`
   in that season; publish `adj_off_pass_epa_snap`, `adj_off_rush_epa_snap`,
   `adj_def_pass_epa_snap`, `adj_def_rush_epa_snap`, plus a composite and SRS companion.
 - Source: `simultaneous_adjustment.solve_team_stat_ridge`, `compute_team_adjusted_stats`, and
   `validation/snapshots.build_team_adjusted_snapshot` (already the leakage-safe form).
-- Why: this is the schedule-adjusted "true strength" input the user asked for, and it directly
-  fixes the power-rankings design. In the sos walk-forward it beat raw EPA and SRS on next-week
-  margin MAE.
+- Why: this is the schedule-adjusted "true strength" input the user asked for, the all-hops form
+  of the head-to-head-exclusion method in section 3.1, and it directly fixes the power-rankings
+  design.
+- Expectation, corrected 2026-09-09 from `../nfl-sos-ratings/docs/validation-report.md`: in the
+  sos walk-forward (1999-2025, weeks 5+, next-week home margin MAE) the within-season ridge
+  backbone did **not** beat raw EPA differential or SRS overall (SaOvR `10.701`, RawEPA `10.695`,
+  SRS `10.658`), and a prior-carrying Elo beat all three (`10.580`). It edged SRS and raw EPA only
+  in late weeks (`10.649` vs `10.651` and `10.671`). An earlier version of this document claimed
+  the ridge beat raw EPA and SRS; that was wrong. nfl-predictor already carries Elo and the
+  TeamRankings predictive rating, so the gain has to come from (a) the pass/rush by
+  offense/defense decomposition that lets the model see matchup structure, and (b) a
+  prior-carrying early-season blend, the property that made Elo win there. Design and ablate for
+  both; do not expect the composite alone to beat Elo.
+- Inputs: one row per team-game from `pbp.aggregate_pbp_team_game_stats` with per-game responses
+  `pass_epa_sum / offensive_snaps` and `rush_epa_sum / offensive_snaps`. `is_home` is not in
+  `team_stats_df`; derive it from `posteam_type` in `pbp.py` (or from the schedule) and keep it
+  out of the averaged and published columns. The sos repo tunes the ridge penalty per solve by
+  5-fold CV over `logspace(-6, 2, 17)`; v1 here freezes one value chosen once offline and records
+  how it was chosen.
 - Floor: 1999.
 - Leakage: safe if the solve is fed only prior-week rows. Early weeks are ill-posed; use a
   prior-season final snapshot regressed by `WEEK1_REGRESSION_FACTOR` as the Week 1 value and
@@ -167,13 +243,22 @@ implementation complexity, and owning layer.
 
 ### 4.5 Schedule strength from adjusted ratings
 
-- What: `sos_played` = mean of opponents' pre-week adjusted composite over games played;
-  `sos_remaining` = the same over the remaining regular-season schedule.
-- Source: `main._build_team_schedule_strength` in the sos repo (season-level); the weekly form is
-  new but trivial once 4.4 exists.
+**Status: landed 2026-09-09** (see `ARCHIVE.md`, Milestone 46).
+
+- What: `sos_played_adj` = mean of faced opponents' pre-week adjusted composite over games
+  played; `sos_remaining_adj` = the same over the remaining regular-season schedule;
+  `sos_played_raw` = the one-hop companion from section 3.1, the mean over faced opponents of
+  their raw EPA margin per play computed from prior-week games **excluding games against the
+  subject**, equal weight per unique opponent.
+- Source: `main._build_team_schedule_strength` (season-level, ridge-based) and
+  `opponent_stats.compute_opponent_profile` plus `team_stats.compute_team_stats_excluding_opponent`
+  (one-hop, head-to-head excluded) in the sos repo; the weekly forms are new but small once 4.4
+  exists.
 - Why: replaces reliance on scraped TeamRankings SOS and future SOS with an internal, explainable
   measure; the model can weigh raw and adjusted stats together.
-- Floor: 1999. Leakage: none if opponent ratings are the same pre-week snapshot.
+- Floor: 1999. Leakage: none if opponent ratings are the same pre-week snapshot, **and** the
+  remaining side is restricted to the regular season. Shipping this the obvious way leaked the
+  postseason bracket into regular-season rows; see `ARCHIVE.md`, Milestone 46.
 - Complexity: low after 4.4. Layer: ETL.
 
 ### 4.6 QB per-dropback families for the expected starter
@@ -182,6 +267,10 @@ implementation complexity, and owning layer.
   `qb_any_a`, `qb_td_int_margin_rate`, `qb_dropbacks` for `away_qb` / `home_qb`.
 - Source: `qb_stats.compute_qb_game_stats_from_pbp` (grouped by `passer_player_id`), rate
   formulas in the sos README.
+- Schedule lenses (section 3.1 applied to QBs): `qb_faced_pass_def_adj`, the dropback-weighted
+  mean of the faced defenses' pre-week ridge pass-defense coefficient from 4.4 (the sos `QSoS`
+  construct), and the one-hop `qb_faced_pass_def_raw`, the faced defenses' EPA per dropback
+  allowed from prior-week games excluding games against the QB's team.
 - Why: the user wants QB EPA to matter more; today the only QB signal is the nfeloqb value/Elo pair
   and its 4-week trend.
 - Floor: 1999 for EPA-based fields, 2006 for CPOE.
@@ -221,8 +310,9 @@ implementation complexity, and owning layer.
   raw adjusted units; standardization is for rankings display only.
 - Frozen composite weights as features: let XGBoost weight components; reuse the sos weights only
   as the default display composite for power rankings.
-- Season-level opponent profiles with head-to-head exclusion and `diff_*` surfaces: the weekly
-  ridge snapshot supersedes them and is cheaper.
+- Season-level `diff_*` comparison surfaces: display-only in the sos repo; not ported. The
+  head-to-head-excluded opponent profiles behind them are **not** rejected; section 3.1 records
+  how they carry over as the ridge snapshot plus the one-hop schedule-strength companion.
 - ESPN QBR, PFR, NGS: later floors, external release assets, small expected gain.
 - Designed-run/scramble QB split, time of possession, tackle accounting, receiving mirrors: display
   value only at this stage.
@@ -252,10 +342,13 @@ ridge-adjusted strength + schedule strength), then 43 rewritten (power rankings 
 snapshot), then 47 (QB per-dropback families), then 48 (PBP situational stats replacing the scrape),
 then the deferred 39/40 sweep and 41 residuals. Milestone 42 stays parked.
 
-The first implementation session should deliver Milestone 45 end to end: cached PBP loader, team-game
-aggregation, schema constants, invariant-schema finalization, leakage audit on the rebuilt dataset,
-and a 2023-2025 walk-forward comparison against the recorded baseline (Brier `0.2312`, log loss
-`0.7352`, pick accuracy `0.6833`, margin MAE `9.8954`, total MAE `10.1021`, ECE `0.1308`).
+The first implementation session delivered Milestone 45 end to end on 2026-09-09 (see
+`ARCHIVE.md`). The baseline it was asked to compare against (Brier `0.2312`, log loss `0.7352`,
+pick accuracy `0.6833`, margin MAE `9.8954`, total MAE `10.1021`, ECE `0.1308`) is recorded in
+`models/review_walk_forward_2023_2025.json` with a config matching today's defaults, but the
+default configuration did not reproduce it on the pre-change dataset and the cause was not found;
+compare future work against the working baseline in `AGENTS.md`, within one dataset build and
+code version.
 
 ## 8. Guardrails specific to the PBP work
 

@@ -128,7 +128,7 @@ remains **90% or higher**, with **100%** as the aspirational ceiling:
 python -m pytest --cov-fail-under=95
 ```
 
-Current validated local baseline as of 2026-09-09: `412 passed` with `90.03%` coverage.
+Current validated local baseline as of 2026-09-09: `471 passed` with `90.51%` coverage.
 
 ## Data collection (Polars + nflreadpy)
 
@@ -540,6 +540,10 @@ uv lock --check
 uv sync --check --active
 ```
 
+CI installs `markdownlint-cli` for the `markdownlint .` step; on a machine that has
+`markdownlint-cli2` instead, the equivalent is
+`markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings"`.
+
 GitHub Actions mirrors this gate in `.github/workflows/validation.yml` and also runs the
 editable-install smoke check plus `--help` smoke checks for `nfl_predictor.ml_model`,
 `scripts/weekly_run.py`, and `scripts/power_rankings.py`.
@@ -626,13 +630,37 @@ games.
   named explicitly (`def_*` / `*_allowed`) rather than relying on the generic `opponent_` mirror.
   Counts and sums are carried through season-to-date aggregation and every rate is computed
   afterwards as a ratio of sums, never a mean of per-game rates.
+- Schedule-adjusted team strength (`constants.ADJUSTED_STRENGTH_STATS`): a pre-week snapshot
+  solved for every `(season, week)` from a simultaneous ridge that estimates one offense and one
+  defense coefficient per team plus a shared home-field term, on per-snap pass and rush EPA
+  responses. Published per team as `adj_off_pass_epa_snap`, `adj_off_rush_epa_snap`,
+  `adj_def_pass_epa_snap`, `adj_def_rush_epa_snap`, a point-margin SRS companion (`adj_srs`), a
+  special-teams rating (`st_rating`), a standardized display composite
+  (`adj_strength_composite`), and the games behind the solve (`strength_games_played`).
+  A **higher** `adj_def_*` value means a **better** defense: the solve models a team-game as
+  `offense[team] - defense[opponent]`, so the defense coefficient is what suppresses the
+  opponent's output.
+- Schedule strength in two lenses (`constants.SCHEDULE_STRENGTH_STATS`): `sos_played_adj` and
+  `sos_remaining_adj`, the mean pre-week composite of the opponents already faced and still to
+  come; and `sos_played_raw`, the one-hop companion that profiles each faced opponent from only
+  its games **against the rest of the league**, excluding every head-to-head game with the subject.
+  Both are restricted to the regular season: the regular-season schedule is fixed before kickoff
+  and is legitimately known, but the postseason bracket is an outcome of the season being
+  predicted and must never reach a pre-week feature. `sos_played_raw` is therefore null through
+  week 2, because a week-2 opponent's only prior game is the one against the subject.
+
+The strength family is ablatable as the `strength` feature group
+(`--disable-feature-groups strength`), and the early-season prior blend can be ablated
+independently at ETL time with `--no-strength-prior-blend`.
 
 ## Open work
 
 Active tasks (milestones + guardrails) are tracked in `.agents/TODO.md`, and completed milestones
-live in `.agents/ARCHIVE.md`. Those are local planning files (the `.agents/` directory is
-gitignored). The current direction is stronger feature engineering around play-by-play EPA and
-schedule-adjusted team strength, with XGBoost margin/total remaining the primary model.
+live in `.agents/ARCHIVE.md`; both are tracked in git alongside the cross-repo feature crosswalk
+(`.agents/feature_crosswalk.md`) and the next-session handoff prompt. The current direction is
+stronger feature engineering around play-by-play EPA and schedule-adjusted team strength, porting
+the head-to-head-excluded opponent-profile method from the sibling `nfl-sos-ratings` project and
+the simultaneous ridge that generalizes it, with XGBoost margin/total remaining the primary model.
 
 ## Development notes
 

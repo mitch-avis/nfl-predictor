@@ -12,6 +12,7 @@ from nfl_predictor.utils.polars.teamrankings import (
     get_elo_columns,
     get_pbp_columns,
     get_stat_columns,
+    get_strength_columns,
     get_tr_columns,
 )
 
@@ -47,16 +48,19 @@ def build_final_column_order() -> list[str]:
     tr_cols = get_tr_columns()
     nflreadpy_stats = get_stat_columns()
     pbp_stats = get_pbp_columns()
+    strength_stats = get_strength_columns()
 
-    # Build the base stat columns (non-opponent): ELO + TR + trends + nflreadpy + PBP stats.
-    # Play-by-play stats name their allowed variants explicitly, so they never receive the
-    # generic opponent_ mirror generated below for nflreadpy stats.
+    # Build the base stat columns (non-opponent): ELO + TR + trends + nflreadpy + PBP +
+    # schedule-adjusted strength stats. Play-by-play and strength stats name their allowed
+    # and defensive variants explicitly, so they never receive the generic opponent_ mirror
+    # generated below for nflreadpy stats.
     base_stats = []
     base_stats.extend(elo_cols)
     base_stats.extend(tr_cols)
     base_stats.extend(constants.TREND_FEATURE_COLUMNS)
     base_stats.extend(nflreadpy_stats)
     base_stats.extend(pbp_stats)
+    base_stats.extend(strength_stats)
 
     # Deduplicate
     seen = set()

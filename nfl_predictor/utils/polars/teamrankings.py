@@ -815,6 +815,19 @@ def get_pbp_columns() -> list[str]:
     return constants.PBP_STATS.copy()
 
 
+def get_strength_columns() -> list[str]:
+    """Get the schedule-adjusted strength stat column names to publish.
+
+    These name their own offensive and defensive sides explicitly, so like the
+    play-by-play stats they never receive the generic `opponent_` mirror.
+
+    Returns:
+        List of stat column names
+
+    """
+    return constants.ADJUSTED_STRENGTH_STATS.copy()
+
+
 def get_elo_columns() -> list[str]:
     """Get the ELO column names.
 
@@ -1043,6 +1056,9 @@ def get_stats_for_diff() -> list[str]:
 
     # Play-by-play derived stats (allowed variants are explicit, so no opponent mirror)
     all_stats.extend(get_pbp_columns())
+
+    # Schedule-adjusted strength stats (offense/defense named explicitly, no mirror)
+    all_stats.extend(get_strength_columns())
 
     # Opponent stats (excluding duplicates)
     excluded = set(constants.EXCLUDE_FROM_OPPONENT_STATS)

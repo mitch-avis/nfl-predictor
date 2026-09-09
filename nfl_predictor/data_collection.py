@@ -45,6 +45,7 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.utils import game_utils, polars_utils
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.polars import schedule_strength, strength_snapshot
 
 
 def _current_nfl_season(today: date) -> int:
@@ -77,6 +78,9 @@ class DataCollectionConfig:
     force_refresh_nflreadpy: bool
     min_season: int
     max_season: int
+    # Set to False to ablate the early-season strength prior and publish the raw
+    # in-season solve, so the blend can be measured on its own.
+    blend_strength_prior: bool = True
 
 
 def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFrame:
@@ -148,6 +152,15 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         default=None,
         help="Force refresh nflreadpy data even when cache exists.",
     )
+    parser.add_argument(
+        "--strength-prior-blend",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Blend the previous season's final adjusted-strength snapshot into early-season "
+            "weeks. Use --no-strength-prior-blend to publish the raw in-season solve instead."
+        ),
+    )
     args = parser.parse_args(argv)
     default_min = DEFAULT_MIN_SEASON
     default_max = _default_max_season()
@@ -162,6 +175,7 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         ),
         min_season=int(min_season),
         max_season=int(max_season),
+        blend_strength_prior=bool(args.strength_prior_blend),
     )
 
 
@@ -312,6 +326,10 @@ def _log_pbp_null_rates(team_stats_df: pl.DataFrame, enable_debug: bool) -> None
         )
 
 
+# Context flag carried alongside the play-by-play counts; see the join docstring below.
+_PBP_HOME_COLUMN = "is_home"
+
+
 def _join_pbp_team_game_stats(
     team_stats_df: pl.DataFrame,
     pbp_team_games: pl.DataFrame,
@@ -319,9 +337,12 @@ def _join_pbp_team_game_stats(
     """Attach per-team-game play-by-play counts to the team stats frame.
 
     The counts join on `(season, week, team_abbr)`; `opponent_abbr` is dropped from the
-    play-by-play side because team stats already carry it. Teams without play-by-play for a
-    game keep nulls, and when no play-by-play is available at all every count column is
-    still added as nulls so the downstream schema stays invariant. The join is guaranteed
+    play-by-play side because team stats already carry it. The `is_home` context flag rides
+    along with the counts: season-to-date aggregation drops it because it is not numeric, so
+    it never reaches the published schema, but the opponent-adjusted solves read it here.
+    Teams without play-by-play for a game keep nulls, and when no play-by-play is available
+    at all every count column and `is_home` are still added as nulls so the downstream
+    schema stays invariant. The join is guaranteed
     not to change the row count: duplicate team-week keys are collapsed with a warning
     rather than multiplying the team-stats frame.
 
@@ -337,13 +358,16 @@ def _join_pbp_team_game_stats(
 
     if pbp_team_games.height == 0:
         log.warning("No play-by-play team-game rows available; emitting null count columns.")
-        return team_stats_df.with_columns(
-            [
-                pl.lit(None, dtype=pl.Float64).alias(col)
-                for col in constants.PBP_COUNT_COLUMNS
-                if col not in team_stats_df.columns
-            ]
-        )
+        empty_columns: list[pl.Expr] = [
+            pl.lit(None, dtype=pl.Float64).alias(col)
+            for col in constants.PBP_COUNT_COLUMNS
+            if col not in team_stats_df.columns
+        ]
+        # `is_home` is a context flag rather than a count, so it is not in
+        # PBP_COUNT_COLUMNS and needs its own null fill to keep the schema invariant.
+        if _PBP_HOME_COLUMN not in team_stats_df.columns:
+            empty_columns.append(pl.lit(None, dtype=pl.Boolean).alias(_PBP_HOME_COLUMN))
+        return team_stats_df.with_columns(empty_columns)
 
     countable = [col for col in pbp_team_games.columns if col not in {*join_keys, "opponent_abbr"}]
     lookup = pbp_team_games.select([*join_keys, *countable])
@@ -359,11 +383,13 @@ def _join_pbp_team_game_stats(
 
     merged = team_stats_df.join(deduped, on=join_keys, how="left")
 
-    missing = [
+    missing: list[pl.Expr] = [
         pl.lit(None, dtype=pl.Float64).alias(col)
         for col in constants.PBP_COUNT_COLUMNS
         if col not in merged.columns
     ]
+    if _PBP_HOME_COLUMN not in merged.columns:
+        missing.append(pl.lit(None, dtype=pl.Boolean).alias(_PBP_HOME_COLUMN))
     if missing:
         merged = merged.with_columns(missing)
 
@@ -550,6 +576,7 @@ def collect_all_data(
                 elo_df=elo_df,
                 tr_df=tr_df,
                 prev_tr_df=prev_tr_df,
+                blend_strength_prior=config.blend_strength_prior,
             )
         if season_data.height > 0:
             all_seasons_data.append(season_data)
@@ -584,6 +611,247 @@ def collect_all_data(
     return pl.DataFrame()
 
 
+# Per-game components of the one-hop schedule-strength margin. The published
+# `epa_margin_per_play` is a difference of two per-side rates with different
+# denominators, so it is not expressible as a single ratio of sums. These two columns
+# are, which is what the opponent profiling below needs: net EPA over every play the
+# team was involved in, offense and defense pooled.
+_STRENGTH_MARGIN_NUMERATOR = "_strength_epa_margin_sum"
+_STRENGTH_MARGIN_DENOMINATOR = "_strength_total_plays"
+
+_STRENGTH_MARGIN_SOURCES = (
+    "pass_epa_sum",
+    "rush_epa_sum",
+    "pass_epa_allowed_sum",
+    "rush_epa_allowed_sum",
+    "offensive_snaps",
+    "defensive_snaps",
+)
+
+
+def _schedule_teams(schedule_df: pl.DataFrame, season: int) -> list[str]:
+    """Return every team on the season's schedule, sorted.
+
+    The schedule is published before kickoff, so this is the team universe even when no
+    game has been played yet. Taking it from here rather than from played games is what
+    lets a Week-1 row carry the regressed prior in production instead of nulls.
+    """
+    sides = [side for side in ("away_abbr", "home_abbr") if side in schedule_df.columns]
+    if not sides or "season" not in schedule_df.columns:
+        return []
+    season_rows = schedule_df.filter(pl.col("season") == season)
+    teams: set[str] = set()
+    for side in sides:
+        teams.update(season_rows.get_column(side).drop_nulls().cast(pl.String).to_list())
+    return sorted(teams)
+
+
+def _regular_season_schedule(schedule_df: pl.DataFrame, season: int) -> pl.DataFrame:
+    """Return only the season's regular-season rows.
+
+    The postseason bracket is a result of the season, not schedule context known in
+    advance, so it must not reach any pre-week feature. Filtering by week rather than by
+    `game_type` keeps this working on the minimal schedule frames used in tests, which do
+    not always carry a game-type column.
+    """
+    if "week" not in schedule_df.columns:
+        return schedule_df
+    return schedule_df.filter(pl.col("week") <= constants.get_regular_season_weeks(season))
+
+
+def _with_strength_margin_components(team_stats_df: pl.DataFrame) -> pl.DataFrame:
+    """Attach the net-EPA numerator and play-count denominator used by schedule strength.
+
+    Formulas:
+        numerator   = (pass_epa_sum + rush_epa_sum)
+                      - (pass_epa_allowed_sum + rush_epa_allowed_sum)
+        denominator = offensive_snaps + defensive_snaps
+
+    Returns the frame unchanged when any source column is missing, so a season without
+    play-by-play still flows through and simply yields a null schedule strength.
+    """
+    if any(column not in team_stats_df.columns for column in _STRENGTH_MARGIN_SOURCES):
+        return team_stats_df
+
+    def value(column: str) -> pl.Expr:
+        return pl.col(column).cast(pl.Float64, strict=False)
+
+    return team_stats_df.with_columns(
+        (
+            (value("pass_epa_sum") + value("rush_epa_sum"))
+            - (value("pass_epa_allowed_sum") + value("rush_epa_allowed_sum"))
+        ).alias(_STRENGTH_MARGIN_NUMERATOR),
+        (value("offensive_snaps") + value("defensive_snaps")).alias(_STRENGTH_MARGIN_DENOMINATOR),
+    )
+
+
+def build_prior_strength_snapshot(
+    team_stats_df: pl.DataFrame,
+    season: int,
+    *,
+    min_season: int,
+) -> pl.DataFrame | None:
+    """Return the previous season's final strength snapshot, or None when unavailable.
+
+    "Final" means the whole regular season, which is what the playoff branch of the
+    snapshot builder returns for any week past the regular season.
+    """
+    if season <= min_season or team_stats_df.height == 0:
+        return None
+    previous = season - 1
+    if team_stats_df.filter(pl.col("season") == previous).height == 0:
+        return None
+    snapshot = strength_snapshot.build_strength_snapshot(
+        team_stats_df,
+        season=previous,
+        week=constants.get_regular_season_weeks(previous) + 1,
+        blend_prior=False,
+    )
+    return snapshot if snapshot.height > 0 else None
+
+
+def build_strength_features(
+    team_stats_df: pl.DataFrame,
+    schedule_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    prior_snapshot: pl.DataFrame | None = None,
+    blend_prior: bool = True,
+) -> pl.DataFrame:
+    """Build every published schedule-adjusted strength column for one season week.
+
+    Combines the pre-week ridge snapshot with the two schedule-strength lenses: the
+    ridge-based mean of opponents' pre-week composite, and the one-hop companion that
+    profiles each faced opponent from its other games only.
+
+    Both lenses are restricted to the regular season. That matters for the
+    games-remaining side: the regular-season schedule is fixed before kickoff and so is
+    legitimately known, but *which* postseason games a team will play, and against whom,
+    is an outcome of the very season being predicted. Letting the bracket into a
+    week-`N` feature would leak the season's result backwards into it.
+
+    Args:
+        team_stats_df: Per-game team stats carrying the play-by-play sums, `is_home`
+            and the scoring columns. Rows outside the requested window are filtered
+            downstream, so the full history may be passed.
+        schedule_df: The season's schedule, used for the games-remaining lens.
+        season: Season being processed.
+        week: Week being processed; every value is solved from earlier games only.
+        prior_snapshot: Previous season's final snapshot for the early-season blend.
+        blend_prior: Set to False to ablate the prior and publish the raw in-season solve.
+
+    Returns:
+        One row per team with `team_abbr` and `constants.ADJUSTED_STRENGTH_STATS`.
+
+    """
+    snapshot = strength_snapshot.build_strength_snapshot(
+        team_stats_df,
+        season=season,
+        week=week,
+        prior_snapshot=prior_snapshot,
+        blend_prior=blend_prior,
+        teams=_schedule_teams(schedule_df, season),
+    )
+    if snapshot.height == 0:
+        return pl.DataFrame(
+            schema={
+                "team_abbr": pl.String,
+                **dict.fromkeys(constants.ADJUSTED_STRENGTH_STATS, pl.Float64),
+            }
+        )
+
+    features = snapshot.select("team_abbr", *constants.STRENGTH_TEAM_STATS)
+
+    ratings = snapshot.select("team_abbr", "adj_strength_composite")
+    try:
+        adjusted = schedule_strength.compute_schedule_strength_adjusted(
+            _regular_season_schedule(schedule_df, season),
+            ratings,
+            season=season,
+            week=week,
+            rating_col="adj_strength_composite",
+            team_col="team_abbr",
+        )
+        features = features.join(adjusted, on="team_abbr", how="left")
+    except ValueError as error:
+        log.warning(
+            "Skipping adjusted schedule strength for season %d week %d: %s",
+            season,
+            week,
+            error,
+        )
+
+    prepared = _with_strength_margin_components(team_stats_df)
+    if _STRENGTH_MARGIN_NUMERATOR in prepared.columns:
+        raw = schedule_strength.compute_schedule_strength_raw(
+            prepared,
+            season=season,
+            week=week,
+            team_col="team_abbr",
+            opponent_col="opponent_abbr",
+            numerator_col=_STRENGTH_MARGIN_NUMERATOR,
+            denominator_col=_STRENGTH_MARGIN_DENOMINATOR,
+        )
+        features = features.join(raw, on="team_abbr", how="left")
+
+    missing = [
+        pl.lit(None, dtype=pl.Float64).alias(column)
+        for column in constants.ADJUSTED_STRENGTH_STATS
+        if column not in features.columns
+    ]
+    if missing:
+        features = features.with_columns(missing)
+
+    return features.select("team_abbr", *constants.ADJUSTED_STRENGTH_STATS)
+
+
+def _merge_strength_features(
+    merged: pl.DataFrame,
+    features: pl.DataFrame,
+) -> pl.DataFrame:
+    """Join the per-team strength columns onto a week's games as away_/home_ pairs.
+
+    Every published column is added on both sides even when the join finds nothing, so
+    the output schema stays invariant across seasons and the model sees nulls rather
+    than a missing column.
+
+    A duplicate team key on the feature side would multiply this week's games instead of
+    annotating them, silently corrupting every downstream row, so duplicates are collapsed
+    with a warning rather than joined.
+    """
+    if features.height > 0:
+        deduped = features.unique(subset=["team_abbr"], keep="first")
+        if deduped.height != features.height:
+            log.warning(
+                "Strength features produced %d duplicate team keys; keeping the first of each.",
+                features.height - deduped.height,
+            )
+        features = deduped
+
+    row_count = merged.height
+    for side in ("away", "home"):
+        renamed = features.rename(
+            {"team_abbr": f"{side}_abbr"}
+            | {column: f"{side}_{column}" for column in constants.ADJUSTED_STRENGTH_STATS}
+        )
+        merged = merged.join(renamed, on=f"{side}_abbr", how="left")
+
+    if merged.height != row_count:
+        raise ValueError(
+            f"Strength feature join changed the row count from {row_count} to {merged.height}"
+        )
+
+    return merged.with_columns(
+        [
+            pl.lit(None, dtype=pl.Float64).alias(f"{side}_{column}")
+            for side in ("away", "home")
+            for column in constants.ADJUSTED_STRENGTH_STATS
+            if f"{side}_{column}" not in merged.columns
+        ]
+    )
+
+
 def process_season(
     season: int,
     schedule_df: pl.DataFrame,
@@ -594,6 +862,7 @@ def process_season(
     elo_df: pl.DataFrame | None = None,
     tr_df: pl.DataFrame | None = None,
     prev_tr_df: pl.DataFrame | None = None,
+    blend_strength_prior: bool = True,
 ) -> pl.DataFrame:
     """Process a single season's data.
 
@@ -606,6 +875,7 @@ def process_season(
         elo_df: ELO ratings DataFrame
         tr_df: TeamRankings DataFrame for this season
         prev_tr_df: TeamRankings DataFrame for previous season (for week 1)
+        blend_strength_prior: Set to False to ablate the strength prior blend
 
     Returns:
         Processed DataFrame for the season
@@ -635,6 +905,13 @@ def process_season(
     if schedule_df.height > 0:
         coach_features = polars_utils.build_coach_features(schedule_df, season=season)
 
+    # Solved once per season rather than per week: it depends only on the prior season.
+    prior_strength_snapshot = (
+        build_prior_strength_snapshot(team_stats_df, season, min_season=min_season)
+        if blend_strength_prior
+        else None
+    )
+
     # Get unique weeks in the schedule
     weeks = sorted(season_schedule.select("week").unique().to_series().to_list())
 
@@ -657,6 +934,8 @@ def process_season(
             qb_trends=qb_trends,
             team_stat_trends=team_stat_trends,
             coach_features=coach_features,
+            prior_strength_snapshot=prior_strength_snapshot,
+            blend_strength_prior=blend_strength_prior,
         )
         if week_data.height > 0:
             weekly_data.append(week_data)
@@ -694,6 +973,8 @@ def process_week(
     qb_trends: pl.DataFrame | None = None,
     team_stat_trends: pl.DataFrame | None = None,
     coach_features: pl.DataFrame | None = None,
+    prior_strength_snapshot: pl.DataFrame | None = None,
+    blend_strength_prior: bool = True,
 ) -> pl.DataFrame:
     """Process a single week's games with aggregated stats from prior weeks.
 
@@ -716,6 +997,9 @@ def process_week(
         qb_trends: Optional rolling quarterback trend features for the current season
         team_stat_trends: Optional rolling team-stat trend features for the current season
         coach_features: Optional per-team coach feature DataFrame
+        prior_strength_snapshot: Optional previous-season final strength snapshot used
+            by the early-season prior blend. Computed here when not supplied.
+        blend_strength_prior: Set to False to ablate the strength prior blend
 
     Returns:
         DataFrame with week's games and features
@@ -953,6 +1237,22 @@ def process_week(
                 season,
                 week,
             )
+
+    # Schedule-adjusted team strength, solved from games strictly before this week
+    with _timed_substep("strength_features", timing_enabled, timing_totals):
+        if prior_strength_snapshot is None and blend_strength_prior:
+            prior_strength_snapshot = build_prior_strength_snapshot(
+                team_stats_df, season, min_season=min_season
+            )
+        strength_features = build_strength_features(
+            team_stats_df,
+            schedule_df,
+            season=season,
+            week=week,
+            prior_snapshot=prior_strength_snapshot,
+            blend_prior=blend_strength_prior,
+        )
+        merged = _merge_strength_features(merged, strength_features)
 
     # Calculate stat differentials
     with _timed_substep("calculate_differentials", timing_enabled, timing_totals):

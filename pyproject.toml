@@ -121,6 +121,9 @@ venv = ".venv"
 pythonPlatform = "Linux"
 stubPath = "stubs"
 executionEnvironments = [{ root = "." }]
+# `nfl-sos-ratings` is a gitignored symlink to the read-only reference repo; it is not part
+# of this project's type-check surface. The rest of the list restores pyright's defaults.
+exclude = ["nfl-sos-ratings", "**/node_modules", "**/__pycache__", "**/.*"]
 # --- Standard-mode diagnostics promoted to errors (also surfaced by Pylance) ----------
 reportMissingImports = "error"
 reportMissingModuleSource = "warning"

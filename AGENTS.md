@@ -34,16 +34,24 @@ Rules that are always enforced:
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material.
-- Validated baseline on 2026-09-09:
+- Validated baseline on 2026-09-09 (after the play-by-play feature release, version `0.3.0`):
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`412 passed`) with coverage `90.03%` against the enforced
+  - `.venv/bin/python -m pytest` passes (`471 passed`) with coverage `90.51%` against the enforced
     `90%` floor.
-  - `markdownlint .`, `uv lock --check`, and `uv sync --check --active` pass.
-  - ETL was rerun for `1999-2026` and the leakage audit passed on the refreshed dataset.
-- Reference walk-forward benchmark (seasons `2023-2025`, current default config): Brier `0.2312`,
-  log loss `0.7352`, pick accuracy `0.6833`, margin MAE `9.8954`, total MAE `10.1021`,
-  reliability ECE `0.1308`. New feature work must report against these numbers.
+  - `markdownlint-cli2` and `uv lock --check` pass.
+  - ETL was rerun for `1999-2026` (`7260` rows, `465` columns, `1999-2025`) and the leakage audit
+    passed on the refreshed dataset (`430` features, `0` findings).
+- Working walk-forward benchmark (seasons `2023-2025`, `--eval-last-n-seasons 3`, `720` games), with
+  the play-by-play feature group **off**: Brier `0.2314`, log loss `0.7440`, pick accuracy `0.6708`,
+  margin MAE `9.9977`, total MAE `10.1164`, reliability ECE `0.1269`. With the group **on**:
+  `0.2317`, `0.7455`, `0.6778`, `9.9178`, `10.1295`, `0.1244`. Report new feature work against
+  these.
+- The older reference (Brier `0.2312`, log loss `0.7352`, pick accuracy `0.6833`, margin MAE
+  `9.8954`) is **not reproducible**: re-running the default config against the untouched pre-change
+  dataset gives Brier `0.2300`, log loss `0.7501`, pick accuracy `0.6833`, margin MAE `9.9705`. Do
+  not treat a gap against those old numbers as a regression. Compare arms only within a single
+  dataset build and code version.
 
 ### Readiness behaviors that must not regress
 

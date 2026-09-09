@@ -70,8 +70,6 @@ Rules that are always enforced:
   and new milestones continue from the latest archived number.
 - The cross-repo feature review and prioritized shortlist live in `.agents/feature_crosswalk.md`.
 - The handoff prompt for the next session lives in `.agents/next_agent_session_prompt.md`.
-- `.agents/` is gitignored local planning state. Keep it accurate anyway; a stale plan file is a
-  repo bug.
 - `CHANGELOG.md` is the authoritative release history.
 - Before starting any task: read `.agents/TODO.md` and work only on the highest-priority blocking
   items.

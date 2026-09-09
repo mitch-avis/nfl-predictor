@@ -32,6 +32,45 @@ NUMERIC_DTYPES = {
 }
 
 
+# Columns of `constants.PBP_COLUMNS` that carry text rather than measurements.
+# Everything else in that list is numeric; `season`/`week` are whole numbers and the
+# remaining value columns (EPA, rates, indicator flags) are stored as floats because
+# nflreadpy publishes several of them as nullable floats.
+_PBP_STRING_COLUMNS = frozenset(
+    {
+        "game_id",
+        "posteam",
+        "defteam",
+        "home_team",
+        "away_team",
+        "posteam_type",
+        "play_type",
+        "season_type",
+        "two_point_conv_result",
+        "td_team",
+        "fixed_drive_result",
+        "drive_start_yard_line",
+        "passer_player_id",
+        "passer_player_name",
+    }
+)
+
+_PBP_INTEGER_COLUMNS = frozenset({"season", "week"})
+
+# Explicit schema used to build a typed but empty play-by-play frame so callers always
+# see a stable set of columns and dtypes, even when no season could be loaded.
+_PBP_COLUMN_DTYPES: dict[str, DataType] = {
+    column: (
+        pl.Utf8()
+        if column in _PBP_STRING_COLUMNS
+        else pl.Int64()
+        if column in _PBP_INTEGER_COLUMNS
+        else pl.Float64()
+    )
+    for column in constants.PBP_COLUMNS
+}
+
+
 def _is_numeric_dtype(dtype: DataType) -> bool:
     """Return True if dtype is numeric."""
     return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES
@@ -61,6 +100,12 @@ def _team_stats_cache_path(cache_dir: Path, season: int, regular_season_only: bo
     """Build the cache path for season team stats."""
     suffix = "reg" if regular_season_only else "all"
     return cache_dir / f"team_stats_{season}_{suffix}.parquet"
+
+
+def _pbp_cache_path(cache_dir: Path, season: int, regular_season_only: bool) -> Path:
+    """Build the cache path for a season of play-by-play data."""
+    suffix = "reg" if regular_season_only else "all"
+    return cache_dir / f"pbp_{season}_{suffix}.parquet"
 
 
 def _read_cached_frame(path: Path) -> pl.DataFrame | None:
@@ -654,103 +699,145 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
     return result
 
 
-def load_pbp(seasons: list[int]) -> pl.DataFrame:
+def _empty_pbp_frame() -> pl.DataFrame:
+    """Build an empty play-by-play frame with the full expected schema."""
+    return pl.DataFrame(schema=_PBP_COLUMN_DTYPES)
+
+
+def _prepare_pbp(season_df: pl.DataFrame, *, regular_season_only: bool) -> pl.DataFrame:
+    """Reduce raw nflreadpy play-by-play data to the cached project schema.
+
+    Only the columns of `constants.PBP_COLUMNS` that are actually present are kept, because
+    older seasons do not publish every column. Team abbreviations are normalized so cached
+    frames already use canonical identifiers.
+
+    Args:
+        season_df: Raw play-by-play frame for a single season
+        regular_season_only: If True, drop non-regular-season plays when `season_type` exists
+
+    Returns:
+        Prepared play-by-play DataFrame ready to cache
+
+    """
+    available_cols = set(season_df.columns)
+    cols_to_select = [c for c in constants.PBP_COLUMNS if c in available_cols]
+    prepared = season_df.select(cols_to_select)
+
+    if regular_season_only and "season_type" in prepared.columns:
+        prepared = prepared.filter(pl.col("season_type") == "REG")
+
+    for col in ("posteam", "defteam", "home_team", "away_team"):
+        if col in prepared.columns:
+            prepared = normalize_team_column(prepared, col)
+
+    return prepared
+
+
+def load_pbp(
+    seasons: list[int],
+    *,
+    cache_dir: os.PathLike | str | None = None,
+    force_refresh: bool = False,
+    current_season: int | None = None,
+    regular_season_only: bool = True,
+) -> pl.DataFrame:
     """Load play-by-play data for specified seasons using nflreadpy.
+
+    Seasons are loaded one at a time because play-by-play frames are large. Each season is
+    reduced to the guarded selection in `constants.PBP_COLUMNS`, filtered, normalized, and
+    then cached, so a cache hit needs no further work.
+
+    Caching contract:
+        - Prepared frames are cached as `pbp_<season>_<reg|all>.parquet` in the resolved
+          cache directory.
+        - Historical seasons (`season < current_season`) read from that cache whenever it
+          exists and `force_refresh` is False.
+        - The current and any future season is always refreshed, and `force_refresh` bypasses
+          the cache for every season.
+
+    Degrade-on-failure contract:
+        - A failure for a historical season is re-raised, because historical data is expected
+          to be available.
+        - A failure for the current or a future season is logged as a warning and the cached
+          frame is used when one exists; otherwise that season is skipped. Both a
+          `ConnectionError` and a `ValueError` count as a failure here: before kickoff the
+          current season has no play-by-play published at all, and nflreadpy reports that by
+          raising `ValueError` for an out-of-range season rather than by failing to connect.
+        - When no season yields data, an empty frame carrying the full expected schema is
+          returned (see `_PBP_COLUMN_DTYPES`) so callers always see stable columns and dtypes.
 
     Args:
         seasons: List of season years to load
+        cache_dir: Optional cache directory override for nflreadpy outputs
+        force_refresh: If True, refresh play-by-play data even when cache exists
+        current_season: Optional current season override for cache decisions
+        regular_season_only: If True, keep only regular season plays
 
     Returns:
-        Polars DataFrame with play-by-play data
+        Polars DataFrame with prepared play-by-play data
 
     """
+    if not seasons:
+        return _empty_pbp_frame()
+
+    resolved_cache_dir = _resolve_cache_dir(cache_dir)
+    resolved_current_season = _resolve_current_season(current_season)
+
     log.info("Loading play-by-play for seasons: %s", seasons)
-    pbp_df = nfl.load_pbp(seasons=seasons)
 
-    # Normalize team abbreviations in relevant columns
-    team_cols = ["home_team", "away_team", "posteam", "defteam"]
-    for col in team_cols:
-        if col in pbp_df.columns:
-            pbp_df = normalize_team_column(pbp_df, col)
+    pbp_frames: list[pl.DataFrame] = []
+    for season in seasons:
+        cache_path = _pbp_cache_path(resolved_cache_dir, season, regular_season_only)
+        use_cache = (season < resolved_current_season) and not force_refresh
+        cached = _read_cached_frame(cache_path) if use_cache else None
+        if cached is not None:
+            log.info(
+                "Using cached nflreadpy play-by-play for season %d from %s",
+                season,
+                cache_path,
+            )
+            pbp_frames.append(cached)
+            continue
 
-    return pbp_df
+        if season < resolved_current_season and not force_refresh:
+            log.info("Play-by-play cache miss for season %d; loading via nflreadpy.", season)
+        else:
+            log.info("Refreshing play-by-play via nflreadpy for season %d.", season)
 
+        try:
+            season_df = nfl.load_pbp(seasons=[season])
+        except (ConnectionError, ValueError) as exc:
+            if season < resolved_current_season:
+                raise
 
-def aggregate_pbp_stats(
-    pbp_df: pl.DataFrame,
-    seasons: list[int],
-) -> pl.DataFrame:
-    """Aggregate play-by-play data into per-team per-week statistics.
+            fallback_cached = _read_cached_frame(cache_path)
+            if fallback_cached is not None:
+                log.warning(
+                    "Current-season play-by-play unavailable for season %d; "
+                    "using cached data from %s. Error: %s",
+                    season,
+                    cache_path,
+                    exc,
+                )
+                pbp_frames.append(fallback_cached)
+            else:
+                log.warning(
+                    "Current-season play-by-play not published yet for season %d; "
+                    "continuing without it. Error: %s",
+                    season,
+                    exc,
+                )
+            continue
 
-    Computes statistics that aren't directly available in load_team_stats:
-    - Third down attempts and conversions
-    - Fourth down attempts and conversions
-    - Red zone attempts and touchdowns
-    - Two-point conversion attempts and successes
-    - Total plays (for points per play calculations)
+        season_df = _prepare_pbp(season_df, regular_season_only=regular_season_only)
+        _write_cached_frame(season_df, cache_path)
+        pbp_frames.append(season_df)
 
-    Args:
-        pbp_df: Play-by-play DataFrame from load_pbp
-        seasons: List of seasons to process
+    if not pbp_frames:
+        log.warning("No play-by-play data available for seasons: %s", seasons)
+        return _empty_pbp_frame()
 
-    Returns:
-        DataFrame with columns: season, week, team_abbr, and computed stats
-
-    """
-    if pbp_df.height == 0:
-        return pl.DataFrame()
-
-    # Filter to real plays (exclude nulls, penalties, etc.)
-    # Filter to requested seasons and regular season
-    plays = pbp_df.filter(
-        pl.col("season").is_in(seasons)
-        & pl.col("season_type").eq("REG")
-        & pl.col("posteam").is_not_null()
-        & pl.col("play_type").is_in(["run", "pass", "qb_kneel", "qb_spike"])
-    )
-
-    if plays.height == 0:
-        log.warning("No valid plays found in PBP data for aggregation")
-        return pl.DataFrame()
-
-    # Aggregate by team (posteam = team on offense)
-    team_stats = plays.group_by(["season", "week", "posteam"]).agg(
-        [
-            # Third down stats
-            pl.col("third_down_converted").sum().alias("third_down_conversions"),
-            pl.col("third_down_failed").sum().alias("third_down_fails"),
-            # Fourth down stats
-            pl.col("fourth_down_converted").sum().alias("fourth_down_conversions"),
-            pl.col("fourth_down_failed").sum().alias("fourth_down_fails"),
-            # Red zone stats (plays inside opponent's 20)
-            ((pl.col("yardline_100").le(20)) & (pl.col("td_team").is_not_null()))
-            .sum()
-            .alias("red_zone_tds"),
-            (pl.col("yardline_100").le(20)).sum().alias("red_zone_plays"),
-            # Two-point attempts
-            pl.col("two_point_attempt").sum().alias("two_point_attempts"),
-            (pl.col("two_point_conv_result") == "success").sum().alias("two_point_successes"),
-            # Total plays for points per play
-            pl.len().alias("total_plays"),
-        ]
-    )
-
-    # Rename posteam to team_abbr
-    team_stats = team_stats.rename({"posteam": "team_abbr"})
-
-    # Calculate third and fourth down attempts
-    team_stats = team_stats.with_columns(
-        [
-            (pl.col("third_down_conversions") + pl.col("third_down_fails")).alias(
-                "third_down_attempts"
-            ),
-            (pl.col("fourth_down_conversions") + pl.col("fourth_down_fails")).alias(
-                "fourth_down_attempts"
-            ),
-        ]
-    )
-
-    return team_stats
+    return pl.concat(pbp_frames, how="diagonal")
 
 
 def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:

@@ -401,34 +401,6 @@ def test_add_per_game_opponent_stats() -> None:
     assert out.filter(pl.col("team_abbr") == "AAA")["opponent_pass_yards"][0] == 150
 
 
-def test_aggregate_pbp_stats() -> None:
-    """Play-by-play stats are aggregated correctly."""
-    pbp = pl.DataFrame(
-        {
-            "season": [2023, 2023],
-            "week": [1, 1],
-            "season_type": ["REG", "REG"],
-            "posteam": ["AAA", "AAA"],
-            "play_type": ["run", "pass"],
-            "third_down_converted": [1, 0],
-            "third_down_failed": [0, 1],
-            "fourth_down_converted": [0, 1],
-            "fourth_down_failed": [0, 0],
-            "yardline_100": [10, 30],
-            "td_team": ["AAA", None],
-            "two_point_attempt": [0, 1],
-            "two_point_conv_result": [None, "success"],
-        }
-    )
-
-    out = loaders.aggregate_pbp_stats(pbp, seasons=[2023])
-
-    assert out.height == 1
-    assert out["third_down_attempts"][0] == 2
-    assert out["fourth_down_attempts"][0] == 1
-    assert out["red_zone_plays"][0] == 1
-
-
 def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
     """Elo ratings loading and latest extraction work as expected."""
     qb_path = tmp_path / "qb_elos.csv"
@@ -469,3 +441,240 @@ def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
 
     latest = loaders.get_latest_elo_by_team(elo, season=2023)
     assert latest.height == 2
+
+
+def _pbp_payload(
+    *,
+    season: int = 2020,
+    posteam: str = "AAA",
+    season_types: list[str] | None = None,
+) -> pl.DataFrame:
+    """Build a small raw play-by-play payload for loader tests."""
+    types = season_types if season_types is not None else ["REG"]
+    rows = len(types)
+    return pl.DataFrame(
+        {
+            "game_id": [f"{season}_{i:02d}" for i in range(rows)],
+            "season": [season] * rows,
+            "season_type": types,
+            "week": list(range(1, rows + 1)),
+            "posteam": [posteam] * rows,
+            "defteam": ["BBB"] * rows,
+            "home_team": [posteam] * rows,
+            "away_team": ["BBB"] * rows,
+            "play_type": ["pass"] * rows,
+            "epa": [0.5] * rows,
+            "extra_unused_column": [1] * rows,
+        }
+    )
+
+
+def test_load_pbp_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
+    """Play-by-play loader prefers the cache for historical seasons."""
+    cached = pl.DataFrame({"season": [2020], "week": [1], "posteam": ["CACHED"]})
+    cached.write_parquet(tmp_path / "pbp_2020_reg.parquet")
+
+    def fail_load_pbp(*_args, **_kwargs) -> pl.DataFrame:
+        """Fail if nflreadpy is called."""
+        raise AssertionError("nflreadpy play-by-play load should not be called")
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", fail_load_pbp)
+
+    df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert df["posteam"].to_list() == ["CACHED"]
+
+
+def test_load_pbp_writes_cache_on_miss(monkeypatch, tmp_path: Path) -> None:
+    """A historical cache miss downloads play-by-play data and writes the parquet cache."""
+
+    def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        """Return a raw play-by-play payload for the requested season."""
+        assert seasons == [2020]
+        return _pbp_payload()
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+
+    df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    cache_path = tmp_path / "pbp_2020_reg.parquet"
+    assert cache_path.exists()
+    assert "extra_unused_column" not in df.columns
+    assert pl.read_parquet(cache_path).equals(df)
+
+
+def test_load_pbp_force_refresh_ignores_cache(monkeypatch, tmp_path: Path) -> None:
+    """force_refresh re-downloads play-by-play data even when a cache exists."""
+    stale = pl.DataFrame({"season": [2020], "week": [1], "posteam": ["STALE"]})
+    stale.write_parquet(tmp_path / "pbp_2020_reg.parquet")
+
+    def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        """Return refreshed play-by-play data."""
+        _ = seasons
+        return _pbp_payload(posteam="FRESH")
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+
+    df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024, force_refresh=True)
+
+    assert df["posteam"].to_list() == ["FRESH"]
+
+
+def test_load_pbp_current_season_failure_uses_cache(monkeypatch, tmp_path: Path) -> None:
+    """A current-season connection failure falls back to cached play-by-play data."""
+    cached = pl.DataFrame({"season": [2024], "week": [1], "posteam": ["CACHED"]})
+    cached.write_parquet(tmp_path / "pbp_2024_reg.parquet")
+
+    def failing_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        """Simulate an nflreadpy outage."""
+        _ = seasons
+        raise ConnectionError("boom")
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
+
+    df = loaders.load_pbp([2024], cache_dir=tmp_path, current_season=2024)
+
+    assert df["posteam"].to_list() == ["CACHED"]
+
+
+def test_load_pbp_current_season_failure_without_cache(monkeypatch, tmp_path: Path) -> None:
+    """A current-season failure without a cache returns a typed empty frame."""
+
+    def failing_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        """Simulate an nflreadpy outage."""
+        _ = seasons
+        raise ConnectionError("boom")
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
+
+    df = loaders.load_pbp([2024], cache_dir=tmp_path, current_season=2024)
+
+    assert df.height == 0
+    assert df.columns == list(constants.PBP_COLUMNS)
+    assert df.schema["game_id"] == pl.Utf8
+    assert df.schema["season"] == pl.Int64
+    assert df.schema["week"] == pl.Int64
+    assert df.schema["epa"] == pl.Float64
+
+
+def test_load_pbp_historical_failure_raises(monkeypatch, tmp_path: Path) -> None:
+    """A historical connection failure is treated as a bug and re-raised."""
+
+    def failing_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        """Simulate an nflreadpy outage."""
+        _ = seasons
+        raise ConnectionError("boom")
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
+
+    with pytest.raises(ConnectionError):
+        loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+
+def test_load_pbp_tolerates_missing_optional_columns(monkeypatch, tmp_path: Path) -> None:
+    """Seasons missing optional play-by-play columns load with only the present ones."""
+
+    def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        """Return a sparse play-by-play payload."""
+        _ = seasons
+        return pl.DataFrame(
+            {
+                "game_id": ["2020_01"],
+                "season": [2020],
+                "week": [1],
+                "posteam": ["AAA"],
+                "epa": [0.25],
+            }
+        )
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+
+    df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert df.columns == ["game_id", "season", "week", "posteam", "epa"]
+    assert df.height == 1
+
+
+def test_load_pbp_normalizes_team_aliases(monkeypatch, tmp_path: Path) -> None:
+    """Legacy team abbreviations are normalized to canonical values."""
+
+    def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        """Return play-by-play rows using relocated-franchise abbreviations."""
+        _ = seasons
+        return pl.DataFrame(
+            {
+                "game_id": ["2005_01"],
+                "season": [2005],
+                "season_type": ["REG"],
+                "week": [1],
+                "posteam": ["OAK"],
+                "defteam": ["SD"],
+                "home_team": ["STL"],
+                "away_team": ["OAK"],
+            }
+        )
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+
+    df = loaders.load_pbp([2005], cache_dir=tmp_path, current_season=2024)
+
+    assert df["posteam"][0] == constants.ALIAS_TO_CANONICAL["OAK"]
+    assert df["defteam"][0] == constants.ALIAS_TO_CANONICAL["SD"]
+    assert df["home_team"][0] == constants.ALIAS_TO_CANONICAL["STL"]
+    assert df["away_team"][0] == constants.ALIAS_TO_CANONICAL["OAK"]
+
+
+def test_load_pbp_regular_season_filter(monkeypatch, tmp_path: Path) -> None:
+    """The regular-season filter drops postseason plays and switches the cache filename."""
+
+    def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        """Return one regular season and one postseason play."""
+        _ = seasons
+        return _pbp_payload(season_types=["REG", "POST"])
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+
+    reg_only = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+    assert reg_only["season_type"].to_list() == ["REG"]
+    assert (tmp_path / "pbp_2020_reg.parquet").exists()
+
+    all_types = loaders.load_pbp(
+        [2020], cache_dir=tmp_path, current_season=2024, regular_season_only=False
+    )
+    assert all_types["season_type"].to_list() == ["REG", "POST"]
+    assert (tmp_path / "pbp_2020_all.parquet").exists()
+
+
+def test_load_pbp_empty_seasons_returns_empty_frame() -> None:
+    """An empty season list short-circuits to an empty frame."""
+    assert loaders.load_pbp([]).height == 0
+
+
+def test_load_pbp_current_season_out_of_range_is_non_fatal(monkeypatch, tmp_path: Path) -> None:
+    """A current season nflreadpy refuses to serve degrades instead of failing the run.
+
+    Before kickoff the current season has no play-by-play at all, and nflreadpy signals
+    that with a ValueError rather than a connection failure. The pipeline must still run.
+    """
+
+    def out_of_range_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        raise ValueError("Season must be between 1999 and 2025")
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", out_of_range_load_pbp)
+
+    df = loaders.load_pbp([2026], cache_dir=tmp_path, current_season=2026)
+
+    assert df.height == 0
+    assert "posteam" in df.columns
+
+
+def test_load_pbp_historical_out_of_range_still_raises(monkeypatch, tmp_path: Path) -> None:
+    """A historical season that cannot be served is a real failure and is not swallowed."""
+
+    def out_of_range_load_pbp(seasons: list[int]) -> pl.DataFrame:
+        raise ValueError("Season must be between 1999 and 2025")
+
+    monkeypatch.setattr(loaders.nfl, "load_pbp", out_of_range_load_pbp)
+
+    with pytest.raises(ValueError, match="Season must be between"):
+        loaders.load_pbp([2015], cache_dir=tmp_path, current_season=2026)

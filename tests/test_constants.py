@@ -110,13 +110,22 @@ def test_feature_group_column_markers_shape() -> None:
 
 
 def test_pbp_count_columns_match_the_aggregation_output() -> None:
-    """Published count contract stays in sync with the aggregation module's output."""
+    """Published count contract stays in sync with the aggregation module's output.
+
+    Every team-game column is either an identity key, a context flag that is
+    carried but never aggregated, or a count that season-to-date aggregation
+    averages. ``is_home`` is the only context flag: it says who hosted the game,
+    which opponent-adjusted solves need and no rate ever divides by.
+    """
     from nfl_predictor.utils.polars import pbp
 
     identity = {"season", "week", "team_abbr", "opponent_abbr"}
-    produced = [c for c in pbp.PBP_TEAM_GAME_COLUMNS if c not in identity]
+    context = {"is_home"}
+    produced = [c for c in pbp.PBP_TEAM_GAME_COLUMNS if c not in identity | context]
 
     assert produced == constants.PBP_COUNT_COLUMNS
+    assert context <= set(pbp.PBP_TEAM_GAME_COLUMNS)
+    assert not context & set(constants.PBP_COUNT_COLUMNS)
 
 
 def test_pbp_stats_are_unique_and_name_allowed_metrics_explicitly() -> None:

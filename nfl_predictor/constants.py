@@ -818,6 +818,46 @@ PBP_STATS = [
 
 FEATURE_GROUP_COLUMN_MARKERS["pbp"] = tuple(PBP_STATS)
 
+# Schedule-adjusted team strength, solved per (season, week) from prior-week games only.
+# Published per team and prefixed with away_/home_, plus a _diff companion.
+STRENGTH_TEAM_STATS = [
+    # Simultaneous ridge coefficients, centered per side. For the defensive pair a
+    # HIGHER value is a BETTER defense: the solve models a team's per-snap EPA as
+    # offense[team] - defense[opponent], so a large defense coefficient is what
+    # suppresses the opponent's output.
+    "adj_off_pass_epa_snap",
+    "adj_off_rush_epa_snap",
+    "adj_def_pass_epa_snap",
+    "adj_def_rush_epa_snap",
+    # Simple rating system companions on point margin and special-teams EPA margin.
+    "adj_srs",
+    "st_rating",
+    # Display composite over within-snapshot standardized components.
+    "adj_strength_composite",
+    # Prior in-season games behind the solve, which drives the early-season prior blend.
+    "strength_games_played",
+]
+
+# Schedule strength derived from the same pre-week snapshot.
+# `sos_played_raw` is the one-hop, head-to-head-excluded companion to `sos_played_adj`.
+SCHEDULE_STRENGTH_STATS = [
+    "sos_played_adj",
+    "sos_remaining_adj",
+    "sos_played_raw",
+]
+
+# Every per-team strength column published in the final schema.
+ADJUSTED_STRENGTH_STATS = [*STRENGTH_TEAM_STATS, *SCHEDULE_STRENGTH_STATS]
+
+# Columns the weekly snapshot builder emits, keyed by team. `adj_hfa` is the shared
+# home-field term: one league-wide value per (season, week), so it is deliberately
+# NOT published to the game schema, where it would become two identical away_/home_
+# columns and an always-zero diff. It stays on the snapshot for reporting and for
+# anything that consumes the solve directly.
+STRENGTH_SNAPSHOT_STATS = [*STRENGTH_TEAM_STATS, "adj_hfa"]
+
+FEATURE_GROUP_COLUMN_MARKERS["strength"] = tuple(ADJUSTED_STRENGTH_STATS)
+
 # Stats to EXCLUDE from opponent stat generation (they create duplicates)
 # These stats are duplicates when viewed from opponent's perspective:
 # - scoring_margin: opponent_scoring_margin = -scoring_margin
@@ -843,6 +883,8 @@ EXCLUDE_FROM_OPPONENT_STATS = [
     # Play-by-play counts: the *_allowed_* columns already carry the opponent's offense
     # for the same game, so a generic opponent_ mirror would duplicate them.
     *PBP_COUNT_COLUMNS,
+    # Context flag rather than a stat: opponent_is_home is the exact inverse of is_home.
+    "is_home",
 ]
 
 # nflreadpy stats to use (per team) - these get prefixed with away_/home_

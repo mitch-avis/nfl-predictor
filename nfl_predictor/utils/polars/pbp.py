@@ -87,6 +87,8 @@ _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     "week": pl.Int64,
     "team_abbr": pl.String,
     "opponent_abbr": pl.String,
+    # Context flag, not a count: never averaged, mirrored, or published.
+    "is_home": pl.Boolean,
     # Snap volume.
     "offensive_snaps": pl.Int64,
     "defensive_snaps": pl.Int64,
@@ -139,6 +141,8 @@ _REQUIRED_PBP_COLUMNS = ("season", "week", "posteam", "defteam")
 _ST_COLUMNS = ("st_epa_for", "st_epa_against", "st_plays")
 _ST_PLAYS_OFFENSE = "_st_plays_offense"
 _ST_PLAYS_DEFENSE = "_st_plays_defense"
+_IS_HOME_OFFENSE = "_is_home_offense"
+_IS_HOME_DEFENSE = "_is_home_defense"
 
 
 def _flag_expr(columns: list[str], column: str) -> pl.Expr:
@@ -160,6 +164,21 @@ def _nullable_expr(columns: list[str], column: str, dtype: DataTypeClass) -> pl.
     if column in columns:
         return pl.col(column).cast(dtype, strict=False)
     return pl.lit(None, dtype=dtype)
+
+
+def _possession_side_expr(columns: list[str], side: str) -> pl.Expr:
+    """Return a group-constant flag for whether ``posteam_type`` equals ``side``.
+
+    Formula: ``max(lower(posteam_type) == side)`` over the group. ``posteam_type``
+    is constant within a ``(season, week, posteam, defteam)`` group because the
+    possessing team is fixed there, so the maximum simply lifts that constant out
+    of the group while ignoring rows where the column is null. When
+    ``posteam_type`` is absent the result is a typed null, matching the
+    missing-source contract in the module docstring.
+    """
+    if "posteam_type" not in columns:
+        return pl.lit(None, dtype=pl.Boolean)
+    return pl.col("posteam_type").cast(pl.Utf8, strict=False).str.to_lowercase().eq(side).max()
 
 
 def _scrimmage_snap_expr(columns: list[str]) -> pl.Expr:
@@ -328,6 +347,7 @@ def _aggregate_offense(plays: pl.DataFrame) -> pl.DataFrame:
             _count(play["dropback"] & play["early_down"], "early_down_passes"),
             _sum_when(play["special"], epa, "st_epa_for"),
             _count(play["special"], _ST_PLAYS_OFFENSE),
+            _possession_side_expr(columns, "home").alias(_IS_HOME_OFFENSE),
             *_situational_aggregations(columns),
         )
         .rename({"posteam": "team_abbr", "defteam": "opponent_abbr"})
@@ -381,6 +401,7 @@ def _aggregate_allowed(plays: pl.DataFrame) -> pl.DataFrame:
             _count(play["stuffed_rush"], "stuffed_rush_allowed_count"),
             _sum_when(play["special"], epa, "st_epa_against"),
             _count(play["special"], _ST_PLAYS_DEFENSE),
+            _possession_side_expr(columns, "away").alias(_IS_HOME_DEFENSE),
         )
         .rename({"defteam": "team_abbr", "posteam": "opponent_abbr"})
     )
@@ -410,8 +431,15 @@ def aggregate_pbp_team_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     """Aggregate play-by-play rows into one team-game row of counts and sums.
 
     The output has one row per ``(season, week, team_abbr, opponent_abbr)`` with
-    exactly the columns in ``PBP_TEAM_GAME_COLUMNS``. Only counts and sums are
-    produced; rates are derived downstream as ratios of season-to-date sums.
+    exactly the columns in ``PBP_TEAM_GAME_COLUMNS``. Apart from ``is_home`` only
+    counts and sums are produced; rates are derived downstream as ratios of
+    season-to-date sums.
+
+    ``is_home`` is the one non-count column: a boolean saying whether the team
+    hosted the game, taken from ``posteam_type`` on either perspective. It is
+    context for opponent-adjusted solves, not a statistic, so it is deliberately
+    absent from ``constants.PBP_COUNT_COLUMNS`` and ``constants.PBP_STATS`` and is
+    never averaged, mirrored, or published.
 
     Args:
         pbp_df: Raw play-by-play rows. Optional source columns may be missing;
@@ -452,7 +480,13 @@ def aggregate_pbp_team_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     combined = combined.with_columns(
         (pl.col(_ST_PLAYS_OFFENSE).fill_null(0) + pl.col(_ST_PLAYS_DEFENSE).fill_null(0)).alias(
             "st_plays"
-        )
+        ),
+        # Either perspective identifies the same team-game, so take whichever is
+        # present: a team with no offensive snaps still has its side recorded on
+        # the plays it defended, and vice versa.
+        pl.coalesce(pl.col(_IS_HOME_OFFENSE), pl.col(_IS_HOME_DEFENSE))
+        .cast(pl.Boolean)
+        .alias("is_home"),
     ).with_columns(
         *[pl.col(name).fill_null(0) for name in count_columns],
         *[pl.col(name).fill_null(0.0) for name in sum_columns],

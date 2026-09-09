@@ -7,6 +7,7 @@ from typing import Any
 import polars as pl
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.utils.polars import pbp
 
 # Default values for one fixture play. Every fixture row starts from these and
@@ -16,6 +17,7 @@ _PLAY_DEFAULTS: dict[str, Any] = {
     "week": 1,
     "season_type": "REG",
     "posteam": "",
+    "posteam_type": None,
     "defteam": "",
     "play_type": "no_play",
     "qb_dropback": 0,
@@ -42,6 +44,7 @@ _FIXTURE_DTYPES: dict[str, Any] = {
     "yardline_100": pl.Float64,
     "yards_gained": pl.Float64,
     "epa": pl.Float64,
+    "posteam_type": pl.String,
     "two_point_conv_result": pl.String,
     "td_team": pl.String,
 }
@@ -90,6 +93,10 @@ def _fixture_plays() -> pl.DataFrame:
         D2 rush, 1st down, -3 yards, epa -1.0, at the SF 75.
     Game 2 special teams (1 play):
         S2 DAL field goal, epa 1.4.
+
+    ``posteam_type`` is stamped on afterwards rather than repeated on every row:
+    KC and SF are the home teams, so every play they possess is a "home"
+    possession and every play their opponent possesses is an "away" possession.
     """
     return _frame(
         [
@@ -274,6 +281,11 @@ def _fixture_plays() -> pl.DataFrame:
                 yardline_100=20.0,
             ),
         ]
+    ).with_columns(
+        pl.when(pl.col("posteam").is_in(["KC", "SF"]))
+        .then(pl.lit("home"))
+        .otherwise(pl.lit("away"))
+        .alias("posteam_type")
     )
 
 
@@ -312,6 +324,7 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "week": 1,
         "team_abbr": "KC",
         "opponent_abbr": "BUF",
+        "is_home": True,
         "offensive_snaps": 5,
         "defensive_snaps": 4,
         "dropbacks": 3,
@@ -354,6 +367,7 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "week": 1,
         "team_abbr": "BUF",
         "opponent_abbr": "KC",
+        "is_home": False,
         "offensive_snaps": 4,
         "defensive_snaps": 5,
         "dropbacks": 1,
@@ -396,6 +410,7 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "week": 1,
         "team_abbr": "SF",
         "opponent_abbr": "DAL",
+        "is_home": True,
         "offensive_snaps": 3,
         "defensive_snaps": 2,
         "dropbacks": 1,
@@ -438,6 +453,7 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "week": 1,
         "team_abbr": "DAL",
         "opponent_abbr": "SF",
+        "is_home": False,
         "offensive_snaps": 2,
         "defensive_snaps": 3,
         "dropbacks": 1,
@@ -940,3 +956,67 @@ def test_two_point_attempts_are_not_dropbacks_or_carries() -> None:
     assert opp["dropbacks_allowed"] == 1
     assert opp["carries_allowed"] == 1
     assert opp["pass_epa_allowed_sum"] == pytest.approx(1.0)
+
+
+def test_is_home_is_derived_from_posteam_type() -> None:
+    """The home indicator marks the home team on both sides of each game."""
+    result = pbp.aggregate_pbp_team_game_stats(_fixture_plays())
+
+    assert _row_for(result, "KC")["is_home"] is True
+    assert _row_for(result, "BUF")["is_home"] is False
+    assert _row_for(result, "SF")["is_home"] is True
+    assert _row_for(result, "DAL")["is_home"] is False
+
+
+def test_is_home_is_recovered_for_a_team_with_no_offensive_snaps() -> None:
+    """A team seen only on defense still gets its home indicator from the other side."""
+    plays = _frame(
+        [
+            _play(
+                posteam="AAA",
+                posteam_type="away",
+                defteam="BBB",
+                play_type="pass",
+                qb_dropback=1,
+                down=1,
+                epa=0.5,
+            )
+        ]
+    )
+
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    assert _row_for(result, "AAA")["is_home"] is False
+    assert _row_for(result, "BBB")["is_home"] is True
+
+
+def test_is_home_is_null_when_posteam_type_is_absent() -> None:
+    """A missing possession-side column yields a null indicator rather than a guess."""
+    plays = _frame(
+        [
+            _play(
+                posteam="AAA",
+                defteam="BBB",
+                play_type="pass",
+                qb_dropback=1,
+                down=1,
+                epa=0.5,
+            )
+        ]
+    ).drop("posteam_type")
+
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    assert result.schema["is_home"] == pl.Boolean
+    assert result["is_home"].to_list() == [None, None]
+
+
+def test_is_home_is_not_carried_as_a_count_or_published_stat() -> None:
+    """The home indicator is context, so it is never averaged, mirrored, or published."""
+    assert "is_home" in pbp.PBP_TEAM_GAME_COLUMNS
+    # Not a count, so season-to-date aggregation never averages it.
+    assert "is_home" not in constants.PBP_COUNT_COLUMNS
+    # Not a published stat, so it never reaches the final schema.
+    assert "is_home" not in constants.PBP_STATS
+    # opponent_is_home would be the exact inverse of is_home, so the mirror skips it.
+    assert "is_home" in constants.EXCLUDE_FROM_OPPONENT_STATS

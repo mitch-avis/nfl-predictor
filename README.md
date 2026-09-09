@@ -152,9 +152,16 @@ Note: the `data/` directory is gitignored by default; generate it via the data c
 above. Note: `*_ml.csv` files include model-ready engineered features.
 
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
-season under `data/cache/nflreadpy` (schedule + team stats). Current/future seasons are always
-refreshed to keep upcoming games and lines current. Use `--min-season`/`--max-season` to override
-the default season window (defaults to `constants.MIN_SEASON` through the current NFL season).
+season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future
+seasons are always refreshed to keep upcoming games and lines current. Use
+`--min-season`/`--max-season` to override the default season window (defaults to
+`constants.MIN_SEASON` through the current NFL season).
+
+Play-by-play is the largest of those sources (roughly 1.2M regular-season plays for 1999-2025). It
+is fetched one season at a time, reduced to the column list in `constants.PBP_COLUMNS`, filtered to
+the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<season>_reg.parquet`.
+Before kickoff the current season has no play-by-play published at all; that is non-fatal, and the
+ETL falls back to cache or continues without it.
 
 TeamRankings data is cached under `data/<season>/` as week-level CSVs; enable debug logging to see
 cache hits. Use `--timing` to log per-step runtimes and `--debug-logs` for detailed ETL diagnostics.
@@ -167,7 +174,7 @@ are missing historically.
 
 Primary sources:
 
-- `nflreadpy` (NFLverse): schedules, results, and team-level stats.
+- `nflreadpy` (NFLverse): schedules, results, team-level stats, and play-by-play.
 - Local cached CSVs under `data/` for Elo/market data when present.
 - TeamRankings web scrape for select ratings and stats not available in NFLverse (see ETL logs).
 
@@ -323,6 +330,17 @@ python scripts/walk_forward_backtest.py
 python scripts/walk_forward_backtest.py --recency-half-life-seasons 2
 python scripts/walk_forward_backtest.py --disable-trend-features
 python scripts/walk_forward_backtest.py --disable-trend-features --recency-half-life-seasons 2
+```
+
+Named feature groups can be ablated the same way with `--disable-feature-groups` (available on both
+`scripts/walk_forward_backtest.py` and `scripts/wf_compare.py`). Group names come from
+`constants.FEATURE_GROUP_COLUMN_MARKERS`; a column belongs to a group when any of that group's
+markers is a substring of the column name, which catches the `away_`/`home_` prefixes and the
+`_diff` suffix at once. An unknown group name is a hard error. The dropped column list is recorded
+in the run's metrics report.
+
+```bash
+python scripts/walk_forward_backtest.py --disable-feature-groups pbp
 ```
 
 Recent ablation example (2003-2025 seasons, include postseason, calibration=platt, recency half-life
@@ -602,6 +620,12 @@ games.
 - Standings-based motivation proxy features (clinch/elimination proxies).
 - Stadium metadata features (roof/surface/type, elevation, venue location).
 - Head coach prior record features (career and team-specific).
+- Play-by-play per-snap efficiency features (`constants.PBP_STATS`): offensive and allowed EPA per
+  snap, EPA per dropback and per carry, success rates, explosive pass/rush rates, stuffed-run rate,
+  early-down pass rate, snap volume, and special-teams EPA margin per play. Defensive metrics are
+  named explicitly (`def_*` / `*_allowed`) rather than relying on the generic `opponent_` mirror.
+  Counts and sums are carried through season-to-date aggregation and every rate is computed
+  afterwards as a ratio of sums, never a mean of per-game rates.
 
 ## Open work
 

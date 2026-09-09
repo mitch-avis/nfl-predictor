@@ -661,6 +661,163 @@ TR_STATS = [
     "opponent_two_point_conversion_pct",
 ]
 
+# Play-by-play columns selected from nflreadpy.load_pbp before caching.
+# Every column is existence-guarded at load time: older seasons do not publish all of
+# them, and a missing column becomes a null-filled default rather than an error.
+PBP_COLUMNS = [
+    # Identity and join keys
+    "game_id",
+    "season",
+    "season_type",
+    "week",
+    "posteam",
+    "defteam",
+    "home_team",
+    "away_team",
+    "posteam_type",
+    # Play classification
+    "play_type",
+    "qb_dropback",
+    "qb_kneel",
+    "qb_spike",
+    "rush",
+    "pass",
+    "down",
+    "ydstogo",
+    "yardline_100",
+    # Value columns
+    "epa",
+    "qb_epa",
+    "success",
+    "yards_gained",
+    "air_yards",
+    "cpoe",
+    "xpass",
+    "pass_oe",
+    # Situational outcomes
+    "third_down_converted",
+    "third_down_failed",
+    "fourth_down_converted",
+    "fourth_down_failed",
+    "two_point_attempt",
+    "two_point_conv_result",
+    "td_team",
+    "sack",
+    "interception",
+    "fumble_lost",
+    "complete_pass",
+    "pass_touchdown",
+    "rush_touchdown",
+    "first_down",
+    # Special teams
+    "special",
+    "special_teams_play",
+    # Drives
+    "fixed_drive",
+    "fixed_drive_result",
+    "drive_start_yard_line",
+    # Passer identity (bridge to Elo QB identities)
+    "passer_player_id",
+    "passer_player_name",
+]
+
+# Candidate column names for the special-teams play flag, in preference order.
+# nflreadpy has published this flag under both names; the first one present wins.
+PBP_SPECIAL_TEAMS_FLAG_CANDIDATES = ("special", "special_teams_play")
+
+# Feature groups that can be ablated in walk-forward evaluation.
+# A published column belongs to a group when any marker is a substring of its name,
+# which covers the away_/home_/opponent_ prefixes and the _diff suffix at once.
+FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
+    # Every published play-by-play stat name is its own marker, so the group tracks
+    # PBP_STATS automatically and stays disjoint from the older stat families.
+    "pbp": (),  # populated below, once PBP_STATS is defined
+}
+
+# Raw per-team-game counts and sums produced from play-by-play.
+# These are carried through season-to-date aggregation so rates can be computed as a
+# ratio of sums afterwards; they are not published in the final schema themselves,
+# apart from the snap volumes that also appear in PBP_STATS.
+PBP_COUNT_COLUMNS = [
+    "offensive_snaps",
+    "defensive_snaps",
+    "dropbacks",
+    "carries",
+    "dropbacks_allowed",
+    "carries_allowed",
+    "pass_epa_sum",
+    "rush_epa_sum",
+    "pass_epa_allowed_sum",
+    "rush_epa_allowed_sum",
+    "pass_success_count",
+    "rush_success_count",
+    "pass_success_allowed_count",
+    "rush_success_allowed_count",
+    "explosive_pass_count",
+    "explosive_rush_count",
+    "stuffed_rush_count",
+    "explosive_pass_allowed_count",
+    "explosive_rush_allowed_count",
+    "stuffed_rush_allowed_count",
+    "early_down_plays",
+    "early_down_passes",
+    "st_epa_for",
+    "st_epa_against",
+    "st_plays",
+    "third_down_conversions",
+    "third_down_fails",
+    "third_down_attempts",
+    "fourth_down_conversions",
+    "fourth_down_fails",
+    "fourth_down_attempts",
+    "red_zone_plays",
+    "red_zone_tds",
+    "two_point_attempts",
+    "two_point_successes",
+    "total_plays",
+]
+
+# Play-by-play stats published in the final schema (per team, prefixed with away_/home_).
+# Each is derived in _compute_derived_metrics as a ratio of season-to-date summed
+# components. Defensive metrics are named explicitly with `def_`/`_allowed` rather than
+# relying on the generic `opponent_` mirror.
+PBP_STATS = [
+    # Snap volume (pace)
+    "offensive_snaps",
+    "defensive_snaps",
+    # Per-snap EPA
+    "off_pass_epa_per_snap",
+    "off_rush_epa_per_snap",
+    "def_pass_epa_allowed_per_snap",
+    "def_rush_epa_allowed_per_snap",
+    # Per-attempt EPA
+    "epa_per_dropback",
+    "epa_per_carry",
+    "epa_per_dropback_allowed",
+    "epa_per_carry_allowed",
+    "epa_margin_per_play",
+    # Success rates
+    "success_rate",
+    "pass_success_rate",
+    "rush_success_rate",
+    "success_rate_allowed",
+    "pass_success_rate_allowed",
+    "rush_success_rate_allowed",
+    # Explosive and stuffed rates
+    "explosive_pass_rate",
+    "explosive_rush_rate",
+    "explosive_pass_rate_allowed",
+    "explosive_rush_rate_allowed",
+    "stuffed_rush_rate",
+    "stuffed_rush_rate_allowed",
+    # Tendency
+    "early_down_pass_rate",
+    # Special teams
+    "st_epa_margin_per_play",
+]
+
+FEATURE_GROUP_COLUMN_MARKERS["pbp"] = tuple(PBP_STATS)
+
 # Stats to EXCLUDE from opponent stat generation (they create duplicates)
 # These stats are duplicates when viewed from opponent's perspective:
 # - scoring_margin: opponent_scoring_margin = -scoring_margin
@@ -683,6 +840,9 @@ EXCLUDE_FROM_OPPONENT_STATS = [
     "points_per_play",
     "points_per_play_margin",
     "penalty_yards_per_penalty",
+    # Play-by-play counts: the *_allowed_* columns already carry the opponent's offense
+    # for the same game, so a generic opponent_ mirror would duplicate them.
+    *PBP_COUNT_COLUMNS,
 ]
 
 # nflreadpy stats to use (per team) - these get prefixed with away_/home_
@@ -696,6 +856,7 @@ NFLREADPY_STATS = [
     "times_sacked",
     "passing_epa",
     "passing_cpoe",
+    "rushing_epa",
     # Rushing offense
     "rush_attempts",
     "rush_yards",

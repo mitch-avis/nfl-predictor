@@ -231,5 +231,11 @@ models/
 **/optuna.db
 *.db
 
+# Agents folder
+.agents/
+
 # Bash history
 .bash_history
+
+# NFL SOS Ratings folder
+nfl-sos-ratings

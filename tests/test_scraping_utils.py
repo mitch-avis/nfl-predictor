@@ -4,6 +4,7 @@ import builtins
 import datetime
 from datetime import date
 from pathlib import Path
+from typing import Self
 
 import polars as pl
 import pytest
@@ -123,23 +124,23 @@ def test_get_season_start_and_week_date() -> None:
 
 
 def test_get_current_nfl_week_handles_preseason_and_clamp(monkeypatch) -> None:
-    """Preseason dates return the prior season; late-February dates clamp to max week."""
+    """Pre-kickoff dates resolve to week 1; late-February dates clamp to max week."""
 
     class _PreseasonDate(datetime.date):
         @classmethod
-        def today(cls) -> datetime.date:
+        def today(cls) -> Self:
             """Return an August preseason date before kickoff."""
             return cls(2025, 8, 15)
 
     monkeypatch.setattr(scraping_utils, "date", _PreseasonDate)
     preseason_season, preseason_week = scraping_utils.get_current_nfl_week()
 
-    assert preseason_season == 2024
-    assert preseason_week == constants.get_regular_season_weeks(2024) + 4
+    assert preseason_season == 2025
+    assert preseason_week == 1
 
     class _LateFebruaryDate(datetime.date):
         @classmethod
-        def today(cls) -> datetime.date:
+        def today(cls) -> Self:
             """Return a date far enough after kickoff to require clamping."""
             return cls(2026, 2, 28)
 

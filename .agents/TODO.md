@@ -41,19 +41,24 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-09)
+### Current validated baseline (2026-09-09, after the play-by-play milestone)
 
 - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
   `.venv/bin/pyright .` pass cleanly.
-- `.venv/bin/python -m pytest` passes (`412 passed`) with coverage `90.03%` against the enforced
+- `.venv/bin/python -m pytest` passes (`471 passed`) with coverage `90.51%` against the enforced
   `90%` floor.
-- `markdownlint .`, `uv lock --check`, and `uv sync --check --active` pass.
+- `markdownlint-cli2` and `uv lock --check` pass.
 - ETL was rerun for `1999-2026`: `data/completed_games_ml.csv` covers `1999-2025` (`7260` rows,
-  `384` columns) and `data/predict/week_01_games_to_predict.csv` holds `16` rows for 2026 Week 1.
-- The leakage audit passed on the refreshed dataset.
-- Reference walk-forward benchmark (seasons `2023-2025`, default config): Brier `0.2312`, log loss
-  `0.7352`, pick accuracy `0.6833`, margin MAE `9.8954`, total MAE `10.1021`, reliability ECE
-  `0.1308`. Every feature milestone below reports against these numbers.
+  `465` columns) and `data/predict/week_01_games_to_predict.csv` holds `16` rows for 2026 Week 1.
+- The leakage audit passed on the refreshed dataset (`430` features, `0` findings).
+- Walk-forward (`2023-2025`, `--eval-last-n-seasons 3`, `720` games): with the play-by-play group
+  on, Brier `0.2317`, log loss `0.7455`, pick accuracy `0.6778`, margin MAE `9.9178`, total MAE
+  `10.1295`, ECE `0.1244`. With it off: `0.2314`, `0.7440`, `0.6708`, `9.9977`, `10.1164`, `0.1269`.
+- The previously recorded reference (Brier `0.2312`, log loss `0.7352`, pick accuracy `0.6833`,
+  margin MAE `9.8954`, total MAE `10.1021`, ECE `0.1308`) is **not reproducible**: the untouched
+  pre-change dataset re-run under the same default config gives Brier `0.2300`, log loss `0.7501`,
+  pick accuracy `0.6833`, margin MAE `9.9705`. Treat the group-off numbers above as the working
+  baseline and compare future work against them, not against the old reference.
 
 ---
 
@@ -101,45 +106,33 @@ Rules for every feature milestone:
 
 ## Milestone 45 - PBP foundation + per-snap team EPA families
 
-Goal: bring play-by-play into the ETL with caching, and publish the per-snap EPA, success,
-explosive, and special-teams families that `nfl-sos-ratings` uses as its rating backbone.
+**Completed 2026-09-09.** Moved to `ARCHIVE.md` with the walk-forward table, ETL timing, null-rate
+summary, and the four defects found and fixed along the way.
 
-Tasks:
+Outcome to carry forward: the family is leakage-safe, ablatable, and costs almost nothing to build
+(0.35s to aggregate 1.2M plays), but it is **not** a win on the primary selection metric. Brier and
+log loss are marginally worse with the group on; margin MAE improves in 3 of 3 seasons and
+calibration improves slightly. Raw per-snap EPA is unadjusted for opponent, which is the most likely
+reason it adds little over the existing Elo and TeamRankings predictive ratings. Milestone 46 is the
+direct test of that hypothesis: the same inputs, opponent-adjusted.
 
-- [ ] 45.1 Cached PBP loader in `nfl_predictor/utils/polars/loaders.py`:
-  - explicit column list in `constants.PBP_COLUMNS` (see `feature_crosswalk.md` section 8), with
-    every column existence-guarded
-  - per-season Parquet cache under `data/cache/nflreadpy/pbp_<season>.parquet`, current-season
-    refresh, `force_refresh` support, and non-fatal current-season failures with cache fallback
-  - regular-season filter for feature inputs and team normalization for `posteam`, `defteam`,
-    `home_team`, `away_team`
-- [ ] 45.2 Team-game aggregation (new `nfl_predictor/utils/polars/pbp.py`): one row per
-      `(season, week, team_abbr, opponent_abbr)` with snap counts (scrimmage-snap definition:
-      dropback, rush, kneel, spike), dropbacks, carries, pass/rush EPA sums for offense and
-      allowed, success counts, explosive counts, stuffed runs, early-down pass counts, special-teams
-      EPA for/against and play counts, and the existing third/fourth-down, red-zone, and two-point
-      counts from `aggregate_pbp_stats`. Formula in every docstring; hand-built fixture tests.
-- [ ] 45.3 Join the team-game rows into `team_stats_df` in `collect_all_data` before
-      `add_per_game_opponent_stats`; derive rates in `_compute_derived_metrics` as ratio of sums;
-      add `constants.PBP_STATS` plus exclusion entries; extend `build_final_column_order`.
-- [ ] 45.4 Verify the Week 1 previous-season regression path covers the new columns and that a
-      season without PBP still emits the invariant schema.
-- [ ] 45.5 Add the walk-forward ablation switch for the PBP feature group in
-      `nfl_predictor/ml/walk_forward.py`, `scripts/walk_forward_backtest.py`, and
-      `scripts/wf_compare.py`.
-- [ ] 45.6 Rebuild `1999-2026`, run `scripts/leakage_audit.py`, run the `2023-2025` walk-forward
-      with the group on and off, and record the table in `ARCHIVE.md` and `CHANGELOG.md`.
-- [ ] 45.7 Update `README.md` data sources and feature areas; add `rushing_epa` to the published
-      stats as part of the same schema change.
+Open follow-ups inherited from this milestone:
 
-Acceptance:
-
-- [ ] `data/completed_games_ml.csv` carries the new families for `1999-2025` with documented null
-      rates per season.
-- [ ] Leakage audit passes; a test proves a future week's plays do not change an earlier week's
-      features.
-- [ ] Walk-forward table recorded against the reference baseline; all gates green; coverage stays
-      at or above `90%`.
+- [x] Resolved: the recorded reference (Brier `0.2312`, log loss `0.7352`, pick accuracy `0.6833`,
+      margin MAE `9.8954`) is **not reproducible** on this machine. Re-running the default config
+      against the untouched pre-change dataset gives Brier `0.2300`, log loss `0.7501`, pick
+      accuracy `0.6833`, margin MAE `9.9705` - a larger log-loss gap than the rebuilt dataset
+      produces. `--xgb-tree-method hist` and `rushing_epa` were both ruled out by controls. The
+      milestone's changes did not regress the baseline; the old reference numbers were recorded
+      under a configuration or environment that is no longer reproducible.
+- [ ] `red_zone_tds` counts a touchdown by either team on a red-zone play, so a pick-six is credited
+      to the offense. It is computed but not published today; fix before Milestone 48 publishes it.
+- [ ] Half of `PBP_COUNT_COLUMNS` (third/fourth down, red zone, two-point, total plays) is joined,
+      aggregated and regressed but never published. Publish it in Milestone 48 or stop carrying it.
+- [ ] The play-by-play cache key has no schema version, so growing `constants.PBP_COLUMNS` will not
+      invalidate existing per-season caches. Same latent issue as `load_team_stats`.
+- [ ] The leakage perturbation test covers a regular-season week only; add playoff-branch and
+      Week-1-fallback equivalents.
 
 ---
 

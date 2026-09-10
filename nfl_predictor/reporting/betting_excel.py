@@ -479,7 +479,7 @@ def write_betting_template_xlsx(
         spread_action = addr(excel_row, "spread_action")
         ws[
             spread_action
-        ].value = f'=IF({spread_edge_prob}<=0,"PASS",IF({spread_edge_prob}<0.02,"PASS",IF({spread_edge_prob}<0.04,"LEAN",IF({spread_edge_prob}<0.07,"SMALL",IF({spread_edge_prob}<0.10,"MEDIUM","STRONG"))))))'  # noqa: E501
+        ].value = f'=IF({spread_edge_prob}<=0,"PASS",IF({spread_edge_prob}<0.02,"PASS",IF({spread_edge_prob}<0.04,"LEAN",IF({spread_edge_prob}<0.07,"SMALL",IF({spread_edge_prob}<0.10,"MEDIUM","STRONG")))))'  # noqa: E501
 
         spread_conf = addr(excel_row, "spread_confidence_1_10")
         ws[
@@ -514,7 +514,7 @@ def write_betting_template_xlsx(
         moneyline_action = addr(excel_row, "money_action")
         ws[
             moneyline_action
-        ].value = f'=IF({moneyline_edge_prob}<=0,"PASS",IF({moneyline_edge_prob}<0.02,"PASS",IF({moneyline_edge_prob}<0.04,"LEAN",IF({moneyline_edge_prob}<0.07,"SMALL",IF({moneyline_edge_prob}<0.10,"MEDIUM","STRONG"))))))'  # noqa: E501
+        ].value = f'=IF({moneyline_edge_prob}<=0,"PASS",IF({moneyline_edge_prob}<0.02,"PASS",IF({moneyline_edge_prob}<0.04,"LEAN",IF({moneyline_edge_prob}<0.07,"SMALL",IF({moneyline_edge_prob}<0.10,"MEDIUM","STRONG")))))'  # noqa: E501
 
         moneyline_conf = addr(excel_row, "money_confidence_1_10")
         ws[
@@ -583,7 +583,7 @@ def write_betting_template_xlsx(
         total_action = addr(excel_row, "total_action")
         ws[
             total_action
-        ].value = f'=IF({total_edge_prob}<=0,"PASS",IF({total_edge_prob}<0.02,"PASS",IF({total_edge_prob}<0.04,"LEAN",IF({total_edge_prob}<0.07,"SMALL",IF({total_edge_prob}<0.10,"MEDIUM","STRONG"))))))'  # noqa: E501
+        ].value = f'=IF({total_edge_prob}<=0,"PASS",IF({total_edge_prob}<0.02,"PASS",IF({total_edge_prob}<0.04,"LEAN",IF({total_edge_prob}<0.07,"SMALL",IF({total_edge_prob}<0.10,"MEDIUM","STRONG")))))'  # noqa: E501
 
         total_conf = addr(excel_row, "total_confidence_1_10")
         ws[
@@ -898,7 +898,7 @@ def write_betting_template_xlsx(
         ws_live[spread_edge_prob].value = f"=MAX(0,{spread_edge_home},{spread_edge_away})"
         ws_live[
             spread_action
-        ].value = f'=IF({spread_edge_prob}<=0,"PASS",IF({spread_edge_prob}<0.02,"PASS",IF({spread_edge_prob}<0.04,"LEAN",IF({spread_edge_prob}<0.07,"SMALL",IF({spread_edge_prob}<0.10,"MEDIUM","STRONG"))))))'  # noqa: E501
+        ].value = f'=IF({spread_edge_prob}<=0,"PASS",IF({spread_edge_prob}<0.02,"PASS",IF({spread_edge_prob}<0.04,"LEAN",IF({spread_edge_prob}<0.07,"SMALL",IF({spread_edge_prob}<0.10,"MEDIUM","STRONG")))))'  # noqa: E501
         ws_live[
             spread_conf
         ].value = f"=IF({spread_edge_prob}<0.01,1,IF({spread_edge_prob}<0.02,2,IF({spread_edge_prob}<0.03,3,IF({spread_edge_prob}<0.04,4,IF({spread_edge_prob}<0.05,5,IF({spread_edge_prob}<0.06,6,IF({spread_edge_prob}<0.07,7,IF({spread_edge_prob}<0.08,8,IF({spread_edge_prob}<0.10,9,10)))))))))"  # noqa: E501
@@ -939,7 +939,7 @@ def write_betting_template_xlsx(
         ws_live[money_edge_prob].value = f"=MAX(0,{edge_home_ml},{edge_away_ml})"
         ws_live[
             money_action
-        ].value = f'=IF({money_edge_prob}<=0,"PASS",IF({money_edge_prob}<0.02,"PASS",IF({money_edge_prob}<0.04,"LEAN",IF({money_edge_prob}<0.07,"SMALL",IF({money_edge_prob}<0.10,"MEDIUM","STRONG"))))))'  # noqa: E501
+        ].value = f'=IF({money_edge_prob}<=0,"PASS",IF({money_edge_prob}<0.02,"PASS",IF({money_edge_prob}<0.04,"LEAN",IF({money_edge_prob}<0.07,"SMALL",IF({money_edge_prob}<0.10,"MEDIUM","STRONG")))))'  # noqa: E501
         ws_live[
             money_conf
         ].value = f"=IF({money_edge_prob}<0.01,1,IF({money_edge_prob}<0.02,2,IF({money_edge_prob}<0.03,3,IF({money_edge_prob}<0.04,4,IF({money_edge_prob}<0.05,5,IF({money_edge_prob}<0.06,6,IF({money_edge_prob}<0.07,7,IF({money_edge_prob}<0.08,8,IF({money_edge_prob}<0.10,9,10)))))))))"  # noqa: E501
@@ -1014,7 +1014,7 @@ def write_betting_template_xlsx(
         ws_live[total_edge_prob].value = f"=MAX(0,{total_edge_over},{total_edge_under})"
         ws_live[
             total_action
-        ].value = f'=IF({total_edge_prob}<=0,"PASS",IF({total_edge_prob}<0.02,"PASS",IF({total_edge_prob}<0.04,"LEAN",IF({total_edge_prob}<0.07,"SMALL",IF({total_edge_prob}<0.10,"MEDIUM","STRONG"))))))'  # noqa: E501
+        ].value = f'=IF({total_edge_prob}<=0,"PASS",IF({total_edge_prob}<0.02,"PASS",IF({total_edge_prob}<0.04,"LEAN",IF({total_edge_prob}<0.07,"SMALL",IF({total_edge_prob}<0.10,"MEDIUM","STRONG")))))'  # noqa: E501
         ws_live[
             total_conf
         ].value = f"=IF({total_edge_prob}<0.01,1,IF({total_edge_prob}<0.02,2,IF({total_edge_prob}<0.03,3,IF({total_edge_prob}<0.04,4,IF({total_edge_prob}<0.05,5,IF({total_edge_prob}<0.06,6,IF({total_edge_prob}<0.07,7,IF({total_edge_prob}<0.08,8,IF({total_edge_prob}<0.10,9,10)))))))))"  # noqa: E501

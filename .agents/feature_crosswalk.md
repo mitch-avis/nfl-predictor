@@ -44,7 +44,11 @@ this review started from.
 
 ## 2. Power rankings: verified behavior and verdict
 
-`scripts/power_rankings.py::_build_games_for_ratings` fits `fit_bradley_terry_ratings` on:
+Status 2026-09-10: item 1 of section 6 landed on 2026-09-09 (Milestone 43.1), so the behavior
+described below is now reachable only through `--legacy-franchise-fit`. Items 2-4 are pending.
+
+As found on 2026-09-09, `scripts/power_rankings.py::_build_games_for_ratings` fit
+`fit_bradley_terry_ratings` on:
 
 - every completed game in `data/all_data.csv` from `ratings_min_season` onward, and the default is
   `None`, which means every season back to 1999, all weighted equally;
@@ -341,6 +345,11 @@ Order: Milestone 45 (PBP foundation + per-snap EPA/success/explosive/ST families
 ridge-adjusted strength + schedule strength), then 43 rewritten (power rankings on the new
 snapshot), then 47 (QB per-dropback families), then 48 (PBP situational stats replacing the scrape),
 then the deferred 39/40 sweep and 41 residuals. Milestone 42 stays parked.
+
+Status 2026-09-10: 45 and 46 are done; 43.1 is done. Measuring 46 from week 1 exposed an
+early-season shrinkage defect in every season-to-date family (week 2 runs on one unshrunk game),
+now Milestone 49, which was moved ahead of 43 phase 2 because 2026 Week 2 is the next slate. The
+authoritative order lives in `.agents/TODO.md`.
 
 The first implementation session delivered Milestone 45 end to end on 2026-09-09 (see
 `ARCHIVE.md`). The baseline it was asked to compare against (Brier `0.2312`, log loss `0.7352`,

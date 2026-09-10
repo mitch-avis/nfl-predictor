@@ -202,6 +202,25 @@ Open follow-ups inherited from this milestone:
 
 ---
 
+## The total (over/under) model carries almost no signal - found 2026-09-09
+
+Predicted totals for the 2026 Week 1 slate all land between `43.9` and `44.1` while market totals
+for the same games range `40.5` to `47.5`. The model is effectively predicting the league mean for
+every game and not differentiating at all. Training holdout `total_mae` is `10.9974` against a
+`margin_mae` of `9.8471`, so the total head is materially weaker than the margin head.
+
+Consequence: the `total_value_side`, `total_edge_prob`, `total_confidence_1_10` and `total_ev`
+columns in the betting workbook are computed from that flat prediction and are not actionable. The
+spread and moneyline columns are unaffected. This was reported to the user rather than silently
+shipped.
+
+Worth a dedicated investigation: check whether the total target is being learned at all (feature
+importance for the total head), whether market total anchoring would help, and whether the total
+head deserves different features from the margin head. Do not present total-based betting
+recommendations as usable until this is resolved.
+
+---
+
 ## Early-season shrinkage - highest-priority defect found 2026-09-09
 
 A walk-forward from week 1 (`models/wf_strength_2023_2025_from_week1/`, 48 games per week over
@@ -247,15 +266,19 @@ targets, and future games filled with model probabilities.
 
 Tasks:
 
-- [ ] 43.1 Quick defaults in `scripts/power_rankings.py` and `scripts/weekly_run.py`:
-  - `--ratings-window-seasons` (default `2`: current plus previous season) and
-    `--ratings-prior-season-weight` (default `0.25`) with sample weights in
-    `fit_bradley_terry_ratings`
-  - margin-based targets via `margin_to_home_win_prob` by default; keep the binary mapping as an
-    option
-  - exclude future model-probability rows from the strength fit by default (they stay in projected
-    standings); add `--legacy-franchise-fit` to reproduce the old output
-- [ ] 43.2 After Milestone 46: default the ranking to the ETL adjusted composite for
+- [x] 43.1 Landed 2026-09-09 in `scripts/power_rankings.py` and
+      `nfl_predictor/reporting/power_rankings.py`: `--ratings-window-seasons` (default `2`),
+      `--ratings-prior-season-weight` (default `0.25`) via sample weights in
+      `fit_bradley_terry_ratings`, margin-based targets by default (`--ratings-target`), future
+      model-probability rows excluded from the strength fit (`--ratings-include-future`), and
+      `--legacy-franchise-fit` reproducing the old output exactly (pinned by a test).
+      Evidence it mattered: for 2024 through week 18 the old fit ranked a 4-13 New England first;
+      the new default ranks DET, BAL, BUF, GB, PHI, matching both the season's results and the
+      schedule-adjusted snapshot.
+      **Not done for `scripts/weekly_run.py`:** it calls `_build_games_for_ratings` positionally
+      without the new arguments, so it silently inherits the new defaults but exposes no flags to
+      override them and has no `--legacy-franchise-fit`. Wire them through when convenient.
+- [ ] 43.2 **Next up.** Default the ranking to the ETL adjusted composite for
       `(season, through_week + 1)` rows, map to the existing 1-10 and 0-10 scales, and publish the
       components next to the rank. Keep Bradley-Terry available as `--method bradley_terry`.
 - [ ] 43.3 Leave projected standings as record plus model win probabilities. Label or remove

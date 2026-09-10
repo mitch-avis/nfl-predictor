@@ -6,8 +6,8 @@ Completed milestones live in `ARCHIVE.md` (same directory). Agent workflow and g
 `feature_crosswalk.md`.
 
 - Completed work should be moved to `ARCHIVE.md` (with dates/notes).
-- New milestones continue numbering from the latest archived milestone (44), so new work starts
-  at 45.
+- Milestone numbering is authoritative in `ARCHIVE.md`. Active milestones run through 50, so new
+  work starts at 51.
 
 ---
 
@@ -33,6 +33,8 @@ For each task:
    - `uv sync --check --active`
 
 1. **Update docs** where behavior changes (README/AGENTS/CHANGELOG), and update TODO/ARCHIVE.
+1. **Commit** (when asked) with Conventional Commits subjects, `type(scope): summary`, per
+   `AGENTS.md`.
 
 ### Always use the repo venv
 
@@ -42,24 +44,20 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-09, after the play-by-play milestone)
+### Current validated baseline (2026-09-10, version `0.4.0`)
 
 - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
   `.venv/bin/pyright .` pass cleanly.
-- `.venv/bin/python -m pytest` passes (`471 passed`) with coverage `90.51%` against the enforced
+- `.venv/bin/python -m pytest` passes (`558 passed`) with coverage `90.83%` against the enforced
   `90%` floor.
-- `markdownlint-cli2` and `uv lock --check` pass.
-- ETL was rerun for `1999-2026`: `data/completed_games_ml.csv` covers `1999-2025` (`7260` rows,
-  `465` columns) and `data/predict/week_01_games_to_predict.csv` holds `16` rows for 2026 Week 1.
-- The leakage audit passed on the refreshed dataset (`430` features, `0` findings).
-- Walk-forward (`2023-2025`, `--eval-last-n-seasons 3`, `720` games): with the play-by-play group
-  on, Brier `0.2317`, log loss `0.7455`, pick accuracy `0.6778`, margin MAE `9.9178`, total MAE
-  `10.1295`, ECE `0.1244`. With it off: `0.2314`, `0.7440`, `0.6708`, `9.9977`, `10.1164`, `0.1269`.
-- The previously recorded reference (Brier `0.2312`, log loss `0.7352`, pick accuracy `0.6833`,
-  margin MAE `9.8954`, total MAE `10.1021`, ECE `0.1308`) is **not reproducible**: the untouched
-  pre-change dataset re-run under the same default config gives Brier `0.2300`, log loss `0.7501`,
-  pick accuracy `0.6833`, margin MAE `9.9705`. Treat the group-off numbers above as the working
-  baseline and compare future work against them, not against the old reference.
+- `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass.
+- `data/completed_games_ml.csv` covers `1999-2025` (`7260` rows, `498` columns) and
+  `data/predict/week_01_games_to_predict.csv` holds `16` rows for 2026 Week 1. This build dates
+  from the 2026-09-09 17:28 Week 1 refresh and fingerprints to `5b6af6aa...`.
+- The leakage audit passed on the `0.4.0` schema (`463` features, `0` findings).
+- The walk-forward benchmark table lives in `AGENTS.md`. **Its arms ran on an earlier build**
+  (dataset hash `668368d8...`), so before comparing new feature work, re-run the reference arm on
+  the build you are measuring against and keep both reports under `models/`.
 
 ---
 
@@ -86,14 +84,17 @@ Agents and humans should not rely on the shell activation state.
 Milestone 44 completed on 2026-06-13 and lives in `ARCHIVE.md`. On 2026-09-09 the roadmap was
 reordered around the feature-engineering workstream (see `feature_crosswalk.md`). Execution order:
 
-1. Milestone 45 - PBP foundation + per-snap team EPA, success, explosive, special-teams families
-2. Milestone 46 - Weekly schedule-adjusted team strength (ridge snapshot) + EPA schedule strength
-3. Milestone 43 (rewritten) - Power rankings measure current-season strength
-4. Milestone 47 - QB per-dropback EPA families for the expected starter
-5. Milestone 48 - PBP situational stats replace the TeamRankings stat scrape
-6. Milestone 39 (with 40 folded in) - Off-season configuration sweep, after the feature work lands
-7. Milestone 41 residuals - orchestration polish
-8. Milestone 42 - parked (alternative model families) until the user reopens it
+1. Milestone 45 - PBP foundation + per-snap team EPA families (done 2026-09-09)
+2. Milestone 46 - Weekly schedule-adjusted team strength (done 2026-09-09)
+3. Milestone 49 - Continuous early-season shrinkage (**next**; 2026 Week 2 kicks off 2026-09-17,
+   and week 2 is the week this defect wrecks, so it moved ahead of 43 phase 2 on 2026-09-10)
+4. Milestone 43 phase 2 - Power rankings on the adjusted composite (43.1 done 2026-09-09)
+5. Milestone 50 - The total/over-under head carries almost no signal
+6. Milestone 47 - QB per-dropback EPA families for the expected starter
+7. Milestone 48 - PBP situational stats replace the TeamRankings stat scrape
+8. Milestone 39 (with 40 folded in) - Off-season configuration sweep, after the feature work lands
+9. Milestone 41 residuals - orchestration polish
+10. Milestone 42 - parked (alternative model families) until the user reopens it
 
 Rules for every feature milestone:
 
@@ -196,35 +197,19 @@ Open follow-ups inherited from this milestone:
       stable. This is pre-existing (`aggregate_team_stats_to_week` has the same property) but it
       does mean the dataset fingerprint in the model artifact contract changes across identical
       runs. Worth a line in the artifact contract docs.
-- [ ] `uv sync --check --active` reports the environment is outdated. This predates this milestone
-      and is unrelated to it (`pyproject.toml` and `uv.lock` were untouched when it was first
-      observed); it needs a plain `uv sync` to clear.
+- [x] Resolved 2026-09-10: `uv sync --check --active` was failing because the environment still
+      had the `0.3.0` package installed after the `0.4.0` version bump. A plain `uv sync` cleared
+      it. Re-sync after every version bump.
 
 ---
 
-## The total (over/under) model carries almost no signal - found 2026-09-09
+## Milestone 49 - Continuous early-season shrinkage (next; found 2026-09-09)
 
-Predicted totals for the 2026 Week 1 slate all land between `43.9` and `44.1` while market totals
-for the same games range `40.5` to `47.5`. The model is effectively predicting the league mean for
-every game and not differentiating at all. Training holdout `total_mae` is `10.9974` against a
-`margin_mae` of `9.8471`, so the total head is materially weaker than the margin head.
+Goal: season-to-date stat features in weeks 2-4 are mostly the regressed prior season and hand over
+to the in-season sample as it accumulates, instead of switching from 100% prior in week 1 to 0%
+prior in week 2.
 
-Consequence: the `total_value_side`, `total_edge_prob`, `total_confidence_1_10` and `total_ev`
-columns in the betting workbook are computed from that flat prediction and are not actionable. The
-spread and moneyline columns are unaffected. This was reported to the user rather than silently
-shipped.
-
-Worth a dedicated investigation: check whether the total target is being learned at all (feature
-importance for the total head), whether market total anchoring would help, and whether the total
-head deserves different features from the margin head. Do not present total-based betting
-recommendations as usable until this is resolved.
-
----
-
-## Early-season shrinkage - highest-priority defect found 2026-09-09
-
-A walk-forward from week 1 (`models/wf_strength_2023_2025_from_week1/`, 48 games per week over
-`2023-2025`) shows week 2 is the weakest week of the season, and week 1 is one of the strongest:
+Evidence (`models/wf_strength_2023_2025_from_week1/`, 48 games per week over `2023-2025`):
 
 | window | Brier | log loss | pick acc | margin MAE |
 | --- | --- | --- | --- | --- |
@@ -232,33 +217,82 @@ A walk-forward from week 1 (`models/wf_strength_2023_2025_from_week1/`, 48 games
 | week 2 only | `0.2445` | `0.6846` | `0.5208` | `8.7838` |
 | weeks 3-18 | `0.2277` | `0.7431` | `0.6958` | `9.9006` |
 
-Week 1 runs entirely on the previous season regressed toward the league mean, and it beats the
-mid-season benchmark on both probability metrics. Week 2 runs on **one game with no shrinkage at
-all** and drops to `0.5208` pick accuracy.
+Week 1 runs entirely on the previous season regressed toward the league mean and beats the
+mid-season benchmark on both probability metrics. Week 2 runs on **one game with no shrinkage** and
+drops to `0.5208` pick accuracy.
 
-Root cause, verified: `aggregate_team_stats_to_week` takes a plain mean over prior in-season games,
-and `regress_to_mean` is only applied through the `teams_needing_fallback` path in `process_week`,
-which fires only when a team has *zero* in-season games. So `away_games_played` is `17` in week 1
-(the regressed prior season) and `1` in week 2. The resulting features are wildly overdispersed:
-`away_success_rate` in 2024 has std `0.0807` and range `0.250-0.569` at week 2, against std `0.0359`
-and range `0.375-0.490` at week 16.
+Root cause, verified in code and on the 2026-09-10 dataset: `aggregate_team_stats_to_week` takes a
+plain mean over prior in-season games, and `process_week` builds the regressed prior-season frame
+only for `teams_needing_fallback`, the teams with *zero* in-season games. So `away_games_played` is
+`17` in week 1 and `1` in week 2, and 2024 `away_success_rate` has std `0.0807` (range
+`0.250-0.569`) at week 2 against `0.0359` (`0.375-0.490`) at week 16. This affects every
+season-to-date family that flows through `team_stats_df` (nflreadpy stats and the play-by-play
+counts alike). The strength family is exempt: its own blend already sits at 80% prior in week 2.
 
-This is **not** specific to the schedule-adjusted strength family, whose own prior blend already
-sits at 80% prior in week 2. It affects every season-to-date feature family at once.
+Design (decided 2026-09-10; details in `next_agent_session_prompt.md`): blend the aggregated
+per-game means as `w * in_season + (1 - w) * regressed_prior` with
+`w = games_played / (games_played + K)`, `K = PRIOR_BLEND_GAMES = 4.0` shared with the strength
+snapshot and promoted to `constants.py`, then `recompute_derived_metrics` so rates stay ratios of
+blended sums. Zero games gives `w = 0`, so week-1 rows are unchanged by construction.
+`games_played` keeps its current semantics in this cut.
 
-Recommended fix: replace the all-or-nothing week-1 fallback with continuous shrinkage toward the
-regressed prior season across the early weeks, using the same `games / (games + K)` form the
-strength snapshot already uses, so week 2 is mostly prior and the in-season sample takes over as it
-accumulates. Land it as an ablatable switch and measure it with `--wf-start-week 1`, reporting weeks
-1, 2 and 3-18 separately; the aggregate hides the effect because 2 of 18 weeks change.
+Tasks:
 
-Deliberately **not** shipped on 2026-09-09: it rewrites the semantics of every season-to-date
-feature and needs a full ETL rebuild plus a week-1 walk-forward to validate, which could not be done
-safely before a pick deadline. It also cannot improve week 1, which already uses the regressed prior.
+- [ ] 49.1 Characterization tests first: week-1 rows bit-identical before and after; a one-game
+      team's week-2 stat equals `0.2 * in_season + 0.8 * prior` at `K = 4`; rates are recomputed
+      from blended sums, not blended directly; the first season in the run is untouched;
+      `--no-stat-prior-blend` reproduces today's output exactly.
+- [ ] 49.2 Implement the blend in `process_week`, building the regressed prior once per season
+      (a `prior_season_stats` argument alongside `prior_strength_snapshot`, computed inside when
+      `None`).
+- [ ] 49.3 CLI: `--stat-prior-blend-games` (default `4`) and `--no-stat-prior-blend` on
+      `nfl_predictor.data_collection`, mirroring `--strength-prior-blend`.
+- [ ] 49.4 Back up `data/*.csv`, rebuild, confirm the 2024 week-2 dispersion collapses toward the
+      week-16 spread and week-1 rows match the backup; run the leakage audit.
+- [ ] 49.5 Walk-forward from week 1 (`--wf-start-week 1`, `--eval-last-n-seasons 3`), off arm on
+      the pre-change build and on arm on the new build, both under `models/wf_shrink_2023_2025_*`.
+      Report weeks 1, 2, and 3-18 separately; the aggregate hides a 2-of-18-weeks change.
+- [ ] 49.6 README, AGENTS baseline note, CHANGELOG `[Unreleased]`, move to `ARCHIVE.md`.
+
+Acceptance:
+
+- [ ] Week 1 metrics identical on both arms; week 2 Brier and log loss move materially toward the
+      weeks 3-18 numbers; weeks 3-18 do not regress. If the result is a tie or a loss, the switch
+      ships default-off and the table is recorded anyway.
+- [ ] Follow-up recorded: whether `games_played` should publish the effective sample size instead
+      of the raw in-season count.
 
 ---
 
-## Milestone 43 - Power rankings measure current-season strength (rewritten 2026-09-09)
+## Milestone 50 - The total (over/under) head carries almost no signal (found 2026-09-09)
+
+Predicted totals for the 2026 Week 1 slate all land between `43.9` and `44.1` while market totals
+for the same games range `40.5` to `47.5`. The model is effectively predicting the league mean for
+every game. Training holdout `total_mae` is `10.9974` against a `margin_mae` of `9.8471`.
+
+Consequence: the `total_value_side`, `total_edge_prob`, `total_confidence_1_10` and `total_ev`
+columns in the betting workbook are computed from that flat prediction and are not actionable. The
+spread and moneyline columns are unaffected. Do not present total-based betting recommendations as
+usable until this is resolved.
+
+Tasks:
+
+- [ ] 50.1 Diagnose: feature importance for the total head; whether the total target is being
+      learned at all (early-stopping round, train vs holdout MAE); whether the pruning or feature
+      selection step is dropping total-relevant columns.
+- [ ] 50.2 Test market-total anchoring (residual training against `market_total_line`) in
+      walk-forward, and whether the total head deserves a different feature set from the margin head.
+- [ ] 50.3 Record the walk-forward table; either fix the default or mark the total columns of the
+      betting workbook as diagnostic-only in the report and README.
+
+Acceptance:
+
+- [ ] Weekly predicted totals span a range comparable to the market's, or the total outputs are
+      explicitly labelled non-actionable.
+
+---
+
+## Milestone 43 - Power rankings measure current-season strength (phase 2 pending)
 
 Goal: a Week `N` ranking reflects how strong teams are going into week `N`. Verified current
 behavior: a Bradley-Terry fit over every season since 1999 with equal weights, fixed `0.97 / 0.03`
@@ -278,14 +312,15 @@ Tasks:
       **Not done for `scripts/weekly_run.py`:** it calls `_build_games_for_ratings` positionally
       without the new arguments, so it silently inherits the new defaults but exposes no flags to
       override them and has no `--legacy-franchise-fit`. Wire them through when convenient.
-- [ ] 43.2 **Next up.** Default the ranking to the ETL adjusted composite for
+- [ ] 43.2 Default the ranking to the ETL adjusted composite for
       `(season, through_week + 1)` rows, map to the existing 1-10 and 0-10 scales, and publish the
       components next to the rank. Keep Bradley-Terry available as `--method bradley_terry`.
 - [ ] 43.3 Leave projected standings as record plus model win probabilities. Label or remove
       `golden_command._build_pregame_power_rankings` so one ranking artifact is canonical.
 - [ ] 43.4 Tests: recency weighting shifts ratings toward recent results; window logic excludes
       older seasons; a synthetic breakout team ranks first late in the season.
-- [ ] 43.5 README and `--help` explain "current-season" versus "franchise" rankings.
+- [ ] 43.5 README and `--help` explain "current-season" versus "franchise" rankings (the 43.1
+      flags are documented in README and `CHANGELOG.md` as of 2026-09-10; extend, do not redo).
 
 Acceptance:
 

@@ -236,3 +236,10 @@ models/
 
 # NFL SOS Ratings folder
 nfl-sos-ratings
+
+# Web UI (Vite frontend + FastAPI runtime state)
+web/node_modules/
+web/dist/
+web/coverage/
+web/*.tsbuildinfo
+data/web/

@@ -37,12 +37,12 @@ jobs:
       - name: Sync dependencies
         run: |
           source .venv/bin/activate
-          uv sync --active
+          uv sync --active --extra web
 
       - name: Verify synced environment
         run: |
           source .venv/bin/activate
-          uv sync --check --active
+          uv sync --check --active --extra web
 
       - name: Ruff format check
         run: .venv/bin/ruff format --check .
@@ -78,3 +78,37 @@ jobs:
           .venv/bin/python -m nfl_predictor.ml_model --help >/dev/null
           .venv/bin/python scripts/weekly_run.py --help >/dev/null
           .venv/bin/python scripts/power_rankings.py --help >/dev/null
+          .venv/bin/python -m nfl_predictor.api --help >/dev/null
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build

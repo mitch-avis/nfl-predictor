@@ -36,9 +36,21 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/mitch-avis/nfl-predictor"
 
+[project.optional-dependencies]
+web = [
+    "argon2-cffi",
+    "fastapi",
+    "pydantic-settings",
+    "pyjwt",
+    "python-multipart",
+    "sse-starlette",
+    "uvicorn[standard]",
+]
+
 [dependency-groups]
 dev = [
     "colorama",
+    "httpx",
     "pandas-stubs>=3.0.3.260530",
     "pyright",
     "pytest",
@@ -70,6 +82,7 @@ extend-exclude = [
     ".mypy_cache",
     "build",
     "dist",
+    "web",
 ]
 
 [tool.ruff.lint]
@@ -94,7 +107,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101"] # Use of assert is standard in pytest
+"tests/**/*.py" = ["S101", "S105", "S106"] # asserts and fixture passwords are standard in pytest
+"nfl_predictor/api/registry/*.py" = ["E501"]  # one column definition per line, descriptions included
 
 [tool.ruff.lint.isort]
 known-first-party = ["nfl_predictor"]
@@ -123,7 +137,7 @@ stubPath = "stubs"
 executionEnvironments = [{ root = "." }]
 # `nfl-sos-ratings` is a gitignored symlink to the read-only reference repo; it is not part
 # of this project's type-check surface. The rest of the list restores pyright's defaults.
-exclude = ["nfl-sos-ratings", "**/node_modules", "**/__pycache__", "**/.*"]
+exclude = ["nfl-sos-ratings", "web", "**/node_modules", "**/__pycache__", "**/.*"]
 # --- Standard-mode diagnostics promoted to errors (also surfaced by Pylance) ----------
 reportMissingImports = "error"
 reportMissingModuleSource = "warning"

@@ -26,28 +26,31 @@ Rules that are always enforced:
 ## Current Focus (2026 season start)
 
 - The active workstream is feature engineering for true team strength: PBP-derived per-snap EPA
-  families, weekly schedule-adjusted (ridge) team strength, QB per-dropback EPA families, and a
-  power-rankings redesign that measures current-season strength. The analysis, crosswalk, and
-  prioritized shortlist live in `.agents/feature_crosswalk.md`; the ordered milestones live in
-  `.agents/TODO.md`.
+  families and weekly schedule-adjusted (ridge) team strength have landed; continuous early-season
+  shrinkage of every season-to-date family, the power-rankings redesign on the adjusted composite,
+  and QB per-dropback EPA families are next. The analysis, crosswalk, and prioritized shortlist
+  live in `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-09 (after the schedule-adjusted strength release, version
-  `0.4.0`):
+- Validated baseline on 2026-09-10 (version `0.4.0`):
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`548 passed`) with coverage `90.8%` against the enforced
+  - `.venv/bin/python -m pytest` passes (`558 passed`) with coverage `90.83%` against the enforced
     `90%` floor.
-  - `markdownlint-cli2` and `uv lock --check` pass.
+  - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. Re-run a plain
+    `uv sync` after every version bump, or the last check fails on the stale installed package.
   - ETL was rerun for `1999-2026` (`7260` rows, `498` columns, `1999-2025`) and the leakage audit
     passed on the refreshed dataset (`463` features, `0` findings).
 - Working walk-forward benchmark (seasons `2023-2025`, `--eval-last-n-seasons 3`, `720` games),
-  measured on the `0.4.0` dataset build. Reports are on disk under
-  `models/wf_strength_2023_2025_{both_on,strength_off,both_off,prior_off}/`.
+  measured on a `0.4.0` dataset build. Reports are on disk under
+  `models/wf_strength_2023_2025_{both_on,strength_off,both_off,prior_off}/`. **The build those arms
+  ran on (dataset hash `668368d8...` in each `metadata.json`) was superseded by the 2026-09-09
+  17:28 Week 1 refresh**; the file on disk fingerprints differently. The numbers stand as the
+  reference, but any new comparison must first re-run its reference arm on the build it measures.
 
   | arm | Brier | log loss | pick acc | margin MAE | total MAE | ECE |
   | --- | --- | --- | --- | --- | --- | --- |
@@ -145,6 +148,13 @@ Rules that are always enforced:
 - When committing work, prefer one logical change per commit for multi-file schema work and one file
   per commit for all other changes, including deletions, unless the user explicitly asks for
   different commit granularity.
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/): a subject
+  of the form `type(scope): imperative summary`, at most 72 characters, followed by a blank line
+  and a body that explains what changed and why. Types: `feat`, `fix`, `docs`, `test`, `refactor`,
+  `perf`, `build`, `ci`, `chore`. The scope is optional and names the area (`etl`, `ml`,
+  `rankings`, `reporting`, `agents`, `walk-forward`). Mark breaking changes with `!` after the
+  type or scope. Examples: `feat(etl): blend early-season stats toward the regressed prior`,
+  `docs(agents): regenerate the handoff prompt`, `fix(reporting): balance the workbook formulas`.
 
 ## CI Direction
 
@@ -241,9 +251,12 @@ Recommended local commands:
   outputs.
 - `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
 - `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
-- `scripts/power_rankings.py`: power rankings + projected standings. Today it fits Bradley-Terry
-  over every season since 1999 with equal weights; the redesign toward current-season adjusted
-  strength is Milestone 43 in `.agents/TODO.md`.
+- `scripts/power_rankings.py`: power rankings + projected standings. Since 2026-09-09 the default
+  fit is Bradley-Terry over a two-season window with prior seasons weighted `0.25`, margin-based
+  targets, and future model probabilities excluded; `--legacy-franchise-fit` restores the old
+  all-seasons equal-weight fit. Ranking on the ETL's schedule-adjusted composite is the pending
+  phase 2 of Milestone 43 in `.agents/TODO.md`. `scripts/weekly_run.py` inherits the new defaults
+  but does not yet expose the flags.
 
 ## Modeling Philosophy (Important Context)
 
@@ -539,6 +552,11 @@ Rules for stat-style features:
   fixture.
 - Any schedule-adjusted or opponent-adjusted value for week `N` must be solved from games strictly
   before week `N` in that season, with a documented prior-season fallback for early weeks.
+- A change that alters feature *values* at ETL time (a prior blend, a regression factor, a new
+  fallback) cannot be ablated with `--disable-feature-groups`, which only drops columns. Ablate it
+  with two dataset builds behind an ETL flag, back up `data/*.csv` before each rebuild, and keep
+  both walk-forward reports under `models/`. Measure early-season changes with `--wf-start-week 1`
+  and report weeks 1, 2, and 3-18 separately.
 
 ## Missing Data Rules
 

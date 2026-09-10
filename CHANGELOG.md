@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Rank teams on current-season strength by default in `scripts/power_rankings.py`. The
+  Bradley-Terry fit now sees a two-season window with prior-season games weighted `0.25`
+  (`--ratings-window-seasons`, `--ratings-prior-season-weight`), scores completed games by margin
+  through the model's win-probability curve (`--ratings-target`), and excludes future
+  model-probability rows from the strength fit (`--ratings-include-future`). The previous
+  all-seasons equal-weight fit ranked a 4-13 team first for 2024; `--legacy-franchise-fit`
+  reproduces it exactly and is pinned by a test. `scripts/weekly_run.py` inherits the new defaults
+  without exposing the flags yet.
+
+### Added
+
+- Add optional per-game sample weights and a margin-based target to
+  `nfl_predictor.reporting.power_rankings.fit_bradley_terry_ratings`; uniform weights reproduce
+  the unweighted fit exactly.
+
+### Fixed
+
+- Fix the six recommendation formulas in the betting workbook, which closed one more parenthesis
+  than they opened, so Excel reported the file as corrupt and stripped every action cell. The
+  generated workbook is now validated by tokenizing each formula.
+
 ## [0.4.0] - 2026-09-09
 
 ### Changed

@@ -1,0 +1,220 @@
+"""Column metadata for the betting report.
+
+Total (over/under) columns are registered with ``actionable=False``: the model's total head does
+not separate from the market line, so the UI must show them as informational only.
+"""
+
+from __future__ import annotations
+
+from nfl_predictor.api.registry.columns import ColumnMeta, register
+
+MONEYLINE = "Moneyline"
+SPREAD = "Spread"
+TOTAL = "Total (informational)"
+FAIR = "Fair odds"
+
+register(
+    ColumnMeta(
+        "model_home_prob",
+        "Model home %",
+        "Model win probability for the home team.",
+        MONEYLINE,
+        "prob",
+        decimals=1,
+    ),
+    ColumnMeta(
+        "market_home_prob_raw",
+        "Implied home %",
+        "Home win probability implied by the home moneyline, vig included.",
+        MONEYLINE,
+        "prob",
+        decimals=1,
+    ),
+    ColumnMeta(
+        "market_away_prob_raw",
+        "Implied away %",
+        "Away win probability implied by the away moneyline, vig included.",
+        MONEYLINE,
+        "prob",
+        decimals=1,
+    ),
+    ColumnMeta(
+        "moneyline_value_side",
+        "ML side",
+        "Side with the larger positive probability edge against its offered price.",
+        MONEYLINE,
+        "team",
+    ),
+    ColumnMeta(
+        "moneyline_edge_prob",
+        "ML edge",
+        "Model probability minus the implied probability of the value side (vig included, so it is a bet-level edge).",
+        MONEYLINE,
+        "pct",
+        "higher",
+        heatmap=True,
+        decimals=1,
+    ),
+    ColumnMeta(
+        "moneyline_action",
+        "ML action",
+        "PASS below 2 points of edge, LEAN under 4, SMALL under 7, MEDIUM under 10, STRONG at 10 or more.",
+        MONEYLINE,
+        "action",
+    ),
+    ColumnMeta(
+        "moneyline_confidence_1_10",
+        "ML conf.",
+        "1 to 10 ladder from the edge: 1 per point of edge, capped at 10.",
+        MONEYLINE,
+        "int",
+        "higher",
+    ),
+    ColumnMeta(
+        "moneyline_ev",
+        "ML EV/$1",
+        "Expected profit per 1 unit staked on the value side at the offered price.",
+        MONEYLINE,
+        "float",
+        "higher",
+        heatmap=True,
+        decimals=3,
+    ),
+    ColumnMeta(
+        "model_fair_home_moneyline",
+        "Fair home ML",
+        "Moneyline that would make the home side a zero-edge bet at the model probability.",
+        FAIR,
+        "money",
+    ),
+    ColumnMeta(
+        "model_fair_away_moneyline",
+        "Fair away ML",
+        "Moneyline that would make the away side a zero-edge bet at the model probability.",
+        FAIR,
+        "money",
+    ),
+    ColumnMeta(
+        "spread_p_home_cover",
+        "P(home covers)",
+        "Probability the home team covers the spread, from a normal margin distribution centered on the prediction.",
+        SPREAD,
+        "prob",
+        decimals=1,
+    ),
+    ColumnMeta(
+        "spread_sigma",
+        "Margin σ",
+        "Standard deviation of the margin distribution, from the p10/p90 quantiles (13 when unavailable).",
+        SPREAD,
+        "float",
+        decimals=1,
+    ),
+    ColumnMeta(
+        "spread_value_side",
+        "Spread side",
+        "Side with the larger cover probability edge against a -110 price.",
+        SPREAD,
+        "team",
+    ),
+    ColumnMeta(
+        "spread_edge_prob",
+        "Spread edge",
+        "Cover probability of the value side minus the 52.4% break-even at -110.",
+        SPREAD,
+        "pct",
+        "higher",
+        heatmap=True,
+        decimals=1,
+    ),
+    ColumnMeta(
+        "spread_edge_points",
+        "Spread edge (pts)",
+        "Predicted margin plus the home spread: how many points the model disagrees with the line by, from the home side.",
+        SPREAD,
+        "spread",
+        "neutral",
+        heatmap=True,
+        decimals=1,
+    ),
+    ColumnMeta(
+        "spread_action",
+        "Spread action",
+        "Same PASS/LEAN/SMALL/MEDIUM/STRONG ladder applied to the cover-probability edge.",
+        SPREAD,
+        "action",
+    ),
+    ColumnMeta(
+        "spread_confidence_1_10",
+        "Spread conf.",
+        "1 to 10 ladder from the cover-probability edge.",
+        SPREAD,
+        "int",
+        "higher",
+    ),
+    ColumnMeta(
+        "spread_ev",
+        "Spread EV/$1",
+        "Expected profit per unit at -110 on the value side.",
+        SPREAD,
+        "float",
+        "higher",
+        heatmap=True,
+        decimals=3,
+    ),
+    ColumnMeta(
+        "total_p_over",
+        "P(over)",
+        "Probability the total goes over the line. Informational: the total model has no demonstrated edge.",
+        TOTAL,
+        "prob",
+        decimals=1,
+        actionable=False,
+    ),
+    ColumnMeta(
+        "total_value_side",
+        "Total side",
+        "OVER or UNDER with the larger edge. Informational only.",
+        TOTAL,
+        "text",
+        actionable=False,
+    ),
+    ColumnMeta(
+        "total_edge_prob",
+        "Total edge",
+        "Probability edge against -110. Informational only.",
+        TOTAL,
+        "pct",
+        decimals=1,
+        actionable=False,
+    ),
+    ColumnMeta(
+        "total_edge_points",
+        "Total edge (pts)",
+        "Predicted total minus the line. Informational only.",
+        TOTAL,
+        "spread",
+        decimals=1,
+        actionable=False,
+    ),
+    ColumnMeta(
+        "total_action",
+        "Total action",
+        "Ladder label. Informational only; do not bet totals on this model.",
+        TOTAL,
+        "action",
+        actionable=False,
+    ),
+)
+
+BETTING_COLUMNS: list[str] = [
+    "game_id", "date", "away_abbr", "home_abbr",
+    "moneyline_value_side", "moneyline_action", "moneyline_edge_prob", "moneyline_ev",
+    "moneyline_confidence_1_10", "model_home_prob", "market_home_prob_novig", "edge_home_prob",
+    "away_moneyline", "home_moneyline", "market_away_prob_raw", "market_home_prob_raw",
+    "spread_value_side", "spread_action", "spread_edge_prob", "spread_edge_points", "spread_ev",
+    "spread_confidence_1_10", "home_spread", "away_spread", "spread_p_home_cover", "spread_sigma",
+    "model_fair_away_moneyline", "model_fair_home_moneyline",
+    "predicted_away_score_raw", "predicted_home_score_raw", "predicted_margin_raw", "predicted_total_raw",
+    "total_line", "total_p_over", "total_value_side", "total_edge_prob", "total_edge_points", "total_action",
+]  # fmt: skip

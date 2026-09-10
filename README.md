@@ -428,6 +428,12 @@ Notes:
   - `power_rankings_season_XXXX_week_YY.csv`
   - `projected_standings_season_XXXX_week_YY.csv`
   - `projected_division_standings_season_XXXX_week_YY.csv`
+- Power rankings measure **current-season** strength by default: the Bradley-Terry fit sees the
+  current and previous season only (`--ratings-window-seasons 2`), weights prior-season games at
+  `0.25` (`--ratings-prior-season-weight`), scores completed games by margin
+  (`--ratings-target margin`), and keeps the model's forecasts for future games out of the strength
+  fit (`--ratings-include-future` is off). Future games still drive the projected standings.
+  `--legacy-franchise-fit` restores the older all-seasons, equal-weight "franchise" ranking.
 
 Model selection hierarchy (default):
 

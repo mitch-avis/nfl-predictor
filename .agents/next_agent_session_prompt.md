@@ -1,10 +1,18 @@
 # Next Agent Session Prompt
 
 You are the orchestrating agent (Claude Opus 5) for an implementation session in the `nfl-predictor`
-workspace (`/home/mitch/workspace/nfl-predictor`). Your deliverable is **Milestone 52: the total
-(over/under) head carries almost no signal**, tasks 52.2 and 52.3 in `.agents/TODO.md`. The
-diagnosis (52.1) is done and verified: the root cause is a shared early-stopping callback, the
-fix is small, and the cost is in the walk-forward arms that measure it.
+workspace (`/home/mitch/workspace/nfl-predictor`). You have two deliverables, in this order:
+
+1. **Task 56.4 first** (Phase 0 below): the weekly run crashes at training for weeks 2-4 of every
+   season because in-season calibration cannot find four weeks in the new season. It blocks the
+   2026 Week 2 run, so it lands before anything else.
+2. **Milestone 52: the total (over/under) head carries almost no signal**, tasks 52.2 and 52.3
+   in `.agents/TODO.md`. The diagnosis (52.1) is done and verified: the root cause is a shared
+   early-stopping callback, the fix is small, and the cost is in the walk-forward arms that
+   measure it.
+
+Work on a branch from `main` if `feat/pbp-per-snap-epa` has been merged by the time you start
+(`git branch --show-current`, `git log --oneline -3 main`); otherwise stay on the current branch.
 
 Milestone numbers changed on 2026-09-10 (map at the top of `.agents/ARCHIVE.md`). Milestone 52 was
 "50"; older commits and the crosswalk use the old numbers.
@@ -35,7 +43,9 @@ opening message asks for all four arms, run all four in the order above.
   night and before Thursday, and it should run on the fixed code so Week 2 totals are usable. Week
   1 totals were produced on 2026-09-08 by a one-tree head and are not actionable; spreads and
   moneylines from that run are fine.
-- Nothing in this milestone needs an ETL rebuild.
+- The Week 2 run needs both fixes: task 56.4 so it runs at all, and the total-head fix so its
+  totals mean something. If the session runs short, 56.4 alone still unblocks Week 2.
+- Nothing in either task needs an ETL rebuild.
 
 ## 0. Read first, in this order
 
@@ -66,10 +76,11 @@ opening message asks for all four arms, run all four in the order above.
 - The project version is `0.5.0` in `pyproject.toml`, but there is **no tag and no GitHub
   release**: the user removed both on 2026-09-11 because the project is private and not ready
   for releases. Never create or push a tag or release.
-- Milestone 51 is committed on `feat/pbp-per-snap-epa` (five commits after `0.5.0`, ending in
-  the docs commit) and unreleased; the working tree should be clean apart from gitignored data,
-  so check `git status` first. The gate was green on it: `631 passed`, coverage `91.16%`, all
-  linters, `uv lock --check`, `uv sync --check --active`, markdownlint.
+- Milestone 51 is committed on `feat/pbp-per-snap-epa` (the `feat(etl)`, `feat(power-rankings)`,
+  `feat(weekly-run)`, `refactor(golden)` and `docs` commits, followed by handoff-doc commits) and
+  unreleased; the working tree should be clean apart from gitignored data and the
+  `models/smoke_20260911/` run, so check `git status` first. The gate was green on it: `631 passed`,
+  coverage `91.16%`, all linters, `uv lock --check`, `uv sync --check --active`, markdownlint.
 - **Root cause, verified twice on 2026-09-11.** With xgboost `3.4.1`, `fit()` no longer accepts
   `early_stopping_rounds`, so `_with_xgb_early_stopping_params` sets the init parameter
   `early_stopping_rounds` **and** adds one `EarlyStopping` callback instance to the params. Both
@@ -87,6 +98,16 @@ opening message asks for all four arms, run all four in the order above.
   and the sklearn wrapper passes both that parameter and `self.callbacks`, so today every fit runs
   two early-stopping callbacks and the shared one wins. Verified: an `XGBRegressor` with only the
   init parameter and no explicit callback stops at the same round as one with a fresh callback.
+- **Task 56.4, verified 2026-09-11.** A weekly-run smoke test (`--skip-data-refresh --run-id
+  smoke_20260911`) finished all 9 walk-forward candidates (about 2 minutes each), then Stage 2
+  stopped with `ValueError: Not enough weeks in season 2026 for calibration.` from
+  `ml_model_core._split_train_calibration_holdout` (around line 325). With the weekly defaults
+  (no holdout, no calibration seasons, 4 calibration weeks) the in-season window comes only from
+  the newest season, and 2026 has one completed week. Calling the split on the live data: `(0, 0,
+  4)` raises; `(0, 2, 0)` trains on 1999-2024 and calibrates on 2025 plus the 2026 games (274
+  games); `(0, 1, 0)` calibrates on the two 2026 games alone. Full spec in `.agents/TODO.md`
+  under 56.4. The split's in-season values are read only by the two `calibration_inseason`
+  metadata blocks in `ml_model_training.py`; the web UI does not read them.
 - The benchmark in `AGENTS.md` (`models/wf_shrink_2023_2025_on/`) was measured with
   `market_anchor` **on**, `include_market` on, `early_stopping_rounds 50`, `--wf-start-week 1`,
   `--eval-last-n-seasons 3`, on `data/completed_games_ml.m49_on_through_2025.csv` (fingerprint
@@ -111,6 +132,11 @@ opening message asks for all four arms, run all four in the order above.
   from ruff and markdownlint; never edit it.
 
 ## 2. Decided (do not relitigate; record deviations)
+
+- 56.4: roll the calibration window back across the season boundary as specified in
+  `.agents/TODO.md`; do not add a flag, and do not change the guard in `scripts/weekly_run.py`.
+  When the newest season has enough weeks the split must be identical to today's, which is what
+  keeps every earlier weekly run reproducible.
 
 - The fix is to stop adding the explicit `EarlyStopping` callback in
   `_with_xgb_early_stopping_params` when the `early_stopping_rounds` init parameter is supported,
@@ -138,10 +164,29 @@ opening message asks for all four arms, run all four in the order above.
 - Do not modify `../nfeloqb` or `../nfl-sos-ratings`.
 - Commit only if the user asks. If asked: one logical change per commit, Conventional Commits
   subject (`type(scope): imperative summary`), a body explaining what and why, and the attribution
-  line the harness provides. Do not push commits or tags unless asked; pushing a version tag
-  publishes a GitHub release.
+  line the harness provides. Do not push unless asked. Never create or push a version tag or a
+  GitHub release: the project is private and not ready for releases.
 
-## Phase 1 - The fix, tests first (short)
+## Phase 0 - Task 56.4, the calibration crash (short, first)
+
+1. Tests first in `tests/test_ml_model_core_helpers.py`: the Week-2 case (newest season has one
+   week, four requested: the window is that week plus the previous season's last three, and
+   training excludes exactly those), the unchanged case (newest season has at least four weeks:
+   output identical to today's), and the error when the whole pool has fewer weeks than
+   requested. Replace the test that pins today's error for the Week-2 case.
+2. Implement it in `_split_train_calibration_holdout` and extend the two `calibration_inseason`
+   metadata blocks as the TODO spec says. Run the full gate.
+3. Verify on the real pipeline by resuming the smoke run with default training flags. The
+   walk-forward stage is reused, so only training and the later stages run:
+   `.venv/bin/python scripts/weekly_run.py --skip-data-refresh --run-id smoke_20260911 --resume`.
+   Check that training finishes, that `metadata.json` lists 2026 week 1 plus three 2025 weeks
+   under `calibration_inseason`, and that the power rankings, predictions and betting report are
+   written. If the user already finished the smoke run with the workaround flags, still run this
+   once without them.
+4. `CHANGELOG.md` `[Unreleased]` `Fixed` entry; move 56.4 to `.agents/ARCHIVE.md` under a
+   "Milestone 56 (partial)" heading and remove the roadmap line for it in `.agents/TODO.md`.
+
+## Phase 1 - The total-head fix, tests first (short)
 
 1. Regression test on `_fit_margin_total_models` with an eval set and
    `early_stopping_rounds=50`: synthetic data where the margin target is easier than the total
@@ -182,7 +227,8 @@ if the margin metrics reproduced), `.agents/TODO.md` and `.agents/ARCHIVE.md`. T
 
 ## Final report to the user (structure)
 
-1. Outcome first: whether the fix landed, whether the anchored arm reproduced the benchmark's
+1. Outcome first: whether task 56.4 landed and the smoke run finished without workaround flags;
+   then whether the total-head fix landed, whether the anchored arm reproduced the benchmark's
    margin metrics exactly, and the unanchored total MAE against the market line's `10.1207`.
 2. The walk-forward table (windows as in `AGENTS.md`) for every arm you ran, with run directories.
 3. What the retrained production model predicts for 2026 Week 1 totals.

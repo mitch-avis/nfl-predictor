@@ -98,6 +98,9 @@ EPA families), 46 (schedule-adjusted strength), 49 (continuous early-season shri
 phase of 43 (current-season Bradley-Terry defaults), and 51 (power rankings on the adjusted
 composite). Execution order:
 
+0. Task 56.4 - Early-season training calibration crash (**first, urgent**: it blocks every weekly
+   run for weeks 2-4, including the 2026 Week 2 run due between 2026-09-14 and 2026-09-17; do it
+   at the start of the Milestone 52 session)
 1. Milestone 52 - The total (over/under) head carries almost no signal (**next**; 52.1 found the
    cause, a shared early-stopping callback, so 52.2 is a small fix plus a walk-forward)
 2. Milestone 53 - QB per-dropback EPA families for the expected starter
@@ -296,6 +299,29 @@ Formerly Milestone 41.
       prediction week is postseason, default the power-rankings through-week to the last
       regular-season week.
 - [ ] 56.3 Wire sweep-selected defaults once Milestone 55 lands; confirm resume behavior.
+- [ ] 56.4 **Urgent, do first.** Roll the in-season calibration window back across the season
+      boundary. Found 2026-09-11 in a weekly-run smoke test, which stopped at Stage 2 training
+      with `ValueError: Not enough weeks in season 2026 for calibration.` Cause:
+      `ml_model_core._split_train_calibration_holdout` takes in-season calibration weeks only from
+      the newest season in the pool (`base_pool[-1]`) and raises when it has fewer than
+      `calibration_weeks` (weekly default `4`, from `--wf-calibration-weeks`). So every weekly run
+      for weeks 2-4 of a season fails. The code dates from January 2026; it surfaced now because
+      the ETL rebuild added two completed 2026 Week 1 games. The Week 1 production model avoided
+      it because it came from `golden_command.py` with whole-season calibration.
+      Fix: take the most recent `calibration_weeks` completed `(season, week)` pairs across the
+      pool in time order (for Week 2: 2026 week 1 plus 2025 weeks 16-18 on the regular-season
+      frame) and exclude exactly those pairs from training. Raise only when the whole pool has
+      fewer weeks than requested. When the newest season already has enough weeks, the result
+      must be identical to today's. Whole-season calibration (`calibration_seasons`) must not
+      also claim a season the rolling window touched. The metadata `calibration_inseason` block
+      (written in `ml_model_training.py` at two places, around lines 691 and 1091) stays readable:
+      keep `season` and `weeks` for the newest season and add the full list of pairs. Tests: the
+      Week-2 case, the unchanged case, the too-few-weeks error, and training excluding the window;
+      update `tests/test_ml_model_core_helpers.py` (the test around line 226 pins today's error).
+      Workaround until then: `--train-calibration-weeks 0 --train-calibration-seasons 2`, which
+      calibrates on 2025 plus the 2026 games. `--train-calibration-seasons 1` alone calibrates on
+      the two 2026 games and must not be used; `0` and `0` is forced back to 4 weeks by a guard in
+      `scripts/weekly_run.py`.
 
 Acceptance:
 

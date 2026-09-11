@@ -330,4 +330,50 @@ Odds-provider adapter interface plus the `Live` blend from `betting_excel.py`
   division standings), Betting (action ladder, totals hidden by default, workbook download), Data
   & ETL, Model (tiles, feature importance, reliability diagram, walk-forward candidates), and
   Glossary.
-- Phase 2: not started.
+- Phase 2 (2026-09-10): done. `nfl_predictor/api/jobs/` (catalog, SQLite store, subprocess runner,
+  SSE stream, routes) and `nfl_predictor/lines_refresh.py`; routes under `/api/jobs`; frontend
+  `/jobs` and `/jobs/:jobId` with the generated form, streamed log console, progress bar and
+  cancel, plus admin Run ETL / Refresh lines buttons on Data & ETL and Generate workbook on
+  Betting. Verified live: `lines_refresh` chained into `predict` against copies of the real
+  datasets, writing a predictions CSV.
+
+  Deviations from the plan above, all deliberate:
+
+  - **Progress regex.** The plan cited a `Walk-forward fold N/M done` line in
+    `nfl_predictor/ml/walk_forward.py`; the line that actually exists is `WF candidate %d/%d` in
+    `scripts/weekly_run.py`. The runner matches both (`(?:fold|candidate) N/M`).
+  - **Queue vs 409.** Both behaviors are implemented: the runner gives each exclusive group a
+    single worker, so queued jobs in a group never overlap (this is the path chained jobs take),
+    while `POST /api/jobs` still answers 409 `group_busy` when the group is already occupied.
+  - **Log flushing.** Batching only on new output would hide the last line of a job that logs and
+    then works silently, so a reader thread fills a buffer and the worker flushes it every 250 ms.
+  - **Join key for the lines refresh.** `game_id` remains the preferred key, but the real
+    `data/predict/week_NN_games_to_predict.csv` files have no `game_id` column, so those fall back
+    to `(season, week, away_abbr, home_abbr)`. Files with neither key are skipped with a warning.
+  - **Unchanged files are not rewritten.** A refresh that finds no changed cell leaves the file
+    byte-identical instead of rewriting it through Polars.
+  - **Log console.** Rendering is capped at the newest 2000 filtered lines with a "… N earlier
+    lines not shown" note rather than a virtualized list; no virtualization library is installed.
+  - **`etl_full`, `validate_offline` and `validate_live`** read `nfl_predictor.constants.DATA_PATH`
+    (the checkout's own `data/`) and ignore `NFLP_DATA_DIR`; every other template is given explicit
+    paths from the settings. This only matters when the API is pointed at another checkout's data.
+
+  Fixed along the way: `Settings.python_executable` was resolved to its target, and because
+  `.venv/bin/python` is a symlink to the base interpreter, jobs launched outside the virtual
+  environment and failed on `import polars`. The path is now made absolute but never resolved.
+
+- Phase 3 (2026-09-10): done. `nfl_predictor/week_builder.py` extracts one week of upcoming games
+  from `all_data_ml.csv` with the ETL's own `filter_upcoming_games` rule; the `predict_week`
+  template runs it and chains `predict`, so a future week goes from nothing to predictions in one
+  click. `GET /api/predictions/weeks` now also lists the current season's unplayed weeks with
+  source `available`, and the Predictions page answers one of those with a "not predicted yet"
+  panel carrying the Generate action and the caveat that lines, rest, and quarterbacks are as of
+  the last ETL. Verified live: week 3 of 2026 generated and predicted (16 games) from the active
+  run's model.
+
+  Deviations: the availability check is the ETL's upcoming-game rule (season, week, and a missing
+  score) rather than a copy of `scripts/power_rankings.py::_predict_future_games`, whose feature
+  check needs a loaded model; the week file is written with every column of `all_data_ml.csv`,
+  which the prediction CLI narrows through the model's feature spec.
+
+- Phase 4: not started.

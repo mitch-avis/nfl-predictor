@@ -212,6 +212,16 @@ def _edge_to_action(edge: float) -> str:
     return "STRONG"
 
 
+TOTAL_SIGNAL_STATUS = "diagnostic_only"
+"""Label written next to the total (over/under) columns of every betting report row.
+
+In the 2023-2025 walk-forward the model's total trails the market's own total line (weeks 3-18
+total MAE ``10.3152`` unanchored and ``10.2295`` anchored against ``10.0847`` for the line), and
+its deviation from the line has no correlation with the actual deviation. Over/under leans are
+therefore diagnostics, not betting signals, until a total model beats the line in walk-forward.
+"""
+
+
 def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
     """Build a betting-oriented report from a predictions table.
 
@@ -290,6 +300,7 @@ def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
     else:
         df["total_value_side"] = None
         df["total_edge_points"] = float("nan")
+    df["total_signal"] = TOTAL_SIGNAL_STATUS
 
     # Friendly display columns
     df["matchup"] = df["away_abbr"].astype(str) + " @ " + df["home_abbr"].astype(str)
@@ -322,6 +333,7 @@ def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
         "total_line",
         "total_value_side",
         "total_edge_points",
+        "total_signal",
     ]
     cols_present = [c for c in cols if c in df.columns]
     report = df[cols_present].copy()

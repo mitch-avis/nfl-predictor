@@ -45,6 +45,7 @@ from nfl_predictor.ml.ml_model_core import (
     _fit_transform_matrix,
     _fit_win_prob_calibrator,
     _get_target_columns,
+    _inseason_calibration_pairs,
     _load_games,
     _predict_home_win_prob,
     _predict_margin_total_from_model,
@@ -691,6 +692,7 @@ def train_margin_total_model_with_report(
         "calibration_inseason": {
             "season": calibration_season_inseason,
             "weeks": calibration_weeks_inseason,
+            "pairs": _inseason_calibration_pairs(split[1], calibration),
         },
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
@@ -1091,6 +1093,7 @@ def train_blended_margin_total_model_with_report(
         "calibration_inseason": {
             "season": calibration_season_inseason,
             "weeks": calibration_weeks_inseason,
+            "pairs": _inseason_calibration_pairs(split[1], calibration),
         },
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()

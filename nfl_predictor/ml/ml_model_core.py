@@ -322,6 +322,54 @@ def _split_by_season(
     return train_df, holdout_df, holdout
 
 
+def _latest_season_week_pairs(df: pd.DataFrame, count: int) -> list[tuple[int, int]]:
+    """Return the newest ``count`` distinct ``(season, week)`` pairs in ``df``, oldest first.
+
+    Pairs are ordered by ``season * 100 + week``, so the window rolls back across the season
+    boundary when the newest season has fewer than ``count`` completed weeks.
+
+    Raises:
+        ValueError: If ``df`` holds fewer than ``count`` distinct pairs.
+
+    """
+    frame = df[["season", "week"]].dropna().drop_duplicates()
+    pairs = sorted((int(season), int(week)) for season, week in frame.itertuples(index=False))
+    if len(pairs) < count:
+        raise ValueError(
+            "Not enough weeks in the training pool for calibration: "
+            f"{len(pairs)} available, {count} requested."
+        )
+    return pairs[-count:]
+
+
+def _season_week_mask(df: pd.DataFrame, pairs: Sequence[tuple[int, int]]) -> pd.Series:
+    """Return a boolean mask of the rows of ``df`` whose ``(season, week)`` is in ``pairs``."""
+    mask = pd.Series(False, index=df.index)
+    if not pairs:
+        return mask
+    season = pd.to_numeric(df["season"], errors="coerce")
+    week = pd.to_numeric(df["week"], errors="coerce")
+    for pair_season, pair_week in pairs:
+        mask |= (season == pair_season) & (week == pair_week)
+    return mask
+
+
+def _inseason_calibration_pairs(
+    calibration_df: pd.DataFrame,
+    calibration_seasons: Sequence[int],
+) -> list[list[int]]:
+    """List the in-season calibration window as sorted ``[season, week]`` pairs.
+
+    The window is every calibration row outside the whole calibration seasons; the split
+    never gives a whole calibration season to a season the window touches, so this is exact.
+    """
+    if calibration_df.empty or "week" not in calibration_df.columns:
+        return []
+    window = calibration_df[~calibration_df["season"].isin(list(calibration_seasons))]
+    frame = window[["season", "week"]].dropna().drop_duplicates()
+    return [[int(season), int(week)] for season, week in sorted(frame.itertuples(index=False))]
+
+
 def _split_train_calibration_holdout(
     df: pd.DataFrame,
     holdout_seasons: int,
@@ -337,6 +385,26 @@ def _split_train_calibration_holdout(
     int | None,
     list[int],
 ]:
+    """Split games into train, calibration and holdout frames by time.
+
+    The newest ``holdout_seasons`` seasons are held out. From the remaining pool, the
+    in-season calibration window is the newest ``calibration_weeks`` completed
+    ``(season, week)`` pairs in time order, so early in a season it reaches back into the
+    previous season (week 2 with four weeks requested: the new season's week 1 plus the
+    previous season's last three). Whole calibration seasons are the newest
+    ``calibration_seasons`` pool seasons the window does not touch. Training is every other
+    pool row, with the window's pairs removed.
+
+    Returns:
+        ``(train_df, calibration_df, holdout_df, train_seasons, calibration_seasons,
+        holdout_seasons, inseason_season, inseason_weeks)``, where ``inseason_season`` is
+        the newest season in the window and ``inseason_weeks`` its weeks in the window.
+
+    Raises:
+        ValueError: If the pool has fewer weeks than ``calibration_weeks`` or too few seasons
+            for the requested holdout and calibration seasons.
+
+    """
     if "season" not in df.columns:
         raise ValueError("Expected a season column for time-aware splits.")
     seasons = sorted(df["season"].dropna().unique())
@@ -352,46 +420,32 @@ def _split_train_calibration_holdout(
 
     inseason_calibration_season: int | None = None
     inseason_calibration_weeks: list[int] = []
-    inseason_calibration_df = df.iloc[0:0].copy()
+    window_pairs: list[tuple[int, int]] = []
     if calibration_weeks:
         if "week" not in df.columns:
             raise ValueError("Expected a week column for in-season calibration.")
-        inseason_calibration_season = base_pool[-1]
-        season_weeks = (
-            df.loc[df["season"] == inseason_calibration_season, "week"].dropna().unique().tolist()
+        window_pairs = _latest_season_week_pairs(
+            df[df["season"].isin(base_pool)], calibration_weeks
         )
-        season_weeks = sorted(int(week) for week in season_weeks)
-        if len(season_weeks) < calibration_weeks:
-            raise ValueError(
-                f"Not enough weeks in season {inseason_calibration_season} for calibration."
-            )
-        inseason_calibration_weeks = season_weeks[-calibration_weeks:]
-        inseason_calibration_df = df[
-            (df["season"] == inseason_calibration_season)
-            & (df["week"].isin(inseason_calibration_weeks))
-        ].copy()
+        inseason_calibration_season = window_pairs[-1][0]
+        inseason_calibration_weeks = [
+            week for season, week in window_pairs if season == inseason_calibration_season
+        ]
 
-    calibration_candidates = base_pool
-    if inseason_calibration_season is not None:
-        calibration_candidates = [s for s in base_pool if s != inseason_calibration_season]
+    window_seasons = {season for season, _ in window_pairs}
+    calibration_candidates = [s for s in base_pool if s not in window_seasons]
 
     if calibration_seasons and len(calibration_candidates) <= calibration_seasons:
         raise ValueError("Not enough seasons to create train/calibration/holdout splits.")
     calibration = calibration_candidates[-calibration_seasons:] if calibration_seasons else []
     train = [season for season in base_pool if season not in calibration]
 
-    train_df = df[df["season"].isin(train)].copy()
-    if inseason_calibration_season is not None and inseason_calibration_weeks:
-        train_df = train_df[
-            ~(
-                (train_df["season"] == inseason_calibration_season)
-                & (train_df["week"].isin(inseason_calibration_weeks))
-            )
-        ]
+    window_mask = _season_week_mask(df, window_pairs)
+    train_df = df[df["season"].isin(train) & ~window_mask].copy()
 
     calibration_df = df[df["season"].isin(calibration)].copy()
-    if not inseason_calibration_df.empty:
-        calibration_df = pd.concat([calibration_df, inseason_calibration_df], axis=0)
+    if window_pairs:
+        calibration_df = pd.concat([calibration_df, df[window_mask].copy()], axis=0)
 
     holdout_df = df[df["season"].isin(holdout)].copy()
 

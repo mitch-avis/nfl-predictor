@@ -245,3 +245,4 @@ def test_train_blended_margin_total_model_with_report(monkeypatch) -> None:
 
     assert result.metrics_report["model_kind"] == "blend"
     assert result.metrics_report["metrics"]["holdout"] is not None
+    assert result.splits["calibration_inseason"] == {"season": None, "weeks": [], "pairs": []}

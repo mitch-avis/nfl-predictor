@@ -435,10 +435,14 @@ def _split_train_calibration_holdout(
     window_seasons = {season for season, _ in window_pairs}
     calibration_candidates = [s for s in base_pool if s not in window_seasons]
 
-    if calibration_seasons and len(calibration_candidates) <= calibration_seasons:
+    if calibration_seasons and len(calibration_candidates) < calibration_seasons:
         raise ValueError("Not enough seasons to create train/calibration/holdout splits.")
     calibration = calibration_candidates[-calibration_seasons:] if calibration_seasons else []
+    # Seasons the window touches never become whole calibration seasons, so their remaining
+    # weeks always train; the pool is too small only when no season is left for training.
     train = [season for season in base_pool if season not in calibration]
+    if not train:
+        raise ValueError("Not enough seasons to create train/calibration/holdout splits.")
 
     window_mask = _season_week_mask(df, window_pairs)
     train_df = df[df["season"].isin(train) & ~window_mask].copy()

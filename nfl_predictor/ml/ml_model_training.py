@@ -298,9 +298,10 @@ def train_margin_total_model(
     log.info("Calibration seasons: %s", calibration)
     if calibration_season_inseason is not None and calibration_weeks_inseason:
         log.info(
-            "Calibration weeks: season %s weeks %s",
+            "Calibration weeks: season %s weeks %s (window pairs %s)",
             calibration_season_inseason,
             calibration_weeks_inseason,
+            _inseason_calibration_pairs(calibration_df, calibration),
         )
     log.info("Holdout seasons: %s", holdout)
     log.debug(
@@ -759,9 +760,10 @@ def train_blended_margin_total_model(
     log.info("Calibration seasons: %s", calibration)
     if calibration_season_inseason is not None and calibration_weeks_inseason:
         log.info(
-            "Calibration weeks: season %s weeks %s",
+            "Calibration weeks: season %s weeks %s (window pairs %s)",
             calibration_season_inseason,
             calibration_weeks_inseason,
+            _inseason_calibration_pairs(calibration_df, calibration),
         )
     log.info("Holdout seasons: %s", holdout)
     log.debug(

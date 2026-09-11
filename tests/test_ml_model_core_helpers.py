@@ -343,3 +343,34 @@ def test_inseason_calibration_pairs_lists_the_rolling_window() -> None:
         [2026, 1],
     ]
     assert core._inseason_calibration_pairs(df.iloc[0:0], []) == []
+
+
+def test_split_lets_window_seasons_feed_training_when_calibration_seasons_are_requested() -> None:
+    """Accepts a pool whose only non-window season is the whole calibration season.
+
+    With three pool seasons and a window that touches the two newest, the oldest season is
+    the whole calibration season and the window seasons' remaining weeks train the model.
+    """
+    df = _season_weeks_frame({2024: 18, 2025: 18, 2026: 1})
+
+    split = core._split_train_calibration_holdout(
+        df,
+        holdout_seasons=0,
+        calibration_seasons=1,
+        calibration_weeks=4,
+    )
+    train_df, calibration_df = split[0], split[1]
+
+    assert split[4] == [2024]
+    assert split[3] == [2025, 2026]
+    window = [(2025, 16), (2025, 17), (2025, 18), (2026, 1)]
+    assert _pairs(calibration_df) == [(2024, week) for week in range(1, 19)] + window
+    assert _pairs(train_df) == [(2025, week) for week in range(1, 16)]
+
+    with pytest.raises(ValueError, match="Not enough seasons"):
+        core._split_train_calibration_holdout(
+            _season_weeks_frame({2025: 18, 2026: 1}),
+            holdout_seasons=0,
+            calibration_seasons=1,
+            calibration_weeks=4,
+        )

@@ -226,6 +226,25 @@ def _parse_args() -> argparse.Namespace:
         help="XGBoost n_jobs override.",
     )
     parser.add_argument(
+        "--resume",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Restore weeks already finished by an identical earlier run (same data, config, "
+            "code and library versions) instead of training them again. Use --no-resume to "
+            "retrain every week and overwrite its checkpoint."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=walk_forward.DEFAULT_CHECKPOINT_DIR,
+        help=(
+            "Root for per-week checkpoints; each run uses a subdirectory named for its "
+            "fingerprint (default: models/wf_checkpoints)."
+        ),
+    )
+    parser.add_argument(
         "--out-json",
         type=Path,
         default=None,
@@ -306,7 +325,9 @@ def main() -> None:
     run_id = walk_forward.generate_run_id(dataset_hash, config)
     created_at = datetime.now(UTC).isoformat()
 
-    results = walk_forward.run_walk_forward_backtest(df, config)
+    results = walk_forward.run_walk_forward_backtest(
+        df, config, checkpoint_dir=args.checkpoint_dir, resume=bool(args.resume)
+    )
 
     run_dir = Path(constants.ROOT_DIR) / "models" / run_id
     out_json = args.out_json or (run_dir / "metrics_report.json")
@@ -315,6 +336,7 @@ def main() -> None:
     config_payload = config.to_dict()
     config_payload["data_path"] = str(args.data_path)
     config_payload["out_json"] = str(out_json)
+    config_payload["checkpoint"] = results.get("checkpoint")
     config_payload["disable_trend_features"] = bool(args.disable_trend_features)
     if args.disable_trend_features:
         config_payload["dropped_trend_columns"] = drop_columns

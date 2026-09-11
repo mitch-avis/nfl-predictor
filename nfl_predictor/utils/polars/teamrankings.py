@@ -722,6 +722,70 @@ def recompute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
     return _compute_derived_metrics(agg_df)
 
 
+def blend_with_prior_stats(
+    in_season: pl.DataFrame,
+    prior: pl.DataFrame,
+    prior_blend_games: float,
+) -> pl.DataFrame:
+    """Blend season-to-date per-game means toward the regressed previous season.
+
+    Formulas:
+        ``weight = games_played / (games_played + prior_blend_games)``
+        ``blended = weight * in_season_mean + (1 - weight) * regressed_prior_mean``
+
+    The blend is applied to the per-game means of the underlying counts and sums, and
+    every derived ratio is then recomputed from the blended values, so a published rate
+    stays a ratio of blended sums rather than a blend of two rates. `games_played` keeps
+    the in-season count. When only one side has a value for a team and column, that side
+    is published unchanged, so a team with no previous-season row keeps its raw in-season
+    means.
+
+    Args:
+        in_season: Aggregated season-to-date stats, one row per team, with `games_played`
+        prior: Regressed previous-season stats, one row per team
+        prior_blend_games: Games at which the two sides are weighted equally; positive
+
+    Returns:
+        The in-season frame, blended, with the same columns in the same order
+
+    """
+    if in_season.height == 0 or prior.height == 0 or "team_abbr" not in prior.columns:
+        return in_season
+
+    blended_columns = [
+        column
+        for column in in_season.columns
+        if column not in {"team_abbr", "games_played"}
+        and column in prior.columns
+        and in_season.schema[column].is_numeric()
+        and prior.schema[column].is_numeric()
+    ]
+    if not blended_columns:
+        return in_season
+
+    prior_side = prior.select(
+        pl.col("team_abbr"),
+        *[pl.col(column).cast(pl.Float64).alias(f"_prior_{column}") for column in blended_columns],
+    ).unique(subset=["team_abbr"], keep="first", maintain_order=True)
+
+    games = pl.col("games_played").cast(pl.Float64)
+    weight = games / (games + prior_blend_games)
+    blended = (
+        in_season.join(prior_side, on="team_abbr", how="left", maintain_order="left")
+        .with_columns(
+            pl.when(pl.col(f"_prior_{column}").is_null())
+            .then(pl.col(column))
+            .when(pl.col(column).is_null())
+            .then(pl.col(f"_prior_{column}"))
+            .otherwise(weight * pl.col(column) + (1.0 - weight) * pl.col(f"_prior_{column}"))
+            .alias(column)
+            for column in blended_columns
+        )
+        .select(in_season.columns)
+    )
+    return recompute_derived_metrics(blended)
+
+
 def calculate_league_means(team_stats_df: pl.DataFrame, season: int) -> dict[str, float]:
     """Calculate league-wide mean statistics for a given season.
 

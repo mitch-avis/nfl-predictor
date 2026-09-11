@@ -243,3 +243,6 @@ web/dist/
 web/coverage/
 web/*.tsbuildinfo
 data/web/
+
+# Agent skills (a separate git clone of mitch-avis/agent-skills)
+.agents/skills/

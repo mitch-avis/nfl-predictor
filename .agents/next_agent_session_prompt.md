@@ -1,176 +1,238 @@
 # Next Agent Session Prompt
 
 You are the orchestrating agent (Claude Opus 5) for an implementation session in the `nfl-predictor`
-workspace (`/home/mitch/workspace/nfl-predictor`). Your deliverable is **Milestone 49: continuous
-early-season shrinkage** from `.agents/TODO.md`, validated with a from-week-1 walk-forward. If it
-lands with time to spare, continue into **Milestone 43 phase 2** (43.2 onward), also in
-`.agents/TODO.md`.
+workspace (`/home/mitch/workspace/nfl-predictor`). You have two deliverables, in this order:
 
-## Why this order, and the one thing to say in your first response
+1. **Task 56.4 first** (Phase 0 below): the weekly run crashes at training for weeks 2-4 of every
+   season because in-season calibration cannot find four weeks in the new season. It blocks the
+   2026 Week 2 run, so it lands before anything else.
+2. **Milestone 52: the total (over/under) head carries almost no signal**, tasks 52.2 and 52.3
+   in `.agents/TODO.md`. The diagnosis (52.1) is done and verified: the root cause is a shared
+   early-stopping callback, the fix is small, and the cost is in the walk-forward arms that
+   measure it.
 
-The 2026-09-09 planning review put Milestone 43 next and flagged the shrinkage defect as higher
-value. The 2026-09-10 review reorders them, for a reason of timing rather than value: **2026 Week 2
-kicks off Thursday 2026-09-17.** Week 2 is the one week of the season this defect wrecks (pick
-accuracy `0.5208` against `0.6958` for weeks 3-18). A fix that lands and validates on history this
-week changes the Week 2 picks; a fix that lands next week helps in 2027. Milestone 43 phase 2 is a
-reporting refinement with no deadline.
+Work on a branch from `main` if `feat/pbp-per-snap-epa` has been merged by the time you start
+(`git branch --show-current`, `git log --oneline -3 main`); otherwise stay on the current branch.
 
-Say this in one sentence at the top of your first response so the user can flip the order if they
-disagree. Then start. Do not ask permission to begin.
+Milestone numbers changed on 2026-09-10 (map at the top of `.agents/ARCHIVE.md`). Milestone 52 was
+"50"; older commits and the crosswalk use the old numbers.
+
+## Priority call (the user can flip it)
+
+The 52.2 plan in `.agents/TODO.md` asks for four walk-forward arms (reference and fixed, anchored
+and unanchored). This prompt trims that to **two mandatory arms plus one optional**:
+
+1. **Fixed, anchored**, on the benchmark's exact input file. The fix cannot touch the margin head
+   (it is fit first, with a fresh callback), so this arm must reproduce the benchmark's Brier,
+   log loss, pick accuracy and margin MAE to four decimals. That reproduction is the reference-arm
+   comparison, and it doubles as the proof the fix changed nothing else. Do not rerun the reference
+   anchored arm unless the reproduction fails.
+2. **Fixed, unanchored** (`--no-market-anchor`), the production configuration. This is the number
+   the user cares about: does the total head beat the market line without being handed it?
+3. **Reference, unanchored**: optional, last, only if time remains. Its outcome is already known
+   in kind (a flat 44), and the production model's holdout `total_mae` of `10.9974` stands in.
+
+Each arm takes about 75 minutes on an idle machine and they run **one at a time**. If the user's
+opening message asks for all four arms, run all four in the order above.
+
+## Calendar (decides what is time-sensitive)
+
+- Today's date is in your environment. 2026 Week 1 is in progress: NE at SEA (2026-09-09) and SF at
+  LAR (2026-09-10) are complete; the Sunday slate is 2026-09-13 and DEN at KC is Monday 2026-09-14.
+- Week 2 opens Thursday 2026-09-17 (DET at BUF). The Week 2 weekly run has to happen after Monday
+  night and before Thursday, and it should run on the fixed code so Week 2 totals are usable. Week
+  1 totals were produced on 2026-09-08 by a one-tree head and are not actionable; spreads and
+  moneylines from that run are fine.
+- The Week 2 run needs both fixes: task 56.4 so it runs at all, and the total-head fix so its
+  totals mean something. If the session runs short, 56.4 alone still unblocks Week 2.
+- Nothing in either task needs an ETL rebuild.
 
 ## 0. Read first, in this order
 
-1. `AGENTS.md`: non-negotiables, command forms, readiness behaviors, the validated baseline, and
-   the note that the recorded benchmark's dataset build no longer exists on disk.
-2. `.agents/TODO.md`, the Milestone 49 section in full, then Milestone 43 and the follow-ups.
-3. `.agents/ARCHIVE.md`, Milestone 46: the strength snapshot already does the blend you are about
-   to generalize, and its walk-forward showed the blend is a tie on Brier. Expect that here too.
-4. `nfl_predictor/data_collection.py::process_week` (around lines 1042-1078) and
-   `nfl_predictor/utils/polars/teamrankings.py::aggregate_team_stats_to_week`,
-   `regress_to_mean`, `recompute_derived_metrics`.
-5. `nfl_predictor/utils/polars/strength_snapshot.py` lines 85-95 and 305-330: the existing
-   `games / (games + PRIOR_BLEND_GAMES)` blend, `PRIOR_BLEND_GAMES = 4.0`.
-6. Tests that pin the current fallback: `tests/test_data_collection.py`
-   (`test_process_week_uses_fallback_stats_for_week1`,
-   `test_week1_fallback_regresses_pbp_rates_toward_the_league_mean`,
-   `test_week1_row_features_ignore_every_current_season_play`) and
-   `tests/test_data_collection_helpers.py::test_process_week_fallback`.
+1. `AGENTS.md`: non-negotiables, the current benchmark table (measured 2026-09-10, reproduced from
+   `models/wf_shrink_2023_2025_on/metrics_report.json` on 2026-09-11), and the walk-forward
+   operating notes (one run at a time, checkpoints, OpenMP wait policy).
+2. `.agents/TODO.md`: Milestone 52 in full, including the 52.1 findings, then the open follow-ups.
+3. `.agents/ARCHIVE.md`: the Milestone 51 entry (what the last session shipped and how it
+   verified it) and Milestone 49 (how the benchmark was measured).
+4. `nfl_predictor/ml/ml_model_xgb_utils.py::_with_xgb_early_stopping_params` (line 182) and
+   `_build_xgb_fit_kwargs`: the helper that puts one `xgb.callback.EarlyStopping` instance into
+   the params dict.
+5. `nfl_predictor/ml/ml_model_core.py::_fit_margin_total_models` (lines 600-645): both
+   `XGBRegressor`s are built from the same `active_params`, including the fallback path through
+   `_coerce_tree_method_on_error`. Compare `_fit_quantile_models` (line 659), which builds fresh
+   params per quantile and is healthy, and `_fit_models` (line 480, `ScoreModel`), which uses no
+   early stopping and is unaffected. `_early_stopping_info` (line 1225) is what `metadata.json`
+   records.
+6. `scripts/walk_forward_backtest.py` (`--data-path`, `--eval-last-n-seasons`, `--wf-start-week`,
+   `--market-anchor` / `--no-market-anchor`, `--resume`, `--checkpoint-dir`, `--out-json`) and
+   `nfl_predictor/ml/walk_forward.py` for the fingerprint and checkpoint logic.
+7. Tests: `tests/test_ml_model_xgb_utils.py` (the early-stopping helper),
+   `tests/test_ml_model_training_margin_total.py` and `tests/test_ml_model_core_cv.py` (existing
+   fixtures around `_fit_margin_total_models`), and `tests/test_wf_checkpointing.py`.
 
 ## 1. Facts to trust unless your verification disproves them
 
-- Baseline 2026-09-10, version `0.4.0`: all gates green, `558 passed`, coverage `90.83%`.
-  `uv sync --check --active` passes again (the environment had the `0.3.0` package installed after
-  the version bump; a plain `uv sync` fixed it).
-- **The dataset on disk is not the build the recorded walk-forward arms ran on.** Every
-  `models/wf_strength_2023_2025_*` report carries dataset hash `668368d8...`; the current
-  `data/completed_games_ml.csv` (rebuilt 2026-09-09 17:28 by the Week 1 refresh) fingerprints to
-  `5b6af6aa...`. So the "off" arm for your comparison does not exist yet. Start it first (Phase 0).
-- The defect, verified on the current dataset, 2024 season, `away_games_played` and
-  `away_success_rate`:
+- The project version is `0.5.0` in `pyproject.toml`, but there is **no tag and no GitHub
+  release**: the user removed both on 2026-09-11 because the project is private and not ready
+  for releases. Never create or push a tag or release.
+- Milestone 51 is committed on `feat/pbp-per-snap-epa` (the `feat(etl)`, `feat(power-rankings)`,
+  `feat(weekly-run)`, `refactor(golden)` and `docs` commits, followed by handoff-doc commits) and
+  unreleased; the working tree should be clean apart from gitignored data and the
+  `models/smoke_20260911/` run, so check `git status` first. The gate was green on it: `631 passed`,
+  coverage `91.16%`, all linters, `uv lock --check`, `uv sync --check --active`, markdownlint.
+- **Root cause, verified twice on 2026-09-11.** With xgboost `3.4.1`, `fit()` no longer accepts
+  `early_stopping_rounds`, so `_with_xgb_early_stopping_params` sets the init parameter
+  `early_stopping_rounds` **and** adds one `EarlyStopping` callback instance to the params. Both
+  estimators in `_fit_margin_total_models` are built from that dict and so share the instance,
+  whose best score and patience counter survive across fits (`EarlyStopping.before_training` only
+  records the starting round). The total fit starts against the margin head's best RMSE, which a
+  total RMSE never reaches, and stops after one round. On disk:
+  `models/week01_2026_refreshed`, `models/week01_2026_strength` and `models/weekly_2025_week_22`
+  all have a 1-tree `total_model` with no `best_iteration` next to a 276-283 tree margin head.
+  A synthetic reproduction with realistic noise (margin RMSE about 9, total RMSE about 13) gives a
+  1-tree total head with prediction std `0.22`; the same fit with its own callback keeps 98 trees,
+  std `3.75`, and lowers eval MAE from `11.36` to `10.82`.
+- **The explicit callback is redundant.** `xgboost.training.train` builds its own fresh
+  `EarlyStopping(rounds=early_stopping_rounds)` from the init parameter (`training.py` line 189),
+  and the sklearn wrapper passes both that parameter and `self.callbacks`, so today every fit runs
+  two early-stopping callbacks and the shared one wins. Verified: an `XGBRegressor` with only the
+  init parameter and no explicit callback stops at the same round as one with a fresh callback.
+- **Task 56.4, verified 2026-09-11.** A weekly-run smoke test (`--skip-data-refresh --run-id
+  smoke_20260911`) finished all 9 walk-forward candidates (about 2 minutes each), then Stage 2
+  stopped with `ValueError: Not enough weeks in season 2026 for calibration.` from
+  `ml_model_core._split_train_calibration_holdout` (around line 325). With the weekly defaults
+  (no holdout, no calibration seasons, 4 calibration weeks) the in-season window comes only from
+  the newest season, and 2026 has one completed week. Calling the split on the live data: `(0, 0,
+  4)` raises; `(0, 2, 0)` trains on 1999-2024 and calibrates on 2025 plus the 2026 games (274
+  games); `(0, 1, 0)` calibrates on the two 2026 games alone. Full spec in `.agents/TODO.md`
+  under 56.4. The split's in-season values are read only by the two `calibration_inseason`
+  metadata blocks in `ml_model_training.py`; the web UI does not read them.
+- The benchmark in `AGENTS.md` (`models/wf_shrink_2023_2025_on/`) was measured with
+  `market_anchor` **on**, `include_market` on, `early_stopping_rounds 50`, `--wf-start-week 1`,
+  `--eval-last-n-seasons 3`, on `data/completed_games_ml.m49_on_through_2025.csv` (fingerprint
+  `5d67ddff...`, still on disk, `7260` rows, seasons `<= 2025`). Its overall row is Brier `0.2272`,
+  log loss `0.7273`, pick accuracy `0.6814`, margin MAE `9.8143`, total MAE `10.1000` over 816
+  games. Under anchoring the crippled head predicts roughly the market line plus a constant, which
+  is why total MAE looked normal there. The market line alone scores `10.1207` and the healthy
+  `total_q0.5` quantile head `10.1378` on the same games (52.1 findings).
+- The production weekly model (`models/week01_2026_refreshed/metadata.json`) has `market_anchor`
+  **off** and `early_stopping_rounds 50`; its holdout `total_mae` is `10.9974`.
+- The live dataset `data/completed_games_ml.csv` is the 2026-09-11 rebuild (`7262` rows, `498`
+  columns, fingerprint `e388dc7a...`) and includes two 2026 games. Do not use it for the
+  walk-forward arms: `--eval-last-n-seasons 3` would slide onto 2026. Use the `m49_on_through_2025`
+  file for every arm so all arms share one build.
+- Walk-forward operating rules (`AGENTS.md`): check `uptime` first; never run two XGBoost-heavy
+  jobs at once; every finished week checkpoints under `models/wf_checkpoints/<fingerprint>/` and
+  an identical command resumes; the fingerprint includes the modelling source, so the fixed arms
+  get a new checkpoint directory by design; choose `OMP_WAIT_POLICY=PASSIVE` only under load; use
+  `--out-json models/<name>/metrics_report.json` to name the run directory, and measure the first
+  week before quoting an ETA.
+- `.agents/skills/` is the user's separate clone of agent skills. It is gitignored and excluded
+  from ruff and markdownlint; never edit it.
 
-  | week | games_played | std | min | max |
-  | --- | --- | --- | --- | --- |
-  | 1 | 17 (regressed prior) | `0.0216` | `0.373` | `0.455` |
-  | 2 | 1 | `0.0807` | `0.250` | `0.569` |
-  | 3 | 2 | `0.0659` | `0.265` | `0.500` |
-  | 16 | 14 | `0.0359` | `0.375` | `0.490` |
+## 2. Decided (do not relitigate; record deviations)
 
-- Root cause, verified in code: `aggregate_team_stats_to_week` takes the plain mean of prior
-  in-season games; `process_week` builds the regressed prior-season frame only for
-  `teams_needing_fallback`, the teams with **zero** in-season games. One game is enough to switch a
-  team from 100% prior to 0% prior.
-- `aggregate_team_stats_to_week` stores per-game **means** of counts, and the derived rates are
-  ratios of those means (equal to ratios of sums because the game count cancels). Blending means
-  then calling `recompute_derived_metrics` keeps every rate a ratio of blended sums. Do not blend
-  the rates directly.
-- The play-by-play counts are already joined into `team_stats_df` before `process_week`, so one
-  blend on the aggregated frame covers the nflreadpy stats and the PBP family together.
-- Already shrunk, leave alone: the strength family (`prior_strength_snapshot`, its own blend), the
-  TeamRankings ratings (`tr_df` / `prev_tr_df`, a separate merge), Elo, trend features, records.
-- Timings: full ETL rebuild about `480s` warm; from-week-1 walk-forward at
-  `--eval-last-n-seasons 3` about `40 min`. The walk-forward writes to `models/<run_id>/` by
-  default; `--out-json` may only ever point inside `models/`.
-- The ETL overwrites `data/*.csv` unconditionally. Back them up before each rebuild.
-- `markdownlint` here is `markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings"`.
+- 56.4: roll the calibration window back across the season boundary as specified in
+  `.agents/TODO.md`; do not add a flag, and do not change the guard in `scripts/weekly_run.py`.
+  When the newest season has enough weeks the split must be identical to today's, which is what
+  keeps every earlier weekly run reproducible.
 
-## 2. Design decisions already made (do not relitigate; record deviations)
-
-- **Form.** For every team with a prior-season regressed profile available, publish
-  `w * in_season_mean + (1 - w) * regressed_prior_mean` per stat column with
-  `w = games_played / (games_played + K)`, then `recompute_derived_metrics`. A team with zero games
-  gets `w = 0`, which is exactly today's fallback, so **week-1 rows must be bit-identical before and
-  after**. Write that test first; it is your strongest regression guard.
-- **K.** Reuse `PRIOR_BLEND_GAMES = 4.0`; promote it to `constants.py` so both blends share one
-  named value, rather than introducing a second constant. Expose it as
-  `--stat-prior-blend-games` on `nfl_predictor.data_collection` with `--no-stat-prior-blend` to
-  ablate, mirroring `--strength-prior-blend`.
-- **`games_played` keeps its current semantics** in this cut (in-season count; the regressed prior
-  carries `17`). Changing it is a separate, measurable follow-up; record it in `TODO.md`.
-- **Build the prior once per season**, not once per week: `process_week` already takes
-  `prior_strength_snapshot` computed by the caller, so add a `prior_season_stats` argument the same
-  way and fall back to computing it inside when `None` (keeps existing tests working).
-- **First season in the run** (`season == min_season`) has no prior; publish the raw in-season
-  means as today. Playoff rows use full-season means as today (`w` is then about `0.8`; accept it).
-- **Ablation is at ETL time**, not in the walk-forward: `--disable-feature-groups` removes columns,
-  it cannot undo a value change. Two dataset builds, two walk-forward runs, both under `models/`.
+- The fix is to stop adding the explicit `EarlyStopping` callback in
+  `_with_xgb_early_stopping_params` when the `early_stopping_rounds` init parameter is supported,
+  leaving xgboost to build a fresh callback per fit. If you instead keep an explicit callback, it
+  must be a new instance per estimator, on both the normal and the tree-method fallback path.
+- Tuning is out of scope. Note in `.agents/TODO.md` (under Milestone 55) that Optuna's
+  `combined_mae` objective scored a crippled total head until this fix, so existing tuned params
+  were chosen on the margin head alone.
+- A separate feature set for the total head (the tail of 52.2) is only for the case where the fixed
+  unanchored head still trails the market line. Diagnose and record; do not build it this session.
+- 52.3 is a documentation decision: if the fixed head's unanchored total MAE is at or below the
+  market line's, remove the "not actionable" caveat from Milestone 52 and say so in README and
+  CHANGELOG; if it still trails, keep the totals labelled diagnostic-only in the betting workbook
+  section of README and in the weekly report.
+- New work that is not part of an existing milestone takes number 58 onward; never renumber
+  existing milestones (numbering rules at the top of `.agents/TODO.md`).
 
 ## 3. Non-negotiables
 
-- TDD: characterization or failing tests first, then production code, small diffs.
-- No leakage: week `N` features use games strictly before week `N`; the prior is the previous
-  season's regular season only, regressed by `constants.WEEK1_REGRESSION_FACTOR`.
-- Polars-first ETL; no pandas in `data_collection.py` or `utils/polars/`.
-- Docstrings with the formula; type hints; no milestone numbers in code, comments, or tests; no new
+- TDD: failing test first, then production code, small diffs.
+- No leakage; time-aware evaluation; compare arms only within one dataset build and code version.
+- Docstrings with formulas; type hints; no milestone numbers in code, comments, or tests; no new
   `noqa` / `type: ignore` / `pragma: no cover` without a real reason.
 - All Python tooling via `.venv/bin/...`; `uv` from PATH; never bare `python` / `pytest` / `ruff`.
-- XGBoost margin/total is the only model family; no tuning campaigns.
 - Do not modify `../nfeloqb` or `../nfl-sos-ratings`.
-- Every number you report must be readable from a `metrics_report.json` under `models/`.
-- Commit only if the user asks. If asked: one logical change per commit, a Conventional Commits
-  subject (`type(scope): imperative summary`, see `AGENTS.md`), a body explaining what and why,
-  ending with the attribution line the harness provides.
+- Commit only if the user asks. If asked: one logical change per commit, Conventional Commits
+  subject (`type(scope): imperative summary`), a body explaining what and why, and the attribution
+  line the harness provides. Do not push unless asked. Never create or push a version tag or a
+  GitHub release: the project is private and not ready for releases.
 
-## Phase 0 - Baseline (start this before reading further code)
+## Phase 0 - Task 56.4, the calibration crash (short, first)
 
-1. `cp data/completed_games_ml.csv data/completed_games_ml.pre_m49.csv` (and `all_data_ml.csv`).
-2. Launch the **off arm** on the current dataset in the background, so it runs while you implement:
+1. Tests first in `tests/test_ml_model_core_helpers.py`: the Week-2 case (newest season has one
+   week, four requested: the window is that week plus the previous season's last three, and
+   training excludes exactly those), the unchanged case (newest season has at least four weeks:
+   output identical to today's), and the error when the whole pool has fewer weeks than
+   requested. Replace the test that pins today's error for the Week-2 case.
+2. Implement it in `_split_train_calibration_holdout` and extend the two `calibration_inseason`
+   metadata blocks as the TODO spec says. Run the full gate.
+3. Verify on the real pipeline by resuming the smoke run with default training flags. The
+   walk-forward stage is reused, so only training and the later stages run:
+   `.venv/bin/python scripts/weekly_run.py --skip-data-refresh --run-id smoke_20260911 --resume`.
+   Check that training finishes, that `metadata.json` lists 2026 week 1 plus three 2025 weeks
+   under `calibration_inseason`, and that the power rankings, predictions and betting report are
+   written. If the user already finished the smoke run with the workaround flags, still run this
+   once without them.
+4. `CHANGELOG.md` `[Unreleased]` `Fixed` entry; move 56.4 to `.agents/ARCHIVE.md` under a
+   "Milestone 56 (partial)" heading and remove the roadmap line for it in `.agents/TODO.md`.
 
-   ```bash
-   .venv/bin/python scripts/walk_forward_backtest.py --eval-last-n-seasons 3 --wf-start-week 1 \
-     --out-json models/wf_shrink_2023_2025_off/metrics_report.json
-   ```
+## Phase 1 - The total-head fix, tests first (short)
 
-   There is no run-id flag; the named directories under `models/` come from pointing `--out-json`
-   at `models/<name>/metrics_report.json`, and `metadata.json` (with the dataset hash) lands next
-   to it. The report's `metrics.per_week` block gives the week 1, week 2, and weeks 3-18 windows
-   you will report.
-3. `.venv/bin/python -m pytest -q` and record the actual count.
+1. Regression test on `_fit_margin_total_models` with an eval set and
+   `early_stopping_rounds=50`: synthetic data where the margin target is easier than the total
+   target (margin noise about 9, total noise about 13, a planted total signal). Assert the total
+   head's `get_booster().num_boosted_rounds()` is greater than 1, equals the round count of a total
+   head fit on its own, and that its predictions have a spread (std above 1). Make it fail on the
+   current code before touching production code; keep it fast (a few thousand rows, depth 3).
+2. Unit test on `_with_xgb_early_stopping_params`: two calls, or the params for two estimators,
+   never share a callback object; on this xgboost version the result carries the init parameter
+   and no `callbacks` entry.
+3. Implement the decided fix. Run the full gate.
+4. Retrain the production configuration once (the `golden_command.py` or `weekly_run.py` path the
+   user uses, or `ml_model_core` directly on the live dataset) and confirm `metadata.json` now
+   records `total_model.best_iteration` and the 2026 Week 1 predicted totals spread across the
+   market's `40.5-47.5` range rather than `43.9-44.1`.
 
-## Phase 1 - Implement (49.1 to 49.4)
+## Phase 2 - Measure (long; one arm at a time)
 
-1. Test first: week-1 rows unchanged; a one-game team's week-2 stat equals `0.2 * in_season +
-   0.8 * prior` at `K = 4`; rates are recomputed from blended sums (build a fixture where blending
-   the rate directly gives a different number); `--no-stat-prior-blend` reproduces today's output
-   exactly; the first season in the run is untouched.
-2. Then the production change in `process_week`, the CLI flags, the constant promotion.
-3. Rebuild the dataset (about 8 minutes) with the blend on. Verify with a one-off Polars check that
-   the 2024 week-2 `away_success_rate` spread has collapsed toward the week-16 spread, and that
-   week-1 rows match the backup bit-for-bit.
-4. Run the leakage audit.
+1. `uptime`, then the fixed anchored arm on `data/completed_games_ml.m49_on_through_2025.csv`
+   with the benchmark flags. Confirm Brier, log loss, pick accuracy and margin MAE match the
+   `AGENTS.md` table to four decimals in every window; if they do not, stop and find out why
+   before running anything else. Record the new total MAE per window.
+2. The fixed unanchored arm (`--no-market-anchor`, otherwise identical). Record total MAE per
+   window and, from the fold outputs, the standard deviation of `predicted_total - total_line`
+   (the 52.1 findings give the crippled head's median within-fold std as `0.51`).
+3. Optional: the reference unanchored arm.
+4. Write the walk-forward table into `.agents/TODO.md` under Milestone 52, then move the milestone
+   to `.agents/ARCHIVE.md` with the table, the commands, run directories and fingerprints.
 
-## Phase 2 - Measure (49.5)
+## Phase 3 - Docs and the gate
 
-Run the **on arm** from week 1 with the same command and `wf_shrink_2023_2025_on`. Report weeks 1,
-2, and 3-18 separately against the off arm; the season aggregate hides the effect because 2 of 18
-weeks change. Success is week 2 moving materially toward the weeks 3-18 numbers on Brier and log
-loss without weeks 3-18 regressing. Week 1 should be identical by construction; if it is not, your
-blend touched a fallback row and that is a bug, not a result.
-
-If the result is a tie or a loss, say so and leave the switch default **off**. The strength blend
-was a tie on Brier; this may be too. The honest table is the deliverable either way.
-
-## Phase 3 - Docs and gate (49.6)
-
-Update `README.md` (data sources / early-season handling), `AGENTS.md` (baseline table if the
-default changes, the early-season note), `CHANGELOG.md`, and move Milestone 49 to `ARCHIVE.md`
-with the table. `CHANGELOG.md` already has an `[Unreleased]` section; add to it rather than
-opening a version. Then the full gate.
-
-## Phase 4 - Only if time remains: Milestone 43 phase 2
-
-Read the Milestone 43 section of `.agents/TODO.md`. The facts that matter: rank on
-`adj_strength_composite` for `(season, through_week + 1)` rows, never on raw `adj_*`; a higher
-`adj_def_*` is a **better** defense; the 2024 pre-week-18 anchor is BAL, DET, PHI, BUF, GB on the
-composite and DET, BAL, BUF, GB, PHI on the current Bradley-Terry default. Keep `--method
-bradley_terry` and `--legacy-franchise-fit`. Wire the phase 1 flags through `weekly_run.py`. No
-ETL rebuild is needed for any of it.
+`CHANGELOG.md` `[Unreleased]` (a `Fixed` entry that names the shared callback and the versions
+affected: every model trained with early stopping on xgboost `>= 2.0`, which is every model in
+`models/`), `README.md` (the betting workbook totals caveat, per the 52.3 decision), `AGENTS.md`
+(benchmark table: add the fixed arm's total MAE and point the benchmark at the new run directory
+if the margin metrics reproduced), `.agents/TODO.md` and `.agents/ARCHIVE.md`. Then the full gate
+(commands in `AGENTS.md`; the local markdownlint command excludes `#.agents/skills`).
 
 ## Final report to the user (structure)
 
-1. Outcome first: what landed, the default you chose for the switch, and gate status.
-2. The three-window table, off versus on, with the `models/` paths.
-3. Whether Week 2 of 2026 will use the new build, and what the user must run after the Week 1
-   games finish on Monday 2026-09-14 (`scripts/weekly_run.py` with the ETL refresh).
-4. What was left out or deferred, and why.
-5. Your recommendation for the next session: Milestone 43 phase 2 if it did not fit here, then
-   the total/over-under investigation (Milestone 50), then Milestone 47.
+1. Outcome first: whether task 56.4 landed and the smoke run finished without workaround flags;
+   then whether the total-head fix landed, whether the anchored arm reproduced the benchmark's
+   margin metrics exactly, and the unanchored total MAE against the market line's `10.1207`.
+2. The walk-forward table (windows as in `AGENTS.md`) for every arm you ran, with run directories.
+3. What the retrained production model predicts for 2026 Week 1 totals.
+4. What was left out or deferred (the optional arm, the separate-feature-set question), and why.
+5. Recommendation for the next session: Milestone 53 (QB per-dropback EPA), then the Milestone 49
+   `games_played` follow-up, with the Week 2 weekly run scheduled between Monday night and
+   Thursday 2026-09-17.

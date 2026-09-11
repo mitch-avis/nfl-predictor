@@ -14,13 +14,17 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import os
 import subprocess
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from pickle import UnpicklingError
+from typing import Any, NamedTuple
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -32,6 +36,14 @@ from nfl_predictor.utils.logger import log
 DEFAULT_CALIBRATION_WEEKS = 4
 DEFAULT_RANDOM_SEED = 42
 RELIABILITY_BINS = 10
+
+# Shared root for per-fold checkpoints. Each run writes into a subdirectory named for its
+# fingerprint, so any identical walk-forward (from any script) resumes where it stopped and
+# runs with different inputs never see each other's files.
+DEFAULT_CHECKPOINT_DIR = Path(constants.ROOT_DIR) / "models" / "wf_checkpoints"
+# Bump when the checkpoint payload layout changes, so older files are ignored, not misread.
+FOLD_CHECKPOINT_VERSION = 1
+
 SUMMARY_METRICS = (
     "margin_mae",
     "total_mae",
@@ -373,19 +385,176 @@ def _resolve_xgb_params(config: WalkForwardConfig) -> dict[str, Any]:
     return ml_model._resolve_xgb_params(ml_model.DEFAULT_XGB_PARAMS, overrides=overrides)
 
 
+def _modelling_source_files() -> list[Path]:
+    """Return the source files whose contents can change a fold's result."""
+    ml_dir = Path(__file__).resolve().parent
+    package_dir = ml_dir.parent
+    files = sorted(ml_dir.glob("*.py"))
+    files.extend(package_dir / name for name in ("constants.py", "ml_model.py"))
+    return [path for path in files if path.exists()]
+
+
+def fold_checkpoint_fingerprint(df: pd.DataFrame, config: WalkForwardConfig) -> str:
+    """Return the key that decides whether a saved fold may be reused.
+
+    It covers everything a fold's result depends on: the input rows and columns, the full
+    config, the installed library versions, and the source of the modelling code. A saved
+    fold is reused only when all of these are unchanged, so a resumed run reproduces an
+    uninterrupted one instead of mixing results computed from different inputs.
+    """
+    digest = hashlib.sha256()
+    digest.update(f"fold-checkpoint-v{FOLD_CHECKPOINT_VERSION}".encode())
+    digest.update(json.dumps(config.to_dict(), sort_keys=True, default=str).encode())
+    digest.update(json.dumps([str(column) for column in df.columns]).encode())
+    digest.update(json.dumps([str(dtype) for dtype in df.dtypes]).encode())
+    digest.update(pd.util.hash_pandas_object(df, index=True).to_numpy().tobytes())
+    digest.update(json.dumps(_library_versions(), sort_keys=True).encode())
+    for path in _modelling_source_files():
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+class _RestoredFold(NamedTuple):
+    """A finished fold read back from its checkpoint."""
+
+    metrics: dict[str, Any]
+    predictions: pd.DataFrame
+    feature_columns: list[str]
+
+
+@dataclass(frozen=True)
+class _FoldCheckpointStore:
+    """Per-fold checkpoint files for one fingerprinted walk-forward run.
+
+    Files are written with `joblib`, like model checkpoints, because it round-trips pandas
+    dtypes and float64 values exactly. They are only ever read back from a directory this
+    module wrote, and only when the stored fingerprint matches the current run.
+    """
+
+    directory: Path
+    fingerprint: str
+
+    @classmethod
+    def create(
+        cls, root: Path, df: pd.DataFrame, config: WalkForwardConfig
+    ) -> _FoldCheckpointStore:
+        """Open (creating if needed) the checkpoint directory for this run's inputs."""
+        fingerprint = fold_checkpoint_fingerprint(df, config)
+        directory = Path(root) / fingerprint[:20]
+        directory.mkdir(parents=True, exist_ok=True)
+        manifest_path = directory / "manifest.json"
+        if not manifest_path.exists():
+            manifest = {
+                "fingerprint": fingerprint,
+                "version": FOLD_CHECKPOINT_VERSION,
+                "created_at": datetime.now(UTC).isoformat(),
+                "rows": len(df),
+                "columns": len(df.columns),
+                "config": config.to_dict(),
+                "library_versions": _library_versions(),
+            }
+            temporary = manifest_path.with_name(f"{manifest_path.name}.tmp")
+            temporary.write_text(json.dumps(manifest, indent=2, sort_keys=True, default=str))
+            os.replace(temporary, manifest_path)
+        log.info("Walk-forward fold checkpoints: %s", directory)
+        return cls(directory=directory, fingerprint=fingerprint)
+
+    def _path(self, fold: WalkForwardFold) -> Path:
+        """Return the checkpoint file for one fold."""
+        return self.directory / f"fold_{int(fold.season)}_w{int(fold.week):02d}.joblib"
+
+    def load(self, fold: WalkForwardFold) -> _RestoredFold | None:
+        """Return the saved fold, or None when it is missing, unreadable, or foreign."""
+        path = self._path(fold)
+        if not path.exists():
+            return None
+        try:
+            payload = joblib.load(path)
+        except (
+            OSError,
+            EOFError,
+            ValueError,
+            TypeError,
+            AttributeError,
+            ImportError,
+            KeyError,
+            IndexError,
+            UnpicklingError,
+        ) as error:
+            log.warning("Ignoring unreadable checkpoint %s (%s); training again.", path, error)
+            return None
+        if not (
+            isinstance(payload, dict)
+            and payload.get("version") == FOLD_CHECKPOINT_VERSION
+            and payload.get("fingerprint") == self.fingerprint
+            and payload.get("season") == int(fold.season)
+            and payload.get("week") == int(fold.week)
+            and isinstance(payload.get("metrics"), dict)
+            and isinstance(payload.get("predictions"), pd.DataFrame)
+            and isinstance(payload.get("feature_columns"), list)
+        ):
+            log.warning("Ignoring checkpoint %s: it belongs to another run; training again.", path)
+            return None
+        return _RestoredFold(
+            metrics=payload["metrics"],
+            predictions=payload["predictions"],
+            feature_columns=list(payload["feature_columns"]),
+        )
+
+    def save(
+        self,
+        fold: WalkForwardFold,
+        metrics: dict[str, Any],
+        predictions: pd.DataFrame,
+        feature_columns: list[str],
+    ) -> None:
+        """Write one finished fold atomically, so a stop mid-write never leaves a bad file."""
+        path = self._path(fold)
+        temporary = path.with_name(f"{path.name}.tmp")
+        joblib.dump(
+            {
+                "version": FOLD_CHECKPOINT_VERSION,
+                "fingerprint": self.fingerprint,
+                "season": int(fold.season),
+                "week": int(fold.week),
+                "metrics": metrics,
+                "predictions": predictions,
+                "feature_columns": feature_columns,
+            },
+            temporary,
+        )
+        os.replace(temporary, path)
+
+
 def run_walk_forward_backtest(
     df: pd.DataFrame,
     config: WalkForwardConfig,
     *,
     fold_callback: Callable[[dict[str, Any], WalkForwardFold], None] | None = None,
+    checkpoint_dir: Path | None = None,
+    resume: bool = True,
 ) -> dict[str, Any]:
     """Run walk-forward training/evaluation and return metrics plus per-game predictions.
 
     Any feature groups named in `config.disabled_feature_groups` are dropped here, so the
     config alone determines the ablation. The CLI scripts also drop them before building the
     config (to log and record exactly what went away); dropping again is a no-op.
+
+    When `checkpoint_dir` is given, every finished week is saved under a subdirectory named
+    for `fold_checkpoint_fingerprint(df, config)`. With `resume` (the default), a week whose
+    checkpoint matches is restored instead of trained; with `resume=False` every week is
+    trained and its checkpoint overwritten. Weeks are independent and seeded, so a resumed
+    run returns exactly what an uninterrupted one would. `fold_callback` fires only for
+    weeks that are trained, not for restored ones.
     """
     np.random.seed(config.random_seed)  # noqa: NPY002 (legacy for reproducibility)
+    # Fingerprint the caller's frame before any column drops or row filters below.
+    store = (
+        _FoldCheckpointStore.create(checkpoint_dir, df, config)
+        if checkpoint_dir is not None
+        else None
+    )
     if config.disabled_feature_groups:
         group_columns = resolve_feature_group_columns(
             list(df.columns), config.disabled_feature_groups
@@ -444,8 +613,27 @@ def run_walk_forward_backtest(
     per_week_metrics: list[dict[str, Any]] = []
     prediction_frames: list[pd.DataFrame] = []
     feature_list: list[str] | None = None
+    restored_folds = 0
+    computed_folds = 0
 
-    for fold in folds:
+    run_start = time.perf_counter()
+    for fold_index, fold in enumerate(folds, start=1):
+        restored = store.load(fold) if store is not None and resume else None
+        if restored is not None:
+            if feature_list is None:
+                feature_list = restored.feature_columns
+            per_week_metrics.append(restored.metrics)
+            prediction_frames.append(restored.predictions)
+            restored_folds += 1
+            log.info(
+                "Walk-forward fold %d/%d restored from checkpoint: season %d week %d",
+                fold_index,
+                len(folds),
+                int(fold.season),
+                int(fold.week),
+            )
+            continue
+
         feature_spec = ml_model._build_feature_spec(
             fold.train_df,
             include_market=include_market,
@@ -455,8 +643,9 @@ def run_walk_forward_backtest(
             market_transform=market_transform,
             disable_pruning=config.disable_pruning,
         )
+        fold_features = list(feature_spec.feature_columns)
         if feature_list is None:
-            feature_list = list(feature_spec.feature_columns)
+            feature_list = fold_features
         preprocessor = ml_model._build_preprocessor(feature_spec, for_tree=True)
 
         x_train = preprocessor.fit_transform(
@@ -703,10 +892,41 @@ def run_walk_forward_backtest(
             metrics["market_total_resid_mae"] = float(
                 np.mean(np.abs(actual_total_resid - pred_total_resid))
             )
+        # Saved before the callback, so a callback that stops the run keeps this week.
+        if store is not None:
+            store.save(fold, metrics, fold_predictions, fold_features)
+        computed_folds += 1
+
         if fold_callback is not None:
             fold_callback(metrics, fold)
 
         per_week_metrics.append(metrics)
+
+        # Nothing else is logged between the first weeks and the final report, so this
+        # line is the only progress signal a long run gives. The remaining-time estimate
+        # assumes the average trained fold so far (restored folds cost nothing), which
+        # runs low late in a run as training sets grow.
+        elapsed = time.perf_counter() - run_start
+        log.info(
+            "Walk-forward fold %d/%d done: season %d week %d (%d games, Brier %.4f), "
+            "%.0fs elapsed, about %.0fs remaining",
+            fold_index,
+            len(folds),
+            int(fold.season),
+            int(fold.week),
+            games_count,
+            float(metrics["brier"]),
+            elapsed,
+            elapsed / computed_folds * (len(folds) - fold_index),
+        )
+
+    if store is not None:
+        log.info(
+            "Walk-forward checkpoints: %d weeks restored, %d trained (%s)",
+            restored_folds,
+            computed_folds,
+            store.directory,
+        )
 
     predictions = pd.concat(prediction_frames, ignore_index=True)
     sort_cols = [col for col in ("season", "week", "game_id") if col in predictions.columns]
@@ -745,6 +965,15 @@ def run_walk_forward_backtest(
             include_postseason=config.include_postseason,
         ),
         "excluded_incomplete_seasons": excluded_incomplete,
+        "checkpoint": (
+            None
+            if store is None
+            else {
+                "dir": str(store.directory),
+                "restored_folds": restored_folds,
+                "computed_folds": computed_folds,
+            }
+        ),
     }
 
 

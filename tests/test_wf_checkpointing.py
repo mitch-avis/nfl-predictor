@@ -241,6 +241,49 @@ def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.Mo
     assert set(result["candidate_key"]) == {"cand1", "cand2"}
 
 
+def test_wf_compare_checkpoints_candidate_weeks_under_the_run_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each candidate saves its finished weeks inside the run, honoring the resume flag."""
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setattr(weekly_run, "_build_wf_candidates", lambda **_kwargs: [_candidate("cand1")])
+    seen: list[dict[str, object]] = []
+
+    def _fake_run(*_args: object, **kwargs: object) -> dict[str, object]:
+        seen.append(kwargs)
+        return _stub_results(1)
+
+    monkeypatch.setattr(weekly_run.walk_forward, "run_walk_forward_backtest", _fake_run)
+
+    weekly_run._run_wf_compare(
+        pd.DataFrame(),
+        run_dir=run_dir,
+        resume=False,
+        dataset_fingerprint={"sha256": "deadbeef", "path": "x", "size": 1, "mtime": 0.0},
+        wf_run_fingerprint="wf123",
+        checkpoint_per_fold=False,
+        eval_last_n_seasons=1,
+        wf_start_week=3,
+        calibration_weeks=1,
+        include_postseason=False,
+        exclude_incomplete_seasons=False,
+        recency_half_life_weeks=None,
+        recency_half_life_seasons=None,
+        market_mode="features",
+        market_prob_source="raw",
+        market_prob_blend_method="prob",
+        win_prob_uncertainty="off",
+        xgb_params_overrides={},
+        early_stopping_rounds=1,
+        include_quantiles=False,
+    )
+
+    assert len(seen) == 1
+    assert seen[0]["checkpoint_dir"] == weekly_run._wf_compare_dir(run_dir) / "wf_folds"
+    assert seen[0]["resume"] is False
+
+
 def test_corrupt_artifact_recomputes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Corrupt candidate artifacts should be moved aside and recomputed."""
     run_dir = tmp_path / "run"

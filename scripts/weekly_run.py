@@ -83,6 +83,7 @@ _PATH_KEYS = {
     "power_rankings_data_ml",
     "power_rankings_data_schedule",
     "power_rankings_out_dir",
+    "power_rankings_strength_snapshots",
 }
 
 
@@ -516,7 +517,62 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         "--ratings-min-season",
         type=int,
         default=defaults.get("ratings_min_season"),
-        help="Optional minimum season for ratings fit.",
+        help="Optional minimum season for the Bradley-Terry ratings fit.",
+    )
+    parser.add_argument(
+        "--power-rankings-method",
+        choices=power_rankings.RANKING_METHODS,
+        default=defaults.get("power_rankings_method"),
+        help=(
+            "Power rankings method: 'composite' (default; the ETL's schedule-adjusted "
+            "strength for the week after the through-week) or 'bradley_terry'. "
+            "--legacy-franchise-fit implies bradley_terry."
+        ),
+    )
+    parser.add_argument(
+        "--power-rankings-strength-snapshots",
+        type=Path,
+        default=defaults.get(
+            "power_rankings_strength_snapshots", power_rankings.DEFAULT_STRENGTH_SNAPSHOTS
+        ),
+        help="Per-team weekly strength file the composite method reads.",
+    )
+    parser.add_argument(
+        "--ratings-window-seasons",
+        type=int,
+        default=defaults.get(
+            "ratings_window_seasons", power_rankings.DEFAULT_RATINGS_WINDOW_SEASONS
+        ),
+        help="Bradley-Terry only: seasons the fit sees, counting the current one (0 = all).",
+    )
+    parser.add_argument(
+        "--ratings-prior-season-weight",
+        type=float,
+        default=defaults.get(
+            "ratings_prior_season_weight", power_rankings.DEFAULT_PRIOR_SEASON_WEIGHT
+        ),
+        help="Bradley-Terry only: weight on games from seasons before the current one.",
+    )
+    parser.add_argument(
+        "--ratings-target",
+        choices=("margin", "binary"),
+        default=defaults.get("ratings_target", "margin"),
+        help="Bradley-Terry only: target for completed games.",
+    )
+    parser.add_argument(
+        "--ratings-include-future",
+        action=argparse.BooleanOptionalAction,
+        default=defaults.get("ratings_include_future", False),
+        help="Bradley-Terry only: feed future games' model win probabilities into the fit.",
+    )
+    parser.add_argument(
+        "--legacy-franchise-fit",
+        action="store_true",
+        default=defaults.get("legacy_franchise_fit", False),
+        help=(
+            "Rank with the historical all-seasons, equal-weight Bradley-Terry 'franchise' "
+            "fit; overrides the other ranking options."
+        ),
     )
     return parser
 
@@ -530,7 +586,39 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         _validate_config_keys(config, _allowed_config_keys(parser))
         parser = _build_parser(_normalize_config_defaults(config))
         args = parser.parse_args(argv)
+    try:
+        _power_ranking_options(args)
+    except ValueError as error:
+        parser.error(str(error))
     return args
+
+
+def _power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOptions:
+    """Resolve the ranking options the weekly run's flags describe."""
+    return power_rankings.resolve_ranking_options(
+        method=args.power_rankings_method,
+        legacy_franchise_fit=bool(args.legacy_franchise_fit),
+        window_seasons=int(args.ratings_window_seasons),
+        prior_season_weight=float(args.ratings_prior_season_weight),
+        target=str(args.ratings_target),
+        include_future=bool(args.ratings_include_future),
+        ratings_min_season=args.ratings_min_season,
+        strength_snapshots=Path(args.power_rankings_strength_snapshots),
+    )
+
+
+def _power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
+    """Return the ranking settings that decide whether a reports stage can be reused."""
+    options = _power_ranking_options(args)
+    return {
+        "power_rankings_method": options.method,
+        "power_rankings_strength_snapshots": str(options.strength_snapshots),
+        "ratings_window_seasons": options.window_seasons,
+        "ratings_prior_season_weight": options.prior_season_weight,
+        "ratings_target": options.target,
+        "ratings_include_future": options.include_future,
+        "ratings_min_season": options.ratings_min_season,
+    }
 
 
 def _config_payload(args: argparse.Namespace) -> dict[str, Any]:
@@ -1058,7 +1146,15 @@ def _run_wf_compare(
 
             fold_callback = fold_progress_callback
 
-        out = walk_forward.run_walk_forward_backtest(df, cfg, fold_callback=fold_callback)
+        # Finished weeks are saved inside the run, so a candidate stopped partway resumes
+        # at its next unfinished week rather than from the start.
+        out = walk_forward.run_walk_forward_backtest(
+            df,
+            cfg,
+            fold_callback=fold_callback,
+            checkpoint_dir=wf_dir / "wf_folds",
+            resume=resume,
+        )
         duration = time.monotonic() - start
         summary_row = _build_summary_row(
             candidate,
@@ -1623,6 +1719,7 @@ def main() -> int:
         "power_rankings_data_schedule": str(args.power_rankings_data_schedule),
         "power_rankings_out_dir": str(pr_out_dir_default),
         "power_rankings_include_postseason": bool(args.power_rankings_include_postseason),
+        **_power_rankings_report_config(args),
     }
     report_hash = artifacts.stable_short_hash(report_config)
     report_marker = _stage_marker_path(run_dir, "reports")
@@ -1669,42 +1766,27 @@ def main() -> int:
             pr_out_dir = args.power_rankings_out_dir or output_dir
             pr_out_dir.mkdir(parents=True, exist_ok=True)
             model = ml_model_core.load_model_checkpoint(model_path, "margin_total")
-            current_records = power_rankings._load_current_records(
-                args.power_rankings_data_schedule,
-                season=pr_season,
-                through_week=pr_week,
-                include_postseason=bool(args.power_rankings_include_postseason),
-            )
-            future_games = power_rankings._predict_future_games(
-                model,
-                model_kind="margin_total",
-                data_ml=args.power_rankings_data_ml,
-                season=pr_season,
-                through_week=pr_week,
-                include_postseason=bool(args.power_rankings_include_postseason),
-            )
-            games_for_ratings = power_rankings._build_games_for_ratings(
-                schedule_path=args.power_rankings_data_schedule,
-                season=pr_season,
-                through_week=pr_week,
-                ratings_min_season=args.ratings_min_season,
-                future_games_with_probs=future_games,
-                include_postseason=bool(args.power_rankings_include_postseason),
-            )
-            result = power_rankings.build_power_rankings_and_standings(
-                season=pr_season,
-                through_week=pr_week,
-                current_records=current_records,
-                games_for_ratings=games_for_ratings,
-                future_games_with_probs=future_games,
-            )
-            power_rankings._write_outputs(
-                result,
-                out_dir=pr_out_dir,
-                season=pr_season,
-                through_week=pr_week,
-            )
-            outputs.extend(_power_rankings_outputs(pr_out_dir, pr_season, pr_week))
+            try:
+                result = power_rankings.compute_power_rankings(
+                    model,
+                    model_kind="margin_total",
+                    data_ml=args.power_rankings_data_ml,
+                    data_schedule=args.power_rankings_data_schedule,
+                    season=pr_season,
+                    through_week=pr_week,
+                    include_postseason=bool(args.power_rankings_include_postseason),
+                    options=_power_ranking_options(args),
+                )
+            except power_rankings.StrengthSnapshotUnavailableError as exc:
+                log.warning("Power rankings skipped: %s", exc)
+            else:
+                power_rankings._write_outputs(
+                    result,
+                    out_dir=pr_out_dir,
+                    season=pr_season,
+                    through_week=pr_week,
+                )
+                outputs.extend(_power_rankings_outputs(pr_out_dir, pr_season, pr_week))
 
     _write_stage_marker(
         report_marker,

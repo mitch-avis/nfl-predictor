@@ -10,8 +10,13 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from scripts import betting_pipeline
+
+
+class _StageReachedError(Exception):
+    """Raised by a stub to stop the pipeline once the walk-forward stage is reached."""
 
 
 def test_betting_pipeline_parse_args_leaves_predict_path_unset() -> None:
@@ -71,6 +76,48 @@ def test_betting_pipeline_dry_run_exits_successfully(tmp_path: Path) -> None:
         sys.argv = old_argv
     assert isinstance(exit_code, int)
     assert exit_code == 0
+
+
+def test_betting_pipeline_stage1_checkpoints_walk_forward_weeks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stage 1 saves finished walk-forward weeks inside the run dir and honors --resume."""
+    run_dir = tmp_path / "run"
+    data_path = tmp_path / "tiny.csv"
+    pd.DataFrame(
+        [
+            {"season": 2024, "week": 1, "away_score": 10, "home_score": 20},
+            {"season": 2024, "week": 2, "away_score": 17, "home_score": 14},
+        ]
+    ).to_csv(data_path, index=False)
+    captured: dict[str, object] = {}
+
+    def fake_run(_df: pd.DataFrame, _config: object, **kwargs: object) -> dict[str, object]:
+        """Record the keyword arguments, then stop the pipeline."""
+        captured.update(kwargs)
+        raise _StageReachedError
+
+    monkeypatch.setattr(betting_pipeline.walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "betting_pipeline.py",
+            "--data-path",
+            str(data_path),
+            "--predict-path",
+            str(tmp_path / "predict.csv"),
+            "--run-id",
+            "test_betting_pipeline_stage1",
+            "--run-dir",
+            str(run_dir),
+        ],
+    )
+
+    with pytest.raises(_StageReachedError):
+        betting_pipeline.main()
+
+    assert captured == {"checkpoint_dir": run_dir / "wf_folds", "resume": True}
 
 
 def test_betting_pipeline_stage2_passes_calibration_for_blend(tmp_path, monkeypatch) -> None:

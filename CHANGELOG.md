@@ -4,6 +4,60 @@
 
 ### Changed
 
+- Rank teams on the ETL's schedule-adjusted strength composite by default in
+  `scripts/power_rankings.py` (`--method composite`). A ranking through week N reads the week
+  N+1 snapshot, which is solved only from earlier games and has a row for every scheduled team,
+  so teams on a bye are ranked exactly and no later result leaks into a historical rerun. The
+  composite is converted to points with that week's SRS slope and to a win probability against
+  an average team through the model's margin curve before it is placed on the 1-10 and 0-10
+  scales; the composite, `points_vs_average` and the components are published next to the rank.
+  `--method bradley_terry` reproduces the previous default exactly (pinned by a test), and
+  `--legacy-franchise-fit` now implies it.
+- Expose the ranking options in `scripts/weekly_run.py` (`--power-rankings-method`,
+  `--power-rankings-strength-snapshots`, `--ratings-window-seasons`,
+  `--ratings-prior-season-weight`, `--ratings-target`, `--ratings-include-future`,
+  `--legacy-franchise-fit`). It now calls the same `compute_power_rankings` as the script,
+  includes the options in its reports-stage reuse hash, and skips the rankings with a warning
+  when the snapshot for the requested week is missing.
+- Write the model-rating table from `scripts/golden_command.py` as `model_rating_rankings.csv`
+  instead of `power_rankings.csv`, so the power rankings from `scripts/power_rankings.py` are the
+  one canonical ranking artifact.
+
+### Added
+
+- Write `data/strength_snapshots.csv` from the ETL: pre-week adjusted strength for every team on
+  each season's schedule and every processed week, teams on a bye included, plus the week after
+  the regular season before the playoff schedule exists. Values equal the `away_`/`home_`
+  strength columns on the game rows (one solve feeds both) and add the league-wide home-field
+  term `adj_hfa`. Training rows are unchanged.
+
+### Fixed
+
+- Compare scores as numbers when building power-ranking records and projected standings. The ETL
+  writes the newest games first, so once unplayed games led the file Polars inferred the score
+  columns as text and compared them alphabetically: for 2024 through week 17, 26 of 32 records
+  were wrong (DET showed 11-5 instead of 14-2). The Bradley-Terry ratings were unaffected.
+- List every team in projected standings before its first game. Standings were built on the
+  record rows, which do not exist before week 1, so the Week-1 projected standings came out empty;
+  teams with no games yet now start from a zero record.
+
+## [0.5.0] - 2026-09-10
+
+### Changed
+
+- Bump the project version to `0.5.0` for the early-season shrinkage and resumable walk-forward
+  release and keep `uv.lock` aligned.
+- Renumber the active worklist in `.agents/TODO.md` so milestones run in execution order (51-57);
+  finished parts moved to `.agents/ARCHIVE.md`, which records the old-to-new map. Archived numbers
+  are unchanged.
+- Blend season-to-date team stats toward the regressed previous season in early weeks instead of
+  switching from the full prior in week 1 to a single unshrunk game in week 2. Each team's per-game
+  means are weighted `games / (games + 4)` in-season and the rest prior, and every rate is
+  recomputed from the blended sums. Over 2023-2025 from week 1, week-2 Brier fell from `0.2434` to
+  `0.2268` and pick accuracy rose from `0.5417` to `0.6042`, with weeks 3-18 unchanged within noise
+  (`models/wf_shrink_2023_2025_{off,on}/`). On by default; `--no-stat-prior-blend` and
+  `--stat-prior-blend-games` on `nfl_predictor.data_collection` ablate or tune it at ETL time.
+  `PRIOR_BLEND_GAMES` moved to `constants.py` and is shared with the adjusted-strength blend.
 - Rank teams on current-season strength by default in `scripts/power_rankings.py`. The
   Bradley-Terry fit now sees a two-season window with prior-season games weighted `0.25`
   (`--ratings-window-seasons`, `--ratings-prior-season-weight`), scores completed games by margin
@@ -15,6 +69,23 @@
 
 ### Added
 
+- Make walk-forward runs resumable. Every finished week is saved under
+  `models/wf_checkpoints/<fingerprint>/` (data, config, modelling code, and library versions), and
+  re-running an identical command restores those weeks and trains only the rest, with results
+  identical to an uninterrupted run. Available as `--resume` / `--checkpoint-dir` on
+  `scripts/walk_forward_backtest.py` and `scripts/wf_compare.py`, `--wf-resume` /
+  `--wf-checkpoint-dir` on `scripts/golden_command.py`, and through the existing `--resume` of
+  `scripts/weekly_run.py` and `scripts/betting_pipeline.py`, which now also resume partway through a
+  candidate. Metrics reports record how many weeks were restored.
+- Log one progress line per finished walk-forward week with elapsed time and an estimate of the time
+  remaining; previously a run printed nothing between its first weeks and its final report.
+- Document walk-forward operating practice in `README.md` and `AGENTS.md`: run one XGBoost-heavy job
+  at a time, and choose the OpenMP wait policy by machine load. Under CPU contention the default
+  policy made one week take `730s`; `OMP_WAIT_POLICY=PASSIVE` cut that to `185s`, but on an idle
+  machine the default is faster (`75s` against about `142s`). The policy changes scheduling only,
+  never results or fold checkpoints.
+- Exclude the optional, gitignored `.agents/skills/` clone from ruff (`pyproject.toml`) and
+  markdownlint (new `.markdownlintignore`).
 - Add optional per-game sample weights and a margin-based target to
   `nfl_predictor.reporting.power_rankings.fit_bradley_terry_ratings`; uniform weights reproduce
   the unweighted fit exactly.

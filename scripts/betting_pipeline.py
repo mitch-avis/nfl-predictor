@@ -810,7 +810,14 @@ def main() -> int:
                 early_stopping_rounds=15,
                 xgb_params_overrides=xgb_params_overrides,
             )
-            out = walk_forward.run_walk_forward_backtest(df, cfg)
+            # Finished weeks are saved inside the run, so a stopped stage 1 resumes at the
+            # next unfinished week of the candidate it was on.
+            out = walk_forward.run_walk_forward_backtest(
+                df,
+                cfg,
+                checkpoint_dir=run_dir / "wf_folds",
+                resume=bool(args.resume),
+            )
             overall = out["overall"]
             rows.append(
                 {

@@ -5,16 +5,25 @@ This script is meant for fan-friendly reporting:
 - A 1-10 (and 0-10) power rating per team (absolute scale vs an average team)
 - Projected standings based on current record + expected wins in remaining REG games
 
-Method summary
+Rating methods
 --------------
-1) Load a trained model checkpoint.
-2) Predict win probabilities for remaining regular season games (from ML feature rows).
-3) Fit a simple Bradley-Terry latent-strength model using:
-   - completed-game outcomes (as probability targets)
-   - future-game model win probabilities (as probability targets)
-4) Convert latent strengths to a stable (ultimate) power rating by mapping
-    `sigmoid(rating_raw)` (win prob vs an average team on a neutral field) onto
-    1-10 and 0-10 scales.
+``--method composite`` (the default) is the current-season view: how strong each team is
+going into the next week. It ranks teams on the ETL's pre-week schedule-adjusted
+strength composite, read from ``data/strength_snapshots.csv`` for the week after
+``--through-week``. Every team on the schedule has a row there, teams on a bye included,
+and each row is solved only from games before that week, so a ranking through week N
+sees results through week N and nothing later.
+
+``--method bradley_terry`` fits latent strengths to game results instead: completed
+games as probability targets (margin-based by default) over a window of recent seasons
+with earlier seasons down-weighted, optionally with the model's win probabilities for
+future games (the ``--ratings-*`` options). ``--legacy-franchise-fit`` restores the
+original all-seasons, equal-weight "franchise" fit and implies this method.
+
+Both methods map their rating onto the 1-10 and 0-10 scales through a win probability
+against an average team on a neutral field (see
+``nfl_predictor.reporting.power_rankings``). Projected standings are the same under both:
+current record plus the model's win probabilities for the remaining games.
 
 Usage example
 -------------
@@ -37,6 +46,7 @@ Outputs
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -48,6 +58,7 @@ try:
     from nfl_predictor import constants
     from nfl_predictor.ml import ml_model_core
     from nfl_predictor.reporting.power_rankings import (
+        COMPOSITE_COLUMN,
         FIT_WEIGHT_COLUMN,
         PowerRatingsResult,
         build_power_rankings_and_standings,
@@ -62,6 +73,7 @@ except ModuleNotFoundError:
     from nfl_predictor import constants
     from nfl_predictor.ml import ml_model_core
     from nfl_predictor.reporting.power_rankings import (
+        COMPOSITE_COLUMN,
         FIT_WEIGHT_COLUMN,
         PowerRatingsResult,
         build_power_rankings_and_standings,
@@ -70,7 +82,7 @@ except ModuleNotFoundError:
     from nfl_predictor.utils.logger import log
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate power rankings + projected standings")
     p.add_argument("--model-in", type=Path, required=True, help="Path to model checkpoint .joblib")
     p.add_argument(
@@ -106,11 +118,31 @@ def _parse_args() -> argparse.Namespace:
         help="Directory to write outputs.",
     )
     p.add_argument(
+        "--method",
+        choices=RANKING_METHODS,
+        default=None,
+        help=(
+            "How teams are rated. 'composite' (default) ranks on the ETL's "
+            "schedule-adjusted strength composite for the week after --through-week: the "
+            "current-season view. 'bradley_terry' fits ratings to game results with the "
+            "--ratings-* options. --legacy-franchise-fit implies bradley_terry."
+        ),
+    )
+    p.add_argument(
+        "--strength-snapshots",
+        type=Path,
+        default=DEFAULT_STRENGTH_SNAPSHOTS,
+        help=(
+            "Per-team weekly strength file written by the ETL, read by the composite "
+            "method (default: data/strength_snapshots.csv)."
+        ),
+    )
+    p.add_argument(
         "--ratings-min-season",
         type=int,
         default=None,
         help=(
-            "Optional minimum season to include in the ratings fit. "
+            "Bradley-Terry only. Optional minimum season to include in the ratings fit. "
             "Default: include all historical seasons available in --data-schedule."
         ),
     )
@@ -118,16 +150,19 @@ def _parse_args() -> argparse.Namespace:
         "--include-postseason",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Include postseason games in records/ratings (default: regular season only).",
+        help=(
+            "Include postseason games in records and in the Bradley-Terry fit (default: "
+            "regular season only). The composite never includes postseason games."
+        ),
     )
     p.add_argument(
         "--ratings-window-seasons",
         type=int,
         default=DEFAULT_RATINGS_WINDOW_SEASONS,
         help=(
-            "How many seasons the ratings fit sees, counting the current one. "
-            f"Default {DEFAULT_RATINGS_WINDOW_SEASONS} (current plus previous). "
-            "Use 0 for every available season."
+            "Bradley-Terry only. How many seasons the ratings fit sees, counting the "
+            f"current one. Default {DEFAULT_RATINGS_WINDOW_SEASONS} (current plus "
+            "previous). Use 0 for every available season."
         ),
     )
     p.add_argument(
@@ -135,8 +170,9 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         default=DEFAULT_PRIOR_SEASON_WEIGHT,
         help=(
-            "Weight applied to games from seasons before the current one. "
-            f"Default {DEFAULT_PRIOR_SEASON_WEIGHT}. Current-season games always weigh 1.0."
+            "Bradley-Terry only. Weight applied to games from seasons before the current "
+            f"one. Default {DEFAULT_PRIOR_SEASON_WEIGHT}. Current-season games always weigh "
+            "1.0."
         ),
     )
     p.add_argument(
@@ -144,8 +180,9 @@ def _parse_args() -> argparse.Namespace:
         choices=("margin", "binary"),
         default="margin",
         help=(
-            "Target for completed games. 'margin' maps the observed point margin through "
-            "the model's win-probability curve; 'binary' scores every win the same."
+            "Bradley-Terry only. Target for completed games. 'margin' maps the observed "
+            "point margin through the model's win-probability curve; 'binary' scores "
+            "every win the same."
         ),
     )
     p.add_argument(
@@ -153,21 +190,22 @@ def _parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=False,
         help=(
-            "Feed future games' model win probabilities into the strength fit. Off by "
-            "default: the fit should describe results, not the model's own forecasts. "
-            "Future games always remain in projected standings."
+            "Bradley-Terry only. Feed future games' model win probabilities into the "
+            "strength fit. Off by default: the fit should describe results, not the "
+            "model's own forecasts. Future games always remain in projected standings."
         ),
     )
     p.add_argument(
         "--legacy-franchise-fit",
         action="store_true",
         help=(
-            "Reproduce the historical ranking exactly: every season since 1999 weighted "
-            "equally, binary win/loss targets, and future model probabilities in the fit. "
-            "Overrides the other --ratings-* flags."
+            "Reproduce the historical 'franchise' ranking exactly: a Bradley-Terry fit "
+            "with every season since 1999 weighted equally, binary win/loss targets, and "
+            "future model probabilities in the fit. Implies --method bradley_terry and "
+            "overrides the other --ratings-* flags."
         ),
     )
-    return p.parse_args()
+    return p.parse_args(argv)
 
 
 # Seasons the ratings fit sees by default, counting the current one. Two keeps a
@@ -188,6 +226,48 @@ _RATINGS_COLUMNS = (
     "p_home",
     FIT_WEIGHT_COLUMN,
 )
+
+# Ranking methods, default first.
+RANKING_METHODS = ("composite", "bradley_terry")
+
+# Where the ETL writes the per-team weekly strength snapshots the composite method reads.
+DEFAULT_STRENGTH_SNAPSHOTS = Path(constants.DATA_PATH) / f"{constants.STRENGTH_SNAPSHOTS_NAME}.csv"
+
+# Scores are read as numbers explicitly. The ETL writes the newest games first, so the rows
+# Polars samples to infer types can all be unplayed, and scores inferred as text compare
+# alphabetically ("9" > "31").
+_SCORE_DTYPES: dict[str, pl.DataType | type[pl.DataType]] = {
+    "away_score": pl.Float64,
+    "home_score": pl.Float64,
+}
+
+# Key columns of the strength snapshot file; every other column is a float.
+_SNAPSHOT_KEY_DTYPES: dict[str, pl.DataType | type[pl.DataType]] = {
+    "season": pl.Int64,
+    "week": pl.Int64,
+    "team_abbr": pl.String,
+}
+
+
+class StrengthSnapshotUnavailableError(ValueError):
+    """The strength snapshot a composite ranking needs cannot be read."""
+
+
+@dataclass(frozen=True)
+class RankingOptions:
+    """How a ranking is computed. Build it with `resolve_ranking_options`.
+
+    The Bradley-Terry fields are ignored by the composite method, and the snapshot path
+    is ignored by the Bradley-Terry method.
+    """
+
+    method: str = RANKING_METHODS[0]
+    window_seasons: int = DEFAULT_RATINGS_WINDOW_SEASONS
+    prior_season_weight: float = DEFAULT_PRIOR_SEASON_WEIGHT
+    target: str = "margin"
+    include_future: bool = False
+    ratings_min_season: int | None = None
+    strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS
 
 
 def _pl_to_pandas(df: pl.DataFrame) -> pd.DataFrame:
@@ -226,7 +306,7 @@ def _load_current_records(
 ) -> pd.DataFrame:
     """Load current records through the specified week."""
     df = (
-        pl.read_csv(schedule_path)
+        pl.read_csv(schedule_path, schema_overrides=_SCORE_DTYPES)
         .select(
             [
                 "season",
@@ -476,7 +556,7 @@ def _build_games_for_ratings(
         Games with `season`, `week`, `away_abbr`, `home_abbr`, `p_home` and `fit_weight`.
 
     """
-    sched = pl.read_csv(schedule_path).select(
+    sched = pl.read_csv(schedule_path, schema_overrides=_SCORE_DTYPES).select(
         [
             "season",
             "week",
@@ -537,6 +617,184 @@ def _build_games_for_ratings(
     return games.dropna(subset=["p_home", "away_abbr", "home_abbr"]).copy()
 
 
+def load_strength_snapshot(path: Path, *, season: int, through_week: int) -> pd.DataFrame:
+    """Read the ETL's per-team strength snapshot for the week after ``through_week``.
+
+    A ranking through week ``N`` describes teams going into week ``N + 1``. The ETL solves
+    the week ``N + 1`` snapshot from games strictly before that week, so it holds every
+    result through week ``N`` and nothing later, and it has a row for every team on the
+    season's schedule, teams on a bye included. Rows for any other week are never used.
+
+    Raises:
+        StrengthSnapshotUnavailableError: If the file is missing, lacks the key columns or
+            the composite, has no rows for that week, or lists a team twice in it.
+
+    """
+    target_week = int(through_week) + 1
+    hint = (
+        "Rebuild the data with `python -m nfl_predictor.data_collection`, or rank with "
+        "--method bradley_terry."
+    )
+    if not path.exists():
+        raise StrengthSnapshotUnavailableError(f"Missing strength snapshot file {path}. {hint}")
+
+    header = pl.read_csv(path, n_rows=0).columns
+    missing = sorted({*_SNAPSHOT_KEY_DTYPES, COMPOSITE_COLUMN} - set(header))
+    if missing:
+        raise StrengthSnapshotUnavailableError(f"{path} lacks the columns {missing}. {hint}")
+
+    overrides = {column: _SNAPSHOT_KEY_DTYPES.get(column, pl.Float64) for column in header}
+    frame = pl.read_csv(path, schema_overrides=overrides).filter(
+        (pl.col("season") == int(season)) & (pl.col("week") == target_week)
+    )
+    if frame.is_empty():
+        raise StrengthSnapshotUnavailableError(
+            f"No strength snapshot for season {season} week {target_week} (a ranking "
+            f"through week {through_week}) in {path}. {hint}"
+        )
+    duplicated = sorted(set(frame.filter(pl.col("team_abbr").is_duplicated())["team_abbr"]))
+    if duplicated:
+        raise StrengthSnapshotUnavailableError(
+            f"{path} has duplicate rows for {duplicated} in season {season} week "
+            f"{target_week}. {hint}"
+        )
+    return _pl_to_pandas(frame.sort("team_abbr"))
+
+
+def resolve_ranking_options(
+    *,
+    method: str | None,
+    legacy_franchise_fit: bool,
+    window_seasons: int = DEFAULT_RATINGS_WINDOW_SEASONS,
+    prior_season_weight: float = DEFAULT_PRIOR_SEASON_WEIGHT,
+    target: str = "margin",
+    include_future: bool = False,
+    ratings_min_season: int | None = None,
+    strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS,
+) -> RankingOptions:
+    """Turn the ranking settings from a command line into one consistent set of options.
+
+    ``method=None`` means the default, the composite, unless ``legacy_franchise_fit`` is
+    set: the legacy fit is a Bradley-Terry fit, so it implies that method and replaces
+    the other Bradley-Terry settings with the historical ones (every season weighted
+    equally, binary targets, future model probabilities in the fit).
+
+    Raises:
+        ValueError: For an unknown method, or for the legacy fit combined with the
+            composite.
+
+    """
+    if method is not None and method not in RANKING_METHODS:
+        raise ValueError(
+            f"Unknown ranking method {method!r}; expected one of {', '.join(RANKING_METHODS)}."
+        )
+    if legacy_franchise_fit:
+        if method == "composite":
+            raise ValueError(
+                "--legacy-franchise-fit is a Bradley-Terry fit and cannot be combined with "
+                "--method composite."
+            )
+        log.info("Legacy franchise fit requested; the other --ratings-* options are ignored.")
+        return RankingOptions(
+            method="bradley_terry",
+            window_seasons=0,
+            prior_season_weight=1.0,
+            target="binary",
+            include_future=True,
+            ratings_min_season=ratings_min_season,
+            strength_snapshots=Path(strength_snapshots),
+        )
+    return RankingOptions(
+        method=method or RANKING_METHODS[0],
+        window_seasons=int(window_seasons),
+        prior_season_weight=float(prior_season_weight),
+        target=str(target),
+        include_future=bool(include_future),
+        ratings_min_season=ratings_min_season,
+        strength_snapshots=Path(strength_snapshots),
+    )
+
+
+def compute_power_rankings(
+    model: Any,
+    *,
+    model_kind: str,
+    data_ml: Path,
+    data_schedule: Path,
+    season: int,
+    through_week: int,
+    include_postseason: bool,
+    options: RankingOptions,
+) -> PowerRatingsResult:
+    """Build the ranking and projected standings for one season through one week.
+
+    Shared by this script and ``scripts/weekly_run.py`` so both write the same artifact.
+    Records count results through ``through_week``; projected standings add the model's
+    win probabilities for the later games; the ranking follows ``options.method``.
+
+    Raises:
+        StrengthSnapshotUnavailableError: For the composite method, when the snapshot for
+            the week after ``through_week`` cannot be read. This is checked before the
+            model predicts anything.
+
+    """
+    snapshot = None
+    if options.method == "composite":
+        snapshot = load_strength_snapshot(
+            options.strength_snapshots, season=season, through_week=through_week
+        )
+
+    current_records = _load_current_records(
+        data_schedule,
+        season=season,
+        through_week=through_week,
+        include_postseason=include_postseason,
+    )
+    future_games = _predict_future_games(
+        model,
+        model_kind=model_kind,
+        data_ml=data_ml,
+        season=season,
+        through_week=through_week,
+        include_postseason=include_postseason,
+    )
+
+    if snapshot is not None:
+        log.info(
+            "Ranking on the adjusted composite: season %d, snapshot week %d, from %s",
+            season,
+            through_week + 1,
+            options.strength_snapshots,
+        )
+        return build_power_rankings_and_standings(
+            season=season,
+            through_week=through_week,
+            current_records=current_records,
+            future_games_with_probs=future_games,
+            strength_snapshot=snapshot,
+        )
+
+    games_for_ratings = _build_games_for_ratings(
+        schedule_path=data_schedule,
+        season=season,
+        through_week=through_week,
+        ratings_min_season=options.ratings_min_season,
+        future_games_with_probs=future_games,
+        include_postseason=include_postseason,
+        window_seasons=options.window_seasons,
+        prior_season_weight=options.prior_season_weight,
+        target=options.target,
+        include_future=options.include_future,
+    )
+    return build_power_rankings_and_standings(
+        season=season,
+        through_week=through_week,
+        current_records=current_records,
+        games_for_ratings=games_for_ratings,
+        future_games_with_probs=future_games,
+    )
+
+
 def _write_outputs(
     result: PowerRatingsResult,
     *,
@@ -560,9 +818,22 @@ def _write_outputs(
     log.info("Wrote %s", div_path)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     """Run the power rankings CLI."""
-    args = _parse_args()
+    args = _parse_args(argv)
+    try:
+        options = resolve_ranking_options(
+            method=args.method,
+            legacy_franchise_fit=bool(args.legacy_franchise_fit),
+            window_seasons=int(args.ratings_window_seasons),
+            prior_season_weight=float(args.ratings_prior_season_weight),
+            target=str(args.ratings_target),
+            include_future=bool(args.ratings_include_future),
+            ratings_min_season=args.ratings_min_season,
+            strength_snapshots=args.strength_snapshots,
+        )
+    except ValueError as error:
+        raise SystemExit(f"error: {error}") from error
 
     if not args.model_in.exists():
         raise FileNotFoundError(f"Missing model checkpoint: {args.model_in}")
@@ -570,55 +841,22 @@ def main() -> int:
         raise FileNotFoundError(f"Missing ML dataset: {args.data_ml}")
     if not args.data_schedule.exists():
         raise FileNotFoundError(f"Missing schedule dataset: {args.data_schedule}")
+    if options.method == "composite" and not options.strength_snapshots.exists():
+        raise FileNotFoundError(
+            f"Missing strength snapshot file: {options.strength_snapshots}. Rebuild the data "
+            "or rank with --method bradley_terry."
+        )
 
     model = ml_model_core.load_model_checkpoint(args.model_in, args.model_kind)
-
-    current_records = _load_current_records(
-        args.data_schedule,
-        season=args.season,
-        through_week=args.through_week,
-        include_postseason=bool(args.include_postseason),
-    )
-    future_games = _predict_future_games(
+    result = compute_power_rankings(
         model,
         model_kind=args.model_kind,
         data_ml=args.data_ml,
+        data_schedule=args.data_schedule,
         season=args.season,
         through_week=args.through_week,
         include_postseason=bool(args.include_postseason),
-    )
-    if args.legacy_franchise_fit:
-        # The historical behavior: every season equal, binary targets, forecasts in the fit.
-        window_seasons = 0
-        prior_season_weight = 1.0
-        ratings_target = "binary"
-        include_future = True
-        log.info("Legacy franchise fit requested; --ratings-* options are ignored.")
-    else:
-        window_seasons = int(args.ratings_window_seasons)
-        prior_season_weight = float(args.ratings_prior_season_weight)
-        ratings_target = str(args.ratings_target)
-        include_future = bool(args.ratings_include_future)
-
-    games_for_ratings = _build_games_for_ratings(
-        schedule_path=args.data_schedule,
-        season=args.season,
-        through_week=args.through_week,
-        ratings_min_season=args.ratings_min_season,
-        future_games_with_probs=future_games,
-        include_postseason=bool(args.include_postseason),
-        window_seasons=window_seasons,
-        prior_season_weight=prior_season_weight,
-        target=ratings_target,
-        include_future=include_future,
-    )
-
-    result = build_power_rankings_and_standings(
-        season=args.season,
-        through_week=args.through_week,
-        current_records=current_records,
-        games_for_ratings=games_for_ratings,
-        future_games_with_probs=future_games,
+        options=options,
     )
 
     _write_outputs(result, out_dir=args.out_dir, season=args.season, through_week=args.through_week)

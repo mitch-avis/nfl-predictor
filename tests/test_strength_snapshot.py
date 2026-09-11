@@ -236,7 +236,7 @@ def test_prior_blend_weight_follows_the_documented_games_formula() -> None:
     )
 
     played = blended.filter(pl.col("team_abbr") == "AAA")["strength_games_played"].item()
-    weight = played / (played + strength_snapshot.PRIOR_BLEND_GAMES)
+    weight = played / (played + constants.PRIOR_BLEND_GAMES)
     regressed_prior = 1.0 * (1.0 - constants.WEEK1_REGRESSION_FACTOR)
     solved = in_season_only.filter(pl.col("team_abbr") == "AAA")["adj_off_pass_epa_snap"].item()
     expected = weight * solved + (1.0 - weight) * regressed_prior

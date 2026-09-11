@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nfl-predictor"
-version = "0.4.0"
+version = "0.5.0"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -83,6 +83,8 @@ extend-exclude = [
     "build",
     "dist",
     "web",
+    # A separate git clone of agent skills, not part of this project.
+    ".agents/skills",
 ]
 
 [tool.ruff.lint]

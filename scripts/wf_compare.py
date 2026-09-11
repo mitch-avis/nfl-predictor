@@ -152,6 +152,21 @@ def _parse_args() -> argparse.Namespace:
             "(e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS."
         ),
     )
+    parser.add_argument(
+        "--resume",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Restore weeks already finished by an identical earlier run of each candidate "
+            "instead of training them again. Use --no-resume to retrain every week."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=walk_forward.DEFAULT_CHECKPOINT_DIR,
+        help="Root for per-week checkpoints (default: models/wf_checkpoints).",
+    )
     return parser.parse_args()
 
 
@@ -183,6 +198,8 @@ def _run_one(
     early_stopping_rounds: int,
     include_quantiles: bool,
     disabled_feature_groups: tuple[str, ...] = (),
+    checkpoint_dir: Path | None = None,
+    resume: bool = True,
 ) -> dict[str, Any]:
     cfg = walk_forward.WalkForwardConfig(
         eval_seasons=None,
@@ -209,7 +226,9 @@ def _run_one(
         disabled_feature_groups=disabled_feature_groups,
     )
 
-    out = walk_forward.run_walk_forward_backtest(df, cfg)
+    out = walk_forward.run_walk_forward_backtest(
+        df, cfg, checkpoint_dir=checkpoint_dir, resume=resume
+    )
     overall = out["overall"]
     reliability = out.get("reliability", [])
     return {
@@ -338,6 +357,8 @@ def main() -> int:
                             early_stopping_rounds=args.early_stopping_rounds,
                             include_quantiles=bool(args.include_quantiles),
                             disabled_feature_groups=disabled_feature_groups,
+                            checkpoint_dir=args.checkpoint_dir,
+                            resume=bool(args.resume),
                         )
                         rows.append(row)
 

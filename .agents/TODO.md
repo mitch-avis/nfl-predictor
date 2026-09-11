@@ -5,9 +5,13 @@ Completed milestones live in `ARCHIVE.md` (same directory). Agent workflow and g
 `../AGENTS.md`. The cross-repo review that motivates the current ordering lives in
 `feature_crosswalk.md`.
 
-- Completed work should be moved to `ARCHIVE.md` (with dates/notes).
-- Milestone numbering is authoritative in `ARCHIVE.md`. Active milestones run through 50, so new
-  work starts at 51.
+- Completed work moves to `ARCHIVE.md` (with dates and notes); a partly done milestone moves its
+  finished tasks there and keeps the rest here.
+- Active milestones are numbered in execution order. When the order changes, move the section rather
+  than renumbering it; renumber only in a deliberate cleanup that records the old-to-new map in
+  `ARCHIVE.md`. Archived numbers never change.
+- Milestones up to 51 are archived or retired (the last cleanup, 2026-09-10, is recorded at the top
+  of `ARCHIVE.md`). Active milestones run 52 to 57, so new work starts at 58.
 
 ---
 
@@ -16,24 +20,23 @@ Completed milestones live in `ARCHIVE.md` (same directory). Agent workflow and g
 For each task:
 
 1. **Understand scope**: read the relevant modules/tests/docs.
-1. **Plan**: outline the smallest set of changes needed.
-1. **Test-Driven Development**: add/adjust tests for all planned changes. Aim to increase coverage.
+2. **Plan**: outline the smallest set of changes needed.
+3. **Test-Driven Development**: add/adjust tests for all planned changes. Aim to increase coverage.
    For executable code, confirm the exact behavior/lines you plan to touch are covered first; if
    not, add focused characterization or failing tests before editing production code.
-1. **Implement**: make changes incrementally (small diffs, one logical change at a time).
-1. **Run checks (venv only)**:
+4. **Implement**: make changes incrementally (small diffs, one logical change at a time).
+5. **Run checks (venv only)**:
    - `.venv/bin/ruff format .`
    - `.venv/bin/ruff check .`
    - `.venv/bin/pyright .`
    - `.venv/bin/ty check .`
    - `.venv/bin/python -m pytest`
    - `markdownlint .` (CI installs `markdownlint-cli`; the local binary is `markdownlint-cli2`,
-     so run `markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings"` here)
+     so run `markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#.agents/skills"` here)
    - `uv lock --check`
    - `uv sync --check --active`
-
-1. **Update docs** where behavior changes (README/AGENTS/CHANGELOG), and update TODO/ARCHIVE.
-1. **Commit** (when asked) with Conventional Commits subjects, `type(scope): summary`, per
+6. **Update docs** where behavior changes (README/AGENTS/CHANGELOG), and update TODO/ARCHIVE.
+7. **Commit** (when asked) with Conventional Commits subjects, `type(scope): summary`, per
    `AGENTS.md`.
 
 ### Always use the repo venv
@@ -44,20 +47,29 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-10, version `0.4.0`)
+### Current validated baseline (2026-09-11, version `0.5.0` plus unreleased work)
 
 - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
   `.venv/bin/pyright .` pass cleanly.
-- `.venv/bin/python -m pytest` passes (`558 passed`) with coverage `90.83%` against the enforced
+- `.venv/bin/python -m pytest` passes (`631 passed`) with coverage `91.16%` against the enforced
   `90%` floor.
 - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass.
-- `data/completed_games_ml.csv` covers `1999-2025` (`7260` rows, `498` columns) and
-  `data/predict/week_01_games_to_predict.csv` holds `16` rows for 2026 Week 1. This build dates
-  from the 2026-09-09 17:28 Week 1 refresh and fingerprints to `5b6af6aa...`.
-- The leakage audit passed on the `0.4.0` schema (`463` features, `0` findings).
-- The walk-forward benchmark table lives in `AGENTS.md`. **Its arms ran on an earlier build**
-  (dataset hash `668368d8...`), so before comparing new feature work, re-run the reference arm on
-  the build you are measuring against and keep both reports under `models/`.
+- `.agents/skills/` is a separate git clone of agent skills. It is gitignored and excluded from
+  ruff and markdownlint (`.markdownlintignore`); pyright already skips dot-directories and ty only
+  checks `nfl_predictor`, `scripts`, and `tests`.
+- `data/completed_games_ml.csv` is the 2026-09-11 00:34 rebuild: `7262` rows (`1999-2025` plus two
+  2026 Week 1 games, NE at SEA and SF at LAR), `498` columns, fingerprint `e388dc7a...`. Its `7261`
+  shared rows equal the stat-prior-blend build of 2026-09-10 (`e46f1be9...`, backed up with the
+  other CSVs in `data/backup_pre_m51/`) apart from last-ULP drift in the `sos_*` columns. The same
+  run wrote `data/strength_snapshots.csv` (`18818` rows, `ff5f4823...`).
+  `data/predict/week_01_games_to_predict.csv` holds the `14` remaining 2026 Week 1 games. The
+  pre-blend build is kept as `data/completed_games_ml.pre_m49.csv` (`5b6af6aa...`) and
+  `data/backup_pre_m49/`.
+- The leakage audit passed on the 2026-09-10 build (`463` features, `0` findings); the rebuild
+  added one game and no feature.
+- The walk-forward benchmark lives in `AGENTS.md` and was re-measured on this build
+  (`models/wf_shrink_2023_2025_on/`). Compare new feature work only against a reference arm run on
+  the same build and code version.
 
 ---
 
@@ -81,20 +93,24 @@ Agents and humans should not rely on the shell activation state.
 
 ## Roadmap Status
 
-Milestone 44 completed on 2026-06-13 and lives in `ARCHIVE.md`. On 2026-09-09 the roadmap was
-reordered around the feature-engineering workstream (see `feature_crosswalk.md`). Execution order:
+Done so far in the feature-engineering workstream (see `ARCHIVE.md`): Milestone 45 (play-by-play
+EPA families), 46 (schedule-adjusted strength), 49 (continuous early-season shrinkage), the first
+phase of 43 (current-season Bradley-Terry defaults), and 51 (power rankings on the adjusted
+composite). Execution order:
 
-1. Milestone 45 - PBP foundation + per-snap team EPA families (done 2026-09-09)
-2. Milestone 46 - Weekly schedule-adjusted team strength (done 2026-09-09)
-3. Milestone 49 - Continuous early-season shrinkage (**next**; 2026 Week 2 kicks off 2026-09-17,
-   and week 2 is the week this defect wrecks, so it moved ahead of 43 phase 2 on 2026-09-10)
-4. Milestone 43 phase 2 - Power rankings on the adjusted composite (43.1 done 2026-09-09)
-5. Milestone 50 - The total/over-under head carries almost no signal
-6. Milestone 47 - QB per-dropback EPA families for the expected starter
-7. Milestone 48 - PBP situational stats replace the TeamRankings stat scrape
-8. Milestone 39 (with 40 folded in) - Off-season configuration sweep, after the feature work lands
-9. Milestone 41 residuals - orchestration polish
-10. Milestone 42 - parked (alternative model families) until the user reopens it
+0. Task 56.4 - Early-season training calibration crash (**first, urgent**: it blocks every weekly
+   run for weeks 2-4, including the 2026 Week 2 run due between 2026-09-14 and 2026-09-17; do it
+   at the start of the Milestone 52 session)
+1. Milestone 52 - The total (over/under) head carries almost no signal (**next**; 52.1 found the
+   cause, a shared early-stopping callback, so 52.2 is a small fix plus a walk-forward)
+2. Milestone 53 - QB per-dropback EPA families for the expected starter
+3. Milestone 54 - PBP situational stats replace the TeamRankings stat scrape
+4. Milestone 55 - Off-season configuration sweep, after the feature work lands
+5. Milestone 56 - Weekly orchestration residuals
+6. Milestone 57 - Ensembles and alternative models (parked until the user reopens it)
+
+The open follow-ups below are not milestones. Pick them up when their area is next touched, or
+promote one to a milestone when it grows.
 
 Rules for every feature milestone:
 
@@ -104,81 +120,240 @@ Rules for every feature milestone:
 - Keep the invariant output schema: when a source is missing for a season, emit nulls.
 - XGBoost margin/total remains the only model family in scope.
 - The method borrowed from `nfl-sos-ratings` is its head-to-head-excluded opponent profiling
-  (`feature_crosswalk.md` section 3.1): it lands as the weekly ridge snapshot (its all-hops form)
+  (`feature_crosswalk.md` section 3.1): it landed as the weekly ridge snapshot (its all-hops form)
   plus a one-hop schedule-strength companion, and the QB milestone carries the same two lenses.
 - Keep walk-forward comparison artifacts under `models/`; numbers reported in these files must be
   auditable from disk.
 
 ---
 
-## Follow-ups inherited from Milestone 45 (completed 2026-09-09)
+## Milestone 52 - The total (over/under) head carries almost no signal
 
-The milestone itself lives in `ARCHIVE.md` with the walk-forward table, ETL timing, null-rate
-summary, and the four defects found and fixed along the way.
+Formerly Milestone 50 (found 2026-09-09). Predicted totals for the 2026 Week 1 slate all land
+between `43.9` and `44.1` while market totals for the same games range `40.5` to `47.5`. The model
+is effectively predicting the league mean for every game. Training holdout `total_mae` is `10.9974`
+against a `margin_mae` of `9.8471`.
 
-Outcome to carry forward: the family is leakage-safe, ablatable, and costs almost nothing to build
-(0.35s to aggregate 1.2M plays), but it is **not** a win on the primary selection metric. Brier and
-log loss are marginally worse with the group on; margin MAE improves in 3 of 3 seasons and
-calibration improves slightly. Raw per-snap EPA is unadjusted for opponent, which is the most likely
-reason it adds little over the existing Elo and TeamRankings predictive ratings. Milestone 46 is the
-direct test of that hypothesis: the same inputs, opponent-adjusted.
+Consequence: the `total_value_side`, `total_edge_prob`, `total_confidence_1_10` and `total_ev`
+columns in the betting workbook are computed from that flat prediction and are not actionable. The
+spread and moneyline columns are unaffected. Do not present total-based betting recommendations as
+usable until this is resolved.
 
-Open follow-ups inherited from this milestone:
+Tasks:
 
-- [x] Resolved: the recorded reference (Brier `0.2312`, log loss `0.7352`, pick accuracy `0.6833`,
-      margin MAE `9.8954`) is **not reproducible** on this machine. Re-running the default config
-      against the untouched pre-change dataset gives Brier `0.2300`, log loss `0.7501`, pick
-      accuracy `0.6833`, margin MAE `9.9705` - a larger log-loss gap than the rebuilt dataset
-      produces. `--xgb-tree-method hist` and `rushing_epa` were both ruled out by controls. The
-      milestone's changes did not regress the baseline; the old reference numbers were recorded
-      under a configuration or environment that is no longer reproducible.
-- [ ] `red_zone_tds` counts a touchdown by either team on a red-zone play, so a pick-six is credited
-      to the offense. It is computed but not published today; fix before Milestone 48 publishes it.
-- [ ] Half of `PBP_COUNT_COLUMNS` (third/fourth down, red zone, two-point, total plays) is joined,
-      aggregated and regressed but never published. Publish it in Milestone 48 or stop carrying it.
-- [ ] The play-by-play cache key has no schema version, so growing `constants.PBP_COLUMNS` will not
-      invalidate existing per-season caches. Same latent issue as `load_team_stats`.
-- [x] Resolved: the leakage perturbation test covered a regular-season week only. Playoff-branch
-      and Week-1-fallback equivalents now exist for both the play-by-play family and the
-      schedule-adjusted strength family, and each was mutation-verified by breaking the
-      corresponding cutoff and confirming the matching test fails.
-- [x] The on/off walk-forward arms were written with `--out-json` into a temporary directory and
-      are not on disk. A 2026-09-09 review re-ran both arms and reproduced the numbers exactly;
-      reports now live in `models/review_wf_2023_2025_pbp_{off,on}/`. Keep future arms under
-      `models/`.
+- [x] 52.1 Diagnose: feature importance for the total head; whether the total target is being
+      learned at all (early-stopping round, train vs holdout MAE); whether the pruning or feature
+      selection step is dropping total-relevant columns. Done 2026-09-11; findings below. No code
+      changed.
+- [ ] 52.2 Fix the shared early-stopping callback: give each estimator in
+      `_fit_margin_total_models` its own `EarlyStopping` instance (a fresh params copy per head),
+      with a regression test that the total head's round count does not depend on the margin fit
+      (the synthetic reproduction below makes a good fixture). Then run the walk-forward reference
+      and fixed arms on one build and code version, anchored (the benchmark config) and unanchored
+      (the production config), and record total MAE. Only if a healthy total head still trails
+      the market line, test a separate feature set for it.
+- [ ] 52.3 Record the walk-forward table; either fix the default or mark the total columns of the
+      betting workbook as diagnostic-only in the report and README.
+
+Findings from 52.1 (2026-09-11):
+
+- **Root cause: the total head shares the margin head's early-stopping callback.** With xgboost
+  `3.4.1`, `fit()` no longer takes `early_stopping_rounds`, so `_with_xgb_early_stopping_params`
+  puts one `xgb.callback.EarlyStopping` instance into the params dict, and
+  `_fit_margin_total_models` builds both `XGBRegressor`s from that dict. The callback keeps its
+  best score and patience counter between fits. The total fit therefore starts against the margin
+  head's best validation RMSE (about `9.5`, which a total RMSE never beats) with the patience
+  counter already spent when the margin head stopped early, and it stops after one round. When the
+  margin head runs to `n_estimators` without stopping, the total head gets at most the patience
+  left over (up to 50 rounds). `_fit_quantile_models` builds fresh params for every quantile, so the
+  quantile heads are healthy (`total_q0.5` stopped at iteration `346` in the 2026 model).
+- **Evidence on disk.** `models/week01_2026_refreshed/model.joblib` and
+  `models/week01_2026_strength/model.joblib`: margin heads of `283` and `276` trees
+  (`best_iteration` `232`, `225`), total heads of **1 tree** with no `best_iteration`, and
+  `metadata.json` records early stopping for every head except `total_model`.
+  `models/weekly_2025_week_22` has the same 1-tree total head. Runs without early stopping
+  (`models/review_*`) keep all `598` trees in both heads. Train versus holdout MAE cannot say more
+  than "the total is flat": holdout `total_mae` is `10.9974`, and feature importance for a one-tree
+  head is meaningless.
+- **Reproduction.** Calling `_fit_margin_total_models` on synthetic data with a planted total
+  signal and `early_stopping_rounds=50` gives a 1-tree total head whose predictions span
+  `43.70-44.08` (std `0.07`), the 2026 symptom. The same total head fit with its own callback keeps
+  `235` trees (std `3.85`) and cuts eval MAE from `8.60` to `8.08`.
+- **Scope.** Every caller of `_fit_margin_total_models` that passes an eval set: final training,
+  Optuna trials (whose `combined_mae` objective has been scoring a crippled total), walk-forward
+  folds, the blended model and `model_compare.py`. The margin head is fit first with a fresh
+  callback, so margin predictions, win probabilities, Brier, log loss and pick accuracy are not
+  affected; only total predictions and total MAE are (and tuning, through the objective).
+- **Why the benchmark hid it.** The walk-forward benchmark runs with `market_anchor` on, so the
+  total head predicts a residual on `total_line` and a crippled head gives roughly the market line
+  plus a constant. Over the benchmark's 816 games (fold checkpoints in
+  `models/wf_checkpoints/5ea347bc3339f5d3a9e3/`, the on arm) total MAE is `10.1000`, against
+  `10.1207` for the market line alone and `10.1378` for the p50 quantile head; the within-fold std
+  of `predicted_total - total_line` has a median of `0.51`. The production model has
+  `market_anchor` off, which is why it prints a flat 44.
+- **Not the cause.** Feature pruning or selection (the head never gets past its first round), and
+  the total target itself (the quantile heads learn it).
+
+Acceptance:
+
+- [ ] Weekly predicted totals span a range comparable to the market's, or the total outputs are
+      explicitly labelled non-actionable.
 
 ---
 
-## Milestone 46 - Weekly schedule-adjusted team strength
+## Milestone 53 - QB per-dropback EPA families for the expected starter
 
-**Completed 2026-09-09.** Moved to `ARCHIVE.md` with the walk-forward table, the ridge-penalty
-provenance, null-rate summary, sanity checks, and the five defects found and fixed along the way
-(two of them leaks found by independent review, not by the original tests).
+Formerly Milestone 47. Goal: give the model the expected starter's per-dropback production instead
+of only the nfeloqb value/Elo pair.
 
-Outcome to carry forward: **the opponent-adjustment hypothesis held on the primary metric.** With
-the strength group on, Brier improves to `0.2277` from `0.2312` with it off and `0.2320` with both
-feature groups off, and log loss to `0.7431` from `0.7495` / `0.7493`. Pick accuracy gains 2.2
-points against the both-off baseline. This is the first family in the workstream to move Brier and
-log loss in the right direction rather than trading them for margin MAE.
+Tasks:
 
-Two things did **not** improve and should not be papered over: margin MAE is slightly worse than
-the strength-off arm (`9.9006` vs `9.8698`), and reliability ECE is worse than the both-off arm
-(`0.1321` vs `0.1237`). The gain comes from probability *ranking*, not from sharper point estimates
-or better-calibrated probabilities.
+- [ ] 53.1 Identity bridge: read a copied `data/qb_meta_data.csv` (from
+      `../nfeloqb/Other Data/meta_data.csv`, read-only contract) to map `away_qb`/`home_qb` names
+      to GSIS ids; fallback name match against PBP `passer_player_name`; log the unmatched rate;
+      tests for aliases and misses.
+- [ ] 53.2 QB-game aggregation from PBP by `passer_player_id`: dropbacks, attempts, completions,
+      pass yards, TDs, INTs, sacks, sack yards, `qb_epa` sum, CPOE mean (2006+). Formulas in
+      docstrings; fixture tests.
+- [ ] 53.3 Career-to-date and season-to-date rates strictly before the game date, plus a rolling
+      dropback window for recency; new-starter fallback to a regressed league mean with a
+      `qb_history_dropbacks` column so the model can see sample size.
+- [ ] 53.4 Join for away/home plus diffs; constants; finalization; null policy documented.
+- [ ] 53.5 Leakage audit and walk-forward ablation; record results.
+- [ ] 53.6 Schedule lenses (`feature_crosswalk.md` section 3.1 applied to QBs):
+      `qb_faced_pass_def_adj`, the dropback-weighted mean of the faced defenses' pre-week ridge
+      pass-defense coefficient from Milestone 46 (the sos `QSoS` construct), and the one-hop
+      `qb_faced_pass_def_raw`, the faced defenses' EPA per dropback allowed from prior-week games
+      excluding games against the QB's team.
+- [ ] 53.7 Optional phase 2: opponent-adjusted QB EPA via a dropback-weighted ridge against faced
+      defenses (design in `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`).
 
-Two further results worth carrying, both of which cut against the milestone's own rationale:
+Acceptance:
 
-- **The early-season prior blend is a tie on Brier** (`0.2277` with it on and off). It helps only
-  log loss (`0.7431` vs `0.7492`) and pick accuracy (`0.6958` vs `0.6847`). It stays on as the
-  default on that basis, but it is the weakest-supported piece here and `--no-strength-prior-blend`
-  remains so it can be re-measured cheaply.
-- **The pass/rush by offense/defense decomposition is not where the gain lives.**
-  `adj_strength_composite_diff` ranks 6th and `adj_srs_diff` 7th of 533 features, but the raw
-  decomposition components sit at a median rank of 183. The milestone justified itself partly on
-  the decomposition giving the model matchup structure; the importance evidence does not support
-  that. Follow-up 2 below is the experiment that would settle it.
+- [ ] Unmatched-QB rate is reported and below an agreed threshold for `2006+`.
+- [ ] Walk-forward table recorded; all gates green.
 
-Open follow-ups inherited from this milestone:
+---
+
+## Milestone 54 - PBP situational stats replace the TeamRankings stat scrape
+
+Formerly Milestone 48. Goal: compute third/fourth-down, red-zone, and two-point rates (offense and
+allowed) from the Milestone 45 counts so those eight columns no longer depend on scraping and extend
+to 1999.
+
+Tasks:
+
+- [ ] 54.1 Derive the rates from PBP counts in `_compute_derived_metrics`. Fix the `red_zone_tds`
+      attribution first (see the Milestone 45 follow-ups below).
+- [ ] 54.2 Keep the existing TR column names and switch the source, behind a transitional
+      `--tr-stats-source pbp|scrape` option; the TeamRankings ratings scrape is unchanged.
+- [ ] 54.3 Sanity-compare PBP values against scraped values for `2010-2025`; walk-forward check;
+      update README data sources.
+
+Acceptance:
+
+- [ ] The eight situational columns are populated for `1999+` offline; walk-forward is not worse.
+
+---
+
+## Milestone 55 - Off-season configuration sweep + lock default settings
+
+Formerly Milestone 39, with former Milestone 40 folded in. Deferred until the feature milestones
+land, because new feature families would invalidate sweep results.
+
+Goal: run an objective, repeatable sweep of modeling configurations under the canonical evaluation
+protocol, then write the selected configuration as the default for weekly runs.
+
+Tasks:
+
+- [ ] 55.1 Define a sweep config schema (JSON or YAML) covering model kind (`margin_total`,
+      `blended_margin_total`), calibration, market mode and probability source, blend method,
+      weight and clamp grids, uncertainty, tuning, and XGBoost params including GPU preference.
+- [ ] 55.2 Implement `scripts/config_sweep.py` (or `--mode sweep` in `scripts/weekly_run.py`) that
+      runs walk-forward per config, writes `sweep_summary.csv` and `best_config.json`, supports
+      resume by dataset hash plus config hash (per-week fold checkpoints already exist), and always
+      includes a baseline row with market blending and clamping off, with deltas versus that
+      baseline.
+- [ ] 55.3 Include `PRIOR_BLEND_GAMES` (`K`, for example `2`, `4`, `8`) in the sweep; it was reused
+      from the strength blend rather than chosen (see the Milestone 49 follow-ups).
+- [ ] 55.4 Add `xgb_device=auto` (prefer `cuda`, else CPU) used identically in evaluation and final
+      training.
+- [ ] 55.5 Decide the `ScoreModel` fate: document as experimental or deprecate cleanly.
+- [ ] 55.6 Add the stability view by season and week bucket, and a "recommended defaults" section.
+
+Acceptance:
+
+- [ ] One command plus one config file produce the sweep summary and `best_config.json`, and
+      `scripts/weekly_run.py --defaults-path best_config.json` runs end to end.
+
+---
+
+## Milestone 56 - Weekly orchestration residuals
+
+Formerly Milestone 41.
+
+- [ ] 56.1 Add data-refresh pass-through (`--data-min-season` / `--data-max-season` or a generic
+      `--data-collection-args`) to `scripts/weekly_run.py`; the same pass-through carries the
+      `--stat-prior-blend*` flags, which it cannot set today.
+- [ ] 56.2 Decide and document how postseason games enter evaluation and training; when the
+      prediction week is postseason, default the power-rankings through-week to the last
+      regular-season week.
+- [ ] 56.3 Wire sweep-selected defaults once Milestone 55 lands; confirm resume behavior.
+- [ ] 56.4 **Urgent, do first.** Roll the in-season calibration window back across the season
+      boundary. Found 2026-09-11 in a weekly-run smoke test, which stopped at Stage 2 training
+      with `ValueError: Not enough weeks in season 2026 for calibration.` Cause:
+      `ml_model_core._split_train_calibration_holdout` takes in-season calibration weeks only from
+      the newest season in the pool (`base_pool[-1]`) and raises when it has fewer than
+      `calibration_weeks` (weekly default `4`, from `--wf-calibration-weeks`). So every weekly run
+      for weeks 2-4 of a season fails. The code dates from January 2026; it surfaced now because
+      the ETL rebuild added two completed 2026 Week 1 games. The Week 1 production model avoided
+      it because it came from `golden_command.py` with whole-season calibration.
+      Fix: take the most recent `calibration_weeks` completed `(season, week)` pairs across the
+      pool in time order (for Week 2: 2026 week 1 plus 2025 weeks 16-18 on the regular-season
+      frame) and exclude exactly those pairs from training. Raise only when the whole pool has
+      fewer weeks than requested. When the newest season already has enough weeks, the result
+      must be identical to today's. Whole-season calibration (`calibration_seasons`) must not
+      also claim a season the rolling window touched. The metadata `calibration_inseason` block
+      (written in `ml_model_training.py` at two places, around lines 691 and 1091) stays readable:
+      keep `season` and `weeks` for the newest season and add the full list of pairs. Tests: the
+      Week-2 case, the unchanged case, the too-few-weeks error, and training excluding the window;
+      update `tests/test_ml_model_core_helpers.py` (the test around line 226 pins today's error).
+      Workaround until then: `--train-calibration-weeks 0 --train-calibration-seasons 2`, which
+      calibrates on 2025 plus the 2026 games. `--train-calibration-seasons 1` alone calibrates on
+      the two 2026 games and must not be used; `0` and `0` is forced back to 4 weeks by a guard in
+      `scripts/weekly_run.py`.
+
+Acceptance:
+
+- [ ] One command produces the complete weekly package from scratch and re-running skips work
+      whose inputs and config did not change.
+
+---
+
+## Milestone 57 - Ensembles and alternative models (parked)
+
+Formerly Milestone 42. Parked by user direction on 2026-09-09: XGBoost margin/total remains the
+primary model and benchmark. Reopen only when the user asks. Original scope: direct win-probability
+classifier, logit-space probability ensemble, optional LightGBM/CatBoost extras, season-phase
+specialization.
+
+---
+
+## Open follow-ups from completed milestones
+
+Each group names the archived milestone it came from; the milestone's full record is in
+`ARCHIVE.md`. Resolved items have moved there.
+
+### From Milestone 45 (play-by-play EPA families)
+
+- [ ] `red_zone_tds` counts a touchdown by either team on a red-zone play, so a pick-six is credited
+      to the offense. It is computed but not published today; fix before Milestone 54 publishes it.
+- [ ] Half of `PBP_COUNT_COLUMNS` (third/fourth down, red zone, two-point, total plays) is joined,
+      aggregated and regressed but never published. Publish it in Milestone 54 or stop carrying it.
+- [ ] The play-by-play cache key has no schema version, so growing `constants.PBP_COLUMNS` will not
+      invalidate existing per-season caches. Same latent issue as `load_team_stats`.
+
+### From Milestone 46 (schedule-adjusted strength)
 
 - [ ] `strength_games_played_diff` has a gain-based importance of exactly `0.0`: the two teams in a
       game have almost always played the same number of games, so the diff is a constant zero
@@ -197,235 +372,19 @@ Open follow-ups inherited from this milestone:
       stable. This is pre-existing (`aggregate_team_stats_to_week` has the same property) but it
       does mean the dataset fingerprint in the model artifact contract changes across identical
       runs. Worth a line in the artifact contract docs.
-- [x] Resolved 2026-09-10: `uv sync --check --active` was failing because the environment still
-      had the `0.3.0` package installed after the `0.4.0` version bump. A plain `uv sync` cleared
-      it. Re-sync after every version bump.
 
----
+### From Milestone 49 (continuous early-season shrinkage)
 
-## Milestone 49 - Continuous early-season shrinkage (next; found 2026-09-09)
-
-Goal: season-to-date stat features in weeks 2-4 are mostly the regressed prior season and hand over
-to the in-season sample as it accumulates, instead of switching from 100% prior in week 1 to 0%
-prior in week 2.
-
-Evidence (`models/wf_strength_2023_2025_from_week1/`, 48 games per week over `2023-2025`):
-
-| window | Brier | log loss | pick acc | margin MAE |
-| --- | --- | --- | --- | --- |
-| week 1 only | `0.2134` | `0.6151` | `0.6042` | `9.3640` |
-| week 2 only | `0.2445` | `0.6846` | `0.5208` | `8.7838` |
-| weeks 3-18 | `0.2277` | `0.7431` | `0.6958` | `9.9006` |
-
-Week 1 runs entirely on the previous season regressed toward the league mean and beats the
-mid-season benchmark on both probability metrics. Week 2 runs on **one game with no shrinkage** and
-drops to `0.5208` pick accuracy.
-
-Root cause, verified in code and on the 2026-09-10 dataset: `aggregate_team_stats_to_week` takes a
-plain mean over prior in-season games, and `process_week` builds the regressed prior-season frame
-only for `teams_needing_fallback`, the teams with *zero* in-season games. So `away_games_played` is
-`17` in week 1 and `1` in week 2, and 2024 `away_success_rate` has std `0.0807` (range
-`0.250-0.569`) at week 2 against `0.0359` (`0.375-0.490`) at week 16. This affects every
-season-to-date family that flows through `team_stats_df` (nflreadpy stats and the play-by-play
-counts alike). The strength family is exempt: its own blend already sits at 80% prior in week 2.
-
-Design (decided 2026-09-10; details in `next_agent_session_prompt.md`): blend the aggregated
-per-game means as `w * in_season + (1 - w) * regressed_prior` with
-`w = games_played / (games_played + K)`, `K = PRIOR_BLEND_GAMES = 4.0` shared with the strength
-snapshot and promoted to `constants.py`, then `recompute_derived_metrics` so rates stay ratios of
-blended sums. Zero games gives `w = 0`, so week-1 rows are unchanged by construction.
-`games_played` keeps its current semantics in this cut.
-
-Tasks:
-
-- [ ] 49.1 Characterization tests first: week-1 rows bit-identical before and after; a one-game
-      team's week-2 stat equals `0.2 * in_season + 0.8 * prior` at `K = 4`; rates are recomputed
-      from blended sums, not blended directly; the first season in the run is untouched;
-      `--no-stat-prior-blend` reproduces today's output exactly.
-- [ ] 49.2 Implement the blend in `process_week`, building the regressed prior once per season
-      (a `prior_season_stats` argument alongside `prior_strength_snapshot`, computed inside when
-      `None`).
-- [ ] 49.3 CLI: `--stat-prior-blend-games` (default `4`) and `--no-stat-prior-blend` on
-      `nfl_predictor.data_collection`, mirroring `--strength-prior-blend`.
-- [ ] 49.4 Back up `data/*.csv`, rebuild, confirm the 2024 week-2 dispersion collapses toward the
-      week-16 spread and week-1 rows match the backup; run the leakage audit.
-- [ ] 49.5 Walk-forward from week 1 (`--wf-start-week 1`, `--eval-last-n-seasons 3`), off arm on
-      the pre-change build and on arm on the new build, both under `models/wf_shrink_2023_2025_*`.
-      Report weeks 1, 2, and 3-18 separately; the aggregate hides a 2-of-18-weeks change.
-- [ ] 49.6 README, AGENTS baseline note, CHANGELOG `[Unreleased]`, move to `ARCHIVE.md`.
-
-Acceptance:
-
-- [ ] Week 1 metrics identical on both arms; week 2 Brier and log loss move materially toward the
-      weeks 3-18 numbers; weeks 3-18 do not regress. If the result is a tie or a loss, the switch
-      ships default-off and the table is recorded anyway.
-- [ ] Follow-up recorded: whether `games_played` should publish the effective sample size instead
-      of the raw in-season count.
-
----
-
-## Milestone 50 - The total (over/under) head carries almost no signal (found 2026-09-09)
-
-Predicted totals for the 2026 Week 1 slate all land between `43.9` and `44.1` while market totals
-for the same games range `40.5` to `47.5`. The model is effectively predicting the league mean for
-every game. Training holdout `total_mae` is `10.9974` against a `margin_mae` of `9.8471`.
-
-Consequence: the `total_value_side`, `total_edge_prob`, `total_confidence_1_10` and `total_ev`
-columns in the betting workbook are computed from that flat prediction and are not actionable. The
-spread and moneyline columns are unaffected. Do not present total-based betting recommendations as
-usable until this is resolved.
-
-Tasks:
-
-- [ ] 50.1 Diagnose: feature importance for the total head; whether the total target is being
-      learned at all (early-stopping round, train vs holdout MAE); whether the pruning or feature
-      selection step is dropping total-relevant columns.
-- [ ] 50.2 Test market-total anchoring (residual training against `market_total_line`) in
-      walk-forward, and whether the total head deserves a different feature set from the margin head.
-- [ ] 50.3 Record the walk-forward table; either fix the default or mark the total columns of the
-      betting workbook as diagnostic-only in the report and README.
-
-Acceptance:
-
-- [ ] Weekly predicted totals span a range comparable to the market's, or the total outputs are
-      explicitly labelled non-actionable.
-
----
-
-## Milestone 43 - Power rankings measure current-season strength (phase 2 pending)
-
-Goal: a Week `N` ranking reflects how strong teams are going into week `N`. Verified current
-behavior: a Bradley-Terry fit over every season since 1999 with equal weights, fixed `0.97 / 0.03`
-targets, and future games filled with model probabilities.
-
-Tasks:
-
-- [x] 43.1 Landed 2026-09-09 in `scripts/power_rankings.py` and
-      `nfl_predictor/reporting/power_rankings.py`: `--ratings-window-seasons` (default `2`),
-      `--ratings-prior-season-weight` (default `0.25`) via sample weights in
-      `fit_bradley_terry_ratings`, margin-based targets by default (`--ratings-target`), future
-      model-probability rows excluded from the strength fit (`--ratings-include-future`), and
-      `--legacy-franchise-fit` reproducing the old output exactly (pinned by a test).
-      Evidence it mattered: for 2024 through week 18 the old fit ranked a 4-13 New England first;
-      the new default ranks DET, BAL, BUF, GB, PHI, matching both the season's results and the
-      schedule-adjusted snapshot.
-      **Not done for `scripts/weekly_run.py`:** it calls `_build_games_for_ratings` positionally
-      without the new arguments, so it silently inherits the new defaults but exposes no flags to
-      override them and has no `--legacy-franchise-fit`. Wire them through when convenient.
-- [ ] 43.2 Default the ranking to the ETL adjusted composite for
-      `(season, through_week + 1)` rows, map to the existing 1-10 and 0-10 scales, and publish the
-      components next to the rank. Keep Bradley-Terry available as `--method bradley_terry`.
-- [ ] 43.3 Leave projected standings as record plus model win probabilities. Label or remove
-      `golden_command._build_pregame_power_rankings` so one ranking artifact is canonical.
-- [ ] 43.4 Tests: recency weighting shifts ratings toward recent results; window logic excludes
-      older seasons; a synthetic breakout team ranks first late in the season.
-- [ ] 43.5 README and `--help` explain "current-season" versus "franchise" rankings (the 43.1
-      flags are documented in README and `CHANGELOG.md` as of 2026-09-10; extend, do not redo).
-
-Acceptance:
-
-- [ ] Default weekly-run rankings for a late-season week align with current-season results and
-      recent form; the franchise view remains reachable by explicit flag.
-
----
-
-## Milestone 47 - QB per-dropback EPA families for the expected starter
-
-Goal: give the model the expected starter's per-dropback production instead of only the nfeloqb
-value/Elo pair.
-
-Tasks:
-
-- [ ] 47.1 Identity bridge: read a copied `data/qb_meta_data.csv` (from
-      `../nfeloqb/Other Data/meta_data.csv`, read-only contract) to map `away_qb`/`home_qb` names
-      to GSIS ids; fallback name match against PBP `passer_player_name`; log the unmatched rate;
-      tests for aliases and misses.
-- [ ] 47.2 QB-game aggregation from PBP by `passer_player_id`: dropbacks, attempts, completions,
-      pass yards, TDs, INTs, sacks, sack yards, `qb_epa` sum, CPOE mean (2006+). Formulas in
-      docstrings; fixture tests.
-- [ ] 47.3 Career-to-date and season-to-date rates strictly before the game date, plus a rolling
-      dropback window for recency; new-starter fallback to a regressed league mean with a
-      `qb_history_dropbacks` column so the model can see sample size.
-- [ ] 47.4 Join for away/home plus diffs; constants; finalization; null policy documented.
-- [ ] 47.5 Leakage audit and walk-forward ablation; record results.
-- [ ] 47.6 Schedule lenses (`feature_crosswalk.md` section 3.1 applied to QBs):
-      `qb_faced_pass_def_adj`, the dropback-weighted mean of the faced defenses' pre-week ridge
-      pass-defense coefficient from Milestone 46 (the sos `QSoS` construct), and the one-hop
-      `qb_faced_pass_def_raw`, the faced defenses' EPA per dropback allowed from prior-week games
-      excluding games against the QB's team.
-- [ ] 47.7 Optional phase 2: opponent-adjusted QB EPA via a dropback-weighted ridge against faced
-      defenses (design in `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`).
-
-Acceptance:
-
-- [ ] Unmatched-QB rate is reported and below an agreed threshold for `2006+`.
-- [ ] Walk-forward table recorded; all gates green.
-
----
-
-## Milestone 48 - PBP situational stats replace the TeamRankings stat scrape
-
-Goal: compute third/fourth-down, red-zone, and two-point rates (offense and allowed) from the
-Milestone 45 counts so those eight columns no longer depend on scraping and extend to 1999.
-
-Tasks:
-
-- [ ] 48.1 Derive the rates from PBP counts in `_compute_derived_metrics`.
-- [ ] 48.2 Keep the existing TR column names and switch the source, behind a transitional
-      `--tr-stats-source pbp|scrape` option; the TeamRankings ratings scrape is unchanged.
-- [ ] 48.3 Sanity-compare PBP values against scraped values for `2010-2025`; walk-forward check;
-      update README data sources.
-
-Acceptance:
-
-- [ ] The eight situational columns are populated for `1999+` offline; walk-forward is not worse.
-
----
-
-## Milestone 39 - Off-season configuration sweep + lock default settings (deferred until 45-47 land)
-
-Goal: run an objective, repeatable sweep of modeling configurations under the canonical evaluation
-protocol, then write the selected configuration as the default for weekly runs. Deferred because
-new feature families would invalidate sweep results.
-
-Tasks:
-
-- [ ] Define a sweep config schema (JSON or YAML) covering model kind (`margin_total`,
-      `blended_margin_total`), calibration, market mode and probability source, blend method,
-      weight and clamp grids, uncertainty, tuning, and XGBoost params including GPU preference.
-- [ ] Implement `scripts/config_sweep.py` (or `--mode sweep` in `scripts/weekly_run.py`) that runs
-      walk-forward per config, writes `sweep_summary.csv` and `best_config.json`, supports resume
-      by dataset hash plus config hash, and always includes a baseline row with market blending
-      and clamping off with deltas versus that baseline (former Milestone 40).
-- [ ] Add `xgb_device=auto` (prefer `cuda`, else CPU) used identically in evaluation and final
-      training.
-- [ ] Decide the `ScoreModel` fate: document as experimental or deprecate cleanly.
-- [ ] Add the stability view by season and week bucket, and a "recommended defaults" section.
-
-Acceptance:
-
-- [ ] One command plus one config file produce the sweep summary and `best_config.json`, and
-      `scripts/weekly_run.py --defaults-path best_config.json` runs end to end.
-
----
-
-## Milestone 41 - Weekly orchestration residuals
-
-- [ ] Add data-refresh pass-through (`--data-min-season` / `--data-max-season` or a generic
-      `--data-collection-args`) to `scripts/weekly_run.py`.
-- [ ] Decide and document how postseason games enter evaluation and training; when the prediction
-      week is postseason, default the power-rankings through-week to the last regular-season week.
-- [ ] Wire sweep-selected defaults once Milestone 39 lands; confirm resume behavior.
-
-Acceptance:
-
-- [ ] One command produces the complete weekly package from scratch and re-running skips work
-      whose inputs and config did not change.
-
----
-
-## Milestone 42 - Ensembles and alternative models (parked)
-
-Parked by user direction on 2026-09-09: XGBoost margin/total remains the primary model and
-benchmark. Reopen only when the user asks. Original scope: direct win-probability classifier,
-logit-space probability ensemble, optional LightGBM/CatBoost extras, season-phase specialization.
+- [ ] `games_played` publishes `17` for a week-1 fallback row (the prior's game count) and `1` for
+      a blended week-2 row whose values are 80% prior, so it tells the model the opposite of how
+      much evidence stands behind the numbers. Candidates: an effective-games column such as
+      `games + K * (1 - WEEK1_REGRESSION_FACTOR)`, or a separate `stat_prior_weight`. Needs its own
+      ETL rebuild and from-week-1 walk-forward. The strongest candidate for the next feature slot.
+- [ ] Weeks 3-18 margin MAE got worse with the blend (`9.8952` to `9.9578`) and season Brier is
+      slightly worse in 2024 and 2025. The `K` check is task 55.3.
+- [ ] Choose the OpenMP wait policy automatically in the walk-forward entry points (default when
+      idle, `PASSIVE` under load) instead of relying on the operator; see `AGENTS.md`. It changes
+      scheduling only, never results.
+- [ ] `models/wf_checkpoints/` grows by a few hundred KB per distinct run and is never pruned. Any
+      edit under `nfl_predictor/ml/` changes the fingerprint by design, so stale directories pile
+      up. Add a cleanup note or command once it matters.

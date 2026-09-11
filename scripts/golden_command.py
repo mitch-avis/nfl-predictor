@@ -65,14 +65,17 @@ def _add_ratings(df: pd.DataFrame, target_columns: tuple[str, str]) -> pd.DataFr
 
 
 def _build_pregame_power_rankings(df: pd.DataFrame) -> pd.DataFrame:
-    """Build per-week pregame power rankings from rating columns.
+    """Build per-week team rankings from the model's per-game rating columns.
 
     The produced rating for a given (season, week) is based on:
     - pregame ratings for games at/after that week
     - postgame ratings for games strictly before that week
 
-    This is intentionally simple and deterministic; it is a display artifact and does not
-    affect model training or win probabilities.
+    This is a quick view of what one trained model implies, written as
+    `model_rating_rankings.csv`. It is not the repository's power ranking: that artifact
+    comes from `scripts/power_rankings.py` (and `scripts/weekly_run.py`), which ranks on
+    the schedule-adjusted composite. It is deterministic and does not affect model
+    training or win probabilities.
     """
     if "season" not in df.columns or "week" not in df.columns:
         return pd.DataFrame()
@@ -228,6 +231,21 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--wf-resume",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Restore walk-forward weeks already finished by an identical earlier run instead "
+            "of training them again. Use --no-wf-resume to retrain every week."
+        ),
+    )
+    parser.add_argument(
+        "--wf-checkpoint-dir",
+        type=Path,
+        default=walk_forward.DEFAULT_CHECKPOINT_DIR,
+        help="Root for per-week walk-forward checkpoints (default: models/wf_checkpoints).",
+    )
+    parser.add_argument(
         "--wf-xgb-tree-method",
         type=str,
         default=None,
@@ -362,7 +380,11 @@ def _parse_args() -> argparse.Namespace:
         "--write-power-rankings",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Write power_rankings.csv for the predicted week into the run directory.",
+        help=(
+            "Write model_rating_rankings.csv (teams ranked by this model's per-game ratings) "
+            "for the predicted week into the run directory. The canonical power rankings "
+            "come from scripts/power_rankings.py."
+        ),
     )
     parser.add_argument(
         "--train-holdout-seasons",
@@ -503,13 +525,19 @@ def main() -> int:
             market_prob_blend_method=args.market_prob_blend_method,
             xgb_params_overrides=(wf_overrides or None),
         )
-        wf_results = walk_forward.run_walk_forward_backtest(wf_df, wf_config)
+        wf_results = walk_forward.run_walk_forward_backtest(
+            wf_df,
+            wf_config,
+            checkpoint_dir=args.wf_checkpoint_dir,
+            resume=bool(args.wf_resume),
+        )
 
         wf_config_payload = wf_config.to_dict()
         wf_config_payload.update({"run_id": run_id, "data_path": str(args.data_path)})
         wf_config_payload.update(wf_results.get("resolved_settings", {}))
         wf_config_payload["resolved_eval_seasons"] = wf_results.get("resolved_eval_seasons")
         wf_config_payload["feature_list"] = wf_results.get("feature_list")
+        wf_config_payload["checkpoint"] = wf_results.get("checkpoint")
         if "excluded_incomplete_seasons" in wf_results:
             wf_config_payload["excluded_incomplete_seasons"] = wf_results[
                 "excluded_incomplete_seasons"
@@ -640,7 +668,7 @@ def main() -> int:
                     args.predict_path,
                 )
                 rankings = pd.DataFrame()
-            out_rankings = run_dir / "power_rankings.csv"
+            out_rankings = run_dir / "model_rating_rankings.csv"
             rankings.to_csv(out_rankings, index=False)
         except (OSError, ValueError, KeyError, ParserError) as exc:
             log.warning("Power rankings generation failed: %s", exc)

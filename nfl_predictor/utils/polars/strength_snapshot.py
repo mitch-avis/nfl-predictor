@@ -84,16 +84,6 @@ from nfl_predictor.utils.polars.adjusted_strength import solve_srs, solve_team_r
 # standardized within each snapshot and so is immune to this.
 STRENGTH_RIDGE_LAMBDA = 10.0
 
-# Games at which the in-season solve and the carried-over prior are weighted equally.
-#
-# The in-season weight is `games / (games + PRIOR_BLEND_GAMES)`, so with K = 4 a team
-# reaches parity after four games (about week 5), three-quarters in-season after
-# twelve, and the prior is never fully discarded. Four games is roughly the point at
-# which a per-snap EPA solve stops being dominated by one blowout, and it matches the
-# quarter-season scale the rest of this repository already uses for early-season
-# fallbacks.
-PRIOR_BLEND_GAMES = 4.0
-
 # Default weights for the display composite, over within-snapshot standardized
 # components. Source: the published team composite of the read-only `nfl-sos-ratings`
 # project, whose weights are fit to predict the following season's adjusted
@@ -326,7 +316,8 @@ def _blend_prior(
         ],
     ).unique(subset=[_TEAM], keep="first")
 
-    weight = pl.col("strength_games_played") / (pl.col("strength_games_played") + PRIOR_BLEND_GAMES)
+    games = pl.col("strength_games_played")
+    weight = games / (games + constants.PRIOR_BLEND_GAMES)
     return solved.join(prior, on=_TEAM, how="left").with_columns(
         *[
             pl.when(pl.col(column).is_null())

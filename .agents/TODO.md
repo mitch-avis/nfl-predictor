@@ -10,8 +10,8 @@ Completed milestones live in `ARCHIVE.md` (same directory). Agent workflow and g
 - Active milestones are numbered in execution order. When the order changes, move the section rather
   than renumbering it; renumber only in a deliberate cleanup that records the old-to-new map in
   `ARCHIVE.md`. Archived numbers never change.
-- Milestones up to 50 are archived or retired (the last cleanup, 2026-09-10, is recorded at the top
-  of `ARCHIVE.md`). Active milestones run 51 to 57, so new work starts at 58.
+- Milestones up to 51 are archived or retired (the last cleanup, 2026-09-10, is recorded at the top
+  of `ARCHIVE.md`). Active milestones run 52 to 57, so new work starts at 58.
 
 ---
 
@@ -47,22 +47,26 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-10, version `0.5.0`)
+### Current validated baseline (2026-09-11, version `0.5.0` plus unreleased work)
 
 - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
   `.venv/bin/pyright .` pass cleanly.
-- `.venv/bin/python -m pytest` passes (`590 passed`) with coverage `91.04%` against the enforced
+- `.venv/bin/python -m pytest` passes (`631 passed`) with coverage `91.16%` against the enforced
   `90%` floor.
 - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass.
 - `.agents/skills/` is a separate git clone of agent skills. It is gitignored and excluded from
   ruff and markdownlint (`.markdownlintignore`); pyright already skips dot-directories and ty only
   checks `nfl_predictor`, `scripts`, and `tests`.
-- `data/completed_games_ml.csv` is the stat-prior-blend build (2026-09-10 11:17): `7261` rows
-  (`1999-2025` plus the 2026 opener, NE at SEA), `498` columns, fingerprint `e46f1be9...`.
-  `data/predict/week_01_games_to_predict.csv` holds the `15` remaining 2026 Week 1 games. The
-  pre-change build is kept as `data/completed_games_ml.pre_m49.csv` (`5b6af6aa...`) and
+- `data/completed_games_ml.csv` is the 2026-09-11 00:34 rebuild: `7262` rows (`1999-2025` plus two
+  2026 Week 1 games, NE at SEA and SF at LAR), `498` columns, fingerprint `e388dc7a...`. Its `7261`
+  shared rows equal the stat-prior-blend build of 2026-09-10 (`e46f1be9...`, backed up with the
+  other CSVs in `data/backup_pre_m51/`) apart from last-ULP drift in the `sos_*` columns. The same
+  run wrote `data/strength_snapshots.csv` (`18818` rows, `ff5f4823...`).
+  `data/predict/week_01_games_to_predict.csv` holds the `14` remaining 2026 Week 1 games. The
+  pre-blend build is kept as `data/completed_games_ml.pre_m49.csv` (`5b6af6aa...`) and
   `data/backup_pre_m49/`.
-- The leakage audit passed on this build (`463` features, `0` findings).
+- The leakage audit passed on the 2026-09-10 build (`463` features, `0` findings); the rebuild
+  added one game and no feature.
 - The walk-forward benchmark lives in `AGENTS.md` and was re-measured on this build
   (`models/wf_shrink_2023_2025_on/`). Compare new feature work only against a reference arm run on
   the same build and code version.
@@ -90,17 +94,17 @@ Agents and humans should not rely on the shell activation state.
 ## Roadmap Status
 
 Done so far in the feature-engineering workstream (see `ARCHIVE.md`): Milestone 45 (play-by-play
-EPA families), 46 (schedule-adjusted strength), 49 (continuous early-season shrinkage), and the
-first phase of 43 (current-season Bradley-Terry defaults). Execution order:
+EPA families), 46 (schedule-adjusted strength), 49 (continuous early-season shrinkage), the first
+phase of 43 (current-season Bradley-Terry defaults), and 51 (power rankings on the adjusted
+composite). Execution order:
 
-1. Milestone 51 - Power rankings on the adjusted composite (**next**; 51.1 has a design fork the
-   user settles first)
-2. Milestone 52 - The total (over/under) head carries almost no signal
-3. Milestone 53 - QB per-dropback EPA families for the expected starter
-4. Milestone 54 - PBP situational stats replace the TeamRankings stat scrape
-5. Milestone 55 - Off-season configuration sweep, after the feature work lands
-6. Milestone 56 - Weekly orchestration residuals
-7. Milestone 57 - Ensembles and alternative models (parked until the user reopens it)
+1. Milestone 52 - The total (over/under) head carries almost no signal (**next**; 52.1 found the
+   cause, a shared early-stopping callback, so 52.2 is a small fix plus a walk-forward)
+2. Milestone 53 - QB per-dropback EPA families for the expected starter
+3. Milestone 54 - PBP situational stats replace the TeamRankings stat scrape
+4. Milestone 55 - Off-season configuration sweep, after the feature work lands
+5. Milestone 56 - Weekly orchestration residuals
+6. Milestone 57 - Ensembles and alternative models (parked until the user reopens it)
 
 The open follow-ups below are not milestones. Pick them up when their area is next touched, or
 promote one to a milestone when it grows.
@@ -120,60 +124,6 @@ Rules for every feature milestone:
 
 ---
 
-## Milestone 51 - Power rankings on the adjusted composite
-
-Formerly phase 2 of Milestone 43. Phase 1 (current-season Bradley-Terry defaults in
-`scripts/power_rankings.py`) is archived.
-
-Goal: a Week `N` ranking reflects how strong teams are going into week `N`, read from the ETL's
-schedule-adjusted composite instead of a separate Bradley-Terry fit.
-
-Tasks:
-
-- [ ] 51.1 Default the ranking to the adjusted composite for `(season, through_week + 1)`, map it
-      to the existing 1-10 and 0-10 scales with a documented transform (the composite is a
-      within-snapshot z-score, not a win probability), and publish the components next to the
-      rank. Keep Bradley-Terry available as `--method bradley_terry`.
-      **Design fork (found 2026-09-10; the user decides before coding):** the composite reaches the
-      ranking script today only through game rows, and a team on bye in week `through_week + 1` has
-      no game row that week. Its next row is solved from games that include week
-      `through_week + 1`, which leaks later results into a historical rerun (harmless live, where
-      that week is unplayed). Options:
-      (a) use the team's latest row at or before `through_week + 1`: leak-free, no new data path,
-      but one game stale for bye teams;
-      (b) solve the snapshot inside the script with `strength_snapshot.build_strength_snapshot`:
-      exact, but the solver needs the per-team-game frame that only `collect_all_data` assembles
-      (nflreadpy team stats, play-by-play aggregation, scoring, opponent columns), so that chain
-      must be factored out of the ETL and called from a reporting script, which then needs the
-      network for the current season and can disagree with the build the model predicted from;
-      (c) have the ETL write the per-team weekly snapshot it already computes (`process_week`
-      solves every team on the season's schedule, bye teams included, then keeps only the teams
-      with a game) to a new file such as `data/strength_snapshots.csv`: exact, offline and cheap to
-      read, and consistent with the model's features by construction, at the cost of one ETL
-      rebuild (about 10 minutes, no walk-forward, since training rows do not change) and a new
-      artifact to document. Recommended: (c).
-- [ ] 51.2 Leave projected standings as record plus model win probabilities. Label or remove
-      `golden_command._build_pregame_power_rankings` so one ranking artifact is canonical.
-- [ ] 51.3 Tests: the composite ranking ranks an obviously strongest synthetic team first; a bye
-      team is handled by the chosen option and never reads a later week; the scale mappings are
-      monotone and bounded; `--method bradley_terry` reproduces today's default output; a synthetic
-      breakout team ranks first late in the season.
-- [ ] 51.4 Wire the ranking flags through `scripts/weekly_run.py`, which today calls
-      `_build_games_for_ratings` without them (`--ratings-window-seasons`,
-      `--ratings-prior-season-weight`, `--ratings-target`, `--ratings-include-future`,
-      `--legacy-franchise-fit`, and the new `--method`).
-- [ ] 51.5 README and `--help` explain "current-season" versus "franchise" rankings (the phase-1
-      flags are already documented in README and `CHANGELOG.md`; extend, do not redo).
-
-Acceptance:
-
-- [ ] Default weekly-run rankings for a late-season week align with current-season results and
-      recent form; the franchise view remains reachable by explicit flag.
-- [ ] Sanity anchor, not a test oracle: the 2024 pre-week-18 top five is BAL, DET, PHI, BUF, GB
-      on the composite and DET, BAL, BUF, GB, PHI on the current Bradley-Terry default.
-
----
-
 ## Milestone 52 - The total (over/under) head carries almost no signal
 
 Formerly Milestone 50 (found 2026-09-09). Predicted totals for the 2026 Week 1 slate all land
@@ -188,13 +138,58 @@ usable until this is resolved.
 
 Tasks:
 
-- [ ] 52.1 Diagnose: feature importance for the total head; whether the total target is being
+- [x] 52.1 Diagnose: feature importance for the total head; whether the total target is being
       learned at all (early-stopping round, train vs holdout MAE); whether the pruning or feature
-      selection step is dropping total-relevant columns.
-- [ ] 52.2 Test market-total anchoring (residual training against `market_total_line`) in
-      walk-forward, and whether the total head deserves a different feature set from the margin head.
+      selection step is dropping total-relevant columns. Done 2026-09-11; findings below. No code
+      changed.
+- [ ] 52.2 Fix the shared early-stopping callback: give each estimator in
+      `_fit_margin_total_models` its own `EarlyStopping` instance (a fresh params copy per head),
+      with a regression test that the total head's round count does not depend on the margin fit
+      (the synthetic reproduction below makes a good fixture). Then run the walk-forward reference
+      and fixed arms on one build and code version, anchored (the benchmark config) and unanchored
+      (the production config), and record total MAE. Only if a healthy total head still trails
+      the market line, test a separate feature set for it.
 - [ ] 52.3 Record the walk-forward table; either fix the default or mark the total columns of the
       betting workbook as diagnostic-only in the report and README.
+
+Findings from 52.1 (2026-09-11):
+
+- **Root cause: the total head shares the margin head's early-stopping callback.** With xgboost
+  `3.4.1`, `fit()` no longer takes `early_stopping_rounds`, so `_with_xgb_early_stopping_params`
+  puts one `xgb.callback.EarlyStopping` instance into the params dict, and
+  `_fit_margin_total_models` builds both `XGBRegressor`s from that dict. The callback keeps its
+  best score and patience counter between fits. The total fit therefore starts against the margin
+  head's best validation RMSE (about `9.5`, which a total RMSE never beats) with the patience
+  counter already spent when the margin head stopped early, and it stops after one round. When the
+  margin head runs to `n_estimators` without stopping, the total head gets at most the patience
+  left over (up to 50 rounds). `_fit_quantile_models` builds fresh params for every quantile, so the
+  quantile heads are healthy (`total_q0.5` stopped at iteration `346` in the 2026 model).
+- **Evidence on disk.** `models/week01_2026_refreshed/model.joblib` and
+  `models/week01_2026_strength/model.joblib`: margin heads of `283` and `276` trees
+  (`best_iteration` `232`, `225`), total heads of **1 tree** with no `best_iteration`, and
+  `metadata.json` records early stopping for every head except `total_model`.
+  `models/weekly_2025_week_22` has the same 1-tree total head. Runs without early stopping
+  (`models/review_*`) keep all `598` trees in both heads. Train versus holdout MAE cannot say more
+  than "the total is flat": holdout `total_mae` is `10.9974`, and feature importance for a one-tree
+  head is meaningless.
+- **Reproduction.** Calling `_fit_margin_total_models` on synthetic data with a planted total
+  signal and `early_stopping_rounds=50` gives a 1-tree total head whose predictions span
+  `43.70-44.08` (std `0.07`), the 2026 symptom. The same total head fit with its own callback keeps
+  `235` trees (std `3.85`) and cuts eval MAE from `8.60` to `8.08`.
+- **Scope.** Every caller of `_fit_margin_total_models` that passes an eval set: final training,
+  Optuna trials (whose `combined_mae` objective has been scoring a crippled total), walk-forward
+  folds, the blended model and `model_compare.py`. The margin head is fit first with a fresh
+  callback, so margin predictions, win probabilities, Brier, log loss and pick accuracy are not
+  affected; only total predictions and total MAE are (and tuning, through the objective).
+- **Why the benchmark hid it.** The walk-forward benchmark runs with `market_anchor` on, so the
+  total head predicts a residual on `total_line` and a crippled head gives roughly the market line
+  plus a constant. Over the benchmark's 816 games (fold checkpoints in
+  `models/wf_checkpoints/5ea347bc3339f5d3a9e3/`, the on arm) total MAE is `10.1000`, against
+  `10.1207` for the market line alone and `10.1378` for the p50 quantile head; the within-fold std
+  of `predicted_total - total_line` has a median of `0.51`. The production model has
+  `market_anchor` off, which is why it prints a flat 44.
+- **Not the cause.** Feature pruning or selection (the head never gets past its first round), and
+  the total target itself (the quantile heads learn it).
 
 Acceptance:
 

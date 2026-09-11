@@ -147,6 +147,11 @@ Typical outputs:
 - `data/all_data.csv` and `data/all_data_ml.csv`
 - `data/completed_games.csv` and `data/completed_games_ml.csv`
 - `data/predict/week_XX_games_to_predict.csv`
+- `data/strength_snapshots.csv`: pre-week schedule-adjusted strength per team, one row for every
+  team on each season's schedule and every processed week (teams on a bye included, plus the week
+  after the regular season), keyed by `season`, `week` and `team_abbr`. The values equal the
+  `away_`/`home_` strength columns on that week's game rows, plus the league-wide home-field term
+  `adj_hfa`. Power rankings read it.
 
 Note: the `data/` directory is gitignored by default; generate it via the data collection step
 above. Note: `*_ml.csv` files include model-ready engineered features.
@@ -466,12 +471,29 @@ Notes:
   - `power_rankings_season_XXXX_week_YY.csv`
   - `projected_standings_season_XXXX_week_YY.csv`
   - `projected_division_standings_season_XXXX_week_YY.csv`
-- Power rankings measure **current-season** strength by default: the Bradley-Terry fit sees the
-  current and previous season only (`--ratings-window-seasons 2`), weights prior-season games at
-  `0.25` (`--ratings-prior-season-weight`), scores completed games by margin
-  (`--ratings-target margin`), and keeps the model's forecasts for future games out of the strength
-  fit (`--ratings-include-future` is off). Future games still drive the projected standings.
-  `--legacy-franchise-fit` restores the older all-seasons, equal-weight "franchise" ranking.
+- Power rankings measure **current-season** strength by default (`--method composite`): how strong
+  each team is going into the next week. Teams are ranked on the ETL's schedule-adjusted strength
+  composite for the week after `--through-week`, read from `data/strength_snapshots.csv`. That
+  snapshot is solved only from games before the week it describes and has a row for every team on
+  the schedule, so a team on a bye is ranked exactly and no later result reaches a historical
+  rerun. The composite (a weighted mean of within-week z-scores) is converted to points with the
+  week's own SRS slope, then to a win probability against an average team through the model's
+  margin curve, and placed on the 1-10 and 0-10 scales. Each row also carries the composite,
+  `points_vs_average`, the components (`adj_off_*`, `adj_def_*`, `st_rating`, `adj_srs`) and
+  `strength_games_played`. A higher `adj_def_*` is a better defense.
+- `--method bradley_terry` ranks on a Bradley-Terry fit to game results instead: the current and
+  previous season only (`--ratings-window-seasons 2`), prior-season games weighted `0.25`
+  (`--ratings-prior-season-weight`), completed games scored by margin (`--ratings-target margin`),
+  and the model's forecasts for future games kept out of the fit (`--ratings-include-future` is
+  off). `--legacy-franchise-fit` restores the older all-seasons, equal-weight **franchise** ranking,
+  which describes a club's history more than its current team, and implies this method.
+- Projected standings are the same under both methods: current record plus the model's win
+  probabilities for the remaining games.
+- `scripts/weekly_run.py` accepts the same options (`--power-rankings-method`,
+  `--power-rankings-strength-snapshots`, `--ratings-*`, `--legacy-franchise-fit`) and writes the
+  same files. It skips the rankings with a warning when the snapshot for the requested week is
+  missing. `scripts/golden_command.py` writes a separate `model_rating_rankings.csv` from one
+  model's per-game ratings; it is a diagnostic, not the power ranking.
 
 Model selection hierarchy (default):
 

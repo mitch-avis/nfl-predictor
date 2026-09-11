@@ -44,9 +44,10 @@ this review started from.
 
 ## 2. Power rankings: verified behavior and verdict
 
-Status 2026-09-10: item 1 of section 6 landed on 2026-09-09 (Milestone 43 phase 1), so the
-behavior described below is now reachable only through `--legacy-franchise-fit`. Items 2-4 are
-pending as Milestone 51 in `TODO.md`.
+Status 2026-09-11: item 1 of section 6 landed on 2026-09-09 (Milestone 43 phase 1) and items 2-4
+landed on 2026-09-11 (Milestone 51, see `ARCHIVE.md`): the default ranking now reads the ETL's
+adjusted composite from `data/strength_snapshots.csv`. The behavior described below is reachable
+only through `--legacy-franchise-fit`.
 
 As found on 2026-09-09, `scripts/power_rankings.py::_build_games_for_ratings` fit
 `fit_bradley_terry_ratings` on:
@@ -357,9 +358,9 @@ early-season shrinkage defect in every season-to-date family (week 2 ran on one 
 Milestone 49 fixed it with a continuous `games / (games + 4)` blend toward the regressed prior
 season: week-2 Brier `0.2434` to `0.2268`, pick accuracy `0.5417` to `0.6042`, weeks 3-18 unchanged
 within noise. That is the same prior-carrying property the sos validation credits for Elo's lead,
-now applied to every season-to-date family. Milestone 51 (formerly 43 phase 2) is next. The
-authoritative order lives in
-`.agents/TODO.md`.
+now applied to every season-to-date family. Milestone 51 (formerly 43 phase 2) landed on
+2026-09-11. Milestone 52 (the total head) is next: its diagnosis found a shared early-stopping
+callback, not a feature problem. The authoritative order lives in `.agents/TODO.md`.
 
 The first implementation session delivered Milestone 45 end to end on 2026-09-09 (see
 `ARCHIVE.md`). The baseline it was asked to compare against (Brier `0.2312`, log loss `0.7352`,

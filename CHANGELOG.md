@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Rank teams on the ETL's schedule-adjusted strength composite by default in
+  `scripts/power_rankings.py` (`--method composite`). A ranking through week N reads the week
+  N+1 snapshot, which is solved only from earlier games and has a row for every scheduled team,
+  so teams on a bye are ranked exactly and no later result leaks into a historical rerun. The
+  composite is converted to points with that week's SRS slope and to a win probability against
+  an average team through the model's margin curve before it is placed on the 1-10 and 0-10
+  scales; the composite, `points_vs_average` and the components are published next to the rank.
+  `--method bradley_terry` reproduces the previous default exactly (pinned by a test), and
+  `--legacy-franchise-fit` now implies it.
+- Expose the ranking options in `scripts/weekly_run.py` (`--power-rankings-method`,
+  `--power-rankings-strength-snapshots`, `--ratings-window-seasons`,
+  `--ratings-prior-season-weight`, `--ratings-target`, `--ratings-include-future`,
+  `--legacy-franchise-fit`). It now calls the same `compute_power_rankings` as the script,
+  includes the options in its reports-stage reuse hash, and skips the rankings with a warning
+  when the snapshot for the requested week is missing.
+- Write the model-rating table from `scripts/golden_command.py` as `model_rating_rankings.csv`
+  instead of `power_rankings.csv`, so the power rankings from `scripts/power_rankings.py` are the
+  one canonical ranking artifact.
+
+### Added
+
+- Write `data/strength_snapshots.csv` from the ETL: pre-week adjusted strength for every team on
+  each season's schedule and every processed week, teams on a bye included, plus the week after
+  the regular season before the playoff schedule exists. Values equal the `away_`/`home_`
+  strength columns on the game rows (one solve feeds both) and add the league-wide home-field
+  term `adj_hfa`. Training rows are unchanged.
+
+### Fixed
+
+- Compare scores as numbers when building power-ranking records and projected standings. The ETL
+  writes the newest games first, so once unplayed games led the file Polars inferred the score
+  columns as text and compared them alphabetically: for 2024 through week 17, 26 of 32 records
+  were wrong (DET showed 11-5 instead of 14-2). The Bradley-Terry ratings were unaffected.
+- List every team in projected standings before its first game. Standings were built on the
+  record rows, which do not exist before week 1, so the Week-1 projected standings came out empty;
+  teams with no games yet now start from a zero record.
+
 ## [0.5.0] - 2026-09-10
 
 ### Changed

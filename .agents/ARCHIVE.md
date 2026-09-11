@@ -44,6 +44,84 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Milestone 51 - Power rankings on the adjusted composite
+
+Completed 2026-09-11 (formerly Milestone 43 phase 2). The 51.1 design fork was settled by the
+user as option (c): the ETL writes the per-team weekly strength snapshot it already solves, so bye
+teams are ranked exactly, offline, and from the same numbers the model sees.
+
+### What landed
+
+- `data/strength_snapshots.csv` from `nfl_predictor.data_collection`: one row per
+  `(season, week, team)` for every team on the season's schedule, bye teams included, with
+  `constants.ADJUSTED_STRENGTH_STATS` plus the home-field term `adj_hfa`
+  (`constants.STRENGTH_SNAPSHOT_FILE_COLUMNS`). `process_week` records the same
+  `build_strength_table` frame it joins onto the game rows, so the file equals the model's features
+  by construction. `process_season` adds the week after the regular season when the playoff
+  schedule is not published yet, so a ranking through the last regular-season week always works.
+- `scripts/power_rankings.py --method composite`, now the default, ranks through week N on the
+  week N+1 snapshot. The documented transform (`rank_teams_on_composite`):
+  `points_vs_average = beta * (composite - mean)`, with `beta` the within-week OLS slope of
+  `adj_srs` on the composite, then `p = Phi(points / SCORE_DIFF_STD_DEV)` and the existing
+  `1 + 9p` and `10p` scales. Each row publishes the composite, `points_vs_average`, the five
+  weighted components, `adj_srs`, `strength_games_played` and `snapshot_week`.
+- `--method bradley_terry` keeps the previous default output, and `--legacy-franchise-fit` implies
+  it. `compute_power_rankings` is shared with `scripts/weekly_run.py`, which exposes
+  `--power-rankings-method`, `--power-rankings-strength-snapshots`, the four `--ratings-*` options
+  and `--legacy-franchise-fit` (51.4). They are validated at parse time and included in the
+  reports-stage reuse hash, and a missing snapshot week skips the rankings with a warning.
+  Deviation from the plan: the weekly flag is `--power-rankings-method`, not `--method`, because
+  the weekly runner has many stages and its other ranking flags carry the same prefix.
+- 51.2: `scripts/golden_command.py` writes its per-model rating table as
+  `model_rating_rankings.csv` and labels it a diagnostic; projected standings keep their method.
+- 51.5: README, `--help` and `AGENTS.md` explain the current-season (composite) and franchise
+  (legacy Bradley-Terry) views and the new data file.
+- Tests: `tests/test_strength_snapshot_file.py` (bye-team rows; a week-N snapshot unchanged when
+  week N onward is rewritten, with a counter-test that earlier weeks do move it; file equal to the
+  game-row features; schema when nothing was solved; the full-season week; `main` writes the file),
+  composite tests in `tests/test_power_rankings.py` (strongest first, monotone and bounded scales,
+  average team at mid-scale, missing points scale, unrated team kept last, a breakout team first by
+  week 16 but not in week 2), script tests (next-week snapshot, later weeks ignored, missing and
+  duplicate snapshot errors, option resolution, a Bradley-Terry characterization pinned before the
+  refactor), and `tests/test_weekly_run_power_rankings.py`.
+
+### Found and fixed on the way
+
+- Records and projected standings compared scores as text: the ETL writes the newest games first,
+  so once unplayed 2026 games led `all_data.csv`, Polars inferred the score columns as strings.
+  For 2024 through week 17, 26 of 32 records were wrong (DET 11-5 instead of 14-2, KC 14-2 instead
+  of 15-1). Bradley-Terry ratings were unaffected because `outcome_to_home_prob` coerces.
+- Projected standings were empty before a season's first game, because they were built on record
+  rows that do not exist yet. That hit the live 2026 Week 1 weekly run.
+- Not a defect: nine model features (QB Elo trends, `sos_played_raw`) are also inferred as strings
+  when `_predict_future_games` reads `all_data_ml.csv`, but the model coerces them; predicted
+  probabilities are identical to a full-file read for 2026 and 2024.
+
+### Verification (2026-09-11 rebuild, about 10 minutes)
+
+- `data/completed_games_ml.csv`: `7262` rows, `498` columns, fingerprint `e388dc7a...`. That is the
+  previous build's `7261` rows plus SF at LAR (2026 week 1, 27-7), completed since. All `7261`
+  shared rows match the previous build within `1e-9` on the `468` numeric columns outside
+  schedule strength; the `sos_*` columns move by the known last-ULP drift only (max `5.6e-17`).
+  In `all_data_ml.csv` only `263` future 2026 rows moved, from the new result. The previous build
+  is in `data/backup_pre_m51/`.
+- `data/strength_snapshots.csv`: `18818` rows, fingerprint `ff5f4823...`, 31-32 teams per week, no
+  duplicate keys, 2026 weeks 1-19 with 32 teams each. Across all `7533` game rows, 0 of `165726`
+  strength cells differ from the snapshot (null-safe, `1e-12`). Five rows have a null composite:
+  teams with no prior season in the data and no game yet (BAL, LAC and LAR in 1999 weeks 2-3; HOU
+  in 2002 week 1). The composite method ranks such a team last with a warning.
+- `--method bradley_terry` on the real 2024 data through week 17 reproduces the pre-change ranks,
+  power ratings and columns exactly (`rating_raw` within `2.2e-16`, the CSV round trip).
+- Anchor, 2024 through week 17 (snapshot week 18). Composite top ten: BAL, DET, PHI, BUF, GB, KC,
+  MIN, TB, DEN, WSH (BAL `8.07`, DET `7.80`). Bradley-Terry: DET, BAL, BUF, GB, PHI, KC, MIN, TB,
+  LAC, DEN. Both top fives match the anchor.
+- 2026 through week 0 (the Week 1 ranking): 32 teams, no nulls; LAR, SEA, NE, BUF and JAX lead and
+  LV is last.
+- No walk-forward: training rows did not change. The leakage audit was not rerun; its last run
+  (2026-09-10 build, `463` features, `0` findings) predates one added game and no new feature.
+
+---
+
 ## Milestone 43 phase 1 - Current-season Bradley-Terry power rankings
 
 Completed 2026-09-09. Phase 2 continues as Milestone 51 in `TODO.md`.

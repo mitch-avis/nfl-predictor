@@ -26,9 +26,10 @@ Rules that are always enforced:
 ## Current Focus (2026 season start)
 
 - The active workstream is feature engineering for true team strength: PBP-derived per-snap EPA
-  families, weekly schedule-adjusted (ridge) team strength, and continuous early-season shrinkage of
-  every season-to-date family have landed; the power-rankings redesign on the adjusted composite
-  and QB per-dropback EPA families are next. The analysis, crosswalk, and prioritized shortlist
+  families, weekly schedule-adjusted (ridge) team strength, continuous early-season shrinkage of
+  every season-to-date family, and power rankings on the adjusted composite have landed. Next are
+  the total-head fix (its early stopping shares the margin head's callback, so it stops after one
+  round; Milestone 52) and QB per-dropback EPA families. The analysis, crosswalk, and prioritized shortlist
   live in `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
@@ -36,19 +37,21 @@ Rules that are always enforced:
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-10 (version `0.5.0`):
+- Validated baseline on 2026-09-11 (version `0.5.0` plus the unreleased power-rankings work):
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`590 passed`) with coverage `91.04%` against the enforced
+  - `.venv/bin/python -m pytest` passes (`631 passed`) with coverage `91.16%` against the enforced
     `90%` floor.
   - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. Re-run a plain
     `uv sync` after every version bump, or the last check fails on the stale installed package.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
     `markdownlint-cli2`). Never edit it as part of this repo's work.
-  - ETL was rerun for `1999-2026` with the early-season stat blend on (`7261` completed rows: all
-    of `1999-2025` plus the 2026 opener; `498` columns; fingerprint `e46f1be9...`) and the leakage
-    audit passed on it (`463` features, `0` findings).
+  - ETL was rerun on 2026-09-11 for `1999-2026` (`7262` completed rows: all of `1999-2025` plus
+    two 2026 Week 1 games; `498` columns; fingerprint `e388dc7a...`), which also wrote
+    `data/strength_snapshots.csv` (`18818` rows). Its shared rows equal the 2026-09-10
+    stat-blend build (`e46f1be9...`) apart from last-ULP `sos_*` drift; the leakage audit passed
+    on that build (`463` features, `0` findings), and the benchmark below was measured on it.
 - **Current walk-forward benchmark**, measured 2026-09-10 on the blend build (seasons `2023-2025`,
   `--eval-last-n-seasons 3`, from week 1, the build cut to seasons `<= 2025` so the eval window does
   not slide onto 2026): `models/wf_shrink_2023_2025_on/`. The weeks 3-18 window equals a
@@ -268,12 +271,14 @@ Recommended local commands:
   outputs.
 - `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
 - `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
-- `scripts/power_rankings.py`: power rankings + projected standings. Since 2026-09-09 the default
-  fit is Bradley-Terry over a two-season window with prior seasons weighted `0.25`, margin-based
-  targets, and future model probabilities excluded; `--legacy-franchise-fit` restores the old
-  all-seasons equal-weight fit. Ranking on the ETL's schedule-adjusted composite is Milestone 51
-  in `.agents/TODO.md`. `scripts/weekly_run.py` inherits the new defaults but does not yet expose
-  the flags.
+- `scripts/power_rankings.py`: power rankings + projected standings. Since 2026-09-11 the default
+  (`--method composite`) ranks on the ETL's schedule-adjusted composite, read from
+  `data/strength_snapshots.csv` for the week after `--through-week`. `--method bradley_terry` keeps
+  the 2026-09-09 current-season fit (two-season window, prior seasons weighted `0.25`, margin
+  targets, future model probabilities excluded), and `--legacy-franchise-fit` restores the old
+  all-seasons equal-weight fit and implies it. `scripts/weekly_run.py` exposes the same options
+  and calls the same `compute_power_rankings`. `scripts/golden_command.py` writes a separate
+  `model_rating_rankings.csv`, which is a per-model diagnostic, not the power ranking.
 
 ## Modeling Philosophy (Important Context)
 
@@ -292,6 +297,8 @@ Recommended local commands:
   - `data/all_data.csv` - combined dataset without ML-only targets
   - `data/completed_games_ml.csv` and `data/completed_games.csv` - completed games subsets
   - `data/predict/week_XX_games_to_predict.csv` - upcoming week games with engineered features
+  - `data/strength_snapshots.csv` - pre-week adjusted strength per `(season, week, team)` for
+    every scheduled team, bye teams included; the source of the default power rankings
 
 ### I/O rules
 

@@ -1,7 +1,9 @@
 # Web UI for nfl-predictor: FastAPI backend + React frontend
 
-Planned 2026-09-10. This is the implementation plan for the web UI milestone (Milestone 51 once
-`.agents/TODO.md` is updated). Status of each phase is tracked at the bottom.
+Planned 2026-09-10. This is the implementation plan for the web UI milestone, Milestone 58 in
+`.agents/TODO.md` (51 was taken by the power-rankings work in the 2026-09-10 renumbering).
+Phases 0-3 merged into `main` on 2026-09-11 as version `0.8.0`. Status of each phase is
+tracked at the bottom.
 
 ## Context
 
@@ -376,4 +378,8 @@ Odds-provider adapter interface plus the `Live` blend from `betting_excel.py`
   check needs a loaded model; the week file is written with every column of `all_data_ml.csv`,
   which the prediction CLI narrows through the model's feature spec.
 
+- Merged (2026-09-11): `feat/web-ui` merged into `main` as version `0.8.0` after merging
+  `main` (the calibration-window, total-head and quarterback work, `0.6.1`-`0.7.1`) into it;
+  no conflicts. The web server libraries became core dependencies, and `README.md` /
+  `AGENTS.md` now describe the app. Open phases continue as Milestone 58 in `.agents/TODO.md`.
 - Phase 4: not started.

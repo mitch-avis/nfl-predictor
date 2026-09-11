@@ -11,7 +11,8 @@ Completed milestones live in `ARCHIVE.md` (same directory). Agent workflow and g
   than renumbering it; renumber only in a deliberate cleanup that records the old-to-new map in
   `ARCHIVE.md`. Archived numbers never change.
 - Milestones up to 52 are archived or retired (the last cleanup, 2026-09-10, is recorded at the top
-  of `ARCHIVE.md`). Active milestones run 53 to 57, so new work starts at 58.
+  of `ARCHIVE.md`). Active milestones run 53 to 58 (58 is the web UI, added 2026-09-11), so new
+  work starts at 59.
 
 ---
 
@@ -50,13 +51,16 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-11, version `0.7.0`)
+### Current validated baseline (2026-09-11, version `0.8.0`, `main` at `7c105bc`)
 
 - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
   `.venv/bin/pyright .` pass cleanly.
-- `.venv/bin/python -m pytest` passes (`649 passed`) with coverage `91.21%` against the enforced
-  `90%` floor.
-- `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass.
+- `.venv/bin/python -m pytest` passes (`814 passed`, `tests/api/` included) with coverage
+  `92.90%` against the enforced `90%` floor.
+- `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. The frontend gate
+  in `web/` (lint, typecheck, `22` vitest tests, build) passes after `npm ci` under Node 26.
+- `main` contains `fix/calibration-window-total-head` (`0.6.1`-`0.7.1`) and `feat/web-ui`
+  (`0.8.0`), both merged and pushed on 2026-09-11. New work starts on a fresh branch off `main`.
 - `.agents/skills/` is a separate git clone of agent skills. It is gitignored and excluded from
   ruff and markdownlint (`.markdownlintignore`); pyright already skips dot-directories and ty only
   checks `nfl_predictor`, `scripts`, and `tests`.
@@ -103,7 +107,8 @@ Done so far in the feature-engineering workstream (see `ARCHIVE.md`): Milestone 
 EPA families), 46 (schedule-adjusted strength), 49 (continuous early-season shrinkage), the first
 phase of 43 (current-season Bradley-Terry defaults), 51 (power rankings on the adjusted
 composite), 52 (the total head: fixed, still behind the market line, totals labelled
-diagnostic-only), and task 56.4 (calibration window across the season boundary). Execution order:
+diagnostic-only), task 56.4 (calibration window across the season boundary), and the web UI's
+phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
 1. Milestone 53 - QB per-dropback EPA families for the expected starter (**next**; the 2026 Week 2
    weekly run is due between Monday night 2026-09-14 and Thursday 2026-09-17)
@@ -111,6 +116,8 @@ diagnostic-only), and task 56.4 (calibration window across the season boundary).
 3. Milestone 55 - Off-season configuration sweep, after the feature work lands
 4. Milestone 56 - Weekly orchestration residuals
 5. Milestone 57 - Ensembles and alternative models (parked until the user reopens it)
+6. Milestone 58 - Web UI, phases 4-6 (pool helpers, team and QB pages, live odds design); runs
+   alongside the ML work whenever the user asks for it, on its own branch
 
 The open follow-ups below are not milestones. Pick them up when their area is next touched, or
 promote one to a milestone when it grows.
@@ -248,6 +255,29 @@ specialization.
 
 ---
 
+## Milestone 58 - Web UI: remaining phases
+
+Added 2026-09-11. Phases 0-3 (scaffolding and auth, the read-only pages, jobs, future-week
+predictions) are done and archived under "Milestone 58 (partial)" in `ARCHIVE.md`; the design,
+decisions and per-phase status live in `web_ui_plan.md`. Work happens on a fresh branch off
+`main` (the `../nfl-predictor-web` worktree is fine for it) and merges back after each phase.
+
+- [ ] 58.1 Phase 4: pool helpers (confidence pool sheet, tiebreakers, survivor optimizer) per
+      `web_ui_plan.md`.
+- [ ] 58.2 Phase 5: team and QB pages over the `nfl-sos-ratings` Parquet outputs.
+- [ ] 58.3 Phase 6 (design only): live betting and live odds.
+- [ ] 58.4 Housekeeping: the `web` extra in `pyproject.toml` now duplicates the core dependency
+      list; drop it (and the `--extra web` in CI and `web/README.md`) or give it a purpose. The
+      `etl_full`, `validate_offline` and `validate_live` job templates read the checkout's own
+      `data/` and ignore `NFLP_DATA_DIR` (see the plan's Phase 2 deviations).
+
+Acceptance:
+
+- [ ] Each phase ships with `tests/api/` and vitest coverage, the Python and frontend gates green,
+      a `CHANGELOG.md` entry under a new version, and the plan's Status section updated.
+
+---
+
 ## Open follow-ups from completed milestones
 
 Each group names the archived milestone it came from; the milestone's full record is in
@@ -297,6 +327,49 @@ Each group names the archived milestone it came from; the milestone's full recor
 - [ ] `models/wf_checkpoints/` grows by a few hundred KB per distinct run and is never pruned. Any
       edit under `nfl_predictor/ml/` changes the fingerprint by design, so stale directories pile
       up. Add a cleanup note or command once it matters.
+
+### From the 2026-09-11 code review of `0.6.1`-`0.7.0`
+
+Fixed in `0.7.1`: the season guard, the window log line, the quarterback history refresh and
+the identity warning. Still open:
+
+- [ ] `walk_forward.select_calibration_data` still takes calibration weeks from the eval season
+      only and returns an empty frame when fewer than `calibration_weeks` exist, so walk-forward
+      folds for weeks 2-4 fit with no calibration frame (and no early stopping) while production
+      training now rolls the window back into the previous season. The backtest therefore does
+      not measure the early-season regime the weekly model uses. Roll the walk-forward window
+      back the same way and re-measure from week 1.
+- [ ] With `--train-calibration-seasons 1` and the default four weeks, the whole calibration
+      season is the newest season the window does not touch, so it jumps (for example from 2024
+      to 2025) between weeks 4 and 5 of a season and swaps a whole season between train and
+      calibration. Correct by construction, but not logged; log the candidates or document it.
+- [ ] With `--include-postseason`, the rolled-back window is filled by the previous season's
+      playoff weeks (divisional, conference, Super Bowl: seven games), so a week-1 or week-2
+      window can hold about 23 games. The weekly default excludes the postseason; consider
+      skipping postseason weeks when the window rolls back, or counting games instead of weeks.
+- [ ] `_split_train_calibration_holdout` still returns the lossy `(newest season, its weeks)`
+      pair and `_inseason_calibration_pairs` re-derives the window from the calibration frame;
+      returning `window_pairs` from the split would remove the duplication (touches the two
+      destructuring sites in `ml_model_training.py` and two 8-tuple mocks in
+      `tests/test_ml_model_training_additional.py`).
+- [ ] `_attach_qb_features` requests a not-yet-published current season a second time before
+      kickoff (the first `load_pbp` skipped it, so it is "missing"), doubling that network attempt
+      and its warning; and every ETL run, however narrow its `--min-season`, needs all
+      `1999..max_season` play-by-play seasons cached or downloadable.
+- [ ] `qb_stats`: scrambles (dropbacks without a passer id) go to the team-game's plurality
+      passer, so a starter who leaves early has his scrambles booked to the backup; the recent
+      window counts any week with one dropback as a full game; `completions` and the recent
+      `cpoe` sums are computed but never read. Reuse notes: `_flag` / `_value` / `_count` /
+      `_sum` duplicate `pbp._flag_expr` / `_value_expr` / `_count` / `_sum_when`; the away-minus-
+      home loop duplicates `polars_utils.calculate_stat_differentials`; `_ratio` is a third copy
+      of the null-safe ratio in `teamrankings._safe_ratio` and `strength_snapshot`. Take these
+      along with task 53.6.
+- [ ] The QB identity chain (Elo name to GSIS id via a copy of the nfeloqb metadata, aliases and
+      an `F.Last` fallback) could key completed games on the nflverse schedule's
+      `away_qb_id` / `home_qb_id` directly if those columns joined `NFLREADPY_SCHEDULE_COLUMNS`;
+      name resolution would then be needed only for future-week rows.
+- [ ] `_build_xgb_fit_kwargs` forwards `LogEvalCallback` only when `fit()` accepts `callbacks`,
+      which XGBoost 3.4.1 does not, so eval-progress logging is silently dropped (pre-existing).
 
 ### From task 56.4 (rolling calibration window)
 

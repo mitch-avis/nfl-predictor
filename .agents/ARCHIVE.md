@@ -44,6 +44,51 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Milestone 58 (partial) - Web UI: FastAPI backend + React frontend
+
+Phases 0-3 completed 2026-09-10 (on `feat/web-ui`, worktree `../nfl-predictor-web`) and merged
+into `main` on 2026-09-11 as version `0.8.0`; phases 4-6 stay in `TODO.md`. The milestone number
+was assigned at merge time (the plan had reserved 51, which the 2026-09-10 renumbering gave to the
+power rankings). The full design, the decisions made with the user, and the per-phase status with
+deviations live in `web_ui_plan.md`.
+
+### What landed
+
+- `nfl_predictor/api/`: FastAPI app factory (`python -m nfl_predictor.api`), argon2 passwords,
+  JWT session cookie with a CSRF header, `viewer` / `admin` roles, a login rate limit, a bootstrap
+  CLI (`nfl_predictor.api.auth.cli`), SQLite state under `data/web/`, a run index over
+  `models/*/metadata.json` with one admin-selected active run, readers plus a column registry for
+  predictions, betting (derived from predictions with the workbook formulas, totals
+  `actionable=False`), power rankings with week-over-week movement, model metadata, metrics,
+  importance and calibration, and data/ETL status; the built SPA is served from `web/dist/`.
+- `nfl_predictor/api/jobs/`: a subprocess runner over the repo CLIs with a SQLite job table,
+  persisted logs streamed over server-sent events, progress from the `WF candidate N/M` line,
+  cancel by process group, one worker for the walk-forward group and a two-slot pool otherwise,
+  and 13 templates (`etl_full`, `lines_refresh`, `weekly_run`, `train`, `predict`,
+  `predict_week`, `power_rankings`, `betting_xlsx`, `leakage_audit`, `validate_offline`,
+  `validate_live`, `walk_forward_backtest`, `shap_analysis`).
+- `nfl_predictor/lines_refresh.py` (lines-only refresh that chains a predict job) and
+  `nfl_predictor/week_builder.py` (future-week inputs from `all_data_ml.csv`).
+- `web/`: Vite, React 19, TypeScript, Tailwind v4, shadcn, TanStack Table and Query, react-router
+  and recharts; pages Overview, Predictions, Power Rankings, Betting, Data & ETL, Model, Runs, Users,
+  Jobs, Job detail, Glossary and Login. `tests/api/` (backend) and `web/src/**/*.test.ts`
+  (frontend) cover it; CI gained a `web` job (Node 26).
+- Config: the web server libraries became core dependencies at merge time (`0.8.0`), `web/` is
+  excluded from ruff, pyright and ty, and `web/node_modules/`, `web/dist/` and `data/web/` are
+  ignored.
+
+### Merge (2026-09-11)
+
+`main` (`0.7.1`, the calibration-window, total-head, quarterback and review-fix commits) merged
+into `feat/web-ui` with no conflicts; the branch's Python gate (`814 passed`, `92.88%`) and
+frontend gate passed, and a throwaway API instance on port 8766 served runs, predictions, data
+status, the job catalog and power rankings from this checkout's `data/` and `models/`. `main` then
+fast-forwarded to the branch tip, and the `0.8.0` changelog, README and `AGENTS.md` entries
+followed (`814 passed`, `92.90%`). The user's live instance on port 8765 was left running on the
+pre-merge API code.
+
+---
+
 ## Milestone 53 (partial) - QB per-dropback EPA families for the expected starter
 
 Tasks 53.1-53.5 completed 2026-09-11 (version `0.7.0`); 53.6 (schedule lenses) and 53.7 (the
@@ -143,6 +188,13 @@ inputs changed with the user's refresh; the cause is resolved below.
   `data/qb_meta_data.csv` matched their `../nfeloqb` sources byte-for-byte throughout), so the
   shift is not a quarterback-feature or identity-bridge defect. No further action needed; the
   `AGENTS.md` benchmark documents which build it was measured on for future audits.
+- **Review fixes (2026-09-11, version `0.7.1`).** `_attach_qb_features` no longer passes
+  `--refresh-nflreadpy` through to the history seasons it loads for career rates (a one-season
+  refresh had become a full 1999+ play-by-play download); they always read the per-season cache.
+  The missing-identity-file warning now says quarterbacks are matched by passer name only rather
+  than claiming every feature turns null. The remaining review notes (scramble attribution,
+  the recent window's one-dropback games, unread sums, reuse of the `pbp` helpers) are follow-ups
+  in `TODO.md` to take along with task 53.6.
 
 ---
 
@@ -366,6 +418,12 @@ Task 56.4 completed 2026-09-11 (version `0.6.1`); tasks 56.1-56.3 stay in `TODO.
 - Observed, not changed: training early-stops on the calibration frame, so the 50-game window
   stopped the anchored margin head at iteration 1. That predates the fix and is an open follow-up
   in `TODO.md`.
+- Review follow-up (2026-09-11, version `0.7.1`): the season-count guard predated the window and
+  still demanded a spare pool season beyond the whole calibration seasons, so a three-season pool
+  with `--train-calibration-seasons 1` raised `Not enough seasons` in weeks 2-4; it now raises
+  only when no season is left to train on. The `Calibration weeks` log line prints the window's
+  `[season, week]` pairs. The walk-forward's own calibration selection was not changed (open
+  follow-up in `TODO.md`).
 
 ---
 

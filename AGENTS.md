@@ -34,18 +34,22 @@ Rules that are always enforced:
   with the group switched off, and the user decided 2026-09-11 to keep them (`.agents/ARCHIVE.md`,
   Milestone 53). Next are their schedule lenses (task 53.6) or the Milestone 49 `games_played`
   follow-up. The analysis, crosswalk, and prioritized shortlist live in
-  `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`.
+  `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`. The web UI
+  (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on
+  2026-09-11; its open phases are Milestone 58 in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-11 (version `0.7.0`):
+- Validated baseline on 2026-09-11 (version `0.8.0`, `main` at `7c105bc`):
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`649 passed`) with coverage `91.21%` against the enforced
-    `90%` floor.
+  - `.venv/bin/python -m pytest` passes (`814 passed`, `tests/api/` included) with coverage
+    `92.90%` against the enforced `90%` floor.
+  - The frontend gate in `web/` (`npm run lint`, `npm run typecheck`, `npx vitest run` with `22`
+    tests, `npm run build`) passes; it needs `npm ci` under Node 26 first.
   - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. Re-run a plain
     `uv sync` after every version bump, or the last check fails on the stale installed package.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff

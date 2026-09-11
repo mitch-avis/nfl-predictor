@@ -1,5 +1,11 @@
 # Web UI Session Prompt
 
+> Historical: this is the Phase 2 prompt from 2026-09-10. Phases 0-3 landed and `feat/web-ui`
+> merged into `main` on 2026-09-11 (version `0.8.0`), so the worktree rules below about not
+> touching the main checkout and not rebasing no longer apply. A future web session starts
+> on a fresh branch off `main`, reads `.agents/web_ui_plan.md` (Status section) and
+> Milestone 58 in `.agents/TODO.md`, and follows the gate in `AGENTS.md`.
+
 You are the orchestrating agent (Claude Opus) for an implementation session in the
 `nfl-predictor-web` workspace (`/home/mitch/workspace/nfl-predictor-web`). Your deliverable is
 **Phase 2 of the web UI plan** in `.agents/web_ui_plan.md`: the subprocess job runner with

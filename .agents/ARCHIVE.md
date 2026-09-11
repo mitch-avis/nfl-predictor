@@ -44,6 +44,331 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Milestone 53 (partial) - QB per-dropback EPA families for the expected starter
+
+Tasks 53.1-53.5 completed 2026-09-11 (version `0.7.0`); 53.6 (schedule lenses) and 53.7 (the
+optional quarterback ridge) stay in `TODO.md`. Outcome: the family works as designed and passes
+every leakage check, but its on/off walk-forward is a statistical tie.
+
+### What landed
+
+- `nfl_predictor/utils/polars/qb_stats.py`: `build_qb_identity` / `load_qb_identity` (nfeloqb
+  `name_id` to GSIS id through `data/qb_meta_data.csv`, ambiguous names dropped,
+  `constants.QB_NAME_ALIASES` for three Elo spellings, a unique `F.Last` passer-name fallback);
+  `aggregate_qb_game_stats` (one row per quarterback game of dropback sums, using the team
+  families' dropback definition through the new public `pbp.dropback_condition` and
+  `pbp.regular_season_plays`); `attach_qb_features` (strict as-of joins on
+  `season * 100 + week`, so a row never sees its own week).
+- `constants.QB_PBP_STATS` (7 stats, 21 columns with sides and diffs), `QB_PRIOR_DROPBACKS = 300`,
+  `QB_RECENT_GAMES = 8`, `QB_META_DATA_NAME`, and the `qb` feature group, disjoint from `pbp` and
+  `strength`. `finalize.build_final_column_order` places the columns; the schema grew from `498`
+  to `519`.
+- `data_collection._attach_qb_features`, called after `fill_future_qb_data` so future weeks use
+  the assigned starter; it loads missing history seasons from 1999 so partial-season runs match a
+  full rebuild, and leaves rows without quarterback columns alone.
+- Tests: `tests/test_qb_stats.py` (identity, a hand-built play fixture, strictly-before and league
+  prior by hand, recent window, a same-week and later-week perturbation, first-week nulls,
+  abbreviated fallback and unknown names, schema and group disjointness) and
+  `tests/test_data_collection_qb_features.py`.
+
+### Deviations from the plan
+
+- Recency is the last 8 games rather than a season-to-date rate that resets in week 1; career
+  rates shrink to the league and recent rates to the career, so a first start gets the league
+  rate (no separate rookie prior).
+- Column names avoid `epa_per_dropback` so the `pbp` group does not swallow them;
+  `qb_td_int_margin_rate` was left out.
+- Scrambles (dropbacks without a passer id; the cache has no rusher id) are credited to the
+  team-game's primary passer.
+
+### Verification (rebuild of 2026-09-11 06:47)
+
+- `data/completed_games_ml.csv`: `7263` rows, `519` columns, `acaa2892...`; the pre-rebuild build
+  (the user's 06:03 refresh, `9b8bf303...`) is in `data/backup_pre_m53/`. The ETL logged 17148
+  quarterback games and `0` of `7533` rows unmatched on both sides; CPOE is null before 2006 by
+  design. Leakage audit: `484` features, `0` flags.
+- Real data: the features of all 14 games of 2024 week 10 are identical when computed from
+  play-by-play cut before week 10, and equal the ETL file exactly. Burrow's history before that
+  week is `2453` dropbacks against `2358` raw passer-id dropbacks (the rest are credited
+  scrambles). Correlation with the home margin: `qb_dropback_epa_diff` `-0.281`,
+  `qb_dropback_epa_recent_diff` `-0.308`, `qb_any_a_diff` `-0.267`, `qb_sack_rate_diff`
+  `+0.129`, all with the expected sign.
+
+### Walk-forward (53.5)
+
+Benchmark config (anchored, from week 1, `--eval-last-n-seasons 3`, Platt, 4 calibration weeks)
+on `data/completed_games_ml.m53_through_2025.csv` (`7261` rows, `06a7a34d...`), one arm at a time,
+default OpenMP policy: `models/wf_qb_2023_2025_on/` (checkpoints `cb41507aa5be425f3c3f`, 483
+features including all 21 new columns) and `models/wf_qb_2023_2025_off/`
+(`--disable-feature-groups qb`, checkpoints `6024b0fcaebe9c480dd4`, 462 features).
+
+| window | games | Brier on / off | log loss on / off | pick acc on / off | margin MAE on / off |
+| --- | --- | --- | --- | --- | --- |
+| week 1 only | 48 | `0.2023` / `0.2058` | `0.5938` / `0.6012` | `0.7708` / `0.7292` | `8.9241` / `9.0535` |
+| week 2 only | 48 | `0.2309` / `0.2353` | `0.6548` / `0.6634` | `0.6458` / `0.5833` | `8.6736` / `8.7179` |
+| weeks 3-18 | 720 | `0.2327` / `0.2302` | `0.7708` / `0.7577` | `0.6819` / `0.6806` | `9.9839` / `9.9324` |
+| all weeks | 816 | `0.2308` / `0.2291` | `0.7535` / `0.7430` | `0.6850` / `0.6777` | `9.8445` / `9.8092` |
+
+Paired bootstrap over games (5000 resamples, seed 0), on minus off, weeks 3-18: Brier `+0.0025`
+`[-0.0025, +0.0074]`, log loss `+0.0131` `[-0.0083, +0.0346]`, pick accuracy `+0.0014`
+`[-0.0125, +0.0167]`, margin MAE `+0.0515` `[-0.0479, +0.1496]`. By season (weeks 3-18) Brier
+`0.2422 / 0.1939 / 0.2619` on against `0.2516 / 0.1850 / 0.2539` off: better in 2023, worse in 2024
+and 2025. Interpretation: no measurable gain; the direction on the headline window is slightly
+against, the early weeks slightly for. The production training paths have no feature-group switch,
+so the weekly model trains on the family until the user decides (open follow-up in `TODO.md`).
+
+A second finding: the QB-off arm, same config and code as the benchmark, scores weeks 3-18 Brier
+`0.2302` / log loss `0.7577` against the benchmark's `0.2284` / `0.7406` on the earlier build. The
+inputs changed with the user's refresh; the cause is resolved below.
+
+### Resolved after review (2026-09-11)
+
+- **Decision: keep the quarterback family in production.** The user reviewed the on/off table and
+  chose to keep it, no code change: week 2 pick accuracy improved meaningfully (`0.6458` against
+  `0.5833`, 48 games) and the headline weeks-3-18 loss is inside its 95% interval either way, so
+  there is no evidence against keeping it, only mixed evidence for it. A production
+  disabled-feature-group switch was suggested in the first draft of this milestone but rejected as
+  unnecessary complexity: the walk-forward tools (`walk_forward_backtest.py`, `wf_compare.py`)
+  already support `--disable-feature-groups` for ablation studies, which is all this decision
+  needed, and XGBoost's column/row subsampling already down-weights a genuinely low-signal family
+  through gain-based splitting; a training-time switch is only worth adding later if the config
+  sweep (Milestone 55) needs to search over feature-group inclusion, not for this decision.
+- **Baseline shift explained: a full nflreadpy cache refresh, not a bug.** The user ran a full ETL
+  with `--refresh-nflreadpy` overnight before this session (the 06:03 build that predates the
+  quarterback rebuild), which re-pulls every season's schedule, team-stat and play-by-play cache
+  from nflverse rather than reusing the historical cache. nflverse periodically republishes
+  corrected historical values (box scores, EPA, market lines), so a full refresh can legitimately
+  change many historical rows even with completely unchanged code and walk-forward config. The
+  quarterback identity files were already current at both checkpoints (`data/qb_elos.csv` and
+  `data/qb_meta_data.csv` matched their `../nfeloqb` sources byte-for-byte throughout), so the
+  shift is not a quarterback-feature or identity-bridge defect. No further action needed; the
+  `AGENTS.md` benchmark documents which build it was measured on for future audits.
+
+---
+
+## Milestone 52 - The total (over/under) head carries almost no signal
+
+Completed 2026-09-11 (fix in version `0.6.2`, report label in `0.6.3`). Outcome: the total head
+learns again, but it still trails the market's total line in walk-forward, so the total columns are
+labelled diagnostic-only. The original record follows.
+
+Formerly Milestone 50 (found 2026-09-09). Predicted totals for the 2026 Week 1 slate all land
+between `43.9` and `44.1` while market totals for the same games range `40.5` to `47.5`. The model
+is effectively predicting the league mean for every game. Training holdout `total_mae` is `10.9974`
+against a `margin_mae` of `9.8471`.
+
+Consequence: the `total_value_side`, `total_edge_prob`, `total_confidence_1_10` and `total_ev`
+columns in the betting workbook are computed from that flat prediction and are not actionable. The
+spread and moneyline columns are unaffected. Do not present total-based betting recommendations as
+usable until this is resolved.
+
+Tasks:
+
+- [x] 52.1 Diagnose: feature importance for the total head; whether the total target is being
+      learned at all (early-stopping round, train vs holdout MAE); whether the pruning or feature
+      selection step is dropping total-relevant columns. Done 2026-09-11; findings below. No code
+      changed.
+- [x] 52.2 Fix the shared early-stopping callback: give each estimator in
+      `_fit_margin_total_models` its own `EarlyStopping` instance (a fresh params copy per head),
+      with a regression test that the total head's round count does not depend on the margin fit
+      (the synthetic reproduction below makes a good fixture). Then run the walk-forward reference
+      and fixed arms on one build and code version, anchored (the benchmark config) and unanchored
+      (the production config), and record total MAE. Only if a healthy total head still trails
+      the market line, test a separate feature set for it. Done 2026-09-11. Deviations: the fix
+      drops the explicit callback instead of copying it per head (XGBoost already builds a fresh
+      one from the init parameter); the reference anchored arm was not rerun, because the fixed
+      anchored arm reproduced the benchmark's margin metrics exactly and the benchmark's own
+      checkpoints serve as that reference; the separate feature set was diagnosed, not built.
+- [x] 52.3 Record the walk-forward table; either fix the default or mark the total columns of the
+      betting workbook as diagnostic-only in the report and README. Done 2026-09-11: the healthy
+      head trails the line, so the totals are labelled diagnostic-only.
+
+Findings from 52.1 (2026-09-11):
+
+- **Root cause: the total head shares the margin head's early-stopping callback.** With xgboost
+  `3.4.1`, `fit()` no longer takes `early_stopping_rounds`, so `_with_xgb_early_stopping_params`
+  puts one `xgb.callback.EarlyStopping` instance into the params dict, and
+  `_fit_margin_total_models` builds both `XGBRegressor`s from that dict. The callback keeps its
+  best score and patience counter between fits. The total fit therefore starts against the margin
+  head's best validation RMSE (about `9.5`, which a total RMSE never beats) with the patience
+  counter already spent when the margin head stopped early, and it stops after one round. When the
+  margin head runs to `n_estimators` without stopping, the total head gets at most the patience
+  left over (up to 50 rounds). `_fit_quantile_models` builds fresh params for every quantile, so the
+  quantile heads are healthy (`total_q0.5` stopped at iteration `346` in the 2026 model).
+- **Evidence on disk.** `models/week01_2026_refreshed/model.joblib` and
+  `models/week01_2026_strength/model.joblib`: margin heads of `283` and `276` trees
+  (`best_iteration` `232`, `225`), total heads of **1 tree** with no `best_iteration`, and
+  `metadata.json` records early stopping for every head except `total_model`.
+  `models/weekly_2025_week_22` has the same 1-tree total head. Runs without early stopping
+  (`models/review_*`) keep all `598` trees in both heads. Train versus holdout MAE cannot say more
+  than "the total is flat": holdout `total_mae` is `10.9974`, and feature importance for a one-tree
+  head is meaningless.
+- **Reproduction.** Calling `_fit_margin_total_models` on synthetic data with a planted total
+  signal and `early_stopping_rounds=50` gives a 1-tree total head whose predictions span
+  `43.70-44.08` (std `0.07`), the 2026 symptom. The same total head fit with its own callback keeps
+  `235` trees (std `3.85`) and cuts eval MAE from `8.60` to `8.08`.
+- **Scope.** Every caller of `_fit_margin_total_models` that passes an eval set: final training,
+  Optuna trials (whose `combined_mae` objective has been scoring a crippled total), walk-forward
+  folds, the blended model and `model_compare.py`. The margin head is fit first with a fresh
+  callback, so margin predictions, win probabilities, Brier, log loss and pick accuracy are not
+  affected; only total predictions and total MAE are (and tuning, through the objective).
+- **Why the benchmark hid it.** The walk-forward benchmark runs with `market_anchor` on, so the
+  total head predicts a residual on `total_line` and a crippled head gives roughly the market line
+  plus a constant. Over the benchmark's 816 games (fold checkpoints in
+  `models/wf_checkpoints/5ea347bc3339f5d3a9e3/`, the on arm) total MAE is `10.1000`, against
+  `10.1207` for the market line alone and `10.1378` for the p50 quantile head; the within-fold std
+  of `predicted_total - total_line` has a median of `0.51`. The production model has
+  `market_anchor` off, which is why it prints a flat 44.
+- **Not the cause.** Feature pruning or selection (the head never gets past its first round), and
+  the total target itself (the quantile heads learn it).
+
+Results of 52.2 (2026-09-11, version `0.6.2`):
+
+- **Fix landed.** `_with_xgb_early_stopping_params` sets only the `early_stopping_rounds` init
+  parameter, so XGBoost builds a fresh `EarlyStopping` for every fit. Tests:
+  `tests/test_ml_model_margin_total_early_stopping.py` (the paired total head keeps the rounds a
+  solo fit keeps and predicts with std above 1; it failed on the old code with a 1-round head) and
+  `tests/test_ml_model_xgb_utils.py` (no `callbacks` entry, no shared object).
+- **Production config, same live build (`e388dc7a...`).** Old code
+  (`models/week01_2026_totalref`, trained from a `HEAD` worktree) against the fix
+  (`models/week01_2026_totalfix`): identical margin head (151 trees, best iteration 100); total
+  head 1 tree against 235 (best iteration 184); Week 1 totals `43.9-44.2` (std `0.08`) against
+  `39.4-48.8` (std `3.01`, correlation `0.956` with market lines of `38.5-50.5`). With the build cut
+  to `<= 2025` so the holdout is 2025 (272 games; `models/holdout2025_total{ref,fix}`), holdout
+  total MAE is `11.0051` against `10.5387`; the market line scores `10.3934` on the same games.
+  Margin MAE, Brier and accuracy are identical.
+- **Fixed anchored arm** (`models/wf_totalfix_2023_2025_anchored/`, checkpoints
+  `models/wf_checkpoints/c39db4f843175eaab09f/`, benchmark flags on
+  `data/completed_games_ml.m49_on_through_2025.csv`). Brier, log loss, pick accuracy and margin MAE
+  equal the benchmark to four decimals in every window, so the fix changed nothing on the margin
+  side. Total MAE:
+
+  | window | games | crippled (benchmark) | fixed | market line |
+  | --- | --- | --- | --- | --- |
+  | week 1 only | 48 | `9.9426` | `9.9426` | `10.3333` |
+  | week 2 only | 48 | `9.8727` | `9.8727` | `10.4479` |
+  | weeks 3-18 | 720 | `10.1257` | `10.2295` | `10.0847` |
+  | all weeks | 816 | `10.1000` | `10.1916` | `10.1207` |
+
+  Weeks 1-2 are identical because those folds skip calibration for lack of rows, so they have no
+  eval set, no early stopping, and never had the bug. In weeks 3-18 the healthy anchored head is
+  worse: against the crippled head `+0.1038` (95% paired bootstrap `[-0.0191, +0.2287]`), against
+  the line `+0.1448` (`[-0.0073, +0.2991]`); by season `10.44 / 9.88 / 10.36` against the crippled
+  `10.45 / 9.82 / 10.11`, so 2025 carries the gap. The spread of `predicted_total - total_line`
+  grows from a median within-fold std of `0.533` to `2.046`: under anchoring the head now learns a
+  residual, and on a four-week early-stopping window that residual is mostly noise.
+- **Fixed unanchored arm, the production configuration** (`models/wf_totalfix_2023_2025_unanchored/`,
+  checkpoints `models/wf_checkpoints/8eb0587a0da4c6ab57cc/`, same build and flags with
+  `--no-market-anchor`). Total MAE `9.8223` / `9.8879` / `10.3152` / `10.2610` for week 1, week 2,
+  weeks 3-18 and all weeks, against the line's `10.3333` / `10.4479` / `10.0847` / `10.1207`. In
+  weeks 3-18 it trails the line by `+0.2305` (95% paired bootstrap `[+0.0725, +0.3881]`) and the
+  crippled anchored head by `+0.1895` (`[+0.0493, +0.3287]`); by season `10.48 / 10.05 / 10.42`
+  against the line's `10.33 / 9.79 / 10.13`. Median within-fold std of `predicted_total -
+  total_line` is `2.091` (the crippled head's was `0.533`). Its probability metrics are not a
+  benchmark comparison (anchoring changes the margin head too): Brier `0.2322`, log loss `0.7602`,
+  pick accuracy `0.6740`, margin MAE `9.8906` over all weeks.
+- **Why a healthy head still trails: its deviation from the line carries no signal.** In weeks
+  3-18 the correlation of `predicted_total - total_line` with `actual_total - total_line` is
+  `-0.012` (`-0.034` for the p50 quantile head), and blending back toward the line only helps:
+  total MAE of `line + k * (prediction - line)` rises monotonically from `10.0847` at `k = 0` to
+  `10.3152` at `k = 1` (over all weeks the minimum is `10.1176` at `k = 0.1`). The head learns the
+  line, which is one of its features, plus noise. A separate feature set for the total head would
+  only help if it carries information the closing total does not (weather, pace, officiating,
+  late injury news), and none of today's families was built for that. Not built this session.
+- **Reference unanchored arm** (old code; `models/wf_totalref_2023_2025_unanchored/`, checkpoints
+  `models/wf_checkpoints/55a1388a301ce116b10a/`). Total MAE `9.8223` / `9.8879` / `10.3009` /
+  `10.2485` by window, identical to the fixed arm in weeks 1-2 (no eval set) and **statistically
+  tied** with it in weeks 3-18: reference minus fixed `-0.0142` (95% paired bootstrap
+  `[-0.1745, +0.1399]`), by season `10.58 / 9.87 / 10.45` against `10.48 / 10.05 / 10.42`. It
+  trails the line by `+0.2162` (`[+0.0307, +0.4032]`). The pre-fix head is not a flat 44 in
+  walk-forward: when the margin head stops late, the shared callback leaves the total head part of
+  its patience, so it is only flatter (median within-fold std of `predicted_total - total_line`
+  `2.436` against the fixed `2.091`; a constant prediction would deviate by the line's own spread).
+  Its margin and probability metrics equal the fixed arm's, as they must. So the fix restores the
+  total head's behaviour (it tracks the market, and the single-split 2025 holdout improves from
+  `11.0051` to `10.5387`) but does **not** improve walk-forward total MAE, unanchored or anchored:
+  the head has nothing to add to the closing line either way.
+
+52.3 decision and label (version `0.6.3`): the fixed unanchored head trails the line, so every row
+of `scripts/betting_pipeline.build_betting_report` (the weekly run's `*_betting_report.csv`)
+carries `total_signal = diagnostic_only` next to `total_edge_points`
+(`TOTAL_SIGNAL_STATUS`, test `tests/test_betting_pipeline_recs.py`), and README's Scripts section
+says the report and workbook totals are diagnostics. The workbook itself is unchanged.
+
+How the walk-forward arms were run and scored:
+
+- One build for every arm: `data/completed_games_ml.m49_on_through_2025.csv` (dataset fingerprint
+  `5d67ddff19f8...`, `7260` rows, seasons `<= 2025`). The arms ran one at a time on an idle machine
+  with the default OpenMP policy, about 38-40 minutes each. Their `metadata.json` records git
+  `6dda1bc` because the fixes were not committed yet; the per-week checkpoint fingerprint, which
+  hashes the modelling source, is what separates code versions.
+- Fixed anchored: `.venv/bin/python scripts/walk_forward_backtest.py --data-path
+  data/completed_games_ml.m49_on_through_2025.csv --eval-last-n-seasons 3 --wf-start-week 1
+  --calibration platt --wf-calibration-weeks 4 --market-anchor --market-transform --out-json
+  models/wf_totalfix_2023_2025_anchored/metrics_report.json`.
+- Fixed unanchored: the same with `--no-market-anchor` and `--out-json
+  models/wf_totalfix_2023_2025_unanchored/metrics_report.json`.
+- Reference unanchored: the same unanchored command run from a detached `HEAD` worktree with
+  `PYTHONPATH` pointing at it, `--out-json models/wf_totalref_2023_2025_unanchored/metrics_report.json`.
+  Its checkpoints were written inside the worktree and copied to
+  `models/wf_checkpoints/55a1388a301ce116b10a/`. Old code is proven by week 5 of 2023, the first
+  fold with an early-stopping eval set: identical margins, total std `1.886` against `4.912`.
+- Windows were scored from the per-week checkpoints (games, Brier, log loss, pick accuracy, margin
+  and total MAE, the line's total MAE, the p50 head, and the std of `predicted_total -
+  total_line`); the same scorer reproduces the `AGENTS.md` benchmark table to four decimals from
+  `models/wf_checkpoints/5ea347bc3339f5d3a9e3/`. Paired bootstrap: 5000 resamples of games,
+  seed 0. In both anchored arms the 2023 weeks 1-4 folds are identical and every fold from week 5
+  differs, so the first four weeks of a season have no early-stopping eval set.
+
+Acceptance:
+
+- [x] Weekly predicted totals span a range comparable to the market's, or the total outputs are
+      explicitly labelled non-actionable. Both: the retrained production model's Week 1 totals
+      span `39.4-48.8` against market lines of `38.5-50.5`, and the report labels them
+      `diagnostic_only`.
+
+---
+
+## Milestone 56 (partial) - Weekly orchestration residuals
+
+Task 56.4 completed 2026-09-11 (version `0.6.1`); tasks 56.1-56.3 stay in `TODO.md`.
+
+### 56.4 - The in-season calibration window rolls back across the season boundary
+
+- Cause: `ml_model_core._split_train_calibration_holdout` took its in-season calibration weeks only
+  from the newest pool season and raised `Not enough weeks in season 2026 for calibration.` when
+  that season had fewer than `calibration_weeks` (weekly default `4`). Every weekly run for weeks
+  2-4 of a season failed at Stage 2; the weekly-run smoke test `models/smoke_20260911` found it
+  once the rebuild added two completed 2026 games.
+- Fix: the window is the newest `calibration_weeks` distinct `(season, week)` pairs across the pool
+  in time order (`_latest_season_week_pairs`), training drops exactly those pairs
+  (`_season_week_mask`), and whole-season calibration picks only seasons the window does not touch.
+  The one remaining error is a pool with fewer weeks than requested. No flag was added and the
+  guard in `scripts/weekly_run.py` is unchanged.
+- Metadata: `splits.calibration_inseason` keeps `season` and `weeks` (the newest season in the
+  window and its weeks) and adds `pairs` (`_inseason_calibration_pairs`), in both the margin/total
+  and the blend reports. The return tuple of the split is unchanged, so no caller moved.
+- Tests: `tests/test_ml_model_core_helpers.py` (the Week-2 rollback with training excluding exactly
+  the window, the unchanged split when the newest season has enough weeks, whole-season calibration
+  skipping touched seasons, the pairs helper, and the pool-too-small error replacing the test that
+  pinned the old one), `tests/test_ml_model_training_report.py` (a two-season window recorded in
+  metadata) and `tests/test_ml_model_training_score_blend.py`.
+- Verification on the live dataset (regular season, `e388dc7a...`): the new split equals the
+  previous code, frames included, in all 126 configurations the previous code accepted (holdout
+  0-2, calibration seasons 0-2, weeks 0, 1, 2, 4 and 6, on the full build, the build cut at 2025,
+  and one cut at 2025 week 8); the previous code raised in the other 9. `(0, 0, 4)` now calibrates
+  on 2025 weeks 16-18 plus 2026 week 1 (50 games) and trains on 6904.
+- Real pipeline: `weekly_run.py --skip-data-refresh --run-id smoke_20260911 --resume` with default
+  training flags reused Stage 1, trained, and wrote predictions, confidence picks, the betting
+  report, power rankings and projected standings; `metadata.json` lists the four pairs. The user's
+  earlier run of the same id with the workaround flags (`--train-calibration-weeks 0
+  --train-calibration-seasons 2`) is kept in `models/smoke_20260911_workaround/`.
+- Observed, not changed: training early-stops on the calibration frame, so the 50-game window
+  stopped the anchored margin head at iteration 1. That predates the fix and is an open follow-up
+  in `TODO.md`.
+
+---
+
 ## Milestone 51 - Power rankings on the adjusted composite
 
 Completed 2026-09-11 (formerly Milestone 43 phase 2). The 51.1 design fork was settled by the

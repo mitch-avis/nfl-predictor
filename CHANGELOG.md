@@ -1,6 +1,100 @@
 # Changelog
 
-## [Unreleased]
+## [0.7.0] - 2026-09-11
+
+### Changed
+
+- Bump the project version to `0.7.0` and keep `uv.lock` aligned.
+- Grow the invariant output schema from `498` to `519` columns with the quarterback family.
+
+### Added
+
+- Add quarterback per-dropback features for the expected starter (`constants.QB_PBP_STATS`,
+  `nfl_predictor/utils/polars/qb_stats.py`), for `away_qb` and `home_qb` plus a `_diff` each:
+  career EPA per dropback, CPOE (2006+), sack rate and ANY/A, each shrunk toward the league rate
+  with `300` pseudo-dropbacks; EPA per dropback and ANY/A over the last `8` games, shrunk toward
+  the career rate; and career dropbacks, so the model sees the sample size. Every value comes from
+  that quarterback's regular-season dropbacks in earlier weeks, across teams and seasons, never
+  the game's own week. Names map to play-by-play passer ids through `data/qb_meta_data.csv`, a
+  read-only copy of the nfeloqb metadata, with three aliases and an abbreviated-name fallback;
+  every 1999-2026 row matched. The family is the `qb` feature group
+  (`--disable-feature-groups qb`), disjoint from `pbp` and `strength`. In the 2023-2025
+  walk-forward (benchmark config, one build) it is a statistical tie with the group switched off:
+  weeks 3-18 Brier `0.2327` against `0.2302` and log loss `0.7708` against `0.7577`, both inside
+  their 95% bootstrap intervals, while weeks 1 and 2 lean better (week 2 pick accuracy `0.6458`
+  against `0.5833`, 48 games). The weekly model trains on it by default.
+
+## [0.6.3] - 2026-09-11
+
+### Changed
+
+- Bump the project version to `0.6.3` and keep `uv.lock` aligned.
+
+### Added
+
+- Label the total (over/under) columns of the betting report as diagnostic-only: every row of
+  `build_betting_report` (the weekly run's `*_betting_report.csv` and `scripts/betting_pipeline.py`)
+  carries `total_signal = diagnostic_only` next to `total_edge_points`, and the README says so for
+  the report and the workbook. With the total head fixed, the 2023-2025 walk-forward still puts it
+  behind the market's own total line: weeks 3-18 total MAE `10.3152` in the production
+  configuration (no market anchoring; 95% bootstrap interval of the gap to the line
+  `[+0.07, +0.39]`) and `10.2295` with anchoring, against `10.0847` for the line. Its deviation
+  from the line is uncorrelated with the actual deviation (`-0.012`), so an over/under lean is not a
+  betting signal. The fix in `0.6.2` restores the head's behaviour but not its walk-forward
+  accuracy: the pre-fix head scores `10.3009` in the same configuration, a statistical tie.
+  Spreads, moneylines and win probabilities are unaffected.
+
+## [0.6.2] - 2026-09-11
+
+### Changed
+
+- Bump the project version to `0.6.2` and keep `uv.lock` aligned.
+
+### Fixed
+
+- Give every XGBoost fit its own early-stopping state, so the total (over/under) head learns
+  again. On XGBoost versions whose `fit()` no longer takes `early_stopping_rounds` (every model in
+  `models/` trained with early stopping, on `3.1.3` and `3.4.1`), the compatibility helper put one
+  `xgb.callback.EarlyStopping` object into the params dict, and the margin and total heads were
+  both built from that dict. The total head inherited the margin head's best score and spent
+  patience and stopped after one round, so the unanchored production model predicted `43.9-44.2`
+  for every 2026 Week 1 game and anchored runs predicted roughly the market line plus a constant.
+  The helper now sets only the `early_stopping_rounds` init parameter, from which XGBoost builds a
+  fresh callback for every fit. The margin head was always fit first, so margin predictions, win
+  probabilities, Brier, log loss and pick accuracy do not change; total predictions, total MAE and
+  the Optuna `combined_mae` objective do. Retrained on the same build and config, the Week 1 total
+  head keeps `235` trees instead of one and its totals span `39.4-48.8` against market lines of
+  `38.5-50.5`, while the margin head is identical. Models trained before this version keep the
+  one-tree total head until they are retrained, and tuned parameters from earlier Optuna runs were
+  chosen on the margin head alone.
+
+## [0.6.1] - 2026-09-11
+
+### Changed
+
+- Bump the project version from `0.5.0` to `0.6.1` and keep `uv.lock` aligned. `0.6.0` names the
+  power-rankings work below, which landed on `main` without a version bump.
+
+### Added
+
+- Record the whole in-season calibration window in the training metadata:
+  `splits.calibration_inseason` keeps `season` and `weeks` (the newest season in the window and
+  its weeks) and adds `pairs`, every `[season, week]` the window used.
+
+### Fixed
+
+- Roll the in-season calibration window back across the season boundary. Training took its
+  calibration weeks only from the newest season and raised `Not enough weeks in season 2026 for
+  calibration` when that season had fewer completed weeks than requested, so every weekly run for
+  weeks 2-4 of a season stopped at the training stage (the weekly default asks for four). The
+  window is now the newest completed `(season, week)` pairs in time order: for Week 2 of 2026,
+  week 1 plus 2025 weeks 16-18. Training excludes exactly those pairs, whole-season calibration
+  never takes a season the window touched, and the split raises only when the whole training
+  pool has fewer weeks than requested. When the newest season already has enough weeks the split
+  is unchanged; on the live dataset it matches the previous code in all 126 configurations that
+  code accepted.
+
+## [0.6.0] - 2026-09-11
 
 ### Changed
 

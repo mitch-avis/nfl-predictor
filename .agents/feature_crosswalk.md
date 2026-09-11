@@ -288,6 +288,14 @@ implementation complexity, and owning layer.
   teams (career-to-date window is safer than team-season).
 - Layer: ETL; treat the nfeloqb metadata file as a read-only input copied into `data/`, like
   `qb_elos.csv`.
+- Landed 2026-09-11 (version `0.7.0`, `nfl_predictor/utils/polars/qb_stats.py`) with these
+  differences: the columns are named `qb_dropback_epa`, `qb_dropback_epa_recent`, `qb_cpoe`,
+  `qb_sack_rate`, `qb_any_a`, `qb_any_a_recent` and `qb_history_dropbacks`, because a name
+  containing `epa_per_dropback` would fall into the `pbp` ablation group; rates are career-to-date
+  plus the last 8 games (no season-to-date rate that resets in week 1); `qb_td_int_margin_rate`
+  was left out; new starters get the league rate through shrinkage rather than a separate rookie
+  prior; scrambles are credited to the team-game's primary passer because the cache has no rusher
+  id. The schedule lenses remain open (task 53.6).
 
 ### 4.7 Special teams EPA margin
 
@@ -359,8 +367,14 @@ Milestone 49 fixed it with a continuous `games / (games + 4)` blend toward the r
 season: week-2 Brier `0.2434` to `0.2268`, pick accuracy `0.5417` to `0.6042`, weeks 3-18 unchanged
 within noise. That is the same prior-carrying property the sos validation credits for Elo's lead,
 now applied to every season-to-date family. Milestone 51 (formerly 43 phase 2) landed on
-2026-09-11. Milestone 52 (the total head) is next: its diagnosis found a shared early-stopping
-callback, not a feature problem. The authoritative order lives in `.agents/TODO.md`.
+2026-09-11. Milestone 52 (the total head) was a shared early-stopping callback, not a feature
+problem; it was fixed on 2026-09-11 (version `0.6.2`). The healthy total head still trails the
+market's total line in walk-forward and its deviation from the line carries no signal, so totals
+stay diagnostic-only. Any future total-specific features would have to carry information the
+closing line does not. Milestone 53 (QB per-dropback EPA) landed on 2026-09-11 and ties in
+walk-forward with the group switched off (weeks 3-18 log loss `0.7708` against `0.7577`, inside
+noise; weeks 1-2 lean better); the user reviewed it and decided to keep the family in production.
+Its schedule lenses (task 53.6) are next. The authoritative order lives in `.agents/TODO.md`.
 
 The first implementation session delivered Milestone 45 end to end on 2026-09-09 (see
 `ARCHIVE.md`). The baseline it was asked to compare against (Brier `0.2312`, log loss `0.7352`,

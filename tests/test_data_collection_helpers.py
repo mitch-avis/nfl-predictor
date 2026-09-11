@@ -92,6 +92,28 @@ def test_parse_args_uses_defaults_and_boolean_overrides(monkeypatch: pytest.Monk
     )
 
 
+def test_parse_args_reads_the_stat_prior_blend_switches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stat prior blend is on at the shared K by default and can be tuned or ablated."""
+    monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
+
+    default_config = data_collection._parse_args([])
+    assert default_config.blend_stat_prior is True
+    assert default_config.stat_prior_blend_games == constants.PRIOR_BLEND_GAMES
+
+    tuned = data_collection._parse_args(["--stat-prior-blend-games", "6"])
+    assert tuned.blend_stat_prior is True
+    assert tuned.stat_prior_blend_games == pytest.approx(6.0)
+
+    ablated = data_collection._parse_args(["--no-stat-prior-blend"])
+    assert ablated.blend_stat_prior is False
+
+
+def test_parse_args_rejects_a_non_positive_stat_prior_blend_games() -> None:
+    """A zero or negative K would divide by zero for a team with no games, so it is refused."""
+    with pytest.raises(SystemExit):
+        data_collection._parse_args(["--stat-prior-blend-games", "0"])
+
+
 def test_resolve_config_uses_defaults_or_parsed_args(monkeypatch: pytest.MonkeyPatch) -> None:
     """Config resolution should either materialize defaults or delegate to _parse_args."""
     monkeypatch.setattr(data_collection, "ENABLE_DATA_COLLECTION_TIMING", False)

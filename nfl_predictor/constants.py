@@ -52,6 +52,18 @@ TEAMRANKINGS_MIN_WEEK = 2
 # Regression factor for week-1 stats toward league mean
 WEEK1_REGRESSION_FACTOR = 1 / 3
 
+# Games at which an early-season in-season sample and the regressed previous season are
+# weighted equally. Shared by the adjusted-strength snapshot and the season-to-date stat
+# blend.
+#
+# The in-season weight is `games / (games + PRIOR_BLEND_GAMES)`, so with K = 4 a team
+# reaches parity after four games (about week 5), three-quarters in-season after twelve,
+# and the prior is never fully discarded. Four games is roughly the point at which a
+# per-snap EPA sample stops being dominated by one blowout, and it matches the
+# quarter-season scale the rest of this repository already uses for early-season
+# fallbacks.
+PRIOR_BLEND_GAMES = 4.0
+
 # URL for Team Rankings data
 TEAM_RANKINGS_URL = "https://www.teamrankings.com/nfl"
 TEAM_RANKINGS_SLEEP = 1  # Sleep time in seconds for web scraping

@@ -183,7 +183,15 @@ def _with_xgb_early_stopping_params(
     params: dict[str, Any],
     early_stopping_rounds: int | None,
 ) -> dict[str, Any]:
-    """Attach early-stopping parameters for XGBoost versions that require init kwargs."""
+    """Attach early-stopping parameters for XGBoost versions that require init kwargs.
+
+    Only the ``early_stopping_rounds`` init parameter is set. XGBoost builds a fresh
+    ``EarlyStopping`` callback from it on every ``fit``, so each estimator stops on its own
+    validation curve. An explicit callback object must not go into ``params``: every
+    estimator built from the dict would share it, and its best score and patience counter
+    would carry from one fit into the next (a total head fit after the margin head would
+    start against the margin's best error and stop after one round).
+    """
     if not early_stopping_rounds:
         return params
     if _xgb_fit_supports("early_stopping_rounds"):
@@ -196,14 +204,6 @@ def _with_xgb_early_stopping_params(
 
     updated = params.copy()
     updated.setdefault("early_stopping_rounds", int(early_stopping_rounds))
-
-    if _xgb_param_supported("callbacks"):
-        early_stop_cls = getattr(getattr(xgb, "callback", None), "EarlyStopping", None)
-        if early_stop_cls is not None:
-            updated.setdefault(
-                "callbacks",
-                [early_stop_cls(rounds=int(early_stopping_rounds))],
-            )
     return updated
 
 

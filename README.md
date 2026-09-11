@@ -33,6 +33,7 @@ This repo is geared toward:
     - [Authoritative weekly workflow (runs, in this order)](#authoritative-weekly-workflow-runs-in-this-order)
     - [Outputs and conventions](#outputs-and-conventions)
   - [Scripts](#scripts)
+  - [Web UI](#web-ui)
   - [Validation](#validation)
   - [Leakage audit](#leakage-audit)
   - [Changelog](#changelog)
@@ -593,6 +594,27 @@ GPU note (XGBoost 2.x): prefer `--xgb-tree-method hist --xgb-device cuda`.
 
 If you see great performance on the exact data a model trained on, that is not evidence the model
 generalizes. Prefer holdout and walk-forward metrics.
+
+## Web UI
+
+A FastAPI backend (`nfl_predictor/api/`) and a React single-page app (`web/`) browse the
+project's outputs and, for admins, run its jobs from a browser. The backend indexes
+`models/*/metadata.json`, lets an admin mark one run **active**, and serves that run's
+predictions, confidence picks, betting table (totals are never actionable), power rankings,
+model metrics and data status; the Jobs pages run the ETL, a lines-only refresh
+(`nfl_predictor/lines_refresh.py`), future-week inputs (`nfl_predictor/week_builder.py`),
+training, prediction, walk-forward and the reports as streamed background subprocesses.
+
+```bash
+.venv/bin/python -m nfl_predictor.api.auth.cli create-user <name> --role admin   # once
+.venv/bin/python -m nfl_predictor.api                                            # http://127.0.0.1:8000
+```
+
+The frontend needs Node 26 (`source ~/.nvm/nvm.sh`); `cd web && npm ci && npm run build` writes
+`web/dist/`, which the backend serves. Configuration is by `NFLP_*` environment variables
+(`NFLP_DATA_DIR`, `NFLP_MODELS_DIR`, `NFLP_STATE_DIR`, `NFLP_PORT`, ...). Details, the check
+commands and the layout are in `web/README.md`; the design and phase status are in
+`.agents/web_ui_plan.md`.
 
 ## Validation
 

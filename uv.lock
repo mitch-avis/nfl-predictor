@@ -714,7 +714,7 @@ wheels = [
 
 [[package]]
 name = "nfl-predictor"
-version = "0.7.1"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
@@ -729,7 +729,9 @@ dependencies = [
     { name = "optuna" },
     { name = "pandas" },
     { name = "polars" },
+    { name = "pydantic-settings" },
     { name = "pyjwt" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "scipy" },
@@ -781,9 +783,11 @@ requires-dist = [
     { name = "optuna" },
     { name = "pandas" },
     { name = "polars" },
+    { name = "pydantic-settings" },
     { name = "pydantic-settings", marker = "extra == 'web'" },
     { name = "pyjwt" },
     { name = "pyjwt", marker = "extra == 'web'" },
+    { name = "python-multipart" },
     { name = "python-multipart", marker = "extra == 'web'" },
     { name = "requests" },
     { name = "scikit-learn" },

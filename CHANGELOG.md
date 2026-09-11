@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.8.0] - 2026-09-11
+
+### Changed
+
+- Bump the project version to `0.8.0` and keep `uv.lock` aligned.
+- Make the web server libraries (`fastapi`, `uvicorn[standard]`, `pyjwt`, `argon2-cffi`,
+  `sse-starlette`, `pydantic-settings`, `python-multipart`) core dependencies, so a plain
+  `uv sync` installs everything `nfl_predictor.api` and its tests import; the `web` extra still
+  exists and now adds nothing. Add `httpx` to the dev group for the API test client.
+- Exclude `web/` from ruff and pyright, and `web/node_modules/`, `web/dist/` and `data/web/` from
+  git and markdownlint.
+
+### Added
+
+- Add a web UI for the project: a FastAPI backend (`nfl_predictor/api/`, run with
+  `.venv/bin/python -m nfl_predictor.api`) and a Vite + React 19 + Tailwind single-page app
+  (`web/`, built into `web/dist/` and served by the backend). Sign-in is username/password with
+  argon2 hashes and a signed JWT cookie, with `viewer` and `admin` roles and a bootstrap CLI
+  (`python -m nfl_predictor.api.auth.cli`). The backend indexes `models/*/metadata.json`, lets an
+  admin mark one run **active**, and serves that run's predictions, confidence picks, betting
+  table (derived from the predictions with the workbook formulas; totals are not actionable),
+  power rankings with week-over-week movement, model metadata, metrics, feature importance and
+  calibration, and data/ETL status, through a column registry (`nfl_predictor/api/registry/`)
+  that drives labels, tooltips and heatmaps. Pages: Overview, Predictions, Power Rankings,
+  Betting, Data & ETL, Model, Runs, Users, Jobs and Glossary, on desktop and at phone width.
+- Run the project's CLIs as background jobs from the UI (`nfl_predictor/api/jobs/`): a subprocess
+  runner with a SQLite job table, persisted logs streamed over server-sent events, progress from
+  the walk-forward candidate log line, cancel, and one worker for the walk-forward group so two
+  walk-forward runs never overlap. Templates: `etl_full`, `lines_refresh`, `weekly_run`,
+  `train`, `predict`, `predict_week`, `power_rankings`, `betting_xlsx`, `leakage_audit`,
+  `validate_offline`, `validate_live`, `walk_forward_backtest` and `shap_analysis`.
+- Refresh market lines without a full ETL (`nfl_predictor/lines_refresh.py`): reload the
+  nflverse schedule for one season, fill missing moneylines from the spreads, and update the
+  line columns of that season's rows in `data/all_data_ml.csv`, `data/all_data.csv` and the
+  week's `games_to_predict` file in place, then chain a predict job on the active run.
+- Build prediction inputs for a future week (`nfl_predictor/week_builder.py`, the `predict_week`
+  job): extract the week's unplayed games from `data/all_data_ml.csv` with the ETL's own
+  upcoming-game rule and predict them with the active run's model, so the week selector can
+  offer any unplayed week of the current season.
+- Add a `web` job to `.github/workflows/validation.yml` (Node 26: `npm ci`, lint, typecheck,
+  vitest, build) and sync the Python job with the `web` extra.
+
 ## [0.7.1] - 2026-09-11
 
 ### Changed

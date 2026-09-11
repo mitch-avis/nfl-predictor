@@ -302,6 +302,20 @@ Recommended local commands:
   and calls the same `compute_power_rankings`. `scripts/golden_command.py` writes a separate
   `model_rating_rankings.csv`, which is a per-model diagnostic, not the power ranking.
 
+### Web UI (FastAPI + React)
+
+- `nfl_predictor/api/` is the FastAPI backend (`python -m nfl_predictor.api`): auth (argon2,
+  JWT cookie, `viewer`/`admin`), a run index over `models/*/metadata.json` with one **active**
+  run, readers and a column registry for predictions, betting, power rankings, model and data
+  status, and a job runner (`nfl_predictor/api/jobs/`) that launches the repo CLIs as
+  subprocesses with streamed logs; walk-forward jobs share one worker so two never overlap.
+  `nfl_predictor/lines_refresh.py` and `nfl_predictor/week_builder.py` are the CLIs it added.
+- `web/` is the Vite + React 19 + Tailwind app; it is excluded from ruff, pyright and ty.
+  Its gate (`source ~/.nvm/nvm.sh`, then in `web/`: `npm run lint`, `npm run typecheck`,
+  `npx vitest run`, `npm run build`) runs as the `web` job in CI; run it whenever `web/` changes.
+- Tests for the backend live in `tests/api/`; the design, decisions and phase status live in
+  `.agents/web_ui_plan.md`, and `web/README.md` documents the runtime configuration.
+
 ## Modeling Philosophy (Important Context)
 
 - Implementation is purely in Python.
@@ -653,7 +667,8 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
 ## Safety, Scope, and Prohibited Behaviors
 
 - Do not introduce offensive/unsafe content or harmful instructions.
-- Do not add unrelated features (dashboards, new scrapers, unrelated pipelines).
+- Do not add unrelated features (new scrapers, unrelated pipelines). The web UI under
+  `nfl_predictor/api/` and `web/` is in scope; extend it by phase per `.agents/web_ui_plan.md`.
 - Do not remove/alter existing pipeline behavior without updating tests and documentation.
 - Avoid new external services or network dependencies beyond existing scraping utilities.
 - Do not claim betting profitability; report metrics and uncertainty honestly.

@@ -63,8 +63,9 @@ opening message asks for all four arms, run all four in the order above.
 
 ## 1. Facts to trust unless your verification disproves them
 
-- Version `0.5.0` is committed, tagged, and **published as a GitHub release** (2026-09-11 00:02
-  MDT). Everything since is unreleased.
+- The project version is `0.5.0` in `pyproject.toml`, but there is **no tag and no GitHub
+  release**: the user removed both on 2026-09-11 because the project is private and not ready
+  for releases. Never create or push a tag or release.
 - Milestone 51 is committed on `feat/pbp-per-snap-epa` (five commits after `0.5.0`, ending in
   the docs commit) and unreleased; the working tree should be clean apart from gitignored data,
   so check `git status` first. The gate was green on it: `631 passed`, coverage `91.16%`, all

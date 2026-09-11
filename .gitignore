@@ -236,3 +236,6 @@ models/
 
 # NFL SOS Ratings folder
 nfl-sos-ratings
+
+# Agent skills (a separate git clone of mitch-avis/agent-skills)
+.agents/skills/

@@ -70,6 +70,8 @@ extend-exclude = [
     ".mypy_cache",
     "build",
     "dist",
+    # A separate git clone of agent skills, not part of this project.
+    ".agents/skills",
 ]
 
 [tool.ruff.lint]

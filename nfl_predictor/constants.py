@@ -868,6 +868,21 @@ ADJUSTED_STRENGTH_STATS = [*STRENGTH_TEAM_STATS, *SCHEDULE_STRENGTH_STATS]
 # anything that consumes the solve directly.
 STRENGTH_SNAPSHOT_STATS = [*STRENGTH_TEAM_STATS, "adj_hfa"]
 
+# Columns of the per-team weekly strength file the ETL writes next to the game datasets:
+# every published strength column plus the shared home-field term, keyed by
+# (season, week, team). Teams on a bye are included, which is what lets a report read a
+# team's pre-week strength for a week in which it has no game row.
+STRENGTH_SNAPSHOT_FILE_COLUMNS = [
+    "season",
+    "week",
+    "team_abbr",
+    *ADJUSTED_STRENGTH_STATS,
+    "adj_hfa",
+]
+
+# Base name of that file under DATA_PATH, without the extension.
+STRENGTH_SNAPSHOTS_NAME = "strength_snapshots"
+
 FEATURE_GROUP_COLUMN_MARKERS["strength"] = tuple(ADJUSTED_STRENGTH_STATS)
 
 # Stats to EXCLUDE from opponent stat generation (they create duplicates)

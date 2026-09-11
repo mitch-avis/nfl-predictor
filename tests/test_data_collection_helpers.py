@@ -240,7 +240,11 @@ def test_main_orchestrates_collection_and_output_writes(monkeypatch: pytest.Monk
     )
     monkeypatch.setattr(data_collection, "_determine_nfl_week", lambda _today: 3)
     monkeypatch.setattr(data_collection, "_resolve_seasons", lambda start, end: [start, end])
-    monkeypatch.setattr(data_collection, "collect_all_data", lambda seasons, config: all_data)
+    monkeypatch.setattr(
+        data_collection,
+        "collect_all_data",
+        lambda seasons, config, strength_snapshots: all_data,
+    )
     monkeypatch.setattr(data_collection, "_log_df_stats", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(data_collection, "_timed_step", fake_timed_step)
     monkeypatch.setattr(
@@ -284,6 +288,7 @@ def test_main_orchestrates_collection_and_output_writes(monkeypatch: pytest.Monk
         "all_data",
         "completed_games_ml",
         "completed_games",
+        "strength_snapshots",
         "predict/week_03_games_to_predict",
     ]
     assert any(message == "Data collection complete." for message in info_messages)

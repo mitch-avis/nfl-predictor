@@ -18,6 +18,8 @@ Output Files:
     - data/completed_games_ml.csv: Only completed games with diffs
     - data/completed_games.csv: Only completed games without diffs
     - data/predict/week_XX_games_to_predict.csv: Upcoming games for prediction
+    - data/strength_snapshots.csv: Pre-week schedule-adjusted strength for every team on
+      each season's schedule and every processed week, teams on a bye included
 
 Usage:
     Run directly to collect and process all data:
@@ -300,8 +302,11 @@ def main(argv: list[str] | None = None) -> None:
         len(seasons_to_process),
     )
 
+    strength_snapshots: list[pl.DataFrame] = []
     with _timed_step("collect_all_data", config.enable_timing):
-        all_data_df = collect_all_data(seasons_to_process, config=config)
+        all_data_df = collect_all_data(
+            seasons_to_process, config=config, strength_snapshots=strength_snapshots
+        )
 
     _log_df_stats("all_data", all_data_df, config.enable_debug)
 
@@ -319,6 +324,11 @@ def main(argv: list[str] | None = None) -> None:
     completed_no_diff_df = polars_utils.remove_diff_columns(completed_df)
     save_dataframe(completed_df, "completed_games_ml")
     save_dataframe(completed_no_diff_df, "completed_games")
+
+    # Per-team pre-week strength, bye teams included, for reports that rank teams.
+    save_dataframe(
+        combine_strength_snapshots(strength_snapshots), constants.STRENGTH_SNAPSHOTS_NAME
+    )
 
     # Filter and save upcoming games for prediction (ML version only)
     upcoming_df = polars_utils.filter_upcoming_games(all_data_df, current_season, current_week)
@@ -427,12 +437,15 @@ def collect_all_data(
     seasons: list[int],
     *,
     config: DataCollectionConfig | None = None,
+    strength_snapshots: list[pl.DataFrame] | None = None,
 ) -> pl.DataFrame:
     """Collect and combine all data for specified seasons.
 
     Args:
         seasons: List of season years to process
         config: Optional runtime config for logging/timing and cache refresh
+        strength_snapshots: Optional list that receives each processed week's per-team
+            strength snapshot; see `combine_strength_snapshots`
 
     Returns:
         Combined DataFrame with all game data and features
@@ -606,6 +619,7 @@ def collect_all_data(
                 blend_strength_prior=config.blend_strength_prior,
                 blend_stat_prior=config.blend_stat_prior,
                 stat_prior_blend_games=config.stat_prior_blend_games,
+                strength_snapshots=strength_snapshots,
             )
         if season_data.height > 0:
             all_seasons_data.append(season_data)
@@ -776,6 +790,17 @@ def build_prior_season_stats(
     return polars_utils.recompute_derived_metrics(prior)
 
 
+# Every per-team value of one week's strength table: the published game-row columns plus
+# the league-wide home-field term, which only the snapshot file carries.
+_STRENGTH_TABLE_COLUMNS = (*constants.ADJUSTED_STRENGTH_STATS, "adj_hfa")
+
+# Column types of the published strength snapshot file.
+_STRENGTH_SNAPSHOT_FILE_SCHEMA: dict[str, pl.DataType | type[pl.DataType]] = {
+    column: {"season": pl.Int64, "week": pl.Int64, "team_abbr": pl.String}.get(column, pl.Float64)
+    for column in constants.STRENGTH_SNAPSHOT_FILE_COLUMNS
+}
+
+
 def build_strength_features(
     team_stats_df: pl.DataFrame,
     schedule_df: pl.DataFrame,
@@ -785,7 +810,57 @@ def build_strength_features(
     prior_snapshot: pl.DataFrame | None = None,
     blend_prior: bool = True,
 ) -> pl.DataFrame:
-    """Build every published schedule-adjusted strength column for one season week.
+    """Build the per-team strength columns published on game rows for one season week.
+
+    This is `build_strength_table` without the home-field term, which is one league-wide
+    value per week and so is not joined onto games. Arguments are those of
+    `build_strength_table`.
+
+    Returns:
+        One row per team with `team_abbr` and `constants.ADJUSTED_STRENGTH_STATS`.
+
+    """
+    return build_strength_table(
+        team_stats_df,
+        schedule_df,
+        season=season,
+        week=week,
+        prior_snapshot=prior_snapshot,
+        blend_prior=blend_prior,
+    ).select("team_abbr", *constants.ADJUSTED_STRENGTH_STATS)
+
+
+def _stamp_strength_snapshot(table: pl.DataFrame, *, season: int, week: int) -> pl.DataFrame:
+    """Key one week's strength table by season and week, in the published file layout."""
+    return table.with_columns(
+        pl.lit(season).alias("season"),
+        pl.lit(week).alias("week"),
+    ).select(pl.col(name).cast(dtype) for name, dtype in _STRENGTH_SNAPSHOT_FILE_SCHEMA.items())
+
+
+def combine_strength_snapshots(frames: list[pl.DataFrame]) -> pl.DataFrame:
+    """Stack weekly strength snapshots into the published file, typed and sorted.
+
+    The result has one row per ``(season, week, team)`` for every team on each season's
+    schedule, bye teams included, ordered by season, week and team. An empty list gives
+    an empty frame that still carries every documented column, so the file keeps one
+    schema whether or not any week was solved.
+    """
+    if not frames:
+        return pl.DataFrame(schema=_STRENGTH_SNAPSHOT_FILE_SCHEMA)
+    return pl.concat(frames, how="vertical").sort(["season", "week", "team_abbr"])
+
+
+def build_strength_table(
+    team_stats_df: pl.DataFrame,
+    schedule_df: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    prior_snapshot: pl.DataFrame | None = None,
+    blend_prior: bool = True,
+) -> pl.DataFrame:
+    """Build every schedule-adjusted strength value for one season week, per team.
 
     Combines the pre-week ridge snapshot with the two schedule-strength lenses: the
     ridge-based mean of opponents' pre-week composite, and the one-hop companion that
@@ -808,7 +883,9 @@ def build_strength_features(
         blend_prior: Set to False to ablate the prior and publish the raw in-season solve.
 
     Returns:
-        One row per team with `team_abbr` and `constants.ADJUSTED_STRENGTH_STATS`.
+        One row per team on the season's schedule, teams on a bye included, with
+        `team_abbr`, `constants.ADJUSTED_STRENGTH_STATS` and the league-wide home-field
+        term `adj_hfa`.
 
     """
     snapshot = strength_snapshot.build_strength_snapshot(
@@ -821,13 +898,10 @@ def build_strength_features(
     )
     if snapshot.height == 0:
         return pl.DataFrame(
-            schema={
-                "team_abbr": pl.String,
-                **dict.fromkeys(constants.ADJUSTED_STRENGTH_STATS, pl.Float64),
-            }
+            schema={"team_abbr": pl.String, **dict.fromkeys(_STRENGTH_TABLE_COLUMNS, pl.Float64)}
         )
 
-    features = snapshot.select("team_abbr", *constants.STRENGTH_TEAM_STATS)
+    features = snapshot.select("team_abbr", *constants.STRENGTH_TEAM_STATS, "adj_hfa")
 
     ratings = snapshot.select("team_abbr", "adj_strength_composite")
     try:
@@ -869,7 +943,7 @@ def build_strength_features(
     if missing:
         features = features.with_columns(missing)
 
-    return features.select("team_abbr", *constants.ADJUSTED_STRENGTH_STATS)
+    return features.select("team_abbr", *_STRENGTH_TABLE_COLUMNS)
 
 
 def _merge_strength_features(
@@ -931,6 +1005,7 @@ def process_season(
     blend_strength_prior: bool = True,
     blend_stat_prior: bool = True,
     stat_prior_blend_games: float = constants.PRIOR_BLEND_GAMES,
+    strength_snapshots: list[pl.DataFrame] | None = None,
 ) -> pl.DataFrame:
     """Process a single season's data.
 
@@ -946,6 +1021,9 @@ def process_season(
         blend_strength_prior: Set to False to ablate the strength prior blend
         blend_stat_prior: Set to False to ablate the season-to-date stat prior blend
         stat_prior_blend_games: K in the stat blend weight ``games / (games + K)``
+        strength_snapshots: Optional list that receives one per-team strength snapshot
+            per processed week, plus the week after the regular season when the schedule
+            does not reach it yet
 
     Returns:
         Processed DataFrame for the season
@@ -1011,9 +1089,27 @@ def process_season(
             prior_season_stats=prior_season_stats,
             blend_stat_prior=blend_stat_prior,
             stat_prior_blend_games=stat_prior_blend_games,
+            strength_snapshots=strength_snapshots,
         )
         if week_data.height > 0:
             weekly_data.append(week_data)
+
+    # No game carries the week after the regular season until the playoff schedule is
+    # published, yet a ranking through the final regular-season week needs that week's
+    # snapshot (the whole regular season). Solve it directly when the schedule stops short.
+    after_regular_season = constants.get_regular_season_weeks(season) + 1
+    if strength_snapshots is not None and after_regular_season not in weeks:
+        full_season = build_strength_table(
+            team_stats_df,
+            season_schedule,
+            season=season,
+            week=after_regular_season,
+            prior_snapshot=prior_strength_snapshot,
+            blend_prior=blend_strength_prior,
+        )
+        strength_snapshots.append(
+            _stamp_strength_snapshot(full_season, season=season, week=after_regular_season)
+        )
 
     if timing_enabled and timing_totals:
         summary = ", ".join(
@@ -1053,6 +1149,7 @@ def process_week(
     prior_season_stats: pl.DataFrame | None = None,
     blend_stat_prior: bool = True,
     stat_prior_blend_games: float = constants.PRIOR_BLEND_GAMES,
+    strength_snapshots: list[pl.DataFrame] | None = None,
 ) -> pl.DataFrame:
     """Process a single week's games with aggregated stats from prior weeks.
 
@@ -1088,6 +1185,8 @@ def process_week(
             `build_prior_season_stats`. Computed here when not supplied.
         blend_stat_prior: Set to False to ablate the season-to-date stat prior blend
         stat_prior_blend_games: K in the stat blend weight ``games / (games + K)``
+        strength_snapshots: Optional list that receives this week's per-team strength
+            snapshot for every team on the schedule, bye teams included
 
     Returns:
         DataFrame with week's games and features
@@ -1322,7 +1421,7 @@ def process_week(
             prior_strength_snapshot = build_prior_strength_snapshot(
                 team_stats_df, season, min_season=min_season
             )
-        strength_features = build_strength_features(
+        strength_table = build_strength_table(
             team_stats_df,
             schedule_df,
             season=season,
@@ -1330,7 +1429,14 @@ def process_week(
             prior_snapshot=prior_strength_snapshot,
             blend_prior=blend_strength_prior,
         )
-        merged = _merge_strength_features(merged, strength_features)
+        if strength_snapshots is not None:
+            # Recorded before the join below keeps only the teams playing this week.
+            strength_snapshots.append(
+                _stamp_strength_snapshot(strength_table, season=season, week=week)
+            )
+        merged = _merge_strength_features(
+            merged, strength_table.select("team_abbr", *constants.ADJUSTED_STRENGTH_STATS)
+        )
 
     # Calculate stat differentials
     with _timed_substep("calculate_differentials", timing_enabled, timing_totals):

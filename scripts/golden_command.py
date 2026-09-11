@@ -65,14 +65,17 @@ def _add_ratings(df: pd.DataFrame, target_columns: tuple[str, str]) -> pd.DataFr
 
 
 def _build_pregame_power_rankings(df: pd.DataFrame) -> pd.DataFrame:
-    """Build per-week pregame power rankings from rating columns.
+    """Build per-week team rankings from the model's per-game rating columns.
 
     The produced rating for a given (season, week) is based on:
     - pregame ratings for games at/after that week
     - postgame ratings for games strictly before that week
 
-    This is intentionally simple and deterministic; it is a display artifact and does not
-    affect model training or win probabilities.
+    This is a quick view of what one trained model implies, written as
+    `model_rating_rankings.csv`. It is not the repository's power ranking: that artifact
+    comes from `scripts/power_rankings.py` (and `scripts/weekly_run.py`), which ranks on
+    the schedule-adjusted composite. It is deterministic and does not affect model
+    training or win probabilities.
     """
     if "season" not in df.columns or "week" not in df.columns:
         return pd.DataFrame()
@@ -377,7 +380,11 @@ def _parse_args() -> argparse.Namespace:
         "--write-power-rankings",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Write power_rankings.csv for the predicted week into the run directory.",
+        help=(
+            "Write model_rating_rankings.csv (teams ranked by this model's per-game ratings) "
+            "for the predicted week into the run directory. The canonical power rankings "
+            "come from scripts/power_rankings.py."
+        ),
     )
     parser.add_argument(
         "--train-holdout-seasons",
@@ -661,7 +668,7 @@ def main() -> int:
                     args.predict_path,
                 )
                 rankings = pd.DataFrame()
-            out_rankings = run_dir / "power_rankings.csv"
+            out_rankings = run_dir / "model_rating_rankings.csv"
             rankings.to_csv(out_rankings, index=False)
         except (OSError, ValueError, KeyError, ParserError) as exc:
             log.warning("Power rankings generation failed: %s", exc)

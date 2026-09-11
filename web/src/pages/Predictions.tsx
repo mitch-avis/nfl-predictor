@@ -1,12 +1,15 @@
-import { LayoutGrid, Table2 } from 'lucide-react'
+import { LayoutGrid, Table2, Wand2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
-import { usePicks, usePredictions } from '@/api/queries'
+import { ApiError } from '@/api/client'
+import { usePicks, usePredictions, useWeeks } from '@/api/queries'
 import type { Row, WeekRef } from '@/api/types'
 import { CopyButton } from '@/components/common/CopyButton'
+import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatTile } from '@/components/common/StatTile'
+import { RunJobButton } from '@/components/jobs/RunJobButton'
 import { WeekSelector, weekKey } from '@/components/common/WeekSelector'
 import { MatchupCard } from '@/components/predictions/MatchupCard'
 import { WinProbBar } from '@/components/predictions/WinProbBar'
@@ -20,6 +23,31 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useNumberParam, useQueryParam } from '@/hooks/useQueryParam'
 import { cn } from '@/utils/cn'
 import { formatDateTime, formatNumber, formatPercent, formatRelative } from '@/utils/format'
+
+/** A week the model has not predicted yet: offer to generate it rather than showing an error. */
+function NotPredictedYet({ season, week }: { season: number | null; week: number | null }) {
+  return (
+    <EmptyState
+      title={`Week ${week ?? '?'} has no predictions yet`}
+      description={
+        <>
+          The games are in the dataset, so the active model can predict them now. A future week
+          keeps the market lines, rest, and quarterbacks of the last ETL run, so refresh the lines
+          and predict again once the week is close.
+        </>
+      }
+      action={
+        <RunJobButton
+          templateId="predict_week"
+          label="Generate predictions"
+          icon={Wand2}
+          variant="default"
+          preset={season !== null && week !== null ? { season, week } : undefined}
+        />
+      }
+    />
+  )
+}
 
 function useWeekParams() {
   const [run, setRun] = useQueryParam('run')
@@ -78,11 +106,18 @@ function PicksList({ params }: { params: { run: string | null; season: number | 
 export function PredictionsPage() {
   const { params, select } = useWeekParams()
   const query = usePredictions(params)
+  const weeksQuery = useWeeks()
   const isMobile = useIsMobile()
   const [view, setView] = useState<'auto' | 'cards' | 'table'>('auto')
   const showCards = view === 'cards' || (view === 'auto' && isMobile)
   const groups = useColumnGroups('predictions', query.data?.table, ['Uncertainty', 'Context'])
-  const current = query.data ? weekKey({ season: query.data.season, week: query.data.week, source: query.data.source, run_id: query.data.run_id }) : null
+  const weeks = query.data?.weeks ?? weeksQuery.data ?? []
+  const notPredicted = query.isError && query.error instanceof ApiError && query.error.code === 'no_predictions'
+  const current = query.data
+    ? weekKey({ season: query.data.season, week: query.data.week, source: query.data.source, run_id: query.data.run_id })
+    : notPredicted && params.week !== null
+      ? weekKey({ season: params.season, week: params.week, source: 'available' })
+      : null
   const rows = useMemo<Row[]>(() => query.data?.table.rows ?? [], [query.data])
 
   return (
@@ -92,7 +127,7 @@ export function PredictionsPage() {
         description="Calibrated win probabilities, predicted scores, and how they compare with the market lines captured at the last data refresh."
         actions={
           <>
-            {query.data ? <WeekSelector weeks={query.data.weeks} value={current} onChange={select} /> : null}
+            <WeekSelector weeks={weeks} value={current} onChange={select} />
             <div className="inline-flex rounded-md border">
               <Button variant={showCards ? 'secondary' : 'ghost'} size="sm" aria-label="Card view" onClick={() => setView('cards')}>
                 <LayoutGrid className="size-4" />
@@ -105,7 +140,8 @@ export function PredictionsPage() {
         }
       />
       {query.isLoading ? <Skeleton className="h-64 w-full" /> : null}
-      {query.isError ? <ErrorState error={query.error} title="No predictions to show" /> : null}
+      {notPredicted ? <NotPredictedYet season={params.season} week={params.week} /> : null}
+      {query.isError && !notPredicted ? <ErrorState error={query.error} title="No predictions to show" /> : null}
       {query.data ? (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

@@ -29,10 +29,10 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/betting', label: 'Betting', icon: BarChart3, description: 'Moneyline and spread edges' },
   { to: '/data', label: 'Data & ETL', icon: Database, description: 'Dataset freshness and pipeline health' },
   { to: '/model', label: 'Model', icon: FlaskConical, description: 'Metrics, calibration, and feature importance' },
-  { to: '/jobs', label: 'Jobs', icon: PlayCircle, description: 'Run ETL, training, and reports', adminOnly: true, phase: 2 },
+  { to: '/jobs', label: 'Jobs', icon: PlayCircle, description: 'Run ETL, training, and reports' },
   { to: '/runs', label: 'Runs', icon: Activity, description: 'Every run on disk; pin the active one' },
   { to: '/users', label: 'Users', icon: Users, description: 'Accounts and roles', adminOnly: true },
   { to: '/glossary', label: 'Glossary', icon: BookOpen, description: 'What every column means' },
 ]
 
-export const CURRENT_PHASE = 1
+export const CURRENT_PHASE = 2

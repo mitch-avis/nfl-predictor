@@ -8,6 +8,8 @@ import { BettingPage } from './pages/Betting'
 import { DashboardPage } from './pages/Dashboard'
 import { DataStatusPage } from './pages/DataStatus'
 import { GlossaryPage } from './pages/Glossary'
+import { JobDetailPage } from './pages/JobDetail'
+import { JobsPage } from './pages/Jobs'
 import { LoginPage } from './pages/Login'
 import { PlaceholderPage } from './pages/Placeholder'
 import { PowerRankingsPage } from './pages/PowerRankings'
@@ -34,6 +36,8 @@ export const router = createBrowserRouter([
       { path: 'data', element: <DataStatusPage /> },
       { path: 'model', element: <Lazy><ModelPage /></Lazy> },
       { path: 'glossary', element: <GlossaryPage /> },
+      { path: 'jobs', element: <JobsPage /> },
+      { path: 'jobs/:jobId', element: <JobDetailPage /> },
       { path: 'runs', element: <RunsPage /> },
       { path: 'users', element: <UsersPage /> },
       { path: '*', element: <PlaceholderPage /> },

@@ -1,10 +1,11 @@
-import { Download, Info } from 'lucide-react'
+import { Download, FileSpreadsheet, Info } from 'lucide-react'
 import { useState } from 'react'
 
 import { qs } from '@/api/client'
-import { useBetting, useSession } from '@/api/queries'
+import { useBetting } from '@/api/queries'
 import { ErrorState } from '@/components/common/ErrorState'
 import { PageHeader } from '@/components/common/PageHeader'
+import { RunJobButton } from '@/components/jobs/RunJobButton'
 import { ActionBadge } from '@/components/betting/ActionBadge'
 import { ColumnPicker, useColumnGroups } from '@/components/table/ColumnPicker'
 import { DataTable } from '@/components/table/DataTable'
@@ -22,7 +23,6 @@ export function BettingPage() {
   const [week] = useNumberParam('week')
   const params = { run, season, week }
   const query = useBetting(params)
-  const session = useSession()
   const [showTotals, setShowTotals] = useState(false)
   const groups = useColumnGroups('betting', query.data?.table, ['Fair odds', 'Total (informational)', 'Uncertainty'])
   const columns = groups.columns.filter((key) => showTotals || query.data?.table.column_metadata[key]?.actionable !== false)
@@ -41,11 +41,9 @@ export function BettingPage() {
                   <Download className="size-4" /> Workbook
                 </a>
               </Button>
-            ) : session.data?.user.role === 'admin' ? (
-              <Button variant="outline" size="sm" disabled title="Generate from the Jobs page (phase 2)">
-                <Download className="size-4" /> No workbook yet
-              </Button>
-            ) : null}
+            ) : (
+              <RunJobButton templateId="betting_xlsx" label="Generate workbook" icon={FileSpreadsheet} />
+            )}
           </>
         }
       />

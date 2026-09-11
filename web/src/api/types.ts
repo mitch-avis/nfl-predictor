@@ -78,7 +78,7 @@ export interface Registry {
 export interface WeekRef {
   season: number | null
   week: number | null
-  source: 'active' | 'run' | 'unattached'
+  source: 'active' | 'run' | 'unattached' | 'available'
   run_id: string | null
   label: string
 }
@@ -228,3 +228,78 @@ export interface DataStatusOut {
   cache: { schedule: number[]; pbp: number[] }
   leakage_audit: LeakageAudit | null
 }
+
+export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'
+export type ParamKind = 'int' | 'float' | 'str' | 'bool' | 'choice'
+
+export interface ParamSpec {
+  name: string
+  label: string
+  kind: ParamKind
+  description: string
+  required: boolean
+  default: string | number | boolean | null
+  choices: string[]
+  minimum: number | null
+  maximum: number | null
+}
+
+export interface JobTemplate {
+  id: string
+  label: string
+  description: string
+  category: string
+  exclusive_group: string | null
+  chain_template_id: string | null
+  writes_datasets: boolean
+  needs_active_run: boolean
+  params: ParamSpec[]
+}
+
+export interface JobCatalog {
+  templates: JobTemplate[]
+  busy_groups: string[]
+}
+
+export interface JobProgress {
+  current: number
+  total: number
+  label: string
+}
+
+export interface Job {
+  id: string
+  template_id: string
+  template_label: string
+  params: Record<string, string | number | boolean>
+  status: JobStatus
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+  exit_code: number | null
+  created_by: string | null
+  progress: JobProgress | null
+  error: string | null
+  parent_job_id: string | null
+}
+
+export interface JobList {
+  jobs: Job[]
+  busy_groups: string[]
+}
+
+export interface JobLogLine {
+  seq: number
+  ts: string
+  level: string
+  line: string
+}
+
+export interface JobLogs {
+  job_id: string
+  status: JobStatus
+  next_seq: number
+  lines: JobLogLine[]
+}
+
+export type JobParams = Record<string, string | number | boolean>

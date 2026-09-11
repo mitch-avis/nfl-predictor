@@ -5,11 +5,18 @@ import { ApiError, apiFetch, qs } from './client'
 import type {
   BettingOut,
   DataStatusOut,
+  Job,
+  JobCatalog,
+  JobList,
+  JobLogs,
+  JobParams,
+  JobStatus,
   ModelOut,
   PicksOut,
   PowerOut,
   PredictionsOut,
   Registry,
+  WeekRef,
   Role,
   RunDetail,
   RunKind,
@@ -23,7 +30,13 @@ export const keys = {
   users: ['users'] as const,
   runs: (kind?: RunKind | 'all') => ['runs', kind ?? 'all'] as const,
   run: (runId: string) => ['run', runId] as const,
+  jobCatalog: ['job-catalog'] as const,
+  jobs: ['jobs'] as const,
+  job: (jobId: string) => ['job', jobId] as const,
 }
+
+/** How often job lists refresh while something is still running. */
+const JOB_POLL_MS = 2000
 
 export function useSession() {
   return useQuery({
@@ -145,6 +158,14 @@ export function usePredictions(params: WeekParams) {
   })
 }
 
+/** Every week the selector can offer, including weeks that could still be generated. */
+export function useWeeks() {
+  return useQuery({
+    queryKey: ['prediction-weeks'],
+    queryFn: () => apiFetch<WeekRef[]>('/api/predictions/weeks'),
+  })
+}
+
 export function usePicks(params: WeekParams) {
   return useQuery({
     queryKey: ['picks', params],
@@ -179,4 +200,63 @@ export function useDataStatus() {
     queryFn: () => apiFetch<DataStatusOut>('/api/data/status'),
     refetchInterval: 60_000,
   })
+}
+
+export function useJobCatalog() {
+  return useQuery({ queryKey: keys.jobCatalog, queryFn: () => apiFetch<JobCatalog>('/api/jobs/catalog') })
+}
+
+export function useJobs(limit = 50) {
+  return useQuery({
+    queryKey: [...keys.jobs, limit],
+    queryFn: () => apiFetch<JobList>(`/api/jobs${qs({ limit })}`),
+    refetchInterval: (query) =>
+      query.state.data?.jobs.some((job) => job.status === 'running' || job.status === 'queued')
+        ? JOB_POLL_MS
+        : false,
+  })
+}
+
+export function useJob(jobId: string | null, { poll = true }: { poll?: boolean } = {}) {
+  return useQuery({
+    queryKey: keys.job(jobId ?? ''),
+    queryFn: () => apiFetch<Job>(`/api/jobs/${encodeURIComponent(jobId ?? '')}`),
+    enabled: jobId !== null,
+    refetchInterval: (query) =>
+      poll && query.state.data && !isTerminal(query.state.data.status) ? JOB_POLL_MS : false,
+  })
+}
+
+/** Whether a job has finished, one way or another. */
+export function isTerminal(status: JobStatus): boolean {
+  return status === 'succeeded' || status === 'failed' || status === 'canceled'
+}
+
+export function useCreateJob() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ templateId, params }: { templateId: string; params: JobParams }) =>
+      apiFetch<Job>('/api/jobs', { method: 'POST', body: { template_id: templateId, params } }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.jobs })
+      void client.invalidateQueries({ queryKey: keys.jobCatalog })
+    },
+  })
+}
+
+export function useCancelJob() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      apiFetch<Job>(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }),
+    onSuccess: (job) => {
+      client.setQueryData(keys.job(job.id), job)
+      void client.invalidateQueries({ queryKey: keys.jobs })
+    },
+  })
+}
+
+/** Fetch a page of a job's logs starting after `after`. */
+export function fetchJobLogs(jobId: string, after: number) {
+  return apiFetch<JobLogs>(`/api/jobs/${encodeURIComponent(jobId)}/logs${qs({ after })}`)
 }

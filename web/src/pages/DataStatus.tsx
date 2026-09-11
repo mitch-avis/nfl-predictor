@@ -1,10 +1,11 @@
-import { CheckCircle2, Database, XCircle } from 'lucide-react'
+import { CheckCircle2, Database, RefreshCw, XCircle } from 'lucide-react'
 
 import { useDataStatus } from '@/api/queries'
 import { ErrorState } from '@/components/common/ErrorState'
 import { InfoTooltip } from '@/components/common/InfoTooltip'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatTile } from '@/components/common/StatTile'
+import { RunJobButton } from '@/components/jobs/RunJobButton'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -46,7 +47,23 @@ export function DataStatusPage() {
 
   return (
     <>
-      <PageHeader title="Data & ETL" description="What the pipeline last produced, how fresh it is, and whether the leakage audit is clean. Refresh and job controls arrive in phase 2." />
+      <PageHeader
+        title="Data & ETL"
+        description="What the pipeline last produced, how fresh it is, and whether the leakage audit is clean."
+        actions={
+          <>
+            <RunJobButton
+              templateId="lines_refresh"
+              label="Refresh lines"
+              icon={RefreshCw}
+              preset={
+                query.data ? { season: query.data.current_season, week: query.data.current_week } : undefined
+              }
+            />
+            <RunJobButton templateId="etl_full" label="Run ETL" icon={Database} />
+          </>
+        }
+      />
       {query.isLoading ? <Skeleton className="h-64 w-full" /> : null}
       {query.isError ? <ErrorState error={query.error} /> : null}
       {query.data ? (

@@ -65,14 +65,10 @@ opening message asks for all four arms, run all four in the order above.
 
 - Version `0.5.0` is committed, tagged, and **published as a GitHub release** (2026-09-11 00:02
   MDT). Everything since is unreleased.
-- **The working tree is dirty with the finished Milestone 51 work** (14 modified files and two
-  new test files; `git status`). It is complete, documented and gate-green (`631 passed`,
-  coverage `91.16%`, all linters, `uv lock --check`, `uv sync --check --active`, markdownlint).
-  Do not revert, reformat or fold it into your changes. Milestone 52 touches
-  `nfl_predictor/ml/ml_model_xgb_utils.py`, `nfl_predictor/ml/ml_model_core.py` and tests, none of
-  which Milestone 51 changed, so the two sets of changes stay separable. Commit only if the user
-  asks; if they ask, commit Milestone 51 first as its own logical commits (ETL snapshot file,
-  composite ranking method, score-dtype and standings fixes, weekly-run flags, docs), then the fix.
+- Milestone 51 is committed on `feat/pbp-per-snap-epa` (five commits after `0.5.0`, ending in
+  the docs commit) and unreleased; the working tree should be clean apart from gitignored data,
+  so check `git status` first. The gate was green on it: `631 passed`, coverage `91.16%`, all
+  linters, `uv lock --check`, `uv sync --check --active`, markdownlint.
 - **Root cause, verified twice on 2026-09-11.** With xgboost `3.4.1`, `fit()` no longer accepts
   `early_stopping_rounds`, so `_with_xgb_early_stopping_params` sets the init parameter
   `early_stopping_rounds` **and** adds one `EarlyStopping` callback instance to the params. Both

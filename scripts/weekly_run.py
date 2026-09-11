@@ -1058,7 +1058,15 @@ def _run_wf_compare(
 
             fold_callback = fold_progress_callback
 
-        out = walk_forward.run_walk_forward_backtest(df, cfg, fold_callback=fold_callback)
+        # Finished weeks are saved inside the run, so a candidate stopped partway resumes
+        # at its next unfinished week rather than from the start.
+        out = walk_forward.run_walk_forward_backtest(
+            df,
+            cfg,
+            fold_callback=fold_callback,
+            checkpoint_dir=wf_dir / "wf_folds",
+            resume=resume,
+        )
         duration = time.monotonic() - start
         summary_row = _build_summary_row(
             candidate,

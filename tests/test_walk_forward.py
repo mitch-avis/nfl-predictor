@@ -115,6 +115,165 @@ def test_walk_forward_deterministic_outputs() -> None:
     assert result_a["per_week"] == result_b["per_week"]
 
 
+def test_run_walk_forward_backtest_logs_each_finished_week(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every finished fold logs its position and timing, so a long run shows progress."""
+    messages: list[str] = []
+
+    def _capture(msg: str, *args: object, **_kwargs: object) -> None:
+        """Record the formatted message."""
+        messages.append(msg % args if args else msg)
+
+    monkeypatch.setattr(walk_forward.log, "info", _capture)
+
+    walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
+
+    progress = [message for message in messages if message.startswith("Walk-forward fold")]
+    assert len(progress) == 2
+    assert progress[0].startswith("Walk-forward fold 1/2 done: season 2023 week 2 (2 games")
+    assert progress[1].startswith("Walk-forward fold 2/2 done: season 2023 week 3 (2 games")
+    assert all("elapsed" in message and "remaining" in message for message in progress)
+
+
+class _RunStoppedError(Exception):
+    """Raised by a fold callback to simulate a run stopped partway through."""
+
+
+def _run_recording_folds(
+    df: pd.DataFrame,
+    config: walk_forward.WalkForwardConfig,
+    *,
+    checkpoint_dir: Path | None = None,
+    resume: bool = True,
+) -> tuple[dict[str, object], list[tuple[int, int]]]:
+    """Run the backtest and return its result plus the (season, week) of each computed fold."""
+    computed: list[tuple[int, int]] = []
+
+    def _record(_metrics: dict[str, object], fold: walk_forward.WalkForwardFold) -> None:
+        """Record a fold that was trained rather than restored."""
+        computed.append((fold.season, fold.week))
+
+    result = walk_forward.run_walk_forward_backtest(
+        df, config, fold_callback=_record, checkpoint_dir=checkpoint_dir, resume=resume
+    )
+    return result, computed
+
+
+def _assert_same_results(actual: dict[str, object], expected: dict[str, object]) -> None:
+    """Assert two backtest results carry identical per-week metrics and predictions."""
+    assert actual["per_week"] == expected["per_week"]
+    assert actual["feature_list"] == expected["feature_list"]
+    predictions = actual["predictions"]
+    expected_predictions = expected["predictions"]
+    assert isinstance(predictions, pd.DataFrame)
+    assert isinstance(expected_predictions, pd.DataFrame)
+    pdt.assert_frame_equal(predictions, expected_predictions, check_exact=True)
+
+
+def test_resumed_run_matches_an_uninterrupted_run(tmp_path: Path) -> None:
+    """A run stopped after its first week resumes from the checkpoint and ends identical."""
+    df = _fixture_df()
+    config = _base_config()
+    clean = walk_forward.run_walk_forward_backtest(df, config)
+
+    def _stop(_metrics: dict[str, object], _fold: walk_forward.WalkForwardFold) -> None:
+        """Stop the run as soon as the first week is finished."""
+        raise _RunStoppedError
+
+    with pytest.raises(_RunStoppedError):
+        walk_forward.run_walk_forward_backtest(
+            df, config, fold_callback=_stop, checkpoint_dir=tmp_path
+        )
+
+    resumed, computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+
+    assert computed == [(2023, 3)]
+    assert resumed["checkpoint"] == {
+        "dir": str(tmp_path / walk_forward.fold_checkpoint_fingerprint(df, config)[:20]),
+        "restored_folds": 1,
+        "computed_folds": 1,
+    }
+    _assert_same_results(resumed, clean)
+
+
+def test_finished_run_restores_every_week(tmp_path: Path) -> None:
+    """Re-running a finished run trains nothing and reproduces the same results."""
+    df = _fixture_df()
+    config = _base_config()
+    first, first_computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+    second, second_computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+
+    assert first_computed == [(2023, 2), (2023, 3)]
+    assert second_computed == []
+    _assert_same_results(second, first)
+
+
+def test_checkpoints_from_another_config_are_not_reused(tmp_path: Path) -> None:
+    """A different config fingerprints differently, so every week is trained again."""
+    df = _fixture_df()
+    config = _base_config()
+    changed = replace(
+        config,
+        xgb_params_overrides={**(config.xgb_params_overrides or {}), "n_estimators": 11},
+    )
+    _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+
+    result, computed = _run_recording_folds(df, changed, checkpoint_dir=tmp_path)
+
+    assert computed == [(2023, 2), (2023, 3)]
+    _assert_same_results(result, walk_forward.run_walk_forward_backtest(df, changed))
+
+
+def test_corrupt_checkpoint_is_recomputed(tmp_path: Path) -> None:
+    """An unreadable checkpoint is ignored and that week is trained again."""
+    df = _fixture_df()
+    config = _base_config()
+    clean, _ = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+    (fold_file,) = tmp_path.rglob("fold_2023_w02.joblib")
+    fold_file.write_bytes(b"not a checkpoint")
+
+    result, computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+
+    assert computed == [(2023, 2)]
+    _assert_same_results(result, clean)
+
+
+def test_resume_disabled_recomputes_every_week(tmp_path: Path) -> None:
+    """With resume off, existing checkpoints are overwritten rather than read."""
+    df = _fixture_df()
+    config = _base_config()
+    _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+
+    _, computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path, resume=False)
+
+    assert computed == [(2023, 2), (2023, 3)]
+
+
+def test_run_without_a_checkpoint_dir_reports_no_checkpoint() -> None:
+    """Checkpointing is opt-in for library callers."""
+    result = walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
+
+    assert result["checkpoint"] is None
+
+
+def test_fold_checkpoint_fingerprint_tracks_data_and_config() -> None:
+    """The fingerprint is stable for identical inputs and moves with the data or config."""
+    df = _fixture_df()
+    config = _base_config()
+    baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
+
+    changed_df = df.copy()
+    changed_df.loc[0, "feat1"] = 99.0
+
+    assert walk_forward.fold_checkpoint_fingerprint(df.copy(), config) == baseline
+    assert walk_forward.fold_checkpoint_fingerprint(changed_df, config) != baseline
+    assert (
+        walk_forward.fold_checkpoint_fingerprint(df, replace(config, calibration_weeks=2))
+        != baseline
+    )
+
+
 def test_walk_forward_probabilities_in_bounds() -> None:
     """Home win probabilities are always in [0, 1]."""
     df = _fixture_df()

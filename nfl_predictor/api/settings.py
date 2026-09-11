@@ -72,9 +72,10 @@ class Settings(BaseSettings):
         self.db_path = (self.db_path or self.state_dir / "app.db").resolve()
         self.sos_data_dir = (self.sos_data_dir or root / "nfl-sos-ratings" / "data").resolve()
         self.web_dist = (self.web_dist or root / "web" / "dist").resolve()
-        self.python_executable = (
-            self.python_executable or root / ".venv" / "bin" / Path(sys.executable).name
-        ).resolve()
+        # The venv interpreter is a symlink to the base Python; resolving it would launch jobs
+        # outside the virtual environment, so this path is made absolute but never resolved.
+        interpreter = self.python_executable or root / ".venv" / "bin" / Path(sys.executable).name
+        self.python_executable = interpreter if interpreter.is_absolute() else root / interpreter
 
     @property
     def data_path(self) -> Path:

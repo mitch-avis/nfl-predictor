@@ -53,3 +53,23 @@ def test_jwt_secret_explicit(tmp_path: Path) -> None:
     settings = Settings(root_dir=tmp_path, jwt_secret="abc" * 11)
     assert settings.resolve_jwt_secret() == "abc" * 11
     assert not (settings.state_path / SIGNING_KEY_FILENAME).exists()
+
+
+def test_python_executable_keeps_the_venv_symlink(tmp_path: Path) -> None:
+    """The interpreter path is not resolved: the venv python is a symlink to the base Python."""
+    venv_bin = tmp_path / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    real = tmp_path / "base-python"
+    real.write_text("#!/bin/sh\n", encoding="utf-8")
+    (venv_bin / Path(sys.executable).name).symlink_to(real)
+
+    settings = Settings(root_dir=tmp_path)
+
+    assert settings.python_path == venv_bin / Path(sys.executable).name
+    assert settings.python_path.is_symlink()
+
+
+def test_python_executable_can_be_given_relative_to_the_root(tmp_path: Path) -> None:
+    """A relative override is anchored at the repository root."""
+    settings = Settings(root_dir=tmp_path, python_executable=Path(".venv/bin/python"))
+    assert settings.python_path == tmp_path / ".venv" / "bin" / "python"

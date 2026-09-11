@@ -24,6 +24,12 @@ To incorporate *both* past games and future expectations:
 
 The resulting latent ratings are then scaled to a 1-10 power-rating scale.
 
+Teams can instead be ranked on the ETL's pre-week schedule-adjusted strength composite,
+read from one week of the per-team strength snapshot file. The composite is a weighted
+mean of within-week z-scores, not a win probability, so it is first expressed in points
+through that week's own SRS and then mapped onto the same scales; see
+`rank_teams_on_composite`.
+
 This is a display/reporting artifact only; it does not affect training.
 """
 
@@ -36,12 +42,28 @@ import pandas as pd
 
 from nfl_predictor import constants
 from nfl_predictor.ml.ml_model_core import margin_to_home_win_prob
+from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.polars.strength_snapshot import COMPOSITE_WEIGHTS
 
 # Internal column used to carry per-game fit weights; never published.
 _WEIGHT_COLUMN = "__fit_weight"
 
 # Optional column on the ratings input carrying each game's weight in the fit.
 FIT_WEIGHT_COLUMN = "fit_weight"
+
+# The snapshot column the composite method ranks on.
+COMPOSITE_COLUMN = "adj_strength_composite"
+
+# Published next to a composite rank: the weighted components, the SRS the points scale
+# is read from, and the in-season games behind the solve.
+COMPOSITE_PUBLISHED_COLUMNS: tuple[str, ...] = (
+    *COMPOSITE_WEIGHTS,
+    "adj_srs",
+    "strength_games_played",
+)
+
+# Fewest teams with both a composite and an SRS for the points scale to be estimated.
+_MIN_TEAMS_FOR_POINTS_SCALE = 3
 
 
 @dataclass(frozen=True)
@@ -211,6 +233,22 @@ def fit_bradley_terry_ratings(
     return ratings, home_adv
 
 
+def win_prob_to_power_1_10(p: np.ndarray | float) -> np.ndarray:
+    """Map a win probability against an average team onto the 1-10 display scale.
+
+    Formula: ``power_rating_1_10 = 1 + 9 * p``, so 0 maps to 1, 0.5 to 5.5 and 1 to 10.
+    """
+    return 1.0 + 9.0 * np.asarray(p, dtype=float)
+
+
+def win_prob_to_power_0_10(p: np.ndarray | float) -> np.ndarray:
+    """Map a win probability against an average team onto the 0-10 display scale.
+
+    Formula: ``power_rating_0_10 = 10 * p``.
+    """
+    return 10.0 * np.asarray(p, dtype=float)
+
+
 def scale_ratings_1_to_10(ratings_raw: pd.Series) -> pd.Series:
     """Scale raw ratings to a stable 1-10 range.
 
@@ -224,7 +262,7 @@ def scale_ratings_1_to_10(ratings_raw: pd.Series) -> pd.Series:
     """
     x = ratings_raw.astype(float)
     p_vs_avg = _sigmoid(x.to_numpy())
-    scaled = 1.0 + 9.0 * p_vs_avg
+    scaled = win_prob_to_power_1_10(p_vs_avg)
     return pd.Series(scaled, index=x.index, name="power_rating_1_10").round(2)
 
 
@@ -235,8 +273,90 @@ def ratings_to_power_0_to_10(ratings_raw: pd.Series) -> pd.Series:
     from win probability vs an average team on a neutral field.
     """
     x = ratings_raw.astype(float)
-    scaled = 10.0 * _sigmoid(x.to_numpy())
+    scaled = win_prob_to_power_0_10(_sigmoid(x.to_numpy()))
     return pd.Series(scaled, index=x.index, name="power_rating_0_10").round(2)
+
+
+def composite_points_scale(snapshot: pd.DataFrame) -> float:
+    """Return how many points of adjusted margin one composite unit is worth.
+
+    The composite has no units: it is a weighted mean of within-week z-scores. Its points
+    equivalent is read from the same snapshot, as the ordinary least-squares slope of each
+    team's adjusted SRS (points per game against an average schedule) on its composite::
+
+        beta = cov(adj_srs, composite) / var(composite)
+
+    over the teams that have both values.
+
+    Returns:
+        ``beta``, or NaN when fewer than three teams have both values, when the composite
+        has no spread, or when the slope is not positive: a scale that would flatten or
+        invert the ranking is worse than none.
+
+    """
+    if not {COMPOSITE_COLUMN, "adj_srs"} <= set(snapshot.columns):
+        return float("nan")
+    composite = pd.to_numeric(snapshot[COMPOSITE_COLUMN], errors="coerce").to_numpy(dtype=float)
+    srs = pd.to_numeric(snapshot["adj_srs"], errors="coerce").to_numpy(dtype=float)
+    usable = np.isfinite(composite) & np.isfinite(srs)
+    if int(usable.sum()) < _MIN_TEAMS_FOR_POINTS_SCALE:
+        return float("nan")
+    x = composite[usable]
+    y = srs[usable]
+    variance = float(np.var(x))
+    if variance <= 0.0:
+        return float("nan")
+    slope = float(np.mean((x - x.mean()) * (y - y.mean()))) / variance
+    return slope if slope > 0.0 else float("nan")
+
+
+def rank_teams_on_composite(snapshot: pd.DataFrame) -> pd.DataFrame:
+    """Rate every team in one week's strength snapshot on the display scales.
+
+    ``adj_strength_composite`` is unitless and is not a win probability, so the
+    Bradley-Terry ``sigmoid(rating)`` mapping does not apply to it. It is first expressed
+    in points with the slope ``beta`` from `composite_points_scale`, then turned into a
+    win probability against an average team on a neutral field through the model's own
+    normal margin curve, and only then placed on the scales::
+
+        points_vs_average = beta * (composite - mean(composite))
+        p_vs_average = Phi(points_vs_average / SCORE_DIFF_STD_DEV)
+        power_rating_1_10 = 1 + 9 * p_vs_average
+        power_rating_0_10 = 10 * p_vs_average
+
+    With ``beta > 0`` both scales rise with the composite and stay bounded, and an exactly
+    average team sits at 5.5 and 5.0. When ``beta`` is unavailable the points and scale
+    columns are null and the composite alone orders the teams.
+
+    Args:
+        snapshot: One row per team with ``team_abbr`` and ``adj_strength_composite``. The
+            components in `COMPOSITE_PUBLISHED_COLUMNS` are carried through when present.
+
+    Returns:
+        One row per team with ``team_abbr``, ``adj_strength_composite``,
+        ``points_vs_average``, ``power_rating_1_10``, ``power_rating_0_10`` and the
+        published components.
+
+    """
+    frame = pd.DataFrame({"team_abbr": snapshot["team_abbr"].astype(str).to_numpy()})
+    for column in (COMPOSITE_COLUMN, *COMPOSITE_PUBLISHED_COLUMNS):
+        if column in snapshot.columns:
+            frame[column] = pd.to_numeric(snapshot[column], errors="coerce").to_numpy(dtype=float)
+        else:
+            frame[column] = np.nan
+
+    beta = composite_points_scale(frame)
+    composite = frame[COMPOSITE_COLUMN].to_numpy(dtype=float)
+    if np.isnan(beta):
+        points = np.full(len(frame), np.nan)
+    else:
+        points = beta * (composite - float(np.nanmean(composite)))
+    p_vs_average = np.asarray(margin_to_home_win_prob(points), dtype=float)
+
+    frame.insert(2, "points_vs_average", np.round(points, 2))
+    frame.insert(3, "power_rating_1_10", np.round(win_prob_to_power_1_10(p_vs_average), 2))
+    frame.insert(4, "power_rating_0_10", np.round(win_prob_to_power_0_10(p_vs_average), 2))
+    return frame
 
 
 def compute_projected_standings(
@@ -270,6 +390,17 @@ def compute_projected_standings(
     future["home_abbr"] = future["home_abbr"].astype(str)
     future["away_abbr"] = future["away_abbr"].astype(str)
     p_home = pd.to_numeric(future[p_home_col], errors="coerce")
+
+    # A team has no record row until it has played, yet it still has a schedule to project
+    # (every team before week 1), so it starts from a zero record.
+    unrecorded = sorted(
+        (set(future["home_abbr"]) | set(future["away_abbr"])) - set(df_rec["team_abbr"])
+    )
+    if unrecorded:
+        zero_records = pd.DataFrame(
+            {"team_abbr": unrecorded, "wins": 0, "losses": 0, "ties": 0, "games_played": 0}
+        )
+        df_rec = zero_records if df_rec.empty else pd.concat([df_rec, zero_records])
 
     home_exp = (
         future.assign(exp_wins=p_home)
@@ -342,15 +473,75 @@ def compute_projected_standings(
     return out
 
 
-def build_power_rankings_and_standings(
+def _team_frame(team_universe: list[str]) -> pd.DataFrame:
+    """Return one row per team with its division and conference."""
+    base = pd.DataFrame({"team_abbr": team_universe})
+    base["division"] = base["team_abbr"].map(constants.TEAM_TO_DIVISION).fillna("Unknown")
+    base["conference"] = base["team_abbr"].map(constants.TEAM_TO_CONFERENCE).fillna("Unknown")
+    return base
+
+
+def _with_records(rankings: pd.DataFrame, current_records: pd.DataFrame) -> pd.DataFrame:
+    """Attach each team's current record, zero for a team with no games yet."""
+    return rankings.merge(
+        current_records[["team_abbr", "wins", "losses", "ties", "games_played"]],
+        on="team_abbr",
+        how="left",
+    ).fillna({"wins": 0, "losses": 0, "ties": 0, "games_played": 0})
+
+
+def _record_teams(current_records: pd.DataFrame) -> set[str]:
+    """Return the teams named in the current records."""
+    return set(pd.Series(current_records["team_abbr"], dtype="string").dropna().astype(str))
+
+
+def _composite_power_rankings(
+    snapshot: pd.DataFrame,
+    current_records: pd.DataFrame,
     *,
     season: int,
     through_week: int,
-    current_records: pd.DataFrame,
+) -> pd.DataFrame:
+    """Rank teams on one week's adjusted composite and attach their records.
+
+    A team with a record but no composite is kept, with null ratings, and ranked last.
+    """
+    ratings = rank_teams_on_composite(snapshot)
+    team_universe = sorted(_record_teams(current_records) | set(ratings["team_abbr"]))
+    rated = set(ratings.loc[ratings[COMPOSITE_COLUMN].notna(), "team_abbr"])
+    unrated = [team for team in team_universe if team not in rated]
+    if unrated:
+        log.warning("No adjusted composite for %s; ranked last.", ", ".join(unrated))
+
+    pr = _with_records(
+        _team_frame(team_universe).merge(ratings, on="team_abbr", how="left"), current_records
+    )
+    pr["season"] = int(season)
+    pr["through_week"] = int(through_week)
+    snapshot_weeks = (
+        pd.to_numeric(snapshot["week"], errors="coerce").dropna().unique()
+        if "week" in snapshot.columns
+        else []
+    )
+    pr["snapshot_week"] = (
+        int(snapshot_weeks[0]) if len(snapshot_weeks) == 1 else int(through_week) + 1
+    )
+
+    pr = pr.sort_values(
+        [COMPOSITE_COLUMN, "team_abbr"], ascending=[False, True], na_position="last"
+    )
+    pr["rank"] = np.arange(1, len(pr) + 1)
+    return pr
+
+
+def _bradley_terry_power_rankings(
     games_for_ratings: pd.DataFrame,
-    future_games_with_probs: pd.DataFrame,
-) -> PowerRatingsResult:
-    """Build power rankings and projected standings tables.
+    current_records: pd.DataFrame,
+    *,
+    season: int,
+    through_week: int,
+) -> pd.DataFrame:
+    """Fit Bradley-Terry ratings to the games and rank teams on them.
 
     When `games_for_ratings` carries a `fit_weight` column it is used as per-game
     sample weights, which is how the caller down-weights older seasons.
@@ -366,13 +557,11 @@ def build_power_rankings_and_standings(
     power_rating_0_10 = ratings_to_power_0_to_10(ratings_raw)
 
     team_universe = sorted(
-        set(pd.Series(current_records["team_abbr"], dtype="string").dropna().astype(str))
+        _record_teams(current_records)
         | set(pd.Series(games_for_ratings["home_abbr"], dtype="string").dropna().astype(str))
         | set(pd.Series(games_for_ratings["away_abbr"], dtype="string").dropna().astype(str))
     )
-    base = pd.DataFrame({"team_abbr": team_universe})
-    base["division"] = base["team_abbr"].map(constants.TEAM_TO_DIVISION).fillna("Unknown")
-    base["conference"] = base["team_abbr"].map(constants.TEAM_TO_CONFERENCE).fillna("Unknown")
+    base = _team_frame(team_universe)
 
     pr = base.merge(
         ratings_raw.rename("rating_raw").reset_index().rename(columns={"index": "team_abbr"}),
@@ -390,11 +579,7 @@ def build_power_rankings_and_standings(
         how="left",
     )
 
-    pr = pr.merge(
-        current_records[["team_abbr", "wins", "losses", "ties", "games_played"]],
-        on="team_abbr",
-        how="left",
-    ).fillna({"wins": 0, "losses": 0, "ties": 0, "games_played": 0})
+    pr = _with_records(pr, current_records)
 
     pr["home_advantage_logit"] = home_adv
     pr["home_advantage_prob"] = float(_sigmoid(home_adv))
@@ -403,6 +588,49 @@ def build_power_rankings_and_standings(
 
     pr = pr.sort_values(["power_rating_1_10", "team_abbr"], ascending=[False, True])
     pr["rank"] = np.arange(1, len(pr) + 1)
+    return pr
+
+
+def build_power_rankings_and_standings(
+    *,
+    season: int,
+    through_week: int,
+    current_records: pd.DataFrame,
+    future_games_with_probs: pd.DataFrame,
+    games_for_ratings: pd.DataFrame | None = None,
+    strength_snapshot: pd.DataFrame | None = None,
+) -> PowerRatingsResult:
+    """Build power rankings and projected standings tables.
+
+    Pass exactly one ratings source:
+
+    - ``strength_snapshot``: one week's per-team strength snapshot. Teams are ranked on
+      its adjusted composite (see `rank_teams_on_composite`), with the components
+      published next to the rank. A ``week`` column is published as ``snapshot_week``.
+    - ``games_for_ratings``: games with a ``p_home`` target for the Bradley-Terry fit. A
+      `fit_weight` column is used as per-game sample weights, which is how the caller
+      down-weights older seasons.
+
+    Projected standings are the same under both: current record plus the model's win
+    probabilities for the remaining games.
+
+    Raises:
+        ValueError: If neither or both ratings sources are given.
+
+    """
+    if strength_snapshot is not None and games_for_ratings is None:
+        pr = _composite_power_rankings(
+            strength_snapshot, current_records, season=season, through_week=through_week
+        )
+    elif games_for_ratings is not None and strength_snapshot is None:
+        pr = _bradley_terry_power_rankings(
+            games_for_ratings, current_records, season=season, through_week=through_week
+        )
+    else:
+        raise ValueError(
+            "Pass exactly one ratings source: games_for_ratings (Bradley-Terry) or "
+            "strength_snapshot (adjusted composite)."
+        )
 
     projected = compute_projected_standings(
         current_records=current_records,

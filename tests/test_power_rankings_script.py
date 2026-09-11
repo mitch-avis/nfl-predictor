@@ -12,6 +12,7 @@ import pandas as pd
 import polars as pl
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.ml import ml_model_core
 from scripts import power_rankings
 
@@ -389,3 +390,276 @@ def test_future_games_stay_out_of_the_strength_fit_by_default() -> None:
 
     assert default["week"].tolist() == [1]
     assert sorted(with_future["week"].tolist()) == [1, 2]
+
+
+def test_load_current_records_compares_scores_as_numbers(tmp_path: Path) -> None:
+    """A file that opens with unplayed games must not turn scores into text.
+
+    The ETL writes newest games first, so the rows Polars samples to infer types can all
+    have blank scores; compared as text, a 9-31 loss would read as a win.
+    """
+    unplayed = [
+        {
+            "season": 2025,
+            "week": index % 18 + 1,
+            "game_type": "REG",
+            "away_abbr": "CCC",
+            "home_abbr": "DDD",
+            "away_score": None,
+            "home_score": None,
+        }
+        for index in range(150)
+    ]
+    played = [
+        {
+            "season": 2024,
+            "week": 5,
+            "game_type": "REG",
+            "away_abbr": "AAA",
+            "home_abbr": "BBB",
+            "away_score": 9,
+            "home_score": 31,
+        }
+    ]
+    schedule_path = tmp_path / "schedule.csv"
+    pd.DataFrame([*unplayed, *played]).to_csv(schedule_path, index=False)
+
+    records = power_rankings._load_current_records(
+        schedule_path, season=2024, through_week=5
+    ).set_index("team_abbr")
+
+    assert records.loc["BBB", "wins"] == 1
+    assert records.loc["AAA", "losses"] == 1
+    assert records.loc["AAA", "wins"] == 0
+
+
+# Two seasons of a four-team league; week 3 of 2024 is still to be played.
+_FIXTURE_GAMES = (
+    (2023, 1, "AAA", "BBB", 10, 27),
+    (2023, 1, "CCC", "DDD", 24, 17),
+    (2023, 2, "BBB", "CCC", 20, 23),
+    (2023, 2, "DDD", "AAA", 13, 30),
+    (2024, 1, "AAA", "CCC", 21, 20),
+    (2024, 1, "BBB", "DDD", 35, 14),
+    (2024, 2, "CCC", "BBB", 17, 31),
+    (2024, 2, "DDD", "AAA", 28, 24),
+    (2024, 3, "AAA", "BBB", None, None),
+    (2024, 3, "CCC", "DDD", None, None),
+)
+
+
+def _write_fixture_schedule(path: Path) -> Path:
+    """Write the fixture league as a schedule/results CSV."""
+    frame = pd.DataFrame(
+        _FIXTURE_GAMES,
+        columns=["season", "week", "away_abbr", "home_abbr", "away_score", "home_score"],
+    )
+    frame.insert(2, "game_type", "REG")
+    frame.to_csv(path, index=False)
+    return path
+
+
+def _write_snapshots(path: Path, weeks: dict[int, dict[str, float]]) -> Path:
+    """Write a strength snapshot file with one row per team per 2024 week."""
+    rows: list[dict[str, object]] = []
+    for week, composites in weeks.items():
+        for team, value in composites.items():
+            row: dict[str, object] = {"season": 2024, "week": week, "team_abbr": team}
+            for column in constants.STRENGTH_SNAPSHOT_FILE_COLUMNS[3:]:
+                row[column] = value / 10.0
+            row["adj_strength_composite"] = value
+            row["adj_srs"] = 7.0 * value
+            rows.append(row)
+    pl.DataFrame(rows).write_csv(path)
+    return path
+
+
+def _no_future_games(*_args: object, **_kwargs: object) -> pd.DataFrame:
+    """Stand in for model predictions: nothing left to project."""
+    return pd.DataFrame(columns=["season", "week", "away_abbr", "home_abbr", "home_win_prob"])
+
+
+def _rank_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    options: power_rankings.RankingOptions,
+    *,
+    through_week: int = 2,
+) -> pd.DataFrame:
+    """Rank the fixture league through a week with the given options."""
+    monkeypatch.setattr(power_rankings, "_predict_future_games", _no_future_games)
+    schedule = _write_fixture_schedule(tmp_path / "schedule.csv")
+    result = power_rankings.compute_power_rankings(
+        None,
+        model_kind="margin_total",
+        data_ml=schedule,
+        data_schedule=schedule,
+        season=2024,
+        through_week=through_week,
+        include_postseason=False,
+        options=options,
+    )
+    return result.power_rankings
+
+
+def test_bradley_terry_method_reproduces_the_current_season_fit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pinned from the ranking the script produced before the composite became the default."""
+    options = power_rankings.resolve_ranking_options(
+        method="bradley_terry", legacy_franchise_fit=False
+    )
+
+    rankings = _rank_fixture(tmp_path, monkeypatch, options)
+
+    assert rankings.columns.tolist() == [
+        "team_abbr",
+        "division",
+        "conference",
+        "rating_raw",
+        "power_rating_1_10",
+        "power_rating_0_10",
+        "wins",
+        "losses",
+        "ties",
+        "games_played",
+        "home_advantage_logit",
+        "home_advantage_prob",
+        "season",
+        "through_week",
+        "rank",
+    ]
+    assert rankings["team_abbr"].tolist() == ["BBB", "CCC", "AAA", "DDD"]
+    assert rankings["rating_raw"].tolist() == pytest.approx(
+        [1.0734312909839037, -0.16356451172377265, -0.28861933211784196, -0.6212474471422891],
+        abs=1e-12,
+    )
+    assert rankings["power_rating_1_10"].tolist() == [7.71, 5.13, 4.86, 4.15]
+    assert rankings["power_rating_0_10"].tolist() == [7.45, 4.59, 4.28, 3.49]
+    assert float(rankings["home_advantage_logit"].iloc[0]) == pytest.approx(
+        -0.10168353446110899, abs=1e-12
+    )
+
+
+def test_composite_method_ranks_on_the_snapshot_for_the_next_week(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Through week 2 means going into week 3, so week 3's snapshot decides the order."""
+    snapshots = _write_snapshots(
+        tmp_path / "snapshots.csv",
+        {
+            2: {"AAA": 2.0, "BBB": 1.0, "CCC": 0.0, "DDD": -1.0},
+            3: {"AAA": -0.5, "BBB": 0.5, "CCC": 1.5, "DDD": -1.5},
+            4: {"AAA": 3.0, "BBB": -3.0, "CCC": -2.0, "DDD": 2.0},
+        },
+    )
+    options = power_rankings.resolve_ranking_options(
+        method=None, legacy_franchise_fit=False, strength_snapshots=snapshots
+    )
+
+    rankings = _rank_fixture(tmp_path, monkeypatch, options)
+
+    assert rankings["team_abbr"].tolist() == ["CCC", "BBB", "AAA", "DDD"]
+    assert rankings["snapshot_week"].unique().tolist() == [3]
+    # Records still come from the results through week 2.
+    assert int(rankings.loc[rankings["team_abbr"] == "BBB", "wins"].iloc[0]) == 2
+
+
+def test_later_snapshot_weeks_never_reach_the_ranking(tmp_path: Path) -> None:
+    """Rewriting every week after the one being ranked changes nothing."""
+    base = {3: {"AAA": -0.5, "BBB": 0.5}}
+    later = {**base, 4: {"AAA": 50.0, "BBB": -50.0}, 5: {"AAA": 9.0, "BBB": 9.0}}
+
+    without_later = power_rankings.load_strength_snapshot(
+        _write_snapshots(tmp_path / "base.csv", base), season=2024, through_week=2
+    )
+    with_later = power_rankings.load_strength_snapshot(
+        _write_snapshots(tmp_path / "later.csv", later), season=2024, through_week=2
+    )
+
+    pd.testing.assert_frame_equal(without_later, with_later)
+    assert with_later["week"].unique().tolist() == [3]
+
+
+def test_a_missing_snapshot_week_is_a_clear_error(tmp_path: Path) -> None:
+    """Ranking a week the ETL never solved fails loudly and names the alternatives."""
+    path = _write_snapshots(tmp_path / "snapshots.csv", {3: {"AAA": 0.5, "BBB": -0.5}})
+
+    with pytest.raises(ValueError, match="bradley_terry"):
+        power_rankings.load_strength_snapshot(path, season=2024, through_week=9)
+
+
+def test_a_duplicated_team_in_a_snapshot_week_is_rejected(tmp_path: Path) -> None:
+    """Two rows for one team in one week would make the rank ambiguous."""
+    path = tmp_path / "snapshots.csv"
+    rows = pl.read_csv(_write_snapshots(path, {3: {"AAA": 0.5, "BBB": -0.5}}))
+    pl.concat([rows, rows.head(1)]).write_csv(path)
+
+    with pytest.raises(ValueError, match="duplicate"):
+        power_rankings.load_strength_snapshot(path, season=2024, through_week=2)
+
+
+def test_ranking_options_default_to_the_composite() -> None:
+    """With no method named, rankings read the adjusted composite."""
+    options = power_rankings.resolve_ranking_options(method=None, legacy_franchise_fit=False)
+
+    assert options.method == "composite"
+    assert options.strength_snapshots == power_rankings.DEFAULT_STRENGTH_SNAPSHOTS
+
+
+def test_legacy_franchise_fit_selects_the_old_bradley_terry_settings() -> None:
+    """The legacy flag implies Bradley-Terry with every historical setting restored."""
+    options = power_rankings.resolve_ranking_options(
+        method=None,
+        legacy_franchise_fit=True,
+        window_seasons=5,
+        prior_season_weight=0.1,
+        target="margin",
+        include_future=False,
+        ratings_min_season=2010,
+    )
+
+    assert options.method == "bradley_terry"
+    assert options.window_seasons == 0
+    assert options.prior_season_weight == pytest.approx(1.0)
+    assert options.target == "binary"
+    assert options.include_future is True
+    assert options.ratings_min_season == 2010
+
+
+def test_legacy_franchise_fit_cannot_be_combined_with_the_composite() -> None:
+    """Asking for both is contradictory, so it is refused rather than guessed."""
+    with pytest.raises(ValueError, match="legacy"):
+        power_rankings.resolve_ranking_options(method="composite", legacy_franchise_fit=True)
+
+
+def test_an_unknown_ranking_method_is_rejected() -> None:
+    """Only the documented methods are accepted."""
+    with pytest.raises(ValueError, match="method"):
+        power_rankings.resolve_ranking_options(method="elo", legacy_franchise_fit=False)
+
+
+def test_cli_exposes_the_method_and_snapshot_path() -> None:
+    """The script parses the ranking method and the snapshot file location."""
+    args = power_rankings._parse_args(
+        [
+            "--model-in",
+            "model.joblib",
+            "--season",
+            "2024",
+            "--through-week",
+            "3",
+            "--method",
+            "bradley_terry",
+            "--strength-snapshots",
+            "snapshots.csv",
+        ]
+    )
+    defaults = power_rankings._parse_args(
+        ["--model-in", "model.joblib", "--season", "2024", "--through-week", "3"]
+    )
+
+    assert args.method == "bradley_terry"
+    assert args.strength_snapshots == Path("snapshots.csv")
+    assert defaults.method is None
+    assert defaults.strength_snapshots == power_rankings.DEFAULT_STRENGTH_SNAPSHOTS

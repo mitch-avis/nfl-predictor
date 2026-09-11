@@ -51,6 +51,14 @@ class ForbiddenError(ApiError):
         super().__init__(403, code, message)
 
 
+class UnprocessableEntityError(ApiError):
+    """A 422 error, matching FastAPI's own validation status."""
+
+    def __init__(self, message: str, code: str = "invalid_params") -> None:
+        """Build a 422 error."""
+        super().__init__(422, code, message)
+
+
 class BadRequestError(ApiError):
     """A 400 error."""
 

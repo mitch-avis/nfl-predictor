@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 from nfl_predictor.api import create_app
 from nfl_predictor.api.auth import users as user_store
 from nfl_predictor.api.db import Database
+from nfl_predictor.api.jobs import catalog
+from nfl_predictor.api.jobs.catalog import JobTemplate
 from nfl_predictor.api.settings import CSRF_HEADER_VALUE, Settings
 
 TEST_SECRET = "test-secret-" * 4
@@ -85,3 +87,16 @@ def viewer_client(app, db: Database) -> Iterator[TestClient]:  # noqa: ANN001
         test_client.headers.update(CSRF_HEADERS)
         login(test_client, "viewer", VIEWER_PASSWORD)
         yield test_client
+
+
+@pytest.fixture
+def register(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
+    """Return a helper that replaces the job catalog with the given templates."""
+
+    def _register(*templates: JobTemplate) -> None:
+        monkeypatch.setattr(catalog, "TEMPLATES", tuple(templates))
+        monkeypatch.setattr(
+            catalog, "TEMPLATES_BY_ID", {template.id: template for template in templates}
+        )
+
+    return _register

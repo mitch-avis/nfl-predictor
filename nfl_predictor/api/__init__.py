@@ -5,7 +5,8 @@ Build the app with :func:`create_app`; run it with ``python -m nfl_predictor.api
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -14,6 +15,8 @@ from nfl_predictor.api.auth.ratelimit import LoginRateLimiter
 from nfl_predictor.api.auth.router import router as auth_router
 from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import install_error_handlers
+from nfl_predictor.api.jobs.router import router as jobs_router
+from nfl_predictor.api.jobs.runner import JobRunner
 from nfl_predictor.api.readers.data_status import FingerprintCache
 from nfl_predictor.api.routers.betting import router as betting_router
 from nfl_predictor.api.routers.data import router as data_router
@@ -53,7 +56,19 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
 
     """
     settings = settings or Settings()
+
+    @asynccontextmanager
+    async def lifespan(running_app: FastAPI) -> AsyncIterator[None]:
+        """Start the job runner with the server and stop it on shutdown."""
+        runner: JobRunner = running_app.state.job_runner
+        runner.start()
+        try:
+            yield
+        finally:
+            runner.stop()
+
     app = FastAPI(
+        lifespan=lifespan,
         title="nfl-predictor",
         version="0.1.0",
         docs_url="/api/docs",
@@ -64,6 +79,7 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     app.state.login_limiter = LoginRateLimiter()
     app.state.run_index = RunIndex(settings.models_path)
     app.state.fingerprints = FingerprintCache(app.state.db)
+    app.state.job_runner = JobRunner(app.state.db, settings, app.state.run_index)
     install_error_handlers(app)
 
     @app.middleware("http")
@@ -88,6 +104,7 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     app.include_router(power_router, prefix=API_PREFIX)
     app.include_router(model_router, prefix=API_PREFIX)
     app.include_router(data_router, prefix=API_PREFIX)
+    app.include_router(jobs_router, prefix=API_PREFIX)
 
     @app.get(f"{API_PREFIX}/health", tags=["meta"])
     def health() -> dict[str, str]:

@@ -41,13 +41,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
+from pathlib import Path
 
 import polars as pl
 
 from nfl_predictor import constants
 from nfl_predictor.utils import game_utils, polars_utils
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars import schedule_strength, strength_snapshot
+from nfl_predictor.utils.polars import qb_stats, schedule_strength, strength_snapshot
 
 
 def _current_nfl_season(today: date) -> int:
@@ -335,6 +336,62 @@ def main(argv: list[str] | None = None) -> None:
     save_dataframe(upcoming_df, f"predict/week_{current_week:>02}_games_to_predict")
 
     log.info("Data collection complete.")
+
+
+def _attach_qb_features(
+    games: pl.DataFrame,
+    pbp_df: pl.DataFrame,
+    *,
+    max_season: int,
+    force_refresh: bool,
+    current_season: int,
+    identity_path: Path | None = None,
+) -> pl.DataFrame:
+    """Attach the quarterback per-dropback family to the combined game rows.
+
+    Career rates need every earlier regular season, so play-by-play seasons from
+    ``constants.NFLREADPY_MIN_SEASON`` through ``max_season`` that are not already in
+    ``pbp_df`` are loaded from the per-season cache before aggregating; a partial-season run
+    therefore produces the same values as a full rebuild. Rows without ``away_qb`` /
+    ``home_qb`` come back unchanged, and the final schema fills the columns with nulls.
+
+    Args:
+        games: Combined game rows after the future-week quarterback fill.
+        pbp_df: Play-by-play already loaded for the team-stat seasons.
+        max_season: Last season being processed.
+        force_refresh: Passed to ``load_pbp`` for the extra seasons.
+        current_season: Passed to ``load_pbp`` for its cache decisions.
+        identity_path: Quarterback identity file; defaults to
+            ``DATA_PATH/<QB_META_DATA_NAME>.csv``.
+
+    Returns:
+        ``games`` with the quarterback columns from ``qb_stats.attach_qb_features``.
+
+    """
+    if not {"season", "week", "away_qb", "home_qb"}.issubset(games.columns):
+        log.warning("Game rows have no away_qb/home_qb; skipping quarterback features")
+        return games
+    loaded = set(pbp_df.get_column("season").unique().to_list()) if "season" in pbp_df else set()
+    missing = [
+        season
+        for season in range(constants.NFLREADPY_MIN_SEASON, max_season + 1)
+        if season not in loaded
+    ]
+    parts = [qb_stats.aggregate_qb_game_stats(pbp_df)]
+    if missing:
+        history = polars_utils.load_pbp(
+            missing, force_refresh=force_refresh, current_season=current_season
+        )
+        parts.append(qb_stats.aggregate_qb_game_stats(history))
+    qb_games = pl.concat(parts, how="vertical")
+    path = identity_path or Path(constants.DATA_PATH) / f"{constants.QB_META_DATA_NAME}.csv"
+    identity = qb_stats.load_qb_identity(path)
+    log.info(
+        "QB features: %d quarterback games from play-by-play, %d identity names",
+        qb_games.height,
+        identity.height,
+    )
+    return qb_stats.attach_qb_features(games, qb_games, identity)
 
 
 def _log_pbp_null_rates(team_stats_df: pl.DataFrame, enable_debug: bool) -> None:
@@ -640,6 +697,15 @@ def collect_all_data(
             )
         # Fill in QB data for future games using most recent starters
         combined_df = game_utils.fill_future_qb_data(combined_df, raw_elo_df)
+        # Quarterback features key on the final starter assignment, future weeks included.
+        with _timed_step("attach_qb_features", config.enable_timing):
+            combined_df = _attach_qb_features(
+                combined_df,
+                pbp_df,
+                max_season=max(seasons),
+                force_refresh=config.force_refresh_nflreadpy,
+                current_season=current_season,
+            )
         # Fill in lines for future games from SurvivorGrid
         combined_df = game_utils.fill_future_game_lines(combined_df)
         # Fill missing moneylines by calculating from spreads

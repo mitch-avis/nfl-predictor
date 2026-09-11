@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.7.1] - 2026-09-11
+
+### Changed
+
+- Bump the project version to `0.7.1` and keep `uv.lock` aligned.
+- Load the quarterback family's history seasons (the play-by-play seasons before the ones an ETL
+  run processes) from the per-season cache even under `--refresh-nflreadpy`. The flag now
+  refreshes only the seasons being processed, as before the family existed; a one-season
+  refresh no longer re-downloads every season back to 1999. A full-range run still refreshes
+  every season it processes.
+- Say in the missing-identity-file warning what actually happens: without
+  `data/qb_meta_data.csv` quarterbacks are matched through the abbreviated passer-name
+  fallback alone, so most starters still get features and only ambiguous or unknown names are
+  null.
+
+### Fixed
+
+- Accept a training pool whose only seasons outside the rolling calibration window are the
+  requested whole calibration seasons. The season-count guard predated the rolling window and
+  still demanded a spare season for training, although the window seasons' remaining weeks
+  always train; with `--train-calibration-seasons 1` on a three-season pool, weeks 2-4 raised
+  `Not enough seasons` where week 5 succeeded. The guard now raises only when no season is left
+  to train on. Pools without a window split exactly as before.
+- Log the whole in-season calibration window. The `Calibration weeks` line printed only the
+  newest season's weeks (`season 2026 weeks [1]` for a window that also held 2025 weeks
+  16-18); it now appends the `[season, week]` pairs that the metadata records.
+
 ## [0.7.0] - 2026-09-11
 
 ### Changed

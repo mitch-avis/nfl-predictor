@@ -49,10 +49,12 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
     )
     history = pl.DataFrame(_dropbacks(2000, 5, "NE", "TB", 30))
     requested: list[list[int]] = []
+    refreshed: list[bool] = []
 
-    def fake_load_pbp(seasons: list[int], **_kwargs: Any) -> pl.DataFrame:
-        """Record the requested seasons and return the earlier history."""
+    def fake_load_pbp(seasons: list[int], **kwargs: Any) -> pl.DataFrame:
+        """Record the requested seasons and refresh flag, return the earlier history."""
         requested.append(list(seasons))
+        refreshed.append(bool(kwargs.get("force_refresh")))
         return history
 
     monkeypatch.setattr(polars_utils, "load_pbp", fake_load_pbp)
@@ -70,12 +72,12 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
         games,
         in_memory,
         max_season=2001,
-        force_refresh=False,
         current_season=2026,
         identity_path=_identity_file(tmp_path),
     )
 
     assert requested == [list(range(constants.NFLREADPY_MIN_SEASON, 2001))]
+    assert refreshed == [False], "history seasons always come from the cache"
     row = out.row(0, named=True)
     assert row["away_qb_history_dropbacks"] == 50
     assert row["home_qb_history_dropbacks"] == 12
@@ -99,7 +101,6 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
         games,
         pl.DataFrame(),
         max_season=2001,
-        force_refresh=False,
         current_season=2026,
         identity_path=tmp_path / "missing.csv",
     )

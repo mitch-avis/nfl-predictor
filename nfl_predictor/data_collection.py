@@ -343,7 +343,6 @@ def _attach_qb_features(
     pbp_df: pl.DataFrame,
     *,
     max_season: int,
-    force_refresh: bool,
     current_season: int,
     identity_path: Path | None = None,
 ) -> pl.DataFrame:
@@ -352,14 +351,16 @@ def _attach_qb_features(
     Career rates need every earlier regular season, so play-by-play seasons from
     ``constants.NFLREADPY_MIN_SEASON`` through ``max_season`` that are not already in
     ``pbp_df`` are loaded from the per-season cache before aggregating; a partial-season run
-    therefore produces the same values as a full rebuild. Rows without ``away_qb`` /
-    ``home_qb`` come back unchanged, and the final schema fills the columns with nulls.
+    therefore produces the same values as a full rebuild. Those history seasons are never
+    force-refreshed: a refresh applies to the seasons being processed, which arrive in
+    ``pbp_df``, and re-pulling every earlier season would turn a one-season refresh into a
+    full-history download. Rows without ``away_qb`` / ``home_qb`` come back unchanged, and the
+    final schema fills the columns with nulls.
 
     Args:
         games: Combined game rows after the future-week quarterback fill.
         pbp_df: Play-by-play already loaded for the team-stat seasons.
         max_season: Last season being processed.
-        force_refresh: Passed to ``load_pbp`` for the extra seasons.
         current_season: Passed to ``load_pbp`` for its cache decisions.
         identity_path: Quarterback identity file; defaults to
             ``DATA_PATH/<QB_META_DATA_NAME>.csv``.
@@ -379,9 +380,7 @@ def _attach_qb_features(
     ]
     parts = [qb_stats.aggregate_qb_game_stats(pbp_df)]
     if missing:
-        history = polars_utils.load_pbp(
-            missing, force_refresh=force_refresh, current_season=current_season
-        )
+        history = polars_utils.load_pbp(missing, force_refresh=False, current_season=current_season)
         parts.append(qb_stats.aggregate_qb_game_stats(history))
     qb_games = pl.concat(parts, how="vertical")
     path = identity_path or Path(constants.DATA_PATH) / f"{constants.QB_META_DATA_NAME}.csv"
@@ -703,7 +702,6 @@ def collect_all_data(
                 combined_df,
                 pbp_df,
                 max_season=max(seasons),
-                force_refresh=config.force_refresh_nflreadpy,
                 current_season=current_season,
             )
         # Fill in lines for future games from SurvivorGrid

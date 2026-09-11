@@ -141,11 +141,14 @@ def build_qb_identity(meta_df: pl.DataFrame) -> pl.DataFrame:
 def load_qb_identity(path: Path) -> pl.DataFrame:
     """Read the quarterback identity file and build the name-to-id map.
 
-    A missing file is not fatal: it logs a warning and returns an empty map, so every
-    quarterback feature becomes null rather than stopping the ETL.
+    A missing file is not fatal: it logs a warning and returns an empty map. Quarterbacks are
+    then identified only through the abbreviated passer-name fallback of ``attach_qb_features``,
+    which leaves a name shared by several passers, and every unmatched name, null.
     """
     if not path.exists():
-        log.warning("QB identity file %s not found; quarterback features will be null", path)
+        log.warning(
+            "QB identity file %s not found; quarterbacks are matched by passer name only", path
+        )
         return pl.DataFrame(schema=_IDENTITY_SCHEMA)
     meta = pl.read_csv(path, columns=["name_id", "gsis_id"], infer_schema_length=0)
     return build_qb_identity(meta)

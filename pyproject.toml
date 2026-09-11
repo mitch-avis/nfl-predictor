@@ -12,19 +12,24 @@ keywords = ["stats", "sports", "football", "machine learning"]
 authors = [{ name = "Mitch Avis", email = "mitchavis@gmail.com" }]
 license = { text = "MIT" }
 dependencies = [
+    "argon2-cffi",
     "beautifulsoup4",
     "coloredlogs",
+    "fastapi",
     "joblib",
     "lxml",
     "nflreadpy",
     "numpy",
-    "optuna",
     "openpyxl",
+    "optuna",
     "pandas",
     "polars",
+    "pyjwt",
     "requests",
     "scikit-learn",
     "scipy",
+    "sse-starlette",
+    "uvicorn[standard]",
     "xgboost",
 ]
 classifiers = [

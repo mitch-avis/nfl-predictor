@@ -167,6 +167,17 @@ TeamRankings data is cached under `data/<season>/` as week-level CSVs; enable de
 cache hits. Use `--timing` to log per-step runtimes and `--debug-logs` for detailed ETL diagnostics.
 Use `--refresh-nflreadpy` to force refresh nflreadpy data even when cache exists.
 
+Early-season handling: Week 1 has no in-season games, so every season-to-date team stat (the
+nflreadpy families and the play-by-play counts) falls back to the previous regular season regressed
+one third of the way toward the league mean (`constants.WEEK1_REGRESSION_FACTOR`). From week 2 on,
+each team's per-game means are blended toward that same prior, weighting the in-season sample
+`games / (games + K)` with `K = constants.PRIOR_BLEND_GAMES` (`4`): one game is 20% of the value,
+four games 50%, twelve games 75%. Rates are recomputed from the blended sums. Use
+`--stat-prior-blend-games` to change `K` and `--no-stat-prior-blend` to publish plain in-season
+means instead; both change feature values, so compare them with two dataset builds, not with
+`--disable-feature-groups`. The first season in a run has no prior and uses in-season means, and the
+schedule-adjusted strength family carries its own blend (`--no-strength-prior-blend`).
+
 ## Data sources + missing data
 
 This project is designed to keep an invariant output schema across seasons, even when some sources
@@ -321,6 +332,33 @@ incomplete, either pass `--exclude-incomplete-seasons` or specify `--eval-season
 metrics report includes the evaluated window and any exclusions. Walk-forward calibration uses the
 last K weeks strictly before the eval week; if insufficient weeks or outcomes are available,
 calibration is skipped for that fold.
+
+Every finished week logs its position, running time, and an estimate of the time remaining
+(`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
+1107s remaining`). The estimate averages the weeks trained so far, so it runs a little low late in a
+run as training sets grow. A from-week-1 run over three seasons takes about 75 minutes on a 24-core
+machine. Run one walk-forward at a time: XGBoost uses every core, and two concurrent runs slow each
+other down far more than twofold. When anything else is busy on the machine, set
+`OMP_WAIT_POLICY=PASSIVE` (for example `OMP_WAIT_POLICY=PASSIVE python
+scripts/walk_forward_backtest.py ...`): XGBoost's OpenMP threads otherwise spin while waiting for a
+preempted peer. On 2026-09-10, with other jobs loading the machine, one walk-forward week took `730s`
+with the default policy and `185s` with `PASSIVE`. On an idle machine keep the default: with
+`PASSIVE` the threads sleep between XGBoost's many small parallel steps and waking them costs more
+than it saves, so an idle week took `~142s` against `~82s` for the default. The setting changes
+scheduling only, never results, so switching it mid-run and resuming is safe.
+
+Walk-forward runs are **resumable**. Each finished week is saved under
+`models/wf_checkpoints/<fingerprint>/`, where the fingerprint covers the input rows, the full config,
+the modelling source code, and the installed library versions. Re-running an identical command
+after a stop (deliberate or not) restores the finished weeks and trains only the rest; a resumed run
+returns exactly the numbers an uninterrupted one would, which a test pins. Anything that changes the
+fingerprint starts fresh, so stale results are never mixed in. `--no-resume` retrains every week
+and `--checkpoint-dir` moves the root. The same checkpointing runs in `scripts/wf_compare.py`
+(`--resume`, `--checkpoint-dir`), `scripts/golden_command.py` (`--wf-resume`,
+`--wf-checkpoint-dir`), and inside the run directories of `scripts/weekly_run.py` and
+`scripts/betting_pipeline.py` (their existing `--resume`). The metrics report records how many weeks
+were restored and how many were trained. Checkpoints are small (a few hundred KB per run) and safe to
+delete once a report is written.
 
 Trend/season-phase ablation (drop trend + season-phase features while keeping everything else
 identical) is available via `--disable-trend-features`. Example 2x2 comparison matrix:
@@ -548,7 +586,9 @@ uv sync --check --active
 
 CI installs `markdownlint-cli` for the `markdownlint .` step; on a machine that has
 `markdownlint-cli2` instead, the equivalent is
-`markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings"`.
+`markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#.agents/skills"`. The
+`.agents/skills/` folder is an optional, gitignored clone of agent skills; ruff and
+`markdownlint .` skip it through `pyproject.toml` and `.markdownlintignore`.
 
 GitHub Actions mirrors this gate in `.github/workflows/validation.yml` and also runs the
 editable-install smoke check plus `--help` smoke checks for `nfl_predictor.ml_model`,

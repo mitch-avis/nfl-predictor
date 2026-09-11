@@ -1,176 +1,146 @@
 # Next Agent Session Prompt
 
 You are the orchestrating agent (Claude Opus 5) for an implementation session in the `nfl-predictor`
-workspace (`/home/mitch/workspace/nfl-predictor`). Your deliverable is **Milestone 49: continuous
-early-season shrinkage** from `.agents/TODO.md`, validated with a from-week-1 walk-forward. If it
-lands with time to spare, continue into **Milestone 43 phase 2** (43.2 onward), also in
-`.agents/TODO.md`.
+workspace (`/home/mitch/workspace/nfl-predictor`). Your deliverable is **Milestone 51: power
+rankings on the adjusted composite** (51.1 through 51.5 in `.agents/TODO.md`). If it lands with time
+to spare, start the **Milestone 52** diagnosis (52.1, the flat total head).
 
-## Why this order, and the one thing to say in your first response
+Milestone numbers changed on 2026-09-10: the worklist was renumbered into execution order, and the
+old-to-new map is at the top of `.agents/ARCHIVE.md`. Milestone 51 was "43 phase 2" and Milestone 52
+was "50". Older commits, changelog entries and `feature_crosswalk.md` use the old numbers.
 
-The 2026-09-09 planning review put Milestone 43 next and flagged the shrinkage defect as higher
-value. The 2026-09-10 review reorders them, for a reason of timing rather than value: **2026 Week 2
-kicks off Thursday 2026-09-17.** Week 2 is the one week of the season this defect wrecks (pick
-accuracy `0.5208` against `0.6958` for weeks 3-18). A fix that lands and validates on history this
-week changes the Week 2 picks; a fix that lands next week helps in 2027. Milestone 43 phase 2 is a
-reporting refinement with no deadline.
+## The one thing to settle in your first response
 
-Say this in one sentence at the top of your first response so the user can flip the order if they
-disagree. Then start. Do not ask permission to begin.
+51.1 has a design fork, written up in full under 51.1 in `.agents/TODO.md`. A team on bye in week
+`through_week + 1` has no game row that week, and its next row leaks that week's results into a
+historical rerun. The options:
+
+- **(a)** use the team's latest row at or before `through_week + 1`: leak-free, no new data path,
+  one game stale for bye teams;
+- **(b)** solve the snapshot inside the reporting script: exact, but it means factoring the
+  per-team-game frame out of `collect_all_data` and giving a reporting script network access and
+  a second route to the same numbers;
+- **(c)** have the ETL write the per-team weekly snapshot it already computes (bye teams included)
+  to a new file such as `data/strength_snapshots.csv`: exact, offline, consistent with the model's
+  features by construction; costs one ETL rebuild of about 10 minutes and a new artifact to
+  document.
+
+The previous session explained these to the user and **recommended (c)**; the user was leaning
+toward (b) or (c). If the user's opening message names a choice, take it and proceed. If it does
+not, restate the three options in a few lines with the (c) recommendation, ask them to choose, and
+read code while you wait. Everything else below is decided.
 
 ## 0. Read first, in this order
 
-1. `AGENTS.md`: non-negotiables, command forms, readiness behaviors, the validated baseline, and
-   the note that the recorded benchmark's dataset build no longer exists on disk.
-2. `.agents/TODO.md`, the Milestone 49 section in full, then Milestone 43 and the follow-ups.
-3. `.agents/ARCHIVE.md`, Milestone 46: the strength snapshot already does the blend you are about
-   to generalize, and its walk-forward showed the blend is a tie on Brier. Expect that here too.
-4. `nfl_predictor/data_collection.py::process_week` (around lines 1042-1078) and
-   `nfl_predictor/utils/polars/teamrankings.py::aggregate_team_stats_to_week`,
-   `regress_to_mean`, `recompute_derived_metrics`.
-5. `nfl_predictor/utils/polars/strength_snapshot.py` lines 85-95 and 305-330: the existing
-   `games / (games + PRIOR_BLEND_GAMES)` blend, `PRIOR_BLEND_GAMES = 4.0`.
-6. Tests that pin the current fallback: `tests/test_data_collection.py`
-   (`test_process_week_uses_fallback_stats_for_week1`,
-   `test_week1_fallback_regresses_pbp_rates_toward_the_league_mean`,
-   `test_week1_row_features_ignore_every_current_season_play`) and
-   `tests/test_data_collection_helpers.py::test_process_week_fallback`.
+1. `AGENTS.md`: non-negotiables, command forms, the current benchmark (measured 2026-09-10 on the
+   blend build), and the walk-forward operating notes (one run at a time, checkpoints, OpenMP wait
+   policy).
+2. `.agents/TODO.md`: Milestone 51 in full, then Milestone 52 and the open follow-ups.
+3. `.agents/ARCHIVE.md`: the renumbering map, "Milestone 43 phase 1" (what the Bradley-Terry
+   defaults already do), and the Milestone 49 entry (how the last session measured, and what it
+   got wrong about week 1).
+4. `nfl_predictor/data_collection.py`: `process_week` around the `strength_features` substep,
+   `build_strength_features`, `_schedule_teams`, `_merge_strength_features`, and where the CSV
+   outputs are written (`write_csv`). With option (c), this is where the snapshot file comes from.
+5. `nfl_predictor/utils/polars/strength_snapshot.py` (`build_strength_snapshot`, `_with_composite`,
+   `COMPOSITE_WEIGHTS`) so you know what `adj_strength_composite` is before you rank on it.
+6. `scripts/power_rankings.py` (`_build_games_for_ratings`, `main`),
+   `nfl_predictor/reporting/power_rankings.py` (`fit_bradley_terry_ratings`,
+   `scale_ratings_1_to_10`, `ratings_to_power_0_to_10`, `build_power_rankings_and_standings`),
+   `scripts/weekly_run.py` around the power-rankings stage, and
+   `scripts/golden_command.py::_build_pregame_power_rankings`.
+7. Tests: `tests/test_power_rankings.py`, `tests/test_power_rankings_script.py`,
+   `tests/test_golden_command_power_rankings.py`, and `tests/test_stat_prior_blend.py` for how the
+   last session tested `process_week` and `process_season`.
 
 ## 1. Facts to trust unless your verification disproves them
 
-- Baseline 2026-09-10, version `0.4.0`: all gates green, `558 passed`, coverage `90.83%`.
-  `uv sync --check --active` passes again (the environment had the `0.3.0` package installed after
-  the version bump; a plain `uv sync` fixed it).
-- **The dataset on disk is not the build the recorded walk-forward arms ran on.** Every
-  `models/wf_strength_2023_2025_*` report carries dataset hash `668368d8...`; the current
-  `data/completed_games_ml.csv` (rebuilt 2026-09-09 17:28 by the Week 1 refresh) fingerprints to
-  `5b6af6aa...`. So the "off" arm for your comparison does not exist yet. Start it first (Phase 0).
-- The defect, verified on the current dataset, 2024 season, `away_games_played` and
-  `away_success_rate`:
+- Version `0.5.0`, committed and tagged locally on 2026-09-10 (the tag is not pushed). All gates
+  green: `590 passed`, coverage `91.04%`. The working tree should be clean apart from gitignored
+  data; check `git status` first.
+- `data/completed_games_ml.csv` is the stat-prior-blend build (`7261` rows including the 2026
+  opener, fingerprint `e46f1be9...`); `data/all_data_ml.csv` carries the future 2026 rows with
+  `away_`/`home_adj_strength_composite`. Back up `data/*.csv` before any rebuild (option (c) needs
+  one); keep the backup alongside the existing `*.pre_m49.csv` files.
+- `process_week` builds the strength snapshot for every team on the season's schedule
+  (`teams=_schedule_teams(...)`), so bye teams are solved every week and only dropped when the
+  snapshot is joined onto game rows. Verify this before relying on it.
+- Rank on `adj_strength_composite`, never on the raw `adj_*` columns: the frozen ridge penalty makes
+  the raw columns drift in scale across a season, while the composite is standardized within each
+  snapshot. A **higher** `adj_def_*` is a **better** defense.
+- The 2024 pre-week-18 anchor: BAL, DET, PHI, BUF, GB on the composite; DET, BAL, BUF, GB, PHI on
+  the current Bradley-Terry default. Use it as a sanity check, not as a test oracle.
+- The composite is a within-snapshot z-score, not a win probability. Mapping it onto the existing
+  1-10 and 0-10 scales needs a documented transform; do not reuse `sigmoid(rating_raw)` blindly.
+- `--method bradley_terry` must keep today's default output reachable, and `--legacy-franchise-fit`
+  must keep reproducing the old franchise fit exactly (a test pins it).
+- Adding a snapshot file must not change the training rows. After a rebuild, confirm
+  `completed_games_ml.csv` matches the previous build except for the known last-ULP drift in the
+  schedule-strength columns (see the Milestone 46 follow-ups); if anything else moves, stop and
+  find out why. No walk-forward is needed for Milestone 51.
+- If you run a walk-forward anyway (Milestone 52), read the `AGENTS.md` operating notes first: one
+  run at a time, check `uptime` and choose the OpenMP wait policy from it, and a stopped run resumes
+  by re-running the identical command.
+- `.agents/skills/` is the user's separate clone of agent skills. It is gitignored and excluded from
+  ruff and markdownlint; never edit it.
 
-  | week | games_played | std | min | max |
-  | --- | --- | --- | --- | --- |
-  | 1 | 17 (regressed prior) | `0.0216` | `0.373` | `0.455` |
-  | 2 | 1 | `0.0807` | `0.250` | `0.569` |
-  | 3 | 2 | `0.0659` | `0.265` | `0.500` |
-  | 16 | 14 | `0.0359` | `0.375` | `0.490` |
+## 2. Decided (do not relitigate; record deviations)
 
-- Root cause, verified in code: `aggregate_team_stats_to_week` takes the plain mean of prior
-  in-season games; `process_week` builds the regressed prior-season frame only for
-  `teams_needing_fallback`, the teams with **zero** in-season games. One game is enough to switch a
-  team from 100% prior to 0% prior.
-- `aggregate_team_stats_to_week` stores per-game **means** of counts, and the derived rates are
-  ratios of those means (equal to ratios of sums because the game count cancels). Blending means
-  then calling `recompute_derived_metrics` keeps every rate a ratio of blended sums. Do not blend
-  the rates directly.
-- The play-by-play counts are already joined into `team_stats_df` before `process_week`, so one
-  blend on the aggregated frame covers the nflreadpy stats and the PBP family together.
-- Already shrunk, leave alone: the strength family (`prior_strength_snapshot`, its own blend), the
-  TeamRankings ratings (`tr_df` / `prev_tr_df`, a separate merge), Elo, trend features, records.
-- Timings: full ETL rebuild about `480s` warm; from-week-1 walk-forward at
-  `--eval-last-n-seasons 3` about `40 min`. The walk-forward writes to `models/<run_id>/` by
-  default; `--out-json` may only ever point inside `models/`.
-- The ETL overwrites `data/*.csv` unconditionally. Back them up before each rebuild.
-- `markdownlint` here is `markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings"`.
-
-## 2. Design decisions already made (do not relitigate; record deviations)
-
-- **Form.** For every team with a prior-season regressed profile available, publish
-  `w * in_season_mean + (1 - w) * regressed_prior_mean` per stat column with
-  `w = games_played / (games_played + K)`, then `recompute_derived_metrics`. A team with zero games
-  gets `w = 0`, which is exactly today's fallback, so **week-1 rows must be bit-identical before and
-  after**. Write that test first; it is your strongest regression guard.
-- **K.** Reuse `PRIOR_BLEND_GAMES = 4.0`; promote it to `constants.py` so both blends share one
-  named value, rather than introducing a second constant. Expose it as
-  `--stat-prior-blend-games` on `nfl_predictor.data_collection` with `--no-stat-prior-blend` to
-  ablate, mirroring `--strength-prior-blend`.
-- **`games_played` keeps its current semantics** in this cut (in-season count; the regressed prior
-  carries `17`). Changing it is a separate, measurable follow-up; record it in `TODO.md`.
-- **Build the prior once per season**, not once per week: `process_week` already takes
-  `prior_strength_snapshot` computed by the caller, so add a `prior_season_stats` argument the same
-  way and fall back to computing it inside when `None` (keeps existing tests working).
-- **First season in the run** (`season == min_season`) has no prior; publish the raw in-season
-  means as today. Playoff rows use full-season means as today (`w` is then about `0.8`; accept it).
-- **Ablation is at ETL time**, not in the walk-forward: `--disable-feature-groups` removes columns,
-  it cannot undo a value change. Two dataset builds, two walk-forward runs, both under `models/`.
+- 51.1 defaults to the composite with the components published next to the rank; Bradley-Terry
+  stays as `--method bradley_terry`.
+- 51.4: the phase-1 flags (`--ratings-window-seasons`, `--ratings-prior-season-weight`,
+  `--ratings-target`, `--ratings-include-future`, `--legacy-franchise-fit`) and the new `--method`
+  get wired through `scripts/weekly_run.py`.
+- 51.2: projected standings stay record plus model win probabilities; label or retire
+  `golden_command._build_pregame_power_rankings` so one ranking artifact is canonical.
+- 51.5 extends the README and `--help` text written in phase 1; it does not redo it.
+- New work that is not part of an existing milestone takes number 58 onward; never renumber
+  existing milestones (see the numbering rules at the top of `.agents/TODO.md`).
 
 ## 3. Non-negotiables
 
-- TDD: characterization or failing tests first, then production code, small diffs.
-- No leakage: week `N` features use games strictly before week `N`; the prior is the previous
-  season's regular season only, regressed by `constants.WEEK1_REGRESSION_FACTOR`.
-- Polars-first ETL; no pandas in `data_collection.py` or `utils/polars/`.
-- Docstrings with the formula; type hints; no milestone numbers in code, comments, or tests; no new
+- TDD: failing or characterization tests first, then production code, small diffs.
+- No leakage: a week-`N` ranking uses only games through week `N - 1` in that season.
+- Polars-first in ETL; pandas is acceptable in the reporting module as it already is.
+- Docstrings with formulas; type hints; no milestone numbers in code, comments, or tests; no new
   `noqa` / `type: ignore` / `pragma: no cover` without a real reason.
 - All Python tooling via `.venv/bin/...`; `uv` from PATH; never bare `python` / `pytest` / `ruff`.
-- XGBoost margin/total is the only model family; no tuning campaigns.
 - Do not modify `../nfeloqb` or `../nfl-sos-ratings`.
-- Every number you report must be readable from a `metrics_report.json` under `models/`.
-- Commit only if the user asks. If asked: one logical change per commit, a Conventional Commits
-  subject (`type(scope): imperative summary`, see `AGENTS.md`), a body explaining what and why,
-  ending with the attribution line the harness provides.
+- Commit only if the user asks. If asked: one logical change per commit, Conventional Commits
+  subject (`type(scope): imperative summary`), a body explaining what and why, and the attribution
+  line the harness provides. Do not push commits or tags unless asked; pushing a version tag
+  publishes a GitHub release.
 
-## Phase 0 - Baseline (start this before reading further code)
+## Phase 1 - 51.1 and 51.3 (tests first)
 
-1. `cp data/completed_games_ml.csv data/completed_games_ml.pre_m49.csv` (and `all_data_ml.csv`).
-2. Launch the **off arm** on the current dataset in the background, so it runs while you implement:
+1. Tests: the composite ranking for a synthetic week ranks the obviously strongest team first; a
+   bye team is handled by the chosen option and never reads a later week's data; the 1-10 and 0-10
+   mappings are monotone and bounded; `--method bradley_terry` reproduces today's output; a
+   synthetic breakout team ranks first late in the season. With option (c), also test the snapshot
+   writer: one row per scheduled team per week, bye teams included, schema stable when a season
+   has no games yet.
+2. Implement the chosen option, the scale mapping, and the published components.
+3. Check the 2024 pre-week-18 top five against the anchor above and the 2026 Week 1 output for
+   sanity (every team present, no nulls).
 
-   ```bash
-   .venv/bin/python scripts/walk_forward_backtest.py --eval-last-n-seasons 3 --wf-start-week 1 \
-     --out-json models/wf_shrink_2023_2025_off/metrics_report.json
-   ```
+## Phase 2 - 51.2, 51.4 and 51.5, then the gate
 
-   There is no run-id flag; the named directories under `models/` come from pointing `--out-json`
-   at `models/<name>/metrics_report.json`, and `metadata.json` (with the dataset hash) lands next
-   to it. The report's `metrics.per_week` block gives the week 1, week 2, and weeks 3-18 windows
-   you will report.
-3. `.venv/bin/python -m pytest -q` and record the actual count.
+Wire the flags through `weekly_run.py`, settle the canonical artifact, update `README.md` (and the
+data-files list if option (c) adds a file), `AGENTS.md` (the `scripts/power_rankings.py` entry),
+`CHANGELOG.md` `[Unreleased]`, and move Milestone 51 to `ARCHIVE.md`. Then the full gate (commands
+in `AGENTS.md` and `.agents/TODO.md`; the local markdownlint command excludes `#.agents/skills`).
 
-## Phase 1 - Implement (49.1 to 49.4)
+## Phase 3 - Only if time remains: 52.1
 
-1. Test first: week-1 rows unchanged; a one-game team's week-2 stat equals `0.2 * in_season +
-   0.8 * prior` at `K = 4`; rates are recomputed from blended sums (build a fixture where blending
-   the rate directly gives a different number); `--no-stat-prior-blend` reproduces today's output
-   exactly; the first season in the run is untouched.
-2. Then the production change in `process_week`, the CLI flags, the constant promotion.
-3. Rebuild the dataset (about 8 minutes) with the blend on. Verify with a one-off Polars check that
-   the 2024 week-2 `away_success_rate` spread has collapsed toward the week-16 spread, and that
-   week-1 rows match the backup bit-for-bit.
-4. Run the leakage audit.
-
-## Phase 2 - Measure (49.5)
-
-Run the **on arm** from week 1 with the same command and `wf_shrink_2023_2025_on`. Report weeks 1,
-2, and 3-18 separately against the off arm; the season aggregate hides the effect because 2 of 18
-weeks change. Success is week 2 moving materially toward the weeks 3-18 numbers on Brier and log
-loss without weeks 3-18 regressing. Week 1 should be identical by construction; if it is not, your
-blend touched a fallback row and that is a bug, not a result.
-
-If the result is a tie or a loss, say so and leave the switch default **off**. The strength blend
-was a tie on Brier; this may be too. The honest table is the deliverable either way.
-
-## Phase 3 - Docs and gate (49.6)
-
-Update `README.md` (data sources / early-season handling), `AGENTS.md` (baseline table if the
-default changes, the early-season note), `CHANGELOG.md`, and move Milestone 49 to `ARCHIVE.md`
-with the table. `CHANGELOG.md` already has an `[Unreleased]` section; add to it rather than
-opening a version. Then the full gate.
-
-## Phase 4 - Only if time remains: Milestone 43 phase 2
-
-Read the Milestone 43 section of `.agents/TODO.md`. The facts that matter: rank on
-`adj_strength_composite` for `(season, through_week + 1)` rows, never on raw `adj_*`; a higher
-`adj_def_*` is a **better** defense; the 2024 pre-week-18 anchor is BAL, DET, PHI, BUF, GB on the
-composite and DET, BAL, BUF, GB, PHI on the current Bradley-Terry default. Keep `--method
-bradley_terry` and `--legacy-franchise-fit`. Wire the phase 1 flags through `weekly_run.py`. No
-ETL rebuild is needed for any of it.
+Diagnose why predicted totals sit between `43.9` and `44.1` for every 2026 Week 1 game: total-head
+feature importance, early-stopping round, train versus holdout MAE, and whether pruning drops
+total-relevant columns. Diagnosis only; record findings under Milestone 52 in `.agents/TODO.md`.
 
 ## Final report to the user (structure)
 
-1. Outcome first: what landed, the default you chose for the switch, and gate status.
-2. The three-window table, off versus on, with the `models/` paths.
-3. Whether Week 2 of 2026 will use the new build, and what the user must run after the Week 1
-   games finish on Monday 2026-09-14 (`scripts/weekly_run.py` with the ETL refresh).
+1. Outcome first: which 51.1 option landed, the new default ranking, and gate status.
+2. The 2024 pre-week-18 top ten under the composite and under `--method bradley_terry`.
+3. What `scripts/weekly_run.py` now produces for power rankings, and which flags it exposes.
 4. What was left out or deferred, and why.
-5. Your recommendation for the next session: Milestone 43 phase 2 if it did not fit here, then
-   the total/over-under investigation (Milestone 50), then Milestone 47.
+5. Recommendation for the next session: Milestone 52, then 53, then the Milestone 49 follow-ups
+   (the `games_played` effective-sample column first).

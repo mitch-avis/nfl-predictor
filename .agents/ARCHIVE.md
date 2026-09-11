@@ -4,6 +4,182 @@ This file contains completed milestones and optional enhancements that were prev
 `TODO.md`. Keep this as the audit trail. If future changes regress behavior, re-run the acceptance
 checks from the relevant section.
 
+Archived milestone numbers never change. The active worklist in `TODO.md` was renumbered once, on
+2026-09-10, so that its milestones run in execution order; the map is below.
+
+---
+
+## Worklist renumbering (2026-09-10)
+
+By 2026-09-10 the active milestones in `TODO.md` ran 50, 43 (phase 2), 47, 48, 39, 41, 42 in
+execution order, because milestones had been reordered without renumbering. The finished parts
+were archived (Milestone 43 phase 1 below; the resolved follow-ups listed after the map), and the
+remaining milestones were renumbered from 51 in execution order. Numbers 39-43, 47, 48 and 50 are
+retired for active work: an older document, commit or changelog entry that names one of them means
+the old milestone, and the map gives its new home. Subtasks keep their order (old 43.2 is 51.1, old
+50.1 is 52.1, and so on).
+
+| old | new | milestone |
+| --- | --- | --- |
+| 43 phase 2 | 51 | Power rankings on the adjusted composite |
+| 50 | 52 | The total (over/under) head carries almost no signal |
+| 47 | 53 | QB per-dropback EPA families for the expected starter |
+| 48 | 54 | PBP situational stats replace the TeamRankings stat scrape |
+| 39 (with 40) | 55 | Off-season configuration sweep + lock default settings |
+| 41 | 56 | Weekly orchestration residuals |
+| 42 | 57 | Ensembles and alternative models (parked) |
+
+Follow-ups resolved after their milestones closed:
+
+- Milestone 45: the old reference (Brier `0.2312`, log loss `0.7352`, pick accuracy `0.6833`,
+  margin MAE `9.8954`) is not reproducible on this machine; the default config on the untouched
+  pre-change dataset gives Brier `0.2300`, log loss `0.7501`, pick accuracy `0.6833`, margin MAE
+  `9.9705`. `--xgb-tree-method hist` and `rushing_epa` were ruled out by controls.
+- Milestone 45: playoff-branch and Week-1-fallback leakage perturbation tests now exist for the
+  play-by-play and schedule-adjusted strength families, each mutation-verified.
+- Milestone 45: the on/off walk-forward arms were re-run on 2026-09-09 and reproduced exactly;
+  reports live in `models/review_wf_2023_2025_pbp_{off,on}/`.
+- Milestone 46: `uv sync --check --active` failed after the `0.4.0` bump because the environment
+  still had `0.3.0` installed; a plain `uv sync` cleared it. Re-sync after every version bump.
+
+---
+
+## Milestone 43 phase 1 - Current-season Bradley-Terry power rankings
+
+Completed 2026-09-09. Phase 2 continues as Milestone 51 in `TODO.md`.
+
+The old `scripts/power_rankings.py` fit Bradley-Terry over every season since 1999 with equal
+weights, fixed `0.97 / 0.03` targets, and future games filled with model probabilities. For 2024
+through week 18 it ranked a 4-13 New England first.
+
+What landed, in `scripts/power_rankings.py` and `nfl_predictor/reporting/power_rankings.py`:
+
+- `--ratings-window-seasons` (default `2`) and `--ratings-prior-season-weight` (default `0.25`),
+  implemented as per-game sample weights in `fit_bradley_terry_ratings`; uniform weights reproduce
+  the unweighted fit exactly.
+- Margin-based targets by default (`--ratings-target`), scoring completed games through the model's
+  win-probability curve.
+- Future model-probability rows excluded from the strength fit (`--ratings-include-future`).
+- `--legacy-franchise-fit` reproduces the old output exactly, pinned by a test.
+
+Evidence: the new default ranks DET, BAL, BUF, GB, PHI for 2024 through week 18, matching the
+season's results and the schedule-adjusted snapshot. Not done in this phase: `scripts/weekly_run.py`
+inherits the defaults but exposes none of the flags (task 51.4).
+
+---
+
+## Milestone 49 - Continuous early-season shrinkage
+
+Completed 2026-09-10.
+
+Season-to-date team stats (the nflreadpy families and the play-by-play counts alike) used to switch
+from 100% regressed prior season in week 1 to a single unshrunk game in week 2. They now hand over
+continuously: `w = games / (games + K)`, `K = constants.PRIOR_BLEND_GAMES = 4.0`,
+`published = w * in_season_mean + (1 - w) * regressed_prior_mean`, with every derived rate
+recomputed from the blended sums. A team with zero games has `w = 0`, which is the old Week-1
+fallback. **Week 2 is no longer the weak week**, and nothing else got worse on the primary metrics.
+Shipped **default-on**.
+
+### What landed
+
+- `polars_utils.blend_with_prior_stats` (in `utils/polars/teamrankings.py`): blends the per-game
+  means, keeps `games_played` as the in-season count, publishes whichever side exists when only one
+  does, then calls `recompute_derived_metrics`.
+- `data_collection.build_prior_season_stats`: the regressed previous regular season, built once per
+  season in `process_season` and passed to `process_week` as `prior_season_stats` (computed inside
+  when `None`). It is both the Week-1 fallback and the blend's prior.
+- CLI on `nfl_predictor.data_collection`: `--stat-prior-blend` / `--no-stat-prior-blend` (default
+  on) and `--stat-prior-blend-games` (default `4`, must be positive). `PRIOR_BLEND_GAMES` moved from
+  `strength_snapshot.py` to `constants.py`, shared by both blends.
+- `tests/test_stat_prior_blend.py` (15 tests) plus two CLI tests: week-1 rows identical with the
+  blend on and off; `0.2 * in_season + 0.8 * prior` for a one-game team; rates as ratios of blended
+  sums, distinguished from a blend of rates (`0.2667` vs `0.30`); first season untouched; team with
+  no prior season untouched; the prior built once per season.
+
+### Build verification (2026-09-10 11:17 rebuild, 11.5 min)
+
+- Week-1 stat columns are bit-identical to the pre-change backup (`data/backup_pre_m49/`). The only
+  week-1 differences anywhere are the three `sos_remaining_adj` columns at most `6.9e-17` apart, the
+  known Polars summation-order drift.
+- 2024 week-2 `away_success_rate` std `0.0807` (range `0.250-0.569`) became `0.0316`
+  (`0.366-0.485`), below the old week-16 spread of `0.0359`. Week 16 moved too (`0.0359` to
+  `0.0306`), as designed: the prior never fully drops out.
+- No strength, TeamRankings, Elo, trend, or record column changed; 291 stat columns did.
+- Leakage audit OK: `463` features, `0` findings
+  (`models/wf_shrink_2023_2025_on/leakage_audit.json`).
+
+### Walk-forward (2023-2025, from week 1, 816 games, 54 folds)
+
+Both arms ran on one code version (`91aaffc` plus this change) and one config. Off arm: the
+pre-change build (`data/completed_games_ml.pre_m49.csv`, hash `5b6af6aa...`),
+`models/wf_shrink_2023_2025_off/`. On arm: the blend build cut to seasons `<= 2025`
+(`data/completed_games_ml.m49_on_through_2025.csv`, hash `5d67ddff...`) because the rebuild had
+picked up the 2026 opener, `models/wf_shrink_2023_2025_on/`. Same 816 games on both.
+
+| window | games | arm | Brier | log loss | pick acc | margin MAE | total MAE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| week 1 | 48 | off | `0.2119` | `0.6134` | `0.6667` | `9.3640` | `10.1288` |
+| week 1 | 48 | on | `0.2097` | `0.6097` | `0.7083` | `9.1365` | `9.9426` |
+| week 2 | 48 | off | `0.2434` | `0.6799` | `0.5417` | `8.7892` | `10.2705` |
+| week 2 | 48 | on | **`0.2268`** | **`0.6452`** | **`0.6042`** | **`8.3401`** | `9.8727` |
+| weeks 3-18 | 720 | off | `0.2293` | `0.7541` | `0.6847` | `9.8952` | `10.1536` |
+| weeks 3-18 | 720 | on | `0.2284` | `0.7406` | `0.6847` | `9.9578` | `10.1257` |
+| all weeks | 816 | off | `0.2291` | `0.7414` | `0.6752` | `9.7989` | `10.1590` |
+| all weeks | 816 | on | `0.2272` | `0.7273` | `0.6814` | `9.8143` | `10.1000` |
+
+Paired game-level differences (on minus off; 95% interval from 10,000 bootstrap resamples of
+games; per-game predictions read from the two arms' fold checkpoints):
+
+| window | Brier diff | log loss diff |
+| --- | --- | --- |
+| week 1 | `-0.0022` [`-0.0146`, `+0.0102`] | `-0.0037` [`-0.0296`, `+0.0216`] |
+| week 2 | `-0.0166` [`-0.0332`, `-0.0007`] | `-0.0347` [`-0.0717`, `+0.0002`] |
+| weeks 3-18 | `-0.0009` [`-0.0071`, `+0.0055`] | `-0.0134` [`-0.0396`, `+0.0130`] |
+| all weeks | `-0.0019` [`-0.0075`, `+0.0038`] | `-0.0141` [`-0.0367`, `+0.0086`] |
+
+Per season (Brier / log loss / pick accuracy / margin MAE, all weeks):
+
+| season | off | on |
+| --- | --- | --- |
+| 2023 | 0.2427 / 0.7706 / 0.6654 / 10.0492 | 0.2353 / 0.7515 / 0.6765 / 10.1017 |
+| 2024 | 0.1980 / 0.6817 / 0.7169 / 9.5774 | 0.1989 / 0.6735 / 0.7243 / 9.5480 |
+| 2025 | 0.2468 / 0.7719 / 0.6434 / 9.7701 | 0.2475 / 0.7569 / 0.6434 / 9.7933 |
+
+Reliability ECE over all weeks: `0.1073` off, `0.1081` on (flat).
+
+**Did it work?** On the target, yes. Week-2 Brier falls to the weeks 3-18 level (`0.2268` against
+`0.2284`), the one Brier interval that excludes zero, and pick accuracy gains 6.25 points. Week-2
+log loss improves by about as much, with its interval just touching zero. Weeks 3-18 do not
+regress: Brier and log loss both move the right way, within noise, and pick accuracy is identical.
+
+**What did not improve.** Weeks 3-18 margin MAE is worse (`9.8952` to `9.9578`). Season Brier is
+slightly worse in 2024 and 2025 (`+0.0009`, `+0.0007`) and better in 2023; log loss improves in all
+three. With 48 games a week, the week-2 result is supported but not overwhelming.
+
+### Corrections to the plan
+
+- The acceptance criterion "week 1 metrics identical on both arms" rested on a wrong premise.
+  Week-1 *features* are identical (verified on the 48 evaluated rows), but each week-1 model trains
+  on every earlier season, whose week 2+ rows the blend changes (6041 rows before 2023;
+  `away_pass_yards` moves up to 153 yards). Week 1 therefore moves within noise, as the table shows.
+  The right check is that the evaluated rows are unchanged, and they are.
+- The rebuild picked up the 2026 opener (NE 10, SEA 13; 7261 completed rows). Without the cut to
+  `<= 2025`, `--eval-last-n-seasons 3` would have scored 2024-2026 on the on arm.
+
+### Landed alongside (tooling)
+
+- Walk-forward runs log one line per finished week with elapsed and remaining time, and are
+  resumable: each finished week is checkpointed under `models/wf_checkpoints/<fingerprint>/`
+  (data, config, modelling source, library versions), and re-running an identical command restores
+  it. A test pins that a resumed run equals an uninterrupted one exactly. Wired into
+  `walk_forward_backtest.py`, `wf_compare.py`, `golden_command.py`, `weekly_run.py`, and
+  `betting_pipeline.py`. The on-arm relaunch in this milestone restored its first week from a
+  checkpoint after a deliberate stop.
+- Operational lessons, now in `AGENTS.md`: two concurrent from-week-1 walk-forwards each burned
+  more than a whole solo run's CPU (42 CPU-hours) without finishing and were stopped; under
+  unrelated load a week took `730s` with the default OpenMP wait policy and `185s` with
+  `OMP_WAIT_POLICY=PASSIVE`; on an idle machine the default was faster (`75s` against `~142s`).
+
 ---
 
 ## Milestone 46 - Weekly schedule-adjusted team strength

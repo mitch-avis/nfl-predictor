@@ -26,8 +26,8 @@ Rules that are always enforced:
 ## Current Focus (2026 season start)
 
 - The active workstream is feature engineering for true team strength: PBP-derived per-snap EPA
-  families and weekly schedule-adjusted (ridge) team strength have landed; continuous early-season
-  shrinkage of every season-to-date family, the power-rankings redesign on the adjusted composite,
+  families, weekly schedule-adjusted (ridge) team strength, and continuous early-season shrinkage of
+  every season-to-date family have landed; the power-rankings redesign on the adjusted composite
   and QB per-dropback EPA families are next. The analysis, crosswalk, and prioritized shortlist
   live in `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
@@ -36,21 +36,40 @@ Rules that are always enforced:
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-10 (version `0.4.0`):
+- Validated baseline on 2026-09-10 (version `0.5.0`):
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`558 passed`) with coverage `90.83%` against the enforced
+  - `.venv/bin/python -m pytest` passes (`590 passed`) with coverage `91.04%` against the enforced
     `90%` floor.
   - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. Re-run a plain
     `uv sync` after every version bump, or the last check fails on the stale installed package.
-  - ETL was rerun for `1999-2026` (`7260` rows, `498` columns, `1999-2025`) and the leakage audit
-    passed on the refreshed dataset (`463` features, `0` findings).
-- Working walk-forward benchmark (seasons `2023-2025`, `--eval-last-n-seasons 3`, `720` games),
-  measured on a `0.4.0` dataset build. Reports are on disk under
-  `models/wf_strength_2023_2025_{both_on,strength_off,both_off,prior_off}/`. **The build those arms
-  ran on (dataset hash `668368d8...` in each `metadata.json`) was superseded by the 2026-09-09
-  17:28 Week 1 refresh**; the file on disk fingerprints differently. The numbers stand as the
-  reference, but any new comparison must first re-run its reference arm on the build it measures.
+  - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
+    (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
+    `markdownlint-cli2`). Never edit it as part of this repo's work.
+  - ETL was rerun for `1999-2026` with the early-season stat blend on (`7261` completed rows: all
+    of `1999-2025` plus the 2026 opener; `498` columns; fingerprint `e46f1be9...`) and the leakage
+    audit passed on it (`463` features, `0` findings).
+- **Current walk-forward benchmark**, measured 2026-09-10 on the blend build (seasons `2023-2025`,
+  `--eval-last-n-seasons 3`, from week 1, the build cut to seasons `<= 2025` so the eval window does
+  not slide onto 2026): `models/wf_shrink_2023_2025_on/`. The weeks 3-18 window equals a
+  `--wf-start-week 3` run and stays the headline number.
+
+  | window | games | Brier | log loss | pick acc | margin MAE | total MAE |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | week 1 only | 48 | `0.2097` | `0.6097` | `0.7083` | `9.1365` | `9.9426` |
+  | week 2 only | 48 | `0.2268` | `0.6452` | `0.6042` | `8.3401` | `9.8727` |
+  | weeks 3-18 (headline) | 720 | `0.2284` | `0.7406` | `0.6847` | `9.9578` | `10.1257` |
+  | all weeks | 816 | `0.2272` | `0.7273` | `0.6814` | `9.8143` | `10.1000` |
+
+  The same config on the pre-change build (`models/wf_shrink_2023_2025_off/`) gave week 2
+  `0.2434` / `0.6799` / `0.5417` and weeks 3-18 `0.2293` / `0.7541` / `0.6847`; the comparison and
+  its bootstrap intervals are in `.agents/ARCHIVE.md` under Milestone 49. To compare new feature
+  work, run the reference arm on the same build and code version, with `--wf-start-week 1`
+  whenever early-season handling could move.
+- Older reference, measured on a superseded `0.4.0` build (dataset hash `668368d8...`) with
+  `--wf-start-week 3`, kept for the strength-family ablation it records. Reports are under
+  `models/wf_strength_2023_2025_{both_on,strength_off,both_off,prior_off}/`. Do not compare new
+  arms against these numbers directly.
 
   | arm | Brier | log loss | pick acc | margin MAE | total MAE | ECE |
   | --- | --- | --- | --- | --- | --- | --- |
@@ -69,17 +88,13 @@ Rules that are always enforced:
   | week 2 only | `0.2445` | `0.6846` | `0.5208` | `8.7838` |
   | weeks 3-18 | `0.2277` | `0.7431` | `0.6958` | `9.9006` |
 
-  Week 1 is the **best-calibrated** week in the season: it runs entirely on the regressed prior
-  season, and both Brier and log loss beat the mid-season benchmark. Its lower pick accuracy is the
-  model correctly hedging toward 0.5 rather than being confidently wrong. **Week 2 is the weak
-  week** (`0.5208` accuracy, barely a coin flip), because season-to-date features there are
-  unshrunk one-game means: `games_played` is `17` in week 1 (the regressed prior) but `1` in week 2.
-  Keep week 3 as the headline benchmark so the recorded arms stay comparable, and re-check weeks
-  1-2 whenever early-season feature handling changes.
+  That run exposed the early-season defect: week 2 (`0.5208` accuracy) ran on unshrunk one-game
+  means. The stat prior blend fixed it on 2026-09-10 (current benchmark above). Week 1 remains the
+  best-calibrated week because it runs entirely on the regressed prior season.
 
-  Report new feature work against these, and only within one dataset build and code version. The
-  strength group is the first family in this workstream to improve Brier and log loss rather than
-  trade them for margin MAE; margin MAE and ECE do **not** improve alongside them. The early-season
+  What these arms still tell you: the strength group is the first family in this workstream to
+  improve Brier and log loss rather than trade them for margin MAE; margin MAE and ECE do **not**
+  improve alongside them. The early-season
   prior blend is a **tie on Brier** (`0.2277` either way) and earns its place only on log loss
   (`0.7431` vs `0.7492`) and pick accuracy (`0.6958` vs `0.6847`).
 - The older reference (Brier `0.2312`, log loss `0.7352`, pick accuracy `0.6833`, margin MAE
@@ -101,8 +116,10 @@ Rules that are always enforced:
 ## Source of truth for work
 
 - Active milestones and tasks live in `.agents/TODO.md` (authoritative active worklist).
-- Completed milestones live in `.agents/ARCHIVE.md`. Milestone numbering is authoritative there,
-  and new milestones continue from the latest archived number.
+- Completed milestones live in `.agents/ARCHIVE.md`; archived numbers never change. Active
+  milestones in `.agents/TODO.md` are numbered in execution order (renumbered once on 2026-09-10;
+  the old-to-new map is at the top of `ARCHIVE.md`), and new milestones take the next number after
+  the highest one in either file. When priorities change, move a section instead of renumbering.
 - The cross-repo feature review and prioritized shortlist live in `.agents/feature_crosswalk.md`.
 - The handoff prompt for the next session lives in `.agents/next_agent_session_prompt.md`.
 - `CHANGELOG.md` is the authoritative release history.
@@ -254,9 +271,9 @@ Recommended local commands:
 - `scripts/power_rankings.py`: power rankings + projected standings. Since 2026-09-09 the default
   fit is Bradley-Terry over a two-season window with prior seasons weighted `0.25`, margin-based
   targets, and future model probabilities excluded; `--legacy-franchise-fit` restores the old
-  all-seasons equal-weight fit. Ranking on the ETL's schedule-adjusted composite is the pending
-  phase 2 of Milestone 43 in `.agents/TODO.md`. `scripts/weekly_run.py` inherits the new defaults
-  but does not yet expose the flags.
+  all-seasons equal-weight fit. Ranking on the ETL's schedule-adjusted composite is Milestone 51
+  in `.agents/TODO.md`. `scripts/weekly_run.py` inherits the new defaults but does not yet expose
+  the flags.
 
 ## Modeling Philosophy (Important Context)
 
@@ -321,8 +338,12 @@ Recommended local commands:
 ## Season/Week Logic & Edge Cases
 
 - Use `constants.get_regular_season_weeks(season)` to determine regular-season length.
-- Week 1 / early-season rows with missing history use a documented fallback consistent with tests
-  (regression-to-mean and/or previous-season values + global mean).
+- Week 1 / early-season rows with missing history use the previous regular season regressed by
+  `constants.WEEK1_REGRESSION_FACTOR`. From week 2 on, season-to-date stats blend toward that same
+  prior with in-season weight `games / (games + constants.PRIOR_BLEND_GAMES)`, and rates are
+  recomputed from the blended sums (`polars_utils.blend_with_prior_stats`). The adjusted-strength
+  family blends its own previous-season snapshot the same way. New season-to-date families inherit
+  the stat blend automatically if they flow through `team_stats_df`.
 - Future games have missing outcomes; the pipeline still outputs a structurally complete row
   suitable for prediction.
 - Postseason rows may exist. Training/evaluation defaults should be explicit about whether
@@ -624,5 +645,20 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
   resume behavior.
 - Keep walk-forward comparison artifacts under `models/` (do not point `--out-json` at a temporary
   directory). Any number reported in `.agents/` or `AGENTS.md` must be auditable from disk.
-- To resume a walk-forward comparison, re-run the same command with `--resume` and inspect
-  `wf_compare/wf_summary.csv` for live progress.
+- Walk-forward runs checkpoint every finished week (`models/wf_checkpoints/<fingerprint>/` by
+  default; `wf_compare/wf_folds/` inside `weekly_run` runs, `wf_folds/` inside `betting_pipeline`
+  runs). After a stop, re-run the identical command and it resumes at the next unfinished week;
+  `--no-resume` retrains everything. Watch progress in the run's log: every finished week prints a
+  `Walk-forward fold N/M done` line with elapsed and remaining time. For `weekly_run` comparisons,
+  `wf_compare/wf_summary.csv` still shows per-candidate results.
+- Run **one walk-forward at a time**. XGBoost uses every core, and on 2026-09-10 two concurrent
+  from-week-1 runs each burned more CPU than a whole solo run (42 CPU-hours against a solo run's
+  roughly 30) without finishing, so both were stopped and rerun in sequence. A from-week-1 run over
+  `--eval-last-n-seasons 3` takes about 75 minutes alone on an idle machine; a week-3 start about 40.
+- Choose the OpenMP wait policy by machine load at launch. Under other load, use
+  `OMP_WAIT_POLICY=PASSIVE`: with the default policy XGBoost's threads spin while a preempted peer
+  catches up (on 2026-09-10 one week took `730s` by default and `185s` with `PASSIVE`). On an idle
+  machine keep the default, because sleeping threads cost more to wake than they save on this
+  small dataset (an idle `PASSIVE` week took `~142s` against `~82s` for the default). The setting
+  changes scheduling only, so it neither alters results nor invalidates fold checkpoints; switching
+  mid-run means stop, relaunch with the other policy, and resume.

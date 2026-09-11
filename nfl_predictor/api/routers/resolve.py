@@ -8,9 +8,10 @@ from pathlib import Path
 
 from fastapi import Request
 
+from nfl_predictor import week_builder
 from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import NotFoundError
-from nfl_predictor.api.readers.data_status import unattached_files
+from nfl_predictor.api.readers.data_status import current_season_week, unattached_files
 from nfl_predictor.api.runs import active
 from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
 from nfl_predictor.api.schemas.data import WeekRef
@@ -47,9 +48,15 @@ def get_index(request: Request) -> RunIndex:
 def available_weeks(
     settings: Settings, index: RunIndex, active_run: RunSummary | None
 ) -> list[WeekRef]:
-    """List every week with predictions: the active run's, other runs', and unattached files."""
+    """List the weeks a client can select.
+
+    Weeks that already have predictions come first, from the active run, other runs, and then
+    unattached ``data/predict`` files. Weeks of the current season that are still unplayed and have
+    no predictions follow with source ``available``, so the selector can offer to generate them.
+    """
     refs: list[WeekRef] = []
     seen: set[tuple[str, int | None, int | None]] = set()
+    predicted: set[tuple[int | None, int | None]] = set()
     if active_run and active_run.run_files.predictions is not None:
         refs.append(
             WeekRef(
@@ -61,6 +68,7 @@ def available_weeks(
             )
         )
         seen.add(("run", active_run.season, active_run.week))
+        predicted.add((active_run.season, active_run.week))
     for run in index.runs():
         if run.run_files.predictions is None or run is active_run:
             continue
@@ -68,6 +76,7 @@ def available_weeks(
         if key in seen:
             continue
         seen.add(key)
+        predicted.add((run.season, run.week))
         refs.append(
             WeekRef(
                 season=run.season,
@@ -80,6 +89,7 @@ def available_weeks(
     for item in unattached_files(settings.data_path, settings.reports_path):
         if item["kind"] != "predictions":
             continue
+        predicted.add((item["season"], item["week"]))
         refs.append(
             WeekRef(
                 season=item["season"],
@@ -89,7 +99,26 @@ def available_weeks(
                 label=f"Week {item['week']} (data/predict)",
             )
         )
+    refs.extend(generatable_weeks(settings, predicted))
     return refs
+
+
+def generatable_weeks(
+    settings: Settings, predicted: set[tuple[int | None, int | None]]
+) -> list[WeekRef]:
+    """Return the current season's unplayed weeks that have no predictions yet."""
+    season, _current_week = current_season_week()
+    return [
+        WeekRef(
+            season=season,
+            week=week,
+            source="available",
+            run_id=None,
+            label=f"Week {week} (not predicted yet)",
+        )
+        for week in week_builder.available_weeks(season, data_dir=settings.data_path)
+        if (season, week) not in predicted
+    ]
 
 
 def resolve_predictions(

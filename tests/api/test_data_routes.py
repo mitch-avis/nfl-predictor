@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import polars
 from fastapi.testclient import TestClient
 
+from nfl_predictor.api.routers import resolve
 from tests.api import factories
 
 
@@ -171,3 +173,40 @@ def test_data_routes(project_root: Path, viewer_client: TestClient, app) -> None
     assert [f["name"] for f in payload["predict_files"]] == ["week_03_predictions.csv"]
     unattached = viewer_client.get("/api/data/unattached").json()
     assert len(unattached) == 1
+
+
+def test_weeks_offer_unpredicted_weeks_of_the_current_season(
+    project_root: Path,
+    viewer_client: TestClient,
+    app,  # noqa: ANN001
+    monkeypatch,  # noqa: ANN001
+) -> None:
+    """Unplayed weeks with no predictions are listed so the UI can offer to generate them."""
+    _seed(project_root, app)
+    monkeypatch.setattr(resolve, "current_season_week", lambda: (2026, 2))
+    polars.DataFrame(
+        {
+            "season": [2026, 2026, 2026],
+            "week": [1, 2, 4],
+            "away_score": [17, None, None],
+            "home_score": [24, None, None],
+        }
+    ).write_csv(project_root / "data" / "all_data_ml.csv")
+
+    weeks = viewer_client.get("/api/predictions/weeks").json()
+
+    available = [week for week in weeks if week["source"] == "available"]
+    assert [week["week"] for week in available] == [2, 4]
+    assert available[0]["label"] == "Week 2 (not predicted yet)"
+    assert all(week["run_id"] is None for week in available)
+
+
+def test_weeks_offer_nothing_when_the_dataset_is_missing(
+    project_root: Path,
+    viewer_client: TestClient,
+    app,  # noqa: ANN001
+) -> None:
+    """Without an ML dataset there is nothing to generate from."""
+    _seed(project_root, app)
+    weeks = viewer_client.get("/api/predictions/weeks").json()
+    assert [week for week in weeks if week["source"] == "available"] == []

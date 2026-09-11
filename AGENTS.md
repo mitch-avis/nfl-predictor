@@ -27,42 +27,56 @@ Rules that are always enforced:
 
 - The active workstream is feature engineering for true team strength: PBP-derived per-snap EPA
   families, weekly schedule-adjusted (ridge) team strength, continuous early-season shrinkage of
-  every season-to-date family, and power rankings on the adjusted composite have landed. Next are
-  the total-head fix (its early stopping shares the margin head's callback, so it stops after one
-  round; Milestone 52) and QB per-dropback EPA families. The analysis, crosswalk, and prioritized shortlist
-  live in `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`.
+  every season-to-date family, power rankings on the adjusted composite, and the total-head fix
+  (version `0.6.2`: each XGBoost fit gets its own early stopping) have landed. The fixed total
+  head still trails the market's total line in walk-forward, so the betting report labels totals
+  `diagnostic_only`. QB per-dropback EPA families landed in version `0.7.0`, tied in walk-forward
+  with the group switched off, and the user decided 2026-09-11 to keep them (`.agents/ARCHIVE.md`,
+  Milestone 53). Next are their schedule lenses (task 53.6) or the Milestone 49 `games_played`
+  follow-up. The analysis, crosswalk, and prioritized shortlist live in
+  `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-11 (version `0.5.0` plus the unreleased power-rankings work):
+- Validated baseline on 2026-09-11 (version `0.7.0`):
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`631 passed`) with coverage `91.16%` against the enforced
+  - `.venv/bin/python -m pytest` passes (`649 passed`) with coverage `91.21%` against the enforced
     `90%` floor.
   - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. Re-run a plain
     `uv sync` after every version bump, or the last check fails on the stale installed package.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
     `markdownlint-cli2`). Never edit it as part of this repo's work.
-  - ETL was rerun on 2026-09-11 for `1999-2026` (`7262` completed rows: all of `1999-2025` plus
-    two 2026 Week 1 games; `498` columns; fingerprint `e388dc7a...`), which also wrote
-    `data/strength_snapshots.csv` (`18818` rows). Its shared rows equal the 2026-09-10
-    stat-blend build (`e46f1be9...`) apart from last-ULP `sos_*` drift; the leakage audit passed
-    on that build (`463` features, `0` findings), and the benchmark below was measured on it.
-- **Current walk-forward benchmark**, measured 2026-09-10 on the blend build (seasons `2023-2025`,
-  `--eval-last-n-seasons 3`, from week 1, the build cut to seasons `<= 2025` so the eval window does
-  not slide onto 2026): `models/wf_shrink_2023_2025_on/`. The weeks 3-18 window equals a
-  `--wf-start-week 3` run and stays the headline number.
+  - ETL was rerun on 2026-09-11 at 06:47 for `1999-2026` with the quarterback family (`7263`
+    completed rows: all of `1999-2025` plus two 2026 Week 1 games; `519` columns; fingerprint
+    `acaa2892...`); `data/completed_games_ml.m53_through_2025.csv` is its cut to seasons `<= 2025`.
+    The leakage audit passed on it (`484` features, `0` flags). The benchmark below was measured
+    on the earlier `498`-column build `data/completed_games_ml.m49_on_through_2025.csv`, which a
+    data cleanup removed; its numbers stay auditable from the fold checkpoints named below.
+- **Current walk-forward benchmark**, measured 2026-09-11 with the total-head fix (version
+  `0.6.2`) on the blend build `data/completed_games_ml.m49_on_through_2025.csv` (seasons
+  `2023-2025`, `--eval-last-n-seasons 3`, from week 1, the build cut to seasons `<= 2025` so the
+  eval window does not slide onto 2026, `market_anchor` on): `models/wf_totalfix_2023_2025_anchored/`
+  (checkpoints `models/wf_checkpoints/c39db4f843175eaab09f/`). Brier, log loss, pick accuracy and
+  margin MAE reproduce the 2026-09-10 run (`models/wf_shrink_2023_2025_on/`) to four decimals in
+  every window; only total MAE moved. The weeks 3-18 window equals a `--wf-start-week 3` run and
+  stays the headline number.
 
-  | window | games | Brier | log loss | pick acc | margin MAE | total MAE |
-  | --- | --- | --- | --- | --- | --- | --- |
-  | week 1 only | 48 | `0.2097` | `0.6097` | `0.7083` | `9.1365` | `9.9426` |
-  | week 2 only | 48 | `0.2268` | `0.6452` | `0.6042` | `8.3401` | `9.8727` |
-  | weeks 3-18 (headline) | 720 | `0.2284` | `0.7406` | `0.6847` | `9.9578` | `10.1257` |
-  | all weeks | 816 | `0.2272` | `0.7273` | `0.6814` | `9.8143` | `10.1000` |
+  | window | games | Brier | log loss | pick acc | margin MAE | total MAE | market total MAE |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | week 1 only | 48 | `0.2097` | `0.6097` | `0.7083` | `9.1365` | `9.9426` | `10.3333` |
+  | week 2 only | 48 | `0.2268` | `0.6452` | `0.6042` | `8.3401` | `9.8727` | `10.4479` |
+  | weeks 3-18 (headline) | 720 | `0.2284` | `0.7406` | `0.6847` | `9.9578` | `10.2295` | `10.0847` |
+  | all weeks | 816 | `0.2272` | `0.7273` | `0.6814` | `9.8143` | `10.1916` | `10.1207` |
+
+  Before the fix the one-tree total head scored `9.9426` / `9.8727` / `10.1257` / `10.1000` in the
+  same windows (weeks 1-2 skip calibration, so they have no eval set and never had the bug). The
+  healthy anchored head trails the market line in weeks 3-18; the comparison and its bootstrap
+  intervals are under Milestone 52 in `.agents/TODO.md`.
 
   The same config on the pre-change build (`models/wf_shrink_2023_2025_off/`) gave week 2
   `0.2434` / `0.6799` / `0.5417` and weeks 3-18 `0.2293` / `0.7541` / `0.6847`; the comparison and
@@ -157,14 +171,22 @@ Rules that are always enforced:
 
 ## Changelog and Commit Workflow
 
-- `CHANGELOG.md` follows Common Changelog: latest release first, `## VERSION - YYYY-MM-DD`, then
-  `Changed`, `Added`, `Removed`, and `Fixed` in that order.
-- The historical baseline is `0.1.0` on `main`. Add the next release entry above it and reference
-  the most relevant commits before tagging a release.
+- `CHANGELOG.md` follows Common Changelog: latest version first, `## [VERSION] - YYYY-MM-DD`,
+  then `Changed`, `Added`, `Removed`, and `Fixed` in that order.
+- **Update the changelog as you go**, not at the end of a session: add an entry each time a
+  milestone, a task, or a sizable chunk of one lands (a fix, a feature group, a changed default).
+- **Every entry gets its own incremented version. Never write `[Unreleased]`.** Bump the patch
+  (`0.6.1` to `0.6.2`) for fixes and small additions, and the minor (`0.6.x` to `0.7.0`) for a new
+  feature family, a changed default, or a schema change. Date the entry with the day the change
+  lands.
+- **Set `pyproject.toml` to the newest changelog version in the same change**, then run `uv lock`
+  and `uv sync`, or `uv lock --check` and `uv sync --check --active` fail on the stale version.
+- The project is private and not ready for releases: **never create or push a git tag or a GitHub
+  release.** Versions live only in `CHANGELOG.md`, `pyproject.toml`, and `uv.lock`;
+  `.github/workflows/release.yml` stays idle because no tag is ever pushed.
+- The historical baseline is `0.1.0` on `main`.
 - Keep changelog entries focused on notable user-facing, tooling, or workflow changes; skip routine
   formatting-only noise.
-- Keep git tags aligned with changelog versions so `.github/workflows/release.yml` can publish or
-  update GitHub releases from `CHANGELOG.md`.
 - When committing work, prefer one logical change per commit for multi-file schema work and one file
   per commit for all other changes, including deletions, unless the user explicitly asks for
   different commit granularity.

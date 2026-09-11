@@ -885,6 +885,48 @@ STRENGTH_SNAPSHOTS_NAME = "strength_snapshots"
 
 FEATURE_GROUP_COLUMN_MARKERS["strength"] = tuple(ADJUSTED_STRENGTH_STATS)
 
+# Quarterback per-dropback family for the expected starter (`away_qb` / `home_qb`), built from
+# play-by-play games of that quarterback strictly before the row's week, across teams and
+# seasons. Published per side plus a _diff companion. The names deliberately contain no
+# play-by-play or strength marker, so the three ablation groups stay disjoint.
+QB_PBP_STATS = [
+    # Career EPA per dropback, shrunk toward the league (scrambles and sacks included).
+    "qb_dropback_epa",
+    # EPA per dropback over the last QB_RECENT_GAMES games, shrunk toward the career rate.
+    "qb_dropback_epa_recent",
+    # Completion percentage over expectation (2006+), shrunk toward the league.
+    "qb_cpoe",
+    # Sacks per dropback, shrunk toward the league.
+    "qb_sack_rate",
+    # Adjusted net yards per attempt, shrunk toward the league.
+    "qb_any_a",
+    # ANY/A over the last QB_RECENT_GAMES games, shrunk toward the career rate.
+    "qb_any_a_recent",
+    # Career dropbacks behind the rates: the sample size the model sees.
+    "qb_history_dropbacks",
+]
+
+FEATURE_GROUP_COLUMN_MARKERS["qb"] = tuple(QB_PBP_STATS)
+
+# Pseudo-dropbacks of prior evidence in every quarterback rate: a career rate is
+# (sum + K * league_rate) / (count + K) and a recent rate is shrunk the same way toward the
+# career rate. About half a season of dropbacks; chosen, not tuned (see the sweep milestone).
+QB_PRIOR_DROPBACKS = 300
+
+# Quarterback games in the recent window (any teams, any seasons).
+QB_RECENT_GAMES = 8
+
+# Base name under DATA_PATH of the quarterback identity file, a read-only copy of
+# `../nfeloqb/Other Data/meta_data.csv` (`name_id` -> `gsis_id`, the play-by-play passer id).
+QB_META_DATA_NAME = "qb_meta_data"
+
+# Quarterback names used by the Elo source that the identity file spells differently.
+QB_NAME_ALIASES = {
+    "A.J. McCarron": "AJ McCarron",
+    "Mitch Trubisky": "Mitchell Trubisky",
+    "Robert Griffin": "Robert Griffin III",
+}
+
 # Stats to EXCLUDE from opponent stat generation (they create duplicates)
 # These stats are duplicates when viewed from opponent's perspective:
 # - scoring_margin: opponent_scoring_margin = -scoring_margin

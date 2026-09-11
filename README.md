@@ -168,6 +168,12 @@ the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<se
 Before kickoff the current season has no play-by-play published at all; that is non-fatal, and the
 ETL falls back to cache or continues without it.
 
+The quarterback family needs `data/qb_meta_data.csv`, a read-only copy of
+`../nfeloqb/Other Data/meta_data.csv` made the same way as `data/qb_elos.csv`. It maps the Elo
+quarterback names to GSIS ids, which are also the play-by-play passer ids. Without the file the
+quarterback columns are null and the ETL logs a warning. Career rates need every earlier season, so
+the ETL reads the cached play-by-play from 1999 even when `--min-season` is later.
+
 TeamRankings data is cached under `data/<season>/` as week-level CSVs; enable debug logging to see
 cache hits. Use `--timing` to log per-step runtimes and `--debug-logs` for detailed ETL diagnostics.
 Use `--refresh-nflreadpy` to force refresh nflreadpy data even when cache exists.
@@ -192,6 +198,9 @@ Primary sources:
 
 - `nflreadpy` (NFLverse): schedules, results, team-level stats, and play-by-play.
 - Local cached CSVs under `data/` for Elo/market data when present.
+- `data/qb_meta_data.csv` (copied from `../nfeloqb`) for the quarterback name-to-id bridge. A name
+  missing from it falls back to the play-by-play passer name (`F.Last`) when that is unique; a
+  quarterback still unmatched gets null quarterback features, and the ETL logs the unmatched rate.
 - TeamRankings web scrape for select ratings and stats not available in NFLverse (see ETL logs).
 
 Missing data policy (high level):
@@ -527,6 +536,15 @@ Repo utilities under `scripts/`:
   reports), resumable with optional JSON/YAML config.
 - `scripts/backtest_predictions.py`: run a backtest using a saved model artifact.
 
+**Totals are diagnostic-only.** The total (over/under) columns of the betting report and workbook
+(`total_value_side`, `total_edge_points`, and the workbook's total edge, confidence and EV cells)
+come from the model's total head. Since version `0.6.2` that head learns again (before, it stopped
+after one tree and predicted about 44 points for every game), but in the 2023-2025 walk-forward it
+still trails the market's own total line: in weeks 3-18, total MAE is `10.3152` in the production
+configuration (no market anchoring) and `10.2295` with anchoring, against `10.0847` for the line
+itself. Treat an over/under lean as a diagnostic, not a betting signal. Spreads, moneylines and win
+probabilities are unaffected.
+
 `wf_compare` examples:
 
 ```bash
@@ -629,19 +647,20 @@ python scripts/leakage_audit.py
 Release history lives in `CHANGELOG.md` and follows the [Common
 Changelog](https://common-changelog.org/) format. The historical baseline is `0.1.0` from `main`.
 
-When preparing the next release, add a new `## VERSION - YYYY-MM-DD` entry at the top of the file
-and keep the change groups in this order:
+Update `CHANGELOG.md` as work lands, one entry per fix, feature group, or changed default, each
+under its own incremented `## [VERSION] - YYYY-MM-DD` heading at the top of the file. There is no
+`[Unreleased]` section: bump the patch version for fixes and small additions and the minor version
+for new feature families, changed defaults, or schema changes, and set `pyproject.toml` to the same
+version in the same change (then `uv lock` and `uv sync`). Keep the change groups in this order:
 
 - `Changed`
 - `Added`
 - `Removed`
 - `Fixed`
 
-Keep each change to a single imperative line, link the most relevant commit or PR, and skip routine
-formatting noise. Update `CHANGELOG.md` whenever user-facing behavior, tooling expectations, or the
-operating workflow changes. Pushing a `0.x.y` or `v0.x.y` tag triggers
-`.github/workflows/release.yml`, which extracts the matching `CHANGELOG.md` section and creates or
-updates the GitHub release. Keep git tags aligned with changelog versions.
+Keep each change to a single imperative line and skip routine formatting noise. The project is
+private, so versions are not tagged and no GitHub release is published;
+`.github/workflows/release.yml` only runs when a `0.x.y` or `v0.x.y` tag is pushed.
 
 ## Artifacts
 
@@ -717,9 +736,21 @@ games.
   predicted and must never reach a pre-week feature. `sos_played_raw` is therefore null through
   week 2, because a week-2 opponent's only prior game is the one against the subject.
 
+- Quarterback per-dropback production for the expected starter (`constants.QB_PBP_STATS`, in
+  `nfl_predictor/utils/polars/qb_stats.py`): for `away_qb` and `home_qb`, from that quarterback's
+  regular-season dropbacks in every earlier week across teams and seasons (never the game's own
+  week). Career EPA per dropback (`qb_dropback_epa`), CPOE (2006+), sack rate and ANY/A are shrunk
+  toward the league with `K = constants.QB_PRIOR_DROPBACKS` pseudo-dropbacks,
+  `(sum + K * league_rate) / (count + K)`, so a first start gets the league rate; the last
+  `constants.QB_RECENT_GAMES` games (`qb_dropback_epa_recent`, `qb_any_a_recent`) are shrunk
+  toward the career rate the same way; `qb_history_dropbacks` tells the model how much evidence
+  stands behind them. Scrambles are credited to the team-game's primary passer, because the
+  play-by-play cache keeps the passer id but not the rusher id.
+
 The strength family is ablatable as the `strength` feature group
 (`--disable-feature-groups strength`), and the early-season prior blend can be ablated
-independently at ETL time with `--no-strength-prior-blend`.
+independently at ETL time with `--no-strength-prior-blend`. The quarterback family is the `qb`
+group (`--disable-feature-groups qb`); no group overlaps another.
 
 ## Open work
 

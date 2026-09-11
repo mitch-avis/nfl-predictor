@@ -70,3 +70,26 @@ def test_build_betting_report_basic_columns() -> None:
 
     # Fair moneylines should be finite
     assert math.isfinite(float(report.iloc[0]["model_fair_home_moneyline"]))
+
+
+def test_build_betting_report_labels_totals_diagnostic_only() -> None:
+    """Every row says the total columns are diagnostic, next to the total columns themselves."""
+    df = pd.DataFrame(
+        {
+            "game_id": ["g1", "g2"],
+            "away_abbr": ["A", "C"],
+            "home_abbr": ["B", "D"],
+            "home_win_prob": [0.60, 0.52],
+            "predicted_margin": [3.0, 0.5],
+            "predicted_total": [44.0, 41.0],
+            "home_moneyline": [-120, -110],
+            "away_moneyline": [110, 100],
+            "total_line": [43.5, 40.5],
+        }
+    )
+
+    report = betting_pipeline.build_betting_report(df)
+
+    assert report["total_signal"].tolist() == ["diagnostic_only", "diagnostic_only"]
+    columns = report.columns.tolist()
+    assert columns.index("total_signal") == columns.index("total_edge_points") + 1

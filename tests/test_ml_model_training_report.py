@@ -132,4 +132,62 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
     assert splits["train_seasons"] == [2020]
     assert splits["calibration_seasons"] == [2021]
     assert splits["holdout_seasons"] == [2022]
+    assert splits["calibration_inseason"] == {"season": None, "weeks": [], "pairs": []}
     assert result.metrics_report["tuning_cv"] == {"cv_splits": 2}
+
+
+def test_train_margin_total_model_with_report_records_the_rolling_calibration_window(
+    monkeypatch,
+) -> None:
+    """Records every in-season calibration pair when the window spans two seasons."""
+    df = pd.DataFrame(
+        {
+            "season": [2020, 2020, 2021],
+            "week": [1, 2, 1],
+            "away_score": [10, 20, 11],
+            "home_score": [17, 13, 20],
+        }
+    )
+    model = MarginTotalModel(
+        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
+        feature_spec=_feature_spec(),
+        margin_model=cast(xgb.XGBRegressor, object()),
+        total_model=cast(xgb.XGBRegressor, object()),
+        target_columns=("away_score", "home_score"),
+        calibrator=None,
+        margin_quantile_models=None,
+        total_quantile_models=None,
+        quantiles=None,
+        market_anchor=False,
+        market_prob_config=None,
+        xgb_params={"n_estimators": 1},
+        tuned_params=None,
+        tuned_cv_summary=None,
+    )
+    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
+    monkeypatch.setattr(ml_model_training, "train_margin_total_model", lambda **_kwargs: model)
+    monkeypatch.setattr(
+        ml_model_training.feature_importance,
+        "build_feature_importance_report",
+        lambda _model: {"feature_names": []},
+    )
+
+    result = ml_model_training.train_margin_total_model_with_report(
+        data_path=Path("dummy.csv"),
+        holdout_seasons=0,
+        calibration_seasons=0,
+        calibration_weeks=2,
+        include_market=True,
+        max_cardinality_ratio=0.5,
+        win_prob_calibration="none",
+        optuna_config=None,
+        market_transform=False,
+        market_anchor=False,
+        market_prob_config=None,
+    )
+
+    assert result.splits["calibration_inseason"] == {
+        "season": 2021,
+        "weeks": [1],
+        "pairs": [[2020, 2], [2021, 1]],
+    }

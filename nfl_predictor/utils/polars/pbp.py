@@ -427,6 +427,20 @@ def _prepare_plays(pbp_df: pl.DataFrame) -> pl.DataFrame:
     return plays
 
 
+def regular_season_plays(pbp_df: pl.DataFrame) -> pl.DataFrame:
+    """Return the regular-season plays with both teams known (see ``_prepare_plays``)."""
+    return _prepare_plays(pbp_df)
+
+
+def dropback_condition(columns: list[str]) -> pl.Expr:
+    """Return the dropback definition shared by every play-by-play family.
+
+    Formula: a scrimmage snap with ``qb_dropback > 0`` that is not a kneel, a spike, or a
+    two-point try (see ``_play_conditions``).
+    """
+    return _play_conditions(columns)["dropback"]
+
+
 def aggregate_pbp_team_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     """Aggregate play-by-play rows into one team-game row of counts and sums.
 

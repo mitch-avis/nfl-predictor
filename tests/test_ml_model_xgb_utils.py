@@ -109,8 +109,12 @@ def test_build_xgb_fit_kwargs_with_callbacks(monkeypatch) -> None:
     assert kwargs["callbacks"] == [sentinel]
 
 
-def test_with_xgb_early_stopping_params_with_callbacks(monkeypatch) -> None:
-    """XGB params are updated with early stopping using callbacks when needed."""
+def test_with_xgb_early_stopping_params_uses_the_init_param_only(monkeypatch) -> None:
+    """Early stopping goes in the init param and never in a callback object.
+
+    A callback object in the params dict is shared by every estimator built from that dict
+    and carries its best score and patience from one fit into the next.
+    """
     _reset_runtime_state()
 
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
@@ -120,16 +124,26 @@ def test_with_xgb_early_stopping_params_with_callbacks(monkeypatch) -> None:
 
     monkeypatch.setattr(xgb_utils, "_xgb_param_supported", fake_param_supported)
 
-    updated = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 7)
+    params = {"max_depth": 2}
+    updated = xgb_utils._with_xgb_early_stopping_params(params, 7)
 
-    assert updated["early_stopping_rounds"] == 7
-    assert "callbacks" in updated
+    assert updated == {"max_depth": 2, "early_stopping_rounds": 7}
+    assert params == {"max_depth": 2}
 
-    callbacks = cast(list[Any], updated["callbacks"])
-    assert callbacks
-    callback = callbacks[0]
-    if hasattr(callback, "save_best"):
-        assert callback.save_best is False
+
+def test_with_xgb_early_stopping_params_never_shares_a_callback() -> None:
+    """On the installed XGBoost, two estimators' params carry no callback object at all."""
+    first = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
+    second = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
+
+    assert first["early_stopping_rounds"] == 5
+    assert "callbacks" not in first
+    assert "callbacks" not in second
+
+    first_model = xgb.XGBRegressor(**first)
+    second_model = xgb.XGBRegressor(**second)
+    assert first_model.get_params()["callbacks"] is None
+    assert second_model.get_params()["callbacks"] is None
 
 
 def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:

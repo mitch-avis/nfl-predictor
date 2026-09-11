@@ -223,10 +223,154 @@ def test_split_train_calibration_holdout_rejects_invalid_calibration_requests() 
             calibration_weeks=1,
         )
 
-    with pytest.raises(ValueError, match="Not enough weeks in season 2023"):
+    with pytest.raises(ValueError, match="Not enough weeks in the training pool"):
         core._split_train_calibration_holdout(
             df,
             holdout_seasons=0,
             calibration_seasons=0,
-            calibration_weeks=3,
+            calibration_weeks=5,
+        )
+
+
+def _season_weeks_frame(season_weeks: dict[int, int]) -> pd.DataFrame:
+    """Build one game row per ``(season, week)`` for weeks ``1..n`` of each season."""
+    rows = [
+        {"season": season, "week": week, "away_score": 10, "home_score": 20}
+        for season, n_weeks in season_weeks.items()
+        for week in range(1, n_weeks + 1)
+    ]
+    return pd.DataFrame(rows)
+
+
+def _pairs(frame: pd.DataFrame) -> list[tuple[int, int]]:
+    """Return the sorted ``(season, week)`` pairs present in ``frame``."""
+    return sorted({(int(s), int(w)) for s, w in zip(frame["season"], frame["week"], strict=True)})
+
+
+def test_split_rolls_calibration_window_back_across_the_season_boundary() -> None:
+    """Uses the newest completed weeks across seasons when the newest season is short.
+
+    Week 2 of a season has one completed week; four requested weeks are that week plus
+    the previous season's last three, and exactly those pairs leave the training rows.
+    """
+    df = _season_weeks_frame({2024: 18, 2025: 18, 2026: 1})
+
+    (
+        train_df,
+        calibration_df,
+        holdout_df,
+        train_seasons,
+        calibration_seasons,
+        holdout_seasons,
+        inseason_calibration_season,
+        inseason_calibration_weeks,
+    ) = core._split_train_calibration_holdout(
+        df,
+        holdout_seasons=0,
+        calibration_seasons=0,
+        calibration_weeks=4,
+    )
+
+    window = [(2025, 16), (2025, 17), (2025, 18), (2026, 1)]
+    assert _pairs(calibration_df) == window
+    assert inseason_calibration_season == 2026
+    assert inseason_calibration_weeks == [1]
+    assert calibration_seasons == []
+    assert holdout_seasons == []
+    assert holdout_df.empty
+    assert train_seasons == [2024, 2025, 2026]
+    assert set(_pairs(train_df)) == set(_pairs(df)) - set(window)
+    assert len(train_df) + len(calibration_df) == len(df)
+
+
+def test_split_keeps_the_window_inside_a_season_with_enough_weeks() -> None:
+    """Leaves the split unchanged when the newest season already has enough weeks."""
+    df = _season_weeks_frame({2024: 18, 2025: 18, 2026: 4})
+
+    split = core._split_train_calibration_holdout(
+        df,
+        holdout_seasons=0,
+        calibration_seasons=1,
+        calibration_weeks=4,
+    )
+    train_df, calibration_df = split[0], split[1]
+
+    assert split[3] == [2024, 2026]
+    assert split[4] == [2025]
+    assert split[6] == 2026
+    assert split[7] == [1, 2, 3, 4]
+    assert _pairs(calibration_df) == [(2025, week) for week in range(1, 19)] + [
+        (2026, week) for week in range(1, 5)
+    ]
+    assert _pairs(train_df) == [(2024, week) for week in range(1, 19)]
+
+
+def test_split_whole_season_calibration_skips_seasons_the_window_touched() -> None:
+    """Chooses calibration seasons only from seasons outside the rolling window."""
+    df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
+
+    split = core._split_train_calibration_holdout(
+        df,
+        holdout_seasons=0,
+        calibration_seasons=1,
+        calibration_weeks=4,
+    )
+    train_df, calibration_df = split[0], split[1]
+
+    assert split[4] == [2024]
+    assert split[3] == [2023, 2025, 2026]
+    window = [(2025, 16), (2025, 17), (2025, 18), (2026, 1)]
+    assert _pairs(calibration_df) == [(2024, week) for week in range(1, 19)] + window
+    assert _pairs(train_df) == [(2023, week) for week in range(1, 19)] + [
+        (2025, week) for week in range(1, 16)
+    ]
+
+
+def test_inseason_calibration_pairs_lists_the_rolling_window() -> None:
+    """Lists the in-season window's pairs and ignores whole calibration seasons."""
+    df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
+    split = core._split_train_calibration_holdout(
+        df,
+        holdout_seasons=0,
+        calibration_seasons=1,
+        calibration_weeks=4,
+    )
+
+    assert core._inseason_calibration_pairs(split[1], split[4]) == [
+        [2025, 16],
+        [2025, 17],
+        [2025, 18],
+        [2026, 1],
+    ]
+    assert core._inseason_calibration_pairs(df.iloc[0:0], []) == []
+
+
+def test_split_lets_window_seasons_feed_training_when_calibration_seasons_are_requested() -> None:
+    """Accepts a pool whose only non-window season is the whole calibration season.
+
+    With three pool seasons and a window that touches the two newest, the oldest season is
+    the whole calibration season and the window seasons' remaining weeks train the model.
+    """
+    df = _season_weeks_frame({2024: 18, 2025: 18, 2026: 1})
+
+    split = core._split_train_calibration_holdout(
+        df,
+        holdout_seasons=0,
+        calibration_seasons=1,
+        calibration_weeks=4,
+    )
+    train_df, calibration_df = split[0], split[1]
+
+    assert split[4] == [2024]
+    assert split[3] == [2025, 2026]
+    window = [(2025, 16), (2025, 17), (2025, 18), (2026, 1)]
+    assert _pairs(calibration_df) == [(2024, week) for week in range(1, 19)] + window
+    assert _pairs(train_df) == [(2025, week) for week in range(1, 16)]
+
+    with pytest.raises(ValueError, match="Not enough seasons"):
+        core._split_train_calibration_holdout(
+            _season_weeks_frame({2025: 18, 2026: 1}),
+            holdout_seasons=0,
+            calibration_seasons=1,
+            calibration_weeks=4,
         )

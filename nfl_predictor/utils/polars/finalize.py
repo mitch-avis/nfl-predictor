@@ -61,6 +61,7 @@ def build_final_column_order() -> list[str]:
     base_stats.extend(nflreadpy_stats)
     base_stats.extend(pbp_stats)
     base_stats.extend(strength_stats)
+    base_stats.extend(constants.QB_PBP_STATS)
 
     # Deduplicate
     seen = set()

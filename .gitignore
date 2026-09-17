@@ -245,4 +245,4 @@ web/*.tsbuildinfo
 data/web/
 
 # Agent skills (a separate git clone of mitch-avis/agent-skills)
-.agents/skills/
+.agents/skills

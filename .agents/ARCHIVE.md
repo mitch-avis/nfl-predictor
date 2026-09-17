@@ -196,6 +196,49 @@ inputs changed with the user's refresh; the cause is resolved below.
   the recent window's one-dropback games, unread sums, reuse of the `pbp` helpers) are follow-ups
   in `TODO.md` to take along with task 53.6.
 
+### 53.6 Schedule lenses (2026-09-11, version `0.9.0`; keep-or-drop decision open)
+
+- Built: `qb_faced_pass_def_adj` (ridge form, the sos `QSoS` construct) and
+  `qb_faced_pass_def_raw` (one-hop, head-to-head excluded, like `sos_played_raw`), per side plus
+  `_diff`, in `qb_stats.py`, crediting the `nfl-sos-ratings` method. Scope and weighting follow
+  `QSoS`: the quarterback's games earlier in the row's season, dropback-weighted; the ridge value
+  of each game comes from the snapshot of the week it was played, and the one-hop profile from
+  the faced defense's games before the row's week minus those against the quarterback's team.
+  The `qb` group now holds them; `qb_schedule` drops only them. The `pbp` helpers and
+  `calculate_stat_differentials` reuse notes were taken along; `_ratio` was not.
+- Build: cached ETL rebuild at 18:17 (`525` columns, `4cf48985...`), backup of the `519`-column
+  build in `data/backup_pre_m53_6/`. Every pre-existing 1999-2025 value is unchanged (the
+  quarterback columns exactly; the `sos_*` columns within `2.2e-16`, float summation order).
+  Leakage audit `490` features, `0` flags. Real data: all 14 games of 2024 week 10 get identical
+  lenses when recomputed from play-by-play cut before week 10 and snapshots before week 10. The
+  lenses are null in week 1 (and the one-hop lens in week 2), about 1-3% null from week 3.
+  Correlation with the home margin, weeks 3-18: `qb_faced_pass_def_adj_diff` `-0.055`,
+  `qb_faced_pass_def_raw_diff` `+0.047` (both with the expected sign); the two lenses correlate
+  `-0.375` with each other (opposite sign conventions).
+- Walk-forward, benchmark config (anchored, from week 1, `--eval-last-n-seasons 3`, Platt, 4
+  calibration weeks) on `data/completed_games_ml.m53_6_through_2025.csv` (`7261` rows,
+  `940cbbf4...`), one arm at a time, default OpenMP policy: `models/wf_qbsched_2023_2025_on/`
+  (checkpoints `1ca801a7b58256dc1442`, 489 features) and `models/wf_qbsched_2023_2025_off/`
+  (`--disable-feature-groups qb_schedule`, checkpoints `02a3a730da026668dffe`, 483 features).
+  Windows are game-weighted from `per_week`; the same scorer reproduces the 53.5 table and its
+  bootstrap exactly.
+
+| window | games | Brier on / off | log loss on / off | pick acc on / off | margin MAE on / off |
+| --- | --- | --- | --- | --- | --- |
+| week 1 only | 48 | `0.2065` / `0.2051` | `0.6015` / `0.5996` | `0.6875` / `0.7708` | `9.2897` / `8.9283` |
+| week 2 only | 48 | `0.2280` / `0.2275` | `0.6475` / `0.6457` | `0.6458` / `0.6667` | `8.4192` / `8.5291` |
+| weeks 3-18 | 720 | `0.2312` / `0.2282` | `0.7575` / `0.7551` | `0.6764` / `0.6903` | `10.0226` / `9.9708` |
+| all weeks | 816 | `0.2295` / `0.2268` | `0.7419` / `0.7395` | `0.6752` / `0.6936` | `9.8852` / `9.8246` |
+
+Paired bootstrap over games (5000 resamples, seed 0), on minus off. Weeks 3-18: Brier `+0.0030`
+`[-0.0019, +0.0080]`, log loss `+0.0025` `[-0.0194, +0.0249]`, pick accuracy `-0.0139`
+`[-0.0292, +0.0014]`, margin MAE `+0.0519` `[-0.0488, +0.1574]`. Weeks 1-2: Brier `+0.0009`
+`[-0.0056, +0.0075]`, pick accuracy `-0.0521` `[-0.1042, -0.0104]` (5 of 96 picks). By season
+(weeks 1-18) Brier `0.2363 / 0.2055 / 0.2467` on against `0.2349 / 0.1982 / 0.2473` off.
+Interpretation: no gain anywhere; every point estimate leans against the lenses, only the early
+pick accuracy clears its interval. Decision (keep, or drop the two columns from the schema) is the
+user's; until then they ship in the `qb` group.
+
 ---
 
 ## Milestone 52 - The total (over/under) head carries almost no signal

@@ -32,8 +32,9 @@ Rules that are always enforced:
   head still trails the market's total line in walk-forward, so the betting report labels totals
   `diagnostic_only`. QB per-dropback EPA families landed in version `0.7.0`, tied in walk-forward
   with the group switched off, and the user decided 2026-09-11 to keep them (`.agents/ARCHIVE.md`,
-  Milestone 53). Next are their schedule lenses (task 53.6) or the Milestone 49 `games_played`
-  follow-up. The analysis, crosswalk, and prioritized shortlist live in
+  Milestone 53). Their schedule lenses (task 53.6) landed in version `0.9.0` and measured no
+  gain in walk-forward; keeping them is an open user decision. Next is the Milestone 49
+  `games_played` follow-up. The analysis, crosswalk, and prioritized shortlist live in
   `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`. The web UI
   (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on
   2026-09-11; its open phases are Milestone 58 in `.agents/TODO.md`.
@@ -43,11 +44,12 @@ Rules that are always enforced:
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-11 (version `0.8.0`, `main` at `7c105bc`):
+- Validated baseline on 2026-09-11 (version `0.9.0`, branch `feat/qb-schedule-lenses` off `main`
+  at `69e8011`):
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`814 passed`, `tests/api/` included) with coverage
-    `92.90%` against the enforced `90%` floor.
+  - `.venv/bin/python -m pytest` passes (`821 passed`, `tests/api/` included) with coverage
+    `92.96%` against the enforced `90%` floor.
   - The frontend gate in `web/` (`npm run lint`, `npm run typecheck`, `npx vitest run` with `22`
     tests, `npm run build`) passes; it needs `npm ci` under Node 26 first.
   - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. Re-run a plain
@@ -55,12 +57,14 @@ Rules that are always enforced:
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
     `markdownlint-cli2`). Never edit it as part of this repo's work.
-  - ETL was rerun on 2026-09-11 at 06:47 for `1999-2026` with the quarterback family (`7263`
-    completed rows: all of `1999-2025` plus two 2026 Week 1 games; `519` columns; fingerprint
-    `acaa2892...`); `data/completed_games_ml.m53_through_2025.csv` is its cut to seasons `<= 2025`.
-    The leakage audit passed on it (`484` features, `0` flags). The benchmark below was measured
-    on the earlier `498`-column build `data/completed_games_ml.m49_on_through_2025.csv`, which a
-    data cleanup removed; its numbers stay auditable from the fold checkpoints named below.
+  - ETL was rerun on 2026-09-11 at 18:17 from the cache for `1999-2026` with the quarterback
+    schedule lenses (`7263` completed rows: all of `1999-2025` plus two 2026 Week 1 games; `525`
+    columns; fingerprint `4cf48985...`); `data/completed_games_ml.m53_6_through_2025.csv`
+    (`940cbbf4...`) is its cut to seasons `<= 2025`, and the previous `519`-column build is in
+    `data/backup_pre_m53_6/`. The leakage audit passed on it (`490` features, `0` flags). The
+    benchmark below was measured on the earlier `498`-column build
+    `data/completed_games_ml.m49_on_through_2025.csv`, which a data cleanup removed; its numbers
+    stay auditable from the fold checkpoints named below.
 - **Current walk-forward benchmark**, measured 2026-09-11 with the total-head fix (version
   `0.6.2`) on the blend build `data/completed_games_ml.m49_on_through_2025.csv` (seasons
   `2023-2025`, `--eval-last-n-seasons 3`, from week 1, the build cut to seasons `<= 2025` so the
@@ -670,7 +674,6 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
 
 ## Safety, Scope, and Prohibited Behaviors
 
-- Do not introduce offensive/unsafe content or harmful instructions.
 - Do not add unrelated features (new scrapers, unrelated pipelines). The web UI under
   `nfl_predictor/api/` and `web/` is in scope; extend it by phase per `.agents/web_ui_plan.md`.
 - Do not remove/alter existing pipeline behavior without updating tests and documentation.

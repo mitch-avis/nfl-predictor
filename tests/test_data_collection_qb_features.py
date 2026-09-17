@@ -85,6 +85,54 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
     assert out["game_id"].to_list() == ["g1"]
 
 
+def test_attach_qb_features_passes_the_schedule_lens_inputs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Defense games and snapshots reach the lenses, excluding each quarterback's own team."""
+    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_a, **_k: pl.DataFrame())
+    in_memory = pl.DataFrame(
+        _dropbacks(2001, 1, "NE", "TB", 20) + _dropbacks(2001, 1, "BUF", "JA", 12)
+    )
+    defense_games = pl.DataFrame(
+        {
+            "season": [2001, 2001],
+            "week": [1, 1],
+            "team_abbr": ["OPP", "OPP"],
+            "opponent_abbr": ["BUF", "NE"],
+            "dropbacks_allowed": [12.0, 20.0],
+            "pass_epa_allowed_sum": [2.4, 6.0],
+        }
+    )
+    snapshots = pl.DataFrame(
+        {"season": [2001], "week": [1], "team_abbr": ["OPP"], "adj_def_pass_epa_snap": [0.3]}
+    )
+    games = pl.DataFrame(
+        {
+            "game_id": ["g1"],
+            "season": [2001],
+            "week": [2],
+            "away_qb": ["Tom Brady"],
+            "home_qb": ["Josh Allen"],
+        }
+    )
+
+    out = data_collection._attach_qb_features(
+        games,
+        in_memory,
+        max_season=2001,
+        current_season=2026,
+        identity_path=_identity_file(tmp_path),
+        defense_games=defense_games,
+        snapshots=snapshots,
+    )
+
+    row = out.row(0, named=True)
+    assert row["away_qb_faced_pass_def_adj"] == pytest.approx(0.3)
+    # Brady's NE faced OPP, whose other game was against BUF, and the reverse for Allen.
+    assert row["away_qb_faced_pass_def_raw"] == pytest.approx(0.2)
+    assert row["home_qb_faced_pass_def_raw"] == pytest.approx(0.3)
+
+
 def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.9.0] - 2026-09-11
+
+### Changed
+
+- Bump the project version to `0.9.0` and keep `uv.lock` aligned.
+- Quarterback games (`qb_stats.aggregate_qb_game_stats`) now record the defense faced
+  (`opponent_abbr`). The quarterback module reuses the play-by-play expression helpers and
+  `calculate_stat_differentials` instead of its own copies; the existing quarterback columns are
+  unchanged on a rebuild (every 1999-2025 value identical).
+- The `qb` feature group now includes the schedule lenses below; the new `qb_schedule` group
+  drops only the lenses.
+
+### Added
+
+- Add the quarterback schedule lenses (`constants.QB_SCHEDULE_STATS`, per side plus `_diff`), the
+  head-to-head-excluded opponent-profiling method of the `nfl-sos-ratings` project applied to the
+  expected starter. Both average his games earlier in the row's season, weighted by his dropbacks
+  in each. `qb_faced_pass_def_adj` is the ridge form (the sos `QSoS` construct): each faced
+  defense's `adj_def_pass_epa_snap` from the strength snapshot of the week it was faced (higher is
+  tougher). `qb_faced_pass_def_raw` is the one-hop form, like `sos_played_raw`: each faced
+  defense's EPA per dropback allowed in its games before the row's week, excluding its games
+  against the quarterback's team (higher is easier). The ETL feeds them the play-by-play
+  team-game counts and the weekly strength snapshots it already builds. Measured in walk-forward
+  (benchmark config, 2023-2025, `--disable-feature-groups qb_schedule` for the off arm): no gain,
+  weeks 3-18 Brier `0.2312` on against `0.2282` off (paired difference `+0.0030`
+  `[-0.0019, +0.0080]`); whether to keep them is open.
+
 ## [0.8.0] - 2026-09-11
 
 ### Changed

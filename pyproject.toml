@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling>=1.30"]
+requires = ["hatchling>=1.32"]
 build-backend = "hatchling.build"
 
 [project]
 name = "nfl-predictor"
-version = "0.8.0"
+version = "0.9.0"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -58,7 +58,7 @@ web = [
 dev = [
     "colorama",
     "httpx",
-    "pandas-stubs>=3.0.3.260530",
+    "pandas-stubs",
     "pyright",
     "pytest",
     "pytest-cov",
@@ -116,8 +116,14 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "S105", "S106"] # asserts and fixture passwords are standard in pytest
-"nfl_predictor/api/registry/*.py" = ["E501"]  # one column definition per line, descriptions included
+"tests/**/*.py" = [
+    "S101",
+    "S105",
+    "S106",
+] # asserts and fixture passwords are standard in pytest
+"nfl_predictor/api/registry/*.py" = [
+    "E501",
+] # one column definition per line, descriptions included
 
 [tool.ruff.lint.isort]
 known-first-party = ["nfl_predictor"]
@@ -144,9 +150,16 @@ venv = ".venv"
 pythonPlatform = "Linux"
 stubPath = "stubs"
 executionEnvironments = [{ root = "." }]
+exclude = [
+    "**/__pycache__",
+    "**/.*",
+    ".venv",
+    "**/node_modules",
 # `nfl-sos-ratings` is a gitignored symlink to the read-only reference repo; it is not part
 # of this project's type-check surface. The rest of the list restores pyright's defaults.
-exclude = ["nfl-sos-ratings", "web", "**/node_modules", "**/__pycache__", "**/.*"]
+    "nfl-sos-ratings",
+    "web",
+]
 # --- Standard-mode diagnostics promoted to errors (also surfaced by Pylance) ----------
 reportMissingImports = "error"
 reportMissingModuleSource = "warning"
@@ -172,7 +185,7 @@ reportUnknownParameterType = "none"
 reportUnknownLambdaType = "none"
 
 [tool.pytest.ini_options]
-minversion = "7.0"
+minversion = "9.0"
 testpaths = ["tests"]
 addopts = [
     "-ra",                       # show extra summary for (s)kipped, (x)failed

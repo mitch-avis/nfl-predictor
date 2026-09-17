@@ -345,6 +345,8 @@ def _attach_qb_features(
     max_season: int,
     current_season: int,
     identity_path: Path | None = None,
+    defense_games: pl.DataFrame | None = None,
+    snapshots: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Attach the quarterback per-dropback family to the combined game rows.
 
@@ -364,6 +366,9 @@ def _attach_qb_features(
         current_season: Passed to ``load_pbp`` for its cache decisions.
         identity_path: Quarterback identity file; defaults to
             ``DATA_PATH/<QB_META_DATA_NAME>.csv``.
+        defense_games: Per-team-game play-by-play counts for the one-hop schedule lens.
+            The lenses stay within the row's season, so the processed seasons suffice.
+        snapshots: Stacked weekly strength snapshots for the ridge schedule lens.
 
     Returns:
         ``games`` with the quarterback columns from ``qb_stats.attach_qb_features``.
@@ -390,7 +395,9 @@ def _attach_qb_features(
         qb_games.height,
         identity.height,
     )
-    return qb_stats.attach_qb_features(games, qb_games, identity)
+    return qb_stats.attach_qb_features(
+        games, qb_games, identity, defense_games=defense_games, snapshots=snapshots
+    )
 
 
 def _log_pbp_null_rates(team_stats_df: pl.DataFrame, enable_debug: bool) -> None:
@@ -703,6 +710,10 @@ def collect_all_data(
                 pbp_df,
                 max_season=max(seasons),
                 current_season=current_season,
+                defense_games=pbp_team_games,
+                snapshots=None
+                if strength_snapshots is None
+                else combine_strength_snapshots(strength_snapshots),
             )
         # Fill in lines for future games from SurvivorGrid
         combined_df = game_utils.fill_future_game_lines(combined_df)

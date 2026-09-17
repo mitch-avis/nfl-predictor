@@ -1,8 +1,7 @@
 # Next Agent Session Prompt
 
-You are the orchestrating agent (Claude Opus 5, or Sonnet 5 for a bounded task) for a session in
-the `nfl-predictor` workspace (`/home/mitch/workspace/nfl-predictor`). Deliverables, in this
-order:
+You are the orchestrating agent for a session in the `nfl-predictor` workspace
+(`/home/mitch/workspace/nfl-predictor`). Deliverables, in this order:
 
 1. **The 2026 Week 2 weekly run** (Phase 0), if the session falls between Monday night
    2026-09-14 (DEN at KC ends Week 1) and Thursday 2026-09-17 (DET at BUF opens Week 2). It is the

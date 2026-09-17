@@ -153,7 +153,10 @@ follow-ups below.
       `qb_faced_pass_def_adj`, the dropback-weighted mean of the faced defenses' pre-week ridge
       pass-defense coefficient from Milestone 46 (the sos `QSoS` construct), and the one-hop
       `qb_faced_pass_def_raw`, the faced defenses' EPA per dropback allowed from prior-week games
-      excluding games against the QB's team.
+      excluding games against the QB's team. Implemented and measured 2026-09-11 (`0.9.0`,
+      `ARCHIVE.md`, Milestone 53, "53.6"): no gain, every headline point estimate leans against
+      the lenses and week 1-2 pick accuracy is worse outside its 95% interval. They ship in the
+      `qb` group today; keep or drop is the user's decision, open.
 - [ ] 53.7 Optional phase 2: opponent-adjusted QB EPA via a dropback-weighted ridge against faced
       defenses (design in `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`).
 
@@ -161,8 +164,9 @@ Acceptance:
 
 - [x] Unmatched-QB rate is reported and below an agreed threshold for `2006+`. The ETL logs it per
       side; on the 2026-09-11 rebuild it is `0` of `7533` rows on both sides, every season.
-- [ ] Walk-forward table recorded; all gates green. Recorded for 53.1-53.5 (statistical tie,
-      `ARCHIVE.md`); 53.6 adds its own on/off arm before this is checked.
+- [ ] Walk-forward table recorded; all gates green. Recorded for 53.1-53.5 (statistical tie) and
+      for 53.6 (no gain; `models/wf_qbsched_2023_2025_{on,off}/`), both in `ARCHIVE.md`; check
+      this once the 53.6 decision is made.
 
 ---
 
@@ -359,11 +363,10 @@ the identity warning. Still open:
 - [ ] `qb_stats`: scrambles (dropbacks without a passer id) go to the team-game's plurality
       passer, so a starter who leaves early has his scrambles booked to the backup; the recent
       window counts any week with one dropback as a full game; `completions` and the recent
-      `cpoe` sums are computed but never read. Reuse notes: `_flag` / `_value` / `_count` /
-      `_sum` duplicate `pbp._flag_expr` / `_value_expr` / `_count` / `_sum_when`; the away-minus-
-      home loop duplicates `polars_utils.calculate_stat_differentials`; `_ratio` is a third copy
-      of the null-safe ratio in `teamrankings._safe_ratio` and `strength_snapshot`. Take these
-      along with task 53.6.
+      `cpoe` sums are computed but never read. Reuse: the play-by-play helpers and
+      `calculate_stat_differentials` were taken along with task 53.6 (`0.9.0`); `_ratio` is still
+      a third copy of the null-safe ratio in `teamrankings._safe_ratio` and `strength_snapshot`
+      (consolidating it touches three modules, so it was left out of that task).
 - [ ] The QB identity chain (Elo name to GSIS id via a copy of the nfeloqb metadata, aliases and
       an `F.Last` fallback) could key completed games on the nflverse schedule's
       `away_qb_id` / `home_qb_id` directly if those columns joined `NFLREADPY_SCHEDULE_COLUMNS`;

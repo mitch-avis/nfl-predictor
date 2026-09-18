@@ -786,6 +786,24 @@ with `colsample_bytree = 0.6098`, one fact held in two columns reaches a given t
 probability `1 - 0.39**2 = 0.85`, against `0.61` when it is held in one. The published dataset is
 now internally consistent, which the metrics do not measure and which was the point of the fix.
 
+#### Review note (2026-09-18 audit)
+
+The fix above is correct: in the `0.11.0` build `away_/home_games_played` equals
+`wins + losses + ties` in all `7278` rows and is `0` in every week-1 row. Two qualifications to
+the record, from `models/feature_audit_2026_09_18/`:
+
+- "Agreed in 6845 of 6848 weeks-2+ rows" compared the old stat-frame count with
+  `strength_games_played`, and both are built on the nflverse team-stats skeleton, which is
+  missing Jacksonville's eight home games in 2001 and 2002 (upstream gap, verified live). Against
+  the corrected record count the strength counter disagrees on `58` away and `54` home rows,
+  almost all JAX 2001-2002 (`7` at week 17 against `15`) plus one-game gaps for six 1999-2000
+  team-seasons. The pruning decision stands, but `strength_games_played` is not a clean count for
+  those rows; the skeleton fix is task 59.3 in `TODO.md`.
+- The weeks-3-18 drift in the table above (Brier `+0.0042`) is Platt-calibration noise rather
+  than a `colsample_bytree` effect: rescored through the deterministic map
+  `Phi(margin / SCORE_DIFF_STD_DEV)` on the same checkpoints, after-minus-before is `+0.0003`
+  `[-0.0022, +0.0028]` (`rescored_arms.json`). See Milestone 59 in `TODO.md`.
+
 ---
 
 ## Milestone 46 - Weekly schedule-adjusted team strength

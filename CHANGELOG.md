@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.11.0] - 2026-09-17
+
+### Fixed
+
+- `away_games_played` / `home_games_played` now carry the record-feature count they are
+  declared as (`constants.RECORD_FEATURE_COLUMNS`): the team's completed games this season,
+  `wins + losses + ties`. The season-to-date stat frame produces a column of the same name
+  holding the row count behind its means, and the records join silently suffixed the record
+  values away, so a prior-season fallback row published the _previous_ season's total: `17` in
+  week 1 (and `8` / `16` for the postponed first games of JAX 2001, JAX 2002 and MIA 2017)
+  beside the `wins = 0, losses = 0, ties = 0` it should have agreed with. The stat-frame copies
+  are dropped before the join, so the record values keep the names.
+
+### Changed
+
+- Bump the project version to `0.11.0` and keep `uv.lock` aligned.
+- Prune `away_games_played` as well as `home_games_played`, so neither side reaches the model.
+  Both duplicate `away_/home_strength_games_played`, which already publish the same count per
+  side with a diff: in the 2023-2025 evaluation window, weeks 3-18, the two agreed in 759 of 759
+  rows. Measured against the Milestone 53 baseline arm (`models/wf_qbsched_2023_2025_off/`, the
+  same benchmark config from week 1, 483 features against 482): week 1, where the fallback lie
+  lived, improves on every metric (Brier `0.2024` against `0.2051`, log loss `0.5945` against
+  `0.5996`, pick accuracy `0.7917` against `0.7708`); weeks 3-18, where the column was an exact
+  duplicate, drift slightly the other way (Brier `0.2324` against `0.2282`) with every interval
+  covering zero. Since no information can be lost by dropping a value-identical column, that
+  drift is a `colsample_bytree = 0.6098` sampling artifact: two copies of one fact reach a tree
+  with probability `0.85`, one copy with `0.61`. Full table in `.agents/ARCHIVE.md`, Milestone 49.
+- Rebuild `data/completed_games_ml.csv` on the corrected column (`7278` rows, `519` columns,
+  `8bacad41...`); the previous build is in `data/backup_pre_m49_games_played/`.
+
 ## [0.10.0] - 2026-09-17
 
 ### Removed

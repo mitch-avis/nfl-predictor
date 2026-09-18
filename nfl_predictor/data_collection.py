@@ -854,6 +854,13 @@ def build_prior_season_stats(
     return polars_utils.recompute_derived_metrics(prior)
 
 
+# Columns the season-to-date stat aggregation and the record features both produce. The
+# record features own them: `games_played` there is the team's completed games this season
+# (wins + losses + ties), while the stat frame reports the row count behind its means, which
+# is the previous season's total on a fallback row.
+_RECORD_OWNED_STAT_COLUMNS = ("away_games_played", "home_games_played")
+
+
 # Every per-team value of one week's strength table: the published game-row columns plus
 # the league-wide home-field term, which only the snapshot file carries.
 _STRENGTH_TABLE_COLUMNS = (*constants.ADJUSTED_STRENGTH_STATS, "adj_hfa")
@@ -1346,6 +1353,15 @@ def process_week(
                 season,
                 week,
             )
+
+    # The season-to-date stat frame carries its own `games_played`, which a prior-season
+    # fallback row fills with the *previous* season's game count. The record columns below
+    # own these names (`constants.RECORD_FEATURE_COLUMNS`), so drop the stat-frame copies
+    # first; otherwise the join suffixes the record values away and the published column
+    # contradicts the `wins` / `losses` / `ties` it should agree with.
+    merged = merged.drop(
+        [column for column in _RECORD_OWNED_STAT_COLUMNS if column in merged.columns]
+    )
 
     if records_df.height > 0:
         away_records = _prefix_team_records(records_df, "away")

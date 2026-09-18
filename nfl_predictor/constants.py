@@ -583,6 +583,10 @@ MOTIVATION_FEATURE_COLUMNS = [
 PRUNED_FEATURE_COLUMNS = [
     "neutral",
     "home_ties",
+    # Both sides of the season-to-date game count: `away_/home_strength_games_played` already
+    # publish it per side, with a diff, and agree with these in every row but the prior-season
+    # fallbacks. See the Milestone 49 follow-up in `.agents/ARCHIVE.md`.
+    "away_games_played",
     "home_games_played",
     "away_division_ties",
     "home_division_ties",

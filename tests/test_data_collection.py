@@ -646,3 +646,96 @@ def test_week_one_publishes_strength_before_any_game_is_played() -> None:
     assert features["adj_strength_composite"].null_count() == 0
     # Nothing has been played yet, so the solve rests entirely on the prior.
     assert features["strength_games_played"].to_list() == [0.0, 0.0]
+
+
+def _two_team_schedule(season: int) -> pl.DataFrame:
+    """Return a two-team schedule whose week-1 game is complete and week-2 game is not."""
+    return pl.DataFrame(
+        {
+            "season": [season, season],
+            "week": [1, 2],
+            "game_type": ["REG", "REG"],
+            "away_abbr": ["BUF", "KC"],
+            "home_abbr": ["KC", "BUF"],
+            "away_score": [20, None],
+            "home_score": [17, None],
+        },
+        schema_overrides={"away_score": pl.Int64, "home_score": pl.Int64},
+    )
+
+
+def _two_team_prior_stats(season: int) -> pl.DataFrame:
+    """Return a full prior regular season for both teams, so the fallback has real counts."""
+    weeks = list(range(1, 18))
+    return pl.DataFrame(
+        {
+            "season": [season - 1] * (2 * len(weeks)),
+            "week": weeks * 2,
+            "team_abbr": ["BUF"] * len(weeks) + ["KC"] * len(weeks),
+            "opponent_abbr": ["KC"] * len(weeks) + ["BUF"] * len(weeks),
+            "pass_yards": [300.0] * len(weeks) + [200.0] * len(weeks),
+            "points_scored": [24.0] * len(weeks) + [17.0] * len(weeks),
+            "points_allowed": [17.0] * len(weeks) + [24.0] * len(weeks),
+        }
+    )
+
+
+def test_process_week_publishes_no_games_played_for_a_week1_fallback_row() -> None:
+    """A week-1 row has played nothing this season, whatever the prior season's count was."""
+    season = 2007
+    schedule_df = _two_team_schedule(season)
+
+    result = process_week(
+        season=season,
+        week=1,
+        schedule_df=schedule_df,
+        team_stats_df=_two_team_prior_stats(season),
+        min_season=season - 1,
+        elo_df=None,
+        tr_df=None,
+        prev_tr_df=None,
+    )
+
+    row = result.row(0, named=True)
+    assert row["away_games_played"] == 0
+    assert row["home_games_played"] == 0
+
+
+def test_process_week_games_played_agrees_with_the_published_record() -> None:
+    """`games_played` is wins + losses + ties, the same record its siblings are built from."""
+    season = 2007
+    schedule_df = _two_team_schedule(season)
+    team_stats_df = pl.concat(
+        [
+            _two_team_prior_stats(season),
+            pl.DataFrame(
+                {
+                    "season": [season, season],
+                    "week": [1, 1],
+                    "team_abbr": ["BUF", "KC"],
+                    "opponent_abbr": ["KC", "BUF"],
+                    "pass_yards": [310.0, 210.0],
+                    "points_scored": [20.0, 17.0],
+                    "points_allowed": [17.0, 20.0],
+                }
+            ),
+        ],
+        how="vertical",
+    )
+
+    result = process_week(
+        season=season,
+        week=2,
+        schedule_df=schedule_df,
+        team_stats_df=team_stats_df,
+        min_season=season - 1,
+        elo_df=None,
+        tr_df=None,
+        prev_tr_df=None,
+    )
+
+    row = result.row(0, named=True)
+    for side in ("away", "home"):
+        played = row[f"{side}_games_played"]
+        assert played == 1
+        assert played == row[f"{side}_wins"] + row[f"{side}_losses"] + row[f"{side}_ties"]

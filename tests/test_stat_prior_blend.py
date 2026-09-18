@@ -141,12 +141,18 @@ def test_disabling_the_blend_publishes_raw_in_season_means() -> None:
     assert week_two["away_epa_per_dropback"] == pytest.approx(0.1)
 
 
-def test_games_played_keeps_the_in_season_count() -> None:
-    """Blending changes stat values, not the published in-season game count."""
-    week_two = _row(_run_week(2), "BUF")
+def test_games_played_is_untouched_by_the_blend() -> None:
+    """Blending changes stat values, not the published game count.
 
-    assert week_two["away_games_played"] == 1
-    assert week_two["home_games_played"] == 1
+    The count is a record feature: the team's completed games in the schedule. This
+    fixture's schedule carries no scores, so both sides publish 0 whether the blend runs
+    or not, which is the point -- the blend never writes this column.
+    """
+    blended = _row(_run_week(2), "BUF")
+    unblended = _row(_run_week(2, blend_stat_prior=False), "BUF")
+
+    for side in ("away", "home"):
+        assert blended[f"{side}_games_played"] == unblended[f"{side}_games_played"] == 0
 
 
 def test_team_without_a_prior_season_keeps_its_raw_in_season_means() -> None:

@@ -199,3 +199,16 @@ def test_rushing_epa_is_published() -> None:
     """Rushing EPA is published alongside passing EPA rather than dropped."""
     assert "rushing_epa" in constants.NFLREADPY_STATS
     assert "passing_epa" in constants.NFLREADPY_STATS
+
+
+def test_games_played_is_pruned_on_both_sides() -> None:
+    """The record count duplicates `strength_games_played`, so neither side reaches the model.
+
+    `away_/home_games_played` count the team's completed games this season, which
+    `away_/home_strength_games_played` already publish per side with a diff. Keeping a second
+    copy only gave the model two columns to split on for one fact; see the Milestone 49
+    follow-up in `.agents/ARCHIVE.md`.
+    """
+    for side in ("away", "home"):
+        assert f"{side}_games_played" in constants.RECORD_FEATURE_COLUMNS
+        assert f"{side}_games_played" in constants.PRUNED_FEATURE_COLUMNS

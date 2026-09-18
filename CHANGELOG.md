@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.12.0] - 2026-09-18
+
+### Changed
+
+- Bump the project version to `0.12.0` and keep `uv.lock` aligned.
+- Prune 20 more columns at training time (`constants.PRUNED_FEATURE_COLUMNS`; `482` to `462`
+  features, no schema change, no rebuild): `is_divisional_matchup` (equal to the schedule's
+  `division` flag from 2002 on and derived from today's division map before that), the three
+  `season_phase_*` one-hots (repeats of `week_in_season_norm`), `away_ties`,
+  `home_division_eliminated_proxy` and `away_division_rank` (the last unpruned members of
+  families whose other sides were already out), `strength_games_played_diff` (a constant zero
+  outside bye weeks), the six next-game flags `*_next_is_home`, `*_next_is_divisional_matchup`
+  and `*_days_to_next_game`, and the six sack mirrors `*_opponent_def_sacks` /
+  `*_opponent_times_sacked` plus their diffs (`times_sacked` / `def_sacks` seen from the other
+  sideline, `r = 0.998`). Selection evidence: gain aggregated over 18 retrained walk-forward
+  folds (`models/feature_audit_2026_09_18/feature_ranking.json`), where each of the first 14
+  carries under `0.05%` of total gain, and the near-duplicate scan in the same directory.
+  Walk-forward on `data/completed_games_ml.m49_through_2025.csv`, benchmark config from week 1,
+  `models/wf_deadweight_2023_2025_pruned/` (checkpoints `bae0e56db951d1a890d4`) against the
+  `0.11.0` arm `models/wf_m49_gp_2023_2025_pruned/`, both scored through the benchmark's Platt
+  calibrator and through the deterministic map `Phi(margin / SCORE_DIFF_STD_DEV)`:
+
+  | window | games | Platt Brier after / before | deterministic Brier after / before | margin MAE after / before |
+  | --- | --- | --- | --- | --- |
+  | week 1 only | 48 | `0.2066` / `0.2024` | `0.2066` / `0.2024` | `9.1501` / `9.0399` |
+  | week 2 only | 48 | `0.2306` / `0.2282` | `0.2306` / `0.2282` | `8.5436` / `8.4502` |
+  | weeks 3-18 | 720 | `0.2295` / `0.2324` | `0.2098` / `0.2106` | `9.9600` / `9.9647` |
+  | all weeks | 816 | `0.2283` / `0.2304` | `0.2111` / `0.2111` | `9.8291` / `9.8212` |
+
+  Paired bootstrap (5000 resamples, seed 0), after minus before, weeks 3-18: deterministic Brier
+  `-0.0007` `[-0.0032, +0.0016]`, Platt Brier `-0.0029` `[-0.0077, +0.0022]`, margin MAE
+  `-0.0046` `[-0.1003, +0.0924]`; every window's interval covers zero. The pruned arm's
+  deterministic weeks-3-18 Brier equals the market spread's through the same map (`0.2098`
+  against `0.2099`). A tie is the expected outcome for removing columns the trees did not use;
+  the change is a cleanup, not a gain. The audit that produced it, including the finding that
+  the benchmark's Platt columns are noise-dominated, is Milestone 59 in `.agents/TODO.md`.
+
 ## [0.11.0] - 2026-09-17
 
 ### Fixed

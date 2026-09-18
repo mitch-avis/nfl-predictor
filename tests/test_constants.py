@@ -206,9 +206,43 @@ def test_games_played_is_pruned_on_both_sides() -> None:
 
     `away_/home_games_played` count the team's completed games this season, which
     `away_/home_strength_games_played` already publish per side with a diff. Keeping a second
-    copy only gave the model two columns to split on for one fact; see the Milestone 49
-    follow-up in `.agents/ARCHIVE.md`.
+    copy only gave the model two columns to split on for one fact.
     """
     for side in ("away", "home"):
         assert f"{side}_games_played" in constants.RECORD_FEATURE_COLUMNS
         assert f"{side}_games_played" in constants.PRUNED_FEATURE_COLUMNS
+
+
+def test_dead_weight_and_mirror_columns_are_pruned() -> None:
+    """Columns that carry no usable signal or duplicate another column never reach the model.
+
+    The season-phase flags repeat `week_in_season_norm`; `away_ties` and the remaining
+    divisional-standing proxies are near-constant; the next-game flags and the game-count diff
+    split on almost nothing; `is_divisional_matchup` equals the schedule's `division` flag from
+    2002 on; and the `opponent_def_sacks` / `opponent_times_sacked` mirrors are `times_sacked` /
+    `def_sacks` seen from the other sideline.
+    """
+    expected = {
+        "is_divisional_matchup",
+        "season_phase_early",
+        "season_phase_mid",
+        "season_phase_late",
+        "away_ties",
+        "home_division_eliminated_proxy",
+        "away_division_rank",
+        "strength_games_played_diff",
+        "away_next_is_home",
+        "home_next_is_home",
+        "away_next_is_divisional_matchup",
+        "home_next_is_divisional_matchup",
+        "away_days_to_next_game",
+        "home_days_to_next_game",
+        "away_opponent_def_sacks",
+        "home_opponent_def_sacks",
+        "opponent_def_sacks_diff",
+        "away_opponent_times_sacked",
+        "home_opponent_times_sacked",
+        "opponent_times_sacked_diff",
+    }
+    assert expected <= set(constants.PRUNED_FEATURE_COLUMNS)
+    assert len(constants.PRUNED_FEATURE_COLUMNS) == len(set(constants.PRUNED_FEATURE_COLUMNS))

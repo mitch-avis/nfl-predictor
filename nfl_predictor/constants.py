@@ -585,19 +585,50 @@ PRUNED_FEATURE_COLUMNS = [
     "home_ties",
     # Both sides of the season-to-date game count: `away_/home_strength_games_played` already
     # publish it per side, with a diff, and agree with these in every row but the prior-season
-    # fallbacks. See the Milestone 49 follow-up in `.agents/ARCHIVE.md`.
+    # fallbacks.
     "away_games_played",
     "home_games_played",
+    # The two teams in a game have almost always played the same number of games, so the diff
+    # is a constant zero outside bye weeks.
+    "strength_games_played_diff",
+    # Equal to the schedule's `division` flag from the 2002 realignment on, and derived from
+    # the current division map before it, so the schedule flag is the one to keep.
+    "is_divisional_matchup",
+    # One-hot repeats of `week_in_season_norm`.
+    "season_phase_early",
+    "season_phase_mid",
+    "season_phase_late",
+    # Near-constant: a handful of ties per season.
+    "away_ties",
+    # Next-game context flags that trees almost never split on; the location-change flags and
+    # the opponent's win percentage carry what signal the lookahead family has.
+    "away_next_is_home",
+    "home_next_is_home",
+    "away_next_is_divisional_matchup",
+    "home_next_is_divisional_matchup",
+    "away_days_to_next_game",
+    "home_days_to_next_game",
+    # Mirrors of `times_sacked` and `def_sacks` seen from the other sideline: the same events,
+    # counted for the opponent. The interception and turnover mirrors are already excluded at
+    # ETL time (`EXCLUDE_FROM_OPPONENT_STATS`); these are excluded at training time.
+    "away_opponent_def_sacks",
+    "home_opponent_def_sacks",
+    "opponent_def_sacks_diff",
+    "away_opponent_times_sacked",
+    "home_opponent_times_sacked",
+    "opponent_times_sacked_diff",
     "away_division_ties",
     "home_division_ties",
     "away_conference_ties",
     "home_conference_ties",
     "away_next_location_change",
     "home_next_location_change",
+    "away_division_rank",
     "home_division_rank",
     "away_division_clinched_proxy",
     "home_division_clinched_proxy",
     "away_division_eliminated_proxy",
+    "home_division_eliminated_proxy",
     "away_conference_clinched_proxy",
     "home_conference_clinched_proxy",
     "away_conference_eliminated_proxy",

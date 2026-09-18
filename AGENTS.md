@@ -5,6 +5,11 @@
 This repository predicts NFL outcomes and scores for **Pick 'Em** and **Confidence Pools**.
 
 - **Primary objective:** calibrated win probabilities and weekly confidence rankings.
+- **Standing yardstick:** the closing market line. Every walk-forward report compares the model's
+  win probability and margin against the market-implied probability and the spread on the same
+  games; the model is measured by that difference, and "not worse than the market with better
+  early-season calibration" is the current bar. Beating the closing line is a stretch goal, never a
+  claim.
 - **Secondary objective:** realistic score outputs for display and reporting.
 
 Rules that are always enforced:
@@ -34,9 +39,15 @@ Rules that are always enforced:
   with the group switched off, and the user decided 2026-09-11 to keep them (`.agents/ARCHIVE.md`,
   Milestone 53). Their schedule lenses (task 53.6) landed in version `0.9.0`, measured no gain
   in walk-forward, and were dropped from the schema in `0.10.0` by the user's decision on
-  2026-09-17 (`.agents/ARCHIVE.md`, Milestone 53, "53.6"). Next is the Milestone 49
-  `games_played` follow-up. The analysis, crosswalk, and prioritized shortlist live in
-  `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`. The web UI
+  2026-09-17 (`.agents/ARCHIVE.md`, Milestone 53, "53.6"). The Milestone 49
+  `games_played` follow-up closed in `0.11.0`, and the 2026-09-18 audit pruned 20 dead-weight and
+  duplicate columns at training time in `0.12.0` (`482` to `462` features; a walk-forward tie)
+  and opened Milestone 59, which re-baselines the benchmark instrument, fixes the calibration
+  window and reconciles early stopping between production and walk-forward (see the caveat under
+  the benchmark table below). The user ordered it first on 2026-09-18; Milestone 54 (now
+  PBP-first, with the schedule skeleton as task 54.0) follows. The analysis, crosswalk, and
+  prioritized shortlist live in `.agents/feature_crosswalk.md`; the ordered milestones live in
+  `.agents/TODO.md`. The web UI
   (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on
   2026-09-11; its open phases are Milestone 58 in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
@@ -92,6 +103,17 @@ Rules that are always enforced:
   same windows (weeks 1-2 skip calibration, so they have no eval set and never had the bug). The
   healthy anchored head trails the market line in weeks 3-18; the comparison and its bootstrap
   intervals are under Milestone 52 in `.agents/TODO.md`.
+
+  **Read the Brier and log-loss columns with care (2026-09-18 audit).** The benchmark's Platt
+  calibrator fits on about 60 games and emits probabilities of exactly `0` and `1`; its weeks-3-18
+  log loss (`0.7406`) is worse than a coin flip while the same predicted margins through the
+  deterministic map `Phi(margin / SCORE_DIFF_STD_DEV)` score Brier `0.2094` / log loss `0.6069`,
+  a statistical tie with the market spread through the same map (`0.2099` / `0.6076`; difference
+  `-0.0005` `[-0.0041, +0.0032]`). Every checkpointed arm rescored this way sits between `0.2082`
+  and `0.2135` (`models/feature_audit_2026_09_18/rescored_arms.json`), so differences between
+  arms in the Platt columns are not evidence about features. Until Milestone 59 re-baselines the
+  instrument, judge feature work on the deterministic rescoring of its checkpoints and on margin
+  MAE against the spread.
 
   The same config on the pre-change build (`models/wf_shrink_2023_2025_off/`) gave week 2
   `0.2434` / `0.6799` / `0.5417` and weeks 3-18 `0.2293` / `0.7541` / `0.6847`; the comparison and

@@ -1,143 +1,109 @@
 # Next Agent Session Prompt
 
 You are the orchestrating agent for a session in the `nfl-predictor` workspace
-(`/home/mitch/workspace/nfl-predictor`). Deliverables, in this order:
+(`/home/mitch/workspace/nfl-predictor`). Your job is **Milestone 59, tasks 59.1 to 59.3** in
+`.agents/TODO.md`: give the walk-forward a probability instrument that can rank feature work,
+replace the 4-week Platt calibration with one that cannot blow up, and make production and
+walk-forward fit the same model. Nothing else can be measured until this lands, which is why the
+user put it first on 2026-09-18.
 
-1. **The 2026 Week 2 weekly run is done** (Phase 0 closed). It completed 2026-09-17 18:36 MDT
-   (`scripts/weekly_run.py --run-id weekly_2026_week_02`; ETL ran standalone first, then chained
-   in with `--skip-data-refresh`). Started too late (~18:04 MDT) for that night's DET-at-BUF
-   kickoff (~18:15 MDT) — that game had no model pick in time — but predictions, the betting
-   report and power rankings exist for all 16 Week 2 games under `models/weekly_2026_week_02/`;
-   see `.agents/TODO.md` Milestone 53 for the run summary. Nothing to do here unless something
-   about that run looks wrong on inspection. For any future weekly run, use `weekly_run.py`
-   directly (not `python -m nfl_predictor.data_collection` alone, which is only its ETL stage).
-2. **The quarterback schedule lenses are decided and gone** (Milestone 53, task 53.6, closed).
-   The user chose to drop them on 2026-09-17; version `0.10.0` removed the two columns, the
-   `qb_schedule` group and the lens machinery, and rebuilt the data on the `519`-column schema
-   (Phase 1 below is the record). Do not reopen the question or reintroduce the columns. The
-   idea's next form is task 53.7 in `TODO.md` (a defense-adjusted quarterback rate first, the
-   ridge only if that shows signal); it is queued, not started, and is not this session's job
-   unless the user asks for it.
-3. **The Milestone 49 `games_played` follow-up is closed too** (version `0.11.0`, Phase 2 below
-   is its record). Next is Milestone 54 (PBP situational stats replace the TeamRankings scrape),
-   unless the user picks task 53.7 instead.
-
-**Start on a new branch off `main`** for any new code work; the weekly run itself can run from
-whatever branch is checked out (it does not commit anything). `feat/qb-schedule-lenses` holds
-task 53.6 including its removal (`0.10.0`); merge it to `main` if that has not happened yet
-(check `git log main --oneline -3`). Confirm `git log --oneline -1` and `git status` before
-starting; do not work on `main` directly.
+**Start on a new branch off `main`** (suggested name `feat/m59-benchmark-instrument`). `main` is
+clean at the `0.12.0` commits from the 2026-09-18 audit session; confirm with
+`git log --oneline -6` and `git status` before starting, and do not work on `main` directly.
+Merge to `main` when a task is finished and gated, not at the end of the milestone.
 
 ## Calendar
 
-- Today's date is in your environment. Week 2 opened Thursday 2026-09-17 (DET at BUF); the Week 2
-  weekly run completed that evening (see Phase 0) — done, not something to redo.
-- A weekly run needs a data refresh (ETL, roughly 10 minutes from the nflreadpy cache), about 3
-  minutes of walk-forward comparison when it can reuse a warm cache (9 candidates; budget more,
-  up to 18 minutes, on a cold one), and a few minutes of training and reports — the 2026-09-17
-  run finished ETL-to-reports in about 23 minutes total; budget at least 30 for a future one
-  that starts cold.
+- Today's date is in your environment. The 2026 season is in progress; Week 2 finishes with the
+  Monday 2026-09-21 game and the Week 3 weekly run is due before the Thursday 2026-09-24 kickoff.
+  The user runs `scripts/weekly_run.py` themselves unless they ask you to; if so, it needs about 30
+  minutes cold (ETL about 10 minutes from the nflreadpy cache, walk-forward compare 3 to 18
+  minutes, training and reports a few minutes) and must not overlap with any walk-forward you
+  have running.
+- A from-week-1 walk-forward over `--eval-last-n-seasons 3` takes about 60 minutes on this idle
+  machine (54 folds, the last one measured 2026-09-18 took 60 minutes); six seasons roughly
+  double that. One at a time, `uptime` first, default OpenMP policy when idle.
 
 ## 0. Read first, in this order
 
 1. `AGENTS.md`: non-negotiables, the changelog rules (a new incremented version per landed
-   change, never `[Unreleased]`, `pyproject.toml` in step, no tags or releases), the benchmark
-   table, the walk-forward operating notes, and the new web-UI paragraph under "Project Shape".
-2. `CHANGELOG.md` entries `0.6.0` to `0.10.0`: what the last sessions shipped, including the
-   `0.7.1` review fixes, the `0.8.0` web-UI landing, the `0.9.0` schedule lenses and their
-   `0.10.0` removal.
-3. `.agents/TODO.md`: Milestone 53 (tasks 53.1-53.6 done, 53.7 open and reshaped: adjusted rate
-   before ridge), Milestone 58 (the web UI's open phases), Milestone
-   55's note about re-tuning, and the open follow-ups (the early-stopping window from task 56.4,
-   the Milestone 49 `games_played` item, and the `_ratio` dedup left out of 53.6).
-4. `.agents/ARCHIVE.md`: Milestone 52 (the total head: fixed, still behind the market line),
-   Milestone 53 (through 53.6), Milestone 56 (partial) (the calibration window) and Milestone 58
-   (partial) (the web UI, phases 0-3).
-5. `nfl_predictor/utils/polars/qb_stats.py` and `tests/test_qb_stats.py`: the quarterback family,
-   its formulas and the strictly-before rule.
+   change, never `[Unreleased]`, `pyproject.toml` in step, no tags or releases), the new
+   "standing yardstick" bullet under the mission, the benchmark table **and the caveat under it**,
+   and the walk-forward operating notes.
+2. `.agents/TODO.md`: Milestone 59 in full (findings and tasks), then Milestone 54 (now
+   PBP-first; its task 54.0 is the small schedule-skeleton fix you may be asked to take after 59.3).
+3. `.agents/ARCHIVE.md`: the review note under Milestone 49 ("Review note (2026-09-18 audit)")
+   for what the rescoring found, then Milestone 52 (the total head) and Milestone 56 (partial)
+   (task 56.4, the calibration window that crosses the season boundary in production).
+4. `CHANGELOG.md` entries `0.10.0` to `0.12.0`.
+5. Code you will change: `nfl_predictor/ml/walk_forward.py` (`run_walk_forward_backtest`,
+   `select_calibration_data`, the checkpoint store), `nfl_predictor/ml/ml_model_core.py`
+   (`_fit_win_prob_calibrator`, `_predict_home_win_prob`, `_margin_to_home_win_prob`,
+   `_fit_margin_total_models`, `resolve_win_prob_calibration_method`),
+   `nfl_predictor/ml/ml_model_training.py` (the production fit and its calibration window from
+   task 56.4), `nfl_predictor/ml/metrics.py`, `nfl_predictor/ml/wf_compare_utils.py`, and their
+   tests.
 
 ## 1. Facts to trust unless your verification disproves them
 
-- Version `0.11.0` in `pyproject.toml`, `uv.lock` aligned; no tag and no GitHub release exist or
-  may be created. Gate on `feat/games-played-evidence` as of 2026-09-17 night: `817 passed`,
-  coverage `92.93%`, ruff, pyright, ty and markdownlint (on the changed docs) all clean. Re-run
-  the frontend gate (`web/`: lint, typecheck, vitest, build) if this session touches
-  `nfl_predictor/api/` or `web/`; it was last verified passing at the `0.8.0` merge, not
-  re-checked since.
-- The web server libraries are now core dependencies (version `0.8.0`), so a plain `uv sync`
-  installs everything `tests/api/` imports. The `web` extra still exists but adds nothing.
-- **Quarterback family (the per-dropback EPA stats, `constants.QB_PBP_STATS`): kept, decision
-  closed.** The user reviewed the on/off walk-forward table on 2026-09-11 and chose to keep the
-  family in production with no code change. Do not reopen this question.
-- **`games_played` (Milestone 49 follow-up): closed, version `0.11.0`.** The records join now
-  owns `away_/home_games_played` (`wins + losses + ties`, `0` in week 1 instead of the prior
-  season's `17`), and both sides are pruned as duplicates of `strength_games_played`, which
-  already published the count correctly. An effective-games or `stat_prior_weight` column was
-  considered and not built: both are monotone transforms of a count the model already has, so
-  neither can change a tree's splits. Do not reopen it as a new column. Table, bootstrap and
-  reasoning: `.agents/ARCHIVE.md`, Milestone 49, "`games_played` as evidence".
-- **Quarterback schedule lenses (task 53.6): dropped, decision closed.** Built in `0.9.0`,
-  measured 2026-09-11 (no gain anywhere; weeks 3-18 Brier `0.2312` on / `0.2282` off, paired
-  diff `+0.0030` `[-0.0019, +0.0080]`), removed in `0.10.0` on 2026-09-17 by the user's decision.
-  `constants.QB_SCHEDULE_STATS` and the `qb_schedule` group no longer exist; the `qb` group is
-  the seven per-dropback stats. Full table and the reasoning: `.agents/ARCHIVE.md`, Milestone 53,
-  "53.6 Schedule lenses." The walk-forward directories `models/wf_qbsched_2023_2025_{on,off}/`
-  remain as the record.
-- A training-time `--disable-feature-groups` switch for production paths (`ml_model`,
-  `weekly_run.py`, `golden_command.py`) was considered and explicitly rejected as unneeded
-  complexity; only the walk-forward tools carry it. Do not build one unless a later task
-  genuinely needs to search over feature-group inclusion (Milestone 55's sweep is the plausible
-  future home for that, not before).
-- **The walk-forward baseline shift is explained, not a bug.** The QB-off arm scored weeks 3-18
-  Brier `0.2302` / log loss `0.7577` against the benchmark's `0.2284` / `0.7406` on an earlier
-  build, same config and code. Cause: the user ran a full `--refresh-nflreadpy` ETL overnight
-  before the 2026-09-11 session, which re-pulls every season's nflverse cache; nflverse
-  periodically republishes corrected historical values, so a full refresh can legitimately move
-  historical rows with no code change. The quarterback identity files (`data/qb_elos.csv`,
-  `data/qb_meta_data.csv`) were verified byte-identical to their `../nfeloqb` sources before and
-  after that session, so the shift is not a quarterback-feature defect. See `.agents/ARCHIVE.md`,
-  Milestone 53, "Resolved after review."
-- **Calibration window (task 56.4, `0.6.1`, guard relaxed in `0.7.1`).** In-season calibration
-  takes the newest completed `(season, week)` pairs across the pool, so the Week 2 run calibrates
-  on 2026 week 1 plus 2025 weeks 16-18 and records them in `metadata.json` under
-  `splits.calibration_inseason.pairs`; the training log now prints the same pairs. Final training
-  also early-stops on that window (about 50-64 games); in the Week-2 smoke run the anchored margin
-  head stopped at iteration 1. That predates the fix and is an open follow-up, not a regression.
-  The walk-forward's own calibration selection (`walk_forward.select_calibration_data`) still
-  takes weeks from the eval season only, so folds for weeks 2-4 run without a calibration frame
-  while production rolls back; recorded as a follow-up in `TODO.md`, not fixed.
-- **Total head (`0.6.2`, `0.6.3`).** Each XGBoost fit now gets its own early stopping. The healthy
-  total head still trails the market line in 2023-2025 walk-forward (weeks 3-18 total MAE `10.3152`
-  unanchored, `10.2295` anchored, `10.0847` for the line; its deviation from the line has no
-  signal), so the betting report carries `total_signal = diagnostic_only`. The fix did not
-  improve walk-forward total MAE (the pre-fix unanchored head scores `10.3009`, a tie).
-- **Data.** `data/completed_games_ml.csv` is the 2026-09-17 22:28 rebuild on the `0.11.0` schema:
-  `7278` rows, `519` columns, `8bacad41...`, leakage audit `483` features / `0` flags. Fingerprints
-  and the backup trail are in `AGENTS.md`. The `0.11.0` walk-forward input
-  `data/completed_games_ml.m49_through_2025.csv` (`7261` rows, `07971269...`) and the lens
-  measurement's `data/completed_games_ml.m53_6_through_2025.csv` (`525` columns) stay as records.
-  Any new walk-forward comparison must start from the current build, not either cut.
-- **Quarterback family (`0.7.0`).** Seven stats per side plus diffs (`constants.QB_PBP_STATS`),
-  career rates shrunk toward the league with `K = 300` pseudo-dropbacks, recent (last 8 games)
-  rates shrunk toward the career, `qb_history_dropbacks`. Identity through `data/qb_meta_data.csv`
-  (a read-only copy of `../nfeloqb/Other Data/meta_data.csv`; data is gitignored, so it must exist
-  locally; without it the abbreviated passer-name fallback still matches most starters); 0 of
-  7533 rows unmatched. It is the `qb` feature group (`.agents/ARCHIVE.md` Milestone 53 holds its
-  walk-forward table and the lenses' one).
-- `../nfeloqb` is the user's; never modify it. It was refreshed for Week 2 on 2026-09-17.
+- Version `0.12.0` in `pyproject.toml`, `uv.lock` aligned; no tag and no GitHub release exist or
+  may be created. Gate on `main` at the end of the audit session: `818 passed`, coverage `92.93%`,
+  ruff, pyright, ty, markdownlint, `uv lock --check` and `uv sync --check --active` clean. The
+  frontend gate (`web/`: lint, typecheck, vitest, build) was last verified at the `0.8.0` merge;
+  re-run it only if you touch `nfl_predictor/api/` or `web/`.
+- **The instrument finding.** The walk-forward's `--calibration platt --wf-calibration-weeks 4`
+  fits `LogisticRegression(solver="lbfgs")` with default `C` on the last 4 weeks of the eval
+  season (about 60 games) and emits probabilities of exactly `0.0` and `1.0` (25% of weeks-3-18
+  predictions fall outside `[0.05, 0.95]`). On the `0.11.0` arm the same `predicted_margin`
+  scores weeks 3-18 Brier `0.2324` / log loss `0.7612` through Platt and `0.2106` / `0.6087`
+  through `Phi(margin / SCORE_DIFF_STD_DEV)`; the market spread through the same map scores
+  `0.2099` / `0.6076`. Every checkpointed arm rescored deterministically sits between `0.2082`
+  and `0.2135`; every archived arm-versus-arm difference is within `0.0013` with intervals
+  covering zero (`models/feature_audit_2026_09_18/rescored_arms.json`; the script that produced
+  it is not in the repo, so re-derive from the checkpoints' `predictions` frames, which carry
+  `predicted_margin`, `home_win_prob`, `home_spread`, both moneylines and both scores).
+- **Weeks 1-2 are the model's edge.** With no calibration frame those folds use the deterministic
+  map, and the model beats the market there (Brier `0.2153` against `0.2218` over 96 games).
+- **Early stopping today.** Walk-forward folds with a calibration frame run to the `598`-tree cap
+  (best iteration `595-597` in 15 of 18 sampled folds); the Week 2 production run stopped the
+  margin head at iteration `0` and the total head at `1` on its 64-game window
+  (`models/weekly_2026_week_02/metadata.json`, `early_stopping`), so production predicted the
+  spread while the benchmark evaluated a 598-tree model. Production trains with
+  `calibration = elo` (a fixed logistic map), walk-forward with `platt`.
+- **Feature gain is flat.** Over 18 retrained folds the median feature's share of total gain
+  equals the uniform `2 / 482`; 158 features carry half; the top of the ranking is rare-event
+  counts (`models/feature_audit_2026_09_18/feature_ranking.json`). `0.12.0` pruned 20 dead-weight
+  and duplicate columns at training time (`482` to `462`); the ablation was a tie everywhere
+  (`models/wf_deadweight_2023_2025_pruned/`, table in `CHANGELOG.md`).
+- **Data.** `data/completed_games_ml.csv` is the 2026-09-17 22:28 build (`7278` rows, `519`
+  columns, `8bacad41...`). The walk-forward input for comparisons is
+  `data/completed_games_ml.m49_through_2025.csv` (`7261` rows, seasons `<= 2025`) and the
+  `0.12.0` arm's cut of it, `data/completed_games_ml.m49_through_2025.deadweight_cut.csv`
+  (`499` columns; the same model inputs as the current prune list, verified column-for-column).
+  Any new arm must run on a build cut to seasons `<= 2025` so the eval window does not slide onto
+  2026.
+- **Upstream gap, not yours to fix in this milestone.** nflverse team stats hold only
+  Jacksonville's 8 road games for 2001 and 2002 (verified live 2026-09-18); every JAX season-to-
+  date family for those seasons is road-only. That is task 54.0. Division context for 1999-2001
+  uses today's map; that is task 59.4, after 59.3.
+- `../nfeloqb` and `../nfl-sos-ratings` are the user's; never modify them.
 
 ## 2. Decided (do not relitigate; record deviations)
 
-- Totals stay diagnostic-only until a total model beats the closing line in walk-forward.
-- The quarterback per-dropback family stays in production (user decision, 2026-09-11) and the
-  schedule lenses are out (user decision, 2026-09-17); no feature-group switch in the training
-  CLIs unless Milestone 55's sweep needs one.
-- Tuning is out of scope; any future tuning starts from scratch (old studies scored a crippled
-  total head).
-- New work that is not part of an existing milestone takes number 59 onward (58 is the web UI).
-- Walk-forward runs one at a time; `uptime` first; default OpenMP policy when idle. The web UI's
-  job runner serializes its own walk-forward jobs, but it does not know about a walk-forward you
-  start from a shell, so check `pgrep -af walk_forward` and the Jobs page before starting one.
+- The closing market line is the standing yardstick; every walk-forward report compares against it
+  on the same games. "Not worse than the market, better early-season calibration" is the bar;
+  beating the closing line is a stretch goal, never a claim.
+- Milestone 59 before Milestone 54; 54.0 (schedule skeleton) before the rest of 54; 53.7 and the
+  Milestone 55 sweep only on the 59.1 instrument.
+- Elo stays a feature (`elo_pre`, `qb_elo_pre` and trends). Calibration is a post-processing
+  layer fit on pooled out-of-fold predictions, never on the last 60 games; the deterministic
+  one-parameter map is the floor it must beat.
+- The quarterback per-dropback family stays (2026-09-11); the schedule lenses are out
+  (2026-09-17); `games_played` is pruned (2026-09-17); the 20 `0.12.0` prunes stand.
+- Totals stay diagnostic-only until a total model beats the closing line.
+- New milestones take number 60 onward.
+- Walk-forward runs one at a time; check `pgrep -af walk_forward` and the web UI's Jobs page
+  (the API on port 8765 runs from `../nfl-predictor-web`; do not bounce it unasked).
 
 ## 3. Non-negotiables
 
@@ -145,75 +111,72 @@ starting; do not work on `main` directly.
 - All Python tooling via `.venv/bin/...`; `uv` from PATH.
 - Update `CHANGELOG.md` as each chunk lands, under a new incremented version, with
   `pyproject.toml` bumped and `uv lock` / `uv sync` run; never `[Unreleased]`, never a tag.
-- Do not modify `../nfeloqb` or `../nfl-sos-ratings`; `.agents/skills/` is not this repo's.
-- Commits (when the user asks): one logical change per commit, Conventional Commits subjects,
-  a body with what and why, the harness attribution line. Version bumps and `uv.lock` go with the
-  commit whose changelog entry they belong to. Merge finished work to `main` promptly rather than
-  batching it on a long branch.
+- No milestone numbers or TODO labels in code, comments, docstrings or test names.
+- Keep walk-forward artifacts under `models/`; every number written into `.agents/` or
+  `AGENTS.md` must be auditable from disk.
+- Commits (when the user asks): one logical change per commit, Conventional Commits subjects, a
+  body with what and why, the harness attribution line.
 
-## Phase 0 - The Week 2 weekly run (done; reference only)
+## Phase 1 - Task 59.1, the instrument
 
-Completed 2026-09-17 18:36 MDT under `models/weekly_2026_week_02/`. Selected config
-`hybrid_raw_prob_base_elo_blend0.20_clamp0.10`; calibration window `[[2025,16],[2025,17],
-[2025,18],[2026,1]]` as expected; `total_signal = diagnostic_only` throughout; predictions,
-confidence picks, betting report and power rankings all present for all 16 Week 2 games. The
-Thursday-night DET-at-BUF game has a prediction on file but had no model pick in time for that
-kickoff. Nothing left to do here; if the next weekly run is due (Week 3, opening after Monday
-night 2026-09-21's game), follow the pattern above with a fresh `--run-id` and start it early
-enough — the 2026-09-17 run took about 23 minutes end to end, budget at least 30.
+Add to every walk-forward fold and to the aggregated report: Brier, log loss and pick accuracy for
+(a) the configured calibrator, (b) `Phi(margin / sigma)` with `sigma = SCORE_DIFF_STD_DEV`, and
+(c) the market-implied probability (no-vig from the two moneylines; `Phi(spread / sigma)` when
+moneylines are missing). Add the paired model-minus-market Brier and log loss with a bootstrap
+interval per window (week 1, week 2, weeks 3-18, all) to the report, `summary_table` and
+`wf_compare`, and add `market_brier` / `market_log_loss` columns to `wf_compare.csv`. Keep the
+checkpoint payload readable (bump `FOLD_CHECKPOINT_VERSION` only if the layout changes). Then
+rebuild the `AGENTS.md` benchmark table from the deterministic columns of the existing
+`0.12.0` arm (`models/wf_deadweight_2023_2025_pruned/`, checkpoints `bae0e56db951d1a890d4`) and
+put the market row beside it; the numbers must match the rescoring in the archive note.
 
-## Phase 1 - The quarterback schedule lenses: dropped (done; reference only)
+## Phase 2 - Task 59.2, calibration that cannot blow up
 
-The user decided on 2026-09-17 to drop `qb_faced_pass_def_adj` / `qb_faced_pass_def_raw`.
-Version `0.10.0` on `feat/qb-schedule-lenses` removed them (code, tests, docs), rebuilt
-`data/completed_games_ml.csv` on the `519`-column schema and re-ran the leakage audit and the
-full gate; the record, with the reasoning for why the lenses were the wrong form of the idea, is
-`.agents/ARCHIVE.md` Milestone 53, "53.6". Nothing left to do. If the user wants the idea back,
-it is task 53.7 in `TODO.md` (defense-adjusted rate, then ridge only on signal), a new milestone
-of work with its own walk-forward, not a revert.
+Replace the 4-week Platt fit. For eval season `S`, the calibrator's training set is the pooled
+walk-forward predictions for seasons `S-2` and `S-1` plus the completed weeks of `S` (about 540
+games at week 1, growing), never the last 60 games alone. Implement in this order and measure each
+on the 2023-2025 checkpoints:
 
-## Phase 2 - Milestone 49 `games_played` (done; reference only)
+1. the one-parameter map: estimate `sigma` from the pooled residuals `actual - predicted_margin`;
+2. Platt on the pooled set with an L2 penalty (`C` chosen time-aware, not on the eval season);
+3. isotonic only past the existing 200-game threshold.
 
-Closed 2026-09-17 in version `0.11.0` on `feat/games-played-evidence`: the records join now owns
-the column, both sides are pruned, the data was rebuilt and a from-week-1 walk-forward was
-recorded against Milestone 53's baseline arm. Week 1, where the column lied, improves on every
-metric; weeks 3-18, where it was an exact duplicate of `strength_games_played` in all 759 rows,
-drift slightly the other way inside their intervals, which is a `colsample_bytree` sampling
-artifact rather than information loss. Full record: `.agents/ARCHIVE.md`, Milestone 49,
-"`games_played` as evidence". Nothing left to do.
+Acceptance: weeks 3-18 log loss within `0.005` of the deterministic `0.607`; no probability outside
+`[0.02, 0.98]` unless the spread exceeds 14 points; `auto` resolves to this path; production
+(`weekly_run`, `golden_command`, `betting_pipeline`) and walk-forward call one calibration
+function. The production calibration window from task 56.4 becomes this pooled set.
 
-## Phase 3 - What to pick up next
+## Phase 3 - Task 59.3, fit parity and early stopping
 
-Milestone 54 (PBP situational stats replace the TeamRankings stat scrape) is the next milestone in
-`TODO.md`'s execution order. Task 53.7 (a defense-adjusted quarterback rate, then the ridge only
-if that shows signal) is the other live candidate and was reshaped on 2026-09-17; the user has
-seen both and has not picked between them. Ask before starting either.
+Make production and walk-forward call the same fit function with the same stopping rule. Remove
+early stopping from in-season fits and fix `n_estimators` from a time-aware tuning whose eval set
+is a whole prior season (at least 250 games), or early-stop on that season-sized set; record
+`best_iteration` for every head in `metadata.json` and in the walk-forward report, and warn when it
+is below `10` or at the cap. Re-tuning of the other parameters stays in Milestone 55 but must use
+the 59.1 instrument. Run one from-week-1 walk-forward on the `0.12.0` cut with the new fit and
+report it against `models/wf_deadweight_2023_2025_pruned/` on the deterministic and market
+columns.
 
-## 5. The web UI now lives on `main`
+## Phase 4 - If time remains
 
-`feat/web-ui` merged into `main` on 2026-09-11 (version `0.8.0`, `CHANGELOG.md`): the FastAPI
-backend in `nfl_predictor/api/`, the React app in `web/`, `nfl_predictor/lines_refresh.py`,
-`nfl_predictor/week_builder.py`, `tests/api/`, and the `web` CI job. Its design and phase status
-are in `.agents/web_ui_plan.md` (phases 0-3 done; 4-6 open as Milestone 58 in `TODO.md`).
-`.agents/web_ui_session_prompt.md` is the historical Phase 2 prompt. The worktree
-`../nfl-predictor-web` still exists on `feat/web-ui`, now equal to `main`; future web work should
-start from a fresh branch off `main` (in that worktree or here), and keep merging to `main` after
-each phase. Do not delete either merged branch without the user asking.
+Task 54.0 (schedule skeleton and coverage check) is small and independent; task 59.4 (season-aware
+divisions) is three seasons of known facts listed in the task. Ask before starting 59.5 (the
+noise-family ablation), because it needs a six-season walk-forward.
 
-The user runs the API from that worktree on port 8765 against this checkout's `data/`, `models/`
-and `reports/` (`NFLP_*` environment variables; state in `../nfl-predictor-web/data/web/`). The
-instance running at the end of the review session was started at 02:40 on 2026-09-11 with the
-pre-merge API code (its jobs already execute the merged CLIs, because they are subprocesses of
-the worktree's files). A restart picks up the merged package; ask before bouncing it. Its job
-history holds the `weekly_run` job that failed on the old `Not enough weeks in season 2026`
-error, which the current code fixes. Tests under `tests/api/` are part of the normal gate now;
-touching `scripts/weekly_run.py` flags or `metadata.json` keys can affect the API's readers and
-job catalog (`nfl_predictor/api/jobs/catalog.py`), so run the whole suite.
+## 5. The web UI lives on `main`
+
+`nfl_predictor/api/` (FastAPI), `web/` (React), `tests/api/`, and the `web` CI job merged as
+`0.8.0`. Design and phase status: `.agents/web_ui_plan.md` (phases 0-3 done; 4-6 open as
+Milestone 58). The user runs the API from the worktree `../nfl-predictor-web` on port 8765 against
+this checkout's `data/`, `models/` and `reports/`; ask before restarting it. Touching
+`scripts/weekly_run.py` flags or `metadata.json` keys can affect the API's readers and job
+catalog (`nfl_predictor/api/jobs/catalog.py`), so run the whole suite, `tests/api/` included.
 
 ## Final report to the user
 
-1. The Week 2 run: confirmed complete or not, and its outputs (picks, confidence ranking, any
-   anomaly, whether Thursday night's game was covered).
-2. Anything about the `0.10.0` lens removal that looked wrong on inspection (it should not).
-3. What landed after that, with walk-forward tables and run directories.
-4. What is left, and the recommendation for the next session.
+1. What landed per task, with the walk-forward table on the deterministic and market columns and
+   the run directories.
+2. Whether production and walk-forward now fit and calibrate identically, and the recorded
+   `best_iteration` values.
+3. Anything the audit's facts above turned out to be wrong about.
+4. What is left in Milestone 59 and the recommendation for the next session.

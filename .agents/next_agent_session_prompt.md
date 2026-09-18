@@ -11,19 +11,20 @@ You are the orchestrating agent for a session in the `nfl-predictor` workspace
    see `.agents/TODO.md` Milestone 53 for the run summary. Nothing to do here unless something
    about that run looks wrong on inspection. For any future weekly run, use `weekly_run.py`
    directly (not `python -m nfl_predictor.data_collection` alone, which is only its ETL stage).
-2. **The quarterback schedule lenses keep-or-drop decision** (Milestone 53, task 53.6) is open
-   and belongs to the user, not this agent. It landed in version `0.9.0` (measured: no gain in
-   walk-forward, every headline point estimate leans against the two columns). Do not decide it
-   unilaterally; if the session includes that conversation, follow the user's call and update
-   `TODO.md`/`ARCHIVE.md`/`constants.py` accordingly. Otherwise leave the columns in place and
-   move on.
-3. Otherwise, or once the schedule-lens decision is resolved, move to the Milestone 49
-   `games_played` follow-up (Phase 2).
+2. **The quarterback schedule lenses are decided and gone** (Milestone 53, task 53.6, closed).
+   The user chose to drop them on 2026-09-17; version `0.10.0` removed the two columns, the
+   `qb_schedule` group and the lens machinery, and rebuilt the data on the `519`-column schema
+   (Phase 1 below is the record). Do not reopen the question or reintroduce the columns. The
+   idea's next form is task 53.7 in `TODO.md` (a defense-adjusted quarterback rate first, the
+   ridge only if that shows signal); it is queued, not started, and is not this session's job
+   unless the user asks for it.
+3. Move to the Milestone 49 `games_played` follow-up (Phase 2).
 
 **Start on a new branch off `main`** for any new code work; the weekly run itself can run from
-whatever branch is checked out (it does not commit anything). `feat/qb-schedule-lenses` (this
-branch) holds task 53.6, pushed to `origin`. Confirm `git log --oneline -1` and `git status`
-before starting; do not work on `main` directly.
+whatever branch is checked out (it does not commit anything). `feat/qb-schedule-lenses` holds
+task 53.6 including its removal (`0.10.0`); merge it to `main` if that has not happened yet
+(check `git log main --oneline -3`). Confirm `git log --oneline -1` and `git status` before
+starting; do not work on `main` directly.
 
 ## Calendar
 
@@ -40,23 +41,25 @@ before starting; do not work on `main` directly.
 1. `AGENTS.md`: non-negotiables, the changelog rules (a new incremented version per landed
    change, never `[Unreleased]`, `pyproject.toml` in step, no tags or releases), the benchmark
    table, the walk-forward operating notes, and the new web-UI paragraph under "Project Shape".
-2. `CHANGELOG.md` entries `0.6.0` to `0.9.0`: what the last sessions shipped, including the
-   `0.7.1` review fixes, the `0.8.0` web-UI landing, and the `0.9.0` schedule lenses.
-3. `.agents/TODO.md`: Milestone 53 (tasks 53.1-53.6 are done or measured, 53.6's keep-or-drop
-   decision still open, 53.7 not started), Milestone 58 (the web UI's open phases), Milestone
+2. `CHANGELOG.md` entries `0.6.0` to `0.10.0`: what the last sessions shipped, including the
+   `0.7.1` review fixes, the `0.8.0` web-UI landing, the `0.9.0` schedule lenses and their
+   `0.10.0` removal.
+3. `.agents/TODO.md`: Milestone 53 (tasks 53.1-53.6 done, 53.7 open and reshaped: adjusted rate
+   before ridge), Milestone 58 (the web UI's open phases), Milestone
    55's note about re-tuning, and the open follow-ups (the early-stopping window from task 56.4,
    the Milestone 49 `games_played` item, and the `_ratio` dedup left out of 53.6).
 4. `.agents/ARCHIVE.md`: Milestone 52 (the total head: fixed, still behind the market line),
    Milestone 53 (through 53.6), Milestone 56 (partial) (the calibration window) and Milestone 58
    (partial) (the web UI, phases 0-3).
-5. `nfl_predictor/utils/polars/qb_stats.py` and `tests/test_qb_stats.py`: the quarterback family
-   including the schedule lenses, their formulas and the strictly-before rule.
+5. `nfl_predictor/utils/polars/qb_stats.py` and `tests/test_qb_stats.py`: the quarterback family,
+   its formulas and the strictly-before rule.
 
 ## 1. Facts to trust unless your verification disproves them
 
-- Version `0.9.0` in `pyproject.toml`, `uv.lock` aligned; no tag and no GitHub release exist or may
-  be created. Gate on `feat/qb-schedule-lenses` as of 2026-09-17: `821 passed`, coverage `92.96%`,
-  ruff, pyright, ty, markdownlint (on the changed docs) all clean. Re-run the frontend gate
+- Version `0.10.0` in `pyproject.toml`, `uv.lock` aligned; no tag and no GitHub release exist or
+  may be created. Gate on `feat/qb-schedule-lenses` as of 2026-09-17 evening (after the removal):
+  see the numbers recorded in `.agents/ARCHIVE.md` Milestone 53, "53.6 removal"; ruff, pyright,
+  ty, markdownlint (on the changed docs) all clean. Re-run the frontend gate
   (`web/`: lint, typecheck, vitest, build) if this session touches `nfl_predictor/api/` or `web/`;
   it was last verified passing at the `0.8.0` merge, not re-checked since.
 - The web server libraries are now core dependencies (version `0.8.0`), so a plain `uv sync`
@@ -64,14 +67,13 @@ before starting; do not work on `main` directly.
 - **Quarterback family (the per-dropback EPA stats, `constants.QB_PBP_STATS`): kept, decision
   closed.** The user reviewed the on/off walk-forward table on 2026-09-11 and chose to keep the
   family in production with no code change. Do not reopen this question.
-- **Quarterback schedule lenses (`constants.QB_SCHEDULE_STATS`, task 53.6, version `0.9.0`):
-  keep-or-drop is open, not closed.** Built and measured 2026-09-11: no gain anywhere in
-  walk-forward (weeks 3-18 Brier `0.2312` on / `0.2282` off, paired diff `+0.0030`
-  `[-0.0019, +0.0080]`; every headline point estimate leans against the lenses; only early pick
-  accuracy, on a 96-game sample, clears its interval against them). They ship live in the `qb`
-  group today only because no decision has been made yet, not because they are validated. The
-  `qb_schedule` group ablates only these two columns if a training run needs to test without
-  them. Full table: `.agents/ARCHIVE.md`, Milestone 53, "53.6 Schedule lenses."
+- **Quarterback schedule lenses (task 53.6): dropped, decision closed.** Built in `0.9.0`,
+  measured 2026-09-11 (no gain anywhere; weeks 3-18 Brier `0.2312` on / `0.2282` off, paired
+  diff `+0.0030` `[-0.0019, +0.0080]`), removed in `0.10.0` on 2026-09-17 by the user's decision.
+  `constants.QB_SCHEDULE_STATS` and the `qb_schedule` group no longer exist; the `qb` group is
+  the seven per-dropback stats. Full table and the reasoning: `.agents/ARCHIVE.md`, Milestone 53,
+  "53.6 Schedule lenses." The walk-forward directories `models/wf_qbsched_2023_2025_{on,off}/`
+  remain as the record.
 - A training-time `--disable-feature-groups` switch for production paths (`ml_model`,
   `weekly_run.py`, `golden_command.py`) was considered and explicitly rejected as unneeded
   complexity; only the walk-forward tools carry it. Do not build one unless a later task
@@ -100,28 +102,28 @@ before starting; do not work on `main` directly.
   unanchored, `10.2295` anchored, `10.0847` for the line; its deviation from the line has no
   signal), so the betting report carries `total_signal = diagnostic_only`. The fix did not
   improve walk-forward total MAE (the pre-fix unanchored head scores `10.3009`, a tie).
-- **Data.** The 2026-09-11 18:17 rebuild carries the schedule lenses: `data/completed_games_ml.csv`
-  (`7263` rows, `525` columns, `4cf48985...`), its cut `data/completed_games_ml.m53_6_through_2025.csv`
-  (`940cbbf4...`); the pre-rebuild `519`-column copy is in `data/backup_pre_m53_6/`. Leakage audit:
-  `490` features, `0` flags. The 2026-09-17 evening ETL (started for the Week 2 weekly run, see
-  Phase 0) refreshes `data/completed_games_ml.csv` again from the current nflreadpy cache plus
-  the user's `../nfeloqb` refresh; check its fingerprint and row count rather than trusting the
-  numbers above once that run has landed.
+- **Data.** `data/completed_games_ml.csv` is the 2026-09-17 evening rebuild on the `0.10.0`
+  schema (`519` columns; rows and fingerprint in `.agents/ARCHIVE.md` Milestone 53, "53.6
+  removal", and `AGENTS.md`). The `525`-column build it replaced (the Week 2 weekly run's ETL of
+  18:13 that evening) is in `data/backup_pre_m53_6_drop/`; `data/backup_pre_m53_6/` still holds
+  the 2026-09-11 `519`-column build from before the lenses. The lens walk-forward input
+  `data/completed_games_ml.m53_6_through_2025.csv` (`525` columns) stays as that measurement's
+  record. Any new walk-forward comparison must start from the current build, not that cut.
 - **Quarterback family (`0.7.0`).** Seven stats per side plus diffs (`constants.QB_PBP_STATS`),
   career rates shrunk toward the league with `K = 300` pseudo-dropbacks, recent (last 8 games)
   rates shrunk toward the career, `qb_history_dropbacks`. Identity through `data/qb_meta_data.csv`
   (a read-only copy of `../nfeloqb/Other Data/meta_data.csv`; data is gitignored, so it must exist
   locally; without it the abbreviated passer-name fallback still matches most starters); 0 of
-  7533 rows unmatched. It is the `qb` feature group (schedule lenses included since `0.9.0`; see
-  the schedule-lens note above and `.agents/ARCHIVE.md` Milestone 53 for both walk-forward tables).
+  7533 rows unmatched. It is the `qb` feature group (`.agents/ARCHIVE.md` Milestone 53 holds its
+  walk-forward table and the lenses' one).
 - `../nfeloqb` is the user's; never modify it. It was refreshed for Week 2 on 2026-09-17.
 
 ## 2. Decided (do not relitigate; record deviations)
 
 - Totals stay diagnostic-only until a total model beats the closing line in walk-forward.
-- The quarterback per-dropback family stays in production (user decision, 2026-09-11); no
-  feature-group switch in the training CLIs unless Milestone 55's sweep needs one. The schedule
-  lenses (task 53.6) are the one open exception — see section 1.
+- The quarterback per-dropback family stays in production (user decision, 2026-09-11) and the
+  schedule lenses are out (user decision, 2026-09-17); no feature-group switch in the training
+  CLIs unless Milestone 55's sweep needs one.
 - Tuning is out of scope; any future tuning starts from scratch (old studies scored a crippled
   total head).
 - New work that is not part of an existing milestone takes number 59 onward (58 is the web UI).
@@ -152,18 +154,15 @@ kickoff. Nothing left to do here; if the next weekly run is due (Week 3, opening
 night 2026-09-21's game), follow the pattern above with a fresh `--run-id` and start it early
 enough — the 2026-09-17 run took about 23 minutes end to end, budget at least 30.
 
-## Phase 1 - The quarterback schedule lenses keep-or-drop decision
+## Phase 1 - The quarterback schedule lenses: dropped (done; reference only)
 
-Task 53.6 already landed the code, tests and walk-forward measurement (version `0.9.0`; see
-section 1 and `.agents/ARCHIVE.md` Milestone 53, "53.6 Schedule lenses"). There is no
-implementation work left here — only the user's decision on whether to keep
-`qb_faced_pass_def_adj` / `qb_faced_pass_def_raw` in the schema. If the user decides to drop
-them: remove `QB_SCHEDULE_STATS` from `constants.py` (and its entry in
-`FEATURE_GROUP_COLUMN_MARKERS`), the `qb_schedule` group, the ETL wiring in
-`data_collection.py` (`defense_games` / `snapshots` args to `_attach_qb_features`), the
-`_schedule_lenses` machinery in `qb_stats.py`, and their tests; rebuild and note the schema
-change in `CHANGELOG.md` under a new version. If kept, just close out the TODO item recording
-the decision. Do not spend implementation time here until the decision is made.
+The user decided on 2026-09-17 to drop `qb_faced_pass_def_adj` / `qb_faced_pass_def_raw`.
+Version `0.10.0` on `feat/qb-schedule-lenses` removed them (code, tests, docs), rebuilt
+`data/completed_games_ml.csv` on the `519`-column schema and re-ran the leakage audit and the
+full gate; the record, with the reasoning for why the lenses were the wrong form of the idea, is
+`.agents/ARCHIVE.md` Milestone 53, "53.6". Nothing left to do. If the user wants the idea back,
+it is task 53.7 in `TODO.md` (defense-adjusted rate, then ridge only on signal), a new milestone
+of work with its own walk-forward, not a revert.
 
 ## Phase 2 - Milestone 49 follow-up: `games_played` as evidence
 
@@ -196,6 +195,6 @@ job catalog (`nfl_predictor/api/jobs/catalog.py`), so run the whole suite.
 
 1. The Week 2 run: confirmed complete or not, and its outputs (picks, confidence ranking, any
    anomaly, whether Thursday night's game was covered).
-2. The schedule-lens decision, if it was made this session, and what changed as a result.
+2. Anything about the `0.10.0` lens removal that looked wrong on inspection (it should not).
 3. What landed after that, with walk-forward tables and run directories.
 4. What is left, and the recommendation for the next session.

@@ -769,21 +769,10 @@ games.
   stands behind them. Scrambles are credited to the team-game's primary passer, because the
   play-by-play cache keeps the passer id but not the rusher id.
 
-- Quarterback schedule lenses (`constants.QB_SCHEDULE_STATS`, same module): how hard were the pass
-  defenses behind the starter's production this season? Both average his games earlier in the
-  row's season, weighted by his dropbacks in each, in the two forms of the `nfl-sos-ratings`
-  head-to-head-excluded method. `qb_faced_pass_def_adj` takes each faced defense's ridge
-  `adj_def_pass_epa_snap` from the snapshot of the week it was faced (the sos `QSoS` construct;
-  higher is tougher). `qb_faced_pass_def_raw` takes each faced defense's EPA per dropback allowed
-  in its games before the row's week, excluding its games against the quarterback's team (the
-  one-hop form of `sos_played_raw`; higher is easier). Both are null before his first game of the
-  season, and the one-hop lens is null through week 2 for the same reason as `sos_played_raw`.
-
 The strength family is ablatable as the `strength` feature group
 (`--disable-feature-groups strength`), and the early-season prior blend can be ablated
 independently at ETL time with `--no-strength-prior-blend`. The quarterback family is the `qb`
-group (`--disable-feature-groups qb`), lenses included; `qb_schedule` drops only the two
-lenses. Apart from that nesting, no group overlaps another.
+group (`--disable-feature-groups qb`). No group overlaps another.
 
 ## Open work
 

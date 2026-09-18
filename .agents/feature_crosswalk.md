@@ -153,9 +153,9 @@ distinct work in a pre-game feature. How the idea lands in nfl-predictor, in ord
   season-to-date profile contains the game against the subject, which is exactly the game that
   produced the subject's own stats. The two constructs are ablated against each other rather than
   assumed equivalent.
-- Milestone 47 gives QBs the same two lenses: a faced-pass-defense strength from the team ridge
-  (the sos `QSoS` construct, dropback-weighted) and a one-hop companion built from faced defenses'
-  EPA per dropback allowed excluding games against the QB's team, before the optional QB ridge.
+- Milestone 47 (now 53) gave QBs the same two lenses in `0.9.0` and dropped them in `0.10.0`
+  (task 53.6: no gain, and a schedule faced is an input to an adjusted rate, not a feature). The
+  QB form of the method that remains open is the adjusted rate or ridge (task 53.7).
 - Not ported: excluding an earlier head-to-head meeting from the two teams' own profiles on a
   rematch row. Pre-week profiles contain a head-to-head game only for divisional rematches, and
   for prediction the earlier meeting is evidence about both teams rather than contamination. This
@@ -276,7 +276,9 @@ implementation complexity, and owning layer.
 - Schedule lenses (section 3.1 applied to QBs): `qb_faced_pass_def_adj`, the dropback-weighted
   mean of the faced defenses' pre-week ridge pass-defense coefficient from 4.4 (the sos `QSoS`
   construct), and the one-hop `qb_faced_pass_def_raw`, the faced defenses' EPA per dropback
-  allowed from prior-week games excluding games against the QB's team.
+  allowed from prior-week games excluding games against the QB's team. Built in `0.9.0`,
+  measured (no gain) and dropped in `0.10.0`; see task 53.6 in `ARCHIVE.md` for why a schedule
+  faced belongs inside an adjusted rate, not beside it.
 - Why: the user wants QB EPA to matter more; today the only QB signal is the nfeloqb value/Elo pair
   and its 4-week trend.
 - Floor: 1999 for EPA-based fields, 2006 for CPOE.
@@ -295,7 +297,7 @@ implementation complexity, and owning layer.
   plus the last 8 games (no season-to-date rate that resets in week 1); `qb_td_int_margin_rate`
   was left out; new starters get the league rate through shrinkage rather than a separate rookie
   prior; scrambles are credited to the team-game's primary passer because the cache has no rusher
-  id. The schedule lenses remain open (task 53.6).
+  id. The schedule lenses (task 53.6) were built, measured and dropped (`0.9.0` / `0.10.0`).
 
 ### 4.7 Special teams EPA margin
 
@@ -374,7 +376,8 @@ stay diagnostic-only. Any future total-specific features would have to carry inf
 closing line does not. Milestone 53 (QB per-dropback EPA) landed on 2026-09-11 and ties in
 walk-forward with the group switched off (weeks 3-18 log loss `0.7708` against `0.7577`, inside
 noise; weeks 1-2 lean better); the user reviewed it and decided to keep the family in production.
-Its schedule lenses (task 53.6) are next. The authoritative order lives in `.agents/TODO.md`.
+Its schedule lenses (task 53.6) were tried and dropped (`0.10.0`, 2026-09-17). The authoritative
+order lives in `.agents/TODO.md`.
 
 The first implementation session delivered Milestone 45 end to end on 2026-09-09 (see
 `ARCHIVE.md`). The baseline it was asked to compare against (Brier `0.2312`, log loss `0.7352`,

@@ -64,10 +64,12 @@ Agents and humans should not rely on the shell activation state.
 - `.agents/skills/` is a separate git clone of agent skills. It is gitignored and excluded from
   ruff and markdownlint (`.markdownlintignore`); pyright already skips dot-directories and ty only
   checks `nfl_predictor`, `scripts`, and `tests`.
-- `data/completed_games_ml.csv` is the 2026-09-11 06:47 rebuild with the quarterback family:
-  `7263` rows (`1999-2025` plus the two completed 2026 Week 1 games), `519` columns, fingerprint
-  `acaa2892...`; `data/completed_games_ml.m53_through_2025.csv` is its cut to seasons `<= 2025`
-  (`7261` rows, `06a7a34d...`), the input of the Milestone 53 walk-forward arms. The build it
+- `data/completed_games_ml.csv` is the 2026-09-17 21:39 rebuild on the `0.10.0` schema (schedule
+  lenses removed): `7277` rows (`1999-2025` plus the 2026 Week 1 games), `519` columns,
+  fingerprint `0cecc2e3...`; leakage audit `484` features, `0` flags. The `525`-column build it
+  replaced is in `data/backup_pre_m53_6_drop/`. `data/completed_games_ml.m53_through_2025.csv`
+  (`7261` rows, `06a7a34d...`, cut from the 2026-09-11 06:47 build `acaa2892...`) was the input
+  of the Milestone 53 walk-forward arms. The 06:47 build
   replaced was a refresh made outside the agent session at 06:03 (`9b8bf303...`, `498` columns),
   backed up in `data/backup_pre_m53/`. That refresh also removed `data/backup_pre_m49/`,
   `data/backup_pre_m51/`, `data/completed_games_ml.pre_m49.csv` and the benchmark input
@@ -110,8 +112,8 @@ composite), 52 (the total head: fixed, still behind the market line, totals labe
 diagnostic-only), task 56.4 (calibration window across the season boundary), and the web UI's
 phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
-1. Milestone 53 - QB per-dropback EPA families for the expected starter (**next**; the schedule
-   lenses' keep-or-drop decision, task 53.6, is open with the user)
+1. Milestone 53 - QB per-dropback EPA families for the expected starter (**next**; task 53.6
+   closed 2026-09-17 by dropping the lenses; 53.7 open, defense-adjusted rate first)
 2. Milestone 54 - PBP situational stats replace the TeamRankings stat scrape
 3. Milestone 55 - Off-season configuration sweep, after the feature work lands
 4. Milestone 56 - Weekly orchestration residuals
@@ -131,7 +133,8 @@ Rules for every feature milestone:
 - XGBoost margin/total remains the only model family in scope.
 - The method borrowed from `nfl-sos-ratings` is its head-to-head-excluded opponent profiling
   (`feature_crosswalk.md` section 3.1): it landed as the weekly ridge snapshot (its all-hops form)
-  plus a one-hop schedule-strength companion, and the QB milestone carries the same two lenses.
+  plus a one-hop schedule-strength companion. The QB milestone tried the same two lenses on
+  quarterbacks (task 53.6) and dropped them; its remaining form is the adjusted rate (53.7).
 - Keep walk-forward comparison artifacts under `models/`; numbers reported in these files must be
   auditable from disk.
 
@@ -149,16 +152,20 @@ leakage audit and walk-forward) are done and archived under "Milestone 53 (parti
 `ARCHIVE.md` (2026-09-11, version `0.7.0`). The on/off walk-forward is a statistical tie; see the
 follow-ups below.
 
-- [ ] 53.6 Schedule lenses (`feature_crosswalk.md` section 3.1 applied to QBs):
-      `qb_faced_pass_def_adj`, the dropback-weighted mean of the faced defenses' pre-week ridge
-      pass-defense coefficient from Milestone 46 (the sos `QSoS` construct), and the one-hop
-      `qb_faced_pass_def_raw`, the faced defenses' EPA per dropback allowed from prior-week games
-      excluding games against the QB's team. Implemented and measured 2026-09-11 (`0.9.0`,
-      `ARCHIVE.md`, Milestone 53, "53.6"): no gain, every headline point estimate leans against
-      the lenses and week 1-2 pick accuracy is worse outside its 95% interval. They ship in the
-      `qb` group today; keep or drop is the user's decision, open.
-- [ ] 53.7 Optional phase 2: opponent-adjusted QB EPA via a dropback-weighted ridge against faced
-      defenses (design in `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`).
+- [x] 53.6 Schedule lenses: built and measured 2026-09-11 (`0.9.0`; no gain), dropped from the
+      schema 2026-09-17 (`0.10.0`) by the user's decision. Record and reasoning in `ARCHIVE.md`,
+      Milestone 53, "53.6". Do not reintroduce them as standalone columns; the idea's next form
+      is 53.7.
+- [ ] 53.7 Opponent-adjusted quarterback EPA, in two steps. First (cheap) a defense-adjusted
+      rate: per quarterback game, `qb_epa_sum - dropbacks * expected_epa_allowed` where the
+      expectation is the faced defense's pre-game `adj_def_pass_epa_snap` (or its one-hop
+      profile), aggregated with the same `K = 300` shrinkage as `qb_dropback_epa` (career and
+      last-8 windows) so it lands next to the existing rates and is measured the same way. The
+      quarterback-game rows already carry `opponent_abbr` for this. Only if that shows signal,
+      the ridge: dropback-weighted quarterback effects solved jointly with defenses (design in
+      `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`). Ceiling to keep in mind:
+      the team-level `adj_off_pass_epa` is already opponent-adjusted, so the gain is confined to
+      where the quarterback's history diverges from the team's (new and traded starters).
 
 2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`scripts/weekly_run.py --run-id
 weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too late (~18:04 MDT)
@@ -172,8 +179,8 @@ Acceptance:
 - [x] Unmatched-QB rate is reported and below an agreed threshold for `2006+`. The ETL logs it per
       side; on the 2026-09-11 rebuild it is `0` of `7533` rows on both sides, every season.
 - [ ] Walk-forward table recorded; all gates green. Recorded for 53.1-53.5 (statistical tie) and
-      for 53.6 (no gain; `models/wf_qbsched_2023_2025_{on,off}/`), both in `ARCHIVE.md`; check
-      this once the 53.6 decision is made.
+      for 53.6 (no gain; `models/wf_qbsched_2023_2025_{on,off}/`), both in `ARCHIVE.md`. Gates
+      green on the `0.10.0` removal.
 
 ---
 
@@ -371,7 +378,8 @@ the identity warning. Still open:
       passer, so a starter who leaves early has his scrambles booked to the backup; the recent
       window counts any week with one dropback as a full game; `completions` and the recent
       `cpoe` sums are computed but never read. Reuse: the play-by-play helpers and
-      `calculate_stat_differentials` were taken along with task 53.6 (`0.9.0`); `_ratio` is still
+      `calculate_stat_differentials` were taken along with task 53.6 (`0.9.0`; the lenses are gone
+      since `0.10.0`, the reuse stays); `_ratio` is still
       a third copy of the null-safe ratio in `teamrankings._safe_ratio` and `strength_snapshot`
       (consolidating it touches three modules, so it was left out of that task).
 - [ ] The QB identity chain (Elo name to GSIS id via a copy of the nfeloqb metadata, aliases and

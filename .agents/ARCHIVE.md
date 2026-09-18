@@ -236,8 +236,46 @@ Paired bootstrap over games (5000 resamples, seed 0), on minus off. Weeks 3-18: 
 `[-0.0056, +0.0075]`, pick accuracy `-0.0521` `[-0.1042, -0.0104]` (5 of 96 picks). By season
 (weeks 1-18) Brier `0.2363 / 0.2055 / 0.2467` on against `0.2349 / 0.1982 / 0.2473` off.
 Interpretation: no gain anywhere; every point estimate leans against the lenses, only the early
-pick accuracy clears its interval. Decision (keep, or drop the two columns from the schema) is the
-user's; until then they ship in the `qb` group.
+pick accuracy clears its interval.
+
+Decision (user, 2026-09-17): drop. Removed in version `0.10.0` from the same branch:
+`constants.QB_SCHEDULE_STATS`, the `qb_schedule` group, the `_schedule_lenses` machinery and the
+`defense_games` / `snapshots` arguments of `attach_qb_features` / `_attach_qb_features`, and the
+tests; `opponent_abbr` on the quarterback-game rows and the `pbp` / `calculate_stat_differentials`
+reuse stay. Reasoning, independent of the table: a schedule faced is a nuisance parameter for
+estimating the quarterback's skill, not a predictor of the next game, so its value lies entirely
+in the subtraction `production - expected production given schedule`; as standalone columns the
+lenses left that subtraction for the trees to discover as an interaction. Their season-to-date
+window matched neither the career rate (all seasons, `K = 300`) nor the last-8 rate (which reaches
+into the prior season until about week 9), so there was no aligned rate to adjust. The team-level
+ridge `adj_off_pass_epa` is already opponent-adjusted, so the lenses could add information only
+where the quarterback's schedule differs from the team's (mid-season starter changes), exactly
+where the `K = 300` prior dominates his rate. And their noisiest weeks (3-5, two to four defenses
+with two to four games each) were also their most useful ones, since by mid-season the ridge
+snapshots have converged. The two correlated weak columns (`-0.375` with each other, `+-0.05`
+with the margin) then cost a little variance through column subsampling, consistent with every
+point estimate leaning against them. If the idea returns it goes inside the rate: task 53.7 in
+`TODO.md`, the defense-adjusted rate first and the ridge only if that shows signal. The
+`0.10.0` rebuild and its verification are recorded under "53.6 removal" below.
+
+### 53.6 removal (2026-09-17, version `0.10.0`)
+
+- Code: `constants.py` (`QB_SCHEDULE_STATS`, the `qb_schedule` group), `finalize.py`,
+  `qb_stats.py` (docstring section 4, the lens constants, `_faced_games`,
+  `_faced_snapshot_values`, `_faced_one_hop_values`, `_dropback_weighted`, `_schedule_lenses`,
+  the `defense_games` / `snapshots` arguments), `data_collection.py` (the same arguments and the
+  snapshot / team-game wiring into `_attach_qb_features`), seven tests across
+  `tests/test_qb_stats.py` and `tests/test_data_collection_qb_features.py`; 342 lines removed.
+- Build: cached ETL rebuild at 21:39 into `data/completed_games_ml.csv` (`7277` rows, `519`
+  columns, `0cecc2e3...`); the `525`-column build it replaced (the Week 2 weekly run's 18:13 ETL,
+  `3f1db457...`) is in `data/backup_pre_m53_6_drop/`. Aligned on `(season, week, away_abbr,
+  home_abbr)`, every shared column is identical (numeric max difference `0`, no null mismatch);
+  the only schema change is the six lens columns gone. Quarterback identity still `0` of `7533`
+  rows unmatched per side. Leakage audit `484` features, `0` flags
+  (`models/audit_m53_6_drop/leakage_audit.json`).
+- Gate: `814 passed`, coverage `92.89%`, ruff, pyright, ty and markdownlint (on the changed
+  docs) clean. No walk-forward: with the columns absent the model sees exactly the off arm of the
+  53.6 measurement (`models/wf_qbsched_2023_2025_off/`), which stands as the number.
 
 ---
 

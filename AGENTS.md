@@ -32,8 +32,9 @@ Rules that are always enforced:
   head still trails the market's total line in walk-forward, so the betting report labels totals
   `diagnostic_only`. QB per-dropback EPA families landed in version `0.7.0`, tied in walk-forward
   with the group switched off, and the user decided 2026-09-11 to keep them (`.agents/ARCHIVE.md`,
-  Milestone 53). Their schedule lenses (task 53.6) landed in version `0.9.0` and measured no
-  gain in walk-forward; keeping them is an open user decision. Next is the Milestone 49
+  Milestone 53). Their schedule lenses (task 53.6) landed in version `0.9.0`, measured no gain
+  in walk-forward, and were dropped from the schema in `0.10.0` by the user's decision on
+  2026-09-17 (`.agents/ARCHIVE.md`, Milestone 53, "53.6"). Next is the Milestone 49
   `games_played` follow-up. The analysis, crosswalk, and prioritized shortlist live in
   `.agents/feature_crosswalk.md`; the ordered milestones live in `.agents/TODO.md`. The web UI
   (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on
@@ -57,11 +58,14 @@ Rules that are always enforced:
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
     `markdownlint-cli2`). Never edit it as part of this repo's work.
-  - ETL was rerun on 2026-09-11 at 18:17 from the cache for `1999-2026` with the quarterback
-    schedule lenses (`7263` completed rows: all of `1999-2025` plus two 2026 Week 1 games; `525`
-    columns; fingerprint `4cf48985...`); `data/completed_games_ml.m53_6_through_2025.csv`
-    (`940cbbf4...`) is its cut to seasons `<= 2025`, and the previous `519`-column build is in
-    `data/backup_pre_m53_6/`. The leakage audit passed on it (`490` features, `0` flags). The
+  - ETL was rerun on 2026-09-17 at 21:39 from the cache for `1999-2026` on the `0.10.0` schema
+    (the schedule lenses removed): `7277` completed rows (all of `1999-2025` plus the 2026 Week 1
+    games), `519` columns, fingerprint `0cecc2e3...`; every remaining value is identical to the
+    `525`-column build it replaced (that evening's Week 2 weekly-run ETL, `3f1db457...`, kept in
+    `data/backup_pre_m53_6_drop/`). The leakage audit passed on it (`484` features, `0` flags,
+    `models/audit_m53_6_drop/leakage_audit.json`). The lens measurement's input
+    `data/completed_games_ml.m53_6_through_2025.csv` (`525` columns, `940cbbf4...`) and the
+    2026-09-11 pre-lens build in `data/backup_pre_m53_6/` remain on disk as records. The
     benchmark below was measured on the earlier `498`-column build
     `data/completed_games_ml.m49_on_through_2025.csv`, which a data cleanup removed; its numbers
     stay auditable from the fold checkpoints named below.

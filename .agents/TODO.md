@@ -110,8 +110,8 @@ composite), 52 (the total head: fixed, still behind the market line, totals labe
 diagnostic-only), task 56.4 (calibration window across the season boundary), and the web UI's
 phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
-1. Milestone 53 - QB per-dropback EPA families for the expected starter (**next**; the 2026 Week 2
-   weekly run is due between Monday night 2026-09-14 and Thursday 2026-09-17)
+1. Milestone 53 - QB per-dropback EPA families for the expected starter (**next**; the schedule
+   lenses' keep-or-drop decision, task 53.6, is open with the user)
 2. Milestone 54 - PBP situational stats replace the TeamRankings stat scrape
 3. Milestone 55 - Off-season configuration sweep, after the feature work lands
 4. Milestone 56 - Weekly orchestration residuals
@@ -159,6 +159,13 @@ follow-ups below.
       `qb` group today; keep or drop is the user's decision, open.
 - [ ] 53.7 Optional phase 2: opponent-adjusted QB EPA via a dropback-weighted ridge against faced
       defenses (design in `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`).
+
+2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`scripts/weekly_run.py --run-id
+weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too late (~18:04 MDT)
+for the Thursday-night DET-at-BUF kickoff (~18:15 MDT) but predictions exist for all 16 Week 2
+games including it. Selected config `hybrid_raw_prob_base_elo_blend0.20_clamp0.10`; weeks-16-2025
+through-week-1-2026 calibration window as expected; `total_signal = diagnostic_only` throughout.
+Outputs under `models/weekly_2026_week_02/`.
 
 Acceptance:
 

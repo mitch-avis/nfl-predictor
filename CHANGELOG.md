@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.10.0] - 2026-09-17
+
+### Removed
+
+- Drop the quarterback schedule lenses (`qb_faced_pass_def_adj`, `qb_faced_pass_def_raw`, per
+  side plus `_diff`; six columns) from the schema, by the user's decision after the `0.9.0`
+  walk-forward measured no gain. The reasoning, recorded in `.agents/ARCHIVE.md` Milestone 53
+  ("53.6"): a schedule faced is a nuisance parameter for estimating the quarterback's skill, not a
+  predictor of the next game; as standalone columns the lenses left the subtraction
+  `production - expected production given schedule` to the model, in a season-to-date window
+  that matches neither the career nor the last-8 rates; and the team-level ridge pass offense is
+  already opponent-adjusted. Gone: `constants.QB_SCHEDULE_STATS`, the `qb_schedule` feature
+  group, the `_schedule_lenses` machinery in `qb_stats.py`, the `defense_games` / `snapshots`
+  arguments of `attach_qb_features` and `data_collection._attach_qb_features`, and their tests.
+  The quarterback-game rows keep `opponent_abbr`, which a defense-adjusted quarterback rate (the
+  form the idea takes if revisited; see `.agents/TODO.md` task 53.7) would need. The `qb` group
+  is the seven per-dropback stats again.
+
+### Changed
+
+- Bump the project version to `0.10.0` and keep `uv.lock` aligned.
+- Rebuild `data/completed_games_ml.csv` from the nflreadpy cache on the new schema (`519`
+  columns); the previous `525`-column build is in `data/backup_pre_m53_6_drop/`.
+
 ## [0.9.0] - 2026-09-11
 
 ### Changed

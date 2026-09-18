@@ -276,118 +276,6 @@ def test_attach_qb_features_matches_abbreviated_names_and_nulls_unknown_quarterb
     assert first["qb_dropback_epa_diff"] is None
 
 
-# Schedule-lens fixture: quarterback A (NE) faced ZZZ in 2022, then XXX in 2023 week 1 (30
-# dropbacks) and YYY in 2023 week 2 (40 dropbacks). Values marked "decoy" must never be read.
-_LENS_QB_GAMES = [
-    _qb_game(2022, 17, "NE", "A", "ZZZ", dropbacks=50),
-    _qb_game(2023, 1, "NE", "A", "XXX", dropbacks=30),
-    _qb_game(2023, 2, "NE", "A", "YYY", dropbacks=40),
-]
-_LENS_SNAPSHOTS = pl.DataFrame(
-    {
-        "season": [2022, 2023, 2023, 2023, 2023],
-        "week": [17, 1, 2, 2, 3],
-        "team_abbr": ["ZZZ", "XXX", "YYY", "XXX", "YYY"],
-        # ZZZ: another season (decoy). XXX week 2 and YYY week 3: not the week faced (decoys).
-        "adj_def_pass_epa_snap": [5.0, 0.10, -0.05, 9.0, 9.0],
-    }
-)
-# One row per defense-game: team_abbr defends against opponent_abbr.
-_LENS_DEFENSE_GAMES = pl.DataFrame(
-    {
-        "season": [2023] * 5,
-        "week": [1, 2, 3, 1, 2],
-        "team_abbr": ["XXX", "XXX", "XXX", "YYY", "YYY"],
-        "opponent_abbr": ["NE", "MIA", "MIA", "BUF", "NE"],
-        "dropbacks_allowed": [10.0, 20.0, 30.0, 25.0, 40.0],
-        # Head-to-head with NE and XXX's week-3 game are decoys; the rest give XXX 0.2 and
-        # YYY -0.2 EPA per dropback allowed.
-        "pass_epa_allowed_sum": [5.0, 4.0, 30.0, -5.0, 12.0],
-    }
-)
-
-
-def _lenses(
-    rows: list[tuple[int, int, str, str]],
-    *,
-    defense_games: pl.DataFrame = _LENS_DEFENSE_GAMES,
-    snapshots: pl.DataFrame = _LENS_SNAPSHOTS,
-) -> pl.DataFrame:
-    """Return the quarterback family for ``rows`` with the schedule-lens fixture."""
-    return qb_stats.attach_qb_features(
-        _games(rows),
-        _qb_games(_LENS_QB_GAMES),
-        _IDENTITY,
-        defense_games=defense_games,
-        snapshots=snapshots,
-    )
-
-
-def test_faced_pass_def_adj_weights_each_game_by_dropbacks_at_the_week_it_was_played() -> None:
-    """The ridge lens averages the snapshot of each game's own week, dropback-weighted."""
-    out = _lenses([(2023, 3, "Name A", "Name B"), (2023, 2, "Name A", "Name B")])
-    week3, week2 = out.row(0, named=True), out.row(1, named=True)
-
-    assert week3["away_qb_faced_pass_def_adj"] == pytest.approx((30 * 0.10 + 40 * -0.05) / 70)
-    assert week2["away_qb_faced_pass_def_adj"] == pytest.approx(0.10)
-    # B has no games this season, so there is nothing to average.
-    assert week3["home_qb_faced_pass_def_adj"] is None
-    assert week3["qb_faced_pass_def_adj_diff"] is None
-
-
-def test_faced_pass_def_lenses_start_empty_each_season() -> None:
-    """Games from an earlier season never enter either lens."""
-    row = _lenses([(2023, 1, "Name A", "Name B")]).row(0, named=True)
-
-    assert row["away_qb_faced_pass_def_adj"] is None
-    assert row["away_qb_faced_pass_def_raw"] is None
-
-
-def test_faced_pass_def_adj_skips_games_without_a_snapshot() -> None:
-    """A faced defense missing from the snapshot drops out of the weights."""
-    snapshots = _LENS_SNAPSHOTS.filter(~((pl.col("week") == 2) & (pl.col("team_abbr") == "YYY")))
-    row = _lenses([(2023, 3, "Name A", "Name B")], snapshots=snapshots).row(0, named=True)
-
-    assert row["away_qb_faced_pass_def_adj"] == pytest.approx(0.10)
-
-
-def test_faced_pass_def_raw_excludes_head_to_head_games_and_the_row_week() -> None:
-    """The one-hop lens profiles each faced defense from its other earlier games only."""
-    out = _lenses([(2023, 3, "Name A", "Name B"), (2023, 2, "Name A", "Name B")])
-    week3, week2 = out.row(0, named=True), out.row(1, named=True)
-
-    assert week3["away_qb_faced_pass_def_raw"] == pytest.approx((30 * 0.2 + 40 * -0.2) / 70)
-    # Before week 2, XXX's only game was against NE, so it has no profile left.
-    assert week2["away_qb_faced_pass_def_raw"] is None
-
-
-def test_faced_pass_def_raw_ignores_the_head_to_head_game_values() -> None:
-    """Rewriting a faced defense's games against the quarterback's team changes nothing."""
-    base = _lenses([(2023, 3, "Name A", "Name B")])
-    rewritten = _LENS_DEFENSE_GAMES.with_columns(
-        pl.when(pl.col("opponent_abbr") == "NE")
-        .then(pl.col("pass_epa_allowed_sum") * 100)
-        .otherwise(pl.col("pass_epa_allowed_sum"))
-    )
-    perturbed = _lenses([(2023, 3, "Name A", "Name B")], defense_games=rewritten)
-
-    assert perturbed["away_qb_faced_pass_def_raw"].to_list() == pytest.approx(
-        base["away_qb_faced_pass_def_raw"].to_list()
-    )
-
-
-def test_faced_pass_def_lenses_are_null_without_their_inputs() -> None:
-    """Without defense games or snapshots the lens columns exist and stay null."""
-    games = _games([(2023, 3, "Name A", "Name B")])
-
-    out = qb_stats.attach_qb_features(games, _qb_games(_LENS_QB_GAMES), _IDENTITY)
-
-    for stat in constants.QB_SCHEDULE_STATS:
-        assert out[f"away_{stat}"].dtype == pl.Float64
-        assert out[f"away_{stat}"].null_count() == 1
-        assert f"{stat}_diff" in out.columns
-
-
 def test_qb_columns_join_the_final_schema_as_their_own_feature_group() -> None:
     """The final schema carries every quarterback stat per side and as a diff, in one group."""
     order = build_final_column_order()
@@ -398,10 +286,8 @@ def test_qb_columns_join_the_final_schema_as_their_own_feature_group() -> None:
             column for stat in stats for column in (f"away_{stat}", f"home_{stat}", f"{stat}_diff")
         )
 
-    expected = published([*constants.QB_PBP_STATS, *constants.QB_SCHEDULE_STATS])
+    expected = published(constants.QB_PBP_STATS)
     assert set(expected) <= set(order)
     assert resolve_feature_group_columns(order, ["qb"]) == expected
-    lenses = published(constants.QB_SCHEDULE_STATS)
-    assert resolve_feature_group_columns(order, ["qb_schedule"]) == lenses
     for other in ("pbp", "strength"):
         assert not set(resolve_feature_group_columns(order, [other])) & set(expected)

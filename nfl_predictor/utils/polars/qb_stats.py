@@ -39,25 +39,6 @@ Formulas, with ``K = constants.QB_PRIOR_DROPBACKS``:
 - ``qb_history_dropbacks``: career dropbacks, so the model can see how much evidence stands
   behind the rates. Null when the quarterback cannot be identified.
 
-4. Schedule lenses. Both describe the pass defenses behind the quarterback's production this
-   season: his games in the row's season with ``week`` strictly below the row's week, each
-   weighted by his dropbacks in that game. They port the head-to-head-excluded opponent
-   profiling of the read-only ``nfl-sos-ratings`` project, which originated the method, in its
-   two forms:
-
-   - ``qb_faced_pass_def_adj``: its ridge form, the ``QSoS`` construct. Each faced defense's
-     ``adj_def_pass_epa_snap`` from the strength snapshot of the week that game was played
-     (solved from earlier weeks, so pre-game). Higher is a tougher schedule.
-   - ``qb_faced_pass_def_raw``: its one-hop form, as ``schedule_strength.sos_played_raw`` does
-     for teams. Each faced defense's ``pass_epa_allowed_sum / dropbacks_allowed`` over its
-     games before the row's week, excluding every game against the team the quarterback faced
-     it for, so the profile cannot echo his own play. Higher is an easier schedule.
-
-   A game whose defense has no snapshot row, or no games left after the exclusion, drops out
-   of the weights; with no game left the lens is null. Deviation from the reference's one-hop
-   views: games are weighted by dropbacks, as ``QSoS`` weights them, not equally per unique
-   opponent.
-
 Deviation from the ``nfl-sos-ratings`` reference (read-only): it credits scrambles through
 ``rusher_player_id``, which this repo's play-by-play cache does not select. Here a scramble
 (a dropback with no passer) is credited to the team-game's primary passer, the one with the
@@ -108,20 +89,6 @@ _SIDES = ("away", "home")
 # ANY/A bonus per passing touchdown and penalty per interception.
 _ANY_A_TD_BONUS = 20.0
 _ANY_A_INT_PENALTY = 45.0
-# Schedule-lens outputs and the inputs they read.
-_FACED_ADJ = "qb_faced_pass_def_adj"
-_FACED_RAW = "qb_faced_pass_def_raw"
-_SNAPSHOT_COLUMN = "adj_def_pass_epa_snap"
-_DEFENSE_GAME_COLUMNS = (
-    "season",
-    "week",
-    "team_abbr",
-    "opponent_abbr",
-    "dropbacks_allowed",
-    "pass_epa_allowed_sum",
-)
-_ROW_WEEK = "_row_week"
-_LENS_VALUE = "_lens_value"
 
 
 def empty_qb_game_frame() -> pl.DataFrame:
@@ -437,115 +404,10 @@ def _side_features(
     return frame.select(_ROW, *[expr.alias(f"{side}_{name}") for name, expr in stats.items()])
 
 
-def _faced_games(targets: pl.DataFrame, qb_games: pl.DataFrame) -> pl.DataFrame:
-    """Return, per target row, its quarterback's games earlier in the row's season.
-
-    One row per ``(_ROW, week, team_abbr)`` quarterback game, with the defense faced
-    (``opponent_abbr``), the row's week (``_row_week``) and the game's ``dropbacks``.
-    """
-    games = qb_games.select("season", "week", "team_abbr", "opponent_abbr", "qb_id", "dropbacks")
-    return (
-        targets.filter(pl.col("qb_id").is_not_null())
-        .select(
-            _ROW,
-            pl.col("season").cast(pl.Int64),
-            pl.col("week").cast(pl.Int64).alias(_ROW_WEEK),
-            "qb_id",
-        )
-        .join(games, on=["season", "qb_id"], how="inner")
-        .filter(pl.col("week") < pl.col(_ROW_WEEK))
-    )
-
-
-def _faced_snapshot_values(faced: pl.DataFrame, snapshots: pl.DataFrame) -> pl.DataFrame:
-    """Attach each faced defense's pass coefficient from the snapshot of the week faced."""
-    lookup = snapshots.select(
-        pl.col("season").cast(pl.Int64),
-        pl.col("week").cast(pl.Int64),
-        pl.col("team_abbr").cast(pl.String).alias("opponent_abbr"),
-        pl.col(_SNAPSHOT_COLUMN).cast(pl.Float64).alias(_LENS_VALUE),
-    )
-    return faced.join(lookup, on=["season", "week", "opponent_abbr"], how="left")
-
-
-def _faced_one_hop_values(faced: pl.DataFrame, defense_games: pl.DataFrame) -> pl.DataFrame:
-    """Attach each faced defense's head-to-head-excluded EPA per dropback allowed.
-
-    The profile sums the defense's games in the row's season before the row's week, except
-    those whose offense was the team the quarterback faced it for.
-    """
-    game_key = [_ROW, "week", "team_abbr", "opponent_abbr"]
-    defense = defense_games.select(
-        pl.col("season").cast(pl.Int64),
-        pl.col("week").cast(pl.Int64).alias("_defense_week"),
-        pl.col("team_abbr").cast(pl.String).alias("opponent_abbr"),
-        pl.col("opponent_abbr").cast(pl.String).alias("_defense_foe"),
-        pl.col("dropbacks_allowed").cast(pl.Float64),
-        pl.col("pass_epa_allowed_sum").cast(pl.Float64),
-    )
-    profiles = (
-        faced.select(*game_key, "season", _ROW_WEEK)
-        .join(defense, on=["season", "opponent_abbr"], how="inner")
-        .filter(
-            (pl.col("_defense_week") < pl.col(_ROW_WEEK))
-            & (pl.col("_defense_foe") != pl.col("team_abbr"))
-        )
-        .group_by(game_key)
-        .agg(
-            _ratio(pl.col("pass_epa_allowed_sum").sum(), pl.col("dropbacks_allowed").sum()).alias(
-                _LENS_VALUE
-            )
-        )
-    )
-    return faced.join(profiles, on=game_key, how="left")
-
-
-def _dropback_weighted(values: pl.DataFrame, name: str) -> pl.DataFrame:
-    """Return ``sum(dropbacks * value) / sum(dropbacks)`` per row over non-null values."""
-    known = pl.col(_LENS_VALUE).is_not_null()
-    return values.group_by(_ROW).agg(
-        _ratio(
-            (pl.col("dropbacks") * pl.col(_LENS_VALUE)).sum(),
-            pl.col("dropbacks").filter(known).sum(),
-        ).alias(name)
-    )
-
-
-def _schedule_lenses(
-    targets: pl.DataFrame,
-    qb_games: pl.DataFrame,
-    defense_games: pl.DataFrame | None,
-    snapshots: pl.DataFrame | None,
-    side: str,
-) -> pl.DataFrame:
-    """Compute one side's schedule lenses for rows keyed by ``_ROW``; see the module docstring.
-
-    A missing input leaves its lens null rather than failing, like every other absent source.
-    """
-    faced = _faced_games(targets, qb_games)
-    sources = {
-        _FACED_ADJ: None if snapshots is None else _faced_snapshot_values(faced, snapshots),
-        _FACED_RAW: None
-        if defense_games is None
-        else _faced_one_hop_values(faced, defense_games.select(_DEFENSE_GAME_COLUMNS)),
-    }
-    out = targets.select(_ROW)
-    for stat, values in sources.items():
-        name = f"{side}_{stat}"
-        if values is None:
-            out = out.with_columns(pl.lit(None, dtype=pl.Float64).alias(name))
-        else:
-            out = out.join(_dropback_weighted(values, name), on=_ROW, how="left")
-    return out
-
-
 def attach_qb_features(
     games: pl.DataFrame,
     qb_games: pl.DataFrame,
     identity: pl.DataFrame,
-    *,
-    defense_games: pl.DataFrame | None = None,
-    snapshots: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Add the quarterback family for ``away_qb`` and ``home_qb`` to every game row.
 
@@ -553,20 +415,14 @@ def attach_qb_features(
         games: Game rows with ``season``, ``week``, ``away_qb`` and ``home_qb``.
         qb_games: Quarterback-game sums from ``aggregate_qb_game_stats``.
         identity: Name-to-id map from ``build_qb_identity``.
-        defense_games: Per-team-game play-by-play rows from the defense's side
-            (``pbp.aggregate_pbp_team_game_stats``: ``team_abbr`` defending against
-            ``opponent_abbr``, ``dropbacks_allowed``, ``pass_epa_allowed_sum``) for the
-            one-hop lens. None leaves that lens null.
-        snapshots: Pre-week strength snapshots keyed by ``(season, week, team_abbr)`` with
-            ``adj_def_pass_epa_snap`` for the ridge lens. None leaves that lens null.
 
     Returns:
         ``games`` in its original row order with ``away_<stat>``, ``home_<stat>`` and
-        ``<stat>_diff`` (away minus home) for every stat in ``constants.QB_PBP_STATS`` and
-        ``constants.QB_SCHEDULE_STATS``. Formulas are in the module docstring.
+        ``<stat>_diff`` (away minus home) for every stat in ``constants.QB_PBP_STATS``.
+        Formulas are in the module docstring.
 
     """
-    stats = [*constants.QB_PBP_STATS, *constants.QB_SCHEDULE_STATS]
+    stats = list(constants.QB_PBP_STATS)
     new_columns = [f"{prefix}{stat}" for stat in stats for prefix in ("away_", "home_")] + [
         f"{stat}_diff" for stat in stats
     ]
@@ -597,8 +453,7 @@ def attach_qb_features(
                 sorted(set(unmatched["qb_name"].to_list()))[:10],
             )
         features = _side_features(resolved, career, recent, league, side)
-        lenses = _schedule_lenses(resolved, qb_games, defense_games, snapshots, side)
-        out = out.join(features, on=_ROW, how="left").join(lenses, on=_ROW, how="left")
+        out = out.join(features, on=_ROW, how="left")
 
     out = calculate_stat_differentials(out, stats)
     return out.sort(_ROW).drop(_ROW, _KEY)

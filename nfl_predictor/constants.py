@@ -906,23 +906,7 @@ QB_PBP_STATS = [
     "qb_history_dropbacks",
 ]
 
-# Schedule lenses for the same quarterback: how hard were the pass defenses behind his production
-# this season? Each averages his games earlier in the row's season, weighted by his dropbacks in
-# each game, and is null before his first game of the season. The two lenses are the method of the
-# read-only `nfl-sos-ratings` project applied to quarterbacks: its ridge form and its one-hop,
-# head-to-head-excluded opponent profile.
-QB_SCHEDULE_STATS = [
-    # Faced defenses' ridge pass-defense coefficient, each from the snapshot of the week it was
-    # faced (itself solved from earlier weeks). HIGHER is a TOUGHER schedule.
-    "qb_faced_pass_def_adj",
-    # Faced defenses' EPA per dropback allowed in their games before the row's week, excluding
-    # their games against the team the quarterback faced them for. HIGHER is an EASIER schedule.
-    "qb_faced_pass_def_raw",
-]
-
-FEATURE_GROUP_COLUMN_MARKERS["qb"] = (*QB_PBP_STATS, *QB_SCHEDULE_STATS)
-# The lenses alone, so they can be ablated inside the quarterback family.
-FEATURE_GROUP_COLUMN_MARKERS["qb_schedule"] = tuple(QB_SCHEDULE_STATS)
+FEATURE_GROUP_COLUMN_MARKERS["qb"] = tuple(QB_PBP_STATS)
 
 # Pseudo-dropbacks of prior evidence in every quarterback rate: a career rate is
 # (sum + K * league_rate) / (count + K) and a recent rate is shrunk the same way toward the

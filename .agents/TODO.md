@@ -112,8 +112,10 @@ composite), 52 (the total head: fixed, still behind the market line, totals labe
 diagnostic-only), task 56.4 (calibration window across the season boundary), and the web UI's
 phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
-1. Milestone 53 - QB per-dropback EPA families for the expected starter (**next**; task 53.6
-   closed 2026-09-17 by dropping the lenses; 53.7 open, defense-adjusted rate first)
+1. Milestone 53 - QB per-dropback EPA families for the expected starter (task 53.6 closed
+   2026-09-17 by dropping the lenses; 53.7 open, defense-adjusted rate first). The Milestone 49
+   `games_played` follow-up closed the same day (version `0.11.0`); Milestone 54 is **next**
+   unless the user picks 53.7.
 2. Milestone 54 - PBP situational stats replace the TeamRankings stat scrape
 3. Milestone 55 - Off-season configuration sweep, after the feature work lands
 4. Milestone 56 - Weekly orchestration residuals
@@ -332,11 +334,13 @@ Each group names the archived milestone it came from; the milestone's full recor
 
 ### From Milestone 49 (continuous early-season shrinkage)
 
-- [ ] `games_played` publishes `17` for a week-1 fallback row (the prior's game count) and `1` for
-      a blended week-2 row whose values are 80% prior, so it tells the model the opposite of how
-      much evidence stands behind the numbers. Candidates: an effective-games column such as
-      `games + K * (1 - WEEK1_REGRESSION_FACTOR)`, or a separate `stat_prior_weight`. Needs its own
-      ETL rebuild and from-week-1 walk-forward. The strongest candidate for the next feature slot.
+- [x] `games_played` published the prior season's count on a fallback row. Closed 2026-09-17
+      (version `0.11.0`) by fixing the records join that the column's values were being suffixed
+      away by, and pruning both sides as duplicates of `strength_games_played`. Neither proposed
+      column was built: `games + K * (1 - WEEK1_REGRESSION_FACTOR)` is an affine shift and
+      `K / (games + K)` is monotone in `games`, so neither can change a tree's splits, and the
+      strength counter already published the fact correctly. Record, table and bootstrap in
+      `ARCHIVE.md`, Milestone 49, "`games_played` as evidence". Do not reopen it as a new column.
 - [ ] Weeks 3-18 margin MAE got worse with the blend (`9.8952` to `9.9578`) and season Brier is
       slightly worse in 2024 and 2025. The `K` check is task 55.3.
 - [ ] Choose the OpenMP wait policy automatically in the walk-forward entry points (default when

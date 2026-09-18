@@ -58,14 +58,17 @@ Rules that are always enforced:
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
     `markdownlint-cli2`). Never edit it as part of this repo's work.
-  - ETL was rerun on 2026-09-17 at 21:39 from the cache for `1999-2026` on the `0.10.0` schema
-    (the schedule lenses removed): `7277` completed rows (all of `1999-2025` plus the 2026 Week 1
-    games), `519` columns, fingerprint `0cecc2e3...`; every remaining value is identical to the
-    `525`-column build it replaced (that evening's Week 2 weekly-run ETL, `3f1db457...`, kept in
-    `data/backup_pre_m53_6_drop/`). The leakage audit passed on it (`484` features, `0` flags,
-    `models/audit_m53_6_drop/leakage_audit.json`). The lens measurement's input
-    `data/completed_games_ml.m53_6_through_2025.csv` (`525` columns, `940cbbf4...`) and the
-    2026-09-11 pre-lens build in `data/backup_pre_m53_6/` remain on disk as records. The
+  - ETL was rerun on 2026-09-17 at 22:28 from the cache for `1999-2026` on the `0.11.0` schema
+    (schedule lenses removed in `0.10.0`, `games_played` corrected in `0.11.0`): `7278` completed
+    rows (all of `1999-2025` plus the 2026 Week 1 games and the Week 2 Thursday game, which
+    finished during the rebuild), `519` columns, fingerprint `8bacad41...`. Against the build it
+    replaced (`0cecc2e3...`, kept in `data/backup_pre_m49_games_played/`) exactly two columns
+    moved: `away_games_played` and `home_games_played`. The leakage audit passed on it (`483`
+    features, `0` flags, `models/audit_m49_games_played/leakage_audit.json`). Earlier inputs kept
+    as records: `data/completed_games_ml.m49_through_2025.csv` (`7261` rows, `07971269...`, the
+    `0.11.0` walk-forward input), `data/completed_games_ml.m53_6_through_2025.csv` (`525`
+    columns, `940cbbf4...`, the lens measurement's input), and the pre-lens builds in
+    `data/backup_pre_m53_6/` and `data/backup_pre_m53_6_drop/`. The
     benchmark below was measured on the earlier `498`-column build
     `data/completed_games_ml.m49_on_through_2025.csv`, which a data cleanup removed; its numbers
     stay auditable from the fold checkpoints named below.

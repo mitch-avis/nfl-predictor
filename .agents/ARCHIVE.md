@@ -722,6 +722,70 @@ three. With 48 games a week, the week-2 result is supported but not overwhelming
   unrelated load a week took `730s` with the default OpenMP wait policy and `185s` with
   `OMP_WAIT_POLICY=PASSIVE`; on an idle machine the default was faster (`75s` against `~142s`).
 
+### `games_played` as evidence (2026-09-17, version `0.11.0`; follow-up closed)
+
+The follow-up asked for an effective-games column (`games + K * (1 - WEEK1_REGRESSION_FACTOR)`)
+or a `stat_prior_weight`, because `games_played` published `17` for a week-1 fallback row and `1`
+for a blended week-2 row. Investigation replaced that plan:
+
+- **Neither proposed column can change an XGBoost fit.** `games + K * (1 - f)` is `games + 2.667`,
+  an affine shift; `K / (games + K)` is strictly decreasing in `games`. Both are monotone
+  transforms of the count, and axis-aligned trees are invariant to monotone transforms.
+- **The model already had a correct counter.** `away_/home_strength_games_played` (plus their
+  diff) publish the team's completed games per side, `0` in week 1, no nulls, 1999-2026, and all
+  three were already in the trained feature list.
+- **The defect was the column itself.** `away_games_played` matched the strength counter in 6845
+  of 6848 weeks-2+ rows overall, and in 759 of 759 rows of the 2023-2025 weeks-3-18 evaluation
+  window. It differed only on prior-season fallback rows, where it published the previous
+  season's total (`17`, or `8` / `16` for the postponed first games of JAX 2001, JAX 2002 and
+  MIA 2017) beside the `wins = 0, losses = 0, ties = 0` on the same row.
+- **Cause: a join name collision.** The season-to-date stat frame and the record features both
+  produce `games_played`; `merge_schedule_with_team_stats` ran first, so the records join
+  suffixed the record values to `*_right` and final column selection dropped them. The column
+  declared in `constants.RECORD_FEATURE_COLUMNS` was never a record feature. The collision was
+  confined to this one name: `wins`, `losses`, `ties` and `win_pct` all carried record values.
+- **`home_games_played` was already pruned**, so only the away side reached the model.
+
+Landed: the stat-frame copies are dropped before the records join (`_RECORD_OWNED_STAT_COLUMNS`),
+so the published column is `wins + losses + ties`; and both sides joined
+`constants.PRUNED_FEATURE_COLUMNS`, since the strength counter already carries the fact.
+
+Build: cached ETL rebuild at 22:28 (`7278` rows, `519` columns, `8bacad41...`); against the
+pre-change build (`0cecc2e3...`, kept in `data/backup_pre_m49_games_played/`) exactly two columns
+moved, `away_games_played` and `home_games_played`, max difference `17.0`. The extra row is
+2026 week 2 DET at BUF, which finished during the rebuild. Leakage audit `483` features, `0`
+flags (`models/audit_m49_games_played/leakage_audit.json`).
+
+Walk-forward: `models/wf_m49_gp_2023_2025_pruned/` (`482` features, checkpoints
+`85760def37b42ddcd594`) on `data/completed_games_ml.m49_through_2025.csv` (`7261` rows,
+`07971269...`), benchmark config from week 1. The before arm is Milestone 53's
+`models/wf_qbsched_2023_2025_off/` (`483` features, checkpoints `02a3a730da026668dffe`): same
+config, same 816 games, and its cut differs only in the six lens columns it had disabled plus the
+two treatment columns. Windows are per-game from the fold checkpoints; the scorer reproduces the
+53.6 "off" table exactly in all sixteen cells, once a tied game counts as an incorrect pick as
+the pipeline counts it.
+
+| window | games | Brier after / before | log loss after / before | pick acc after / before | margin MAE after / before |
+| --- | --- | --- | --- | --- | --- |
+| week 1 only | 48 | `0.2024` / `0.2051` | `0.5945` / `0.5996` | `0.7917` / `0.7708` | `9.0399` / `8.9283` |
+| week 2 only | 48 | `0.2282` / `0.2275` | `0.6473` / `0.6457` | `0.6042` / `0.6667` | `8.4502` / `8.5291` |
+| weeks 3-18 | 720 | `0.2324` / `0.2282` | `0.7612` / `0.7551` | `0.6778` / `0.6903` | `9.9647` / `9.9708` |
+| all weeks | 816 | `0.2304` / `0.2268` | `0.7447` / `0.7395` | `0.6801` / `0.6936` | `9.8212` / `9.8246` |
+
+Paired bootstrap over games (5000 resamples, seed 0), after minus before. Week 1: Brier `-0.0026`
+`[-0.0108, +0.0053]`, log loss `-0.0052` `[-0.0220, +0.0111]`, pick accuracy `+0.0208`
+`[-0.0625, +0.1042]`. Weeks 3-18: Brier `+0.0042` `[-0.0010, +0.0094]`, log loss `+0.0061`
+`[-0.0180, +0.0303]`, pick accuracy `-0.0125` `[-0.0278, +0.0028]`, margin MAE `-0.0061`
+`[-0.1081, +0.1012]`. Every interval covers zero.
+
+Interpretation: the change helps in the one window where the column lied (week 1 improves on
+Brier, log loss and pick accuracy) and is informationally neutral everywhere else, because in
+weeks 3-18 the removed column was value-identical to a retained one in all 759 rows. Dropping a
+duplicate cannot remove information, so the weeks-3-18 drift is a column-sampling artifact:
+with `colsample_bytree = 0.6098`, one fact held in two columns reaches a given tree with
+probability `1 - 0.39**2 = 0.85`, against `0.61` when it is held in one. The published dataset is
+now internally consistent, which the metrics do not measure and which was the point of the fix.
+
 ---
 
 ## Milestone 46 - Weekly schedule-adjusted team strength

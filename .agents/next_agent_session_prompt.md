@@ -18,7 +18,9 @@ You are the orchestrating agent for a session in the `nfl-predictor` workspace
    idea's next form is task 53.7 in `TODO.md` (a defense-adjusted quarterback rate first, the
    ridge only if that shows signal); it is queued, not started, and is not this session's job
    unless the user asks for it.
-3. Move to the Milestone 49 `games_played` follow-up (Phase 2).
+3. **The Milestone 49 `games_played` follow-up is closed too** (version `0.11.0`, Phase 2 below
+   is its record). Next is Milestone 54 (PBP situational stats replace the TeamRankings scrape),
+   unless the user picks task 53.7 instead.
 
 **Start on a new branch off `main`** for any new code work; the weekly run itself can run from
 whatever branch is checked out (it does not commit anything). `feat/qb-schedule-lenses` holds
@@ -56,17 +58,24 @@ starting; do not work on `main` directly.
 
 ## 1. Facts to trust unless your verification disproves them
 
-- Version `0.10.0` in `pyproject.toml`, `uv.lock` aligned; no tag and no GitHub release exist or
-  may be created. Gate on `feat/qb-schedule-lenses` as of 2026-09-17 evening (after the removal):
-  see the numbers recorded in `.agents/ARCHIVE.md` Milestone 53, "53.6 removal"; ruff, pyright,
-  ty, markdownlint (on the changed docs) all clean. Re-run the frontend gate
-  (`web/`: lint, typecheck, vitest, build) if this session touches `nfl_predictor/api/` or `web/`;
-  it was last verified passing at the `0.8.0` merge, not re-checked since.
+- Version `0.11.0` in `pyproject.toml`, `uv.lock` aligned; no tag and no GitHub release exist or
+  may be created. Gate on `feat/games-played-evidence` as of 2026-09-17 night: `817 passed`,
+  coverage `92.93%`, ruff, pyright, ty and markdownlint (on the changed docs) all clean. Re-run
+  the frontend gate (`web/`: lint, typecheck, vitest, build) if this session touches
+  `nfl_predictor/api/` or `web/`; it was last verified passing at the `0.8.0` merge, not
+  re-checked since.
 - The web server libraries are now core dependencies (version `0.8.0`), so a plain `uv sync`
   installs everything `tests/api/` imports. The `web` extra still exists but adds nothing.
 - **Quarterback family (the per-dropback EPA stats, `constants.QB_PBP_STATS`): kept, decision
   closed.** The user reviewed the on/off walk-forward table on 2026-09-11 and chose to keep the
   family in production with no code change. Do not reopen this question.
+- **`games_played` (Milestone 49 follow-up): closed, version `0.11.0`.** The records join now
+  owns `away_/home_games_played` (`wins + losses + ties`, `0` in week 1 instead of the prior
+  season's `17`), and both sides are pruned as duplicates of `strength_games_played`, which
+  already published the count correctly. An effective-games or `stat_prior_weight` column was
+  considered and not built: both are monotone transforms of a count the model already has, so
+  neither can change a tree's splits. Do not reopen it as a new column. Table, bootstrap and
+  reasoning: `.agents/ARCHIVE.md`, Milestone 49, "`games_played` as evidence".
 - **Quarterback schedule lenses (task 53.6): dropped, decision closed.** Built in `0.9.0`,
   measured 2026-09-11 (no gain anywhere; weeks 3-18 Brier `0.2312` on / `0.2282` off, paired
   diff `+0.0030` `[-0.0019, +0.0080]`), removed in `0.10.0` on 2026-09-17 by the user's decision.
@@ -102,13 +111,12 @@ starting; do not work on `main` directly.
   unanchored, `10.2295` anchored, `10.0847` for the line; its deviation from the line has no
   signal), so the betting report carries `total_signal = diagnostic_only`. The fix did not
   improve walk-forward total MAE (the pre-fix unanchored head scores `10.3009`, a tie).
-- **Data.** `data/completed_games_ml.csv` is the 2026-09-17 evening rebuild on the `0.10.0`
-  schema (`519` columns; rows and fingerprint in `.agents/ARCHIVE.md` Milestone 53, "53.6
-  removal", and `AGENTS.md`). The `525`-column build it replaced (the Week 2 weekly run's ETL of
-  18:13 that evening) is in `data/backup_pre_m53_6_drop/`; `data/backup_pre_m53_6/` still holds
-  the 2026-09-11 `519`-column build from before the lenses. The lens walk-forward input
-  `data/completed_games_ml.m53_6_through_2025.csv` (`525` columns) stays as that measurement's
-  record. Any new walk-forward comparison must start from the current build, not that cut.
+- **Data.** `data/completed_games_ml.csv` is the 2026-09-17 22:28 rebuild on the `0.11.0` schema:
+  `7278` rows, `519` columns, `8bacad41...`, leakage audit `483` features / `0` flags. Fingerprints
+  and the backup trail are in `AGENTS.md`. The `0.11.0` walk-forward input
+  `data/completed_games_ml.m49_through_2025.csv` (`7261` rows, `07971269...`) and the lens
+  measurement's `data/completed_games_ml.m53_6_through_2025.csv` (`525` columns) stay as records.
+  Any new walk-forward comparison must start from the current build, not either cut.
 - **Quarterback family (`0.7.0`).** Seven stats per side plus diffs (`constants.QB_PBP_STATS`),
   career rates shrunk toward the league with `K = 300` pseudo-dropbacks, recent (last 8 games)
   rates shrunk toward the career, `qb_history_dropbacks`. Identity through `data/qb_meta_data.csv`
@@ -164,11 +172,22 @@ full gate; the record, with the reasoning for why the lenses were the wrong form
 it is task 53.7 in `TODO.md` (defense-adjusted rate, then ridge only on signal), a new milestone
 of work with its own walk-forward, not a revert.
 
-## Phase 2 - Milestone 49 follow-up: `games_played` as evidence
+## Phase 2 - Milestone 49 `games_played` (done; reference only)
 
-`games_played` publishes `17` for a week-1 fallback row and `1` for a blended week-2 row. Add an
-effective-games column or a `stat_prior_weight` (see `.agents/TODO.md`), rebuild, and measure from
-week 1 with weeks 1, 2 and 3-18 reported separately.
+Closed 2026-09-17 in version `0.11.0` on `feat/games-played-evidence`: the records join now owns
+the column, both sides are pruned, the data was rebuilt and a from-week-1 walk-forward was
+recorded against Milestone 53's baseline arm. Week 1, where the column lied, improves on every
+metric; weeks 3-18, where it was an exact duplicate of `strength_games_played` in all 759 rows,
+drift slightly the other way inside their intervals, which is a `colsample_bytree` sampling
+artifact rather than information loss. Full record: `.agents/ARCHIVE.md`, Milestone 49,
+"`games_played` as evidence". Nothing left to do.
+
+## Phase 3 - What to pick up next
+
+Milestone 54 (PBP situational stats replace the TeamRankings stat scrape) is the next milestone in
+`TODO.md`'s execution order. Task 53.7 (a defense-adjusted quarterback rate, then the ridge only
+if that shows signal) is the other live candidate and was reshaped on 2026-09-17; the user has
+seen both and has not picked between them. Ask before starting either.
 
 ## 5. The web UI now lives on `main`
 

@@ -32,36 +32,40 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   edit under `nfl_predictor/ml/` changes every checkpoint fingerprint, so a rerun after a code
   change retrains from scratch: get the code stable before you measure.
 
-## Starting state (verified 2026-09-19 by the audit session)
+## Starting state (updated 2026-09-20 during the rebuild session)
 
-- Branch `feat/m59-benchmark-instrument`, off `main` at `683acab`. Version `0.12.5` in
-  `pyproject.toml` and `uv.lock`. The `0.12.1` to `0.12.5` tree was committed on 2026-09-20 as
-  five commits, one per version (`e5ee418` instrument, `7189792` calibration, `db6e892` fit
-  parity, `532fd38` divisions / rare events / sack mirrors, `d9453cb` audit fixes, gate script,
-  docs and the version bump). The split is a hunk-level reconstruction; the intermediate
-  commits are not individually gate-clean, and the first commit's body names the two
-  `walk_forward.py` hunks that carry later material. Nothing is pushed.
-- `scripts/gate.sh` exited `0` on the committed tree on 2026-09-20 (`843 passed`, coverage
-  `92.63%`, every step ok); the counts match the "validated baseline" bullet of `AGENTS.md`.
-- Milestone 59 is closed and archived (`.agents/ARCHIVE.md`, Milestone 59) with two parts
-  narrowed and reopened: the fitted-calibration pool is in-sample rather than out-of-fold
-  (`.agents/TODO.md`, "From Milestone 59"), and `n_estimators` is untuned (task 55.7). The
-  benchmark table in `AGENTS.md` comes from the `0.12.3` fit-parity arms; read the paragraph
-  above it for the provenance and the `0.12.0` rescore difference.
-- `auto` calibration is the deterministic floor `Phi(margin / SCORE_DIFF_STD_DEV)`; production
-  (`betting_pipeline`) defaults to `elo`. No fitted calibrator has beaten the floor. Treat the
-  deterministic and market-implied columns as the instrument for every comparison.
-- No in-season early stopping anywhere since `0.12.3`; every head runs the `598`-tree budget.
-  The `early_stopping_rounds` config field and the `weekly_run` flags are recorded but inert for
-  in-season fits (Optuna trials still use them).
-- `data/completed_games_ml.csv` is the 2026-09-17 22:28 build (`7278` rows, `519` columns,
-  `8bacad41...`). It **predates** the `0.12.4` ETL changes (pre-2002 division records, sack
-  mirrors excluded), so an ETL rebuild is pending. Rebuilding is a must-ask item, and it should
-  not collide with the user's weekly run.
-- The walk-forward input for comparisons is `data/completed_games_ml.m49_through_2025.csv`
-  (seasons `<= 2025`) and its `0.12.0` cut `data/completed_games_ml.m49_through_2025.deadweight_cut.csv`.
-  Any new arm must run on a build cut to seasons `<= 2025` so the eval window does not slide
-  onto 2026, and must be compared only against an arm on the same build and code version.
+- `main` is at `85e4522`, the `--no-ff` merge of `feat/m59-benchmark-instrument` (`0.12.1` to
+  `0.12.5`, committed on 2026-09-20 as five per-version commits `e5ee418`, `7189792`,
+  `db6e892`, `532fd38`, `d9453cb` plus `084f857`; the split is a hunk-level reconstruction and
+  the first commit's body names the two `walk_forward.py` hunks that carry later material).
+  **Nothing is pushed**; pushing is a must-ask item the user has not answered yet.
+- Active branch `chore/m59-etl-rebuild` off `main`, version `0.12.6`: `2d46083` fixes the
+  `0.12.4` defect that the first ETL rebuild exposed (the sack exclusion starved
+  `opponent_points_per_play`; six derived columns went null), `fec17d2` adds the matching rule
+  to `AGENTS.md`. `scripts/gate.sh` exited `0` on `fec17d2` (`846 passed`, coverage `92.67%`).
+- Data on disk (2026-09-20 04:31 rebuild, second pass, on the `0.12.6` code):
+  `data/completed_games_ml.csv` `db6a78a3...` (`7278` rows, `513` columns); the through-2025
+  cut `data/completed_games_ml.m59_through_2025.csv` `cf42ec55...` (`7261` rows). The build it
+  replaced (`8bacad41...`, `519` columns) is in `data/backup_pre_m59_rebuild/`. Against it,
+  exactly the six sack mirrors are gone and only the 27 division and conference derived columns
+  move, all in 1999-2001 rows (plus one 2026 stadium surface filled in by the current-season
+  refresh). Leakage audit `models/audit_m59_rebuild/leakage_audit.json`: `463` features, `0`
+  flags. ETL logs and the cut script are in `models/etl_m59_rebuild/`.
+- **Walk-forward tie check in progress or finished**: `models/wf_m59_rebuild_2023_2025_from_week1/`
+  (`HYPOTHESIS.md` has the hypothesis, decision rule and command; `run.log` the progress;
+  `compare_to_benchmark.py <candidate_ckpt> <reference_ckpt>` rescores two checkpoint
+  directories, validated to reproduce the `AGENTS.md` table on a self-comparison). Reference:
+  `models/wf_checkpoints/f6ff076066674127b163/`. If the report exists, the next step is the
+  two-key rescore (a separate reviewer runs the compare script), then the `AGENTS.md` data-state
+  and benchmark-input bullets, `.agents/TODO.md` ("From Milestone 59": the rebuild follow-up),
+  `CHANGELOG.md`, gate, commit, and the merge question to the user.
+- Milestone 59 is closed and archived with two parts reopened: the fitted-calibration pool is
+  in-sample ("From Milestone 59" in `TODO.md`), and `n_estimators` is untuned (task 55.7).
+  `auto` is the deterministic floor; production defaults to `elo`; no in-season early stopping
+  since `0.12.3`.
+- The user answered the first check-in on 2026-09-20: merge now (done locally), run the ETL
+  rebuild when needed (done), the proposed order of work is confirmed, and the user will likely
+  run the Week 3 weekly run themselves (hold off unless asked).
 - The web API runs from the worktree `../nfl-predictor-web` on port 8765 against this
   checkout's `data/`, `models/` and `reports/`; never restart it unasked. `../nfeloqb` and
   `../nfl-sos-ratings` are the user's and read-only.

@@ -47,12 +47,16 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-19, version `0.12.5`, `feat/m59-benchmark-instrument`)
+### Current validated baseline (2026-09-20, version `0.12.7`, `chore/m59-etl-rebuild`)
 
-- `scripts/gate.sh` exits `0` on the `0.12.5` tree: `843 passed`, coverage `92.63%`; ruff
-  format, ruff, ty, pyright, markdownlint, `uv lock --check`, `uv sync --check --active
-  --extra web` and the CLI help smoke checks clean. The tree was uncommitted when measured; the
-  next session commits it by version (see `next_agent_session_prompt.md`).
+- `scripts/gate.sh` exits `0` on the `0.12.6` fix commit (`846 passed`, coverage `92.67%`);
+  ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`, `uv sync --check --active
+  --extra web` and the CLI help smoke checks clean. `0.12.1`-`0.12.5` are merged into `main`
+  (`85e4522`, local, not pushed).
+- Data: the 2026-09-20 rebuild (`db6a78a3...`, `7278` rows, `513` columns; backup of the
+  previous build in `data/backup_pre_m59_rebuild/`); walk-forward input for new arms
+  `data/completed_games_ml.m59_through_2025.csv` (`cf42ec55...`), reference arm
+  `models/wf_m59_rebuild_2023_2025_from_week1/` (see `AGENTS.md`).
 - The walk-forward benchmark and its provenance are in `AGENTS.md`; the Milestone 59 record,
   measurements and audit are in `ARCHIVE.md`.
 - Everything below is the earlier `0.8.0` baseline, kept for the data-state notes that still
@@ -346,12 +350,10 @@ Each group names the archived milestone it came from; the milestone's full recor
       eval seasons, so the floor stays the fallback); in production, the walk-forward compare
       that `weekly_run` already runs. Measure on the 59.1 instrument before making it default.
 - [ ] Narrowed 59.3: `n_estimators` is untuned; task 55.7 carries it.
-- [ ] ETL rebuild pending (must-ask): `data/completed_games_ml.csv` is the 2026-09-17 build and
-      predates 59.4 (pre-2002 division and conference records, lookahead and standings values
-      for 1999-2001) and 59.6 (the six sack mirrors disappear from the schema). Back up
-      `data/*.csv` first, rerun the leakage audit, and run one from-week-1 walk-forward on the
-      new build as the tie check (the mirrors are already pruned at training time, so a tie is
-      expected).
+- [x] ETL rebuild for 59.4 and 59.6: done 2026-09-20 (`0.12.6`), a tie on the instrument;
+      record under `ARCHIVE.md`, Milestone 59, "Rebuild". The first pass exposed a `0.12.4`
+      defect (the sack exclusion starved `opponent_points_per_play`), fixed before the second
+      pass.
 - [ ] `WalkForwardConfig.early_stopping_rounds` stays in the config and the fingerprint though
       no in-season fit reads it; removing it changes every fingerprint. Remove it, or wire it to
       the season-sized eval set of task 55.7, when that lands.

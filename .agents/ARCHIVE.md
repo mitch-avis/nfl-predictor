@@ -136,6 +136,31 @@ add `deterministic_home_win_prob = ml_model._margin_to_home_win_prob(predicted_m
 `market_home_win_prob = walk_forward._resolve_market_home_win_prob(frame)`, then score with
 `walk_forward._probability_window_rows(frame, seed=0)`.
 
+### Rebuild (2026-09-20, versions `0.12.6` and `0.12.7`)
+
+The ETL rebuild for 59.4 and 59.6 ran twice. The first pass, on the `0.12.5` code, published
+`away_/home_opponent_points_per_play`, `away_/home_points_per_play_margin` and their diffs as
+all-null columns: 59.6 had excluded `times_sacked` from the opponent mirror, and
+`opponent_points_per_play` divides `points_allowed` by the opponent's pass attempts, rush
+attempts and times sacked (`models/etl_m59_rebuild/etl_defective_first_pass.log`). `0.12.6`
+(`2d46083`) builds the mirrors named in `constants.OPPONENT_MIRROR_INTERMEDIATES`
+(`times_sacked` only) per game and drops them at schema selection, with tests on the mirror
+helper, the formula and the constant. The second pass (`models/etl_m59_rebuild/etl.log`) gives
+`data/completed_games_ml.csv` `db6a78a3...` (`7278` rows, `513` columns): against the backup in
+`data/backup_pre_m59_rebuild/` (`8bacad41...`) only the 27 division and conference derived
+columns move, all in 1999-2001 rows, plus one 2026 `stadium_surface` from the current-season
+refresh; the six sack mirrors are gone. Leakage audit `models/audit_m59_rebuild/`: `463`
+features, `0` flags.
+
+Tie check: `models/wf_m59_rebuild_2023_2025_from_week1/` (benchmark config from week 1 on the
+through-2025 cut `cf42ec55...`; checkpoints `34c17e508ab015a80662`; hypothesis and decision rule
+in `HYPOTHESIS.md`; independent rescore in `REVIEW.md`). Weeks 3-18 deterministic Brier
+`0.2096` against the benchmark's `0.2099`, paired `-0.0003` `[-0.0028, +0.0023]`; margin MAE
+`9.9722` against `9.9608`, `+0.0113` `[-0.0890, +0.1142]`: a tie by the rule. All 816 margins
+moved (max `5.16`), and weeks-3-18 pick accuracy fell `0.6861` to `0.6764` (7 games). The full
+four-window table is the reference arm in `AGENTS.md`; new arms on the rebuilt build compare
+against it.
+
 ### Audit (2026-09-19, version `0.12.5`)
 
 A review session audited both implementation sessions against the tree and the artifacts. What

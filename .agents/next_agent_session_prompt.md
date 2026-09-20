@@ -39,26 +39,28 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   `db6e892`, `532fd38`, `d9453cb` plus `084f857`; the split is a hunk-level reconstruction and
   the first commit's body names the two `walk_forward.py` hunks that carry later material).
   **Nothing is pushed**; pushing is a must-ask item the user has not answered yet.
-- Active branch `chore/m59-etl-rebuild` off `main`, version `0.12.6`: `2d46083` fixes the
+- Active branch `chore/m59-etl-rebuild` off `main`, version `0.12.7`: `2d46083` fixes the
   `0.12.4` defect that the first ETL rebuild exposed (the sack exclusion starved
   `opponent_points_per_play`; six derived columns went null), `fec17d2` adds the matching rule
-  to `AGENTS.md`. `scripts/gate.sh` exited `0` on `fec17d2` (`846 passed`, coverage `92.67%`).
-- Data on disk (2026-09-20 04:31 rebuild, second pass, on the `0.12.6` code):
+  to `AGENTS.md`, and the `0.12.7` commit records the rebuild and its tie check in the docs.
+  `scripts/gate.sh` must exit `0` on the branch tip (the previous session ran it before the
+  final commit; the result is in that commit's message). The branch is ready to merge into
+  `main` once the user says so; nothing is pushed.
+- Data on disk (2026-09-20 04:31 rebuild, second pass, `0.12.6` schema):
   `data/completed_games_ml.csv` `db6a78a3...` (`7278` rows, `513` columns); the through-2025
-  cut `data/completed_games_ml.m59_through_2025.csv` `cf42ec55...` (`7261` rows). The build it
-  replaced (`8bacad41...`, `519` columns) is in `data/backup_pre_m59_rebuild/`. Against it,
-  exactly the six sack mirrors are gone and only the 27 division and conference derived columns
-  move, all in 1999-2001 rows (plus one 2026 stadium surface filled in by the current-season
-  refresh). Leakage audit `models/audit_m59_rebuild/leakage_audit.json`: `463` features, `0`
-  flags. ETL logs and the cut script are in `models/etl_m59_rebuild/`.
-- **Walk-forward tie check in progress or finished**: `models/wf_m59_rebuild_2023_2025_from_week1/`
-  (`HYPOTHESIS.md` has the hypothesis, decision rule and command; `run.log` the progress;
-  `compare_to_benchmark.py <candidate_ckpt> <reference_ckpt>` rescores two checkpoint
-  directories, validated to reproduce the `AGENTS.md` table on a self-comparison). Reference:
-  `models/wf_checkpoints/f6ff076066674127b163/`. If the report exists, the next step is the
-  two-key rescore (a separate reviewer runs the compare script), then the `AGENTS.md` data-state
-  and benchmark-input bullets, `.agents/TODO.md` ("From Milestone 59": the rebuild follow-up),
-  `CHANGELOG.md`, gate, commit, and the merge question to the user.
+  cut `data/completed_games_ml.m59_through_2025.csv` `cf42ec55...` (`7261` rows) is the
+  walk-forward input for new arms. The build it replaced (`8bacad41...`, `519` columns) is in
+  `data/backup_pre_m59_rebuild/`. Leakage audit `models/audit_m59_rebuild/leakage_audit.json`:
+  `463` features, `0` flags. ETL logs and the cut script are in `models/etl_m59_rebuild/`.
+- **Reference arm on the rebuilt build**: `models/wf_m59_rebuild_2023_2025_from_week1/`
+  (checkpoints `34c17e508ab015a80662`), a tie with the standing benchmark by the rule in its
+  `HYPOTHESIS.md`, rescored independently in its `REVIEW.md`; the four-window table is in
+  `AGENTS.md` under "Reference arm on the 2026-09-20 rebuild". Compare new arms on the rebuilt
+  build against this run. Two flags from the review: all 816 margins moved (max `5.16`), and
+  weeks-3-18 pick accuracy fell `0.6861` to `0.6764`; both are recorded, neither changed the
+  decision.
+- Next task: 54.0 (schedule skeleton and coverage check) on a fresh branch off `main` after the
+  merge, per the confirmed order of work below.
 - Milestone 59 is closed and archived with two parts reopened: the fitted-calibration pool is
   in-sample ("From Milestone 59" in `TODO.md`), and `n_estimators` is untuned (task 55.7).
   `auto` is the deterministic floor; production defaults to `elo`; no in-season early stopping

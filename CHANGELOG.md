@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.7] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.7` and keep `uv.lock` aligned.
+- The dataset on disk is the 2026-09-20 rebuild on the `0.12.6` schema (`7278` rows, `513`
+  columns, `db6a78a3...`; previous build kept in `data/backup_pre_m59_rebuild/`): the six sack
+  mirrors are gone and the 1999-2001 division and conference derived columns use the pre-2002
+  alignment. Leakage audit `463` features, `0` flags. The from-week-1 walk-forward on its
+  through-2025 cut (`models/wf_m59_rebuild_2023_2025_from_week1/`, rescored in its `REVIEW.md`)
+  ties the standing benchmark (weeks 3-18 deterministic Brier `0.2096` against `0.2099`, paired
+  `[-0.0028, +0.0023]`; margin MAE `+0.0113`) and becomes the reference arm for new work on the
+  rebuilt build; `AGENTS.md` carries its table beside the benchmark.
+
 ## [0.12.6] - 2026-09-20
 
 ### Changed

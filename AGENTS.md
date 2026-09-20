@@ -50,8 +50,9 @@ Rules that are always enforced:
   opponent mirrors at the ETL source; and the six-season noise-family follow-up found no lift.
   Two parts were narrowed and are reopened as follow-ups (`.agents/TODO.md`, "From Milestone
   59"): the fitted-calibration pool is in-sample rather than out-of-fold, and `n_estimators` was
-  not re-tuned (task 55.7). The dataset on disk predates the 59.4 and 59.6 ETL changes; a
-  rebuild is pending and is a must-ask item. Milestone 54 (now PBP-first, with the schedule
+  not re-tuned (task 55.7). The ETL rebuild for 59.4 and 59.6 ran on 2026-09-20 (data state
+  below); its first pass exposed a `0.12.4` defect (the sack exclusion starved
+  `opponent_points_per_play`), fixed in `0.12.6`. Milestone 54 (now PBP-first, with the schedule
   skeleton as task 54.0) is the next ML milestone. The analysis, crosswalk, and
   prioritized shortlist live in `.agents/feature_crosswalk.md`; the ordered milestones live in
   `.agents/TODO.md`. The web UI
@@ -82,7 +83,21 @@ Rules that are always enforced:
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
     `markdownlint-cli2`). Never edit it as part of this repo's work.
-  - ETL was rerun on 2026-09-17 at 22:28 from the cache for `1999-2026` on the `0.11.0` schema
+  - ETL was rerun on 2026-09-20 at 04:31 from the cache for `1999-2026` on the `0.12.6` schema
+    (pre-2002 division and conference alignment from `0.12.4`, the six `*_opponent_def_sacks` /
+    `*_opponent_times_sacked` mirrors gone, the times-sacked mirror kept as an unpublished
+    intermediate by `0.12.6`): `7278` completed rows, `513` columns, fingerprint `db6a78a3...`.
+    Against the build it replaced (`8bacad41...`, kept in `data/backup_pre_m59_rebuild/`) only
+    the 27 division and conference derived columns moved, all in 1999-2001 rows, plus one 2026
+    `stadium_surface` filled in by the current-season refresh. The leakage audit passed on it
+    (`463` features, `0` flags, `models/audit_m59_rebuild/leakage_audit.json`). The first pass
+    of the rebuild, on the `0.12.5` code, published six derived columns as nulls
+    (`models/etl_m59_rebuild/etl_defective_first_pass.log`) and was discarded. The through-2025
+    cut for walk-forward comparisons is `data/completed_games_ml.m59_through_2025.csv` (`7261`
+    rows, `cf42ec55...`, cut by `models/etl_m59_rebuild/cut_through_2025.py`); its tie check
+    against the benchmark below is `models/wf_m59_rebuild_2023_2025_from_week1/`.
+  - The previous record: ETL rerun on 2026-09-17 at 22:28 from the cache for `1999-2026` on
+    the `0.11.0` schema
     (schedule lenses removed in `0.10.0`, `games_played` corrected in `0.11.0`): `7278` completed
     rows (all of `1999-2025` plus the 2026 Week 1 games and the Week 2 Thursday game, which
     finished during the rebuild), `519` columns, fingerprint `8bacad41...`. Against the build it
@@ -121,6 +136,29 @@ Rules that are always enforced:
   same windows (weeks 1-2 skip calibration, so they have no eval set and never had the bug). The
   healthy anchored head trails the market line in weeks 3-18; the comparison and its bootstrap
   intervals are under Milestone 52 in `.agents/TODO.md`.
+
+  **Reference arm on the 2026-09-20 rebuild** (`0.12.6` schema, `data/completed_games_ml.m59_through_2025.csv`
+  `cf42ec55...`, same config and code path, git `fec17d2`):
+  `models/wf_m59_rebuild_2023_2025_from_week1/` (checkpoints
+  `models/wf_checkpoints/34c17e508ab015a80662/`; hypothesis and decision rule written before the
+  run in its `HYPOTHESIS.md`; rescored independently by a reviewer subagent in its `REVIEW.md`,
+  which also reproduces the table above from the `f6ff0760...` checkpoints). New arms on the
+  rebuilt build compare against this run, not the table above.
+
+  | window | games | model Brier | model log loss | model pick acc | market Brier | market log loss | market pick acc | margin MAE | total MAE |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | week 1 only | 48 | `0.2071` | `0.6038` | `0.7500` | `0.2099` | `0.6090` | `0.7083` | `9.0976` | `10.0247` |
+  | week 2 only | 48 | `0.2266` | `0.6440` | `0.5833` | `0.2330` | `0.6585` | `0.5833` | `8.4281` | `9.7688` |
+  | weeks 3-18 (headline) | 720 | `0.2096` | `0.6072` | `0.6764` | `0.2086` | `0.6042` | `0.6861` | `9.9722` | `10.2389` |
+  | all weeks | 816 | `0.2105` | `0.6091` | `0.6752` | `0.2102` | `0.6077` | `0.6814` | `9.8299` | `10.1986` |
+
+  Paired against the benchmark above (rebuild minus benchmark, 5000 resamples, seed 0), weeks
+  3-18: deterministic Brier `-0.0003` `[-0.0028, +0.0023]`, margin MAE `+0.0113`
+  `[-0.0890, +0.1142]`; all weeks `-0.0004` `[-0.0028, +0.0019]` and `+0.0001`. A tie by the
+  rule written before the run. It is an aggregate tie, not a reproduction: all 816 margins moved
+  (up to `5.16` points, because the 1999-2001 training rows changed), and deterministic pick
+  accuracy in weeks 3-18 fell from `0.6861` to `0.6764` (7 games), so the model no longer
+  matches the market's pick accuracy there. Every fold ran the full `598`-tree budget.
 
   **How to read it now.** Walk-forward reports and `wf_compare` now carry three probability views:
   the configured calibrator, the deterministic map, and market-implied home win probability from

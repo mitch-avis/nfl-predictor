@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.12.6] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.6` and keep `uv.lock` aligned.
+
+### Fixed
+
+- The `0.12.4` exclusion of `times_sacked` from the opponent mirror starved
+  `opponent_points_per_play`, which divides `points_allowed` by the opponent's pass attempts,
+  rush attempts and times sacked: the first ETL rebuild on that schema (2026-09-20) published
+  `away_/home_opponent_points_per_play`, `away_/home_points_per_play_margin` and their two
+  diffs as all-null columns (`models/etl_m59_rebuild/etl_defective_first_pass.log`, the schema
+  enforcement line). The ETL now builds the mirrors named in
+  `constants.OPPONENT_MIRROR_INTERMEDIATES` (`times_sacked` only) per game for the derivation
+  and drops them when the final schema is selected, so `opponent_times_sacked` stays
+  unpublished and the six derived columns keep the values the previous build had.
+
 ## [0.12.5] - 2026-09-19
 
 ### Changed

@@ -401,6 +401,33 @@ def test_add_per_game_opponent_stats() -> None:
     assert out.filter(pl.col("team_abbr") == "AAA")["opponent_pass_yards"][0] == 150
 
 
+def test_add_per_game_opponent_stats_keeps_the_times_sacked_intermediate() -> None:
+    """The opponent's times sacked is mirrored for the plays-allowed denominator only.
+
+    `opponent_points_per_play` divides `points_allowed` by the opponent's pass attempts,
+    rush attempts and times sacked, so that one excluded mirror must still be built per game;
+    `opponent_def_sacks` stays out because nothing downstream reads it.
+    """
+    df = pl.DataFrame(
+        {
+            "season": [2023, 2023],
+            "week": [1, 1],
+            "team_abbr": ["AAA", "BBB"],
+            "opponent_abbr": ["BBB", "AAA"],
+            "times_sacked": [2, 5],
+            "def_sacks": [5, 2],
+            "points_allowed": [10, 20],
+        }
+    )
+
+    out = loaders.add_per_game_opponent_stats(df)
+
+    assert "opponent_times_sacked" in out.columns
+    assert "opponent_def_sacks" not in out.columns
+    assert "opponent_points_allowed" not in out.columns
+    assert out.filter(pl.col("team_abbr") == "AAA")["opponent_times_sacked"][0] == 5
+
+
 def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
     """Elo ratings loading and latest extraction work as expected."""
     qb_path = tmp_path / "qb_elos.csv"

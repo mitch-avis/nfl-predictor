@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 import polars as pl
+import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import teamrankings
@@ -95,6 +96,28 @@ def test_compute_derived_metrics() -> None:
     assert "opponent_yards_per_point" in out.columns
     assert "points_per_play" in out.columns
     assert "penalty_yards_per_penalty" in out.columns
+
+
+def test_compute_derived_metrics_opponent_points_per_play_uses_mirrored_plays() -> None:
+    """opponent_points_per_play = points_allowed / (opp passes + opp rushes + opp sacks taken)."""
+    df = pl.DataFrame(
+        {
+            "team_abbr": ["AAA"],
+            "points_scored": [30],
+            "points_allowed": [20],
+            "pass_attempts": [30],
+            "rush_attempts": [20],
+            "times_sacked": [2],
+            "opponent_pass_attempts": [25],
+            "opponent_rush_attempts": [20],
+            "opponent_times_sacked": [5],
+        }
+    )
+
+    out = teamrankings._compute_derived_metrics(df)
+
+    assert out["opponent_points_per_play"][0] == pytest.approx(20 / 50)
+    assert out["points_per_play_margin"][0] == pytest.approx(30 / 52 - 20 / 50)
 
 
 def test_aggregate_team_stats_to_week() -> None:

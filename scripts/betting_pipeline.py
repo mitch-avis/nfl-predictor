@@ -705,12 +705,12 @@ def _wf_compare_matrix() -> list[tuple[str, str, float, float]]:
 
 
 def _pick_best_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Pick best by (brier, log_loss) ascending."""
+    """Pick best by deterministic Brier then deterministic log loss."""
 
     def key(row: dict[str, Any]) -> tuple[float, float]:
         return (
-            float(row.get("brier", float("inf"))),
-            float(row.get("log_loss", float("inf"))),
+            float(row.get("deterministic_brier", row.get("brier", float("inf")))),
+            float(row.get("deterministic_log_loss", row.get("log_loss", float("inf")))),
         )
 
     if not rows:
@@ -841,7 +841,37 @@ def main() -> int:
                     "market_prob_blend_method": args.market_prob_blend_method,
                     "brier": float(overall.get("brier", float("nan"))),
                     "log_loss": float(overall.get("log_loss", float("nan"))),
+                    "deterministic_brier": float(overall.get("deterministic_brier", float("nan"))),
+                    "deterministic_log_loss": float(
+                        overall.get("deterministic_log_loss", float("nan"))
+                    ),
+                    "market_brier": float(overall.get("market_brier", float("nan"))),
+                    "market_log_loss": float(overall.get("market_log_loss", float("nan"))),
+                    "deterministic_brier_vs_market": float(
+                        overall.get("deterministic_brier_vs_market", float("nan"))
+                    ),
+                    "deterministic_log_loss_vs_market": float(
+                        overall.get("deterministic_log_loss_vs_market", float("nan"))
+                    ),
+                    "deterministic_brier_vs_market_ci_low": float(
+                        overall.get("deterministic_brier_vs_market_ci_low", float("nan"))
+                    ),
+                    "deterministic_brier_vs_market_ci_high": float(
+                        overall.get("deterministic_brier_vs_market_ci_high", float("nan"))
+                    ),
+                    "deterministic_log_loss_vs_market_ci_low": float(
+                        overall.get("deterministic_log_loss_vs_market_ci_low", float("nan"))
+                    ),
+                    "deterministic_log_loss_vs_market_ci_high": float(
+                        overall.get("deterministic_log_loss_vs_market_ci_high", float("nan"))
+                    ),
                     "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
+                    "deterministic_pick_accuracy": float(
+                        overall.get("deterministic_pick_accuracy", float("nan"))
+                    ),
+                    "market_pick_accuracy": float(
+                        overall.get("market_pick_accuracy", float("nan"))
+                    ),
                     "margin_mae": float(overall.get("margin_mae", float("nan"))),
                     "total_mae": float(overall.get("total_mae", float("nan"))),
                     "expected_points_avg": float(overall.get("expected_points_avg", float("nan"))),
@@ -851,7 +881,9 @@ def main() -> int:
                 }
             )
 
-        wf_result_df = pd.DataFrame(rows).sort_values(["brier", "log_loss"], ascending=[True, True])
+        wf_result_df = pd.DataFrame(rows).sort_values(
+            ["deterministic_brier", "deterministic_log_loss"], ascending=[True, True]
+        )
         wf_result_df.to_csv(wf_compare_csv, index=False)
         best_row = _pick_best_row(rows)
         wf_best_json.write_text(json.dumps(best_row, indent=2, sort_keys=True), encoding="utf-8")

@@ -233,6 +233,23 @@ def test_model_reader_tolerates_odd_shapes(tmp_path: Path) -> None:
     assert model.best_candidate_calibration(resolve_run_files(run)) is None
 
 
+def test_wf_compare_prefers_deterministic_ranking(tmp_path: Path) -> None:
+    """WF compare tables should rank by the deterministic instrument when present."""
+    (tmp_path / "wf.csv").write_text(
+        (
+            "label,brier,log_loss,deterministic_brier,deterministic_log_loss\n"
+            "configured-better,0.2,0.6,0.22,0.62\n"
+            "deterministic-better,0.23,0.63,0.19,0.59\n"
+        ),
+        encoding="utf-8",
+    )
+
+    table = model.wf_compare(tmp_path / "wf.csv")
+
+    assert [row["label"] for row in table.rows] == ["deterministic-better", "configured-better"]
+    assert table.rows[0]["wf_rank"] == 1
+
+
 def test_data_status_helpers(project_root: Path, db: Database) -> None:
     """File status, cache coverage, leakage audits, and unattached files are discovered."""
     data = project_root / "data"

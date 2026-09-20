@@ -188,3 +188,25 @@ def test_betting_pipeline_stage2_passes_calibration_for_blend(tmp_path, monkeypa
         sys.argv = old_argv
 
     assert exit_code == 0
+
+
+def test_betting_pipeline_pick_best_row_prefers_deterministic_metrics() -> None:
+    """Stage-1 selection should use deterministic Brier and deterministic log loss."""
+    rows = [
+        {
+            "label": "configured-better",
+            "brier": 0.20,
+            "log_loss": 0.60,
+            "deterministic_brier": 0.22,
+            "deterministic_log_loss": 0.62,
+        },
+        {
+            "label": "deterministic-better",
+            "brier": 0.23,
+            "log_loss": 0.63,
+            "deterministic_brier": 0.19,
+            "deterministic_log_loss": 0.59,
+        },
+    ]
+
+    assert betting_pipeline._pick_best_row(rows)["label"] == "deterministic-better"

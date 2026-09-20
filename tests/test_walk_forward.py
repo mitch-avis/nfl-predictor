@@ -411,9 +411,37 @@ def test_build_metrics_report_shape() -> None:
         created_at="2026-01-10T00:00:00Z",
         config_payload={"foo": "bar"},
         results={
-            "per_week": [{"week": 3, "games": 1}],
+            "per_week": [
+                {
+                    "week": 3,
+                    "games": 1,
+                    "deterministic_brier": 0.2,
+                    "deterministic_log_loss": 0.6,
+                    "market_brier": 0.21,
+                    "market_log_loss": 0.61,
+                }
+            ],
             "per_season": [{"season": 2024, "games": 1}],
-            "overall": {"games": 1},
+            "overall": {
+                "games": 1,
+                "deterministic_brier": 0.2,
+                "deterministic_log_loss": 0.6,
+                "market_brier": 0.21,
+                "market_log_loss": 0.61,
+            },
+            "probability_windows": [
+                {
+                    "window": "all_weeks",
+                    "label": "all weeks",
+                    "games": 1,
+                    "deterministic_brier_vs_market": -0.01,
+                    "deterministic_brier_vs_market_ci_low": -0.03,
+                    "deterministic_brier_vs_market_ci_high": 0.01,
+                    "deterministic_log_loss_vs_market": -0.02,
+                    "deterministic_log_loss_vs_market_ci_low": -0.04,
+                    "deterministic_log_loss_vs_market_ci_high": 0.0,
+                }
+            ],
             "reliability": [{"bin_lower": 0.0, "bin_upper": 0.1, "count": 1}],
             "eval_window": {"include_postseason": False, "seasons": {}},
         },
@@ -424,6 +452,12 @@ def test_build_metrics_report_shape() -> None:
     assert report["metrics"]["fold_summary"]["folds"] == 1
     assert isinstance(report["metrics"]["summary_table"], list)
     assert report["metric_strategy"]["primary"][0]["metric"] == "brier"
+    assert any(row["metric"] == "deterministic_brier" for row in report["metrics"]["summary_table"])
+    assert any(row["metric"] == "market_brier" for row in report["metrics"]["summary_table"])
+    assert any(
+        row.get("metric") == "deterministic_brier_vs_market" and row.get("window") == "all_weeks"
+        for row in report["metrics"]["summary_table"]
+    )
     assert report["calibration"]["bin_count"] == walk_forward.RELIABILITY_BINS
     assert report["splits"]["eval_window"]["include_postseason"] is False
     assert report["splits"]["excluded_incomplete_seasons"] == []
@@ -456,7 +490,9 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
             "actual_total": [41.0, 38.0],
             "predicted_total": [40.0, 39.0],
             "actual_home_win": [1, 0],
-            "home_win_prob": [0.7, 0.3],
+            "home_win_prob": [0.8, 0.4],
+            "deterministic_home_win_prob": [0.7, 0.3],
+            "market_home_win_prob": [0.65, 0.35],
             "expected_points": [1.5, 2.0],
             "actual_points": [1.0, 2.0],
             "pick_correct": [True, True],
@@ -477,6 +513,14 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
     assert "margin_p10_p90_coverage" in metrics
     assert "total_p10_p90_coverage" in metrics
     assert "reliability_ece" in metrics
+    assert metrics["deterministic_brier"] == pytest.approx(0.09)
+    assert metrics["deterministic_log_loss"] == pytest.approx(0.3566749439)
+    assert metrics["deterministic_pick_accuracy"] == pytest.approx(1.0)
+    assert metrics["market_brier"] == pytest.approx(0.1225)
+    assert metrics["market_log_loss"] == pytest.approx(0.4307829161)
+    assert metrics["market_pick_accuracy"] == pytest.approx(1.0)
+    assert metrics["deterministic_brier_vs_market"] == pytest.approx(-0.0325)
+    assert metrics["deterministic_log_loss_vs_market"] == pytest.approx(-0.0741079722)
 
 
 def test_season_win_totals_summary() -> None:
@@ -518,11 +562,42 @@ def test_calibration_drift_summary() -> None:
     row = drift["per_week"][0]
     assert row["season"] == 2024
     assert row["week"] == 3
-    assert row["games"] == 2
     assert row["avg_pred"] == pytest.approx(0.5)
     assert row["avg_actual"] == pytest.approx(0.5)
     assert row["bias"] == pytest.approx(0.0)
     assert row["brier"] == pytest.approx(0.04)
+
+
+def test_probability_window_rows_include_bootstrap_intervals() -> None:
+    """Window summaries include deterministic-versus-market intervals for each standard window."""
+    predictions = pd.DataFrame(
+        {
+            "season": [2024, 2024, 2024, 2024],
+            "week": [1, 2, 3, 4],
+            "actual_margin": [7.0, -3.0, 10.0, -6.0],
+            "predicted_margin": [6.0, -2.0, 8.0, -5.0],
+            "actual_total": [45.0, 41.0, 48.0, 39.0],
+            "predicted_total": [44.0, 40.0, 47.0, 38.0],
+            "actual_home_win": [1, 0, 1, 0],
+            "home_win_prob": [0.76, 0.41, 0.81, 0.36],
+            "deterministic_home_win_prob": [0.74, 0.38, 0.79, 0.33],
+            "market_home_win_prob": [0.71, 0.42, 0.76, 0.39],
+            "expected_points": [1.0, 2.0, 3.0, 4.0],
+            "actual_points": [1.0, 2.0, 3.0, 4.0],
+            "pick_correct": [True, True, True, True],
+        }
+    )
+
+    rows = walk_forward._probability_window_rows(predictions, seed=7)
+    by_window = {row["window"]: row for row in rows}
+
+    assert set(by_window) == {"week_1_only", "week_2_only", "weeks_3_18", "all_weeks"}
+    assert by_window["all_weeks"]["deterministic_brier_vs_market"] < 0
+    assert "deterministic_brier_vs_market_ci_low" in by_window["all_weeks"]
+    assert "deterministic_brier_vs_market_ci_high" in by_window["all_weeks"]
+    assert "deterministic_log_loss_vs_market_ci_low" in by_window["all_weeks"]
+    assert "deterministic_log_loss_vs_market_ci_high" in by_window["all_weeks"]
+    assert by_window["weeks_3_18"]["games"] == 2
 
 
 def test_git_commit_hash_returns_none_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:

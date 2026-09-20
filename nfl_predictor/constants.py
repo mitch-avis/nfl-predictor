@@ -428,9 +428,10 @@ NFLREADPY_SCHEDULE_RENAME = {
 # Data Collection Column Definitions
 # ============================================================================
 
-# Team division/conference mapping (modern alignment; applies to all seasons in this repo).
-# Used for record splits (division/conference), divisional matchup indicator,
-# and motivation proxies.
+# Team division/conference mapping. `TEAM_TO_DIVISION` is the modern alignment; callers that need
+# historical context should use `division_map_for_season` / `conference_map_for_season`.
+NFL_REALIGNMENT_SEASON = 2002
+
 TEAM_TO_DIVISION: dict[str, str] = {
     # AFC East
     "BUF": "AFC East",
@@ -477,6 +478,66 @@ TEAM_TO_DIVISION: dict[str, str] = {
 TEAM_TO_CONFERENCE: dict[str, str] = {
     team: "AFC" if div.startswith("AFC") else "NFC" for team, div in TEAM_TO_DIVISION.items()
 }
+
+PRE_2002_TEAM_TO_DIVISION: dict[str, str] = {
+    # AFC East
+    "BUF": "AFC East",
+    "IND": "AFC East",
+    "MIA": "AFC East",
+    "NE": "AFC East",
+    "NYJ": "AFC East",
+    # AFC Central
+    "BAL": "AFC Central",
+    "CIN": "AFC Central",
+    "CLE": "AFC Central",
+    "JAX": "AFC Central",
+    "PIT": "AFC Central",
+    "TEN": "AFC Central",
+    # AFC West
+    "DEN": "AFC West",
+    "KC": "AFC West",
+    "LAC": "AFC West",
+    "LV": "AFC West",
+    "SEA": "AFC West",
+    # NFC East
+    "ARI": "NFC East",
+    "DAL": "NFC East",
+    "NYG": "NFC East",
+    "PHI": "NFC East",
+    "WSH": "NFC East",
+    # NFC Central
+    "CHI": "NFC Central",
+    "DET": "NFC Central",
+    "GB": "NFC Central",
+    "MIN": "NFC Central",
+    "TB": "NFC Central",
+    # NFC West
+    "ATL": "NFC West",
+    "CAR": "NFC West",
+    "NO": "NFC West",
+    "LAR": "NFC West",
+    "SF": "NFC West",
+}
+
+PRE_2002_TEAM_TO_CONFERENCE: dict[str, str] = {
+    team: "AFC" if div.startswith("AFC") else "NFC"
+    for team, div in PRE_2002_TEAM_TO_DIVISION.items()
+}
+
+
+def division_map_for_season(season: int | None) -> dict[str, str]:
+    """Return the NFL division alignment that applied in a season."""
+    if season is not None and int(season) < NFL_REALIGNMENT_SEASON:
+        return PRE_2002_TEAM_TO_DIVISION
+    return TEAM_TO_DIVISION
+
+
+def conference_map_for_season(season: int | None) -> dict[str, str]:
+    """Return the NFL conference alignment that applied in a season."""
+    if season is not None and int(season) < NFL_REALIGNMENT_SEASON:
+        return PRE_2002_TEAM_TO_CONFERENCE
+    return TEAM_TO_CONFERENCE
+
 
 RECORD_FEATURE_COLUMNS = [
     # Overall
@@ -779,6 +840,15 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     # Every published play-by-play stat name is its own marker, so the group tracks
     # PBP_STATS automatically and stays disjoint from the older stat families.
     "pbp": (),  # populated below, once PBP_STATS is defined
+    # Rare event counts that led the audit's noise-family ranking.
+    "rare_events": (
+        "special_teams_tds",
+        "def_fumbles",
+        "fumble_recovery_tds",
+        "2pt_conversions",
+        "def_safeties",
+        "def_tds",
+    ),
 }
 
 # Raw per-team-game counts and sums produced from play-by-play.
@@ -975,6 +1045,8 @@ EXCLUDE_FROM_OPPONENT_STATS = [
     "scoring_margin",
     "points_scored",
     "points_allowed",
+    "times_sacked",
+    "def_sacks",
     "def_interceptions",
     "interceptions_thrown",
     "turnover_margin",

@@ -242,8 +242,34 @@ def _run_one(
         "market_mode": market_mode,
         "brier": float(overall.get("brier", float("nan"))),
         "log_loss": float(overall.get("log_loss", float("nan"))),
+        "deterministic_brier": float(overall.get("deterministic_brier", float("nan"))),
+        "deterministic_log_loss": float(overall.get("deterministic_log_loss", float("nan"))),
+        "market_brier": float(overall.get("market_brier", float("nan"))),
+        "market_log_loss": float(overall.get("market_log_loss", float("nan"))),
+        "deterministic_brier_vs_market": float(
+            overall.get("deterministic_brier_vs_market", float("nan"))
+        ),
+        "deterministic_log_loss_vs_market": float(
+            overall.get("deterministic_log_loss_vs_market", float("nan"))
+        ),
+        "deterministic_brier_vs_market_ci_low": float(
+            overall.get("deterministic_brier_vs_market_ci_low", float("nan"))
+        ),
+        "deterministic_brier_vs_market_ci_high": float(
+            overall.get("deterministic_brier_vs_market_ci_high", float("nan"))
+        ),
+        "deterministic_log_loss_vs_market_ci_low": float(
+            overall.get("deterministic_log_loss_vs_market_ci_low", float("nan"))
+        ),
+        "deterministic_log_loss_vs_market_ci_high": float(
+            overall.get("deterministic_log_loss_vs_market_ci_high", float("nan"))
+        ),
         "reliability_ece": metrics_utils.reliability_ece(reliability),
         "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
+        "deterministic_pick_accuracy": float(
+            overall.get("deterministic_pick_accuracy", float("nan"))
+        ),
+        "market_pick_accuracy": float(overall.get("market_pick_accuracy", float("nan"))),
         "margin_mae": float(overall.get("margin_mae", float("nan"))),
         "total_mae": float(overall.get("total_mae", float("nan"))),
         "expected_points_avg": float(overall.get("expected_points_avg", float("nan"))),
@@ -363,7 +389,9 @@ def main() -> int:
                         rows.append(row)
 
     result_df = pd.DataFrame(rows)
-    result_df = result_df.sort_values(["brier", "log_loss"], ascending=[True, True])
+    result_df = result_df.sort_values(
+        ["deterministic_brier", "deterministic_log_loss"], ascending=[True, True]
+    )
 
     run_id = _now_run_id()
     out_path = args.out
@@ -385,10 +413,16 @@ def main() -> int:
         "market_prob_source",
         "market_prob_blend_method",
         "win_prob_use_uncertainty",
+        "deterministic_brier",
+        "deterministic_log_loss",
+        "market_brier",
+        "market_log_loss",
+        "deterministic_brier_vs_market",
+        "deterministic_log_loss_vs_market",
         "brier",
         "log_loss",
         "reliability_ece",
-        "pick_accuracy",
+        "deterministic_pick_accuracy",
         "actual_points_avg",
         "expected_points_avg",
         "margin_mae",

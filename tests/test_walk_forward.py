@@ -287,7 +287,7 @@ def test_walk_forward_probabilities_in_bounds() -> None:
 
 
 def test_calibration_data_is_time_aware() -> None:
-    """Calibration data must come from weeks strictly before the eval week."""
+    """Calibration data uses prior seasons plus earlier weeks of the current season only."""
     df = _fixture_df()
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 
@@ -296,7 +296,33 @@ def test_calibration_data_is_time_aware() -> None:
             fold.train_df, fold.season, fold.week, calibration_weeks=1
         )
         if not calibration_df.empty:
-            assert calibration_df["week"].max() < fold.week
+            current_season = calibration_df[calibration_df["season"] == fold.season]
+            if not current_season.empty:
+                assert current_season["week"].max() < fold.week
+            assert calibration_df["season"].min() >= fold.season - 2
+            assert calibration_df["season"].max() <= fold.season
+
+
+def test_calibration_data_uses_prior_two_seasons_plus_completed_weeks() -> None:
+    """Calibration selection should pool the previous two seasons and current completed weeks."""
+    df = pd.DataFrame(
+        {
+            "season": [2020, 2020, 2021, 2021, 2022, 2022],
+            "week": [1, 2, 1, 2, 1, 2],
+            "away_score": [10, 11, 12, 13, 14, 15],
+            "home_score": [20, 21, 22, 23, 24, 25],
+        }
+    )
+
+    calibration_df = walk_forward.select_calibration_data(
+        df,
+        eval_season=2022,
+        eval_week=2,
+        calibration_weeks=1,
+    )
+
+    assert calibration_df["season"].tolist() == [2020, 2020, 2021, 2021, 2022]
+    assert calibration_df["week"].tolist() == [1, 2, 1, 2, 1]
 
 
 def test_walk_forward_quantile_intervals_monotonic() -> None:
@@ -411,9 +437,37 @@ def test_build_metrics_report_shape() -> None:
         created_at="2026-01-10T00:00:00Z",
         config_payload={"foo": "bar"},
         results={
-            "per_week": [{"week": 3, "games": 1}],
+            "per_week": [
+                {
+                    "week": 3,
+                    "games": 1,
+                    "deterministic_brier": 0.2,
+                    "deterministic_log_loss": 0.6,
+                    "market_brier": 0.21,
+                    "market_log_loss": 0.61,
+                }
+            ],
             "per_season": [{"season": 2024, "games": 1}],
-            "overall": {"games": 1},
+            "overall": {
+                "games": 1,
+                "deterministic_brier": 0.2,
+                "deterministic_log_loss": 0.6,
+                "market_brier": 0.21,
+                "market_log_loss": 0.61,
+            },
+            "probability_windows": [
+                {
+                    "window": "all_weeks",
+                    "label": "all weeks",
+                    "games": 1,
+                    "deterministic_brier_vs_market": -0.01,
+                    "deterministic_brier_vs_market_ci_low": -0.03,
+                    "deterministic_brier_vs_market_ci_high": 0.01,
+                    "deterministic_log_loss_vs_market": -0.02,
+                    "deterministic_log_loss_vs_market_ci_low": -0.04,
+                    "deterministic_log_loss_vs_market_ci_high": 0.0,
+                }
+            ],
             "reliability": [{"bin_lower": 0.0, "bin_upper": 0.1, "count": 1}],
             "eval_window": {"include_postseason": False, "seasons": {}},
         },
@@ -424,6 +478,12 @@ def test_build_metrics_report_shape() -> None:
     assert report["metrics"]["fold_summary"]["folds"] == 1
     assert isinstance(report["metrics"]["summary_table"], list)
     assert report["metric_strategy"]["primary"][0]["metric"] == "brier"
+    assert any(row["metric"] == "deterministic_brier" for row in report["metrics"]["summary_table"])
+    assert any(row["metric"] == "market_brier" for row in report["metrics"]["summary_table"])
+    assert any(
+        row.get("metric") == "deterministic_brier_vs_market" and row.get("window") == "all_weeks"
+        for row in report["metrics"]["summary_table"]
+    )
     assert report["calibration"]["bin_count"] == walk_forward.RELIABILITY_BINS
     assert report["splits"]["eval_window"]["include_postseason"] is False
     assert report["splits"]["excluded_incomplete_seasons"] == []
@@ -456,7 +516,9 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
             "actual_total": [41.0, 38.0],
             "predicted_total": [40.0, 39.0],
             "actual_home_win": [1, 0],
-            "home_win_prob": [0.7, 0.3],
+            "home_win_prob": [0.8, 0.4],
+            "deterministic_home_win_prob": [0.7, 0.3],
+            "market_home_win_prob": [0.65, 0.35],
             "expected_points": [1.5, 2.0],
             "actual_points": [1.0, 2.0],
             "pick_correct": [True, True],
@@ -477,6 +539,14 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
     assert "margin_p10_p90_coverage" in metrics
     assert "total_p10_p90_coverage" in metrics
     assert "reliability_ece" in metrics
+    assert metrics["deterministic_brier"] == pytest.approx(0.09)
+    assert metrics["deterministic_log_loss"] == pytest.approx(0.3566749439)
+    assert metrics["deterministic_pick_accuracy"] == pytest.approx(1.0)
+    assert metrics["market_brier"] == pytest.approx(0.1225)
+    assert metrics["market_log_loss"] == pytest.approx(0.4307829161)
+    assert metrics["market_pick_accuracy"] == pytest.approx(1.0)
+    assert metrics["deterministic_brier_vs_market"] == pytest.approx(-0.0325)
+    assert metrics["deterministic_log_loss_vs_market"] == pytest.approx(-0.0741079722)
 
 
 def test_season_win_totals_summary() -> None:
@@ -518,11 +588,42 @@ def test_calibration_drift_summary() -> None:
     row = drift["per_week"][0]
     assert row["season"] == 2024
     assert row["week"] == 3
-    assert row["games"] == 2
     assert row["avg_pred"] == pytest.approx(0.5)
     assert row["avg_actual"] == pytest.approx(0.5)
     assert row["bias"] == pytest.approx(0.0)
     assert row["brier"] == pytest.approx(0.04)
+
+
+def test_probability_window_rows_include_bootstrap_intervals() -> None:
+    """Window summaries include deterministic-versus-market intervals for each standard window."""
+    predictions = pd.DataFrame(
+        {
+            "season": [2024, 2024, 2024, 2024],
+            "week": [1, 2, 3, 4],
+            "actual_margin": [7.0, -3.0, 10.0, -6.0],
+            "predicted_margin": [6.0, -2.0, 8.0, -5.0],
+            "actual_total": [45.0, 41.0, 48.0, 39.0],
+            "predicted_total": [44.0, 40.0, 47.0, 38.0],
+            "actual_home_win": [1, 0, 1, 0],
+            "home_win_prob": [0.76, 0.41, 0.81, 0.36],
+            "deterministic_home_win_prob": [0.74, 0.38, 0.79, 0.33],
+            "market_home_win_prob": [0.71, 0.42, 0.76, 0.39],
+            "expected_points": [1.0, 2.0, 3.0, 4.0],
+            "actual_points": [1.0, 2.0, 3.0, 4.0],
+            "pick_correct": [True, True, True, True],
+        }
+    )
+
+    rows = walk_forward._probability_window_rows(predictions, seed=7)
+    by_window = {row["window"]: row for row in rows}
+
+    assert set(by_window) == {"week_1_only", "week_2_only", "weeks_3_18", "all_weeks"}
+    assert by_window["all_weeks"]["deterministic_brier_vs_market"] < 0
+    assert "deterministic_brier_vs_market_ci_low" in by_window["all_weeks"]
+    assert "deterministic_brier_vs_market_ci_high" in by_window["all_weeks"]
+    assert "deterministic_log_loss_vs_market_ci_low" in by_window["all_weeks"]
+    assert "deterministic_log_loss_vs_market_ci_high" in by_window["all_weeks"]
+    assert by_window["weeks_3_18"]["games"] == 2
 
 
 def test_git_commit_hash_returns_none_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -647,7 +748,20 @@ def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPa
 
     assert walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=0).empty
     assert walk_forward.select_calibration_data(df, 2030, 2, calibration_weeks=1).empty
-    assert walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=5).empty
+    pooled = walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=1)
+    assert not pooled.empty
+    pooled_pairs = sorted(
+        {
+            (int(season), int(week))
+            for season, week in zip(pooled["season"], pooled["week"], strict=True)
+        }
+    )
+    assert pooled_pairs == [
+        (2022, 1),
+        (2022, 2),
+        (2022, 3),
+        (2023, 1),
+    ]
 
     postseason_summary = walk_forward.summarize_eval_window(
         pd.DataFrame({"season": [2024], "week": [20]}),
@@ -778,6 +892,130 @@ def test_walk_forward_backtest_handles_elo_uncertainty_and_incomplete_filters(
     incomplete_config = replace(_base_config(), exclude_incomplete_seasons=True)
     with pytest.raises(ValueError, match="No complete seasons available"):
         walk_forward.run_walk_forward_backtest(df, incomplete_config)
+
+
+def test_walk_forward_auto_calibration_uses_the_deterministic_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auto calibration should stay on the deterministic floor; no fitted selector exists."""
+    assert not hasattr(walk_forward.ml_model, "_select_auto_calibration_method")
+    assert not hasattr(walk_forward.ml_model, "_sigma_calibrator_improves_on_floor")
+    monkeypatch.setattr(
+        walk_forward.ml_model,
+        "_fit_win_prob_calibrator",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("auto should not fit a calibrator")
+        ),
+    )
+
+    result = walk_forward.run_walk_forward_backtest(
+        _fixture_df(),
+        replace(_base_config(), calibration="auto", include_quantiles=False),
+    )
+
+    assert set(result["predictions"]["calibration_method"].unique()) == {"none"}
+
+
+def test_walk_forward_disables_small_window_early_stopping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Walk-forward fits should no longer use per-fold early stopping windows."""
+
+    class _DummyBooster:
+        def num_boosted_rounds(self) -> int:
+            return 12
+
+    class _DummyModel:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.n_estimators = 12
+
+        def get_booster(self) -> _DummyBooster:
+            return _DummyBooster()
+
+    margin_rounds: list[object] = []
+    quantile_rounds: list[object] = []
+
+    def fake_fit_margin_total_models(*_args, **kwargs):
+        margin_rounds.append(kwargs.get("early_stopping_rounds"))
+        return _DummyModel("margin"), _DummyModel("total")
+
+    def fake_fit_quantile_models(*_args, **kwargs):
+        quantile_rounds.append(kwargs.get("early_stopping_rounds"))
+        return {}
+
+    def fake_predict_xgb(model: _DummyModel, x: np.ndarray) -> np.ndarray:
+        if model.name == "margin":
+            return np.full(x.shape[0], 3.0, dtype=float)
+        return np.full(x.shape[0], 44.0, dtype=float)
+
+    monkeypatch.setattr(
+        walk_forward.ml_model,
+        "_fit_margin_total_models",
+        fake_fit_margin_total_models,
+    )
+    monkeypatch.setattr(walk_forward.ml_model, "_fit_quantile_models", fake_fit_quantile_models)
+    monkeypatch.setattr(walk_forward.ml_model, "_predict_xgb", fake_predict_xgb)
+
+    result = walk_forward.run_walk_forward_backtest(
+        _fixture_df(),
+        replace(_base_config(), include_quantiles=True, early_stopping_rounds=5),
+    )
+
+    assert margin_rounds == [None, None]
+    assert quantile_rounds == [None, None, None, None]
+    assert result["resolved_settings"]["in_season_early_stopping"] is False
+    first_week = result["per_week"][0]
+    assert first_week["margin_model.best_iteration"] == 11
+    assert first_week["total_model.best_iteration"] == 11
+    assert first_week["margin_model.early_stopped"] is False
+    # Running the full budget is the configured behavior, not a warning condition.
+    assert "iteration_warnings" not in first_week
+
+
+def test_iteration_details_warns_only_on_real_early_stopping_outcomes() -> None:
+    """Cap and below-10 flags describe early stopping; a full-budget fit is not flagged."""
+
+    class _Booster:
+        def __init__(self, rounds: int) -> None:
+            self._rounds = rounds
+
+        def num_boosted_rounds(self) -> int:
+            return self._rounds
+
+    class _FullBudget:
+        n_estimators = 12
+
+        def get_booster(self) -> _Booster:
+            return _Booster(12)
+
+    class _StoppedAtCap:
+        n_estimators = 12
+        best_iteration = 11
+
+        def get_booster(self) -> _Booster:
+            return _Booster(12)
+
+    class _StoppedEarly:
+        n_estimators = 12
+        best_iteration = 3
+
+        def get_booster(self) -> _Booster:
+            return _Booster(4)
+
+    details = walk_forward._iteration_details(
+        {"full": _FullBudget(), "capped": _StoppedAtCap(), "tiny": _StoppedEarly()}
+    )
+
+    assert details["full.best_iteration"] == 11
+    assert details["full.early_stopped"] is False
+    assert "full.warning" not in details
+    assert details["capped.best_iteration"] == 11
+    assert details["capped.early_stopped"] is True
+    assert details["capped.warning"] == "at_cap"
+    assert details["tiny.best_iteration"] == 3
+    assert details["tiny.warning"] == "below_10"
+    assert details["iteration_warnings"] == ["capped:at_cap", "tiny:below_10"]
 
 
 def test_resolve_feature_group_columns_matches_configured_markers(

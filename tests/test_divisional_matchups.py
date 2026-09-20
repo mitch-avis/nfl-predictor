@@ -56,3 +56,34 @@ def test_add_divisional_matchup_feature_validates_schema() -> None:
         assert "missing required columns" in str(exc)
     else:
         raise AssertionError("Expected ValueError for missing required columns")
+
+
+def test_add_divisional_matchup_feature_uses_historical_alignment_by_season() -> None:
+    """Season-aware divisional flags should match the schedule flag in every season."""
+    rows: list[dict[str, int | str]] = []
+    for season in range(1999, 2027):
+        if season < 2002:
+            rows.extend(
+                [
+                    {"season": season, "away_abbr": "ARI", "home_abbr": "DAL", "division": 1},
+                    {"season": season, "away_abbr": "ARI", "home_abbr": "SF", "division": 0},
+                ]
+            )
+        else:
+            rows.extend(
+                [
+                    {"season": season, "away_abbr": "ARI", "home_abbr": "DAL", "division": 0},
+                    {"season": season, "away_abbr": "ARI", "home_abbr": "SF", "division": 1},
+                ]
+            )
+
+    df = pl.DataFrame(rows).with_columns(
+        [
+            pl.col("season").cast(pl.Int32),
+            pl.col("division").cast(pl.Int32),
+        ]
+    )
+
+    out = polars_utils.add_divisional_matchup_feature(df)
+
+    assert out["is_divisional_matchup"].to_list() == out["division"].to_list()

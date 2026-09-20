@@ -1,5 +1,153 @@
 # Changelog
 
+## [0.12.5] - 2026-09-19
+
+### Changed
+
+- Bump the project version to `0.12.5` and keep `uv.lock` aligned.
+- Walk-forward fold metrics record `<head>.early_stopped` beside `<head>.best_iteration`, and
+  the `at_cap` warning fires only when early stopping ran and never triggered. A head that used
+  its whole `n_estimators` budget by configuration is recorded, not warned about (before this,
+  every fold of every `0.12.3`-`0.12.4` run logged `at_cap` for every head). `resolved_settings`
+  records `in_season_early_stopping: false`, and the `--wf-early-stopping-rounds` /
+  `--train-early-stopping-rounds` help text says what the flags still do (the run fingerprint
+  and Optuna trials only).
+- Rewrite the `0.12.1` to `0.12.4` entries below into Common Changelog sections and correct
+  their claims after the 2026-09-19 audit of the two sessions that produced them: the benchmark
+  table comes from the retrained fit-parity arms, not from a rescore of the `0.12.0`
+  checkpoints; the fitted calibration pool is in-sample, not out-of-fold; and `n_estimators` was
+  not re-tuned. The audit record is in `.agents/ARCHIVE.md`, Milestone 59, "Audit".
+- Reopen the narrowed parts of tasks 59.2 and 59.3 as follow-ups in `.agents/TODO.md` ("From
+  Milestone 59") and as task 55.7.
+
+### Added
+
+- `scripts/gate.sh`: the single validation gate. It runs every check that
+  `.github/workflows/validation.yml` runs, in CI's order, and reports all of them before exiting
+  non-zero; `--web` adds the frontend gate and `--quick` skips pytest.
+- "Delegation guardrails" in `AGENTS.md`: the gate rule, the narrowing rule, the two-key rule
+  for numbers written into docs, the compute budget, and the must-ask / may-proceed lists for
+  autonomous sessions.
+- `sigma` (residual-scale Normal-CDF map) is selectable by name in every calibration choice
+  list; before, it was reachable only as the fallback for undersized isotonic requests.
+
+### Removed
+
+- The unreachable fitted-`auto` selector (`_select_auto_calibration_method`) and its floor
+  check (`_sigma_calibrator_improves_on_floor`), left behind when `auto` was locked to the
+  deterministic floor in `0.12.2`, and the undocumented `deterministic` alias for `sigma`.
+
+### Fixed
+
+- `nfl_predictor/constants.py` failed `ruff format --check` (one missing blank line after
+  `conference_map_for_season`), so CI would have failed on the `0.12.4` tree.
+- The `AGENTS.md` benchmark table states which run its numbers come from and how far a true
+  rescore of the `0.12.0` checkpoints sits from them.
+
+## [0.12.4] - 2026-09-19
+
+### Changed
+
+- Bump the project version to `0.12.4` and keep `uv.lock` aligned.
+- `def_sacks` and `times_sacked` join `EXCLUDE_FROM_OPPONENT_STATS`, so the next ETL rebuild
+  drops the six `*_opponent_def_sacks` / `*_opponent_times_sacked` mirrors that `0.12.0` prunes
+  at training time. The dataset on disk (2026-09-17 build) predates this change; the
+  training-time prune tolerates the columns disappearing.
+- Remove the dead fitted-selector call sites from production and walk-forward so `auto` reads as
+  the deterministic floor in code as well as in the docs.
+
+### Added
+
+- `PRE_2002_TEAM_TO_DIVISION`, `PRE_2002_TEAM_TO_CONFERENCE`, `division_map_for_season` and
+  `conference_map_for_season` in `constants`, and season-aware division and conference
+  expressions in `features.py`.
+- The `rare_events` feature group (`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`,
+  `2pt_conversions`, `def_safeties`, `def_tds`) for `--disable-feature-groups`, and
+  `--min-child-weight` / `--gamma` on `scripts/walk_forward_backtest.py`.
+- Three six-season arms (`--eval-last-n-seasons 6`, from week 1, `auto`, `market_anchor` on,
+  `data/completed_games_ml.m49_through_2025.deadweight_cut.csv`), run one at a time:
+
+  | arm | deterministic Brier | market Brier | paired 95% CI | margin MAE |
+  | --- | --- | --- | --- | --- |
+  | `models/wf_m59_2020_2025_auto_floor_baseline/` | `0.2116` | `0.2104` | `[-0.0016, +0.0041]` | `9.9015` |
+  | `models/wf_m59_2020_2025_rare_events_off/` | `0.2123` | `0.2104` | `[-0.0010, +0.0049]` | `9.9101` |
+  | `models/wf_m59_2020_2025_regularized_gamma5_mcw5/` | `0.2114` | `0.2104` | `[-0.0018, +0.0039]` | `9.8903` |
+
+  Every interval covers zero: the rare-event family is not measurable noise at this sample
+  size and stronger regularization is a tie. The baseline's 2023-2025 folds are bit-identical
+  to the `0.12.3` from-week-1 arms and reproduce the `AGENTS.md` table; its configured `auto`
+  probabilities equal the deterministic floor, none leaves `[0.02, 0.98]` unless
+  `|predicted_margin| > 14`, and every head ran the full `598`-tree budget.
+
+### Fixed
+
+- 1999-2001 rows used today's division map. `is_divisional_matchup`, the division and
+  conference records, the lookahead context and the standings proxies now use the pre-2002
+  alignment, and the divisional flag agrees with nflverse `division` in every season (it
+  disagreed on 61, 67 and 61 rows in 1999, 2000 and 2001). The dataset on disk predates this
+  fix; the corrected values arrive with the next ETL rebuild.
+
+## [0.12.3] - 2026-09-19
+
+### Changed
+
+- Bump the project version to `0.12.3` and keep `uv.lock` aligned.
+- Remove per-fold early stopping from the in-season production and walk-forward fits. Both call
+  the same shared XGBoost fit helpers and run the full `n_estimators` budget (`598`), which is
+  what the walk-forward folds already did in practice (patience never fired) and what the Week 2
+  production run did not (its margin head stopped at iteration `0` on a 64-game window).
+  `metadata.json` records a fallback `best_iteration` for every head even without early
+  stopping, and walk-forward fold metrics carry per-head iteration fields. Not done, and
+  reopened as task 55.7: choosing `n_estimators` from a season-sized time-aware tuning.
+- Measured on the deadweight cut from week 1, seasons 2023-2025
+  (`models/wf_m59_2023_2025_from_week1*/`, five arms that differ only in the configured
+  calibrator): against the `0.12.0` arm, 247 of 816 predicted margins move, by at most `0.34`
+  points; deterministic weeks-3-18 Brier / log loss / margin MAE are `0.2099` / `0.6073` /
+  `9.9608` against `0.2098` / `0.6072` / `9.9600`, a tie.
+
+## [0.12.2] - 2026-09-19
+
+### Changed
+
+- The calibration frame for fitted calibrators is the previous two seasons plus the completed
+  weeks of the current season (`select_calibration_data` in walk-forward,
+  `_pooled_calibration_frame` in production) instead of the last four weeks of the eval season.
+  The rows are in-sample: the model that predicts them was trained on them. The out-of-fold pool
+  the task asked for is an open follow-up (`.agents/TODO.md`, "From Milestone 59").
+- `auto` resolves to the deterministic floor (`none`). Five three-season arms measured fitted
+  alternatives on the pooled frame and none beat the floor on weeks 3-18 (configured Brier:
+  isotonic `0.2378` with log loss `2.02`, sigma `0.2119`, centered sigma `0.2119`, sigma with a
+  floor fallback `0.2119`, validation-selected `0.2347`; the floor `0.2099`). Run directories and
+  the table are in `.agents/ARCHIVE.md`, Milestone 59.
+
+### Added
+
+- `sigma` calibration: one residual standard deviation estimated on the calibration frame, used
+  in `Phi(margin / sigma)`. An explicit `isotonic` request below the 200-row threshold falls
+  back to it.
+- Platt scaling chooses `C` from `{0.01, 0.1, 1, 10}` on the latest pre-eval season of the
+  calibration frame instead of using the unregularized default.
+
+## [0.12.1] - 2026-09-19
+
+### Added
+
+- Three probability views on the same games in every walk-forward report: the configured
+  calibrator, the deterministic `Phi(margin / SCORE_DIFF_STD_DEV)` map, and the market-implied
+  home win probability (no-vig moneyline, `Phi(spread / sigma)` when moneylines are missing).
+  Per-window rows (week 1, week 2, weeks 3-18, all) carry paired deterministic-minus-market Brier
+  and log-loss differences with 5000-sample bootstrap intervals, in `metrics.windows` and the
+  summary table. `deterministic_*` and `market_*` columns are written to `wf_compare.csv` by
+  `scripts/wf_compare.py`, `scripts/weekly_run.py` and `scripts/betting_pipeline.py`, and the API
+  column registry and metrics reader expose them.
+
+### Changed
+
+- Candidate ranking in `weekly_run`, `betting_pipeline`, `wf_compare` and the API reader sorts by
+  deterministic Brier then deterministic log loss instead of the configured columns.
+- The `AGENTS.md` benchmark table is rebuilt on the deterministic and market-implied columns with
+  the market row beside the model's.
+
 ## [0.12.0] - 2026-09-18
 
 ### Changed

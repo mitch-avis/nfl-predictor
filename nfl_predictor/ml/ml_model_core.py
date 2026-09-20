@@ -29,6 +29,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.metrics import (
     brier_score_loss,
+    log_loss,
     mean_absolute_error,
     mean_squared_error,
     root_mean_squared_error,
@@ -86,6 +87,7 @@ AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES = 200
 NORMAL_Z_P90 = 1.281551565545
 P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
 MIN_WIN_PROB_SIGMA = 0.5
+PLATT_C_GRID = (0.01, 0.1, 1.0, 10.0)
 
 
 @dataclass(frozen=True)
@@ -796,15 +798,34 @@ def _fit_win_prob_calibrator(
     actual_home_win: np.ndarray,
     method: str,
     sample_weight: np.ndarray | None = None,
+    actual_margin: np.ndarray | None = None,
+    seasons: np.ndarray | None = None,
+    excluded_season: int | None = None,
 ) -> WinProbCalibrator | None:
     method = resolve_win_prob_calibration_method(method, len(pred_margin))
     if method == "none":
         return None
+    if method == "sigma":
+        if actual_margin is None:
+            raise ValueError("Sigma calibration requires actual_margin values.")
+        sigma = _estimate_win_prob_sigma_from_residuals(
+            pred_margin,
+            actual_margin,
+            sample_weight=sample_weight,
+        )
+        return WinProbCalibrator(method=method, model=sigma)
     if method == "elo":
         # Deterministic mapping; no fitting.
         return WinProbCalibrator(method=method, model=None)
     if method == "platt":
-        model = LogisticRegression(solver="lbfgs")
+        c_value = _select_platt_regularization(
+            pred_margin,
+            actual_home_win,
+            sample_weight=sample_weight,
+            seasons=seasons,
+            excluded_season=excluded_season,
+        )
+        model = LogisticRegression(solver="lbfgs", C=c_value)
         model.fit(pred_margin.reshape(-1, 1), actual_home_win, sample_weight=sample_weight)
         return WinProbCalibrator(method=method, model=model)
     if method == "isotonic":
@@ -825,13 +846,13 @@ def normalize_win_prob_calibration_method(method: str) -> str:
 def resolve_win_prob_calibration_method(method: str, sample_count: int) -> str:
     """Resolve calibration method with support for auto selection."""
     method = normalize_win_prob_calibration_method(method)
+    if method == "isotonic" and 0 < sample_count < AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES:
+        return "sigma"
     if method != "auto":
         return method
     if sample_count <= 0:
         return "none"
-    if sample_count >= AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES:
-        return "isotonic"
-    return "platt"
+    return "none"
 
 
 def _predict_home_win_prob(
@@ -844,6 +865,12 @@ def _predict_home_win_prob(
     if not use_uncertainty:
         if calibrator is None:
             return _margin_to_home_win_prob(pred_margin)
+        if calibrator.method == "sigma":
+            sigma_value = np.full_like(
+                np.asarray(pred_margin, dtype=float),
+                float(calibrator.model),
+            )
+            return np.clip(_margin_to_home_win_prob_with_sigma(pred_margin, sigma_value), 0.0, 1.0)
         if calibrator.method == "elo":
             return np.clip(_margin_to_home_win_prob_elo_style(pred_margin), 0.0, 1.0)
         if calibrator.method == "isotonic":
@@ -1122,6 +1149,81 @@ def _coerce_sigma(
     return sigma_arr
 
 
+def _estimate_win_prob_sigma_from_residuals(
+    pred_margin: np.ndarray,
+    actual_margin: np.ndarray,
+    *,
+    sample_weight: np.ndarray | None = None,
+    min_sigma: float = MIN_WIN_PROB_SIGMA,
+) -> float:
+    """Estimate a single sigma from margin residuals for deterministic calibration."""
+    pred_margin_arr = np.asarray(pred_margin, dtype=float)
+    actual_margin_arr = np.asarray(actual_margin, dtype=float)
+    residual = actual_margin_arr - pred_margin_arr
+    if sample_weight is None:
+        residual_centered = residual - float(np.mean(residual))
+        sigma = float(np.sqrt(np.mean(residual_centered**2)))
+    else:
+        weights = np.asarray(sample_weight, dtype=float)
+        residual_mean = float(np.average(residual, weights=weights))
+        sigma = float(np.sqrt(np.average((residual - residual_mean) ** 2, weights=weights)))
+    return max(sigma, float(min_sigma))
+
+
+def _select_platt_regularization(
+    pred_margin: np.ndarray,
+    actual_home_win: np.ndarray,
+    *,
+    sample_weight: np.ndarray | None,
+    seasons: np.ndarray | None,
+    excluded_season: int | None,
+) -> float:
+    """Choose the Platt-scaling regularization strength using only pre-eval seasons."""
+    if seasons is None:
+        return 1.0
+
+    seasons_arr = np.asarray(seasons)
+    if excluded_season is not None:
+        tuning_mask = seasons_arr != excluded_season
+    else:
+        tuning_mask = np.ones(len(seasons_arr), dtype=bool)
+
+    tuning_seasons = sorted({int(season) for season in seasons_arr[tuning_mask]})
+    if len(tuning_seasons) < 2:
+        return 1.0
+
+    validation_season = tuning_seasons[-1]
+    train_mask = tuning_mask & (seasons_arr < validation_season)
+    validation_mask = tuning_mask & (seasons_arr == validation_season)
+    if train_mask.sum() == 0 or validation_mask.sum() == 0:
+        return 1.0
+
+    train_outcomes = np.asarray(actual_home_win)[train_mask]
+    validation_outcomes = np.asarray(actual_home_win)[validation_mask]
+    if len(np.unique(train_outcomes)) < 2 or len(np.unique(validation_outcomes)) < 2:
+        return 1.0
+
+    pred_margin_arr = np.asarray(pred_margin, dtype=float)
+    weights_arr = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
+    best_c = 1.0
+    best_loss = float("inf")
+    for c_value in PLATT_C_GRID:
+        model = LogisticRegression(solver="lbfgs", C=float(c_value))
+        fit_weights = None if weights_arr is None else weights_arr[train_mask]
+        model.fit(
+            pred_margin_arr[train_mask].reshape(-1, 1),
+            train_outcomes,
+            sample_weight=fit_weights,
+        )
+        validation_prob = model.predict_proba(pred_margin_arr[validation_mask].reshape(-1, 1))[:, 1]
+        validation_prob = np.clip(validation_prob, 1e-15, 1.0 - 1e-15)
+        validation_loss = log_loss(validation_outcomes, validation_prob, labels=[0, 1])
+        if validation_loss < best_loss:
+            best_loss = float(validation_loss)
+            best_c = float(c_value)
+    return best_c
+
+
 def _margin_to_home_win_prob_elo_style(
     margin: np.ndarray,
     *,
@@ -1284,9 +1386,16 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
     info: dict[str, Any] = {}
 
     def _capture(prefix: str, estimator: Any) -> None:
+        best_iteration_recorded = False
         for key in ("best_iteration", "best_score", "best_ntree_limit"):
             if hasattr(estimator, key):
                 info[f"{prefix}.{key}"] = getattr(estimator, key)
+                if key == "best_iteration":
+                    best_iteration_recorded = True
+        if not best_iteration_recorded and hasattr(estimator, "get_booster"):
+            booster = estimator.get_booster()
+            if hasattr(booster, "num_boosted_rounds"):
+                info[f"{prefix}.best_iteration"] = int(booster.num_boosted_rounds()) - 1
 
     if isinstance(model, ScoreModel):
         _capture("away_model", model.away_model)

@@ -18,6 +18,18 @@ def test_team_division_mapping_covers_all_canonical_teams() -> None:
     assert set(constants.TEAM_TO_CONFERENCE.values()) == {"AFC", "NFC"}
 
 
+def test_historical_division_map_handles_pre_realignment_alignment() -> None:
+    """Season-aware division helpers should switch to the pre-2002 alignment."""
+    old_map = constants.division_map_for_season(2001)
+    new_map = constants.division_map_for_season(2002)
+
+    assert old_map["ARI"] == "NFC East"
+    assert old_map["SEA"] == "AFC West"
+    assert "HOU" not in old_map
+    assert new_map["ARI"] == "NFC West"
+    assert new_map["SEA"] == "NFC West"
+
+
 def test_team_alias_mapping_normalizes_to_canonical() -> None:
     """Ensure team aliases normalize to canonical abbreviations."""
     for canonical_abbr, meta in constants.TEAM_MAPPING.items():
@@ -164,6 +176,28 @@ def test_pbp_count_columns_are_excluded_from_opponent_generation() -> None:
 
     for col in constants.PBP_COUNT_COLUMNS:
         assert col in excluded, f"{col} would be duplicated as opponent_{col}"
+
+
+def test_sack_mirror_inputs_are_excluded_from_opponent_generation() -> None:
+    """Sack events should be excluded before ETL builds duplicate opponent mirrors."""
+    excluded = set(constants.EXCLUDE_FROM_OPPONENT_STATS)
+
+    assert "def_sacks" in excluded
+    assert "times_sacked" in excluded
+
+
+def test_rare_events_feature_group_markers_cover_the_noise_family() -> None:
+    """The rare-event ablation group should name the exact noise-family columns."""
+    markers = set(constants.FEATURE_GROUP_COLUMN_MARKERS["rare_events"])
+
+    assert markers == {
+        "special_teams_tds",
+        "def_fumbles",
+        "fumble_recovery_tds",
+        "2pt_conversions",
+        "def_safeties",
+        "def_tds",
+    }
 
 
 def test_pbp_feature_group_markers_catch_new_columns_only() -> None:

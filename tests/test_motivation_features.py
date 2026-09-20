@@ -142,3 +142,40 @@ def test_motivation_division_clinch_proxy_uses_max_wins_other() -> None:
 
     assert out["away_division_rank"].to_list() == [1]
     assert out["away_division_clinched_proxy"].to_list() == [1]
+
+
+def test_motivation_features_use_historical_divisions_before_2002() -> None:
+    """Historical division ranks should use the pre-2002 alignment."""
+    season = 2001
+
+    schedule = _schedule_rows(
+        {
+            "season": season,
+            "week": 1,
+            "game_type": "REG",
+            "away_abbr": "ARI",
+            "home_abbr": "DAL",
+            "away_score": 24,
+            "home_score": 17,
+        },
+        {
+            "season": season,
+            "week": 1,
+            "game_type": "REG",
+            "away_abbr": "SF",
+            "home_abbr": "ATL",
+            "away_score": 20,
+            "home_score": 10,
+        },
+    )
+
+    out = polars_utils.add_motivation_features(
+        _games_to_predict("ARI", "DAL"),
+        schedule,
+        season=season,
+        week=2,
+        include_postseason=False,
+    )
+
+    assert out["away_division_rank"].to_list() == [1]
+    assert out["home_division_rank"].to_list() == [2]

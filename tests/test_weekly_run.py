@@ -87,3 +87,51 @@ def test_stage_marker_reuse(tmp_path: Path) -> None:
     )
     assert weekly_run._stage_can_reuse(marker, "abc123", "def456", [output_path])
     assert not weekly_run._stage_can_reuse(marker, "abc123", "wrong", [output_path])
+
+
+def test_pick_best_row_prefers_deterministic_metrics() -> None:
+    """WF candidate selection should use the deterministic probability instrument."""
+    rows = [
+        {
+            "label": "configured-better",
+            "brier": 0.20,
+            "log_loss": 0.60,
+            "deterministic_brier": 0.22,
+            "deterministic_log_loss": 0.62,
+        },
+        {
+            "label": "deterministic-better",
+            "brier": 0.23,
+            "log_loss": 0.63,
+            "deterministic_brier": 0.19,
+            "deterministic_log_loss": 0.59,
+        },
+    ]
+
+    assert weekly_run._pick_best_row(rows)["label"] == "deterministic-better"
+
+
+def test_rank_summary_prefers_deterministic_metrics() -> None:
+    """WF comparison ranking should sort by deterministic Brier then deterministic log loss."""
+    frame = pd.DataFrame(
+        [
+            {
+                "label": "configured-better",
+                "brier": 0.20,
+                "log_loss": 0.60,
+                "deterministic_brier": 0.22,
+                "deterministic_log_loss": 0.62,
+            },
+            {
+                "label": "deterministic-better",
+                "brier": 0.23,
+                "log_loss": 0.63,
+                "deterministic_brier": 0.19,
+                "deterministic_log_loss": 0.59,
+            },
+        ]
+    )
+
+    ranked = weekly_run._rank_summary(frame)
+    assert ranked.iloc[0]["label"] == "deterministic-better"
+    assert ranked.iloc[0]["rank"] == 1

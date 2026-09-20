@@ -49,6 +49,40 @@ NUMERIC_DTYPES = {
 }
 
 
+def _division_expr(
+    team_col: str, *, season: int | None = None, season_col: str | None = None
+) -> pl.Expr:
+    """Return a season-aware team-division expression."""
+    team_expr = pl.col(team_col)
+    if season_col is None:
+        return team_expr.replace_strict(constants.division_map_for_season(season), default=None)
+
+    historical = team_expr.replace_strict(constants.PRE_2002_TEAM_TO_DIVISION, default=None)
+    modern = team_expr.replace_strict(constants.TEAM_TO_DIVISION, default=None)
+    return (
+        pl.when(pl.col(season_col) < constants.NFL_REALIGNMENT_SEASON)
+        .then(historical)
+        .otherwise(modern)
+    )
+
+
+def _conference_expr(
+    team_col: str, *, season: int | None = None, season_col: str | None = None
+) -> pl.Expr:
+    """Return a season-aware team-conference expression."""
+    team_expr = pl.col(team_col)
+    if season_col is None:
+        return team_expr.replace_strict(constants.conference_map_for_season(season), default=None)
+
+    historical = team_expr.replace_strict(constants.PRE_2002_TEAM_TO_CONFERENCE, default=None)
+    modern = team_expr.replace_strict(constants.TEAM_TO_CONFERENCE, default=None)
+    return (
+        pl.when(pl.col(season_col) < constants.NFL_REALIGNMENT_SEASON)
+        .then(historical)
+        .otherwise(modern)
+    )
+
+
 def compute_team_records_before_week(
     schedule_df: pl.DataFrame,
     *,
@@ -142,20 +176,12 @@ def compute_team_records_before_week(
 
     team_games = pl.concat([home_rows, away_rows], how="vertical")
 
-    division_map = constants.TEAM_TO_DIVISION
-    conference_map = constants.TEAM_TO_CONFERENCE
     team_games = team_games.with_columns(
         [
-            pl.col("team_abbr").replace_strict(division_map, default=None).alias("team_division"),
-            pl.col("opponent_abbr")
-            .replace_strict(division_map, default=None)
-            .alias("opp_division"),
-            pl.col("team_abbr")
-            .replace_strict(conference_map, default=None)
-            .alias("team_conference"),
-            pl.col("opponent_abbr")
-            .replace_strict(conference_map, default=None)
-            .alias("opp_conference"),
+            _division_expr("team_abbr", season=season).alias("team_division"),
+            _division_expr("opponent_abbr", season=season).alias("opp_division"),
+            _conference_expr("team_abbr", season=season).alias("team_conference"),
+            _conference_expr("opponent_abbr", season=season).alias("opp_conference"),
         ]
     ).with_columns(
         [
@@ -234,8 +260,8 @@ def compute_team_records_before_week(
 def add_divisional_matchup_feature(df: pl.DataFrame) -> pl.DataFrame:
     """Add an `is_divisional_matchup` feature for each game.
 
-    A divisional matchup is defined as away/home teams sharing the same division, based on
-    `constants.TEAM_TO_DIVISION`.
+    A divisional matchup is defined as away/home teams sharing the same division. When a `season`
+    column is available, the helper uses the pre-2002 alignment for those rows.
 
     Args:
         df: DataFrame containing `away_abbr` and `home_abbr`.
@@ -249,9 +275,12 @@ def add_divisional_matchup_feature(df: pl.DataFrame) -> pl.DataFrame:
     if missing:
         raise ValueError(f"df missing required columns: {missing}")
 
-    division_map = constants.TEAM_TO_DIVISION
-    away_div = pl.col("away_abbr").replace_strict(division_map, default=None)
-    home_div = pl.col("home_abbr").replace_strict(division_map, default=None)
+    if "season" in df.columns:
+        away_div = _division_expr("away_abbr", season_col="season")
+        home_div = _division_expr("home_abbr", season_col="season")
+    else:
+        away_div = _division_expr("away_abbr")
+        home_div = _division_expr("home_abbr")
 
     return df.with_columns(
         [(away_div == home_div).fill_null(False).cast(pl.Int32).alias("is_divisional_matchup")]
@@ -337,10 +366,9 @@ def compute_team_next_week_context(
 
     joined = current_team.join(next_team, on="team_abbr", how="left")
 
-    division_map = constants.TEAM_TO_DIVISION
-    next_is_div = pl.col("team_abbr").replace_strict(division_map, default=None) == pl.col(
-        "next_opponent_abbr"
-    ).replace_strict(division_map, default=None)
+    next_is_div = _division_expr("team_abbr", season=season) == _division_expr(
+        "next_opponent_abbr", season=season
+    )
 
     return joined.with_columns(
         [
@@ -541,12 +569,8 @@ def compute_team_standings_before_week(
 
     records = records.with_columns(
         [
-            pl.col("team_abbr")
-            .replace_strict(constants.TEAM_TO_DIVISION, default=None)
-            .alias("division"),
-            pl.col("team_abbr")
-            .replace_strict(constants.TEAM_TO_CONFERENCE, default=None)
-            .alias("conference"),
+            _division_expr("team_abbr", season=season).alias("division"),
+            _conference_expr("team_abbr", season=season).alias("conference"),
         ]
     )
 

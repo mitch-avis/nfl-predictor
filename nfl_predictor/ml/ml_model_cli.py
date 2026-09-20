@@ -188,7 +188,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--win-prob-calibration",
-        choices=["none", "platt", "isotonic", "elo", "auto", "logistic"],
+        choices=["none", "platt", "isotonic", "sigma", "elo", "auto", "logistic"],
         default="isotonic",
         help="Calibration method for win probabilities (logistic is an alias for platt).",
     )

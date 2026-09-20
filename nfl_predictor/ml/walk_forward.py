@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 
 from nfl_predictor import constants, ml_model
+from nfl_predictor.ml import feature_spec as feature_spec_utils
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
@@ -36,6 +37,7 @@ from nfl_predictor.utils.logger import log
 DEFAULT_CALIBRATION_WEEKS = 4
 DEFAULT_RANDOM_SEED = 42
 RELIABILITY_BINS = 10
+BOOTSTRAP_SAMPLES = 5000
 
 # Shared root for per-fold checkpoints. Each run writes into a subdirectory named for its
 # fingerprint, so any identical walk-forward (from any script) resumes where it stopped and
@@ -49,11 +51,19 @@ SUMMARY_METRICS = (
     "total_mae",
     "brier",
     "log_loss",
+    "deterministic_brier",
+    "deterministic_log_loss",
+    "market_brier",
+    "market_log_loss",
+    "deterministic_brier_vs_market",
+    "deterministic_log_loss_vs_market",
     "reliability_ece",
     "expected_points",
     "actual_points",
     "picks_correct",
     "pick_accuracy",
+    "deterministic_pick_accuracy",
+    "market_pick_accuracy",
     "market_margin_resid_mae",
     "market_total_resid_mae",
     "margin_p10_p90_coverage",
@@ -273,20 +283,21 @@ def select_calibration_data(
 ) -> pd.DataFrame:
     """Select time-aware calibration data from the training window.
 
-    Uses the last `calibration_weeks` weeks of the eval season strictly before `eval_week`.
-    Returns empty when insufficient or unavailable.
+    Uses the previous two seasons plus the completed weeks of the eval season strictly before
+    `eval_week`. A positive `calibration_weeks` enables the pooled selector; zero disables it.
     """
     if calibration_weeks <= 0:
         return train_df.iloc[0:0].copy()
-    season_df = train_df[train_df["season"] == eval_season].copy()
-    if season_df.empty:
-        return season_df
-    eligible_weeks = sorted(season_df["week"].dropna().unique())
-    eligible_weeks = [week for week in eligible_weeks if week < eval_week]
-    if len(eligible_weeks) < calibration_weeks:
-        return season_df.iloc[0:0].copy()
-    selected_weeks = eligible_weeks[-calibration_weeks:]
-    return season_df[season_df["week"].isin(selected_weeks)].copy()
+    if "season" not in train_df.columns or "week" not in train_df.columns:
+        return train_df.iloc[0:0].copy()
+
+    season = pd.to_numeric(train_df["season"], errors="coerce")
+    week = pd.to_numeric(train_df["week"], errors="coerce")
+    lower_season = int(eval_season) - 2
+    mask = ((season >= lower_season) & (season < eval_season)) | (
+        (season == eval_season) & (week < eval_week)
+    )
+    return train_df.loc[mask].copy()
 
 
 def summarize_eval_window(
@@ -364,6 +375,9 @@ def _fit_calibrator(
     actual_home_win: np.ndarray,
     method: str,
     sample_weight: np.ndarray | None = None,
+    actual_margin: np.ndarray | None = None,
+    seasons: np.ndarray | None = None,
+    excluded_season: int | None = None,
 ) -> ml_model.WinProbCalibrator | None:
     method = method.lower()
     if method == "none":
@@ -373,8 +387,256 @@ def _fit_calibrator(
         log.info("Calibration skipped: only one outcome class present.")
         return None
     return ml_model._fit_win_prob_calibrator(
-        pred_margin, actual_home_win, method, sample_weight=sample_weight
+        pred_margin,
+        actual_home_win,
+        method,
+        sample_weight=sample_weight,
+        actual_margin=actual_margin,
+        seasons=seasons,
+        excluded_season=excluded_season,
     )
+
+
+def _resolve_market_home_win_prob(frame: pd.DataFrame) -> np.ndarray:
+    """Return market home-win probabilities using no-vig moneylines or a spread fallback."""
+    market_frame = feature_spec_utils._add_market_transforms(frame)
+    market_prob = np.full(len(market_frame), np.nan, dtype=float)
+
+    if {"home_market_prob", "away_market_prob"}.issubset(market_frame.columns):
+        home_raw = pd.to_numeric(market_frame["home_market_prob"], errors="coerce").to_numpy(
+            dtype=float
+        )
+        away_raw = pd.to_numeric(market_frame["away_market_prob"], errors="coerce").to_numpy(
+            dtype=float
+        )
+        market_prob = ml_model._normalize_no_vig(home_raw, away_raw)
+
+    if "market_home_margin" in market_frame.columns:
+        spread_margin = pd.to_numeric(market_frame["market_home_margin"], errors="coerce").to_numpy(
+            dtype=float
+        )
+        spread_prob = ml_model._margin_to_home_win_prob(spread_margin)
+        missing = ~np.isfinite(market_prob)
+        market_prob[missing] = spread_prob[missing]
+
+    return metrics_utils.clip_probabilities(market_prob)
+
+
+def _probability_summary_for_column(
+    frame: pd.DataFrame,
+    *,
+    column: str,
+    prefix: str,
+) -> dict[str, float]:
+    """Compute prefixed probability metrics for one probability column when available."""
+    if column not in frame.columns:
+        return {}
+
+    probs = pd.to_numeric(frame[column], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(probs)
+    if not valid.any():
+        return {}
+
+    actual_home_win = pd.to_numeric(frame.loc[valid, "actual_home_win"], errors="coerce").to_numpy(
+        dtype=int
+    )
+    actual_margin = pd.to_numeric(frame.loc[valid, "actual_margin"], errors="coerce").to_numpy(
+        dtype=float
+    )
+    return metrics_utils.probability_summary(
+        actual_home_win,
+        actual_margin,
+        probs[valid],
+        prefix=prefix,
+    )
+
+
+def _paired_probability_differences(
+    frame: pd.DataFrame,
+    *,
+    model_column: str,
+    market_column: str,
+    prefix: str,
+) -> dict[str, float]:
+    """Compute paired probability metric deltas against the market on shared valid rows."""
+    if model_column not in frame.columns or market_column not in frame.columns:
+        return {}
+
+    model_prob = pd.to_numeric(frame[model_column], errors="coerce").to_numpy(dtype=float)
+    market_prob = pd.to_numeric(frame[market_column], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(model_prob) & np.isfinite(market_prob)
+    if not valid.any():
+        return {}
+
+    actual_home_win = pd.to_numeric(frame.loc[valid, "actual_home_win"], errors="coerce").to_numpy(
+        dtype=int
+    )
+    actual_margin = pd.to_numeric(frame.loc[valid, "actual_margin"], errors="coerce").to_numpy(
+        dtype=float
+    )
+    model_metrics = metrics_utils.probability_summary(
+        actual_home_win,
+        actual_margin,
+        model_prob[valid],
+    )
+    market_metrics = metrics_utils.probability_summary(
+        actual_home_win,
+        actual_margin,
+        market_prob[valid],
+    )
+    return {
+        f"{prefix}_brier_vs_market": model_metrics["brier"] - market_metrics["brier"],
+        f"{prefix}_log_loss_vs_market": model_metrics["log_loss"] - market_metrics["log_loss"],
+    }
+
+
+def _bootstrap_probability_differences(
+    frame: pd.DataFrame,
+    *,
+    model_column: str,
+    market_column: str,
+    prefix: str,
+    n_samples: int,
+    seed: int,
+) -> dict[str, float]:
+    """Bootstrap paired probability metric deltas against the market."""
+    if n_samples <= 0 or model_column not in frame.columns or market_column not in frame.columns:
+        return {}
+
+    model_prob = pd.to_numeric(frame[model_column], errors="coerce").to_numpy(dtype=float)
+    market_prob = pd.to_numeric(frame[market_column], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(model_prob) & np.isfinite(market_prob)
+    if not valid.any():
+        return {}
+
+    actual_home_win = pd.to_numeric(frame.loc[valid, "actual_home_win"], errors="coerce").to_numpy(
+        dtype=int
+    )
+    actual_margin = pd.to_numeric(frame.loc[valid, "actual_margin"], errors="coerce").to_numpy(
+        dtype=float
+    )
+    model_prob = model_prob[valid]
+    market_prob = market_prob[valid]
+    n_rows = int(len(actual_home_win))
+    rng = np.random.default_rng(int(seed))
+
+    brier_diffs = np.empty(int(n_samples), dtype=float)
+    log_loss_diffs = np.empty(int(n_samples), dtype=float)
+
+    for sample_index in range(int(n_samples)):
+        indices = rng.integers(0, n_rows, size=n_rows)
+        sampled_actual_home_win = actual_home_win[indices]
+        sampled_actual_margin = actual_margin[indices]
+        sampled_model_prob = model_prob[indices]
+        sampled_market_prob = market_prob[indices]
+        model_metrics = metrics_utils.probability_summary(
+            sampled_actual_home_win,
+            sampled_actual_margin,
+            sampled_model_prob,
+        )
+        market_metrics = metrics_utils.probability_summary(
+            sampled_actual_home_win,
+            sampled_actual_margin,
+            sampled_market_prob,
+        )
+        brier_diffs[sample_index] = model_metrics["brier"] - market_metrics["brier"]
+        log_loss_diffs[sample_index] = model_metrics["log_loss"] - market_metrics["log_loss"]
+
+    return {
+        f"{prefix}_brier_vs_market_ci_low": float(np.nanpercentile(brier_diffs, 2.5)),
+        f"{prefix}_brier_vs_market_ci_high": float(np.nanpercentile(brier_diffs, 97.5)),
+        f"{prefix}_log_loss_vs_market_ci_low": float(np.nanpercentile(log_loss_diffs, 2.5)),
+        f"{prefix}_log_loss_vs_market_ci_high": float(np.nanpercentile(log_loss_diffs, 97.5)),
+    }
+
+
+def _probability_window_rows(
+    predictions: pd.DataFrame,
+    *,
+    seed: int,
+) -> list[dict[str, Any]]:
+    """Build deterministic versus market summaries for the standard report windows."""
+    if predictions.empty or "week" not in predictions.columns:
+        return []
+
+    windows = [
+        ("week_1_only", "week 1 only", predictions["week"] == 1),
+        ("week_2_only", "week 2 only", predictions["week"] == 2),
+        ("weeks_3_18", "weeks 3-18", predictions["week"] >= 3),
+        ("all_weeks", "all weeks", pd.Series(True, index=predictions.index)),
+    ]
+
+    rows: list[dict[str, Any]] = []
+    for window_key, label, mask in windows:
+        frame = predictions.loc[mask].copy()
+        if frame.empty:
+            continue
+        row = {
+            "window": window_key,
+            "label": label,
+            **_aggregate_metrics(
+                frame,
+                market_anchor=(
+                    "market_baseline_margin" in frame.columns
+                    and "market_baseline_total" in frame.columns
+                ),
+            ),
+        }
+        row.update(
+            _bootstrap_probability_differences(
+                frame,
+                model_column="deterministic_home_win_prob",
+                market_column="market_home_win_prob",
+                prefix="deterministic",
+                n_samples=BOOTSTRAP_SAMPLES,
+                seed=seed,
+            )
+        )
+        rows.append(row)
+    return rows
+
+
+def _estimator_best_iteration(estimator: Any) -> int | None:
+    """Return the effective best iteration for an estimator, with a full-budget fallback."""
+    best_iteration = getattr(estimator, "best_iteration", None)
+    if best_iteration is not None:
+        return int(best_iteration)
+    if hasattr(estimator, "get_booster"):
+        booster = estimator.get_booster()
+        if hasattr(booster, "num_boosted_rounds"):
+            return int(booster.num_boosted_rounds()) - 1
+    return None
+
+
+def _iteration_details(models: dict[str, Any]) -> dict[str, Any]:
+    """Return per-head iteration details and warning flags for a fold report.
+
+    `best_iteration` is always recorded. XGBoost only sets its own `best_iteration` when early
+    stopping ran, so `early_stopped` records whether it did; a head that used its whole tree
+    budget by configuration is not "at the cap" in any diagnostic sense and is not flagged.
+    The `at_cap` flag therefore means early stopping ran and never fired, and `below_10` means
+    a head has suspiciously few trees whichever way it was fit.
+    """
+    details: dict[str, Any] = {}
+    warnings: list[str] = []
+    for name, estimator in models.items():
+        best_iteration = _estimator_best_iteration(estimator)
+        if best_iteration is None:
+            continue
+        early_stopped = getattr(estimator, "best_iteration", None) is not None
+        details[f"{name}.best_iteration"] = best_iteration
+        details[f"{name}.early_stopped"] = early_stopped
+        at_cap = False
+        n_estimators = getattr(estimator, "n_estimators", None)
+        if early_stopped and n_estimators is not None:
+            at_cap = best_iteration >= int(n_estimators) - 1
+        if best_iteration < 10 or at_cap:
+            warning = "below_10" if best_iteration < 10 else "at_cap"
+            details[f"{name}.warning"] = warning
+            warnings.append(f"{name}:{warning}")
+    if warnings:
+        details["iteration_warnings"] = warnings
+    return details
 
 
 def _resolve_xgb_params(config: WalkForwardConfig) -> dict[str, Any]:
@@ -585,6 +847,9 @@ def run_walk_forward_backtest(
         "include_quantiles": config.include_quantiles,
         "disable_pruning": config.disable_pruning,
         "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
+        # In-season fits run the full `n_estimators` budget; `early_stopping_rounds` in the
+        # config is kept for the fingerprint and for tuning, and is not applied here.
+        "in_season_early_stopping": False,
     }
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
@@ -689,7 +954,7 @@ def run_walk_forward_backtest(
             x_eval=x_calibration,
             y_margin_eval=y_margin_calibration,
             y_total_eval=y_total_calibration,
-            early_stopping_rounds=config.early_stopping_rounds,
+            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
 
@@ -705,7 +970,7 @@ def run_walk_forward_backtest(
                 quantiles,
                 x_eval=x_calibration,
                 y_eval=y_margin_calibration,
-                early_stopping_rounds=config.early_stopping_rounds,
+                early_stopping_rounds=None,
                 sample_weight=train_weight,
             )
             total_quantiles = ml_model._fit_quantile_models(
@@ -715,7 +980,7 @@ def run_walk_forward_backtest(
                 quantiles,
                 x_eval=x_calibration,
                 y_eval=y_total_calibration,
-                early_stopping_rounds=config.early_stopping_rounds,
+                early_stopping_rounds=None,
                 sample_weight=train_weight,
             )
 
@@ -759,16 +1024,27 @@ def run_walk_forward_backtest(
                     pred_margin_inputs = pred_margin_calibration / sigma_calibration
                 away_col, home_col = target_columns
                 actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
+                actual_margin_calibration = calibration_df[home_col].to_numpy(
+                    dtype=float
+                ) - calibration_df[away_col].to_numpy(dtype=float)
                 calibration_recency = compute_recency_sample_weight(
                     calibration_df,
                     half_life_weeks=config.recency_half_life_weeks,
                     half_life_seasons=config.recency_half_life_seasons,
+                )
+                calibration_seasons = (
+                    calibration_df["season"].to_numpy(dtype=int)
+                    if "season" in calibration_df.columns
+                    else None
                 )
                 calibrator = _fit_calibrator(
                     pred_margin_inputs,
                     actual_home_win.to_numpy(),
                     resolved_calibration,
                     sample_weight=calibration_recency,
+                    actual_margin=actual_margin_calibration,
+                    seasons=calibration_seasons,
+                    excluded_season=(int(fold.season) if calibration_seasons is not None else None),
                 )
                 calibration_method = "none" if calibrator is None else calibrator.method
 
@@ -800,6 +1076,7 @@ def run_walk_forward_backtest(
                 pred_margin_quantiles,
                 fallback=constants.SCORE_DIFF_STD_DEV,
             )
+        deterministic_home_win_prob = ml_model._margin_to_home_win_prob(pred_margin)
         home_win_prob = ml_model.predict_home_win_prob(
             pred_margin,
             calibrator,
@@ -817,6 +1094,7 @@ def run_walk_forward_backtest(
                 fold.eval_df, home_win_prob, market_prob_config
             )
         home_win_prob = metrics_utils.clip_probabilities(home_win_prob)
+        market_home_win_prob = _resolve_market_home_win_prob(fold.eval_df)
 
         away_col, home_col = target_columns
         away_score = fold.eval_df[away_col].to_numpy(dtype=float)
@@ -845,6 +1123,10 @@ def run_walk_forward_backtest(
         fold_predictions["predicted_away_score"] = pred_away
         fold_predictions["home_win_prob"] = home_win_prob
         fold_predictions["away_win_prob"] = 1 - home_win_prob
+        fold_predictions["deterministic_home_win_prob"] = deterministic_home_win_prob
+        fold_predictions["deterministic_away_win_prob"] = 1 - deterministic_home_win_prob
+        fold_predictions["market_home_win_prob"] = market_home_win_prob
+        fold_predictions["market_away_win_prob"] = 1 - market_home_win_prob
         fold_predictions["actual_margin"] = actual_margin
         fold_predictions["actual_total"] = actual_total
         fold_predictions["actual_home_win"] = actual_home_win
@@ -860,37 +1142,27 @@ def run_walk_forward_backtest(
         prediction_frames.append(fold_predictions)
 
         games_count = int(len(fold_predictions))
-        metrics = {
-            "season": int(fold.season),
-            "week": int(fold.week),
-            "games": games_count,
-            **metrics_utils.margin_total_metrics(
-                actual_margin, actual_total, pred_margin, pred_total
-            ),
-            **metrics_utils.probability_metrics(actual_home_win, home_win_prob),
-            **metrics_utils.confidence_pool_summary(confidence_cols),
-            "calibration_method": calibration_method,
-        }
-        metrics["reliability_ece"] = metrics_utils.reliability_ece(
-            metrics_utils.reliability_table(
-                home_win_prob,
-                actual_home_win,
-                bins=RELIABILITY_BINS,
+        metrics = _aggregate_metrics(fold_predictions, market_anchor)
+        metrics["season"] = int(fold.season)
+        metrics["week"] = int(fold.week)
+        metrics["games"] = games_count
+        metrics["calibration_method"] = calibration_method
+        metrics.update(
+            _iteration_details(
+                {
+                    "margin_model": margin_model,
+                    "total_model": total_model,
+                    **{f"margin_q{q}": model for q, model in margin_quantiles.items()},
+                    **{f"total_q{q}": model for q, model in total_quantiles.items()},
+                }
             )
         )
-        picks_correct = int(metrics["picks_correct"])
-        metrics["pick_accuracy"] = picks_correct / games_count if games_count else 0.0
-
-        if market_anchor and baseline_margin_eval is not None and baseline_total_eval is not None:
-            actual_margin_resid = actual_margin - baseline_margin_eval
-            actual_total_resid = actual_total - baseline_total_eval
-            pred_margin_resid = pred_margin - baseline_margin_eval
-            pred_total_resid = pred_total - baseline_total_eval
-            metrics["market_margin_resid_mae"] = float(
-                np.mean(np.abs(actual_margin_resid - pred_margin_resid))
-            )
-            metrics["market_total_resid_mae"] = float(
-                np.mean(np.abs(actual_total_resid - pred_total_resid))
+        if metrics.get("iteration_warnings"):
+            log.warning(
+                "Walk-forward fold season %d week %d iteration warning(s): %s",
+                int(fold.season),
+                int(fold.week),
+                ", ".join(metrics["iteration_warnings"]),
             )
         # Saved before the callback, so a callback that stops the run keeps this week.
         if store is not None:
@@ -939,6 +1211,17 @@ def run_walk_forward_backtest(
         per_season_metrics.append(_aggregate_metrics(season_df, market_anchor))
 
     overall_metrics = _aggregate_metrics(predictions, market_anchor)
+    probability_windows = _probability_window_rows(predictions, seed=config.random_seed)
+    for row in probability_windows:
+        if row.get("window") == "all_weeks":
+            overall_metrics.update(
+                {
+                    key: value
+                    for key, value in row.items()
+                    if key.endswith("_ci_low") or key.endswith("_ci_high")
+                }
+            )
+            break
     reliability = metrics_utils.reliability_table(
         predictions["home_win_prob"].to_numpy(),
         predictions["actual_home_win"].to_numpy(),
@@ -954,6 +1237,7 @@ def run_walk_forward_backtest(
         "reliability": reliability,
         "season_win_totals": season_win_totals,
         "calibration_drift": calibration_drift,
+        "probability_windows": probability_windows,
         "predictions": predictions,
         "resolved_settings": resolved_settings,
         "resolved_eval_seasons": resolved_eval_seasons,
@@ -985,7 +1269,11 @@ def build_metrics_report(
 ) -> dict[str, Any]:
     """Build the JSON-serializable metrics report payload."""
     fold_summary = _summarize_fold_metrics(results["per_week"])
-    summary_table = _build_metrics_summary_table(results["overall"], fold_summary)
+    summary_table = _build_metrics_summary_table(
+        results["overall"],
+        fold_summary,
+        results.get("probability_windows") or [],
+    )
     return {
         "run_id": run_id,
         "created_at": created_at,
@@ -996,6 +1284,7 @@ def build_metrics_report(
             "per_season": results["per_season"],
             "overall": results["overall"],
             "fold_summary": fold_summary,
+            "windows": results.get("probability_windows") or [],
             "summary_table": summary_table,
         },
         "calibration": {
@@ -1059,7 +1348,7 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
         "weeks": weeks_count,
         "games": games_count,
         **metrics_utils.margin_total_metrics(actual_margin, actual_total, pred_margin, pred_total),
-        **metrics_utils.probability_metrics(actual_home_win, home_win_prob),
+        **metrics_utils.probability_summary(actual_home_win, actual_margin, home_win_prob),
         "expected_points": expected_points_total,
         "actual_points": actual_points_total,
         "picks_correct": picks_correct,
@@ -1070,10 +1359,32 @@ def _aggregate_metrics(frame: pd.DataFrame, market_anchor: bool) -> dict[str, An
         bins=RELIABILITY_BINS,
     )
     metrics["reliability_ece"] = metrics_utils.reliability_ece(reliability_bins)
-    metrics["pick_accuracy"] = picks_correct / games_count if games_count else 0.0
     if weeks_count:
         metrics["expected_points_avg"] = expected_points_total / weeks_count
         metrics["actual_points_avg"] = actual_points_total / weeks_count
+
+    metrics.update(
+        _probability_summary_for_column(
+            frame,
+            column="deterministic_home_win_prob",
+            prefix="deterministic",
+        )
+    )
+    metrics.update(
+        _probability_summary_for_column(
+            frame,
+            column="market_home_win_prob",
+            prefix="market",
+        )
+    )
+    metrics.update(
+        _paired_probability_differences(
+            frame,
+            model_column="deterministic_home_win_prob",
+            market_column="market_home_win_prob",
+            prefix="deterministic",
+        )
+    )
 
     if market_anchor and "market_baseline_margin" in frame.columns:
         baseline_margin = frame["market_baseline_margin"].to_numpy()
@@ -1245,6 +1556,7 @@ def _calibration_drift(predictions: pd.DataFrame) -> dict[str, list[dict[str, An
 def _build_metrics_summary_table(
     overall: dict[str, Any],
     fold_summary: dict[str, Any],
+    probability_windows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Build a summary table for first-class metrics."""
     rows: list[dict[str, Any]] = []
@@ -1261,6 +1573,23 @@ def _build_metrics_summary_table(
                     "overall": overall.get(metric),
                     "fold_mean": stats.get("mean"),
                     "fold_variance": stats.get("variance"),
+                }
+            )
+    for window in probability_windows:
+        for metric in ("deterministic_brier_vs_market", "deterministic_log_loss_vs_market"):
+            if metric not in window:
+                continue
+            rows.append(
+                {
+                    "metric": metric,
+                    "priority": "primary",
+                    "direction": "lower",
+                    "window": window.get("window"),
+                    "window_label": window.get("label"),
+                    "overall": window.get(metric),
+                    "ci_low": window.get(f"{metric}_ci_low"),
+                    "ci_high": window.get(f"{metric}_ci_high"),
+                    "games": window.get("games"),
                 }
             )
     return rows

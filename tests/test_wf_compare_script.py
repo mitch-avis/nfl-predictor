@@ -37,7 +37,17 @@ def test_run_one_forwards_checkpoint_settings(
     ) -> dict[str, object]:
         """Record the keyword arguments and return a minimal result."""
         captured.update(kwargs)
-        return {"overall": {}, "reliability": []}
+        return {
+            "overall": {
+                "deterministic_brier": 0.2,
+                "deterministic_log_loss": 0.6,
+                "market_brier": 0.21,
+                "market_log_loss": 0.61,
+                "deterministic_brier_vs_market": -0.01,
+                "deterministic_log_loss_vs_market": -0.01,
+            },
+            "reliability": [],
+        }
 
     monkeypatch.setattr(wf_compare.walk_forward, "run_walk_forward_backtest", fake_run)
     monkeypatch.setattr(wf_compare.metrics_utils, "reliability_ece", lambda _bins: 0.0)
@@ -67,3 +77,9 @@ def test_run_one_forwards_checkpoint_settings(
 
     assert captured == {"checkpoint_dir": tmp_path, "resume": False}
     assert row["label"] == "candidate"
+    assert row["deterministic_brier"] == pytest.approx(0.2)
+    assert row["deterministic_log_loss"] == pytest.approx(0.6)
+    assert row["market_brier"] == pytest.approx(0.21)
+    assert row["market_log_loss"] == pytest.approx(0.61)
+    assert row["deterministic_brier_vs_market"] == pytest.approx(-0.01)
+    assert row["deterministic_log_loss_vs_market"] == pytest.approx(-0.01)

@@ -19,12 +19,20 @@ METRIC_STRATEGY: dict[str, list[dict[str, str]]] = {
     "primary": [
         {"metric": "brier", "direction": "lower"},
         {"metric": "log_loss", "direction": "lower"},
+        {"metric": "deterministic_brier", "direction": "lower"},
+        {"metric": "deterministic_log_loss", "direction": "lower"},
+        {"metric": "market_brier", "direction": "lower"},
+        {"metric": "market_log_loss", "direction": "lower"},
+        {"metric": "deterministic_brier_vs_market", "direction": "lower"},
+        {"metric": "deterministic_log_loss_vs_market", "direction": "lower"},
         {"metric": "reliability_ece", "direction": "lower"},
     ],
     "secondary": [
         {"metric": "expected_points_avg", "direction": "higher"},
         {"metric": "actual_points_avg", "direction": "higher"},
         {"metric": "pick_accuracy", "direction": "higher"},
+        {"metric": "deterministic_pick_accuracy", "direction": "higher"},
+        {"metric": "market_pick_accuracy", "direction": "higher"},
     ],
     "tertiary": [
         {"metric": "margin_mae", "direction": "lower"},
@@ -63,6 +71,33 @@ def probability_metrics(actual_home_win: np.ndarray, home_win_prob: np.ndarray) 
         "brier": float(brier_score_loss(actual_home_win, probs)),
         "log_loss": float(log_loss(actual_home_win, probs_eps, labels=[0, 1])),
     }
+
+
+def probability_pick_accuracy(actual_margin: np.ndarray, home_win_prob: np.ndarray) -> float:
+    """Compute pick accuracy, treating tied games as incorrect for either side."""
+    margins = np.asarray(actual_margin, dtype=float)
+    probs = clip_probabilities(home_win_prob)
+    if len(margins) == 0:
+        return 0.0
+    predicted_home = probs >= 0.5
+    actual_home = margins > 0
+    correct = (predicted_home == actual_home) & (margins != 0)
+    return float(np.mean(correct))
+
+
+def probability_summary(
+    actual_home_win: np.ndarray,
+    actual_margin: np.ndarray,
+    home_win_prob: np.ndarray,
+    *,
+    prefix: str | None = None,
+) -> dict[str, float]:
+    """Return Brier, log loss, and pick accuracy for one probability path."""
+    metrics = probability_metrics(actual_home_win, home_win_prob)
+    metrics["pick_accuracy"] = probability_pick_accuracy(actual_margin, home_win_prob)
+    if prefix is None:
+        return metrics
+    return {f"{prefix}_{key}": value for key, value in metrics.items()}
 
 
 def confidence_pool_columns(

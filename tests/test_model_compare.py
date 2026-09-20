@@ -377,7 +377,9 @@ def test_fit_margin_total_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> Non
     )
     monkeypatch.setattr(ml_model, "predict_home_win_prob", lambda *_: np.array([0.7]))
     monkeypatch.setattr(ml_model, "adjust_home_win_prob", lambda _df, probs, _cfg: probs)
-    monkeypatch.setattr(model_compare.walk_forward, "_fit_calibrator", lambda *_: object())
+    monkeypatch.setattr(
+        model_compare.walk_forward, "_fit_calibrator", lambda *_args, **_kwargs: object()
+    )
 
     fold = walk_forward.WalkForwardFold(
         season=2024,
@@ -474,7 +476,7 @@ def test_fit_blended_fold_smoke_with_stubs(monkeypatch: MonkeyPatch) -> None:
     )
     monkeypatch.setattr(core, "_predict_home_win_prob", lambda *_: np.array([0.66]))
     monkeypatch.setattr(core, "_adjust_home_win_prob", lambda _df, probs, _cfg: probs)
-    monkeypatch.setattr(core, "_fit_win_prob_calibrator", lambda *_: object())
+    monkeypatch.setattr(core, "_fit_win_prob_calibrator", lambda *_args, **_kwargs: object())
 
     fold = walk_forward.WalkForwardFold(
         season=2024,

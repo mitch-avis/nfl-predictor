@@ -308,7 +308,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "wf_early_stopping_rounds",
             ml_model_core.DEFAULT_EARLY_STOPPING_ROUNDS,
         ),
-        help="Walk-forward: early stopping rounds (default aligns with training).",
+        help=(
+            "Walk-forward: recorded in the run config only; in-season fits run the full "
+            "n_estimators budget without early stopping."
+        ),
     )
     parser.add_argument(
         "--holdout-seasons",
@@ -391,7 +394,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "train_early_stopping_rounds",
             ml_model_core.DEFAULT_EARLY_STOPPING_ROUNDS,
         ),
-        help="Training: early stopping rounds.",
+        help=(
+            "Training: early stopping rounds for Optuna tuning trials only; the final "
+            "in-season fit runs the full n_estimators budget."
+        ),
     )
     parser.add_argument(
         "--tune",
@@ -778,14 +784,14 @@ def _market_modes(mode: str) -> list[tuple[str, bool, bool]]:
 
 
 def _pick_best_row(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    """Pick best row by (brier, log_loss) ascending."""
+    """Pick best row by deterministic Brier then deterministic log loss."""
     if not rows:
         raise ValueError("No walk-forward rows produced.")
 
     def key(row: dict[str, Any]) -> tuple[float, float]:
         return (
-            float(row.get("brier", float("inf"))),
-            float(row.get("log_loss", float("inf"))),
+            float(row.get("deterministic_brier", row.get("brier", float("inf")))),
+            float(row.get("deterministic_log_loss", row.get("log_loss", float("inf")))),
         )
 
     return dict(sorted(rows, key=key)[0])
@@ -962,8 +968,34 @@ def _build_summary_row(
         "market_mode": candidate["market_mode"],
         "brier": float(overall.get("brier", float("nan"))),
         "log_loss": float(overall.get("log_loss", float("nan"))),
+        "deterministic_brier": float(overall.get("deterministic_brier", float("nan"))),
+        "deterministic_log_loss": float(overall.get("deterministic_log_loss", float("nan"))),
+        "market_brier": float(overall.get("market_brier", float("nan"))),
+        "market_log_loss": float(overall.get("market_log_loss", float("nan"))),
+        "deterministic_brier_vs_market": float(
+            overall.get("deterministic_brier_vs_market", float("nan"))
+        ),
+        "deterministic_log_loss_vs_market": float(
+            overall.get("deterministic_log_loss_vs_market", float("nan"))
+        ),
+        "deterministic_brier_vs_market_ci_low": float(
+            overall.get("deterministic_brier_vs_market_ci_low", float("nan"))
+        ),
+        "deterministic_brier_vs_market_ci_high": float(
+            overall.get("deterministic_brier_vs_market_ci_high", float("nan"))
+        ),
+        "deterministic_log_loss_vs_market_ci_low": float(
+            overall.get("deterministic_log_loss_vs_market_ci_low", float("nan"))
+        ),
+        "deterministic_log_loss_vs_market_ci_high": float(
+            overall.get("deterministic_log_loss_vs_market_ci_high", float("nan"))
+        ),
         "reliability_ece": metrics_utils.reliability_ece(reliability),
         "pick_accuracy": float(overall.get("pick_accuracy", float("nan"))),
+        "deterministic_pick_accuracy": float(
+            overall.get("deterministic_pick_accuracy", float("nan"))
+        ),
+        "market_pick_accuracy": float(overall.get("market_pick_accuracy", float("nan"))),
         "margin_mae": float(overall.get("margin_mae", float("nan"))),
         "total_mae": float(overall.get("total_mae", float("nan"))),
         "expected_points_avg": float(overall.get("expected_points_avg", float("nan"))),
@@ -1016,10 +1048,17 @@ def _upsert_summary(
 
 
 def _rank_summary(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add a rank column using (brier, log_loss) ordering."""
+    """Add a rank column using deterministic Brier then deterministic log loss."""
     if frame.empty:
         return frame
-    ranked = frame.sort_values(["brier", "log_loss"], ascending=[True, True]).reset_index(drop=True)
+    primary_brier = "deterministic_brier" if "deterministic_brier" in frame.columns else "brier"
+    primary_log_loss = (
+        "deterministic_log_loss" if "deterministic_log_loss" in frame.columns else "log_loss"
+    )
+    ranked = frame.sort_values(
+        [primary_brier, primary_log_loss],
+        ascending=[True, True],
+    ).reset_index(drop=True)
     ranked["rank"] = range(1, len(ranked) + 1)
     return ranked
 

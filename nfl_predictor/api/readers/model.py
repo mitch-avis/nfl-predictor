@@ -73,6 +73,7 @@ def metrics_summary(path: Path) -> dict[str, Any]:
         "overall": _opt_dict(metrics.get("overall")),
         "per_season": _opt_list(metrics.get("per_season")),
         "per_week": _opt_list(metrics.get("per_week")),
+        "windows": _opt_list(metrics.get("windows")),
         "summary_table": _opt_list(metrics.get("summary_table")),
         "metric_strategy": _opt_dict(raw.get("metric_strategy")),
         "calibration": _opt_dict(raw.get("calibration")),
@@ -118,10 +119,14 @@ def feature_importance(path: Path, top: int = TOP_FEATURES) -> list[dict[str, An
 
 
 def wf_compare(path: Path) -> TablePayload:
-    """Return the candidate comparison table ranked by Brier then log loss."""
+    """Return the candidate comparison table ranked by the deterministic instrument."""
     frame: pl.DataFrame = cached(path, lambda p: pl.read_csv(p, infer_schema_length=10000))
     if "rank" in frame.columns:
         frame = frame.rename({"rank": "wf_rank"}).sort("wf_rank")
+    elif {"deterministic_brier", "deterministic_log_loss"} <= set(frame.columns):
+        frame = frame.sort(["deterministic_brier", "deterministic_log_loss"]).with_row_index(
+            "wf_rank", offset=1
+        )
     elif {"brier", "log_loss"} <= set(frame.columns):
         frame = frame.sort(["brier", "log_loss"]).with_row_index("wf_rank", offset=1)
     return project(frame, WF_COMPARE_COLUMNS)

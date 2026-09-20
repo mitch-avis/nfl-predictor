@@ -111,3 +111,39 @@ def test_compute_team_next_week_context_validates_schema() -> None:
         assert "missing required columns" in str(exc)
     else:
         raise AssertionError("Expected ValueError for missing required columns")
+
+
+def test_add_lookahead_features_uses_historical_divisions_before_2002() -> None:
+    """Next-week divisional context should use the pre-2002 alignment."""
+    schedule_df = pl.DataFrame(
+        {
+            "season": [2001, 2001, 2001, 2001],
+            "week": [1, 1, 2, 2],
+            "game_type": ["REG", "REG", "REG", "REG"],
+            "date": [
+                dt.date(2001, 9, 9),
+                dt.date(2001, 9, 9),
+                dt.date(2001, 9, 16),
+                dt.date(2001, 9, 16),
+            ],
+            "away_abbr": ["ARI", "SF", "ARI", "NYG"],
+            "home_abbr": ["DAL", "ATL", "PHI", "DAL"],
+        }
+    )
+
+    games_df = pl.DataFrame(
+        {
+            "away_abbr": ["ARI"],
+            "home_abbr": ["DAL"],
+            "away_win_pct": [0.0],
+            "home_win_pct": [0.0],
+        }
+    )
+
+    out = polars_utils.add_lookahead_features(games_df, schedule_df, season=2001, week=1)
+    row = out.row(0, named=True)
+
+    assert row["away_next_opponent_abbr"] == "PHI"
+    assert row["away_next_is_divisional_matchup"] == 1
+    assert row["home_next_opponent_abbr"] == "NYG"
+    assert row["home_next_is_divisional_matchup"] == 1

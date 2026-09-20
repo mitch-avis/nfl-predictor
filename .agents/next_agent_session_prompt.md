@@ -35,10 +35,14 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
 ## Starting state (verified 2026-09-19 by the audit session)
 
 - Branch `feat/m59-benchmark-instrument`, off `main` at `683acab`. Version `0.12.5` in
-  `pyproject.toml` and `uv.lock`. **Everything from `0.12.1` to `0.12.5` is uncommitted**: about
-  40 modified files plus `scripts/gate.sh` (new).
-- `scripts/gate.sh` exited `0` on this tree at the end of the audit session; the counts are in
-  the "validated baseline" bullet of `AGENTS.md`.
+  `pyproject.toml` and `uv.lock`. The `0.12.1` to `0.12.5` tree was committed on 2026-09-20 as
+  five commits, one per version (`e5ee418` instrument, `7189792` calibration, `db6e892` fit
+  parity, `532fd38` divisions / rare events / sack mirrors, `d9453cb` audit fixes, gate script,
+  docs and the version bump). The split is a hunk-level reconstruction; the intermediate
+  commits are not individually gate-clean, and the first commit's body names the two
+  `walk_forward.py` hunks that carry later material. Nothing is pushed.
+- `scripts/gate.sh` exited `0` on the committed tree on 2026-09-20 (`843 passed`, coverage
+  `92.63%`, every step ok); the counts match the "validated baseline" bullet of `AGENTS.md`.
 - Milestone 59 is closed and archived (`.agents/ARCHIVE.md`, Milestone 59) with two parts
   narrowed and reopened: the fitted-calibration pool is in-sample rather than out-of-fold
   (`.agents/TODO.md`, "From Milestone 59"), and `n_estimators` is untuned (task 55.7). The

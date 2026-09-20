@@ -39,12 +39,10 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   `db6e892`, `532fd38`, `d9453cb` plus `084f857`; the split is a hunk-level reconstruction and
   the first commit's body names the two `walk_forward.py` hunks that carry later material).
   Both branches were merged into `main` and pushed on 2026-09-20 (`main` at `70592e8`).
-- Active branch `chore/m59-etl-rebuild` off `main`, version `0.12.7`: `2d46083` fixes the
-  `0.12.4` defect that the first ETL rebuild exposed (the sack exclusion starved
-  `opponent_points_per_play`; six derived columns went null), `fec17d2` adds the matching rule
-  to `AGENTS.md`, and the `0.12.7` commit records the rebuild and its tie check in the docs.
-  `scripts/gate.sh` exited `0` on the branch tip (`846 passed`, coverage `92.67%`); the branch
-  is merged into `main` (`70592e8`) and pushed. Start task 54.0 on a fresh branch off `main`.
+- `chore/m59-etl-rebuild` (`0.12.6` fix, `0.12.7` record) is merged into `main` and pushed
+  (`main` at `9575ad8`). The session then ran the Week 2 refresh and the seed-7 noise control,
+  recorded in `docs/m59-noise-floor` as version `0.12.8` (docs only); that branch is to be
+  merged into `main` and pushed once the user says so.
 - Data on disk (2026-09-20 04:31 rebuild, second pass, `0.12.6` schema):
   `data/completed_games_ml.csv` `db6a78a3...` (`7278` rows, `513` columns); the through-2025
   cut `data/completed_games_ml.m59_through_2025.csv` `cf42ec55...` (`7261` rows) is the
@@ -53,16 +51,18 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   `463` features, `0` flags. ETL logs and the cut script are in `models/etl_m59_rebuild/`.
 - **Reference arm on the rebuilt build**: `models/wf_m59_rebuild_2023_2025_from_week1/`
   (checkpoints `34c17e508ab015a80662`), a tie with the standing benchmark by the rule in its
-  `HYPOTHESIS.md`, rescored independently in its `REVIEW.md`; the four-window table is in
-  `AGENTS.md` under "Reference arm on the 2026-09-20 rebuild". Compare new arms on the rebuilt
-  build against this run. Two flags from the review: all 816 margins moved (max `5.16`), and
-  weeks-3-18 pick accuracy fell `0.6861` to `0.6764`; both are recorded, neither changed the
-  decision.
+  `HYPOTHESIS.md`, rescored in its `REVIEW.md`; its table is in `AGENTS.md` under "Reference arm
+  on the 2026-09-20 rebuild". **Fit-noise floor**: the same arm with `--random-seed 7`
+  (`models/wf_m59_rebuild_2023_2025_from_week1_seed7/`, rescored in its `REVIEW.md`) moves every
+  margin (median `0.91`), flips 46 picks and shifts weeks-3-18 Brier by `+0.0020`
+  `[-0.0006, +0.0045]`; the paragraph beside the reference arm in `AGENTS.md` states what a
+  single three-season arm cannot resolve. Read every new arm against that floor.
+- The Week 2 package for the Sunday and Monday games is `models/weekly_2026_week_02_refresh/`
+  (lines refreshed 10:13 MDT, run finished 10:45 MDT, same selected config as Week 2's first run).
 - Next task: 54.0 (schedule skeleton and coverage check) on a fresh branch off `main`, per the
-  confirmed order of work below. The user asked, after the merge, why weeks-3-18 pick accuracy
-  fell 7 games between the benchmark and the rebuild arm; the answer (45 picks flipped on
-  near-coin-flip margins, all within noise, none caused by the `0.12.6` fix) is in the session
-  transcript and should be kept in mind when the next arm is read.
+  confirmed order of work below. Its acceptance says "a walk-forward tie on the instrument":
+  read it against the noise floor above, and note that the JAX 2001-2002 rows it fixes are
+  training rows only, so expect the same all-margins-move pattern as the rebuild arm.
 - Milestone 59 is closed and archived with two parts reopened: the fitted-calibration pool is
   in-sample ("From Milestone 59" in `TODO.md`), and `n_estimators` is untuned (task 55.7).
   `auto` is the deterministic floor; production defaults to `elo`; no in-season early stopping

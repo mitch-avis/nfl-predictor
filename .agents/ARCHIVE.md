@@ -161,6 +161,12 @@ moved (max `5.16`), and weeks-3-18 pick accuracy fell `0.6861` to `0.6764` (7 ga
 four-window table is the reference arm in `AGENTS.md`; new arms on the rebuilt build compare
 against it.
 
+Noise control (`0.12.8`, 2026-09-20): the reference arm rerun with `--random-seed 7`
+(`models/wf_m59_rebuild_2023_2025_from_week1_seed7/`, checkpoints `89dc69c3f18d74ad205b`,
+rescored in its `REVIEW.md`) moves every margin (median `0.91` points), flips 46 picks and lands
+at weeks-3-18 Brier `0.2116` / pick accuracy `0.6847`, so the rebuild arm's 7-game drop is fit
+noise; the floor is recorded beside the reference arm in `AGENTS.md`.
+
 ### Audit (2026-09-19, version `0.12.5`)
 
 A review session audited both implementation sessions against the tree and the artifacts. What

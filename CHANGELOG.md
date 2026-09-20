@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.8] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.8` and keep `uv.lock` aligned.
+- Record the fit-noise floor of the walk-forward instrument in `AGENTS.md`: the reference arm
+  rerun with only `--random-seed 7` (`models/wf_m59_rebuild_2023_2025_from_week1_seed7/`,
+  rescored in its `REVIEW.md`) moves every margin (median `0.91` points), flips 46 of 720 picks
+  and shifts weeks-3-18 deterministic Brier by `+0.0020` `[-0.0006, +0.0045]` and pick accuracy
+  by `+0.0083`. The 2026-09-20 rebuild's 7-game pick-accuracy drop is therefore fit noise, and
+  single three-season arms cannot resolve effects below those sizes.
+- The Week 2 package was refreshed for the Sunday and Monday games
+  (`models/weekly_2026_week_02_refresh/`): market lines refreshed first, then the weekly run
+  on the rebuilt dataset with the data refresh skipped.
+
 ## [0.12.7] - 2026-09-20
 
 ### Changed

@@ -596,7 +596,7 @@ def _parse_args() -> argparse.Namespace:
     # Final step win-prob calibration: default to elo to allow calibration_seasons=0
     parser.add_argument(
         "--final-win-prob-calibration",
-        choices=["elo", "isotonic", "platt", "none", "auto", "logistic"],
+        choices=["elo", "isotonic", "platt", "sigma", "none", "auto", "logistic"],
         default="elo",
         help=(
             "Win-prob calibration for final training (logistic is an alias for platt). "

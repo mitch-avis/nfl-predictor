@@ -26,16 +26,12 @@ For each task:
    For executable code, confirm the exact behavior/lines you plan to touch are covered first; if
    not, add focused characterization or failing tests before editing production code.
 4. **Implement**: make changes incrementally (small diffs, one logical change at a time).
-5. **Run checks (venv only)**:
-   - `.venv/bin/ruff format .`
-   - `.venv/bin/ruff check .`
-   - `.venv/bin/pyright .`
-   - `.venv/bin/ty check .`
-   - `.venv/bin/python -m pytest`
-   - `markdownlint .` (CI installs `markdownlint-cli`; the local binary is `markdownlint-cli2`,
-     so run `markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#.agents/skills"` here)
-   - `uv lock --check`
-   - `uv sync --check --active`
+5. **Run the gate**: `scripts/gate.sh` (add `--web` when `web/` changed). It runs, in CI's
+   order, `uv lock --check`, `uv sync --check --active --extra web`, `ruff format --check`,
+   `ruff check`, `ty check`, `pyright`, `pytest`, markdownlint and the CLI help smoke checks,
+   and reports every step before exiting non-zero. Nothing is "done" until it exits `0` on the
+   final tree (`AGENTS.md`, "Delegation guardrails"). The individual `.venv/bin/...` commands
+   are for iteration only.
 6. **Update docs** where behavior changes (README/AGENTS), and update TODO/ARCHIVE. Add a
    `CHANGELOG.md` entry as each task or sizable chunk lands, under a new incremented version
    (never `[Unreleased]`), set `pyproject.toml` to that version, and run `uv lock` and `uv sync`.
@@ -51,7 +47,16 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-11, version `0.8.0`, `main` at `7c105bc`)
+### Current validated baseline (2026-09-19, version `0.12.5`, `feat/m59-benchmark-instrument`)
+
+- `scripts/gate.sh` exits `0` on the `0.12.5` tree: `843 passed`, coverage `92.63%`; ruff
+  format, ruff, ty, pyright, markdownlint, `uv lock --check`, `uv sync --check --active
+  --extra web` and the CLI help smoke checks clean. The tree was uncommitted when measured; the
+  next session commits it by version (see `next_agent_session_prompt.md`).
+- The walk-forward benchmark and its provenance are in `AGENTS.md`; the Milestone 59 record,
+  measurements and audit are in `ARCHIVE.md`.
+- Everything below is the earlier `0.8.0` baseline, kept for the data-state notes that still
+  hold.
 
 - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
   `.venv/bin/pyright .` pass cleanly.
@@ -100,6 +105,8 @@ Agents and humans should not rely on the shell activation state.
 - [ ] Confirm the readiness behaviors in `AGENTS.md` (Week 1 detection, non-fatal current-season
       404s, CSV-based prediction-file resolution) still hold.
 - [ ] Confirm neighboring repos (`../nfeloqb`, `../nfl-sos-ratings`) are not modified.
+- [ ] Confirm `scripts/gate.sh` exits `0` on the final tree and that every number written into
+      the docs names its run directory (`AGENTS.md`, "Delegation guardrails").
 
 ---
 
@@ -109,18 +116,17 @@ Done so far in the feature-engineering workstream (see `ARCHIVE.md`): Milestone 
 EPA families), 46 (schedule-adjusted strength), 49 (continuous early-season shrinkage), the first
 phase of 43 (current-season Bradley-Terry defaults), 51 (power rankings on the adjusted
 composite), 52 (the total head: fixed, still behind the market line, totals labelled
-diagnostic-only), task 56.4 (calibration window across the season boundary), and the web UI's
-phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
+diagnostic-only), task 56.4 (calibration window across the season boundary), Milestone 59
+(benchmark instrument, fit parity, historical divisions, and the noise-family follow-up; closed
+2026-09-19 with two narrowed parts reopened under "From Milestone 59" below and task 55.7), and
+the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
-1. Milestone 59 - Benchmark instrument, calibration and fit parity (user's decision 2026-09-18:
-   first, because nothing else can be measured until it lands; tasks 59.1-59.3 before any feature
-   work, 59.4-59.6 alongside)
-2. Milestone 54 - PBP-first team-game skeleton and situational stats (54.0 first)
-3. Milestone 53 - task 53.7 (defense-adjusted quarterback rate), measured on the 59.1 instrument
-4. Milestone 55 - Off-season configuration sweep, on the 59.1 instrument
-5. Milestone 56 - Weekly orchestration residuals
-6. Milestone 57 - Ensembles and alternative models (parked until the user reopens it)
-7. Milestone 58 - Web UI, phases 4-6 (pool helpers, team and QB pages, live odds design); runs
+1. Milestone 54 - PBP-first team-game skeleton and situational stats (54.0 first)
+2. Milestone 53 - task 53.7 (defense-adjusted quarterback rate), measured on the 59.1 instrument
+3. Milestone 55 - Off-season configuration sweep, on the 59.1 instrument
+4. Milestone 56 - Weekly orchestration residuals
+5. Milestone 57 - Ensembles and alternative models (parked until the user reopens it)
+6. Milestone 58 - Web UI, phases 4-6 (pool helpers, team and QB pages, live odds design); runs
    alongside the ML work whenever the user asks for it, on its own branch
 
 The open follow-ups below are not milestones. Pick them up when their area is next touched, or
@@ -247,6 +253,14 @@ Tasks:
       training.
 - [ ] 55.5 Decide the `ScoreModel` fate: document as experimental or deprecate cleanly.
 - [ ] 55.6 Add the stability view by season and week bucket, and a "recommended defaults" section.
+- [ ] 55.7 Choose `n_estimators` time-aware (from task 59.3, not done there). In-season fits run
+      the full `598`-tree budget since `0.12.3` with no early stopping anywhere; `598` is the
+      old Optuna value, not a measured choice. Tune it on a whole prior season as the eval set
+      (at least 250 games), or early-stop on that season-sized set, and apply the result
+      identically in walk-forward and production through the shared fit helpers. Read the
+      result on the deterministic and market columns over six seasons. Until then, the
+      `early_stopping_rounds` config field and the `--wf-early-stopping-rounds` /
+      `--train-early-stopping-rounds` flags are recorded but inert for in-season fits.
 
 Note for any tuning: until the shared early-stopping callback was fixed (version `0.6.2`), every
 Optuna trial's total head stopped after one round, so the `combined_mae` objective scored a
@@ -314,125 +328,35 @@ Acceptance:
 
 ---
 
-## Milestone 59 - Benchmark instrument and feature audit follow-ups
-
-Added 2026-09-18 by the review session that audited the `0.10.0` / `0.11.0` sessions and the
-feature set. Evidence lives under `models/feature_audit_2026_09_18/` (`fold_importance.json`,
-`feature_ranking.json`, `rescored_arms.json`, `deadweight_columns.json`, logs) and
-`models/wf_deadweight_2023_2025_pruned/`. Recommended to run **before** Milestone 54, because
-it changes how every feature comparison is read.
-
-Findings:
-
-- **The benchmark's probability metrics are dominated by Platt noise, not by features.** The
-  walk-forward fits `LogisticRegression` on the last 4 weeks (about 60 games) of the eval season,
-  which yields probabilities of exactly `0.0` and `1.0` (25% of weeks-3-18 predictions fall
-  outside `[0.05, 0.95]`). On the `0.11.0` arm the same `predicted_margin` scores weeks 3-18 Brier
-  `0.2324` / log loss `0.7612` through Platt (worse than a coin flip's `0.693`) and `0.2106` /
-  `0.6087` through the deterministic map `Phi(margin / SCORE_DIFF_STD_DEV)`; the market spread
-  through the same map scores `0.2099` / `0.6076`. Weeks 1-2, which skip calibration, were never
-  affected. Rescoring every checkpointed arm deterministically puts all of them in a Brier band of
-  `0.2082` to `0.2135` against the market's `0.2099`, and every paired arm difference the archive
-  reports as a gain or a loss (strength prior blend, quarterback family, lenses, `games_played`)
-  collapses to within `0.0013` with intervals covering zero (`rescored_arms.json`). Production
-  trains with `calibration = elo`, so the benchmark never measured the production probability
-  path either.
-- **No arm beats the market.** Deterministic weeks-3-18 Brier against the market: benchmark arm
-  `-0.0005` `[-0.0041, +0.0032]`, `0.11.0` arm `+0.0006` `[-0.0030, +0.0045]`. Margin MAE: every
-  anchored arm is `0.05` to `0.07` points worse than the spread it anchors on (all intervals cover
-  zero); the residual head's predictions correlate `0.08` with the actual-minus-spread outcome.
-  Feature gain is flat: the median feature's share of total gain equals the uniform `2 / 482`,
-  158 features carry half the gain, and the top of the ranking is rare-event counts
-  (`special_teams_tds`, `def_fumbles`, `2pt_conversions`, `fumble_recovery_tds`, safeties). That
-  is the signature of trees fitting noise on a residual target, so pruning individual columns
-  cannot be measured at this sample size; the actionable lever is the instrument and the model's
-  regularization, not the column list.
-  The one prune the audit landed (`0.12.0`: 20 dead-weight and duplicate columns, `482` to
-  `462`) is a tie in every window under both maps (weeks 3-18 deterministic Brier `0.2098`
-  after / `0.2106` before, `-0.0007` `[-0.0032, +0.0016]`; table in `CHANGELOG.md`, arm
-  `models/wf_deadweight_2023_2025_pruned/`), as expected for columns the trees did not use.
-- **Early stopping is inert in walk-forward.** In 15 of the 18 sampled folds with a calibration
-  frame the best iteration is `595-597` of `598`; the `n_estimators` cap binds and the 50-round
-  patience never fires, while production final training stopped the margin head at iteration `0`
-  (Week 2 run). The two paths are not the same model.
-- **Upstream nflverse gap.** `load_team_stats` returns only Jacksonville's 8 road games for 2001
-  and 2002 (verified live on 2026-09-18), and one game is missing for BAL/LAR 1999 and
-  BUF/KC/LAC/MIA 2000. Play-by-play has all 16 JAX games, but the PBP counts left-join onto the
-  team-stats skeleton, so every JAX 2001-2002 season-to-date family (stats, EPA, ridge inputs,
-  `strength_games_played`, which reads `7` at week 17) is built from road games only. The
-  `0.11.0` record's "agreed in 6845 of 6848 rows" compared two columns that shared this
-  undercount; against the corrected record count the strength counter disagrees on 58 away and
-  54 home rows.
-- **Static division map.** `is_divisional_matchup`, the division/conference records, ranks and
-  games-behind features use today's `TEAM_TO_DIVISION` for every season, so 1999-2001 rows (pre
-  realignment: ARI in the NFC East, SEA in the AFC West, and so on) are mislabeled; the nflverse
-  `div_game` flag (`division`) is correct and disagrees with `is_divisional_matchup` on 189 rows,
-  all 1999-2001.
-- **Near-duplicate mirrors.** `opponent_def_sacks` is `times_sacked` seen from the other sideline
-  (`r = 0.998`) and `opponent_times_sacked` is `def_sacks`; `EXCLUDE_FROM_OPPONENT_STATS` already
-  removes the analogous interception and turnover mirrors but not these.
-
-Tasks (order agreed with the user on 2026-09-18; 59.1 and 59.2 first, they are the instrument):
-
-- [ ] 59.1 Instrument. Make the walk-forward report score win probability three ways on every
-      fold: the configured calibrator (kept as a diagnostic), the deterministic map
-      `Phi(margin / sigma)`, and the market-implied probability from the same rows (no-vig
-      moneyline, with `Phi(spread / sigma)` as the fallback when moneylines are missing). Print
-      the paired model-minus-market Brier with a bootstrap interval per window (weeks 1, 2, 3-18,
-      all) in the report and in `wf_compare`. Rebuild the `AGENTS.md` benchmark table from the
-      deterministic columns and state the market row beside it. The rescoring script in
-      `models/feature_audit_2026_09_18/` (see the `.agents/ARCHIVE.md` review note under
-      Milestone 49 for the numbers) is the reference for what the numbers should be.
-- [ ] 59.2 Calibration that cannot blow up. Replace the 4-week Platt fit with a calibrator fit on
-      pooled out-of-fold predictions: for eval season `S`, use the walk-forward predictions of
-      seasons `S-2` and `S-1` (about 540 games) plus completed weeks of `S`, never the last 60 games
-      alone. Start with the one-parameter map (estimate `sigma` from those residuals), then test
-      Platt on the pooled set with an L2 penalty and isotonic only past the existing 200-game
-      threshold. Acceptance: on the 2023-2025 checkpoints, weeks 3-18 log loss within `0.005` of
-      the deterministic `0.607`, no probability outside `[0.02, 0.98]` unless the spread exceeds
-      14 points. Make `auto` resolve to this path and make production (`weekly_run`,
-      `golden_command`, `betting_pipeline`) and walk-forward share one calibration function.
-- [ ] 59.3 Fit parity and the early-stopping window. Today production early-stops on a 60-game
-      window (the Week 2 margin head stopped at iteration `0`, so production predicted the spread)
-      while walk-forward folds run to the `598` cap (patience never fires). Remove early stopping
-      from in-season fits and fix `n_estimators` from a time-aware tuning (a whole prior season as
-      the eval set, at least 250 games), or early-stop on that season-sized set; either way the
-      two paths must call the same fit function and `metadata.json` must record
-      `best_iteration` for every head, with a warning when it is `< 10` or at the cap. Re-tuning
-      of the other parameters stays in Milestone 55 but must use the 59.1 instrument.
-- [ ] 59.4 Season-aware divisions. `division` (nflverse `div_game`) is correct in every season and
-      is the flag the model keeps; the division and conference records, ranks, games-behind and
-      clinch proxies still use today's map for 1999-2001. Add the pre-2002 alignment to
-      `constants` (AFC East BUF IND MIA NE NYJ; AFC Central BAL CIN CLE JAX PIT TEN; AFC West DEN
-      KC LV LAC SEA; NFC East ARI DAL NYG PHI WSH; NFC Central CHI DET GB MIN TB; NFC West ATL
-      CAR NO SF LAR; no HOU), select the map by season in `features.py`, and assert
-      `division == is_divisional_matchup` for every season in a test. Nulling the 1999-2001 rows
-      is the fallback if the map proves awkward, but the map is three seasons of known facts.
-- [ ] 59.5 Noise-family ablation with the new instrument. The gain ranking is led by rare-event
-      counts (`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`, `2pt_conversions`,
-      `def_safeties`, `def_tds`). Run one arm with those families dropped and one with stronger
-      regularization (`min_child_weight`, `gamma`) and read both on deterministic Brier against the
-      market and on margin MAE against the spread, over at least six eval seasons
-      (`--eval-last-n-seasons 6`) so the intervals can resolve `0.002` Brier.
-- [ ] 59.6 Add `def_sacks` / `times_sacked` to `EXCLUDE_FROM_OPPONENT_STATS` when the schema is
-      next rebuilt (the columns were pruned at training time in `0.12.0` as the interim step).
-
-The team-stats skeleton fix moved to Milestone 54 as task 54.0, by the user's decision.
-
-Acceptance:
-
-- [ ] Every walk-forward report carries deterministic and market columns with paired intervals,
-      and the `AGENTS.md` benchmark quotes them.
-- [ ] Production and walk-forward fit and calibrate through the same functions; `metadata.json`
-      records `best_iteration` for every head.
-- [ ] Division context is correct for 1999-2001.
-
----
-
 ## Open follow-ups from completed milestones
 
 Each group names the archived milestone it came from; the milestone's full record is in
 `ARCHIVE.md`. Resolved items have moved there.
+
+### From Milestone 59 (benchmark instrument; audited 2026-09-19)
+
+- [ ] Narrowed 59.2: the calibration frame for fitted calibrators is the previous two seasons
+      plus the completed weeks of the eval season, but the rows are in-sample (walk-forward: a
+      subset of `fold.train_df` predicted by the model trained on it; production:
+      `_pooled_calibration_frame` over `train_df + calibration_df`, the same way). The task asked
+      for pooled out-of-fold predictions. Only `platt`, `isotonic` and `sigma` are affected;
+      `auto` is the deterministic floor and production defaults to `elo`, so nothing shipped on
+      it. If a fitted calibrator is ever to beat the floor it needs the out-of-fold pool: in
+      walk-forward, the earlier folds' `predictions` frames of the same run (empty for the first
+      eval seasons, so the floor stays the fallback); in production, the walk-forward compare
+      that `weekly_run` already runs. Measure on the 59.1 instrument before making it default.
+- [ ] Narrowed 59.3: `n_estimators` is untuned; task 55.7 carries it.
+- [ ] ETL rebuild pending (must-ask): `data/completed_games_ml.csv` is the 2026-09-17 build and
+      predates 59.4 (pre-2002 division and conference records, lookahead and standings values
+      for 1999-2001) and 59.6 (the six sack mirrors disappear from the schema). Back up
+      `data/*.csv` first, rerun the leakage audit, and run one from-week-1 walk-forward on the
+      new build as the tie check (the mirrors are already pruned at training time, so a tie is
+      expected).
+- [ ] `WalkForwardConfig.early_stopping_rounds` stays in the config and the fingerprint though
+      no in-season fit reads it; removing it changes every fingerprint. Remove it, or wire it to
+      the season-sized eval set of task 55.7, when that lands.
+- [ ] `scripts/wf_compare.py` prints `deterministic_pick_accuracy` in place of the configured
+      `pick_accuracy` in its summary columns; the CSV still has both.
 
 ### From Milestone 45 (play-by-play EPA families)
 

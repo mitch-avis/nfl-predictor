@@ -44,6 +44,123 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Milestone 59 - Benchmark instrument and feature audit follow-ups
+
+Closed 2026-09-19 across versions `0.12.1` to `0.12.4` by two implementation sessions, then
+audited and corrected the same day in `0.12.5` (see "Audit" at the end). The task text and
+findings that opened it on 2026-09-18 are in the git history of `TODO.md` (commit `ebdd8a5`).
+Outcome: the walk-forward instrument is the deterministic-plus-market view with paired intervals;
+`auto` is the deterministic floor; production and walk-forward fit through the same helpers with
+no in-season early stopping and `best_iteration` recorded per head; 1999-2001 division context
+uses the pre-2002 alignment; sack mirrors are excluded at the ETL source; the noise-family
+follow-up found no lift. Two parts were narrowed against the task text and are reopened as
+follow-ups ("Narrowed" below), not closed.
+
+### What landed
+
+- 59.1 Instrument: walk-forward reports, `wf_compare.csv`, the `weekly_run` and
+  `betting_pipeline` summaries, and the API column registry carry configured, deterministic
+  (`Phi(margin / SCORE_DIFF_STD_DEV)`) and market-implied (no-vig moneyline, spread fallback)
+  probability columns, with paired deterministic-minus-market Brier and log-loss differences and
+  5000-sample bootstrap intervals for week 1, week 2, weeks 3-18 and all weeks. Candidate ranking
+  sorts on the deterministic columns.
+- 59.2 Calibration: the fitted calibration frame is the previous two seasons plus the completed
+  weeks of the eval season (`select_calibration_data`; `_pooled_calibration_frame` in
+  production); `sigma` (one residual standard deviation) landed as a method, Platt picks `C`
+  from a grid on the latest pre-eval season, undersized isotonic falls back to sigma, and `auto`
+  resolves to the deterministic floor because no fitted path beat it (table below).
+- 59.3 Fit parity: in-season early stopping removed from production and walk-forward; both call
+  the same shared fit helpers and run the full `598`-tree budget. `metadata.json` and the
+  walk-forward per-week rows record `best_iteration` per head (since `0.12.5` also
+  `early_stopped`, and `at_cap` only when early stopping ran and never fired).
+- 59.4 Divisions: `PRE_2002_TEAM_TO_DIVISION` / `_CONFERENCE` and `division_map_for_season` /
+  `conference_map_for_season` in `constants`; the divisional flag, record splits, lookahead
+  context and standings proxies select the map by season. Verified on the real dataset: the
+  recomputed flag agrees with nflverse `division` in every season (the on-disk column disagreed
+  on 61, 67 and 61 rows in 1999, 2000 and 2001).
+- 59.5 Noise-family ablation: the `rare_events` feature group and `--min-child-weight` /
+  `--gamma` on the walk-forward CLI; three six-season arms (table below), all ties.
+- 59.6 `def_sacks` and `times_sacked` joined `EXCLUDE_FROM_OPPONENT_STATS`.
+
+### Narrowed (reopened as follow-ups in `TODO.md`, "From Milestone 59", and task 55.7)
+
+- 59.2 asked for a calibrator fit on pooled **out-of-fold** predictions. The landed pool is the
+  right rows but in-sample: the model that predicts them was trained on them. Nothing shipped on
+  it (`auto` is the floor, production defaults to `elo`), but the acceptance "make `auto`
+  resolve to this path" is met only in the degenerate sense that the path is the floor.
+- 59.3 asked to fix `n_estimators` from a season-sized time-aware tuning or to early-stop on
+  such a set. Neither was done; early stopping was removed and the old `598` cap kept, so every
+  head "hits the cap" by construction. Task 55.7.
+- The dataset on disk predates 59.4 and 59.6; the ETL rebuild is pending and is a must-ask item.
+
+### Measurements
+
+All arms: `data/completed_games_ml.m49_through_2025.deadweight_cut.csv`, from week 1,
+`market_anchor` on, checkpoints under `models/wf_checkpoints/<id>/`. Five three-season arms
+(`--eval-last-n-seasons 3`, 54 folds, about 2h20m each under `OMP_WAIT_POLICY=PASSIVE`, run in
+sequence 2026-09-18 18:57 to 2026-09-19 07:09) differ only in what `auto` resolved to at the
+time; their predicted margins and therefore their deterministic and market columns are identical.
+
+| run directory | `auto` resolved to | checkpoints | configured weeks 3-18 Brier / log loss |
+| --- | --- | --- | --- |
+| `wf_m59_2023_2025_from_week1/` | isotonic on the pooled frame | `303d85338c828f278a0e` | `0.2378` / `2.0158` |
+| `wf_m59_2023_2025_from_week1_auto_sigma/` | sigma (residual RMS) | `3863bd37678f4b9a4dae` | `0.2119` / `0.6157` |
+| `wf_m59_2023_2025_from_week1_auto_sigma_centered/` | sigma (residual std) | `27f1cd2a30b2f1a91a9a` | `0.2119` / `0.6157` |
+| `wf_m59_2023_2025_from_week1_auto_floor/` | sigma with a floor fallback | `f6ff076066674127b163` | `0.2119` / `0.6157` |
+| `wf_m59_2023_2025_from_week1_auto_selected/` | validation-selected among none/sigma/platt/isotonic | `a1e047a11237c39d013d` | `0.2347` / `0.9893` |
+
+The deterministic columns of every arm, and the floor `auto` now ships, weeks 3-18: Brier
+`0.2099`, log loss `0.6073`, pick accuracy `0.6861`; market `0.2086` / `0.6042` / `0.6861`;
+paired deterministic-minus-market Brier `+0.0012` `[-0.0030, +0.0054]`. The full four-window
+table is the benchmark in `AGENTS.md`. Against the `0.12.0` arm (`bae0e56db951d1a890d4`, fit with
+early stopping), 247 of 816 predicted margins move by at most `0.34` points; its rescore gives
+weeks 3-18 `0.2098` / `0.6072` and margin MAE `9.9600` against `9.9608`: a tie.
+
+Six-season arms (`--eval-last-n-seasons 6`, 107 folds, about 1h40m each on an idle machine,
+run in sequence 2026-09-19 10:27 to 15:17), `calibration=auto` (the floor):
+
+| run directory | checkpoints | deterministic Brier | market Brier | paired 95% CI | margin MAE |
+| --- | --- | --- | --- | --- | --- |
+| `wf_m59_2020_2025_auto_floor_baseline/` | `c641473671fc9f9b2f5f` | `0.2116` | `0.2104` | `[-0.0016, +0.0041]` | `9.9015` |
+| `wf_m59_2020_2025_rare_events_off/` | `3f38eaafc58d78b0542b` | `0.2123` | `0.2104` | `[-0.0010, +0.0049]` | `9.9101` |
+| `wf_m59_2020_2025_regularized_gamma5_mcw5/` | `8cc0bf9724c5bab18002` | `0.2114` | `0.2104` | `[-0.0018, +0.0039]` | `9.8903` |
+
+Every interval covers zero. The baseline's 2023-2025 folds are bit-identical to the three-season
+arms (max predicted-margin difference `0.0`), so they add no information about 2023-2025 and
+serve as the reproduction check; its 2020-2022 folds are new. Restored from its checkpoints:
+configured probabilities equal the deterministic floor exactly, none leaves `[0.02, 0.98]` when
+`|predicted_margin| <= 14`, and every head in all 107 folds ran the full `598`-tree budget.
+
+Reproduction: load `fold_*.joblib` from the checkpoint directory, concatenate `predictions`,
+add `deterministic_home_win_prob = ml_model._margin_to_home_win_prob(predicted_margin)` and
+`market_home_win_prob = walk_forward._resolve_market_home_win_prob(frame)`, then score with
+`walk_forward._probability_window_rows(frame, seed=0)`.
+
+### Audit (2026-09-19, version `0.12.5`)
+
+A review session audited both implementation sessions against the tree and the artifacts. What
+held: every run retrained (no stale-fold resume), the division fix, the acceptance checks above,
+840 tests passing. What did not, and what `0.12.5` did about it:
+
+- `AGENTS.md` said the benchmark table was rescored from the `0.12.0` checkpoints; it came from
+  the retrained arms (fourth-decimal difference, above). Corrected.
+- `ruff format --check` failed on `constants.py`; the second session reported a green gate
+  without running it, and CI would have failed. Fixed, and `scripts/gate.sh` now runs the whole
+  CI gate as one command.
+- 59.2 and 59.3 were checked off after being narrowed (above). Reopened as follow-ups.
+- Every fold logged an `at_cap` warning that could not be false. The warning now requires early
+  stopping to have run.
+- `_select_auto_calibration_method` and `_sigma_calibrator_improves_on_floor` were dead after
+  the second session removed their call sites. Deleted. `sigma` was reachable only as the
+  isotonic fallback; it is now a CLI choice.
+- The first session's closing comparison script crashed on a typo, so its "tie with `0.12.0`"
+  claim was unverified when made; the rescore above confirms it. Its closing table labelled the
+  deterministic columns as the model's result for the `auto_selected` arm without saying that
+  arm's configured `auto` scored `0.2337` / `0.9523` over all weeks.
+- The "Delegation guardrails" section in `AGENTS.md` records the rules that follow from this.
+
+---
+
 ## Milestone 58 (partial) - Web UI: FastAPI backend + React frontend
 
 Phases 0-3 completed 2026-09-10 (on `feat/web-ui`, worktree `../nfl-predictor-web`) and merged

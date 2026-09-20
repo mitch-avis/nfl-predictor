@@ -262,8 +262,9 @@ available via `--recency-half-life-weeks` or `--recency-half-life-seasons` (use 
 exponential decay to training and calibration samples.
 
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
-- `--calibration-seasons` reserves seasons just before the holdout for calibration/blending.
-- `--calibration-weeks` reserves the most recent weeks from the latest season for calibration.
+- `--calibration-seasons` and `--calibration-weeks` still gate whether a fitted post-processing
+  calibrator is allowed to run, but the fitted calibration pool itself is now the previous two
+  seasons plus the completed weeks of the current season.
 
 Example: hold out the most recent season for evaluation and calibrate on the season before it:
 
@@ -300,12 +301,21 @@ time-aware calibration split (seasons and/or weeks immediately preceding the hol
 
 - `none`: deterministic Normal-CDF mapping using `constants.SCORE_DIFF_STD_DEV`.
 - `elo`: deterministic Elo-style logistic mapping (no fitting).
-- `platt`: Platt scaling via logistic regression fit on the calibration split.
-- `isotonic`: isotonic regression fit on the calibration split.
-- `auto`: use isotonic when calibration data is large enough; otherwise fall back to Platt.
+- `sigma`: Normal-CDF mapping with one sigma estimated from the margin residuals of the
+  calibration frame instead of the fixed `SCORE_DIFF_STD_DEV`.
+- `platt`: Platt scaling on the calibration frame, with `C` chosen from a small grid on the
+  latest pre-eval season of that frame.
+- `isotonic`: isotonic regression on the calibration frame; below the 200-row threshold it falls
+  back to `sigma`.
+- `auto`: the deterministic floor (`none`). No fitted calibrator has beaten it on the walk-forward
+  instrument, so `auto` does not fit anything.
 - `logistic`: alias for `platt`.
 
-Calibration is time-aware: it fits only on historical data relative to the evaluation window.
+The calibration frame for the fitted methods is the previous two seasons plus the completed weeks
+of the current season, strictly before the predicted week. Its rows are in-sample for the model
+that predicts them (an out-of-fold pool is an open follow-up), which is one reason the fitted
+methods have not beaten the deterministic floor. The walk-forward report carries the configured,
+deterministic and market-implied probability columns side by side so the choice can be measured.
 
 ### Market integration (optional, recommended)
 
@@ -339,14 +349,17 @@ python scripts/walk_forward_backtest.py --help
 ```
 
 This is the **canonical evaluation protocol** for model selection. By default it evaluates the last
-N seasons (regular season only) with time-aware calibration from the last K weeks of each eval
-season. Use `--include-postseason` if you want postseason folds included. Optional recency weighting
+N seasons (regular season only) and reports three probability views on the same games: the
+configured calibrator, the deterministic margin map, and the market-implied home win probability.
+Use `--include-postseason` if you want postseason folds included. Optional recency weighting
 is available via `--recency-half-life-weeks` or `--recency-half-life-seasons` (use only one). GPU
 acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`. If the latest season is
 incomplete, either pass `--exclude-incomplete-seasons` or specify `--eval-seasons` explicitly; the
 metrics report includes the evaluated window and any exclusions. Walk-forward calibration uses the
-last K weeks strictly before the eval week; if insufficient weeks or outcomes are available,
-calibration is skipped for that fold.
+calibration frame described above for fitted calibrators; `auto` is the deterministic floor; the
+summary table includes deterministic-minus-market bootstrap intervals for week 1, week 2,
+weeks 3-18, and all weeks; and every fold runs the full `n_estimators` budget (no in-season early
+stopping, in walk-forward or in production), with `best_iteration` recorded per head.
 
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
@@ -507,7 +520,7 @@ Notes:
 
 Model selection hierarchy (default):
 
-- Primary: probability quality (Brier, log loss, reliability).
+- Primary: deterministic probability quality and deterministic-minus-market intervals.
 - Secondary: confidence pool expected points and stability.
 - Tertiary: margin/total MAE (plus market-relative residual MAE when anchoring).
 
@@ -633,7 +646,13 @@ python scripts/validate_live.py
 Both validation scripts exit non-zero when the input data file is missing or the validation fails,
 so they are safe to use in shell automation.
 
-Canonical local validation sequence:
+Canonical local validation sequence, as one command:
+
+```bash
+scripts/gate.sh          # add --web when web/ changed; --quick skips pytest
+```
+
+It runs the steps below in CI's order and reports every one before exiting non-zero:
 
 ```bash
 ruff format --check .
@@ -727,8 +746,9 @@ All engineered features are defined so they apply to **every matchup**, not only
 games.
 
 - Invariant-schema missing-data handling across seasons.
-- Season-to-date record features (overall/division/conference).
-- Divisional rivalry indicator.
+- Season-to-date record features (overall/division/conference), with the pre-2002 alignment for
+  the three historical seasons before realignment.
+- Divisional rivalry indicator, also season-aware across the 2002 realignment.
 - Lookahead / next-week context features.
 - Standings-based motivation proxy features (clinch/elimination proxies).
 - Stadium metadata features (roof/surface/type, elevation, venue location).
@@ -772,7 +792,9 @@ games.
 The strength family is ablatable as the `strength` feature group
 (`--disable-feature-groups strength`), and the early-season prior blend can be ablated
 independently at ETL time with `--no-strength-prior-blend`. The quarterback family is the `qb`
-group (`--disable-feature-groups qb`). No group overlaps another.
+group (`--disable-feature-groups qb`). The rare-event noise family is the `rare_events` group
+(`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`, `2pt_conversions`, `def_safeties`,
+`def_tds`). No group overlaps another.
 
 ## Open work
 

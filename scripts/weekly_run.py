@@ -308,7 +308,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "wf_early_stopping_rounds",
             ml_model_core.DEFAULT_EARLY_STOPPING_ROUNDS,
         ),
-        help="Walk-forward: early stopping rounds (default aligns with training).",
+        help=(
+            "Walk-forward: recorded in the run config only; in-season fits run the full "
+            "n_estimators budget without early stopping."
+        ),
     )
     parser.add_argument(
         "--holdout-seasons",
@@ -391,7 +394,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "train_early_stopping_rounds",
             ml_model_core.DEFAULT_EARLY_STOPPING_ROUNDS,
         ),
-        help="Training: early stopping rounds.",
+        help=(
+            "Training: early stopping rounds for Optuna tuning trials only; the final "
+            "in-season fit runs the full n_estimators budget."
+        ),
     )
     parser.add_argument(
         "--tune",

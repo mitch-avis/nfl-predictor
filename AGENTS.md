@@ -41,11 +41,18 @@ Rules that are always enforced:
   in walk-forward, and were dropped from the schema in `0.10.0` by the user's decision on
   2026-09-17 (`.agents/ARCHIVE.md`, Milestone 53, "53.6"). The Milestone 49
   `games_played` follow-up closed in `0.11.0`, and the 2026-09-18 audit pruned 20 dead-weight and
-  duplicate columns at training time in `0.12.0` (`482` to `462` features; a walk-forward tie)
-  and opened Milestone 59, which re-baselines the benchmark instrument, fixes the calibration
-  window and reconciles early stopping between production and walk-forward (see the caveat under
-  the benchmark table below). The user ordered it first on 2026-09-18; Milestone 54 (now
-  PBP-first, with the schedule skeleton as task 54.0) follows. The analysis, crosswalk, and
+  duplicate columns at training time in `0.12.0` (`482` to `462` features; a walk-forward tie).
+  Milestone 59 closed in `0.12.4` and was audited and corrected in `0.12.5`: the benchmark
+  instrument now carries configured, deterministic and market-implied probability views; `auto`
+  is explicitly the deterministic floor; production and walk-forward fit through the same
+  helpers with no in-season early stopping and `best_iteration` recorded per head; 1999-2001
+  division context is historically aligned; `def_sacks` / `times_sacked` are excluded from
+  opponent mirrors at the ETL source; and the six-season noise-family follow-up found no lift.
+  Two parts were narrowed and are reopened as follow-ups (`.agents/TODO.md`, "From Milestone
+  59"): the fitted-calibration pool is in-sample rather than out-of-fold, and `n_estimators` was
+  not re-tuned (task 55.7). The dataset on disk predates the 59.4 and 59.6 ETL changes; a
+  rebuild is pending and is a must-ask item. Milestone 54 (now PBP-first, with the schedule
+  skeleton as task 54.0) is the next ML milestone. The analysis, crosswalk, and
   prioritized shortlist live in `.agents/feature_crosswalk.md`; the ordered milestones live in
   `.agents/TODO.md`. The web UI
   (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on
@@ -56,8 +63,14 @@ Rules that are always enforced:
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-11 (version `0.9.0`, branch `feat/qb-schedule-lenses` off `main`
-  at `69e8011`):
+- Validated baseline on 2026-09-19 (version `0.12.5`, branch `feat/m59-benchmark-instrument`
+  off `main` at `683acab`, the whole `0.12.1`-`0.12.5` tree still uncommitted at that point):
+  `scripts/gate.sh` exits `0` (`843 passed`, coverage `92.63%` against the enforced `90%`
+  floor; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
+  `uv sync --check --active --extra web` and the CLI help smoke checks all clean). The
+  frontend gate was last verified at the `0.8.0` merge; run `scripts/gate.sh --web` whenever
+  `web/` or `nfl_predictor/api/` changes. The bullets below record the earlier `0.9.0` baseline
+  and the data state, which have not changed since:
   - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
     `.venv/bin/pyright .` pass cleanly.
   - `.venv/bin/python -m pytest` passes (`821 passed`, `tests/api/` included) with coverage
@@ -83,37 +96,43 @@ Rules that are always enforced:
     benchmark below was measured on the earlier `498`-column build
     `data/completed_games_ml.m49_on_through_2025.csv`, which a data cleanup removed; its numbers
     stay auditable from the fold checkpoints named below.
-- **Current walk-forward benchmark**, measured 2026-09-11 with the total-head fix (version
-  `0.6.2`) on the blend build `data/completed_games_ml.m49_on_through_2025.csv` (seasons
-  `2023-2025`, `--eval-last-n-seasons 3`, from week 1, the build cut to seasons `<= 2025` so the
-  eval window does not slide onto 2026, `market_anchor` on): `models/wf_totalfix_2023_2025_anchored/`
-  (checkpoints `models/wf_checkpoints/c39db4f843175eaab09f/`). Brier, log loss, pick accuracy and
-  margin MAE reproduce the 2026-09-10 run (`models/wf_shrink_2023_2025_on/`) to four decimals in
-  every window; only total MAE moved. The weeks 3-18 window equals a `--wf-start-week 3` run and
-  stays the headline number.
+- **Current walk-forward benchmark**, measured 2026-09-19 on the `0.12.3` fit-parity code
+  (no in-season early stopping) with `data/completed_games_ml.m49_through_2025.deadweight_cut.csv`,
+  seasons `2023-2025`, from week 1, `market_anchor` on: run
+  `models/wf_m59_2023_2025_from_week1_auto_floor/` (checkpoints
+  `models/wf_checkpoints/f6ff076066674127b163/`). The five `models/wf_m59_2023_2025_from_week1*/`
+  arms differ only in the configured calibrator and share these deterministic and market columns
+  exactly, and the 2023-2025 folds of the six-season `models/wf_m59_2020_2025_auto_floor_baseline/`
+  reproduce them bit for bit. A true rescore of the `0.12.0` arm's checkpoints
+  (`bae0e56db951d1a890d4`, the previous fit with early stopping) sits in the fourth decimal:
+  weeks 3-18 log loss `0.6072` and margin MAE `9.9600`, all weeks `0.6096` and `9.8291`, because
+  the fit-parity change moved 247 of 816 predicted margins by up to `0.34` points. Treat the
+  deterministic and market-implied columns below as the standing probability instrument; the
+  configured calibrator is diagnostic only unless it can beat them on the same games.
 
-  | window | games | Brier | log loss | pick acc | margin MAE | total MAE | market total MAE |
-  | --- | --- | --- | --- | --- | --- | --- | --- |
-  | week 1 only | 48 | `0.2097` | `0.6097` | `0.7083` | `9.1365` | `9.9426` | `10.3333` |
-  | week 2 only | 48 | `0.2268` | `0.6452` | `0.6042` | `8.3401` | `9.8727` | `10.4479` |
-  | weeks 3-18 (headline) | 720 | `0.2284` | `0.7406` | `0.6847` | `9.9578` | `10.2295` | `10.0847` |
-  | all weeks | 816 | `0.2272` | `0.7273` | `0.6814` | `9.8143` | `10.1916` | `10.1207` |
+  | window | games | model Brier | model log loss | model pick acc | market Brier | market log loss | market pick acc | margin MAE | total MAE | market total MAE |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | week 1 only | 48 | `0.2066` | `0.6029` | `0.7500` | `0.2099` | `0.6090` | `0.7083` | `9.1501` | `10.2129` | `10.3333` |
+  | week 2 only | 48 | `0.2306` | `0.6526` | `0.6250` | `0.2330` | `0.6585` | `0.5833` | `8.5436` | `9.6833` | `10.4479` |
+  | weeks 3-18 (headline) | 720 | `0.2099` | `0.6073` | `0.6861` | `0.2086` | `0.6042` | `0.6861` | `9.9608` | `10.3025` | `10.0847` |
+  | all weeks | 816 | `0.2109` | `0.6097` | `0.6863` | `0.2102` | `0.6077` | `0.6814` | `9.8298` | `10.2608` | `10.1207` |
 
   Before the fix the one-tree total head scored `9.9426` / `9.8727` / `10.1257` / `10.1000` in the
   same windows (weeks 1-2 skip calibration, so they have no eval set and never had the bug). The
   healthy anchored head trails the market line in weeks 3-18; the comparison and its bootstrap
   intervals are under Milestone 52 in `.agents/TODO.md`.
 
-  **Read the Brier and log-loss columns with care (2026-09-18 audit).** The benchmark's Platt
-  calibrator fits on about 60 games and emits probabilities of exactly `0` and `1`; its weeks-3-18
-  log loss (`0.7406`) is worse than a coin flip while the same predicted margins through the
-  deterministic map `Phi(margin / SCORE_DIFF_STD_DEV)` score Brier `0.2094` / log loss `0.6069`,
-  a statistical tie with the market spread through the same map (`0.2099` / `0.6076`; difference
-  `-0.0005` `[-0.0041, +0.0032]`). Every checkpointed arm rescored this way sits between `0.2082`
-  and `0.2135` (`models/feature_audit_2026_09_18/rescored_arms.json`), so differences between
-  arms in the Platt columns are not evidence about features. Until Milestone 59 re-baselines the
-  instrument, judge feature work on the deterministic rescoring of its checkpoints and on margin
-  MAE against the spread.
+  **How to read it now.** Walk-forward reports and `wf_compare` now carry three probability views:
+  the configured calibrator, the deterministic map, and market-implied home win probability from
+  the same rows (no-vig moneyline with a spread fallback). Feature work is ranked on the
+  deterministic columns and on the paired deterministic-minus-market intervals; the default `auto`
+  calibration path stays on the deterministic floor until a fitted calibrator proves it can beat
+  that floor on the shared validation logic. Revalidated 2026-09-19 by
+  `models/wf_m59_2020_2025_auto_floor_baseline/`: filtering its 2023-2025 folds reproduces the
+  table above exactly, configured `auto` equals the deterministic floor in every 2023-2025
+  window, no probability leaves `[0.02, 0.98]` unless `|predicted_margin| > 14`, and all 107
+  six-season folds ran the full `598`-tree budget for both heads (`best_iteration = 597`,
+  `early_stopped = false`; the budget itself is not tuned, see task 55.7).
 
   The same config on the pre-change build (`models/wf_shrink_2023_2025_off/`) gave week 2
   `0.2434` / `0.6799` / `0.5417` and weeks 3-18 `0.2293` / `0.7541` / `0.6847`; the comparison and
@@ -166,6 +185,57 @@ Rules that are always enforced:
   cache-then-degrade pattern.
 - Default weekly prediction-file resolution uses the CSV `season`/`week` values, not the filename
   week, so a stale `week_22` file never wins over a new `week_01` file.
+
+## Delegation guardrails (every agent session)
+
+Added 2026-09-19 after the audit of the two sessions that closed Milestone 59
+(`.agents/ARCHIVE.md`, Milestone 59, "Audit"). Those sessions narrowed the task text and ticked
+the box anyway, reported a green gate without running the whole gate, wrote a benchmark
+provenance sentence that was false, and spent about twelve CPU-hours on calibrators that were
+then discarded. An autonomous session has no other supervision, so these rules are not advisory.
+
+1. **One gate.** `scripts/gate.sh` is the definition of "checks pass". No task, chunk or version
+   is reported done, and no changelog entry is written as landed, until it exits `0` on the
+   final tree. Reporting a subset of checks as the gate is a defect; `--quick` is for iteration,
+   never for the report.
+2. **Narrowing is never a checkbox.** If what landed differs from the task text (smaller scope, a
+   substitute method, a skipped acceptance criterion), the task stays `[ ]` with a `Narrowed:`
+   note giving the difference, the reason and where the remainder now lives, and the difference
+   goes on the user's question list. Rewriting the acceptance text to fit the delivery is not
+   allowed.
+3. **Two keys on every number.** The agent that produced a run never writes its numbers into
+   `AGENTS.md`, `.agents/ARCHIVE.md`, `.agents/TODO.md` or `CHANGELOG.md`. A reviewer (a separate
+   subagent, or the next session) rescores the artifact from disk, writes the run directory and
+   the reproduction command beside the number, and only then may the docs change. A number in
+   the docs without a run directory is a defect.
+4. **Compute budget.** Before each walk-forward run, write the hypothesis and the decision rule
+   (which result changes what). After two runs on one task without a decision, stop and ask.
+   One walk-forward at a time; `uptime` and `pgrep -af walk_forward` first; OpenMP policy by
+   load. Any edit under `nfl_predictor/ml/` changes every checkpoint fingerprint, so a rerun
+   after a code change retrains from scratch; plan runs after the code is stable.
+5. **Must ask first** (stop and wait; never assume):
+   - rebuilding anything under `data/` (an ETL rerun), or deleting or overwriting any file under
+     `data/` or `models/`;
+   - changing a default (CLI, config, constants) that alters what a weekly run produces, or any
+     change that alters feature values at ETL time;
+   - closing a milestone, reopening a parked one (Milestone 57), or reordering the roadmap;
+   - merging to `main` or pushing (tags and releases: never, see above);
+   - touching `../nfeloqb`, `../nfl-sos-ratings`, or the web API on port 8765;
+   - a third walk-forward run on one task, or any six-season run;
+   - anything the task text says to decide with the user.
+6. **May proceed without asking:**
+   - commits on the working feature branch after each versioned chunk (Conventional Commits, one
+     logical change per commit, the attribution line the harness provides);
+   - fixes with a failing test first, and doc updates that restate numbers already verified
+     under rule 3;
+   - one walk-forward run per written hypothesis, within rule 4;
+   - creating the milestone's feature branch off `main` when none exists.
+7. **Check-ins.** Report at every landed version and after every walk-forward run: what landed,
+   the run directory, the gate result, the open questions. Stop for a question whenever rule 5
+   triggers; a session that ends blocked on a question has done the right thing.
+8. **Handoff hygiene.** Rewrite `.agents/next_agent_session_prompt.md` at every landed chunk
+   (branch, version, uncommitted state, the next task, open questions) so a restart after a
+   closed terminal or a context summary resumes without re-deriving anything.
 
 ## Source of truth for work
 
@@ -287,8 +357,10 @@ doc example. `uv` is expected to come from `PATH` as an external project manager
   replacing one with the other.
 - PEP 8 / PEP 257 conventions unless explicitly overridden by repo tooling.
 
-Recommended local commands:
+Recommended local commands (`scripts/gate.sh` runs all of them the way CI does and is the only
+form that counts as "the gate"; the individual commands are for iteration):
 
+- `scripts/gate.sh` (add `--web` when `web/` changed, `--quick` to skip pytest while iterating)
 - `.venv/bin/ruff format .`
 - `.venv/bin/ruff check .` (and optionally `.venv/bin/ruff check . --fix`)
 - `.venv/bin/pyright .`

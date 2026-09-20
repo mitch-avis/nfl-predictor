@@ -1386,9 +1386,16 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
     info: dict[str, Any] = {}
 
     def _capture(prefix: str, estimator: Any) -> None:
+        best_iteration_recorded = False
         for key in ("best_iteration", "best_score", "best_ntree_limit"):
             if hasattr(estimator, key):
                 info[f"{prefix}.{key}"] = getattr(estimator, key)
+                if key == "best_iteration":
+                    best_iteration_recorded = True
+        if not best_iteration_recorded and hasattr(estimator, "get_booster"):
+            booster = estimator.get_booster()
+            if hasattr(booster, "num_boosted_rounds"):
+                info[f"{prefix}.best_iteration"] = int(booster.num_boosted_rounds()) - 1
 
     if isinstance(model, ScoreModel):
         _capture("away_model", model.away_model)

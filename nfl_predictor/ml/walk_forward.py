@@ -847,6 +847,9 @@ def run_walk_forward_backtest(
         "include_quantiles": config.include_quantiles,
         "disable_pruning": config.disable_pruning,
         "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
+        # In-season fits run the full `n_estimators` budget; `early_stopping_rounds` in the
+        # config is kept for the fingerprint and for tuning, and is not applied here.
+        "in_season_early_stopping": False,
     }
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
@@ -951,7 +954,7 @@ def run_walk_forward_backtest(
             x_eval=x_calibration,
             y_margin_eval=y_margin_calibration,
             y_total_eval=y_total_calibration,
-            early_stopping_rounds=config.early_stopping_rounds,
+            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
 
@@ -967,7 +970,7 @@ def run_walk_forward_backtest(
                 quantiles,
                 x_eval=x_calibration,
                 y_eval=y_margin_calibration,
-                early_stopping_rounds=config.early_stopping_rounds,
+                early_stopping_rounds=None,
                 sample_weight=train_weight,
             )
             total_quantiles = ml_model._fit_quantile_models(
@@ -977,7 +980,7 @@ def run_walk_forward_backtest(
                 quantiles,
                 x_eval=x_calibration,
                 y_eval=y_total_calibration,
-                early_stopping_rounds=config.early_stopping_rounds,
+                early_stopping_rounds=None,
                 sample_weight=train_weight,
             )
 

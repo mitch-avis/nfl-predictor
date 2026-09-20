@@ -461,7 +461,7 @@ def train_margin_total_model(
             x_eval=x_calibration,
             y_margin_eval=y_margin_calibration,
             y_total_eval=y_total_calibration,
-            early_stopping_rounds=optuna_config.early_stopping_rounds,
+            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
 
@@ -473,7 +473,7 @@ def train_margin_total_model(
             quantiles,
             x_eval=x_calibration,
             y_eval=y_margin_calibration,
-            early_stopping_rounds=optuna_config.early_stopping_rounds,
+            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
         total_quantiles = _fit_quantile_models(
@@ -483,7 +483,7 @@ def train_margin_total_model(
             quantiles,
             x_eval=x_calibration,
             y_eval=y_total_calibration,
-            early_stopping_rounds=optuna_config.early_stopping_rounds,
+            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
 
@@ -979,7 +979,7 @@ def train_blended_margin_total_model(
         x_eval=team_calib,
         y_margin_eval=y_margin_calib,
         y_total_eval=y_total_calib,
-        early_stopping_rounds=optuna_config.early_stopping_rounds,
+        early_stopping_rounds=None,
         sample_weight=train_weight,
     )
     team_margin_calib = _predict_xgb(team_margin_model, team_calib)

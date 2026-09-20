@@ -894,6 +894,130 @@ def test_walk_forward_backtest_handles_elo_uncertainty_and_incomplete_filters(
         walk_forward.run_walk_forward_backtest(df, incomplete_config)
 
 
+def test_walk_forward_auto_calibration_uses_the_deterministic_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auto calibration should stay on the deterministic floor; no fitted selector exists."""
+    assert not hasattr(walk_forward.ml_model, "_select_auto_calibration_method")
+    assert not hasattr(walk_forward.ml_model, "_sigma_calibrator_improves_on_floor")
+    monkeypatch.setattr(
+        walk_forward.ml_model,
+        "_fit_win_prob_calibrator",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("auto should not fit a calibrator")
+        ),
+    )
+
+    result = walk_forward.run_walk_forward_backtest(
+        _fixture_df(),
+        replace(_base_config(), calibration="auto", include_quantiles=False),
+    )
+
+    assert set(result["predictions"]["calibration_method"].unique()) == {"none"}
+
+
+def test_walk_forward_disables_small_window_early_stopping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Walk-forward fits should no longer use per-fold early stopping windows."""
+
+    class _DummyBooster:
+        def num_boosted_rounds(self) -> int:
+            return 12
+
+    class _DummyModel:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.n_estimators = 12
+
+        def get_booster(self) -> _DummyBooster:
+            return _DummyBooster()
+
+    margin_rounds: list[object] = []
+    quantile_rounds: list[object] = []
+
+    def fake_fit_margin_total_models(*_args, **kwargs):
+        margin_rounds.append(kwargs.get("early_stopping_rounds"))
+        return _DummyModel("margin"), _DummyModel("total")
+
+    def fake_fit_quantile_models(*_args, **kwargs):
+        quantile_rounds.append(kwargs.get("early_stopping_rounds"))
+        return {}
+
+    def fake_predict_xgb(model: _DummyModel, x: np.ndarray) -> np.ndarray:
+        if model.name == "margin":
+            return np.full(x.shape[0], 3.0, dtype=float)
+        return np.full(x.shape[0], 44.0, dtype=float)
+
+    monkeypatch.setattr(
+        walk_forward.ml_model,
+        "_fit_margin_total_models",
+        fake_fit_margin_total_models,
+    )
+    monkeypatch.setattr(walk_forward.ml_model, "_fit_quantile_models", fake_fit_quantile_models)
+    monkeypatch.setattr(walk_forward.ml_model, "_predict_xgb", fake_predict_xgb)
+
+    result = walk_forward.run_walk_forward_backtest(
+        _fixture_df(),
+        replace(_base_config(), include_quantiles=True, early_stopping_rounds=5),
+    )
+
+    assert margin_rounds == [None, None]
+    assert quantile_rounds == [None, None, None, None]
+    assert result["resolved_settings"]["in_season_early_stopping"] is False
+    first_week = result["per_week"][0]
+    assert first_week["margin_model.best_iteration"] == 11
+    assert first_week["total_model.best_iteration"] == 11
+    assert first_week["margin_model.early_stopped"] is False
+    # Running the full budget is the configured behavior, not a warning condition.
+    assert "iteration_warnings" not in first_week
+
+
+def test_iteration_details_warns_only_on_real_early_stopping_outcomes() -> None:
+    """Cap and below-10 flags describe early stopping; a full-budget fit is not flagged."""
+
+    class _Booster:
+        def __init__(self, rounds: int) -> None:
+            self._rounds = rounds
+
+        def num_boosted_rounds(self) -> int:
+            return self._rounds
+
+    class _FullBudget:
+        n_estimators = 12
+
+        def get_booster(self) -> _Booster:
+            return _Booster(12)
+
+    class _StoppedAtCap:
+        n_estimators = 12
+        best_iteration = 11
+
+        def get_booster(self) -> _Booster:
+            return _Booster(12)
+
+    class _StoppedEarly:
+        n_estimators = 12
+        best_iteration = 3
+
+        def get_booster(self) -> _Booster:
+            return _Booster(4)
+
+    details = walk_forward._iteration_details(
+        {"full": _FullBudget(), "capped": _StoppedAtCap(), "tiny": _StoppedEarly()}
+    )
+
+    assert details["full.best_iteration"] == 11
+    assert details["full.early_stopped"] is False
+    assert "full.warning" not in details
+    assert details["capped.best_iteration"] == 11
+    assert details["capped.early_stopped"] is True
+    assert details["capped.warning"] == "at_cap"
+    assert details["tiny.best_iteration"] == 3
+    assert details["tiny.warning"] == "below_10"
+    assert details["iteration_warnings"] == ["capped:at_cap", "tiny:below_10"]
+
+
 def test_resolve_feature_group_columns_matches_configured_markers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

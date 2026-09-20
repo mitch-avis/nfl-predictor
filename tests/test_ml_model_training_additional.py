@@ -130,6 +130,40 @@ def test_filter_to_regular_season_for_training_returns_input_when_not_applicable
     )
 
 
+def test_early_stopping_info_records_last_round_without_xgb_best_iteration() -> None:
+    """Metadata should record a best_iteration even when early stopping is disabled."""
+
+    class _DummyBooster:
+        def num_boosted_rounds(self) -> int:
+            return 12
+
+    class _DummyModel:
+        def get_booster(self) -> _DummyBooster:
+            return _DummyBooster()
+
+    model = MarginTotalModel(
+        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
+        feature_spec=_feature_spec(),
+        margin_model=cast(xgb.XGBRegressor, _DummyModel()),
+        total_model=cast(xgb.XGBRegressor, _DummyModel()),
+        target_columns=("away_score", "home_score"),
+        calibrator=None,
+        margin_quantile_models=None,
+        total_quantile_models=None,
+        quantiles=None,
+        market_anchor=False,
+        market_prob_config=None,
+        xgb_params={"n_estimators": 12},
+        tuned_params=None,
+        tuned_cv_summary=None,
+    )
+
+    info = ml_model_training._early_stopping_info(model)
+
+    assert info["margin_model.best_iteration"] == 11
+    assert info["total_model.best_iteration"] == 11
+
+
 def test_train_score_model_without_holdout_skips_holdout_evaluation(monkeypatch) -> None:
     """Skips holdout inference when no holdout seasons are configured."""
     df = pd.DataFrame(

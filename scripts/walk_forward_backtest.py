@@ -226,6 +226,18 @@ def _parse_args() -> argparse.Namespace:
         help="XGBoost n_jobs override.",
     )
     parser.add_argument(
+        "--min-child-weight",
+        type=float,
+        default=None,
+        help="Optional XGBoost min_child_weight override.",
+    )
+    parser.add_argument(
+        "--gamma",
+        type=float,
+        default=None,
+        help="Optional XGBoost gamma override.",
+    )
+    parser.add_argument(
         "--resume",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -297,6 +309,10 @@ def main() -> None:
         xgb_overrides["device"] = str(args.xgb_device)
     if args.xgb_n_jobs is not None:
         xgb_overrides["n_jobs"] = int(args.xgb_n_jobs)
+    if args.min_child_weight is not None:
+        xgb_overrides["min_child_weight"] = float(args.min_child_weight)
+    if args.gamma is not None:
+        xgb_overrides["gamma"] = float(args.gamma)
 
     config = walk_forward.WalkForwardConfig(
         eval_seasons=args.eval_seasons,

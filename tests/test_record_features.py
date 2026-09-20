@@ -120,3 +120,26 @@ def test_compute_team_records_before_week_validates_schema() -> None:
         assert "missing required columns" in str(exc)
     else:
         raise AssertionError("Expected ValueError for missing required columns")
+
+
+def test_compute_team_records_before_week_uses_historical_divisions_before_2002() -> None:
+    """Pre-2002 division splits should use the historical alignment."""
+    schedule_df = pl.DataFrame(
+        {
+            "season": [2001],
+            "week": [1],
+            "game_type": ["REG"],
+            "away_abbr": ["ARI"],
+            "home_abbr": ["DAL"],
+            "away_score": [24],
+            "home_score": [17],
+        }
+    )
+
+    records = polars_utils.compute_team_records_before_week(schedule_df, season=2001, week=2)
+    by_team = _row_by_team(records)
+
+    assert by_team["ARI"]["division_wins"] == 1
+    assert by_team["ARI"]["conference_wins"] == 1
+    assert by_team["DAL"]["division_losses"] == 1
+    assert by_team["DAL"]["conference_losses"] == 1

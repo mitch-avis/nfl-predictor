@@ -720,7 +720,10 @@ Rules for stat-style features:
 - Carry counts and sums through season-to-date aggregation and compute rates afterward (ratio of
   sums), the way `_compute_derived_metrics` already works.
 - Name allowed/defensive metrics explicitly and add them to `EXCLUDE_FROM_OPPONENT_STATS` so the
-  generic `opponent_` mirror does not duplicate them.
+  generic `opponent_` mirror does not duplicate them. Before excluding a stat, grep
+  `_compute_derived_metrics` for its `opponent_` mirror: a derived metric that reads it needs
+  the stat listed in `OPPONENT_MIRROR_INTERMEDIATES` too, or the derived columns go null at the
+  next rebuild (the `0.12.4` sack exclusion did exactly that, fixed in `0.12.6`).
 - Cite the formula in the docstring and test each self-computed metric against a hand-built
   fixture.
 - Any schedule-adjusted or opponent-adjusted value for week `N` must be solved from games strictly

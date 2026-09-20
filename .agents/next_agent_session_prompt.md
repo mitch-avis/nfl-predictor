@@ -38,14 +38,13 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   `0.12.5`, committed on 2026-09-20 as five per-version commits `e5ee418`, `7189792`,
   `db6e892`, `532fd38`, `d9453cb` plus `084f857`; the split is a hunk-level reconstruction and
   the first commit's body names the two `walk_forward.py` hunks that carry later material).
-  **Nothing is pushed**; pushing is a must-ask item the user has not answered yet.
+  Both branches were merged into `main` and pushed on 2026-09-20 (`main` at `70592e8`).
 - Active branch `chore/m59-etl-rebuild` off `main`, version `0.12.7`: `2d46083` fixes the
   `0.12.4` defect that the first ETL rebuild exposed (the sack exclusion starved
   `opponent_points_per_play`; six derived columns went null), `fec17d2` adds the matching rule
   to `AGENTS.md`, and the `0.12.7` commit records the rebuild and its tie check in the docs.
-  `scripts/gate.sh` must exit `0` on the branch tip (the previous session ran it before the
-  final commit; the result is in that commit's message). The branch is ready to merge into
-  `main` once the user says so; nothing is pushed.
+  `scripts/gate.sh` exited `0` on the branch tip (`846 passed`, coverage `92.67%`); the branch
+  is merged into `main` (`70592e8`) and pushed. Start task 54.0 on a fresh branch off `main`.
 - Data on disk (2026-09-20 04:31 rebuild, second pass, `0.12.6` schema):
   `data/completed_games_ml.csv` `db6a78a3...` (`7278` rows, `513` columns); the through-2025
   cut `data/completed_games_ml.m59_through_2025.csv` `cf42ec55...` (`7261` rows) is the
@@ -59,8 +58,11 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   build against this run. Two flags from the review: all 816 margins moved (max `5.16`), and
   weeks-3-18 pick accuracy fell `0.6861` to `0.6764`; both are recorded, neither changed the
   decision.
-- Next task: 54.0 (schedule skeleton and coverage check) on a fresh branch off `main` after the
-  merge, per the confirmed order of work below.
+- Next task: 54.0 (schedule skeleton and coverage check) on a fresh branch off `main`, per the
+  confirmed order of work below. The user asked, after the merge, why weeks-3-18 pick accuracy
+  fell 7 games between the benchmark and the rebuild arm; the answer (45 picks flipped on
+  near-coin-flip margins, all within noise, none caused by the `0.12.6` fix) is in the session
+  transcript and should be kept in mind when the next arm is read.
 - Milestone 59 is closed and archived with two parts reopened: the fitted-calibration pool is
   in-sample ("From Milestone 59" in `TODO.md`), and `n_estimators` is untuned (task 55.7).
   `auto` is the deterministic floor; production defaults to `elo`; no in-season early stopping

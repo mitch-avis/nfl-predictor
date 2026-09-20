@@ -283,20 +283,21 @@ def select_calibration_data(
 ) -> pd.DataFrame:
     """Select time-aware calibration data from the training window.
 
-    Uses the last `calibration_weeks` weeks of the eval season strictly before `eval_week`.
-    Returns empty when insufficient or unavailable.
+    Uses the previous two seasons plus the completed weeks of the eval season strictly before
+    `eval_week`. A positive `calibration_weeks` enables the pooled selector; zero disables it.
     """
     if calibration_weeks <= 0:
         return train_df.iloc[0:0].copy()
-    season_df = train_df[train_df["season"] == eval_season].copy()
-    if season_df.empty:
-        return season_df
-    eligible_weeks = sorted(season_df["week"].dropna().unique())
-    eligible_weeks = [week for week in eligible_weeks if week < eval_week]
-    if len(eligible_weeks) < calibration_weeks:
-        return season_df.iloc[0:0].copy()
-    selected_weeks = eligible_weeks[-calibration_weeks:]
-    return season_df[season_df["week"].isin(selected_weeks)].copy()
+    if "season" not in train_df.columns or "week" not in train_df.columns:
+        return train_df.iloc[0:0].copy()
+
+    season = pd.to_numeric(train_df["season"], errors="coerce")
+    week = pd.to_numeric(train_df["week"], errors="coerce")
+    lower_season = int(eval_season) - 2
+    mask = ((season >= lower_season) & (season < eval_season)) | (
+        (season == eval_season) & (week < eval_week)
+    )
+    return train_df.loc[mask].copy()
 
 
 def summarize_eval_window(
@@ -374,6 +375,9 @@ def _fit_calibrator(
     actual_home_win: np.ndarray,
     method: str,
     sample_weight: np.ndarray | None = None,
+    actual_margin: np.ndarray | None = None,
+    seasons: np.ndarray | None = None,
+    excluded_season: int | None = None,
 ) -> ml_model.WinProbCalibrator | None:
     method = method.lower()
     if method == "none":
@@ -1017,16 +1021,27 @@ def run_walk_forward_backtest(
                     pred_margin_inputs = pred_margin_calibration / sigma_calibration
                 away_col, home_col = target_columns
                 actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
+                actual_margin_calibration = calibration_df[home_col].to_numpy(
+                    dtype=float
+                ) - calibration_df[away_col].to_numpy(dtype=float)
                 calibration_recency = compute_recency_sample_weight(
                     calibration_df,
                     half_life_weeks=config.recency_half_life_weeks,
                     half_life_seasons=config.recency_half_life_seasons,
+                )
+                calibration_seasons = (
+                    calibration_df["season"].to_numpy(dtype=int)
+                    if "season" in calibration_df.columns
+                    else None
                 )
                 calibrator = _fit_calibrator(
                     pred_margin_inputs,
                     actual_home_win.to_numpy(),
                     resolved_calibration,
                     sample_weight=calibration_recency,
+                    actual_margin=actual_margin_calibration,
+                    seasons=calibration_seasons,
+                    excluded_season=(int(fold.season) if calibration_seasons is not None else None),
                 )
                 calibration_method = "none" if calibrator is None else calibrator.method
 

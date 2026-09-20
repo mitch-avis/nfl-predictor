@@ -287,7 +287,7 @@ def test_walk_forward_probabilities_in_bounds() -> None:
 
 
 def test_calibration_data_is_time_aware() -> None:
-    """Calibration data must come from weeks strictly before the eval week."""
+    """Calibration data uses prior seasons plus earlier weeks of the current season only."""
     df = _fixture_df()
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 
@@ -296,7 +296,33 @@ def test_calibration_data_is_time_aware() -> None:
             fold.train_df, fold.season, fold.week, calibration_weeks=1
         )
         if not calibration_df.empty:
-            assert calibration_df["week"].max() < fold.week
+            current_season = calibration_df[calibration_df["season"] == fold.season]
+            if not current_season.empty:
+                assert current_season["week"].max() < fold.week
+            assert calibration_df["season"].min() >= fold.season - 2
+            assert calibration_df["season"].max() <= fold.season
+
+
+def test_calibration_data_uses_prior_two_seasons_plus_completed_weeks() -> None:
+    """Calibration selection should pool the previous two seasons and current completed weeks."""
+    df = pd.DataFrame(
+        {
+            "season": [2020, 2020, 2021, 2021, 2022, 2022],
+            "week": [1, 2, 1, 2, 1, 2],
+            "away_score": [10, 11, 12, 13, 14, 15],
+            "home_score": [20, 21, 22, 23, 24, 25],
+        }
+    )
+
+    calibration_df = walk_forward.select_calibration_data(
+        df,
+        eval_season=2022,
+        eval_week=2,
+        calibration_weeks=1,
+    )
+
+    assert calibration_df["season"].tolist() == [2020, 2020, 2021, 2021, 2022]
+    assert calibration_df["week"].tolist() == [1, 2, 1, 2, 1]
 
 
 def test_walk_forward_quantile_intervals_monotonic() -> None:
@@ -722,7 +748,20 @@ def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPa
 
     assert walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=0).empty
     assert walk_forward.select_calibration_data(df, 2030, 2, calibration_weeks=1).empty
-    assert walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=5).empty
+    pooled = walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=1)
+    assert not pooled.empty
+    pooled_pairs = sorted(
+        {
+            (int(season), int(week))
+            for season, week in zip(pooled["season"], pooled["week"], strict=True)
+        }
+    )
+    assert pooled_pairs == [
+        (2022, 1),
+        (2022, 2),
+        (2022, 3),
+        (2023, 1),
+    ]
 
     postseason_summary = walk_forward.summarize_eval_window(
         pd.DataFrame({"season": [2024], "week": [20]}),

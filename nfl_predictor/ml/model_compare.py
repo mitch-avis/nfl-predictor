@@ -232,10 +232,21 @@ def _fit_margin_total_fold(
                 pred_margin_calib = pred_margin_calib + baseline_margin_calib
             away_col, home_col = target_columns
             actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
+            actual_margin = calibration_df[home_col].to_numpy(dtype=float) - calibration_df[
+                away_col
+            ].to_numpy(dtype=float)
+            calibration_seasons = (
+                calibration_df["season"].to_numpy(dtype=int)
+                if "season" in calibration_df.columns
+                else None
+            )
             calibrator = walk_forward._fit_calibrator(
                 pred_margin_calib,
                 actual_home_win.to_numpy(),
                 recipe.calibration_method,
+                actual_margin=actual_margin,
+                seasons=calibration_seasons,
+                excluded_season=int(fold.season) if calibration_seasons is not None else None,
             )
             if calibrator is None:
                 calibration_method = "none"
@@ -353,6 +364,12 @@ def _fit_blended_fold(
     )
     away_col, home_col = target_columns
     actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
+    actual_margin = calibration_df[home_col].to_numpy(dtype=float) - calibration_df[
+        away_col
+    ].to_numpy(dtype=float)
+    calibration_seasons = (
+        calibration_df["season"].to_numpy(dtype=int) if "season" in calibration_df.columns else None
+    )
 
     calibrator = None
     calibration_method = recipe.calibration_method
@@ -361,6 +378,9 @@ def _fit_blended_fold(
             blended_margin_calib,
             actual_home_win.to_numpy(),
             recipe.calibration_method,
+            actual_margin=actual_margin,
+            seasons=calibration_seasons,
+            excluded_season=int(fold.season) if calibration_seasons is not None else None,
         )
         if calibrator is None:
             calibration_method = "none"

@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.12.7] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.7` and keep `uv.lock` aligned.
+- The dataset on disk is the 2026-09-20 rebuild on the `0.12.6` schema (`7278` rows, `513`
+  columns, `db6a78a3...`; previous build kept in `data/backup_pre_m59_rebuild/`): the six sack
+  mirrors are gone and the 1999-2001 division and conference derived columns use the pre-2002
+  alignment. Leakage audit `463` features, `0` flags. The from-week-1 walk-forward on its
+  through-2025 cut (`models/wf_m59_rebuild_2023_2025_from_week1/`, rescored in its `REVIEW.md`)
+  ties the standing benchmark (weeks 3-18 deterministic Brier `0.2096` against `0.2099`, paired
+  `[-0.0028, +0.0023]`; margin MAE `+0.0113`) and becomes the reference arm for new work on the
+  rebuilt build; `AGENTS.md` carries its table beside the benchmark.
+
+## [0.12.6] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.6` and keep `uv.lock` aligned.
+
+### Fixed
+
+- The `0.12.4` exclusion of `times_sacked` from the opponent mirror starved
+  `opponent_points_per_play`, which divides `points_allowed` by the opponent's pass attempts,
+  rush attempts and times sacked: the first ETL rebuild on that schema (2026-09-20) published
+  `away_/home_opponent_points_per_play`, `away_/home_points_per_play_margin` and their two
+  diffs as all-null columns (`models/etl_m59_rebuild/etl_defective_first_pass.log`, the schema
+  enforcement line). The ETL now builds the mirrors named in
+  `constants.OPPONENT_MIRROR_INTERMEDIATES` (`times_sacked` only) per game for the derivation
+  and drops them when the final schema is selected, so `opponent_times_sacked` stays
+  unpublished and the six derived columns keep the values the previous build had.
+
 ## [0.12.5] - 2026-09-19
 
 ### Changed

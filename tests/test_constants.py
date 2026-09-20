@@ -186,6 +186,14 @@ def test_sack_mirror_inputs_are_excluded_from_opponent_generation() -> None:
     assert "times_sacked" in excluded
 
 
+def test_opponent_mirror_intermediates_are_excluded_from_publication() -> None:
+    """Every intermediate mirror is an excluded stat, so the published schema never carries it."""
+    excluded = set(constants.EXCLUDE_FROM_OPPONENT_STATS)
+
+    assert constants.OPPONENT_MIRROR_INTERMEDIATES == ("times_sacked",)
+    assert set(constants.OPPONENT_MIRROR_INTERMEDIATES) <= excluded
+
+
 def test_rare_events_feature_group_markers_cover_the_noise_family() -> None:
     """The rare-event ablation group should name the exact noise-family columns."""
     markers = set(constants.FEATURE_GROUP_COLUMN_MARKERS["rare_events"])

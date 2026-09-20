@@ -657,7 +657,9 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
 
     Note: Some stats are excluded from opponent generation because they would be
     exact duplicates or inverses of existing stats.
-    See constants.EXCLUDE_FROM_OPPONENT_STATS.
+    See constants.EXCLUDE_FROM_OPPONENT_STATS. The mirrors named in
+    constants.OPPONENT_MIRROR_INTERMEDIATES are built anyway because a derived metric
+    reads them; the final schema selection drops them.
 
     Args:
         team_stats_df: DataFrame with per-game team statistics
@@ -676,6 +678,7 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
         "games_played",
     }
     exclude_cols.update(constants.EXCLUDE_FROM_OPPONENT_STATS)
+    exclude_cols.difference_update(constants.OPPONENT_MIRROR_INTERMEDIATES)
 
     stat_cols = [col for col in team_stats_df.columns if col not in exclude_cols]
 

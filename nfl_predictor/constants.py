@@ -1063,6 +1063,13 @@ EXCLUDE_FROM_OPPONENT_STATS = [
     "is_home",
 ]
 
+# Excluded mirrors that the ETL still builds per game because a derived metric reads them,
+# and drops again when the final schema is selected. `opponent_points_per_play` divides
+# `points_allowed` by the opponent's plays (`opponent_pass_attempts + opponent_rush_attempts +
+# opponent_times_sacked`), so the times-sacked mirror has to exist at derivation time even
+# though it is never published.
+OPPONENT_MIRROR_INTERMEDIATES: tuple[str, ...] = ("times_sacked",)
+
 # nflreadpy stats to use (per team) - these get prefixed with away_/home_
 NFLREADPY_STATS = [
     # Passing offense

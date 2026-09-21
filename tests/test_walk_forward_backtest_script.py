@@ -216,3 +216,70 @@ def test_disable_feature_groups_unknown_group_raises_from_cli_path(
 
     with pytest.raises(ValueError, match="not_a_real_group"):
         walk_forward.resolve_feature_group_columns(["away_epa"], groups)
+
+
+def test_parse_args_accepts_n_estimators_override() -> None:
+    """`--n-estimators` parses as an integer and defaults to None when omitted."""
+    old_argv = sys.argv
+    try:
+        sys.argv = ["walk_forward_backtest.py", "--n-estimators", "900"]
+        args = walk_forward_backtest._parse_args()
+        sys.argv = ["walk_forward_backtest.py"]
+        defaults = walk_forward_backtest._parse_args()
+    finally:
+        sys.argv = old_argv
+
+    assert args.n_estimators == 900
+    assert defaults.n_estimators is None
+
+
+def test_main_forwards_n_estimators_into_the_xgb_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The tree-budget flag reaches the engine config as an int, and is absent when omitted."""
+    captured: list[walk_forward.WalkForwardConfig] = []
+
+    def fake_run(
+        _df: pd.DataFrame, config: walk_forward.WalkForwardConfig, **_kwargs: object
+    ) -> dict[str, object]:
+        """Record the config the CLI built and return a minimal result."""
+        captured.append(config)
+        return {"checkpoint": {}, "per_week": []}
+
+    def fake_report(
+        _run_id: str, _created_at: str, payload: dict[str, object], _results: object
+    ) -> dict[str, object]:
+        """Return the config payload unchanged."""
+        return {"config": payload}
+
+    def fake_metadata(
+        _created_at: str, _hash: str, payload: dict[str, object]
+    ) -> dict[str, object]:
+        """Return a minimal metadata payload."""
+        return {"config": payload}
+
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
+    monkeypatch.setattr(walk_forward, "build_metadata", fake_metadata)
+    out_json = tmp_path / "metrics_report.json"
+    base_argv = [
+        "walk_forward_backtest.py",
+        "--checkpoint-dir",
+        str(tmp_path / "checkpoints"),
+        "--out-json",
+        str(out_json),
+    ]
+
+    monkeypatch.setattr(sys, "argv", [*base_argv, "--n-estimators", "900"])
+    walk_forward_backtest.main()
+
+    monkeypatch.setattr(sys, "argv", base_argv)
+    walk_forward_backtest.main()
+
+    overrides = captured[0].xgb_params_overrides or {}
+    assert overrides["n_estimators"] == 900
+    assert isinstance(overrides["n_estimators"], int)
+    assert "n_estimators" not in (captured[1].xgb_params_overrides or {})

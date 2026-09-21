@@ -238,6 +238,15 @@ def _parse_args() -> argparse.Namespace:
         help="Optional XGBoost gamma override.",
     )
     parser.add_argument(
+        "--n-estimators",
+        type=int,
+        default=None,
+        help=(
+            "Optional XGBoost n_estimators override (the tree budget; every in-season fit "
+            "runs the full budget)."
+        ),
+    )
+    parser.add_argument(
         "--resume",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -313,6 +322,8 @@ def main() -> None:
         xgb_overrides["min_child_weight"] = float(args.min_child_weight)
     if args.gamma is not None:
         xgb_overrides["gamma"] = float(args.gamma)
+    if args.n_estimators is not None:
+        xgb_overrides["n_estimators"] = int(args.n_estimators)
 
     config = walk_forward.WalkForwardConfig(
         eval_seasons=args.eval_seasons,

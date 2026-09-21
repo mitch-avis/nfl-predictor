@@ -409,6 +409,9 @@ in the run's metrics report.
 python scripts/walk_forward_backtest.py --disable-feature-groups pbp
 ```
 
+`--n-estimators` overrides the XGBoost tree budget for the run (every in-season fit runs the full
+budget), which is how the budget itself is measured against the default.
+
 Recent ablation example (2003-2025 seasons, include postseason, calibration=platt, recency half-life
 seasons=2):
 

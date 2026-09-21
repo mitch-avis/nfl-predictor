@@ -54,7 +54,7 @@ xgb.set_config(verbosity=0)
 
 DEFAULT_XGB_PARAMS = {
     "objective": "reg:squarederror",
-    "n_estimators": 598,
+    "n_estimators": 200,
     "learning_rate": 0.0165,
     "max_depth": 5,
     "min_child_weight": 2.1878,

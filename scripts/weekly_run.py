@@ -290,19 +290,22 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     parser.add_argument(
         "--wf-n-estimators",
         type=int,
-        default=defaults.get("wf_n_estimators", 120),
+        default=defaults.get("wf_n_estimators", ml_model_core.DEFAULT_XGB_PARAMS["n_estimators"]),
         help="Walk-forward: XGBoost n_estimators override.",
     )
     parser.add_argument(
         "--wf-max-depth",
         type=int,
-        default=defaults.get("wf_max_depth", 4),
+        default=defaults.get("wf_max_depth", ml_model_core.DEFAULT_XGB_PARAMS["max_depth"]),
         help="Walk-forward: XGBoost max_depth override.",
     )
     parser.add_argument(
         "--wf-learning-rate",
         type=float,
-        default=defaults.get("wf_learning_rate", 0.07),
+        default=defaults.get(
+            "wf_learning_rate",
+            ml_model_core.DEFAULT_XGB_PARAMS["learning_rate"],
+        ),
         help="Walk-forward: XGBoost learning_rate override.",
     )
     parser.add_argument(
@@ -1501,8 +1504,6 @@ def main() -> int:
             "n_estimators": int(args.wf_n_estimators),
             "max_depth": int(args.wf_max_depth),
             "learning_rate": float(args.wf_learning_rate),
-            "subsample": 0.9,
-            "colsample_bytree": 0.9,
             "n_jobs": int(args.wf_n_jobs),
             "verbosity": 0,
         },

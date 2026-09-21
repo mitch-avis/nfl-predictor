@@ -369,8 +369,8 @@ Every finished week logs its position, running time, and an estimate of the time
 1107s remaining`). The estimate averages the weeks trained so far, so it runs a little low late in a
 run as training sets grow. Measured on 2026-09-20/21 on a 24-core machine: a from-week-1 run over
 three seasons takes about 50 minutes on an idle machine and about 110 minutes when anything else
-loads it; over six seasons it takes about 100 minutes idle at a 200-tree budget, about 3.3 hours at
-400 and about 4.8 hours at the default 598 under load (run directories
+loads it; over six seasons it takes about 100 minutes idle at the default 200-tree budget, about
+3.3 hours at 400 and about 4.8 hours at 598 under load (run directories
 `models/wf_m55_7_2020_2025_trees*/`). Run one walk-forward at a time: XGBoost uses every core, and
 two concurrent runs slow each other down far more than twofold. When anything else is busy on the
 machine, set `OMP_WAIT_POLICY=PASSIVE` (for example `OMP_WAIT_POLICY=PASSIVE python
@@ -484,9 +484,10 @@ This is the current behavior, recorded for reference; none of it is a recommenda
 
 - Walk-forward and training filter to `game_type == "REG"` by default: `--include-postseason`
   and `--wf-include-postseason` are off, and `--postseason-weight` is `1.0`.
-- The shipped `config/weekly_run.yaml` turns them on for the weekly run:
-  `wf_include_postseason: true`, `include_postseason: true`, `postseason_weight: 1.3`, and
-  `power_rankings_include_postseason: true`.
+- The shipped `config/weekly_run.yaml` now keeps those regular-season defaults for the weekly run:
+  `wf_include_postseason: false` and `include_postseason: false`. It still ships
+  `postseason_weight: 1.3`, but that weight is inert unless postseason training is explicitly
+  enabled, and `power_rankings_include_postseason: true` remains on for the rankings step.
 - The schedule-adjusted strength composite built in ETL never includes postseason games.
 - The power rankings default through-week is the week before the prediction week, clamped to the
   last regular-season week when the prediction week is postseason, because strength snapshots stop

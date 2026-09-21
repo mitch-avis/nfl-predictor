@@ -59,7 +59,9 @@ Rules that are always enforced:
   (PBP-first, with the schedule skeleton as task 54.0). The analysis, crosswalk, and
   prioritized shortlist live in `.agents/feature_crosswalk.md`; the ordered milestones live in
   `.agents/TODO.md`. Task 55.7's tree-budget ladder ran in `0.12.10`-`0.12.13` (three
-  six-season rungs, "Tree-budget ladder" below) and awaits the user's decision on the default.
+  six-season rungs, "Tree-budget ladder" below); on 2026-09-21 the user approved adopting
+  `200` as the shared default in `0.13.0`, and the accepted `100` rung later tied that default
+  in `0.13.1`, so `200` stays in place.
   Task 56.1 landed in `0.12.11`; tasks 56.2 (the postseason default) and 58.4 (the ETL's
   upstream input paths) were narrowed in `0.12.11` and `0.12.12`. The web UI
   (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on
@@ -228,11 +230,15 @@ Rules that are always enforced:
 
   Outcome: the ladder stopped on the `400` rung's "report all three and ask" branch. `400` ties
   `598` on Brier, `200` beats `400` on margin MAE beyond the fit-noise floor but not on Brier,
-  and the weeks 3-18 `200 - 598` Brier interval covers zero by `+0.0000791`. **The default
-  `n_estimators` stays `598` until the user decides otherwise**; a default change is must-ask.
-  The `1200` rung stays pre-written and never launched. Open questions: a `100` rung, a second
-  seed on `200` (the six-season fit-noise floor has never been measured), and whether any
-  default change should wait for a bye week mid-season. Timings, which are scheduling facts and
+  and the weeks 3-18 `200 - 598` Brier interval covers zero by `+0.0000791`. On 2026-09-21 the
+  user chose `200` as the shared default for the `0.13.0` code change. The accepted `100` rung
+  later tied the new default in its independent review (`models/wf_m55_7_2020_2025_trees100/`
+  and `REVIEW.md` there): governing weeks 3-18 against `200`, deterministic Brier `0.2103`
+  against `0.2103`, diff `+0.0000` `[-0.0008, +0.0009]`; margin MAE `9.9237` against `9.9281`,
+  diff `-0.0044` `[-0.0389, +0.0296]`. So `200` stays the default and task 55.7 is closed. The
+  `1200` rung stays pre-written and never launched. Open questions: a second seed on `200`
+  (the six-season fit-noise floor has never been measured) and whether any further default change
+  should wait for a bye week mid-season. Timings, which are scheduling facts and
   not clean speed measurements: `598` about `161` s/fold (4h46m) under load from gates and the
   web API watcher, `200` about `56` s/fold (1h40m) and `400` about `111` s/fold (3h18m) on a
   machine quiet apart from that watcher.

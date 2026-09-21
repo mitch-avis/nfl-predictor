@@ -48,18 +48,18 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-21, version `0.12.15`, `docs/handoff-next-steps`)
+### Current validated baseline (2026-09-21, version `0.13.1`, `main`)
 
-- Everything through `0.12.14` is merged into `main` and pushed; `main` is at `3729006`, the
-  merge of `docs/rules-and-roadmap`. The current branch `docs/handoff-next-steps` sits off that
-  commit and carries the documentation-only `0.12.15` chunk. This chunk changes no executable
-  code, so its gate result is the one reported in the session check-in; the last full
-  `scripts/gate.sh` exited `0` on the `0.12.13` tree (`862 passed`, coverage `92.68%`), and the
-  last `--web` run was `862 passed`, coverage `92.66%`, on `ebb1f8e`. That gate covered ruff
-  format, ruff, ty, pyright, pytest with coverage against the enforced `90%` floor,
-  markdownlint, `uv lock --check`, `uv sync --check --active` and the CLI help smoke checks,
-  plus the frontend gate (lint, typecheck, `22` vitest tests, build). The `web` extra no longer
-  exists, so the gate no longer passes `--extra web`.
+- `main` and `origin/main` carry `0.13.1`, merged and pushed. The shared `n_estimators` default
+      is `200`; `scripts/weekly_run.py` Stage 1 now uses the shared production XGBoost defaults; and
+      the shipped `config/weekly_run.yaml` has `tune: false`, `wf_include_postseason: false`,
+      `include_postseason: false`, `wf_max_depth: 5` and `wf_learning_rate: 0.0165`. The reviewed
+      `100`-tree plateau check `models/wf_m55_7_2020_2025_trees100/` tied `200`, so `200` stays the
+      default. New work should start from a fresh branch off `main`.
+- `scripts/gate.sh` exits `0` on the merged `0.13.1` tree (`865 passed`, coverage `92.68%`).
+      That gate covered `uv lock --check`, `uv sync --check --active`, ruff format, ruff, ty,
+      pyright, pytest with coverage against the enforced `90%` floor, markdownlint and the CLI help
+      smoke checks. The last `--web` run remains `862 passed`, coverage `92.66%`, on `ebb1f8e`.
 - Data: the 2026-09-20 rebuild (`db6a78a3...`, `7278` rows, `513` columns; backup of the
   previous build in `data/backup_pre_m59_rebuild/`); walk-forward input for new arms
   `data/completed_games_ml.m59_through_2025.csv` (`cf42ec55...`), reference arm
@@ -134,17 +134,12 @@ the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
 Order set by the user on 2026-09-21, after the tree-budget ladder was reported:
 
-1. Task 55.7 close-out: adopt `200` as the shared default `n_estimators`, align
-   `config/weekly_run.yaml` with the production defaults, then run the `100` plateau rung.
-2. Task 56.2 config flags: `include_postseason: false` and `wf_include_postseason: false` in
-   `config/weekly_run.yaml`. It can share the `0.13.0` chunk with item 1, since both are
-   config defaults.
-3. Task 54.0 - the parked schedule skeleton plus the box-score repair, the ETL rebuild, and one
+1. Task 54.0 - the parked schedule skeleton plus the box-score repair, the ETL rebuild, and one
    three-season no-breakage arm at the new `200` default.
-4. Tasks 54.1 and 54.2 - situational rates and the PBP box-score source.
-5. Task 55.8 - season weighting, as six-season arms at the `200` default.
-6. Task 55.9 - the Optuna re-tune, after Milestone 54 lands.
-7. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
+2. Tasks 54.1 and 54.2 - situational rates and the PBP box-score source.
+3. Task 55.8 - season weighting, as six-season arms at the `200` default.
+4. Task 55.9 - the Optuna re-tune, after Milestone 54 lands.
+5. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
    off); it can run in parallel with any walk-forward as a subagent task.
 
 After those: Milestone 53 task 53.7 (defense-adjusted quarterback rate), tasks 54.3 and 54.4,
@@ -302,7 +297,7 @@ Tasks:
       training.
 - [ ] 55.5 Decide the `ScoreModel` fate: document as experimental or deprecate cleanly.
 - [ ] 55.6 Add the stability view by season and week bucket, and a "recommended defaults" section.
-- [ ] 55.7 Choose `n_estimators` time-aware (from task 59.3, not done there). In-season fits run
+- [x] 55.7 Choose `n_estimators` time-aware (from task 59.3, not done there). In-season fits run
       the full `598`-tree budget since `0.12.3` with no early stopping anywhere; `598` is the
       old Optuna value, not a measured choice. Tune it on a whole prior season as the eval set
       (at least 250 games), or early-stop on that season-sized set, and apply the result
@@ -336,7 +331,17 @@ Tasks:
       `HYPOTHESIS.md` naming its windows and columns per guardrail rule 4, and an independent
       reviewer rescore. If `100` ties `200`, keep `200`; if `100` is better beyond the
       fit-noise floor, report it and ask. The default change is a minor bump (`0.13.0`). The
-      task stays open until `0.13.0` lands and the `100` rung is reviewed.
+      task stayed open until the `100` rung was reviewed. Landed 2026-09-21 on
+      `feat/m55-7-default-200` (`0.13.0`, gate green): `DEFAULT_XGB_PARAMS` now carries
+      `n_estimators = 200`, the bare `weekly_run` parser falls back to the shared production
+      `n_estimators`, `max_depth` and `learning_rate`, Stage 1 no longer forces
+      `subsample` / `colsample_bytree` to `0.9`, and `config/weekly_run.yaml` is aligned.
+      Closed 2026-09-21 by the reviewed plateau check in
+      `models/wf_m55_7_2020_2025_trees100/`: against the governing `200` rung, weeks 3-18,
+      deterministic Brier `0.2103` vs `0.2103`, diff `+0.0000` `[-0.0008, +0.0009]`; margin
+      MAE `9.9237` vs `9.9281`, diff `-0.0044` `[-0.0389, +0.0296]`. By the written rule, a
+      tie, so `200` stays the shared default. The reviewer also rescored the rung against `598`
+      for ladder continuity (`REVIEW.md` in the same run directory).
 - [ ] 55.8 Season weighting. Today every training row from 1999 carries the same weight as
       last week's game (`recency_half_life_seasons` is off by default in walk-forward and
       production). The README's recency ablation ("keep it off") is not trustworthy: it was
@@ -390,7 +395,7 @@ Formerly Milestone 41.
       `--data-collection-args`) to `scripts/weekly_run.py`; the same pass-through carries the
       `--stat-prior-blend*` flags, which it cannot set today. Done 2026-09-20 (`0.12.11`) as the
       generic `--data-collection-args` string.
-- [ ] 56.2 Decide and document how postseason games enter evaluation and training; when the
+- [x] 56.2 Decide and document how postseason games enter evaluation and training; when the
       prediction week is postseason, default the power-rankings through-week to the last
       regular-season week. Narrowed 2026-09-20 (`0.12.11`): the through-week clamp landed and the
       README documents the current state (code defaults exclude postseason; the shipped
@@ -409,7 +414,8 @@ Formerly Milestone 41.
       strength, records and the prior-season blend are regular-season only; Elo and QB Elo
       (`data/qb_elos.csv`) and the TeamRankings playoff-week snapshots are the only features
       that carry playoff results, and they enter as pre-game ratings, so there is no leakage.
-      The playoff-week design itself stays deferred.
+      The playoff-week design itself stays deferred. Done 2026-09-21 in `0.13.0` on
+      `feat/m55-7-default-200`, together with the task 55.7 default-alignment chunk.
 - [ ] 56.3 Wire sweep-selected defaults once Milestone 55 lands; confirm resume behavior.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and

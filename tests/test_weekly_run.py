@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -29,6 +30,29 @@ def test_load_config_yaml_optional(tmp_path: Path) -> None:
         assert "PyYAML" in str(exc)
     else:
         assert payload["wf_eval_last_n_seasons"] == 3
+
+
+def test_shipped_weekly_run_config_matches_approved_defaults() -> None:
+    """The shipped weekly config should reflect the approved 0.13.0 defaults."""
+    config_path = Path(__file__).resolve().parents[1] / "config" / "weekly_run.yaml"
+
+    config = weekly_run._load_config(config_path)
+    args = weekly_run._build_parser(weekly_run._normalize_config_defaults(config)).parse_args([])
+
+    assert args.wf_n_estimators == 200
+    assert args.wf_include_postseason is False
+    assert args.include_postseason is False
+    assert args.tune is False
+
+
+def test_weekly_run_parser_defaults_follow_shared_xgb_defaults() -> None:
+    """Bare weekly-run defaults should match the shared production XGBoost defaults."""
+    args = weekly_run._build_parser().parse_args([])
+    defaults = weekly_run.ml_model_core.DEFAULT_XGB_PARAMS
+
+    assert args.wf_n_estimators == defaults["n_estimators"]
+    assert args.wf_max_depth == defaults["max_depth"]
+    assert args.wf_learning_rate == pytest.approx(defaults["learning_rate"])
 
 
 def test_resolve_predict_path_prefers_latest_week(tmp_path: Path) -> None:
@@ -184,3 +208,65 @@ def test_data_collection_args_parses_from_the_command_line() -> None:
     args = weekly_run._build_parser().parse_args(["--data-collection-args", "--min-season 2010"])
 
     assert args.data_collection_args == "--min-season 2010"
+
+
+def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stage 1 should evaluate the same XGBoost defaults the final fit uses."""
+
+    class _StopAfterStage1Error(Exception):
+        """Stop weekly_run once the Stage 1 config has been captured."""
+
+    captured: dict[str, object] = {}
+    data_path = tmp_path / "completed_games_ml.csv"
+    data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
+
+    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> pd.DataFrame:
+        """Capture the Stage 1 overrides and stop before later stages run."""
+        xgb_params_overrides = kwargs.get("xgb_params_overrides")
+        assert isinstance(xgb_params_overrides, dict)
+        captured.update(xgb_params_overrides)
+        raise _StopAfterStage1Error()
+
+    monkeypatch.setattr(weekly_run.walk_forward, "load_games", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(weekly_run.artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(
+        weekly_run.fingerprints,
+        "dataset_fingerprint",
+        lambda _path: {"sha256": "fp"},
+    )
+    monkeypatch.setattr(weekly_run, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(weekly_run, "_run_wf_compare", _fake_run_wf_compare)
+
+    old_argv = sys.argv
+    try:
+        sys.argv = [
+            "weekly_run.py",
+            "--skip-data-refresh",
+            "--data-path",
+            str(data_path),
+            "--run-id",
+            "weekly_test",
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ]
+
+        with pytest.raises(_StopAfterStage1Error):
+            weekly_run.main()
+    finally:
+        sys.argv = old_argv
+
+    resolved = weekly_run.ml_model_core._resolve_xgb_params(
+        weekly_run.ml_model_core.DEFAULT_XGB_PARAMS,
+        overrides=captured,
+    )
+    defaults = weekly_run.ml_model_core.DEFAULT_XGB_PARAMS
+
+    assert resolved["n_estimators"] == defaults["n_estimators"]
+    assert resolved["max_depth"] == defaults["max_depth"]
+    assert resolved["learning_rate"] == pytest.approx(defaults["learning_rate"])
+    assert resolved["subsample"] == pytest.approx(defaults["subsample"])
+    assert resolved["colsample_bytree"] == pytest.approx(defaults["colsample_bytree"])

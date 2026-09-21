@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.13.1] - 2026-09-21
+
+### Changed
+
+- Bump the project version to `0.13.1` and keep `uv.lock` aligned.
+- Task 55.7 closes on the reviewed `100`-tree plateau check:
+  `models/wf_m55_7_2020_2025_trees100/` (checkpoints
+  `models/wf_checkpoints/09a60441e87d86c894ba/`, reviewed independently in its `REVIEW.md`).
+  By the written governing rule, `100` ties the current default `200`, so `200` stays the
+  shared default. Governing weeks 3-18, `100` vs `200`: deterministic Brier `0.2103` vs
+  `0.2103`, diff `+0.0000` with 95% interval `[-0.0008, +0.0009]`; margin MAE `9.9237` vs
+  `9.9281`, diff `-0.0044` with 95% interval `[-0.0389, +0.0296]`.
+- `AGENTS.md`, `.agents/TODO.md` and `.agents/next_agent_session_prompt.md` now treat task 55.7
+  as closed, keep `200` as the shared default after the plateau check, and move the next active
+  work item to task 54.0.
+
+## [0.13.0] - 2026-09-21
+
+### Changed
+
+- Bump the project version to `0.13.0` and keep `uv.lock` aligned.
+- Adopt `200` as the shared default `n_estimators` in walk-forward and production together.
+  `nfl_predictor/ml/ml_model_core.py` now carries the `200`-tree default, and the bare
+  `scripts/weekly_run.py` parser falls back to the same `n_estimators`, `max_depth` and
+  `learning_rate` as the production XGBoost defaults.
+- `scripts/weekly_run.py` Stage 1 no longer forces `subsample` and `colsample_bytree` to `0.9`,
+  so the weekly walk-forward comparison now evaluates the same XGBoost parameter set the final
+  fit uses by default.
+- `config/weekly_run.yaml` now matches the approved weekly defaults: `tune: false`,
+  `wf_include_postseason: false`, `include_postseason: false`, `wf_n_estimators: 200`,
+  `wf_max_depth: 5` and `wf_learning_rate: 0.0165`. `postseason_weight: 1.3` stays in place
+  but is inert unless postseason training is explicitly enabled.
+- `README.md` and `AGENTS.md` now describe the `200`-tree default and the shipped weekly config
+  accurately, while keeping the ladder measurements and benchmark history intact.
+
 ## [0.12.15] - 2026-09-21
 
 ### Changed

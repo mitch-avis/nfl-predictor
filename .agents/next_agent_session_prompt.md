@@ -21,12 +21,13 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
 - Today's date is in your environment. The 2026 season is in progress. Week 2 ends with the
   Monday 2026-09-21 game; the Week 3 weekly run is due before the Thursday 2026-09-24 kickoff,
   and every later week follows the same rhythm (Thursday kickoff, Monday finish).
-- The user runs `scripts/weekly_run.py` themselves unless they ask you to. Measured 2026-09-20:
-  with `--skip-data-refresh` it took 32 minutes (Stage 1, the walk-forward compare, 30 of them
-  while the web API's reload watcher loaded the machine); the ETL adds about 10 minutes from the
-  nflreadpy cache. Refresh the lines first (`python -m nfl_predictor.lines_refresh --season
-  2026 --week N`) when the dataset is fresh but the odds are hours old. It must not overlap any
-  walk-forward: `pgrep -af walk_forward` and `uptime` before anything heavy.
+- The user runs `scripts/weekly_run.py` themselves; they confirmed this again on 2026-09-20 for
+  Week 3. Measured 2026-09-20: with `--skip-data-refresh` it took 32 minutes (Stage 1, the
+  walk-forward compare, 30 of them while the web API's reload watcher loaded the machine); the
+  ETL adds about 10 minutes from the nflreadpy cache. Refresh the lines first (`python -m
+  nfl_predictor.lines_refresh --season 2026 --week N`) when the dataset is fresh but the odds
+  are hours old. It must not overlap any walk-forward: `pgrep -af walk_forward` and `uptime`
+  before anything heavy.
 - Walk-forward durations, one at a time: from week 1 over three eval seasons about 50 minutes
   idle, about 110 minutes when anything else (the web API with `--reload`, a browser session)
   loads the machine, in which case relaunch with `OMP_WAIT_POLICY=PASSIVE` and resume; six
@@ -35,12 +36,30 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   never `pkill -f` a pattern that matches your own shell. Any edit under `nfl_predictor/ml/`
   changes every checkpoint fingerprint; get the code stable before you measure.
 
-## Starting state (2026-09-20, end of the rebuild session)
+## Starting state (2026-09-20, task 55.7 in flight)
 
-- `main` is at the merge of `docs/m59-noise-floor` (`c1fff6a`) plus whatever landed the
-  `0.12.9` handoff (this file); version `0.12.9`. Everything through `0.12.8` is merged and
-  pushed. Check `git status --short | wc -l` and `git log --oneline -3` first; if this file's
-  branch is not yet merged, say so in the check-in.
+- Branch `feat/m55-7-tree-budget`, version `0.12.10`, tree clean at `a664d35`. It was created
+  off `docs/handoff-m55-first`, which is one commit ahead of `main` at `7ea8e39` and is **not
+  merged**; merging both branches into `main` and pushing is on the user's question list
+  (must-ask). Commits on this branch: `280dd96 feat(walk-forward): add --n-estimators
+  tree-budget override`, `345c398 docs(agents): record the launch convention and load-driven
+  timings`, `23776b0 docs(agents): restate the validated baseline at 0.12.9`, `a664d35 chore:
+  bump to 0.12.10 with the tree-budget flag changelog entry`. The full `scripts/gate.sh` exits
+  `0` on that tree: `848 passed`, coverage `92.66%`.
+- **A six-season walk-forward is running.** The `598`-tree reference rung of the task 55.7
+  ladder, `models/wf_m55_7_2020_2025_trees598/` (`HYPOTHESIS.md`, `launch.sh`, `run.log`;
+  checkpoints `models/wf_checkpoints/8431001f74f2766a8c44/`), launched 2026-09-20 19:08 with
+  `OMP_WAIT_POLICY=PASSIVE` because the web API `--reload` watcher loads the machine; `107`
+  folds. Check it with `pgrep -af walk_forward` and the tail of its `run.log`. If it is dead,
+  re-run its `launch.sh`: it resumes from the checkpoints. One run at a time.
+- The ladder plan and the stopping rule live in that run's `HYPOTHESIS.md`: `598` first (it must
+  reproduce the 2023-2025 folds of `models/wf_m59_rebuild_2023_2025_from_week1/` bit for bit),
+  then the extremes `200` and `1200`, then `400` or `800` only if an extreme separates from
+  `598` beyond the fit-noise floor; if both extremes tie, keep `598` and close the ladder. The
+  two extreme rung directories already exist with `HYPOTHESIS.md` and `launch.sh` pre-written
+  (`models/wf_m55_7_2020_2025_trees200/`, `models/wf_m55_7_2020_2025_trees1200/`) and are not
+  launched. Each finished rung needs a reviewer rescore into its `REVIEW.md`, using the
+  `compare_to_benchmark.py` copied into each rung directory, before any number enters the docs.
 - Data on disk: the 2026-09-20 04:31 rebuild on the `0.12.6` schema, `data/completed_games_ml.csv`
   `db6a78a3...` (`7278` rows, `513` columns), lines refreshed at 10:13 for Week 2. The
   walk-forward input for every new arm is the through-2025 cut
@@ -65,7 +84,8 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
 - The Week 2 package for the Sunday and Monday games is `models/weekly_2026_week_02_refresh/`
   (config `hybrid_raw_prob_base_elo_blend0.20_clamp0.10`, `elo` calibration, 15 games).
 - `auto` calibration is the deterministic floor; production defaults to `elo`; no in-season
-  early stopping since `0.12.3`; every head runs the untuned `598`-tree budget (task 55.7).
+  early stopping since `0.12.3`; every head runs the untuned `598`-tree budget, which is
+  exactly what task 55.7 is measuring. `--n-estimators` overrides it since `0.12.10`.
 - The web API runs from the worktree `../nfl-predictor-web` on port 8765 (the user starts it
   with `--reload`; its watcher takes half a core continuously); never restart it unasked.
   `../nfeloqb` and `../nfl-sos-ratings` are the user's and read-only.
@@ -77,11 +97,13 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
    walk-forward operating notes.
 2. `.agents/TODO.md`: the execution loop, the roadmap order (reordered 2026-09-20), Milestone 55
    tasks 55.7 and 55.8 in full, task 54.0, and the "From Milestone 59" follow-ups.
-3. `.agents/ARCHIVE.md`, Milestone 59 ("Rebuild" and "Audit"), then Milestone 52.
-4. `CHANGELOG.md` entries `0.12.0` to `0.12.9`.
-5. `README.md` sections "Win probability calibration", "Backtesting" (including the superseded
+3. `models/wf_m55_7_2020_2025_trees598/HYPOTHESIS.md`: the ladder in flight, its decision rule
+   and its stopping rule.
+4. `.agents/ARCHIVE.md`, Milestone 59 ("Rebuild" and "Audit"), then Milestone 52.
+5. `CHANGELOG.md` entries `0.12.0` to `0.12.10`.
+6. `README.md` sections "Win probability calibration", "Backtesting" (including the superseded
    recency ablation note), "Validation".
-6. `models/wf_m59_rebuild_2023_2025_from_week1_seed7/HYPOTHESIS.md` and `REVIEW.md`, as the
+7. `models/wf_m59_rebuild_2023_2025_from_week1_seed7/HYPOTHESIS.md` and `REVIEW.md`, as the
    model for how a run is written up.
 
 ## First check-in (before any code or run)
@@ -89,10 +111,11 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
 1. `git status --short | wc -l`, `git log --oneline -3`, `scripts/gate.sh --quick`. A dirty
    quick gate is the first task; ask about nothing else until it is clean.
 2. `pgrep -af walk_forward`, `uptime`, and `ps -eo pcpu,args --sort=-pcpu | head -4` to see
-   whether the web API or a weekly run is loading the machine.
-3. Confirm with the user, in one message: the Week 3 weekly run (they said they will likely run
-   it themselves; ask whether that still holds and whether the machine is free for a six-season
-   walk-forward now), and the order of work below.
+   whether the `598` rung, the web API or a weekly run is loading the machine.
+3. Report to the user, in one message: the state of the `598` rung, what the ladder does next,
+   and anything on the question list below. The user already said on 2026-09-20 that they run
+   the Week 3 weekly run themselves and that the machine is free for walk-forward runs for 12
+   hours or more, so do not re-ask either.
 
 ## Order of work (agreed with the user on 2026-09-20)
 
@@ -100,18 +123,17 @@ Each item is one or more versioned chunks with its own changelog entry, gate run
 branch named for the task, handoff rewrite, and a check-in. New work starts on a fresh branch
 off `main`; merging and pushing are must-ask, every time.
 
-1. **Task 55.7, the tree budget.** `598` trees is an old Optuna value that was never measured,
-   and every fit now runs the full budget by construction. Design before running: a ladder of
-   budgets (for example `200`, `400`, `598`, `800`, `1200`) as separate six-season arms of the
-   reference configuration on the rebuilt build (`--eval-last-n-seasons 6 --wf-start-week 1
-   --calibration auto --wf-calibration-weeks 4 --market-anchor --market-transform`, plus the
-   budget flag), one `HYPOTHESIS.md` per arm with the decision rule written against the
-   fit-noise floor, one arm at a time, a reviewer rescore of each before any number enters the
-   docs. Six seasons cost about 100 minutes idle each; write the whole ladder's plan and the
-   stopping rule in the check-in before the first launch, and stop to ask after two arms if no
-   decision has emerged (guardrail 4). The winner becomes the shared default in walk-forward and
-   production together, which is a default change: must-ask before changing it, and mid-season
-   the user may prefer to wait for a bye week or the off-season.
+1. **Task 55.7, the tree budget** (in progress on this branch). `598` trees is an old Optuna
+   value that was never measured, and every fit now runs the full budget by construction. The
+   ladder runs as separate six-season arms of the reference configuration on the rebuilt build
+   (`--eval-last-n-seasons 6 --wf-start-week 1 --calibration auto --wf-calibration-weeks 4
+   --market-anchor --market-transform`, plus `--n-estimators`), one `HYPOTHESIS.md` per arm with
+   the decision rule written against the fit-noise floor, one arm at a time, a reviewer rescore
+   of each before any number enters the docs. Six seasons cost about 100 minutes idle each.
+   Guardrail 4 still applies: stop and ask rather than improvising extra rungs beyond the
+   written stopping rule. The winner becomes the shared default in walk-forward and production
+   together, which is a default change: must-ask before changing it, and mid-season the user may
+   prefer to wait for a bye week or the off-season.
 2. **Task 55.8, season weighting.** Half-lives of about `4`, `8` and `16` seasons via
    `--recency-half-life-seasons` as six-season arms against the unweighted reference, same
    discipline. Replace the README's superseded ablation with the new measurement and its run
@@ -138,15 +160,22 @@ off `main`; merging and pushing are must-ask, every time.
 
 - `README.md`, "Backtesting": the recency ablation table is marked superseded; task 55.8
   replaces it with the new measurement. The "about 75 minutes on a 24-core machine" duration
-  line predates the load findings above; correct it when 55.7's runs give fresh timings.
-- `AGENTS.md`, walk-forward operating notes: add the `launch.sh` / `nohup setsid` convention
-  and the load-driven `PASSIVE` relaunch observed on 2026-09-20 if they are not there yet.
-- `.agents/TODO.md`, "Current validated baseline": restate the version and gate counts at each
-  landed chunk (they lag by one version at the moment).
+  line predates the load findings above; correct it when 55.7's runs give fresh timings. Both
+  are still open.
+- `AGENTS.md`, walk-forward operating notes: the `launch.sh` / `nohup setsid` convention and the
+  load-driven `PASSIVE` relaunch are recorded (`345c398`, `0.12.10`). Done.
+- `.agents/TODO.md`, "Current validated baseline": restated at `0.12.9` (`23776b0`). Restate it
+  again at each landed chunk so it does not lag.
 - Any place that still says the benchmark is "the" reference: on the rebuilt build the
   reference is `models/wf_m59_rebuild_2023_2025_from_week1/`, and the `AGENTS.md` benchmark
   table is the record of the previous build.
 - `CHANGELOG.md`: one entry per landed chunk, new version each time, never `[Unreleased]`.
+
+## Open questions waiting on the user
+
+1. Merge `docs/handoff-m55-first` and `feat/m55-7-tree-budget` into `main` and push (must-ask).
+2. Any default change that comes out of the tree-budget ladder, including the timing of it
+   mid-season (must-ask).
 
 ## How each chunk runs
 

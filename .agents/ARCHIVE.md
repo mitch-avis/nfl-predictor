@@ -44,6 +44,68 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Milestone 54 (partial) - PBP-first team-game skeleton and situational stats
+
+Task 54.0 completed 2026-09-21 (version `0.14.0`); tasks 54.1 to 54.4 stay in `TODO.md`.
+Outcome: completed regular-season team-game rows now come from the schedule skeleton,
+the collapsed 2001-2002 Jacksonville home rows have their box-score columns nulled, the ETL
+rebuild passes leakage checks, and the reviewed three-season no-breakage arm ties the accepted
+`200`-tree reference.
+
+### What landed
+
+- `nfl_predictor/utils/polars/loaders.py`: `build_team_game_skeleton`, which projects every
+  completed regular-season schedule row to its two team-game rows before any nflverse team stats or
+  play-by-play counts are attached; `_log_team_stats_coverage`, which warns for every
+  `(season, team)` whose team-stat row count differs from the schedule; `_repair_collapsed_box_scores`,
+  which nulls the box-score columns of one-row games where the surviving nflverse row clearly
+  covers both teams; and `attach_team_stats_to_schedule`, which applies the repair after the join.
+- `nfl_predictor/data_collection.py` now builds the per-team-game frame from the schedule skeleton
+  instead of from the nflverse team-stats rows, so missing team-stat rows no longer erase the game
+  from schedule-driven counts.
+- `nfl_predictor/constants.py`: `TEAM_GAME_NON_BOX_SCORE_COLUMNS`, used to preserve identity,
+  schedule-derived scoring columns and play-by-play counts while nulling only the collapsed
+  box-score fields.
+- Tests: `tests/test_data_collection_helpers.py` and `tests/test_polars_loaders.py` cover the
+  schedule skeleton, the coverage-gap warnings and the collapsed-box-score repair.
+
+### Verification
+
+- Branch baseline: `feat/m54-0-landing`, version `0.14.0`, off `main` at `d6795ca`.
+- The approved backup of the previous top-level CSVs is `data/backup_pre_m54_0/`.
+- Rebuild log: `models/etl_m54_0_rebuild/etl.log`. It logs the expected 9 coverage-gap warnings
+  (`1999` null team, `1999` BAL/LAR, `2000` BUF/KC/LAC/MIA, `2001-2002` JAX) and the expected 16
+  repair warnings for the collapsed Jacksonville home rows.
+- Rebuilt top-level dataset: `data/completed_games_ml.csv` (`7292` completed rows, `513` columns,
+  fingerprint `db8b8ff4...`). The through-2025 cut is
+  `data/completed_games_ml.m54_0_through_2025.csv` (`7261` rows, `513` columns, fingerprint
+  `e914eadf...`), cut by `models/etl_m54_0_rebuild/cut_through_2025.py` with a verbatim-line
+  check against the source file.
+- Leakage audit: `models/audit_m54_0_rebuild/leakage_audit.json` (`463` features, `0` flags).
+- Acceptance fact: `data/strength_snapshots.csv` now shows Jacksonville at
+  `strength_games_played = 16.0` at season end in 2001 and 2002.
+
+### Walk-forward (54.0)
+
+Run directory: `models/wf_m54_0_2023_2025_from_week1/`
+
+- Hypothesis and decision rule: `HYPOTHESIS.md`
+- Checkpoints: `models/wf_checkpoints/d112ebcba3115bafe9d9/`
+- Completion: `Walk-forward fold 54/54 done` at `2026-09-21 14:18:24.011`, `1301s elapsed`,
+  followed by `wf exit 0` in `run.log`
+- Reference slice: `models/wf_checkpoints/a5e76d54187e27ca7370_2023_2025/`
+- Independent review: `models/wf_m54_0_2023_2025_from_week1/REVIEW.md`
+
+Governing weeks 3-18 result, candidate minus reference (`720` games): deterministic Brier
+`0.2097` vs `0.2090`, diff `+0.0007` with 95% interval `[-0.0011, +0.0024]`; margin MAE
+`9.9166` vs `9.9044`, diff `+0.0122` with 95% interval `[-0.0566, +0.0801]`. By the written
+rule, a no-breakage tie. All `816` predicted margins moved (max `4.44` points). A broader-than-
+first-hypothesized ETL change also appeared: `836` of `855` scored 2023-2025 rows moved at least
+one feature, especially in the `sos_*` and `opponent_*` EPA families, but the review kept the
+decision performance-based and still read the run as a tie.
+
+---
+
 ## Milestone 59 - Benchmark instrument and feature audit follow-ups
 
 Closed 2026-09-19 across versions `0.12.1` to `0.12.4` by two implementation sessions, then

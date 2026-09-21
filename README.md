@@ -166,6 +166,13 @@ seasons are always refreshed to keep upcoming games and lines current. Use
 `--min-season`/`--max-season` to override the default season window (defaults to
 `constants.MIN_SEASON` through the current NFL season).
 
+For completed regular-season games, the ETL now builds the per-team-game frame from the schedule
+first: each completed game contributes exactly two team rows, and nflverse team stats plus the
+play-by-play counts are left-joined onto that skeleton. When nflverse misses one side of a game,
+the row still exists with null box-score stats, so schedule-driven counts such as
+`strength_games_played` continue to follow the schedule instead of the stats source's coverage.
+The ETL logs every `(season, team)` whose nflverse team-stat row count differs from the schedule.
+
 Play-by-play is the largest of those sources (roughly 1.2M regular-season plays for 1999-2025). It
 is fetched one season at a time, reduced to the column list in `constants.PBP_COLUMNS`, filtered to
 the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<season>_reg.parquet`.

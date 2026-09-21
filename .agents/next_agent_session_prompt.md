@@ -40,24 +40,26 @@ must-ask list means stop and wait.
   your own shell. Any edit under `nfl_predictor/ml/` changes every checkpoint fingerprint; get
   the code stable before you measure.
 
-## Starting state (2026-09-21, after merge and push of `0.13.1`)
+## Starting state (2026-09-21, after task 54.0 on `feat/m54-0-landing`)
 
-- **The repo is clean on `main`, and `origin/main` matches it.** `0.13.1` is merged and pushed.
-  `scripts/gate.sh` exits `0` on this tree (`865 passed`, coverage `92.68%`). The shared
-  `n_estimators` default is `200`; `scripts/weekly_run.py` Stage 1 evaluates the shared
-  production XGBoost defaults; and the shipped `config/weekly_run.yaml` now has `tune: false`,
-  `wf_include_postseason: false`, `include_postseason: false`, `wf_max_depth: 5` and
-  `wf_learning_rate: 0.0165`. The last `--web` run remains `862 passed`, coverage `92.66%`, on
-  `ebb1f8e`. Start new work on a fresh branch off `main`.
+- **The working branch is `feat/m54-0-landing`, unmerged, at version `0.14.0`.** It is based on
+  `main` at `d6795ca`; `main` and `origin/main` still carry `0.13.1`. `scripts/gate.sh` exits
+  `0` on this branch after the reviewed 54.0 doc sync. The shared `n_estimators` default remains
+  `200`; `scripts/weekly_run.py` Stage 1 evaluates the shared production XGBoost defaults; and the
+  shipped `config/weekly_run.yaml` keeps `tune: false`, `wf_include_postseason: false`,
+  `include_postseason: false`, `wf_max_depth: 5` and `wf_learning_rate: 0.0165`.
 - **Task 55.7 is closed.** The accepted `100`-tree rung completed under
   `models/wf_m55_7_2020_2025_trees100/` (checkpoints `models/wf_checkpoints/09a60441e87d86c894ba/`)
   and was independently rescored in `REVIEW.md` there against both the governing `200` rung and
   the ladder reference `598`. By the written rule, `100` ties `200`, so `200` stays the shared
   default and no new user decision is needed.
-- **The user answered every open question on 2026-09-21, so your first check-in is a report, not
-  a question.** The decisions are recorded on the tasks in `.agents/TODO.md`; the `0.13.0`
-  code/default chunk those answers approved is now on `main`, and the next decisions
-  left to the user are only the must-ask items under guardrail rule 5.
+- **Task 54.0 is complete on this branch.** The parked commits `ae687dd` and `d34b0ab` were
+  cherry-picked cleanly, the top-level CSVs were backed up to `data/backup_pre_m54_0/`, the ETL
+  rebuild from cache logged the expected 9 coverage-gap warnings and 16 repair warnings, leakage
+  audit `models/audit_m54_0_rebuild/leakage_audit.json` passed (`463` features, `0` flags), and
+  the through-2025 cut `data/completed_games_ml.m54_0_through_2025.csv` is `e914eadf...`
+  (`7261` rows, `513` columns). `data/completed_games_ml.csv` is now `db8b8ff4...`
+  (`7292` completed rows, `513` columns).
 - **No walk-forward is running.** The tree-budget ladder (task 55.7) is complete: four
   six-season rungs of the reference configuration on the rebuilt build, differing only in
   `--n-estimators`, each with a `HYPOTHESIS.md` written before its launch and an independent
@@ -69,19 +71,15 @@ must-ask list means stop and wait.
   `models/wf_m55_7_2020_2025_trees100/` (`09a60441e87d86c894ba`). The numbers and the pairwise
   intervals are in `AGENTS.md` under "Tree-budget ladder" and in the `100` rung's `REVIEW.md`.
   The `1200` rung stays pre-written and unlaunched.
-- **The parked branch `feat/m54-0-schedule-skeleton`** is two commits off `main` and not merged:
-  `ae687dd feat(etl): build the team-game frame from the schedule skeleton` (task 54.0) and
-  `d34b0ab fix(etl): null the box score of a team-stats row that covers both teams`. The repair
-  came out of the audit of the skeleton: for all 16 JAX home games of 2001-2002 the surviving
-  nflverse team-stats row carries both teams' production, and the skeleton alone would push that
-  doubled box score into JAX's opponent mirrors. The user approved both commits and the rebuild
-  that follows them; the details are on task 54.0 in `.agents/TODO.md`.
-- Data on disk: the 2026-09-20 04:31 rebuild on the `0.12.6` schema, `data/completed_games_ml.csv`
-  `db6a78a3...` (`7278` rows, `513` columns), lines refreshed 2026-09-20 10:13 for Week 2. The
-  walk-forward input for every arm on this build is the through-2025 cut
-  `data/completed_games_ml.m59_through_2025.csv` (`cf42ec55...`, `7261` rows). The previous
-  build is in `data/backup_pre_m59_rebuild/`. Leakage audit `models/audit_m59_rebuild/`: `463`
-  features, `0` flags.
+- **The 54.0 no-breakage arm is the current-build three-season reference.**
+  `models/wf_m54_0_2023_2025_from_week1/` (checkpoints
+  `models/wf_checkpoints/d112ebcba3115bafe9d9/`, with `HYPOTHESIS.md`, `compare_output.txt` and
+  `REVIEW.md` in the run directory) tied the accepted `200`-tree reference slice
+  `models/wf_checkpoints/a5e76d54187e27ca7370_2023_2025/` on the governing weeks 3-18 window:
+  deterministic Brier `0.2097` vs `0.2090`, diff `+0.0007` `[-0.0011, +0.0024]`; margin MAE
+  `9.9166` vs `9.9044`, diff `+0.0122` `[-0.0566, +0.0801]`. The rebuild moved 836 of 855 scored
+  2023-2025 rows in at least one feature, chiefly in the `sos_*` and `opponent_*` EPA families,
+  so future current-build arms compare against this run, not the earlier `0.12.6` reference.
 - **Reference arms.** On the rebuilt build at `598` trees:
   `models/wf_m59_rebuild_2023_2025_from_week1/` (three seasons; table in `AGENTS.md` under
   "Reference arm on the 2026-09-20 rebuild") and `models/wf_m55_7_2020_2025_trees598/` (six
@@ -124,12 +122,14 @@ must-ask list means stop and wait.
    `models/wf_m55_7_2020_2025_trees200/REVIEW.md` and
    `models/wf_m55_7_2020_2025_trees400/REVIEW.md`, whose "Ladder summary" section is the source
    of the `AGENTS.md` tables.
-4. `.agents/ARCHIVE.md`, Milestone 59 ("Rebuild" and "Audit"), then Milestone 52.
+4. `.agents/ARCHIVE.md`, Milestone 54 (partial), then Milestone 59 ("Rebuild" and "Audit"),
+   then Milestone 52.
 5. `CHANGELOG.md` entries `0.12.0` to `0.13.1`.
 6. `README.md` sections "Win probability calibration", "Backtesting" (including the superseded
    recency ablation note), "Validation".
-7. `models/wf_m59_rebuild_2023_2025_from_week1_seed7/HYPOTHESIS.md` and `REVIEW.md`, as the
-   model for how a run is written up.
+7. `models/wf_m54_0_2023_2025_from_week1/HYPOTHESIS.md` and `REVIEW.md`, then
+  `models/wf_m59_rebuild_2023_2025_from_week1_seed7/HYPOTHESIS.md` and `REVIEW.md` as the fit-
+  noise-floor model.
 
 ## First check-in (before any code or run)
 
@@ -137,11 +137,9 @@ must-ask list means stop and wait.
    quick gate is the first task; ask about nothing else until it is clean.
 2. `pgrep -af walk_forward`, `uptime`, and `ps -eo pcpu,args --sort=-pcpu | head -4` to see
    whether the web API or a weekly run is loading the machine.
-3. Report to the user, in one message: the clean `main` state, the plan for task 54.0, and
-  whether you expect to finish its merge/gate/rebuild setup before the next weekly deadline.
-   This is a report, not a question: the user answered everything on 2026-09-21. They also said
-   on 2026-09-20 that they run the Week 3 weekly run themselves and that the machine is free for
-   walk-forward runs for 12 hours or more, so do not re-ask either.
+3. Report to the user, in one message: the current branch state, that task 54.0 is complete on
+  `feat/m54-0-landing`, the reviewed no-breakage result, and the plan for tasks 54.1 and 54.2.
+  This is still a report unless the user explicitly asks about merge or push.
 
 ## Order of work (decided with the user on 2026-09-21)
 
@@ -149,26 +147,19 @@ Each item is one or more versioned chunks with its own changelog entry, gate run
 branch named for the task, handoff rewrite, and a check-in. New work starts on a fresh branch
 off `main`; merging and pushing are must-ask, every time.
 
-1. **Task 54.0.** Merge `feat/m54-0-schedule-skeleton` (both commits, the repair included) into
-   the working branch, changelog entry, gate; then the approved rebuild (back up `data/*.csv` to
-   `data/backup_pre_m54_0/`, rerun the ETL from the cache, rerun the leakage audit, cut
-   `data/completed_games_ml.m54_0_through_2025.csv`); then one three-season from-week-1 arm at
-   the `200` default against the 2023-2025 folds of `models/wf_m55_7_2020_2025_trees200/`, read
-   as a no-breakage tie check. Expect 9 coverage-gap warnings and 16 repair warnings from the
-   ETL.
-2. **Tasks 54.1 and 54.2**: the eight situational rates from the play-by-play counts (fix the
+1. **Tasks 54.1 and 54.2**: the eight situational rates from the play-by-play counts (fix the
    `red_zone_tds` attribution first), then the box-score stats from play-by-play behind
    `--team-stats-source`.
-3. **Task 55.8, season weighting**: half-lives of about `4`, `8` and `16` seasons via
+2. **Task 55.8, season weighting**: half-lives of about `4`, `8` and `16` seasons via
    `--recency-half-life-seasons` as six-season arms against the unweighted reference at the
    `200` default on whichever build is then current. Replace the README's superseded ablation
    with the new measurement and its run directories whichever way it goes. A winning weighting
    is a default change: must-ask.
-4. **Task 55.9, the Optuna re-tune**: after Milestone 54, ideally on a bye week or in the
+3. **Task 55.9, the Optuna re-tune**: after Milestone 54, ideally on a bye week or in the
    off-season. Its three prerequisites (no early stopping inside trials, a deterministic-Brier
    objective, and plumbing so a tuned set reaches the walk-forward) are each their own tested
    chunk before any trial runs. Details on the task.
-5. **Milestone 60, the CLI inventory**: read-only, so it can run in parallel with any
+4. **Milestone 60, the CLI inventory**: read-only, so it can run in parallel with any
    walk-forward as a subagent task. The removals land only after the user signs off.
 
 Later, unchanged: Milestone 53 task 53.7, tasks 54.3 and 54.4, the rest of Milestone 55 and
@@ -183,24 +174,23 @@ Milestone 56, Milestone 58 phases 4-6 whenever the user asks, and Milestone 57 s
   standing shared default unless a future measured default change lands.
 - `AGENTS.md`, walk-forward operating notes: the `launch.sh` / `nohup setsid` convention and the
   load-driven `PASSIVE` relaunch are recorded (`345c398`, `0.12.10`). Done.
-- `.agents/TODO.md`, "Current validated baseline": restated at `0.13.1`. Restate it again at
+- `.agents/TODO.md`, "Current validated baseline": restated at `0.14.0`. Restate it again at
   each landed chunk so it does not lag.
-- Any place that still says the benchmark is "the" reference: on the rebuilt build the
-  reference is `models/wf_m59_rebuild_2023_2025_from_week1/` at `598` trees and
-  `models/wf_m55_7_2020_2025_trees200/` at the new default, and the `AGENTS.md` benchmark table
-  is the record of the previous build.
+- Any place that still says the reference is the `0.12.6` rebuild arm: on the current 54.0 build,
+  later current-build arms compare against `models/wf_m54_0_2023_2025_from_week1/`; the older
+  `models/wf_m59_rebuild_2023_2025_from_week1/` and the accepted six-season `200` rung remain the
+  previous-build records.
 - `CHANGELOG.md`: one entry per landed chunk, new version each time, never `[Unreleased]`.
 
 ## Open questions waiting on the user
 
-**None blocking.** The user answered all seven open questions on 2026-09-21; the answers are on
-the tasks in `.agents/TODO.md` and in the `0.13.1` state now on `main`. What remains
-must-ask under guardrail rule 5 inside this work:
+**Immediate question if the user asks for it:** whether to merge and push `feat/m54-0-landing`
+(`0.14.0`). That is must-ask every time. Otherwise none block continuing into 54.1 and 54.2.
+What remains must-ask under guardrail rule 5 inside this work:
 
 1. Merging any branch into `main`, and pushing: must-ask, every time, however small the chunk.
-2. The ETL rebuild is pre-approved **for task 54.0 only**, with the backup to
-   `data/backup_pre_m54_0/` first. Any other rebuild, and any deletion or overwrite under
-   `data/` or `models/`, is a fresh ask.
+2. Task 54.0 has already spent the one approved rebuild. Any later rebuild, and any deletion or
+  overwrite under `data/` or `models/`, is a fresh ask.
 3. Any further rung of the closed tree-budget ladder (the pre-written `1200`, a second seed, or
   anything outside the accepted ladder as written) is a fresh ask.
 4. Any future default change (`55.8`'s weighting, `55.9`'s tuned parameters, or a later revisit

@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.14.0] - 2026-09-21
+
+### Changed
+
+- Bump the project version to `0.14.0` and keep `uv.lock` aligned.
+- Task 54.0 now builds the per-team-game frame from the schedule skeleton instead of from the
+  nflverse team-stats rows, so every completed regular-season game keeps its two team rows even
+  when the stats source misses one side. Team stats and play-by-play counts are left-joined onto
+  that skeleton, coverage gaps are logged per `(season, team)`, and schedule-driven game counts
+  no longer disappear with missing team-stat rows.
+- Rebuild the top-level datasets from cache on the 54.0 ETL code: `data/completed_games_ml.csv`
+  is now `db8b8ff4...` (`7292` completed rows, `513` columns) with the prior top-level CSVs in
+  `data/backup_pre_m54_0/`; the walk-forward input for later current-build arms is
+  `data/completed_games_ml.m54_0_through_2025.csv` `e914eadf...` (`7261` rows), cut by
+  `models/etl_m54_0_rebuild/cut_through_2025.py`. Leakage audit
+  `models/audit_m54_0_rebuild/leakage_audit.json` passed (`463` features, `0` flags).
+- The reviewed no-breakage arm `models/wf_m54_0_2023_2025_from_week1/` (checkpoints
+  `models/wf_checkpoints/d112ebcba3115bafe9d9/`, reviewed in its `REVIEW.md`) ties the accepted
+  `200`-tree reference slice `models/wf_checkpoints/a5e76d54187e27ca7370_2023_2025/` on the
+  governing weeks 3-18 window: deterministic Brier `0.2097` vs `0.2090`, diff `+0.0007`
+  `[-0.0011, +0.0024]`; margin MAE `9.9166` vs `9.9044`, diff `+0.0122`
+  `[-0.0566, +0.0801]`. The rebuild moved 836 of 855 scored 2023-2025 rows in at least one
+  feature, mostly in the `sos_*` and `opponent_*` EPA families, but the decision remains a
+  performance-based tie.
+
+### Fixed
+
+- The 2001-2002 Jacksonville home rows where the surviving nflverse team-stats row carried both
+  teams' box score are now repaired by nulling only the box-score columns on those one-row games,
+  leaving identity, schedule scores and play-by-play counts intact so the duplicated totals do not
+  contaminate season-to-date mirrors.
+
 ## [0.13.1] - 2026-09-21
 
 ### Changed

@@ -160,6 +160,21 @@ Rules that are always enforced:
   accuracy in weeks 3-18 fell from `0.6861` to `0.6764` (7 games), so the model no longer
   matches the market's pick accuracy there. Every fold ran the full `598`-tree budget.
 
+  **Fit-noise floor on the same build** (2026-09-20): the reference arm rerun with only
+  `--random-seed 7` (`models/wf_m59_rebuild_2023_2025_from_week1_seed7/`, checkpoints
+  `models/wf_checkpoints/89dc69c3f18d74ad205b/`, hypothesis and rule in its `HYPOTHESIS.md`,
+  rescored independently in its `REVIEW.md`). XGBoost runs with `subsample 0.6354` and
+  `colsample_bytree 0.6098`, so the seed alone changes every fit. Weeks 3-18 against the
+  reference arm: every margin moved (median `0.91`, p90 `2.34`, max `5.58` points), 46 picks
+  flipped, deterministic Brier `0.2116` against `0.2096` (`+0.0020` `[-0.0006, +0.0045]`), pick
+  accuracy `0.6847` against `0.6764` (`+0.0083` `[-0.0097, +0.0264]`), margin MAE `10.0271`
+  against `9.9722`. The rebuild arm's differences from the benchmark above (median move `0.89`,
+  45 flips, pick accuracy `-0.0097`) are the same size, so they are fit noise, not a
+  division-correction effect. Consequence for reading any single three-season arm: a Brier
+  difference under about `0.002`, a pick-accuracy difference under about `0.01` (7 games in 720)
+  and a margin MAE difference under about `0.06` are indistinguishable from re-seeding; a claimed
+  effect of that size needs six seasons or several seeds before it is a result.
+
   **How to read it now.** Walk-forward reports and `wf_compare` now carry three probability views:
   the configured calibrator, the deterministic map, and market-implied home win probability from
   the same rows (no-vig moneyline with a spread fallback). Feature work is ranked on the

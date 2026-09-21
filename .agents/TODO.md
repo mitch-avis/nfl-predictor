@@ -185,7 +185,10 @@ weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too l
 for the Thursday-night DET-at-BUF kickoff (~18:15 MDT) but predictions exist for all 16 Week 2
 games including it. Selected config `hybrid_raw_prob_base_elo_blend0.20_clamp0.10`; weeks-16-2025
 through-week-1-2026 calibration window as expected; `total_signal = diagnostic_only` throughout.
-Outputs under `models/weekly_2026_week_02/`.
+Outputs under `models/weekly_2026_week_02/`. Refreshed 2026-09-20 10:13-10:45 MDT for the
+Sunday and Monday games (`models/weekly_2026_week_02_refresh/`): market lines refreshed first
+(`lines_refresh --season 2026 --week 2`, 9 of 15 games' odds had moved), then
+`weekly_run.py --skip-data-refresh` on the 04:31 rebuild; same selected config, 15 games.
 
 Acceptance:
 

@@ -47,12 +47,14 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-20, version `0.12.7`, `chore/m59-etl-rebuild`)
+### Current validated baseline (2026-09-20, version `0.12.9`, `feat/m55-7-tree-budget`)
 
-- `scripts/gate.sh` exits `0` on the `0.12.6` fix commit (`846 passed`, coverage `92.67%`);
-  ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`, `uv sync --check --active
-  --extra web` and the CLI help smoke checks clean. `0.12.1`-`0.12.5` are merged into `main`
-  (`85e4522`, local, not pushed).
+- The branch sits off `docs/handoff-m55-first`, which is one commit ahead of `main` at `7ea8e39`
+  and not yet merged. `scripts/gate.sh --quick` exits `0` on `7ea8e39`: ruff format, ruff, ty,
+  pyright, markdownlint, `uv lock --check`, `uv sync --check --active --extra web` and the CLI
+  help smoke checks clean. The last full gate count on record is `846 passed`, coverage
+  `92.67%`, on the `0.12.6` fix commit. Everything through `0.12.8` is merged into `main` and
+  pushed (`c1fff6a`).
 - Data: the 2026-09-20 rebuild (`db6a78a3...`, `7278` rows, `513` columns; backup of the
   previous build in `data/backup_pre_m59_rebuild/`); walk-forward input for new arms
   `data/completed_games_ml.m59_through_2025.csv` (`cf42ec55...`), reference arm

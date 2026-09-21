@@ -314,12 +314,17 @@ Acceptance:
 
 Formerly Milestone 41.
 
-- [ ] 56.1 Add data-refresh pass-through (`--data-min-season` / `--data-max-season` or a generic
+- [x] 56.1 Add data-refresh pass-through (`--data-min-season` / `--data-max-season` or a generic
       `--data-collection-args`) to `scripts/weekly_run.py`; the same pass-through carries the
-      `--stat-prior-blend*` flags, which it cannot set today.
+      `--stat-prior-blend*` flags, which it cannot set today. Done 2026-09-20 (`0.12.11`) as the
+      generic `--data-collection-args` string.
 - [ ] 56.2 Decide and document how postseason games enter evaluation and training; when the
       prediction week is postseason, default the power-rankings through-week to the last
-      regular-season week.
+      regular-season week. Narrowed 2026-09-20 (`0.12.11`): the through-week clamp landed and the
+      README documents the current state (code defaults exclude postseason; the shipped
+      `config/weekly_run.yaml` includes it at weight `1.3`, so the weekly command and the
+      documented defaults disagree). The decision itself is the user's: keep the config's
+      inclusion, or align the defaults; a default change is must-ask.
 - [ ] 56.3 Wire sweep-selected defaults once Milestone 55 lands; confirm resume behavior.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.10] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.10` and keep `uv.lock` aligned.
+- `AGENTS.md` walk-forward operating notes carry the `launch.sh` / `nohup setsid` launch
+  convention, the 2026-09-20 idle durations (three seasons about 50 minutes, six about 100) and
+  the load-driven `OMP_WAIT_POLICY=PASSIVE` relaunch; `.agents/TODO.md` restates the validated
+  baseline at `0.12.9`.
+
+### Added
+
+- `--n-estimators` on `scripts/walk_forward_backtest.py`: an XGBoost tree-budget override that
+  flows through `WalkForwardConfig.xgb_params_overrides` like `--gamma`, so the budget ladder of
+  task 55.7 runs as separate arms without touching `nfl_predictor/ml/` or any default.
+
 ## [0.12.9] - 2026-09-20
 
 ### Changed

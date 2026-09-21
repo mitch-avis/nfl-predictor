@@ -1070,6 +1070,26 @@ EXCLUDE_FROM_OPPONENT_STATS = [
 # though it is never published.
 OPPONENT_MIRROR_INTERMEDIATES: tuple[str, ...] = ("times_sacked",)
 
+# Columns of a per-team-game row that are NOT part of the team's own box score: the row's
+# identity, the scoring columns taken from the schedule, and the play-by-play counts and
+# their context flag. The box score is the complement of this set, defined this way rather
+# than enumerated because the team-stats source publishes well over a hundred box-score
+# columns and adds more between seasons. It names what stays when a row that describes two
+# teams at once has to give up the values it cannot own.
+TEAM_GAME_NON_BOX_SCORE_COLUMNS: tuple[str, ...] = (
+    "season",
+    "week",
+    "team_abbr",
+    "opponent_abbr",
+    "season_type",
+    "game_id",
+    "points_scored",
+    "points_allowed",
+    "scoring_margin",
+    "is_home",
+    *PBP_COUNT_COLUMNS,
+)
+
 # nflreadpy stats to use (per team) - these get prefixed with away_/home_
 NFLREADPY_STATS = [
     # Passing offense

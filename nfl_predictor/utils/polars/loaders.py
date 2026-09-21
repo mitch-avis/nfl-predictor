@@ -561,6 +561,76 @@ def _log_team_stats_coverage(team_stats_df: pl.DataFrame, skeleton: pl.DataFrame
         )
 
 
+def _repair_collapsed_box_scores(joined: pl.DataFrame, *, covered_flag: str) -> pl.DataFrame:
+    """Null the box score of a stat row that describes both teams of one game.
+
+    Where the source publishes a row for only one side of a scheduled game, that row's
+    box score is the whole game's production rather than the team's own: the missing
+    side's yards, plays and penalties are counted in it. Such a value is not a team-game
+    statistic, so it is replaced with a null and the games it covers fall out of the
+    season-to-date denominators along with it. Identity, the scoring columns the schedule
+    supplies and the play-by-play counts are per-team correct either way and stay, as
+    `constants.TEAM_GAME_NON_BOX_SCORE_COLUMNS` records.
+
+    Args:
+        joined: Per-team-game frame with one row per scheduled team-game
+        covered_flag: Name of the boolean column marking rows the stats source covers
+
+    Returns:
+        The frame with the affected rows' box-score columns set to null
+
+    """
+    if "opponent_abbr" not in joined.columns:
+        return joined
+
+    opponent_flag = "_opponent_covered"
+    opponent_coverage = joined.select(
+        pl.col("season"),
+        pl.col("week"),
+        pl.col("team_abbr").alias("opponent_abbr"),
+        pl.col(covered_flag).alias(opponent_flag),
+    )
+    flagged = joined.join(
+        opponent_coverage,
+        on=["season", "week", "opponent_abbr"],
+        how="left",
+    ).with_columns(pl.col(opponent_flag).fill_null(value=False))
+
+    collapsed = pl.col(covered_flag) & ~pl.col(opponent_flag)
+    affected = flagged.filter(collapsed)
+    if affected.height == 0:
+        return flagged.drop(opponent_flag)
+
+    log.warning(
+        "Repairing %d team-stat row(s) whose box score covers both teams of the game.",
+        affected.height,
+    )
+    for row in (
+        affected.select("season", "week", "team_abbr")
+        .sort(["season", "week", "team_abbr"])
+        .iter_rows(named=True)
+    ):
+        log.warning(
+            "Dropping the box score of %s week %s %s: the source has no row for its opponent.",
+            row["season"],
+            row["week"],
+            row["team_abbr"],
+        )
+
+    box_score_columns = [
+        column
+        for column in joined.columns
+        if column not in constants.TEAM_GAME_NON_BOX_SCORE_COLUMNS and column != covered_flag
+    ]
+    return flagged.with_columns(
+        pl.when(collapsed)
+        .then(pl.lit(None, dtype=joined.schema[column]))
+        .otherwise(pl.col(column))
+        .alias(column)
+        for column in box_score_columns
+    ).drop(opponent_flag)
+
+
 def attach_team_stats_to_schedule(
     team_stats_df: pl.DataFrame,
     schedule_df: pl.DataFrame,
@@ -603,11 +673,17 @@ def attach_team_stats_to_schedule(
     _log_team_stats_coverage(in_scope, skeleton)
 
     context_columns = [col for col in _SKELETON_CONTEXT_COLUMNS if col in team_stats_df.columns]
-    joined = skeleton.select(*keys, *context_columns).join(
-        in_scope.drop(context_columns),
-        on=keys,
-        how="left",
+    covered_flag = "_covered_by_team_stats"
+    joined = (
+        skeleton.select(*keys, *context_columns)
+        .join(
+            in_scope.drop(context_columns).with_columns(pl.lit(value=True).alias(covered_flag)),
+            on=keys,
+            how="left",
+        )
+        .with_columns(pl.col(covered_flag).fill_null(value=False))
     )
+    joined = _repair_collapsed_box_scores(joined, covered_flag=covered_flag).drop(covered_flag)
     unscheduled = in_scope.join(skeleton.select(keys), on=keys, how="anti")
 
     return (

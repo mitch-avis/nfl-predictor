@@ -1090,6 +1090,58 @@ def test_build_team_game_frame_recovers_a_team_game_the_stats_source_misses() ->
     assert aaa["opponent_abbr"] == "BBB"
 
 
+def test_build_team_game_frame_keeps_points_and_plays_on_a_repaired_row() -> None:
+    """Repairing a two-team box score leaves the per-team sources and the schema alone."""
+    schedule = pl.DataFrame(
+        {
+            "season": [2001],
+            "week": [1],
+            "game_type": ["REG"],
+            "home_abbr": ["AAA"],
+            "away_abbr": ["BBB"],
+            "home_score": [20],
+            "away_score": [10],
+        }
+    )
+    # Only BBB has a row, and it carries both teams' yards.
+    team_stats = pl.DataFrame(
+        {
+            "season": [2001],
+            "week": [1],
+            "team_abbr": ["BBB"],
+            "opponent_abbr": ["AAA"],
+            "total_yards": [580.0],
+        }
+    )
+    pbp_team_games = pl.DataFrame(
+        {
+            "season": [2001, 2001],
+            "week": [1, 1],
+            "team_abbr": ["AAA", "BBB"],
+            "opponent_abbr": ["BBB", "AAA"],
+            "offensive_snaps": [60.0, 55.0],
+        }
+    )
+
+    frame = data_collection._build_team_game_frame(team_stats, schedule, pbp_team_games)
+    frame = polars_utils.add_scoring_data_to_team_stats(frame, schedule)
+    mirrored = polars_utils.add_per_game_opponent_stats(frame)
+
+    assert set(team_stats.columns) <= set(frame.columns)
+    bbb = frame.filter(pl.col("team_abbr") == "BBB").row(0, named=True)
+    aaa = frame.filter(pl.col("team_abbr") == "AAA").row(0, named=True)
+    # The two-team box score is gone from the row that could not own it.
+    assert bbb["total_yards"] is None
+    assert aaa["total_yards"] is None
+    # Per-team sources are untouched.
+    assert bbb["points_scored"] == 10
+    assert aaa["points_scored"] == 20
+    assert bbb["offensive_snaps"] == 55.0
+    assert aaa["offensive_snaps"] == 60.0
+    # The mirror publishes a null rather than the two-team total.
+    assert mirrored.filter(pl.col("team_abbr") == "AAA")["opponent_total_yards"][0] is None
+
+
 def test_season_to_date_denominators_follow_each_stat_source() -> None:
     """Each aggregated value divides by the games its own source covers.
 

@@ -794,12 +794,13 @@ def test_attach_team_stats_to_schedule_warns_about_coverage_gaps(
 
     loaders.attach_team_stats_to_schedule(_coverage_team_stats(), _coverage_schedule())
 
-    messages = [record.message for record in caplog.records]
+    messages = [record.message for record in caplog.records if "coverage gap" in record.message]
     gap_messages = [message for message in messages if "JAX" in message]
     assert gap_messages, messages
     assert "2001" in gap_messages[0]
     assert "1" in gap_messages[0]
     assert "2" in gap_messages[0]
+    # The fully covered team is not reported as a gap.
     assert not [message for message in messages if "CLE" in message]
 
 
@@ -851,6 +852,96 @@ def test_attach_team_stats_to_schedule_keeps_a_stat_row_the_schedule_omits() -> 
 
     assert attached.filter(pl.col("week") == 9).height == 1
     assert attached.height == 5
+
+
+def _collapsed_row_schedule() -> pl.DataFrame:
+    """Build a two-game schedule whose first game has one team-stats row.
+
+    Returns:
+        Schedule frame with two completed games
+
+    """
+    return pl.DataFrame(
+        {
+            "season": [2001, 2001],
+            "week": [1, 2],
+            "game_type": ["REG", "REG"],
+            "home_abbr": ["JAX", "CLE"],
+            "away_abbr": ["CLE", "JAX"],
+            "home_score": [20, 17],
+            "away_score": [10, 14],
+        }
+    )
+
+
+def _collapsed_row_team_stats() -> pl.DataFrame:
+    """Build team stats whose first-week row carries both teams' production.
+
+    Returns:
+        Team-stat frame with a two-team row in week 1 and a clean week 2
+
+    """
+    return pl.DataFrame(
+        {
+            "season": [2001, 2001, 2001],
+            "week": [1, 2, 2],
+            "team_abbr": ["CLE", "CLE", "JAX"],
+            "opponent_abbr": ["JAX", "JAX", "CLE"],
+            "season_type": ["REG", "REG", "REG"],
+            # Week 1 holds both teams' penalties because the source dropped the other row.
+            "penalties": [12.0, 7.0, 9.0],
+            "penalty_yards": [100.0, 60.0, 81.0],
+        }
+    )
+
+
+def test_attach_team_stats_to_schedule_nulls_a_box_score_that_covers_both_teams() -> None:
+    """The surviving row of a one-sided game loses a box score it cannot own."""
+    team_stats = _collapsed_row_team_stats()
+
+    attached = loaders.attach_team_stats_to_schedule(team_stats, _collapsed_row_schedule())
+
+    assert set(attached.columns) == set(team_stats.columns)
+    week_one = attached.filter(pl.col("week") == 1).sort("team_abbr")
+    assert week_one["team_abbr"].to_list() == ["CLE", "JAX"]
+    # Neither side of the collapsed game claims the two-team totals.
+    assert week_one["penalties"].to_list() == [None, None]
+    assert week_one["penalty_yards"].to_list() == [None, None]
+    # Identity survives the repair.
+    assert week_one["opponent_abbr"].to_list() == ["JAX", "CLE"]
+    assert week_one["season_type"].to_list() == ["REG", "REG"]
+    # A game both teams are covered for is untouched.
+    week_two = attached.filter(pl.col("week") == 2).sort("team_abbr")
+    assert week_two["penalties"].to_list() == [7.0, 9.0]
+
+
+def test_attach_team_stats_to_schedule_leaves_a_game_neither_team_covers() -> None:
+    """A game missing from the source on both sides has no box score to repair."""
+    schedule = _collapsed_row_schedule()
+    team_stats = _collapsed_row_team_stats().filter(pl.col("week") == 2)
+
+    attached = loaders.attach_team_stats_to_schedule(team_stats, schedule)
+
+    week_one = attached.filter(pl.col("week") == 1)
+    assert week_one.height == 2
+    assert week_one["penalties"].to_list() == [None, None]
+    week_two = attached.filter(pl.col("week") == 2).sort("team_abbr")
+    assert week_two["penalties"].to_list() == [7.0, 9.0]
+
+
+def test_attach_team_stats_to_schedule_logs_the_repaired_rows(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The repaired season, week and team are named, with how many rows were repaired."""
+    caplog.set_level(logging.WARNING)
+
+    loaders.attach_team_stats_to_schedule(_collapsed_row_team_stats(), _collapsed_row_schedule())
+
+    messages = [record.message for record in caplog.records]
+    repaired = [message for message in messages if "CLE" in message and "2001" in message]
+    assert repaired, messages
+    assert any("1" in message for message in repaired)
+    assert any(message.count("1") and "row" in message for message in messages)
 
 
 def test_attach_team_stats_to_schedule_without_a_schedule_is_a_no_op() -> None:

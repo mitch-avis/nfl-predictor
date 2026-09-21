@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.12.13] - 2026-09-21
+
+### Changed
+
+- Bump the project version to `0.12.13` and keep `uv.lock` aligned.
+- `AGENTS.md` records the task 55.7 tree-budget ladder: three six-season rungs of the reference
+  configuration on the rebuilt build that differ only in `--n-estimators`
+  (`models/wf_m55_7_2020_2025_trees598/`, the reference, which reproduces the three-season
+  reference arm's 2023-2025 folds bit for bit, plus
+  `models/wf_m55_7_2020_2025_trees200/` and `models/wf_m55_7_2020_2025_trees400/`), each one
+  independently rescored into its `REVIEW.md`. Weeks 3-18 over `1423` games: deterministic
+  Brier `0.2103` (`200`), `0.2111` (`400`) and `0.2117` (`598`) against market Brier `0.2095`,
+  with margin MAE `9.9281`, `9.9978` and `10.0240`; the `200 - 598` paired difference is
+  `-0.0014` `[-0.0029, +0.0001]` on Brier and `-0.0958` `[-0.1583, -0.0345]` on margin MAE. The
+  ladder stopped on its "report all three and ask" branch: no default change, and the choice of
+  budget is with the user.
+- `README.md`, "Backtesting": fresh walk-forward durations measured during the ladder (three
+  seasons from week 1 about 50 minutes idle and about 110 loaded; six seasons about 100 minutes
+  idle at `200` trees, about 3.3 hours at `400`, about 4.8 hours at the default `598` under
+  load), replacing the older "about 75 minutes" line, and a pointer from `--n-estimators` to the
+  ladder record.
+- `.agents/TODO.md`: task 55.7 stays open with a progress note carrying the ladder result, the
+  three run directories and the decision pending with the user.
+
 ## [0.12.12] - 2026-09-20
 
 ### Changed

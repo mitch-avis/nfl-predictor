@@ -142,7 +142,9 @@ python -m nfl_predictor.data_collection
 
 The default season range is controlled by `constants.MIN_SEASON` (currently 1999).
 
-This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`).
+This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`). Pass
+`--data-dir` to write them somewhere else; the upstream inputs and caches the ETL reads still come
+from `data/`.
 
 Typical outputs:
 
@@ -671,8 +673,9 @@ Live validation (may require network access):
 python scripts/validate_live.py
 ```
 
-Both validation scripts exit non-zero when the input data file is missing or the validation fails,
-so they are safe to use in shell automation.
+Both read `data/all_data.csv` unless `--data-dir` points them at another dataset directory, and
+both exit non-zero when the input data file is missing or the validation fails, so they are safe to
+use in shell automation.
 
 Canonical local validation sequence, as one command:
 

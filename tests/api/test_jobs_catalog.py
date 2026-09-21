@@ -114,11 +114,13 @@ def test_validate_params_reads_booleans_from_form_strings() -> None:
 
 
 def test_etl_template_passes_only_the_options_given(settings: Settings) -> None:
-    """Blank fields are left off the command line entirely."""
+    """Blank fields are left off the command line entirely, but the data tree is always set."""
     assert build("etl_full", settings, {}) == [
         str(settings.python_path),
         "-m",
         "nfl_predictor.data_collection",
+        "--data-dir",
+        str(settings.data_path),
         "--no-refresh-nflreadpy",
     ]
     argv = build("etl_full", settings, {"min_season": 2015, "refresh_nflreadpy": True})
@@ -206,11 +208,12 @@ def test_betting_workbook_needs_predictions(settings: Settings) -> None:
 
 
 def test_read_only_templates_take_no_parameters(settings: Settings) -> None:
-    """The validation scripts run without arguments."""
+    """The validation scripts take no parameters but read the configured data tree."""
     for template_id in ("validate_offline", "validate_live"):
         argv = build(template_id, settings, {})
-        assert len(argv) == 2
+        assert len(argv) == 4
         assert argv[1].endswith(f"{template_id}.py")
+        assert argv[2:] == ["--data-dir", str(settings.data_path)]
 
 
 def test_leakage_audit_defaults_its_report_path(settings: Settings) -> None:

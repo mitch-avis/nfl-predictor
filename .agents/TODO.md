@@ -27,7 +27,7 @@ For each task:
    not, add focused characterization or failing tests before editing production code.
 4. **Implement**: make changes incrementally (small diffs, one logical change at a time).
 5. **Run the gate**: `scripts/gate.sh` (add `--web` when `web/` changed). It runs, in CI's
-   order, `uv lock --check`, `uv sync --check --active --extra web`, `ruff format --check`,
+   order, `uv lock --check`, `uv sync --check --active`, `ruff format --check`,
    `ruff check`, `ty check`, `pyright`, `pytest`, markdownlint and the CLI help smoke checks,
    and reports every step before exiting non-zero. Nothing is "done" until it exits `0` on the
    final tree (`AGENTS.md`, "Delegation guardrails"). The individual `.venv/bin/...` commands
@@ -361,6 +361,15 @@ decisions and per-phase status live in `web_ui_plan.md`. Work happens on a fresh
       list; drop it (and the `--extra web` in CI and `web/README.md`) or give it a purpose. The
       `etl_full`, `validate_offline` and `validate_live` job templates read the checkout's own
       `data/` and ignore `NFLP_DATA_DIR` (see the plan's Phase 2 deviations).
+      Narrowed: the `web` extra is dropped, and the three CLIs now take `--data-dir` with the
+      templates passing `NFLP_DATA_DIR`, so every dataset those jobs read or write follows the
+      configured tree. The ETL's upstream inputs still resolve from `constants.DATA_PATH`: the
+      copied `qb_elos.csv` and quarterback identity file (`nfl_predictor/utils/polars/loaders.py`,
+      `data_collection._attach_qb_features`) and the TeamRankings and nflreadpy caches
+      (`nfl_predictor/utils/scraping_utils.py`, `nfl_predictor/utils/polars/teamrankings.py`).
+      Threading a data directory through those read paths is a separate change; until it lands,
+      pointing the API at another checkout's data makes `etl_full` read inputs from this checkout
+      and write outputs to the configured one.
 
 Acceptance:
 

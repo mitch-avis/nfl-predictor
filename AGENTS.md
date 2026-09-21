@@ -71,7 +71,7 @@ Rules that are always enforced:
   off `main` at `683acab`, the whole `0.12.1`-`0.12.5` tree still uncommitted at that point):
   `scripts/gate.sh` exits `0` (`843 passed`, coverage `92.63%` against the enforced `90%`
   floor; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
-  `uv sync --check --active --extra web` and the CLI help smoke checks all clean). The
+  `uv sync --check --active` and the CLI help smoke checks all clean). The
   frontend gate was last verified at the `0.8.0` merge; run `scripts/gate.sh --web` whenever
   `web/` or `nfl_predictor/api/` changes. The bullets below record the earlier `0.9.0` baseline
   and the data state, which have not changed since:

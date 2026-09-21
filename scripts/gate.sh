@@ -95,7 +95,7 @@ web_step() {
 }
 
 run_step "uv lock --check" uv lock --check
-run_step "uv sync --check --active --extra web" uv sync --check --active --extra web
+run_step "uv sync --check --active" uv sync --check --active
 run_step "ruff format --check" .venv/bin/ruff format --check .
 run_step "ruff check" .venv/bin/ruff check .
 run_step "ty check" .venv/bin/ty check .

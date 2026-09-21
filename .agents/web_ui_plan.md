@@ -134,12 +134,12 @@ web/  package.json  vite.config.ts (proxy /api -> 127.0.0.1:8000)  components.js
 
 ### Config edits (small, additive; outside the other session's dirty set)
 
-- `pyproject.toml`: `[project.optional-dependencies] web = [fastapi, uvicorn[standard],
-  pydantic-settings, pyjwt, argon2-cffi, sse-starlette, python-multipart]`; add `httpx` to dev
+- `pyproject.toml`: the API dependencies (fastapi, uvicorn[standard], pydantic-settings, pyjwt,
+  argon2-cffi, sse-starlette, python-multipart) are core dependencies; add `httpx` to the dev
   group for TestClient; add `"web"` to ruff `extend-exclude` and pyright `exclude`.
 - `.gitignore`: `web/node_modules/`, `web/dist/`, `web/coverage/`, `web/*.tsbuildinfo`,
   `data/web/`.
-- `.github/workflows/validation.yml`: `uv sync --extra web` in the Python job; new `web` job
+- `.github/workflows/validation.yml`: `uv sync` in the Python job; new `web` job
   (`actions/setup-node@v6`, node 26, npm cache on `web/package-lock.json`, `npm ci`, `npm run
   lint`, `npm run typecheck`, `npm test -- --run`, `npm run build`).
 - `web/README.md` documents `source ~/.nvm/nvm.sh`, dev/build commands, and the backend command.
@@ -356,9 +356,13 @@ Odds-provider adapter interface plus the `Live` blend from `betting_excel.py`
     byte-identical instead of rewriting it through Polars.
   - **Log console.** Rendering is capped at the newest 2000 filtered lines with a "… N earlier
     lines not shown" note rather than a virtualized list; no virtualization library is installed.
-  - **`etl_full`, `validate_offline` and `validate_live`** read `nfl_predictor.constants.DATA_PATH`
-    (the checkout's own `data/`) and ignore `NFLP_DATA_DIR`; every other template is given explicit
-    paths from the settings. This only matters when the API is pointed at another checkout's data.
+  - **`etl_full`, `validate_offline` and `validate_live`** originally read
+    `nfl_predictor.constants.DATA_PATH` (the checkout's own `data/`) and ignored `NFLP_DATA_DIR`;
+    every other template is given explicit paths from the settings. The three CLIs now take
+    `--data-dir` and the templates pass `NFLP_DATA_DIR`, so the datasets they read and write follow
+    the configured tree. The ETL's upstream inputs (the copied `qb_elos.csv`, the quarterback
+    identity file, the TeamRankings and nflreadpy caches) still resolve from
+    `constants.DATA_PATH`.
 
   Fixed along the way: `Settings.python_executable` was resolved to its target, and because
   `.venv/bin/python` is a symlink to the base interpreter, jobs launched outside the virtual

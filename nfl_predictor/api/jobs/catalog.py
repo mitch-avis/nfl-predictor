@@ -432,6 +432,12 @@ TEMPLATES: tuple[JobTemplate, ...] = (
                 default=True,
             ),
             ParamSpec(
+                "data_collection_args",
+                "ETL arguments",
+                "str",
+                "Extra arguments for the data refresh, as one shell-quoted string.",
+            ),
+            ParamSpec(
                 "wf_eval_last_n_seasons",
                 "Walk-forward seasons",
                 "int",

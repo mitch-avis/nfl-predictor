@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from scripts import weekly_run
 
@@ -135,3 +136,51 @@ def test_rank_summary_prefers_deterministic_metrics() -> None:
     ranked = weekly_run._rank_summary(frame)
     assert ranked.iloc[0]["label"] == "deterministic-better"
     assert ranked.iloc[0]["rank"] == 1
+
+
+def test_data_refresh_without_arguments_calls_data_collection_bare(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no pass-through string the refresh calls data collection with no argv."""
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def _fake_main(*args: object, **kwargs: object) -> None:
+        """Record how the data-collection entrypoint was invoked."""
+        calls.append((args, kwargs))
+
+    monkeypatch.setattr(weekly_run.data_collection, "main", _fake_main)
+
+    weekly_run._refresh_data(None)
+    weekly_run._refresh_data("   ")
+
+    assert calls == [((), {}), ((), {})]
+
+
+def test_data_refresh_forwards_split_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pass-through string is split shell-style and forwarded as the argv list."""
+    captured: list[list[str]] = []
+
+    def _fake_main(argv: list[str] | None = None) -> None:
+        """Record the argv list handed to the data-collection entrypoint."""
+        assert argv is not None
+        captured.append(argv)
+
+    monkeypatch.setattr(weekly_run.data_collection, "main", _fake_main)
+
+    weekly_run._refresh_data("--min-season 2010 --stat-prior-blend-games 4")
+
+    assert captured == [["--min-season", "2010", "--stat-prior-blend-games", "4"]]
+
+
+def test_data_collection_args_is_a_valid_config_key() -> None:
+    """A config file can set the data-collection pass-through arguments."""
+    allowed = weekly_run._allowed_config_keys(weekly_run._build_parser())
+
+    assert "data_collection_args" in allowed
+
+
+def test_data_collection_args_parses_from_the_command_line() -> None:
+    """The command-line flag stores the raw pass-through string."""
+    args = weekly_run._build_parser().parse_args(["--data-collection-args", "--min-season 2010"])
+
+    assert args.data_collection_args == "--min-season 2010"

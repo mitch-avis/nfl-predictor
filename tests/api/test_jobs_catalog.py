@@ -161,6 +161,18 @@ def test_weekly_run_writes_a_config_file(settings: Settings) -> None:
     assert "week" not in config
 
 
+def test_weekly_run_forwards_data_collection_arguments(settings: Settings) -> None:
+    """The ETL pass-through string reaches the weekly-run config file unchanged."""
+    argv = build(
+        "weekly_run",
+        settings,
+        {"week": 2, "data_collection_args": "--min-season 2010"},
+    )
+
+    config = json.loads(Path(argv[3]).read_text(encoding="utf-8"))
+    assert config["data_collection_args"] == "--min-season 2010"
+
+
 def test_predict_uses_the_active_run_model(settings: Settings, run: RunSummary) -> None:
     """Prediction reads the pinned run's model and writes back into its directory."""
     argv = build("predict", settings, {"season": 2026, "week": 2}, run)

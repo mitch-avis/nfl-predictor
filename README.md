@@ -30,6 +30,7 @@ This repo is geared toward:
   - [Backtesting](#backtesting)
   - [Weekly workflow (canonical)](#weekly-workflow-canonical)
     - [High-level stages](#high-level-stages)
+    - [How postseason games enter today](#how-postseason-games-enter-today)
     - [Authoritative weekly workflow (runs, in this order)](#authoritative-weekly-workflow-runs-in-this-order)
     - [Outputs and conventions](#outputs-and-conventions)
   - [Scripts](#scripts)
@@ -464,6 +465,26 @@ Notes:
   provided.
 - Stage 1 walk-forward comparison is resumable and writes `wf_compare/` artifacts under the run
   directory (including `wf_summary.csv` and per-candidate results).
+- `--data-collection-args` forwards extra arguments to the data refresh stage as one
+  shell-quoted string, for example
+  `--data-collection-args "--min-season 2010 --stat-prior-blend-games 4"`. It is split
+  shell-style and handed to `nfl_predictor.data_collection` as its argument list; when it is
+  unset the refresh runs exactly as before. The same value is a config key
+  (`data_collection_args` in `config/weekly_run.yaml`).
+
+### How postseason games enter today
+
+This is the current behavior, recorded for reference; none of it is a recommendation.
+
+- Walk-forward and training filter to `game_type == "REG"` by default: `--include-postseason`
+  and `--wf-include-postseason` are off, and `--postseason-weight` is `1.0`.
+- The shipped `config/weekly_run.yaml` turns them on for the weekly run:
+  `wf_include_postseason: true`, `include_postseason: true`, `postseason_weight: 1.3`, and
+  `power_rankings_include_postseason: true`.
+- The schedule-adjusted strength composite built in ETL never includes postseason games.
+- The power rankings default through-week is the week before the prediction week, clamped to the
+  last regular-season week when the prediction week is postseason, because strength snapshots stop
+  one week after the regular season. Pass `--power-rankings-through-week` to override it.
 
 ### Authoritative weekly workflow (runs, in this order)
 

@@ -125,9 +125,13 @@ diagnostic-only), task 56.4 (calibration window across the season boundary), Mil
 2026-09-19 with two narrowed parts reopened under "From Milestone 59" below and task 55.7), and
 the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
-1. Milestone 54 - PBP-first team-game skeleton and situational stats (54.0 first)
-2. Milestone 53 - task 53.7 (defense-adjusted quarterback rate), measured on the 59.1 instrument
-3. Milestone 55 - Off-season configuration sweep, on the 59.1 instrument
+1. Milestone 55 - tasks 55.7 (the tree budget) and 55.8 (season weighting) first, on the 59.1
+   instrument over six seasons; the rest of the sweep after them. Reordered ahead of 54 on
+   2026-09-20 by the user's decision after the fit-noise floor was measured: both affect every
+   prediction, and 54.0 is a correctness check that cannot show lift.
+2. Milestone 54 - PBP-first team-game skeleton and situational stats (54.0 first, as a
+   no-breakage check on three seasons)
+3. Milestone 53 - task 53.7 (defense-adjusted quarterback rate), measured on the 59.1 instrument
 4. Milestone 56 - Weekly orchestration residuals
 5. Milestone 57 - Ensembles and alternative models (parked until the user reopens it)
 6. Milestone 58 - Web UI, phases 4-6 (pool helpers, team and QB pages, live odds design); runs
@@ -142,6 +146,11 @@ Rules for every feature milestone:
   `--disable-trend-features`).
 - Report a walk-forward comparison with the group on and off before marking done, read on the
   deterministic and market columns (task 59.1), over enough seasons to resolve the effect claimed.
+  The fit-noise floor (`AGENTS.md`, "Fit-noise floor on the same build") is the yardstick: on
+  three seasons a Brier difference under about `0.002`, a pick-accuracy difference under about
+  `0.01` or a margin MAE difference under about `0.06` is re-seeding noise. An arm that claims an
+  improvement runs on six seasons (`--eval-last-n-seasons 6`, about 100 minutes idle) and, if
+  the claim is still near the floor, on a second seed; a three-season arm can only show a tie.
 - Keep the invariant output schema: when a source is missing for a season, emit nulls.
 - XGBoost margin/total remains the only model family in scope.
 - The method borrowed from `nfl-sos-ratings` is its head-to-head-excluded opponent profiling
@@ -214,7 +223,10 @@ Tasks:
       stats and the play-by-play counts onto it, and log every `(season, team)` whose team-stats
       row count differs from the schedule. Acceptance: JAX 2001 and 2002 season-to-date rows count
       16 games and `strength_games_played` reads 16 at season end; the leakage audit still passes;
-      a walk-forward tie on the 59.1 instrument.
+      a walk-forward tie on the 59.1 instrument. Read the tie as a no-breakage check on three
+      seasons against the reference arm on the rebuilt build: the fixed rows are 2001-2002
+      training rows, so every margin will move (the fit-noise floor pattern) and no lift is
+      expected or claimable.
 - [ ] 54.1 Derive the eight situational rates (third/fourth down, red zone, two-point; offense and
       allowed) from the play-by-play counts in `_compute_derived_metrics`. Fix the `red_zone_tds`
       attribution first (Milestone 45 follow-ups below).
@@ -267,7 +279,22 @@ Tasks:
       identically in walk-forward and production through the shared fit helpers. Read the
       result on the deterministic and market columns over six seasons. Until then, the
       `early_stopping_rounds` config field and the `--wf-early-stopping-rounds` /
-      `--train-early-stopping-rounds` flags are recorded but inert for in-season fits.
+      `--train-early-stopping-rounds` flags are recorded but inert for in-season fits. Method:
+      a ladder of budgets (for example `200`, `400`, `598`, `800`, `1200`) as separate six-season
+      arms of the reference configuration on the rebuilt build, one hypothesis per arm, read on
+      the deterministic columns against the fit-noise floor; the winner becomes the shared
+      default in walk-forward and production together (a default change: must-ask).
+- [ ] 55.8 Season weighting. Today every training row from 1999 carries the same weight as
+      last week's game (`recency_half_life_seasons` is off by default in walk-forward and
+      production). The README's recency ablation ("keep it off") is not trustworthy: it was
+      measured through Platt calibration, which the 2026-09-18 audit found noise-dominated, on
+      a superseded build, with a log loss of `1.95` that reads as a calibration failure rather
+      than a model difference, and with an aggressive half-life of `2` seasons. Re-measure on
+      the 59.1 instrument over six seasons on the rebuilt build: half-lives of about `4`, `8`
+      and `16` seasons via `--recency-half-life-seasons`, plus the unweighted reference,
+      hypothesis and decision rule per arm, read against the fit-noise floor. If a weighting
+      wins, changing the default is must-ask; either way, replace the README ablation with the
+      new measurement and its run directories.
 
 Note for any tuning: until the shared early-stopping callback was fixed (version `0.6.2`), every
 Optuna trial's total head stopped after one round, so the `combined_mae` objective scored a

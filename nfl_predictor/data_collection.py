@@ -506,6 +506,31 @@ def _join_pbp_team_game_stats(
     return merged
 
 
+def _build_team_game_frame(
+    team_stats_df: pl.DataFrame,
+    schedule_df: pl.DataFrame,
+    pbp_team_games: pl.DataFrame,
+) -> pl.DataFrame:
+    """Build the per-team-game frame the season-to-date features aggregate over.
+
+    The schedule supplies the rows, so every completed game contributes exactly two
+    team-games whether or not the statistical sources cover it; team stats and the
+    play-by-play counts are attached to that frame and stay null where a source is
+    missing.
+
+    Args:
+        team_stats_df: Per-team-game statistics from nflverse
+        schedule_df: Schedule covering the same seasons as the team stats
+        pbp_team_games: Per-team-game play-by-play counts, possibly empty
+
+    Returns:
+        Per-team-game frame with the team-stat columns and the play-by-play counts
+
+    """
+    framed = polars_utils.attach_team_stats_to_schedule(team_stats_df, schedule_df)
+    return _join_pbp_team_game_stats(framed, pbp_team_games)
+
+
 def collect_all_data(
     seasons: list[int],
     *,
@@ -566,6 +591,18 @@ def collect_all_data(
     if min_season > constants.NFLREADPY_MIN_SEASON:  # Need prior season for week 1 regression
         stats_seasons = [min_season - 1] + stats_seasons
 
+    # The schedule for every season the team stats cover, so the per-team-game frame and
+    # the scoring merge below both span the week-1 previous-season fallback.
+    stats_schedule_df = schedule_df
+    if stats_seasons != list(seasons):
+        with _timed_step("load_prior_schedule", config.enable_timing):
+            prior_schedule_df = polars_utils.load_schedule(
+                [min_season - 1],
+                force_refresh=config.force_refresh_nflreadpy,
+                current_season=current_season,
+            )
+        stats_schedule_df = pl.concat([prior_schedule_df, schedule_df], how="diagonal")
+
     # Load team statistics (regular season only - used for building features)
     # Playoff games use cumulative stats from the regular season
     with _timed_step("load_team_stats", config.enable_timing):
@@ -591,27 +628,18 @@ def collect_all_data(
 
     with _timed_step("aggregate_pbp_team_game_stats", config.enable_timing):
         pbp_team_games = polars_utils.aggregate_pbp_team_game_stats(pbp_df)
-        team_stats_df = _join_pbp_team_game_stats(team_stats_df, pbp_team_games)
+        team_stats_df = _build_team_game_frame(team_stats_df, stats_schedule_df, pbp_team_games)
     log.info("Aggregated play-by-play: %d team-game records", pbp_team_games.height)
+    log.info("Per-team-game frame: %d team-game rows", team_stats_df.height)
     _log_pbp_null_rates(team_stats_df, config.enable_debug)
     _log_df_stats("team_stats_with_pbp", team_stats_df, config.enable_debug)
 
     # Add scoring data (points scored/allowed) to team stats from schedule
     # This enables computing points-related metrics like scoring margin
-    # Need to also load schedule for previous season for scoring data
     with _timed_step("add_scoring_data", config.enable_timing):
-        if min_season > constants.NFLREADPY_MIN_SEASON:
-            prev_schedule = polars_utils.load_schedule(
-                [min_season - 1],
-                force_refresh=config.force_refresh_nflreadpy,
-                current_season=current_season,
-            )
-            full_schedule = pl.concat([prev_schedule, schedule_df], how="diagonal")
-            team_stats_df = polars_utils.add_scoring_data_to_team_stats(
-                team_stats_df, full_schedule
-            )
-        else:
-            team_stats_df = polars_utils.add_scoring_data_to_team_stats(team_stats_df, schedule_df)
+        team_stats_df = polars_utils.add_scoring_data_to_team_stats(
+            team_stats_df, stats_schedule_df
+        )
     _log_df_stats("team_stats_with_scores", team_stats_df, config.enable_debug)
 
     # Add per-game opponent stats AFTER scoring data is added

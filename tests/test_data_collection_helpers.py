@@ -1047,3 +1047,113 @@ def test_join_pbp_team_game_stats_never_multiplies_rows() -> None:
 
     assert out.height == 2, "the join must not multiply team-stat rows"
     assert out.filter(pl.col("team_abbr") == "AAA")["offensive_snaps"][0] == 64
+
+
+def test_build_team_game_frame_recovers_a_team_game_the_stats_source_misses() -> None:
+    """A game the stat source omits keeps its play-by-play counts and its game count."""
+    schedule = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "game_type": ["REG"],
+            "home_abbr": ["AAA"],
+            "away_abbr": ["BBB"],
+            "home_score": [21],
+            "away_score": [17],
+        }
+    )
+    team_stats = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "team_abbr": ["BBB"],
+            "opponent_abbr": ["AAA"],
+            "pass_yards": [180.0],
+        }
+    )
+    pbp_team_games = pl.DataFrame(
+        {
+            "season": [2023, 2023],
+            "week": [1, 1],
+            "team_abbr": ["AAA", "BBB"],
+            "opponent_abbr": ["BBB", "AAA"],
+            "offensive_snaps": [64, 58],
+        }
+    )
+
+    out = data_collection._build_team_game_frame(team_stats, schedule, pbp_team_games)
+
+    assert out.height == 2
+    aaa = out.filter(pl.col("team_abbr") == "AAA").row(0, named=True)
+    assert aaa["offensive_snaps"] == 64
+    assert aaa["pass_yards"] is None
+    assert aaa["opponent_abbr"] == "BBB"
+
+
+def test_season_to_date_denominators_follow_each_stat_source() -> None:
+    """Each aggregated value divides by the games its own source covers.
+
+    A team-game the box-score source does not cover still counts as a game played and
+    still carries its points and its play-by-play counts. The box-score average stays an
+    average over the games that have box scores, so it is not diluted by the games the
+    source is missing, while points and play-by-play rates use every scheduled game.
+    """
+    schedule = pl.DataFrame(
+        {
+            "season": [2001, 2001],
+            "week": [1, 2],
+            "game_type": ["REG", "REG"],
+            "home_abbr": ["AAA", "BBB"],
+            "away_abbr": ["BBB", "AAA"],
+            "home_score": [20, 17],
+            "away_score": [10, 14],
+        }
+    )
+    # The box-score source covers only the second game for AAA.
+    team_stats = pl.DataFrame(
+        {
+            "season": [2001, 2001, 2001],
+            "week": [1, 2, 2],
+            "team_abbr": ["BBB", "BBB", "AAA"],
+            "opponent_abbr": ["AAA", "AAA", "BBB"],
+            "penalties": [5.0, 7.0, 9.0],
+            "penalty_yards": [40.0, 60.0, 81.0],
+        }
+    )
+    # Play-by-play covers both games for both teams.
+    pbp_team_games = pl.DataFrame(
+        {
+            "season": [2001, 2001, 2001, 2001],
+            "week": [1, 1, 2, 2],
+            "team_abbr": ["AAA", "BBB", "AAA", "BBB"],
+            "opponent_abbr": ["BBB", "AAA", "BBB", "AAA"],
+            "offensive_snaps": [60.0, 55.0, 70.0, 65.0],
+            "pass_epa_sum": [6.0, 1.0, 7.0, 2.0],
+        }
+    )
+
+    frame = data_collection._build_team_game_frame(team_stats, schedule, pbp_team_games)
+    frame = polars_utils.add_scoring_data_to_team_stats(frame, schedule)
+    agg = polars_utils.aggregate_team_stats_to_week(frame, 3, 2001)
+    aaa = agg.filter(pl.col("team_abbr") == "AAA").row(0, named=True)
+
+    # The game count comes from the schedule, not from the box-score coverage.
+    assert aaa["games_played"] == 2
+    # A box-score average is the average over its one covered game, never halved.
+    assert aaa["penalties"] == pytest.approx(9.0)
+    assert aaa["penalty_yards"] == pytest.approx(81.0)
+    assert aaa["penalty_yards_per_penalty"] == pytest.approx(81.0 / 9.0)
+    # Points come from the schedule, so both games count.
+    assert aaa["points_scored"] == pytest.approx((20.0 + 14.0) / 2.0)
+    # A play-by-play rate is the ratio of sums over both games.
+    assert aaa["off_pass_epa_per_snap"] == pytest.approx((6.0 + 7.0) / (60.0 + 70.0))
+
+    # The early-season blend weighs the in-season side by the scheduled game count, even
+    # for a column whose average rests on fewer games than that.
+    prior = pl.DataFrame({"team_abbr": ["AAA"], "penalties": [3.0], "penalty_yards": [30.0]})
+    blend_games = 4.0
+    blended = polars_utils.blend_with_prior_stats(
+        agg.filter(pl.col("team_abbr") == "AAA"), prior, blend_games
+    )
+    weight = 2.0 / (2.0 + blend_games)
+    assert blended["penalties"][0] == pytest.approx(weight * 9.0 + (1.0 - weight) * 3.0)

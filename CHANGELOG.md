@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.12.14] - 2026-09-21
+
+### Changed
+
+- Bump the project version to `0.12.14` and keep `uv.lock` aligned.
+- `AGENTS.md`, "Delegation guardrails" rule 4: a walk-forward decision rule must now name the
+  exact window or windows it reads, the exact columns, and how the windows combine when they
+  disagree, so a rung cannot read as a tie on one window and a win on another without the rule
+  saying which governs. A ladder (several runs of one hypothesis family with a stated cap and
+  stopping rule) written into the check-in and accepted by the user now counts as approval for
+  every rung up to that cap.
+- `AGENTS.md`, rule 5: the must-ask item "a third walk-forward run on one task, or any
+  six-season run" excludes rungs of a ladder already accepted under rule 4 and within its cap.
+  The section intro records why both amendments were asked for.
+- `.agents/TODO.md`, task 56.2: the user's direction that postseason matchups stay in the data
+  but are kept separate from regular-season matchups for training and prediction, that a
+  regular-season model should not train on playoff games, that the prior-season blend should
+  draw on the previous regular season only, and that the design discussion is deferred until
+  the rest runs smoothly, in time for the 2026 playoffs.
+- `.agents/TODO.md`, task 58.4: closed by the user's decision. `NFLP_DATA_DIR` stays, because
+  the web API resolves its paths through it and it lets the app run against a copied data tree,
+  but the ETL's upstream inputs will not follow it; the `0.12.12` narrowing is the final shape.
+- `.agents/TODO.md`: new Milestone 60, "CLI consolidation", to audit every `add_argument` across
+  the entrypoints, list the inert, duplicated and config-only flags, and propose removals plus a
+  shared options module; the removals land only after the user signs off. Task 55.7 carries a
+  note that the user asked whether a fresh Optuna run should choose `n_estimators` rather than
+  adopting `200` directly.
+
 ## [0.12.13] - 2026-09-21
 
 ### Changed

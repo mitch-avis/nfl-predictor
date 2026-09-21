@@ -308,6 +308,9 @@ Added 2026-09-19 after the audit of the two sessions that closed Milestone 59
 the box anyway, reported a green gate without running the whole gate, wrote a benchmark
 provenance sentence that was false, and spent about twelve CPU-hours on calibrators that were
 then discarded. An autonomous session has no other supervision, so these rules are not advisory.
+Rules 4 and 5 were extended on 2026-09-21, after the tree-budget ladder's `400` rung was launched
+as a third run on one task and its result was read on the all-weeks interval while the written
+rule named weeks 3-18; the user accepted both and asked for the two amendments below.
 
 1. **One gate.** `scripts/gate.sh` is the definition of "checks pass". No task, chunk or version
    is reported done, and no changelog entry is written as landed, until it exits `0` on the
@@ -324,7 +327,15 @@ then discarded. An autonomous session has no other supervision, so these rules a
    the reproduction command beside the number, and only then may the docs change. A number in
    the docs without a run directory is a defect.
 4. **Compute budget.** Before each walk-forward run, write the hypothesis and the decision rule
-   (which result changes what). After two runs on one task without a decision, stop and ask.
+   (which result changes what). The decision rule names the exact window or windows it reads
+   (week 1, week 2, weeks 3-18, all weeks), the exact columns (deterministic Brier, log loss,
+   pick accuracy, margin MAE, the paired deterministic-minus-market interval), and how the
+   windows combine when they disagree, so a rung cannot read as a tie on one window and a win
+   on another without the rule saying which one governs. After two runs on one task without a
+   decision, stop and ask. A **ladder** (several runs of one hypothesis family, with a stated
+   cap on the number of rungs and a stopping rule) written into the check-in and accepted by
+   the user counts as approval for every rung up to that cap; only a rung beyond the cap, or
+   outside the ladder as written, needs a fresh ask.
    One walk-forward at a time; `uptime` and `pgrep -af walk_forward` first; OpenMP policy by
    load. Any edit under `nfl_predictor/ml/` changes every checkpoint fingerprint, so a rerun
    after a code change retrains from scratch; plan runs after the code is stable.
@@ -336,7 +347,8 @@ then discarded. An autonomous session has no other supervision, so these rules a
    - closing a milestone, reopening a parked one (Milestone 57), or reordering the roadmap;
    - merging to `main` or pushing (tags and releases: never, see above);
    - touching `../nfeloqb`, `../nfl-sos-ratings`, or the web API on port 8765;
-   - a third walk-forward run on one task, or any six-season run;
+   - a third walk-forward run on one task, or any six-season run, unless it is a rung of a
+     ladder the user has already accepted under rule 4 and is within that ladder's cap;
    - anything the task text says to decide with the user.
 6. **May proceed without asking:**
    - commits on the working feature branch after each versioned chunk (Conventional Commits, one

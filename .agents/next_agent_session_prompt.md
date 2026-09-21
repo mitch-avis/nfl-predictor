@@ -38,14 +38,32 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
 
 ## Starting state (2026-09-20, task 55.7 in flight)
 
-- Branch `feat/m55-7-tree-budget`, version `0.12.10`, tree clean at `a664d35`. It was created
+- Branch `feat/m55-7-tree-budget`, version `0.12.12`, tree clean at `ebb1f8e`. It was created
   off `docs/handoff-m55-first`, which is one commit ahead of `main` at `7ea8e39` and is **not
   merged**; merging both branches into `main` and pushing is on the user's question list
   (must-ask). Commits on this branch: `280dd96 feat(walk-forward): add --n-estimators
   tree-budget override`, `345c398 docs(agents): record the launch convention and load-driven
   timings`, `23776b0 docs(agents): restate the validated baseline at 0.12.9`, `a664d35 chore:
-  bump to 0.12.10 with the tree-budget flag changelog entry`. The full `scripts/gate.sh` exits
-  `0` on that tree: `848 passed`, coverage `92.66%`.
+  bump to 0.12.10 with the tree-budget flag changelog entry`, then the two chunks below. The
+  full `scripts/gate.sh --web` exits `0` on `ebb1f8e`: `862 passed`, coverage `92.66%`, and the
+  frontend gate with `22` vitest tests.
+- **Two more chunks landed while the `598` rung ran**, out of the roadmap order because they
+  need no machine time and the ladder holds the machine:
+  - `0.12.11` (`5ee9fda feat(weekly-run): pass ETL arguments through and clamp postseason
+    rankings`, `aacc724 docs(agents): close task 56.1 and narrow 56.2 to the user's decision`,
+    `1226c70 chore: bump to 0.12.11 ...`). Task 56.1 is done: `scripts/weekly_run.py` forwards
+    `--data-collection-args` to the ETL. Task 56.2 is **narrowed**, not done: the
+    power-rankings through-week clamp and the README documentation landed, and the postseason
+    default is left to the user. Code defaults exclude postseason; `config/weekly_run.yaml`
+    includes it at weight `1.3`. That disagreement is a question, not a bug to fix unasked.
+  - `0.12.12` (`604bcc6 feat(api): route ETL and validation jobs to the configured data
+    directory`, `e3b828d build: drop the web extra that duplicated the core dependencies`,
+    `ebb1f8e chore: bump to 0.12.12 ...`). Task 58.4 is **narrowed**: the `web` extra is gone
+    (so nothing passes `--extra web` any more) and the `etl_full`, `validate_offline` and
+    `validate_live` job templates pass `--data-dir` from `NFLP_DATA_DIR`. The ETL's upstream
+    inputs still resolve from `constants.DATA_PATH` (the copied `qb_elos.csv`, the QB identity
+    file, the TeamRankings and nflreadpy caches), so pointing the API at another checkout still
+    reads those from this one. Whether that remainder is wanted at all is a question.
 - **A six-season walk-forward is running.** The `598`-tree reference rung of the task 55.7
   ladder, `models/wf_m55_7_2020_2025_trees598/` (`HYPOTHESIS.md`, `launch.sh`, `run.log`;
   checkpoints `models/wf_checkpoints/8431001f74f2766a8c44/`), launched 2026-09-20 19:08 with
@@ -100,7 +118,7 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
 3. `models/wf_m55_7_2020_2025_trees598/HYPOTHESIS.md`: the ladder in flight, its decision rule
    and its stopping rule.
 4. `.agents/ARCHIVE.md`, Milestone 59 ("Rebuild" and "Audit"), then Milestone 52.
-5. `CHANGELOG.md` entries `0.12.0` to `0.12.10`.
+5. `CHANGELOG.md` entries `0.12.0` to `0.12.12`.
 6. `README.md` sections "Win probability calibration", "Backtesting" (including the superseded
    recency ablation note), "Validation".
 7. `models/wf_m59_rebuild_2023_2025_from_week1_seed7/HYPOTHESIS.md` and `REVIEW.md`, as the
@@ -144,12 +162,14 @@ off `main`; merging and pushing are must-ask, every time.
    copy) and one three-season from-week-1 arm against the reference arm, read as a no-breakage
    check: every margin will move (training rows changed), and a tie is the only claimable
    outcome.
-4. **Milestone 56** (weekly orchestration residuals): 56.1 data-refresh pass-through, 56.2
-   postseason handling, then 56.3 after the sweep. Also close or rewrite the "From task 56.4"
-   follow-up about early stopping on the calibration frame: superseded by `0.12.3`, remainder
-   is 55.7.
-5. **Task 58.4** (web housekeeping): the `web` extra duplication and the job templates that
-   ignore `NFLP_DATA_DIR`; run `scripts/gate.sh --web`.
+4. **Milestone 56** (weekly orchestration residuals): 56.1 data-refresh pass-through **done**
+   in `0.12.11`; 56.2 postseason handling **narrowed** in the same version (clamp plus README;
+   the default is the user's call); 56.3 still waits on the sweep. The "From task 56.4"
+   follow-up about early stopping on the calibration frame is **closed** in `.agents/TODO.md`:
+   `0.12.3` removed in-season early stopping, and the remaining tree-budget question is 55.7.
+5. **Task 58.4** (web housekeeping): **narrowed** in `0.12.12`. The `web` extra is dropped and
+   the three job templates pass `--data-dir`; the ETL's upstream input paths are the open
+   remainder, and whether to chase them is a question.
 6. **The rest of Milestone 55** (sweep schema and runner, `PRIOR_BLEND_GAMES`, `xgb_device`,
    `ScoreModel`, the stability view), including the out-of-fold calibration pool ("From
    Milestone 59") as an arm if a fitted calibrator is reconsidered at all.
@@ -164,8 +184,8 @@ off `main`; merging and pushing are must-ask, every time.
   are still open.
 - `AGENTS.md`, walk-forward operating notes: the `launch.sh` / `nohup setsid` convention and the
   load-driven `PASSIVE` relaunch are recorded (`345c398`, `0.12.10`). Done.
-- `.agents/TODO.md`, "Current validated baseline": restated at `0.12.9` (`23776b0`). Restate it
-  again at each landed chunk so it does not lag.
+- `.agents/TODO.md`, "Current validated baseline": restated at `0.12.12` (`ebb1f8e`). Restate
+  it again at each landed chunk so it does not lag.
 - Any place that still says the benchmark is "the" reference: on the rebuilt build the
   reference is `models/wf_m59_rebuild_2023_2025_from_week1/`, and the `AGENTS.md` benchmark
   table is the record of the previous build.
@@ -176,6 +196,12 @@ off `main`; merging and pushing are must-ask, every time.
 1. Merge `docs/handoff-m55-first` and `feat/m55-7-tree-budget` into `main` and push (must-ask).
 2. Any default change that comes out of the tree-budget ladder, including the timing of it
    mid-season (must-ask).
+3. Task 56.2: should postseason games be included in weekly runs by default? The code defaults
+   exclude them, `config/weekly_run.yaml` includes them at weight `1.3`, and one of the two has
+   to change.
+4. Task 58.4: is the remainder wanted at all, that is, should the ETL's upstream inputs
+   (`qb_elos.csv`, the QB identity file, the TeamRankings and nflreadpy caches) also follow
+   `NFLP_DATA_DIR`, or is the configured tree only meant for the datasets the jobs write?
 
 ## How each chunk runs
 

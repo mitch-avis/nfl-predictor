@@ -47,14 +47,16 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-20, version `0.12.9`, `feat/m55-7-tree-budget`)
+### Current validated baseline (2026-09-20, version `0.12.12`, `feat/m55-7-tree-budget`)
 
 - The branch sits off `docs/handoff-m55-first`, which is one commit ahead of `main` at `7ea8e39`
-  and not yet merged. `scripts/gate.sh --quick` exits `0` on `7ea8e39`: ruff format, ruff, ty,
-  pyright, markdownlint, `uv lock --check`, `uv sync --check --active --extra web` and the CLI
-  help smoke checks clean. The last full gate count on record is `846 passed`, coverage
-  `92.67%`, on the `0.12.6` fix commit. Everything through `0.12.8` is merged into `main` and
-  pushed (`c1fff6a`).
+  and not yet merged. The full `scripts/gate.sh --web` exits `0` on `ebb1f8e`, the `0.12.12`
+  tip: ruff format, ruff, ty, pyright, `862 passed` with coverage `92.66%` against the enforced
+  `90%` floor, markdownlint, `uv lock --check`, `uv sync --check --active` and the CLI help
+  smoke checks clean, plus the frontend gate (lint, typecheck, `22` vitest tests, build). The
+  `web` extra no longer exists, so the gate no longer passes `--extra web`. Everything through
+  `0.12.8` is merged into `main` and pushed (`c1fff6a`); `0.12.9` to `0.12.12` are on this
+  branch only.
 - Data: the 2026-09-20 rebuild (`db6a78a3...`, `7278` rows, `513` columns; backup of the
   previous build in `data/backup_pre_m59_rebuild/`); walk-forward input for new arms
   `data/completed_games_ml.m59_through_2025.csv` (`cf42ec55...`), reference arm
@@ -369,7 +371,9 @@ decisions and per-phase status live in `web_ui_plan.md`. Work happens on a fresh
       (`nfl_predictor/utils/scraping_utils.py`, `nfl_predictor/utils/polars/teamrankings.py`).
       Threading a data directory through those read paths is a separate change; until it lands,
       pointing the API at another checkout's data makes `etl_full` read inputs from this checkout
-      and write outputs to the configured one.
+      and write outputs to the configured one. The narrowed part landed in `0.12.12`
+      (`604bcc6`, `e3b828d`); whether the remainder is wanted at all is on the user's question
+      list.
 
 Acceptance:
 
@@ -498,12 +502,11 @@ the identity warning. Still open:
 
 ### From task 56.4 (rolling calibration window)
 
-- [ ] Final training early-stops every head on the calibration frame, so a weekly run with the
-      default four in-season calibration weeks and no calibration season stops on roughly 50-64
-      games. The Week-2 smoke run (`models/smoke_20260911`, market-anchored) stopped its margin
-      head at iteration `1` on the 50-game window; the workaround run, calibrated on the 2025 and
-      2026 seasons (274 games), stopped at `189` (`models/smoke_20260911_workaround/`), and
-      `models/weekly_2025_week_22` (8 weeks) at `9`. This predates the window fix (four weeks of
-      one season are just as small). Candidate: early-stop on a larger window than the
-      calibrator uses, for example the last full season plus the calibration window, and
-      measure it in walk-forward.
+- [x] Closed 2026-09-20: superseded by `0.12.3`, which removed in-season early stopping from
+      production and walk-forward. No head stops on the calibration frame any more, so the
+      defect this item described cannot recur. The historical evidence, kept for the record:
+      the Week-2 smoke run (`models/smoke_20260911`, market-anchored) stopped its margin head at
+      iteration `1` on a 50-game window; the workaround run calibrated on the 2025 and 2026
+      seasons (274 games) stopped at `189` (`models/smoke_20260911_workaround/`), and
+      `models/weekly_2025_week_22` (8 weeks) at `9`. Every head now runs the full tree budget,
+      and the only question left is how large that budget should be, which is task 55.7.

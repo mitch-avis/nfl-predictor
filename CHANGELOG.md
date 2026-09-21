@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.9] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.9` and keep `uv.lock` aligned.
+- Roadmap reordered by the user's decision: Milestone 55 tasks 55.7 (the tree budget) and the
+  new 55.8 (season weighting, re-measured on the deterministic instrument over six seasons) run
+  before Milestone 54; task 54.0 is read as a no-breakage check on three seasons. The feature
+  rules in `.agents/TODO.md` now require six seasons for any arm that claims an improvement.
+- The README's recency-weighting ablation is marked superseded (measured through the
+  noise-dominated Platt calibrator on an earlier build); task 55.8 replaces it.
+- `.agents/next_agent_session_prompt.md` rewritten for the next session.
+
 ## [0.12.8] - 2026-09-20
 
 ### Changed

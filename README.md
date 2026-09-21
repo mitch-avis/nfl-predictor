@@ -424,8 +424,12 @@ Interpretation:
 
 - Trend features improve probability metrics (Brier/log loss) and margin MAE, with a small tradeoff
   in total MAE.
-- Recency weighting (half-life seasons=2) hurts probability metrics in this run; keep it off unless
-  a future ablation shows improvement.
+- Recency weighting (half-life seasons=2) scored worse in this run, but the result is superseded:
+  it was measured through Platt calibration, which the 2026-09-18 audit found noise-dominated,
+  on an earlier dataset build, and its log loss of `1.95` reads as a calibration failure rather
+  than a model difference. Season weighting is re-measured on the deterministic instrument under
+  task 55.8 in `.agents/TODO.md`; until then the default stays off and this table is history,
+  not guidance.
 
 Evaluation rule: "Model selection is based on time-aware walk-forward evaluation; random CV is not
 authoritative." Season-blocked CV is used for hyperparameter tuning only; walk-forward remains the

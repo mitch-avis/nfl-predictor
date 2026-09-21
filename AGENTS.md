@@ -52,8 +52,11 @@ Rules that are always enforced:
   59"): the fitted-calibration pool is in-sample rather than out-of-fold, and `n_estimators` was
   not re-tuned (task 55.7). The ETL rebuild for 59.4 and 59.6 ran on 2026-09-20 (data state
   below); its first pass exposed a `0.12.4` defect (the sack exclusion starved
-  `opponent_points_per_play`), fixed in `0.12.6`. Milestone 54 (now PBP-first, with the schedule
-  skeleton as task 54.0) is the next ML milestone. The analysis, crosswalk, and
+  `opponent_points_per_play`), fixed in `0.12.6`. The fit-noise floor of the instrument was
+  measured the same day (see "Fit-noise floor on the same build" below), and on that evidence
+  the user reordered the roadmap: Milestone 55 tasks 55.7 (the tree budget) and 55.8 (season
+  weighting) come first, then task 54.0 as a no-breakage check, then the rest of Milestone 54
+  (PBP-first, with the schedule skeleton as task 54.0). The analysis, crosswalk, and
   prioritized shortlist live in `.agents/feature_crosswalk.md`; the ordered milestones live in
   `.agents/TODO.md`. The web UI
   (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on

@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.12.12] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.12` and keep `uv.lock` aligned.
+- The `etl_full`, `validate_offline` and `validate_live` job templates pass `--data-dir` from
+  `NFLP_DATA_DIR`, so the datasets those jobs read and write follow the configured data tree
+  instead of the checkout's own `data/`. The ETL's upstream inputs (`qb_elos.csv`, the
+  quarterback identity file, the TeamRankings and nflreadpy caches) still resolve from
+  `constants.DATA_PATH`; task 58.4 stays open for that remainder.
+- `python -m nfl_predictor.data_collection`, `scripts/validate_offline.py` and
+  `scripts/validate_live.py` accept `--data-dir`; omitting it keeps the packaged data directory,
+  so every existing invocation behaves as before.
+
+### Removed
+
+- The `web` optional-dependency extra in `pyproject.toml`, whose seven packages are all core
+  dependencies already. `scripts/gate.sh`, `.github/workflows/validation.yml`, `web/README.md`
+  and the agent docs now say plain `uv sync` / `uv sync --check --active`.
+
 ## [0.12.11] - 2026-09-20
 
 ### Changed

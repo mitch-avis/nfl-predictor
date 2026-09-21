@@ -714,7 +714,7 @@ wheels = [
 
 [[package]]
 name = "nfl-predictor"
-version = "0.12.11"
+version = "0.12.12"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
@@ -740,17 +740,6 @@ dependencies = [
     { name = "xgboost" },
 ]
 
-[package.optional-dependencies]
-web = [
-    { name = "argon2-cffi" },
-    { name = "fastapi" },
-    { name = "pydantic-settings" },
-    { name = "pyjwt" },
-    { name = "python-multipart" },
-    { name = "sse-starlette" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "colorama" },
@@ -770,11 +759,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "argon2-cffi" },
-    { name = "argon2-cffi", marker = "extra == 'web'" },
     { name = "beautifulsoup4" },
     { name = "coloredlogs" },
     { name = "fastapi" },
-    { name = "fastapi", marker = "extra == 'web'" },
     { name = "joblib" },
     { name = "lxml" },
     { name = "nflreadpy" },
@@ -784,21 +771,15 @@ requires-dist = [
     { name = "pandas" },
     { name = "polars" },
     { name = "pydantic-settings" },
-    { name = "pydantic-settings", marker = "extra == 'web'" },
     { name = "pyjwt" },
-    { name = "pyjwt", marker = "extra == 'web'" },
     { name = "python-multipart" },
-    { name = "python-multipart", marker = "extra == 'web'" },
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "sse-starlette" },
-    { name = "sse-starlette", marker = "extra == 'web'" },
     { name = "uvicorn", extras = ["standard"] },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'web'" },
     { name = "xgboost" },
 ]
-provides-extras = ["web"]
 
 [package.metadata.requires-dev]
 dev = [

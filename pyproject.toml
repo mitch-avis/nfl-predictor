@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nfl-predictor"
-version = "0.12.11"
+version = "0.12.12"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -42,17 +42,6 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/mitch-avis/nfl-predictor"
-
-[project.optional-dependencies]
-web = [
-    "argon2-cffi",
-    "fastapi",
-    "pydantic-settings",
-    "pyjwt",
-    "python-multipart",
-    "sse-starlette",
-    "uvicorn[standard]",
-]
 
 [dependency-groups]
 dev = [

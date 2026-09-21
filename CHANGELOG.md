@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.12.11] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.11` and keep `uv.lock` aligned.
+- The default power-rankings through-week in `scripts/weekly_run.py` is clamped to the last
+  regular-season week when the prediction week is postseason (the ETL writes strength snapshots
+  only through the week after the regular season, so later playoff weeks skipped the rankings).
+  An explicit `--power-rankings-through-week` still wins.
+
+### Added
+
+- `--data-collection-args` on `scripts/weekly_run.py` (config key `data_collection_args`, also a
+  parameter of the `weekly_run` API job): one shell-quoted string passed through to the data
+  refresh, so `--min-season`, `--max-season` and the `--stat-prior-blend*` flags can be set from
+  the weekly command. Unset, the refresh runs exactly as before.
+- README: how postseason games enter training, evaluation and the rankings today (the code
+  defaults exclude them; the shipped `config/weekly_run.yaml` includes them at weight `1.3`).
+
 ## [0.12.10] - 2026-09-20
 
 ### Changed

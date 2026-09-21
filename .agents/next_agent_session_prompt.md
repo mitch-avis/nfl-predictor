@@ -36,50 +36,38 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   never `pkill -f` a pattern that matches your own shell. Any edit under `nfl_predictor/ml/`
   changes every checkpoint fingerprint; get the code stable before you measure.
 
-## Starting state (2026-09-20, task 55.7 in flight)
+## Starting state (2026-09-21, the tree-budget ladder complete)
 
-- Branch `feat/m55-7-tree-budget`, version `0.12.12`, tree clean at `ebb1f8e`. It was created
-  off `docs/handoff-m55-first`, which is one commit ahead of `main` at `7ea8e39` and is **not
-  merged**; merging both branches into `main` and pushing is on the user's question list
-  (must-ask). Commits on this branch: `280dd96 feat(walk-forward): add --n-estimators
-  tree-budget override`, `345c398 docs(agents): record the launch convention and load-driven
-  timings`, `23776b0 docs(agents): restate the validated baseline at 0.12.9`, `a664d35 chore:
-  bump to 0.12.10 with the tree-budget flag changelog entry`, then the two chunks below. The
-  full `scripts/gate.sh --web` exits `0` on `ebb1f8e`: `862 passed`, coverage `92.66%`, and the
-  frontend gate with `22` vitest tests.
-- **Two more chunks landed while the `598` rung ran**, out of the roadmap order because they
-  need no machine time and the ladder holds the machine:
-  - `0.12.11` (`5ee9fda feat(weekly-run): pass ETL arguments through and clamp postseason
-    rankings`, `aacc724 docs(agents): close task 56.1 and narrow 56.2 to the user's decision`,
-    `1226c70 chore: bump to 0.12.11 ...`). Task 56.1 is done: `scripts/weekly_run.py` forwards
-    `--data-collection-args` to the ETL. Task 56.2 is **narrowed**, not done: the
-    power-rankings through-week clamp and the README documentation landed, and the postseason
-    default is left to the user. Code defaults exclude postseason; `config/weekly_run.yaml`
-    includes it at weight `1.3`. That disagreement is a question, not a bug to fix unasked.
-  - `0.12.12` (`604bcc6 feat(api): route ETL and validation jobs to the configured data
-    directory`, `e3b828d build: drop the web extra that duplicated the core dependencies`,
-    `ebb1f8e chore: bump to 0.12.12 ...`). Task 58.4 is **narrowed**: the `web` extra is gone
-    (so nothing passes `--extra web` any more) and the `etl_full`, `validate_offline` and
-    `validate_live` job templates pass `--data-dir` from `NFLP_DATA_DIR`. The ETL's upstream
-    inputs still resolve from `constants.DATA_PATH` (the copied `qb_elos.csv`, the QB identity
-    file, the TeamRankings and nflreadpy caches), so pointing the API at another checkout still
-    reads those from this one. Whether that remainder is wanted at all is a question.
-- **A six-season walk-forward is running.** The `598`-tree reference rung of the task 55.7
-  ladder, `models/wf_m55_7_2020_2025_trees598/` (`HYPOTHESIS.md`, `launch.sh`, `run.log`;
-  checkpoints `models/wf_checkpoints/8431001f74f2766a8c44/`), launched 2026-09-20 19:08 with
-  `OMP_WAIT_POLICY=PASSIVE` because the web API `--reload` watcher loads the machine; `107`
-  folds. Check it with `pgrep -af walk_forward` and the tail of its `run.log`. If it is dead,
-  re-run its `launch.sh`: it resumes from the checkpoints. One run at a time.
-- The ladder plan and the stopping rule live in that run's `HYPOTHESIS.md`: `598` first (it must
-  reproduce the 2023-2025 folds of `models/wf_m59_rebuild_2023_2025_from_week1/` bit for bit),
-  then the extremes `200` and `1200`, then `400` or `800` only if an extreme separates from
-  `598` beyond the fit-noise floor; if both extremes tie, keep `598` and close the ladder. The
-  two extreme rung directories already exist with `HYPOTHESIS.md` and `launch.sh` pre-written
-  (`models/wf_m55_7_2020_2025_trees200/`, `models/wf_m55_7_2020_2025_trees1200/`) and are not
-  launched. Each finished rung needs a reviewer rescore into its `REVIEW.md`, using the
-  `compare_to_benchmark.py` copied into each rung directory, before any number enters the docs.
+- Branch `feat/m55-7-tree-budget`, version `0.12.13`. The `0.12.13` docs chunk (this file, the
+  `AGENTS.md` ladder record, the `README.md` timings, the task 55.7 progress note, the
+  changelog entry and the `pyproject.toml` bump) is uncommitted until the orchestrator commits
+  it; everything before it is committed, the tip being `9b9a7c8`. The branch sits off
+  `docs/handoff-m55-first`, which is one commit ahead of `main` at `7ea8e39` and is **not
+  merged**; merging both branches into `main` and pushing is on the question list (must-ask).
+  The last full `scripts/gate.sh --web` exited `0` on `ebb1f8e`: `862 passed`, coverage
+  `92.66%`, frontend gate with `22` vitest tests.
+- **The tree-budget ladder (task 55.7) is complete and no walk-forward is running.** Three
+  six-season rungs of the reference configuration on the rebuilt build, differing only in
+  `--n-estimators`, each with a `HYPOTHESIS.md` written before its launch and an independent
+  `REVIEW.md`: `models/wf_m55_7_2020_2025_trees598/` (checkpoints
+  `models/wf_checkpoints/8431001f74f2766a8c44/`, the six-season reference, which reproduces the
+  three-season reference arm's 2023-2025 folds bit for bit),
+  `models/wf_m55_7_2020_2025_trees200/` (`a5e76d54187e27ca7370`) and
+  `models/wf_m55_7_2020_2025_trees400/` (`849c353f7074fedb0538`). The numbers and the pairwise
+  intervals are in `AGENTS.md` under "Tree-budget ladder"; the ladder stopped on its "report all
+  three and ask" branch, the default stays `598`, and the `1200` rung stays pre-written and
+  unlaunched. Nothing about the default changes without the user.
+- **A parked branch: `feat/m54-0-schedule-skeleton`**, two commits off `main` and not merged:
+  `ae687dd feat(etl): build the team-game frame from the schedule skeleton` (task 54.0) and
+  `d34b0ab fix(etl): null the box score of a team-stats row that covers both teams`. The repair
+  came out of the audit of the skeleton: for all 16 JAX home games of 2001-2002 the surviving
+  nflverse team-stats row carries both teams' production, and the skeleton alone would push
+  that doubled box score into JAX's opponent mirrors. The repair alters feature values beyond
+  the task text, so it needs the user's yes on its own. Both commits need the must-ask ETL
+  rebuild (back up `data/*.csv` first), the leakage audit rerun and a three-season from-week-1
+  tie check against the reference arm before anything lands.
 - Data on disk: the 2026-09-20 04:31 rebuild on the `0.12.6` schema, `data/completed_games_ml.csv`
-  `db6a78a3...` (`7278` rows, `513` columns), lines refreshed at 10:13 for Week 2. The
+  `db6a78a3...` (`7278` rows, `513` columns), lines refreshed 2026-09-20 10:13 for Week 2. The
   walk-forward input for every new arm is the through-2025 cut
   `data/completed_games_ml.m59_through_2025.csv` (`cf42ec55...`, `7261` rows). The previous
   build is in `data/backup_pre_m59_rebuild/`. Leakage audit `models/audit_m59_rebuild/`: `463`
@@ -89,24 +77,24 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
   "Reference arm on the 2026-09-20 rebuild"). **Fit-noise floor**: the same arm with
   `--random-seed 7`, `models/wf_m59_rebuild_2023_2025_from_week1_seed7/`; the paragraph beside
   the reference arm in `AGENTS.md` states what a three-season arm cannot resolve (Brier under
-  about `0.002`, pick accuracy under about `0.01`, margin MAE under about `0.06`). Every run
-  directory holds a `HYPOTHESIS.md` (rule and command, written before the run), a `REVIEW.md`
-  (the independent rescore) and `compare_to_benchmark.py <candidate_ckpt> <reference_ckpt>`,
-  which rescores two checkpoint directories and is validated against the `AGENTS.md` table.
-  Reuse that script and that layout for every arm.
+  about `0.002`, pick accuracy under about `0.01`, margin MAE under about `0.06`). The
+  six-season floor has never been measured. Every run directory holds a `HYPOTHESIS.md`, a
+  `REVIEW.md` and `compare_to_benchmark.py <candidate_ckpt> <reference_ckpt>`; reuse that
+  script and that layout for every arm.
 - What the model trains on: every walk-forward fold and the production fit train on every game
   strictly before the predicted week, all seasons from 1999 (a fold in 2025 trains on about
   `6,900` games across 27 seasons). `--eval-last-n-seasons` sets how many seasons are scored,
   not trained on. Every training row carries the same weight; recency weighting exists
-  (`--recency-half-life-seasons`) and is off by default.
+  (`--recency-half-life-seasons`) and is off by default, which is what task 55.8 measures.
 - The Week 2 package for the Sunday and Monday games is `models/weekly_2026_week_02_refresh/`
   (config `hybrid_raw_prob_base_elo_blend0.20_clamp0.10`, `elo` calibration, 15 games).
 - `auto` calibration is the deterministic floor; production defaults to `elo`; no in-season
-  early stopping since `0.12.3`; every head runs the untuned `598`-tree budget, which is
-  exactly what task 55.7 is measuring. `--n-estimators` overrides it since `0.12.10`.
-- The web API runs from the worktree `../nfl-predictor-web` on port 8765 (the user starts it
-  with `--reload`; its watcher takes half a core continuously); never restart it unasked.
-  `../nfeloqb` and `../nfl-sos-ratings` are the user's and read-only.
+  early stopping since `0.12.3`; every head runs the `598`-tree budget, which the ladder above
+  measured but did not change. `--n-estimators` overrides it since `0.12.10`.
+- Machine state: no walk-forward running; check with `pgrep -af walk_forward` and `uptime`
+  before anything heavy. The web API runs from the worktree `../nfl-predictor-web` on port 8765
+  (the user starts it with `--reload`; its watcher takes half a core continuously); never
+  restart it unasked. `../nfeloqb` and `../nfl-sos-ratings` are the user's and read-only.
 
 ## Read first, in this order
 
@@ -115,10 +103,14 @@ walk-forward runs per task before you ask; the must-ask list means stop and wait
    walk-forward operating notes.
 2. `.agents/TODO.md`: the execution loop, the roadmap order (reordered 2026-09-20), Milestone 55
    tasks 55.7 and 55.8 in full, task 54.0, and the "From Milestone 59" follow-ups.
-3. `models/wf_m55_7_2020_2025_trees598/HYPOTHESIS.md`: the ladder in flight, its decision rule
-   and its stopping rule.
+3. The tree-budget ladder, in this order:
+   `models/wf_m55_7_2020_2025_trees598/HYPOTHESIS.md` (the ladder rule and stopping rule), then
+   `models/wf_m55_7_2020_2025_trees598/REVIEW.md`,
+   `models/wf_m55_7_2020_2025_trees200/REVIEW.md` and
+   `models/wf_m55_7_2020_2025_trees400/REVIEW.md` (whose "Ladder summary" section is the source
+   of the `AGENTS.md` tables).
 4. `.agents/ARCHIVE.md`, Milestone 59 ("Rebuild" and "Audit"), then Milestone 52.
-5. `CHANGELOG.md` entries `0.12.0` to `0.12.12`.
+5. `CHANGELOG.md` entries `0.12.0` to `0.12.13`.
 6. `README.md` sections "Win probability calibration", "Backtesting" (including the superseded
    recency ablation note), "Validation".
 7. `models/wf_m59_rebuild_2023_2025_from_week1_seed7/HYPOTHESIS.md` and `REVIEW.md`, as the
@@ -141,29 +133,28 @@ Each item is one or more versioned chunks with its own changelog entry, gate run
 branch named for the task, handoff rewrite, and a check-in. New work starts on a fresh branch
 off `main`; merging and pushing are must-ask, every time.
 
-1. **Task 55.7, the tree budget** (in progress on this branch). `598` trees is an old Optuna
-   value that was never measured, and every fit now runs the full budget by construction. The
-   ladder runs as separate six-season arms of the reference configuration on the rebuilt build
-   (`--eval-last-n-seasons 6 --wf-start-week 1 --calibration auto --wf-calibration-weeks 4
-   --market-anchor --market-transform`, plus `--n-estimators`), one `HYPOTHESIS.md` per arm with
-   the decision rule written against the fit-noise floor, one arm at a time, a reviewer rescore
-   of each before any number enters the docs. Six seasons cost about 100 minutes idle each.
-   Guardrail 4 still applies: stop and ask rather than improvising extra rungs beyond the
-   written stopping rule. The winner becomes the shared default in walk-forward and production
-   together, which is a default change: must-ask before changing it, and mid-season the user may
-   prefer to wait for a bye week or the off-season.
-2. **Task 55.8, season weighting.** Half-lives of about `4`, `8` and `16` seasons via
-   `--recency-half-life-seasons` as six-season arms against the unweighted reference, same
-   discipline. Replace the README's superseded ablation with the new measurement and its run
-   directories whichever way it goes. A winning weighting is a default change: must-ask.
-3. **Task 54.0** (schedule skeleton and coverage check): small, data-correctness, JAX
-   2001-2002. It changes feature values at ETL time, so it needs a rebuild (must-ask, back up
-   `data/*.csv` to `data/backup_pre_<tag>/` first, rerun the leakage audit, cut a through-2025
-   copy) and one three-season from-week-1 arm against the reference arm, read as a no-breakage
-   check: every margin will move (training rows changed), and a tie is the only claimable
-   outcome.
+1. **Task 55.7, the tree budget: ladder done, decision pending.** Three six-season rungs
+   (`598`, `200`, `400`) ran and were reviewed; the record is in `AGENTS.md` under "Tree-budget
+   ladder" and the progress note is on the task in `.agents/TODO.md`. The task stays `[ ]`
+   because the outcome is a question, not a change: the default `n_estimators` stays `598`
+   until the user picks. Do not launch a `100` rung, a second seed or the pre-written `1200`
+   rung without being asked, and do not change the default, which is shared by walk-forward and
+   production; mid-season the user may prefer a bye week for it.
+2. **Task 55.8, season weighting: next, once the user answers on the budget.** Half-lives of
+   about `4`, `8` and `16` seasons via `--recency-half-life-seasons` as six-season arms against
+   the unweighted reference, same discipline. Replace the README's superseded ablation with the
+   new measurement and its run directories whichever way it goes. A winning weighting is a
+   default change: must-ask.
+3. **Task 54.0** (schedule skeleton and coverage check): **code parked** on
+   `feat/m54-0-schedule-skeleton` (`ae687dd`, plus the both-teams box-score repair `d34b0ab`,
+   which needs its own yes). It changes feature values at ETL time, so it needs a rebuild
+   (must-ask, back up `data/*.csv` to `data/backup_pre_<tag>/` first, rerun the leakage audit,
+   cut a through-2025 copy) and one three-season from-week-1 arm against the reference arm,
+   read as a no-breakage check: every margin will move (training rows changed), and a tie is
+   the only claimable outcome.
 4. **Milestone 56** (weekly orchestration residuals): 56.1 data-refresh pass-through **done**
-   in `0.12.11`; 56.2 postseason handling **narrowed** in the same version (clamp plus README;
+   in `0.12.11`; 56.2 postseason handling **narrowed** in the same version, waiting on the
+   user's default (clamp plus README;
    the default is the user's call); 56.3 still waits on the sweep. The "From task 56.4"
    follow-up about early stopping on the calibration frame is **closed** in `.agents/TODO.md`:
    `0.12.3` removed in-season early stopping, and the remaining tree-budget question is 55.7.
@@ -179,13 +170,13 @@ off `main`; merging and pushing are must-ask, every time.
 ## Documentation debts to clear as you go
 
 - `README.md`, "Backtesting": the recency ablation table is marked superseded; task 55.8
-  replaces it with the new measurement. The "about 75 minutes on a 24-core machine" duration
-  line predates the load findings above; correct it when 55.7's runs give fresh timings. Both
-  are still open.
+  replaces it with the new measurement. Still open. The duration line was corrected in
+  `0.12.13` with the ladder's measured timings. Done.
 - `AGENTS.md`, walk-forward operating notes: the `launch.sh` / `nohup setsid` convention and the
   load-driven `PASSIVE` relaunch are recorded (`345c398`, `0.12.10`). Done.
-- `.agents/TODO.md`, "Current validated baseline": restated at `0.12.12` (`ebb1f8e`). Restate
-  it again at each landed chunk so it does not lag.
+- `.agents/TODO.md`, "Current validated baseline": restated at `0.12.13`, with the gate
+  result pointing at the session check-in until the orchestrator's gate lands. Restate it
+  again at each landed chunk so it does not lag.
 - Any place that still says the benchmark is "the" reference: on the rebuilt build the
   reference is `models/wf_m59_rebuild_2023_2025_from_week1/`, and the `AGENTS.md` benchmark
   table is the record of the previous build.
@@ -194,14 +185,28 @@ off `main`; merging and pushing are must-ask, every time.
 ## Open questions waiting on the user
 
 1. Merge `docs/handoff-m55-first` and `feat/m55-7-tree-budget` into `main` and push (must-ask).
-2. Any default change that comes out of the tree-budget ladder, including the timing of it
-   mid-season (must-ask).
-3. Task 56.2: should postseason games be included in weekly runs by default? The code defaults
+2. The tree budget: keep `598`, adopt `200`, or run `100` and/or a second seed on `200` first?
+   Weeks 3-18 over six seasons, deterministic Brier `0.2103` (`200`) / `0.2111` (`400`) /
+   `0.2117` (`598`) against market `0.2095`, margin MAE `9.9281` / `9.9978` / `10.0240`, the
+   `200 - 598` Brier interval `[-0.0029, +0.0001]` covering zero by `+0.0000791` and its margin
+   MAE `-0.0958` `[-0.1583, -0.0345]` beyond the fit-noise floor. Also: should any default
+   change wait for a bye week, since the default is shared with production?
+3. Two procedural deviations of the ladder session, for the record. The `400` rung was the third
+   walk-forward on task 55.7, which the guardrails list as must-ask; it was launched on the
+   user's "machine is free, go wild" authorization. And it was launched reading the all-weeks
+   interval and margin MAE, while the `200` rung's own decision rule, stated on weeks 3-18, read
+   as a tie.
+4. Task 54.0: rebuild with the schedule skeleton alone (`ae687dd`), with the both-teams
+   box-score repair too (`d34b0ab`), or not yet?
+5. Task 56.2: should postseason games be included in weekly runs by default? The code defaults
    exclude them, `config/weekly_run.yaml` includes them at weight `1.3`, and one of the two has
    to change.
-4. Task 58.4: is the remainder wanted at all, that is, should the ETL's upstream inputs
+6. Task 58.4: is the remainder wanted at all, that is, should the ETL's upstream inputs
    (`qb_elos.csv`, the QB identity file, the TeamRankings and nflreadpy caches) also follow
    `NFLP_DATA_DIR`, or is the configured tree only meant for the datasets the jobs write?
+7. From the 54.0 audit: `blend_with_prior_stats` weights box-score columns by the count of
+   scheduled games while their means rest only on the games actually covered (JAX 2001-2002:
+   `8` of `16`). Is that weighting intended, or should the blend use the covered-game count?
 
 ## How each chunk runs
 

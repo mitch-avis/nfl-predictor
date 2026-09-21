@@ -47,15 +47,16 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-20, version `0.12.12`, `feat/m55-7-tree-budget`)
+### Current validated baseline (2026-09-21, version `0.12.13`, `feat/m55-7-tree-budget`)
 
 - The branch sits off `docs/handoff-m55-first`, which is one commit ahead of `main` at `7ea8e39`
-  and not yet merged. The full `scripts/gate.sh --web` exits `0` on `ebb1f8e`, the `0.12.12`
-  tip: ruff format, ruff, ty, pyright, `862 passed` with coverage `92.66%` against the enforced
-  `90%` floor, markdownlint, `uv lock --check`, `uv sync --check --active` and the CLI help
-  smoke checks clean, plus the frontend gate (lint, typecheck, `22` vitest tests, build). The
-  `web` extra no longer exists, so the gate no longer passes `--extra web`. Everything through
-  `0.12.8` is merged into `main` and pushed (`c1fff6a`); `0.12.9` to `0.12.12` are on this
+  and not yet merged. `scripts/gate.sh` exits `0` on the `0.12.13` tree (`862 passed`,
+  coverage `92.68%`); the previous full gate with `--web` was `862 passed`, coverage `92.66%`,
+  on `ebb1f8e`. That gate covered ruff format, ruff, ty, pyright, pytest with coverage
+  against the enforced `90%` floor, markdownlint, `uv lock --check`, `uv sync --check --active`
+  and the CLI help smoke checks, plus the frontend gate (lint, typecheck, `22` vitest tests,
+  build). The `web` extra no longer exists, so the gate no longer passes `--extra web`. Everything through
+  `0.12.8` is merged into `main` and pushed (`c1fff6a`); `0.12.9` to `0.12.13` are on this
   branch only.
 - Data: the 2026-09-20 rebuild (`db6a78a3...`, `7278` rows, `513` columns; backup of the
   previous build in `data/backup_pre_m59_rebuild/`); walk-forward input for new arms
@@ -288,6 +289,18 @@ Tasks:
       arms of the reference configuration on the rebuilt build, one hypothesis per arm, read on
       the deterministic columns against the fit-noise floor; the winner becomes the shared
       default in walk-forward and production together (a default change: must-ask).
+      Progress 2026-09-21: three six-season rungs ran and were independently rescored,
+      `models/wf_m55_7_2020_2025_trees598/` (the reference, which reproduces the three-season
+      reference arm's 2023-2025 folds bit for bit),
+      `models/wf_m55_7_2020_2025_trees200/` and `models/wf_m55_7_2020_2025_trees400/`. The
+      aggregate order is monotone toward fewer trees and small: weeks 3-18 deterministic Brier
+      `0.2103` / `0.2111` / `0.2117` and margin MAE `9.9281` / `9.9978` / `10.0240` for
+      `200` / `400` / `598`, with the `200 - 598` Brier interval covering zero by `+0.0000791`
+      and its margin MAE difference `-0.0958` `[-0.1583, -0.0345]` beyond the fit-noise floor.
+      The ladder stopped on its own "report all three and ask" branch; the table and the
+      pairwise intervals are in `AGENTS.md` under "Tree-budget ladder". Decision pending with
+      the user: keep `598`, or move the shared default to `200` (or run `100` / a second seed
+      first); a default change is must-ask and mid-season the user may prefer a bye week.
 - [ ] 55.8 Season weighting. Today every training row from 1999 carries the same weight as
       last week's game (`recency_half_life_seasons` is off by default in walk-forward and
       production). The README's recency ablation ("keep it off") is not trustworthy: it was

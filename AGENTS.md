@@ -58,7 +58,10 @@ Rules that are always enforced:
   weighting) come first, then task 54.0 as a no-breakage check, then the rest of Milestone 54
   (PBP-first, with the schedule skeleton as task 54.0). The analysis, crosswalk, and
   prioritized shortlist live in `.agents/feature_crosswalk.md`; the ordered milestones live in
-  `.agents/TODO.md`. The web UI
+  `.agents/TODO.md`. Task 55.7's tree-budget ladder ran in `0.12.10`-`0.12.13` (three
+  six-season rungs, "Tree-budget ladder" below) and awaits the user's decision on the default.
+  Task 56.1 landed in `0.12.11`; tasks 56.2 (the postseason default) and 58.4 (the ETL's
+  upstream input paths) were narrowed in `0.12.11` and `0.12.12`. The web UI
   (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on
   2026-09-11; its open phases are Milestone 58 in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
@@ -177,6 +180,62 @@ Rules that are always enforced:
   difference under about `0.002`, a pick-accuracy difference under about `0.01` (7 games in 720)
   and a margin MAE difference under about `0.06` are indistinguishable from re-seeding; a claimed
   effect of that size needs six seasons or several seeds before it is a result.
+
+  **Tree-budget ladder (task 55.7, 2026-09-20/21)**: three six-season rungs of the reference
+  configuration on the rebuilt build (`data/completed_games_ml.m59_through_2025.csv`
+  `cf42ec55...`, seasons 2020-2025 from week 1, `auto`, `market_anchor` on, four calibration
+  weeks, seed `42`, git `9b9a7c8`), differing only in `--n-estimators`:
+  `models/wf_m55_7_2020_2025_trees598/` (checkpoints `models/wf_checkpoints/8431001f74f2766a8c44/`),
+  `models/wf_m55_7_2020_2025_trees200/` (`a5e76d54187e27ca7370`) and
+  `models/wf_m55_7_2020_2025_trees400/` (`849c353f7074fedb0538`). Each rung carries a
+  `HYPOTHESIS.md` written before its launch and a `REVIEW.md` from an independent rescore. The
+  `598` rung reproduces the three-season reference arm's 2023-2025 folds bit for bit (identical
+  `game_id` sets, maximum absolute difference exactly `0.0` on `predicted_margin`,
+  `predicted_total` and `deterministic_home_win_prob` over all 816 rows), so it is the six-season
+  reference on this build; every fold of every rung spent its whole budget with no early
+  stopping, and `auto` resolved to the deterministic floor in all 107 folds.
+
+  Weeks 3-18, `1423` games; all weeks, `1615` games. Market Brier on those rows is `0.2095` and
+  `0.2104` respectively for every rung, because the market view depends on the rows and not on
+  the fit.
+
+  | window | rung | det Brier | market Brier | pick acc | margin MAE | total MAE | s/fold |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | weeks 3-18 | 200 | `0.2103` | `0.2095` | `0.6732` | `9.9281` | `10.3151` | `56` |
+  | weeks 3-18 | 400 | `0.2111` | `0.2095` | `0.6676` | `9.9978` | `10.3712` | `111` |
+  | weeks 3-18 | 598 | `0.2117` | `0.2095` | `0.6648` | `10.0240` | `10.4114` | `161` |
+  | all weeks | 200 | `0.2110` | `0.2104` | `0.6693` | `9.8040` | `10.3219` | `56` |
+  | all weeks | 400 | `0.2119` | `0.2104` | `0.6625` | `9.8806` | `10.3645` | `111` |
+  | all weeks | 598 | `0.2125` | `0.2104` | `0.6607` | `9.9186` | `10.3940` | `161` |
+
+  Pairwise differences (candidate minus reference, 5000 paired resamples, seed 0):
+
+  | pair | window | Brier diff | Brier interval | MAE diff | MAE interval |
+  | --- | --- | --- | --- | --- | --- |
+  | 200 - 598 | weeks 3-18 | `-0.0014` | `[-0.0029, +0.0001]` | `-0.0958` | `[-0.1583, -0.0345]` |
+  | 200 - 598 | all weeks | `-0.0015` | `[-0.0029, -0.0002]` | `-0.1146` | `[-0.1724, -0.0564]` |
+  | 400 - 598 | weeks 3-18 | `-0.0006` | `[-0.0014, +0.0002]` | `-0.0262` | `[-0.0605, +0.0080]` |
+  | 400 - 598 | all weeks | `-0.0007` | `[-0.0014, +0.0001]` | `-0.0380` | `[-0.0698, -0.0058]` |
+  | 400 - 200 | weeks 3-18 | `+0.0008` | `[-0.0002, +0.0018]` | `+0.0697` | `[+0.0267, +0.1129]` |
+  | 400 - 200 | all weeks | `+0.0009` | `[-0.0001, +0.0018]` | `+0.0766` | `[+0.0370, +0.1160]` |
+
+  The aggregate order is monotone in the budget and points at fewer trees, but the per-season
+  picture is not: margin MAE falls monotonically from `598` to `400` to `200` in five of six
+  seasons (2025 is the exception), while deterministic Brier is monotone in only two of six
+  (2020 and 2023). The monotone reading is an aggregate tilt, not a per-season law. Reproduce any
+  rung with `.venv/bin/python models/wf_m55_7_2020_2025_trees400/compare_to_benchmark.py
+  <rung_ckpt> <598_ckpt>` (the same script sits in each rung directory).
+
+  Outcome: the ladder stopped on the `400` rung's "report all three and ask" branch. `400` ties
+  `598` on Brier, `200` beats `400` on margin MAE beyond the fit-noise floor but not on Brier,
+  and the weeks 3-18 `200 - 598` Brier interval covers zero by `+0.0000791`. **The default
+  `n_estimators` stays `598` until the user decides otherwise**; a default change is must-ask.
+  The `1200` rung stays pre-written and never launched. Open questions: a `100` rung, a second
+  seed on `200` (the six-season fit-noise floor has never been measured), and whether any
+  default change should wait for a bye week mid-season. Timings, which are scheduling facts and
+  not clean speed measurements: `598` about `161` s/fold (4h46m) under load from gates and the
+  web API watcher, `200` about `56` s/fold (1h40m) and `400` about `111` s/fold (3h18m) on a
+  machine quiet apart from that watcher.
 
   **How to read it now.** Walk-forward reports and `wf_compare` now carry three probability views:
   the configured calibrator, the deterministic map, and market-implied home win probability from

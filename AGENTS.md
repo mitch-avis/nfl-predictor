@@ -864,8 +864,14 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
   `wf_compare/wf_summary.csv` still shows per-candidate results.
 - Run **one walk-forward at a time**. XGBoost uses every core, and on 2026-09-10 two concurrent
   from-week-1 runs each burned more CPU than a whole solo run (42 CPU-hours against a solo run's
-  roughly 30) without finishing, so both were stopped and rerun in sequence. A from-week-1 run over
-  `--eval-last-n-seasons 3` takes about 75 minutes alone on an idle machine; a week-3 start about 40.
+  roughly 30) without finishing, so both were stopped and rerun in sequence. Measured 2026-09-20
+  on an idle machine: a from-week-1 run over `--eval-last-n-seasons 3` takes about 50 minutes and
+  over `--eval-last-n-seasons 6` about 100 minutes. The earlier observation, kept as a record, put
+  a from-week-1 three-season run at about 75 minutes alone and a week-3 start at about 40.
+- Launch every walk-forward through a small `launch.sh` in its own run directory (see
+  `models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh` for the shape) with
+  `nohup setsid`, never through a harness-bound shell, which stops at 10 minutes. Never
+  `pkill -f` a pattern that can match your own shell.
 - Choose the OpenMP wait policy by machine load at launch. Under other load, use
   `OMP_WAIT_POLICY=PASSIVE`: with the default policy XGBoost's threads spin while a preempted peer
   catches up (on 2026-09-10 one week took `730s` by default and `185s` with `PASSIVE`). On an idle
@@ -873,3 +879,7 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
   small dataset (an idle `PASSIVE` week took `~142s` against `~82s` for the default). The setting
   changes scheduling only, so it neither alters results nor invalidates fold checkpoints; switching
   mid-run means stop, relaunch with the other policy, and resume.
+- Load observation from 2026-09-20: with the web API running `--reload` (its file watcher takes
+  about half a core continuously) a three-season from-week-1 run took about 110 minutes instead of
+  about 50 idle, so the seed-7 arm was relaunched with `OMP_WAIT_POLICY=PASSIVE` and resumed from
+  its checkpoints. Check `uptime` and `ps -eo pcpu,args --sort=-pcpu | head -4` before a launch.

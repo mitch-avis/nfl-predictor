@@ -1,5 +1,84 @@
 # Changelog
 
+## [0.12.13] - 2026-09-21
+
+### Changed
+
+- Bump the project version to `0.12.13` and keep `uv.lock` aligned.
+- `AGENTS.md` records the task 55.7 tree-budget ladder: three six-season rungs of the reference
+  configuration on the rebuilt build that differ only in `--n-estimators`
+  (`models/wf_m55_7_2020_2025_trees598/`, the reference, which reproduces the three-season
+  reference arm's 2023-2025 folds bit for bit, plus
+  `models/wf_m55_7_2020_2025_trees200/` and `models/wf_m55_7_2020_2025_trees400/`), each one
+  independently rescored into its `REVIEW.md`. Weeks 3-18 over `1423` games: deterministic
+  Brier `0.2103` (`200`), `0.2111` (`400`) and `0.2117` (`598`) against market Brier `0.2095`,
+  with margin MAE `9.9281`, `9.9978` and `10.0240`; the `200 - 598` paired difference is
+  `-0.0014` `[-0.0029, +0.0001]` on Brier and `-0.0958` `[-0.1583, -0.0345]` on margin MAE. The
+  ladder stopped on its "report all three and ask" branch: no default change, and the choice of
+  budget is with the user.
+- `README.md`, "Backtesting": fresh walk-forward durations measured during the ladder (three
+  seasons from week 1 about 50 minutes idle and about 110 loaded; six seasons about 100 minutes
+  idle at `200` trees, about 3.3 hours at `400`, about 4.8 hours at the default `598` under
+  load), replacing the older "about 75 minutes" line, and a pointer from `--n-estimators` to the
+  ladder record.
+- `.agents/TODO.md`: task 55.7 stays open with a progress note carrying the ladder result, the
+  three run directories and the decision pending with the user.
+
+## [0.12.12] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.12` and keep `uv.lock` aligned.
+- The `etl_full`, `validate_offline` and `validate_live` job templates pass `--data-dir` from
+  `NFLP_DATA_DIR`, so the datasets those jobs read and write follow the configured data tree
+  instead of the checkout's own `data/`. The ETL's upstream inputs (`qb_elos.csv`, the
+  quarterback identity file, the TeamRankings and nflreadpy caches) still resolve from
+  `constants.DATA_PATH`; task 58.4 stays open for that remainder.
+- `python -m nfl_predictor.data_collection`, `scripts/validate_offline.py` and
+  `scripts/validate_live.py` accept `--data-dir`; omitting it keeps the packaged data directory,
+  so every existing invocation behaves as before.
+
+### Removed
+
+- The `web` optional-dependency extra in `pyproject.toml`, whose seven packages are all core
+  dependencies already. `scripts/gate.sh`, `.github/workflows/validation.yml`, `web/README.md`
+  and the agent docs now say plain `uv sync` / `uv sync --check --active`.
+
+## [0.12.11] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.11` and keep `uv.lock` aligned.
+- The default power-rankings through-week in `scripts/weekly_run.py` is clamped to the last
+  regular-season week when the prediction week is postseason (the ETL writes strength snapshots
+  only through the week after the regular season, so later playoff weeks skipped the rankings).
+  An explicit `--power-rankings-through-week` still wins.
+
+### Added
+
+- `--data-collection-args` on `scripts/weekly_run.py` (config key `data_collection_args`, also a
+  parameter of the `weekly_run` API job): one shell-quoted string passed through to the data
+  refresh, so `--min-season`, `--max-season` and the `--stat-prior-blend*` flags can be set from
+  the weekly command. Unset, the refresh runs exactly as before.
+- README: how postseason games enter training, evaluation and the rankings today (the code
+  defaults exclude them; the shipped `config/weekly_run.yaml` includes them at weight `1.3`).
+
+## [0.12.10] - 2026-09-20
+
+### Changed
+
+- Bump the project version to `0.12.10` and keep `uv.lock` aligned.
+- `AGENTS.md` walk-forward operating notes carry the `launch.sh` / `nohup setsid` launch
+  convention, the 2026-09-20 idle durations (three seasons about 50 minutes, six about 100) and
+  the load-driven `OMP_WAIT_POLICY=PASSIVE` relaunch; `.agents/TODO.md` restates the validated
+  baseline at `0.12.9`.
+
+### Added
+
+- `--n-estimators` on `scripts/walk_forward_backtest.py`: an XGBoost tree-budget override that
+  flows through `WalkForwardConfig.xgb_params_overrides` like `--gamma`, so the budget ladder of
+  task 55.7 runs as separate arms without touching `nfl_predictor/ml/` or any default.
+
 ## [0.12.9] - 2026-09-20
 
 ### Changed

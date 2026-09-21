@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
@@ -269,8 +271,9 @@ def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch)
         strength_snapshots.append(snapshot)
         return pl.DataFrame({"season": [2007], "week": [2]})
 
-    def fake_save(df: pl.DataFrame, name: str) -> None:
-        """Capture every frame the entry point saves."""
+    def fake_save(df: pl.DataFrame, name: str, data_dir: Path | None = None) -> None:
+        """Capture every frame the entry point saves, with the directory it targets."""
+        del data_dir
         saved[name] = df
 
     monkeypatch.setattr(data_collection, "collect_all_data", fake_collect)

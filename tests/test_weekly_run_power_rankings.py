@@ -91,3 +91,29 @@ def test_weekly_ranking_options_change_the_report_config() -> None:
 
     assert composite != bradley_terry
     assert composite["power_rankings_method"] == "composite"
+
+
+def test_default_through_week_is_the_week_before_the_prediction() -> None:
+    """A regular-season prediction week ranks through the week before it."""
+    assert weekly_run._default_power_rankings_through_week(2025, 5) == 4
+
+
+def test_default_through_week_never_goes_below_zero() -> None:
+    """Week 1 has no earlier week to rank through."""
+    assert weekly_run._default_power_rankings_through_week(2025, 1) == 0
+
+
+def test_default_through_week_clamps_postseason_weeks() -> None:
+    """A postseason prediction week ranks through the last regular-season week."""
+    assert weekly_run._default_power_rankings_through_week(2025, 21) == 18
+    assert weekly_run._default_power_rankings_through_week(2019, 21) == 17
+
+
+def test_default_through_week_without_a_week_is_undefined() -> None:
+    """Without a prediction week there is nothing to derive."""
+    assert weekly_run._default_power_rankings_through_week(2025, None) is None
+
+
+def test_default_through_week_without_a_season_is_unclamped() -> None:
+    """Without a season the regular-season length is unknown, so no clamp applies."""
+    assert weekly_run._default_power_rankings_through_week(None, 21) == 20

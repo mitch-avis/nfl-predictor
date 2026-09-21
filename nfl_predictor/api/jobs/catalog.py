@@ -137,6 +137,11 @@ def _flag(argv: list[str], flag: str, value: Any) -> None:
     argv.extend([flag, str(value)])
 
 
+def _data_dir(ctx: JobContext) -> str:
+    """Return the configured data directory the launched CLI should read and write."""
+    return str(ctx.settings.data_path)
+
+
 def _week_predict_path(ctx: JobContext, week: int) -> str:
     """Return the games-to-predict file for ``week``."""
     return str(ctx.settings.data_path / "predict" / f"week_{week:02d}_games_to_predict.csv")
@@ -149,7 +154,7 @@ def _timestamp() -> str:
 
 def _build_etl_full(ctx: JobContext) -> list[str]:
     """Build the full ETL rebuild command."""
-    argv = [ctx.python, "-m", "nfl_predictor.data_collection"]
+    argv = [ctx.python, "-m", "nfl_predictor.data_collection", "--data-dir", _data_dir(ctx)]
     _flag(argv, "--min-season", ctx.params.get("min_season"))
     _flag(argv, "--max-season", ctx.params.get("max_season"))
     _flag(argv, "--refresh-nflreadpy", ctx.params.get("refresh_nflreadpy"))
@@ -167,7 +172,7 @@ def _build_lines_refresh(ctx: JobContext) -> list[str]:
         "--week",
         str(ctx.params["week"]),
         "--data-dir",
-        str(ctx.settings.data_path),
+        _data_dir(ctx),
     ]
 
 
@@ -243,7 +248,7 @@ def _build_predict_week(ctx: JobContext) -> list[str]:
         "--week",
         str(ctx.params["week"]),
         "--data-dir",
-        str(ctx.settings.data_path),
+        _data_dir(ctx),
     ]
     if ctx.params.get("overwrite"):
         argv.append("--overwrite")
@@ -306,12 +311,12 @@ def _build_leakage_audit(ctx: JobContext) -> list[str]:
 
 def _build_validate_offline(ctx: JobContext) -> list[str]:
     """Build the offline validation command."""
-    return [ctx.python, ctx.script("validate_offline.py")]
+    return [ctx.python, ctx.script("validate_offline.py"), "--data-dir", _data_dir(ctx)]
 
 
 def _build_validate_live(ctx: JobContext) -> list[str]:
     """Build the live validation command."""
-    return [ctx.python, ctx.script("validate_live.py")]
+    return [ctx.python, ctx.script("validate_live.py"), "--data-dir", _data_dir(ctx)]
 
 
 def _build_walk_forward(ctx: JobContext) -> list[str]:
@@ -430,6 +435,12 @@ TEMPLATES: tuple[JobTemplate, ...] = (
                 "bool",
                 "Do not refresh datasets first.",
                 default=True,
+            ),
+            ParamSpec(
+                "data_collection_args",
+                "ETL arguments",
+                "str",
+                "Extra arguments for the data refresh, as one shell-quoted string.",
             ),
             ParamSpec(
                 "wf_eval_last_n_seasons",

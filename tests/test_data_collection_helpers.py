@@ -92,6 +92,16 @@ def test_parse_args_uses_defaults_and_boolean_overrides(monkeypatch: pytest.Monk
     )
 
 
+def test_parse_args_reads_the_data_dir_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The data directory defaults to the packaged one and can be pointed elsewhere."""
+    monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
+
+    assert data_collection._parse_args([]).data_dir is None
+
+    chosen = data_collection._parse_args(["--data-dir", "/srv/nfl/data"])
+    assert chosen.data_dir == Path("/srv/nfl/data")
+
+
 def test_parse_args_reads_the_stat_prior_blend_switches(monkeypatch: pytest.MonkeyPatch) -> None:
     """The stat prior blend is on at the shared K by default and can be tuned or ablated."""
     monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
@@ -209,7 +219,10 @@ def test_log_df_stats_respects_debug_flag(monkeypatch: pytest.MonkeyPatch) -> No
     assert messages == ["enabled: 1 rows, 2 cols"]
 
 
-def test_main_orchestrates_collection_and_output_writes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_orchestrates_collection_and_output_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Main should resolve config, collect data, and write all expected output datasets."""
     config = data_collection.DataCollectionConfig(
         enable_timing=True,
@@ -217,12 +230,13 @@ def test_main_orchestrates_collection_and_output_writes(monkeypatch: pytest.Monk
         force_refresh_nflreadpy=False,
         min_season=2023,
         max_season=2024,
+        data_dir=tmp_path / "configured",
     )
     all_data = pl.DataFrame({"game_id": ["g1"], "season": [2024], "week": [3]})
     no_diff = pl.DataFrame({"game_id": ["g1"]})
     completed = pl.DataFrame({"game_id": ["g1"]})
     upcoming = pl.DataFrame({"game_id": ["g2"]})
-    saved: list[tuple[pl.DataFrame, str]] = []
+    saved: list[tuple[pl.DataFrame, str, Path | None]] = []
     timed_labels: list[tuple[str, bool]] = []
     info_messages: list[str] = []
 
@@ -248,7 +262,9 @@ def test_main_orchestrates_collection_and_output_writes(monkeypatch: pytest.Monk
     monkeypatch.setattr(data_collection, "_log_df_stats", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(data_collection, "_timed_step", fake_timed_step)
     monkeypatch.setattr(
-        data_collection, "save_dataframe", lambda df, name: saved.append((df, name))
+        data_collection,
+        "save_dataframe",
+        lambda df, name, data_dir=None: saved.append((df, name, data_dir)),
     )
     monkeypatch.setattr(
         data_collection.polars_utils,
@@ -283,7 +299,7 @@ def test_main_orchestrates_collection_and_output_writes(monkeypatch: pytest.Monk
 
     assert timed_labels[0] == ("debug", False)
     assert ("collect_all_data", True) in timed_labels
-    assert [name for _df, name in saved] == [
+    assert [name for _df, name, _dir in saved] == [
         "all_data_ml",
         "all_data",
         "completed_games_ml",
@@ -292,6 +308,7 @@ def test_main_orchestrates_collection_and_output_writes(monkeypatch: pytest.Monk
         "predict/week_03_games_to_predict",
     ]
     assert any(message == "Data collection complete." for message in info_messages)
+    assert {data_dir for _df, _name, data_dir in saved} == {config.data_dir}
 
 
 def test_prefix_team_records_and_invalid_side() -> None:
@@ -369,6 +386,21 @@ def test_save_and_load_dataframe(tmp_path: Path, monkeypatch) -> None:
     data_collection.save_dataframe(df, "unit_test")
 
     loaded = data_collection.load_dataframe("unit_test")
+    assert loaded is not None
+    assert loaded.height == 1
+
+
+def test_save_and_load_dataframe_use_an_explicit_data_dir(tmp_path: Path, monkeypatch) -> None:
+    """An explicit data directory wins over the packaged default path."""
+    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path / "unused"))
+    target = tmp_path / "configured"
+
+    df = pl.DataFrame({"a": [1], "b": [2]})
+    data_collection.save_dataframe(df, "unit_test", target)
+
+    assert (target / "unit_test.csv").is_file()
+    assert not (tmp_path / "unused").exists()
+    loaded = data_collection.load_dataframe("unit_test", target)
     assert loaded is not None
     assert loaded.height == 1
 

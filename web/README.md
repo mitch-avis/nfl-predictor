@@ -7,7 +7,7 @@ admins, runs the project's jobs.
 ## Prerequisites
 
 - Node 26 via nvm: `source ~/.nvm/nvm.sh` (nvm-managed Node is not on `PATH` in fresh shells).
-- The Python environment with the web extra: `uv sync --extra web` from the repository root.
+- The Python environment: `uv sync` from the repository root (the API dependencies are core).
 
 ## Run it
 
@@ -36,7 +36,7 @@ Every setting is an `NFLP_`-prefixed environment variable (see `nfl_predictor/ap
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `NFLP_ROOT_DIR` | repository root | Base for every other path |
-| `NFLP_DATA_DIR` | `data/` | ETL outputs |
+| `NFLP_DATA_DIR` | `data/` | Datasets read and written by jobs |
 | `NFLP_MODELS_DIR` | `models/` | Run directories |
 | `NFLP_STATE_DIR` | `data/web/` | SQLite database and signing key |
 | `NFLP_JWT_SECRET` | generated into the state dir | Session signing secret |

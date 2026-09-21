@@ -23,6 +23,7 @@ import csv
 import json
 import os
 import re
+import shlex
 import time
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
@@ -186,6 +187,15 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         action="store_true",
         default=defaults.get("skip_data_refresh", False),
         help="Skip the data collection refresh step.",
+    )
+    parser.add_argument(
+        "--data-collection-args",
+        type=str,
+        default=defaults.get("data_collection_args"),
+        help=(
+            "Extra arguments for the data collection refresh, as one shell-quoted string "
+            '(for example "--min-season 2010 --stat-prior-blend-games 4").'
+        ),
     )
     parser.add_argument(
         "--score-rounding",
@@ -625,6 +635,70 @@ def _power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
         "ratings_include_future": options.include_future,
         "ratings_min_season": options.ratings_min_season,
     }
+
+
+def _data_collection_argv(spec: str | None) -> list[str] | None:
+    """Split a pass-through argument string for the data collection stage.
+
+    Args:
+        spec: Shell-quoted arguments for ``data_collection.main``, or ``None``.
+
+    Returns:
+        The parsed argument list, or ``None`` when nothing was requested.
+
+    """
+    if spec is None:
+        return None
+    argv = shlex.split(spec)
+    return argv or None
+
+
+def _refresh_data(spec: str | None) -> None:
+    """Run the data collection refresh, forwarding optional pass-through arguments.
+
+    Args:
+        spec: Shell-quoted arguments for ``data_collection.main``, or ``None`` to
+            run the refresh with its own defaults.
+
+    """
+    argv = _data_collection_argv(spec)
+    if argv is None:
+        log.info("Refreshing data...")
+        data_collection.main()
+        return
+    log.info("Refreshing data with arguments: %s", " ".join(argv))
+    data_collection.main(argv)
+
+
+def _default_power_rankings_through_week(season: int | None, week: int | None) -> int | None:
+    """Derive the default power-rankings through-week for a prediction week.
+
+    The rankings read a strength snapshot for ``through_week + 1``, and the ETL writes
+    snapshots only through the week after the regular season, so a postseason prediction
+    week is clamped back to the last regular-season week.
+
+    Args:
+        season: Season of the prediction week, when known.
+        week: Prediction week, when known.
+
+    Returns:
+        The through-week to rank on, or ``None`` when no week is known.
+
+    """
+    if week is None:
+        return None
+    derived = max(week - 1, 0)
+    if season is None:
+        return derived
+    last_regular_week = constants.get_regular_season_weeks(season)
+    if derived > last_regular_week:
+        log.info(
+            "Prediction week %s is postseason; power rankings through the regular season week %s.",
+            week,
+            last_regular_week,
+        )
+        return last_regular_week
+    return derived
 
 
 def _config_payload(args: argparse.Namespace) -> dict[str, Any]:
@@ -1376,8 +1450,7 @@ def main() -> int:
         args.train_recency_half_life_seasons = args.wf_recency_half_life_seasons
 
     if not args.skip_data_refresh:
-        log.info("Refreshing data...")
-        data_collection.main()
+        _refresh_data(args.data_collection_args)
 
     if not args.data_path.exists():
         raise FileNotFoundError(f"Missing dataset: {args.data_path}")
@@ -1792,8 +1865,8 @@ def main() -> int:
     if not args.skip_power_rankings:
         pr_season = args.power_rankings_season or season
         pr_week = args.power_rankings_through_week
-        if pr_week is None and week is not None:
-            pr_week = max(week - 1, 0)
+        if pr_week is None:
+            pr_week = _default_power_rankings_through_week(pr_season, week)
 
         if pr_season is None or pr_week is None:
             log.info("Power rankings skipped: unable to infer season/week.")

@@ -88,6 +88,9 @@ class DataCollectionConfig:
     # regressed previous season, restoring the plain in-season mean from week 2 on.
     blend_stat_prior: bool = True
     stat_prior_blend_games: float = constants.PRIOR_BLEND_GAMES
+    # Directory the produced datasets are written to. ``None`` means the packaged
+    # ``constants.DATA_PATH``, so an omitted --data-dir keeps the historical behaviour.
+    data_dir: Path | None = None
 
 
 def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFrame:
@@ -140,6 +143,15 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         type=int,
         default=None,
         help="Maximum season to include (inclusive).",
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Directory the collected datasets are written to (default: the packaged data "
+            "directory). Cached upstream inputs are unaffected."
+        ),
     )
     parser.add_argument(
         "--timing",
@@ -206,6 +218,7 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         blend_strength_prior=bool(args.strength_prior_blend),
         blend_stat_prior=bool(args.stat_prior_blend),
         stat_prior_blend_games=float(args.stat_prior_blend_games),
+        data_dir=args.data_dir,
     )
 
 
@@ -315,25 +328,29 @@ def main(argv: list[str] | None = None) -> None:
     no_diff_df = polars_utils.remove_diff_columns(all_data_df)
 
     # Save all data (ML version with diffs)
-    save_dataframe(all_data_df, "all_data_ml")
+    save_dataframe(all_data_df, "all_data_ml", config.data_dir)
 
     # Save all data (non-ML version without diffs)
-    save_dataframe(no_diff_df, "all_data")
+    save_dataframe(no_diff_df, "all_data", config.data_dir)
 
     # Filter and save completed games (both versions)
     completed_df = polars_utils.filter_completed_games(all_data_df)
     completed_no_diff_df = polars_utils.remove_diff_columns(completed_df)
-    save_dataframe(completed_df, "completed_games_ml")
-    save_dataframe(completed_no_diff_df, "completed_games")
+    save_dataframe(completed_df, "completed_games_ml", config.data_dir)
+    save_dataframe(completed_no_diff_df, "completed_games", config.data_dir)
 
     # Per-team pre-week strength, bye teams included, for reports that rank teams.
     save_dataframe(
-        combine_strength_snapshots(strength_snapshots), constants.STRENGTH_SNAPSHOTS_NAME
+        combine_strength_snapshots(strength_snapshots),
+        constants.STRENGTH_SNAPSHOTS_NAME,
+        config.data_dir,
     )
 
     # Filter and save upcoming games for prediction (ML version only)
     upcoming_df = polars_utils.filter_upcoming_games(all_data_df, current_season, current_week)
-    save_dataframe(upcoming_df, f"predict/week_{current_week:>02}_games_to_predict")
+    save_dataframe(
+        upcoming_df, f"predict/week_{current_week:>02}_games_to_predict", config.data_dir
+    )
 
     log.info("Data collection complete.")
 
@@ -1724,15 +1741,29 @@ def _merge_team_rankings(
     return merged
 
 
-def save_dataframe(df: pl.DataFrame, name: str) -> None:
+def _resolve_data_dir(data_dir: Path | str | None) -> Path:
+    """Return the directory datasets are read from and written to.
+
+    Args:
+        data_dir: An explicit directory, or ``None`` for the packaged data directory.
+
+    Returns:
+        The directory to use.
+
+    """
+    return Path(data_dir) if data_dir is not None else Path(constants.DATA_PATH)
+
+
+def save_dataframe(df: pl.DataFrame, name: str, data_dir: Path | str | None = None) -> None:
     """Save a Polars DataFrame to CSV.
 
     Args:
         df: DataFrame to save
         name: Base name for the file (without extension)
+        data_dir: Directory to write into; defaults to the packaged data directory.
 
     """
-    file_path = f"{constants.DATA_PATH}/{name}.csv"
+    file_path = f"{_resolve_data_dir(data_dir)}/{name}.csv"
 
     # Create directory if needed
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -1742,17 +1773,18 @@ def save_dataframe(df: pl.DataFrame, name: str) -> None:
     log.info("Saved %s (%d rows) to %s", name, df.height, file_path)
 
 
-def load_dataframe(name: str) -> pl.DataFrame | None:
+def load_dataframe(name: str, data_dir: Path | str | None = None) -> pl.DataFrame | None:
     """Load a Polars DataFrame from CSV.
 
     Args:
         name: Base name for the file (without extension)
+        data_dir: Directory to read from; defaults to the packaged data directory.
 
     Returns:
         DataFrame or None if file doesn't exist
 
     """
-    file_path = f"{constants.DATA_PATH}/{name}.csv"
+    file_path = f"{_resolve_data_dir(data_dir)}/{name}.csv"
 
     if not os.path.isfile(file_path):
         log.warning("File not found: %s", file_path)

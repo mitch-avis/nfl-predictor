@@ -62,7 +62,7 @@ def test_validate_offline_main_missing_file_logs_error(tmp_path: Path, monkeypat
     monkeypatch.setattr(module, "log", logger, raising=False)
     monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path))
 
-    assert module.main() == 2
+    assert module.main([]) == 2
     assert logger.records == [("error", f"Missing data file: {tmp_path / 'all_data.csv'}")]
 
 
@@ -84,7 +84,7 @@ def test_validate_offline_main_logs_errors_and_warnings(tmp_path: Path, monkeypa
         ),
     )
 
-    assert module.main() == 1
+    assert module.main([]) == 1
     assert ("error", "Errors:") in logger.records
     assert ("error", "- bad schema") in logger.records
     assert ("warning", "Warnings:") in logger.records
@@ -106,7 +106,7 @@ def test_validate_offline_main_logs_success(tmp_path: Path, monkeypatch) -> None
         lambda _df: module.validation_utils.ValidationResult(errors=[], warnings=[]),
     )
 
-    assert module.main() == 0
+    assert module.main([]) == 0
     assert logger.records == [("info", "Validation OK")]
 
 
@@ -118,7 +118,7 @@ def test_validate_live_main_missing_file_logs_error(tmp_path: Path, monkeypatch)
     monkeypatch.setattr(module, "log", logger, raising=False)
     monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path))
 
-    assert module.main() == 2
+    assert module.main([]) == 2
     assert logger.records == [("error", f"Missing data file: {tmp_path / 'all_data.csv'}")]
 
 
@@ -137,7 +137,7 @@ def test_validate_live_main_logs_success_without_mismatches(tmp_path: Path, monk
         lambda _df: pl.DataFrame(),
     )
 
-    assert module.main() == 0
+    assert module.main([]) == 0
     assert logger.records == [("info", "No mismatches found")]
 
 
@@ -157,12 +157,31 @@ def test_validate_live_main_logs_mismatches(tmp_path: Path, monkeypatch) -> None
         lambda _df: mismatches,
     )
 
-    assert module.main() == 1
+    assert module.main([]) == 1
     assert ("error", "Score mismatches detected:") in logger.records
     assert any(
         level == "error" and "BUF" in message and "KC" in message
         for level, message in logger.records
     )
+
+
+@pytest.mark.parametrize("script_name", ["validate_offline", "validate_live"])
+def test_validation_scripts_read_the_data_dir_option(
+    script_name: str,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """An explicit data directory is read instead of the packaged one."""
+    module = _load_script_module(script_name)
+    logger = _FakeLogger()
+    chosen = tmp_path / "configured"
+    chosen.mkdir()
+
+    monkeypatch.setattr(module, "log", logger, raising=False)
+    monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path / "packaged"))
+
+    assert module.main(["--data-dir", str(chosen)]) == 2
+    assert logger.records == [("error", f"Missing data file: {chosen / 'all_data.csv'}")]
 
 
 @pytest.mark.parametrize("script_name", ["validate_offline", "validate_live"])
@@ -172,9 +191,12 @@ def test_validation_scripts_propagate_exit_codes_from_main(
     monkeypatch,
 ) -> None:
     """Running either validation script as `__main__` exits with the `main()` return code."""
+    import sys
+
     from nfl_predictor import constants
 
     monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", [str(_script_path(script_name))])
 
     with pytest.raises(SystemExit) as exc_info:
         runpy.run_path(str(_script_path(script_name)), run_name="__main__")

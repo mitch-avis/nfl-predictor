@@ -114,11 +114,13 @@ def test_validate_params_reads_booleans_from_form_strings() -> None:
 
 
 def test_etl_template_passes_only_the_options_given(settings: Settings) -> None:
-    """Blank fields are left off the command line entirely."""
+    """Blank fields are left off the command line entirely, but the data tree is always set."""
     assert build("etl_full", settings, {}) == [
         str(settings.python_path),
         "-m",
         "nfl_predictor.data_collection",
+        "--data-dir",
+        str(settings.data_path),
         "--no-refresh-nflreadpy",
     ]
     argv = build("etl_full", settings, {"min_season": 2015, "refresh_nflreadpy": True})
@@ -161,6 +163,18 @@ def test_weekly_run_writes_a_config_file(settings: Settings) -> None:
     assert "week" not in config
 
 
+def test_weekly_run_forwards_data_collection_arguments(settings: Settings) -> None:
+    """The ETL pass-through string reaches the weekly-run config file unchanged."""
+    argv = build(
+        "weekly_run",
+        settings,
+        {"week": 2, "data_collection_args": "--min-season 2010"},
+    )
+
+    config = json.loads(Path(argv[3]).read_text(encoding="utf-8"))
+    assert config["data_collection_args"] == "--min-season 2010"
+
+
 def test_predict_uses_the_active_run_model(settings: Settings, run: RunSummary) -> None:
     """Prediction reads the pinned run's model and writes back into its directory."""
     argv = build("predict", settings, {"season": 2026, "week": 2}, run)
@@ -194,11 +208,12 @@ def test_betting_workbook_needs_predictions(settings: Settings) -> None:
 
 
 def test_read_only_templates_take_no_parameters(settings: Settings) -> None:
-    """The validation scripts run without arguments."""
+    """The validation scripts take no parameters but read the configured data tree."""
     for template_id in ("validate_offline", "validate_live"):
         argv = build(template_id, settings, {})
-        assert len(argv) == 2
+        assert len(argv) == 4
         assert argv[1].endswith(f"{template_id}.py")
+        assert argv[2:] == ["--data-dir", str(settings.data_path)]
 
 
 def test_leakage_audit_defaults_its_report_path(settings: Settings) -> None:

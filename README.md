@@ -30,6 +30,7 @@ This repo is geared toward:
   - [Backtesting](#backtesting)
   - [Weekly workflow (canonical)](#weekly-workflow-canonical)
     - [High-level stages](#high-level-stages)
+    - [How postseason games enter today](#how-postseason-games-enter-today)
     - [Authoritative weekly workflow (runs, in this order)](#authoritative-weekly-workflow-runs-in-this-order)
     - [Outputs and conventions](#outputs-and-conventions)
   - [Scripts](#scripts)
@@ -141,7 +142,9 @@ python -m nfl_predictor.data_collection
 
 The default season range is controlled by `constants.MIN_SEASON` (currently 1999).
 
-This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`).
+This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`). Pass
+`--data-dir` to write them somewhere else; the upstream inputs and caches the ETL reads still come
+from `data/`.
 
 Typical outputs:
 
@@ -364,10 +367,13 @@ stopping, in walk-forward or in production), with `best_iteration` recorded per 
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
 1107s remaining`). The estimate averages the weeks trained so far, so it runs a little low late in a
-run as training sets grow. A from-week-1 run over three seasons takes about 75 minutes on a 24-core
-machine. Run one walk-forward at a time: XGBoost uses every core, and two concurrent runs slow each
-other down far more than twofold. When anything else is busy on the machine, set
-`OMP_WAIT_POLICY=PASSIVE` (for example `OMP_WAIT_POLICY=PASSIVE python
+run as training sets grow. Measured on 2026-09-20/21 on a 24-core machine: a from-week-1 run over
+three seasons takes about 50 minutes on an idle machine and about 110 minutes when anything else
+loads it; over six seasons it takes about 100 minutes idle at a 200-tree budget, about 3.3 hours at
+400 and about 4.8 hours at the default 598 under load (run directories
+`models/wf_m55_7_2020_2025_trees*/`). Run one walk-forward at a time: XGBoost uses every core, and
+two concurrent runs slow each other down far more than twofold. When anything else is busy on the
+machine, set `OMP_WAIT_POLICY=PASSIVE` (for example `OMP_WAIT_POLICY=PASSIVE python
 scripts/walk_forward_backtest.py ...`): XGBoost's OpenMP threads otherwise spin while waiting for a
 preempted peer. On 2026-09-10, with other jobs loading the machine, one walk-forward week took `730s`
 with the default policy and `185s` with `PASSIVE`. On an idle machine keep the default: with
@@ -408,6 +414,10 @@ in the run's metrics report.
 ```bash
 python scripts/walk_forward_backtest.py --disable-feature-groups pbp
 ```
+
+`--n-estimators` overrides the XGBoost tree budget for the run (every in-season fit runs the full
+budget), which is how the budget itself is measured against the default. The six-season ladder
+measured with it (`200`, `400`, `598`) is recorded in `AGENTS.md` under "Tree-budget ladder".
 
 Recent ablation example (2003-2025 seasons, include postseason, calibration=platt, recency half-life
 seasons=2):
@@ -461,6 +471,26 @@ Notes:
   provided.
 - Stage 1 walk-forward comparison is resumable and writes `wf_compare/` artifacts under the run
   directory (including `wf_summary.csv` and per-candidate results).
+- `--data-collection-args` forwards extra arguments to the data refresh stage as one
+  shell-quoted string, for example
+  `--data-collection-args "--min-season 2010 --stat-prior-blend-games 4"`. It is split
+  shell-style and handed to `nfl_predictor.data_collection` as its argument list; when it is
+  unset the refresh runs exactly as before. The same value is a config key
+  (`data_collection_args` in `config/weekly_run.yaml`).
+
+### How postseason games enter today
+
+This is the current behavior, recorded for reference; none of it is a recommendation.
+
+- Walk-forward and training filter to `game_type == "REG"` by default: `--include-postseason`
+  and `--wf-include-postseason` are off, and `--postseason-weight` is `1.0`.
+- The shipped `config/weekly_run.yaml` turns them on for the weekly run:
+  `wf_include_postseason: true`, `include_postseason: true`, `postseason_weight: 1.3`, and
+  `power_rankings_include_postseason: true`.
+- The schedule-adjusted strength composite built in ETL never includes postseason games.
+- The power rankings default through-week is the week before the prediction week, clamped to the
+  last regular-season week when the prediction week is postseason, because strength snapshots stop
+  one week after the regular season. Pass `--power-rankings-through-week` to override it.
 
 ### Authoritative weekly workflow (runs, in this order)
 
@@ -647,8 +677,9 @@ Live validation (may require network access):
 python scripts/validate_live.py
 ```
 
-Both validation scripts exit non-zero when the input data file is missing or the validation fails,
-so they are safe to use in shell automation.
+Both read `data/all_data.csv` unless `--data-dir` points them at another dataset directory, and
+both exit non-zero when the input data file is missing or the validation fails, so they are safe to
+use in shell automation.
 
 Canonical local validation sequence, as one command:
 

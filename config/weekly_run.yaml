@@ -4,6 +4,8 @@
 # run_id omitted so weekly_run generates a fresh artifact-friendly id by default.
 # whether to skip data collection stage (default: false)
 skip_data_refresh: false
+# extra arguments for the data collection refresh, as one shell-quoted string (default: none)
+# data_collection_args: "--min-season 2010 --stat-prior-blend-games 4"
 # resume from previous run or start fresh (default: true)
 resume: true
 # save model checkpoints for each fold during walk-forward evaluation (default: false)

@@ -37,12 +37,12 @@ jobs:
       - name: Sync dependencies
         run: |
           source .venv/bin/activate
-          uv sync --active --extra web
+          uv sync --active
 
       - name: Verify synced environment
         run: |
           source .venv/bin/activate
-          uv sync --check --active --extra web
+          uv sync --check --active
 
       - name: Ruff format check
         run: .venv/bin/ruff format --check .

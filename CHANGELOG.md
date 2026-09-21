@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.12.15] - 2026-09-21
+
+### Changed
+
+- Bump the project version to `0.12.15` and keep `uv.lock` aligned. Documentation only: this
+  entry records the user's decisions of 2026-09-21 on the tasks they belong to, and no
+  executable code changes.
+- `.agents/TODO.md`, task 55.7: the user adopts `200` as the shared default `n_estimators` in
+  walk-forward and production together (an approved default change, to land as `0.13.0`). The
+  same chunk makes `config/weekly_run.yaml` consistent: `tune: false`, because today's
+  `tune: true` re-runs a one-hour Optuna study on every weekly run and was not intended, and the
+  walk-forward stage's XGBoost params aligned with the production defaults, so both stages fit
+  the same model. One more rung, `100`, then runs as the plateau check; if it ties `200`, `200`
+  stays, and if it is better beyond the fit-noise floor, it is reported and asked about.
+- `.agents/TODO.md`: new task 55.9, "Optuna re-tune", to run after Milestone 54 lands, ideally
+  on a bye week or in the off-season. Three prerequisites land first, each as its own tested
+  chunk: trials must fit the way production fits (`_score_margin_total_fold` still passes
+  `early_stopping_rounds`, which `0.12.3` removed from production), the objective must score the
+  deterministic Brier the walk-forward instrument scores rather than the configured
+  calibrator's, and a tuned parameter set needs plumbing to reach the walk-forward. The study
+  itself keeps the current search space, TPE seed `42`, SQLite storage and `300`-`500` trials,
+  and its winner is confirmed on six seasons and a second seed. The studies under
+  `models/weekly_2025_week_21/` and `models/weekly_2025_week_22/` are void.
+- `.agents/TODO.md`, task 56.2: the user approves setting `include_postseason: false` and
+  `wf_include_postseason: false` in `config/weekly_run.yaml`, leaving `postseason_weight` in
+  place but inert, so the weekly run matches the rule that a regular-season model never trains
+  on playoff games. The verified facts are recorded with it: season-to-date stats, strength,
+  records and the prior-season blend are regular-season only, and Elo, QB Elo and the
+  TeamRankings playoff-week snapshots are the only features carrying playoff results, as
+  pre-game ratings with no leakage. The playoff-week design stays deferred.
+- `.agents/TODO.md`, task 54.0: the user approves proceeding with the parked branch
+  `feat/m54-0-schedule-skeleton` including the box-score repair (`ae687dd`, `d34b0ab`), and the
+  ETL rebuild that follows it (back up `data/*.csv` to `data/backup_pre_m54_0/` first, rerun the
+  leakage audit, cut `data/completed_games_ml.m54_0_through_2025.csv`). The tie check is one
+  three-season from-week-1 arm at the new `200` default against the 2023-2025 folds of
+  `models/wf_m55_7_2020_2025_trees200/`, which are the `200` reference on the previous build.
+  The blend-weight follow-up from the 54.0 audit is resolved as "do nothing": task 54.2 erases
+  it.
+- `.agents/TODO.md`, "Roadmap Status": the execution order set by the user on 2026-09-21, from
+  the 55.7 close-out through 56.2, 54.0, 54.1 and 54.2, 55.8, 55.9 and the Milestone 60 CLI
+  inventory; and "Current validated baseline" restated at `0.12.15` on `main` at `3729006`.
+- `.agents/next_agent_session_prompt.md`: rewritten starting state, order of work and open
+  questions. `main` carries everything through `0.12.14`, no walk-forward is running, the web
+  API watcher still loads the machine, nothing blocks the next session, and the first check-in
+  is a report rather than a question.
+
 ## [0.12.14] - 2026-09-21
 
 ### Changed

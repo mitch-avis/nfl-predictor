@@ -141,6 +141,8 @@ the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 5. Milestone 57 - Ensembles and alternative models (parked until the user reopens it)
 6. Milestone 58 - Web UI, phases 4-6 (pool helpers, team and QB pages, live odds design); runs
    alongside the ML work whenever the user asks for it, on its own branch
+7. Milestone 60 - CLI consolidation (audit first, then removals after the user signs off); no
+   modeling dependency, so it can run whenever the user wants the entrypoints tidied
 
 The open follow-ups below are not milestones. Pick them up when their area is next touched, or
 promote one to a milestone when it grows.
@@ -301,6 +303,10 @@ Tasks:
       pairwise intervals are in `AGENTS.md` under "Tree-budget ladder". Decision pending with
       the user: keep `598`, or move the shared default to `200` (or run `100` / a second seed
       first); a default change is must-ask and mid-season the user may prefer a bye week.
+      Open question 2026-09-21: the user asked whether a fresh Optuna tuning run should choose
+      `n_estimators` (together with the learning rate and the rest of the search space) instead
+      of adopting `200` directly. The answer and the resulting plan are pending in that session;
+      `200` is the working candidate either way.
 - [ ] 55.8 Season weighting. Today every training row from 1999 carries the same weight as
       last week's game (`recency_half_life_seasons` is off by default in walk-forward and
       production). The README's recency ablation ("keep it off") is not trustworthy: it was
@@ -340,6 +346,11 @@ Formerly Milestone 41.
       `config/weekly_run.yaml` includes it at weight `1.3`, so the weekly command and the
       documented defaults disagree). The decision itself is the user's: keep the config's
       inclusion, or align the defaults; a default change is must-ask.
+      Direction 2026-09-21: postseason matchups stay in the data and are kept separate from
+      regular-season matchups for training and for prediction. A model used for regular-season
+      weeks should not train on playoff games, and the prior-season blend should draw on the
+      previous regular season only. The design discussion is deferred until the rest of the
+      pipeline runs smoothly, and is wanted in time for the 2026 playoffs.
 - [ ] 56.3 Wire sweep-selected defaults once Milestone 55 lands; confirm resume behavior.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
@@ -372,7 +383,7 @@ decisions and per-phase status live in `web_ui_plan.md`. Work happens on a fresh
       `web_ui_plan.md`.
 - [ ] 58.2 Phase 5: team and QB pages over the `nfl-sos-ratings` Parquet outputs.
 - [ ] 58.3 Phase 6 (design only): live betting and live odds.
-- [ ] 58.4 Housekeeping: the `web` extra in `pyproject.toml` now duplicates the core dependency
+- [x] 58.4 Housekeeping: the `web` extra in `pyproject.toml` now duplicates the core dependency
       list; drop it (and the `--extra web` in CI and `web/README.md`) or give it a purpose. The
       `etl_full`, `validate_offline` and `validate_live` job templates read the checkout's own
       `data/` and ignore `NFLP_DATA_DIR` (see the plan's Phase 2 deviations).
@@ -387,11 +398,38 @@ decisions and per-phase status live in `web_ui_plan.md`. Work happens on a fresh
       and write outputs to the configured one. The narrowed part landed in `0.12.12`
       (`604bcc6`, `e3b828d`); whether the remainder is wanted at all is on the user's question
       list.
+      Closed 2026-09-21 by the user's decision: the `NFLP_DATA_DIR` setting stays, because the
+      web API resolves its own paths through it and it lets the app run against a copied data
+      tree, but the ETL's upstream inputs will not follow it. The `0.12.12` narrowing is the
+      final shape of this task; it stays listed here, marked done, while Milestone 58 is open.
 
 Acceptance:
 
 - [ ] Each phase ships with `tests/api/` and vitest coverage, the Python and frontend gates green,
       a `CHANGELOG.md` entry under a new version, and the plan's Status section updated.
+
+---
+
+## Milestone 60 - CLI consolidation
+
+Added 2026-09-21 by the user's direction: the entrypoints' flags have grown bloated, and some of
+them no longer do anything.
+
+- [ ] 60.1 Audit every `add_argument` across `nfl_predictor/ml/ml_model_cli.py`,
+      `scripts/weekly_run.py`, `scripts/walk_forward_backtest.py`, `scripts/betting_pipeline.py`,
+      `scripts/golden_command.py`, `nfl_predictor/data_collection.py`, `scripts/validate_*.py`
+      and `scripts/power_rankings.py`. List, per flag: the inert ones (for example the
+      early-stopping flags, recorded in the config and the fingerprint but not applied to any
+      fit since `0.12.3`), the ones duplicated across entrypoints, and the ones only ever set by
+      the config file rather than on a command line. Then propose the removals and a shared
+      options module so the surviving flags are declared once. The `--data-dir` and
+      `--data-collection-args` options added in `0.12.11` and `0.12.12` belong in the same
+      audit.
+
+Acceptance:
+
+- [ ] A written inventory lands in `.agents/`, the user signs off on the removal list, and only
+      then do the removals land, each with a deprecation note in `CHANGELOG.md`.
 
 ---
 

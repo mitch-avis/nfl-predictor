@@ -659,19 +659,43 @@ def aggregate_pbp_team_box_score_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     derived stat is left null so callers can fall back to another source. Counts are zero when
     the source column exists but no play in the game satisfies the condition.
 
-    Formulas:
-        - ``pass_attempts``: ``play_type == "pass"`` excluding sacks and two-point tries.
-        - ``pass_completions``: pass attempts with ``complete_pass`` set.
-        - ``pass_yards``: ``yards_gained`` summed over pass attempts.
-        - ``pass_touchdowns`` / ``interceptions_thrown``: pass attempts with those flags set.
-        - ``times_sacked``: plays with ``sack`` set.
-        - ``passing_epa``: ``epa`` over pass plays, sacks included, two-point tries excluded.
+    Formulas, verified against nflverse team stats over 1999-2025 (a four-season sample
+    unless noted): every match rate below is the share of team-games where the derived value
+    equals nflverse's to within 1e-4.
+        - ``pass_attempts``: ``pass_attempt`` set, excluding sacks and two-point tries (100%
+          match). ``pass_attempt`` is nflverse's own canonical flag; a sack carries
+          ``pass_attempt = 1`` too, so nflverse's own ``pass_attempts`` explicitly excludes
+          sacks, unlike the looser ``play_type == "pass"`` this module used before.
+        - ``pass_completions``: pass attempts with ``complete_pass`` set (100%).
+        - ``pass_yards``: ``yards_gained`` summed over pass attempts (99.89%).
+        - ``pass_touchdowns`` / ``interceptions_thrown``: pass attempts with those flags set
+          (100%).
+        - ``times_sacked``: plays with ``sack`` set (100%).
+        - ``passing_epa``: ``qb_epa`` (not ``epa``) over every ``pass_attempt`` play, sacks and
+          two-point tries included (100% on a single season, 98.84% over four). ``qb_epa``
+          attributes EPA to the quarterback's passing line the way nflverse's own team stat
+          does; summing ``epa`` over the same plays matched only 69.54% before this fix.
         - ``passing_cpoe``: mean ``cpoe`` over pass attempts with a published CPOE.
-        - ``rush_attempts``: ``play_type in {"run", "qb_kneel"}``, excluding two-point tries.
-        - ``rush_yards`` / ``rush_touchdowns`` / ``rushing_epa``: summed over those rush attempts.
-        - ``fumbles`` / ``fumbles_lost``: offensive plays with those flags set.
+        - ``rush_attempts``: ``rush_attempt`` set, excluding two-point tries (100%).
+          ``rush_attempt`` is nflverse's own canonical flag; a kneel carries
+          ``rush_attempt = 1`` despite ``rush = 0``, so the looser ``play_type in {"run",
+          "qb_kneel"}`` this module used before agreed with it by coincidence on ordinary
+          plays but not universally.
+        - ``rush_yards``: summed over rush attempts (99.94%). ``rush_touchdowns``: rush
+          attempts with that flag set (100%).
+        - ``rushing_epa``: ``epa`` over every ``rush_attempt`` play, two-point tries included
+          (99.78%).
+        - ``fumbles`` / ``fumbles_lost``: plays with those flags set, excluding special-teams
+          plays (87.49% / 98.03%, up from 73.63% / 90.35% when special-teams fumbles were
+          included). nflverse's team-level ``fumbles`` is an offense-only stat (the sum of a
+          player's sack, rushing and receiving fumbles); a residual gap remains for fumbles on
+          aborted snaps, which nflverse's own player-level fumble categories also do not
+          cleanly attribute.
         - ``first_downs``: ``first_down_pass + first_down_rush`` when those component flags exist.
-        - ``2pt_conversions``: plays whose ``two_point_conv_result == "success"``.
+        - ``2pt_conversions``: plays whose ``two_point_conv_result == "success"`` (94.35%). No
+          simple redefinition closed the residual gap; tracing individual mismatches found
+          nflverse team stats itself disagreeing with its own play-by-play on rare plays (see
+          ``models/pbp_vs_nflverse_m54_2/COMPARISON.md``), which is not fixable from this side.
         - ``total_yards``: ``pass_yards + rush_yards + sack_yards_lost``. nflverse defines
           ``total_yards`` as ``pass_yards + rush_yards - yards_lost_from_sacks`` and stores
           the sack losses as a negative number, so the sack yardage is added back rather
@@ -704,32 +728,45 @@ def aggregate_pbp_team_box_score_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
         return empty_team_box_score_frame()
 
     columns = plays.columns
-    play_type = _nullable_expr(columns, "play_type", pl.String)
     is_two_point = _flag_expr(columns, "two_point_attempt") > 0
     is_sack = _flag_expr(columns, "sack") > 0
-    is_pass_play = (play_type == "pass").fill_null(False) & ~is_two_point
-    is_pass_attempt = is_pass_play & ~is_sack
-    is_rush_attempt = play_type.is_in(("run", "qb_kneel")).fill_null(False) & ~is_two_point
+    is_special = _flag_expr(columns, "special") > 0
+    # ``pass_attempt``/``rush_attempt`` are nflverse's own canonical stat-counting flags,
+    # verified against nflverse team stats over 1999-2025 (four-season sample): they differ
+    # from the looser ``pass``/``rush`` indicators, most visibly that a sack carries
+    # ``pass_attempt = 1`` (excluded below to match nflverse's ``pass_attempts``) and a kneel
+    # carries ``rush_attempt = 1`` despite ``rush = 0``.
+    has_attempt_flags = {"pass_attempt", "rush_attempt"} <= set(columns)
+    is_pass_flagged = _flag_expr(columns, "pass_attempt") > 0
+    is_rush_flagged = _flag_expr(columns, "rush_attempt") > 0
+    # Counting/yardage attempts exclude sacks (for passes) and two-point tries (both sides);
+    # EPA attempts keep sacks and two-point tries in, which is what reproduces nflverse's
+    # ``passing_epa``/``rushing_epa`` (100% and 99.78% match on the verification sample).
+    is_pass_attempt = is_pass_flagged & ~is_sack & ~is_two_point
+    is_pass_epa_play = is_pass_flagged
+    is_rush_attempt = is_rush_flagged & ~is_two_point
+    is_rush_epa_play = is_rush_flagged
     yards = _value_expr(columns, "yards_gained")
     epa = _value_expr(columns, "epa")
+    qb_epa = _value_expr(columns, "qb_epa")
 
     offense_aggs: list[pl.Expr] = []
     if "season_type" in columns:
         offense_aggs.append(pl.col("season_type").drop_nulls().first().alias("season_type"))
-    if "complete_pass" in columns:
+    if "complete_pass" in columns and has_attempt_flags:
         offense_aggs.append(
             _count(is_pass_attempt & (_flag_expr(columns, "complete_pass") > 0), "pass_completions")
         )
-    if "play_type" in columns:
+    if has_attempt_flags:
         offense_aggs.append(_count(is_pass_attempt, "pass_attempts"))
         offense_aggs.append(_sum_when(is_pass_attempt, yards, "pass_yards"))
         offense_aggs.append(_count(is_rush_attempt, "rush_attempts"))
         offense_aggs.append(_sum_when(is_rush_attempt, yards, "rush_yards"))
-    if "pass_touchdown" in columns:
+    if "pass_touchdown" in columns and has_attempt_flags:
         offense_aggs.append(
             _count(is_pass_attempt & (_flag_expr(columns, "pass_touchdown") > 0), "pass_touchdowns")
         )
-    if "interception" in columns:
+    if "interception" in columns and has_attempt_flags:
         offense_aggs.append(
             _count(
                 is_pass_attempt & (_flag_expr(columns, "interception") > 0),
@@ -745,23 +782,29 @@ def aggregate_pbp_team_box_score_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
                 _PBP_SACK_YARDS_LOST,
             )
         )
-    if {"play_type", "epa"} <= set(columns):
-        offense_aggs.append(_sum_when(is_pass_play, epa, "passing_epa"))
-        offense_aggs.append(_sum_when(is_rush_attempt, epa, "rushing_epa"))
-    if "cpoe" in columns and "play_type" in columns:
+    if "qb_epa" in columns and "pass_attempt" in columns:
+        offense_aggs.append(_sum_when(is_pass_epa_play, qb_epa, "passing_epa"))
+    if "epa" in columns and "rush_attempt" in columns:
+        offense_aggs.append(_sum_when(is_rush_epa_play, epa, "rushing_epa"))
+    if "cpoe" in columns and has_attempt_flags:
         has_cpoe = is_pass_attempt & pl.col("cpoe").is_not_null()
         offense_aggs.append(
             _sum_when(has_cpoe, pl.col("cpoe").cast(pl.Float64), _PBP_PASSING_CPOE_SUM)
         )
         offense_aggs.append(_count(has_cpoe, _PBP_PASSING_CPOE_COUNT))
-    if "rush_touchdown" in columns:
+    if "rush_touchdown" in columns and has_attempt_flags:
         offense_aggs.append(
             _count(is_rush_attempt & (_flag_expr(columns, "rush_touchdown") > 0), "rush_touchdowns")
         )
     if "fumble" in columns:
-        offense_aggs.append(_count(_flag_expr(columns, "fumble") > 0, "fumbles"))
+        # nflverse's team-level ``fumbles`` is an offense-only stat (rushing, receiving and
+        # sack fumbles); special-teams fumbles (kickoff/punt) are excluded to match it
+        # (87.5% match, up from 73.6% when special-teams plays were included).
+        offense_aggs.append(_count((_flag_expr(columns, "fumble") > 0) & ~is_special, "fumbles"))
     if "fumble_lost" in columns:
-        offense_aggs.append(_count(_flag_expr(columns, "fumble_lost") > 0, "fumbles_lost"))
+        offense_aggs.append(
+            _count((_flag_expr(columns, "fumble_lost") > 0) & ~is_special, "fumbles_lost")
+        )
     if {"first_down_pass", "first_down_rush"} & set(columns):
         first_down_pass = _flag_expr(columns, "first_down_pass")
         first_down_rush = _flag_expr(columns, "first_down_rush")

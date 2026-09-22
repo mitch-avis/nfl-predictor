@@ -790,6 +790,8 @@ PBP_COLUMNS = [
     "qb_spike",
     "rush",
     "pass",
+    "rush_attempt",
+    "pass_attempt",
     "down",
     "ydstogo",
     "yardline_100",

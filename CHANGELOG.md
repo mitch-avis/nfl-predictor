@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.16.0] - 2026-09-21
+
+### Changed
+
+- Flip the default box-score and situational-percentage sources to play-by-play
+  (`--team-stats-source pbp`, `--tr-stats-source pbp`), including the production fast path
+  `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no arguments.
+  `nflverse`/`scrape` remain selectable explicitly. The change is justified by the
+  `1999-2002` situational-percentage coverage gain (the TeamRankings scrape starts in 2003)
+  and by fixing four columns that previously disagreed with nflverse (below), measured on a
+  reviewed walk-forward no-breakage arm (see the ETL rebuild entry below).
+- `passing_epa` now sums `qb_epa` (nflverse's own quarterback-attribution EPA column) instead
+  of `epa`, over every `pass_attempt` play including sacks and two-point tries. Verified against
+  nflverse team stats: match rate rose from `69.54%` to `98.84%` over a four-season sample
+  (`100%` on 2024 alone).
+- `pass_attempts`, `pass_completions`, `pass_yards`, `pass_touchdowns`, `interceptions_thrown`,
+  `rush_attempts`, `rush_yards` and `rush_touchdowns` now use nflverse's own canonical
+  `pass_attempt`/`rush_attempt` flags instead of `play_type`-based conditions. A sack carries
+  `pass_attempt = 1` in the raw data (nflverse's own `pass_attempts` excludes it explicitly) and
+  a kneel carries `rush_attempt = 1` despite `rush = 0`; the flag-based derivation now matches
+  nflverse on `99.89%`-`100%` of team-games for every one of these columns, up from as low as
+  `86.70%` (`pass_attempts`).
+- `rushing_epa` now includes two-point tries (`99.78%` match, from `95.54%`).
+- `fumbles`/`fumbles_lost` now exclude special-teams plays, matching nflverse's offense-only
+  fumble stat (the sum of a player's sack, rushing and receiving fumbles). Match rate rose from
+  `73.63%`/`90.35%` to `87.49%`/`98.03%`; a residual gap remains for fumbles on aborted snaps,
+  which nflverse's own player-level fumble categories also do not cleanly attribute, and is
+  documented rather than further chased.
+- `2pt_conversions` is unchanged (`94.35%` match); tracing individual mismatches found
+  nflverse's own team-stats table disagreeing with its own play-by-play on rare plays, which is
+  not fixable from this side. Recorded in `models/pbp_vs_nflverse_m54_2/COMPARISON.md`.
+
+### Added
+
+- `pass_attempt` and `rush_attempt` join the cached raw play-by-play columns
+  (`constants.PBP_COLUMNS`), needed for the corrected derivations above.
+
 ## [0.15.1] - 2026-09-21
 
 ### Added

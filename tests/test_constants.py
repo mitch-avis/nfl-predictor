@@ -187,6 +187,9 @@ def test_pbp_columns_include_box_score_source_fields() -> None:
         "penalty_yards",
         "first_down_pass",
         "first_down_rush",
+        "pass_attempt",
+        "rush_attempt",
+        "qb_epa",
     }
 
     assert required <= set(constants.PBP_COLUMNS)

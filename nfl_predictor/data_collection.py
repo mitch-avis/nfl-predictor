@@ -92,9 +92,13 @@ class DataCollectionConfig:
     # ``constants.DATA_PATH``, so an omitted --data-dir keeps the historical behaviour.
     data_dir: Path | None = None
     # Whether play-by-play should override derivable per-team-game box-score columns.
-    team_stats_source: str = "nflverse"
+    # Default flipped to "pbp" on 2026-09-21: nflverse-comparison and walk-forward verified
+    # (models/pbp_vs_nflverse_m54_2/COMPARISON.md, models/wf_m54_flip_*).
+    team_stats_source: str = "pbp"
     # Whether the legacy TeamRankings situational percentage columns come from scrape or PBP.
-    tr_stats_source: str = "scrape"
+    # Default flipped to "pbp" on 2026-09-21 (see team_stats_source above); play-by-play fills
+    # 1999-2002, which the TeamRankings scrape (starts 2003) leaves null.
+    tr_stats_source: str = "pbp"
 
 
 def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFrame:
@@ -206,14 +210,20 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
     parser.add_argument(
         "--team-stats-source",
         choices=("nflverse", "pbp"),
-        default="nflverse",
-        help="Prefer nflverse or play-by-play for derivable per-team-game box-score columns.",
+        default="pbp",
+        help=(
+            "Prefer nflverse or play-by-play for derivable per-team-game box-score columns "
+            "(default pbp since 2026-09-21)."
+        ),
     )
     parser.add_argument(
         "--tr-stats-source",
         choices=("scrape", "pbp"),
-        default="scrape",
-        help="Source for the legacy TeamRankings situational percentage columns.",
+        default="pbp",
+        help=(
+            "Source for the legacy TeamRankings situational percentage columns "
+            "(default pbp since 2026-09-21)."
+        ),
     )
     args = parser.parse_args(argv)
     if args.stat_prior_blend_games <= 0:
@@ -249,8 +259,8 @@ def _resolve_config(argv: list[str] | None) -> DataCollectionConfig:
             force_refresh_nflreadpy=FORCE_REFRESH_NFLREADPY,
             min_season=DEFAULT_MIN_SEASON,
             max_season=_default_max_season(),
-            team_stats_source="nflverse",
-            tr_stats_source="scrape",
+            team_stats_source="pbp",
+            tr_stats_source="pbp",
         )
     return _parse_args(argv)
 

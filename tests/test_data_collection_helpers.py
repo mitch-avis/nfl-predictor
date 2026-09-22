@@ -121,16 +121,22 @@ def test_parse_args_reads_the_stat_prior_blend_switches(monkeypatch: pytest.Monk
 def test_parse_args_reads_the_team_and_tr_source_switches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The ETL exposes explicit source switches for box-score and situational stat families."""
+    """The ETL exposes explicit source switches for box-score and situational stat families.
+
+    Both default to "pbp" since 2026-09-21 (verified against nflverse team stats and the
+    reviewed no-breakage walk-forward arm); "nflverse"/"scrape" remain selectable explicitly.
+    """
     monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
 
     default_config = data_collection._parse_args([])
-    assert default_config.team_stats_source == "nflverse"
-    assert default_config.tr_stats_source == "scrape"
+    assert default_config.team_stats_source == "pbp"
+    assert default_config.tr_stats_source == "pbp"
 
-    chosen = data_collection._parse_args(["--team-stats-source", "pbp", "--tr-stats-source", "pbp"])
-    assert chosen.team_stats_source == "pbp"
-    assert chosen.tr_stats_source == "pbp"
+    chosen = data_collection._parse_args(
+        ["--team-stats-source", "nflverse", "--tr-stats-source", "scrape"]
+    )
+    assert chosen.team_stats_source == "nflverse"
+    assert chosen.tr_stats_source == "scrape"
 
 
 def test_parse_args_rejects_a_non_positive_stat_prior_blend_games() -> None:
@@ -453,6 +459,7 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
             "season": [season - 1],
             "week": [1],
             "team_abbr": ["AAA"],
+            "opponent_abbr": ["BBB"],
         }
     )
 
@@ -517,6 +524,7 @@ def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
             "season": [season_one - 1],
             "week": [1],
             "team_abbr": ["AAA"],
+            "opponent_abbr": ["BBB"],
         }
     )
     tr_df = pl.DataFrame(
@@ -653,7 +661,9 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
             "home_abbr": ["BBB"],
         }
     )
-    team_stats_df = pl.DataFrame({"season": [season], "week": [1], "team_abbr": ["AAA"]})
+    team_stats_df = pl.DataFrame(
+        {"season": [season], "week": [1], "team_abbr": ["AAA"], "opponent_abbr": ["BBB"]}
+    )
     warnings: list[str] = []
     scoring_inputs: list[pl.DataFrame] = []
 
@@ -714,7 +724,9 @@ def test_collect_all_data_dedupes_without_date_or_game_id(monkeypatch: pytest.Mo
             "home_abbr": ["BBB"],
         }
     )
-    team_stats_df = pl.DataFrame({"season": [season], "week": [1], "team_abbr": ["AAA"]})
+    team_stats_df = pl.DataFrame(
+        {"season": [season], "week": [1], "team_abbr": ["AAA"], "opponent_abbr": ["BBB"]}
+    )
     season_data = pl.DataFrame(
         {
             "season": [season, season],

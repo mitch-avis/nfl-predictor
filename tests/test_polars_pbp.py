@@ -855,7 +855,20 @@ def test_red_zone_touchdown_counts_only_the_offense_that_scored() -> None:
 
 
 def test_box_score_aggregation_derives_team_game_stats() -> None:
-    """The box-score helper derives nflreadpy-style team stats from raw play rows."""
+    """The box-score helper derives nflreadpy-style team stats from raw play rows.
+
+    Attempt counting and yardage use the canonical ``pass_attempt``/``rush_attempt`` flags
+    (verified against nflverse team stats for 1999-2025: these raw flags reproduce
+    ``pass_attempts``, ``pass_completions``, ``pass_yards``, ``rush_attempts`` and
+    ``rush_yards`` at 100% on a four-season sample), which differ from the looser ``pass``/
+    ``rush`` indicators: a sack carries ``pass_attempt = 1`` (nflverse's own ``pass_attempts``
+    then excludes it explicitly) while a kneel carries ``rush_attempt = 1`` despite ``rush = 0``.
+    Passing EPA sums ``qb_epa`` (not ``epa``) over every ``pass_attempt`` row, sacks and
+    two-point tries included (100% match on 2024, 98.84% over 1999-2025); rushing EPA sums
+    ``epa`` over every ``rush_attempt`` row, two-point tries included (99.78% match).
+    Fumbles exclude special-teams plays, matching nflverse's offense-only fumble stat
+    (87.5% match, up from 73.6% when special-teams fumbles were included).
+    """
     plays = pl.DataFrame(
         [
             {
@@ -866,10 +879,12 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "BUF",
                 "play_type": "pass",
                 "pass": 1,
+                "pass_attempt": 1,
                 "qb_dropback": 1,
                 "complete_pass": 1,
                 "yards_gained": 12.0,
                 "epa": 0.8,
+                "qb_epa": 0.9,
                 "cpoe": 0.4,
                 "first_down_pass": 1,
             },
@@ -881,9 +896,11 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "BUF",
                 "play_type": "pass",
                 "pass": 1,
+                "pass_attempt": 1,
                 "qb_dropback": 1,
                 "yards_gained": 0.0,
                 "epa": -0.4,
+                "qb_epa": -0.4,
                 "cpoe": -0.2,
             },
             {
@@ -894,10 +911,12 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "BUF",
                 "play_type": "pass",
                 "pass": 1,
+                "pass_attempt": 1,
                 "qb_dropback": 1,
                 "sack": 1,
                 "yards_gained": -7.0,
                 "epa": -1.2,
+                "qb_epa": -1.5,
             },
             {
                 "season": 2024,
@@ -907,6 +926,7 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "BUF",
                 "play_type": "run",
                 "rush": 1,
+                "rush_attempt": 1,
                 "yards_gained": 5.0,
                 "epa": 0.3,
             },
@@ -918,6 +938,7 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "BUF",
                 "play_type": "qb_kneel",
                 "qb_kneel": 1,
+                "rush_attempt": 1,
                 "yards_gained": -1.0,
                 "epa": -0.2,
             },
@@ -929,10 +950,24 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "BUF",
                 "play_type": "run",
                 "rush": 1,
+                "rush_attempt": 1,
                 "yards_gained": 3.0,
                 "epa": -1.0,
                 "fumble": 1,
                 "fumble_lost": 1,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "punt",
+                "special": 1,
+                "fumble": 1,
+                "fumble_lost": 0,
+                "yards_gained": 0.0,
+                "epa": -0.6,
             },
             {
                 "season": 2024,
@@ -953,12 +988,14 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "BUF",
                 "play_type": "pass",
                 "pass": 1,
+                "pass_attempt": 1,
                 "qb_dropback": 1,
                 "complete_pass": 1,
                 "pass_touchdown": 1,
                 "td_team": "KC",
                 "yards_gained": 20.0,
                 "epa": 2.5,
+                "qb_epa": 2.6,
                 "cpoe": 0.2,
                 "first_down_pass": 1,
             },
@@ -970,6 +1007,7 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "BUF",
                 "play_type": "run",
                 "rush": 1,
+                "rush_attempt": 1,
                 "two_point_attempt": 1,
                 "two_point_conv_result": "success",
                 "yards_gained": 2.0,
@@ -983,10 +1021,12 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "KC",
                 "play_type": "pass",
                 "pass": 1,
+                "pass_attempt": 1,
                 "qb_dropback": 1,
                 "complete_pass": 1,
                 "yards_gained": 15.0,
                 "epa": 1.0,
+                "qb_epa": 1.1,
                 "cpoe": 0.1,
                 "first_down_pass": 1,
             },
@@ -998,10 +1038,12 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "KC",
                 "play_type": "pass",
                 "pass": 1,
+                "pass_attempt": 1,
                 "qb_dropback": 1,
                 "sack": 1,
                 "yards_gained": -5.0,
                 "epa": -0.9,
+                "qb_epa": -1.1,
             },
             {
                 "season": 2024,
@@ -1011,10 +1053,12 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "KC",
                 "play_type": "pass",
                 "pass": 1,
+                "pass_attempt": 1,
                 "qb_dropback": 1,
                 "interception": 1,
                 "yards_gained": 0.0,
                 "epa": -1.5,
+                "qb_epa": -1.5,
                 "cpoe": -0.3,
             },
             {
@@ -1025,6 +1069,7 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
                 "defteam": "KC",
                 "play_type": "run",
                 "rush": 1,
+                "rush_attempt": 1,
                 "rush_touchdown": 1,
                 "td_team": "BUF",
                 "yards_gained": 6.0,
@@ -1062,7 +1107,10 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
             "defteam": pl.String,
             "play_type": pl.String,
             "pass": pl.Float64,
+            "pass_attempt": pl.Float64,
             "rush": pl.Float64,
+            "rush_attempt": pl.Float64,
+            "special": pl.Float64,
             "qb_dropback": pl.Float64,
             "qb_kneel": pl.Float64,
             "complete_pass": pl.Float64,
@@ -1077,6 +1125,7 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
             "penalty_team": pl.String,
             "yards_gained": pl.Float64,
             "epa": pl.Float64,
+            "qb_epa": pl.Float64,
             "cpoe": pl.Float64,
             "td_team": pl.String,
             "two_point_attempt": pl.Float64,
@@ -1095,8 +1144,14 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
     assert kc["pass_yards"] == pytest.approx(32.0)
     assert kc["pass_touchdowns"] == 1
     assert kc["times_sacked"] == 1
+    # qb_epa (not epa) over pass_attempt rows, sacks included: 0.9 - 0.4 - 1.5 + 2.6 = 1.6.
+    assert kc["passing_epa"] == pytest.approx(1.6)
     assert kc["rush_attempts"] == 3
     assert kc["rush_yards"] == pytest.approx(7.0)
+    # epa over rush_attempt rows, two-point included: 0.3 - 0.2 - 1.0 + 0.1 = -0.8.
+    assert kc["rushing_epa"] == pytest.approx(-0.8)
+    # The punt fumble is a special-teams play and is excluded from the offense-only fumble
+    # stat, matching nflverse: only the rushing fumble counts.
     assert kc["fumbles"] == 1
     assert kc["fumbles_lost"] == 1
     assert kc["first_downs"] == 2
@@ -1111,6 +1166,8 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
 
     assert buf["pass_attempts"] == 2
     assert buf["pass_completions"] == 1
+    # qb_epa over pass_attempt rows: 1.1 - 1.1 - 1.5 = -1.5.
+    assert buf["passing_epa"] == pytest.approx(-1.5)
     assert buf["rush_attempts"] == 1
     assert buf["rush_touchdowns"] == 1
     assert buf["interceptions_thrown"] == 1

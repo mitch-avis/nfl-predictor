@@ -790,6 +790,8 @@ PBP_COLUMNS = [
     "qb_spike",
     "rush",
     "pass",
+    "rush_attempt",
+    "pass_attempt",
     "down",
     "ydstogo",
     "yardline_100",
@@ -812,11 +814,17 @@ PBP_COLUMNS = [
     "td_team",
     "sack",
     "interception",
+    "fumble",
     "fumble_lost",
     "complete_pass",
     "pass_touchdown",
     "rush_touchdown",
     "first_down",
+    "first_down_pass",
+    "first_down_rush",
+    "penalty",
+    "penalty_team",
+    "penalty_yards",
     # Special teams
     "special",
     "special_teams_play",
@@ -884,13 +892,27 @@ PBP_COUNT_COLUMNS = [
     "third_down_conversions",
     "third_down_fails",
     "third_down_attempts",
+    "third_down_conversions_allowed",
+    "third_down_fails_allowed",
+    "third_down_attempts_allowed",
     "fourth_down_conversions",
     "fourth_down_fails",
     "fourth_down_attempts",
+    "fourth_down_conversions_allowed",
+    "fourth_down_fails_allowed",
+    "fourth_down_attempts_allowed",
     "red_zone_plays",
     "red_zone_tds",
+    "red_zone_plays_allowed",
+    "red_zone_tds_allowed",
+    "red_zone_trips",
+    "red_zone_td_drives",
+    "red_zone_trips_allowed",
+    "red_zone_td_drives_allowed",
     "two_point_attempts",
     "two_point_successes",
+    "two_point_attempts_allowed",
+    "two_point_successes_allowed",
     "total_plays",
 ]
 
@@ -1069,6 +1091,26 @@ EXCLUDE_FROM_OPPONENT_STATS = [
 # opponent_times_sacked`), so the times-sacked mirror has to exist at derivation time even
 # though it is never published.
 OPPONENT_MIRROR_INTERMEDIATES: tuple[str, ...] = ("times_sacked",)
+
+# Columns of a per-team-game row that are NOT part of the team's own box score: the row's
+# identity, the scoring columns taken from the schedule, and the play-by-play counts and
+# their context flag. The box score is the complement of this set, defined this way rather
+# than enumerated because the team-stats source publishes well over a hundred box-score
+# columns and adds more between seasons. It names what stays when a row that describes two
+# teams at once has to give up the values it cannot own.
+TEAM_GAME_NON_BOX_SCORE_COLUMNS: tuple[str, ...] = (
+    "season",
+    "week",
+    "team_abbr",
+    "opponent_abbr",
+    "season_type",
+    "game_id",
+    "points_scored",
+    "points_allowed",
+    "scoring_margin",
+    "is_home",
+    *PBP_COUNT_COLUMNS,
+)
 
 # nflreadpy stats to use (per team) - these get prefixed with away_/home_
 NFLREADPY_STATS = [

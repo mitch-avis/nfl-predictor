@@ -48,56 +48,47 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-21, version `0.13.1`, `main`)
+### Current validated baseline (2026-09-21, version `0.16.1`, branch `feat/m54-0-landing`)
 
-- `main` and `origin/main` carry `0.13.1`, merged and pushed. The shared `n_estimators` default
-      is `200`; `scripts/weekly_run.py` Stage 1 now uses the shared production XGBoost defaults; and
-      the shipped `config/weekly_run.yaml` has `tune: false`, `wf_include_postseason: false`,
-      `include_postseason: false`, `wf_max_depth: 5` and `wf_learning_rate: 0.0165`. The reviewed
-      `100`-tree plateau check `models/wf_m55_7_2020_2025_trees100/` tied `200`, so `200` stays the
-      default. New work should start from a fresh branch off `main`.
-- `scripts/gate.sh` exits `0` on the merged `0.13.1` tree (`865 passed`, coverage `92.68%`).
-      That gate covered `uv lock --check`, `uv sync --check --active`, ruff format, ruff, ty,
-      pyright, pytest with coverage against the enforced `90%` floor, markdownlint and the CLI help
-      smoke checks. The last `--web` run remains `862 passed`, coverage `92.66%`, on `ebb1f8e`.
-- Data: the 2026-09-20 rebuild (`db6a78a3...`, `7278` rows, `513` columns; backup of the
-  previous build in `data/backup_pre_m59_rebuild/`); walk-forward input for new arms
-  `data/completed_games_ml.m59_through_2025.csv` (`cf42ec55...`), reference arm
-  `models/wf_m59_rebuild_2023_2025_from_week1/` (see `AGENTS.md`).
-- The walk-forward benchmark and its provenance are in `AGENTS.md`; the Milestone 59 record,
-  measurements and audit are in `ARCHIVE.md`.
-- Everything below is the earlier `0.8.0` baseline, kept for the data-state notes that still
-  hold.
-
-- `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
-  `.venv/bin/pyright .` pass cleanly.
-- `.venv/bin/python -m pytest` passes (`814 passed`, `tests/api/` included) with coverage
-  `92.90%` against the enforced `90%` floor.
-- `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. The frontend gate
-  in `web/` (lint, typecheck, `22` vitest tests, build) passes after `npm ci` under Node 26.
-- `main` contains `fix/calibration-window-total-head` (`0.6.1`-`0.7.1`) and `feat/web-ui`
-  (`0.8.0`), both merged and pushed on 2026-09-11. New work starts on a fresh branch off `main`.
-- `.agents/skills/` is a separate git clone of agent skills. It is gitignored and excluded from
-  ruff and markdownlint (`.markdownlintignore`); pyright already skips dot-directories and ty only
-  checks `nfl_predictor`, `scripts`, and `tests`.
-- `data/completed_games_ml.csv` is the 2026-09-17 21:39 rebuild on the `0.10.0` schema (schedule
-  lenses removed): `7277` rows (`1999-2025` plus the 2026 Week 1 games), `519` columns,
-  fingerprint `0cecc2e3...`; leakage audit `484` features, `0` flags. The `525`-column build it
-  replaced is in `data/backup_pre_m53_6_drop/`. `data/completed_games_ml.m53_through_2025.csv`
-  (`7261` rows, `06a7a34d...`, cut from the 2026-09-11 06:47 build `acaa2892...`) was the input
-  of the Milestone 53 walk-forward arms. The 06:47 build
-  replaced was a refresh made outside the agent session at 06:03 (`9b8bf303...`, `498` columns),
-  backed up in `data/backup_pre_m53/`. That refresh also removed `data/backup_pre_m49/`,
-  `data/backup_pre_m51/`, `data/completed_games_ml.pre_m49.csv` and the benchmark input
-  `data/completed_games_ml.m49_on_through_2025.csv`, so the benchmark in `AGENTS.md` is auditable
-  from its fold checkpoints only.
-- The leakage audit passed on the 06:47 rebuild (`484` features, `0` flags,
-  `models/wf_qb_2023_2025_on/leakage_audit.json`).
-- The walk-forward benchmark lives in `AGENTS.md`: `models/wf_totalfix_2023_2025_anchored/`,
-  measured 2026-09-11 with the total-head fix on `data/completed_games_ml.m49_on_through_2025.csv`
-  (`5d67ddff...`); its margin and probability metrics equal the 2026-09-10 run
-  (`models/wf_shrink_2023_2025_on/`) to four decimals. Compare new feature work only against a
-  reference arm run on the same build and code version.
+- `feat/m54-0-landing` carries the unmerged `0.14.0`-`0.16.1` chunks off `main` at `d6795ca`;
+      `main` and `origin/main` remain on `0.13.1` with the shared `200`-tree default and the aligned
+      weekly config.
+- `scripts/gate.sh` exits `0` on this branch at every landed chunk through `0.16.1`.
+- Data: the 2026-09-21 full rebuild (`--refresh-nflreadpy`, needed for the new
+      `pass_attempt`/`rush_attempt` raw columns) on the `0.16.0` code, now defaulting to
+      `--team-stats-source pbp --tr-stats-source pbp`, produced `data/completed_games_ml.csv`
+      (`7292` completed rows, `513` columns, `edd6b852...`) with the prior top-level CSVs backed up
+      in `data/backup_pre_m54_flip/` and the pre-refresh play-by-play cache in
+      `data/cache/nflreadpy/backup_pre_m54_flip/`. The walk-forward input is
+      `data/completed_games_ml.m54_flip_through_2025.csv` (`7261` rows, `2d4111a6...`). Leakage
+      audit `models/audit_m54_flip_rebuild/leakage_audit.json`: `463` features, `0` flags, same
+      shape as every prior 54.x build.
+- The user reviewed the four columns that disagreed with nflverse (from the 54.1-54.4 comparison)
+      and asked for each to be examined and corrected, then for both source flags to be flipped to
+      `pbp` as the default once verified: `passing_epa` now sums `qb_epa` instead of `epa`
+      (`69.54%` to `99.33%` match with nflverse); `pass_attempts`/`pass_completions`/`pass_yards`/
+      `pass_touchdowns`/`interceptions_thrown`/`rush_attempts`/`rush_yards`/`rush_touchdowns` now
+      use nflverse's own `pass_attempt`/`rush_attempt` flags (worst case `pass_attempts` `86.70%`
+      to `99.87%`); `rushing_epa` now includes two-point tries (`95.54%` to `99.87%`);
+      `fumbles`/`fumbles_lost` now exclude special-teams plays (`73.63%`/`90.35%` to
+      `91.95%`/`98.37%`). `2pt_conversions` (`94.80%`) needed no code change: the user manually
+      verified a mismatch against the actual game and asked for the rest to be checked, which
+      confirmed a systematic nflverse team-stats bug (roughly doubles the true count on the
+      games it gets wrong, `95.1%` of `246` mismatches across seven sampled seasons) rather than
+      a play-by-play defect. Full numbers: `models/pbp_vs_nflverse_m54_2/COMPARISON.md`.
+- Both source flags are now the default (`0.16.0`), including the production fast path
+      `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no arguments;
+      `nflverse`/`scrape` remain selectable explicitly.
+- Reference arms on the current default (pre-flip) sources: `models/wf_m54_0_2023_2025_from_week1/`
+      (checkpoints `models/wf_checkpoints/d112ebcba3115bafe9d9/`) tied the accepted `200`-tree
+      reference slice on weeks 3-18: deterministic Brier `0.2097` vs `0.2090`, diff `+0.0007`
+      `[-0.0011, +0.0024]`; margin MAE `9.9166` vs `9.9044`, diff `+0.0122` `[-0.0566, +0.0801]`.
+- The default-flip verification arm `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints
+      `models/wf_checkpoints/9779c1cbb0701d23661a/`, reviewed in its `REVIEW.md`) tied that
+      reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
+      `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.
+- Tasks 54.0-54.4 and the default flip are archived. Task 55.8 is the next active task on this
+      branch. Merging `feat/m54-0-landing` to `main` and pushing remain must-ask.
 
 ---
 
@@ -134,17 +125,17 @@ the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
 Order set by the user on 2026-09-21, after the tree-budget ladder was reported:
 
-1. Task 54.0 - the parked schedule skeleton plus the box-score repair, the ETL rebuild, and one
-   three-season no-breakage arm at the new `200` default.
-2. Tasks 54.1 and 54.2 - situational rates and the PBP box-score source.
-3. Task 55.8 - season weighting, as six-season arms at the `200` default.
-4. Task 55.9 - the Optuna re-tune, after Milestone 54 lands.
-5. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
-   off); it can run in parallel with any walk-forward as a subagent task.
+1. Task 55.8 - season weighting, as six-season arms at the `200` default.
+2. Task 55.9 - the Optuna re-tune, after Milestone 54 lands.
+3. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
+      off); it can run in parallel with any walk-forward as a subagent task.
 
-After those: Milestone 53 task 53.7 (defense-adjusted quarterback rate), tasks 54.3 and 54.4,
-the rest of Milestone 55 and Milestone 56, Milestone 58 phases 4-6 whenever the user asks (its
-own branch), and Milestone 57 stays parked until the user reopens it.
+Tasks 54.1-54.4 landed 2026-09-21 (`0.15.0`-`0.15.1`), and the user then approved fixing the
+four open exceptions and flipping both source flags to the default once verified, which landed
+the same day (`0.16.0`-`0.16.1`); Milestone 54 has no remaining item and is fully archived.
+After the three items above: Milestone 53 task 53.7 (defense-adjusted quarterback rate), the
+rest of Milestone 55 and Milestone 56, Milestone 58 phases 4-6 whenever the user asks (its own
+branch), and Milestone 57 stays parked until the user reopens it.
 
 The open follow-ups below are not milestones. Pick them up when their area is next touched, or
 promote one to a milestone when it grows.
@@ -218,58 +209,29 @@ Acceptance:
 
 ---
 
-## Milestone 54 - PBP-first team-game skeleton and situational stats
+## Milestone 54 - PBP-first team-game skeleton and situational stats (closed 2026-09-21)
 
 Formerly Milestone 48, widened on 2026-09-18 by the user's decision after the audit found that
 nflverse team stats lack Jacksonville's 2001-2002 home games while play-by-play has all 16 (see
 Milestone 59's findings). Goal: play-by-play becomes the primary per-team-game source; nflverse
-team stats fill only what play-by-play cannot derive; the TeamRankings stat scrape goes away.
+team stats fill only what play-by-play cannot derive.
 
-Tasks:
-
-- [ ] 54.0 Schedule skeleton and coverage check (small; do first). Build the per-team-game frame
-      from the schedule (every completed game has exactly two team rows), left-join nflverse team
-      stats and the play-by-play counts onto it, and log every `(season, team)` whose team-stats
-      row count differs from the schedule. Acceptance: JAX 2001 and 2002 season-to-date rows count
-      16 games and `strength_games_played` reads 16 at season end; the leakage audit still passes;
-      a walk-forward tie on the 59.1 instrument. Read the tie as a no-breakage check on three
-      seasons against the reference arm on the rebuilt build: the fixed rows are 2001-2002
-      training rows, so every margin will move (the fit-noise floor pattern) and no lift is
-      expected or claimable.
-      Decided 2026-09-21: proceed with the parked branch `feat/m54-0-schedule-skeleton`
-      **including** the box-score repair (commits `ae687dd` skeleton and `d34b0ab` repair).
-      Merge it into the working branch, write the changelog entry, run the gate; then the
-      rebuild, which the user approved for this task: back up `data/*.csv` to
-      `data/backup_pre_m54_0/` first, rerun the ETL from the cache, rerun the leakage audit, and
-      cut a through-2025 copy `data/completed_games_ml.m54_0_through_2025.csv`. Then one
-      three-season from-week-1 arm at the new `200` default, compared against the 2023-2025
-      folds of `models/wf_m55_7_2020_2025_trees200/`, which are the `200` reference on the
-      previous build (the existing three-season reference arm is at `598`, so it is not the fair
-      comparison). Read it as a no-breakage tie check. Expect the ETL to log 9 coverage-gap
-      warnings (1999 BAL/LAR, 2000 BUF/KC/LAC/MIA, 2001-2002 JAX, one 1999 null-team row) and 16
-      repair warnings.
-      Resolved 2026-09-21 (from the 54.0 audit): `blend_with_prior_stats` weights box-score
-      columns by the count of scheduled games while their means rest only on the games actually
-      covered (JAX 2001-2002: `8` of `16`). Do nothing about it; task 54.2 erases the mismatch
-      by deriving those columns from play-by-play for every game.
-- [ ] 54.1 Derive the eight situational rates (third/fourth down, red zone, two-point; offense and
-      allowed) from the play-by-play counts in `_compute_derived_metrics`. Fix the `red_zone_tds`
-      attribution first (Milestone 45 follow-ups below).
-- [ ] 54.2 Derive the box-score stats now taken from nflverse team stats (yards, attempts,
-      completions, touchdowns, sacks, interceptions, fumbles, penalties, first downs, points) from
-      play-by-play per team-game, and compare against nflverse team stats for 1999-2025 (they
-      should agree where both exist; record the exceptions). Switch the source behind a
-      transitional `--team-stats-source pbp|nflverse` option; keep the column names.
-- [ ] 54.3 Keep the existing TR column names and switch the situational source, behind
-      `--tr-stats-source pbp|scrape`; the TeamRankings ratings scrape is unchanged.
-- [ ] 54.4 Sanity-compare PBP values against scraped values for `2010-2025`; walk-forward check on
-      the 59.1 instrument; update README data sources and `AGENTS.md`.
+Tasks 54.0 to 54.4 and the default flip are archived under `ARCHIVE.md` as "Milestone 54
+(partial)" and its "Default flip to `pbp`" subsection (2026-09-21, `0.14.0`-`0.16.1`). Both
+`--team-stats-source` and `--tr-stats-source` now default to `pbp`; `nflverse`/`scrape` remain
+selectable explicitly and the TeamRankings ratings scrape (not the situational-stat columns)
+still runs either way, so it was not retired. Milestone closed; the goal above is achieved.
 
 Acceptance:
 
-- [ ] No `(season, team)` has fewer season-to-date games than the schedule.
-- [ ] The eight situational columns are populated for `1999+` offline; walk-forward is not worse
-      on deterministic Brier against the market.
+- [x] No `(season, team)` has fewer season-to-date games than the schedule. Verified on the 54.0
+      rebuild; see `ARCHIVE.md`, "Milestone 54 (partial)".
+- [x] The eight situational columns are populated for `1999+` offline (`--tr-stats-source pbp`,
+      now the default; TeamRankings itself starts in 2003, so this fills `1026` of `1029`
+      completed games of 1999-2002 that were previously null); walk-forward is a no-breakage tie
+      against the reference arm on deterministic Brier
+      (`models/wf_m54_12_2023_2025_from_week1/REVIEW.md`,
+      `models/wf_m54_flip_2023_2025_from_week1/REVIEW.md`).
 
 ---
 

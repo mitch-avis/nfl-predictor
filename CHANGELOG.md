@@ -1,5 +1,185 @@
 # Changelog
 
+## [0.16.2] - 2026-09-21
+
+### Added
+
+- Confirm that the `2pt_conversions` disagreement with nflverse recorded in `0.16.0`
+  (`models/pbp_vs_nflverse_m54_2/COMPARISON.md`) is a systematic nflverse team-stats bug, not a
+  play-by-play derivation defect, so no code change was needed. The user manually verified one
+  mismatch against the actual game (2024 week 17, Green Bay at Minnesota: exactly one two-point
+  conversion happened that game, matching the play-by-play row exactly, while nflverse's
+  team-stats table reports two) and asked for the rest to be checked.
+  `models/pbp_vs_nflverse_m54_2/verify_2pt_doubling.py` finds that across seven sampled seasons
+  (`2010`, `2015`, `2020`, `2022`, `2023`, `2024`, `2025`; `3710` team-games), `246` team-games
+  disagree, and `234` of those (`95.1%`) show nflverse's count at exactly double the play-by-play
+  count; zero mismatches go the other way. `COMPARISON.md` is updated accordingly, and the
+  `two_point_conversion_pct` rate's disagreement with the TeamRankings scrape is now described as
+  unresolved rather than as a pbp-side limitation, since the scrape is a different, unverified
+  third-party source.
+
+## [0.16.1] - 2026-09-21
+
+### Changed
+
+- Rebuild the production dataset from a refreshed play-by-play cache
+  (`--refresh-nflreadpy`, needed for the new `pass_attempt`/`rush_attempt` raw columns) on the
+  `0.16.0` code: `data/completed_games_ml.csv` is now `edd6b852...` (`7292` completed rows,
+  `513` columns), with the prior build backed up to `data/backup_pre_m54_flip/` (top-level CSVs)
+  and `data/cache/nflreadpy/backup_pre_m54_flip/` (the pre-refresh play-by-play cache). The
+  through-2025 cut is `data/completed_games_ml.m54_flip_through_2025.csv` (`2d4111a6...`).
+  Leakage audit `models/audit_m54_flip_rebuild/leakage_audit.json` passed (`463` features, `0`
+  flags, same shape as every prior 54.x build).
+- Re-verified the four corrected box-score columns against the full rebuild: `passing_epa`
+  matches nflverse on `99.33%` of the `13912` overlapping 1999-2025 team-games (up from
+  `69.54%` before `0.16.0`), `pass_attempts` on `99.87%` (from `86.70%`), `rushing_epa` on
+  `99.87%` (from `95.54%`), and `fumbles`/`fumbles_lost` on `91.95%`/`98.37%` (from
+  `73.63%`/`90.35%`); seventeen of twenty-one derivable columns now match on `98%` or more.
+  `models/pbp_vs_nflverse_m54_2/COMPARISON.md` carries the full table.
+
+### Fixed
+
+- The full rebuild incidentally closed the 1999-2002 Jacksonville team-stats coverage gap that
+  task 54.0's schedule skeleton and box-score repair were built around: because play-by-play has
+  both sides of every JAX game even where nflverse's team-stats table does not, the now-default
+  `pbp` box-score overlay fills those rows before the schedule-skeleton coverage check runs, so
+  the ETL logs `0` repair warnings on this rebuild instead of the `16` the 54.0 rebuild logged
+  (verified: `strength_games_played` for JAX still reads `16.0` at both 2001 and 2002 season
+  end). The schedule-skeleton and repair code remain in place as a safety net for the
+  `nflverse`/`scrape` source configuration, which a caller can still select explicitly.
+
+### Reviewed
+
+- The default-flip walk-forward arm `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints
+  `models/wf_checkpoints/9779c1cbb0701d23661a/`, reviewed in its `REVIEW.md`) ties the
+  pre-flip reference `models/wf_m54_0_2023_2025_from_week1/` on the governing weeks 3-18
+  window: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009` `[-0.0008, +0.0026]`; margin
+  MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`. A no-breakage tie by the
+  written rule.
+
+## [0.16.0] - 2026-09-21
+
+### Changed
+
+- Flip the default box-score and situational-percentage sources to play-by-play
+  (`--team-stats-source pbp`, `--tr-stats-source pbp`), including the production fast path
+  `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no arguments.
+  `nflverse`/`scrape` remain selectable explicitly. The change is justified by the
+  `1999-2002` situational-percentage coverage gain (the TeamRankings scrape starts in 2003)
+  and by fixing four columns that previously disagreed with nflverse (below), measured on a
+  reviewed walk-forward no-breakage arm (see the ETL rebuild entry below).
+- `passing_epa` now sums `qb_epa` (nflverse's own quarterback-attribution EPA column) instead
+  of `epa`, over every `pass_attempt` play including sacks and two-point tries. Verified against
+  nflverse team stats: match rate rose from `69.54%` to `98.84%` over a four-season sample
+  (`100%` on 2024 alone).
+- `pass_attempts`, `pass_completions`, `pass_yards`, `pass_touchdowns`, `interceptions_thrown`,
+  `rush_attempts`, `rush_yards` and `rush_touchdowns` now use nflverse's own canonical
+  `pass_attempt`/`rush_attempt` flags instead of `play_type`-based conditions. A sack carries
+  `pass_attempt = 1` in the raw data (nflverse's own `pass_attempts` excludes it explicitly) and
+  a kneel carries `rush_attempt = 1` despite `rush = 0`; the flag-based derivation now matches
+  nflverse on `99.89%`-`100%` of team-games for every one of these columns, up from as low as
+  `86.70%` (`pass_attempts`).
+- `rushing_epa` now includes two-point tries (`99.78%` match, from `95.54%`).
+- `fumbles`/`fumbles_lost` now exclude special-teams plays, matching nflverse's offense-only
+  fumble stat (the sum of a player's sack, rushing and receiving fumbles). Match rate rose from
+  `73.63%`/`90.35%` to `87.49%`/`98.03%`; a residual gap remains for fumbles on aborted snaps,
+  which nflverse's own player-level fumble categories also do not cleanly attribute, and is
+  documented rather than further chased.
+- `2pt_conversions` is unchanged (`94.35%` match); tracing individual mismatches found
+  nflverse's own team-stats table disagreeing with its own play-by-play on rare plays, which is
+  not fixable from this side. Recorded in `models/pbp_vs_nflverse_m54_2/COMPARISON.md`.
+
+### Added
+
+- `pass_attempt` and `rush_attempt` join the cached raw play-by-play columns
+  (`constants.PBP_COLUMNS`), needed for the corrected derivations above.
+
+## [0.15.1] - 2026-09-21
+
+### Added
+
+- Record the play-by-play against nflverse team-game comparison that task 54.2 asks for, in
+  `models/pbp_vs_nflverse_m54_2/` (`compare_sources.py`, `comparison.json` and
+  `COMPARISON.md`). Seventeen of twenty-one derivable columns agree on `94%` or more of the
+  `13912` overlapping team-games of `1999-2025` with a median difference of zero; the four
+  exceptions (`passing_epa`, `fumbles`, `2pt_conversions`, `pass_attempts`) are recorded with
+  what causes each.
+
+### Fixed
+
+- The play-by-play `total_yards` had its sack term inverted. nflverse defines
+  `total_yards = pass_yards + rush_yards - yards_lost_from_sacks` and stores the sack losses as
+  a negative number, so the yardage is added back rather than deducted; that identity holds on
+  `13418` of `13418` nflverse team-games of 2000-2025. The derived column matched only `14.13%`
+  of team-games and ran `31` yards low (`335.236` against `366.264`); it now matches `96.62%`
+  with a mean of `365.515`.
+
+## [0.15.0] - 2026-09-21
+
+### Added
+
+- Derive the eight situational percentages (third down, fourth down, red zone and two-point,
+  for and allowed) from the play-by-play counts, behind `--tr-stats-source pbp`. The scraped
+  TeamRankings columns remain the default, and TeamRankings still supplies its ratings either
+  way.
+- Aggregate per-team-game box-score stats from play-by-play behind `--team-stats-source pbp`,
+  overlaid on the nflverse rows so nflverse still fills what play-by-play cannot derive.
+- Count red-zone trips and touchdown drives per team-game (`red_zone_trips`,
+  `red_zone_td_drives` and their `_allowed` mirrors) from `fixed_drive` and
+  `fixed_drive_result`.
+- Carry the raw play-by-play columns the new families need: `fumble`, `penalty`,
+  `penalty_team`, `penalty_yards`, `first_down_pass` and `first_down_rush`.
+
+### Fixed
+
+- `red_zone_tds` now counts only touchdowns scored by the team in possession. It previously
+  counted any touchdown on a red-zone play, so a defensive score credited the offense.
+- The play-by-play `red_zone_td_pct` divides touchdown drives by red-zone trips rather than
+  touchdowns by red-zone snaps. The snap denominator measured a different statistic under the
+  scraped column's name: on 2023-2025 it read `0.187` where the scrape reads `56.0`, and the
+  trip denominator puts 2024 at `60.4%` against `19.1%` per snap.
+- The eight play-by-play situational percentages are emitted on the scraped columns' 0-100
+  scale instead of 0-1, so switching `--tr-stats-source` no longer changes what the column
+  means by a factor of 100. `third_down_pct` and `fourth_down_pct` now agree with the scrape
+  (`39.33` against `39.07`, `54.25` against `53.79` over 2023-2025).
+- `load_pbp` normalizes `td_team` and `penalty_team` to canonical abbreviations alongside the
+  other team columns, so legacy aliases no longer invent team-game rows the schedule has no
+  place for.
+- Build the play-by-play box-score frame by joining only the perspectives that produced rows,
+  instead of seeding the result from one of them and joining that same frame again.
+
+## [0.14.0] - 2026-09-21
+
+### Changed
+
+- Bump the project version to `0.14.0` and keep `uv.lock` aligned.
+- Task 54.0 now builds the per-team-game frame from the schedule skeleton instead of from the
+  nflverse team-stats rows, so every completed regular-season game keeps its two team rows even
+  when the stats source misses one side. Team stats and play-by-play counts are left-joined onto
+  that skeleton, coverage gaps are logged per `(season, team)`, and schedule-driven game counts
+  no longer disappear with missing team-stat rows.
+- Rebuild the top-level datasets from cache on the 54.0 ETL code: `data/completed_games_ml.csv`
+  is now `db8b8ff4...` (`7292` completed rows, `513` columns) with the prior top-level CSVs in
+  `data/backup_pre_m54_0/`; the walk-forward input for later current-build arms is
+  `data/completed_games_ml.m54_0_through_2025.csv` `e914eadf...` (`7261` rows), cut by
+  `models/etl_m54_0_rebuild/cut_through_2025.py`. Leakage audit
+  `models/audit_m54_0_rebuild/leakage_audit.json` passed (`463` features, `0` flags).
+- The reviewed no-breakage arm `models/wf_m54_0_2023_2025_from_week1/` (checkpoints
+  `models/wf_checkpoints/d112ebcba3115bafe9d9/`, reviewed in its `REVIEW.md`) ties the accepted
+  `200`-tree reference slice `models/wf_checkpoints/a5e76d54187e27ca7370_2023_2025/` on the
+  governing weeks 3-18 window: deterministic Brier `0.2097` vs `0.2090`, diff `+0.0007`
+  `[-0.0011, +0.0024]`; margin MAE `9.9166` vs `9.9044`, diff `+0.0122`
+  `[-0.0566, +0.0801]`. The rebuild moved 836 of 855 scored 2023-2025 rows in at least one
+  feature, mostly in the `sos_*` and `opponent_*` EPA families, but the decision remains a
+  performance-based tie.
+
+### Fixed
+
+- The 2001-2002 Jacksonville home rows where the surviving nflverse team-stats row carried both
+  teams' box score are now repaired by nulling only the box-score columns on those one-row games,
+  leaving identity, schedule scores and play-by-play counts intact so the duplicated totals do not
+  contaminate season-to-date mirrors.
+
 ## [0.13.1] - 2026-09-21
 
 ### Changed

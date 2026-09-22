@@ -48,6 +48,7 @@ _PBP_STRING_COLUMNS = frozenset(
         "season_type",
         "two_point_conv_result",
         "td_team",
+        "penalty_team",
         "fixed_drive_result",
         "drive_start_yard_line",
         "passer_player_id",
@@ -69,6 +70,26 @@ _PBP_COLUMN_DTYPES: dict[str, DataType] = {
     )
     for column in constants.PBP_COLUMNS
 }
+
+
+# Identity of a team-game everywhere in the per-team frames.
+_TEAM_GAME_KEYS: tuple[str, str, str] = ("season", "week", "team_abbr")
+
+# Matchup context the schedule supplies for a team-game the stat source does not cover.
+_SKELETON_CONTEXT_COLUMNS: tuple[str, str] = ("opponent_abbr", "season_type")
+
+_REGULAR_SEASON_TYPE = "REG"
+
+# Explicit schema so an empty skeleton still carries its columns and dtypes.
+_SKELETON_SCHEMA = pl.Schema(
+    {
+        "season": pl.Int64(),
+        "week": pl.Int64(),
+        "team_abbr": pl.Utf8(),
+        "opponent_abbr": pl.Utf8(),
+        "season_type": pl.Utf8(),
+    }
+)
 
 
 def _is_numeric_dtype(dtype: DataType) -> bool:
@@ -462,6 +483,217 @@ def load_team_stats(
     return pl.concat(team_frames, how="diagonal")
 
 
+def build_team_game_skeleton(schedule_df: pl.DataFrame) -> pl.DataFrame:
+    """Build one row per team per completed regular-season game from the schedule.
+
+    The schedule is the authority on which games were played, so every completed game
+    contributes exactly two rows, one per team, whether or not a statistical source
+    covers it. Games without both scores are still to be played and are left out.
+
+    Args:
+        schedule_df: Schedule frame with `season`, `week`, `home_abbr`, `away_abbr` and
+            both score columns; `game_type` is used to keep regular-season games when
+            the column is present
+
+    Returns:
+        Frame with `season`, `week`, `team_abbr`, `opponent_abbr` and `season_type`,
+        sorted by season, week and team; empty when no completed regular-season game
+        is available
+
+    """
+    required = {"season", "week", "home_abbr", "away_abbr", "home_score", "away_score"}
+    if schedule_df.height == 0 or not required <= set(schedule_df.columns):
+        return pl.DataFrame(schema=_SKELETON_SCHEMA)
+
+    completed = schedule_df.filter(
+        pl.col("home_score").is_not_null() & pl.col("away_score").is_not_null()
+    )
+    if "game_type" in completed.columns:
+        completed = completed.filter(pl.col("game_type") == _REGULAR_SEASON_TYPE)
+    if completed.height == 0:
+        return pl.DataFrame(schema=_SKELETON_SCHEMA)
+
+    def one_side(team_column: str, opponent_column: str) -> pl.DataFrame:
+        """Project the schedule onto one team's perspective of each game."""
+        return completed.select(
+            pl.col("season"),
+            pl.col("week"),
+            pl.col(team_column).alias("team_abbr"),
+            pl.col(opponent_column).alias("opponent_abbr"),
+            pl.lit(_REGULAR_SEASON_TYPE).alias("season_type"),
+        )
+
+    both_sides = pl.concat(
+        [
+            one_side("home_abbr", "away_abbr"),
+            one_side("away_abbr", "home_abbr"),
+        ]
+    )
+    return both_sides.cast(_SKELETON_SCHEMA).sort(list(_TEAM_GAME_KEYS))
+
+
+def _log_team_stats_coverage(team_stats_df: pl.DataFrame, skeleton: pl.DataFrame) -> None:
+    """Warn for every season and team whose stat rows differ from the schedule.
+
+    Args:
+        team_stats_df: Per-team-game stats restricted to the seasons the skeleton covers
+        skeleton: Schedule-derived per-team-game frame
+
+    """
+    group_keys = ["season", "team_abbr"]
+    scheduled = skeleton.group_by(group_keys).agg(pl.len().alias("scheduled_games"))
+    observed = team_stats_df.group_by(group_keys).agg(pl.len().alias("stat_rows"))
+    mismatched = (
+        scheduled.join(observed, on=group_keys, how="full", coalesce=True)
+        .with_columns(
+            pl.col("scheduled_games").fill_null(0),
+            pl.col("stat_rows").fill_null(0),
+        )
+        .filter(pl.col("scheduled_games") != pl.col("stat_rows"))
+        .sort(group_keys)
+    )
+    for row in mismatched.iter_rows(named=True):
+        log.warning(
+            "Team-stats coverage gap for %s %s: %d team-stat rows, %d scheduled games.",
+            row["season"],
+            row["team_abbr"],
+            row["stat_rows"],
+            row["scheduled_games"],
+        )
+
+
+def _repair_collapsed_box_scores(joined: pl.DataFrame, *, covered_flag: str) -> pl.DataFrame:
+    """Null the box score of a stat row that describes both teams of one game.
+
+    Where the source publishes a row for only one side of a scheduled game, that row's
+    box score is the whole game's production rather than the team's own: the missing
+    side's yards, plays and penalties are counted in it. Such a value is not a team-game
+    statistic, so it is replaced with a null and the games it covers fall out of the
+    season-to-date denominators along with it. Identity, the scoring columns the schedule
+    supplies and the play-by-play counts are per-team correct either way and stay, as
+    `constants.TEAM_GAME_NON_BOX_SCORE_COLUMNS` records.
+
+    Args:
+        joined: Per-team-game frame with one row per scheduled team-game
+        covered_flag: Name of the boolean column marking rows the stats source covers
+
+    Returns:
+        The frame with the affected rows' box-score columns set to null
+
+    """
+    if "opponent_abbr" not in joined.columns:
+        return joined
+
+    opponent_flag = "_opponent_covered"
+    opponent_coverage = joined.select(
+        pl.col("season"),
+        pl.col("week"),
+        pl.col("team_abbr").alias("opponent_abbr"),
+        pl.col(covered_flag).alias(opponent_flag),
+    )
+    flagged = joined.join(
+        opponent_coverage,
+        on=["season", "week", "opponent_abbr"],
+        how="left",
+    ).with_columns(pl.col(opponent_flag).fill_null(value=False))
+
+    collapsed = pl.col(covered_flag) & ~pl.col(opponent_flag)
+    affected = flagged.filter(collapsed)
+    if affected.height == 0:
+        return flagged.drop(opponent_flag)
+
+    log.warning(
+        "Repairing %d team-stat row(s) whose box score covers both teams of the game.",
+        affected.height,
+    )
+    for row in (
+        affected.select("season", "week", "team_abbr")
+        .sort(["season", "week", "team_abbr"])
+        .iter_rows(named=True)
+    ):
+        log.warning(
+            "Dropping the box score of %s week %s %s: the source has no row for its opponent.",
+            row["season"],
+            row["week"],
+            row["team_abbr"],
+        )
+
+    box_score_columns = [
+        column
+        for column in joined.columns
+        if column not in constants.TEAM_GAME_NON_BOX_SCORE_COLUMNS and column != covered_flag
+    ]
+    return flagged.with_columns(
+        pl.when(collapsed)
+        .then(pl.lit(None, dtype=joined.schema[column]))
+        .otherwise(pl.col(column))
+        .alias(column)
+        for column in box_score_columns
+    ).drop(opponent_flag)
+
+
+def attach_team_stats_to_schedule(
+    team_stats_df: pl.DataFrame,
+    schedule_df: pl.DataFrame,
+) -> pl.DataFrame:
+    """Left-join team stats onto the schedule-derived per-team-game frame.
+
+    A team-game the statistical source does not cover keeps a row with null stats, so
+    season-to-date game counts follow the schedule instead of the source's coverage.
+    Season-to-date means and rates are unaffected by the added rows because Polars
+    aggregations skip nulls, so every rate stays a ratio of sums over the games that do
+    carry values.
+
+    Rows the skeleton does not cover are never dropped: stats from a season the schedule
+    does not span, and stat rows without a scheduled counterpart, are carried through
+    unchanged. The result is sorted by season, week and team so the frame is
+    deterministic regardless of source ordering.
+
+    Args:
+        team_stats_df: Per-team-game statistics
+        schedule_df: Schedule covering the same seasons
+
+    Returns:
+        The team stats with the same columns, one row per completed scheduled team-game
+        plus any uncovered rows
+
+    """
+    keys = list(_TEAM_GAME_KEYS)
+    if team_stats_df.height == 0 or not set(keys) <= set(team_stats_df.columns):
+        return team_stats_df
+
+    skeleton = build_team_game_skeleton(schedule_df)
+    if skeleton.height == 0:
+        return team_stats_df
+
+    skeleton = skeleton.cast({key: team_stats_df.schema[key] for key in keys})
+    covered_seasons = skeleton["season"].unique().to_list()
+    in_scope = team_stats_df.filter(pl.col("season").is_in(covered_seasons))
+    out_of_scope = team_stats_df.filter(~pl.col("season").is_in(covered_seasons))
+
+    _log_team_stats_coverage(in_scope, skeleton)
+
+    context_columns = [col for col in _SKELETON_CONTEXT_COLUMNS if col in team_stats_df.columns]
+    covered_flag = "_covered_by_team_stats"
+    joined = (
+        skeleton.select(*keys, *context_columns)
+        .join(
+            in_scope.drop(context_columns).with_columns(pl.lit(value=True).alias(covered_flag)),
+            on=keys,
+            how="left",
+        )
+        .with_columns(pl.col(covered_flag).fill_null(value=False))
+    )
+    joined = _repair_collapsed_box_scores(joined, covered_flag=covered_flag).drop(covered_flag)
+    unscheduled = in_scope.join(skeleton.select(keys), on=keys, how="anti")
+
+    return (
+        pl.concat([joined, unscheduled, out_of_scope], how="diagonal")
+        .select(team_stats_df.columns)
+        .sort(keys)
+    )
+
+
 def add_scoring_data_to_team_stats(
     team_stats_df: pl.DataFrame,
     schedule_df: pl.DataFrame,
@@ -729,7 +961,7 @@ def _prepare_pbp(season_df: pl.DataFrame, *, regular_season_only: bool) -> pl.Da
     if regular_season_only and "season_type" in prepared.columns:
         prepared = prepared.filter(pl.col("season_type") == "REG")
 
-    for col in ("posteam", "defteam", "home_team", "away_team"):
+    for col in ("posteam", "defteam", "home_team", "away_team", "td_team", "penalty_team"):
         if col in prepared.columns:
             prepared = normalize_team_column(prepared, col)
 

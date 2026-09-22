@@ -435,6 +435,30 @@ _PBP_SIMPLE_RATE_SPECS: tuple[tuple[str, str, str], ...] = (
     ("early_down_pass_rate", "early_down_passes", "early_down_plays"),
 )
 
+# The situational columns that TeamRankings also publishes. They are emitted on the 0-100
+# scale of the scraped columns they stand in for, so a build can switch source without
+# changing what the column means. Red zone divides touchdown drives by red-zone trips,
+# matching the scraped "red zone scoring % (TD only)"; dividing touchdowns by red-zone
+# snaps would report a different statistic under the same name.
+_PBP_PERCENT_RATE_SPECS: tuple[tuple[str, str, str], ...] = (
+    ("third_down_pct", "third_down_conversions", "third_down_attempts"),
+    ("opponent_third_down_pct", "third_down_conversions_allowed", "third_down_attempts_allowed"),
+    ("fourth_down_pct", "fourth_down_conversions", "fourth_down_attempts"),
+    (
+        "opponent_fourth_down_pct",
+        "fourth_down_conversions_allowed",
+        "fourth_down_attempts_allowed",
+    ),
+    ("red_zone_td_pct", "red_zone_td_drives", "red_zone_trips"),
+    ("opponent_red_zone_td_pct", "red_zone_td_drives_allowed", "red_zone_trips_allowed"),
+    ("two_point_conversion_pct", "two_point_successes", "two_point_attempts"),
+    (
+        "opponent_two_point_conversion_pct",
+        "two_point_successes_allowed",
+        "two_point_attempts_allowed",
+    ),
+)
+
 
 def _safe_ratio(numerator: pl.Expr, denominator: pl.Expr, output: str) -> pl.Expr:
     """Build a null-on-zero-denominator ratio expression.
@@ -487,6 +511,17 @@ def _compute_pbp_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
         - stuffed_rush_rate = stuffed_rush_count / carries
         - stuffed_rush_rate_allowed = stuffed_rush_allowed_count / carries_allowed
         - early_down_pass_rate = early_down_passes / early_down_plays
+        - third_down_pct = 100 * third_down_conversions / third_down_attempts
+        - opponent_third_down_pct = 100 * third_down_conversions_allowed
+          / third_down_attempts_allowed
+        - fourth_down_pct = 100 * fourth_down_conversions / fourth_down_attempts
+        - opponent_fourth_down_pct = 100 * fourth_down_conversions_allowed
+          / fourth_down_attempts_allowed
+        - red_zone_td_pct = 100 * red_zone_td_drives / red_zone_trips
+        - opponent_red_zone_td_pct = 100 * red_zone_td_drives_allowed / red_zone_trips_allowed
+        - two_point_conversion_pct = 100 * two_point_successes / two_point_attempts
+        - opponent_two_point_conversion_pct = 100 * two_point_successes_allowed
+          / two_point_attempts_allowed
         - epa_margin_per_play = (pass_epa_sum + rush_epa_sum) / offensive_snaps
           - (pass_epa_allowed_sum + rush_epa_allowed_sum) / defensive_snaps
         - st_epa_margin_per_play = (st_epa_for - st_epa_against) / st_plays
@@ -507,6 +542,10 @@ def _compute_pbp_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
     for output, numerator, denominator in _PBP_SIMPLE_RATE_SPECS:
         if numerator in available and denominator in available:
             derived.append(_safe_ratio(pl.col(numerator), pl.col(denominator), output))
+
+    for output, numerator, denominator in _PBP_PERCENT_RATE_SPECS:
+        if numerator in available and denominator in available:
+            derived.append(_safe_ratio(100.0 * pl.col(numerator), pl.col(denominator), output))
 
     # Overall success rate combines the pass and rush components on both sides.
     success_specs = (

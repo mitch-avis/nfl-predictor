@@ -166,6 +166,13 @@ seasons are always refreshed to keep upcoming games and lines current. Use
 `--min-season`/`--max-season` to override the default season window (defaults to
 `constants.MIN_SEASON` through the current NFL season).
 
+For completed regular-season games, the ETL now builds the per-team-game frame from the schedule
+first: each completed game contributes exactly two team rows, and nflverse team stats plus the
+play-by-play counts are left-joined onto that skeleton. When nflverse misses one side of a game,
+the row still exists with null box-score stats, so schedule-driven counts such as
+`strength_games_played` continue to follow the schedule instead of the stats source's coverage.
+The ETL logs every `(season, team)` whose nflverse team-stat row count differs from the schedule.
+
 Play-by-play is the largest of those sources (roughly 1.2M regular-season plays for 1999-2025). It
 is fetched one season at a time, reduced to the column list in `constants.PBP_COLUMNS`, filtered to
 the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<season>_reg.parquet`.
@@ -181,6 +188,29 @@ the ETL reads the cached play-by-play from 1999 even when `--min-season` is late
 TeamRankings data is cached under `data/<season>/` as week-level CSVs; enable debug logging to see
 cache hits. Use `--timing` to log per-step runtimes and `--debug-logs` for detailed ETL diagnostics.
 Use `--refresh-nflreadpy` to force refresh nflreadpy data even when cache exists.
+
+Two flags choose where per-team-game stats come from; both default to `pbp` since 2026-09-21.
+`--team-stats-source pbp` derives the box-score families (passing, rushing, penalties, first
+downs, sacks and interceptions) from play-by-play and overlays them on the nflverse rows, so
+nflverse still fills whatever play-by-play cannot derive; pass the flag with `nflverse` to use
+the scraped/nflverse sources instead. `--tr-stats-source pbp` derives the eight situational
+percentages (third down, fourth down, red zone and two-point, for and allowed) from the
+play-by-play counts instead of the TeamRankings scrape; pass `scrape` to use the scrape.
+TeamRankings supplies its ratings either way. The derived percentages use the scraped columns'
+0-100 scale, and `red_zone_td_pct` divides touchdown drives by red-zone trips (drives that
+reached the 20, from `fixed_drive`), which is what the scraped "red zone scoring %" measures --
+not touchdowns per red-zone snap. `passing_epa` sums `qb_epa` (nflverse's own quarterback
+EPA attribution) rather than `epa`, and the box-score counts and yardage use nflverse's own
+`pass_attempt`/`rush_attempt` raw flags rather than `play_type`; both were verified against
+nflverse team stats at 99%+ agreement on the columns they touch
+(`models/pbp_vs_nflverse_m54_2/COMPARISON.md`). `fumbles`/`fumbles_lost` exclude special-teams
+plays to match nflverse's offense-only fumble stat, with a residual gap on aborted-snap fumbles;
+`2pt_conversions` still disagrees with nflverse on a meaningful share of team-games, but this is
+not a derivation defect: nflverse's own team-stats table has a confirmed, systematic bug that
+roughly doubles the count of successful two-point conversions on the games it gets wrong (see
+`models/pbp_vs_nflverse_m54_2/COMPARISON.md`), so the play-by-play value is the correct one where
+they differ. Both flags change feature values at ETL time, so compare them with two dataset
+builds rather than with `--disable-feature-groups`.
 
 Early-season handling: Week 1 has no in-season games, so every season-to-date team stat (the
 nflreadpy families and the play-by-play counts) falls back to the previous regular season regressed

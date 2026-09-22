@@ -65,7 +65,65 @@ Rules that are always enforced:
   Task 56.1 landed in `0.12.11`; tasks 56.2 (the postseason default) and 58.4 (the ETL's
   upstream input paths) were narrowed in `0.12.11` and `0.12.12`. The web UI
   (FastAPI + React, Milestone 58 phases 0-3) merged into `main` as version `0.8.0` on
-  2026-09-11; its open phases are Milestone 58 in `.agents/TODO.md`.
+  2026-09-11; its open phases are Milestone 58 in `.agents/TODO.md`. Task 54.0 landed on the
+  feature branch `feat/m54-0-landing` as version `0.14.0` on 2026-09-21: the schedule now
+  supplies the completed regular-season team-game rows, the collapsed 2001-2002 Jacksonville home
+  rows have their box-score columns nulled, the cache rebuild produced
+  `data/completed_games_ml.csv` `db8b8ff4...` (`7292` completed rows, `513` columns) and the
+  through-2025 cut `data/completed_games_ml.m54_0_through_2025.csv` `e914eadf...` (`7261` rows),
+  leakage audit `models/audit_m54_0_rebuild/leakage_audit.json` passed (`463` features, `0`
+  flags), and the reviewed three-season no-breakage arm
+  `models/wf_m54_0_2023_2025_from_week1/` (checkpoints `d112ebcba3115bafe9d9`) tied the accepted
+  `200`-tree reference slice on the governing weeks 3-18 window: deterministic Brier `0.2097`
+  vs `0.2090`, diff `+0.0007` `[-0.0011, +0.0024]`; margin MAE `9.9166` vs `9.9044`, diff
+  `+0.0122` `[-0.0566, +0.0801]`. The rebuild moved 836 of 855 scored 2023-2025 rows in at
+  least one feature, chiefly in the `sos_*` and `opponent_*` EPA families, so later current-build
+  arms compare against the 54.0 reference, not the earlier `0.12.6` reference arm. Tasks
+  54.1-54.4 landed as `0.15.0`-`0.15.1` on the same day and branch: the eight situational
+  percentages and the per-team-game box score can now be derived from play-by-play behind
+  `--tr-stats-source pbp` and `--team-stats-source pbp` (both default to the prior source), with
+  `red_zone_tds` fixed to require `td_team == posteam` and the derived `red_zone_td_pct` fixed to
+  divide touchdown drives by red-zone trips (`fixed_drive`) instead of touchdowns by red-zone
+  snaps. The comparison task 54.2 requires
+  (`models/pbp_vs_nflverse_m54_2/COMPARISON.md`) caught a sign error in the derived `total_yards`
+  (nflverse subtracts an already-negative sack-yardage column; the derivation was subtracting a
+  positive one, matching only 14.13% of nflverse team-games before the fix and 96.62% after) and
+  records four open exceptions (`passing_epa`, `fumbles`, `2pt_conversions`, `pass_attempts`) and
+  one derived-rate caveat (`two_point_conversion_pct` does not track the scrape once blended,
+  because rare attempts amplify the `2pt_conversions` under-count). The reviewed three-season
+  arm `models/wf_m54_12_2023_2025_from_week1/` (checkpoints `4e729a9c5751ba978a71`) tied the
+  54.0 reference above on weeks 3-18: deterministic Brier `0.2096` vs `0.2097`, diff `-0.0001`
+  `[-0.0017, +0.0016]`; margin MAE `9.9090` vs `9.9166`, diff `-0.0075` `[-0.0760, +0.0611]`.
+  Neither flag was the default at that point; the user then reviewed the four exceptions and
+  approved fixing each and flipping both flags once verified. All four landed as `0.16.0` on the
+  same branch: `passing_epa` sums `qb_epa` (nflverse's own quarterback-attribution EPA column)
+  instead of `epa`, matching nflverse on `99.33%` of the full 1999-2025 rebuild (up from
+  `69.54%`); `pass_attempts`/`pass_completions`/`pass_yards`/`pass_touchdowns`/
+  `interceptions_thrown`/`rush_attempts`/`rush_yards`/`rush_touchdowns` use nflverse's own
+  `pass_attempt`/`rush_attempt` raw flags instead of `play_type` (worst case `pass_attempts`
+  `86.70%` to `99.87%`); `rushing_epa` now includes two-point tries (`95.54%` to `99.87%`);
+  `fumbles`/`fumbles_lost` exclude special-teams plays (`73.63%`/`90.35%` to `91.95%`/`98.37%`,
+  a residual gap on aborted-snap fumbles documented as not further fixable from play-by-play).
+  `2pt_conversions` (`94.80%`) needed no code change: the user manually verified one mismatch
+  against the actual game (2024 week 17, Green Bay at Minnesota — exactly one two-point
+  conversion happened, matching play-by-play) and asked for the rest to be checked, which found
+  a confirmed, systematic nflverse team-stats bug: of `246` mismatches across seven sampled
+  seasons (`3710` team-games), `234` (`95.1%`) show nflverse's count at exactly double the
+  play-by-play count, and zero mismatches go the other way
+  (`models/pbp_vs_nflverse_m54_2/verify_2pt_doubling.py`). The play-by-play value is correct
+  wherever it disagrees with nflverse. Both flags are now the default, including the production
+  fast path `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no
+  arguments; `nflverse`/`scrape` remain selectable explicitly. A full ETL rebuild followed
+  (`0.16.1`, `--refresh-nflreadpy` for the two new raw columns), which closed the JAX 1999-2002
+  coverage gap that task 54.0's schedule-skeleton repair was built for, as anticipated when
+  Milestone 54 was widened on 2026-09-18 specifically because play-by-play has both sides of
+  every JAX game where nflverse's team-stats table does not: the now-default overlay fills those
+  rows before the coverage check runs, and the ETL logs `0` repair warnings on this rebuild (down
+  from `16`). The reviewed verification arm
+  `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints `9779c1cbb0701d23661a`) tied the 54.0
+  pre-flip reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
+  `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.
+  Milestone 54 is closed.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
@@ -151,7 +209,8 @@ Rules that are always enforced:
   `models/wf_checkpoints/34c17e508ab015a80662/`; hypothesis and decision rule written before the
   run in its `HYPOTHESIS.md`; rescored independently by a reviewer subagent in its `REVIEW.md`,
   which also reproduces the table above from the `f6ff0760...` checkpoints). New arms on the
-  rebuilt build compare against this run, not the table above.
+  rebuilt build compare against this run, not the table above, unless they are on the later 54.0
+  schedule-skeleton build, in which case compare against the 54.0 reference below.
 
   | window | games | model Brier | model log loss | model pick acc | market Brier | market log loss | market pick acc | margin MAE | total MAE |
   | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -167,6 +226,32 @@ Rules that are always enforced:
   (up to `5.16` points, because the 1999-2001 training rows changed), and deterministic pick
   accuracy in weeks 3-18 fell from `0.6861` to `0.6764` (7 games), so the model no longer
   matches the market's pick accuracy there. Every fold ran the full `598`-tree budget.
+
+  **Reference arm on the 2026-09-21 schedule-skeleton rebuild** (`0.14.0` branch,
+  `data/completed_games_ml.m54_0_through_2025.csv` `e914eadf...`, same benchmark config with the
+  shared `200`-tree default, git `5afe30f`):
+  `models/wf_m54_0_2023_2025_from_week1/` (checkpoints
+  `models/wf_checkpoints/d112ebcba3115bafe9d9/`; hypothesis and decision rule in its
+  `HYPOTHESIS.md`; reviewed from `compare_output.txt` in its `REVIEW.md` against the reference
+  slice `models/wf_checkpoints/a5e76d54187e27ca7370_2023_2025/`, which is the 2023-2025 subset of
+  the accepted six-season `200` rung). This is the current-build reference for later work on the
+  54.0 branch and its descendants.
+
+  | window | games | model Brier | model log loss | model pick acc | market Brier | market log loss | market pick acc | margin MAE | total MAE |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | week 1 only | 48 | `0.2046` | `0.5987` | `0.7500` | `0.2099` | `0.6090` | `0.7083` | `8.8055` | `10.1284` |
+  | week 2 only | 48 | `0.2292` | `0.6501` | `0.5833` | `0.2330` | `0.6585` | `0.5833` | `8.4435` | `9.9878` |
+  | weeks 3-18 (headline) | 720 | `0.2097` | `0.6072` | `0.6833` | `0.2086` | `0.6042` | `0.6861` | `9.9166` | `10.1890` |
+  | all weeks | 816 | `0.2105` | `0.6093` | `0.6814` | `0.2102` | `0.6077` | `0.6814` | `9.7645` | `10.1736` |
+
+  Paired against the accepted `200`-tree reference slice (candidate minus reference, 5000
+  resamples, seed 0), weeks 3-18: deterministic Brier `+0.0007` `[-0.0011, +0.0024]`, margin MAE
+  `+0.0122` `[-0.0566, +0.0801]`; all weeks `+0.0005` `[-0.0011, +0.0021]` and `+0.0166`
+  `[-0.0477, +0.0801]`. By the written rule, a no-breakage tie. Unlike the narrower expectation in
+  the pre-run hypothesis, 836 of 855 scored 2023-2025 rows moved in at least one feature between
+  the `0.12.6` and `0.14.0` cuts, chiefly in the `sos_*` and `opponent_*` EPA families, so later
+  arms on this build should treat the 54.0 reference as the current baseline rather than the older
+  `0.12.6` reference arm.
 
   **Fit-noise floor on the same build** (2026-09-20): the reference arm rerun with only
   `--random-seed 7` (`models/wf_m59_rebuild_2023_2025_from_week1_seed7/`, checkpoints

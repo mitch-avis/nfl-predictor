@@ -178,6 +178,23 @@ def test_pbp_count_columns_are_excluded_from_opponent_generation() -> None:
         assert col in excluded, f"{col} would be duplicated as opponent_{col}"
 
 
+def test_pbp_columns_include_box_score_source_fields() -> None:
+    """The cached PBP shape includes the raw fields needed for the 54.2 box-score overlay."""
+    required = {
+        "fumble",
+        "penalty",
+        "penalty_team",
+        "penalty_yards",
+        "first_down_pass",
+        "first_down_rush",
+        "pass_attempt",
+        "rush_attempt",
+        "qb_epa",
+    }
+
+    assert required <= set(constants.PBP_COLUMNS)
+
+
 def test_sack_mirror_inputs_are_excluded_from_opponent_generation() -> None:
     """Sack events should be excluded before ETL builds duplicate opponent mirrors."""
     excluded = set(constants.EXCLUDE_FROM_OPPONENT_STATS)

@@ -124,13 +124,27 @@ _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     "third_down_conversions": pl.Int64,
     "third_down_fails": pl.Int64,
     "third_down_attempts": pl.Int64,
+    "third_down_conversions_allowed": pl.Int64,
+    "third_down_fails_allowed": pl.Int64,
+    "third_down_attempts_allowed": pl.Int64,
     "fourth_down_conversions": pl.Int64,
     "fourth_down_fails": pl.Int64,
     "fourth_down_attempts": pl.Int64,
+    "fourth_down_conversions_allowed": pl.Int64,
+    "fourth_down_fails_allowed": pl.Int64,
+    "fourth_down_attempts_allowed": pl.Int64,
     "red_zone_plays": pl.Int64,
     "red_zone_tds": pl.Int64,
+    "red_zone_plays_allowed": pl.Int64,
+    "red_zone_tds_allowed": pl.Int64,
+    "red_zone_trips": pl.Int64,
+    "red_zone_td_drives": pl.Int64,
+    "red_zone_trips_allowed": pl.Int64,
+    "red_zone_td_drives_allowed": pl.Int64,
     "two_point_attempts": pl.Int64,
     "two_point_successes": pl.Int64,
+    "two_point_attempts_allowed": pl.Int64,
+    "two_point_successes_allowed": pl.Int64,
     "total_plays": pl.Int64,
 }
 
@@ -143,6 +157,38 @@ _ST_PLAYS_OFFENSE = "_st_plays_offense"
 _ST_PLAYS_DEFENSE = "_st_plays_defense"
 _IS_HOME_OFFENSE = "_is_home_offense"
 _IS_HOME_DEFENSE = "_is_home_defense"
+_TEAM_BOX_SCORE_SCHEMA: dict[str, DataTypeClass] = {
+    "season": pl.Int64,
+    "week": pl.Int64,
+    "season_type": pl.String,
+    "team_abbr": pl.String,
+    "opponent_abbr": pl.String,
+    "pass_completions": pl.Float64,
+    "pass_attempts": pl.Float64,
+    "pass_yards": pl.Float64,
+    "pass_touchdowns": pl.Float64,
+    "interceptions_thrown": pl.Float64,
+    "times_sacked": pl.Float64,
+    "passing_epa": pl.Float64,
+    "passing_cpoe": pl.Float64,
+    "rushing_epa": pl.Float64,
+    "rush_attempts": pl.Float64,
+    "rush_yards": pl.Float64,
+    "rush_touchdowns": pl.Float64,
+    "fumbles": pl.Float64,
+    "fumbles_lost": pl.Float64,
+    "first_downs": pl.Float64,
+    "2pt_conversions": pl.Float64,
+    "total_yards": pl.Float64,
+    "penalties": pl.Float64,
+    "penalty_yards": pl.Float64,
+    "def_sacks": pl.Float64,
+    "def_interceptions": pl.Float64,
+}
+PBP_TEAM_BOX_SCORE_COLUMNS: list[str] = list(_TEAM_BOX_SCORE_SCHEMA)
+_PBP_PASSING_CPOE_SUM = "_passing_cpoe_sum"
+_PBP_PASSING_CPOE_COUNT = "_passing_cpoe_count"
+_PBP_SACK_YARDS_LOST = "_sack_yards_lost"
 
 
 def _flag_expr(columns: list[str], column: str) -> pl.Expr:
@@ -205,6 +251,17 @@ def _sum_when(condition: pl.Expr, value: pl.Expr, name: str) -> pl.Expr:
     return pl.when(condition).then(value).otherwise(0.0).sum().cast(pl.Float64).alias(name)
 
 
+def _safe_ratio(numerator: pl.Expr, denominator: pl.Expr, name: str) -> pl.Expr:
+    """Return a float ratio expression that stays null when the denominator is zero."""
+    return (
+        pl.when(denominator > 0)
+        .then(numerator / denominator)
+        .otherwise(None)
+        .cast(pl.Float64)
+        .alias(name)
+    )
+
+
 def special_teams_flag_column(columns: list[str]) -> str | None:
     """Return the first special-teams flag column present, or None when none exists.
 
@@ -222,6 +279,13 @@ def empty_team_game_frame() -> pl.DataFrame:
     """Return a typed empty frame with exactly ``PBP_TEAM_GAME_COLUMNS``."""
     return pl.DataFrame(
         schema={name: _PBP_TEAM_GAME_SCHEMA[name] for name in PBP_TEAM_GAME_COLUMNS}
+    )
+
+
+def empty_team_box_score_frame() -> pl.DataFrame:
+    """Return a typed empty frame with exactly ``PBP_TEAM_BOX_SCORE_COLUMNS``."""
+    return pl.DataFrame(
+        schema={name: _TEAM_BOX_SCORE_SCHEMA[name] for name in PBP_TEAM_BOX_SCORE_COLUMNS}
     )
 
 
@@ -265,8 +329,46 @@ def _play_conditions(columns: list[str]) -> dict[str, pl.Expr]:
     }
 
 
-def _situational_aggregations(columns: list[str]) -> list[pl.Expr]:
-    """Build the situational count aggregations for the offense perspective.
+def _red_zone_drive_aggregations(
+    columns: list[str], in_red_zone: pl.Expr, suffix: str
+) -> list[pl.Expr]:
+    """Build the drive-level red-zone counts for one perspective.
+
+    A red-zone trip is a drive that reached the red zone, so it is counted once however
+    many snaps it took inside the 20. A trip converts when the drive ends in a touchdown,
+    which ``fixed_drive_result`` records for every play of the drive. Counting drives
+    rather than snaps is what makes ``red_zone_td_pct`` comparable to the scraped column
+    of the same name; dividing touchdowns by red-zone snaps measures a different quantity.
+
+    Both counts are zero when ``fixed_drive`` is absent, so a season without drive ids
+    still emits the invariant schema.
+
+    Args:
+        columns: Columns present on the prepared play frame.
+        in_red_zone: Per-play condition selecting snaps inside the red zone.
+        suffix: ``"_allowed"`` for the defensive perspective, otherwise empty.
+
+    Returns:
+        Aggregation expressions for the trip and touchdown-drive counts.
+
+    """
+    if "fixed_drive" not in columns:
+        return [
+            pl.lit(0, dtype=pl.Int64).alias(f"red_zone_trips{suffix}"),
+            pl.lit(0, dtype=pl.Int64).alias(f"red_zone_td_drives{suffix}"),
+        ]
+    drive = pl.col("fixed_drive")
+    trips = drive.filter(in_red_zone).n_unique().cast(pl.Int64).alias(f"red_zone_trips{suffix}")
+    if "fixed_drive_result" in columns:
+        scored = (pl.col("fixed_drive_result") == "Touchdown").fill_null(False)
+        td_drives = drive.filter(in_red_zone & scored).n_unique().cast(pl.Int64)
+    else:
+        td_drives = pl.lit(0, dtype=pl.Int64)
+    return [trips, td_drives.alias(f"red_zone_td_drives{suffix}")]
+
+
+def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> list[pl.Expr]:
+    """Build the situational count aggregations for one perspective.
 
     Formulas (all restricted to plays whose ``play_type`` is in
     ``SITUATIONAL_PLAY_TYPES``, matching the existing pipeline definition):
@@ -275,12 +377,18 @@ def _situational_aggregations(columns: list[str]) -> list[pl.Expr]:
         - ``fourth_down_conversions``: plays with ``fourth_down_converted`` set.
         - ``fourth_down_fails``: plays with ``fourth_down_failed`` set.
         - ``red_zone_plays``: plays with ``yardline_100 <= RED_ZONE_YARDLINE``.
-        - ``red_zone_tds``: red-zone plays whose ``td_team`` is not null.
+        - ``red_zone_tds``: red-zone plays whose ``td_team == posteam``.
+        - ``red_zone_trips``: distinct ``fixed_drive`` values with at least one red-zone
+          play, i.e. drives that reached the red zone rather than snaps taken inside it.
+        - ``red_zone_td_drives``: those trips whose ``fixed_drive_result`` is
+          ``"Touchdown"``. ``red_zone_td_drives / red_zone_trips`` is the per-trip
+          conversion rate that the published ``red_zone_td_pct`` reports.
         - ``two_point_attempts``: plays with ``two_point_attempt`` set.
         - ``two_point_successes``: plays with ``two_point_conv_result == "success"``.
         - ``total_plays``: the number of such plays.
     Third- and fourth-down attempts are the conversion plus fail counts and are
-    added after aggregation.
+    added after aggregation. When ``allowed`` is true, the same offense-side events are
+    counted again but written to ``*_allowed`` columns for the team that defended them.
     """
     if "play_type" in columns:
         counted = pl.col("play_type").is_in(list(SITUATIONAL_PLAY_TYPES)).fill_null(False)
@@ -288,26 +396,41 @@ def _situational_aggregations(columns: list[str]) -> list[pl.Expr]:
         counted = pl.lit(False)
     yardline = _nullable_expr(columns, "yardline_100", pl.Float64)
     in_red_zone = (yardline <= RED_ZONE_YARDLINE).fill_null(False)
-    scored_td = pl.col("td_team").is_not_null() if "td_team" in columns else pl.lit(False)
+    if {"td_team", "posteam"} <= set(columns):
+        scored_td = (pl.col("td_team") == pl.col("posteam")).fill_null(False)
+    else:
+        scored_td = pl.lit(False)
     if "two_point_conv_result" in columns:
         two_point_success = (pl.col("two_point_conv_result") == "success").fill_null(False)
     else:
         two_point_success = pl.lit(False)
+    suffix = "_allowed" if allowed else ""
     return [
         _count(
-            counted & (_flag_expr(columns, "third_down_converted") > 0), "third_down_conversions"
+            counted & (_flag_expr(columns, "third_down_converted") > 0),
+            f"third_down_conversions{suffix}",
         ),
-        _count(counted & (_flag_expr(columns, "third_down_failed") > 0), "third_down_fails"),
+        _count(
+            counted & (_flag_expr(columns, "third_down_failed") > 0),
+            f"third_down_fails{suffix}",
+        ),
         _count(
             counted & (_flag_expr(columns, "fourth_down_converted") > 0),
-            "fourth_down_conversions",
+            f"fourth_down_conversions{suffix}",
         ),
-        _count(counted & (_flag_expr(columns, "fourth_down_failed") > 0), "fourth_down_fails"),
-        _count(counted & in_red_zone, "red_zone_plays"),
-        _count(counted & in_red_zone & scored_td, "red_zone_tds"),
-        _count(counted & (_flag_expr(columns, "two_point_attempt") > 0), "two_point_attempts"),
-        _count(counted & two_point_success, "two_point_successes"),
-        _count(counted, "total_plays"),
+        _count(
+            counted & (_flag_expr(columns, "fourth_down_failed") > 0),
+            f"fourth_down_fails{suffix}",
+        ),
+        _count(counted & in_red_zone, f"red_zone_plays{suffix}"),
+        _count(counted & in_red_zone & scored_td, f"red_zone_tds{suffix}"),
+        *_red_zone_drive_aggregations(columns, in_red_zone, suffix),
+        _count(
+            counted & (_flag_expr(columns, "two_point_attempt") > 0),
+            f"two_point_attempts{suffix}",
+        ),
+        _count(counted & two_point_success, f"two_point_successes{suffix}"),
+        *([] if allowed else [_count(counted, "total_plays")]),
     ]
 
 
@@ -402,8 +525,17 @@ def _aggregate_allowed(plays: pl.DataFrame) -> pl.DataFrame:
             _sum_when(play["special"], epa, "st_epa_against"),
             _count(play["special"], _ST_PLAYS_DEFENSE),
             _possession_side_expr(columns, "away").alias(_IS_HOME_DEFENSE),
+            *_situational_aggregations(columns, allowed=True),
         )
         .rename({"defteam": "team_abbr", "posteam": "opponent_abbr"})
+        .with_columns(
+            (pl.col("third_down_conversions_allowed") + pl.col("third_down_fails_allowed")).alias(
+                "third_down_attempts_allowed"
+            ),
+            (pl.col("fourth_down_conversions_allowed") + pl.col("fourth_down_fails_allowed")).alias(
+                "fourth_down_attempts_allowed"
+            ),
+        )
     )
 
 
@@ -516,4 +648,316 @@ def aggregate_pbp_team_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
 
     return combined.select(
         pl.col(name).cast(_PBP_TEAM_GAME_SCHEMA[name]) for name in PBP_TEAM_GAME_COLUMNS
+    ).sort(["season", "week", "team_abbr"])
+
+
+def aggregate_pbp_team_box_score_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
+    """Aggregate raw play rows into nflreadpy-style per-team-game box-score stats.
+
+    The output uses the nflreadpy team-stat names for the box-score families that can be
+    derived directly from play-by-play. When a required source column is absent, the affected
+    derived stat is left null so callers can fall back to another source. Counts are zero when
+    the source column exists but no play in the game satisfies the condition.
+
+    Formulas, verified against nflverse team stats over 1999-2025 (a four-season sample
+    unless noted): every match rate below is the share of team-games where the derived value
+    equals nflverse's to within 1e-4.
+        - ``pass_attempts``: ``pass_attempt`` set, excluding sacks and two-point tries (100%
+          match). ``pass_attempt`` is nflverse's own canonical flag; a sack carries
+          ``pass_attempt = 1`` too, so nflverse's own ``pass_attempts`` explicitly excludes
+          sacks, unlike the looser ``play_type == "pass"`` this module used before.
+        - ``pass_completions``: pass attempts with ``complete_pass`` set (100%).
+        - ``pass_yards``: ``yards_gained`` summed over pass attempts (99.89%).
+        - ``pass_touchdowns`` / ``interceptions_thrown``: pass attempts with those flags set
+          (100%).
+        - ``times_sacked``: plays with ``sack`` set (100%).
+        - ``passing_epa``: ``qb_epa`` (not ``epa``) over every ``pass_attempt`` play, sacks and
+          two-point tries included (100% on a single season, 98.84% over four). ``qb_epa``
+          attributes EPA to the quarterback's passing line the way nflverse's own team stat
+          does; summing ``epa`` over the same plays matched only 69.54% before this fix.
+        - ``passing_cpoe``: mean ``cpoe`` over pass attempts with a published CPOE.
+        - ``rush_attempts``: ``rush_attempt`` set, excluding two-point tries (100%).
+          ``rush_attempt`` is nflverse's own canonical flag; a kneel carries
+          ``rush_attempt = 1`` despite ``rush = 0``, so the looser ``play_type in {"run",
+          "qb_kneel"}`` this module used before agreed with it by coincidence on ordinary
+          plays but not universally.
+        - ``rush_yards``: summed over rush attempts (99.94%). ``rush_touchdowns``: rush
+          attempts with that flag set (100%).
+        - ``rushing_epa``: ``epa`` over every ``rush_attempt`` play, two-point tries included
+          (99.78%).
+        - ``fumbles`` / ``fumbles_lost``: plays with those flags set, excluding special-teams
+          plays (87.49% / 98.03%, up from 73.63% / 90.35% when special-teams fumbles were
+          included). nflverse's team-level ``fumbles`` is an offense-only stat (the sum of a
+          player's sack, rushing and receiving fumbles); a residual gap remains for fumbles on
+          aborted snaps, which nflverse's own player-level fumble categories also do not
+          cleanly attribute.
+        - ``first_downs``: ``first_down_pass + first_down_rush`` when those component flags exist.
+        - ``2pt_conversions``: plays whose ``two_point_conv_result == "success"`` (94.35%). No
+          simple redefinition closed the residual gap; tracing individual mismatches found
+          nflverse team stats itself disagreeing with its own play-by-play on rare plays (see
+          ``models/pbp_vs_nflverse_m54_2/COMPARISON.md``), which is not fixable from this side.
+        - ``total_yards``: ``pass_yards + rush_yards + sack_yards_lost``. nflverse defines
+          ``total_yards`` as ``pass_yards + rush_yards - yards_lost_from_sacks`` and stores
+          the sack losses as a negative number, so the sack yardage is added back rather
+          than deducted. Verified against every nflverse team-game of 2000-2025: the
+          identity holds on 13418 of 13418 rows.
+        - ``penalties`` / ``penalty_yards``: grouped by ``penalty_team`` across offensive and
+          defensive plays.
+        - ``def_sacks`` / ``def_interceptions``: sacks and interceptions faced by the opponent.
+
+    Args:
+        pbp_df: Raw play-by-play rows. Optional source columns may be absent.
+
+    Returns:
+        One row per ``(season, week, team_abbr, opponent_abbr)`` with the typed columns in
+        ``PBP_TEAM_BOX_SCORE_COLUMNS``.
+
+    Raises:
+        ValueError: If an identity column required to key team-games is missing.
+
+    """
+    if pbp_df.height == 0:
+        return empty_team_box_score_frame()
+
+    missing = [column for column in _REQUIRED_PBP_COLUMNS if column not in pbp_df.columns]
+    if missing:
+        raise ValueError(f"pbp_df is missing required columns: {', '.join(missing)}")
+
+    plays = _prepare_plays(pbp_df)
+    if plays.height == 0:
+        return empty_team_box_score_frame()
+
+    columns = plays.columns
+    is_two_point = _flag_expr(columns, "two_point_attempt") > 0
+    is_sack = _flag_expr(columns, "sack") > 0
+    is_special = _flag_expr(columns, "special") > 0
+    # ``pass_attempt``/``rush_attempt`` are nflverse's own canonical stat-counting flags,
+    # verified against nflverse team stats over 1999-2025 (four-season sample): they differ
+    # from the looser ``pass``/``rush`` indicators, most visibly that a sack carries
+    # ``pass_attempt = 1`` (excluded below to match nflverse's ``pass_attempts``) and a kneel
+    # carries ``rush_attempt = 1`` despite ``rush = 0``.
+    has_attempt_flags = {"pass_attempt", "rush_attempt"} <= set(columns)
+    is_pass_flagged = _flag_expr(columns, "pass_attempt") > 0
+    is_rush_flagged = _flag_expr(columns, "rush_attempt") > 0
+    # Counting/yardage attempts exclude sacks (for passes) and two-point tries (both sides);
+    # EPA attempts keep sacks and two-point tries in, which is what reproduces nflverse's
+    # ``passing_epa``/``rushing_epa`` (100% and 99.78% match on the verification sample).
+    is_pass_attempt = is_pass_flagged & ~is_sack & ~is_two_point
+    is_pass_epa_play = is_pass_flagged
+    is_rush_attempt = is_rush_flagged & ~is_two_point
+    is_rush_epa_play = is_rush_flagged
+    yards = _value_expr(columns, "yards_gained")
+    epa = _value_expr(columns, "epa")
+    qb_epa = _value_expr(columns, "qb_epa")
+
+    offense_aggs: list[pl.Expr] = []
+    if "season_type" in columns:
+        offense_aggs.append(pl.col("season_type").drop_nulls().first().alias("season_type"))
+    if "complete_pass" in columns and has_attempt_flags:
+        offense_aggs.append(
+            _count(is_pass_attempt & (_flag_expr(columns, "complete_pass") > 0), "pass_completions")
+        )
+    if has_attempt_flags:
+        offense_aggs.append(_count(is_pass_attempt, "pass_attempts"))
+        offense_aggs.append(_sum_when(is_pass_attempt, yards, "pass_yards"))
+        offense_aggs.append(_count(is_rush_attempt, "rush_attempts"))
+        offense_aggs.append(_sum_when(is_rush_attempt, yards, "rush_yards"))
+    if "pass_touchdown" in columns and has_attempt_flags:
+        offense_aggs.append(
+            _count(is_pass_attempt & (_flag_expr(columns, "pass_touchdown") > 0), "pass_touchdowns")
+        )
+    if "interception" in columns and has_attempt_flags:
+        offense_aggs.append(
+            _count(
+                is_pass_attempt & (_flag_expr(columns, "interception") > 0),
+                "interceptions_thrown",
+            )
+        )
+    if "sack" in columns:
+        offense_aggs.append(_count(is_sack, "times_sacked"))
+        offense_aggs.append(
+            _sum_when(
+                is_sack,
+                pl.when(yards < 0).then(-yards).otherwise(0.0),
+                _PBP_SACK_YARDS_LOST,
+            )
+        )
+    if "qb_epa" in columns and "pass_attempt" in columns:
+        offense_aggs.append(_sum_when(is_pass_epa_play, qb_epa, "passing_epa"))
+    if "epa" in columns and "rush_attempt" in columns:
+        offense_aggs.append(_sum_when(is_rush_epa_play, epa, "rushing_epa"))
+    if "cpoe" in columns and has_attempt_flags:
+        has_cpoe = is_pass_attempt & pl.col("cpoe").is_not_null()
+        offense_aggs.append(
+            _sum_when(has_cpoe, pl.col("cpoe").cast(pl.Float64), _PBP_PASSING_CPOE_SUM)
+        )
+        offense_aggs.append(_count(has_cpoe, _PBP_PASSING_CPOE_COUNT))
+    if "rush_touchdown" in columns and has_attempt_flags:
+        offense_aggs.append(
+            _count(is_rush_attempt & (_flag_expr(columns, "rush_touchdown") > 0), "rush_touchdowns")
+        )
+    if "fumble" in columns:
+        # nflverse's team-level ``fumbles`` is an offense-only stat (rushing, receiving and
+        # sack fumbles); special-teams fumbles (kickoff/punt) are excluded to match it
+        # (87.5% match, up from 73.6% when special-teams plays were included).
+        offense_aggs.append(_count((_flag_expr(columns, "fumble") > 0) & ~is_special, "fumbles"))
+    if "fumble_lost" in columns:
+        offense_aggs.append(
+            _count((_flag_expr(columns, "fumble_lost") > 0) & ~is_special, "fumbles_lost")
+        )
+    if {"first_down_pass", "first_down_rush"} & set(columns):
+        first_down_pass = _flag_expr(columns, "first_down_pass")
+        first_down_rush = _flag_expr(columns, "first_down_rush")
+        offense_aggs.append(
+            (first_down_pass + first_down_rush).sum().cast(pl.Float64).alias("first_downs")
+        )
+    if "two_point_conv_result" in columns:
+        offense_aggs.append(
+            _count(
+                (pl.col("two_point_conv_result") == "success").fill_null(False),
+                "2pt_conversions",
+            )
+        )
+
+    offense = (
+        plays.group_by(["season", "week", "posteam", "defteam"])
+        .agg(offense_aggs)
+        .rename({"posteam": "team_abbr", "defteam": "opponent_abbr"})
+        if offense_aggs
+        else empty_team_box_score_frame()
+    )
+
+    defense_aggs: list[pl.Expr] = []
+    if "sack" in columns:
+        defense_aggs.append(_count(is_sack, "def_sacks"))
+    if "interception" in columns:
+        defense_aggs.append(
+            _count(is_pass_attempt & (_flag_expr(columns, "interception") > 0), "def_interceptions")
+        )
+
+    defense = (
+        plays.group_by(["season", "week", "defteam", "posteam"])
+        .agg(defense_aggs)
+        .rename({"defteam": "team_abbr", "posteam": "opponent_abbr"})
+        if defense_aggs
+        else empty_team_box_score_frame()
+    )
+
+    penalty_frame = empty_team_box_score_frame()
+    if {"penalty", "penalty_team"} <= set(columns):
+        penalty_rows = plays.filter(
+            (_flag_expr(columns, "penalty") > 0)
+            & pl.col("penalty_team").is_not_null()
+            & (pl.col("penalty_team").cast(pl.Utf8).str.strip_chars() != "")
+        ).with_columns(
+            pl.col("penalty_team").cast(pl.String).alias("team_abbr"),
+            pl.when(pl.col("penalty_team") == pl.col("posteam"))
+            .then(pl.col("defteam"))
+            .otherwise(pl.col("posteam"))
+            .alias("opponent_abbr")
+            .cast(pl.String),
+        )
+        penalty_aggs: list[pl.Expr] = []
+        penalty_aggs.append(pl.len().cast(pl.Float64).alias("penalties"))
+        if "penalty_yards" in columns:
+            penalty_aggs.append(
+                pl.col("penalty_yards")
+                .cast(pl.Float64, strict=False)
+                .fill_null(0.0)
+                .sum()
+                .alias("penalty_yards")
+            )
+        penalty_frame = penalty_rows.group_by(["season", "week", "team_abbr", "opponent_abbr"]).agg(
+            penalty_aggs
+        )
+
+    keys = ["season", "week", "team_abbr", "opponent_abbr"]
+    # Join the perspectives that actually produced rows. Seeding `combined` from one of them
+    # and then joining that same frame again would collide every non-key column with itself.
+    parts = [frame for frame in (offense, defense, penalty_frame) if frame.height]
+    if not parts:
+        return empty_team_box_score_frame()
+    combined = parts[0]
+    for part in parts[1:]:
+        combined = combined.join(part, on=keys, how="full", coalesce=True)
+
+    if combined.height == 0:
+        return empty_team_box_score_frame()
+
+    present_numeric = [
+        column
+        for column in (
+            "pass_completions",
+            "pass_attempts",
+            "pass_yards",
+            "pass_touchdowns",
+            "interceptions_thrown",
+            "times_sacked",
+            "passing_epa",
+            "rushing_epa",
+            "rush_attempts",
+            "rush_yards",
+            "rush_touchdowns",
+            "fumbles",
+            "fumbles_lost",
+            "first_downs",
+            "2pt_conversions",
+            "penalties",
+            "penalty_yards",
+            "def_sacks",
+            "def_interceptions",
+            _PBP_PASSING_CPOE_SUM,
+            _PBP_PASSING_CPOE_COUNT,
+            _PBP_SACK_YARDS_LOST,
+        )
+        if column in combined.columns
+    ]
+    if present_numeric:
+        combined = combined.with_columns(
+            pl.col(column).fill_null(0.0) for column in present_numeric
+        )
+
+    derived: list[pl.Expr] = []
+    if {_PBP_PASSING_CPOE_SUM, _PBP_PASSING_CPOE_COUNT} <= set(combined.columns):
+        derived.append(
+            _safe_ratio(
+                pl.col(_PBP_PASSING_CPOE_SUM),
+                pl.col(_PBP_PASSING_CPOE_COUNT),
+                "passing_cpoe",
+            )
+        )
+    if {"pass_yards", "rush_yards", _PBP_SACK_YARDS_LOST} <= set(combined.columns):
+        derived.append(
+            (pl.col("pass_yards") + pl.col("rush_yards") + pl.col(_PBP_SACK_YARDS_LOST))
+            .cast(pl.Float64)
+            .alias("total_yards")
+        )
+    if derived:
+        combined = combined.with_columns(derived)
+
+    combined = combined.drop(
+        [
+            column
+            for column in (
+                _PBP_PASSING_CPOE_SUM,
+                _PBP_PASSING_CPOE_COUNT,
+                _PBP_SACK_YARDS_LOST,
+            )
+            if column in combined.columns
+        ]
+    )
+
+    non_stat_columns = set(keys) | {"season_type"}
+    missing_stats = [
+        pl.lit(None, dtype=pl.Float64).alias(column)
+        for column in PBP_TEAM_BOX_SCORE_COLUMNS
+        if column not in non_stat_columns and column not in combined.columns
+    ]
+    if missing_stats:
+        combined = combined.with_columns(missing_stats)
+    if "season_type" not in combined.columns:
+        combined = combined.with_columns(pl.lit(None, dtype=pl.String).alias("season_type"))
+
+    return combined.select(
+        pl.col(name).cast(_TEAM_BOX_SCORE_SCHEMA[name]) for name in PBP_TEAM_BOX_SCORE_COLUMNS
     ).sort(["season", "week", "team_abbr"])

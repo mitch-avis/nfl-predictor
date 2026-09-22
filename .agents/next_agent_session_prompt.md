@@ -22,11 +22,11 @@ must-ask list means stop and wait.
 - Today's date is in your environment. The 2026 season is in progress. Week 2 ended with the
   Monday 2026-09-21 game; the Week 3 weekly run is due before the Thursday 2026-09-24 kickoff,
   and every later week follows the same rhythm (Thursday kickoff, Monday finish).
-- The user runs `scripts/weekly_run.py` themselves. `feat/m54-0-landing` is unmerged, at
-  `0.16.1`; `main` still carries `0.13.1`'s shared `200`-tree default and the pre-flip
-  `nflverse`/`scrape` sources. **If the user wants this branch's work in their Week 3 run, it
-  needs to be merged first** (must-ask; see "Open questions" below). The next priority task is
-  55.8.
+- The user runs `scripts/weekly_run.py` themselves. `feat/m54-0-landing` merged to `main` and
+  was pushed on 2026-09-22 (version `0.16.2`); `main` and `origin/main` now carry the `pbp`
+  defaults for `--team-stats-source`/`--tr-stats-source` along with the shared `200`-tree
+  default, so the Week 3 weekly run already gets this work with no further merge needed. The
+  next priority task is 55.8.
   Measured 2026-09-20 (pre-flip): with `--skip-data-refresh` the weekly run took 32 minutes
   (Stage 1, the walk-forward compare, 30 of them while the web API's reload watcher loaded the
   machine); the ETL adds about 10 minutes from the nflreadpy cache. That ETL timing has not been
@@ -51,15 +51,18 @@ must-ask list means stop and wait.
   ... && nohup ...` compound command) got it through. If you hit the same block, back up first
   and split the compound command into smaller separately-approved steps.
 
-## Starting state (2026-09-21, after tasks 54.0-54.4 and the default flip on `feat/m54-0-landing`)
+## Starting state (2026-09-22, after `feat/m54-0-landing` merged to `main`)
 
-- **The working branch is `feat/m54-0-landing`, unmerged, at version `0.16.1`.** It is based on
-  `main` at `d6795ca`; `main` and `origin/main` still carry `0.13.1`. `scripts/gate.sh` exits
-  `0` on this branch at every landed chunk through `0.16.1`. The shared `n_estimators` default
-  remains `200`; `scripts/weekly_run.py` Stage 1 evaluates the shared production XGBoost
-  defaults; and the shipped `config/weekly_run.yaml` keeps `tune: false`,
-  `wf_include_postseason: false`, `include_postseason: false`, `wf_max_depth: 5` and
-  `wf_learning_rate: 0.0165`.
+- **`main` and `origin/main` are at version `0.16.2`, merge commit `295d4c4`.**
+  `feat/m54-0-landing` (tasks 54.0-54.4 plus the default flip and the `2pt_conversions`
+  correction) merged cleanly with no conflicts; `uv sync` needed a re-run after the merge to
+  clear a stale-venv `uv sync --check --active` failure (a known caveat, not a defect), and the
+  gate was green before and after that resync. `scripts/gate.sh` exits `0` on `main` at this
+  commit. Work should now start on a fresh branch off `main`, not off `feat/m54-0-landing`. The
+  shared `n_estimators` default remains `200`; `--team-stats-source`/`--tr-stats-source` default
+  to `pbp`; `scripts/weekly_run.py` Stage 1 evaluates the shared production XGBoost defaults;
+  and the shipped `config/weekly_run.yaml` keeps `tune: false`, `wf_include_postseason: false`,
+  `include_postseason: false`, `wf_max_depth: 5` and `wf_learning_rate: 0.0165`.
 - **Task 55.7 is closed.** The accepted `100`-tree rung completed under
   `models/wf_m55_7_2020_2025_trees100/` (checkpoints `models/wf_checkpoints/09a60441e87d86c894ba/`)
   and was independently rescored in `REVIEW.md` there against both the governing `200` rung and
@@ -194,9 +197,10 @@ must-ask list means stop and wait.
    quick gate is the first task; ask about nothing else until it is clean.
 2. `pgrep -af walk_forward`, `uptime`, and `ps -eo pcpu,args --sort=-pcpu | head -4` to see
    whether the web API or a weekly run is loading the machine.
-3. Report to the user, in one message: the current branch state, that Milestone 54 (including
-   the default flip) is complete on `feat/m54-0-landing`, the reviewed results, and the plan for
-   task 55.8. This is still a report unless the user explicitly asks about merge or push.
+3. Report to the user, in one message: the current branch state (`main`, up to date with
+   `origin/main` at `0.16.2`), that Milestone 54 (including the default flip) is merged, and the
+   plan for task 55.8. This is still a report unless the user explicitly asks about merge or
+   push.
 
 ## Order of work (decided with the user on 2026-09-21; Milestone 54 closed the same day)
 
@@ -243,13 +247,9 @@ Later, unchanged: Milestone 53 task 53.7, the rest of Milestone 55 and Milestone
 
 ## Open questions waiting on the user
 
-**Immediate question if the user asks for it:** whether to merge and push `feat/m54-0-landing`
-(`0.16.1`). That is must-ask every time. The user's 2026-09-20 note that they run the Week 3
-weekly run themselves before Thursday 2026-09-24 kickoff means this branch's work (including the
-default flip) only reaches their weekly run if it is merged to `main` first; flag this plainly
-if the deadline is close and no merge has happened yet, without merging unasked. Otherwise
-nothing blocks continuing into 55.8. What remains must-ask under guardrail rule 5 inside this
-work:
+**None blocking.** `feat/m54-0-landing` was merged to `main` and pushed on 2026-09-22 with the
+user's explicit go-ahead; the Week 3 weekly run already gets this branch's work with no further
+action. What remains must-ask under guardrail rule 5 for future work:
 
 1. Merging any branch into `main`, and pushing: must-ask, every time, however small the chunk.
 2. Any later rebuild under `data/`, and any deletion or overwrite under `data/` or `models/`
@@ -260,6 +260,21 @@ work:
    of tree budget) is a fresh ask with the numbers in hand.
 5. Anything else on the rule 5 list: reopening Milestone 57, reordering the roadmap, touching
    `../nfeloqb`, `../nfl-sos-ratings` or the web API on port 8765.
+6. Deleting stale branches (local or remote): a 2026-09-22 review found every branch except
+   `feat/web-ui` is a fully-merged ancestor of `main` with zero unique commits (`git merge-base
+   --is-ancestor <branch> main` true, `git rev-list --count main..<branch>` zero) — pure
+   historical refs from already-landed work, safe to delete but not yet deleted (must-ask, every
+   time): `chore/m59-etl-rebuild`, `docs/handoff-m55-first`, `docs/handoff-next-steps`,
+   `docs/m59-noise-floor`, `docs/rules-and-roadmap`, `feat/m54-0-landing`,
+   `feat/m54-0-schedule-skeleton` (its two commits were cherry-picked into `feat/m54-0-landing`
+   with different hashes, so it shows as not-an-ancestor by git's ancestry check, but its content
+   is verified fully present in `main`), `feat/m55-7-default-200`, `feat/m55-7-tree-budget`,
+   `feat/m59-benchmark-instrument` (local and origin copies for the four that have them:
+   `chore/m59-etl-rebuild`, `docs/m59-noise-floor`, `feat/m59-benchmark-instrument`, and `main`
+   itself, which is not a deletion candidate). `feat/web-ui` is also a fully-merged ancestor but
+   is the live worktree at `../nfl-predictor-web` serving the web API on port 8765 (touching it
+   is separately must-ask under rule 5) — do not delete it; it is operationally necessary
+   infrastructure, not abandoned work.
 
 ## How each chunk runs
 

@@ -260,21 +260,17 @@ action. What remains must-ask under guardrail rule 5 for future work:
    of tree budget) is a fresh ask with the numbers in hand.
 5. Anything else on the rule 5 list: reopening Milestone 57, reordering the roadmap, touching
    `../nfeloqb`, `../nfl-sos-ratings` or the web API on port 8765.
-6. Deleting stale branches (local or remote): a 2026-09-22 review found every branch except
-   `feat/web-ui` is a fully-merged ancestor of `main` with zero unique commits (`git merge-base
-   --is-ancestor <branch> main` true, `git rev-list --count main..<branch>` zero) — pure
-   historical refs from already-landed work, safe to delete but not yet deleted (must-ask, every
-   time): `chore/m59-etl-rebuild`, `docs/handoff-m55-first`, `docs/handoff-next-steps`,
+6. Branch housekeeping is done: a 2026-09-22 review found every branch except `feat/web-ui` was
+   a fully-merged ancestor of `main` with zero unique commits, and the user approved deleting
+   all of them (local and, for the four with remote copies, origin too). Deleted 2026-09-22:
+   `chore/m59-etl-rebuild`, `docs/handoff-m55-first`, `docs/handoff-next-steps`,
    `docs/m59-noise-floor`, `docs/rules-and-roadmap`, `feat/m54-0-landing`,
-   `feat/m54-0-schedule-skeleton` (its two commits were cherry-picked into `feat/m54-0-landing`
-   with different hashes, so it shows as not-an-ancestor by git's ancestry check, but its content
-   is verified fully present in `main`), `feat/m55-7-default-200`, `feat/m55-7-tree-budget`,
-   `feat/m59-benchmark-instrument` (local and origin copies for the four that have them:
-   `chore/m59-etl-rebuild`, `docs/m59-noise-floor`, `feat/m59-benchmark-instrument`, and `main`
-   itself, which is not a deletion candidate). `feat/web-ui` is also a fully-merged ancestor but
-   is the live worktree at `../nfl-predictor-web` serving the web API on port 8765 (touching it
-   is separately must-ask under rule 5) — do not delete it; it is operationally necessary
-   infrastructure, not abandoned work.
+   `feat/m54-0-schedule-skeleton`, `feat/m55-7-default-200`, `feat/m55-7-tree-budget`,
+   `feat/m59-benchmark-instrument`. The repo now has only `main` and `feat/web-ui` locally and
+   on origin. `feat/web-ui` is also a fully-merged ancestor of `main` but was kept: it is the
+   live worktree at `../nfl-predictor-web` serving the web API on port 8765 (touching it is
+   separately must-ask under rule 5), not abandoned work. Any new stale-branch cleanup is a
+   fresh ask.
 
 ## How each chunk runs
 

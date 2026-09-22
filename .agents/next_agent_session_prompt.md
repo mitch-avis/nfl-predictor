@@ -35,19 +35,19 @@ Never run two walk-forwards at once, and never let the 60.1 subagent touch `nfl_
 
 ## Starting state (2026-09-22)
 
-- **`main` is at version `0.16.2`, commit `c3acc39`.** `scripts/gate.sh` exits `0`
-  (`889 passed`, coverage `92.45%`). `feat/m54-0-landing` merged 2026-09-22 and every fully-merged
-  stale branch was deleted; only `main` and `feat/web-ui` (the live worktree behind the web API
-  on port 8765) remain.
-- **A documentation cleanup pass landed the same day**: `AGENTS.md`, `.agents/TODO.md`,
-  `.agents/ARCHIVE.md`, `CHANGELOG.md` (structural ordering fixes) and `README.md` were reviewed
-  and brought current — stale baseline numbers, a fully-closed Milestone 54 section moved out of
-  `TODO.md` into `ARCHIVE.md`, three oversized `[x]` task bodies (55.7, 56.2, 58.4) compacted into
-  pointers with their full record moved to `ARCHIVE.md`, and several resolved-but-still-marked-
-  open follow-up items corrected. Check `git status --short` first: if those files show modified
-  and uncommitted, that is this pass — commit it first (`docs(agents): ...`, conventional
-  commit, one commit is fine for a docs-only pass) before starting 55.8 or 60.1. If it is already
-  committed, skip this.
+- **`main` and `origin/main` are at version `0.16.2`, commit `e67c133`.** `scripts/gate.sh` exits
+  `0` (`889 passed`, coverage `92.45%`, measured at the prior commit `c3acc39` and unaffected by
+  the docs-only commit on top of it). `feat/m54-0-landing` merged 2026-09-22 and every
+  fully-merged stale branch was deleted; only `main` and `feat/web-ui` (the live worktree behind
+  the web API on port 8765) remain. Working tree is clean.
+- **A documentation cleanup pass landed and pushed the same day** (commit `e67c133`,
+  `docs: review and reconcile the doc set with the current repo state`): `AGENTS.md`,
+  `.agents/TODO.md`, `.agents/ARCHIVE.md`, `CHANGELOG.md` (structural ordering fixes) and
+  `README.md` were reviewed and brought current — stale baseline numbers, a fully-closed
+  Milestone 54 section moved out of `TODO.md` into `ARCHIVE.md`, three oversized `[x]` task
+  bodies (55.7, 56.2, 58.4) compacted into pointers with their full record moved to
+  `ARCHIVE.md`, and several resolved-but-still-marked-open follow-up items corrected. Nothing
+  left to commit from it; start from a clean tree.
 - **A material discovery from that same pass, not yet acted on**: the shipped
   `config/weekly_run.yaml` sets `train_recency_half_life_seasons: 4` for final production
   training, but has no `wf_recency_half_life_seasons` key, so its walk-forward comparison stage
@@ -95,9 +95,8 @@ Never run two walk-forwards at once, and never let the 60.1 subagent touch `nfl_
 
 ## First check-in (before any code or run)
 
-1. `git status --short`, `git log --oneline -3`, `scripts/gate.sh --quick`. Handle the docs
-   commit from "Starting state" if still pending; ask about nothing else until the tree is clean
-   and the quick gate passes.
+1. `git status --short`, `git log --oneline -3`, `scripts/gate.sh --quick`. A dirty tree or a
+   failing quick gate is the first task; ask about nothing else until it is clean.
 2. `pgrep -af walk_forward`, `uptime`, `ps -eo pcpu,args --sort=-pcpu | head -4`.
 3. Report to the user, in one message: tree state, confirmation of the two-track plan below, and
    the 55.8 ladder as written (four six-season arms, cap 4) so it counts as accepted under

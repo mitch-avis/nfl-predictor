@@ -123,32 +123,31 @@ Rules that are always enforced:
   `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints `9779c1cbb0701d23661a`) tied the 54.0
   pre-flip reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
   `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.
-  Milestone 54 is closed.
+  Milestone 54 is closed. `feat/m54-0-landing` merged into `main` with no conflicts and was
+  pushed on 2026-09-22 (merge commit `295d4c4`, version `0.16.2`); `main` and `origin/main` now
+  carry the `pbp`-default sources and the shared `200`-tree default with no further merge
+  needed. A 2026-09-22 review found every other branch except `feat/web-ui` (the live worktree
+  behind the web API on port 8765) was a fully-merged, zero-commit ancestor of `main`, and the
+  user approved deleting all ten of them, locally and on `origin`. The next active task is 55.8
+  (season weighting); see "Roadmap Status" in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-19 (version `0.12.5`, branch `feat/m59-benchmark-instrument`
-  off `main` at `683acab`, the whole `0.12.1`-`0.12.5` tree still uncommitted at that point):
-  `scripts/gate.sh` exits `0` (`843 passed`, coverage `92.63%` against the enforced `90%`
+- Validated baseline on 2026-09-22 (`main` at `c3acc39`, version `0.16.2`, working tree clean;
+  `feat/m54-0-landing` merged and every fully-merged stale branch deleted the same day):
+  `scripts/gate.sh` exits `0` (`889 passed`, coverage `92.45%` against the enforced `90%`
   floor; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
   `uv sync --check --active` and the CLI help smoke checks all clean). The
   frontend gate was last verified at the `0.8.0` merge; run `scripts/gate.sh --web` whenever
-  `web/` or `nfl_predictor/api/` changes. The bullets below record the earlier `0.9.0` baseline
-  and the data state, which have not changed since:
-  - `.venv/bin/ruff format .`, `.venv/bin/ruff check .`, `.venv/bin/ty check .`, and
-    `.venv/bin/pyright .` pass cleanly.
-  - `.venv/bin/python -m pytest` passes (`821 passed`, `tests/api/` included) with coverage
-    `92.96%` against the enforced `90%` floor.
-  - The frontend gate in `web/` (`npm run lint`, `npm run typecheck`, `npx vitest run` with `22`
-    tests, `npm run build`) passes; it needs `npm ci` under Node 26 first.
-  - `markdownlint-cli2`, `uv lock --check`, and `uv sync --check --active` pass. Re-run a plain
-    `uv sync` after every version bump, or the last check fails on the stale installed package.
+  `web/` or `nfl_predictor/api/` changes.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
     `markdownlint-cli2`). Never edit it as part of this repo's work.
+  - Re-run a plain `uv sync` after every version bump (including after merging a branch that
+    bumped the version), or `uv sync --check --active` fails on the stale installed package.
   - ETL was rerun on 2026-09-20 at 04:31 from the cache for `1999-2026` on the `0.12.6` schema
     (pre-2002 division and conference alignment from `0.12.4`, the six `*_opponent_def_sacks` /
     `*_opponent_times_sacked` mirrors gone, the times-sacked mirror kept as an unpublished

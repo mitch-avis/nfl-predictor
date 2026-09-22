@@ -11,9 +11,10 @@ Completed milestones live in `ARCHIVE.md` (same directory). Agent workflow and g
   than renumbering it; renumber only in a deliberate cleanup that records the old-to-new map in
   `ARCHIVE.md`. Archived numbers never change.
 - Milestones up to 52 are archived or retired (the last cleanup, 2026-09-10, is recorded at the top
-  of `ARCHIVE.md`). Active milestones run 53 to 59 (58 is the web UI, added 2026-09-11; 59 is the
-  benchmark-instrument follow-up from the 2026-09-18 audit), so new work starts at 61
-  (60 is the CLI consolidation milestone).
+  of `ARCHIVE.md`). Milestones 54 and 59 are also fully closed and archived; their remaining
+  follow-ups live under "Open follow-ups from completed milestones" below. Active milestones with
+  open tasks are 53, 55, 56, 58 (the web UI, added 2026-09-11) and 60 (the CLI consolidation
+  milestone, added 2026-09-21), so new work starts at 61.
 
 ---
 
@@ -48,12 +49,15 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-21, version `0.16.1`, branch `feat/m54-0-landing`)
+### Current validated baseline (2026-09-22, version `0.16.2`, branch `main`)
 
-- `feat/m54-0-landing` carries the unmerged `0.14.0`-`0.16.1` chunks off `main` at `d6795ca`;
-      `main` and `origin/main` remain on `0.13.1` with the shared `200`-tree default and the aligned
-      weekly config.
-- `scripts/gate.sh` exits `0` on this branch at every landed chunk through `0.16.1`.
+- `feat/m54-0-landing` (the `0.14.0`-`0.16.1` chunks) merged into `main` with no conflicts and was
+      pushed on 2026-09-22 (merge commit `295d4c4`, version `0.16.2`). `main` and `origin/main` carry
+      the `pbp`-default sources, the shared `200`-tree default and the aligned weekly config; no
+      further merge is needed for this work. Every other branch except `feat/web-ui` (the live
+      worktree behind the web API on port 8765) was a fully-merged, zero-commit ancestor of `main`
+      and was deleted the same day, locally and on `origin`.
+- `scripts/gate.sh` exits `0` on `main` at `c3acc39` (`889 passed`, coverage `92.45%`).
 - Data: the 2026-09-21 full rebuild (`--refresh-nflreadpy`, needed for the new
       `pass_attempt`/`rush_attempt` raw columns) on the `0.16.0` code, now defaulting to
       `--team-stats-source pbp --tr-stats-source pbp`, produced `data/completed_games_ml.csv`
@@ -87,8 +91,9 @@ Agents and humans should not rely on the shell activation state.
       `models/wf_checkpoints/9779c1cbb0701d23661a/`, reviewed in its `REVIEW.md`) tied that
       reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
       `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.
-- Tasks 54.0-54.4 and the default flip are archived. Task 55.8 is the next active task on this
-      branch. Merging `feat/m54-0-landing` to `main` and pushing remain must-ask.
+- Tasks 54.0-54.4 and the default flip are archived; Milestone 54 is fully closed (`ARCHIVE.md`).
+      Task 55.8 is the next active task, on a fresh branch off `main`. Merging and pushing remain
+      must-ask, every time.
 
 ---
 
@@ -126,7 +131,9 @@ the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 Order set by the user on 2026-09-21, after the tree-budget ladder was reported:
 
 1. Task 55.8 - season weighting, as six-season arms at the `200` default.
-2. Task 55.9 - the Optuna re-tune, after Milestone 54 lands.
+2. Task 55.9 - the Optuna re-tune. Milestone 54 closed 2026-09-21, so this is unblocked; the
+      user would still like it on a bye week or in the off-season, since it occupies the machine
+      for hours.
 3. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
       off); it can run in parallel with any walk-forward as a subagent task.
 
@@ -209,32 +216,6 @@ Acceptance:
 
 ---
 
-## Milestone 54 - PBP-first team-game skeleton and situational stats (closed 2026-09-21)
-
-Formerly Milestone 48, widened on 2026-09-18 by the user's decision after the audit found that
-nflverse team stats lack Jacksonville's 2001-2002 home games while play-by-play has all 16 (see
-Milestone 59's findings). Goal: play-by-play becomes the primary per-team-game source; nflverse
-team stats fill only what play-by-play cannot derive.
-
-Tasks 54.0 to 54.4 and the default flip are archived under `ARCHIVE.md` as "Milestone 54
-(partial)" and its "Default flip to `pbp`" subsection (2026-09-21, `0.14.0`-`0.16.1`). Both
-`--team-stats-source` and `--tr-stats-source` now default to `pbp`; `nflverse`/`scrape` remain
-selectable explicitly and the TeamRankings ratings scrape (not the situational-stat columns)
-still runs either way, so it was not retired. Milestone closed; the goal above is achieved.
-
-Acceptance:
-
-- [x] No `(season, team)` has fewer season-to-date games than the schedule. Verified on the 54.0
-      rebuild; see `ARCHIVE.md`, "Milestone 54 (partial)".
-- [x] The eight situational columns are populated for `1999+` offline (`--tr-stats-source pbp`,
-      now the default; TeamRankings itself starts in 2003, so this fills `1026` of `1029`
-      completed games of 1999-2002 that were previously null); walk-forward is a no-breakage tie
-      against the reference arm on deterministic Brier
-      (`models/wf_m54_12_2023_2025_from_week1/REVIEW.md`,
-      `models/wf_m54_flip_2023_2025_from_week1/REVIEW.md`).
-
----
-
 ## Milestone 55 - Off-season configuration sweep + lock default settings
 
 Formerly Milestone 39, with former Milestone 40 folded in. Deferred until the feature milestones
@@ -259,65 +240,45 @@ Tasks:
       training.
 - [ ] 55.5 Decide the `ScoreModel` fate: document as experimental or deprecate cleanly.
 - [ ] 55.6 Add the stability view by season and week bucket, and a "recommended defaults" section.
-- [x] 55.7 Choose `n_estimators` time-aware (from task 59.3, not done there). In-season fits run
-      the full `598`-tree budget since `0.12.3` with no early stopping anywhere; `598` is the
-      old Optuna value, not a measured choice. Tune it on a whole prior season as the eval set
-      (at least 250 games), or early-stop on that season-sized set, and apply the result
-      identically in walk-forward and production through the shared fit helpers. Read the
-      result on the deterministic and market columns over six seasons. Until then, the
-      `early_stopping_rounds` config field and the `--wf-early-stopping-rounds` /
-      `--train-early-stopping-rounds` flags are recorded but inert for in-season fits. Method:
-      a ladder of budgets (for example `200`, `400`, `598`, `800`, `1200`) as separate six-season
-      arms of the reference configuration on the rebuilt build, one hypothesis per arm, read on
-      the deterministic columns against the fit-noise floor; the winner becomes the shared
-      default in walk-forward and production together (a default change: must-ask).
-      Progress 2026-09-21: three six-season rungs ran and were independently rescored,
-      `models/wf_m55_7_2020_2025_trees598/` (the reference, which reproduces the three-season
-      reference arm's 2023-2025 folds bit for bit),
-      `models/wf_m55_7_2020_2025_trees200/` and `models/wf_m55_7_2020_2025_trees400/`. The
-      aggregate order is monotone toward fewer trees and small: weeks 3-18 deterministic Brier
-      `0.2103` / `0.2111` / `0.2117` and margin MAE `9.9281` / `9.9978` / `10.0240` for
-      `200` / `400` / `598`, with the `200 - 598` Brier interval covering zero by `+0.0000791`
-      and its margin MAE difference `-0.0958` `[-0.1583, -0.0345]` beyond the fit-noise floor.
-      The ladder stopped on its own "report all three and ask" branch; the table and the
-      pairwise intervals are in `AGENTS.md` under "Tree-budget ladder".
-      Decided 2026-09-21 by the user: adopt `200` as the shared default `n_estimators`, in
-      walk-forward and production together (the default change is approved). In the same chunk,
-      make `config/weekly_run.yaml` consistent: it sets `tune: true` today, which re-runs a
-      one-hour Optuna study on every weekly run and was not intended, so set `tune: false`; and
-      its walk-forward stage runs `wf_n_estimators: 200`, `wf_max_depth: 4`,
-      `wf_learning_rate: 0.03` while the final fit uses `DEFAULT_XGB_PARAMS` (depth `5`,
-      learning rate `0.0165`, `598` trees), so align the walk-forward stage's XGBoost params
-      with the production defaults and let both stages fit the same model. Then run one more
-      rung, `100`, as the plateau check: six seasons, the same ladder configuration, a
-      `HYPOTHESIS.md` naming its windows and columns per guardrail rule 4, and an independent
-      reviewer rescore. If `100` ties `200`, keep `200`; if `100` is better beyond the
-      fit-noise floor, report it and ask. The default change is a minor bump (`0.13.0`). The
-      task stayed open until the `100` rung was reviewed. Landed 2026-09-21 on
-      `feat/m55-7-default-200` (`0.13.0`, gate green): `DEFAULT_XGB_PARAMS` now carries
-      `n_estimators = 200`, the bare `weekly_run` parser falls back to the shared production
-      `n_estimators`, `max_depth` and `learning_rate`, Stage 1 no longer forces
-      `subsample` / `colsample_bytree` to `0.9`, and `config/weekly_run.yaml` is aligned.
-      Closed 2026-09-21 by the reviewed plateau check in
-      `models/wf_m55_7_2020_2025_trees100/`: against the governing `200` rung, weeks 3-18,
-      deterministic Brier `0.2103` vs `0.2103`, diff `+0.0000` `[-0.0008, +0.0009]`; margin
-      MAE `9.9237` vs `9.9281`, diff `-0.0044` `[-0.0389, +0.0296]`. By the written rule, a
-      tie, so `200` stays the shared default. The reviewer also rescored the rung against `598`
-      for ladder continuity (`REVIEW.md` in the same run directory).
-- [ ] 55.8 Season weighting. Today every training row from 1999 carries the same weight as
-      last week's game (`recency_half_life_seasons` is off by default in walk-forward and
-      production). The README's recency ablation ("keep it off") is not trustworthy: it was
-      measured through Platt calibration, which the 2026-09-18 audit found noise-dominated, on
-      a superseded build, with a log loss of `1.95` that reads as a calibration failure rather
-      than a model difference, and with an aggressive half-life of `2` seasons. Re-measure on
-      the 59.1 instrument over six seasons on the rebuilt build: half-lives of about `4`, `8`
-      and `16` seasons via `--recency-half-life-seasons`, plus the unweighted reference,
-      hypothesis and decision rule per arm, read against the fit-noise floor. If a weighting
-      wins, changing the default is must-ask; either way, replace the README ablation with the
+- [x] 55.7 Choose `n_estimators` time-aware: closed 2026-09-21 (`0.13.0`-`0.13.1`). A four-rung
+      ladder (`200`/`400`/`598`, then a `100` plateau check), each rung a six-season arm with its
+      own hypothesis and an independent reviewer rescore, found the aggregate order monotone
+      toward fewer trees but small; the user adopted `200` as the shared default `n_estimators`
+      in walk-forward and production together, and `config/weekly_run.yaml`'s walk-forward stage
+      was aligned to the production XGBoost defaults in the same chunk. Full record, the ladder
+      table and the pairwise intervals: `ARCHIVE.md`, Milestone 55, "55.7", and `AGENTS.md` under
+      "Tree-budget ladder".
+- [ ] 55.8 Season weighting. The bare CLI default for `recency_half_life_seasons` is off, and
+      the walk-forward stage of the shipped `config/weekly_run.yaml` leaves it off too (no
+      `wf_recency_half_life_seasons` key), but **not** the final-training stage of that same
+      config: it already sets `train_recency_half_life_seasons: 4`, so a weekly run today
+      trains the production model with half-life-4 recency weighting while its own
+      walk-forward comparison stage evaluates candidates unweighted. Found 2026-09-22 while
+      scoping this task; not yet reflected anywhere else. This means the walk-forward
+      instrument does not currently measure what production does, and the two stages are not
+      fitting comparably (contrary to the alignment principle task 55.7 established for tree
+      count/depth/learning rate). Resolve this discrepancy as part of 55.8, not as a separate
+      must-ask default change, since `train_recency_half_life_seasons: 4` is already live in
+      the shipped config.
+      The README's recency ablation ("keep it off") is not trustworthy: it was measured through
+      Platt calibration, which the 2026-09-18 audit found noise-dominated, on a superseded
+      build, with a log loss of `1.95` that reads as a calibration failure rather than a model
+      difference, and with an aggressive half-life of `2` seasons. Re-measure on the 59.1
+      instrument over six seasons on the current `pbp`-default build: half-lives of about `4`,
+      `8` and `16` seasons via `--recency-half-life-seasons`, plus the unweighted reference (all
+      four arms are fresh runs; the tree-budget ladder's six-season checkpoints predate the
+      pbp-default flip and cannot be reused), hypothesis and decision rule per arm, read against
+      the fit-noise floor. Note the fit-noise floor itself (`AGENTS.md`, "Fit-noise floor on
+      the same build") was measured on three-season arms, so treat it as an approximate,
+      conservative guide on six seasons rather than an exact threshold. If a half-life other
+      than the shipped `4` wins, changing the default is must-ask; either way, align
+      `wf_recency_half_life_seasons` in `config/weekly_run.yaml` to whatever
+      `train_recency_half_life_seasons` ends up being, and replace the README ablation with the
       new measurement and its run directories.
 - [ ] 55.9 Optuna re-tune. Added 2026-09-21 by the user's decision, to run **after Milestone 54
-      lands**: tuning before the feature set changes would have to be redone. The user would
-      like it on a bye week or in the off-season, since it occupies the machine for hours.
+      lands** (tuning before the feature set changes would have to be redone): Milestone 54
+      closed 2026-09-21, so this is now unblocked. The user would still like it on a bye week or
+      in the off-season, since it occupies the machine for hours.
       Prerequisites, each its own tested chunk before any trial runs:
       (1) trials must fit exactly the way production fits. `0.12.3` removed in-season early
       stopping from production and walk-forward, but `_score_margin_total_fold` in
@@ -357,27 +318,13 @@ Formerly Milestone 41.
       `--data-collection-args`) to `scripts/weekly_run.py`; the same pass-through carries the
       `--stat-prior-blend*` flags, which it cannot set today. Done 2026-09-20 (`0.12.11`) as the
       generic `--data-collection-args` string.
-- [x] 56.2 Decide and document how postseason games enter evaluation and training; when the
-      prediction week is postseason, default the power-rankings through-week to the last
-      regular-season week. Narrowed 2026-09-20 (`0.12.11`): the through-week clamp landed and the
-      README documents the current state (code defaults exclude postseason; the shipped
-      `config/weekly_run.yaml` includes it at weight `1.3`, so the weekly command and the
-      documented defaults disagree). The decision itself is the user's: keep the config's
-      inclusion, or align the defaults; a default change is must-ask.
-      Direction 2026-09-21: postseason matchups stay in the data and are kept separate from
-      regular-season matchups for training and for prediction. A model used for regular-season
-      weeks should not train on playoff games, and the prior-season blend should draw on the
-      previous regular season only. The design discussion is deferred until the rest of the
-      pipeline runs smoothly, and is wanted in time for the 2026 playoffs.
-      Decided 2026-09-21: set `include_postseason: false` and `wf_include_postseason: false` in
-      `config/weekly_run.yaml` now (approved), so the weekly run matches the rule that a model
-      used for regular-season weeks never trains on playoff games. Leave `postseason_weight` in
-      place but inert. Verified facts behind the decision: season-to-date stats, adjusted
-      strength, records and the prior-season blend are regular-season only; Elo and QB Elo
-      (`data/qb_elos.csv`) and the TeamRankings playoff-week snapshots are the only features
-      that carry playoff results, and they enter as pre-game ratings, so there is no leakage.
-      The playoff-week design itself stays deferred. Done 2026-09-21 in `0.13.0` on
-      `feat/m55-7-default-200`, together with the task 55.7 default-alignment chunk.
+- [x] 56.2 How postseason games enter evaluation, training and the rankings: closed 2026-09-21
+      (`0.13.0`). Postseason matchups stay in the data, kept separate from regular-season
+      matchups for training and prediction; `include_postseason: false` and
+      `wf_include_postseason: false` are now set in `config/weekly_run.yaml`, matching the code
+      defaults. `postseason_weight` stays in the config but inert. The playoff-week design itself
+      (a playoff-specific model or weighting) stays deferred, wanted in time for the 2026
+      playoffs. Full record: `ARCHIVE.md`, Milestone 56, "56.2".
 - [ ] 56.3 Wire sweep-selected defaults once Milestone 55 lands; confirm resume behavior.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
@@ -402,33 +349,23 @@ specialization.
 ## Milestone 58 - Web UI: remaining phases
 
 Added 2026-09-11. Phases 0-3 (scaffolding and auth, the read-only pages, jobs, future-week
-predictions) are done and archived under "Milestone 58 (partial)" in `ARCHIVE.md`; the design,
-decisions and per-phase status live in `web_ui_plan.md`. Work happens on a fresh branch off
-`main` (the `../nfl-predictor-web` worktree is fine for it) and merges back after each phase.
+predictions) and task 58.4 (housekeeping) are done and archived under "Milestone 58 (partial)"
+in `ARCHIVE.md`; the design, decisions and per-phase status live in `web_ui_plan.md`. Work
+happens on a fresh branch off `main` (the `../nfl-predictor-web` worktree is fine for it) and
+merges back after each phase.
 
 - [ ] 58.1 Phase 4: pool helpers (confidence pool sheet, tiebreakers, survivor optimizer) per
       `web_ui_plan.md`.
 - [ ] 58.2 Phase 5: team and QB pages over the `nfl-sos-ratings` Parquet outputs.
 - [ ] 58.3 Phase 6 (design only): live betting and live odds.
-- [x] 58.4 Housekeeping: the `web` extra in `pyproject.toml` now duplicates the core dependency
-      list; drop it (and the `--extra web` in CI and `web/README.md`) or give it a purpose. The
-      `etl_full`, `validate_offline` and `validate_live` job templates read the checkout's own
-      `data/` and ignore `NFLP_DATA_DIR` (see the plan's Phase 2 deviations).
-      Narrowed: the `web` extra is dropped, and the three CLIs now take `--data-dir` with the
-      templates passing `NFLP_DATA_DIR`, so every dataset those jobs read or write follows the
-      configured tree. The ETL's upstream inputs still resolve from `constants.DATA_PATH`: the
-      copied `qb_elos.csv` and quarterback identity file (`nfl_predictor/utils/polars/loaders.py`,
-      `data_collection._attach_qb_features`) and the TeamRankings and nflreadpy caches
-      (`nfl_predictor/utils/scraping_utils.py`, `nfl_predictor/utils/polars/teamrankings.py`).
-      Threading a data directory through those read paths is a separate change; until it lands,
-      pointing the API at another checkout's data makes `etl_full` read inputs from this checkout
-      and write outputs to the configured one. The narrowed part landed in `0.12.12`
-      (`604bcc6`, `e3b828d`); whether the remainder is wanted at all is on the user's question
-      list.
-      Closed 2026-09-21 by the user's decision: the `NFLP_DATA_DIR` setting stays, because the
-      web API resolves its own paths through it and it lets the app run against a copied data
-      tree, but the ETL's upstream inputs will not follow it. The `0.12.12` narrowing is the
-      final shape of this task; it stays listed here, marked done, while Milestone 58 is open.
+- [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
+      2026-09-21 (`0.12.12`, narrowed and accepted by the user's decision): the `web` extra is
+      dropped, and `etl_full`/`validate_offline`/`validate_live` now take `--data-dir` with the
+      job templates passing `NFLP_DATA_DIR`. The ETL's upstream inputs (the copied `qb_elos.csv`,
+      the quarterback identity file, and the TeamRankings/nflreadpy caches) still resolve from
+      `constants.DATA_PATH` and will not follow `NFLP_DATA_DIR`; threading a data directory
+      through those read paths would be a separate change, not wanted for now. Full record:
+      `ARCHIVE.md`, Milestone 58, "58.4".
 
 Acceptance:
 
@@ -477,23 +414,32 @@ Each group names the archived milestone it came from; the milestone's full recor
       walk-forward, the earlier folds' `predictions` frames of the same run (empty for the first
       eval seasons, so the floor stays the fallback); in production, the walk-forward compare
       that `weekly_run` already runs. Measure on the 59.1 instrument before making it default.
-- [ ] Narrowed 59.3: `n_estimators` is untuned; task 55.7 carries it.
+- [x] Narrowed 59.3: `n_estimators` was untuned; task 55.7 carried it and closed 2026-09-21 with
+      a measured tree-budget ladder rather than the season-sized automatic tuning 59.3 asked for
+      (`200` adopted as the shared default). See `ARCHIVE.md`, Milestone 55, "55.7".
 - [x] ETL rebuild for 59.4 and 59.6: done 2026-09-20 (`0.12.6`), a tie on the instrument;
       record under `ARCHIVE.md`, Milestone 59, "Rebuild". The first pass exposed a `0.12.4`
       defect (the sack exclusion starved `opponent_points_per_play`), fixed before the second
       pass.
 - [ ] `WalkForwardConfig.early_stopping_rounds` stays in the config and the fingerprint though
-      no in-season fit reads it; removing it changes every fingerprint. Remove it, or wire it to
-      the season-sized eval set of task 55.7, when that lands.
+      no in-season fit reads it; removing it changes every fingerprint. Task 55.7 closed with a
+      measured tree-budget ladder rather than a season-sized eval set, so the field's only live
+      option now is to remove it.
 - [ ] `scripts/wf_compare.py` prints `deterministic_pick_accuracy` in place of the configured
       `pick_accuracy` in its summary columns; the CSV still has both.
 
 ### From Milestone 45 (play-by-play EPA families)
 
-- [ ] `red_zone_tds` counts a touchdown by either team on a red-zone play, so a pick-six is credited
-      to the offense. It is computed but not published today; fix before Milestone 54 publishes it.
+- [x] `red_zone_tds` counted a touchdown by either team on a red-zone play, so a pick-six was
+      credited to the offense. Fixed as part of Milestone 54 (`pbp.py` now requires
+      `td_team == posteam`; see `ARCHIVE.md`, Milestone 54). The raw count still is not published
+      as a standalone column, but the corrected count now feeds the published `red_zone_td_pct`
+      rate (`--tr-stats-source pbp`).
 - [ ] Half of `PBP_COUNT_COLUMNS` (third/fourth down, red zone, two-point, total plays) is joined,
-      aggregated and regressed but never published. Publish it in Milestone 54 or stop carrying it.
+      aggregated and regressed but never published as raw counts. Milestone 54 published derived
+      rates from some of them (`red_zone_td_pct`, `two_point_conversion_pct`, and the third/fourth
+      down percentages) via `--tr-stats-source pbp`; the raw counts themselves remain unpublished
+      intermediates. Publish the raw counts or stop carrying the ones no rate reads.
 - [ ] The play-by-play cache key has no schema version, so growing `constants.PBP_COLUMNS` will not
       invalidate existing per-season caches. Same latent issue as `load_team_stats`.
 

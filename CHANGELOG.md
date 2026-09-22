@@ -36,6 +36,12 @@
   `99.87%` (from `95.54%`), and `fumbles`/`fumbles_lost` on `91.95%`/`98.37%` (from
   `73.63%`/`90.35%`); seventeen of twenty-one derivable columns now match on `98%` or more.
   `models/pbp_vs_nflverse_m54_2/COMPARISON.md` carries the full table.
+- Reviewed the default-flip walk-forward arm `models/wf_m54_flip_2023_2025_from_week1/`
+  (checkpoints `models/wf_checkpoints/9779c1cbb0701d23661a/`, reviewed in its `REVIEW.md`): it
+  ties the pre-flip reference `models/wf_m54_0_2023_2025_from_week1/` on the governing weeks
+  3-18 window: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009` `[-0.0008, +0.0026]`;
+  margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`. A no-breakage tie by the
+  written rule.
 
 ### Fixed
 
@@ -47,15 +53,6 @@
   (verified: `strength_games_played` for JAX still reads `16.0` at both 2001 and 2002 season
   end). The schedule-skeleton and repair code remain in place as a safety net for the
   `nflverse`/`scrape` source configuration, which a caller can still select explicitly.
-
-### Reviewed
-
-- The default-flip walk-forward arm `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints
-  `models/wf_checkpoints/9779c1cbb0701d23661a/`, reviewed in its `REVIEW.md`) ties the
-  pre-flip reference `models/wf_m54_0_2023_2025_from_week1/` on the governing weeks 3-18
-  window: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009` `[-0.0008, +0.0026]`; margin
-  MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`. A no-breakage tie by the
-  written rule.
 
 ## [0.16.0] - 2026-09-21
 
@@ -558,6 +555,13 @@
 
 ## [0.12.1] - 2026-09-19
 
+### Changed
+
+- Candidate ranking in `weekly_run`, `betting_pipeline`, `wf_compare` and the API reader sorts by
+  deterministic Brier then deterministic log loss instead of the configured columns.
+- The `AGENTS.md` benchmark table is rebuilt on the deterministic and market-implied columns with
+  the market row beside the model's.
+
 ### Added
 
 - Three probability views on the same games in every walk-forward report: the configured
@@ -568,13 +572,6 @@
   summary table. `deterministic_*` and `market_*` columns are written to `wf_compare.csv` by
   `scripts/wf_compare.py`, `scripts/weekly_run.py` and `scripts/betting_pipeline.py`, and the API
   column registry and metrics reader expose them.
-
-### Changed
-
-- Candidate ranking in `weekly_run`, `betting_pipeline`, `wf_compare` and the API reader sorts by
-  deterministic Brier then deterministic log loss instead of the configured columns.
-- The `AGENTS.md` benchmark table is rebuilt on the deterministic and market-implied columns with
-  the market row beside the model's.
 
 ## [0.12.0] - 2026-09-18
 
@@ -615,17 +612,6 @@
 
 ## [0.11.0] - 2026-09-17
 
-### Fixed
-
-- `away_games_played` / `home_games_played` now carry the record-feature count they are
-  declared as (`constants.RECORD_FEATURE_COLUMNS`): the team's completed games this season,
-  `wins + losses + ties`. The season-to-date stat frame produces a column of the same name
-  holding the row count behind its means, and the records join silently suffixed the record
-  values away, so a prior-season fallback row published the _previous_ season's total: `17` in
-  week 1 (and `8` / `16` for the postponed first games of JAX 2001, JAX 2002 and MIA 2017)
-  beside the `wins = 0, losses = 0, ties = 0` it should have agreed with. The stat-frame copies
-  are dropped before the join, so the record values keep the names.
-
 ### Changed
 
 - Bump the project version to `0.11.0` and keep `uv.lock` aligned.
@@ -643,7 +629,24 @@
 - Rebuild `data/completed_games_ml.csv` on the corrected column (`7278` rows, `519` columns,
   `8bacad41...`); the previous build is in `data/backup_pre_m49_games_played/`.
 
+### Fixed
+
+- `away_games_played` / `home_games_played` now carry the record-feature count they are
+  declared as (`constants.RECORD_FEATURE_COLUMNS`): the team's completed games this season,
+  `wins + losses + ties`. The season-to-date stat frame produces a column of the same name
+  holding the row count behind its means, and the records join silently suffixed the record
+  values away, so a prior-season fallback row published the _previous_ season's total: `17` in
+  week 1 (and `8` / `16` for the postponed first games of JAX 2001, JAX 2002 and MIA 2017)
+  beside the `wins = 0, losses = 0, ties = 0` it should have agreed with. The stat-frame copies
+  are dropped before the join, so the record values keep the names.
+
 ## [0.10.0] - 2026-09-17
+
+### Changed
+
+- Bump the project version to `0.10.0` and keep `uv.lock` aligned.
+- Rebuild `data/completed_games_ml.csv` from the nflreadpy cache on the new schema (`519`
+  columns); the previous `525`-column build is in `data/backup_pre_m53_6_drop/`.
 
 ### Removed
 
@@ -660,12 +663,6 @@
   The quarterback-game rows keep `opponent_abbr`, which a defense-adjusted quarterback rate (the
   form the idea takes if revisited; see `.agents/TODO.md` task 53.7) would need. The `qb` group
   is the seven per-dropback stats again.
-
-### Changed
-
-- Bump the project version to `0.10.0` and keep `uv.lock` aligned.
-- Rebuild `data/completed_games_ml.csv` from the nflreadpy cache on the new schema (`519`
-  columns); the previous `525`-column build is in `data/backup_pre_m53_6_drop/`.
 
 ## [0.9.0] - 2026-09-11
 

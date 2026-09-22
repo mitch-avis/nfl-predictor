@@ -130,7 +130,9 @@ remains **90% or higher**, with **100%** as the aspirational ceiling:
 python -m pytest --cov-fail-under=95
 ```
 
-Current validated local baseline as of 2026-09-09: `471 passed` with `90.51%` coverage.
+Current validated local baseline as of 2026-09-22 (version `0.16.2`): `889 passed` with `92.45%`
+coverage. `scripts/gate.sh` is the source of truth for this number; re-run it rather than trusting
+this line as the project grows.
 
 ## Data collection (Polars + nflreadpy)
 
@@ -684,8 +686,8 @@ model metrics and data status; the Jobs pages run the ETL, a lines-only refresh
 training, prediction, walk-forward and the reports as streamed background subprocesses.
 
 ```bash
-.venv/bin/python -m nfl_predictor.api.auth.cli create-user <name> --role admin   # once
-.venv/bin/python -m nfl_predictor.api                                            # http://127.0.0.1:8000
+python -m nfl_predictor.api.auth.cli create-user <name> --role admin   # once
+python -m nfl_predictor.api                                            # http://127.0.0.1:8000
 ```
 
 The frontend needs Node 26 (`source ~/.nvm/nvm.sh`); `cd web && npm ci && npm run build` writes
@@ -739,7 +741,7 @@ CI installs `markdownlint-cli` for the `markdownlint .` step; on a machine that 
 
 GitHub Actions mirrors this gate in `.github/workflows/validation.yml` and also runs the
 editable-install smoke check plus `--help` smoke checks for `nfl_predictor.ml_model`,
-`scripts/weekly_run.py`, and `scripts/power_rankings.py`.
+`scripts/weekly_run.py`, `scripts/power_rankings.py`, and `nfl_predictor.api`.
 
 ## Leakage audit
 

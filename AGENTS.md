@@ -78,7 +78,25 @@ Rules that are always enforced:
   vs `0.2090`, diff `+0.0007` `[-0.0011, +0.0024]`; margin MAE `9.9166` vs `9.9044`, diff
   `+0.0122` `[-0.0566, +0.0801]`. The rebuild moved 836 of 855 scored 2023-2025 rows in at
   least one feature, chiefly in the `sos_*` and `opponent_*` EPA families, so later current-build
-  arms compare against the 54.0 reference, not the earlier `0.12.6` reference arm.
+  arms compare against the 54.0 reference, not the earlier `0.12.6` reference arm. Tasks
+  54.1-54.4 landed as `0.15.0`-`0.15.1` on the same day and branch: the eight situational
+  percentages and the per-team-game box score can now be derived from play-by-play behind
+  `--tr-stats-source pbp` and `--team-stats-source pbp` (both default to the prior source), with
+  `red_zone_tds` fixed to require `td_team == posteam` and the derived `red_zone_td_pct` fixed to
+  divide touchdown drives by red-zone trips (`fixed_drive`) instead of touchdowns by red-zone
+  snaps. The comparison task 54.2 requires
+  (`models/pbp_vs_nflverse_m54_2/COMPARISON.md`) caught a sign error in the derived `total_yards`
+  (nflverse subtracts an already-negative sack-yardage column; the derivation was subtracting a
+  positive one, matching only 14.13% of nflverse team-games before the fix and 96.62% after) and
+  records four open exceptions (`passing_epa`, `fumbles`, `2pt_conversions`, `pass_attempts`) and
+  one derived-rate caveat (`two_point_conversion_pct` does not track the scrape once blended,
+  because rare attempts amplify the `2pt_conversions` under-count). The reviewed three-season
+  arm `models/wf_m54_12_2023_2025_from_week1/` (checkpoints `4e729a9c5751ba978a71`) tied the
+  54.0 reference above on weeks 3-18: deterministic Brier `0.2096` vs `0.2097`, diff `-0.0001`
+  `[-0.0017, +0.0016]`; margin MAE `9.9090` vs `9.9166`, diff `-0.0075` `[-0.0760, +0.0611]`.
+  Neither flag is the default; flipping either is a must-ask decision, argued for by play-by-play
+  filling `1026` of `1029` completed games of 1999-2002 that the TeamRankings scrape (which
+  starts in 2003) leaves null.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that

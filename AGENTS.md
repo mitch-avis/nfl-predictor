@@ -94,9 +94,29 @@ Rules that are always enforced:
   arm `models/wf_m54_12_2023_2025_from_week1/` (checkpoints `4e729a9c5751ba978a71`) tied the
   54.0 reference above on weeks 3-18: deterministic Brier `0.2096` vs `0.2097`, diff `-0.0001`
   `[-0.0017, +0.0016]`; margin MAE `9.9090` vs `9.9166`, diff `-0.0075` `[-0.0760, +0.0611]`.
-  Neither flag is the default; flipping either is a must-ask decision, argued for by play-by-play
-  filling `1026` of `1029` completed games of 1999-2002 that the TeamRankings scrape (which
-  starts in 2003) leaves null.
+  Neither flag was the default at that point; the user then reviewed the four exceptions and
+  approved fixing each and flipping both flags once verified. All four landed as `0.16.0` on the
+  same branch: `passing_epa` sums `qb_epa` (nflverse's own quarterback-attribution EPA column)
+  instead of `epa`, matching nflverse on `99.33%` of the full 1999-2025 rebuild (up from
+  `69.54%`); `pass_attempts`/`pass_completions`/`pass_yards`/`pass_touchdowns`/
+  `interceptions_thrown`/`rush_attempts`/`rush_yards`/`rush_touchdowns` use nflverse's own
+  `pass_attempt`/`rush_attempt` raw flags instead of `play_type` (worst case `pass_attempts`
+  `86.70%` to `99.87%`); `rushing_epa` now includes two-point tries (`95.54%` to `99.87%`);
+  `fumbles`/`fumbles_lost` exclude special-teams plays (`73.63%`/`90.35%` to `91.95%`/`98.37%`,
+  a residual gap on aborted-snap fumbles documented as not further fixable from play-by-play).
+  `2pt_conversions` (`94.80%`) was investigated and left unchanged: the residual traces to
+  nflverse's own team-stats table disagreeing with its own play-by-play on rare plays. Both
+  flags are now the default, including the production fast path `scripts/weekly_run.py` uses
+  when it calls `data_collection.main()` with no arguments; `nflverse`/`scrape` remain
+  selectable explicitly. A full ETL rebuild followed (`0.16.1`, `--refresh-nflreadpy` for the
+  two new raw columns), which incidentally closed the JAX 1999-2002 coverage gap that task
+  54.0's schedule-skeleton repair was built for: play-by-play has both sides of every JAX game,
+  so the now-default overlay fills those rows before the coverage check runs, and the ETL logs
+  `0` repair warnings on this rebuild (down from `16`). The reviewed verification arm
+  `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints `9779c1cbb0701d23661a`) tied the 54.0
+  pre-flip reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
+  `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.
+  Milestone 54 is closed.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that

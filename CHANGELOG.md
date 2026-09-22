@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.16.1] - 2026-09-21
+
+### Changed
+
+- Rebuild the production dataset from a refreshed play-by-play cache
+  (`--refresh-nflreadpy`, needed for the new `pass_attempt`/`rush_attempt` raw columns) on the
+  `0.16.0` code: `data/completed_games_ml.csv` is now `edd6b852...` (`7292` completed rows,
+  `513` columns), with the prior build backed up to `data/backup_pre_m54_flip/` (top-level CSVs)
+  and `data/cache/nflreadpy/backup_pre_m54_flip/` (the pre-refresh play-by-play cache). The
+  through-2025 cut is `data/completed_games_ml.m54_flip_through_2025.csv` (`2d4111a6...`).
+  Leakage audit `models/audit_m54_flip_rebuild/leakage_audit.json` passed (`463` features, `0`
+  flags, same shape as every prior 54.x build).
+- Re-verified the four corrected box-score columns against the full rebuild: `passing_epa`
+  matches nflverse on `99.33%` of the `13912` overlapping 1999-2025 team-games (up from
+  `69.54%` before `0.16.0`), `pass_attempts` on `99.87%` (from `86.70%`), `rushing_epa` on
+  `99.87%` (from `95.54%`), and `fumbles`/`fumbles_lost` on `91.95%`/`98.37%` (from
+  `73.63%`/`90.35%`); seventeen of twenty-one derivable columns now match on `98%` or more.
+  `models/pbp_vs_nflverse_m54_2/COMPARISON.md` carries the full table.
+
+### Fixed
+
+- The full rebuild incidentally closed the 1999-2002 Jacksonville team-stats coverage gap that
+  task 54.0's schedule skeleton and box-score repair were built around: because play-by-play has
+  both sides of every JAX game even where nflverse's team-stats table does not, the now-default
+  `pbp` box-score overlay fills those rows before the schedule-skeleton coverage check runs, so
+  the ETL logs `0` repair warnings on this rebuild instead of the `16` the 54.0 rebuild logged
+  (verified: `strength_games_played` for JAX still reads `16.0` at both 2001 and 2002 season
+  end). The schedule-skeleton and repair code remain in place as a safety net for the
+  `nflverse`/`scrape` source configuration, which a caller can still select explicitly.
+
+### Reviewed
+
+- The default-flip walk-forward arm `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints
+  `models/wf_checkpoints/9779c1cbb0701d23661a/`, reviewed in its `REVIEW.md`) ties the
+  pre-flip reference `models/wf_m54_0_2023_2025_from_week1/` on the governing weeks 3-18
+  window: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009` `[-0.0008, +0.0026]`; margin
+  MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`. A no-breakage tie by the
+  written rule.
+
 ## [0.16.0] - 2026-09-21
 
 ### Changed

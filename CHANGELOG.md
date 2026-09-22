@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.16.2] - 2026-09-21
+
+### Added
+
+- Confirm that the `2pt_conversions` disagreement with nflverse recorded in `0.16.0`
+  (`models/pbp_vs_nflverse_m54_2/COMPARISON.md`) is a systematic nflverse team-stats bug, not a
+  play-by-play derivation defect, so no code change was needed. The user manually verified one
+  mismatch against the actual game (2024 week 17, Green Bay at Minnesota: exactly one two-point
+  conversion happened that game, matching the play-by-play row exactly, while nflverse's
+  team-stats table reports two) and asked for the rest to be checked.
+  `models/pbp_vs_nflverse_m54_2/verify_2pt_doubling.py` finds that across seven sampled seasons
+  (`2010`, `2015`, `2020`, `2022`, `2023`, `2024`, `2025`; `3710` team-games), `246` team-games
+  disagree, and `234` of those (`95.1%`) show nflverse's count at exactly double the play-by-play
+  count; zero mismatches go the other way. `COMPARISON.md` is updated accordingly, and the
+  `two_point_conversion_pct` rate's disagreement with the TeamRankings scrape is now described as
+  unresolved rather than as a pbp-side limitation, since the scrape is a different, unverified
+  third-party source.
+
 ## [0.16.1] - 2026-09-21
 
 ### Changed

@@ -104,15 +104,22 @@ Rules that are always enforced:
   `86.70%` to `99.87%`); `rushing_epa` now includes two-point tries (`95.54%` to `99.87%`);
   `fumbles`/`fumbles_lost` exclude special-teams plays (`73.63%`/`90.35%` to `91.95%`/`98.37%`,
   a residual gap on aborted-snap fumbles documented as not further fixable from play-by-play).
-  `2pt_conversions` (`94.80%`) was investigated and left unchanged: the residual traces to
-  nflverse's own team-stats table disagreeing with its own play-by-play on rare plays. Both
-  flags are now the default, including the production fast path `scripts/weekly_run.py` uses
-  when it calls `data_collection.main()` with no arguments; `nflverse`/`scrape` remain
-  selectable explicitly. A full ETL rebuild followed (`0.16.1`, `--refresh-nflreadpy` for the
-  two new raw columns), which incidentally closed the JAX 1999-2002 coverage gap that task
-  54.0's schedule-skeleton repair was built for: play-by-play has both sides of every JAX game,
-  so the now-default overlay fills those rows before the coverage check runs, and the ETL logs
-  `0` repair warnings on this rebuild (down from `16`). The reviewed verification arm
+  `2pt_conversions` (`94.80%`) needed no code change: the user manually verified one mismatch
+  against the actual game (2024 week 17, Green Bay at Minnesota — exactly one two-point
+  conversion happened, matching play-by-play) and asked for the rest to be checked, which found
+  a confirmed, systematic nflverse team-stats bug: of `246` mismatches across seven sampled
+  seasons (`3710` team-games), `234` (`95.1%`) show nflverse's count at exactly double the
+  play-by-play count, and zero mismatches go the other way
+  (`models/pbp_vs_nflverse_m54_2/verify_2pt_doubling.py`). The play-by-play value is correct
+  wherever it disagrees with nflverse. Both flags are now the default, including the production
+  fast path `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no
+  arguments; `nflverse`/`scrape` remain selectable explicitly. A full ETL rebuild followed
+  (`0.16.1`, `--refresh-nflreadpy` for the two new raw columns), which closed the JAX 1999-2002
+  coverage gap that task 54.0's schedule-skeleton repair was built for, as anticipated when
+  Milestone 54 was widened on 2026-09-18 specifically because play-by-play has both sides of
+  every JAX game where nflverse's team-stats table does not: the now-default overlay fills those
+  rows before the coverage check runs, and the ETL logs `0` repair warnings on this rebuild (down
+  from `16`). The reviewed verification arm
   `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints `9779c1cbb0701d23661a`) tied the 54.0
   pre-flip reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
   `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.

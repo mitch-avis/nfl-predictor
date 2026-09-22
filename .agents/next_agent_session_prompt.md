@@ -83,20 +83,28 @@ must-ask list means stop and wait.
     offense-only fumble stat: `73.63%`/`90.35%` to `91.95%`/`98.37%`. A residual gap on
     aborted-snap fumbles is documented, not further fixable from play-by-play (nflverse's own
     player-level fumble categories don't cleanly attribute those either).
-  - **`2pt_conversions`** was investigated and left unchanged (`94.80%`); the residual traces to
-    nflverse's own team-stats table disagreeing with its own play-by-play on rare plays, which
-    is not fixable from this side. Its derived `two_point_conversion_pct` also does not track
-    the scrape well once blended (rare attempts amplify a small under-count).
+  - **`2pt_conversions`** needed no code change (`94.80%` match): the derivation was already
+    correct. The user manually verified one mismatch against the actual game (2024 week 17,
+    Green Bay at Minnesota: exactly one two-point conversion happened, matching play-by-play
+    exactly) and asked for the rest to be checked, which confirmed a systematic nflverse
+    team-stats bug: `models/pbp_vs_nflverse_m54_2/verify_2pt_doubling.py` finds that of `246`
+    mismatches across seven sampled seasons (`3710` team-games), `234` (`95.1%`) show nflverse's
+    count at exactly double the play-by-play count, and zero mismatches go the other way. The
+    play-by-play value is correct wherever it disagrees with nflverse. Its derived
+    `two_point_conversion_pct` still does not track the TeamRankings scrape well once blended,
+    but that comparison is against a different, unverified third-party source, not nflverse, so
+    it does not by itself say which side is closer to the truth for the rate.
   - Full numbers and every formula: `models/pbp_vs_nflverse_m54_2/COMPARISON.md`.
   - **Both flags are now the default** (`0.16.0`), including the production fast path
     `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no arguments (a
     separate hardcoded default the CLI argparse default alone would not have changed).
     `nflverse`/`scrape` remain selectable explicitly.
   - **The full ETL rebuild that followed** (`0.16.1`, `--refresh-nflreadpy` for the two new raw
-    columns) incidentally closed the 1999-2002 Jacksonville team-stats coverage gap that task
-    54.0's schedule-skeleton repair was built around: play-by-play has both sides of every JAX
-    game even where nflverse's team-stats table does not, so the now-default overlay fills those
-    rows before the coverage check runs. The ETL logs `0` repair warnings on this rebuild (down
+    columns) closed the 1999-2002 Jacksonville team-stats coverage gap that task 54.0's
+    schedule-skeleton repair was built around, as anticipated when Milestone 54 was widened on
+    2026-09-18 specifically because play-by-play has both sides of every JAX game where
+    nflverse's team-stats table does not: the now-default overlay fills those rows before the
+    coverage check runs. The ETL logs `0` repair warnings on this rebuild (down
     from `16` on the 54.0 rebuild) and `7` coverage-gap warnings, all pre-existing single-game
     gaps unrelated to JAX. `strength_games_played` for JAX still reads `16.0` at both 2001 and
     2002 season end. The schedule-skeleton and repair code remain in place as a safety net for

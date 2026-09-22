@@ -71,9 +71,11 @@ Agents and humans should not rely on the shell activation state.
       use nflverse's own `pass_attempt`/`rush_attempt` flags (worst case `pass_attempts` `86.70%`
       to `99.87%`); `rushing_epa` now includes two-point tries (`95.54%` to `99.87%`);
       `fumbles`/`fumbles_lost` now exclude special-teams plays (`73.63%`/`90.35%` to
-      `91.95%`/`98.37%`). `2pt_conversions` (`94.80%`) was investigated and left unchanged: its
-      residual disagreement traces to nflverse's own team-stats table disagreeing with its own
-      play-by-play on rare plays. Full numbers: `models/pbp_vs_nflverse_m54_2/COMPARISON.md`.
+      `91.95%`/`98.37%`). `2pt_conversions` (`94.80%`) needed no code change: the user manually
+      verified a mismatch against the actual game and asked for the rest to be checked, which
+      confirmed a systematic nflverse team-stats bug (roughly doubles the true count on the
+      games it gets wrong, `95.1%` of `246` mismatches across seven sampled seasons) rather than
+      a play-by-play defect. Full numbers: `models/pbp_vs_nflverse_m54_2/COMPARISON.md`.
 - Both source flags are now the default (`0.16.0`), including the production fast path
       `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no arguments;
       `nflverse`/`scrape` remain selectable explicitly.

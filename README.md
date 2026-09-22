@@ -205,10 +205,12 @@ EPA attribution) rather than `epa`, and the box-score counts and yardage use nfl
 nflverse team stats at 99%+ agreement on the columns they touch
 (`models/pbp_vs_nflverse_m54_2/COMPARISON.md`). `fumbles`/`fumbles_lost` exclude special-teams
 plays to match nflverse's offense-only fumble stat, with a residual gap on aborted-snap fumbles;
-`2pt_conversions` is the one derivable column that still disagrees with nflverse on a meaningful
-share of team-games, traced to nflverse's own team-stats table disagreeing with its own
-play-by-play on rare plays rather than to a derivation defect. Both flags change feature values
-at ETL time, so compare them with two dataset builds rather than with `--disable-feature-groups`.
+`2pt_conversions` still disagrees with nflverse on a meaningful share of team-games, but this is
+not a derivation defect: nflverse's own team-stats table has a confirmed, systematic bug that
+roughly doubles the count of successful two-point conversions on the games it gets wrong (see
+`models/pbp_vs_nflverse_m54_2/COMPARISON.md`), so the play-by-play value is the correct one where
+they differ. Both flags change feature values at ETL time, so compare them with two dataset
+builds rather than with `--disable-feature-groups`.
 
 Early-season handling: Week 1 has no in-season games, so every season-to-date team stat (the
 nflreadpy families and the play-by-play counts) falls back to the previous regular season regressed

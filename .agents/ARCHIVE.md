@@ -149,16 +149,22 @@ decision performance-based and still read the run as a tie.
 - Source comparison (task 54.2): `models/pbp_vs_nflverse_m54_2/COMPARISON.md`. Over the `13912`
   team-games of `1999-2025` where both sources exist, seventeen of twenty-one derivable columns
   agree on `94%` or more with a median difference of zero after the `total_yards` fix (it went
-  from `14.13%` to `96.62%`). Four columns are recorded as open exceptions:
+  from `14.13%` to `96.62%`). Four columns were recorded as open exceptions at this point:
   `passing_epa` (`69.54%`, no simple definition variant closes it), `fumbles` (`73.63%`, the
-  nflverse flag does not attribute which team fumbled), `2pt_conversions` (`94.80%`, under-
-  counted) and `pass_attempts` (`86.70%`, play-type edge cases).
+  nflverse flag does not attribute which team fumbled), `2pt_conversions` (`94.80%`, disagreeing
+  with nflverse's own team-stats table) and `pass_attempts` (`86.70%`, play-type edge cases).
+  `passing_epa`, `fumbles` and `pass_attempts` were fixed the same day; `2pt_conversions` was
+  found not to need a fix (a confirmed nflverse team-stats bug, not a play-by-play defect) — see
+  the "Default flip to `pbp`" subsection below for both.
 - Sanity comparison (task 54.4): the same file's second section compares the published,
   season-to-date, prior-blended situational columns for `4363` completed games of `2010-2025`.
   `third_down_pct` agrees closely (median diff `~1.3`); `fourth_down_pct` and `red_zone_td_pct`
-  track within a few points in aggregate; `two_point_conversion_pct` does not track well
-  (pbp mean `~47%` against scrape `~32%`), because rare two-point attempts amplify the
-  `2pt_conversions` under-count into a large rate swing once blended over a season.
+  track within a few points in aggregate; `two_point_conversion_pct` does not track the scrape
+  well (pbp mean `~47%` against scrape `~32%`), because rare two-point attempts amplify a
+  per-game count difference into a large rate swing once blended over a season. Given the
+  `2pt_conversions` finding below, this does not establish which side is closer to the truth for
+  the rate; it only shows the pbp-derived count itself is correct where it disagrees with
+  nflverse's team-stats table.
 
 ### Walk-forward (54.1-54.4)
 
@@ -210,14 +216,21 @@ verified. All four were fixed:
   documented rather than chased further; nflverse's own player-level fumble categories
   (`load_player_stats`'s `sack_fumbles`+`rushing_fumbles`+`receiving_fumbles`) do not cleanly
   attribute those either.
-- `2pt_conversions` was investigated but left unchanged (`94.80%` on the earlier partial rebuild,
-  `94.35%` on a four-season sample, `94.80%` again on the final full rebuild: the match rate is
-  stable across builds). Tracing individual mismatches (for example Green Bay's week 17 2024
-  game against Minnesota) found nflverse's own team-stats table disagreeing with its own
-  play-by-play on rare plays, which is not fixable from the play-by-play side. Its derived
-  `two_point_conversion_pct` also does not track the scrape well once blended (pbp mean `~47%`
-  against scrape `~32%` over 2010-2025), because rare attempts amplify the small
-  `2pt_conversions` under-count.
+- `2pt_conversions` needed no code change: the match rate (`94.80%` on the earlier partial
+  rebuild, `94.35%` on a four-season sample, `94.80%` again on the final full rebuild) was left
+  where it stood because the derivation was already correct. The user manually verified one
+  mismatch against the actual game (2024 week 17, Green Bay at Minnesota: exactly one two-point
+  conversion happened, matching play-by-play exactly) and asked for the rest to be checked. That
+  investigation, `models/pbp_vs_nflverse_m54_2/verify_2pt_doubling.py`, found a confirmed,
+  systematic nflverse team-stats bug across seven sampled seasons (`2010`, `2015`, `2020`,
+  `2022`, `2023`, `2024`, `2025`; `3710` team-games): of `246` mismatches, `234` (`95.1%`) show
+  nflverse's count at exactly double the play-by-play count, and zero mismatches go the other
+  way (nflverse reporting a nonzero count where play-by-play has none). The play-by-play value is
+  the correct one wherever it disagrees with nflverse. Its derived `two_point_conversion_pct`
+  still does not track the TeamRankings scrape well once blended (pbp mean `~47%` against scrape
+  `~32%` over 2010-2025), but with the doubling bug confirmed on the nflverse side, this
+  comparison against a different, unverified third-party source (TeamRankings, not nflverse) no
+  longer says which side is closer to the truth for the rate.
 
 Full numbers, formulas and the trace of each residual disagreement:
 `models/pbp_vs_nflverse_m54_2/COMPARISON.md`.
@@ -234,12 +247,13 @@ new raw play-by-play columns (`pass_attempt`, `rush_attempt`); the previous top-
 backed up in `data/backup_pre_m54_flip/` and the pre-refresh play-by-play cache in
 `data/cache/nflreadpy/backup_pre_m54_flip/`. Leakage audit
 `models/audit_m54_flip_rebuild/leakage_audit.json` passed (`463` features, `0` flags, same shape
-as every prior 54.x build). The rebuild incidentally closed the 1999-2002 Jacksonville
-team-stats coverage gap that task 54.0's schedule skeleton and box-score repair were built
-around: play-by-play has both sides of every JAX game even where nflverse's team-stats table
-does not, so the now-default `pbp` overlay fills those rows before the schedule-skeleton
-coverage check runs. The ETL logged `0` repair warnings on this rebuild (down from `16` on the
-54.0 rebuild) and `7` coverage-gap warnings, all pre-existing single-game gaps unrelated to JAX
+as every prior 54.x build). The rebuild closed the 1999-2002 Jacksonville team-stats coverage
+gap that task 54.0's schedule skeleton and box-score repair were built around, as anticipated
+when Milestone 54 was widened on 2026-09-18 specifically because play-by-play has both sides of
+every JAX game where nflverse's team-stats table does not: the now-default `pbp` overlay fills
+those rows before the schedule-skeleton coverage check runs. The ETL logged `0` repair warnings
+on this rebuild (down from `16` on the 54.0 rebuild) and `7` coverage-gap warnings, all
+pre-existing single-game gaps unrelated to JAX
 (`1999` null team, `1999` BAL/LAR, `2000` BUF/KC/LAC/MIA); `strength_games_played` for JAX still
 reads `16.0` at both 2001 and 2002 season end, confirming the acceptance criterion still holds.
 The schedule-skeleton and repair code remain in place as a safety net for the `nflverse`/

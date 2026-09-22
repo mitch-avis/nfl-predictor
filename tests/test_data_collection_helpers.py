@@ -118,6 +118,21 @@ def test_parse_args_reads_the_stat_prior_blend_switches(monkeypatch: pytest.Monk
     assert ablated.blend_stat_prior is False
 
 
+def test_parse_args_reads_the_team_and_tr_source_switches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ETL exposes explicit source switches for box-score and situational stat families."""
+    monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
+
+    default_config = data_collection._parse_args([])
+    assert default_config.team_stats_source == "nflverse"
+    assert default_config.tr_stats_source == "scrape"
+
+    chosen = data_collection._parse_args(["--team-stats-source", "pbp", "--tr-stats-source", "pbp"])
+    assert chosen.team_stats_source == "pbp"
+    assert chosen.tr_stats_source == "pbp"
+
+
 def test_parse_args_rejects_a_non_positive_stat_prior_blend_games() -> None:
     """A zero or negative K would divide by zero for a team with no games, so it is refused."""
     with pytest.raises(SystemExit):
@@ -1047,6 +1062,103 @@ def test_join_pbp_team_game_stats_never_multiplies_rows() -> None:
 
     assert out.height == 2, "the join must not multiply team-stat rows"
     assert out.filter(pl.col("team_abbr") == "AAA")["offensive_snaps"][0] == 64
+
+
+def test_overlay_pbp_team_box_scores_prefers_pbp_and_keeps_nflverse_fallbacks() -> None:
+    """The PBP team-stat source overrides derivable columns but keeps nflverse-only values."""
+    team_stats = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "season_type": ["REG"],
+            "team_abbr": ["AAA"],
+            "opponent_abbr": ["BBB"],
+            "pass_yards": [250.0],
+            "penalties": [7.0],
+            "def_qb_hits": [4.0],
+        }
+    )
+    pbp_box = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "season_type": ["REG"],
+            "team_abbr": ["AAA"],
+            "opponent_abbr": ["BBB"],
+            "pass_yards": [240.0],
+            "penalties": [None],
+        }
+    )
+
+    out = data_collection._overlay_pbp_team_box_scores(team_stats, pbp_box)
+    row = out.row(0, named=True)
+
+    assert row["pass_yards"] == pytest.approx(240.0)
+    assert row["penalties"] == pytest.approx(7.0)
+    assert row["def_qb_hits"] == pytest.approx(4.0)
+
+
+def test_overlay_pbp_team_box_scores_keeps_pbp_only_rows() -> None:
+    """A team-game found only in play-by-play survives the overlay for later skeleton joins."""
+    team_stats = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "season_type": ["REG"],
+            "team_abbr": ["AAA"],
+            "opponent_abbr": ["BBB"],
+            "pass_yards": [250.0],
+        }
+    )
+    pbp_box = pl.DataFrame(
+        {
+            "season": [2023, 2023],
+            "week": [1, 1],
+            "season_type": ["REG", "REG"],
+            "team_abbr": ["AAA", "BBB"],
+            "opponent_abbr": ["BBB", "AAA"],
+            "pass_yards": [240.0, 180.0],
+        }
+    )
+
+    out = data_collection._overlay_pbp_team_box_scores(team_stats, pbp_box)
+
+    assert out.height == 2
+    assert out.filter(pl.col("team_abbr") == "BBB")["pass_yards"][0] == pytest.approx(180.0)
+
+
+def test_merge_team_rankings_skips_scraped_situational_columns_when_pbp_is_selected() -> None:
+    """The pbp situational source still joins ratings but leaves existing values alone."""
+    merged = pl.DataFrame(
+        {
+            "away_abbr": ["AAA"],
+            "home_abbr": ["BBB"],
+            "away_third_down_pct": [0.40],
+            "home_third_down_pct": [0.55],
+        }
+    )
+    tr_df = pl.DataFrame(
+        {
+            "team_abbr": ["AAA", "BBB"],
+            "week": [2, 2],
+            "predictive_rating": [1.2, 2.4],
+            "third_down_pct": [0.10, 0.20],
+        }
+    )
+
+    out = data_collection._merge_team_rankings(
+        merged,
+        season=2024,
+        week=2,
+        tr_df=tr_df,
+        prev_tr_df=None,
+        tr_stats_source="pbp",
+    )
+
+    assert out["away_predictive_rating"][0] == pytest.approx(1.2)
+    assert out["home_predictive_rating"][0] == pytest.approx(2.4)
+    assert out["away_third_down_pct"][0] == pytest.approx(0.40)
+    assert out["home_third_down_pct"][0] == pytest.approx(0.55)
 
 
 def test_build_team_game_frame_recovers_a_team_game_the_stats_source_misses() -> None:

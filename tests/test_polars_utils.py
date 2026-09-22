@@ -324,3 +324,82 @@ def test_pbp_derived_rates_are_null_when_source_counts_are_missing() -> None:
     for stat in constants.PBP_STATS:
         assert stat in out.columns, f"{stat} missing from the invariant schema"
         assert row[stat] is None
+
+
+def test_pbp_situational_rates_are_derived_from_counts() -> None:
+    """The situational percentages are ratios of the carried season-to-date counts.
+
+    They are emitted on the 0-100 scale so they match the scraped columns of the same
+    name, and the red-zone rate divides touchdown drives by red-zone trips rather than
+    touchdowns by red-zone snaps.
+    """
+    agg = pl.DataFrame(
+        {
+            "team_abbr": ["AAA"],
+            "third_down_conversions": [7.0],
+            "third_down_attempts": [14.0],
+            "third_down_conversions_allowed": [5.0],
+            "third_down_attempts_allowed": [11.0],
+            "fourth_down_conversions": [2.0],
+            "fourth_down_attempts": [5.0],
+            "fourth_down_conversions_allowed": [1.0],
+            "fourth_down_attempts_allowed": [4.0],
+            "red_zone_td_drives": [4.0],
+            "red_zone_trips": [8.0],
+            "red_zone_td_drives_allowed": [3.0],
+            "red_zone_trips_allowed": [6.0],
+            "two_point_successes": [1.0],
+            "two_point_attempts": [3.0],
+            "two_point_successes_allowed": [2.0],
+            "two_point_attempts_allowed": [5.0],
+        }
+    )
+
+    out = teamrankings._compute_derived_metrics(agg)
+    row = out.row(0, named=True)
+
+    assert row["third_down_pct"] == pytest.approx(100.0 * 7.0 / 14.0)
+    assert row["opponent_third_down_pct"] == pytest.approx(100.0 * 5.0 / 11.0)
+    assert row["fourth_down_pct"] == pytest.approx(100.0 * 2.0 / 5.0)
+    assert row["opponent_fourth_down_pct"] == pytest.approx(100.0 * 1.0 / 4.0)
+    assert row["red_zone_td_pct"] == pytest.approx(100.0 * 4.0 / 8.0)
+    assert row["opponent_red_zone_td_pct"] == pytest.approx(100.0 * 3.0 / 6.0)
+    assert row["two_point_conversion_pct"] == pytest.approx(100.0 * 1.0 / 3.0)
+    assert row["opponent_two_point_conversion_pct"] == pytest.approx(100.0 * 2.0 / 5.0)
+
+
+def test_pbp_situational_rates_are_null_on_zero_denominators() -> None:
+    """A zero attempt count leaves each situational rate null rather than forcing zero."""
+    agg = pl.DataFrame(
+        {
+            "team_abbr": ["AAA"],
+            "third_down_conversions": [0.0],
+            "third_down_attempts": [0.0],
+            "third_down_conversions_allowed": [0.0],
+            "third_down_attempts_allowed": [0.0],
+            "fourth_down_conversions": [0.0],
+            "fourth_down_attempts": [0.0],
+            "fourth_down_conversions_allowed": [0.0],
+            "fourth_down_attempts_allowed": [0.0],
+            "red_zone_td_drives": [0.0],
+            "red_zone_trips": [0.0],
+            "red_zone_td_drives_allowed": [0.0],
+            "red_zone_trips_allowed": [0.0],
+            "two_point_successes": [0.0],
+            "two_point_attempts": [0.0],
+            "two_point_successes_allowed": [0.0],
+            "two_point_attempts_allowed": [0.0],
+        }
+    )
+
+    out = teamrankings._compute_derived_metrics(agg)
+    row = out.row(0, named=True)
+
+    assert row["third_down_pct"] is None
+    assert row["opponent_third_down_pct"] is None
+    assert row["fourth_down_pct"] is None
+    assert row["opponent_fourth_down_pct"] is None
+    assert row["red_zone_td_pct"] is None
+    assert row["opponent_red_zone_td_pct"] is None
+    assert row["two_point_conversion_pct"] is None
+    assert row["opponent_two_point_conversion_pct"] is None

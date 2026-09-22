@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.15.0] - 2026-09-21
+
+### Added
+
+- Derive the eight situational percentages (third down, fourth down, red zone and two-point,
+  for and allowed) from the play-by-play counts, behind `--tr-stats-source pbp`. The scraped
+  TeamRankings columns remain the default, and TeamRankings still supplies its ratings either
+  way.
+- Aggregate per-team-game box-score stats from play-by-play behind `--team-stats-source pbp`,
+  overlaid on the nflverse rows so nflverse still fills what play-by-play cannot derive.
+- Count red-zone trips and touchdown drives per team-game (`red_zone_trips`,
+  `red_zone_td_drives` and their `_allowed` mirrors) from `fixed_drive` and
+  `fixed_drive_result`.
+- Carry the raw play-by-play columns the new families need: `fumble`, `penalty`,
+  `penalty_team`, `penalty_yards`, `first_down_pass` and `first_down_rush`.
+
+### Fixed
+
+- `red_zone_tds` now counts only touchdowns scored by the team in possession. It previously
+  counted any touchdown on a red-zone play, so a defensive score credited the offense.
+- The play-by-play `red_zone_td_pct` divides touchdown drives by red-zone trips rather than
+  touchdowns by red-zone snaps. The snap denominator measured a different statistic under the
+  scraped column's name: on 2023-2025 it read `0.187` where the scrape reads `56.0`, and the
+  trip denominator puts 2024 at `60.4%` against `19.1%` per snap.
+- The eight play-by-play situational percentages are emitted on the scraped columns' 0-100
+  scale instead of 0-1, so switching `--tr-stats-source` no longer changes what the column
+  means by a factor of 100. `third_down_pct` and `fourth_down_pct` now agree with the scrape
+  (`39.33` against `39.07`, `54.25` against `53.79` over 2023-2025).
+- `load_pbp` normalizes `td_team` and `penalty_team` to canonical abbreviations alongside the
+  other team columns, so legacy aliases no longer invent team-game rows the schedule has no
+  place for.
+- Build the play-by-play box-score frame by joining only the perspectives that produced rows,
+  instead of seeding the result from one of them and joining that same frame again.
+
 ## [0.14.0] - 2026-09-21
 
 ### Changed

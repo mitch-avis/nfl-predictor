@@ -639,6 +639,8 @@ def test_load_pbp_normalizes_team_aliases(monkeypatch, tmp_path: Path) -> None:
                 "defteam": ["SD"],
                 "home_team": ["STL"],
                 "away_team": ["OAK"],
+                "td_team": ["STL"],
+                "penalty_team": ["SD"],
             }
         )
 
@@ -650,6 +652,8 @@ def test_load_pbp_normalizes_team_aliases(monkeypatch, tmp_path: Path) -> None:
     assert df["defteam"][0] == constants.ALIAS_TO_CANONICAL["SD"]
     assert df["home_team"][0] == constants.ALIAS_TO_CANONICAL["STL"]
     assert df["away_team"][0] == constants.ALIAS_TO_CANONICAL["OAK"]
+    assert df["td_team"][0] == constants.ALIAS_TO_CANONICAL["STL"]
+    assert df["penalty_team"][0] == constants.ALIAS_TO_CANONICAL["SD"]
 
 
 def test_load_pbp_regular_season_filter(monkeypatch, tmp_path: Path) -> None:

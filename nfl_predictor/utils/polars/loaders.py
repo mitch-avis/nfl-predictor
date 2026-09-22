@@ -48,6 +48,7 @@ _PBP_STRING_COLUMNS = frozenset(
         "season_type",
         "two_point_conv_result",
         "td_team",
+        "penalty_team",
         "fixed_drive_result",
         "drive_start_yard_line",
         "passer_player_id",
@@ -960,7 +961,7 @@ def _prepare_pbp(season_df: pl.DataFrame, *, regular_season_only: bool) -> pl.Da
     if regular_season_only and "season_type" in prepared.columns:
         prepared = prepared.filter(pl.col("season_type") == "REG")
 
-    for col in ("posteam", "defteam", "home_team", "away_team"):
+    for col in ("posteam", "defteam", "home_team", "away_team", "td_team", "penalty_team"):
         if col in prepared.columns:
             prepared = normalize_team_column(prepared, col)
 

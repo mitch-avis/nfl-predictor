@@ -353,13 +353,27 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "third_down_conversions": 1,
         "third_down_fails": 0,
         "third_down_attempts": 1,
+        "third_down_conversions_allowed": 0,
+        "third_down_fails_allowed": 0,
+        "third_down_attempts_allowed": 0,
         "fourth_down_conversions": 0,
         "fourth_down_fails": 1,
         "fourth_down_attempts": 1,
+        "fourth_down_conversions_allowed": 0,
+        "fourth_down_fails_allowed": 0,
+        "fourth_down_attempts_allowed": 0,
         "red_zone_plays": 1,
         "red_zone_tds": 1,
+        "red_zone_plays_allowed": 0,
+        "red_zone_tds_allowed": 0,
+        "red_zone_trips": 0,
+        "red_zone_td_drives": 0,
+        "red_zone_trips_allowed": 0,
+        "red_zone_td_drives_allowed": 0,
         "two_point_attempts": 0,
         "two_point_successes": 0,
+        "two_point_attempts_allowed": 0,
+        "two_point_successes_allowed": 0,
         "total_plays": 5,
     },
     "BUF": {
@@ -396,13 +410,27 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "third_down_conversions": 0,
         "third_down_fails": 0,
         "third_down_attempts": 0,
+        "third_down_conversions_allowed": 1,
+        "third_down_fails_allowed": 0,
+        "third_down_attempts_allowed": 1,
         "fourth_down_conversions": 0,
         "fourth_down_fails": 0,
         "fourth_down_attempts": 0,
+        "fourth_down_conversions_allowed": 0,
+        "fourth_down_fails_allowed": 1,
+        "fourth_down_attempts_allowed": 1,
         "red_zone_plays": 0,
         "red_zone_tds": 0,
+        "red_zone_plays_allowed": 1,
+        "red_zone_tds_allowed": 1,
+        "red_zone_trips": 0,
+        "red_zone_td_drives": 0,
+        "red_zone_trips_allowed": 0,
+        "red_zone_td_drives_allowed": 0,
         "two_point_attempts": 0,
         "two_point_successes": 0,
+        "two_point_attempts_allowed": 0,
+        "two_point_successes_allowed": 0,
         "total_plays": 4,
     },
     "SF": {
@@ -439,13 +467,27 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "third_down_conversions": 1,
         "third_down_fails": 0,
         "third_down_attempts": 1,
+        "third_down_conversions_allowed": 0,
+        "third_down_fails_allowed": 0,
+        "third_down_attempts_allowed": 0,
         "fourth_down_conversions": 0,
         "fourth_down_fails": 0,
         "fourth_down_attempts": 0,
+        "fourth_down_conversions_allowed": 0,
+        "fourth_down_fails_allowed": 0,
+        "fourth_down_attempts_allowed": 0,
         "red_zone_plays": 2,
         "red_zone_tds": 0,
+        "red_zone_plays_allowed": 0,
+        "red_zone_tds_allowed": 0,
+        "red_zone_trips": 0,
+        "red_zone_td_drives": 0,
+        "red_zone_trips_allowed": 0,
+        "red_zone_td_drives_allowed": 0,
         "two_point_attempts": 1,
         "two_point_successes": 1,
+        "two_point_attempts_allowed": 0,
+        "two_point_successes_allowed": 0,
         "total_plays": 3,
     },
     "DAL": {
@@ -482,13 +524,27 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "third_down_conversions": 0,
         "third_down_fails": 0,
         "third_down_attempts": 0,
+        "third_down_conversions_allowed": 1,
+        "third_down_fails_allowed": 0,
+        "third_down_attempts_allowed": 1,
         "fourth_down_conversions": 0,
         "fourth_down_fails": 0,
         "fourth_down_attempts": 0,
+        "fourth_down_conversions_allowed": 0,
+        "fourth_down_fails_allowed": 0,
+        "fourth_down_attempts_allowed": 0,
         "red_zone_plays": 0,
         "red_zone_tds": 0,
+        "red_zone_plays_allowed": 2,
+        "red_zone_tds_allowed": 0,
+        "red_zone_trips": 0,
+        "red_zone_td_drives": 0,
+        "red_zone_trips_allowed": 0,
+        "red_zone_td_drives_allowed": 0,
         "two_point_attempts": 0,
         "two_point_successes": 0,
+        "two_point_attempts_allowed": 1,
+        "two_point_successes_allowed": 1,
         "total_plays": 2,
     },
 }
@@ -504,6 +560,18 @@ _MIRRORED_COLUMNS = (
     ("defensive_snaps", "offensive_snaps"),
     ("dropbacks_allowed", "dropbacks"),
     ("carries_allowed", "carries"),
+    ("third_down_conversions_allowed", "third_down_conversions"),
+    ("third_down_fails_allowed", "third_down_fails"),
+    ("third_down_attempts_allowed", "third_down_attempts"),
+    ("fourth_down_conversions_allowed", "fourth_down_conversions"),
+    ("fourth_down_fails_allowed", "fourth_down_fails"),
+    ("fourth_down_attempts_allowed", "fourth_down_attempts"),
+    ("red_zone_plays_allowed", "red_zone_plays"),
+    ("red_zone_tds_allowed", "red_zone_tds"),
+    ("red_zone_trips_allowed", "red_zone_trips"),
+    ("red_zone_td_drives_allowed", "red_zone_td_drives"),
+    ("two_point_attempts_allowed", "two_point_attempts"),
+    ("two_point_successes_allowed", "two_point_successes"),
 )
 
 
@@ -756,6 +824,296 @@ def test_alternate_special_teams_flag_column_is_used() -> None:
 
     assert _row_for(result, "KC")["st_epa_for"] == pytest.approx(-0.9)
     assert _row_for(result, "BUF")["st_epa_against"] == pytest.approx(-0.9)
+
+
+def test_red_zone_touchdown_counts_only_the_offense_that_scored() -> None:
+    """A red-zone defensive score must not credit the offense with a red-zone touchdown."""
+    plays = pl.DataFrame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="pass",
+                qb_dropback=1,
+                down=3,
+                yardline_100=8.0,
+                yards_gained=0.0,
+                epa=-6.0,
+                third_down_failed=1,
+                td_team="BUF",
+                interception=1,
+            )
+        ],
+        schema_overrides=_FIXTURE_DTYPES,
+    )
+
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    assert _row_for(result, "KC")["red_zone_plays"] == 1
+    assert _row_for(result, "KC")["red_zone_tds"] == 0
+    assert _row_for(result, "BUF")["red_zone_tds"] == 0
+
+
+def test_box_score_aggregation_derives_team_game_stats() -> None:
+    """The box-score helper derives nflreadpy-style team stats from raw play rows."""
+    plays = pl.DataFrame(
+        [
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "pass",
+                "pass": 1,
+                "qb_dropback": 1,
+                "complete_pass": 1,
+                "yards_gained": 12.0,
+                "epa": 0.8,
+                "cpoe": 0.4,
+                "first_down_pass": 1,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "pass",
+                "pass": 1,
+                "qb_dropback": 1,
+                "yards_gained": 0.0,
+                "epa": -0.4,
+                "cpoe": -0.2,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "pass",
+                "pass": 1,
+                "qb_dropback": 1,
+                "sack": 1,
+                "yards_gained": -7.0,
+                "epa": -1.2,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "run",
+                "rush": 1,
+                "yards_gained": 5.0,
+                "epa": 0.3,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "qb_kneel",
+                "qb_kneel": 1,
+                "yards_gained": -1.0,
+                "epa": -0.2,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "run",
+                "rush": 1,
+                "yards_gained": 3.0,
+                "epa": -1.0,
+                "fumble": 1,
+                "fumble_lost": 1,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "no_play",
+                "penalty": 1,
+                "penalty_yards": 10.0,
+                "penalty_team": "KC",
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "pass",
+                "pass": 1,
+                "qb_dropback": 1,
+                "complete_pass": 1,
+                "pass_touchdown": 1,
+                "td_team": "KC",
+                "yards_gained": 20.0,
+                "epa": 2.5,
+                "cpoe": 0.2,
+                "first_down_pass": 1,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "KC",
+                "defteam": "BUF",
+                "play_type": "run",
+                "rush": 1,
+                "two_point_attempt": 1,
+                "two_point_conv_result": "success",
+                "yards_gained": 2.0,
+                "epa": 0.1,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "BUF",
+                "defteam": "KC",
+                "play_type": "pass",
+                "pass": 1,
+                "qb_dropback": 1,
+                "complete_pass": 1,
+                "yards_gained": 15.0,
+                "epa": 1.0,
+                "cpoe": 0.1,
+                "first_down_pass": 1,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "BUF",
+                "defteam": "KC",
+                "play_type": "pass",
+                "pass": 1,
+                "qb_dropback": 1,
+                "sack": 1,
+                "yards_gained": -5.0,
+                "epa": -0.9,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "BUF",
+                "defteam": "KC",
+                "play_type": "pass",
+                "pass": 1,
+                "qb_dropback": 1,
+                "interception": 1,
+                "yards_gained": 0.0,
+                "epa": -1.5,
+                "cpoe": -0.3,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "BUF",
+                "defteam": "KC",
+                "play_type": "run",
+                "rush": 1,
+                "rush_touchdown": 1,
+                "td_team": "BUF",
+                "yards_gained": 6.0,
+                "epa": 1.3,
+                "first_down_rush": 1,
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "BUF",
+                "defteam": "KC",
+                "play_type": "no_play",
+                "penalty": 1,
+                "penalty_yards": 5.0,
+                "penalty_team": "KC",
+            },
+            {
+                "season": 2024,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": "BUF",
+                "defteam": "KC",
+                "play_type": "no_play",
+                "penalty": 1,
+                "penalty_yards": 15.0,
+                "penalty_team": "BUF",
+            },
+        ],
+        schema_overrides={
+            "season": pl.Int64,
+            "week": pl.Int64,
+            "season_type": pl.String,
+            "posteam": pl.String,
+            "defteam": pl.String,
+            "play_type": pl.String,
+            "pass": pl.Float64,
+            "rush": pl.Float64,
+            "qb_dropback": pl.Float64,
+            "qb_kneel": pl.Float64,
+            "complete_pass": pl.Float64,
+            "pass_touchdown": pl.Float64,
+            "rush_touchdown": pl.Float64,
+            "interception": pl.Float64,
+            "sack": pl.Float64,
+            "fumble": pl.Float64,
+            "fumble_lost": pl.Float64,
+            "penalty": pl.Float64,
+            "penalty_yards": pl.Float64,
+            "penalty_team": pl.String,
+            "yards_gained": pl.Float64,
+            "epa": pl.Float64,
+            "cpoe": pl.Float64,
+            "td_team": pl.String,
+            "two_point_attempt": pl.Float64,
+            "two_point_conv_result": pl.String,
+            "first_down_pass": pl.Float64,
+            "first_down_rush": pl.Float64,
+        },
+    )
+
+    result = pbp.aggregate_pbp_team_box_score_stats(plays)
+    kc = _row_for(result, "KC")
+    buf = _row_for(result, "BUF")
+
+    assert kc["pass_attempts"] == 3
+    assert kc["pass_completions"] == 2
+    assert kc["pass_yards"] == pytest.approx(32.0)
+    assert kc["pass_touchdowns"] == 1
+    assert kc["times_sacked"] == 1
+    assert kc["rush_attempts"] == 3
+    assert kc["rush_yards"] == pytest.approx(7.0)
+    assert kc["fumbles"] == 1
+    assert kc["fumbles_lost"] == 1
+    assert kc["first_downs"] == 2
+    assert kc["2pt_conversions"] == 1
+    assert kc["total_yards"] == pytest.approx(32.0)
+    assert kc["penalties"] == 2
+    assert kc["penalty_yards"] == pytest.approx(15.0)
+    assert kc["def_sacks"] == 1
+    assert kc["def_interceptions"] == 1
+
+    assert buf["pass_attempts"] == 2
+    assert buf["pass_completions"] == 1
+    assert buf["rush_attempts"] == 1
+    assert buf["rush_touchdowns"] == 1
+    assert buf["interceptions_thrown"] == 1
+    assert buf["penalties"] == 1
+    assert buf["penalty_yards"] == pytest.approx(15.0)
 
 
 def test_non_regular_season_rows_are_excluded() -> None:
@@ -1020,3 +1378,70 @@ def test_is_home_is_not_carried_as_a_count_or_published_stat() -> None:
     assert "is_home" not in constants.PBP_STATS
     # opponent_is_home would be the exact inverse of is_home, so the mirror skips it.
     assert "is_home" in constants.EXCLUDE_FROM_OPPONENT_STATS
+
+
+def test_red_zone_trips_count_drives_not_snaps() -> None:
+    """Red-zone trips count distinct drives that reached the 20, not plays inside it."""
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                fixed_drive=1,
+                fixed_drive_result="Touchdown",
+                yardline_100=18.0,
+            ),
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                fixed_drive=1,
+                fixed_drive_result="Touchdown",
+                yardline_100=9.0,
+                td_team="KC",
+            ),
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="pass",
+                qb_dropback=1,
+                fixed_drive=2,
+                fixed_drive_result="Field goal",
+                yardline_100=12.0,
+            ),
+        ]
+    )
+
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+    kc = _row_for(result, "KC")
+    buf = _row_for(result, "BUF")
+
+    # Three red-zone snaps, but only two drives reached the red zone.
+    assert kc["red_zone_plays"] == 3
+    assert kc["red_zone_trips"] == 2
+    assert kc["red_zone_td_drives"] == 1
+    # The defence sees the same events as "allowed".
+    assert buf["red_zone_trips_allowed"] == 2
+    assert buf["red_zone_td_drives_allowed"] == 1
+
+
+def test_red_zone_trip_counted_once_per_drive_without_a_touchdown() -> None:
+    """A drive that reaches the red zone and fails is a trip with no touchdown drive."""
+    plays = _frame(
+        [
+            _play(
+                posteam="SF",
+                defteam="DAL",
+                play_type="run",
+                fixed_drive=3,
+                fixed_drive_result="Turnover",
+                yardline_100=5.0,
+            )
+        ]
+    )
+
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    assert _row_for(result, "SF")["red_zone_trips"] == 1
+    assert _row_for(result, "SF")["red_zone_td_drives"] == 0

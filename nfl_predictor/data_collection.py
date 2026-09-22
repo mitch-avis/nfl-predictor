@@ -48,7 +48,7 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.utils import game_utils, polars_utils
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars import qb_stats, schedule_strength, strength_snapshot
+from nfl_predictor.utils.polars import pbp, qb_stats, schedule_strength, strength_snapshot
 
 
 def _current_nfl_season(today: date) -> int:
@@ -91,6 +91,10 @@ class DataCollectionConfig:
     # Directory the produced datasets are written to. ``None`` means the packaged
     # ``constants.DATA_PATH``, so an omitted --data-dir keeps the historical behaviour.
     data_dir: Path | None = None
+    # Whether play-by-play should override derivable per-team-game box-score columns.
+    team_stats_source: str = "nflverse"
+    # Whether the legacy TeamRankings situational percentage columns come from scrape or PBP.
+    tr_stats_source: str = "scrape"
 
 
 def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFrame:
@@ -199,6 +203,18 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
             f"sample and the prior are weighted equally (default {constants.PRIOR_BLEND_GAMES:g})."
         ),
     )
+    parser.add_argument(
+        "--team-stats-source",
+        choices=("nflverse", "pbp"),
+        default="nflverse",
+        help="Prefer nflverse or play-by-play for derivable per-team-game box-score columns.",
+    )
+    parser.add_argument(
+        "--tr-stats-source",
+        choices=("scrape", "pbp"),
+        default="scrape",
+        help="Source for the legacy TeamRankings situational percentage columns.",
+    )
     args = parser.parse_args(argv)
     if args.stat_prior_blend_games <= 0:
         parser.error("--stat-prior-blend-games must be positive.")
@@ -219,6 +235,8 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         blend_stat_prior=bool(args.stat_prior_blend),
         stat_prior_blend_games=float(args.stat_prior_blend_games),
         data_dir=args.data_dir,
+        team_stats_source=str(args.team_stats_source),
+        tr_stats_source=str(args.tr_stats_source),
     )
 
 
@@ -231,8 +249,54 @@ def _resolve_config(argv: list[str] | None) -> DataCollectionConfig:
             force_refresh_nflreadpy=FORCE_REFRESH_NFLREADPY,
             min_season=DEFAULT_MIN_SEASON,
             max_season=_default_max_season(),
+            team_stats_source="nflverse",
+            tr_stats_source="scrape",
         )
     return _parse_args(argv)
+
+
+def _overlay_pbp_team_box_scores(
+    team_stats_df: pl.DataFrame,
+    pbp_box_scores: pl.DataFrame,
+) -> pl.DataFrame:
+    """Prefer play-by-play team-game values while keeping nflverse fallbacks.
+
+    The play-by-play frame carries only the derivable columns. Where it has a non-null value, it
+    wins; where it does not, the nflverse value stays in place. Rows that exist only in the
+    play-by-play frame are retained so the schedule skeleton can still carry them forward.
+    """
+    if pbp_box_scores.height == 0:
+        return team_stats_df
+    if team_stats_df.height == 0:
+        return pbp_box_scores.sort(["season", "week", "team_abbr", "opponent_abbr"])
+
+    keys = ["season", "week", "team_abbr", "opponent_abbr"]
+    joined = team_stats_df.join(
+        pbp_box_scores,
+        on=keys,
+        how="full",
+        coalesce=True,
+        suffix="_pbp",
+    )
+    output_columns = list(team_stats_df.columns)
+    output_columns.extend(
+        column for column in pbp_box_scores.columns if column not in output_columns
+    )
+
+    exprs: list[pl.Expr] = []
+    for column in output_columns:
+        if column in keys:
+            exprs.append(pl.col(column))
+            continue
+        pbp_column = f"{column}_pbp"
+        if pbp_column in joined.columns and column in joined.columns:
+            exprs.append(pl.coalesce(pl.col(pbp_column), pl.col(column)).alias(column))
+        elif pbp_column in joined.columns:
+            exprs.append(pl.col(pbp_column).alias(column))
+        else:
+            exprs.append(pl.col(column))
+
+    return joined.select(exprs).sort(keys)
 
 
 def _resolve_seasons(min_season: int, max_season: int) -> list[int]:
@@ -626,6 +690,12 @@ def collect_all_data(
         )
     log.info("Loaded play-by-play: %d regular season plays", pbp_df.height)
 
+    if config.team_stats_source == "pbp":
+        with _timed_step("aggregate_pbp_team_box_score_stats", config.enable_timing):
+            pbp_box_scores = pbp.aggregate_pbp_team_box_score_stats(pbp_df)
+        team_stats_df = _overlay_pbp_team_box_scores(team_stats_df, pbp_box_scores)
+        _log_df_stats("team_stats_with_pbp_box_scores", team_stats_df, config.enable_debug)
+
     with _timed_step("aggregate_pbp_team_game_stats", config.enable_timing):
         pbp_team_games = polars_utils.aggregate_pbp_team_game_stats(pbp_df)
         team_stats_df = _build_team_game_frame(team_stats_df, stats_schedule_df, pbp_team_games)
@@ -717,6 +787,7 @@ def collect_all_data(
                 elo_df=elo_df,
                 tr_df=tr_df,
                 prev_tr_df=prev_tr_df,
+                tr_stats_source=config.tr_stats_source,
                 blend_strength_prior=config.blend_strength_prior,
                 blend_stat_prior=config.blend_stat_prior,
                 stat_prior_blend_games=config.stat_prior_blend_games,
@@ -1118,6 +1189,7 @@ def process_season(
     elo_df: pl.DataFrame | None = None,
     tr_df: pl.DataFrame | None = None,
     prev_tr_df: pl.DataFrame | None = None,
+    tr_stats_source: str = "scrape",
     blend_strength_prior: bool = True,
     blend_stat_prior: bool = True,
     stat_prior_blend_games: float = constants.PRIOR_BLEND_GAMES,
@@ -1134,6 +1206,7 @@ def process_season(
         elo_df: ELO ratings DataFrame
         tr_df: TeamRankings DataFrame for this season
         prev_tr_df: TeamRankings DataFrame for previous season (for week 1)
+        tr_stats_source: Source for the legacy TeamRankings stat columns
         blend_strength_prior: Set to False to ablate the strength prior blend
         blend_stat_prior: Set to False to ablate the season-to-date stat prior blend
         stat_prior_blend_games: K in the stat blend weight ``games / (games + K)``
@@ -1196,6 +1269,7 @@ def process_season(
             elo_df=elo_df,
             tr_df=tr_df,
             prev_tr_df=prev_tr_df,
+            tr_stats_source=tr_stats_source,
             team_elo_trends=team_elo_trends,
             qb_trends=qb_trends,
             team_stat_trends=team_stat_trends,
@@ -1256,6 +1330,7 @@ def process_week(
     elo_df: pl.DataFrame | None = None,
     tr_df: pl.DataFrame | None = None,
     prev_tr_df: pl.DataFrame | None = None,
+    tr_stats_source: str = "scrape",
     team_elo_trends: pl.DataFrame | None = None,
     qb_trends: pl.DataFrame | None = None,
     team_stat_trends: pl.DataFrame | None = None,
@@ -1290,6 +1365,7 @@ def process_week(
         elo_df: ELO ratings DataFrame
         tr_df: TeamRankings DataFrame for this season
         prev_tr_df: TeamRankings DataFrame for previous season (for week 1)
+        tr_stats_source: Source for the legacy TeamRankings stat columns
         team_elo_trends: Optional rolling ELO trend features for the current season
         qb_trends: Optional rolling quarterback trend features for the current season
         team_stat_trends: Optional rolling team-stat trend features for the current season
@@ -1329,6 +1405,10 @@ def process_week(
     # Aggregate stats from prior weeks
     with _timed_substep("aggregate_team_stats", timing_enabled, timing_totals):
         agg_stats = polars_utils.aggregate_team_stats_to_week(season_stats, week, season)
+    if tr_stats_source == "scrape":
+        agg_stats = agg_stats.drop(
+            [column for column in constants.TR_STATS if column in agg_stats.columns]
+        )
 
     # Get teams playing this week
     teams_this_week = set(
@@ -1482,7 +1562,14 @@ def process_week(
 
     # Merge with TeamRankings
     with _timed_substep("merge_team_rankings", timing_enabled, timing_totals):
-        merged = _merge_team_rankings(merged, season, week, tr_df, prev_tr_df)
+        merged = _merge_team_rankings(
+            merged,
+            season,
+            week,
+            tr_df,
+            prev_tr_df,
+            tr_stats_source=tr_stats_source,
+        )
 
     # TeamRankings trend: last-5 vs last-10 rating
     if {
@@ -1698,6 +1785,8 @@ def _merge_team_rankings(
     week: int,
     tr_df: pl.DataFrame | None,
     prev_tr_df: pl.DataFrame | None,
+    *,
+    tr_stats_source: str = "scrape",
 ) -> pl.DataFrame:
     """Merge TeamRankings data into the game DataFrame.
 
@@ -1716,6 +1805,7 @@ def _merge_team_rankings(
         week: Week number
         tr_df: TeamRankings DataFrame for current season
         prev_tr_df: TeamRankings DataFrame for previous season
+        tr_stats_source: Whether TR situational columns come from the scrape or from PBP
 
     Returns:
         DataFrame with TR columns merged
@@ -1740,8 +1830,11 @@ def _merge_team_rankings(
 
     # Merge TR data if available
     if tr_to_use is not None and tr_to_use.height > 0:
-        # Only include the TR columns we actually want (ratings + stats)
-        expected_tr_cols = set(polars_utils.get_tr_columns())
+        # When the PBP source is selected for the situational percentages, TeamRankings still
+        # contributes only its ratings.
+        expected_tr_cols = set(constants.TR_RATINGS)
+        if tr_stats_source == "scrape":
+            expected_tr_cols.update(constants.TR_STATS)
         available_tr_cols = [c for c in tr_to_use.columns if c in expected_tr_cols]
 
         if not available_tr_cols:

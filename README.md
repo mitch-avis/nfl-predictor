@@ -189,6 +189,18 @@ TeamRankings data is cached under `data/<season>/` as week-level CSVs; enable de
 cache hits. Use `--timing` to log per-step runtimes and `--debug-logs` for detailed ETL diagnostics.
 Use `--refresh-nflreadpy` to force refresh nflreadpy data even when cache exists.
 
+Two flags choose where per-team-game stats come from. `--team-stats-source pbp` derives the
+box-score families (passing, rushing, penalties, first downs, sacks and interceptions) from
+play-by-play and overlays them on the nflverse rows, so nflverse still fills whatever
+play-by-play cannot derive; `nflverse` is the default. `--tr-stats-source pbp` derives the eight
+situational percentages (third down, fourth down, red zone and two-point, for and allowed) from
+the play-by-play counts instead of the TeamRankings scrape; `scrape` is the default, and
+TeamRankings supplies its ratings either way. The derived percentages use the scraped columns'
+0-100 scale, and `red_zone_td_pct` divides touchdown drives by red-zone trips (drives that
+reached the 20, from `fixed_drive`), which is what the scraped "red zone scoring %" measures --
+not touchdowns per red-zone snap. Both flags change feature values at ETL time, so compare them
+with two dataset builds rather than with `--disable-feature-groups`.
+
 Early-season handling: Week 1 has no in-season games, so every season-to-date team stat (the
 nflreadpy families and the play-by-play counts) falls back to the previous regular season regressed
 one third of the way toward the league mean (`constants.WEEK1_REGRESSION_FACTOR`). From week 2 on,

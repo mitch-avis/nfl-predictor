@@ -1101,7 +1101,9 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
     assert kc["fumbles_lost"] == 1
     assert kc["first_downs"] == 2
     assert kc["2pt_conversions"] == 1
-    assert kc["total_yards"] == pytest.approx(32.0)
+    # nflverse total_yards is pass_yards + rush_yards - yards_lost_from_sacks, and it stores
+    # the sack losses as a negative number, so the sack yardage is added back: 32 + 7 + 7.
+    assert kc["total_yards"] == pytest.approx(46.0)
     assert kc["penalties"] == 2
     assert kc["penalty_yards"] == pytest.approx(15.0)
     assert kc["def_sacks"] == 1

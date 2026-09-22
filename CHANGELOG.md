@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.15.1] - 2026-09-21
+
+### Added
+
+- Record the play-by-play against nflverse team-game comparison that task 54.2 asks for, in
+  `models/pbp_vs_nflverse_m54_2/` (`compare_sources.py`, `comparison.json` and
+  `COMPARISON.md`). Seventeen of twenty-one derivable columns agree on `94%` or more of the
+  `13912` overlapping team-games of `1999-2025` with a median difference of zero; the four
+  exceptions (`passing_epa`, `fumbles`, `2pt_conversions`, `pass_attempts`) are recorded with
+  what causes each.
+
+### Fixed
+
+- The play-by-play `total_yards` had its sack term inverted. nflverse defines
+  `total_yards = pass_yards + rush_yards - yards_lost_from_sacks` and stores the sack losses as
+  a negative number, so the yardage is added back rather than deducted; that identity holds on
+  `13418` of `13418` nflverse team-games of 2000-2025. The derived column matched only `14.13%`
+  of team-games and ran `31` yards low (`335.236` against `366.264`); it now matches `96.62%`
+  with a mean of `365.515`.
+
 ## [0.15.0] - 2026-09-21
 
 ### Added

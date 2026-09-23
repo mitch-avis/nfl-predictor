@@ -329,7 +329,7 @@ Rules that are always enforced:
   diff `-0.0044` `[-0.0389, +0.0296]`. So `200` stays the default and task 55.7 is closed. The
   `1200` rung stays pre-written and never launched. Open questions: a second seed on `200`
   (the six-season fit-noise floor has never been measured) and whether any further default change
-  should wait for a bye week mid-season. Timings, which are scheduling facts and
+  should wait for ample downtime if run mid-season. Timings, which are scheduling facts and
   not clean speed measurements: `598` about `161` s/fold (4h46m) under load from gates and the
   web API watcher, `200` about `56` s/fold (1h40m) and `400` about `111` s/fold (3h18m) on a
   machine quiet apart from that watcher.

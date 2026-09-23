@@ -262,25 +262,23 @@ Tasks:
       table and the pairwise intervals: `ARCHIVE.md`, Milestone 55, "55.7", and `AGENTS.md` under
       "Tree-budget ladder".
 - [ ] 55.9 Optuna re-tune. Added 2026-09-21 by the user's decision, to run **after Milestone 54
-      lands** (tuning before the feature set changes would have to be redone): Milestone 54
-      closed 2026-09-21, so this is now unblocked. The user would still like it on a bye week or
-      in the off-season, since it occupies the machine for hours.
-      Prerequisites, each its own tested chunk before any trial runs:
-      (1) trials must fit exactly the way production fits. `0.12.3` removed in-season early
-      stopping from production and walk-forward, but `_score_margin_total_fold` in
-      `nfl_predictor/ml/ml_model_core.py` still passes `early_stopping_rounds` to
-      `_fit_margin_total_models`, so every trial is scored on a differently fitted model.
-      (2) the tuning objective must score what the walk-forward instrument scores: the
-      deterministic `Phi(margin / SCORE_DIFF_STD_DEV)` Brier, with the market view alongside,
-      not the configured-calibrator Brier.
-      (3) plumbing so a tuned parameter set actually reaches the walk-forward. Today
-      `weekly_run` takes explicit `wf_*` params and never writes a best-params file;
-      `--defaults-path` and `best_config.json` exist only as Milestone 55 acceptance text.
-      Then the study itself: the search space as it stands (`n_estimators` `200`-`1200`,
-      learning rate `0.01`-`0.3` log, depth `3`-`8`, and the rest), TPE with seed `42`, SQLite
-      storage, `300`-`500` trials, about 3-8 hours. The winner is confirmed on a six-season
-      walk-forward against the `200` rung and on a second seed before it becomes a default
-      (must-ask). The old studies under `models/weekly_2025_week_21/` and
+      lands** (tuning before the feature set changes would have to be redone): Milestone 54 closed
+      2026-09-21, so this is now unblocked. The user would still like it when there is enough idle
+      time or in the off-season, since it occupies the machine for hours. Prerequisites, each its
+      own tested chunk before any trial runs: (1) trials must fit exactly the way production fits.
+      `0.12.3` removed in-season early stopping from production and walk-forward, but
+      `_score_margin_total_fold` in `nfl_predictor/ml/ml_model_core.py` still passes
+      `early_stopping_rounds` to `_fit_margin_total_models`, so every trial is scored on a
+      differently fitted model. (2) the tuning objective must score what the walk-forward instrument
+      scores: the deterministic `Phi(margin / SCORE_DIFF_STD_DEV)` Brier, with the market view
+      alongside, not the configured-calibrator Brier. (3) plumbing so a tuned parameter set actually
+      reaches the walk-forward. Today `weekly_run` takes explicit `wf_*` params and never writes a
+      best-params file; `--defaults-path` and `best_config.json` exist only as Milestone 55
+      acceptance text. Then the study itself: the search space as it stands (`n_estimators`
+      `200`-`1200`, learning rate `0.01`-`0.3` log, depth `3`-`8`, and the rest), TPE with seed
+      `42`, SQLite storage, `300`-`500` trials, about 3-8 hours. The winner is confirmed on a
+      six-season walk-forward against the `200` rung and on a second seed before it becomes a
+      default (must-ask). The old studies under `models/weekly_2025_week_21/` and
       `models/weekly_2025_week_22/` are void: their trials early-stopped and they predate the
       `0.6.2` guidance.
 

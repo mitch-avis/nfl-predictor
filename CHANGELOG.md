@@ -244,15 +244,15 @@
   walk-forward stage's XGBoost params aligned with the production defaults, so both stages fit
   the same model. One more rung, `100`, then runs as the plateau check; if it ties `200`, `200`
   stays, and if it is better beyond the fit-noise floor, it is reported and asked about.
-- `.agents/TODO.md`: new task 55.9, "Optuna re-tune", to run after Milestone 54 lands, ideally
-  on a bye week or in the off-season. Three prerequisites land first, each as its own tested
-  chunk: trials must fit the way production fits (`_score_margin_total_fold` still passes
+- `.agents/TODO.md`: new task 55.9, "Optuna re-tune", to run after Milestone 54 lands, ideally when
+  there is enough idle time, or in the off-season. Three prerequisites land first, each as its own
+  tested chunk: trials must fit the way production fits (`_score_margin_total_fold` still passes
   `early_stopping_rounds`, which `0.12.3` removed from production), the objective must score the
-  deterministic Brier the walk-forward instrument scores rather than the configured
-  calibrator's, and a tuned parameter set needs plumbing to reach the walk-forward. The study
-  itself keeps the current search space, TPE seed `42`, SQLite storage and `300`-`500` trials,
-  and its winner is confirmed on six seasons and a second seed. The studies under
-  `models/weekly_2025_week_21/` and `models/weekly_2025_week_22/` are void.
+  deterministic Brier the walk-forward instrument scores rather than the configured calibrator's,
+  and a tuned parameter set needs plumbing to reach the walk-forward. The study itself keeps the
+  current search space, TPE seed `42`, SQLite storage and `300`-`500` trials, and its winner is
+  confirmed on six seasons and a second seed. The studies under `models/weekly_2025_week_21/` and
+  `models/weekly_2025_week_22/` are void.
 - `.agents/TODO.md`, task 56.2: the user approves setting `include_postseason: false` and
   `wf_include_postseason: false` in `config/weekly_run.yaml`, leaving `postseason_weight` in
   place but inert, so the weekly run matches the rule that a regular-season model never trains

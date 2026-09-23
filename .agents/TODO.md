@@ -49,15 +49,16 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-22, version `0.16.2`, branch `main`)
+### Current validated baseline (2026-09-23, version `0.17.0`, branch `feat/m55-8-season-weighting`)
 
+- `scripts/gate.sh` exits `0` on this branch after the 55.8 close-out (`889 passed`, coverage
+      `92.45%`). The run updated `config/weekly_run.yaml`, `README.md`, `AGENTS.md`,
+      `.agents/TODO.md`, `.agents/ARCHIVE.md`, `CHANGELOG.md`, `pyproject.toml` and `uv.lock`, and
+      added `REVIEW.md` files to all four 55.8 run directories.
 - `feat/m54-0-landing` (the `0.14.0`-`0.16.1` chunks) merged into `main` with no conflicts and was
       pushed on 2026-09-22 (merge commit `295d4c4`, version `0.16.2`). `main` and `origin/main` carry
-      the `pbp`-default sources, the shared `200`-tree default and the aligned weekly config; no
-      further merge is needed for this work. Every other branch except `feat/web-ui` (the live
-      worktree behind the web API on port 8765) was a fully-merged, zero-commit ancestor of `main`
-      and was deleted the same day, locally and on `origin`.
-- `scripts/gate.sh` exits `0` on `main` at `c3acc39` (`889 passed`, coverage `92.45%`).
+      the `pbp`-default sources and the shared `200`-tree default; this branch layers the 55.8
+      weekly-config alignment and reviewed recency-ladder record on top.
 - Data: the 2026-09-21 full rebuild (`--refresh-nflreadpy`, needed for the new
       `pass_attempt`/`rush_attempt` raw columns) on the `0.16.0` code, now defaulting to
       `--team-stats-source pbp --tr-stats-source pbp`, produced `data/completed_games_ml.csv`
@@ -83,6 +84,11 @@ Agents and humans should not rely on the shell activation state.
 - Both source flags are now the default (`0.16.0`), including the production fast path
       `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no arguments;
       `nflverse`/`scrape` remain selectable explicitly.
+- Task 55.8 is now closed and archived (`0.17.0`): a reviewed four-arm six-season ladder on the
+      current `pbp`-default build found no season-weighting value that beat the shipped
+      half-life `4` beyond the paired intervals, so `train_recency_half_life_seasons: 4` stays in
+      place and `config/weekly_run.yaml` now aligns the walk-forward stage with
+      `wf_recency_half_life_seasons: 4`.
 - Reference arms on the current default (pre-flip) sources: `models/wf_m54_0_2023_2025_from_week1/`
       (checkpoints `models/wf_checkpoints/d112ebcba3115bafe9d9/`) tied the accepted `200`-tree
       reference slice on weeks 3-18: deterministic Brier `0.2097` vs `0.2090`, diff `+0.0007`
@@ -92,8 +98,9 @@ Agents and humans should not rely on the shell activation state.
       reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
       `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.
 - Tasks 54.0-54.4 and the default flip are archived; Milestone 54 is fully closed (`ARCHIVE.md`).
-      Task 55.8 is the next active task, on a fresh branch off `main`. Merging and pushing remain
-      must-ask, every time.
+      Task 55.8 has since landed on `feat/m55-8-season-weighting` and is archived there as
+      version `0.17.0`; `main` still reflects this 2026-09-22 baseline until that branch is
+      merged. Merging and pushing remain must-ask, every time.
 
 ---
 
@@ -130,12 +137,18 @@ the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
 Order set by the user on 2026-09-21, after the tree-budget ladder was reported:
 
-1. Task 55.8 - season weighting, as six-season arms at the `200` default.
-2. Task 55.9 - the Optuna re-tune. Milestone 54 closed 2026-09-21, so this is unblocked; the
+1. Task 55.9 - the Optuna re-tune. Milestone 54 closed 2026-09-21, so this is unblocked; the
       user would still like it on a bye week or in the off-season, since it occupies the machine
       for hours.
-3. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
+2. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
       off); it can run in parallel with any walk-forward as a subagent task.
+
+Task 55.8 closed 2026-09-23 on `feat/m55-8-season-weighting` (`0.17.0`): a reviewed four-arm
+six-season ladder on the current `pbp`-default build
+(`models/wf_m55_8_2020_2025_{unweighted,half_life4,half_life8,half_life16}/`) found no
+season-weighting value that beat the shipped half-life `4` beyond the paired intervals, so the
+production train default stays at `4` and `config/weekly_run.yaml` now aligns the walk-forward
+stage with `wf_recency_half_life_seasons: 4`. Full record: `ARCHIVE.md`, Milestone 55, "55.8".
 
 Tasks 54.1-54.4 landed 2026-09-21 (`0.15.0`-`0.15.1`), and the user then approved fixing the
 four open exceptions and flipping both source flags to the default once verified, which landed
@@ -248,33 +261,6 @@ Tasks:
       was aligned to the production XGBoost defaults in the same chunk. Full record, the ladder
       table and the pairwise intervals: `ARCHIVE.md`, Milestone 55, "55.7", and `AGENTS.md` under
       "Tree-budget ladder".
-- [ ] 55.8 Season weighting. The bare CLI default for `recency_half_life_seasons` is off, and
-      the walk-forward stage of the shipped `config/weekly_run.yaml` leaves it off too (no
-      `wf_recency_half_life_seasons` key), but **not** the final-training stage of that same
-      config: it already sets `train_recency_half_life_seasons: 4`, so a weekly run today
-      trains the production model with half-life-4 recency weighting while its own
-      walk-forward comparison stage evaluates candidates unweighted. Found 2026-09-22 while
-      scoping this task; not yet reflected anywhere else. This means the walk-forward
-      instrument does not currently measure what production does, and the two stages are not
-      fitting comparably (contrary to the alignment principle task 55.7 established for tree
-      count/depth/learning rate). Resolve this discrepancy as part of 55.8, not as a separate
-      must-ask default change, since `train_recency_half_life_seasons: 4` is already live in
-      the shipped config.
-      The README's recency ablation ("keep it off") is not trustworthy: it was measured through
-      Platt calibration, which the 2026-09-18 audit found noise-dominated, on a superseded
-      build, with a log loss of `1.95` that reads as a calibration failure rather than a model
-      difference, and with an aggressive half-life of `2` seasons. Re-measure on the 59.1
-      instrument over six seasons on the current `pbp`-default build: half-lives of about `4`,
-      `8` and `16` seasons via `--recency-half-life-seasons`, plus the unweighted reference (all
-      four arms are fresh runs; the tree-budget ladder's six-season checkpoints predate the
-      pbp-default flip and cannot be reused), hypothesis and decision rule per arm, read against
-      the fit-noise floor. Note the fit-noise floor itself (`AGENTS.md`, "Fit-noise floor on
-      the same build") was measured on three-season arms, so treat it as an approximate,
-      conservative guide on six seasons rather than an exact threshold. If a half-life other
-      than the shipped `4` wins, changing the default is must-ask; either way, align
-      `wf_recency_half_life_seasons` in `config/weekly_run.yaml` to whatever
-      `train_recency_half_life_seasons` ends up being, and replace the README ablation with the
-      new measurement and its run directories.
 - [ ] 55.9 Optuna re-tune. Added 2026-09-21 by the user's decision, to run **after Milestone 54
       lands** (tuning before the feature set changes would have to be redone): Milestone 54
       closed 2026-09-21, so this is now unblocked. The user would still like it on a bye week or
@@ -389,6 +375,13 @@ them no longer do anything.
       options module so the surviving flags are declared once. The `--data-dir` and
       `--data-collection-args` options added in `0.12.11` and `0.12.12` belong in the same
       audit.
+      Progress 2026-09-22: the read-only inventory landed in `.agents/m60_cli_flag_audit.md`.
+      Headline findings: `scripts/weekly_run.py` still exposes an inert walk-forward
+      early-stopping flag and a tuning-only train early-stopping flag; `ml_model_cli.py` has the
+      same tuning-only early-stopping drift; calibration, recency, market-probability blending,
+      XGBoost runtime, and power-rankings options are duplicated with naming drift across
+      entrypoints; and part of the weekly-run surface is effectively config-managed rather than
+      operator-driven. Removals still wait for the user's sign-off, so the task stays open.
 
 Acceptance:
 

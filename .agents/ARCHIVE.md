@@ -429,8 +429,9 @@ held: every run retrained (no stale-fold resume), the division fix, the acceptan
 
 ## Milestone 55 (partial) - Off-season configuration sweep + lock default settings
 
-Formerly Milestone 39, with former Milestone 40 folded in. Task 55.7 completed 2026-09-21
-(versions `0.13.0`-`0.13.1`); tasks 55.1-55.6, 55.8 and 55.9 stay in `TODO.md`.
+Formerly Milestone 39, with former Milestone 40 folded in. Tasks 55.7 and 55.8 completed
+2026-09-21/23 (versions `0.13.0`-`0.13.1` and `0.17.0`); tasks 55.1-55.6 and 55.9 stay in
+`TODO.md`.
 
 ### 55.7 - Choose `n_estimators` time-aware (versions `0.13.0`-`0.13.1`)
 
@@ -473,6 +474,58 @@ run directory).
 
 Task 56.2 (the postseason default, landed the same day as part of the same chunk) is archived
 under "Milestone 56 (partial)" below.
+
+### 55.8 - Season weighting (version `0.17.0`)
+
+The shipped weekly config had diverged: `train_recency_half_life_seasons: 4` was already live in
+`config/weekly_run.yaml`, but no `wf_recency_half_life_seasons` key existed, so a weekly run
+trained the production fit with half-life-4 season weighting while its own walk-forward comparison
+stage still evaluated candidates unweighted. The older README recency ablation was also not
+trustworthy: it had been measured through Platt calibration on a superseded build and read more
+like a calibration failure than a model choice.
+
+Method: a reviewed four-arm six-season ladder on the current `pbp`-default build
+(`data/completed_games_ml.m54_flip_through_2025.csv`, seasons `2020-2025`, from week `1`,
+calibration `auto`, `market_anchor` on, four calibration weeks, seed `42`, shared default
+`200`-tree budget). The arms were:
+
+- `models/wf_m55_8_2020_2025_unweighted/`
+- `models/wf_m55_8_2020_2025_half_life4/`
+- `models/wf_m55_8_2020_2025_half_life8/`
+- `models/wf_m55_8_2020_2025_half_life16/`
+
+Each run directory has its own `REVIEW.md`; the unweighted arm also carries the ladder's
+`HYPOTHESIS.md`.
+
+Reviewed metrics from disk:
+
+| arm | weeks 3-18 det Brier | weeks 3-18 margin MAE | all-weeks det Brier | all-weeks margin MAE | weeks 3-18 det-minus-market Brier CI |
+| --- | --- | --- | --- | --- | --- |
+| unweighted | `0.2107307` | `9.9361` | `0.2113442` | `9.8077` | `[-0.0007381, +0.0033154]` |
+| half-life 4 | `0.2114931` | `10.0051` | `0.2122308` | `9.8829` | `[-0.0004344, +0.0044273]` |
+| half-life 8 | `0.2107159` | `9.9673` | `0.2117030` | `9.8534` | `[-0.0009993, +0.0035351]` |
+| half-life 16 | `0.2101646` | `9.9522` | `0.2111091` | `9.8423` | `[-0.0014890, +0.0028600]` |
+
+Paired bootstrap comparisons from `models/wf_m55_7_2020_2025_trees200/compare_to_benchmark.py`
+(candidate minus reference, 5000 resamples, seed `0`):
+
+- Half-life `4` minus unweighted, weeks 3-18: deterministic Brier `+0.0007624`
+  `[-0.0011145, +0.0026462]`; margin MAE `+0.0691` `[-0.0080, +0.1465]`
+- Half-life `8` minus unweighted, weeks 3-18: deterministic Brier `-0.0000148`
+  `[-0.0015453, +0.0015254]`; margin MAE `+0.0313` `[-0.0302, +0.0949]`
+- Half-life `16` minus unweighted, weeks 3-18: deterministic Brier `-0.0005661`
+  `[-0.0018537, +0.0007247]`; margin MAE `+0.0161` `[-0.0381, +0.0692]`
+- Half-life `16` minus half-life `4`, weeks 3-18: deterministic Brier `-0.0013284`
+  `[-0.0029136, +0.0002453]`; margin MAE `-0.0530` `[-0.1187, +0.0147]`
+
+Outcome: half-life `16` was the best raw Brier arm, but every governing-window interval against
+both the unweighted reference and the shipped half-life `4` arm still covered zero, and half-life
+`8` tied the unweighted reference outright. By the ladder rule, the season-weighting choice is
+flat within noise rather than a clear default-changing win. The shipped production weighting stays
+at `train_recency_half_life_seasons: 4`, and `config/weekly_run.yaml` now also sets
+`wf_recency_half_life_seasons: 4` so the walk-forward comparison stage finally measures the same
+season weighting the final training stage already uses. The README's old Platt-based recency
+ablation is replaced with this ladder.
 
 ---
 

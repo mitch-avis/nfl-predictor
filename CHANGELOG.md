@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.17.0] - 2026-09-23
+
+### Changed
+
+- Close task 55.8 after a reviewed four-arm six-season season-weighting ladder on the current
+  `pbp`-default build (`models/wf_m55_8_2020_2025_{unweighted,half_life4,half_life8,half_life16}/`,
+  each with a `REVIEW.md`). Weeks 3-18 deterministic Brier came in at `0.2107` / `0.2115` /
+  `0.2107` / `0.2102` for unweighted / half-life `4` / half-life `8` / half-life `16`; the
+  paired intervals against the unweighted reference and against half-life `4` all still covered
+  zero, so the ladder reads as flat within noise rather than as a default-changing win for a
+  different value.
+- Keep the shipped production season weighting at `train_recency_half_life_seasons: 4`, because no
+  reviewed arm beat it beyond the paired intervals on the governing weeks 3-18 window.
+- Align `config/weekly_run.yaml` so the weekly walk-forward comparison stage finally measures the
+  same season weighting the final training stage already uses: `wf_recency_half_life_seasons: 4`.
+- Replace the README's superseded Platt-based recency ablation with the reviewed six-season ladder
+  and its outcome.
+
 ## [0.16.2] - 2026-09-21
 
 ### Added

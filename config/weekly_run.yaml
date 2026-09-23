@@ -18,6 +18,8 @@ wf_eval_last_n_seasons: 10
 wf_start_week: 3
 # number of weeks to use for model calibration in walk-forward evaluation (default: 4)
 wf_calibration_weeks: 8
+# exponential recency weighting half-life in seasons for walk-forward evaluation (default: none)
+wf_recency_half_life_seasons: 4
 # whether to include postseason games in walk-forward evaluation (default: false)
 wf_include_postseason: false
 # market mode for walk-forward evaluation (options: features, anchor, hybrid, all, default: hybrid)

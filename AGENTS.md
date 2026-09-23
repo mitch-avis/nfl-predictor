@@ -128,19 +128,26 @@ Rules that are always enforced:
   carry the `pbp`-default sources and the shared `200`-tree default with no further merge
   needed. A 2026-09-22 review found every other branch except `feat/web-ui` (the live worktree
   behind the web API on port 8765) was a fully-merged, zero-commit ancestor of `main`, and the
-  user approved deleting all ten of them, locally and on `origin`. The next active task is 55.8
-  (season weighting); see "Roadmap Status" in `.agents/TODO.md`.
+  user approved deleting all ten of them, locally and on `origin`. Task 55.8 then landed on
+  `feat/m55-8-season-weighting` as version `0.17.0` on 2026-09-23: four reviewed six-season arms
+  on the current `pbp`-default build (`models/wf_m55_8_2020_2025_{unweighted,half_life4,half_life8,half_life16}/`)
+  found no season-weighting value that beat the shipped half-life `4` beyond the paired bootstrap
+  intervals, so the production train default stays at `4` and `config/weekly_run.yaml` now also
+  sets `wf_recency_half_life_seasons: 4` so Stage 1 measures the same season weighting Stage 2
+  already trains. The next active tasks are 55.9 and Milestone 60's signed-off removal phase; see
+  "Roadmap Status" in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-22 (`main` at `c3acc39`, version `0.16.2`, working tree clean;
-  `feat/m54-0-landing` merged and every fully-merged stale branch deleted the same day):
-  `scripts/gate.sh` exits `0` (`889 passed`, coverage `92.45%` against the enforced `90%`
-  floor; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
-  `uv sync --check --active` and the CLI help smoke checks all clean). The
+- Validated baseline on 2026-09-23 (`feat/m55-8-season-weighting` at current head, version
+  `0.17.0`): `scripts/gate.sh` exits `0` (`889 passed`, coverage `92.45%` against the enforced
+  `90%` floor; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
+  `uv sync --check --active` and the CLI help smoke checks all clean). `main` still reflects the
+  earlier `0.16.2` merge until this branch is reviewed and merged; this branch layers the 55.8
+  season-weighting close-out on top. The
   frontend gate was last verified at the `0.8.0` merge; run `scripts/gate.sh --web` whenever
   `web/` or `nfl_predictor/api/` changes.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff

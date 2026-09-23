@@ -451,27 +451,28 @@ python scripts/walk_forward_backtest.py --disable-feature-groups pbp
 budget), which is how the budget itself is measured against the default. The six-season ladder
 measured with it (`200`, `400`, `598`) is recorded in `AGENTS.md` under "Tree-budget ladder".
 
-Recent ablation example (2003-2025 seasons, include postseason, calibration=platt, recency half-life
-seasons=2):
+Reviewed season-weighting ladder on the current `pbp`-default build (`data/completed_games_ml.m54_flip_through_2025.csv`),
+six seasons (`2020-2025`), from week 1, `auto`, `market_anchor` on, seed `42`, default
+`200`-tree budget. Run directories: `models/wf_m55_8_2020_2025_unweighted/`,
+`models/wf_m55_8_2020_2025_half_life4/`, `models/wf_m55_8_2020_2025_half_life8/`, and
+`models/wf_m55_8_2020_2025_half_life16/`; each has a `REVIEW.md` beside its artifacts.
 
-```text
-Setting                         Brier    LogLoss  MarginMAE  TotalMAE  ActualPts
-Trends on, recency off          0.2325   0.7525   10.0159    10.1254   213.35
-Trends on, recency on           0.2804   1.9525   10.0691    10.0670   213.55
-Trends off, recency off         0.2372   0.7772   10.0987    10.0759   210.55
-Trends off, recency on          0.2827   1.9775   10.2003    10.0706   211.50
-```
+| arm | weeks 3-18 det Brier | weeks 3-18 margin MAE | all-weeks det Brier | all-weeks margin MAE | weeks 3-18 det-minus-market Brier CI |
+| --- | --- | --- | --- | --- | --- |
+| unweighted | `0.2107` | `9.9361` | `0.2113` | `9.8077` | `[-0.0007, +0.0033]` |
+| half-life 4 | `0.2115` | `10.0051` | `0.2122` | `9.8829` | `[-0.0004, +0.0044]` |
+| half-life 8 | `0.2107` | `9.9673` | `0.2117` | `9.8534` | `[-0.0010, +0.0035]` |
+| half-life 16 | `0.2102` | `9.9522` | `0.2111` | `9.8423` | `[-0.0015, +0.0029]` |
 
 Interpretation:
 
-- Trend features improve probability metrics (Brier/log loss) and margin MAE, with a small tradeoff
-  in total MAE.
-- Recency weighting (half-life seasons=2) scored worse in this run, but the result is superseded:
-  it was measured through Platt calibration, which the 2026-09-18 audit found noise-dominated,
-  on an earlier dataset build, and its log loss of `1.95` reads as a calibration failure rather
-  than a model difference. Season weighting is re-measured on the deterministic instrument under
-  task 55.8 in `.agents/TODO.md`; until then the default stays off and this table is history,
-  not guidance.
+- Half-life `16` is the best raw Brier arm, but its paired bootstrap interval against both the
+  unweighted reference and the shipped half-life `4` arm still covers zero.
+- Half-life `8` ties the unweighted reference on the governing weeks 3-18 window.
+- The ladder therefore reads as flat within noise rather than as a clear default-changing win.
+- The shipped production weighting stays at `train_recency_half_life_seasons: 4`, and the weekly
+  config now sets `wf_recency_half_life_seasons: 4` so the walk-forward comparison stage measures
+  the same season weighting the final training stage already uses.
 
 Evaluation rule: "Model selection is based on time-aware walk-forward evaluation; random CV is not
 authoritative." Season-blocked CV is used for hyperparameter tuning only; walk-forward remains the

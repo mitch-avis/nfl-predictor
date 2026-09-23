@@ -86,4 +86,4 @@ score_rounding: nfl
 # ratings_min_season omitted so ratings can use the full available history by default.
 # power_rankings_season and power_rankings_through_week are inferred from the prediction input.
 # whether to include postseason games in power rankings (default: false)
-power_rankings_include_postseason: true
+power_rankings_include_postseason: false

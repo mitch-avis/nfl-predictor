@@ -137,9 +137,9 @@ the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
 Order set by the user on 2026-09-21, after the tree-budget ladder was reported:
 
-1. Task 55.9 - the Optuna re-tune. Milestone 54 closed 2026-09-21, so this is unblocked; the
-      user would still like it on a bye week or in the off-season, since it occupies the machine
-      for hours.
+1. Task 55.9 - the Optuna re-tune. Milestone 54 closed 2026-09-21, so this is unblocked; the user
+      would prefer to run it when there is enough idle time, since it occupies the machine for
+      hours.
 2. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
       off); it can run in parallel with any walk-forward as a subagent task.
 

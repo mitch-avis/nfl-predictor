@@ -429,9 +429,22 @@ held: every run retrained (no stale-fold resume), the division fix, the acceptan
 
 ## Milestone 55 (partial) - Off-season configuration sweep + lock default settings
 
-Formerly Milestone 39, with former Milestone 40 folded in. Tasks 55.7 and 55.8 completed
-2026-09-21/23 (versions `0.13.0`-`0.13.1` and `0.17.0`); tasks 55.1-55.6 and 55.9 stay in
-`TODO.md`.
+Formerly Milestone 39, with former Milestone 40 folded in. Task 55.7 completed 2026-09-21
+(versions `0.13.0`-`0.13.1`). Task 55.8 was closed 2026-09-23 as `0.17.0`, reopened the same day,
+and closed again 2026-09-24 as `0.18.0` (see its section below). Tasks 55.1 and 55.2 were retired
+2026-09-24. Tasks 55.3-55.6 and 55.9 stay in `TODO.md`.
+
+### 55.1 and 55.2 - Configuration-sweep runner (retired 2026-09-24)
+
+Retired by the user's decision on 2026-09-24 and never started. The tasks asked for a sweep
+config schema (55.1) and a runner that ran a walk-forward per configuration and wrote
+`sweep_summary.csv` and `best_config.json` (55.2). Why retired: a runner that tries many settings
+and keeps the lowest score is a selection-bias machine. It is the failure the 2026-09-23 review
+found in the weekly run's stage 1 (task 56.5), and it conflicts with `AGENTS.md` rule 4 (a
+hypothesis and a decision rule written before each run) and rule 13 (two seeds for any default
+change). What replaces it: hypothesis-driven ladders for single settings (task 55.3 for `K`,
+for example), the task 55.9 Optuna tune for the XGBoost hyperparameters, and task 56.3 to wire the
+chosen settings into the weekly run and the benchmark from one source.
 
 ### 55.7 - Choose `n_estimators` time-aware (versions `0.13.0`-`0.13.1`)
 
@@ -475,7 +488,83 @@ run directory).
 Task 56.2 (the postseason default, landed the same day as part of the same chunk) is archived
 under "Milestone 56 (partial)" below.
 
-### 55.8 - Season weighting (version `0.17.0`)
+### 55.8 - Season weighting (versions `0.17.0` and `0.18.0`)
+
+Closed 2026-09-24 as `0.18.0` by the user's decision: **production trains unweighted.**
+`config/weekly_run.yaml` no longer sets `train_recency_half_life_seasons: 4` (there since the
+file's first commit, `83ba2a7`, 2026-01-25, and never measured before this task) or
+`wf_recency_half_life_seasons: 4` (added by the `0.17.0` close-out), and
+`tests/test_weekly_run.py` pins both stages as unweighted.
+
+#### The redo (2026-09-23/24)
+
+The `0.17.0` close-out (kept below as written) had correct numbers but kept the shipped half-life
+`4`, the weakest arm on every probability and error metric, and its reviews were written by the
+agent that produced the runs. The user reopened it the same day. The redo added five six-season
+arms on the same build, code path and configuration, all approved in advance with their
+hypotheses and rules written before launch:
+
+- the seed-7 pair, unweighted and half-life `4`
+  (`models/wf_m55_8_2020_2025_unweighted_seed7/`, `..._half_life4_seed7/`; rule in the first's
+  `HYPOTHESIS.md`);
+- the long-half-life check, half-life `16` at seed 7 and half-life `32` at seeds 42 and 7
+  (`..._half_life16_seed7/`, `..._half_life32/`, `..._half_life32_seed7/`; rule in the first's
+  `HYPOTHESIS.md`).
+
+The session that launched them wrote `models/wf_m55_8_review/REVIEW.md`; a separate session that
+produced none of the nine runs wrote `models/wf_m55_8_review/INDEPENDENT_REVIEW.md` from the fold
+checkpoints (`.venv/bin/python models/wf_m55_8_review/independent_rescore.py`). It reproduced
+every number in `REVIEW.md` exactly and confirmed provenance: one dataset (`2d4111a6...`), 107
+folds per arm all computed fresh, the full `200` trees, `auto` resolved to the deterministic
+floor, and only the seed and half-life differing. Its eight disagreements with `REVIEW.md` (all
+accepted, answered at the end of that file) were about completeness and wording, not numbers:
+the seed-42 ladder's own rule was never applied, the claim that `wf_recency_half_life_seasons`
+did not exist was wrong, the rule-9 list left out weeks 1-2 and the week-2 total-MAE signal, and
+the probability-path analysis has no second key.
+
+Weeks 3-18, `1423` games, market Brier `0.20948`:
+
+| arm | det Brier s42 / s7 | log loss s42 / s7 | margin MAE s42 / s7 | pool pts s42 / s7 |
+| --- | --- | --- | --- | --- |
+| unweighted | `0.21073` / `0.20959` | `0.60914` / `0.60665` | `9.9361` / `9.9105` | `8276` / `8346` |
+| half-life 4 | `0.21149` / `0.21180` | `0.61096` / `0.61149` | `10.0051` / `10.0121` | `8272` / `8246` |
+| half-life 8 | `0.21072` / - | `0.60919` / - | `9.9673` / - | `8304` / - |
+| half-life 16 | `0.21016` / `0.20994` | `0.60787` / `0.60757` | `9.9522` / `9.9299` | `8277` / `8317` |
+| half-life 32 | `0.21100` / `0.20975` | `0.60945` / `0.60686` | `9.9571` / `9.9304` | `8251` / `8325` |
+
+Two seeds combined per game (candidate minus unweighted, 5000 game resamples, seed 0), weeks 3-18:
+
+| contrast | det Brier | margin MAE | total MAE | pick acc | pool pts |
+| --- | --- | --- | --- | --- | --- |
+| half-life 4 | `+0.00148` `[-0.00012, +0.00313]` | `+0.0853` `[+0.0188, +0.1535]` | `+0.0744` `[-0.0028, +0.1510]` | `+0.0042` `[-0.0046, +0.0130]` | `-52` `[-114, +10]` |
+| half-life 16 | `-0.00011` `[-0.00104, +0.00088]` | `+0.0177` `[-0.0237, +0.0590]` | `+0.0224` `[-0.0203, +0.0651]` | `+0.0032` `[-0.0025, +0.0091]` | `-14` `[-56, +29]` |
+| half-life 32 | `+0.00021` `[-0.00061, +0.00102]` | `+0.0204` `[-0.0139, +0.0556]` | `-0.0093` `[-0.0471, +0.0270]` | `+0.0056` `[+0.0000, +0.0116]` | `-23` `[-60, +15]` |
+
+Outcomes under the rules as written:
+
+- Seed-7 pair: branch B, half-life `4` loses (margin MAE worse beyond its interval, Brier not in
+  its favor). Over all weeks it is also worse beyond its intervals on Brier `+0.00171`, log loss
+  `+0.00381` and margin MAE `+0.0916`. It is last at both seeds on Brier, log loss, margin MAE and
+  total MAE, and worse than unweighted in 5 of 6 seasons.
+- Long half-lives: neither `16` nor `32` has a Brier interval below zero, so neither is adopted;
+  the half-life `32` pick-accuracy lower bound is exactly zero, not above it.
+- Seed-42 ladder (`models/wf_m55_8_2020_2025_unweighted/HYPOTHESIS.md`): its first branch fails
+  on the point estimate and its "flat, prefer the shipped `4`" fallback rescues the incumbent, the
+  rule-12 case; superseded by the two-seed rules.
+
+Qualifications recorded with the decision: unweighted ties mild weighting rather than beating it;
+the one consistent signal in weighting's favor is week-2 total MAE (two-seed `-0.2824`,
+`-0.2381`, `-0.2044` for half-lives `4`, `16`, `32`, each interval excluding zero; 96 games, on
+the `diagnostic_only` total head, gone by weeks 3-18); and half-life `8` has no second seed.
+
+The six-season fit-noise floor, the first ever measured (same setting, seed 7 minus seed 42, weeks
+3-18): deterministic Brier moved by up to `0.00125`, pick accuracy by up to `0.0084` and pool
+points by up to `74`, with 32-50 picks flipped; intervals excluding zero appeared from re-seeding
+alone (unweighted pick accuracy and pool points, half-life `32` Brier and pool points). This is
+the evidence behind `AGENTS.md` rule 13 and closes the tree-budget ladder's open question about a
+second seed.
+
+#### The `0.17.0` close-out (2026-09-23, superseded; kept as written)
 
 The shipped weekly config had diverged: `train_recency_half_life_seasons: 4` was already live in
 `config/weekly_run.yaml`, but no `wf_recency_half_life_seasons` key existed, so a weekly run

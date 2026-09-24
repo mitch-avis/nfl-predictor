@@ -158,12 +158,12 @@ Rules that are always enforced:
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-24 (`feat/m55-8-season-weighting`, version `0.18.0`):
-  `scripts/gate.sh` exits `0` (`889 passed`, coverage `92.45%` against the enforced `90%` floor;
-  ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`, `uv sync --check --active` and
-  the CLI help smoke checks all clean). `main` still reflects the earlier `0.16.2` merge until this
-  branch is merged; this branch carries the task 55.8 close-out (unweighted production training),
-  the 2026-09-24 roadmap and the guardrail rules 9-14. The
+- Validated baseline on 2026-09-24 (`main` at `703ea25`, version `0.18.0`, re-run on the fresh
+  `feat/m60-cli-consolidation` branch): `scripts/gate.sh` exits `0` (`889 passed`, coverage
+  `92.45%` against the enforced `90%` floor; ruff format, ruff, ty, pyright, markdownlint,
+  `uv lock --check`, `uv sync --check --active` and the CLI help smoke checks all clean).
+  `feat/m55-8-season-weighting` (the task 55.8 close-out, the 2026-09-24 roadmap and the
+  guardrail rules 9-14) is merged into `main` and pushed. The
   frontend gate was last verified at the `0.8.0` merge; run `scripts/gate.sh --web` whenever
   `web/` or `nfl_predictor/api/` changes.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff

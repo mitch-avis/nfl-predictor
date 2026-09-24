@@ -220,9 +220,10 @@ flags:
 
   - entrypoint: ml_model
     flag: --model-kind
-    class: active (partly retiring with ScoreModel)
+    class: active
     note: >-
-      The `score` choice is the only CLI route to ScoreModel (task 55.5). Separately, the
+      The `score` choice is the only CLI route to ScoreModel, which stays pending a fair
+      model-family comparison (task 55.5, PROPOSAL.md section 6). Separately, the
       vocabulary disagrees across consumers: ml_model and training metadata say `blend`,
       power_rankings and the web catalog say `blended_margin_total` (see the web-template
       parse section: three launches are rejected).
@@ -304,7 +305,7 @@ scripts:
       The benchmark entrypoint: 19 launchers under models/, web template, 1 test module.
   scripts/wf_compare.py:
     disposition: move
-    target: thin CLI module in the package
+    target: the `sweep` subcommand; whether it is still needed is decided after task 56.5
     reason: >-
       Calibration and market-blend sweep; 1 test module, cited in README. Shares
       _market_modes and _parse_feature_groups with weekly_run and walk_forward_backtest
@@ -315,22 +316,26 @@ scripts:
     reason: Required tool (AGENTS.md "Leakage Audit"); web template; no test module yet.
   scripts/validate_offline.py:
     disposition: move
-    target: thin CLI module (optionally one module with offline and live modes)
-    reason: Web template validate_offline; no test module yet.
+    target: one `validate` subcommand, offline by default
+    reason: Web template validate_offline; no test module yet; both check data/all_data.csv.
   scripts/validate_live.py:
     disposition: move
-    target: thin CLI module (optionally merged with validate_offline)
+    target: the same `validate` subcommand with a --live switch
     reason: Web template validate_live; no test module yet.
   scripts/betting_report_excel.py:
-    disposition: move
-    target: CLI entry beside nfl_predictor/reporting/betting_excel.py
-    reason: Web template betting_xlsx; 69 lines over existing package code.
+    disposition: retire, with nfl_predictor/reporting/betting_excel.py and openpyxl
+    reason: >-
+      The user no longer needs the Excel workbook (2026-09-24). The weekly run writes it only
+      when betting_template_path is set, which the production config does not; the web
+      betting page recomputes its report from the predictions and never reads the workbook.
+      Retires with it: weekly_run --betting-template-path, the web betting_xlsx job, the
+      workbook download routes and button, and their tests.
   scripts/shap_analysis.py:
     disposition: move
-    target: thin CLI module; drop its ScoreModel branch with task 55.5
+    target: the `explain` subcommand, keeping its ScoreModel branch
     reason: >-
       Web template shap_analysis and 1 test module; optional dependency (shap) guarded by
-      _import_shap. Retiring it would also retire a web job (question for the user).
+      _import_shap.
   scripts/betting_pipeline.py:
     disposition: retire after build_betting_report moves
     target: build_betting_report and its helpers into nfl_predictor/reporting/
@@ -346,15 +351,18 @@ scripts:
   scripts/backtest_predictions.py:
     disposition: retire
     reason: >-
-      No test, no web template, no launcher, no CI; one README mention. Scores a saved model
-      on past weeks, which walk-forward replaced; two of its helpers are copies of
-      golden_command's; uses ScoreModel.
+      No test, no web template, no launcher, no CI; one README mention. Runs one saved model
+      over every completed game, mostly games it trained on; walk-forward reports
+      confidence-pool points out of sample. Two of its helpers are copies of golden_command's.
   scripts/objective_compare_models.py:
     disposition: retire, with nfl_predictor/ml/model_compare.py and tests/test_model_compare.py
     reason: >-
       No test of the script, no web template, no launcher, no CI; one README mention.
-      model_compare.py is imported by nothing else. Model comparison is now done with
-      walk-forward arms and independent rescoring from fold checkpoints.
+      model_compare.py is imported by nothing else. Its idea, a paired comparison of two
+      models on the same folds, returns as the proposed `compare` subcommand over walk-forward
+      checkpoints.
   scripts/gate.sh:
     disposition: keep
-    reason: Repository tooling, the one validation gate (AGENTS.md rule 1); mirrors CI.
+    reason: >-
+      Repository tooling, the one validation gate (AGENTS.md rule 1). Proposed: CI calls it
+      instead of repeating its steps.

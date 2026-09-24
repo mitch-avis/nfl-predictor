@@ -44,6 +44,38 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Milestone 60 (partial) - CLI and entrypoint consolidation
+
+Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`); tasks
+60.4-60.9 stay in `TODO.md`.
+
+### 60.1 and 60.2 - Generated inventories
+
+`.agents/m60/inventory.py` builds every entrypoint's parser by intercepting
+`ArgumentParser.parse_args`, traces each flag's read sites and sinks from the AST, parses every
+web job template command with its target's real parser, and scans the production config, tests,
+CI, docs and `models/` launchers; `.agents/m60/INVENTORY.md` and `inventory.json` are its output.
+Hand judgments live in `.agents/m60/annotations.yaml` and apply only while their evidence
+patterns hold. `.agents/m60/scripts_coverage.py` writes `SCRIPTS_COVERAGE.md`. The superseded
+`.agents/m60_cli_flag_audit.md` was not used. Every finding the 2026-09-23 review recorded was
+confirmed except two details: the market-weight alias is two argparse actions, and eleven test
+modules (not ten) import from `scripts`. New findings: three web launches fail on the model-kind
+vocabulary (`blend` against `blended_margin_total`); `wf_compare --early-stopping-rounds`,
+`weekly_run --wf-n-jobs` and `leakage_audit --include-market` do nothing; the backtest's
+`--calibration` default (`platt`) differs from the benchmark's `auto`; ScoreModel was never
+measured.
+
+### 60.3 - Sign-off
+
+The user's decisions are recorded in `.agents/m60/PROPOSAL.md`, "Sign-off": one
+`nfl-predictor <command>` front door; the script dispositions; the flag removals; the naming rule;
+old launchers reproduce from their recorded commit; ScoreModel removed (task 55.5); the Excel
+betting workbook retired end to end; the model-kind defect fixed in 60.7; CI calls
+`scripts/gate.sh`; a new `compare` command (60.9); the `--calibration` default deferred to task
+56.5; survivor picks wait for task 58.1. Housekeeping the same day: the stray checkpoint folder
+`models/wf_checkpoints/ca3e6892daacd42980f4/` was already gone, and the stale
+`../nfl-predictor-web` worktree record was pruned.
+
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 
 Formerly Milestone 48, widened on 2026-09-18 by the user's decision after the audit found that

@@ -2,6 +2,14 @@
 
 Date: 2026-09-22
 
+> **Superseded on 2026-09-23. Do not use this file as a source.** A second-key review compared
+> every section against the real parsers. The `scripts/golden_command.py` section lists 27 flags
+> that do not exist and misses 20 that do; the `scripts/weekly_run.py` section lists a nonexistent
+> `--report-save-input-copy` and misses `--betting-template-path` and `--ratings-min-season`;
+> about 10 of the 239 flags are classified; and no consumer (web job templates, tests, CI,
+> `models/*/launch.sh`) was checked. Task 60.1 in `TODO.md` replaces it with a script-generated
+> inventory and lists the findings that were verified. The file stays only as a record.
+
 ## Scope
 
 This audit covers every `add_argument(...)` surface in the entrypoints named by task 60.1:

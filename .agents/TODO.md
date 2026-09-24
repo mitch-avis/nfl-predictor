@@ -583,6 +583,23 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       read it). The per-entrypoint snapshot pins the parser surface (option strings, dest,
       default, choices), which is stabler than `--help` text across terminal widths and Python
       versions; intended renames update it in the same commit.
+      Status 2026-09-24 (`0.18.2`): landed except the SHAP tests. `tests/weekly_fixture.py` (the
+      synthetic dataset), `tests/snapshots.py` (shared comparison helpers),
+      `tests/test_weekly_run_characterization.py` (all four weekly stages with the shipped
+      config; about 12 s), `tests/test_entrypoints_characterization.py` (backtest, sweep,
+      leakage audit with a planted leak), `tests/test_cli_surface.py` (19 entrypoints, 309
+      actions, matching the inventory). Snapshots under `tests/fixtures/` are identical across
+      runs, and two mutations (reversing the stage-1 candidate list, deeper trees) both fail the
+      weekly test. The weekly snapshot pins today's stage-1 list-order selection (task 56.5):
+      all nine candidates tie on deterministic Brier and `elo` + blend 0.2 + clamp 0.1 wins.
+      Coverage of `scripts/` rose from 54.0% to 69.6% of statements; the projected package
+      coverage after the moves is 93.8% (`.agents/m60/SCRIPTS_COVERAGE.md`). Found on the way:
+      (a) the paired bootstrap in `walk_forward._bootstrap_probability_differences` spends 98%
+      of a stage-1 run in 5,000 scikit-learn metric calls per window (the tests patch it to
+      200); a numpy version with identical values is a candidate for the `nfl_predictor/ml/`
+      chunk; (b) `shap` is not a declared dependency, so `shap_analysis` and its web job can
+      only exit "not installed", and its disposition goes back to the user; (c) the backtest
+      CLI prints XGBoost's per-matrix INFO lines.
 - [ ] 60.5 Move library code out of `scripts/` into the package (power-rankings computation and
       output writing into `nfl_predictor/reporting/`, the betting-report builder likewise), with
       the scripts temporarily calling the package. Drop every `from scripts import`.

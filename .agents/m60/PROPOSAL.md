@@ -294,6 +294,5 @@ the market's by a margin, sized conservatively) rather than training on an odds-
 
 ## Next
 
-60.4: characterization tests (the weekly run end to end on a synthetic fixture, a snapshot of
-every entrypoint's parser surface, and tests for the scripts with little coverage), green
-against the current layout before anything moves.
+60.4 landed in `0.18.2` except the SHAP tests (see `TODO.md`, 60.4). Open questions before
+60.5: the SHAP command (not installed anywhere), and the bootstrap speed-up.

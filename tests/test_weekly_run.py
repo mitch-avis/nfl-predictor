@@ -33,7 +33,11 @@ def test_load_config_yaml_optional(tmp_path: Path) -> None:
 
 
 def test_shipped_weekly_run_config_matches_approved_defaults() -> None:
-    """The shipped weekly config should reflect the approved 0.13.0 defaults."""
+    """The shipped weekly config should reflect the approved defaults.
+
+    That is 200 trees, no postseason (in evaluation, training or the power rankings), no tuning,
+    and no season recency weighting in either the walk-forward stage or the final training fit.
+    """
     config_path = Path(__file__).resolve().parents[1] / "config" / "weekly_run.yaml"
 
     config = weekly_run._load_config(config_path)
@@ -42,7 +46,12 @@ def test_shipped_weekly_run_config_matches_approved_defaults() -> None:
     assert args.wf_n_estimators == 200
     assert args.wf_include_postseason is False
     assert args.include_postseason is False
+    assert args.power_rankings_include_postseason is False
     assert args.tune is False
+    assert args.wf_recency_half_life_seasons is None
+    assert args.wf_recency_half_life_weeks is None
+    assert args.train_recency_half_life_seasons is None
+    assert args.train_recency_half_life_weeks is None
 
 
 def test_weekly_run_parser_defaults_follow_shared_xgb_defaults() -> None:

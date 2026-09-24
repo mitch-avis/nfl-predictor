@@ -319,6 +319,41 @@ Odds-provider adapter interface plus the `Live` blend from `betting_excel.py`
 - Security: JWT secret from env or generated file, argon2, login rate limit, Tailscale-only
   exposure recommended, cookie Secure flag documented.
 
+## Milestone 60 impact (planned 2026-09-23)
+
+Milestone 60 in `TODO.md` (CLI and entrypoint consolidation) will move most of `scripts/` into the
+package and rename or remove flags. It runs on its own branch after task 55.8 merges, and every
+change below lands with `scripts/gate.sh --web` green and an update to this section. What it
+touches on the web side:
+
+- **Job templates that launch scripts by file path.** `JobContext.script()` in
+  `nfl_predictor/api/jobs/catalog.py` resolves `scripts/<name>`, and eight templates use it:
+  `weekly_run`, `power_rankings`, `betting_xlsx` (`betting_report_excel.py`), `leakage_audit`,
+  `validate_offline`, `validate_live`, `walk_forward_backtest` and `shap_analysis`. Each moves to
+  the new command (`python -m nfl_predictor.<module>` or a console command, per the user's 60.3
+  decision) in the same chunk that moves the script, with its `tests/api/` case updated.
+- **Flags passed by templates.** The templates pass, among others, `--config` (`weekly_run`),
+  `--win-prob-calibration`, `--model-kind`, `--holdout-seasons`, `--model-in`, `--data-path`,
+  `--eval-last-n-seasons`, `--wf-start-week`, `--out-json`, `--season`, `--through-week`,
+  `--data-ml`, `--data-schedule`, `--out-dir` and `--data-dir`. A renamed flag keeps its old
+  spelling as a second option string until the templates move to the new one.
+- **Saved weekly-run configs.** The `weekly_run` template writes its parameters to
+  `data/web/job_configs/{job_id}.json` and runs `weekly_run --config` on it, so the script's own
+  key validation applies. A renamed or removed config key breaks re-running an old job; the
+  inventory (task 60.1) lists every key the template can emit.
+- **Progress parsing.** `PROGRESS_RE` in `nfl_predictor/api/jobs/runner.py` matches
+  `fold N/M` (the walk-forward loop's `Walk-forward fold N/M done` line) and `candidate N/M`
+  (the weekly run's `WF candidate N/M` line). Moving those entrypoints must keep both log lines
+  word for word, or the progress bar stops moving.
+- **Exclusive groups.** `WALK_FORWARD_GROUP` today holds `weekly_run`, `train` and
+  `walk_forward_backtest`. The "Job runner" section above still lists `golden_command`, which
+  never had a template; that script is to be retired (task 60.2).
+- **Deployment state as of 2026-09-23.** `feat/web-ui` is fully merged into `main`; the
+  `../nfl-predictor-web` worktree directory is gone (`git worktree list` marks it prunable) and
+  nothing listens on port `8765`. Before Milestone 60 starts, the user decides whether to prune the
+  worktree record and where the live instance runs from; if it runs from a checkout of `main`, the
+  job templates change as soon as a Milestone 60 chunk merges.
+
 ## Status
 
 - Phase 0 (2026-09-10): done. `nfl_predictor/api/` serves auth, users, runs, and the built SPA;
@@ -386,4 +421,6 @@ Odds-provider adapter interface plus the `Live` blend from `betting_excel.py`
   `main` (the calibration-window, total-head and quarterback work, `0.6.1`-`0.7.1`) into it;
   no conflicts. The web server libraries became core dependencies, and `README.md` /
   `AGENTS.md` now describe the app. Open phases continue as Milestone 58 in `.agents/TODO.md`.
-- Phase 4: not started.
+- Phase 4: not started. Scheduled 2026-09-24 as step 6 of the roadmap in `TODO.md`
+  ("Roadmap Status"): phases 4-6 resume after Milestone 60 has moved the scripts the job runner
+  launches (see "Milestone 60 impact" above), so the web work starts on the settled entrypoints.

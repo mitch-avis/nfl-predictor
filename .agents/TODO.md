@@ -49,18 +49,19 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-24, version `0.18.0`, branch `feat/m55-8-season-weighting`)
+### Current validated baseline (2026-09-24, version `0.18.0`, `main` at `703ea25`)
 
-- `scripts/gate.sh` exits `0` on this branch with the `0.18.0` close-out (`889 passed`, coverage
-      `92.45%`). Coverage measures `nfl_predictor/` only; the `scripts/` tree is outside it
-      (Milestone 60, task 60.2).
-- `origin/feat/m55-8-season-weighting` exists (the branch was pushed). The `../nfl-predictor-web`
+- `feat/m55-8-season-weighting` is merged into `main` and pushed (fast-forward to `703ea25`);
+      the remote branch is gone. `scripts/gate.sh` exits `0` on `main` as re-run on the fresh
+      `feat/m60-cli-consolidation` branch (`889 passed`, coverage `92.45%`). Coverage measures
+      `nfl_predictor/` only; the `scripts/` tree is outside it (Milestone 60, task 60.2).
+- The `../nfl-predictor-web`
       worktree directory no longer exists (`git worktree list` marks it prunable), nothing listens
       on port `8765`, and `feat/web-ui` is fully merged into `main`.
 - `feat/m54-0-landing` (the `0.14.0`-`0.16.1` chunks) merged into `main` with no conflicts and was
       pushed on 2026-09-22 (merge commit `295d4c4`, version `0.16.2`). `main` and `origin/main` carry
-      the `pbp`-default sources and the shared `200`-tree default; this branch layers the task
-      55.8 close-out (unweighted production training) on top.
+      the `pbp`-default sources, the shared `200`-tree default and, since `0.18.0`, unweighted
+      production training.
 - Data: the 2026-09-21 full rebuild (`--refresh-nflreadpy`, needed for the new
       `pass_attempt`/`rush_attempt` raw columns) on the `0.16.0` code, now defaulting to
       `--team-stats-source pbp --tr-stats-source pbp`, produced `data/completed_games_ml.csv`
@@ -99,8 +100,7 @@ Agents and humans should not rely on the shell activation state.
       reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
       `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.
 - Tasks 54.0-54.4 and the default flip are archived; Milestone 54 is fully closed (`ARCHIVE.md`).
-      Task 55.8 closed on `feat/m55-8-season-weighting`; `main` still reflects this 2026-09-22
-      baseline until that branch is merged. Merging and pushing remain must-ask, every
+      Task 55.8 closed as `0.18.0` and is on `main`. Merging and pushing remain must-ask, every
       time.
 
 ---
@@ -327,6 +327,9 @@ Tasks 55.1 and 55.2 (a general configuration-sweep runner) were retired by the u
 - [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental
       or deprecate cleanly. Decided and executed inside Milestone 60, because retiring unused
       model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).
+      Evidence generated 2026-09-24 (`.agents/m60/INVENTORY.md`): no run records `score` and
+      every saved model under `models/` is a `MarginTotalModel`; the proposal is to remove it
+      (`.agents/m60/PROPOSAL.md`, section 6), pending the user's decision at 60.3.
 - [ ] 55.6 (step 3) Add the stability view by season and week bucket, and a "recommended
       defaults" section. The second-key review script
       (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that
@@ -580,6 +583,12 @@ Ground rules for the whole milestone:
       `postseason_weight: 1.3` in the weekly config is inert since task 56.2; `betting_pipeline`
       defaults `--include-postseason` to true (weight `1.15`), against the regular-season rule of
       task 56.2; `--recency-half-life-weeks` has never been measured.
+      Status 2026-09-24: generated on `feat/m60-cli-consolidation` by `.agents/m60/inventory.py`
+      (output `.agents/m60/INVENTORY.md` and `inventory.json`; hand judgments in
+      `annotations.yaml`, re-checked on every run). Every recorded finding above is confirmed
+      except the form of the alias pair (two argparse actions, not one) and the test-module count
+      under 60.2 (eleven, not ten). New findings and the proposed dispositions are in
+      `.agents/m60/PROPOSAL.md`. Left open until the user signs off at 60.3.
 - [ ] 60.2 Disposition of every file under `scripts/`, generated the same way. Per file: size,
       the other scripts it imports, the tests that import it, the web job templates that launch it,
       the CI and gate checks that call it, the docs that cite it, and the `models/*/launch.sh`
@@ -606,6 +615,11 @@ Ground rules for the whole milestone:
       and `objective_compare_models` (no tests, no web template, superseded by walk-forward);
       retire `betting_pipeline` once `build_betting_report` has moved into the package; decide
       `shap_analysis`; keep `gate.sh` (repo tooling).
+      Status 2026-09-24: the per-file inventory is generated by the same script (with current
+      test coverage of each file from `.agents/m60/scripts_coverage.py`). The triage is
+      confirmed, with two additions: retiring `objective_compare_models` also retires
+      `nfl_predictor/ml/model_compare.py`, which nothing else imports; and `shap_analysis` is
+      proposed to move, not retire. Awaiting sign-off at 60.3.
 - [ ] 60.3 User sign-off on 60.1 and 60.2: the removal list, the surviving canonical names, every
       script disposition, the command style for moved entrypoints (`python -m nfl_predictor.<x>`
       or `[project.scripts]` console commands), and the reproduction policy for the old

@@ -608,13 +608,15 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       keep working), retire the retired files (their tests too), and add the shared options module
       (argument-group builders; renames keep the old spelling as a second option string on the
       same argument rather than a separate declaration). Includes: the signed-off flag removals
-      (PROPOSAL.md section 2), `postseason_weight: 1.3` becoming a commented-out example in
-      `config/weekly_run.yaml`, the Excel workbook retirement (`nfl_predictor/reporting/
+      (PROPOSAL.md section 2; `postseason_weight: 1.3` stays in `config/weekly_run.yaml` for
+      postseason training), the Excel workbook retirement (`nfl_predictor/reporting/
       betting_excel.py`, `openpyxl`, `--betting-template-path`), the ScoreModel removal (task
       55.5), merging the two validate scripts, and the step-2 follow-ups (PROPOSAL.md section 7:
       `WalkForwardConfig.early_stopping_rounds`, the `wf_compare` pick-accuracy columns, the
       automatic `OMP_WAIT_POLICY=PASSIVE`, a read-only listing of unreferenced checkpoint
-      directories, the dead `LogEvalCallback` plumbing). Edits under `nfl_predictor/ml/` go in
+      directories, the dead `LogEvalCallback` plumbing), and the numpy rewrite of
+      `walk_forward._bootstrap_probability_differences` (approved 2026-09-24; a test first proves
+      identical values against the scikit-learn version). Edits under `nfl_predictor/ml/` go in
       one chunk. Each removal or rename gets a deprecation or removal note in `CHANGELOG.md`.
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner

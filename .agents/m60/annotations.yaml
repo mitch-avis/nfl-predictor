@@ -5,6 +5,9 @@
 # whose evidence fails is reported as OVERTURNED and fails the run. Judgments add to the
 # mechanical classes; they never replace the per-flag read sites in inventory.json.
 #
+# The dispositions and removals below were signed off by the user on 2026-09-24 (PROPOSAL.md,
+# "Sign-off").
+#
 # Classes: inert (stored but never applied), tuning-only, duplicate, alias, config-only,
 # policy drift (a default that disagrees with a recorded decision), unmeasured (active, but no
 # run ever measured it).
@@ -68,7 +71,8 @@ flags:
     note: >-
       The production config sets 1.3, but include_postseason is false and
       compute_postseason_sample_weight returns None whenever it is, so the weight is never
-      applied (task 56.2). The flag itself is live when include_postseason is true.
+      applied (task 56.2). The flag itself is live when include_postseason is true; the power
+      rankings never read it. Decided 2026-09-24: the key becomes a commented-out example.
     evidence:
       - {path: config/weekly_run.yaml, pattern: '^postseason_weight: 1\.3'}
       - {path: config/weekly_run.yaml, pattern: '^include_postseason: false'}
@@ -220,10 +224,10 @@ flags:
 
   - entrypoint: ml_model
     flag: --model-kind
-    class: active
+    class: active (the score choice retires)
     note: >-
-      The `score` choice is the only CLI route to ScoreModel, which stays pending a fair
-      model-family comparison (task 55.5, PROPOSAL.md section 6). Separately, the
+      The `score` choice is the only CLI route to ScoreModel, which the user decided to remove
+      on 2026-09-24 (task 55.5, PROPOSAL.md section 6). Separately, the
       vocabulary disagrees across consumers: ml_model and training metadata say `blend`,
       power_rankings and the web catalog say `blended_margin_total` (see the web-template
       parse section: three launches are rejected).
@@ -332,7 +336,7 @@ scripts:
       workbook download routes and button, and their tests.
   scripts/shap_analysis.py:
     disposition: move
-    target: the `explain` subcommand, keeping its ScoreModel branch
+    target: the `explain` subcommand, dropping its ScoreModel branch
     reason: >-
       Web template shap_analysis and 1 test module; optional dependency (shap) guarded by
       _import_shap.

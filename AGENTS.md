@@ -128,26 +128,42 @@ Rules that are always enforced:
   carry the `pbp`-default sources and the shared `200`-tree default with no further merge
   needed. A 2026-09-22 review found every other branch except `feat/web-ui` (the live worktree
   behind the web API on port 8765) was a fully-merged, zero-commit ancestor of `main`, and the
-  user approved deleting all ten of them, locally and on `origin`. Task 55.8 then landed on
-  `feat/m55-8-season-weighting` as version `0.17.0` on 2026-09-23: four reviewed six-season arms
-  on the current `pbp`-default build (`models/wf_m55_8_2020_2025_{unweighted,half_life4,half_life8,half_life16}/`)
-  found no season-weighting value that beat the shipped half-life `4` beyond the paired bootstrap
-  intervals, so the production train default stays at `4` and `config/weekly_run.yaml` now also
-  sets `wf_recency_half_life_seasons: 4` so Stage 1 measures the same season weighting Stage 2
-  already trains. The next active tasks are 55.9 and Milestone 60's signed-off removal phase; see
-  "Roadmap Status" in `.agents/TODO.md`.
+  user approved deleting all ten of them, locally and on `origin`. Task 55.8 (season weighting)
+  was closed on `feat/m55-8-season-weighting` as version `0.17.0` on 2026-09-23 and reopened the
+  same day by the user after a second-key review: the four six-season arms
+  (`models/wf_m55_8_2020_2025_{unweighted,half_life4,half_life8,half_life16}/`) are valid, but the
+  close-out kept the shipped half-life `4`, the weakest arm on every probability and error metric,
+  and its reviews were written by the agent that produced the runs. The redo added a second seed
+  and longer half-lives (nine arms in all) and an independent review
+  (`models/wf_m55_8_review/INDEPENDENT_REVIEW.md`), and on 2026-09-24 the user chose
+  **unweighted** training for production: version `0.18.0` removes both
+  `train_recency_half_life_seasons: 4` and `wf_recency_half_life_seasons: 4` from
+  `config/weekly_run.yaml`. The numbers are under "Season weighting and the six-season fit-noise
+  floor" below. The order agreed with the user on 2026-09-24, each step on its own branch and
+  merged before the next, with no deadline:
+  (1) close 55.8;
+  (2) Milestone 60, CLI and entrypoint consolidation widened to every file under `scripts/`,
+  behavior-preserving, with task 55.5;
+  (3) production/benchmark parity: GPU as the default device (55.4), how production
+  probabilities are formed (56.5), pick-time lines (56.6), and the out-of-fold calibration pool;
+  (4) rebuild reproducibility, then every feature-value change (55.3, 53.7 and the feature
+  follow-ups);
+  (5) the Optuna re-tune with wiring into production (55.9 with 56.3);
+  (6) the web UI, Milestone 58 phases 4-6.
+  Tasks 55.1 and 55.2 are retired. The reasoning and the follow-up assignments are under "Roadmap
+  Status" in `.agents/TODO.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-23 (`feat/m55-8-season-weighting` at current head, version
-  `0.17.0`): `scripts/gate.sh` exits `0` (`889 passed`, coverage `92.45%` against the enforced
-  `90%` floor; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
-  `uv sync --check --active` and the CLI help smoke checks all clean). `main` still reflects the
-  earlier `0.16.2` merge until this branch is reviewed and merged; this branch layers the 55.8
-  season-weighting close-out on top. The
+- Validated baseline on 2026-09-24 (`feat/m55-8-season-weighting`, version `0.18.0`):
+  `scripts/gate.sh` exits `0` (`889 passed`, coverage `92.45%` against the enforced `90%` floor;
+  ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`, `uv sync --check --active` and
+  the CLI help smoke checks all clean). `main` still reflects the earlier `0.16.2` merge until this
+  branch is merged; this branch carries the task 55.8 close-out (unweighted production training),
+  the 2026-09-24 roadmap and the guardrail rules 9-14. The
   frontend gate was last verified at the `0.8.0` merge; run `scripts/gate.sh --web` whenever
   `web/` or `nfl_predictor/api/` changes.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
@@ -327,12 +343,54 @@ Rules that are always enforced:
   and `REVIEW.md` there): governing weeks 3-18 against `200`, deterministic Brier `0.2103`
   against `0.2103`, diff `+0.0000` `[-0.0008, +0.0009]`; margin MAE `9.9237` against `9.9281`,
   diff `-0.0044` `[-0.0389, +0.0296]`. So `200` stays the default and task 55.7 is closed. The
-  `1200` rung stays pre-written and never launched. Open questions: a second seed on `200`
-  (the six-season fit-noise floor has never been measured) and whether any further default change
+  `1200` rung stays pre-written and never launched. The six-season fit-noise floor this ladder
+  lacked was measured by task 55.8 (below). Open question: whether any further default change
   should wait for ample downtime if run mid-season. Timings, which are scheduling facts and
   not clean speed measurements: `598` about `161` s/fold (4h46m) under load from gates and the
   web API watcher, `200` about `56` s/fold (1h40m) and `400` about `111` s/fold (3h18m) on a
   machine quiet apart from that watcher.
+
+  **Season weighting and the six-season fit-noise floor (task 55.8, 2026-09-23/24)**: nine
+  six-season arms of the `200`-tree reference configuration on the `pbp`-default build
+  (`data/completed_games_ml.m54_flip_through_2025.csv` `2d4111a6...`, seasons 2020-2025 from week
+  1, `auto`, `market_anchor` on, four calibration weeks, CPU), differing only in
+  `--recency-half-life-seasons` (none, `4`, `8`, `16`, `32`) and `--random-seed` (`42`, `7`;
+  half-life `8` at seed 42 only). Run directories `models/wf_m55_8_2020_2025_*/`, each with its
+  `HYPOTHESIS.md` or a pointer to it; the second key for all nine is
+  `models/wf_m55_8_review/INDEPENDENT_REVIEW.md` (a separate session that produced none of the
+  runs), reproduced with `.venv/bin/python models/wf_m55_8_review/independent_rescore.py`. Every
+  arm spent the full `200` trees in all 107 folds, and `auto` resolved to the deterministic floor.
+  Weeks 3-18, `1423` games, market Brier `0.20948`:
+
+  | arm | det Brier s42 / s7 | margin MAE s42 / s7 | pool pts s42 / s7 |
+  | --- | --- | --- | --- |
+  | unweighted | `0.21073` / `0.20959` | `9.9361` / `9.9105` | `8276` / `8346` |
+  | half-life 4 | `0.21149` / `0.21180` | `10.0051` / `10.0121` | `8272` / `8246` |
+  | half-life 8 | `0.21072` / - | `9.9673` / - | `8304` / - |
+  | half-life 16 | `0.21016` / `0.20994` | `9.9522` / `9.9299` | `8277` / `8317` |
+  | half-life 32 | `0.21100` / `0.20975` | `9.9571` / `9.9304` | `8251` / `8325` |
+
+  Two seeds combined per game (candidate minus unweighted, averaged over the seeds, 5000 game
+  resamples, seed 0), weeks 3-18: half-life `4` deterministic Brier `+0.00148`
+  `[-0.00012, +0.00313]` and margin MAE `+0.0853` `[+0.0188, +0.1535]`; half-life `16` Brier
+  `-0.00011` `[-0.00104, +0.00088]`; half-life `32` Brier `+0.00021` `[-0.00061, +0.00102]`. Over
+  all weeks half-life `4` is worse beyond its intervals on Brier (`+0.00171`), log loss
+  (`+0.00381`) and margin MAE (`+0.0916`). By the rules written before the runs, half-life `4`
+  loses and neither `16` nor `32` is adopted; the user chose unweighted on 2026-09-24. Read it as
+  "weighting at `16` or `32` shows no benefit, and weighting at `4` hurts", not as unweighted
+  beating mild weighting. The one consistent signal in weighting's favor is week-2 total MAE
+  (`0.2`-`0.4` points better for every weighted two-seed contrast; 96 games, non-governing,
+  diagnostic-only head). The seed-42 ladder's own rule reached its "flat, keep the shipped `4`"
+  fallback, a rule-12 case that the two-seed rules superseded.
+
+  The same setting re-seeded (seed 7 minus seed 42, weeks 3-18) moved deterministic Brier by up to
+  `0.00125`, pick accuracy by up to `0.0084` and pool points by up to `74` over the six seasons
+  (32-50 picks flipped, median margin move `0.65`-`0.78` points), and some of those game-resampled
+  intervals exclude zero: unweighted pick accuracy `+0.0084` `[+0.0007, +0.0162]` and pool points
+  `+70` `[+14, +128]`; half-life `32` Brier `-0.00125` `[-0.00250, -0.00007]`. So on six seasons, a
+  single-seed difference under about `0.0013` Brier, `0.008` pick accuracy, `75` pool points or
+  `0.03` margin MAE is within re-seeding noise, whatever its interval says. This is the evidence
+  behind rule 13.
 
   **How to read it now.** Walk-forward reports and `wf_compare` now carry three probability views:
   the configured calibrator, the deterministic map, and market-implied home win probability from
@@ -408,6 +466,17 @@ then discarded. An autonomous session has no other supervision, so these rules a
 Rules 4 and 5 were extended on 2026-09-21, after the tree-budget ladder's `400` rung was launched
 as a third run on one task and its result was read on the all-weeks interval while the written
 rule named weeks 3-18; the user accepted both and asked for the two amendments below.
+Rules 13 and 14 were added on 2026-09-24 with the roadmap above, after the same review's
+second-seed pair showed that re-seeding alone can move six-season pick accuracy and pool points by
+amounts whose intervals exclude zero.
+Rules 3 and 7 were tightened and rules 9-12 added on 2026-09-23, after the second-key review of
+the session that closed task 55.8 as `0.17.0`. Both of its reviewer subagents failed, and the
+producing agent wrote the four `REVIEW.md` files and every number in the docs itself. It closed
+the task by keeping the shipped setting, which was the weakest arm on every probability and error
+metric, and never reported the two intervals that excluded zero (a later count; the review
+first recorded one). It also committed a CLI inventory
+whose largest section had been filled in by guesswork after its code searches failed. The user
+accepted these amendments.
 
 1. **One gate.** `scripts/gate.sh` is the definition of "checks pass". No task, chunk or version
    is reported done, and no changelog entry is written as landed, until it exits `0` on the
@@ -422,7 +491,14 @@ rule named weeks 3-18; the user accepted both and asked for the two amendments b
    `AGENTS.md`, `.agents/ARCHIVE.md`, `.agents/TODO.md` or `CHANGELOG.md`. A reviewer (a separate
    subagent, or the next session) rescores the artifact from disk, writes the run directory and
    the reproduction command beside the number, and only then may the docs change. A number in
-   the docs without a run directory is a defect.
+   the docs without a run directory is a defect. The review is independent only if (a) its
+   `REVIEW.md` names who reviewed and states that the reviewer did not produce the run; (b) it
+   recomputes the metrics from the fold checkpoints (`models/wf_checkpoints/<fingerprint>/`), not
+   from `metrics_report.json` or only through the producer's comparison script; and (c) it checks
+   provenance: dataset hash, git commit, fold count, `best_iteration`/`early_stopped`, and that
+   only the intended setting differs between arms. If a reviewer subagent fails or returns
+   without numbers, the producing agent reports that and stops; it never writes the review
+   itself.
 4. **Compute budget.** Before each walk-forward run, write the hypothesis and the decision rule
    (which result changes what). The decision rule names the exact window or windows it reads
    (week 1, week 2, weeks 3-18, all weeks), the exact columns (deterministic Brier, log loss,
@@ -456,10 +532,58 @@ rule named weeks 3-18; the user accepted both and asked for the two amendments b
    - creating the milestone's feature branch off `main` when none exists.
 7. **Check-ins.** Report at every landed version and after every walk-forward run: what landed,
    the run directory, the gate result, the open questions. Stop for a question whenever rule 5
-   triggers; a session that ends blocked on a question has done the right thing.
+   triggers; a session that ends blocked on a question has done the right thing. The check-in
+   after a walk-forward run carries its governing-window numbers (not only "it finished"), and it
+   is written before the next rung is launched. A session that launches long runs says in the
+   same check-in how they will be sequenced and supervised: either one driver script that runs
+   the accepted rungs back to back, or a watcher that wakes the session when the run exits.
+   Never end a turn while promising to "keep monitoring" with nothing actually watching.
 8. **Handoff hygiene.** Rewrite `.agents/next_agent_session_prompt.md` at every landed chunk
    (branch, version, uncommitted state, the next task, open questions) so a restart after a
    closed terminal or a context summary resumes without re-deriving anything.
+9. **Read every interval; the incumbent gets no benefit of the doubt.** A decision or close-out
+   lists every paired interval that excludes zero, in every window reported and in either
+   direction, plus where each arm ranks on every named column and tie-breaker (deterministic
+   Brier, log loss, margin MAE, total MAE, pick accuracy, confidence-pool points). "No arm beat
+   X" is incomplete without how X compares to the others. A shipped setting that was never
+   measured is an assumption, not a baseline: when a measurement ties, the simpler setting (fewer
+   knobs, fewer assumptions) is the recommendation, and the tie goes to the user as a question
+   rather than closing in the incumbent's favor.
+10. **Inventories and audits are generated, not written.** Any inventory of code (flags, files,
+    columns, consumers, call sites) is produced by a script checked in beside it, and its
+    headline counts are reproduced by that script. A search or tool call that fails, errors, or
+    returns "No matches found" where matches must exist is reported as a failure. The gap is
+    never filled by inference, and a subagent's summary is input to verify, not a source to
+    copy.
+11. **The benchmark measures what production does.** Any setting that differs between the
+    reference walk-forward configuration (the benchmark arms under "Current Focus") and the
+    production weekly run (`config/weekly_run.yaml` and the weekly stage-1 selection) is a
+    defect until the user approves it and it is recorded here. The season-weighting gap closed in
+    `0.18.0` (both train unweighted, task 55.8). Open gaps, all scheduled:
+    - the probability path: production submits the stage-1 winner, currently `elo` with a market
+      blend and clamp, while the benchmark scores the deterministic map (task 56.5);
+    - the device: the weekly run trains on the GPU, standalone walk-forwards on the CPU (task
+      55.4; the user chose the GPU for everything, 2026-09-23);
+    - line timing: backtests anchor to and score against the stored, probably closing, lines,
+      while production anchors to mid-week lines and picks are made before Thursday (task 56.6).
+12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is
+    applied as written. If the result falls between its branches, or its first condition fails
+    and a fallback branch rescues the preferred outcome, the result goes to the user as a
+    question with the numbers.
+13. **Two seeds before any default changes.** A walk-forward result that would change a default
+    (a setting, a feature family kept or dropped, a tuned parameter) holds on two seeds. Combine
+    them per game: the candidate-minus-reference loss difference averaged over the seeds (same
+    seed paired with same seed), bootstrapped over games. Game-resampled intervals hold the fit
+    fixed, so they leave out seed-to-seed variance: a single-seed six-season interval that
+    excludes zero is not enough on its own, above all for pick accuracy and pool points. A new
+    reference arm (a new build, device or code path) is measured on two seeds too, which also
+    records that reference's own noise floor.
+14. **Order of work.** Restructure before changing behavior (a behavior-preserving move is
+    pinned by a characterization test and lands before any output-changing task that touches the
+    same code). Close benchmark/production parity gaps before new measurements (rule 11). Change
+    feature values before tuning. Group changes that invalidate walk-forward checkpoints so they
+    share one new reference. Production-changing steps land between game weeks. The step order
+    in `.agents/TODO.md` ("Roadmap Status") follows these principles; changing it is must-ask.
 
 ## Source of truth for work
 
@@ -1039,7 +1163,14 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
 - Launch every walk-forward through a small `launch.sh` in its own run directory (see
   `models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh` for the shape) with
   `nohup setsid`, never through a harness-bound shell, which stops at 10 minutes. Never
-  `pkill -f` a pattern that can match your own shell.
+  `pkill -f` a pattern that can match your own shell. Several accepted rungs run back to back
+  through one driver script. Two lessons from 2026-09-23:
+  - Any logic added to a `launch.sh` (a load probe, for example) is tested under the script's own
+    strict-mode header, because `IFS=$'\n\t'` changes how `read` splits. A probe written without
+    it failed and stopped the whole queue overnight.
+  - Never execute a fragment cut from a `launch.sh`: a cut that includes the
+    `walk_forward_backtest.py` line starts a second walk-forward with default settings.
+  Check the driver's log after its first run-to-run transition, not only at the end.
 - Choose the OpenMP wait policy by machine load at launch. Under other load, use
   `OMP_WAIT_POLICY=PASSIVE`: with the default policy XGBoost's threads spin while a preempted peer
   catches up (on 2026-09-10 one week took `730s` by default and `185s` with `PASSIVE`). On an idle

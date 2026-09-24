@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.18.1] - 2026-09-24
+
+### Added
+
+- Generate the CLI and scripts inventory for the entrypoint consolidation from the code itself:
+  `.agents/m60/inventory.py` captures every entrypoint's parser, traces each flag's read sites
+  and sinks, cross-checks the production config, the web job templates (parsing every template
+  command with its target's real parser), tests, CI, docs and the `models/*/launch.sh`
+  launchers, and applies hand judgments from `annotations.yaml` only while their evidence still
+  holds. `.agents/m60/scripts_coverage.py` measures the current test coverage of `scripts/`.
+  The proposed dispositions for the user's sign-off are in `.agents/m60/PROPOSAL.md`; no code
+  has moved.
+
+### Changed
+
+- Refresh the validated baseline in `AGENTS.md` and `.agents/TODO.md` now that the `0.18.0`
+  close-out is merged into `main`.
+
 ## [0.18.0] - 2026-09-24
 
 ### Changed

@@ -1,0 +1,360 @@
+# Hand judgments for the CLI and scripts inventory.
+#
+# inventory.py applies a judgment only while every evidence pattern still holds (a regex matched
+# line by line against the named file; `expect: absent` means no line may match). A judgment
+# whose evidence fails is reported as OVERTURNED and fails the run. Judgments add to the
+# mechanical classes; they never replace the per-flag read sites in inventory.json.
+#
+# Classes: inert (stored but never applied), tuning-only, duplicate, alias, config-only,
+# policy drift (a default that disagrees with a recorded decision), unmeasured (active, but no
+# run ever measured it).
+
+flags:
+  - entrypoint: weekly_run
+    flag: --wf-early-stopping-rounds
+    class: inert
+    note: >-
+      Flows into WalkForwardConfig.early_stopping_rounds, which only to_dict() reads (run
+      metadata and the checkpoint fingerprint); every in-season fit passes None since 0.12.3.
+      The production config still sets it (50), so removing the flag also removes that key.
+    evidence:
+      - {path: scripts/weekly_run.py, pattern: '"early_stopping_rounds": int\(args\.wf_early_stopping_rounds\)'}
+      - {path: nfl_predictor/ml/walk_forward.py, pattern: 'early_stopping_rounds=None'}
+      - {path: nfl_predictor/ml/walk_forward.py, pattern: '"early_stopping_rounds": self\.early_stopping_rounds'}
+      - {path: config/weekly_run.yaml, pattern: '^wf_early_stopping_rounds: 50'}
+
+  - entrypoint: wf_compare
+    flag: --early-stopping-rounds
+    class: inert
+    note: >-
+      Passed through _run_one() into WalkForwardConfig.early_stopping_rounds, the same
+      to_dict-only field as above.
+    evidence:
+      - {path: scripts/wf_compare.py, pattern: 'early_stopping_rounds=args\.early_stopping_rounds'}
+      - {path: scripts/wf_compare.py, pattern: '^\s+early_stopping_rounds=early_stopping_rounds,'}
+      - {path: nfl_predictor/ml/walk_forward.py, pattern: 'early_stopping_rounds=None'}
+
+  - entrypoint: weekly_run
+    flag: --train-early-stopping-rounds
+    class: tuning-only
+    note: >-
+      Reaches only OptunaConfig.early_stopping_rounds, read only by the Optuna search. The
+      production config sets it to 80 while tune is false, so it changes nothing weekly.
+    evidence:
+      - {path: scripts/weekly_run.py, pattern: 'early_stopping_rounds=int\(args\.train_early_stopping_rounds\)'}
+      - {path: config/weekly_run.yaml, pattern: '^train_early_stopping_rounds: 80'}
+      - {path: config/weekly_run.yaml, pattern: '^tune: false'}
+
+  - entrypoint: golden_command
+    flag: --train-early-stopping-rounds
+    class: tuning-only
+    note: >-
+      Reaches only OptunaConfig (and the run's config payload); its help text still says
+      "during production training", which has been false since 0.12.3.
+    evidence:
+      - {path: scripts/golden_command.py, pattern: 'Early stopping rounds for XGBoost during production training'}
+      - {path: scripts/golden_command.py, pattern: 'early_stopping_rounds=int\(args\.train_early_stopping_rounds\)'}
+
+  - entrypoint: ml_model
+    flag: --early-stopping-rounds
+    class: tuning-only
+    note: Reaches only OptunaConfig.early_stopping_rounds.
+    evidence:
+      - {path: nfl_predictor/ml/ml_model_cli.py, pattern: 'early_stopping_rounds=args\.early_stopping_rounds'}
+
+  - entrypoint: weekly_run
+    flag: --postseason-weight
+    class: config-only inert
+    note: >-
+      The production config sets 1.3, but include_postseason is false and
+      compute_postseason_sample_weight returns None whenever it is, so the weight is never
+      applied (task 56.2). The flag itself is live when include_postseason is true.
+    evidence:
+      - {path: config/weekly_run.yaml, pattern: '^postseason_weight: 1\.3'}
+      - {path: config/weekly_run.yaml, pattern: '^include_postseason: false'}
+      - {path: nfl_predictor/ml/sample_weights.py, pattern: '^\s+if not include_postseason:'}
+
+  - entrypoint: weekly_run
+    flag: --wf-n-jobs
+    class: duplicate
+    note: >-
+      Overridden by --xgb-n-jobs whenever that is set, and the production config sets
+      xgb_n_jobs 12 (and wf_n_jobs 12), so in production it never decides anything.
+    evidence:
+      - {path: scripts/weekly_run.py, pattern: 'int\(args\.xgb_n_jobs\) if args\.xgb_n_jobs is not None else int\(args\.wf_n_jobs\)'}
+      - {path: config/weekly_run.yaml, pattern: '^xgb_n_jobs: 12'}
+
+  - entrypoint: betting_pipeline
+    flag: --include-postseason
+    class: policy drift
+    note: >-
+      Defaults to true with a 1.15 postseason weight, against the regular-season-only rule
+      recorded by task 56.2 (production config: include_postseason false).
+    evidence:
+      - {path: scripts/betting_pipeline.py, pattern: '--include-postseason --postseason-weight 1\.15'}
+      - {path: config/weekly_run.yaml, pattern: '^include_postseason: false'}
+
+  - entrypoint: betting_pipeline
+    flag: --wf-max-depth
+    class: policy drift
+    note: >-
+      Defaults to depth 4 and (with --wf-learning-rate) learning rate 0.07, while the weekly
+      walk-forward stage was aligned to the production XGBoost settings (depth 5, 0.0165) in
+      0.13.0.
+    evidence:
+      - {path: scripts/betting_pipeline.py, pattern: '^\s+default=0\.07,'}
+      - {path: config/weekly_run.yaml, pattern: '^wf_max_depth: 5'}
+      - {path: config/weekly_run.yaml, pattern: '^wf_learning_rate: 0\.0165'}
+
+  - entrypoint: walk_forward_backtest
+    flag: --calibration
+    class: policy drift
+    note: >-
+      Defaults to platt, but the benchmark configuration recorded in AGENTS.md is auto (the
+      deterministic floor) and every benchmark launcher passes --calibration auto, so a bare
+      run does not reproduce the instrument. golden_command has the same platt default.
+    evidence:
+      - {path: scripts/walk_forward_backtest.py, pattern: '^\s+default="platt",'}
+      - {path: models/wf_m55_8_2020_2025_unweighted/launch.sh, pattern: '--calibration auto'}
+
+  - entrypoint: walk_forward_backtest
+    flag: --market-prob-blend
+    class: alias
+    note: >-
+      Second declaration of the market blend weight; --market-prob-weight wins when set. The
+      WalkForwardConfig field, the metadata key and golden_command's only flag all say
+      weight, so --market-prob-weight is the natural survivor.
+    evidence:
+      - {path: scripts/walk_forward_backtest.py, pattern: 'Alias for --market-prob-blend'}
+      - {path: nfl_predictor/ml/walk_forward.py, pattern: '"market_prob_weight": self\.market_prob_weight'}
+
+  - entrypoint: ml_model
+    flag: --market-prob-blend
+    class: alias
+    note: Same pair as walk_forward_backtest; --market-prob-weight wins when set.
+    evidence:
+      - {path: nfl_predictor/ml/ml_model_cli.py, pattern: 'Alias for --market-prob-blend'}
+
+  - entrypoint: leakage_audit
+    flag: --include-market
+    class: inert
+    note: >-
+      store_true with default true on the same dest as --exclude-market, so passing it can
+      never change anything.
+    evidence:
+      - {path: scripts/leakage_audit.py, pattern: '"--include-market",'}
+      - {path: scripts/leakage_audit.py, pattern: 'dest="include_market"'}
+
+  - entrypoint: walk_forward_backtest
+    flag: --recency-half-life-weeks
+    class: unmeasured
+    note: >-
+      Live, but no launcher under models/ has ever passed it and no run artifact records a
+      non-null value (the fixed check below). The season-based half-life was measured by task
+      55.8 and production chose unweighted.
+    evidence:
+      - {path: models/wf_m55_8_2020_2025_half_life16/launch.sh, pattern: 'recency-half-life-weeks', expect: absent}
+
+  - entrypoint: ml_model
+    flag: --recency-half-life-weeks
+    class: unmeasured
+    note: Same as walk_forward_backtest.
+    evidence:
+      - {path: nfl_predictor/ml/ml_model_cli.py, pattern: '"--recency-half-life-weeks"'}
+
+  - entrypoint: weekly_run
+    flag: --wf-recency-half-life-weeks
+    class: unmeasured
+    note: Same; the production config sets neither weeks form.
+    evidence:
+      - {path: config/weekly_run.yaml, pattern: 'recency_half_life_weeks', expect: absent}
+
+  - entrypoint: weekly_run
+    flag: --train-recency-half-life-weeks
+    class: unmeasured
+    note: Same.
+    evidence:
+      - {path: config/weekly_run.yaml, pattern: 'recency_half_life_weeks', expect: absent}
+
+  - entrypoint: weekly_run
+    flag: --tune-storage
+    class: tuning-only
+    note: Assigned to optuna_storage, which reaches only OptunaConfig.storage.
+    evidence:
+      - {path: scripts/weekly_run.py, pattern: '^\s+storage=optuna_storage,'}
+
+  - entrypoint: ml_model
+    flag: --tune-storage
+    class: tuning-only
+    note: Reaches only OptunaConfig.storage.
+    evidence:
+      - {path: nfl_predictor/ml/ml_model_cli.py, pattern: 'storage=args\.tune_storage'}
+
+  - entrypoint: ml_model
+    flag: --tune-study-name
+    class: tuning-only
+    note: Assigned to study_name, which reaches only OptunaConfig.study_name and a log line.
+    evidence:
+      - {path: nfl_predictor/ml/ml_model_cli.py, pattern: '^\s+study_name=study_name,'}
+
+  - entrypoint: ml_model
+    flag: --tune-metric
+    class: tuning-only
+    note: Reaches OptunaConfig.objective (and a study-name f-string).
+    evidence:
+      - {path: nfl_predictor/ml/ml_model_cli.py, pattern: 'objective=args\.tune_metric'}
+
+  - entrypoint: betting_pipeline
+    flag: --tune-storage
+    class: tuning-only
+    note: Reaches OptunaConfig.storage and the run's recorded config.
+    evidence:
+      - {path: scripts/betting_pipeline.py, pattern: '^\s+storage=str\(storage\),'}
+
+  - entrypoint: betting_pipeline
+    flag: --tune-best-params-out
+    class: tuning-only
+    note: Reaches OptunaConfig.best_params_out.
+    evidence:
+      - {path: scripts/betting_pipeline.py, pattern: '^\s+best_params_out=Path\(best_params_out\),'}
+
+  - entrypoint: ml_model
+    flag: --model-kind
+    class: active (partly retiring with ScoreModel)
+    note: >-
+      The `score` choice is the only CLI route to ScoreModel (task 55.5). Separately, the
+      vocabulary disagrees across consumers: ml_model and training metadata say `blend`,
+      power_rankings and the web catalog say `blended_margin_total` (see the web-template
+      parse section: three launches are rejected).
+    evidence:
+      - {path: nfl_predictor/ml/ml_model_cli.py, pattern: 'choices=\["score", "margin_total", "blend"\]'}
+      - {path: nfl_predictor/api/jobs/catalog.py, pattern: 'MODEL_KINDS = \("margin_total", "blended_margin_total", "score"\)'}
+      - {path: nfl_predictor/ml/ml_model_training.py, pattern: '"model_kind": "blend",'}
+
+concepts:
+  - name: tuning trials
+    options: [--tune-trials, --tune-n-trials, --train-tune-trials]
+  - name: tuning objective
+    options: [--tune-metric, --tune-objective, --train-tune-metric]
+  - name: tuning CV splits
+    options: [--cv-splits, --tune-cv-splits, --train-cv-splits]
+  - name: tuning timeout
+    options: [--tune-timeout, --train-tune-timeout-seconds]
+  - name: tuning switch
+    options: [--tune, --train-tune]
+  - name: win-probability calibration
+    options: [--calibration, --win-prob-calibration, --final-win-prob-calibration]
+  - name: market blend weight
+    options: [--market-prob-weight, --market-prob-blend]
+  - name: walk-forward calibration weeks
+    options: [--calibration-weeks, --wf-calibration-weeks]
+  - name: training calibration weeks and seasons
+    options: [--train-calibration-weeks, --train-calibration-seasons, --calibration-seasons]
+  - name: evaluation window
+    options: [--eval-last-n-seasons, --wf-eval-last-n-seasons]
+  - name: exclude incomplete seasons
+    options: [--exclude-incomplete-seasons, --wf-exclude-incomplete-seasons]
+  - name: tree budget
+    options: [--n-estimators, --wf-n-estimators]
+  - name: tree depth
+    options: [--max-depth, --wf-max-depth]
+  - name: learning rate
+    options: [--learning-rate, --wf-learning-rate]
+  - name: XGBoost threads
+    options: [--xgb-n-jobs, --n-jobs, --wf-n-jobs, --wf-xgb-n-jobs, --train-xgb-n-jobs]
+  - name: XGBoost device
+    options: [--xgb-device, --wf-xgb-device, --train-xgb-device]
+  - name: XGBoost tree method
+    options: [--xgb-tree-method, --wf-xgb-tree-method, --train-xgb-tree-method]
+  - name: holdout seasons
+    options: [--holdout-seasons, --train-holdout-seasons]
+  - name: resume
+    options: [--resume, --wf-resume]
+  - name: checkpoint directory
+    options: [--checkpoint-dir, --wf-checkpoint-dir]
+  - name: market mode
+    options: [--market-mode, --wf-market-mode]
+  - name: win-probability uncertainty (bool in two CLIs, off/on/both in two)
+    options: [--win-prob-uncertainty, --wf-win-prob-uncertainty]
+  - name: early stopping
+    options: [--early-stopping-rounds, --wf-early-stopping-rounds, --train-early-stopping-rounds]
+  - name: output location
+    options: [--out, --out-json, --out-dir, --output-dir, --output-path, --run-dir]
+  - name: saved model input
+    options: [--model-in, --model-path, --model-a]
+
+scripts:
+  scripts/weekly_run.py:
+    disposition: move
+    target: nfl_predictor/weekly_run/ (package; cli, stage-1 compare, training, outputs)
+    reason: >-
+      Produces the weekly picks; 1,917 lines outside coverage. Split on the way in (the
+      2,000-line guidance), pinned by the characterization test first. Imports two scripts.
+  scripts/power_rankings.py:
+    disposition: move
+    target: nfl_predictor/reporting/power_rankings.py (computation, joining the existing
+      Bradley-Terry code there) plus a thin CLI module
+    reason: >-
+      weekly_run calls compute_power_rankings, resolve_ranking_options and the private
+      _write_outputs; web template power_rankings; CLI smoke check in gate and CI.
+  scripts/walk_forward_backtest.py:
+    disposition: move
+    target: thin CLI module in the package
+    reason: >-
+      The benchmark entrypoint: 19 launchers under models/, web template, 1 test module.
+  scripts/wf_compare.py:
+    disposition: move
+    target: thin CLI module in the package
+    reason: >-
+      Calibration and market-blend sweep; 1 test module, cited in README. Shares
+      _market_modes and _parse_feature_groups with weekly_run and walk_forward_backtest
+      (identical bodies), which move into the package once.
+  scripts/leakage_audit.py:
+    disposition: move
+    target: CLI entry beside nfl_predictor/ml/leakage_audit.py
+    reason: Required tool (AGENTS.md "Leakage Audit"); web template; no test module yet.
+  scripts/validate_offline.py:
+    disposition: move
+    target: thin CLI module (optionally one module with offline and live modes)
+    reason: Web template validate_offline; no test module yet.
+  scripts/validate_live.py:
+    disposition: move
+    target: thin CLI module (optionally merged with validate_offline)
+    reason: Web template validate_live; no test module yet.
+  scripts/betting_report_excel.py:
+    disposition: move
+    target: CLI entry beside nfl_predictor/reporting/betting_excel.py
+    reason: Web template betting_xlsx; 69 lines over existing package code.
+  scripts/shap_analysis.py:
+    disposition: move
+    target: thin CLI module; drop its ScoreModel branch with task 55.5
+    reason: >-
+      Web template shap_analysis and 1 test module; optional dependency (shap) guarded by
+      _import_shap. Retiring it would also retire a web job (question for the user).
+  scripts/betting_pipeline.py:
+    disposition: retire after build_betting_report moves
+    target: build_betting_report and its helpers into nfl_predictor/reporting/
+    reason: >-
+      No web template, no launcher, no CI. weekly_run uses only build_betting_report. Keeps a
+      drifted copy of the stage-1 matrix (7 rows against weekly_run's 9), four helpers
+      identical to weekly_run's, and policy-drift defaults (postseason on, depth 4, rate 0.07).
+  scripts/golden_command.py:
+    disposition: retire
+    reason: >-
+      Agreed with the user on 2026-09-23. No web template, no launcher, no CI; its two test
+      modules retire with it. Superseded by weekly_run.
+  scripts/backtest_predictions.py:
+    disposition: retire
+    reason: >-
+      No test, no web template, no launcher, no CI; one README mention. Scores a saved model
+      on past weeks, which walk-forward replaced; two of its helpers are copies of
+      golden_command's; uses ScoreModel.
+  scripts/objective_compare_models.py:
+    disposition: retire, with nfl_predictor/ml/model_compare.py and tests/test_model_compare.py
+    reason: >-
+      No test of the script, no web template, no launcher, no CI; one README mention.
+      model_compare.py is imported by nothing else. Model comparison is now done with
+      walk-forward arms and independent rescoring from fold checkpoints.
+  scripts/gate.sh:
+    disposition: keep
+    reason: Repository tooling, the one validation gate (AGENTS.md rule 1); mirrors CI.

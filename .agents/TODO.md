@@ -49,16 +49,18 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-23, version `0.17.0`, branch `feat/m55-8-season-weighting`)
+### Current validated baseline (2026-09-24, version `0.18.0`, branch `feat/m55-8-season-weighting`)
 
-- `scripts/gate.sh` exits `0` on this branch after the 55.8 close-out (`889 passed`, coverage
-      `92.45%`). The run updated `config/weekly_run.yaml`, `README.md`, `AGENTS.md`,
-      `.agents/TODO.md`, `.agents/ARCHIVE.md`, `CHANGELOG.md`, `pyproject.toml` and `uv.lock`, and
-      added `REVIEW.md` files to all four 55.8 run directories.
+- `scripts/gate.sh` exits `0` on this branch with the `0.18.0` close-out (`889 passed`, coverage
+      `92.45%`). Coverage measures `nfl_predictor/` only; the `scripts/` tree is outside it
+      (Milestone 60, task 60.2).
+- `origin/feat/m55-8-season-weighting` exists (the branch was pushed). The `../nfl-predictor-web`
+      worktree directory no longer exists (`git worktree list` marks it prunable), nothing listens
+      on port `8765`, and `feat/web-ui` is fully merged into `main`.
 - `feat/m54-0-landing` (the `0.14.0`-`0.16.1` chunks) merged into `main` with no conflicts and was
       pushed on 2026-09-22 (merge commit `295d4c4`, version `0.16.2`). `main` and `origin/main` carry
-      the `pbp`-default sources and the shared `200`-tree default; this branch layers the 55.8
-      weekly-config alignment and reviewed recency-ladder record on top.
+      the `pbp`-default sources and the shared `200`-tree default; this branch layers the task
+      55.8 close-out (unweighted production training) on top.
 - Data: the 2026-09-21 full rebuild (`--refresh-nflreadpy`, needed for the new
       `pass_attempt`/`rush_attempt` raw columns) on the `0.16.0` code, now defaulting to
       `--team-stats-source pbp --tr-stats-source pbp`, produced `data/completed_games_ml.csv`
@@ -84,11 +86,10 @@ Agents and humans should not rely on the shell activation state.
 - Both source flags are now the default (`0.16.0`), including the production fast path
       `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no arguments;
       `nflverse`/`scrape` remain selectable explicitly.
-- Task 55.8 is now closed and archived (`0.17.0`): a reviewed four-arm six-season ladder on the
-      current `pbp`-default build found no season-weighting value that beat the shipped
-      half-life `4` beyond the paired intervals, so `train_recency_half_life_seasons: 4` stays in
-      place and `config/weekly_run.yaml` now aligns the walk-forward stage with
-      `wf_recency_half_life_seasons: 4`.
+- Task 55.8 closed as `0.18.0` on 2026-09-24 by the user's decision after an independent review
+      of nine six-season arms: production trains **unweighted**, so `config/weekly_run.yaml` no
+      longer sets `train_recency_half_life_seasons` or `wf_recency_half_life_seasons` (record in
+      `ARCHIVE.md`, Milestone 55, "55.8").
 - Reference arms on the current default (pre-flip) sources: `models/wf_m54_0_2023_2025_from_week1/`
       (checkpoints `models/wf_checkpoints/d112ebcba3115bafe9d9/`) tied the accepted `200`-tree
       reference slice on weeks 3-18: deterministic Brier `0.2097` vs `0.2090`, diff `+0.0007`
@@ -98,9 +99,9 @@ Agents and humans should not rely on the shell activation state.
       reference on weeks 3-18: deterministic Brier `0.2106` vs `0.2097`, diff `+0.0009`
       `[-0.0008, +0.0026]`; margin MAE `9.9321` vs `9.9166`, diff `+0.0156` `[-0.0529, +0.0812]`.
 - Tasks 54.0-54.4 and the default flip are archived; Milestone 54 is fully closed (`ARCHIVE.md`).
-      Task 55.8 has since landed on `feat/m55-8-season-weighting` and is archived there as
-      version `0.17.0`; `main` still reflects this 2026-09-22 baseline until that branch is
-      merged. Merging and pushing remain must-ask, every time.
+      Task 55.8 closed on `feat/m55-8-season-weighting`; `main` still reflects this 2026-09-22
+      baseline until that branch is merged. Merging and pushing remain must-ask, every
+      time.
 
 ---
 
@@ -135,30 +136,85 @@ diagnostic-only), task 56.4 (calibration window across the season boundary), Mil
 2026-09-19 with two narrowed parts reopened under "From Milestone 59" below and task 55.7), and
 the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
-Order set by the user on 2026-09-21, after the tree-budget ladder was reported:
+Order agreed with the user on 2026-09-24, replacing the 2026-09-21 and 2026-09-23 orders. There
+is no deadline: every step runs to satisfactory completion, including its reviews, before the
+next starts. Expect roughly two to three weeks, then the web UI (Milestone 58, phases 4-6).
 
-1. Task 55.9 - the Optuna re-tune. Milestone 54 closed 2026-09-21, so this is unblocked; the user
-      would prefer to run it when there is enough idle time, since it occupies the machine for
-      hours.
-2. Milestone 60 - CLI consolidation (read-only audit first, then removals after the user signs
-      off); it can run in parallel with any walk-forward as a subagent task.
+Why this order (the ordering principles, agreed with the user):
 
-Task 55.8 closed 2026-09-23 on `feat/m55-8-season-weighting` (`0.17.0`): a reviewed four-arm
-six-season ladder on the current `pbp`-default build
-(`models/wf_m55_8_2020_2025_{unweighted,half_life4,half_life8,half_life16}/`) found no
-season-weighting value that beat the shipped half-life `4` beyond the paired intervals, so the
-production train default stays at `4` and `config/weekly_run.yaml` now aligns the walk-forward
-stage with `wf_recency_half_life_seasons: 4`. Full record: `ARCHIVE.md`, Milestone 55, "55.8".
+1. **Restructure before changing behavior.** Milestone 60 moves code without changing any output,
+   pinned by a characterization test of the weekly run; every output-changing task comes after it,
+   so the moves stay verifiable and no code is edited just before it moves.
+2. **The benchmark must measure production before anything else is measured** (`AGENTS.md`
+   rule 11). Parity gaps (device, probability path, line timing) close before new feature or
+   tuning measurements.
+3. **Features before tuning.** Anything that changes feature values lands before the Optuna
+   re-tune, or the tune is fitted to a feature set that no longer exists.
+4. **Batch what invalidates checkpoints.** Edits under `nfl_predictor/ml/` and device changes
+   invalidate every walk-forward checkpoint, so they are grouped and pay for one new reference.
+5. **The weekly run comes first.** Production-changing steps land between game weeks; heavy
+   compute runs overnight; never two walk-forwards at once.
+6. **Two seeds for any default change** (`AGENTS.md` rule 13).
+7. **Each step on its own branch off `main`**, merged (must-ask) when its gate, review and
+   check-in are done, so branches stay short (the user's merge-cadence preference).
+
+Steps:
+
+1. **Task 55.8 close-out** (branch `feat/m55-8-season-weighting`). Done 2026-09-24 as `0.18.0`
+   apart from the merge (must-ask): nine six-season arms, an independent review of all nine
+   (rule 3), and the user's decision for unweighted production training. This
+   step's docs chunk also carries this order, the new rules, and the retirement of 55.1/55.2.
+2. **Milestone 60 + task 55.5** (new branch, new session). CLI and entrypoint consolidation,
+   widened to every file under `scripts/`, behavior-preserving. 55.5 (the `ScoreModel` fate) is
+   decided and executed here, because retiring unused code is part of the same cleanup. Absorbs
+   the follow-ups marked "(step 2)" below.
+3. **Tasks 55.4 + 56.5 + 56.6 + the out-of-fold calibration pool** (new branch). Close the
+   production/benchmark parity gaps together, because each changes what production outputs and
+   they can share one new reference: the GPU as the default device for every run (55.4, decided
+   by the user 2026-09-23, with a GPU determinism check and a two-seed GPU reference); how
+   production probabilities are formed (56.5, decided by the user from evidence, mostly by
+   rescoring saved predictions); the line-timing yardstick (56.6); and the out-of-fold calibration
+   pool (follow-up from 59.2), so fitted calibrators can be judged fairly as 56.5 options.
+   Task 55.6 (the per-season stability view) lands here as part of the standard walk-forward
+   report. Absorbs the follow-ups marked "(step 3)".
+4. **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
+   First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
+   a schema version in the play-by-play cache key), because this step compares dataset builds.
+   Then every change to feature values: `K` for the early-season prior blend (55.3), the
+   defense-adjusted quarterback rate (53.7), and the follow-ups marked "(step 4)". Each ETL rebuild
+   is must-ask; each adoption decision uses two seeds. This is the largest step.
+5. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
+   three prerequisites first, then the study, a six-season confirmation on two seeds, and 56.3
+   (wiring the chosen settings into the weekly run and the benchmark, one shared source).
+6. **Web UI, Milestone 58 phases 4-6**, on a base that Milestone 60 has already settled.
+
+Retired by the user on 2026-09-24: tasks 55.1 and 55.2 (a general configuration-sweep runner). A
+runner that tries many settings and keeps the best is the selection bias that broke the weekly
+stage 1 (task 56.5), and it conflicts with rule 4 (a hypothesis and decision rule per run).
+Hypothesis-driven ladders and the task 55.9 tune cover the purpose. Record in `ARCHIVE.md`,
+Milestone 55.
+
+Task 55.8 was closed on 2026-09-23 as `0.17.0` and **reopened the same day** by the user after a
+second-key review: the numbers were right, but the closing agent had reviewed its own runs
+(rule 3), and the close-out left out that the shipped half-life `4` is the weakest arm on every
+probability and error metric. The redo closed it on 2026-09-24 as `0.18.0`: unweighted
+production training, by the user's decision after an independent review (`ARCHIVE.md`,
+Milestone 55, "55.8").
 
 Tasks 54.1-54.4 landed 2026-09-21 (`0.15.0`-`0.15.1`), and the user then approved fixing the
 four open exceptions and flipping both source flags to the default once verified, which landed
 the same day (`0.16.0`-`0.16.1`); Milestone 54 has no remaining item and is fully archived.
-After the three items above: Milestone 53 task 53.7 (defense-adjusted quarterback rate), the
-rest of Milestone 55 and Milestone 56, Milestone 58 phases 4-6 whenever the user asks (its own
-branch), and Milestone 57 stays parked until the user reopens it.
+Milestone 57 stays parked until the user reopens it.
 
-The open follow-ups below are not milestones. Pick them up when their area is next touched, or
-promote one to a milestone when it grows.
+The open follow-ups below are not milestones. Each one was assigned on 2026-09-24 to the roadmap
+step that absorbs it; none is left for "when the area is next touched":
+
+| step | follow-ups (the group they are listed under) |
+| --- | --- |
+| 2 (Milestone 60) | `WalkForwardConfig.early_stopping_rounds` in the config and fingerprint; `wf_compare.py` printing the wrong pick-accuracy column (both Milestone 59); the automatic OpenMP wait policy in the walk-forward entry points; pruning `models/wf_checkpoints/` (both Milestone 49); `_build_xgb_fit_kwargs` and `LogEvalCallback` (2026-09-11 review) |
+| 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review) |
+| 4, first | Schedule-strength columns not bit-reproducible across identical rebuilds (Milestone 46); no schema version in the play-by-play cache key (Milestone 45) |
+| 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7) |
 
 Rules for every feature milestone:
 
@@ -169,8 +225,11 @@ Rules for every feature milestone:
   The fit-noise floor (`AGENTS.md`, "Fit-noise floor on the same build") is the yardstick: on
   three seasons a Brier difference under about `0.002`, a pick-accuracy difference under about
   `0.01` or a margin MAE difference under about `0.06` is re-seeding noise. An arm that claims an
-  improvement runs on six seasons (`--eval-last-n-seasons 6`, about 100 minutes idle) and, if
-  the claim is still near the floor, on a second seed; a three-season arm can only show a tie.
+  improvement runs on six seasons (`--eval-last-n-seasons 6`, about 100 minutes idle) and on
+  two seeds (`AGENTS.md` rule 13); a three-season arm can only show a tie. The 2026-09-23
+  seed-7 pair showed that on six seasons, re-seeding alone can move pick accuracy and pool points
+  by amounts whose game-resampled intervals exclude zero, so a single-seed six-season "win" is
+  not a result.
 - Keep the invariant output schema: when a source is missing for a season, emit nulls.
 - XGBoost margin/total remains the only model family in scope.
 - The method borrowed from `nfl-sos-ratings` is its head-to-head-excluded opponent profiling
@@ -198,7 +257,8 @@ follow-ups below.
       schema 2026-09-17 (`0.10.0`) by the user's decision. Record and reasoning in `ARCHIVE.md`,
       Milestone 53, "53.6". Do not reintroduce them as standalone columns; the idea's next form
       is 53.7.
-- [ ] 53.7 Opponent-adjusted quarterback EPA, in two steps. First (cheap) a defense-adjusted
+- [ ] 53.7 (step 4, with 55.3; two seeds per adoption decision) Opponent-adjusted quarterback
+      EPA, in two steps. First (cheap) a defense-adjusted
       rate: per quarterback game, `qb_epa_sum - dropbacks * expected_epa_allowed` where the
       expectation is the faced defense's pre-game `adj_def_pass_epa_snap` (or its one-hop
       profile), aggregated with the same `K = 300` shrinkage as `qb_dropback_epa` (career and
@@ -239,20 +299,38 @@ protocol, then write the selected configuration as the default for weekly runs.
 
 Tasks:
 
-- [ ] 55.1 Define a sweep config schema (JSON or YAML) covering model kind (`margin_total`,
-      `blended_margin_total`), calibration, market mode and probability source, blend method,
-      weight and clamp grids, uncertainty, tuning, and XGBoost params including GPU preference.
-- [ ] 55.2 Implement `scripts/config_sweep.py` (or `--mode sweep` in `scripts/weekly_run.py`) that
-      runs walk-forward per config, writes `sweep_summary.csv` and `best_config.json`, supports
-      resume by dataset hash plus config hash (per-week fold checkpoints already exist), and always
-      includes a baseline row with market blending and clamping off, with deltas versus that
-      baseline.
-- [ ] 55.3 Include `PRIOR_BLEND_GAMES` (`K`, for example `2`, `4`, `8`) in the sweep; it was reused
-      from the strength blend rather than chosen (see the Milestone 49 follow-ups).
-- [ ] 55.4 Add `xgb_device=auto` (prefer `cuda`, else CPU) used identically in evaluation and final
-      training.
-- [ ] 55.5 Decide the `ScoreModel` fate: document as experimental or deprecate cleanly.
-- [ ] 55.6 Add the stability view by season and week bucket, and a "recommended defaults" section.
+Tasks 55.1 and 55.2 (a general configuration-sweep runner) were retired by the user on
+2026-09-24; the reason is under "Roadmap Status" and the record in `ARCHIVE.md`.
+
+- [ ] 55.3 (step 4) Choose `PRIOR_BLEND_GAMES` (`K`) instead of inheriting it from the strength
+      blend (see the Milestone 49 follow-ups). With the sweep runner retired, this is a small
+      ladder with its hypothesis and rule written first: candidate values (for example `2`, `4`,
+      `8`), one ETL build each (must-ask; back up `data/*.csv` first), six seasons from week 1 on
+      two seeds, weeks 1, 2 and 3-18 reported separately (the value changes early-season features
+      most). Runs after the rebuild-reproducibility follow-ups and shares its rebuild cycle with
+      53.7. Context from task 55.8: each two-seed weighting contrast (half-lives `4`, `16`, `32`)
+      improved week-2 total MAE by `0.2`-`0.3` points beyond its interval (96 games), the only
+      consistent early-season signal that ladder found; report week-2 total MAE for each `K`.
+- [ ] 55.4 (step 3) Add `xgb_device=auto` (prefer `cuda`, else CPU) used identically in evaluation
+      and final training. **Decided by the user on 2026-09-23: the GPU (CUDA) becomes the default
+      device for every XGBoost run, standalone walk-forwards included.** Today only the weekly run
+      uses it (`xgb_device: cuda` in `config/weekly_run.yaml`, both stages), while
+      `scripts/walk_forward_backtest.py` defaults to the CPU, so every benchmark arm so far trained
+      on the CPU (an `AGENTS.md` rule 11 parity gap). Do not change the default while a CPU ladder
+      is running: arms of one comparison must share a device. When it lands: a one-fold CPU-vs-GPU
+      timing and prediction-difference check, a CPU fallback when no GPU is present, the device
+      recorded in run metadata, and a new GPU reference arm, because later arms can no longer be
+      compared with the CPU reference numbers in `AGENTS.md`. Added 2026-09-24: a GPU determinism
+      check (the same seed twice on one fold must give identical predictions, or checkpoint resume
+      and "only one setting differs" comparisons break), and the GPU reference on two seeds, which
+      also measures the GPU's own fit-noise floor (rule 13).
+- [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental
+      or deprecate cleanly. Decided and executed inside Milestone 60, because retiring unused
+      model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).
+- [ ] 55.6 (step 3) Add the stability view by season and week bucket, and a "recommended
+      defaults" section. The second-key review script
+      (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that
+      into the standard walk-forward report while step 3 touches reporting.
 - [x] 55.7 Choose `n_estimators` time-aware: closed 2026-09-21 (`0.13.0`-`0.13.1`). A four-rung
       ladder (`200`/`400`/`598`, then a `100` plateau check), each rung a six-season arm with its
       own hypothesis and an independent reviewer rescore, found the aggregate order monotone
@@ -261,10 +339,18 @@ Tasks:
       was aligned to the production XGBoost defaults in the same chunk. Full record, the ladder
       table and the pairwise intervals: `ARCHIVE.md`, Milestone 55, "55.7", and `AGENTS.md` under
       "Tree-budget ladder".
-- [ ] 55.9 Optuna re-tune. Added 2026-09-21 by the user's decision, to run **after Milestone 54
-      lands** (tuning before the feature set changes would have to be redone): Milestone 54 closed
-      2026-09-21, so this is now unblocked. The user would still like it when there is enough idle
-      time or in the off-season, since it occupies the machine for hours. Prerequisites, each its
+- [x] 55.8 Season weighting: closed 2026-09-24 (`0.18.0`). Nine six-season arms (unweighted and
+      half-lives `4`, `8`, `16`, `32`; seeds `42` and `7`, half-life `8` at seed 42 only), an
+      independent review of all nine (`models/wf_m55_8_review/INDEPENDENT_REVIEW.md`), and the
+      user's decision: production trains **unweighted**, in the weekly walk-forward stage and the
+      final fit alike. Half-life `4` (shipped since `83ba2a7` and never measured before) lost on
+      two seeds; `16` and `32` tied. Record: `ARCHIVE.md`, Milestone 55, "55.8", and `AGENTS.md`
+      under "Season weighting and the six-season fit-noise floor".
+- [ ] 55.9 (step 5, with 56.3) Optuna re-tune. Added 2026-09-21 by the user's decision, to run
+      **after Milestone 54 lands** (tuning before the feature set changes would have to be
+      redone). Scheduled 2026-09-24 as roadmap step 5, after every feature-value change (step 4)
+      and on the final device (step 3), so the tune is fitted to the feature set that ships. It
+      occupies the machine for hours, so it runs overnight. Prerequisites, each its
       own tested chunk before any trial runs: (1) trials must fit exactly the way production fits.
       `0.12.3` removed in-season early stopping from production and walk-forward, but
       `_score_margin_total_fold` in `nfl_predictor/ml/ml_model_core.py` still passes
@@ -309,7 +395,83 @@ Formerly Milestone 41.
       defaults. `postseason_weight` stays in the config but inert. The playoff-week design itself
       (a playoff-specific model or weighting) stays deferred, wanted in time for the 2026
       playoffs. Full record: `ARCHIVE.md`, Milestone 56, "56.2".
-- [ ] 56.3 Wire sweep-selected defaults once Milestone 55 lands; confirm resume behavior.
+- [ ] 56.3 (step 5, with 55.9) Wire the settings chosen by the task 55.9 tune into the weekly run
+      and the benchmark from one shared source (today `weekly_run` takes explicit `wf_*` params and
+      never reads a best-params file); confirm resume behavior.
+- [ ] 56.5 (step 3) The weekly run's stage-1 winner is chosen by list order, not by evidence.
+      Found by the 2026-09-23 review. `scripts/weekly_run.py` (`_pick_best_row`) ranks the stage-1 candidates
+      by deterministic Brier, then deterministic log loss, but those two columns depend only on
+      the predicted margin, which is identical across the nine calibration and market-blend
+      candidates of one market mode. Every candidate therefore ties, and the stable sort returns
+      whichever candidate the input list puts first; the list is sorted by the configured
+      calibrator's Brier, the column the 2026-09-18 audit found noise-dominated. The week-2
+      production run (`models/weekly_2026_week_02_refresh/wf_best.json`) selected
+      `elo` + `market_prob_weight 0.2` + `market_prob_clamp 0.1`, so the probabilities submitted
+      to the pool come from a different path than the one every benchmark measures, chosen
+      without an interval, and eight of the nine candidates are trained every week for nothing.
+      Related, from rescoring the six-season task 55.8 checkpoints
+      (`models/wf_m55_8_review/probability_paths.py`, the producer's analysis only): a market
+      blend chosen from earlier seasons appears to settle at high weights, which would mean the
+      model's probabilities add little on top of the closing line. That script has **no second
+      key** (`INDEPENDENT_REVIEW.md` there, disagreement 8), so 56.5 rescores it independently
+      before any of its numbers enter the docs. Deciding how production probabilities should be
+      formed (the deterministic floor, a blend weight fixed by a pre-registered walk-forward rule,
+      or something else) is a must-ask default change for the user. Keep it separate from
+      Milestone 60's behavior-preserving moves.
+- [ ] 56.6 (step 3, with 56.5) Measure the model against the lines available at pick time, not
+      only the stored ones. Picks are submitted before the Thursday game, and lines move between
+      then and Sunday, sometimes a lot. The ETL's lines come from nflverse schedules
+      (`spread_line`, `total_line`, the moneylines), probably closing lines. Backtests both
+      **anchor** the model to them and **score** the market against them, while production
+      anchors to whatever lines exist at the mid-week refresh. So backtests probably overstate
+      production accuracy, and the market yardstick is harder than the one the user actually
+      faces (an `AGENTS.md` rule 11 gap).
+      Found 2026-09-24: `data/nfl_lines.csv` (7,231 games, 1999-2025, not in git, read by no code;
+      `web_ui_plan.md` calls it unused legacy) carries opening and last spreads, moneylines and
+      totals, each with a source and timestamp columns:
+      - 1999-2006: opening spread equals last spread in every game (no real openers).
+      - 2007-2021 and 2023: real openers, source `legacy`, no timestamps; mean absolute
+        open-to-last move `1.0`-`1.6` points.
+      - 2022: `59%` of openers equal the last line (partly real).
+      - 2024-2025: DraftKings or consensus openers with timestamps (2025 has 240 games so far).
+      - Opening moneylines only from 2024.
+      Work: (a) confirm the file's provenance (likely nfelo) and whether it can be refreshed through
+      an existing source (nflverse or nfelo, no new external service); (b) confirm what the
+      nflverse schedule lines are (closing, or a snapshot) against this file's `last` columns;
+      (c) on 2007-2025, score the model against the opening line as a second market yardstick
+      beside the stored one, since pick-time lines sit between open and close; (d) measure how
+      much anchoring on opening instead of stored lines changes backtest accuracy, a
+      feature-value change measured with two builds and two seeds; (e) record the coverage limits
+      (no openers before 2007, uncertain in 2022, undated `legacy` openers) wherever a number
+      depends on them. The outcome feeds 56.5: a market blend judged against closing lines
+      overstates what it can do at pick time.
+      Update 2026-09-24:
+      - Provenance. The user confirmed the source as nfelo's `nfelomarket_data` repo
+        (`Data/lines.csv`, updated daily) and refreshed `data/nfl_lines.csv` from it (now through
+        2026 week 3, 7,324 rows). The user also saved nfelo's
+        `output_data/historic_projected_spreads.csv` as `data/historic_odds.csv` (1,463 games,
+        2021 to 2026 week 3): opening and closing spreads plus nfelo's own projected spread and
+        home win probability.
+      - Checks on the refreshed files:
+        (i) The two files agree on openers only from 2023 (`93%`-`100%`); in 2021-2022 they agree
+        on `35%` of openers, and `historic_odds.csv` has an opener different from its close in
+        only `19%`-`22%` of those games, so 2021-2022 openers are doubtful in both.
+        (ii) The closes agree from 2025 (`97%`+) but only `26%`-`44%` in 2021-2024 (different
+        snapshots).
+        (iii) The nflverse spread in our data matches `nfl_lines.csv`'s last line in `64%`-`79%`
+        of games from 2010 on (mean gap about `0.2` points), so it is a late snapshot, not the same
+        feed.
+      - Opening moneylines: the user proposed inferring them from opening spreads, and that is
+        sound for this yardstick, done symmetrically. Convert open **and** close spreads to
+        probabilities through the same mapping, so an open-versus-close difference measures line
+        movement and not the conversion. Fit the mapping from spreads to the market's own no-vig
+        moneyline probabilities where both exist; it uses prices, not results, so it cannot leak
+        outcomes. Compare the fitted map with the fixed `spread_to_moneyline` conversion the ETL
+        already uses to fill missing moneylines. Anchoring (part d) needs only spreads.
+      - Candidate extra yardstick (2021 on): nfelo's pre-game `home_probability_nfelo`, a strong
+        public model. Confirm it is pre-game before using it.
+      - Keep refreshes manual copies, like `data/qb_elos.csv` from `../nfeloqb`; an automated
+        fetch from GitHub would be a new network dependency (must-ask).
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.
@@ -358,33 +520,132 @@ Acceptance:
 
 ---
 
-## Milestone 60 - CLI consolidation
+## Milestone 60 - CLI and entrypoint consolidation
 
 Added 2026-09-21 by the user's direction: the entrypoints' flags have grown bloated, and some of
-them no longer do anything.
+them no longer do anything. Widened on 2026-09-23 by the user's direction to cover every file under
+`scripts/` as well as every flag: each script is retired, moved into `nfl_predictor/` (as a new
+module or into an existing one), or kept in `scripts/` for a stated reason.
 
-- [ ] 60.1 Audit every `add_argument` across `nfl_predictor/ml/ml_model_cli.py`,
-      `scripts/weekly_run.py`, `scripts/walk_forward_backtest.py`, `scripts/betting_pipeline.py`,
-      `scripts/golden_command.py`, `nfl_predictor/data_collection.py`, `scripts/validate_*.py`
-      and `scripts/power_rankings.py`. List, per flag: the inert ones (for example the
-      early-stopping flags, recorded in the config and the fingerprint but not applied to any
-      fit since `0.12.3`), the ones duplicated across entrypoints, and the ones only ever set by
-      the config file rather than on a command line. Then propose the removals and a shared
-      options module so the surviving flags are declared once. The `--data-dir` and
-      `--data-collection-args` options added in `0.12.11` and `0.12.12` belong in the same
-      audit.
-      Progress 2026-09-22: the read-only inventory landed in `.agents/m60_cli_flag_audit.md`.
-      Headline findings: `scripts/weekly_run.py` still exposes an inert walk-forward
-      early-stopping flag and a tuning-only train early-stopping flag; `ml_model_cli.py` has the
-      same tuning-only early-stopping drift; calibration, recency, market-probability blending,
-      XGBoost runtime, and power-rankings options are duplicated with naming drift across
-      entrypoints; and part of the weekly-run surface is effectively config-managed rather than
-      operator-driven. Removals still wait for the user's sign-off, so the task stays open.
+How it runs (user's direction, 2026-09-23): after task 55.8 is redone, reviewed, committed and
+merged, in a **new session on its own branch off `main`**, owned by the reviewing agent (Claude)
+rather than delegated. It touches the web API's job runner, CI, the gate, the tests and most of the
+docs, so every change is recorded in `CHANGELOG.md` and the web UI plan
+(`web_ui_plan.md`, "Milestone 60 impact") is amended in the same chunk that changes the API.
+
+Ground rules for the whole milestone:
+
+- **Behavior-preserving.** Moves, renames and removals must not change a prediction, a
+  probability, a pick, a ranking or a report. A characterization test pins the weekly run's
+  outputs on fixed inputs before the first move and must pass unchanged after every chunk. A
+  behavior defect found along the way is listed and decided separately (see task 56.5), never
+  folded into a move.
+- **Mid-season.** The weekly run must work every week while the milestone is open, so it lands in
+  small chunks, each merged only when the gate (and `scripts/gate.sh --web` when
+  `nfl_predictor/api/` or `web/` changed) is green.
+- **Evidence by script.** Inventories are generated from the code by a script checked in beside
+  them, never written by hand (see the 60.1 note below for why).
+- Edits under `nfl_predictor/ml/` change every walk-forward checkpoint fingerprint, so no
+  reference walk-forward is started while this milestone is moving ML code.
+
+- [ ] 60.1 Flag inventory, regenerated by script. The 2026-09-22 inventory
+      (`.agents/m60_cli_flag_audit.md`) is **superseded and must not be used as a source**: the
+      2026-09-23 review found that its `scripts/golden_command.py` section lists 27 flags that do
+      not exist and misses 20 that do (the subagent's searches over `scripts/` failed with "No
+      matches found" and the gaps were filled by inference), its `scripts/weekly_run.py` section
+      lists a nonexistent `--report-save-input-copy` and misses `--betting-template-path` and
+      `--ratings-min-season`, it classifies about 10 of the 239 flags rather than every flag, and
+      it never checks the flags' consumers. Redo it as follows:
+      (a) A generator script (checked in under `.agents/m60/`) builds every entrypoint's parser
+      and walks its actions, emitting per flag: entrypoint, option strings, dest, default, help,
+      whether `config/weekly_run.yaml` or the web job templates set it, and where it is consumed.
+      (b) Classify **every** flag with evidence: active, inert (stored but never applied),
+      tuning-only, duplicate, alias, config-only, or policy drift (a default that disagrees with a
+      recorded decision).
+      (c) Check every consumer before proposing a change: `nfl_predictor/api/jobs/catalog.py`,
+      `tests/`, `scripts/gate.sh`, `.github/workflows/validation.yml`, `README.md`, `AGENTS.md`,
+      `web/README.md`, and the reproduction commands in every `models/*/launch.sh`.
+      Findings already verified by the 2026-09-23 review, to carry into the new inventory:
+      `--wf-early-stopping-rounds` (`weekly_run`) is inert; `--train-early-stopping-rounds`
+      (`weekly_run`, `golden_command`) and `--early-stopping-rounds` (`ml_model_cli`) only reach
+      Optuna trials, and `golden_command`'s help text still says "during production training";
+      the tuning flags drift across three names per concept (`--tune-trials` / `--tune-n-trials` /
+      `--train-tune-trials`, `--tune-metric` / `--tune-objective` / `--train-tune-metric`,
+      `--cv-splits` / `--tune-cv-splits` / `--train-cv-splits`, `--tune-timeout` /
+      `--train-tune-timeout-seconds`); calibration has four names (`--calibration` in
+      `walk_forward_backtest` and `golden_command`, `--win-prob-calibration`,
+      `--final-win-prob-calibration`); the market blend weight has the alias pair
+      `--market-prob-weight` / `--market-prob-blend` (the internal field, the metadata key and
+      `golden_command`'s only flag all say `weight`, so `weight` is the better survivor);
+      `postseason_weight: 1.3` in the weekly config is inert since task 56.2; `betting_pipeline`
+      defaults `--include-postseason` to true (weight `1.15`), against the regular-season rule of
+      task 56.2; `--recency-half-life-weeks` has never been measured.
+- [ ] 60.2 Disposition of every file under `scripts/`, generated the same way. Per file: size,
+      the other scripts it imports, the tests that import it, the web job templates that launch it,
+      the CI and gate checks that call it, the docs that cite it, and the `models/*/launch.sh`
+      files that call it; then one disposition (retire / move into `nfl_predictor/` with the
+      target module and command / keep with a reason). Facts already established:
+      - `scripts/` holds 6,486 lines, and `[tool.coverage.run] source = ["nfl_predictor"]`, so
+        none of it counts toward the `92.45%` coverage figure, including the 1,917-line
+        `scripts/weekly_run.py` that produces the weekly picks. Moving code into the package brings
+        it under the `90%` floor, so budget the tests for each move before making it.
+      - `scripts/` is not a package (no `__init__.py`); it imports only because pytest sets
+        `pythonpath = ["."]`. `scripts/weekly_run.py` does `from scripts import betting_pipeline,
+        power_rankings` and calls `power_rankings.compute_power_rankings`, the private
+        `power_rankings._write_outputs` and `betting_pipeline.build_betting_report`, and ten test
+        modules do `from scripts import ...`.
+      - `scripts/betting_pipeline.py` keeps its own copy of the walk-forward candidate matrix.
+      - The web API launches eight scripts by file path (`ctx.script(...)` in
+        `nfl_predictor/api/jobs/catalog.py`: `weekly_run`, `power_rankings`,
+        `betting_report_excel`, `leakage_audit`, `validate_offline`, `validate_live`,
+        `walk_forward_backtest`, `shap_analysis`).
+      First-pass triage from the review, for the inventory to confirm or overturn: move into the
+      package `weekly_run`, `power_rankings`, `walk_forward_backtest`, `wf_compare`,
+      `leakage_audit`, `validate_offline`/`validate_live` and `betting_report_excel`; retire
+      `golden_command` (the user agreed on 2026-09-23); probably retire `backtest_predictions`
+      and `objective_compare_models` (no tests, no web template, superseded by walk-forward);
+      retire `betting_pipeline` once `build_betting_report` has moved into the package; decide
+      `shap_analysis`; keep `gate.sh` (repo tooling).
+- [ ] 60.3 User sign-off on 60.1 and 60.2: the removal list, the surviving canonical names, every
+      script disposition, the command style for moved entrypoints (`python -m nfl_predictor.<x>`
+      or `[project.scripts]` console commands), and the reproduction policy for the old
+      `scripts/<name>.py` paths used in `models/*/launch.sh` (permanent thin shims, a deprecation
+      period, or rely on each run's recorded git commit). Nothing below starts before this.
+- [ ] 60.4 Characterization tests first (test-driven): a weekly-run output test on fixed fixture
+      inputs (predictions, confidence picks, betting report, power rankings and standings,
+      identical before and after), a `--help` snapshot per surviving entrypoint, and tests for the
+      library functions about to move. Land them against the current layout, green, before
+      moving anything.
+- [ ] 60.5 Move library code out of `scripts/` into the package (power-rankings computation and
+      output writing into `nfl_predictor/reporting/`, the betting-report builder likewise), with
+      the scripts temporarily calling the package. Drop every `from scripts import`.
+- [ ] 60.6 Move the entrypoints, retire the retired files (their tests too), and add the shared
+      options module (argument-group builders; renames keep the old spelling as a second option
+      string on the same argument rather than a separate declaration). Each removal or rename
+      gets a deprecation or removal note in `CHANGELOG.md`.
+- [ ] 60.7 Web API and frontend: update the job templates in
+      `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
+      parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the
+      weekly run, matched by `PROGRESS_RE` in `nfl_predictor/api/jobs/runner.py`); keep the
+      `weekly_run` template's config keys valid (saved job configs under `data/web/job_configs/`
+      use them); update `tests/api/`; run `scripts/gate.sh --web`; amend `web_ui_plan.md` and
+      `web/README.md`.
+- [ ] 60.8 CI, gate and docs: the CLI smoke checks in `scripts/gate.sh` and
+      `.github/workflows/validation.yml`; `README.md` (the Scripts section and every command
+      example); `AGENTS.md` ("Repo scripts", "Project Shape", "Dev Workflows", launch
+      instructions); `CHANGELOG.md`; `ARCHIVE.md`; the handoff prompt.
 
 Acceptance:
 
-- [ ] A written inventory lands in `.agents/`, the user signs off on the removal list, and only
-      then do the removals land, each with a deprecation note in `CHANGELOG.md`.
+- [ ] Every flag and every file under `scripts/` has a disposition the user signed off on, in a
+      script-generated inventory checked into `.agents/`.
+- [ ] The weekly-run characterization test passes unchanged from the first chunk to the last.
+- [ ] No production code is imported from `scripts/`, and the moved code counts toward coverage
+      with the `90%` floor still met.
+- [ ] Every web job template launches and reports progress (tests plus one live check per
+      template), and `web_ui_plan.md` records the changes.
+- [ ] Every removal or rename has a deprecation or removal note in `CHANGELOG.md`, and the gate
+      (with `--web`) is green on the final tree.
 
 ---
 
@@ -467,7 +728,14 @@ Each group names the archived milestone it came from; the milestone's full recor
       slightly worse in 2024 and 2025. The `K` check is task 55.3.
 - [ ] Choose the OpenMP wait policy automatically in the walk-forward entry points (default when
       idle, `PASSIVE` under load) instead of relying on the operator; see `AGENTS.md`. It changes
-      scheduling only, never results.
+      scheduling only, never results. Measured 2026-09-24 on
+      `models/wf_m55_8_2020_2025_half_life32/run.log`, launched on the default policy after a
+      load probe found the machine idle: folds 1-25 took about `20` s each, then folds 26-29 took
+      `12`-`16` minutes each from 00:16 to 01:10 while other load was present, then about `20` s
+      again. The whole run took `113` minutes, against about `100` for a `PASSIVE` run and a
+      likely `40` if the machine had stayed idle. A probe at launch is not enough, because load
+      that arrives mid-run makes the default policy stall. Candidates: stay on `PASSIVE` unless
+      the machine is dedicated, or re-check load between folds and relaunch through resume.
 - [ ] `models/wf_checkpoints/` grows by a few hundred KB per distinct run and is never pruned. Any
       edit under `nfl_predictor/ml/` changes the fingerprint by design, so stale directories pile
       up. Add a cleanup note or command once it matters.

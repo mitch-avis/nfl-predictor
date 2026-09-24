@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.18.2] - 2026-09-24
+
+### Added
+
+- Characterization tests that pin what the command-line entrypoints produce before they move
+  into the package. `tests/test_weekly_run_characterization.py` runs the weekly run end to end
+  (stage-1 walk-forward, training, predictions, betting report, power rankings and standings)
+  with the shipped `config/weekly_run.yaml` on a small synthetic dataset
+  (`tests/weekly_fixture.py`) and compares every output with snapshots under
+  `tests/fixtures/`. `tests/test_entrypoints_characterization.py` does the same for the
+  walk-forward backtest, the calibration sweep and the leakage audit (including a planted
+  leak), and `tests/test_cli_surface.py` snapshots every entrypoint's flags, defaults and help.
+  Snapshots are rewritten with `NFLP_UPDATE_SNAPSHOTS=1`.
+
 ## [0.18.1] - 2026-09-24
 
 ### Added

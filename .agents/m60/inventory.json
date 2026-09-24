@@ -1324,8 +1324,8 @@
    "annotation": {
     "entrypoint": "ml_model",
     "flag": "--model-kind",
-    "class": "active (partly retiring with ScoreModel)",
-    "note": "The `score` choice is the only CLI route to ScoreModel (task 55.5). Separately, the vocabulary disagrees across consumers: ml_model and training metadata say `blend`, power_rankings and the web catalog say `blended_margin_total` (see the web-template parse section: three launches are rejected).",
+    "class": "active",
+    "note": "The `score` choice is the only CLI route to ScoreModel, which stays pending a fair model-family comparison (task 55.5, PROPOSAL.md section 6). Separately, the vocabulary disagrees across consumers: ml_model and training metadata say `blend`, power_rankings and the web catalog say `blended_margin_total` (see the web-template parse section: three launches are rejected).",
     "evidence": [
      {
       "path": "nfl_predictor/ml/ml_model_cli.py",
@@ -1548,7 +1548,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "argv_builders": [
+     ".agents/m60/inventory.py:804"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -1591,7 +1595,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "argv_builders": [
+     ".agents/m60/inventory.py:805"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -1824,6 +1832,12 @@
    "consumers": {
     "tests": [
      "tests/test_ml_model_cli.py:504"
+    ],
+    "argv_builders": [
+     ".agents/m60/inventory.py:816",
+     ".agents/m60/inventory.py:823",
+     ".agents/m60/inventory.py:830",
+     ".agents/m60/inventory.py:836"
     ]
    },
    "auto_class": "active (read)",
@@ -1860,7 +1874,13 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "argv_builders": [
+     ".agents/m60/inventory.py:817",
+     ".agents/m60/inventory.py:823",
+     ".agents/m60/inventory.py:830"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": {
@@ -2637,7 +2657,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "argv_builders": [
+     ".agents/m60/inventory.py:771"
+    ]
+   },
    "auto_class": "tuning-only (reaches tuning-only OptunaConfig fields)",
    "tags": [],
    "annotation": {
@@ -5074,6 +5098,7 @@
    "web_templates": [],
    "consumers": {
     "argv_builders": [
+     ".agents/m60/inventory.py:804",
      "scripts/weekly_run.py:348"
     ]
    },
@@ -5135,6 +5160,7 @@
    "web_templates": [],
    "consumers": {
     "argv_builders": [
+     ".agents/m60/inventory.py:805",
      "scripts/weekly_run.py:354"
     ]
    },
@@ -11527,7 +11553,11 @@
    "writes": [],
    "weekly_yaml": 50,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "argv_builders": [
+     ".agents/m60/inventory.py:740"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [
     "weekly-config"
@@ -11723,6 +11753,7 @@
    "web_templates": [],
    "consumers": {
     "argv_builders": [
+     ".agents/m60/inventory.py:804",
      "scripts/power_rankings.py:150"
     ]
    },
@@ -11764,7 +11795,11 @@
    "writes": [],
    "weekly_yaml": 1.3,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "argv_builders": [
+     ".agents/m60/inventory.py:805"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [
     "weekly-config"
@@ -12097,6 +12132,9 @@
    "web_templates": [],
    "consumers": {
     "argv_builders": [
+     ".agents/m60/inventory.py:769",
+     ".agents/m60/inventory.py:770",
+     ".agents/m60/inventory.py:778",
      "scripts/golden_command.py:356"
     ]
    },
@@ -13746,7 +13784,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "argv_builders": [
+     ".agents/m60/inventory.py:771"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": {
@@ -15925,6 +15967,9 @@
    "web_templates": [],
    "ci_gate": [],
    "docs": {
+    ".agents/m60/INVENTORY.md": 9,
+    ".agents/m60/PROPOSAL.md": 1,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     "README.md": 2
    },
    "launchers": [],
@@ -15933,7 +15978,7 @@
    "exclusive_package_modules": [],
    "proposed": {
     "disposition": "retire",
-    "reason": "No test, no web template, no launcher, no CI; one README mention. Scores a saved model on past weeks, which walk-forward replaced; two of its helpers are copies of golden_command's; uses ScoreModel."
+    "reason": "No test, no web template, no launcher, no CI; one README mention. Runs one saved model over every completed game, mostly games it trained on; walk-forward reports confidence-pool points out of sample. Two of its helpers are copies of golden_command's."
    }
   },
   {
@@ -15966,6 +16011,9 @@
    "docs": {
     ".agents/ARCHIVE.md": 3,
     ".agents/TODO.md": 1,
+    ".agents/m60/INVENTORY.md": 15,
+    ".agents/m60/PROPOSAL.md": 1,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 2,
     ".agents/m60_cli_flag_audit.md": 5,
     ".agents/web_ui_plan.md": 1,
     "AGENTS.md": 2,
@@ -15974,6 +16022,8 @@
    },
    "launchers": [],
    "python_path_strings": [
+    ".agents/m60/inventory.py",
+    ".agents/m60/scripts_coverage.py",
     "nfl_predictor/api/readers/market.py",
     "nfl_predictor/reporting/betting_excel.py",
     "tests/test_betting_pipeline_script.py"
@@ -15998,6 +16048,9 @@
    ],
    "ci_gate": [],
    "docs": {
+    ".agents/m60/INVENTORY.md": 6,
+    ".agents/m60/PROPOSAL.md": 1,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     ".agents/web_ui_plan.md": 2,
     "CHANGELOG.md": 1,
     "README.md": 1
@@ -16010,9 +16063,8 @@
    "has_main_guard": true,
    "exclusive_package_modules": [],
    "proposed": {
-    "disposition": "move",
-    "target": "CLI entry beside nfl_predictor/reporting/betting_excel.py",
-    "reason": "Web template betting_xlsx; 69 lines over existing package code."
+    "disposition": "retire, with nfl_predictor/reporting/betting_excel.py and openpyxl",
+    "reason": "The user no longer needs the Excel workbook (2026-09-24). The weekly run writes it only when betting_template_path is set, which the production config does not; the web betting page recomputes its report from the predictions and never reads the workbook. Retires with it: weekly_run --betting-template-path, the web betting_xlsx job, the workbook download routes and button, and their tests."
    }
   },
   {
@@ -16031,6 +16083,8 @@
    "docs": {
     ".agents/ARCHIVE.md": 1,
     ".agents/TODO.md": 8,
+    ".agents/m60/INVENTORY.md": 7,
+    ".agents/m60/PROPOSAL.md": 7,
     ".agents/next_agent_session_prompt.md": 1,
     ".agents/web_ui_plan.md": 1,
     "AGENTS.md": 5,
@@ -16038,12 +16092,14 @@
     "README.md": 2
    },
    "launchers": [],
-   "python_path_strings": [],
+   "python_path_strings": [
+    ".agents/m60/inventory.py"
+   ],
    "has_main_guard": false,
    "exclusive_package_modules": [],
    "proposed": {
     "disposition": "keep",
-    "reason": "Repository tooling, the one validation gate (AGENTS.md rule 1); mirrors CI."
+    "reason": "Repository tooling, the one validation gate (AGENTS.md rule 1). Proposed: CI calls it instead of repeating its steps."
    }
   },
   {
@@ -16068,6 +16124,9 @@
     ".agents/ARCHIVE.md": 2,
     ".agents/TODO.md": 1,
     ".agents/feature_crosswalk.md": 1,
+    ".agents/m60/INVENTORY.md": 12,
+    ".agents/m60/PROPOSAL.md": 1,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     ".agents/m60_cli_flag_audit.md": 3,
     ".agents/web_ui_plan.md": 1,
     "AGENTS.md": 3,
@@ -16098,6 +16157,9 @@
    "ci_gate": [],
    "docs": {
     ".agents/feature_crosswalk.md": 1,
+    ".agents/m60/INVENTORY.md": 8,
+    ".agents/m60/PROPOSAL.md": 2,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     "AGENTS.md": 1,
     "CHANGELOG.md": 1,
     "README.md": 1
@@ -16124,6 +16186,9 @@
    "web_templates": [],
    "ci_gate": [],
    "docs": {
+    ".agents/m60/INVENTORY.md": 5,
+    ".agents/m60/PROPOSAL.md": 2,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     "README.md": 1
    },
    "launchers": [],
@@ -16134,7 +16199,7 @@
    ],
    "proposed": {
     "disposition": "retire, with nfl_predictor/ml/model_compare.py and tests/test_model_compare.py",
-    "reason": "No test of the script, no web template, no launcher, no CI; one README mention. model_compare.py is imported by nothing else. Model comparison is now done with walk-forward arms and independent rescoring from fold checkpoints."
+    "reason": "No test of the script, no web template, no launcher, no CI; one README mention. model_compare.py is imported by nothing else. Its idea, a paired comparison of two models on the same folds, returns as the proposed `compare` subcommand over walk-forward checkpoints."
    }
   },
   {
@@ -16184,6 +16249,9 @@
    "docs": {
     ".agents/ARCHIVE.md": 5,
     ".agents/feature_crosswalk.md": 4,
+    ".agents/m60/INVENTORY.md": 12,
+    ".agents/m60/PROPOSAL.md": 3,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     ".agents/m60_cli_flag_audit.md": 4,
     ".agents/web_ui_plan.md": 2,
     ".agents/web_ui_session_prompt.md": 1,
@@ -16223,6 +16291,9 @@
    ],
    "ci_gate": [],
    "docs": {
+    ".agents/m60/INVENTORY.md": 8,
+    ".agents/m60/PROPOSAL.md": 2,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     "README.md": 1
    },
    "launchers": [],
@@ -16234,8 +16305,8 @@
    "exclusive_package_modules": [],
    "proposed": {
     "disposition": "move",
-    "target": "thin CLI module; drop its ScoreModel branch with task 55.5",
-    "reason": "Web template shap_analysis and 1 test module; optional dependency (shap) guarded by _import_shap. Retiring it would also retire a web job (question for the user)."
+    "target": "the `explain` subcommand, keeping its ScoreModel branch",
+    "reason": "Web template shap_analysis and 1 test module; optional dependency (shap) guarded by _import_shap."
    }
   },
   {
@@ -16250,6 +16321,9 @@
    ],
    "ci_gate": [],
    "docs": {
+    ".agents/m60/INVENTORY.md": 6,
+    ".agents/m60/PROPOSAL.md": 2,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     ".agents/m60_cli_flag_audit.md": 2,
     "CHANGELOG.md": 2,
     "README.md": 1
@@ -16262,7 +16336,7 @@
    "exclusive_package_modules": [],
    "proposed": {
     "disposition": "move",
-    "target": "thin CLI module (optionally merged with validate_offline)",
+    "target": "the same `validate` subcommand with a --live switch",
     "reason": "Web template validate_live; no test module yet."
    }
   },
@@ -16278,6 +16352,9 @@
    ],
    "ci_gate": [],
    "docs": {
+    ".agents/m60/INVENTORY.md": 6,
+    ".agents/m60/PROPOSAL.md": 2,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     ".agents/m60_cli_flag_audit.md": 2,
     "CHANGELOG.md": 2,
     "README.md": 1
@@ -16290,8 +16367,8 @@
    "exclusive_package_modules": [],
    "proposed": {
     "disposition": "move",
-    "target": "thin CLI module (optionally one module with offline and live modes)",
-    "reason": "Web template validate_offline; no test module yet."
+    "target": "one `validate` subcommand, offline by default",
+    "reason": "Web template validate_offline; no test module yet; both check data/all_data.csv."
    }
   },
   {
@@ -16316,6 +16393,9 @@
     ".agents/ARCHIVE.md": 4,
     ".agents/TODO.md": 1,
     ".agents/feature_crosswalk.md": 1,
+    ".agents/m60/INVENTORY.md": 10,
+    ".agents/m60/PROPOSAL.md": 3,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     ".agents/m60_cli_flag_audit.md": 5,
     "AGENTS.md": 3,
     "CHANGELOG.md": 4,
@@ -16405,6 +16485,9 @@
     ".agents/ARCHIVE.md": 7,
     ".agents/TODO.md": 9,
     ".agents/feature_crosswalk.md": 3,
+    ".agents/m60/INVENTORY.md": 25,
+    ".agents/m60/PROPOSAL.md": 3,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     ".agents/m60_cli_flag_audit.md": 20,
     ".agents/web_ui_plan.md": 4,
     ".agents/web_ui_session_prompt.md": 2,
@@ -16416,6 +16499,7 @@
     "models/weekly_2026_week_02_refresh/launch.sh"
    ],
    "python_path_strings": [
+    ".agents/m60/inventory.py",
     "nfl_predictor/api/jobs/catalog.py",
     "nfl_predictor/api/readers/model.py",
     "nfl_predictor/api/runs/files.py",
@@ -16453,19 +16537,23 @@
     ".agents/ARCHIVE.md": 3,
     ".agents/TODO.md": 2,
     ".agents/feature_crosswalk.md": 1,
+    ".agents/m60/INVENTORY.md": 10,
+    ".agents/m60/PROPOSAL.md": 3,
+    ".agents/m60/SCRIPTS_COVERAGE.md": 1,
     "AGENTS.md": 1,
     "CHANGELOG.md": 3,
     "README.md": 6
    },
    "launchers": [],
    "python_path_strings": [
+    ".agents/m60/inventory.py",
     "tests/test_wf_compare_script.py"
    ],
    "has_main_guard": true,
    "exclusive_package_modules": [],
    "proposed": {
     "disposition": "move",
-    "target": "thin CLI module in the package",
+    "target": "the `sweep` subcommand; whether it is still needed is decided after task 56.5",
     "reason": "Calibration and market-blend sweep; 1 test module, cited in README. Shares _market_modes and _parse_feature_groups with weekly_run and walk_forward_backtest (identical bodies), which move into the package once."
    }
   }

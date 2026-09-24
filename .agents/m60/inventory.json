@@ -1324,8 +1324,8 @@
    "annotation": {
     "entrypoint": "ml_model",
     "flag": "--model-kind",
-    "class": "active",
-    "note": "The `score` choice is the only CLI route to ScoreModel, which stays pending a fair model-family comparison (task 55.5, PROPOSAL.md section 6). Separately, the vocabulary disagrees across consumers: ml_model and training metadata say `blend`, power_rankings and the web catalog say `blended_margin_total` (see the web-template parse section: three launches are rejected).",
+    "class": "active (the score choice retires)",
+    "note": "The `score` choice is the only CLI route to ScoreModel, which the user decided to remove on 2026-09-24 (task 55.5, PROPOSAL.md section 6). Separately, the vocabulary disagrees across consumers: ml_model and training metadata say `blend`, power_rankings and the web catalog say `blended_margin_total` (see the web-template parse section: three launches are rejected).",
     "evidence": [
      {
       "path": "nfl_predictor/ml/ml_model_cli.py",
@@ -11808,7 +11808,7 @@
     "entrypoint": "weekly_run",
     "flag": "--postseason-weight",
     "class": "config-only inert",
-    "note": "The production config sets 1.3, but include_postseason is false and compute_postseason_sample_weight returns None whenever it is, so the weight is never applied (task 56.2). The flag itself is live when include_postseason is true.",
+    "note": "The production config sets 1.3, but include_postseason is false and compute_postseason_sample_weight returns None whenever it is, so the weight is never applied (task 56.2). The flag itself is live when include_postseason is true; the power rankings never read it. Decided 2026-09-24: the key becomes a commented-out example.",
     "evidence": [
      {
       "path": "config/weekly_run.yaml",
@@ -14691,7 +14691,7 @@
   }
  ],
  "unknown_flags_in_commands": [
-  ".agents/TODO.md:382 weekly_run --defaults-path",
+  ".agents/TODO.md:385 weekly_run --defaults-path",
   "CHANGELOG.md:1006 walk_forward_backtest --wf-resume"
  ],
  "web_template_parse": [
@@ -16085,7 +16085,7 @@
     ".agents/TODO.md": 8,
     ".agents/m60/INVENTORY.md": 7,
     ".agents/m60/PROPOSAL.md": 7,
-    ".agents/next_agent_session_prompt.md": 1,
+    ".agents/next_agent_session_prompt.md": 2,
     ".agents/web_ui_plan.md": 1,
     "AGENTS.md": 5,
     "CHANGELOG.md": 2,
@@ -16305,7 +16305,7 @@
    "exclusive_package_modules": [],
    "proposed": {
     "disposition": "move",
-    "target": "the `explain` subcommand, keeping its ScoreModel branch",
+    "target": "the `explain` subcommand, dropping its ScoreModel branch",
     "reason": "Web template shap_analysis and 1 test module; optional dependency (shap) guarded by _import_shap."
    }
   },
@@ -16800,7 +16800,8 @@
    ".agents/ARCHIVE.md:2023: - [x] `ScoreModel` probabilities change appropriately when a calibrator is attached.",
    ".agents/TODO.md:168: widened to every file under `scripts/`, behavior-preserving. 55.5 (the `ScoreModel` fate) is",
    ".agents/TODO.md:327: - [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental",
-   ".agents/TODO.md:329: model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`)."
+   ".agents/TODO.md:329: model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).",
+   ".agents/next_agent_session_prompt.md:23: questions. It was revised the same day after the user's questions: ScoreModel stays and"
   ],
   "model_kind_flags": [
    "ml_model --model-kind choices=['score', 'margin_total', 'blend'] default='margin_total'",

@@ -46,9 +46,9 @@ per-flag read sites and their sinks are the evidence for each class; hand judgme
 
 ## Hand judgments (annotations.yaml, evidence re-checked)
 
-### ml_model `--model-kind`: active (holds)
+### ml_model `--model-kind`: active (the score choice retires) (holds)
 
-The `score` choice is the only CLI route to ScoreModel, which stays pending a fair model-family comparison (task 55.5, PROPOSAL.md section 6). Separately, the vocabulary disagrees across consumers: ml_model and training metadata say `blend`, power_rankings and the web catalog say `blended_margin_total` (see the web-template parse section: three launches are rejected).
+The `score` choice is the only CLI route to ScoreModel, which the user decided to remove on 2026-09-24 (task 55.5, PROPOSAL.md section 6). Separately, the vocabulary disagrees across consumers: ml_model and training metadata say `blend`, power_rankings and the web catalog say `blended_margin_total` (see the web-template parse section: three launches are rejected).
 
 - holds: `nfl_predictor/ml/ml_model_cli.py` /choices=\["score", "margin_total", "blend"\]/ present (lines: 45)
 - holds: `nfl_predictor/api/jobs/catalog.py` /MODEL_KINDS = \("margin_total", "blended_margin_total", "score"\)/ present (lines: 26)
@@ -175,7 +175,7 @@ Flows into WalkForwardConfig.early_stopping_rounds, which only to_dict() reads (
 
 ### weekly_run `--postseason-weight`: config-only inert (holds)
 
-The production config sets 1.3, but include_postseason is false and compute_postseason_sample_weight returns None whenever it is, so the weight is never applied (task 56.2). The flag itself is live when include_postseason is true.
+The production config sets 1.3, but include_postseason is false and compute_postseason_sample_weight returns None whenever it is, so the weight is never applied (task 56.2). The flag itself is live when include_postseason is true; the power rankings never read it. Decided 2026-09-24: the key becomes a commented-out example.
 
 - holds: `config/weekly_run.yaml` /^postseason_weight: 1\.3/ present (lines: 53)
 - holds: `config/weekly_run.yaml` /^include_postseason: false/ present (lines: 51)
@@ -713,13 +713,14 @@ Occurrences:
 - `.agents/TODO.md:168: widened to every file under `scripts/`, behavior-preserving. 55.5 (the `ScoreModel` fate) is`
 - `.agents/TODO.md:327: - [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental`
 - `.agents/TODO.md:329: model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).`
+- `.agents/next_agent_session_prompt.md:23: questions. It was revised the same day after the user's questions: ScoreModel stays and`
 
 ## Flags in commands that the entrypoint does not define
 
 Commands found in docs, CI or launchers that pass an option the named entrypoint does not
 have (stale docs, or a tokenizer miss to check by hand).
 
-- `.agents/TODO.md:382 weekly_run --defaults-path`
+- `.agents/TODO.md:385 weekly_run --defaults-path`
 - `CHANGELOG.md:1006 walk_forward_backtest --wf-resume`
 
 ## Web job templates parsed by their target's real parser
@@ -843,7 +844,7 @@ Top-level functions of `scripts/` also defined in another script or package modu
 - Names importers use: none.
 - Web templates: none.
 - CI and gate: ['scripts/gate.sh:7', 'scripts/gate.sh:9', 'scripts/gate.sh:11'].
-- Docs citing it: {'.agents/ARCHIVE.md': 1, '.agents/TODO.md': 8, '.agents/m60/INVENTORY.md': 7, '.agents/m60/PROPOSAL.md': 7, '.agents/next_agent_session_prompt.md': 1, '.agents/web_ui_plan.md': 1, 'AGENTS.md': 5, 'CHANGELOG.md': 2, 'README.md': 2}.
+- Docs citing it: {'.agents/ARCHIVE.md': 1, '.agents/TODO.md': 8, '.agents/m60/INVENTORY.md': 7, '.agents/m60/PROPOSAL.md': 7, '.agents/next_agent_session_prompt.md': 2, '.agents/web_ui_plan.md': 1, 'AGENTS.md': 5, 'CHANGELOG.md': 2, 'README.md': 2}.
 - Python files naming its path: ['.agents/m60/inventory.py'].
 - Package modules no other non-test code imports: none.
 - Launchers under `models/` (0): none.
@@ -1052,7 +1053,7 @@ literals in other package or script files. Sinks list the first three read sites
 
 | flag | dest | default | class | tags | yaml | web | tests | ci | docs | launch | argv | sinks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `--model-kind` | model_kind | `margin_total` | active (read); judged active | web |  | train, predict | 11 | 0 | 3 | 0 | 3 | 480 condition / control flow; 514 condition / control flow; 553 condition / control flow; +8 |
+| `--model-kind` | model_kind | `margin_total` | active (read); judged active (the score choice retires) | web |  | train, predict | 11 | 0 | 3 | 0 | 3 | 480 condition / control flow; 514 condition / control flow; 553 condition / control flow; +8 |
 | `--data-path` | data_path | `<repo>/data/completed_games_ml.csv` | active (read) | web |  | train, predict | 1 | 0 | 1 | 0 | 5 | 356 positional arg of artifacts.sha256_file(); 482 kw data_path= of train_score_model_with_report(); 516 kw data_path= of train_margin_total_model_with_report(); +1 |
 | `--holdout-seasons` | holdout_seasons | `2` | active (read) | web |  | train | 0 | 0 | 3 | 0 | 1 | 483 kw holdout_seasons= of train_score_model_with_report(); 517 kw holdout_seasons= of train_margin_total_model_with_report(); 556 kw holdout_seasons= of train_blended_margin_total_model_with_report() |
 | `--exclude-market` | exclude_market | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 484 condition / control flow; 520 condition / control flow |

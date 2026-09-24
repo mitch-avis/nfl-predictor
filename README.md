@@ -294,7 +294,8 @@ playoff games as long as the feature row exists.
 To include postseason games in training, pass `--include-postseason`. To emphasize postseason games,
 also set `--postseason-weight` (e.g., `--postseason-weight 1.5`). Optional recency weighting is
 available via `--recency-half-life-weeks` or `--recency-half-life-seasons` (use only one) to apply
-exponential decay to training and calibration samples.
+exponential decay to training and calibration samples. It is off by default and in the shipped
+weekly config: the six-season, two-seed measurement below found no gain from it.
 
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
 - `--calibration-seasons` and `--calibration-weeks` still gate whether a fitted post-processing
@@ -431,9 +432,9 @@ identical) is available via `--disable-trend-features`. Example 2x2 comparison m
 
 ```bash
 python scripts/walk_forward_backtest.py
-python scripts/walk_forward_backtest.py --recency-half-life-seasons 2
+python scripts/walk_forward_backtest.py --recency-half-life-seasons 16
 python scripts/walk_forward_backtest.py --disable-trend-features
-python scripts/walk_forward_backtest.py --disable-trend-features --recency-half-life-seasons 2
+python scripts/walk_forward_backtest.py --disable-trend-features --recency-half-life-seasons 16
 ```
 
 Named feature groups can be ablated the same way with `--disable-feature-groups` (available on both
@@ -451,28 +452,25 @@ python scripts/walk_forward_backtest.py --disable-feature-groups pbp
 budget), which is how the budget itself is measured against the default. The six-season ladder
 measured with it (`200`, `400`, `598`) is recorded in `AGENTS.md` under "Tree-budget ladder".
 
-Reviewed season-weighting ladder on the current `pbp`-default build (`data/completed_games_ml.m54_flip_through_2025.csv`),
-six seasons (`2020-2025`), from week 1, `auto`, `market_anchor` on, seed `42`, default
-`200`-tree budget. Run directories: `models/wf_m55_8_2020_2025_unweighted/`,
-`models/wf_m55_8_2020_2025_half_life4/`, `models/wf_m55_8_2020_2025_half_life8/`, and
-`models/wf_m55_8_2020_2025_half_life16/`; each has a `REVIEW.md` beside its artifacts.
+Season weighting was measured on the current `pbp`-default build
+(`data/completed_games_ml.m54_flip_through_2025.csv`): nine six-season arms (`2020-2025`, from
+week 1, `auto`, `market_anchor` on, default `200`-tree budget) at seeds `42` and `7`, run
+directories `models/wf_m55_8_2020_2025_*/`, independently reviewed in
+`models/wf_m55_8_review/INDEPENDENT_REVIEW.md`. Weeks 3-18 (`1423` games; market Brier `0.2095`):
 
-| arm | weeks 3-18 det Brier | weeks 3-18 margin MAE | all-weeks det Brier | all-weeks margin MAE | weeks 3-18 det-minus-market Brier CI |
-| --- | --- | --- | --- | --- | --- |
-| unweighted | `0.2107` | `9.9361` | `0.2113` | `9.8077` | `[-0.0007, +0.0033]` |
-| half-life 4 | `0.2115` | `10.0051` | `0.2122` | `9.8829` | `[-0.0004, +0.0044]` |
-| half-life 8 | `0.2107` | `9.9673` | `0.2117` | `9.8534` | `[-0.0010, +0.0035]` |
-| half-life 16 | `0.2102` | `9.9522` | `0.2111` | `9.8423` | `[-0.0015, +0.0029]` |
+| setting | det Brier, seed 42 / 7 | margin MAE, seed 42 / 7 | two-seed det Brier vs unweighted |
+| --- | --- | --- | --- |
+| unweighted | `0.2107` / `0.2096` | `9.9361` / `9.9105` | - |
+| half-life 4 | `0.2115` / `0.2118` | `10.0051` / `10.0121` | `+0.0015` `[-0.0001, +0.0031]` |
+| half-life 8 | `0.2107` / - | `9.9673` / - | - (one seed) |
+| half-life 16 | `0.2102` / `0.2099` | `9.9522` / `9.9299` | `-0.0001` `[-0.0010, +0.0009]` |
+| half-life 32 | `0.2110` / `0.2098` | `9.9571` / `9.9304` | `+0.0002` `[-0.0006, +0.0010]` |
 
-Interpretation:
-
-- Half-life `16` is the best raw Brier arm, but its paired bootstrap interval against both the
-  unweighted reference and the shipped half-life `4` arm still covers zero.
-- Half-life `8` ties the unweighted reference on the governing weeks 3-18 window.
-- The ladder therefore reads as flat within noise rather than as a clear default-changing win.
-- The shipped production weighting stays at `train_recency_half_life_seasons: 4`, and the weekly
-  config now sets `wf_recency_half_life_seasons: 4` so the walk-forward comparison stage measures
-  the same season weighting the final training stage already uses.
+Half-life `4` loses (two-seed margin MAE `+0.0853` `[+0.0188, +0.1535]`, and worse beyond its
+intervals over all weeks); half-lives `16` and `32` tie unweighted. Since `0.18.0` the weekly run
+trains unweighted in both its walk-forward stage and its final fit. The same arms show that on six
+seasons re-seeding alone moves Brier by up to about `0.0013` and pick accuracy by about `0.008`,
+so a single-seed difference that small is not a result.
 
 Evaluation rule: "Model selection is based on time-aware walk-forward evaluation; random CV is not
 authoritative." Season-blocked CV is used for hyperparameter tuning only; walk-forward remains the

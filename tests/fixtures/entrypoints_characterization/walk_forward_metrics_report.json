@@ -1,0 +1,1358 @@
+{
+  "calibration": {
+    "bin_count": 10,
+    "bins": [
+      {
+        "avg_actual": null,
+        "avg_pred": null,
+        "bin_lower": 0.0,
+        "bin_upper": 0.1,
+        "count": 0
+      },
+      {
+        "avg_actual": null,
+        "avg_pred": null,
+        "bin_lower": 0.1,
+        "bin_upper": 0.2,
+        "count": 0
+      },
+      {
+        "avg_actual": 0.4,
+        "avg_pred": 0.25549762622936323,
+        "bin_lower": 0.2,
+        "bin_upper": 0.30000000000000004,
+        "count": 5
+      },
+      {
+        "avg_actual": 0.0,
+        "avg_pred": 0.36046962331686033,
+        "bin_lower": 0.30000000000000004,
+        "bin_upper": 0.4,
+        "count": 6
+      },
+      {
+        "avg_actual": 0.4,
+        "avg_pred": 0.4658902019533284,
+        "bin_lower": 0.4,
+        "bin_upper": 0.5,
+        "count": 15
+      },
+      {
+        "avg_actual": 0.42857142857142855,
+        "avg_pred": 0.5478616109057386,
+        "bin_lower": 0.5,
+        "bin_upper": 0.6000000000000001,
+        "count": 14
+      },
+      {
+        "avg_actual": 0.6666666666666666,
+        "avg_pred": 0.6241358694826497,
+        "bin_lower": 0.6000000000000001,
+        "bin_upper": 0.7000000000000001,
+        "count": 15
+      },
+      {
+        "avg_actual": 0.7142857142857143,
+        "avg_pred": 0.7318434733199165,
+        "bin_lower": 0.7000000000000001,
+        "bin_upper": 0.8,
+        "count": 7
+      },
+      {
+        "avg_actual": 1.0,
+        "avg_pred": 0.8644564660691955,
+        "bin_lower": 0.8,
+        "bin_upper": 0.9,
+        "count": 2
+      },
+      {
+        "avg_actual": null,
+        "avg_pred": null,
+        "bin_lower": 0.9,
+        "bin_upper": 1.0,
+        "count": 0
+      }
+    ]
+  },
+  "config": {
+    "calibration": "auto",
+    "calibration_weeks": 4,
+    "checkpoint": {
+      "computed_folds": 4,
+      "restored_folds": 0
+    },
+    "data_path": "<tmp>/completed_games_ml.csv",
+    "disable_pruning": false,
+    "disable_trend_features": false,
+    "disabled_feature_groups": [],
+    "early_stopping_rounds": 50,
+    "eval_last_n_seasons": 1,
+    "eval_seasons": null,
+    "eval_window": {
+      "include_postseason": false,
+      "incomplete_seasons": [
+        2024
+      ],
+      "seasons": {
+        "2024": {
+          "eval_end_week": 18,
+          "eval_start_week": 1,
+          "incomplete_regular_season": true,
+          "max_week_in_data": 4,
+          "regular_season_weeks": 18
+        }
+      }
+    },
+    "exclude_incomplete_seasons": false,
+    "excluded_incomplete_seasons": [],
+    "feature_end": "home_moneyline",
+    "feature_list": [
+      "away_rest",
+      "home_rest",
+      "away_power",
+      "home_power",
+      "away_points_per_game",
+      "home_points_per_game",
+      "away_points_allowed_per_game",
+      "home_points_allowed_per_game",
+      "power_diff",
+      "market_home_margin",
+      "market_total_line",
+      "home_market_prob",
+      "away_market_prob"
+    ],
+    "feature_start": "away_rest",
+    "in_season_early_stopping": false,
+    "include_market": true,
+    "include_postseason": false,
+    "include_quantiles": true,
+    "market_anchor": true,
+    "market_prob_blend_method": "prob",
+    "market_prob_clamp": 0.0,
+    "market_prob_source": "raw",
+    "market_prob_weight": 0.0,
+    "market_transform": true,
+    "max_cardinality_ratio": 0.5,
+    "out_json": "<tmp>/wf/metrics_report.json",
+    "random_seed": 42,
+    "recency_half_life_seasons": null,
+    "recency_half_life_weeks": null,
+    "resolved_eval_seasons": [
+      2024
+    ],
+    "splits": {
+      "eval_window": {
+        "include_postseason": false,
+        "incomplete_seasons": [
+          2024
+        ],
+        "seasons": {
+          "2024": {
+            "eval_end_week": 18,
+            "eval_start_week": 1,
+            "incomplete_regular_season": true,
+            "max_week_in_data": 4,
+            "regular_season_weeks": 18
+          }
+        }
+      },
+      "resolved_eval_seasons": [
+        2024
+      ],
+      "wf_start_week": 1
+    },
+    "wf_start_week": 1,
+    "win_prob_use_uncertainty": false,
+    "xgb_params_overrides": {
+      "n_estimators": 20,
+      "n_jobs": 1
+    }
+  },
+  "diagnostics": {
+    "calibration_drift": {
+      "per_season": [
+        {
+          "abs_bias": 0.05175901157259055,
+          "avg_actual": 0.484375,
+          "avg_pred": 0.5361340115725906,
+          "bias": 0.05175901157259055,
+          "brier": 0.2175551627409391,
+          "games": 64,
+          "log_loss": 0.6249171181721307,
+          "season": 2024
+        }
+      ],
+      "per_week": [
+        {
+          "abs_bias": 0.030758316452924372,
+          "avg_actual": 0.5625,
+          "avg_pred": 0.5317416835470756,
+          "bias": -0.030758316452924372,
+          "brier": 0.22707544668808505,
+          "games": 16,
+          "log_loss": 0.6500264463245462,
+          "season": 2024,
+          "week": 1
+        },
+        {
+          "abs_bias": 0.235539116638253,
+          "avg_actual": 0.3125,
+          "avg_pred": 0.548039116638253,
+          "bias": 0.235539116638253,
+          "brier": 0.23231662382823032,
+          "games": 16,
+          "log_loss": 0.6489939896856907,
+          "season": 2024,
+          "week": 2
+        },
+        {
+          "abs_bias": 0.04730672355396126,
+          "avg_actual": 0.4375,
+          "avg_pred": 0.48480672355396126,
+          "bias": 0.04730672355396126,
+          "brier": 0.228763527748665,
+          "games": 16,
+          "log_loss": 0.6521402327316284,
+          "season": 2024,
+          "week": 3
+        },
+        {
+          "abs_bias": 0.04505147744892757,
+          "avg_actual": 0.625,
+          "avg_pred": 0.5799485225510724,
+          "bias": -0.04505147744892757,
+          "brier": 0.182065052698776,
+          "games": 16,
+          "log_loss": 0.5485078039466571,
+          "season": 2024,
+          "week": 4
+        }
+      ]
+    },
+    "season_win_totals": {
+      "overall": {
+        "games": 128,
+        "max_abs_error": 2.0550279489004417,
+        "mean_abs_error": 0.645962632307193,
+        "median_abs_error": 0.3491171970347541,
+        "rmse": 0.8824209527408402,
+        "season": null,
+        "teams": 32
+      },
+      "per_season": [
+        {
+          "games": 128,
+          "max_abs_error": 2.0550279489004417,
+          "mean_abs_error": 0.645962632307193,
+          "median_abs_error": 0.3491171970347541,
+          "rmse": 0.8824209527408402,
+          "season": 2024,
+          "teams": 32
+        }
+      ],
+      "per_team": [
+        {
+          "abs_error": 0.030841009550797605,
+          "actual_wins": 2.0,
+          "error": 0.030841009550797605,
+          "expected_wins": 2.0308410095507976,
+          "games": 4,
+          "season": 2024,
+          "team": "ARI"
+        },
+        {
+          "abs_error": 1.9207300485240881,
+          "actual_wins": 4.0,
+          "error": -1.9207300485240881,
+          "expected_wins": 2.079269951475912,
+          "games": 4,
+          "season": 2024,
+          "team": "ATL"
+        },
+        {
+          "abs_error": 0.12552144699083012,
+          "actual_wins": 2.5,
+          "error": -0.12552144699083012,
+          "expected_wins": 2.37447855300917,
+          "games": 4,
+          "season": 2024,
+          "team": "BAL"
+        },
+        {
+          "abs_error": 1.0997476749237944,
+          "actual_wins": 1.0,
+          "error": 1.0997476749237944,
+          "expected_wins": 2.0997476749237944,
+          "games": 4,
+          "season": 2024,
+          "team": "BUF"
+        },
+        {
+          "abs_error": 0.13050597423632082,
+          "actual_wins": 3.0,
+          "error": -0.13050597423632082,
+          "expected_wins": 2.869494025763679,
+          "games": 4,
+          "season": 2024,
+          "team": "CAR"
+        },
+        {
+          "abs_error": 0.8767059462538267,
+          "actual_wins": 3.0,
+          "error": -0.8767059462538267,
+          "expected_wins": 2.1232940537461733,
+          "games": 4,
+          "season": 2024,
+          "team": "CHI"
+        },
+        {
+          "abs_error": 0.8263220994260967,
+          "actual_wins": 1.0,
+          "error": 0.8263220994260967,
+          "expected_wins": 1.8263220994260967,
+          "games": 4,
+          "season": 2024,
+          "team": "CIN"
+        },
+        {
+          "abs_error": 0.27853127554326385,
+          "actual_wins": 1.0,
+          "error": 0.27853127554326385,
+          "expected_wins": 1.2785312755432638,
+          "games": 4,
+          "season": 2024,
+          "team": "CLE"
+        },
+        {
+          "abs_error": 0.6439224162790538,
+          "actual_wins": 1.5,
+          "error": 0.6439224162790538,
+          "expected_wins": 2.1439224162790538,
+          "games": 4,
+          "season": 2024,
+          "team": "DAL"
+        },
+        {
+          "abs_error": 0.2723711365308623,
+          "actual_wins": 2.0,
+          "error": -0.2723711365308623,
+          "expected_wins": 1.7276288634691377,
+          "games": 4,
+          "season": 2024,
+          "team": "DEN"
+        },
+        {
+          "abs_error": 1.2616449992133205,
+          "actual_wins": 3.0,
+          "error": -1.2616449992133205,
+          "expected_wins": 1.7383550007866795,
+          "games": 4,
+          "season": 2024,
+          "team": "DET"
+        },
+        {
+          "abs_error": 1.530554076929008,
+          "actual_wins": 0.0,
+          "error": 1.530554076929008,
+          "expected_wins": 1.530554076929008,
+          "games": 4,
+          "season": 2024,
+          "team": "GB"
+        },
+        {
+          "abs_error": 0.12375455789340983,
+          "actual_wins": 1.5,
+          "error": 0.12375455789340983,
+          "expected_wins": 1.6237545578934098,
+          "games": 4,
+          "season": 2024,
+          "team": "HOU"
+        },
+        {
+          "abs_error": 0.06599717996768995,
+          "actual_wins": 2.0,
+          "error": 0.06599717996768995,
+          "expected_wins": 2.06599717996769,
+          "games": 4,
+          "season": 2024,
+          "team": "IND"
+        },
+        {
+          "abs_error": 0.2344521015611205,
+          "actual_wins": 2.0,
+          "error": 0.2344521015611205,
+          "expected_wins": 2.2344521015611205,
+          "games": 4,
+          "season": 2024,
+          "team": "JAX"
+        },
+        {
+          "abs_error": 0.6938080331184491,
+          "actual_wins": 3.5,
+          "error": -0.6938080331184491,
+          "expected_wins": 2.806191966881551,
+          "games": 4,
+          "season": 2024,
+          "team": "KC"
+        },
+        {
+          "abs_error": 2.0550279489004417,
+          "actual_wins": 4.0,
+          "error": -2.0550279489004417,
+          "expected_wins": 1.9449720510995585,
+          "games": 4,
+          "season": 2024,
+          "team": "LAC"
+        },
+        {
+          "abs_error": 1.4171690881154189,
+          "actual_wins": 0.5,
+          "error": 1.4171690881154189,
+          "expected_wins": 1.9171690881154189,
+          "games": 4,
+          "season": 2024,
+          "team": "LAR"
+        },
+        {
+          "abs_error": 1.202573420405166,
+          "actual_wins": 1.0,
+          "error": 1.202573420405166,
+          "expected_wins": 2.202573420405166,
+          "games": 4,
+          "season": 2024,
+          "team": "LV"
+        },
+        {
+          "abs_error": 0.7704478994594459,
+          "actual_wins": 3.0,
+          "error": -0.7704478994594459,
+          "expected_wins": 2.229552100540554,
+          "games": 4,
+          "season": 2024,
+          "team": "MIA"
+        },
+        {
+          "abs_error": 0.286876380453966,
+          "actual_wins": 3.0,
+          "error": -0.286876380453966,
+          "expected_wins": 2.713123619546034,
+          "games": 4,
+          "season": 2024,
+          "team": "MIN"
+        },
+        {
+          "abs_error": 1.384669115883912,
+          "actual_wins": 3.0,
+          "error": -1.384669115883912,
+          "expected_wins": 1.615330884116088,
+          "games": 4,
+          "season": 2024,
+          "team": "NE"
+        },
+        {
+          "abs_error": 0.11587799719553527,
+          "actual_wins": 2.5,
+          "error": -0.11587799719553527,
+          "expected_wins": 2.3841220028044647,
+          "games": 4,
+          "season": 2024,
+          "team": "NO"
+        },
+        {
+          "abs_error": 0.1323679814037244,
+          "actual_wins": 2.0,
+          "error": -0.1323679814037244,
+          "expected_wins": 1.8676320185962756,
+          "games": 4,
+          "season": 2024,
+          "team": "NYG"
+        },
+        {
+          "abs_error": 0.5079067110184354,
+          "actual_wins": 1.0,
+          "error": 0.5079067110184354,
+          "expected_wins": 1.5079067110184354,
+          "games": 4,
+          "season": 2024,
+          "team": "NYJ"
+        },
+        {
+          "abs_error": 1.6103856419901863,
+          "actual_wins": 0.5,
+          "error": 1.6103856419901863,
+          "expected_wins": 2.1103856419901863,
+          "games": 4,
+          "season": 2024,
+          "team": "PHI"
+        },
+        {
+          "abs_error": 0.3963465661235881,
+          "actual_wins": 1.0,
+          "error": 0.3963465661235881,
+          "expected_wins": 1.396346566123588,
+          "games": 4,
+          "season": 2024,
+          "team": "PIT"
+        },
+        {
+          "abs_error": 0.0036782996526291134,
+          "actual_wins": 1.0,
+          "error": -0.0036782996526291134,
+          "expected_wins": 0.9963217003473709,
+          "games": 4,
+          "season": 2024,
+          "team": "SEA"
+        },
+        {
+          "abs_error": 0.11994026842413863,
+          "actual_wins": 2.0,
+          "error": 0.11994026842413863,
+          "expected_wins": 2.1199402684241386,
+          "games": 4,
+          "season": 2024,
+          "team": "SF"
+        },
+        {
+          "abs_error": 0.003281081151815357,
+          "actual_wins": 2.0,
+          "error": -0.003281081151815357,
+          "expected_wins": 1.9967189188481846,
+          "games": 4,
+          "season": 2024,
+          "team": "TB"
+        },
+        {
+          "abs_error": 0.24695802876391904,
+          "actual_wins": 1.5,
+          "error": 0.24695802876391904,
+          "expected_wins": 1.746958028763919,
+          "games": 4,
+          "season": 2024,
+          "team": "TEN"
+        },
+        {
+          "abs_error": 0.30188782794592006,
+          "actual_wins": 3.0,
+          "error": -0.30188782794592006,
+          "expected_wins": 2.69811217205408,
+          "games": 4,
+          "season": 2024,
+          "team": "WSH"
+        }
+      ]
+    }
+  },
+  "metric_strategy": {
+    "primary": [
+      {
+        "direction": "lower",
+        "metric": "brier"
+      },
+      {
+        "direction": "lower",
+        "metric": "log_loss"
+      },
+      {
+        "direction": "lower",
+        "metric": "deterministic_brier"
+      },
+      {
+        "direction": "lower",
+        "metric": "deterministic_log_loss"
+      },
+      {
+        "direction": "lower",
+        "metric": "market_brier"
+      },
+      {
+        "direction": "lower",
+        "metric": "market_log_loss"
+      },
+      {
+        "direction": "lower",
+        "metric": "deterministic_brier_vs_market"
+      },
+      {
+        "direction": "lower",
+        "metric": "deterministic_log_loss_vs_market"
+      },
+      {
+        "direction": "lower",
+        "metric": "reliability_ece"
+      }
+    ],
+    "secondary": [
+      {
+        "direction": "higher",
+        "metric": "expected_points_avg"
+      },
+      {
+        "direction": "higher",
+        "metric": "actual_points_avg"
+      },
+      {
+        "direction": "higher",
+        "metric": "pick_accuracy"
+      },
+      {
+        "direction": "higher",
+        "metric": "deterministic_pick_accuracy"
+      },
+      {
+        "direction": "higher",
+        "metric": "market_pick_accuracy"
+      }
+    ],
+    "tertiary": [
+      {
+        "direction": "lower",
+        "metric": "margin_mae"
+      },
+      {
+        "direction": "lower",
+        "metric": "total_mae"
+      },
+      {
+        "direction": "lower",
+        "metric": "market_margin_resid_mae"
+      },
+      {
+        "direction": "lower",
+        "metric": "market_total_resid_mae"
+      }
+    ]
+  },
+  "metrics": {
+    "fold_summary": {
+      "folds": 4,
+      "metrics": {
+        "actual_points": {
+          "mean": 92.5,
+          "variance": 205.25
+        },
+        "brier": {
+          "mean": 0.2175551627409391,
+          "variance": 0.00042342797420428987
+        },
+        "deterministic_brier": {
+          "mean": 0.2175551627409391,
+          "variance": 0.00042342797420428987
+        },
+        "deterministic_brier_vs_market": {
+          "mean": 0.003566533934465599,
+          "variance": 1.3204737277082455e-05
+        },
+        "deterministic_log_loss": {
+          "mean": 0.6249171181721306,
+          "variance": 0.0019474138422182125
+        },
+        "deterministic_log_loss_vs_market": {
+          "mean": 0.00753978392085744,
+          "variance": 7.086222626476277e-05
+        },
+        "deterministic_pick_accuracy": {
+          "mean": 0.59375,
+          "variance": 0.0166015625
+        },
+        "expected_points": {
+          "mean": 90.06729060361263,
+          "variance": 1.489569659348784
+        },
+        "log_loss": {
+          "mean": 0.6249171181721306,
+          "variance": 0.0019474138422182125
+        },
+        "margin_mae": {
+          "mean": 9.765190606703982,
+          "variance": 1.0348483380292108
+        },
+        "margin_p10_p90_coverage": {
+          "mean": 0.75,
+          "variance": 0.001953125
+        },
+        "market_brier": {
+          "mean": 0.21398862880647349,
+          "variance": 0.0004621320479733264
+        },
+        "market_log_loss": {
+          "mean": 0.6173773342512732,
+          "variance": 0.0021830582227201525
+        },
+        "market_margin_resid_mae": {
+          "mean": 9.765190606703982,
+          "variance": 1.0348483380292108
+        },
+        "market_pick_accuracy": {
+          "mean": 0.59375,
+          "variance": 0.0107421875
+        },
+        "market_total_resid_mae": {
+          "mean": 8.623205890122335,
+          "variance": 3.199062554419021
+        },
+        "pick_accuracy": {
+          "mean": 0.59375,
+          "variance": 0.0166015625
+        },
+        "picks_correct": {
+          "mean": 9.5,
+          "variance": 4.25
+        },
+        "reliability_ece": {
+          "mean": 0.2688489052496117,
+          "variance": 0.007500130954220656
+        },
+        "total_mae": {
+          "mean": 8.623205890122335,
+          "variance": 3.199062554419021
+        },
+        "total_p10_p90_coverage": {
+          "mean": 0.71875,
+          "variance": 0.0126953125
+        }
+      }
+    },
+    "overall": {
+      "actual_points": 370.0,
+      "actual_points_avg": 92.5,
+      "brier": 0.2175551627409391,
+      "deterministic_brier": 0.2175551627409391,
+      "deterministic_brier_vs_market": 0.003566533934465599,
+      "deterministic_brier_vs_market_ci_high": 0.008621894593254135,
+      "deterministic_brier_vs_market_ci_low": -0.0012613258464637576,
+      "deterministic_log_loss": 0.6249171181721307,
+      "deterministic_log_loss_vs_market": 0.0075397839208575235,
+      "deterministic_log_loss_vs_market_ci_high": 0.018387099208755642,
+      "deterministic_log_loss_vs_market_ci_low": -0.0036078689371675846,
+      "deterministic_pick_accuracy": 0.59375,
+      "expected_points": 360.26916241445053,
+      "expected_points_avg": 90.06729060361263,
+      "games": 64,
+      "log_loss": 0.6249171181721307,
+      "margin_mae": 9.765190606703982,
+      "margin_p10_p90_coverage": 0.75,
+      "market_brier": 0.2139886288064735,
+      "market_log_loss": 0.6173773342512732,
+      "market_margin_resid_mae": 9.765190606703982,
+      "market_pick_accuracy": 0.59375,
+      "market_total_resid_mae": 8.623205890122335,
+      "pick_accuracy": 0.59375,
+      "picks_correct": 38,
+      "reliability_ece": 0.10274528952493583,
+      "season": 2024,
+      "total_mae": 8.623205890122335,
+      "total_p10_p90_coverage": 0.71875,
+      "weeks": 4
+    },
+    "per_season": [
+      {
+        "actual_points": 370.0,
+        "actual_points_avg": 92.5,
+        "brier": 0.2175551627409391,
+        "deterministic_brier": 0.2175551627409391,
+        "deterministic_brier_vs_market": 0.003566533934465599,
+        "deterministic_log_loss": 0.6249171181721307,
+        "deterministic_log_loss_vs_market": 0.0075397839208575235,
+        "deterministic_pick_accuracy": 0.59375,
+        "expected_points": 360.26916241445053,
+        "expected_points_avg": 90.06729060361263,
+        "games": 64,
+        "log_loss": 0.6249171181721307,
+        "margin_mae": 9.765190606703982,
+        "margin_p10_p90_coverage": 0.75,
+        "market_brier": 0.2139886288064735,
+        "market_log_loss": 0.6173773342512732,
+        "market_margin_resid_mae": 9.765190606703982,
+        "market_pick_accuracy": 0.59375,
+        "market_total_resid_mae": 8.623205890122335,
+        "pick_accuracy": 0.59375,
+        "picks_correct": 38,
+        "reliability_ece": 0.10274528952493583,
+        "season": 2024,
+        "total_mae": 8.623205890122335,
+        "total_p10_p90_coverage": 0.71875,
+        "weeks": 4
+      }
+    ],
+    "per_week": [
+      {
+        "actual_points": 97.0,
+        "actual_points_avg": 97.0,
+        "brier": 0.22707544668808505,
+        "calibration_method": "none",
+        "deterministic_brier": 0.22707544668808505,
+        "deterministic_brier_vs_market": 2.5184900997177184e-05,
+        "deterministic_log_loss": 0.6500264463245462,
+        "deterministic_log_loss_vs_market": 0.0037524444662299095,
+        "deterministic_pick_accuracy": 0.6875,
+        "expected_points": 88.13771794170347,
+        "expected_points_avg": 88.13771794170347,
+        "games": 16,
+        "log_loss": 0.6500264463245462,
+        "margin_mae": 9.000845982227474,
+        "margin_model.best_iteration": 19,
+        "margin_model.early_stopped": false,
+        "margin_p10_p90_coverage": 0.75,
+        "margin_q0.1.best_iteration": 19,
+        "margin_q0.1.early_stopped": false,
+        "margin_q0.5.best_iteration": 19,
+        "margin_q0.5.early_stopped": false,
+        "margin_q0.9.best_iteration": 19,
+        "margin_q0.9.early_stopped": false,
+        "market_brier": 0.22705026178708787,
+        "market_log_loss": 0.6462740018583163,
+        "market_margin_resid_mae": 9.000845982227474,
+        "market_pick_accuracy": 0.6875,
+        "market_total_resid_mae": 5.644795834086835,
+        "pick_accuracy": 0.6875,
+        "picks_correct": 11,
+        "reliability_ece": 0.33245291945452754,
+        "season": 2024,
+        "total_mae": 5.644795834086835,
+        "total_model.best_iteration": 19,
+        "total_model.early_stopped": false,
+        "total_p10_p90_coverage": 0.875,
+        "total_q0.1.best_iteration": 19,
+        "total_q0.1.early_stopped": false,
+        "total_q0.5.best_iteration": 19,
+        "total_q0.5.early_stopped": false,
+        "total_q0.9.best_iteration": 19,
+        "total_q0.9.early_stopped": false,
+        "week": 1,
+        "weeks": 1
+      },
+      {
+        "actual_points": 80.0,
+        "actual_points_avg": 80.0,
+        "brier": 0.23231662382823032,
+        "calibration_method": "none",
+        "deterministic_brier": 0.23231662382823032,
+        "deterministic_brier_vs_market": 0.008761188712294532,
+        "deterministic_log_loss": 0.6489939896856906,
+        "deterministic_log_loss_vs_market": 0.01939332592527232,
+        "deterministic_pick_accuracy": 0.4375,
+        "expected_points": 90.54078349218841,
+        "expected_points_avg": 90.54078349218841,
+        "games": 16,
+        "log_loss": 0.6489939896856906,
+        "margin_mae": 8.775980014819652,
+        "margin_model.best_iteration": 19,
+        "margin_model.early_stopped": false,
+        "margin_p10_p90_coverage": 0.8125,
+        "margin_q0.1.best_iteration": 19,
+        "margin_q0.1.early_stopped": false,
+        "margin_q0.5.best_iteration": 19,
+        "margin_q0.5.early_stopped": false,
+        "margin_q0.9.best_iteration": 19,
+        "margin_q0.9.early_stopped": false,
+        "market_brier": 0.22355543511593579,
+        "market_log_loss": 0.6296006637604182,
+        "market_margin_resid_mae": 8.775980014819652,
+        "market_pick_accuracy": 0.4375,
+        "market_total_resid_mae": 8.83257117960602,
+        "pick_accuracy": 0.4375,
+        "picks_correct": 7,
+        "reliability_ece": 0.2846716770346912,
+        "season": 2024,
+        "total_mae": 8.83257117960602,
+        "total_model.best_iteration": 19,
+        "total_model.early_stopped": false,
+        "total_p10_p90_coverage": 0.6875,
+        "total_q0.1.best_iteration": 19,
+        "total_q0.1.early_stopped": false,
+        "total_q0.5.best_iteration": 19,
+        "total_q0.5.early_stopped": false,
+        "total_q0.9.best_iteration": 19,
+        "total_q0.9.early_stopped": false,
+        "week": 2,
+        "weeks": 1
+      },
+      {
+        "actual_points": 79.0,
+        "actual_points_avg": 79.0,
+        "brier": 0.228763527748665,
+        "calibration_method": "none",
+        "deterministic_brier": 0.228763527748665,
+        "deterministic_brier_vs_market": 0.0002978892596277871,
+        "deterministic_log_loss": 0.6521402327316284,
+        "deterministic_log_loss_vs_market": -0.0034239268177467252,
+        "deterministic_pick_accuracy": 0.5,
+        "expected_points": 90.10585666513416,
+        "expected_points_avg": 90.10585666513416,
+        "games": 16,
+        "log_loss": 0.6521402327316284,
+        "margin_mae": 9.9211509344168,
+        "margin_model.best_iteration": 19,
+        "margin_model.early_stopped": false,
+        "margin_p10_p90_coverage": 0.75,
+        "margin_q0.1.best_iteration": 19,
+        "margin_q0.1.early_stopped": false,
+        "margin_q0.5.best_iteration": 19,
+        "margin_q0.5.early_stopped": false,
+        "margin_q0.9.best_iteration": 19,
+        "margin_q0.9.early_stopped": false,
+        "market_brier": 0.22846563848903723,
+        "market_log_loss": 0.6555641595493751,
+        "market_margin_resid_mae": 9.9211509344168,
+        "market_pick_accuracy": 0.5625,
+        "market_total_resid_mae": 9.85331734153442,
+        "pick_accuracy": 0.5,
+        "picks_correct": 8,
+        "reliability_ece": 0.3353202237732468,
+        "season": 2024,
+        "total_mae": 9.85331734153442,
+        "total_model.best_iteration": 19,
+        "total_model.early_stopped": false,
+        "total_p10_p90_coverage": 0.75,
+        "total_q0.1.best_iteration": 19,
+        "total_q0.1.early_stopped": false,
+        "total_q0.5.best_iteration": 19,
+        "total_q0.5.early_stopped": false,
+        "total_q0.9.best_iteration": 19,
+        "total_q0.9.early_stopped": false,
+        "week": 3,
+        "weeks": 1
+      },
+      {
+        "actual_points": 114.0,
+        "actual_points_avg": 114.0,
+        "brier": 0.182065052698776,
+        "calibration_method": "none",
+        "deterministic_brier": 0.182065052698776,
+        "deterministic_brier_vs_market": 0.005181872864942899,
+        "deterministic_log_loss": 0.5485078039466571,
+        "deterministic_log_loss_vs_market": 0.010437292109674257,
+        "deterministic_pick_accuracy": 0.75,
+        "expected_points": 91.48480431542455,
+        "expected_points_avg": 91.48480431542455,
+        "games": 16,
+        "log_loss": 0.5485078039466571,
+        "margin_mae": 11.362785495352,
+        "margin_model.best_iteration": 19,
+        "margin_model.early_stopped": false,
+        "margin_p10_p90_coverage": 0.6875,
+        "margin_q0.1.best_iteration": 19,
+        "margin_q0.1.early_stopped": false,
+        "margin_q0.5.best_iteration": 19,
+        "margin_q0.5.early_stopped": false,
+        "margin_q0.9.best_iteration": 19,
+        "margin_q0.9.early_stopped": false,
+        "market_brier": 0.1768831798338331,
+        "market_log_loss": 0.5380705118369828,
+        "market_margin_resid_mae": 11.362785495352,
+        "market_pick_accuracy": 0.6875,
+        "market_total_resid_mae": 10.162139205262065,
+        "pick_accuracy": 0.75,
+        "picks_correct": 12,
+        "reliability_ece": 0.12295080073598127,
+        "season": 2024,
+        "total_mae": 10.162139205262065,
+        "total_model.best_iteration": 19,
+        "total_model.early_stopped": false,
+        "total_p10_p90_coverage": 0.5625,
+        "total_q0.1.best_iteration": 19,
+        "total_q0.1.early_stopped": false,
+        "total_q0.5.best_iteration": 19,
+        "total_q0.5.early_stopped": false,
+        "total_q0.9.best_iteration": 19,
+        "total_q0.9.early_stopped": false,
+        "week": 4,
+        "weeks": 1
+      }
+    ],
+    "summary_table": [
+      {
+        "direction": "lower",
+        "fold_mean": 0.2175551627409391,
+        "fold_variance": 0.00042342797420428987,
+        "metric": "brier",
+        "overall": 0.2175551627409391,
+        "priority": "primary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 0.6249171181721306,
+        "fold_variance": 0.0019474138422182125,
+        "metric": "log_loss",
+        "overall": 0.6249171181721307,
+        "priority": "primary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 0.2175551627409391,
+        "fold_variance": 0.00042342797420428987,
+        "metric": "deterministic_brier",
+        "overall": 0.2175551627409391,
+        "priority": "primary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 0.6249171181721306,
+        "fold_variance": 0.0019474138422182125,
+        "metric": "deterministic_log_loss",
+        "overall": 0.6249171181721307,
+        "priority": "primary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 0.21398862880647349,
+        "fold_variance": 0.0004621320479733264,
+        "metric": "market_brier",
+        "overall": 0.2139886288064735,
+        "priority": "primary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 0.6173773342512732,
+        "fold_variance": 0.0021830582227201525,
+        "metric": "market_log_loss",
+        "overall": 0.6173773342512732,
+        "priority": "primary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 0.003566533934465599,
+        "fold_variance": 1.3204737277082455e-05,
+        "metric": "deterministic_brier_vs_market",
+        "overall": 0.003566533934465599,
+        "priority": "primary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 0.00753978392085744,
+        "fold_variance": 7.086222626476277e-05,
+        "metric": "deterministic_log_loss_vs_market",
+        "overall": 0.0075397839208575235,
+        "priority": "primary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 0.2688489052496117,
+        "fold_variance": 0.007500130954220656,
+        "metric": "reliability_ece",
+        "overall": 0.10274528952493583,
+        "priority": "primary"
+      },
+      {
+        "direction": "higher",
+        "fold_mean": null,
+        "fold_variance": null,
+        "metric": "expected_points_avg",
+        "overall": 90.06729060361263,
+        "priority": "secondary"
+      },
+      {
+        "direction": "higher",
+        "fold_mean": null,
+        "fold_variance": null,
+        "metric": "actual_points_avg",
+        "overall": 92.5,
+        "priority": "secondary"
+      },
+      {
+        "direction": "higher",
+        "fold_mean": 0.59375,
+        "fold_variance": 0.0166015625,
+        "metric": "pick_accuracy",
+        "overall": 0.59375,
+        "priority": "secondary"
+      },
+      {
+        "direction": "higher",
+        "fold_mean": 0.59375,
+        "fold_variance": 0.0166015625,
+        "metric": "deterministic_pick_accuracy",
+        "overall": 0.59375,
+        "priority": "secondary"
+      },
+      {
+        "direction": "higher",
+        "fold_mean": 0.59375,
+        "fold_variance": 0.0107421875,
+        "metric": "market_pick_accuracy",
+        "overall": 0.59375,
+        "priority": "secondary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 9.765190606703982,
+        "fold_variance": 1.0348483380292108,
+        "metric": "margin_mae",
+        "overall": 9.765190606703982,
+        "priority": "tertiary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 8.623205890122335,
+        "fold_variance": 3.199062554419021,
+        "metric": "total_mae",
+        "overall": 8.623205890122335,
+        "priority": "tertiary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 9.765190606703982,
+        "fold_variance": 1.0348483380292108,
+        "metric": "market_margin_resid_mae",
+        "overall": 9.765190606703982,
+        "priority": "tertiary"
+      },
+      {
+        "direction": "lower",
+        "fold_mean": 8.623205890122335,
+        "fold_variance": 3.199062554419021,
+        "metric": "market_total_resid_mae",
+        "overall": 8.623205890122335,
+        "priority": "tertiary"
+      },
+      {
+        "ci_high": 0.012282499166431112,
+        "ci_low": -0.013189477500658478,
+        "direction": "lower",
+        "games": 16,
+        "metric": "deterministic_brier_vs_market",
+        "overall": 2.5184900997177184e-05,
+        "priority": "primary",
+        "window": "week_1_only",
+        "window_label": "week 1 only"
+      },
+      {
+        "ci_high": 0.03285037256307431,
+        "ci_low": -0.024709820150154403,
+        "direction": "lower",
+        "games": 16,
+        "metric": "deterministic_log_loss_vs_market",
+        "overall": 0.0037524444662300205,
+        "priority": "primary",
+        "window": "week_1_only",
+        "window_label": "week 1 only"
+      },
+      {
+        "ci_high": 0.018695042119941562,
+        "ci_low": -0.002486623807681476,
+        "direction": "lower",
+        "games": 16,
+        "metric": "deterministic_brier_vs_market",
+        "overall": 0.008761188712294504,
+        "priority": "primary",
+        "window": "week_2_only",
+        "window_label": "week 2 only"
+      },
+      {
+        "ci_high": 0.04042812197247374,
+        "ci_low": -0.004694972909335134,
+        "direction": "lower",
+        "games": 16,
+        "metric": "deterministic_log_loss_vs_market",
+        "overall": 0.01939332592527243,
+        "priority": "primary",
+        "window": "week_2_only",
+        "window_label": "week 2 only"
+      },
+      {
+        "ci_high": 0.010943029142264644,
+        "ci_low": -0.004021128677201645,
+        "direction": "lower",
+        "games": 32,
+        "metric": "deterministic_brier_vs_market",
+        "overall": 0.002739881062285343,
+        "priority": "primary",
+        "window": "weeks_3_18",
+        "window_label": "weeks 3-18"
+      },
+      {
+        "ci_high": 0.021437088039643396,
+        "ci_low": -0.013368728058963494,
+        "direction": "lower",
+        "games": 32,
+        "metric": "deterministic_log_loss_vs_market",
+        "overall": 0.0035066826459637657,
+        "priority": "primary",
+        "window": "weeks_3_18",
+        "window_label": "weeks 3-18"
+      },
+      {
+        "ci_high": 0.008621894593254135,
+        "ci_low": -0.0012613258464637576,
+        "direction": "lower",
+        "games": 64,
+        "metric": "deterministic_brier_vs_market",
+        "overall": 0.003566533934465599,
+        "priority": "primary",
+        "window": "all_weeks",
+        "window_label": "all weeks"
+      },
+      {
+        "ci_high": 0.018387099208755642,
+        "ci_low": -0.0036078689371675846,
+        "direction": "lower",
+        "games": 64,
+        "metric": "deterministic_log_loss_vs_market",
+        "overall": 0.0075397839208575235,
+        "priority": "primary",
+        "window": "all_weeks",
+        "window_label": "all weeks"
+      }
+    ],
+    "windows": [
+      {
+        "actual_points": 97.0,
+        "actual_points_avg": 97.0,
+        "brier": 0.22707544668808505,
+        "deterministic_brier": 0.22707544668808505,
+        "deterministic_brier_vs_market": 2.5184900997177184e-05,
+        "deterministic_brier_vs_market_ci_high": 0.012282499166431112,
+        "deterministic_brier_vs_market_ci_low": -0.013189477500658478,
+        "deterministic_log_loss": 0.6500264463245462,
+        "deterministic_log_loss_vs_market": 0.0037524444662300205,
+        "deterministic_log_loss_vs_market_ci_high": 0.03285037256307431,
+        "deterministic_log_loss_vs_market_ci_low": -0.024709820150154403,
+        "deterministic_pick_accuracy": 0.6875,
+        "expected_points": 88.13771794170347,
+        "expected_points_avg": 88.13771794170347,
+        "games": 16,
+        "label": "week 1 only",
+        "log_loss": 0.6500264463245462,
+        "margin_mae": 9.000845982227474,
+        "margin_p10_p90_coverage": 0.75,
+        "market_brier": 0.22705026178708787,
+        "market_log_loss": 0.6462740018583162,
+        "market_margin_resid_mae": 9.000845982227474,
+        "market_pick_accuracy": 0.6875,
+        "market_total_resid_mae": 5.644795834086835,
+        "pick_accuracy": 0.6875,
+        "picks_correct": 11,
+        "reliability_ece": 0.33245291945452754,
+        "season": 2024,
+        "total_mae": 5.644795834086835,
+        "total_p10_p90_coverage": 0.875,
+        "weeks": 1,
+        "window": "week_1_only"
+      },
+      {
+        "actual_points": 80.0,
+        "actual_points_avg": 80.0,
+        "brier": 0.23231662382823032,
+        "deterministic_brier": 0.23231662382823032,
+        "deterministic_brier_vs_market": 0.008761188712294504,
+        "deterministic_brier_vs_market_ci_high": 0.018695042119941562,
+        "deterministic_brier_vs_market_ci_low": -0.002486623807681476,
+        "deterministic_log_loss": 0.6489939896856907,
+        "deterministic_log_loss_vs_market": 0.01939332592527243,
+        "deterministic_log_loss_vs_market_ci_high": 0.04042812197247374,
+        "deterministic_log_loss_vs_market_ci_low": -0.004694972909335134,
+        "deterministic_pick_accuracy": 0.4375,
+        "expected_points": 90.54078349218841,
+        "expected_points_avg": 90.54078349218841,
+        "games": 16,
+        "label": "week 2 only",
+        "log_loss": 0.6489939896856907,
+        "margin_mae": 8.775980014819652,
+        "margin_p10_p90_coverage": 0.8125,
+        "market_brier": 0.2235554351159358,
+        "market_log_loss": 0.6296006637604182,
+        "market_margin_resid_mae": 8.775980014819652,
+        "market_pick_accuracy": 0.4375,
+        "market_total_resid_mae": 8.83257117960602,
+        "pick_accuracy": 0.4375,
+        "picks_correct": 7,
+        "reliability_ece": 0.2846716770346912,
+        "season": 2024,
+        "total_mae": 8.83257117960602,
+        "total_p10_p90_coverage": 0.6875,
+        "weeks": 1,
+        "window": "week_2_only"
+      },
+      {
+        "actual_points": 193.0,
+        "actual_points_avg": 96.5,
+        "brier": 0.20541429022372049,
+        "deterministic_brier": 0.20541429022372049,
+        "deterministic_brier_vs_market": 0.002739881062285343,
+        "deterministic_brier_vs_market_ci_high": 0.010943029142264644,
+        "deterministic_brier_vs_market_ci_low": -0.004021128677201645,
+        "deterministic_log_loss": 0.6003240183391427,
+        "deterministic_log_loss_vs_market": 0.0035066826459637657,
+        "deterministic_log_loss_vs_market_ci_high": 0.021437088039643396,
+        "deterministic_log_loss_vs_market_ci_low": -0.013368728058963494,
+        "deterministic_pick_accuracy": 0.625,
+        "expected_points": 181.5906609805587,
+        "expected_points_avg": 90.79533049027935,
+        "games": 32,
+        "label": "weeks 3-18",
+        "log_loss": 0.6003240183391427,
+        "margin_mae": 10.6419682148844,
+        "margin_p10_p90_coverage": 0.71875,
+        "market_brier": 0.20267440916143514,
+        "market_log_loss": 0.596817335693179,
+        "market_margin_resid_mae": 10.6419682148844,
+        "market_pick_accuracy": 0.625,
+        "market_total_resid_mae": 10.007728273398243,
+        "pick_accuracy": 0.625,
+        "picks_correct": 20,
+        "reliability_ece": 0.19257990863407165,
+        "season": 2024,
+        "total_mae": 10.007728273398243,
+        "total_p10_p90_coverage": 0.65625,
+        "weeks": 2,
+        "window": "weeks_3_18"
+      },
+      {
+        "actual_points": 370.0,
+        "actual_points_avg": 92.5,
+        "brier": 0.2175551627409391,
+        "deterministic_brier": 0.2175551627409391,
+        "deterministic_brier_vs_market": 0.003566533934465599,
+        "deterministic_brier_vs_market_ci_high": 0.008621894593254135,
+        "deterministic_brier_vs_market_ci_low": -0.0012613258464637576,
+        "deterministic_log_loss": 0.6249171181721307,
+        "deterministic_log_loss_vs_market": 0.0075397839208575235,
+        "deterministic_log_loss_vs_market_ci_high": 0.018387099208755642,
+        "deterministic_log_loss_vs_market_ci_low": -0.0036078689371675846,
+        "deterministic_pick_accuracy": 0.59375,
+        "expected_points": 360.26916241445053,
+        "expected_points_avg": 90.06729060361263,
+        "games": 64,
+        "label": "all weeks",
+        "log_loss": 0.6249171181721307,
+        "margin_mae": 9.765190606703982,
+        "margin_p10_p90_coverage": 0.75,
+        "market_brier": 0.2139886288064735,
+        "market_log_loss": 0.6173773342512732,
+        "market_margin_resid_mae": 9.765190606703982,
+        "market_pick_accuracy": 0.59375,
+        "market_total_resid_mae": 8.623205890122335,
+        "pick_accuracy": 0.59375,
+        "picks_correct": 38,
+        "reliability_ece": 0.10274528952493583,
+        "season": 2024,
+        "total_mae": 8.623205890122335,
+        "total_p10_p90_coverage": 0.71875,
+        "weeks": 4,
+        "window": "all_weeks"
+      }
+    ]
+  },
+  "splits": {
+    "calibration_window": {
+      "calibration_weeks": 4,
+      "method": "auto"
+    },
+    "eval_window": {
+      "include_postseason": false,
+      "incomplete_seasons": [
+        2024
+      ],
+      "seasons": {
+        "2024": {
+          "eval_end_week": 18,
+          "eval_start_week": 1,
+          "incomplete_regular_season": true,
+          "max_week_in_data": 4,
+          "regular_season_weeks": 18
+        }
+      }
+    },
+    "excluded_incomplete_seasons": []
+  }
+}

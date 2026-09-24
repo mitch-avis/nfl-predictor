@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.18.0] - 2026-09-24
+
+### Changed
+
+- Train production unweighted: `config/weekly_run.yaml` no longer sets
+  `train_recency_half_life_seasons: 4` or `wf_recency_half_life_seasons: 4`, so the weekly run's
+  walk-forward stage and final fit both train without season recency weighting, like the
+  benchmark. This reverses the `0.17.0` decision. The user decided on 2026-09-24 after nine
+  six-season arms (unweighted and half-lives `4`, `8`, `16`, `32`; seeds `42` and `7`;
+  `models/wf_m55_8_2020_2025_*/`) and an independent review of all nine
+  (`models/wf_m55_8_review/INDEPENDENT_REVIEW.md`). Weeks 3-18, two seeds combined per game,
+  against unweighted: half-life `4` deterministic Brier `+0.00148` `[-0.00012, +0.00313]` and
+  margin MAE `+0.0853` `[+0.0188, +0.1535]` (it loses); half-life `16` `-0.00011`
+  `[-0.00104, +0.00088]` and half-life `32` `+0.00021` `[-0.00061, +0.00102]` (ties, not adopted).
+  `tests/test_weekly_run.py` now pins both stages as unweighted and the power rankings as
+  regular-season only.
+- Tighten the agent guardrails in `AGENTS.md`: rule 3 (what makes a review independent, and stop
+  if a reviewer fails) and rule 7 (check-ins carry the numbers and say how long runs are
+  supervised), plus new rules 9-14 (read every interval, generated inventories, benchmark/production
+  parity, decision rules applied as written, two seeds before any default change, order of work)
+  and two launch-script lessons.
+- Record the first six-season fit-noise floor in `AGENTS.md`: re-seeding alone moves weeks 3-18
+  deterministic Brier by up to about `0.0013`, pick accuracy by about `0.008` and pool points by
+  about `75`, sometimes with intervals that exclude zero.
+- Reorder the roadmap in `.agents/TODO.md` into six steps agreed with the user on 2026-09-24,
+  retire tasks 55.1 and 55.2, add tasks 56.5 (how production probabilities are formed) and 56.6
+  (pick-time lines), and widen Milestone 60 to every file under `scripts/`, with its impact on the
+  web UI recorded in `.agents/web_ui_plan.md`. Mark `.agents/m60_cli_flag_audit.md` superseded.
+- Replace the README's season-weighting ladder with the nine-arm result, and change its ablation
+  examples from `--recency-half-life-seasons 2` to `16`.
+
+### Fixed
+
+- Correct the `0.17.0` task 55.8 record in `.agents/ARCHIVE.md`: it kept the unmeasured shipped
+  half-life `4`, the weakest arm on every probability and error metric, and was reviewed by the
+  agent that produced its runs. The original text is kept under a superseded heading.
+- Power rankings exclude postseason games in the shipped weekly config
+  (`power_rankings_include_postseason: false`, the user's commit `eb1338a`), and the web
+  dependencies `pyjwt` and `starlette` are updated to `2.15.0` and `1.7.0` (`8b440bd`).
+
 ## [0.17.0] - 2026-09-23
 
 ### Changed

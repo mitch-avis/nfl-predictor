@@ -20,7 +20,30 @@ subprocess: the long options match for all 19 entrypoints. The only differences 
 artifacts: options split across wrapped help lines, and `weekly_run`'s help quoting two
 `data_collection` options in an example. `.agents/m60_cli_flag_audit.md` was not used.
 
-Nothing here has been moved. Everything below is a proposal until you sign off.
+## Sign-off (the user, 2026-09-24)
+
+Signed off with these decisions; the sections below are amended to match.
+
+1. One front door, `nfl-predictor <command>` (section 0): yes.
+2. Script dispositions (section 1): yes.
+3. Flag removals (section 2): yes. `postseason_weight` is read only when training includes
+   postseason games (`include_postseason: true`), never by the power rankings, so its inert
+   `1.3` leaves `config/weekly_run.yaml` as a commented-out example beside `include_postseason`
+   for the playoff design (task 56.2); the flag itself stays.
+4. Naming rule (section 3): yes.
+5. Old launchers reproduce from their recorded git commit (section 5): yes.
+6. ScoreModel: **remove it**, with everything only it uses (task 55.5). No model-family
+   comparison.
+7. Fix the model-kind vocabulary defect when the web templates move (60.7): yes.
+8. The `--calibration` default: deferred to roadmap step 3. The user wants one calibration used
+   the same way by every run type (backtest, benchmark, weekly run), `auto` or `platt`.
+9. Step-2 follow-ups (section 7), the automatic OpenMP passive policy included: yes.
+10. CI calls `scripts/gate.sh`: yes.
+11. The `compare` command: yes.
+12. Survivor picks wait until most other milestones are done (task 58.1, step 6).
+13. How success is measured (section 8): agreed.
+14. Housekeeping: the stray checkpoint folder was already gone; the stale
+    `../nfl-predictor-web` worktree record is pruned.
 
 ## What the inventory found
 
@@ -108,7 +131,7 @@ rule in section 3 makes shared concepts spell the same way everywhere.
 | `wf_compare.py` | 436 | move (`sweep`); decide after step 3 whether it is still needed | 1 test module, README; overlaps the weekly stage-1 sweep that task 56.5 will decide |
 | `leakage_audit.py` | 107 | move (`leakage-audit`) | required tool (AGENTS.md "Leakage Audit"); web |
 | `validate_offline.py`, `validate_live.py` | 85, 79 | merge into one `validate` with a `--live` switch | web templates; both check `data/all_data.csv` |
-| `shap_analysis.py` | 188 | move (`explain`), keeping its ScoreModel branch | web template, 1 test module |
+| `shap_analysis.py` | 188 | move (`explain`), dropping its ScoreModel branch | web template, 1 test module |
 | `betting_report_excel.py` | 69 | **retire**, with `nfl_predictor/reporting/betting_excel.py` (1,359 lines), the `openpyxl` dependency, `weekly_run --betting-template-path`, the web `betting_xlsx` job, the workbook download routes and button, and their tests | you no longer need the Excel version; the web page does not read it |
 | `betting_pipeline.py` | 1,108 | retire once `build_betting_report` and its helpers move into `nfl_predictor/reporting/` | no web, launcher or CI; `weekly_run` uses only `build_betting_report`; drifted matrix and defaults |
 | `golden_command.py` | 681 | retire, with its 2 test modules | agreed 2026-09-23; no web, launcher or CI |
@@ -155,10 +178,9 @@ flag or sets it to a value that is never applied.
    and `--train-recency-half-life-weeks`, plus their plumbing. Recommended (rule 9: fewer knobs
    when nothing measured says otherwise).
 5. `postseason_weight: 1.3` in `config/weekly_run.yaml` is inert while `include_postseason` is
-   false. The flag stays live for the playoff design task 56.2 deferred; recommended: drop the
-   key, since the value was never measured and a playoff design will choose its own.
-
-The `score` choice of `--model-kind` is **no longer on this list** (section 6).
+   false. Decided: the key becomes a commented-out example beside `include_postseason`; the
+   flag stays live for the playoff design (task 56.2).
+6. The `score` choice of `--model-kind` everywhere, with ScoreModel (section 6).
 
 ## 3. Surviving canonical names
 
@@ -213,48 +235,26 @@ changes the checkpoint fingerprint, and rescoring reads the checkpoints on disk,
 launcher. The alternatives are permanent two-line shims (the `scripts/` directory survives as
 aliases), or shims with a deprecation period.
 
-## 6. Task 55.5: `ScoreModel` gets a fair test, not a removal
+## 6. Task 55.5: remove `ScoreModel` (decided)
 
 What exists (INVENTORY.md, "ScoreModel and the `score` model kind"): two XGBoost regressors,
-one for the home score and one for the away score, trained on the same features and default
-settings as the margin/total model. The win probability comes from the same fixed normal curve
-on (home minus away). It trains, predicts, saves and loads, and has unit tests for each of
-those. It is reachable through `--model-kind score` (`ml_model`, `backtest_predictions`,
-`power_rankings`) and the web `train` template.
+one for the home score and one for the away score, with the win probability from the fixed
+normal curve on (home minus away). It trains, predicts, saves and loads, with unit tests for
+each. It was never measured: the walk-forward harness cannot run it, it has no market
+anchoring, no uncertainty ranges and no tuning path, and no run or saved model on disk used it.
 
-What it lacks, compared with the production margin/total model:
+A perfect score model and a perfect margin/total model give the same answers (margin = home −
+away, total = home + away); with real data the direct margin model usually wins, because two
+score models spend their capacity on the overall scoring level, which cancels in the
+difference, and their errors add. Weighing that against the parity work a fair test needs, the
+user decided on 2026-09-24 to remove it.
 
-- **Walk-forward support.** The harness cannot backtest it, so it has never been measured.
-- **Market anchoring.** The margin/total model learns only the correction to the market spread
-  and total; ScoreModel learns scores from scratch. Tested as it stands, it would lose for that
-  reason alone. The fair version anchors each score to the market's implied team score
-  (total line / 2 plus or minus spread / 2).
-- **Uncertainty ranges** (p10/p90), which AGENTS.md requires for every model's predictions.
-- **Tuning.** It has no Optuna path; it uses the margin/total model's default settings.
-
-What to expect honestly: margin = home − away and total = home + away, so a perfect score model
-and a perfect margin/total model give identical answers. With real data, predicting the margin
-directly tends to win, because the model spends all its capacity on the difference between the
-teams, while two score models spend much of theirs on the overall scoring level (pace, weather,
-era), which cancels in the difference, and their errors add. That is a prior, not a result;
-only a measurement settles it.
-
-Proposed plan, as a new milestone ("Model-family comparison"), so nothing is removed first:
-
-1. **Parity work (test-first):** walk-forward support for model kinds; market anchoring for
-   ScoreModel; the same probability path as the benchmark; p10/p90 ranges. The blended model
-   (`--model-kind blend`: a team-only model, a market-only model and a linear blend layer), also
-   never backtested, joins as a third candidate at little extra cost.
-2. **Screen, after roadmap step 3** (GPU reference, settled probability path, pick-time lines):
-   six seasons, two seeds, same data build, same folds, each candidate against the
-   margin/total reference and against the market, with a hypothesis and decision rule written
-   first. At shared default settings this still slightly favors margin/total, since the
-   defaults were tuned for it, and the check-in will say so.
-3. **Fair final, inside step 5:** tune every surviving candidate with the same Optuna budget,
-   then confirm on six seasons and two seeds. The winner becomes the default only by your
-   decision (rule 13).
-
-In this milestone ScoreModel and `blend` stay, move with the rest, and keep their tests.
+Removal, behavior-preserving for every weekly output: `ScoreModel`, `train_score_model` and
+`train_score_model_with_report`, the score `predict_week` path, the `score` choice of
+`--model-kind` (`ml_model`, `power_rankings`, the web catalog), the score branches in
+`power_rankings`, `shap_analysis`, `feature_importance`, `ml_model_cli` and the checkpoint
+loader, and the tests that exist only for them. The inventory lists every occurrence. The
+blended model (`blend`) stays.
 
 ## 7. Step-2 follow-ups
 
@@ -292,18 +292,8 @@ simplest candidate) and retire the calibrators it does not use; test the trainin
 campaign; keep betting a separate decision layer (bet only where the model's probability beats
 the market's by a margin, sized conservatively) rather than training on an odds-weighted loss.
 
-## Questions for sign-off
+## Next
 
-See the check-in message of 2026-09-24 for the full reasoning. In short:
-
-1. The front door (`nfl-predictor <command>`) and the grouping in section 0.
-2. The script dispositions in section 1, including retiring the Excel workbook end to end.
-3. The flag removals in section 2.
-4. The naming rule and canonical names in section 3.
-5. The reproduction policy for old launcher paths (section 5).
-6. ScoreModel: keep it, and add the model-family comparison (section 6) to the roadmap.
-7. The model-kind vocabulary defect: fix it when the web templates move (60.7, test first).
-8. The `walk_forward_backtest --calibration` default (`platt` against the benchmark's `auto`).
-9. The step-2 follow-ups in section 7.
-10. CI calls `scripts/gate.sh`.
-11. A new `compare` command for paired comparisons of two backtests.
+60.4: characterization tests (the weekly run end to end on a synthetic fixture, a snapshot of
+every entrypoint's parser surface, and tests for the scripts with little coverage), green
+against the current layout before anything moves.

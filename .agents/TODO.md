@@ -328,8 +328,11 @@ Tasks 55.1 and 55.2 (a general configuration-sweep runner) were retired by the u
       or deprecate cleanly. Decided and executed inside Milestone 60, because retiring unused
       model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).
       Evidence generated 2026-09-24 (`.agents/m60/INVENTORY.md`): no run records `score` and
-      every saved model under `models/` is a `MarginTotalModel`; the proposal is to remove it
-      (`.agents/m60/PROPOSAL.md`, section 6), pending the user's decision at 60.3.
+      every saved model under `models/` is a `MarginTotalModel`. The walk-forward harness cannot
+      run it, so it has never been measured. The user asked on 2026-09-24 for a fair test before
+      any removal; the revised proposal keeps it through Milestone 60 and plans a model-family
+      comparison (margin/total, score, blend) after roadmap step 3
+      (`.agents/m60/PROPOSAL.md`, section 6), pending the user's decision.
 - [ ] 55.6 (step 3) Add the stability view by season and week bucket, and a "recommended
       defaults" section. The second-key review script
       (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that

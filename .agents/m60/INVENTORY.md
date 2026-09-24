@@ -175,7 +175,7 @@ Flows into WalkForwardConfig.early_stopping_rounds, which only to_dict() reads (
 
 ### weekly_run `--postseason-weight`: config-only inert (holds)
 
-The production config sets 1.3, but include_postseason is false and compute_postseason_sample_weight returns None whenever it is, so the weight is never applied (task 56.2). The flag itself is live when include_postseason is true; the power rankings never read it. Decided 2026-09-24: the key becomes a commented-out example.
+The production config sets 1.3, but include_postseason is false and compute_postseason_sample_weight returns None whenever it is, so the weight is never applied (task 56.2). The flag itself is live when include_postseason is true; the power rankings never read it. Decided 2026-09-24: the key stays, for postseason training.
 
 - holds: `config/weekly_run.yaml` /^postseason_weight: 1\.3/ present (lines: 53)
 - holds: `config/weekly_run.yaml` /^include_postseason: false/ present (lines: 51)
@@ -548,7 +548,7 @@ defaults are marked.
   - imports: ['scripts.betting_pipeline', 'scripts.power_rankings']
   - names used: ['DEFAULT_PRIOR_SEASON_WEIGHT', 'DEFAULT_RATINGS_WINDOW_SEASONS', 'DEFAULT_STRENGTH_SNAPSHOTS', 'RANKING_METHODS', 'RankingOptions', 'StrengthSnapshotUnavailableError', '_write_outputs', 'build_betting_report', 'compute_power_rankings', 'resolve_ranking_options']
 - **OVERTURNED**: ten test modules import from scripts
-  - 11: ['tests/test_betting_pipeline_recs.py', 'tests/test_betting_pipeline_script.py', 'tests/test_golden_command_power_rankings.py', 'tests/test_golden_command_wf_resume.py', 'tests/test_power_rankings_script.py', 'tests/test_shap_analysis_script.py', 'tests/test_walk_forward_backtest_script.py', 'tests/test_weekly_run.py', 'tests/test_weekly_run_power_rankings.py', 'tests/test_wf_checkpointing.py', 'tests/test_wf_compare_script.py']
+  - 13: ['tests/test_betting_pipeline_recs.py', 'tests/test_betting_pipeline_script.py', 'tests/test_entrypoints_characterization.py', 'tests/test_golden_command_power_rankings.py', 'tests/test_golden_command_wf_resume.py', 'tests/test_power_rankings_script.py', 'tests/test_shap_analysis_script.py', 'tests/test_walk_forward_backtest_script.py', 'tests/test_weekly_run.py', 'tests/test_weekly_run_characterization.py', 'tests/test_weekly_run_power_rankings.py', 'tests/test_wf_checkpointing.py', 'tests/test_wf_compare_script.py']
 - **CONFIRMED**: betting_pipeline keeps its own copy of the walk-forward candidate matrix
   - scripts/weekly_run.py:_WF_MATRIX: 9 rows: ['none_base', 'platt_base', 'auto_base', 'isotonic_base', 'elo_base', 'isotonic_clamp0.10', 'isotonic_blend0.20_clamp0.10', 'elo_clamp0.10', 'elo_blend0.20_clamp0.10']
   - scripts/betting_pipeline.py:_wf_compare_matrix: 7 rows: ['platt_base', 'isotonic_base', 'elo_base', 'isotonic_clamp0.10', 'isotonic_blend0.20_clamp0.10', 'elo_clamp0.10', 'elo_blend0.20_clamp0.10']
@@ -707,21 +707,25 @@ Occurrences:
 - `tests/test_ml_model_training_score_blend.py:128: model = ScoreModel(`
 - `tests/test_power_rankings_script.py:122: """ScoreModel paths should apply a calibrator when present."""`
 - `tests/test_power_rankings_script.py:178: model_kind="score",`
-- `.agents/ARCHIVE.md:2015: - [x] **Apply win-prob calibration consistently for `ScoreModel`**`
-- `.agents/ARCHIVE.md:2016: - Update the `ScoreModel` path in `scripts/power_rankings.py` so that:`
-- `.agents/ARCHIVE.md:2023: - [x] `ScoreModel` probabilities change appropriately when a calibrator is attached.`
+- `.agents/ARCHIVE.md:65: `--calibration` default (`platt`) differs from the benchmark's `auto`; ScoreModel was never`
+- `.agents/ARCHIVE.md:72: old launchers reproduce from their recorded commit; ScoreModel removed (task 55.5); the Excel`
+- `.agents/ARCHIVE.md:2047: - [x] **Apply win-prob calibration consistently for `ScoreModel`**`
+- `.agents/ARCHIVE.md:2048: - Update the `ScoreModel` path in `scripts/power_rankings.py` so that:`
+- `.agents/ARCHIVE.md:2055: - [x] `ScoreModel` probabilities change appropriately when a calibrator is attached.`
 - `.agents/TODO.md:168: widened to every file under `scripts/`, behavior-preserving. 55.5 (the `ScoreModel` fate) is`
-- `.agents/TODO.md:327: - [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental`
-- `.agents/TODO.md:329: model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).`
-- `.agents/next_agent_session_prompt.md:23: questions. It was revised the same day after the user's questions: ScoreModel stays and`
+- `.agents/TODO.md:336: - [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental`
+- `.agents/TODO.md:338: model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).`
+- `.agents/TODO.md:575: remove ScoreModel (task 55.5); move everything else; keep `scripts/gate.sh`; one naming rule`
+- `.agents/TODO.md:613: betting_excel.py`, `openpyxl`, `--betting-template-path`), the ScoreModel removal (task`
+- `.agents/next_agent_session_prompt.md:22: - remove ScoreModel and everything only it uses (task 55.5);`
 
 ## Flags in commands that the entrypoint does not define
 
 Commands found in docs, CI or launchers that pass an option the named entrypoint does not
 have (stale docs, or a tokenizer miss to check by hand).
 
-- `.agents/TODO.md:385 weekly_run --defaults-path`
-- `CHANGELOG.md:1006 walk_forward_backtest --wf-resume`
+- `.agents/TODO.md:394 weekly_run --defaults-path`
+- `CHANGELOG.md:1020 walk_forward_backtest --wf-resume`
 
 ## Web job templates parsed by their target's real parser
 
@@ -776,19 +780,19 @@ Top-level functions of `scripts/` also defined in another script or package modu
 | file | lines | imports scripts | test importers | code importers | web | CI/gate | docs (files) | launchers | proposed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `scripts/backtest_predictions.py` | 389 |  | 0 |  |  | 0 | 4 | 0 | retire |
-| `scripts/betting_pipeline.py` | 1108 |  | 2 | scripts/weekly_run.py |  | 0 | 10 | 0 | retire after build_betting_report moves |
+| `scripts/betting_pipeline.py` | 1108 |  | 2 | scripts/weekly_run.py |  | 0 | 9 | 0 | retire after build_betting_report moves |
 | `scripts/betting_report_excel.py` | 69 |  | 0 |  | betting_xlsx | 0 | 6 | 0 | retire, with nfl_predictor/reporting/betting_excel.py and openpyxl |
 | `scripts/gate.sh` | 121 |  | 0 |  |  | 3 | 9 | 0 | keep |
-| `scripts/golden_command.py` | 681 |  | 2 |  |  | 0 | 11 | 0 | retire |
-| `scripts/leakage_audit.py` | 107 |  | 0 |  | leakage_audit | 0 | 7 | 0 | move |
+| `scripts/golden_command.py` | 681 |  | 2 |  |  | 0 | 10 | 0 | retire |
+| `scripts/leakage_audit.py` | 107 |  | 1 |  | leakage_audit | 0 | 7 | 0 | move |
 | `scripts/objective_compare_models.py` | 159 |  | 0 |  |  | 0 | 4 | 0 | retire, with nfl_predictor/ml/model_compare.py and tests/test_model_compare.py |
 | `scripts/power_rankings.py` | 868 |  | 2 | scripts/weekly_run.py | power_rankings | 2 | 11 | 0 | move |
-| `scripts/shap_analysis.py` | 188 |  | 1 |  | shap_analysis | 0 | 4 | 0 | move |
+| `scripts/shap_analysis.py` | 188 |  | 1 |  | shap_analysis | 0 | 5 | 0 | move |
 | `scripts/validate_live.py` | 79 |  | 0 |  | validate_live | 0 | 6 | 0 | move |
 | `scripts/validate_offline.py` | 85 |  | 0 |  | validate_offline | 0 | 6 | 0 | move |
-| `scripts/walk_forward_backtest.py` | 400 |  | 1 |  | walk_forward_backtest | 0 | 10 | 19 | move |
-| `scripts/weekly_run.py` | 1917 | scripts.betting_pipeline, scripts.power_rankings | 3 |  | weekly_run | 2 | 12 | 1 | move |
-| `scripts/wf_compare.py` | 436 |  | 1 |  |  | 0 | 9 | 0 | move |
+| `scripts/walk_forward_backtest.py` | 400 |  | 2 |  | walk_forward_backtest | 0 | 10 | 19 | move |
+| `scripts/weekly_run.py` | 1917 | scripts.betting_pipeline, scripts.power_rankings | 4 |  | weekly_run | 2 | 12 | 1 | move |
+| `scripts/wf_compare.py` | 436 |  | 2 |  |  | 0 | 9 | 0 | move |
 
 ### `scripts/backtest_predictions.py`
 
@@ -814,7 +818,7 @@ Top-level functions of `scripts/` also defined in another script or package modu
 - Names importers use: ['TrainingResult', '_implied_prob_to_moneyline', '_moneyline_to_implied_prob', '_novig_pair', '_parse_args', '_pick_best_row', '_resolve_predict_path', 'build_betting_report', 'main', 'walk_forward'].
 - Web templates: none.
 - CI and gate: none.
-- Docs citing it: {'.agents/ARCHIVE.md': 3, '.agents/TODO.md': 1, '.agents/m60/INVENTORY.md': 15, '.agents/m60/PROPOSAL.md': 1, '.agents/m60/SCRIPTS_COVERAGE.md': 2, '.agents/m60_cli_flag_audit.md': 5, '.agents/web_ui_plan.md': 1, 'AGENTS.md': 2, 'CHANGELOG.md': 7, 'README.md': 2}.
+- Docs citing it: {'.agents/ARCHIVE.md': 3, '.agents/m60/INVENTORY.md': 15, '.agents/m60/PROPOSAL.md': 1, '.agents/m60/SCRIPTS_COVERAGE.md': 2, '.agents/m60_cli_flag_audit.md': 5, '.agents/web_ui_plan.md': 1, 'AGENTS.md': 2, 'CHANGELOG.md': 7, 'README.md': 2}.
 - Python files naming its path: ['.agents/m60/inventory.py', '.agents/m60/scripts_coverage.py', 'nfl_predictor/api/readers/market.py', 'nfl_predictor/reporting/betting_excel.py', 'tests/test_betting_pipeline_script.py'].
 - Package modules no other non-test code imports: none.
 - Launchers under `models/` (0): none.
@@ -844,7 +848,7 @@ Top-level functions of `scripts/` also defined in another script or package modu
 - Names importers use: none.
 - Web templates: none.
 - CI and gate: ['scripts/gate.sh:7', 'scripts/gate.sh:9', 'scripts/gate.sh:11'].
-- Docs citing it: {'.agents/ARCHIVE.md': 1, '.agents/TODO.md': 8, '.agents/m60/INVENTORY.md': 7, '.agents/m60/PROPOSAL.md': 7, '.agents/next_agent_session_prompt.md': 2, '.agents/web_ui_plan.md': 1, 'AGENTS.md': 5, 'CHANGELOG.md': 2, 'README.md': 2}.
+- Docs citing it: {'.agents/ARCHIVE.md': 2, '.agents/TODO.md': 8, '.agents/m60/INVENTORY.md': 7, '.agents/m60/PROPOSAL.md': 7, '.agents/next_agent_session_prompt.md': 2, '.agents/web_ui_plan.md': 1, 'AGENTS.md': 5, 'CHANGELOG.md': 2, 'README.md': 2}.
 - Python files naming its path: ['.agents/m60/inventory.py'].
 - Package modules no other non-test code imports: none.
 - Launchers under `models/` (0): none.
@@ -859,7 +863,7 @@ Top-level functions of `scripts/` also defined in another script or package modu
 - Names importers use: ['_build_pregame_power_rankings', '_parse_args', 'constants', 'main', 'walk_forward'].
 - Web templates: none.
 - CI and gate: none.
-- Docs citing it: {'.agents/ARCHIVE.md': 2, '.agents/TODO.md': 1, '.agents/feature_crosswalk.md': 1, '.agents/m60/INVENTORY.md': 12, '.agents/m60/PROPOSAL.md': 1, '.agents/m60/SCRIPTS_COVERAGE.md': 1, '.agents/m60_cli_flag_audit.md': 3, '.agents/web_ui_plan.md': 1, 'AGENTS.md': 3, 'CHANGELOG.md': 2, 'README.md': 3}.
+- Docs citing it: {'.agents/ARCHIVE.md': 2, '.agents/feature_crosswalk.md': 1, '.agents/m60/INVENTORY.md': 12, '.agents/m60/PROPOSAL.md': 1, '.agents/m60/SCRIPTS_COVERAGE.md': 1, '.agents/m60_cli_flag_audit.md': 3, '.agents/web_ui_plan.md': 1, 'AGENTS.md': 3, 'CHANGELOG.md': 2, 'README.md': 3}.
 - Python files naming its path: ['tests/test_golden_command_wf_resume.py'].
 - Package modules no other non-test code imports: none.
 - Launchers under `models/` (0): none.
@@ -869,7 +873,7 @@ Top-level functions of `scripts/` also defined in another script or package modu
 
 - Lines: 107; `__main__` guard: True.
 - Imports from scripts: none.
-- Imported by tests: none.
+- Imported by tests: ['tests/test_entrypoints_characterization.py'].
 - Imported by code: none.
 - Names importers use: none.
 - Web templates: ['leakage_audit'].
@@ -919,7 +923,7 @@ Top-level functions of `scripts/` also defined in another script or package modu
 - Names importers use: ['_import_shap', 'main'].
 - Web templates: ['shap_analysis'].
 - CI and gate: none.
-- Docs citing it: {'.agents/m60/INVENTORY.md': 8, '.agents/m60/PROPOSAL.md': 2, '.agents/m60/SCRIPTS_COVERAGE.md': 1, 'README.md': 1}.
+- Docs citing it: {'.agents/m60/INVENTORY.md': 8, '.agents/m60/PROPOSAL.md': 2, '.agents/m60/SCRIPTS_COVERAGE.md': 1, '.agents/next_agent_session_prompt.md': 1, 'README.md': 1}.
 - Python files naming its path: ['nfl_predictor/api/jobs/catalog.py', 'tests/test_shap_analysis_script.py'].
 - Package modules no other non-test code imports: none.
 - Launchers under `models/` (0): none.
@@ -959,7 +963,7 @@ Top-level functions of `scripts/` also defined in another script or package modu
 
 - Lines: 400; `__main__` guard: True.
 - Imports from scripts: none.
-- Imported by tests: ['tests/test_walk_forward_backtest_script.py'].
+- Imported by tests: ['tests/test_entrypoints_characterization.py', 'tests/test_walk_forward_backtest_script.py'].
 - Imported by code: none.
 - Names importers use: ['_parse_args', '_parse_feature_groups', '_trend_feature_columns', 'main'].
 - Web templates: ['walk_forward_backtest'].
@@ -974,13 +978,13 @@ Top-level functions of `scripts/` also defined in another script or package modu
 
 - Lines: 1917; `__main__` guard: True.
 - Imports from scripts: ['scripts.betting_pipeline', 'scripts.power_rankings'].
-- Imported by tests: ['tests/test_weekly_run.py', 'tests/test_weekly_run_power_rankings.py', 'tests/test_wf_checkpointing.py'].
+- Imported by tests: ['tests/test_weekly_run.py', 'tests/test_weekly_run_characterization.py', 'tests/test_weekly_run_power_rankings.py', 'tests/test_wf_checkpointing.py'].
 - Imported by code: none.
 - Names importers use: ['_allowed_config_keys', '_atomic_write_json', '_build_confidence_picks', '_build_parser', '_build_summary_row', '_candidate_artifact_path', '_default_power_rankings_through_week', '_load_config', '_normalize_config_defaults', '_pick_best_row', '_power_ranking_options', '_power_rankings_report_config', '_rank_summary', '_refresh_data', '_resolve_predict_path', '_run_wf_compare', '_stage_can_reuse', '_wf_compare_dir', '_write_stage_marker', 'artifacts', 'data_collection', 'fingerprints', 'main', 'ml_model_core', 'walk_forward'].
 - Web templates: ['weekly_run'].
 - CI and gate: ['scripts/gate.sh:79', '.github/workflows/validation.yml:79'].
-- Docs citing it: {'.agents/ARCHIVE.md': 7, '.agents/TODO.md': 9, '.agents/feature_crosswalk.md': 3, '.agents/m60/INVENTORY.md': 25, '.agents/m60/PROPOSAL.md': 3, '.agents/m60/SCRIPTS_COVERAGE.md': 1, '.agents/m60_cli_flag_audit.md': 20, '.agents/web_ui_plan.md': 4, '.agents/web_ui_session_prompt.md': 2, 'AGENTS.md': 3, 'CHANGELOG.md': 9, 'README.md': 6}.
-- Python files naming its path: ['.agents/m60/inventory.py', 'nfl_predictor/api/jobs/catalog.py', 'nfl_predictor/api/readers/model.py', 'nfl_predictor/api/runs/files.py', 'scripts/golden_command.py', 'scripts/power_rankings.py', 'tests/api/factories.py', 'tests/api/test_jobs_catalog.py', 'tests/test_weekly_run.py'].
+- Docs citing it: {'.agents/ARCHIVE.md': 7, '.agents/TODO.md': 6, '.agents/feature_crosswalk.md': 3, '.agents/m60/INVENTORY.md': 25, '.agents/m60/PROPOSAL.md': 3, '.agents/m60/SCRIPTS_COVERAGE.md': 1, '.agents/m60_cli_flag_audit.md': 20, '.agents/web_ui_plan.md': 4, '.agents/web_ui_session_prompt.md': 2, 'AGENTS.md': 3, 'CHANGELOG.md': 9, 'README.md': 6}.
+- Python files naming its path: ['.agents/m60/inventory.py', 'nfl_predictor/api/jobs/catalog.py', 'nfl_predictor/api/readers/model.py', 'nfl_predictor/api/runs/files.py', 'scripts/golden_command.py', 'scripts/power_rankings.py', 'tests/api/factories.py', 'tests/api/test_jobs_catalog.py', 'tests/test_weekly_run.py', 'tests/test_weekly_run_characterization.py'].
 - Package modules no other non-test code imports: none.
 - Launchers under `models/` (1): models/weekly_2026_week_02_refresh/launch.sh.
 - Proposed: **move**. Produces the weekly picks; 1,917 lines outside coverage. Split on the way in (the 2,000-line guidance), pinned by the characterization test first. Imports two scripts.
@@ -989,7 +993,7 @@ Top-level functions of `scripts/` also defined in another script or package modu
 
 - Lines: 436; `__main__` guard: True.
 - Imports from scripts: none.
-- Imported by tests: ['tests/test_wf_compare_script.py'].
+- Imported by tests: ['tests/test_entrypoints_characterization.py', 'tests/test_wf_compare_script.py'].
 - Imported by code: none.
 - Names importers use: ['_parse_args', '_run_one', 'metrics_utils', 'walk_forward'].
 - Web templates: none.
@@ -1054,15 +1058,15 @@ literals in other package or script files. Sinks list the first three read sites
 | flag | dest | default | class | tags | yaml | web | tests | ci | docs | launch | argv | sinks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `--model-kind` | model_kind | `margin_total` | active (read); judged active (the score choice retires) | web |  | train, predict | 11 | 0 | 3 | 0 | 3 | 480 condition / control flow; 514 condition / control flow; 553 condition / control flow; +8 |
-| `--data-path` | data_path | `<repo>/data/completed_games_ml.csv` | active (read) | web |  | train, predict | 1 | 0 | 1 | 0 | 5 | 356 positional arg of artifacts.sha256_file(); 482 kw data_path= of train_score_model_with_report(); 516 kw data_path= of train_margin_total_model_with_report(); +1 |
+| `--data-path` | data_path | `<repo>/data/completed_games_ml.csv` | active (read) | web |  | train, predict | 6 | 0 | 1 | 0 | 5 | 356 positional arg of artifacts.sha256_file(); 482 kw data_path= of train_score_model_with_report(); 516 kw data_path= of train_margin_total_model_with_report(); +1 |
 | `--holdout-seasons` | holdout_seasons | `2` | active (read) | web |  | train | 0 | 0 | 3 | 0 | 1 | 483 kw holdout_seasons= of train_score_model_with_report(); 517 kw holdout_seasons= of train_margin_total_model_with_report(); 556 kw holdout_seasons= of train_blended_margin_total_model_with_report() |
 | `--exclude-market` | exclude_market | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 484 condition / control flow; 520 condition / control flow |
 | `--include-postseason --no-include-postseason` | include_postseason | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 1 | 487 kw include_postseason= of train_score_model_with_report(); 528 kw include_postseason= of train_margin_total_model_with_report(); 565 kw include_postseason= of train_blended_margin_total_model_with_report() |
 | `--postseason-weight` | postseason_weight | `1.0` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 1 | 488 kw postseason_weight= of train_score_model_with_report(); 529 kw postseason_weight= of train_margin_total_model_with_report(); 566 kw postseason_weight= of train_blended_margin_total_model_with_report() |
 | `--recency-half-life-weeks` | recency_half_life_weeks | `` | active (read); judged unmeasured |  |  |  | 1 | 0 | 0 | 0 | 0 | 345 condition / control flow; 489 kw recency_half_life_weeks= of train_score_model_with_report(); 530 kw recency_half_life_weeks= of train_margin_total_model_with_report(); +1 |
 | `--recency-half-life-seasons` | recency_half_life_seasons | `` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 345 condition / control flow; 490 kw recency_half_life_seasons= of train_score_model_with_report(); 531 kw recency_half_life_seasons= of train_margin_total_model_with_report(); +1 |
-| `--market-transform` | market_transform | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 525 kw market_transform= of train_margin_total_model_with_report(); 562 kw market_transform= of train_blended_margin_total_model_with_report() |
-| `--market-anchor` | market_anchor | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 526 kw market_anchor= of train_margin_total_model_with_report(); 563 kw market_anchor= of train_blended_margin_total_model_with_report() |
+| `--market-transform` | market_transform | `False` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 525 kw market_transform= of train_margin_total_model_with_report(); 562 kw market_transform= of train_blended_margin_total_model_with_report() |
+| `--market-anchor` | market_anchor | `False` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 526 kw market_anchor= of train_margin_total_model_with_report(); 563 kw market_anchor= of train_blended_margin_total_model_with_report() |
 | `--market-prob-weight` | market_prob_weight | `` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 4 | 383 assigned to market_prob_weight |
 | `--market-prob-blend` | market_prob_blend | `0.0` | active (read); judged alias |  |  |  | 0 | 0 | 0 | 0 | 3 | 385 assigned to market_prob_weight |
 | `--market-prob-clamp` | market_prob_clamp | `0.0` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 389 kw clamp_delta= of MarketProbConfig(); 393 condition / control flow |
@@ -1085,7 +1089,7 @@ literals in other package or script files. Sinks list the first three read sites
 | `--early-stopping-rounds` | early_stopping_rounds | `50` | tuning-only (reaches tuning-only OptunaConfig fields); judged tuning-only |  |  |  | 0 | 0 | 0 | 0 | 1 | 373 kw early_stopping_rounds= of OptunaConfig() |
 | `--xgb-tree-method` | xgb_tree_method | `auto` | active (read) |  |  |  | 0 | 0 | 1 | 0 | 0 | 374 kw tree_method= of OptunaConfig(); 495 kw xgb_tree_method= of train_score_model_with_report() |
 | `--xgb-device` | xgb_device | `auto` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 375 kw device= of OptunaConfig(); 496 kw xgb_device= of train_score_model_with_report() |
-| `--xgb-n-jobs` | xgb_n_jobs | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 380 kw xgb_n_jobs= of OptunaConfig(); 497 kw xgb_n_jobs= of train_score_model_with_report() |
+| `--xgb-n-jobs` | xgb_n_jobs | `` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 380 kw xgb_n_jobs= of OptunaConfig(); 497 kw xgb_n_jobs= of train_score_model_with_report() |
 | `--tune-scope` | tune_scope | `both` | tuning-only (reaches tuning-only OptunaConfig fields) |  |  |  | 0 | 0 | 0 | 0 | 0 | 376 kw tune_scope= of OptunaConfig() |
 | `--tune-storage` | tune_storage | `` | active (read); judged tuning-only |  |  |  | 1 | 0 | 0 | 0 | 0 | 363 condition / control flow; 377 kw storage= of OptunaConfig() |
 | `--tune-study-name` | tune_study_name | `` | active (read); judged tuning-only |  |  |  | 0 | 0 | 0 | 0 | 0 | 362 assigned to study_name |
@@ -1206,13 +1210,13 @@ literals in other package or script files. Sinks list the first three read sites
 
 | flag | dest | default | class | tags | yaml | web | tests | ci | docs | launch | argv | sinks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `--data-path` | data_path | `` | active (read) | web |  | leakage_audit | 0 | 0 | 0 | 0 | 5 | 91 positional arg of pd.read_csv(); 88 positional arg of log.error(); 87 attribute .exists of the value |
-| `--out-json` | out_json | `` | active (read) | web |  | leakage_audit | 0 | 0 | 0 | 0 | 2 | 101 positional arg of leakage_audit.write_report() |
+| `--data-path` | data_path | `` | active (read) | web |  | leakage_audit | 5 | 0 | 0 | 0 | 5 | 91 positional arg of pd.read_csv(); 88 positional arg of log.error(); 87 attribute .exists of the value |
+| `--out-json` | out_json | `` | active (read) | web |  | leakage_audit | 4 | 0 | 0 | 0 | 2 | 101 positional arg of leakage_audit.write_report() |
 | `--feature-start` | feature_start | `away_rest` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 93 kw feature_start= of leakage_audit.LeakageAuditConfig() |
 | `--feature-end` | feature_end | `home_moneyline` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 94 kw feature_end= of leakage_audit.LeakageAuditConfig() |
 | `--include-market` | include_market | `True` | active (read); judged inert |  |  |  | 0 | 0 | 0 | 0 | 0 | 95 kw include_market= of leakage_audit.LeakageAuditConfig() |
 | `--exclude-market` | include_market | `True` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 95 kw include_market= of leakage_audit.LeakageAuditConfig() |
-| `--market-transform` | market_transform | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 96 kw market_transform= of leakage_audit.LeakageAuditConfig() |
+| `--market-transform` | market_transform | `False` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 96 kw market_transform= of leakage_audit.LeakageAuditConfig() |
 | `--max-cardinality-ratio` | max_cardinality_ratio | `0.5` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 97 kw max_cardinality_ratio= of leakage_audit.LeakageAuditConfig() |
 
 ### objective_compare_models
@@ -1282,19 +1286,19 @@ literals in other package or script files. Sinks list the first three read sites
 
 | flag | dest | default | class | tags | yaml | web | tests | ci | docs | launch | argv | sinks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `--data-path` | data_path | `<repo>/data/completed_games_ml.csv` | active (read) | web, launch.sh |  | walk_forward_backtest | 0 | 0 | 1 | 19 | 5 | 285 positional arg of walk_forward.load_games(); 351 positional arg of walk_forward.dataset_fingerprint(); 364 assigned to config_payload['data_path'] |
-| `--eval-last-n-seasons` | eval_last_n_seasons | `3` | active (read) | web, launch.sh |  | walk_forward_backtest | 0 | 0 | 0 | 19 | 1 | 330 kw eval_last_n_seasons= of walk_forward.WalkForwardConfig() |
+| `--data-path` | data_path | `<repo>/data/completed_games_ml.csv` | active (read) | web, launch.sh |  | walk_forward_backtest | 5 | 0 | 1 | 19 | 5 | 285 positional arg of walk_forward.load_games(); 351 positional arg of walk_forward.dataset_fingerprint(); 364 assigned to config_payload['data_path'] |
+| `--eval-last-n-seasons` | eval_last_n_seasons | `3` | active (read) | web, launch.sh |  | walk_forward_backtest | 2 | 0 | 0 | 19 | 1 | 330 kw eval_last_n_seasons= of walk_forward.WalkForwardConfig() |
 | `--eval-seasons` | eval_seasons | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 329 kw eval_seasons= of walk_forward.WalkForwardConfig() |
-| `--wf-start-week` | wf_start_week | `3` | active (read) | web, launch.sh |  | walk_forward_backtest | 0 | 0 | 0 | 19 | 1 | 331 kw wf_start_week= of walk_forward.WalkForwardConfig() |
-| `--calibration` | calibration | `platt` | active (read); judged policy drift | launch.sh |  |  | 1 | 0 | 0 | 19 | 0 | 332 kw calibration= of walk_forward.WalkForwardConfig() |
+| `--wf-start-week` | wf_start_week | `3` | active (read) | web, launch.sh |  | walk_forward_backtest | 1 | 0 | 0 | 19 | 1 | 331 kw wf_start_week= of walk_forward.WalkForwardConfig() |
+| `--calibration` | calibration | `platt` | active (read); judged policy drift | launch.sh |  |  | 2 | 0 | 0 | 19 | 0 | 332 kw calibration= of walk_forward.WalkForwardConfig() |
 | `--wf-calibration-weeks` | wf_calibration_weeks | `4` | active (read) | launch.sh |  |  | 0 | 0 | 0 | 19 | 0 | 333 kw calibration_weeks= of walk_forward.WalkForwardConfig() |
 | `--random-seed` | random_seed | `42` | active (read) | launch.sh |  |  | 0 | 0 | 0 | 10 | 0 | 334 kw random_seed= of walk_forward.WalkForwardConfig() |
 | `--include-postseason` | include_postseason | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 335 kw include_postseason= of walk_forward.WalkForwardConfig() |
 | `--exclude-incomplete-seasons --no-exclude-incomplete-seasons` | exclude_incomplete_seasons | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 336 kw exclude_incomplete_seasons= of walk_forward.WalkForwardConfig() |
 | `--recency-half-life-weeks` | recency_half_life_weeks | `` | active (read); judged unmeasured |  |  |  | 0 | 0 | 0 | 0 | 0 | 280 condition / control flow; 337 kw recency_half_life_weeks= of walk_forward.WalkForwardConfig() |
 | `--recency-half-life-seasons` | recency_half_life_seasons | `` | active (read) | launch.sh |  |  | 0 | 0 | 2 | 7 | 0 | 280 condition / control flow; 338 kw recency_half_life_seasons= of walk_forward.WalkForwardConfig() |
-| `--market-anchor --no-market-anchor` | market_anchor | `True` | active (read) | launch.sh |  |  | 0 | 0 | 0 | 19 | 0 | 339 kw market_anchor= of walk_forward.WalkForwardConfig() |
-| `--market-transform --no-market-transform` | market_transform | `` | active (read) | launch.sh |  |  | 0 | 0 | 0 | 19 | 0 | 340 kw market_transform= of walk_forward.WalkForwardConfig() |
+| `--market-anchor --no-market-anchor` | market_anchor | `True` | active (read) | launch.sh |  |  | 1 | 0 | 0 | 19 | 0 | 339 kw market_anchor= of walk_forward.WalkForwardConfig() |
+| `--market-transform --no-market-transform` | market_transform | `` | active (read) | launch.sh |  |  | 1 | 0 | 0 | 19 | 0 | 340 kw market_transform= of walk_forward.WalkForwardConfig() |
 | `--market-prob-weight` | market_prob_weight | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 310 assigned to market_prob_weight |
 | `--market-prob-blend` | market_prob_blend | `0.0` | active (read); judged alias |  |  |  | 0 | 0 | 0 | 0 | 0 | 312 assigned to market_prob_weight |
 | `--market-prob-clamp` | market_prob_clamp | `0.0` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 342 kw market_prob_clamp= of walk_forward.WalkForwardConfig() |
@@ -1306,19 +1310,19 @@ literals in other package or script files. Sinks list the first three read sites
 | `--disable-feature-groups` | disable_feature_groups | `` | active (read) |  |  |  | 1 | 0 | 1 | 0 | 0 | 296 positional arg of _parse_feature_groups() |
 | `--xgb-tree-method` | xgb_tree_method | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 315 condition / control flow; 316 assigned to xgb_overrides['tree_method'] |
 | `--xgb-device` | xgb_device | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 317 condition / control flow; 318 assigned to xgb_overrides['device'] |
-| `--xgb-n-jobs` | xgb_n_jobs | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 319 condition / control flow; 320 assigned to xgb_overrides['n_jobs'] |
+| `--xgb-n-jobs` | xgb_n_jobs | `` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 319 condition / control flow; 320 assigned to xgb_overrides['n_jobs'] |
 | `--min-child-weight` | min_child_weight | `` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 321 condition / control flow; 322 assigned to xgb_overrides['min_child_weight'] |
 | `--gamma` | gamma | `` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 323 condition / control flow; 324 assigned to xgb_overrides['gamma'] |
-| `--n-estimators` | n_estimators | `` | active (read) | launch.sh |  |  | 2 | 0 | 0 | 7 | 0 | 325 condition / control flow; 326 assigned to xgb_overrides['n_estimators'] |
+| `--n-estimators` | n_estimators | `` | active (read) | launch.sh |  |  | 4 | 0 | 0 | 7 | 0 | 325 condition / control flow; 326 assigned to xgb_overrides['n_estimators'] |
 | `--resume --no-resume` | resume | `True` | active (read) |  |  |  | 2 | 0 | 0 | 0 | 0 | 356 kw resume= of walk_forward.run_walk_forward_backtest() |
-| `--checkpoint-dir` | checkpoint_dir | `<repo>/models/wf_checkpoints` | active (read) |  |  |  | 3 | 0 | 0 | 0 | 0 | 356 kw checkpoint_dir= of walk_forward.run_walk_forward_backtest() |
-| `--out-json` | out_json | `` | active (read) | web, launch.sh |  | walk_forward_backtest | 2 | 0 | 0 | 19 | 2 | 360 condition / control flow |
+| `--checkpoint-dir` | checkpoint_dir | `<repo>/models/wf_checkpoints` | active (read) |  |  |  | 5 | 0 | 0 | 0 | 0 | 356 kw checkpoint_dir= of walk_forward.run_walk_forward_backtest() |
+| `--out-json` | out_json | `` | active (read) | web, launch.sh |  | walk_forward_backtest | 6 | 0 | 0 | 19 | 2 | 360 condition / control flow |
 
 ### weekly_run
 
 | flag | dest | default | class | tags | yaml | web | tests | ci | docs | launch | argv | sinks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `--config` | config | `` | active (read) | web |  | weekly_run | 1 | 0 | 3 | 0 | 1 | 603 condition / control flow; 604 positional arg of _load_config() |
+| `--config` | config | `` | active (read) | web |  | weekly_run | 2 | 0 | 3 | 0 | 1 | 603 condition / control flow; 604 positional arg of _load_config() |
 | `--data-path` | data_path | `<repo>/data/completed_games_ml.csv` | active (read) | web |  | weekly_run | 2 | 0 | 0 | 0 | 6 | 1461 positional arg of artifacts.sha256_file(); 1462 positional arg of fingerprints.dataset_fingerprint(); 1610 positional arg of pd.read_csv(); +4 |
 | `--predict-path` | predict_path | `` | active (read) | web |  | weekly_run | 0 | 0 | 0 | 0 | 2 | 1756 positional arg of _resolve_predict_path() |
 | `--run-id` | run_id | `` | active (read) | web, launch.sh |  | weekly_run | 1 | 0 | 0 | 1 | 2 | 1466 condition / control flow |
@@ -1390,22 +1394,22 @@ literals in other package or script files. Sinks list the first three read sites
 
 | flag | dest | default | class | tags | yaml | web | tests | ci | docs | launch | argv | sinks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `--data-path` | data_path | `data/completed_games_ml.csv` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 300 positional arg of log.info(); 301 positional arg of pd.read_csv(); 297 attribute .exists of the value; +1 |
-| `--eval-last-n-seasons` | eval_last_n_seasons | `3` | active (read) |  |  |  | 0 | 0 | 3 | 0 | 0 | 369 kw eval_last_n_seasons= of _run_one() |
-| `--wf-start-week` | wf_start_week | `3` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 370 kw wf_start_week= of _run_one() |
+| `--data-path` | data_path | `data/completed_games_ml.csv` | active (read) |  |  |  | 5 | 0 | 0 | 0 | 0 | 300 positional arg of log.info(); 301 positional arg of pd.read_csv(); 297 attribute .exists of the value; +1 |
+| `--eval-last-n-seasons` | eval_last_n_seasons | `3` | active (read) |  |  |  | 2 | 0 | 3 | 0 | 0 | 369 kw eval_last_n_seasons= of _run_one() |
+| `--wf-start-week` | wf_start_week | `3` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 370 kw wf_start_week= of _run_one() |
 | `--exclude-incomplete-seasons --no-exclude-incomplete-seasons` | exclude_incomplete_seasons | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 373 kw exclude_incomplete_seasons= of _run_one() |
 | `--calibration-weeks` | calibration_weeks | `4` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 372 kw calibration_weeks= of _run_one() |
-| `--market-mode` | market_mode | `hybrid` | active (read) |  |  |  | 0 | 0 | 2 | 0 | 0 | 352 positional arg of _market_modes() |
+| `--market-mode` | market_mode | `hybrid` | active (read) |  |  |  | 1 | 0 | 2 | 0 | 0 | 352 positional arg of _market_modes() |
 | `--market-prob-source` | market_prob_source | `raw` | active (read) |  |  |  | 0 | 0 | 2 | 0 | 0 | 340 condition / control flow; 340 List |
 | `--market-prob-blend-method` | market_prob_blend_method | `prob` | active (read) |  |  |  | 0 | 0 | 2 | 0 | 0 | 344 condition / control flow; 345 List |
 | `--win-prob-uncertainty` | win_prob_uncertainty | `off` | active (read) |  |  |  | 0 | 0 | 1 | 0 | 0 | 349 condition / control flow; 350 condition / control flow |
-| `--out` | out | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 397 assigned to out_path |
-| `--n-estimators` | n_estimators | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 317 condition / control flow; 318 assigned to xgb_params_overrides['n_estimators'] |
+| `--out` | out | `` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 397 assigned to out_path |
+| `--n-estimators` | n_estimators | `` | active (read) |  |  |  | 2 | 0 | 0 | 0 | 0 | 317 condition / control flow; 318 assigned to xgb_params_overrides['n_estimators'] |
 | `--max-depth` | max_depth | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 319 condition / control flow; 320 assigned to xgb_params_overrides['max_depth'] |
 | `--learning-rate` | learning_rate | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 321 condition / control flow; 322 assigned to xgb_params_overrides['learning_rate'] |
-| `--n-jobs` | n_jobs | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 323 condition / control flow; 324 assigned to xgb_params_overrides['n_jobs'] |
+| `--n-jobs` | n_jobs | `` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 323 condition / control flow; 324 assigned to xgb_params_overrides['n_jobs'] |
 | `--early-stopping-rounds` | early_stopping_rounds | `50` | active (read); judged inert |  |  |  | 0 | 0 | 0 | 0 | 1 | 383 kw early_stopping_rounds= of _run_one() |
 | `--include-quantiles --no-include-quantiles` | include_quantiles | `False` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 384 kw include_quantiles= of _run_one() |
 | `--disable-feature-groups` | disable_feature_groups | `` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 303 positional arg of _parse_feature_groups() |
 | `--resume --no-resume` | resume | `True` | active (read) |  |  |  | 1 | 0 | 0 | 0 | 0 | 387 kw resume= of _run_one() |
-| `--checkpoint-dir` | checkpoint_dir | `<repo>/models/wf_checkpoints` | active (read) |  |  |  | 0 | 0 | 0 | 0 | 0 | 386 kw checkpoint_dir= of _run_one() |
+| `--checkpoint-dir` | checkpoint_dir | `<repo>/models/wf_checkpoints` | active (read) |  |  |  | 2 | 0 | 0 | 0 | 0 | 386 kw checkpoint_dir= of _run_one() |

@@ -1400,6 +1400,11 @@
      "README.md:277"
     ],
     "tests": [
+     "tests/test_entrypoints_characterization.py:109",
+     "tests/test_entrypoints_characterization.py:151",
+     "tests/test_entrypoints_characterization.py:51",
+     "tests/test_entrypoints_characterization.py:77",
+     "tests/test_entrypoints_characterization.py:93",
      "tests/test_golden_command_wf_resume.py:54"
     ],
     "argv_builders": [
@@ -1757,7 +1762,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:118"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -1794,7 +1803,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:117"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -2791,7 +2804,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:121"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -4270,9 +4287,9 @@
    "web_templates": [],
    "consumers": {
     "docs": [
-     ".agents/ARCHIVE.md:1678",
-     "CHANGELOG.md:1161",
-     "CHANGELOG.md:1172"
+     ".agents/ARCHIVE.md:1710",
+     "CHANGELOG.md:1175",
+     "CHANGELOG.md:1186"
     ],
     "tests": [
      "tests/test_betting_pipeline_script.py:68"
@@ -6967,6 +6984,13 @@
     "leakage_audit"
    ],
    "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:109",
+     "tests/test_entrypoints_characterization.py:151",
+     "tests/test_entrypoints_characterization.py:51",
+     "tests/test_entrypoints_characterization.py:77",
+     "tests/test_entrypoints_characterization.py:93"
+    ],
     "argv_builders": [
      "nfl_predictor/api/jobs/catalog.py:201",
      "nfl_predictor/api/jobs/catalog.py:229",
@@ -7010,6 +7034,12 @@
     "leakage_audit"
    ],
    "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:125",
+     "tests/test_entrypoints_characterization.py:51",
+     "tests/test_entrypoints_characterization.py:77",
+     "tests/test_entrypoints_characterization.py:93"
+    ],
     "argv_builders": [
      "nfl_predictor/api/jobs/catalog.py:307",
      "nfl_predictor/api/jobs/catalog.py:332"
@@ -7191,7 +7221,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:118"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -8033,7 +8067,7 @@
    "web_templates": [],
    "consumers": {
     "docs": [
-     ".agents/ARCHIVE.md:1150"
+     ".agents/ARCHIVE.md:1182"
     ],
     "tests": [
      "tests/test_power_rankings_script.py:652"
@@ -8784,7 +8818,7 @@
    ],
    "consumers": {
     "docs": [
-     ".agents/ARCHIVE.md:1036"
+     ".agents/ARCHIVE.md:1068"
     ],
     "launchers": [
      "models/wf_m54_0_2023_2025_from_week1/launch.sh:4",
@@ -8806,6 +8840,13 @@
      "models/wf_m55_8_2020_2025_unweighted_seed7/launch.sh:8",
      "models/wf_m59_rebuild_2023_2025_from_week1/launch.sh:4",
      "models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh:4"
+    ],
+    "tests": [
+     "tests/test_entrypoints_characterization.py:109",
+     "tests/test_entrypoints_characterization.py:151",
+     "tests/test_entrypoints_characterization.py:51",
+     "tests/test_entrypoints_characterization.py:77",
+     "tests/test_entrypoints_characterization.py:93"
     ],
     "argv_builders": [
      "nfl_predictor/api/jobs/catalog.py:201",
@@ -8871,6 +8912,10 @@
      "models/wf_m55_8_2020_2025_unweighted_seed7/launch.sh:8",
      "models/wf_m59_rebuild_2023_2025_from_week1/launch.sh:4",
      "models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh:4"
+    ],
+    "tests": [
+     "tests/test_entrypoints_characterization.py:111",
+     "tests/test_entrypoints_characterization.py:153"
     ],
     "argv_builders": [
      "nfl_predictor/api/jobs/catalog.py:330"
@@ -8964,6 +9009,9 @@
      "models/wf_m59_rebuild_2023_2025_from_week1/launch.sh:4",
      "models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh:4"
     ],
+    "tests": [
+     "tests/test_entrypoints_characterization.py:113"
+    ],
     "argv_builders": [
      "nfl_predictor/api/jobs/catalog.py:331"
     ]
@@ -9032,6 +9080,7 @@
      "models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh:4"
     ],
     "tests": [
+     "tests/test_entrypoints_characterization.py:115",
      "tests/test_walk_forward_backtest_script.py:162"
     ]
    },
@@ -9379,6 +9428,9 @@
      "models/wf_m55_8_2020_2025_unweighted_seed7/launch.sh:8",
      "models/wf_m59_rebuild_2023_2025_from_week1/launch.sh:4",
      "models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh:4"
+    ],
+    "tests": [
+     "tests/test_entrypoints_characterization.py:117"
     ]
    },
    "auto_class": "active (read)",
@@ -9435,6 +9487,9 @@
      "models/wf_m55_8_2020_2025_unweighted_seed7/launch.sh:8",
      "models/wf_m59_rebuild_2023_2025_from_week1/launch.sh:4",
      "models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh:4"
+    ],
+    "tests": [
+     "tests/test_entrypoints_characterization.py:118"
     ]
    },
    "auto_class": "active (read)",
@@ -9886,7 +9941,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:121"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -10016,6 +10075,8 @@
      "models/wf_m55_7_2020_2025_trees400/launch.sh:4"
     ],
     "tests": [
+     "tests/test_entrypoints_characterization.py:119",
+     "tests/test_entrypoints_characterization.py:157",
      "tests/test_walk_forward_backtest_script.py:225",
      "tests/test_walk_forward_backtest_script.py:276"
     ]
@@ -10091,6 +10152,8 @@
    "web_templates": [],
    "consumers": {
     "tests": [
+     "tests/test_entrypoints_characterization.py:123",
+     "tests/test_entrypoints_characterization.py:161",
      "tests/test_walk_forward_backtest_script.py:106",
      "tests/test_walk_forward_backtest_script.py:270",
      "tests/test_walk_forward_backtest_script.py:60"
@@ -10151,6 +10214,10 @@
      "models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh:4"
     ],
     "tests": [
+     "tests/test_entrypoints_characterization.py:125",
+     "tests/test_entrypoints_characterization.py:51",
+     "tests/test_entrypoints_characterization.py:77",
+     "tests/test_entrypoints_characterization.py:93",
      "tests/test_walk_forward_backtest_script.py:108",
      "tests/test_walk_forward_backtest_script.py:272"
     ],
@@ -10207,7 +10274,8 @@
      "README.md:669"
     ],
     "tests": [
-     "tests/api/test_jobs_catalog.py:157"
+     "tests/api/test_jobs_catalog.py:157",
+     "tests/test_weekly_run_characterization.py:53"
     ],
     "argv_builders": [
      "nfl_predictor/api/jobs/catalog.py:189"
@@ -11808,7 +11876,7 @@
     "entrypoint": "weekly_run",
     "flag": "--postseason-weight",
     "class": "config-only inert",
-    "note": "The production config sets 1.3, but include_postseason is false and compute_postseason_sample_weight returns None whenever it is, so the weight is never applied (task 56.2). The flag itself is live when include_postseason is true; the power rankings never read it. Decided 2026-09-24: the key becomes a commented-out example.",
+    "note": "The production config sets 1.3, but include_postseason is false and compute_postseason_sample_weight returns None whenever it is, so the weight is never applied (task 56.2). The flag itself is live when include_postseason is true; the power rankings never read it. Decided 2026-09-24: the key stays, for postseason training.",
     "evidence": [
      {
       "path": "config/weekly_run.yaml",
@@ -13259,7 +13327,15 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:109",
+     "tests/test_entrypoints_characterization.py:151",
+     "tests/test_entrypoints_characterization.py:51",
+     "tests/test_entrypoints_characterization.py:77",
+     "tests/test_entrypoints_characterization.py:93"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -13295,6 +13371,10 @@
      "README.md:631",
      "README.md:639",
      "README.md:649"
+    ],
+    "tests": [
+     "tests/test_entrypoints_characterization.py:111",
+     "tests/test_entrypoints_characterization.py:153"
     ]
    },
    "auto_class": "active (read)",
@@ -13327,7 +13407,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:113"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -13430,6 +13514,9 @@
     "docs": [
      "README.md:631",
      "README.md:639"
+    ],
+    "tests": [
+     "tests/test_entrypoints_characterization.py:155"
     ]
    },
    "auto_class": "active (read)",
@@ -13605,7 +13692,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:163"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -13642,7 +13733,12 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:119",
+     "tests/test_entrypoints_characterization.py:157"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -13753,7 +13849,11 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:159"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -13943,7 +14043,12 @@
    "writes": [],
    "weekly_yaml": null,
    "web_templates": [],
-   "consumers": {},
+   "consumers": {
+    "tests": [
+     "tests/test_entrypoints_characterization.py:123",
+     "tests/test_entrypoints_characterization.py:161"
+    ]
+   },
    "auto_class": "active (read)",
    "tags": [],
    "annotation": null,
@@ -14691,8 +14796,8 @@
   }
  ],
  "unknown_flags_in_commands": [
-  ".agents/TODO.md:385 weekly_run --defaults-path",
-  "CHANGELOG.md:1006 walk_forward_backtest --wf-resume"
+  ".agents/TODO.md:394 weekly_run --defaults-path",
+  "CHANGELOG.md:1020 walk_forward_backtest --wf-resume"
  ],
  "web_template_parse": [
   {
@@ -16010,7 +16115,6 @@
    "ci_gate": [],
    "docs": {
     ".agents/ARCHIVE.md": 3,
-    ".agents/TODO.md": 1,
     ".agents/m60/INVENTORY.md": 15,
     ".agents/m60/PROPOSAL.md": 1,
     ".agents/m60/SCRIPTS_COVERAGE.md": 2,
@@ -16081,7 +16185,7 @@
     "scripts/gate.sh:11"
    ],
    "docs": {
-    ".agents/ARCHIVE.md": 1,
+    ".agents/ARCHIVE.md": 2,
     ".agents/TODO.md": 8,
     ".agents/m60/INVENTORY.md": 7,
     ".agents/m60/PROPOSAL.md": 7,
@@ -16122,7 +16226,6 @@
    "ci_gate": [],
    "docs": {
     ".agents/ARCHIVE.md": 2,
-    ".agents/TODO.md": 1,
     ".agents/feature_crosswalk.md": 1,
     ".agents/m60/INVENTORY.md": 12,
     ".agents/m60/PROPOSAL.md": 1,
@@ -16148,7 +16251,9 @@
    "file": "scripts/leakage_audit.py",
    "lines": 107,
    "imports_scripts": [],
-   "imported_by_tests": [],
+   "imported_by_tests": [
+    "tests/test_entrypoints_characterization.py"
+   ],
    "imported_by_code": {},
    "names_used_by_importers": [],
    "web_templates": [
@@ -16294,6 +16399,7 @@
     ".agents/m60/INVENTORY.md": 8,
     ".agents/m60/PROPOSAL.md": 2,
     ".agents/m60/SCRIPTS_COVERAGE.md": 1,
+    ".agents/next_agent_session_prompt.md": 1,
     "README.md": 1
    },
    "launchers": [],
@@ -16376,6 +16482,7 @@
    "lines": 400,
    "imports_scripts": [],
    "imported_by_tests": [
+    "tests/test_entrypoints_characterization.py",
     "tests/test_walk_forward_backtest_script.py"
    ],
    "imported_by_code": {},
@@ -16443,6 +16550,7 @@
    ],
    "imported_by_tests": [
     "tests/test_weekly_run.py",
+    "tests/test_weekly_run_characterization.py",
     "tests/test_weekly_run_power_rankings.py",
     "tests/test_wf_checkpointing.py"
    ],
@@ -16483,7 +16591,7 @@
    ],
    "docs": {
     ".agents/ARCHIVE.md": 7,
-    ".agents/TODO.md": 9,
+    ".agents/TODO.md": 6,
     ".agents/feature_crosswalk.md": 3,
     ".agents/m60/INVENTORY.md": 25,
     ".agents/m60/PROPOSAL.md": 3,
@@ -16507,7 +16615,8 @@
     "scripts/power_rankings.py",
     "tests/api/factories.py",
     "tests/api/test_jobs_catalog.py",
-    "tests/test_weekly_run.py"
+    "tests/test_weekly_run.py",
+    "tests/test_weekly_run_characterization.py"
    ],
    "has_main_guard": true,
    "exclusive_package_modules": [],
@@ -16522,6 +16631,7 @@
    "lines": 436,
    "imports_scripts": [],
    "imported_by_tests": [
+    "tests/test_entrypoints_characterization.py",
     "tests/test_wf_compare_script.py"
    ],
    "imported_by_code": {},
@@ -16587,7 +16697,7 @@
    "claim": "ten test modules import from scripts",
    "confirmed": false,
    "evidence": [
-    "11: ['tests/test_betting_pipeline_recs.py', 'tests/test_betting_pipeline_script.py', 'tests/test_golden_command_power_rankings.py', 'tests/test_golden_command_wf_resume.py', 'tests/test_power_rankings_script.py', 'tests/test_shap_analysis_script.py', 'tests/test_walk_forward_backtest_script.py', 'tests/test_weekly_run.py', 'tests/test_weekly_run_power_rankings.py', 'tests/test_wf_checkpointing.py', 'tests/test_wf_compare_script.py']"
+    "13: ['tests/test_betting_pipeline_recs.py', 'tests/test_betting_pipeline_script.py', 'tests/test_entrypoints_characterization.py', 'tests/test_golden_command_power_rankings.py', 'tests/test_golden_command_wf_resume.py', 'tests/test_power_rankings_script.py', 'tests/test_shap_analysis_script.py', 'tests/test_walk_forward_backtest_script.py', 'tests/test_weekly_run.py', 'tests/test_weekly_run_characterization.py', 'tests/test_weekly_run_power_rankings.py', 'tests/test_wf_checkpointing.py', 'tests/test_wf_compare_script.py']"
    ]
   },
   {
@@ -16795,13 +16905,17 @@
    "tests/test_ml_model_training_score_blend.py:128: model = ScoreModel(",
    "tests/test_power_rankings_script.py:122: \"\"\"ScoreModel paths should apply a calibrator when present.\"\"\"",
    "tests/test_power_rankings_script.py:178: model_kind=\"score\",",
-   ".agents/ARCHIVE.md:2015: - [x] **Apply win-prob calibration consistently for `ScoreModel`**",
-   ".agents/ARCHIVE.md:2016: - Update the `ScoreModel` path in `scripts/power_rankings.py` so that:",
-   ".agents/ARCHIVE.md:2023: - [x] `ScoreModel` probabilities change appropriately when a calibrator is attached.",
+   ".agents/ARCHIVE.md:65: `--calibration` default (`platt`) differs from the benchmark's `auto`; ScoreModel was never",
+   ".agents/ARCHIVE.md:72: old launchers reproduce from their recorded commit; ScoreModel removed (task 55.5); the Excel",
+   ".agents/ARCHIVE.md:2047: - [x] **Apply win-prob calibration consistently for `ScoreModel`**",
+   ".agents/ARCHIVE.md:2048: - Update the `ScoreModel` path in `scripts/power_rankings.py` so that:",
+   ".agents/ARCHIVE.md:2055: - [x] `ScoreModel` probabilities change appropriately when a calibrator is attached.",
    ".agents/TODO.md:168: widened to every file under `scripts/`, behavior-preserving. 55.5 (the `ScoreModel` fate) is",
-   ".agents/TODO.md:327: - [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental",
-   ".agents/TODO.md:329: model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).",
-   ".agents/next_agent_session_prompt.md:23: questions. It was revised the same day after the user's questions: ScoreModel stays and"
+   ".agents/TODO.md:336: - [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental",
+   ".agents/TODO.md:338: model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).",
+   ".agents/TODO.md:575: remove ScoreModel (task 55.5); move everything else; keep `scripts/gate.sh`; one naming rule",
+   ".agents/TODO.md:613: betting_excel.py`, `openpyxl`, `--betting-template-path`), the ScoreModel removal (task",
+   ".agents/next_agent_session_prompt.md:22: - remove ScoreModel and everything only it uses (task 55.5);"
   ],
   "model_kind_flags": [
    "ml_model --model-kind choices=['score', 'margin_total', 'blend'] default='margin_total'",

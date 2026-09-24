@@ -26,10 +26,11 @@ Signed off with these decisions; the sections below are amended to match.
 
 1. One front door, `nfl-predictor <command>` (section 0): yes.
 2. Script dispositions (section 1): yes.
-3. Flag removals (section 2): yes. `postseason_weight` is read only when training includes
-   postseason games (`include_postseason: true`), never by the power rankings, so its inert
-   `1.3` leaves `config/weekly_run.yaml` as a commented-out example beside `include_postseason`
-   for the playoff design (task 56.2); the flag itself stays.
+3. Flag removals (section 2): yes, except `postseason_weight`. It is read when training
+   includes postseason games (`include_postseason: true`), and the user plans to train with
+   postseason games after Week 18, so `postseason_weight: 1.3` stays in `config/weekly_run.yaml`
+   as it is (clarified 2026-09-24). Turning `include_postseason` on is a default change for the
+   playoff design (task 56.2), and the `1.3` has never been measured.
 4. Naming rule (section 3): yes.
 5. Old launchers reproduce from their recorded git commit (section 5): yes.
 6. ScoreModel: **remove it**, with everything only it uses (task 55.5). No model-family
@@ -178,8 +179,7 @@ flag or sets it to a value that is never applied.
    and `--train-recency-half-life-weeks`, plus their plumbing. Recommended (rule 9: fewer knobs
    when nothing measured says otherwise).
 5. `postseason_weight: 1.3` in `config/weekly_run.yaml` is inert while `include_postseason` is
-   false. Decided: the key becomes a commented-out example beside `include_postseason`; the
-   flag stays live for the playoff design (task 56.2).
+   false. Decided: it stays as it is, ready for postseason training (task 56.2).
 6. The `score` choice of `--model-kind` everywhere, with ScoreModel (section 6).
 
 ## 3. Surviving canonical names

@@ -72,7 +72,7 @@ flags:
       The production config sets 1.3, but include_postseason is false and
       compute_postseason_sample_weight returns None whenever it is, so the weight is never
       applied (task 56.2). The flag itself is live when include_postseason is true; the power
-      rankings never read it. Decided 2026-09-24: the key becomes a commented-out example.
+      rankings never read it. Decided 2026-09-24: the key stays, for postseason training.
     evidence:
       - {path: config/weekly_run.yaml, pattern: '^postseason_weight: 1\.3'}
       - {path: config/weekly_run.yaml, pattern: '^include_postseason: false'}

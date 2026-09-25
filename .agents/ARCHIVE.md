@@ -48,6 +48,11 @@ Follow-ups resolved after their milestones closed:
   run `models/weekly_2026_week_03/` and the backups `data/backup_pre_2026_week_03/` and
   `data/backup_pre_2026_week_03_full/` (every file in them was still present in `data/`, and
   the walk-forward cuts byte-identical).
+- 2026 Week 3 weekly run: `config/weekly_run.yaml` was never read (it needed `--config`). Since
+  `0.23.0` the weekly run reads it by default, rewritten to the code defaults production had been
+  running, so no output changed (task 56.7(a); its values are decided in task 56.7(b)). The same
+  day `--wf-eval-last-n-seasons` gained help text saying the count includes a current season
+  with no completed week (`0.22.0`).
 
 ---
 

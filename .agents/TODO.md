@@ -512,11 +512,12 @@ Formerly Milestone 41.
       fixes the probability path by evidence, re-choosing among near-identical candidates each
       week only adds noise (Week 3's two runs chose `none`, then `elo`, a day apart) and costs
       most of the run's time. Changing a default is must-ask.
-      Decided by the user 2026-09-24: (a) goes ahead as specified, in the 60.6 front-door
-      chunk. The rewritten YAML only records today's defaults; the user stressed that its
-      settings are still to be optimized, which is part (b) here and task 55.4, not something
-      the rewrite settles. How many seasons stage 1 scores is settled here too (with (c)), not
-      by widening the window now.
+      Decided by the user 2026-09-24: (a) goes ahead as specified, in the 60.6 front-door chunk;
+      landed in `0.23.0` (the weekly run reads the YAML without `--config`, and the file holds the
+      code defaults, so production output is unchanged). The rewritten YAML only records today's
+      defaults; the user stressed that its settings are still to be optimized, which is part (b)
+      here and task 55.4, not something the rewrite settles. How many seasons stage 1 scores is
+      settled here too (with (c)), not by widening the window now.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.
@@ -681,9 +682,16 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
         sets stage 1's CPU threads whenever `--xgb-n-jobs` is unset. Removing it changes stage
         1's thread count (speed; results should not depend on it, unverified). Question for
         the user.
-      - Next: the YAML default (task 56.7(a)) and the step-2 follow-ups (`wf_compare`
-        pick-accuracy columns, automatic `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint
-        listing).
+      - `0.23.0` (2026-09-24): task 56.7(a). The weekly run reads `config/weekly_run.yaml`
+        when no `--config` is given, and the file was rewritten to the code defaults (`off`
+        quoted; `postseason_weight: 1.3` kept by the user's decision, inert while postseason
+        training is off). A test pins that the loaded settings equal the bare code defaults
+        apart from the config path and that inert weight. The weekly characterization snapshot
+        was rewritten on purpose: it had pinned the old YAML values, and it now pins the
+        production configuration (a fixture run with `postseason_weight: 1.0`, the pure code
+        defaults, reproduces it exactly).
+      - Next: the step-2 follow-ups (`wf_compare` pick-accuracy columns, automatic
+        `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint listing).
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the
@@ -736,27 +744,14 @@ user submitted) and `models/weekly_2026_week_03_full/` (the rerun with a fresh E
 'em pool). The stopped first run and the two data backups were deleted with the user's approval
 on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
 
-- [ ] **`config/weekly_run.yaml` is never read.** `scripts/weekly_run.py` loads a config only
-      with `--config`, and no launcher passes it; the web UI's weekly job writes its own JSON
-      from the form instead. Every 2026 run so far used the code defaults: stage-1 window 3
-      seasons, 4 calibration weeks, raw moneylines with probability blending, early stopping 50,
-      no score rounding, CPU. The YAML differs on all of these, and `wf_n_jobs` / `xgb_n_jobs`
-      too. The weekly characterization test pins the YAML's configuration. Scheduled as task
-      56.7 (the default-config move in Milestone 60, the values in step 3). The user decided
-      on 2026-09-24 that the weekly run reads the YAML by default, rewritten to today's code
-      defaults, in the 60.6 front-door chunk.
-- [ ] **GPU never used by default.** A consequence of the item above: `xgb_device` defaults
-      to none (CPU), so stage 1 ran on the CPU (about 6 min per candidate against about 1 min
-      on the GPU with `--xgb-device cuda`). The user chose the GPU for everything (task 55.4).
+- [ ] **GPU never used by default.** `xgb_device` defaults to none (the CPU), so stage 1 ran on
+      the CPU (about 6 min per candidate against about 1 min on the GPU with `--xgb-device
+      cuda`). The user chose the GPU for everything (task 55.4).
 - [ ] **The final fit never trains on the newest weeks.** Production and walk-forward both hold
       out the newest 4 completed weeks from the tree fit and use them only for calibration, so
       the Week 3 model's trees did not see 2026 Weeks 1-2, which reach it only through the
       features. Measure a refit on all rows (or a smaller hold-out) in step 3 with the
       out-of-fold calibration pool; the user asked whether this is a design flaw.
-- [ ] **`--wf-eval-last-n-seasons` counts the current season.** It counts the current season
-      even when that season has no scorable weeks: the default 3 scores two seasons, `2`
-      scores one, and `1` fails with "No walk-forward folds available". Make the count mean
-      completed seasons, or document it, in the 60.6 flag pass.
 - [ ] **Stage-1 selection and pick-time timing.** Already scheduled (task 56.5): this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.

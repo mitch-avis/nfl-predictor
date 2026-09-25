@@ -690,8 +690,13 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
         was rewritten on purpose: it had pinned the old YAML values, and it now pins the
         production configuration (a fixture run with `postseason_weight: 1.0`, the pure code
         defaults, reproduces it exactly).
-      - Next: the step-2 follow-ups (`wf_compare` pick-accuracy columns, automatic
-        `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint listing).
+      - `0.24.0` (2026-09-25): the step-2 follow-ups. `nfl-predictor checkpoints` (read-only
+        listing; all 38 directories are referenced today), `OMP_WAIT_POLICY=PASSIVE` set by
+        the walk-forward commands unless the environment sets one, and the `sweep` summary
+        showing each probability view's own pick accuracy. The five step-2 follow-ups are
+        archived (`ARCHIVE.md`, resolved follow-ups).
+      - Left in 60.6: only `weekly_run --wf-n-jobs`, which waits on the user's answer (see
+        `0.22.0` above). Everything else in this task has landed.
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the
@@ -788,12 +793,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       record under `ARCHIVE.md`, Milestone 59, "Rebuild". The first pass exposed a `0.12.4`
       defect (the sack exclusion starved `opponent_points_per_play`), fixed before the second
       pass.
-- [ ] `WalkForwardConfig.early_stopping_rounds` stays in the config and the fingerprint though
-      no in-season fit reads it; removing it changes every fingerprint. Task 55.7 closed with a
-      measured tree-budget ladder rather than a season-sized eval set, so the field's only live
-      option now is to remove it.
-- [ ] `scripts/wf_compare.py` prints `deterministic_pick_accuracy` in place of the configured
-      `pick_accuracy` in its summary columns; the CSV still has both.
 
 ### From Milestone 45 (play-by-play EPA families)
 
@@ -841,19 +840,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       `ARCHIVE.md`, Milestone 49, "`games_played` as evidence". Do not reopen it as a new column.
 - [ ] Weeks 3-18 margin MAE got worse with the blend (`9.8952` to `9.9578`) and season Brier is
       slightly worse in 2024 and 2025. The `K` check is task 55.3.
-- [ ] Choose the OpenMP wait policy automatically in the walk-forward entry points (default when
-      idle, `PASSIVE` under load) instead of relying on the operator; see `AGENTS.md`. It changes
-      scheduling only, never results. Measured 2026-09-24 on
-      `models/wf_m55_8_2020_2025_half_life32/run.log`, launched on the default policy after a
-      load probe found the machine idle: folds 1-25 took about `20` s each, then folds 26-29 took
-      `12`-`16` minutes each from 00:16 to 01:10 while other load was present, then about `20` s
-      again. The whole run took `113` minutes, against about `100` for a `PASSIVE` run and a
-      likely `40` if the machine had stayed idle. A probe at launch is not enough, because load
-      that arrives mid-run makes the default policy stall. Candidates: stay on `PASSIVE` unless
-      the machine is dedicated, or re-check load between folds and relaunch through resume.
-- [ ] `models/wf_checkpoints/` grows by a few hundred KB per distinct run and is never pruned. Any
-      edit under `nfl_predictor/ml/` changes the fingerprint by design, so stale directories pile
-      up. Add a cleanup note or command once it matters.
 
 ### From the 2026-09-11 code review of `0.6.1`-`0.7.0`
 
@@ -895,8 +881,6 @@ the identity warning. Still open:
       an `F.Last` fallback) could key completed games on the nflverse schedule's
       `away_qb_id` / `home_qb_id` directly if those columns joined `NFLREADPY_SCHEDULE_COLUMNS`;
       name resolution would then be needed only for future-week rows.
-- [ ] `_build_xgb_fit_kwargs` forwards `LogEvalCallback` only when `fit()` accepts `callbacks`,
-      which XGBoost 3.4.1 does not, so eval-progress logging is silently dropped (pre-existing).
 
 ### From task 56.4 (rolling calibration window)
 

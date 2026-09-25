@@ -53,6 +53,14 @@ Follow-ups resolved after their milestones closed:
   running, so no output changed (task 56.7(a); its values are decided in task 56.7(b)). The same
   day `--wf-eval-last-n-seasons` gained help text saying the count includes a current season
   with no completed week (`0.22.0`).
+- Step-2 follow-ups, resolved in Milestone 60 on 2026-09-24:
+  `WalkForwardConfig.early_stopping_rounds` removed with the flags that fed it (Milestone 59;
+  `0.20.0`); the `sweep` (formerly `wf_compare.py`) summary shows the configured and market pick
+  accuracy next to their Brier and log loss (Milestone 59; `0.24.0`); the walk-forward commands set
+  `OMP_WAIT_POLICY=PASSIVE` unless the environment sets one (Milestone 49; `0.24.0`); `nfl-predictor
+  checkpoints` lists checkpoint directories and what names them, read-only (Milestone 49; `0.24.0`);
+  the dead `LogEvalCallback` plumbing removed, `_build_xgb_fit_kwargs` kept for tuning's eval set
+  (2026-09-11 review; `0.20.0`).
 
 ---
 

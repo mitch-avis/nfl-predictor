@@ -658,6 +658,16 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       remainder of 60.5, moved here by the user's decision: once the entrypoints move or
       retire, no test module imports `scripts/` (`grep -rl "from scripts import" tests` is
       empty).
+      Progress (the task is done only when every part above has landed):
+      - `0.19.0` (2026-09-24): retired `golden_command`, `betting_pipeline`,
+        `backtest_predictions`, `objective_compare_models` (the script; `model_compare.py` and
+        its test go with the `nfl_predictor/ml/` chunk) and the Excel workbook end to end,
+        including its web job, routes and button (pulled forward from 60.7 so no web job
+        launches a deleted script). 88 of 309 options removed; weekly snapshots unchanged.
+      - Next: the `nfl_predictor/ml/` chunk (ScoreModel, `model_compare.py`,
+        `WalkForwardConfig.early_stopping_rounds`, the week-based half-life, the dead callback
+        plumbing, the numpy bootstrap), then the entrypoint moves behind the front door, then
+        the shared options module with the renames and the remaining flag removals.
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the
@@ -666,8 +676,10 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       use them); update `tests/api/`; run `scripts/gate.sh --web`; amend `web_ui_plan.md` and
       `web/README.md`. Also here, test first: fix the model-kind vocabulary defect (canonical
       `blend`, `blended_margin_total` accepted as an alias; three web launches fail today, and
-      the user saw the train failure in the web UI), and remove the `betting_xlsx` job, the
-      workbook download routes and the Betting page's download button.
+      the user saw the train failure in the web UI). The `betting_xlsx` job, the workbook
+      download routes and the Betting page's download button were removed early, in `0.19.0`.
+      Also here, test first (found 2026-09-24): the frontend's catch-all route answers an
+      unknown `/api/...` path with `index.html` and status 200; it should be a JSON 404.
 - [ ] 60.8 CI, gate and docs: the CLI smoke checks in `scripts/gate.sh`; CI
       (`.github/workflows/validation.yml`) calls `scripts/gate.sh` instead of repeating its
       steps; `README.md` (the Scripts section, every command example, and a "Reproducing an old

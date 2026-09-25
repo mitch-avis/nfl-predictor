@@ -628,8 +628,8 @@ Ground rules for the whole milestone:
 - Edits under `nfl_predictor/ml/` change every walk-forward checkpoint fingerprint, so no
   reference walk-forward is started while this milestone is moving ML code.
 
-Tasks 60.1-60.3 (the generated inventories and the user's sign-off) and 60.4 (the
-characterization tests) are done and archived under
+Tasks 60.1-60.3 (the generated inventories and the user's sign-off), 60.4 (the
+characterization tests) and 60.5 (the library moves) are done and archived under
 "Milestone 60 (partial)" in `ARCHIVE.md`; the decisions are in `.agents/m60/PROPOSAL.md`,
 "Sign-off". In short: one `nfl-predictor <command>` front door; retire `golden_command`,
 `backtest_predictions`, `objective_compare_models` (with `nfl_predictor/ml/model_compare.py`),
@@ -637,20 +637,6 @@ characterization tests) are done and archived under
 remove ScoreModel (task 55.5); move everything else; keep `scripts/gate.sh`; one naming rule
 with old spellings kept as aliases; old launchers reproduce from their recorded commit.
 
-- [ ] 60.5 Move library code out of `scripts/` into the package (power-rankings computation and
-      output writing into `nfl_predictor/reporting/`, the betting-report builder likewise), with
-      the scripts temporarily calling the package. Drop every `from scripts import`.
-      Landed 2026-09-24 in `0.18.5`: the ranking pipeline is in
-      `nfl_predictor/reporting/power_rankings.py` (`_write_outputs` became the public
-      `write_ranking_outputs`), `build_betting_report` and its helpers in
-      `nfl_predictor/reporting/betting_report.py`, and `scripts/weekly_run.py` imports both from
-      the package, so no production code imports `scripts/`. Every characterization snapshot
-      passed unchanged, and `.agents/m60/inventory.py` still reports 19 entrypoints, 309 flags
-      and 0 evidence failures on the moved code (the signed-off `INVENTORY.md` was left as is).
-      Narrowed: 13 test modules still `from scripts import` entrypoint modules (the weekly run,
-      backtest, sweep, leakage audit, SHAP, the power-rankings parser, and the retiring
-      `betting_pipeline` and `golden_command`). Those imports can only go when 60.6 moves or
-      retires the entrypoints, so the remainder lives in 60.6; the user is asked to confirm.
 - [ ] 60.6 Move the entrypoints behind the `nfl-predictor <command>` front door (a
       `[project.scripts]` entry plus `python -m nfl_predictor`; the old `python -m` module forms
       keep working), retire the retired files (their tests too), and add the shared options module
@@ -666,11 +652,12 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       `walk_forward._bootstrap_probability_differences` (approved 2026-09-24; a test first proves
       identical values against the scikit-learn version). Edits under `nfl_predictor/ml/` go in
       one chunk. Each removal or rename gets a deprecation or removal note in `CHANGELOG.md`.
-      Open question for the user (found in 60.4): `shap_analysis --component market` is dead,
-      because the blend trainer never stores a market model, so the request silently analyzes
-      the team model. Remove the flag, or make the request fail when no market model exists?
-      Also here (the remainder of 60.5): once the entrypoints move or retire, no test module
-      imports `scripts/` either.
+      Also here, decided by the user 2026-09-24: remove `shap_analysis --component` (found in
+      60.4: the blend trainer never stores a market model, so `market` silently analyzed the
+      team model; the user never asked for a market model and has no plans for one). And the
+      remainder of 60.5, moved here by the user's decision: once the entrypoints move or
+      retire, no test module imports `scripts/` (`grep -rl "from scripts import" tests` is
+      empty).
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the

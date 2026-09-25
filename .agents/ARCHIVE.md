@@ -54,7 +54,8 @@ Follow-ups resolved after their milestones closed:
 ## Milestone 60 (partial) - CLI and entrypoint consolidation
 
 Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`), task
-60.4 in versions `0.18.2` and `0.18.4`; tasks 60.5-60.9 stay in `TODO.md`.
+60.4 in versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`; tasks 60.6-60.9 stay in
+`TODO.md`.
 
 ### 60.1 and 60.2 - Generated inventories
 
@@ -116,7 +117,22 @@ and deeper trees (weekly test), and taking the maximum instead of the mean absol
 - `shap_analysis --component market` never analyzes a market model:
   `train_blended_margin_total_model` always stores `market_model=None`, so the request falls
   back to the team model (the report says `model_kind: blend_team`). The inventory had listed
-  the flag as active; its disposition is a question for the user in 60.6.
+  the flag as active. The user decided on 2026-09-24 to remove it in 60.6.
+
+### 60.5 - Library code out of `scripts/` (version `0.18.5`)
+
+The power-ranking pipeline (records, future-game predictions, the Bradley-Terry fit inputs, the
+strength-snapshot reader, `resolve_ranking_options`, `compute_power_rankings`, and the output
+writer, now the public `write_ranking_outputs`) moved into
+`nfl_predictor/reporting/power_rankings.py`; `build_betting_report` and its moneyline helpers
+into the new `nfl_predictor/reporting/betting_report.py`. `scripts/weekly_run.py` imports both
+from the package, so no production code imports `scripts/`. The moved bodies are
+byte-identical apart from the rename and three docstring lines (checked by diff against the
+pre-move file), every characterization snapshot passed unchanged, and
+`.agents/m60/inventory.py` still reports 19 entrypoints, 309 flags and 0 evidence failures on
+the moved code. The task text also asked to drop every `from scripts import`; 13 test modules
+still import entrypoint modules, which can only go when those entrypoints move or retire. The
+user moved that remainder into 60.6 on 2026-09-24.
 
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 

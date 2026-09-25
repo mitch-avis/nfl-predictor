@@ -5,11 +5,11 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-14) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestone 60 tasks 60.7-60.9, task 56.7, and
 Milestone 58 task 58.5) and this file.
 
-## State (written 2026-09-25, Milestone 60 after closing 60.6)
+## State (written 2026-09-25, Milestone 60 task 60.7 in progress)
 
-- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.26.0`. Not
+- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.26.1`. Not
   pushed; merging and pushing are must-ask. `scripts/gate.sh` exits `0` on the final tree
-  (956 passed, coverage 92.14%). The working tree is clean after the `0.26.0` commits.
+  (957 passed, coverage 92.15%; `--web` green). The working tree is clean after the `0.26.0` commits.
 - Tasks 60.1-60.6 are done and archived (`ARCHIVE.md`, "Milestone 60 (partial)", which now has
   a 60.6 section summarizing `0.19.0`-`0.26.0`). Sign-off decisions: `.agents/m60/PROPOSAL.md`,
   "Sign-off". `.agents/m60/INVENTORY.md` is the signed-off 60.1 record; do not regenerate it
@@ -39,6 +39,9 @@ Milestone 58 task 58.5) and this file.
   path; the weekly run never read the scope). All twelve saved models under `models/` are
   margin/total models. New pins in `tests/test_blended_model_paths.py`.
 - 60.6 archived and removed from `TODO.md`.
+- `0.26.1`: the first part of 60.7, the API catch-all fix (task 58.5, closed and archived in
+  `ARCHIVE.md`, Milestone 58, "58.5"). An unmatched `/api/...` GET gets the JSON 404; the
+  web plan's "Milestone 60 impact" and Status sections record it. Gate run with `--web`.
 
 ## Your task
 
@@ -47,9 +50,10 @@ Milestone 58 task 58.5) and this file.
    parses (`Walk-forward fold N/M`, `WF candidate N/M`, `PROGRESS_RE` in
    `nfl_predictor/api/jobs/runner.py`) and the `weekly_run` template's config keys valid; fix the
    model-kind vocabulary (canonical `blend`, `blended_margin_total` accepted as an alias; three
-   web launches fail today) test first; fix the API catch-all bug (task 58.5) test first; then
+   web launches fail today) test first; then
    delete the `scripts/` shims (only `scripts/gate.sh` stays). Update `tests/api/`, run
-   `scripts/gate.sh --web`, amend `web_ui_plan.md` and `web/README.md`, and close 58.5.
+   `scripts/gate.sh --web`, and amend `web_ui_plan.md` and `web/README.md`. Task 58.5 (the
+   catch-all) is already done in `0.26.1`.
    Wait for the user's answer on the blend power-rankings question below before touching that
    branch.
 2. Task 60.8 (CI calls `scripts/gate.sh`; the gate's smoke checks use `nfl-predictor`; README,

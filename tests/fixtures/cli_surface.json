@@ -606,6 +606,92 @@
    "type": null
   }
  ],
+ "nfl_predictor.cli.compare": [
+  {
+   "action": "_AppendAction",
+   "choices": null,
+   "default": null,
+   "dest": "candidate",
+   "help": "Candidate run directory or checkpoint directory; repeat once per seed.",
+   "nargs": null,
+   "options": [
+    "--candidate"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_AppendAction",
+   "choices": null,
+   "default": null,
+   "dest": "reference",
+   "help": "Reference run directory or checkpoint directory; repeat once per seed, in order.",
+   "nargs": null,
+   "options": [
+    "--reference"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 5000,
+   "dest": "resamples",
+   "help": "Bootstrap resamples (default: %(default)s).",
+   "nargs": null,
+   "options": [
+    "--resamples"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0,
+   "dest": "bootstrap_seed",
+   "help": "Seed of the bootstrap's random generator (default: %(default)s).",
+   "nargs": null,
+   "options": [
+    "--bootstrap-seed"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "out_json",
+   "help": "Also write the full comparison, at full precision, to this JSON file.",
+   "nargs": null,
+   "options": [
+    "--out-json"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "out_md",
+   "help": "Also write the printed tables to this Markdown file.",
+   "nargs": null,
+   "options": [
+    "--out-md"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  }
+ ],
  "nfl_predictor.cli.explain": [
   {
    "action": "_StoreAction",
@@ -803,6 +889,7 @@
     "backtest",
     "build-week",
     "checkpoints",
+    "compare",
     "data",
     "explain",
     "leakage-audit",

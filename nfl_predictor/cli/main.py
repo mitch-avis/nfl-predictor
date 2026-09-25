@@ -69,6 +69,13 @@ COMMANDS: tuple[Command, ...] = (
         takes_argv=False,
     ),
     Command(
+        "compare",
+        "research",
+        "Paired comparison of walk-forward runs, rescored from their fold checkpoints.",
+        "nfl_predictor.cli.compare",
+        takes_argv=True,
+    ),
+    Command(
         "checkpoints",
         "research",
         "List walk-forward checkpoint directories and what references them (read-only).",

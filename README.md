@@ -488,6 +488,28 @@ Evaluation rule: "Model selection is based on time-aware walk-forward evaluation
 authoritative." Season-blocked CV is used for hyperparameter tuning only; walk-forward remains the
 source of truth.
 
+### Comparing two runs
+
+`nfl-predictor compare` rescores two walk-forward runs from their fold checkpoints (never from a
+run's `metrics_report.json`) and compares them game by game on the same games:
+
+```bash
+nfl-predictor compare \
+  --candidate models/<candidate_run> \
+  --reference models/<reference_run> \
+  --out-md models/<candidate_run>/compare.md
+```
+
+A run is a run directory (its `metadata.json` names the checkpoint directory and adds the dataset
+hash, the git commit and the settings that differ) or a checkpoint directory. For week 1, week 2,
+weeks 3-18 and all weeks it reports each run's deterministic Brier, log loss, pick accuracy, margin
+and total MAE, confidence-pool points and market Brier, and the candidate-minus-reference
+difference with a 95% bootstrap interval (5,000 resamples over games, over weeks for pool points).
+Repeat `--candidate` and `--reference` once per seed, in the same order, to combine seeds: the
+per-game differences are averaged over the seed pairs before the bootstrap. It reproduces the
+independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and replaces the per-run
+`compare_to_benchmark.py` copies under `models/`.
+
 ## Weekly workflow (canonical)
 
 The canonical "do everything for this week" entrypoint is:
@@ -615,7 +637,7 @@ commands by group, and `nfl-predictor <command> --help` shows a command's option
 | group | commands |
 | --- | --- |
 | weekly | `weekly` (refresh, stage-1 selection, train, predict, reports; resumable, JSON/YAML config) |
-| research | `backtest` (walk-forward, the benchmark), `sweep` (calibration and market-probability variants), `explain` (SHAP attribution for a saved model), `checkpoints` (read-only listing of walk-forward checkpoints) |
+| research | `backtest` (walk-forward, the benchmark), `sweep` (calibration and market-probability variants), `compare` (paired comparison of two walk-forward runs), `explain` (SHAP attribution for a saved model), `checkpoints` (read-only listing of walk-forward checkpoints) |
 | data | `data` (the ETL), `validate` (`--live` compares against the schedule), `leakage-audit`, `lines`, `build-week` |
 | models by hand | `train`, `predict` (`--model-in`), `rankings` |
 | web | `web`, `users` |

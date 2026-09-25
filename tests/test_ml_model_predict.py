@@ -17,7 +17,6 @@ from nfl_predictor.ml.ml_model_core import (
     BlendLayer,
     FeatureSpec,
     MarginTotalModel,
-    ScoreModel,
 )
 
 xgb.set_config(verbosity=0)
@@ -165,128 +164,6 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
     assert np.allclose(total_preds[0.9], np.array([49.5]))
     assert len(preprocessor.frames) == 1
     assert preprocessor.frames[0].equals(games_df)
-
-
-def test_predict_week_writes_output_and_pretty(monkeypatch, tmp_path: Path) -> None:
-    """Predict week generates output file and pretty-prints when requested."""
-    games_df = pd.DataFrame(
-        {
-            "game_id": [1, 2],
-            "season": [2023, 2023],
-            "week": [1, 1],
-            "away_abbr": ["AAA", "BBB"],
-            "home_abbr": ["CCC", "DDD"],
-        }
-    )
-
-    away_model = cast(xgb.XGBRegressor, object())
-    home_model = cast(xgb.XGBRegressor, object())
-    predictions = {
-        away_model: np.array([10.2, 14.7]),
-        home_model: np.array([20.4, 17.2]),
-    }
-
-    monkeypatch.setattr(ml_model_predict, "_load_games", lambda _: games_df)
-    monkeypatch.setattr(ml_model_predict, "_apply_feature_spec", lambda df, spec: df)
-
-    def fake_predict_xgb(model: Any, features: np.ndarray) -> np.ndarray:
-        """Return canned predictions keyed by model identity."""
-        _ = features
-        return predictions[model]
-
-    monkeypatch.setattr(ml_model_predict, "_predict_xgb", fake_predict_xgb)
-
-    displayed: dict[str, pd.DataFrame] = {}
-
-    def fake_display(df: pd.DataFrame) -> None:
-        """Capture displayed DataFrame for later inspection."""
-        displayed["df"] = df
-
-    monkeypatch.setattr(ml_model_predict.ml_utils, "display_weekly_predictions", fake_display)
-
-    model = ScoreModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        away_model=away_model,
-        home_model=home_model,
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params=None,
-    )
-
-    output_path = tmp_path / "preds.csv"
-    output_df = ml_model_predict.predict_week(
-        model,
-        tmp_path / "games.csv",
-        output_path=output_path,
-        pretty_output=True,
-        score_rounding="half",
-    )
-
-    assert output_path.exists()
-    assert "predicted_away_score" in output_df.columns
-    assert "predicted_home_score" in output_df.columns
-    assert "predicted_winner" in output_df.columns
-    assert "confidence_rank" in output_df.columns
-    assert displayed["df"].equals(output_df)
-
-    assert np.allclose(output_df["predicted_away_score"].to_numpy(), [10.0, 14.5])
-    assert np.allclose(output_df["predicted_home_score"].to_numpy(), [20.5, 17.0])
-
-
-def test_predict_week_skips_output_and_pretty_when_disabled(monkeypatch, tmp_path: Path) -> None:
-    """Predict week should avoid file and pretty-output side effects when both are disabled."""
-    games_df = pd.DataFrame(
-        {
-            "game_id": [1],
-            "season": [2023],
-            "week": [1],
-            "away_abbr": ["AAA"],
-            "home_abbr": ["CCC"],
-        }
-    )
-
-    away_model = cast(xgb.XGBRegressor, object())
-    home_model = cast(xgb.XGBRegressor, object())
-    predictions = {
-        away_model: np.array([10.2]),
-        home_model: np.array([20.4]),
-    }
-
-    monkeypatch.setattr(ml_model_predict, "_load_games", lambda _: games_df)
-    monkeypatch.setattr(ml_model_predict, "_apply_feature_spec", lambda df, spec: df)
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_xgb",
-        lambda model, _features: predictions[model],
-    )
-
-    pretty_called = {"value": False}
-
-    def fake_display(_df: pd.DataFrame) -> None:
-        pretty_called["value"] = True
-
-    monkeypatch.setattr(ml_model_predict.ml_utils, "display_weekly_predictions", fake_display)
-
-    model = ScoreModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        away_model=away_model,
-        home_model=home_model,
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params=None,
-    )
-
-    output_df = ml_model_predict.predict_week(
-        model,
-        tmp_path / "games.csv",
-        output_path=None,
-        pretty_output=False,
-    )
-
-    assert pretty_called["value"] is False
-    assert output_df.shape[0] == 1
 
 
 def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -> None:

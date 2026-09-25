@@ -2,10 +2,10 @@
 
 Two small models are trained once on the synthetic seasons of ``tests/weekly_fixture.py``: a
 market-anchored margin/total model shaped like the weekly run's, and a blended team/market
-model. The command-line ``main`` then writes a SHAP report for each head or component, and the
-report is compared with a snapshot under ``tests/fixtures/shap_analysis_characterization/``, so
-moving the entrypoint cannot change what it reports. Rewrite the snapshots with
-``NFLP_UPDATE_SNAPSHOTS=1``.
+model. The command-line ``main`` then writes a SHAP report for each head (a blended model's
+team model is analyzed), and the report is compared with a snapshot under
+``tests/fixtures/shap_analysis_characterization/``, so moving the entrypoint cannot change what
+it reports. Rewrite the snapshots with ``NFLP_UPDATE_SNAPSHOTS=1``.
 """
 
 from __future__ import annotations
@@ -100,12 +100,7 @@ def _run_shap(argv: list[str], monkeypatch: pytest.MonkeyPatch) -> int:
             ["--target", "total", "--sample-size", "100", "--random-seed", "3"],
             "margin_total_total_sampled.json",
         ),
-        ("blend", ["--component", "team"], "blend_team_margin.json"),
-        (
-            "blend",
-            ["--component", "market", "--target", "total"],
-            "blend_market_request_total.json",
-        ),
+        ("blend", [], "blend_team_margin.json"),
     ],
 )
 def test_shap_report_matches_snapshot(
@@ -136,35 +131,6 @@ def test_shap_report_matches_snapshot(
     snapshots.check_json(snapshot_name, report, SNAPSHOT_DIR / snapshot_name)
 
 
-def test_shap_market_component_falls_back_to_the_team_model(
-    trained: dict[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The blend trainer stores no market model, so ``--component market`` reports the team one.
-
-    ``train_blended_margin_total_model`` always sets ``market_model=None``; the report still
-    records the requested component, but its model kind names the team model it analyzed.
-    """
-    blend = joblib.load(trained["blend"])
-    assert blend.market_model is None
-    out_json = tmp_path / "shap_report.json"
-    code = _run_shap(
-        [
-            "--model-path",
-            str(trained["blend"]),
-            "--data-path",
-            str(trained["data"]),
-            "--output-path",
-            str(out_json),
-            "--component",
-            "market",
-        ],
-        monkeypatch,
-    )
-    report = json.loads(out_json.read_text(encoding="utf-8"))
-    assert code == 0
-    assert (report["component"], report["model_kind"]) == ("market", "blend_team")
-
-
 def test_shap_report_defaults_to_the_model_directory(
     trained: dict[str, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -178,11 +144,11 @@ def test_shap_report_defaults_to_the_model_directory(
     assert json.loads(default_path.read_text(encoding="utf-8"))["target"] == "margin"
 
 
-def test_shap_rejects_a_score_target_for_a_margin_total_model(
+def test_shap_rejects_a_score_target(
     trained: dict[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A home/away target on a margin/total model is an error, not an empty report."""
-    with pytest.raises(ValueError, match="margin\\|total"):
+    """Only the margin and total heads exist, so a home/away target is a usage error."""
+    with pytest.raises(SystemExit):
         _run_shap(
             [
                 "--model-path",

@@ -85,7 +85,6 @@
     "disable_pruning": false,
     "disable_trend_features": false,
     "disabled_feature_groups": [],
-    "early_stopping_rounds": 50,
     "eval_last_n_seasons": 1,
     "eval_seasons": null,
     "eval_window": {
@@ -136,7 +135,6 @@
     "out_json": "<tmp>/wf/metrics_report.json",
     "random_seed": 42,
     "recency_half_life_seasons": null,
-    "recency_half_life_weeks": null,
     "resolved_eval_seasons": [
       2024
     ],
@@ -719,7 +717,7 @@
       "deterministic_brier": 0.2175551627409391,
       "deterministic_brier_vs_market": 0.003566533934465599,
       "deterministic_brier_vs_market_ci_high": 0.008621894593254135,
-      "deterministic_brier_vs_market_ci_low": -0.0012613258464637576,
+      "deterministic_brier_vs_market_ci_low": -0.0012613258464637847,
       "deterministic_log_loss": 0.6249171181721307,
       "deterministic_log_loss_vs_market": 0.0075397839208575235,
       "deterministic_log_loss_vs_market_ci_high": 0.018387099208755642,
@@ -1173,7 +1171,7 @@
       },
       {
         "ci_high": 0.008621894593254135,
-        "ci_low": -0.0012613258464637576,
+        "ci_low": -0.0012613258464637847,
         "direction": "lower",
         "games": 64,
         "metric": "deterministic_brier_vs_market",
@@ -1304,7 +1302,7 @@
         "deterministic_brier": 0.2175551627409391,
         "deterministic_brier_vs_market": 0.003566533934465599,
         "deterministic_brier_vs_market_ci_high": 0.008621894593254135,
-        "deterministic_brier_vs_market_ci_low": -0.0012613258464637576,
+        "deterministic_brier_vs_market_ci_low": -0.0012613258464637847,
         "deterministic_log_loss": 0.6249171181721307,
         "deterministic_log_loss_vs_market": 0.0075397839208575235,
         "deterministic_log_loss_vs_market_ci_high": 0.018387099208755642,

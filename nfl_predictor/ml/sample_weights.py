@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 import numpy as np
 import pandas as pd
 
@@ -45,17 +43,16 @@ def compute_postseason_sample_weight(
 def compute_recency_sample_weight(
     df: pd.DataFrame,
     *,
-    half_life_weeks: float | None = None,
     half_life_seasons: float | None = None,
 ) -> np.ndarray | None:
-    """Compute exponential recency weights using weeks or seasons as the age unit."""
-    if half_life_weeks is None and half_life_seasons is None:
+    """Compute exponential recency weights by season: ``0.5 ** (age / half_life_seasons)``.
+
+    ``age`` is the number of seasons before the newest season in ``df``. Returns ``None``
+    when no half-life is given, ``df`` is empty, or every weight is 1.
+    """
+    if half_life_seasons is None:
         return None
-    if half_life_weeks is not None and half_life_seasons is not None:
-        raise ValueError("Specify only one of half_life_weeks or half_life_seasons.")
-    if half_life_weeks is not None and half_life_weeks <= 0:
-        raise ValueError("half_life_weeks must be positive.")
-    if half_life_seasons is not None and half_life_seasons <= 0:
+    if half_life_seasons <= 0:
         raise ValueError("half_life_seasons must be positive.")
     if df.empty:
         return None
@@ -67,34 +64,8 @@ def compute_recency_sample_weight(
         raise ValueError("season column contains non-numeric values.")
     season_int = season_series.astype(int)
 
-    if half_life_seasons is not None:
-        max_season = season_int.max()
-        age = max_season - season_int
-        weights = 0.5 ** (age.to_numpy() / float(half_life_seasons))
-        if np.allclose(weights, 1.0):
-            return None
-        return weights.astype(float)
-
-    if "week" not in df.columns:
-        raise ValueError("week column required for week-based recency weighting.")
-    week_series = pd.to_numeric(df["week"], errors="coerce")
-    if week_series.isna().any():
-        raise ValueError("week column contains non-numeric values.")
-    week_int = week_series.astype(int)
-
-    max_week_by_season = week_int.groupby(season_int).max().sort_index()
-    offsets: dict[int, int] = {}
-    cumulative = 0
-    for season, max_week in max_week_by_season.items():
-        season_key = int(cast(int, season))
-        offsets[season_key] = cumulative
-        cumulative += int(max_week)
-
-    week_index = season_int.map(offsets).astype(int) + week_int
-    max_index = week_index.max()
-    age = max_index - week_index
-    half_life_weeks_value = float(cast(float, half_life_weeks))
-    weights = 0.5 ** (age.to_numpy() / half_life_weeks_value)
+    age = season_int.max() - season_int
+    weights = 0.5 ** (age.to_numpy() / float(half_life_seasons))
     if np.allclose(weights, 1.0):
         return None
     return weights.astype(float)

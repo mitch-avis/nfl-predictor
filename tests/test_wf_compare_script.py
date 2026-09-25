@@ -69,7 +69,6 @@ def test_run_one_forwards_checkpoint_settings(
         market_prob_weight=0.0,
         market_prob_clamp=0.0,
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
         checkpoint_dir=tmp_path,
         resume=False,

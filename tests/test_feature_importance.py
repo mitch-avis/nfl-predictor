@@ -164,14 +164,8 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
 
         pass
 
-    class DummyScore:
-        """Synthetic score model class for dispatch testing."""
-
-        pass
-
     monkeypatch.setattr(feature_importance, "BlendedMarginTotalModel", DummyBlend)
     monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
-    monkeypatch.setattr(feature_importance, "ScoreModel", DummyScore)
 
     def fake_margin_report(model: object) -> dict[str, object] | None:
         """Return a synthetic report keyed off the input object."""
@@ -182,7 +176,6 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
         return {"margin": True}
 
     monkeypatch.setattr(feature_importance, "_build_margin_total_report", fake_margin_report)
-    monkeypatch.setattr(feature_importance, "_build_score_report", lambda _model: {"score": True})
 
     blend_report = feature_importance.build_feature_importance_report(DummyBlend("team", "market"))
     assert blend_report == {
@@ -192,9 +185,6 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
 
     margin_report = feature_importance.build_feature_importance_report(DummyMargin())
     assert margin_report == {"margin": True, "model_kind": "margin_total"}
-
-    score_report = feature_importance.build_feature_importance_report(DummyScore())
-    assert score_report == {"score": True, "model_kind": "score"}
 
     assert feature_importance.build_feature_importance_report(object()) is None
 
@@ -211,7 +201,6 @@ def test_build_feature_importance_report_handles_attribute_errors(
 
     monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
     monkeypatch.setattr(feature_importance, "BlendedMarginTotalModel", tuple)
-    monkeypatch.setattr(feature_importance, "ScoreModel", tuple)
 
     def _raise_attribute_error(_model: object) -> dict[str, object] | None:
         """Raise an AttributeError to exercise the guarded path."""

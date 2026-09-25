@@ -50,15 +50,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--target",
-        choices=["margin", "total", "away", "home"],
+        choices=["margin", "total"],
         default="margin",
-        help="Target model head to analyze (margin/total or away/home).",
-    )
-    parser.add_argument(
-        "--component",
-        choices=["team", "market"],
-        default="team",
-        help="For blended models, select the team or market component.",
+        help="Target model head to analyze (margin or total).",
     )
     return parser.parse_args()
 
@@ -71,20 +65,12 @@ def _import_shap() -> Any | None:
         return None
 
 
-def _select_model_component(
-    model: Any,
-    *,
-    component: str,
-) -> tuple[Any, str]:
-    """Resolve the base model component to analyze."""
+def _select_model_component(model: Any) -> tuple[Any, str]:
+    """Resolve the margin/total model to analyze: the model itself, or a blend's team model."""
     if isinstance(model, ml_model_core.BlendedMarginTotalModel):
-        if component == "market" and model.market_model is not None:
-            return model.market_model, "blend_market"
         return model.team_model, "blend_team"
     if isinstance(model, ml_model_core.MarginTotalModel):
         return model, "margin_total"
-    if isinstance(model, ml_model_core.ScoreModel):
-        return model, "score"
     raise ValueError(f"Unsupported model type: {type(model).__name__}")
 
 
@@ -96,12 +82,6 @@ def _resolve_head(model: Any, target: str) -> tuple[Any, str]:
         if target == "total":
             return model.total_model, "total"
         raise ValueError("Margin/total models support --target margin|total.")
-    if isinstance(model, ml_model_core.ScoreModel):
-        if target == "away":
-            return model.away_model, "away"
-        if target == "home":
-            return model.home_model, "home"
-        raise ValueError("Score models support --target away|home.")
     raise ValueError("Unsupported model type for SHAP target resolution.")
 
 
@@ -120,7 +100,7 @@ def main() -> int:
         raise FileNotFoundError(f"Missing dataset: {args.data_path}")
 
     model = joblib.load(args.model_path)
-    base_model, model_kind = _select_model_component(model, component=args.component)
+    base_model, model_kind = _select_model_component(model)
     head_model, target = _resolve_head(base_model, args.target)
 
     df = pd.read_csv(args.data_path)
@@ -174,7 +154,7 @@ def main() -> int:
     )
     payload = {
         "model_kind": model_kind,
-        "component": args.component,
+        "component": "team",
         "target": target,
         "sample_size": int(x_matrix.shape[0]),
         "rows": rows,

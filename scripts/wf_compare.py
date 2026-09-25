@@ -25,7 +25,6 @@ from typing import Any
 import pandas as pd
 
 try:
-    from nfl_predictor import ml_model
     from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
@@ -35,7 +34,6 @@ except ModuleNotFoundError:
 
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root))
-    from nfl_predictor import ml_model
     from nfl_predictor.ml import metrics as metrics_utils
     from nfl_predictor.ml import walk_forward
     from nfl_predictor.utils.logger import log
@@ -132,12 +130,6 @@ def _parse_args() -> argparse.Namespace:
         help="Optional XGBoost n_jobs override.",
     )
     parser.add_argument(
-        "--early-stopping-rounds",
-        type=int,
-        default=ml_model.DEFAULT_EARLY_STOPPING_ROUNDS,
-        help="Early stopping rounds (default aligns with training).",
-    )
-    parser.add_argument(
         "--include-quantiles",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -195,7 +187,6 @@ def _run_one(
     market_prob_weight: float,
     market_prob_clamp: float,
     xgb_params_overrides: dict[str, Any],
-    early_stopping_rounds: int,
     include_quantiles: bool,
     disabled_feature_groups: tuple[str, ...] = (),
     checkpoint_dir: Path | None = None,
@@ -221,7 +212,6 @@ def _run_one(
         max_cardinality_ratio=0.5,
         feature_start="away_rest",
         feature_end="home_moneyline",
-        early_stopping_rounds=early_stopping_rounds,
         xgb_params_overrides=xgb_params_overrides,
         disabled_feature_groups=disabled_feature_groups,
     )
@@ -380,7 +370,6 @@ def main() -> int:
                             market_prob_weight=weight,
                             market_prob_clamp=clamp,
                             xgb_params_overrides=xgb_params_overrides,
-                            early_stopping_rounds=args.early_stopping_rounds,
                             include_quantiles=bool(args.include_quantiles),
                             disabled_feature_groups=disabled_feature_groups,
                             checkpoint_dir=args.checkpoint_dir,

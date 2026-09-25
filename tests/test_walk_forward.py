@@ -959,7 +959,7 @@ def test_walk_forward_disables_small_window_early_stopping(
 
     result = walk_forward.run_walk_forward_backtest(
         _fixture_df(),
-        replace(_base_config(), include_quantiles=True, early_stopping_rounds=5),
+        replace(_base_config(), include_quantiles=True),
     )
 
     assert margin_rounds == [None, None]

@@ -28,7 +28,6 @@ from nfl_predictor.ml.ml_model_core import (
     MarginTotalModel,
     MarketProbConfig,
     OptunaConfig,
-    ScoreModel,
     TrainingResult,
     _adjust_home_win_prob,
     _apply_feature_spec,
@@ -36,11 +35,9 @@ from nfl_predictor.ml.ml_model_core import (
     _build_preprocessor,
     _early_stopping_info,
     _evaluate_margin_total_predictions,
-    _evaluate_predictions,
     _filter_season_bounds,
     _fit_blend_ridge_constrained,
     _fit_margin_total_models,
-    _fit_models,
     _fit_quantile_models,
     _fit_transform_matrix,
     _fit_win_prob_calibrator,
@@ -56,7 +53,6 @@ from nfl_predictor.ml.ml_model_core import (
     _resolve_margin_sigma,
     _resolve_xgb_params,
     _run_optuna_search,
-    _split_by_season,
     _split_train_calibration_holdout,
     _summarize_confidence_pool,
     _summarize_missing_data,
@@ -126,161 +122,6 @@ def _pooled_calibration_frame(
     return base_pool_df.loc[mask].copy()
 
 
-def train_score_model(
-    data_path: Path,
-    holdout_seasons: int,
-    include_market: bool,
-    max_cardinality_ratio: float,
-    market_prob_config: MarketProbConfig | None,
-    include_postseason: bool = False,
-    postseason_weight: float = 1.0,
-    min_season: int | None = None,
-    max_season: int | None = None,
-    feature_start: str = DEFAULT_FEATURE_START_COLUMN,
-    feature_end: str = DEFAULT_FEATURE_END_COLUMN,
-    xgb_tree_method: str | None = None,
-    xgb_device: str | None = None,
-    xgb_n_jobs: int | None = None,
-    recency_half_life_weeks: float | None = None,
-    recency_half_life_seasons: float | None = None,
-) -> ScoreModel:
-    """Train score models using time-aware season splits."""
-    df = _load_games(data_path)
-    target_columns = _get_target_columns(df)
-    df = df.dropna(subset=list(target_columns))
-
-    df = _filter_season_bounds(df, min_season, max_season)
-    df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
-    train_df, holdout_df, holdout = _split_by_season(df, holdout_seasons)
-    log.info("Training seasons: %s", sorted(train_df["season"].unique()))
-    log.info("Holdout seasons: %s", holdout)
-    log.debug("Training rows: %d | Holdout rows: %d", len(train_df), len(holdout_df))
-
-    feature_spec = _build_feature_spec(
-        train_df,
-        include_market=include_market,
-        max_cardinality_ratio=max_cardinality_ratio,
-        feature_start=feature_start,
-        feature_end=feature_end,
-    )
-    log.info(
-        "Feature columns: %d (numeric=%d, categorical=%d)",
-        len(feature_spec.feature_columns),
-        len(feature_spec.numeric_columns),
-        len(feature_spec.categorical_columns),
-    )
-    if feature_spec.high_cardinality_columns:
-        log.info(
-            "Dropped high-cardinality columns: %s",
-            feature_spec.high_cardinality_columns,
-        )
-
-    x_train_df = _apply_feature_spec(train_df, feature_spec)
-    x_holdout_df = _apply_feature_spec(holdout_df, feature_spec)
-
-    preprocessor = _build_preprocessor(feature_spec, for_tree=True)
-    x_train = _fit_transform_matrix(preprocessor, x_train_df)
-
-    postseason_weights = compute_postseason_sample_weight(
-        train_df,
-        include_postseason=include_postseason,
-        postseason_weight=postseason_weight,
-    )
-    recency_weights = compute_recency_sample_weight(
-        train_df,
-        half_life_weeks=recency_half_life_weeks,
-        half_life_seasons=recency_half_life_seasons,
-    )
-    train_weight = combine_sample_weights(postseason_weights, recency_weights)
-    xgb_overrides: dict[str, Any] = {}
-    if xgb_n_jobs is not None:
-        xgb_overrides["n_jobs"] = xgb_n_jobs
-    params = _resolve_xgb_params(
-        DEFAULT_XGB_PARAMS,
-        overrides=xgb_overrides or None,
-        tree_method=xgb_tree_method,
-        device=xgb_device,
-    )
-    away_model, home_model = _fit_models(
-        x_train,
-        train_df,
-        target_columns,
-        params=params,
-        sample_weight=train_weight,
-    )
-
-    if not holdout_df.empty:
-        x_holdout = _transform_matrix(preprocessor, x_holdout_df)
-        pred_away = _predict_xgb(away_model, x_holdout)
-        pred_home = _predict_xgb(home_model, x_holdout)
-
-        metrics = _evaluate_predictions(holdout_df, pred_away, pred_home, target_columns)
-        log.info("Holdout metrics: %s", {k: round(v, 4) for k, v in metrics.items()})
-    else:
-        log.info("No holdout seasons configured; skipping holdout evaluation.")
-
-    return ScoreModel(
-        preprocessor=preprocessor,
-        feature_spec=feature_spec,
-        away_model=away_model,
-        home_model=home_model,
-        target_columns=target_columns,
-        market_prob_config=market_prob_config,
-        xgb_params=params,
-    )
-
-
-def train_score_model_with_report(
-    **kwargs: Any,
-) -> TrainingResult:
-    """Train a score model and return a structured metrics report payload."""
-    data_path: Path = kwargs["data_path"]
-
-    model: ScoreModel = train_score_model(**kwargs)
-    df = _load_games(data_path)
-    df = df.dropna(subset=list(model.target_columns))
-    df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
-    df = _filter_to_regular_season_for_training(
-        df,
-        include_postseason=bool(kwargs.get("include_postseason", False)),
-    )
-
-    missing_data_summary = _summarize_missing_data(df)
-    _train_df, holdout_df, holdout = _split_by_season(df, kwargs["holdout_seasons"])
-    metrics: dict[str, Any] = {}
-    if not holdout_df.empty:
-        x_holdout = _transform_matrix(
-            model.preprocessor, _apply_feature_spec(holdout_df, model.feature_spec)
-        )
-        pred_away = _predict_xgb(model.away_model, x_holdout)
-        pred_home = _predict_xgb(model.home_model, x_holdout)
-        metrics = _evaluate_predictions(holdout_df, pred_away, pred_home, model.target_columns)
-
-    report = {
-        "kind": "train",
-        "model_kind": "score",
-        "metrics": {"holdout": metrics or None},
-        "missing_data": missing_data_summary,
-    }
-    splits = {
-        "train_seasons": sorted(_train_df["season"].dropna().unique().tolist()),
-        "holdout_seasons": holdout,
-    }
-    params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
-    feature_list = list(model.feature_spec.feature_columns)
-    feature_importance_report = feature_importance.build_feature_importance_report(model)
-    return TrainingResult(
-        model=model,
-        metrics_report=report,
-        splits=splits,
-        params=params,
-        tuned_params=None,
-        feature_list=feature_list,
-        early_stopping=_early_stopping_info(model),
-        feature_importance=feature_importance_report,
-    )
-
-
 def train_margin_total_model(
     data_path: Path,
     holdout_seasons: int,
@@ -300,7 +141,6 @@ def train_margin_total_model(
     max_season: int | None = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
-    recency_half_life_weeks: float | None = None,
     recency_half_life_seasons: float | None = None,
 ) -> MarginTotalModel:
     """Train margin/total models with optional calibration."""
@@ -425,7 +265,6 @@ def train_margin_total_model(
         )
         recency_weights = compute_recency_sample_weight(
             train_frame,
-            half_life_weeks=recency_half_life_weeks,
             half_life_seasons=recency_half_life_seasons,
         )
         train_weight = combine_sample_weights(postseason_weights, recency_weights)
@@ -572,7 +411,6 @@ def train_margin_total_model(
         )
         calibration_recency = compute_recency_sample_weight(
             calibration_fit_df,
-            half_life_weeks=recency_half_life_weeks,
             half_life_seasons=recency_half_life_seasons,
         )
         calibration_weight = combine_sample_weights(calibration_postseason, calibration_recency)
@@ -780,7 +618,6 @@ def train_blended_margin_total_model(
     max_season: int | None = None,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
-    recency_half_life_weeks: float | None = None,
     recency_half_life_seasons: float | None = None,
 ) -> BlendedMarginTotalModel:
     """Train blended margin/total models using team vs market signals."""
@@ -960,7 +797,6 @@ def train_blended_margin_total_model(
     )
     recency_weights = compute_recency_sample_weight(
         train_df,
-        half_life_weeks=recency_half_life_weeks,
         half_life_seasons=recency_half_life_seasons,
     )
     train_weight = combine_sample_weights(postseason_weights, recency_weights)
@@ -1026,7 +862,6 @@ def train_blended_margin_total_model(
         )
         calibration_recency = compute_recency_sample_weight(
             calibration_fit_df,
-            half_life_weeks=recency_half_life_weeks,
             half_life_seasons=recency_half_life_seasons,
         )
         calibration_weight = combine_sample_weights(calibration_postseason, calibration_recency)

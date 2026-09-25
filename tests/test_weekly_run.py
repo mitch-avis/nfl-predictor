@@ -49,9 +49,7 @@ def test_shipped_weekly_run_config_matches_approved_defaults() -> None:
     assert args.power_rankings_include_postseason is False
     assert args.tune is False
     assert args.wf_recency_half_life_seasons is None
-    assert args.wf_recency_half_life_weeks is None
     assert args.train_recency_half_life_seasons is None
-    assert args.train_recency_half_life_weeks is None
 
 
 def test_weekly_run_parser_defaults_follow_shared_xgb_defaults() -> None:

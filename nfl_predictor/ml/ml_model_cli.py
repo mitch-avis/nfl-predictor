@@ -26,14 +26,12 @@ from nfl_predictor.ml.ml_model_core import (
     normalize_win_prob_calibration_method,
 )
 from nfl_predictor.ml.ml_model_predict import (
-    predict_week,
     predict_week_blended,
     predict_week_margin_total,
 )
 from nfl_predictor.ml.ml_model_training import (
     train_blended_margin_total_model_with_report,
     train_margin_total_model_with_report,
-    train_score_model_with_report,
 )
 from nfl_predictor.utils.logger import log
 
@@ -42,9 +40,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train NFL score prediction models.")
     parser.add_argument(
         "--model-kind",
-        choices=["score", "margin_total", "blend"],
+        choices=["margin_total", "blend"],
         default="margin_total",
-        help="Model pipeline to use (score, margin_total, or blend).",
+        help="Model pipeline to use (margin_total or blend).",
     )
     parser.add_argument(
         "--data-path",
@@ -82,22 +80,10 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--recency-half-life-weeks",
-        type=float,
-        default=None,
-        help=(
-            "Optional exponential half-life in weeks for recency weighting. "
-            "Use only one of --recency-half-life-weeks or --recency-half-life-seasons."
-        ),
-    )
-    parser.add_argument(
         "--recency-half-life-seasons",
         type=float,
         default=None,
-        help=(
-            "Optional exponential half-life in seasons for recency weighting. "
-            "Use only one of --recency-half-life-weeks or --recency-half-life-seasons."
-        ),
+        help="Optional exponential half-life in seasons for recency weighting.",
     )
     parser.add_argument(
         "--market-transform",
@@ -342,10 +328,6 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     """CLI entry point for training and prediction."""
     args = _parse_args()
-    if args.recency_half_life_weeks is not None and args.recency_half_life_seasons is not None:
-        raise ValueError(
-            "Specify only one of --recency-half-life-weeks or --recency-half-life-seasons."
-        )
     args.win_prob_calibration = normalize_win_prob_calibration_method(args.win_prob_calibration)
     win_prob_use_uncertainty = bool(args.win_prob_uncertainty)
     if args.model_kind != "margin_total" and win_prob_use_uncertainty:
@@ -408,15 +390,7 @@ def main() -> None:
         use_uncertainty = win_prob_use_uncertainty or getattr(
             model, "win_prob_use_uncertainty", False
         )
-        if args.model_kind == "score":
-            predict_week(
-                model,
-                args.predict_path,
-                output_path,
-                pretty_output=args.pretty_output,
-                score_rounding=args.score_rounding,
-            )
-        elif args.model_kind == "margin_total":
+        if args.model_kind == "margin_total":
             predict_week_margin_total(
                 model,
                 args.predict_path,
@@ -477,40 +451,6 @@ def main() -> None:
             }
             artifacts.write_json(paths.feature_importance_path, importance_payload)
 
-    if args.model_kind == "score":
-        result = train_score_model_with_report(
-            data_path=args.data_path,
-            holdout_seasons=args.holdout_seasons,
-            include_market=not args.exclude_market,
-            max_cardinality_ratio=args.max_cardinality_ratio,
-            market_prob_config=market_prob_config,
-            include_postseason=args.include_postseason,
-            postseason_weight=args.postseason_weight,
-            recency_half_life_weeks=args.recency_half_life_weeks,
-            recency_half_life_seasons=args.recency_half_life_seasons,
-            min_season=args.min_season,
-            max_season=args.max_season,
-            feature_start=args.feature_start,
-            feature_end=args.feature_end,
-            xgb_tree_method=args.xgb_tree_method,
-            xgb_device=args.xgb_device,
-            xgb_n_jobs=args.xgb_n_jobs,
-        )
-
-        if args.run_dir is not None and args.model_out is None:
-            args.model_out = args.run_dir / "model.joblib"
-        if args.model_out is not None:
-            _write_artifacts(result, args.model_out)
-        if args.predict_path:
-            predict_week(
-                result.model,
-                args.predict_path,
-                output_path,
-                pretty_output=args.pretty_output,
-                score_rounding=args.score_rounding,
-            )
-        return
-
     if args.model_kind == "margin_total":
         result = train_margin_total_model_with_report(
             data_path=args.data_path,
@@ -527,7 +467,6 @@ def main() -> None:
             market_prob_config=market_prob_config,
             include_postseason=args.include_postseason,
             postseason_weight=args.postseason_weight,
-            recency_half_life_weeks=args.recency_half_life_weeks,
             recency_half_life_seasons=args.recency_half_life_seasons,
             min_season=args.min_season,
             max_season=args.max_season,
@@ -564,7 +503,6 @@ def main() -> None:
             market_prob_config=market_prob_config,
             include_postseason=args.include_postseason,
             postseason_weight=args.postseason_weight,
-            recency_half_life_weeks=args.recency_half_life_weeks,
             recency_half_life_seasons=args.recency_half_life_seasons,
             min_season=args.min_season,
             max_season=args.max_season,

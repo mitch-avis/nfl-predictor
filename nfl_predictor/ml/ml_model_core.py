@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import heapq
 import json
-import logging
 import os
 import time
 import warnings
@@ -31,10 +30,7 @@ from sklearn.metrics import (
     brier_score_loss,
     log_loss,
     mean_absolute_error,
-    mean_squared_error,
-    root_mean_squared_error,
 )
-from xgboost.callback import TrainingCallback
 
 import __main__
 from nfl_predictor import constants
@@ -82,25 +78,11 @@ DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
-DEFAULT_LOG_EVAL_EVERY_N = 10
 AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES = 200
 NORMAL_Z_P90 = 1.281551565545
 P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
 MIN_WIN_PROB_SIGMA = 0.5
 PLATT_C_GRID = (0.01, 0.1, 1.0, 10.0)
-
-
-@dataclass(frozen=True)
-class ScoreModel:
-    """Trained score models and preprocessing state."""
-
-    preprocessor: ColumnTransformer
-    feature_spec: FeatureSpec
-    away_model: xgb.XGBRegressor
-    home_model: xgb.XGBRegressor
-    target_columns: tuple[str, str]
-    market_prob_config: MarketProbConfig | None = None
-    xgb_params: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -198,30 +180,6 @@ class OptunaConfig:
     study_name: str | None
     best_params_out: Path | None
     xgb_n_jobs: int | None = None
-
-
-class LogEvalCallback(TrainingCallback):
-    """Log evaluation metrics during XGBoost training."""
-
-    def __init__(self, logger: logging.Logger, every_n: int = 1, level: int = logging.INFO):
-        """Initialize the callback with logging cadence and level."""
-        self.logger = logger
-        self.every_n = every_n
-        self.level = level
-
-    def after_iteration(self, model, epoch: int, evals_log) -> bool:
-        """Log evaluation metrics after each iteration when due."""
-        if epoch % self.every_n != 0:
-            return False
-
-        # evals_log is like: {"train": {"rmse": [..]}, "valid": {"rmse": [..]}}
-        parts = [f"iter={epoch}"]
-        for data_name, metrics in evals_log.items():
-            for metric_name, values in metrics.items():
-                parts.append(f"{data_name}-{metric_name}={values[-1]:.6g}")
-
-        self.logger.log(self.level, " | ".join(parts))
-        return False
 
 
 def _available_columns(df: pd.DataFrame, candidates: Iterable[str]) -> list[str]:
@@ -537,57 +495,6 @@ def _build_blocked_timepoint_folds(
     return folds
 
 
-def _fit_models(
-    x_train: np.ndarray | spmatrix,
-    y_train: pd.DataFrame,
-    target_columns: tuple[str, str],
-    params: dict[str, Any] | None = None,
-    sample_weight: np.ndarray | None = None,
-) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
-    away_col, home_col = target_columns
-    resolved_params = params or _resolve_xgb_params(DEFAULT_XGB_PARAMS)
-    away_model = xgb.XGBRegressor(**resolved_params)
-    home_model = xgb.XGBRegressor(**resolved_params)
-
-    away_model.fit(x_train, y_train[away_col], sample_weight=sample_weight)
-    home_model.fit(x_train, y_train[home_col], sample_weight=sample_weight)
-
-    return away_model, home_model
-
-
-def _evaluate_predictions(
-    y_true: pd.DataFrame,
-    pred_away: np.ndarray,
-    pred_home: np.ndarray,
-    target_columns: tuple[str, str],
-) -> dict[str, float]:
-    away_col, home_col = target_columns
-    away_true = y_true[away_col].to_numpy()
-    home_true = y_true[home_col].to_numpy()
-
-    metrics = {
-        "away_mae": mean_absolute_error(away_true, pred_away),
-        "home_mae": mean_absolute_error(home_true, pred_home),
-        "away_rmse": _rmse(away_true, pred_away),
-        "home_rmse": _rmse(home_true, pred_home),
-    }
-
-    actual_margin = home_true - away_true
-    predicted_margin = pred_home - pred_away
-    metrics["margin_mae"] = mean_absolute_error(actual_margin, predicted_margin)
-
-    actual_total = home_true + away_true
-    predicted_total = pred_home + pred_away
-    metrics["total_mae"] = mean_absolute_error(actual_total, predicted_total)
-
-    actual_winner = np.where(home_true > away_true, "home", "away")
-    pred_winner = np.where(pred_home > pred_away, "home", "away")
-    is_tie = home_true == away_true
-    metrics["winner_accuracy"] = float(np.mean((pred_winner == actual_winner) & ~is_tie))
-
-    return metrics
-
-
 def _prepare_margin_total_targets(
     df: pd.DataFrame, target_columns: tuple[str, str]
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -683,7 +590,6 @@ def _fit_margin_total_models(
             x_eval,
             y_margin_eval,
             resolved_early_stopping,
-            callbacks=[LogEvalCallback(log, every_n=DEFAULT_LOG_EVAL_EVERY_N)],
         )
         margin_model.fit(x_train, y_margin, sample_weight=sample_weight, **fit_kwargs)
 
@@ -691,7 +597,6 @@ def _fit_margin_total_models(
             x_eval,
             y_total_eval,
             resolved_early_stopping,
-            callbacks=[LogEvalCallback(log, every_n=DEFAULT_LOG_EVAL_EVERY_N)],
         )
         total_model.fit(x_train, y_total, sample_weight=sample_weight, **fit_kwargs)
 
@@ -751,7 +656,6 @@ def _fit_quantile_models(
                 x_eval,
                 y_eval,
                 resolved_early_stopping,
-                callbacks=[LogEvalCallback(log, every_n=DEFAULT_LOG_EVAL_EVERY_N)],
             )
             model.fit(x_train, y_train, sample_weight=sample_weight, **fit_kwargs)
             fitted[quantile] = model
@@ -1246,12 +1150,6 @@ def _margin_to_home_win_prob_elo_style(
     return 1.0 / (1.0 + np.power(10.0, -margin / points_per_400_elo))
 
 
-def _rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    if root_mean_squared_error is not None:
-        return float(root_mean_squared_error(y_true, y_pred))
-    return float(np.sqrt(mean_squared_error(y_true, y_pred)))
-
-
 def _rank_confidence(strength: np.ndarray, tiebreaker: np.ndarray | None = None) -> np.ndarray:
     strength = np.asarray(strength)
     if tiebreaker is None:
@@ -1397,10 +1295,7 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
             if hasattr(booster, "num_boosted_rounds"):
                 info[f"{prefix}.best_iteration"] = int(booster.num_boosted_rounds()) - 1
 
-    if isinstance(model, ScoreModel):
-        _capture("away_model", model.away_model)
-        _capture("home_model", model.home_model)
-    elif isinstance(model, MarginTotalModel):
+    if isinstance(model, MarginTotalModel):
         _capture("margin_model", model.margin_model)
         _capture("total_model", model.total_model)
         if model.margin_quantile_models:
@@ -1421,7 +1316,6 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
 def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
     for cls in (
         FeatureSpec,
-        ScoreModel,
         MarginTotalModel,
         BlendedMarginTotalModel,
         MarketProbConfig,
@@ -1460,7 +1354,6 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
 
     model = _ensure_backward_compatible_model(model)
     expected_types = {
-        "score": ScoreModel,
         "margin_total": MarginTotalModel,
         "blend": BlendedMarginTotalModel,
     }
@@ -1508,8 +1401,6 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
 def _with_market_prob_config(model: Any, config: MarketProbConfig | None) -> Any:
     if config is None:
         return model
-    if isinstance(model, ScoreModel):
-        return replace(model, market_prob_config=config)
     if isinstance(model, MarginTotalModel):
         return replace(model, market_prob_config=config)
     if isinstance(model, BlendedMarginTotalModel):

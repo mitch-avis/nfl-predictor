@@ -305,8 +305,8 @@ playoff games as long as the feature row exists.
 
 To include postseason games in training, pass `--include-postseason`. To emphasize postseason games,
 also set `--postseason-weight` (e.g., `--postseason-weight 1.5`). Optional recency weighting is
-available via `--recency-half-life-weeks` or `--recency-half-life-seasons` (use only one) to apply
-exponential decay to training and calibration samples. It is off by default and in the shipped
+available via `--recency-half-life-seasons` to apply exponential decay by season to training
+and calibration samples. It is off by default and in the shipped
 weekly config: the six-season, two-seed measurement below found no gain from it.
 
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
@@ -391,7 +391,7 @@ This is the **canonical evaluation protocol** for model selection. By default it
 N seasons (regular season only) and reports three probability views on the same games: the
 configured calibrator, the deterministic margin map, and the market-implied home win probability.
 Use `--include-postseason` if you want postseason folds included. Optional recency weighting
-is available via `--recency-half-life-weeks` or `--recency-half-life-seasons` (use only one). GPU
+is available via `--recency-half-life-seasons`. GPU
 acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`. If the latest season is
 incomplete, either pass `--exclude-incomplete-seasons` or specify `--eval-seasons` explicitly; the
 metrics report includes the evaluated window and any exclusions. Walk-forward calibration uses the

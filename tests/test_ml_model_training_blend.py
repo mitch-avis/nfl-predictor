@@ -19,7 +19,6 @@ from nfl_predictor.ml.ml_model_core import (
     BlendLayer,
     FeatureSpec,
     MarginTotalModel,
-    ScoreModel,
 )
 
 xgb.set_config(verbosity=0)
@@ -54,106 +53,12 @@ def _feature_spec() -> FeatureSpec:
 
 def _import_ml_model_training(monkeypatch):
     stub = types.SimpleNamespace(
-        train_score_model=lambda **_kwargs: None,
         train_margin_total_model=lambda **_kwargs: None,
         train_blended_margin_total_model=lambda **_kwargs: None,
     )
     monkeypatch.setitem(sys.modules, "nfl_predictor.ml_model", stub)
     monkeypatch.delitem(sys.modules, "nfl_predictor.ml.ml_model_training", raising=False)
     return importlib.import_module("nfl_predictor.ml.ml_model_training")
-
-
-def test_train_score_model_minimal(monkeypatch) -> None:
-    """Score model training works with minimal data and settings."""
-    ml_model_training = _import_ml_model_training(monkeypatch)
-    df = pd.DataFrame(
-        {
-            "season": [2022, 2023],
-            "away_score": [10, 14],
-            "home_score": [20, 17],
-            "feat1": [1.0, 2.0],
-        }
-    )
-
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(
-        ml_model_training,
-        "_build_feature_spec",
-        lambda *_args, **_kwargs: _feature_spec(),
-    )
-    monkeypatch.setattr(
-        ml_model_training, "_apply_feature_spec", lambda frame, _spec: frame[["feat1"]]
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_build_preprocessor",
-        lambda *_args, **_kwargs: _DummyPreprocessor(),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_fit_models",
-        lambda *_args, **_kwargs: ("away_model", "home_model"),
-    )
-    monkeypatch.setattr(ml_model_training, "_predict_xgb", lambda _model, _x: np.array([10.0]))
-    monkeypatch.setattr(
-        ml_model_training,
-        "_evaluate_predictions",
-        lambda *_args, **_kwargs: {"mae": 1.0},
-    )
-
-    model = ml_model_training.train_score_model(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=1,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        market_prob_config=None,
-    )
-
-    assert isinstance(model, ScoreModel)
-    assert model.target_columns == ("away_score", "home_score")
-
-
-def test_train_score_model_with_report(monkeypatch) -> None:
-    """Score model training with report works as expected."""
-    ml_model_training = _import_ml_model_training(monkeypatch)
-    df = pd.DataFrame(
-        {
-            "season": [2022, 2023],
-            "away_score": [10, 14],
-            "home_score": [20, 17],
-            "feat1": [1.0, 2.0],
-        }
-    )
-
-    model = ScoreModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        away_model=cast(xgb.XGBRegressor, object()),
-        home_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params={"n_estimators": 1},
-    )
-
-    monkeypatch.setattr(ml_model_training, "train_score_model", lambda **_kwargs: model)
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(ml_model_training, "_predict_xgb", lambda _model, _x: np.array([10.0]))
-    monkeypatch.setattr(
-        ml_model_training,
-        "_evaluate_predictions",
-        lambda *_args, **_kwargs: {"away_mae": 1.0},
-    )
-
-    result = ml_model_training.train_score_model_with_report(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=1,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        market_prob_config=None,
-    )
-
-    assert result.metrics_report["model_kind"] == "score"
-    assert result.metrics_report["metrics"]["holdout"] == {"away_mae": 1.0}
 
 
 def test_train_blended_margin_total_model_with_report(monkeypatch) -> None:

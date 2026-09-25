@@ -85,7 +85,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--model-kind",
         type=str,
         default="margin_total",
-        choices=["margin_total", "blended_margin_total", "score"],
+        choices=["margin_total", "blended_margin_total"],
         help="Model kind (must match the saved checkpoint).",
     )
     p.add_argument("--season", type=int, required=True, help="Season year")

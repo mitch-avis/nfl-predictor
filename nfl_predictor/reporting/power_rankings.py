@@ -956,20 +956,7 @@ def _predict_future_games(
             games, home_win_prob, getattr(bm, "market_prob_config", None)
         )
     else:
-        sm = cast(ml_model_core.ScoreModel, model)
-        # ScoreModel: predict home/away scores then derive margin->prob.
-        feature_df = ml_model_core.apply_feature_spec(games, sm.feature_spec)
-        x = ml_model_core._transform_matrix(sm.preprocessor, feature_df)
-        pred_away = ml_model_core.predict_xgb(sm.away_model, x)
-        pred_home = ml_model_core.predict_xgb(sm.home_model, x)
-        pred_margin = pred_home - pred_away
-        home_win_prob = ml_model_core.predict_home_win_prob(
-            pred_margin,
-            getattr(sm, "calibrator", None),
-        )
-        home_win_prob = ml_model_core.adjust_home_win_prob(
-            games, home_win_prob, getattr(sm, "market_prob_config", None)
-        )
+        raise ValueError(f"Unsupported model kind for power rankings: {model_kind!r}")
 
     out = games[["season", "week", "away_abbr", "home_abbr"]].copy()
     out["home_win_prob"] = home_win_prob

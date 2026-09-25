@@ -100,8 +100,6 @@ class WalkForwardConfig:
     max_cardinality_ratio: float = 0.5
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
     feature_end: str = ml_model.DEFAULT_FEATURE_END_COLUMN
-    early_stopping_rounds: int = ml_model.DEFAULT_EARLY_STOPPING_ROUNDS
-    recency_half_life_weeks: float | None = None
     recency_half_life_seasons: float | None = None
     disable_pruning: bool = False
     disabled_feature_groups: tuple[str, ...] = ()
@@ -130,8 +128,6 @@ class WalkForwardConfig:
             "max_cardinality_ratio": self.max_cardinality_ratio,
             "feature_start": self.feature_start,
             "feature_end": self.feature_end,
-            "early_stopping_rounds": self.early_stopping_rounds,
-            "recency_half_life_weeks": self.recency_half_life_weeks,
             "recency_half_life_seasons": self.recency_half_life_seasons,
             "disable_pruning": self.disable_pruning,
             "disabled_feature_groups": list(self.disabled_feature_groups),
@@ -838,8 +834,7 @@ def run_walk_forward_backtest(
         "include_quantiles": config.include_quantiles,
         "disable_pruning": config.disable_pruning,
         "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
-        # In-season fits run the full `n_estimators` budget; `early_stopping_rounds` in the
-        # config is kept for the fingerprint and for tuning, and is not applied here.
+        # In-season fits run the full `n_estimators` budget, with no early stopping.
         "in_season_early_stopping": False,
     }
 
@@ -912,7 +907,6 @@ def run_walk_forward_backtest(
         )
         train_recency = compute_recency_sample_weight(
             fold.train_df,
-            half_life_weeks=config.recency_half_life_weeks,
             half_life_seasons=config.recency_half_life_seasons,
         )
         train_weight = combine_sample_weights(train_recency)
@@ -1020,7 +1014,6 @@ def run_walk_forward_backtest(
                 ) - calibration_df[away_col].to_numpy(dtype=float)
                 calibration_recency = compute_recency_sample_weight(
                     calibration_df,
-                    half_life_weeks=config.recency_half_life_weeks,
                     half_life_seasons=config.recency_half_life_seasons,
                 )
                 calibration_seasons = (

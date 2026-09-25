@@ -343,13 +343,12 @@
   {
    "action": "_StoreAction",
    "choices": [
-    "score",
     "margin_total",
     "blend"
    ],
    "default": "margin_total",
    "dest": "model_kind",
-   "help": "Model pipeline to use (score, margin_total, or blend).",
+   "help": "Model pipeline to use (margin_total or blend).",
    "nargs": null,
    "options": [
     "--model-kind"
@@ -433,22 +432,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": null,
-   "dest": "recency_half_life_weeks",
-   "help": "Optional exponential half-life in weeks for recency weighting. Use only one of --recency-half-life-weeks or --recency-half-life-seasons.",
-   "nargs": null,
-   "options": [
-    "--recency-half-life-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
    "dest": "recency_half_life_seasons",
-   "help": "Optional exponential half-life in seasons for recency weighting. Use only one of --recency-half-life-weeks or --recency-half-life-seasons.",
+   "help": "Optional exponential half-life in seasons for recency weighting.",
    "nargs": null,
    "options": [
     "--recency-half-life-seasons"
@@ -1199,8 +1184,7 @@
    "action": "_StoreAction",
    "choices": [
     "margin_total",
-    "blended_margin_total",
-    "score"
+    "blended_margin_total"
    ],
    "default": "margin_total",
    "dest": "model_kind",
@@ -1493,33 +1477,14 @@
    "action": "_StoreAction",
    "choices": [
     "margin",
-    "total",
-    "away",
-    "home"
+    "total"
    ],
    "default": "margin",
    "dest": "target",
-   "help": "Target model head to analyze (margin/total or away/home).",
+   "help": "Target model head to analyze (margin or total).",
    "nargs": null,
    "options": [
     "--target"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "team",
-    "market"
-   ],
-   "default": "team",
-   "dest": "component",
-   "help": "For blended models, select the team or market component.",
-   "nargs": null,
-   "options": [
-    "--component"
    ],
    "required": false,
    "subcommand": null,
@@ -1698,22 +1663,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": null,
-   "dest": "recency_half_life_weeks",
-   "help": "Optional exponential half-life in weeks for recency weighting. Use only one of --recency-half-life-weeks or --recency-half-life-seasons.",
-   "nargs": null,
-   "options": [
-    "--recency-half-life-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
    "dest": "recency_half_life_seasons",
-   "help": "Optional exponential half-life in seasons for recency weighting. Use only one of --recency-half-life-weeks or --recency-half-life-seasons.",
+   "help": "Optional exponential half-life in seasons for recency weighting.",
    "nargs": null,
    "options": [
     "--recency-half-life-seasons"
@@ -2265,22 +2216,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": null,
-   "dest": "wf_recency_half_life_weeks",
-   "help": "Walk-forward: optional exponential half-life in weeks for recency weighting. Use only one of --wf-recency-half-life-weeks or --wf-recency-half-life-seasons.",
-   "nargs": null,
-   "options": [
-    "--wf-recency-half-life-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
    "dest": "wf_recency_half_life_seasons",
-   "help": "Walk-forward: optional exponential half-life in seasons for recency weighting. Use only one of --wf-recency-half-life-weeks or --wf-recency-half-life-seasons.",
+   "help": "Walk-forward: optional exponential half-life in seasons for recency weighting.",
    "nargs": null,
    "options": [
     "--wf-recency-half-life-seasons"
@@ -2436,20 +2373,6 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": 50,
-   "dest": "wf_early_stopping_rounds",
-   "help": "Walk-forward: recorded in the run config only; in-season fits run the full n_estimators budget without early stopping.",
-   "nargs": null,
-   "options": [
-    "--wf-early-stopping-rounds"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
    "default": 0,
    "dest": "holdout_seasons",
    "help": "Training: holdout seasons.",
@@ -2522,22 +2445,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": null,
-   "dest": "train_recency_half_life_weeks",
-   "help": "Training: optional exponential half-life in weeks for recency weighting. Use only one of --train-recency-half-life-weeks or --train-recency-half-life-seasons.",
-   "nargs": null,
-   "options": [
-    "--train-recency-half-life-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
    "dest": "train_recency_half_life_seasons",
-   "help": "Training: optional exponential half-life in seasons for recency weighting. Use only one of --train-recency-half-life-weeks or --train-recency-half-life-seasons.",
+   "help": "Training: optional exponential half-life in seasons for recency weighting (default: the walk-forward setting).",
    "nargs": null,
    "options": [
     "--train-recency-half-life-seasons"
@@ -3194,20 +3103,6 @@
    "nargs": null,
    "options": [
     "--n-jobs"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 50,
-   "dest": "early_stopping_rounds",
-   "help": "Early stopping rounds (default aligns with training).",
-   "nargs": null,
-   "options": [
-    "--early-stopping-rounds"
    ],
    "required": false,
    "subcommand": null,

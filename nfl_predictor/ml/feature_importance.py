@@ -12,7 +12,6 @@ from sklearn.compose import ColumnTransformer
 from nfl_predictor.ml.ml_model_core import (
     BlendedMarginTotalModel,
     MarginTotalModel,
-    ScoreModel,
 )
 from nfl_predictor.utils.logger import log
 
@@ -71,12 +70,6 @@ def build_feature_importance_report(model: Any) -> dict[str, Any] | None:
                 return None
             report["model_kind"] = "margin_total"
             return report
-        if isinstance(model, ScoreModel):
-            report = _build_score_report(model)
-            if report is None:
-                return None
-            report["model_kind"] = "score"
-            return report
     except AttributeError as exc:
         log.debug("Skipping feature importance: %s", exc)
         return None
@@ -90,17 +83,6 @@ def _build_margin_total_report(model: MarginTotalModel) -> dict[str, Any] | None
         {
             "margin": model.margin_model,
             "total": model.total_model,
-        },
-    )
-
-
-def _build_score_report(model: ScoreModel) -> dict[str, Any] | None:
-    """Build a feature-importance report for score models."""
-    return _build_report_from_models(
-        model.preprocessor,
-        {
-            "away": model.away_model,
-            "home": model.home_model,
         },
     )
 

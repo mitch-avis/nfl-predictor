@@ -41,8 +41,6 @@ wf_n_estimators: 200
 wf_max_depth: 5
 # learning rate for walk-forward XGBoost model (default: 0.0165)
 wf_learning_rate: 0.0165
-# early stopping rounds for walk-forward XGBoost model (default: 50)
-wf_early_stopping_rounds: 50
 # number of parallel jobs for walk-forward XGBoost model training (default: 1)
 wf_n_jobs: 12
 

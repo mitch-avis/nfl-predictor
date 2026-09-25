@@ -23,7 +23,7 @@ ParamKind = Literal["int", "float", "str", "bool", "choice"]
 WALK_FORWARD_GROUP = "walk_forward"
 DATASET_GROUP = "datasets"
 DEFAULT_MODEL_KIND = "margin_total"
-MODEL_KINDS = ("margin_total", "blended_margin_total", "score")
+MODEL_KINDS = ("margin_total", "blended_margin_total")
 
 
 @dataclass(frozen=True)

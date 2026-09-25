@@ -7,13 +7,11 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
-import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
 
 from nfl_predictor import constants
-from nfl_predictor.ml import ml_model_core
 from nfl_predictor.reporting import power_rankings
 
 
@@ -118,8 +116,8 @@ def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
         )
 
 
-def test_score_model_calibration_applied_for_win_prob(tmp_path, monkeypatch) -> None:
-    """ScoreModel paths should apply a calibrator when present."""
+def test_predict_future_games_rejects_an_unsupported_model_kind(tmp_path) -> None:
+    """Only margin/total and blended models can project the remaining games."""
     data_path = tmp_path / "ml.csv"
     pd.DataFrame(
         [
@@ -133,54 +131,16 @@ def test_score_model_calibration_applied_for_win_prob(tmp_path, monkeypatch) -> 
             }
         ]
     ).to_csv(data_path, index=False)
+    model = SimpleNamespace(feature_spec=SimpleNamespace(feature_columns=["feat1"]))
 
-    class DummyPreprocessor:
-        """Minimal preprocessor stub for score model predictions."""
-
-        def transform(self, _df: pd.DataFrame) -> np.ndarray:
-            """Return a deterministic feature matrix."""
-            return np.zeros((len(_df), 1), dtype=float)
-
-    class DummyModel:
-        """Labelled dummy model for predict_xgb."""
-
-        def __init__(self, name: str) -> None:
-            self.name = name
-
-    class DummyCalibrator:
-        """Predictor stub returning fixed probabilities."""
-
-        def predict_proba(self, x: np.ndarray) -> np.ndarray:
-            """Return a fixed 0.9 home win probability."""
-            return np.tile(np.array([0.1, 0.9], dtype=float), (len(x), 1))
-
-    def fake_predict_xgb(model: DummyModel, x: np.ndarray) -> np.ndarray:
-        """Return deterministic away/home scores."""
-        if model.name == "away":
-            return np.full(len(x), 10.0)
-        return np.full(len(x), 20.0)
-
-    monkeypatch.setattr(ml_model_core, "predict_xgb", fake_predict_xgb)
-
-    spec = SimpleNamespace(feature_columns=["feat1"])
-    calibrator = ml_model_core.WinProbCalibrator(method="platt", model=DummyCalibrator())
-    model = SimpleNamespace(
-        feature_spec=spec,
-        preprocessor=DummyPreprocessor(),
-        away_model=DummyModel("away"),
-        home_model=DummyModel("home"),
-        market_prob_config=None,
-        calibrator=calibrator,
-    )
-
-    out = power_rankings._predict_future_games(
-        model,
-        model_kind="score",
-        data_ml=data_path,
-        season=2025,
-        through_week=1,
-    )
-    assert np.allclose(out["home_win_prob"].to_numpy(dtype=float), 0.9)
+    with pytest.raises(ValueError, match="Unsupported model kind"):
+        power_rankings._predict_future_games(
+            model,
+            model_kind="score",
+            data_ml=data_path,
+            season=2025,
+            through_week=1,
+        )
 
 
 def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:

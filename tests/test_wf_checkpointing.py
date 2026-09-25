@@ -226,14 +226,12 @@ def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.Mo
         calibration_weeks=1,
         include_postseason=False,
         exclude_incomplete_seasons=False,
-        recency_half_life_weeks=None,
         recency_half_life_seasons=None,
         market_mode="features",
         market_prob_source="raw",
         market_prob_blend_method="prob",
         win_prob_uncertainty="off",
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
     )
 
@@ -268,14 +266,12 @@ def test_wf_compare_checkpoints_candidate_weeks_under_the_run_dir(
         calibration_weeks=1,
         include_postseason=False,
         exclude_incomplete_seasons=False,
-        recency_half_life_weeks=None,
         recency_half_life_seasons=None,
         market_mode="features",
         market_prob_source="raw",
         market_prob_blend_method="prob",
         win_prob_uncertainty="off",
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
     )
 
@@ -318,14 +314,12 @@ def test_corrupt_artifact_recomputes(tmp_path: Path, monkeypatch: pytest.MonkeyP
         calibration_weeks=1,
         include_postseason=False,
         exclude_incomplete_seasons=False,
-        recency_half_life_weeks=None,
         recency_half_life_seasons=None,
         market_mode="features",
         market_prob_source="raw",
         market_prob_blend_method="prob",
         win_prob_uncertainty="off",
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
     )
 
@@ -367,14 +361,12 @@ def test_resume_after_interrupt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
             calibration_weeks=1,
             include_postseason=False,
             exclude_incomplete_seasons=False,
-            recency_half_life_weeks=None,
             recency_half_life_seasons=None,
             market_mode="features",
             market_prob_source="raw",
             market_prob_blend_method="prob",
             win_prob_uncertainty="off",
             xgb_params_overrides={},
-            early_stopping_rounds=1,
             include_quantiles=False,
         )
 
@@ -399,14 +391,12 @@ def test_resume_after_interrupt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         calibration_weeks=1,
         include_postseason=False,
         exclude_incomplete_seasons=False,
-        recency_half_life_weeks=None,
         recency_half_life_seasons=None,
         market_mode="features",
         market_prob_source="raw",
         market_prob_blend_method="prob",
         win_prob_uncertainty="off",
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
     )
 

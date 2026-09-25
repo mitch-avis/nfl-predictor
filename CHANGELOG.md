@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.27.1] - 2026-09-25
+
+### Changed
+
+- CI's Python job sets up the environment and then runs `scripts/gate.sh` instead of repeating
+  its steps, so CI and a local run check the same things. It now syncs with `--locked`, so an
+  out-of-date `uv.lock` fails instead of being rewritten before the gate's lock check.
+- `README.md` and `AGENTS.md` show every command as `nfl-predictor <command>` with the canonical
+  option names, and the README gains "Reproducing an old run" (a worktree at the run's recorded
+  commit, then its launcher as written).
+
+### Added
+
+- A test that parses every `nfl-predictor` command shown in `README.md` with that command's own
+  parser. It found that the README's leakage-audit example had always lacked the two required
+  options; the example is fixed.
+- The web job test now reads the weekly job's config file and validates its keys, as a real
+  weekly run does, instead of parsing only `--config`.
+
 ## [0.27.0] - 2026-09-25
 
 ### Changed

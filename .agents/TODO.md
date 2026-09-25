@@ -640,6 +640,17 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
 - [ ] 60.5 Move library code out of `scripts/` into the package (power-rankings computation and
       output writing into `nfl_predictor/reporting/`, the betting-report builder likewise), with
       the scripts temporarily calling the package. Drop every `from scripts import`.
+      Landed 2026-09-24 in `0.18.5`: the ranking pipeline is in
+      `nfl_predictor/reporting/power_rankings.py` (`_write_outputs` became the public
+      `write_ranking_outputs`), `build_betting_report` and its helpers in
+      `nfl_predictor/reporting/betting_report.py`, and `scripts/weekly_run.py` imports both from
+      the package, so no production code imports `scripts/`. Every characterization snapshot
+      passed unchanged, and `.agents/m60/inventory.py` still reports 19 entrypoints, 309 flags
+      and 0 evidence failures on the moved code (the signed-off `INVENTORY.md` was left as is).
+      Narrowed: 13 test modules still `from scripts import` entrypoint modules (the weekly run,
+      backtest, sweep, leakage audit, SHAP, the power-rankings parser, and the retiring
+      `betting_pipeline` and `golden_command`). Those imports can only go when 60.6 moves or
+      retires the entrypoints, so the remainder lives in 60.6; the user is asked to confirm.
 - [ ] 60.6 Move the entrypoints behind the `nfl-predictor <command>` front door (a
       `[project.scripts]` entry plus `python -m nfl_predictor`; the old `python -m` module forms
       keep working), retire the retired files (their tests too), and add the shared options module
@@ -658,6 +669,8 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       Open question for the user (found in 60.4): `shap_analysis --component market` is dead,
       because the blend trainer never stores a market model, so the request silently analyzes
       the team model. Remove the flag, or make the request fail when no market model exists?
+      Also here (the remainder of 60.5): once the entrypoints move or retire, no test module
+      imports `scripts/` either.
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the

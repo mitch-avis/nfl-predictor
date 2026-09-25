@@ -107,6 +107,7 @@ def test_betting_routes(project_root: Path, viewer_client: TestClient, app) -> N
     ]
     assert payload["table"]["column_metadata"]["total_action"]["actionable"] is False
     assert "/api/betting/xlsx" not in {getattr(route, "path", None) for route in app.routes}
+    assert viewer_client.get("/api/betting/xlsx").status_code == 404
     unattached = viewer_client.get("/api/betting", params={"week": 3}).json()
     assert unattached["run_id"] is None
 

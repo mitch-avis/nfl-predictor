@@ -28,6 +28,32 @@ from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.utils.logger import log
 
+# The console summary: each probability view (deterministic, market, configured) with its own
+# pick accuracy, then the pool points and the errors. Kept short so it stays scannable.
+SUMMARY_DISPLAY_COLUMNS = (
+    "label",
+    "market_mode",
+    "market_prob_source",
+    "market_prob_blend_method",
+    "win_prob_use_uncertainty",
+    "deterministic_brier",
+    "deterministic_log_loss",
+    "deterministic_pick_accuracy",
+    "market_brier",
+    "market_log_loss",
+    "market_pick_accuracy",
+    "deterministic_brier_vs_market",
+    "deterministic_log_loss_vs_market",
+    "brier",
+    "log_loss",
+    "pick_accuracy",
+    "reliability_ece",
+    "actual_points_avg",
+    "expected_points_avg",
+    "margin_mae",
+    "total_mae",
+)
+
 
 def _now_run_id() -> str:
     return datetime.now(UTC).strftime("wfcmp_%Y%m%d_%H%M%S")
@@ -346,28 +372,7 @@ def main() -> int:
 
     log.info("Wrote %s", out_path)
     log.info("Top results (lower brier/log_loss is better):")
-    # Keep console output short and scannable.
-    display_cols = [
-        "label",
-        "market_mode",
-        "market_prob_source",
-        "market_prob_blend_method",
-        "win_prob_use_uncertainty",
-        "deterministic_brier",
-        "deterministic_log_loss",
-        "market_brier",
-        "market_log_loss",
-        "deterministic_brier_vs_market",
-        "deterministic_log_loss_vs_market",
-        "brier",
-        "log_loss",
-        "reliability_ece",
-        "deterministic_pick_accuracy",
-        "actual_points_avg",
-        "expected_points_avg",
-        "margin_mae",
-        "total_mae",
-    ]
+    display_cols = list(SUMMARY_DISPLAY_COLUMNS)
     log.info("\n%s", result_df[display_cols].head(10).to_string(index=False))
     return 0
 

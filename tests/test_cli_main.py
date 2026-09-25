@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -132,3 +133,34 @@ def test_python_dash_m_runs_the_front_door() -> None:
     assert result.returncode == 0
     assert "nfl-predictor" in result.stdout
     assert "leakage-audit" in result.stdout
+
+
+@pytest.mark.parametrize(("command", "expected"), [("backtest", "PASSIVE"), ("validate", None)])
+def test_walk_forward_commands_default_to_the_passive_openmp_policy(
+    monkeypatch: pytest.MonkeyPatch, command: str, expected: str | None
+) -> None:
+    """Walk-forward commands set OMP_WAIT_POLICY=PASSIVE before loading; others leave it."""
+    monkeypatch.delenv("OMP_WAIT_POLICY", raising=False)
+    seen: dict[str, str | None] = {}
+
+    def resolve(_command: front_door.Command) -> object:
+        """Record the policy at import time and return a no-op entry point."""
+        seen["policy"] = os.environ.get("OMP_WAIT_POLICY")
+        return lambda *_args: 0
+
+    monkeypatch.setattr(front_door, "_resolve", resolve)
+
+    front_door.main([command])
+
+    assert seen["policy"] == expected
+
+
+def test_an_operator_chosen_openmp_policy_is_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A policy already in the environment wins, including an empty value (library default)."""
+    for value in ("ACTIVE", ""):
+        monkeypatch.setenv("OMP_WAIT_POLICY", value)
+        monkeypatch.setattr(front_door, "_resolve", lambda _command: lambda *_args: 0)
+
+        front_door.main(["sweep"])
+
+        assert os.environ["OMP_WAIT_POLICY"] == value

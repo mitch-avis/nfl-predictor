@@ -548,6 +548,64 @@
    "type": "Path"
   }
  ],
+ "nfl_predictor.cli.checkpoints": [
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/models/wf_checkpoints",
+   "dest": "checkpoint_dir",
+   "help": "Checkpoint root to list (default: models/wf_checkpoints).",
+   "nargs": null,
+   "options": [
+    "--checkpoint-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/models",
+   "dest": "models_dir",
+   "help": "Directory searched for references (default: models).",
+   "nargs": null,
+   "options": [
+    "--models-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>",
+   "dest": "docs_dir",
+   "help": "Repository root whose Markdown files and .agents/ are also searched.",
+   "nargs": null,
+   "options": [
+    "--docs-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "unreferenced_only",
+   "help": "List only the directories that nothing references.",
+   "nargs": 0,
+   "options": [
+    "--unreferenced-only"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  }
+ ],
  "nfl_predictor.cli.explain": [
   {
    "action": "_StoreAction",
@@ -744,6 +802,7 @@
    "choices": [
     "backtest",
     "build-week",
+    "checkpoints",
     "data",
     "explain",
     "leakage-audit",

@@ -3,7 +3,9 @@
 ``nfl-predictor <command> [options]`` runs the command with its own options, exactly as its
 module would; ``nfl-predictor <command> --help`` shows them. ``python -m nfl_predictor`` is the
 same front door, and the per-module forms (``python -m nfl_predictor.data_collection`` and the
-others) keep working. Commands are imported only when they run, so ``--help`` stays fast.
+others) keep working. Commands are imported only when they run, so ``--help`` stays fast, and
+the walk-forward commands get OpenMP's passive wait policy before XGBoost loads (see
+``nfl_predictor.cli.openmp``).
 """
 
 from __future__ import annotations
@@ -14,6 +16,8 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
+
+from nfl_predictor.cli.openmp import prefer_passive_wait_policy
 
 PROG = "nfl-predictor"
 
@@ -29,6 +33,7 @@ class Command:
     takes_argv: bool
     function: str = "main"
     requires: str | None = None
+    walk_forward: bool = False
 
 
 COMMANDS: tuple[Command, ...] = (
@@ -38,6 +43,7 @@ COMMANDS: tuple[Command, ...] = (
         "Refresh data, select, train, predict and write the week's reports.",
         "nfl_predictor.weekly_run.pipeline",
         takes_argv=False,
+        walk_forward=True,
     ),
     Command(
         "backtest",
@@ -45,6 +51,7 @@ COMMANDS: tuple[Command, ...] = (
         "Walk-forward evaluation (the benchmark).",
         "nfl_predictor.cli.backtest",
         takes_argv=False,
+        walk_forward=True,
     ),
     Command(
         "sweep",
@@ -52,6 +59,7 @@ COMMANDS: tuple[Command, ...] = (
         "Walk-forward sweep of calibration and market-probability settings.",
         "nfl_predictor.cli.sweep",
         takes_argv=False,
+        walk_forward=True,
     ),
     Command(
         "explain",
@@ -59,6 +67,13 @@ COMMANDS: tuple[Command, ...] = (
         "SHAP feature attribution for a saved model.",
         "nfl_predictor.cli.explain",
         takes_argv=False,
+    ),
+    Command(
+        "checkpoints",
+        "research",
+        "List walk-forward checkpoint directories and what references them (read-only).",
+        "nfl_predictor.cli.checkpoints",
+        takes_argv=True,
     ),
     Command(
         "data",
@@ -192,6 +207,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if _missing_requirement(command, args):
         parser.error(f"{command.name} needs {command.requires}")
 
+    if command.walk_forward:
+        prefer_passive_wait_policy()
     entry = _resolve(command)
     saved_argv = sys.argv
     # Each command's parser names itself after argv[0], so help reads "nfl-predictor <name>".

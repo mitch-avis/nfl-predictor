@@ -82,3 +82,15 @@ def test_run_one_forwards_checkpoint_settings(
     assert row["market_log_loss"] == pytest.approx(0.61)
     assert row["deterministic_brier_vs_market"] == pytest.approx(-0.01)
     assert row["deterministic_log_loss_vs_market"] == pytest.approx(-0.01)
+
+
+def test_printed_summary_shows_each_probability_view_with_its_pick_accuracy() -> None:
+    """The console table pairs the configured and deterministic views with their pick accuracy."""
+    columns = sweep.SUMMARY_DISPLAY_COLUMNS
+
+    assert {"brier", "log_loss", "pick_accuracy"} <= set(columns)
+    assert {"deterministic_brier", "deterministic_pick_accuracy"} <= set(columns)
+    assert columns.index("pick_accuracy") == columns.index("log_loss") + 1
+    assert columns.index("deterministic_pick_accuracy") == (
+        columns.index("deterministic_log_loss") + 1
+    )

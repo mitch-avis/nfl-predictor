@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.28.0] - 2026-09-25
+
+### Added
+
+- `nfl-predictor compare`: a paired comparison of walk-forward runs, rescored from their fold
+  checkpoints (never from `metrics_report.json`). For week 1, week 2, weeks 3-18 and all weeks it
+  reports each run's deterministic Brier, log loss, pick accuracy, margin and total MAE,
+  confidence-pool points and market Brier, the deterministic-minus-market Brier interval, and the
+  candidate-minus-reference difference in each column with a 95% bootstrap interval (over games;
+  over weeks for pool points). Repeating `--candidate` and `--reference` once per seed averages
+  the per-game differences over the seed pairs. A run directory adds provenance (folds, dataset
+  hash, git commit, `best_iteration`, early stopping) and the settings that differ between the
+  runs. `--out-json` and `--out-md` save the report. It reproduces all 1,928 numbers of the task
+  55.8 independent rescore exactly (`.agents/m60/verify_compare.py`), and replaces
+  `objective_compare_models` (retired in `0.19.0`) and the per-run `compare_to_benchmark.py`
+  copies under `models/`. Tooling only; no production output changes.
+
 ## [0.27.1] - 2026-09-25
 
 ### Changed

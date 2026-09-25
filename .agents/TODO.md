@@ -627,105 +627,15 @@ Ground rules for the whole milestone:
   reference walk-forward is started while this milestone is moving ML code.
 
 Tasks 60.1-60.3 (the generated inventories and the user's sign-off), 60.4 (the
-characterization tests) and 60.5 (the library moves) are done and archived under
-"Milestone 60 (partial)" in `ARCHIVE.md`; the decisions are in `.agents/m60/PROPOSAL.md`,
+characterization tests), 60.5 (the library moves) and 60.6 (the front door, retirements,
+renames and removals, `0.19.0`-`0.26.0`) are done and archived under "Milestone 60 (partial)"
+in `ARCHIVE.md`; the decisions are in `.agents/m60/PROPOSAL.md`,
 "Sign-off". In short: one `nfl-predictor <command>` front door; retire `golden_command`,
 `backtest_predictions`, `objective_compare_models` (with `nfl_predictor/ml/model_compare.py`),
 `betting_pipeline` (after `build_betting_report` moves) and the whole Excel betting workbook;
 remove ScoreModel (task 55.5); move everything else; keep `scripts/gate.sh`; one naming rule
 with old spellings kept as aliases; old launchers reproduce from their recorded commit.
 
-- [ ] 60.6 Move the entrypoints behind the `nfl-predictor <command>` front door (a
-      `[project.scripts]` entry plus `python -m nfl_predictor`; the old `python -m` module forms
-      keep working), retire the retired files (their tests too), and add the shared options module
-      (argument-group builders; renames keep the old spelling as a second option string on the
-      same argument rather than a separate declaration). Includes: the signed-off flag removals
-      (PROPOSAL.md section 2; `postseason_weight: 1.3` stays in `config/weekly_run.yaml` for
-      postseason training), the Excel workbook retirement (`nfl_predictor/reporting/
-      betting_excel.py`, `openpyxl`, `--betting-template-path`), the ScoreModel removal (task
-      55.5), merging the two validate scripts, and the step-2 follow-ups (PROPOSAL.md section 7:
-      `WalkForwardConfig.early_stopping_rounds`, the `wf_compare` pick-accuracy columns, the
-      automatic `OMP_WAIT_POLICY=PASSIVE`, a read-only listing of unreferenced checkpoint
-      directories, the dead `LogEvalCallback` plumbing), and the numpy rewrite of
-      `walk_forward._bootstrap_probability_differences` (approved 2026-09-24; a test first proves
-      identical values against the scikit-learn version). Edits under `nfl_predictor/ml/` go in
-      one chunk. Each removal or rename gets a deprecation or removal note in `CHANGELOG.md`.
-      Also here, decided by the user 2026-09-24: remove `shap_analysis --component` (found in
-      60.4: the blend trainer never stores a market model, so `market` silently analyzed the
-      team model; the user never asked for a market model and has no plans for one). And the
-      remainder of 60.5, moved here by the user's decision: once the entrypoints move or
-      retire, no test module imports `scripts/` (`grep -rl "from scripts import" tests` is
-      empty).
-      Progress (the task is done only when every part above has landed):
-      - `0.19.0` (2026-09-24): retired `golden_command`, `betting_pipeline`,
-        `backtest_predictions`, `objective_compare_models` (the script; `model_compare.py` and
-        its test go with the `nfl_predictor/ml/` chunk) and the Excel workbook end to end,
-        including its web job, routes and button (pulled forward from 60.7 so no web job
-        launches a deleted script). 88 of 309 options removed; weekly snapshots unchanged.
-      - `0.20.0` (2026-09-24), the one `nfl_predictor/ml/` chunk: ScoreModel removed (task
-        55.5, archived), `model_compare.py` and its test, `WalkForwardConfig.early_stopping_rounds`
-        with `weekly_run --wf-early-stopping-rounds`, `wf_compare --early-stopping-rounds` and
-        the YAML key, the week-based recency half-life everywhere, the dead `LogEvalCallback`
-        plumbing, `shap_analysis --component`, and the numpy paired bootstrap (identical to
-        1e-12 against the scikit-learn loop, 146 times faster). 7 more options removed (221 to
-        214). Every walk-forward checkpoint fingerprint changes.
-      - `0.21.0` (2026-09-24): the front door `nfl-predictor <command>` (console script and
-        `python -m nfl_predictor`); the weekly run moved into `nfl_predictor/weekly_run/`
-        (split into `config`, `inputs`, `stage1`, `pipeline`, definitions AST-identical), the
-        other entrypoints into `nfl_predictor/cli/`, the two validate scripts merged into
-        `validate --live`, and `nfl_predictor/cli/options.py` started with the two
-        deduplicated helpers. The `scripts/` paths are thin shims until 60.7 repoints the web
-        jobs. No test imports `scripts/` (the 60.5 remainder is done).
-      - `0.22.0` (2026-09-24): the renames with aliases (PROPOSAL.md section 3; every old
-        spelling still parses, checked against the snapshot), the merged market-probability
-        weight, the weekly config keys `tune_trials` / `tune_early_stopping_rounds` (old keys
-        still load), the option-group builders in `nfl_predictor/cli/options.py`,
-        `leakage_audit --include-market` removed, the `--wf-eval-last-n-seasons` count
-        documented in its help, and `ml_model_cli.py` moved out of `nfl_predictor/ml/` to
-        `nfl_predictor/cli/train.py` (one more fingerprint change, then none for CLI edits).
-        Not removed: `weekly_run --wf-n-jobs`. The sign-off assumed the YAML sets both thread
-        counts to 12, but production never read the YAML, so today `--wf-n-jobs` (default 1)
-        sets stage 1's CPU threads whenever `--xgb-n-jobs` is unset. Removing it changes stage
-        1's thread count (speed; results should not depend on it, unverified). Question for
-        the user.
-      - `0.23.0` (2026-09-24): task 56.7(a). The weekly run reads `config/weekly_run.yaml`
-        when no `--config` is given, and the file was rewritten to the code defaults (`off`
-        quoted; `postseason_weight: 1.3` kept by the user's decision, inert while postseason
-        training is off). A test pins that the loaded settings equal the bare code defaults
-        apart from the config path and that inert weight. The weekly characterization snapshot
-        was rewritten on purpose: it had pinned the old YAML values, and it now pins the
-        production configuration (a fixture run with `postseason_weight: 1.0`, the pure code
-        defaults, reproduces it exactly).
-      - `0.24.0` (2026-09-25): the step-2 follow-ups. `nfl-predictor checkpoints` (read-only
-        listing; all 38 directories are referenced today), `OMP_WAIT_POLICY=PASSIVE` set by
-        the walk-forward commands unless the environment sets one, and the `sweep` summary
-        showing each probability view's own pick accuracy. The five step-2 follow-ups are
-        archived (`ARCHIVE.md`, resolved follow-ups).
-      - Left in 60.6, decided by the user on 2026-09-25 (next session):
-        - **One thread-count flag.** `--xgb-n-jobs` alone sets XGBoost's CPU threads for
-          stage 1 and for final training; remove `--wf-n-jobs` and the `wf_n_jobs` config key
-          (an old config that still sets it should get a clear error or be mapped, as the tuning
-          keys were). Its default becomes the number of CPU cores (`os.cpu_count()`), not unset.
-          Today, with `--xgb-n-jobs` unset, stage 1 runs on `--wf-n-jobs` (default 1 thread)
-          while final training uses every core (`DEFAULT_XGB_PARAMS["n_jobs"]`); `--xgb-n-jobs`
-          overrides both when set. Test first whether a weekly-run fixture gives identical
-          output at 1 thread and at N (XGBoost `hist` on the CPU is expected to, but it is
-          unverified); if it differs, report the difference to the user before landing,
-          because the weekly snapshot pins 1 thread. The GPU default (task 55.4) later makes
-          most of this moot.
-        - **Remove the market model entirely.** The user never asked for one and has no plans
-          for one; it should have been removed with `--component` in `0.20.0`. The blend
-          trainer always stores `BlendedMarginTotalModel.market_model = None`, so every branch
-          that reads it is dead: `ml_model_core` (the field, `_early_stopping_info`,
-          `_ensure_backward_compatible_model`, `_with_market_prob_config`), `ml_model_predict`,
-          `ml_model_training` (including the `market_optuna` config the `--tune-scope`
-          `market`/`both` choices build: verify it tunes nothing, then remove `--tune-scope`),
-          `feature_importance` (the `market` component), the power-ranking pipeline, and the
-          tests that fake a market model. This is an `nfl_predictor/ml/` edit, so it changes
-          every checkpoint fingerprint again; no walk-forward has run since `0.20.0`, so land it
-          before any new reference run. No saved model on disk is a blend (all are
-          `MarginTotalModel`), so no pickle compatibility is needed; confirm under `models/`.
-        Then close 60.6 and archive it with a summary of `0.19.0`-`0.24.0` and these two.
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the
@@ -746,6 +656,13 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       instead of showing a clear "not found", and an API test cannot check a removed route by
       status code (the `0.19.0` workbook test checks `app.routes` instead). Fix: the fallback
       returns the API's JSON 404 error for paths under `api/`.
+      Found 2026-09-25 (question for the user before fixing): with the vocabulary fixed, the
+      power rankings still cannot use a blend model. `_predict_future_games` in
+      `nfl_predictor/reporting/power_rankings.py` reads `model.feature_spec`, and a blend keeps
+      it on `model.team_model`, so a blend run fails with "Model is missing feature_spec"
+      before its blend branch is reached (pinned by `tests/test_blended_model_paths.py`). It
+      has never worked. Options: read the team model's spec for a blend, or reject blend runs
+      for rankings with a clear message.
 - [ ] 60.8 CI, gate and docs: the CLI smoke checks in `scripts/gate.sh`; CI
       (`.github/workflows/validation.yml`) calls `scripts/gate.sh` instead of repeating its
       steps; `README.md` (the Scripts section, every command example, and a "Reproducing an old

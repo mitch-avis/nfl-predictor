@@ -67,8 +67,8 @@ Follow-ups resolved after their milestones closed:
 ## Milestone 60 (partial) - CLI and entrypoint consolidation
 
 Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`), task
-60.4 in versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`; tasks 60.6-60.9 stay in
-`TODO.md`.
+60.4 in versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`, task 60.6 in `0.19.0`-`0.26.0`
+(2026-09-24/25); tasks 60.7-60.9 stay in `TODO.md`.
 
 ### 60.1 and 60.2 - Generated inventories
 
@@ -146,6 +146,50 @@ pre-move file), every characterization snapshot passed unchanged, and
 the moved code. The task text also asked to drop every `from scripts import`; 13 test modules
 still import entrypoint modules, which can only go when those entrypoints move or retire. The
 user moved that remainder into 60.6 on 2026-09-24.
+
+### 60.6 - The front door, retirements, renames and removals (versions `0.19.0`-`0.26.0`)
+
+Every part of the task text landed; each version has its own `CHANGELOG.md` entry with the
+removal and rename notes. The weekly-run characterization snapshot passed unchanged through every
+chunk except `0.23.0`, where it was rewritten on purpose (below). `tests/fixtures/cli_surface.json`
+went from 309 actions in 19 entrypoints to 215 in 15 parsers.
+
+- `0.19.0`: retired `golden_command`, `betting_pipeline`, `backtest_predictions`,
+  `objective_compare_models` and the Excel betting workbook end to end, including its web job,
+  routes and the Betting page's button (88 of 309 options).
+- `0.20.0`, the one planned `nfl_predictor/ml/` chunk: ScoreModel removed (task 55.5),
+  `model_compare.py`, `WalkForwardConfig.early_stopping_rounds` and the flags that fed it, the
+  week-based recency half-life, the dead `LogEvalCallback` plumbing, `explain --component`, and
+  the numpy paired bootstrap (identical to `1e-12` against the scikit-learn loop, 146 times
+  faster).
+- `0.21.0`: the front door `nfl-predictor <command>` (console script and `python -m
+  nfl_predictor`); the weekly run moved into `nfl_predictor/weekly_run/` (definitions
+  AST-identical), the other entrypoints into `nfl_predictor/cli/`, the two validate scripts
+  merged into `validate --live`, and `scripts/<name>.py` kept as thin shims for the web jobs
+  until 60.7. No test imports `scripts/` (the 60.5 remainder).
+- `0.22.0`: one naming rule (`--wf-`, `--tune-`, `--xgb-`) with every old spelling kept as a
+  second option string; the merged `--market-prob-weight`; weekly config keys `tune_trials` and
+  `tune_early_stopping_rounds` (old keys still load); `leakage-audit --include-market` removed;
+  `ml_model_cli.py` moved to `nfl_predictor/cli/train.py`, outside the checkpoint fingerprint.
+- `0.23.0`: task 56.7(a). The weekly run reads `config/weekly_run.yaml` by default, and the file
+  holds the code defaults, so production output did not change; the weekly snapshot was
+  rewritten to pin that production configuration instead of the old unread YAML values.
+- `0.24.0`: the step-2 follow-ups (`nfl-predictor checkpoints`, the automatic
+  `OMP_WAIT_POLICY=PASSIVE`, the `sweep` pick-accuracy columns).
+- `0.25.0`, by the user's decision on 2026-09-25: one thread option. `--wf-n-jobs` and
+  `wf_n_jobs` removed (a config that sets it fails with a message naming `xgb_n_jobs`);
+  `--xgb-n-jobs` sets XGBoost's CPU threads for stage 1 and the final fit and defaults to every
+  core (stage 1 had run on one thread). Checked before landing: the weekly fixture at 1 and 24
+  threads gave identical outputs in all eight pinned files, apart from the thread count in the
+  stage-1 candidate key and its hash.
+- `0.26.0`, by the user's decision on 2026-09-25: the market model removed entirely (the
+  `market_model` field, every branch that read it, and the market-only feature selection), with
+  `train --tune-scope`. Its `market` choice tuned nothing; the default `both` halved the blend's
+  team study budget for a market study that never ran, so a tuned blend now gets the whole
+  timeout. No saved model under `models/` was a blend. Found on the way and added to 60.7: the
+  power rankings cannot use a blend model at all, because they read `feature_spec` from the
+  model and a blend keeps it on `team_model` (pinned by
+  `tests/test_blended_model_paths.py`).
 
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 

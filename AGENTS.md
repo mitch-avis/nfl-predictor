@@ -1173,7 +1173,11 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
   machine keep the default, because sleeping threads cost more to wake than they save on this
   small dataset (an idle `PASSIVE` week took `~142s` against `~82s` for the default). The setting
   changes scheduling only, so it neither alters results nor invalidates fold checkpoints; switching
-  mid-run means stop, relaunch with the other policy, and resume.
+  mid-run means stop, relaunch with the other policy, and resume. Since `0.24.0` the walk-forward
+  commands (`nfl-predictor weekly`, `backtest`, `sweep`, and their `scripts/` shims) set
+  `PASSIVE` themselves unless `OMP_WAIT_POLICY` is already set, because load that arrives mid-run
+  stalls the default policy; on a machine known to stay idle, launch with `OMP_WAIT_POLICY=`
+  (empty) to keep the library default.
 - Load observation from 2026-09-20: with the web API running `--reload` (its file watcher takes
   about half a core continuously) a three-season from-week-1 run took about 110 minutes instead of
   about 50 idle, so the seed-7 arm was relaunched with `OMP_WAIT_POLICY=PASSIVE` and resumed from

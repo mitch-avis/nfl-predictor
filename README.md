@@ -427,7 +427,16 @@ and `--checkpoint-dir` moves the root. The same checkpointing runs in `scripts/w
 (`--resume`, `--checkpoint-dir`) and inside the run directories of `scripts/weekly_run.py` (its
 existing `--resume`). The metrics report records how many weeks
 were restored and how many were trained. Checkpoints are small (a few hundred KB per run) and safe to
-delete once a report is written.
+delete once a report is written. Nothing prunes them: `nfl-predictor checkpoints` lists every
+checkpoint directory with its size and whatever names it (a run's report, a review, a launcher,
+`AGENTS.md` or `.agents/`), and `--unreferenced-only` lists the ones nothing names. It never
+deletes anything.
+
+`weekly`, `backtest` and `sweep` run XGBoost with OpenMP's passive wait policy
+(`OMP_WAIT_POLICY=PASSIVE`) unless the environment sets one: when other work shares the machine,
+the default policy's spinning threads stall and a week can take several times longer. On a
+dedicated, idle machine the default is faster; set `OMP_WAIT_POLICY=` (empty) to keep it. The
+policy changes scheduling only, never results.
 
 Trend/season-phase ablation (drop trend + season-phase features while keeping everything else
 identical) is available via `--disable-trend-features`. Example 2x2 comparison matrix:
@@ -605,7 +614,7 @@ commands by group, and `nfl-predictor <command> --help` shows a command's option
 | group | commands |
 | --- | --- |
 | weekly | `weekly` (refresh, stage-1 selection, train, predict, reports; resumable, JSON/YAML config) |
-| research | `backtest` (walk-forward, the benchmark), `sweep` (calibration and market-probability variants), `explain` (SHAP attribution for a saved model) |
+| research | `backtest` (walk-forward, the benchmark), `sweep` (calibration and market-probability variants), `explain` (SHAP attribution for a saved model), `checkpoints` (read-only listing of walk-forward checkpoints) |
 | data | `data` (the ETL), `validate` (`--live` compares against the schedule), `leakage-audit`, `lines`, `build-week` |
 | models by hand | `train`, `predict` (`--model-in`), `rankings` |
 | web | `web`, `users` |

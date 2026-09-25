@@ -227,7 +227,6 @@ def write_weekly_config(root: Path, paths: dict[str, Path], output_dir: Path) ->
             "wf_eval_last_n_seasons": 1,
             "xgb_device": "cpu",
             "xgb_n_jobs": 1,
-            "wf_n_jobs": 1,
             "power_rankings_data_ml": str(paths["all_ml"]),
             "power_rankings_data_schedule": str(paths["all"]),
             "power_rankings_strength_snapshots": str(paths["snapshots"]),

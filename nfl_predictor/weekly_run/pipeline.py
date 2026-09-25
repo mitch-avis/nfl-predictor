@@ -288,7 +288,7 @@ def main() -> int:
             "n_estimators": int(args.wf_n_estimators),
             "max_depth": int(args.wf_max_depth),
             "learning_rate": float(args.wf_learning_rate),
-            "n_jobs": int(args.wf_n_jobs),
+            "n_jobs": config.xgb_thread_count(args),
             "verbosity": 0,
         },
         "include_quantiles": bool(args.wf_include_quantiles),
@@ -299,9 +299,6 @@ def main() -> int:
         wf_config["xgb_params_overrides"]["tree_method"] = args.xgb_tree_method
     if args.xgb_device:
         wf_config["xgb_params_overrides"]["device"] = args.xgb_device
-    wf_config["xgb_params_overrides"]["n_jobs"] = (
-        int(args.xgb_n_jobs) if args.xgb_n_jobs is not None else int(args.wf_n_jobs)
-    )
 
     wf_run_fingerprint = fingerprints.wf_run_fingerprint(
         dataset_fingerprint,
@@ -437,7 +434,7 @@ def main() -> int:
         storage=optuna_storage,
         study_name=args.tune_study_name,
         best_params_out=None,
-        xgb_n_jobs=args.xgb_n_jobs,
+        xgb_n_jobs=config.xgb_thread_count(args),
     )
 
     train_config = {

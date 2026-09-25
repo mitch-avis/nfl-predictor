@@ -49,8 +49,6 @@ wf_n_estimators: 200
 wf_max_depth: 5
 # learning rate for walk-forward XGBoost model (default: 0.0165)
 wf_learning_rate: 0.0165
-# XGBoost threads for stage 1 when xgb_n_jobs is not set (default: 1)
-wf_n_jobs: 1
 
 ## Final model training parameters:
 # whether to include postseason games in final model training (default: false)
@@ -85,8 +83,8 @@ tune_objective: brier
 # xgb_tree_method: hist
 # XGBoost device (default: the CPU; pass --xgb-device cuda for the GPU)
 # xgb_device: cuda
-# XGBoost threads for every stage (default: unset, so final training uses every CPU core and
-# stage 1 uses wf_n_jobs)
+# XGBoost CPU threads for stage 1 and the final fit; results do not depend on it (default: every
+# CPU core)
 # xgb_n_jobs: 12
 
 ## Prediction output settings:

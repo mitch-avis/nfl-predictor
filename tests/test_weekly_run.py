@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -346,3 +347,79 @@ def test_an_explicit_config_replaces_the_shipped_one(tmp_path: Path) -> None:
     assert args.config == config_path
     assert args.wf_eval_last_n_seasons == 5
     assert args.postseason_weight == 1.0
+
+
+def test_xgb_n_jobs_defaults_to_every_cpu_core() -> None:
+    """One thread option sets XGBoost's CPU threads, and it defaults to every core."""
+    args = run_config._build_parser().parse_args([])
+
+    assert run_config.xgb_thread_count(args) == ml_model_core.DEFAULT_XGB_PARAMS["n_jobs"]
+    assert run_config.xgb_thread_count(args) == (os.cpu_count() or 1)
+    assert not hasattr(args, "wf_n_jobs")
+
+
+def test_the_removed_stage1_thread_option_no_longer_parses() -> None:
+    """``--wf-n-jobs`` is gone; ``--xgb-n-jobs`` covers stage 1 too."""
+    with pytest.raises(SystemExit):
+        run_config._build_parser().parse_args(["--wf-n-jobs", "2"])
+
+
+def test_a_config_with_the_removed_stage1_thread_key_is_rejected(tmp_path: Path) -> None:
+    """An old config that sets ``wf_n_jobs`` fails with a message naming its replacement."""
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text('{"wf_n_jobs": 12}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"wf_n_jobs.*xgb_n_jobs"):
+        run_config._parse_args(["--config", str(config_path)])
+
+
+@pytest.mark.parametrize(
+    ("extra_argv", "expected"),
+    [([], os.cpu_count() or 1), (["--xgb-n-jobs", "3"], 3)],
+)
+def test_one_thread_count_reaches_stage1_and_the_final_fit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra_argv: list[str],
+    expected: int,
+) -> None:
+    """Stage 1's walk-forward and the final training fit use the same thread count."""
+
+    class _StopAfterTrainingConfigError(Exception):
+        """Stop weekly_run once the final training config has been captured."""
+
+    captured: dict[str, object] = {}
+    data_path = tmp_path / "completed_games_ml.csv"
+    data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
+
+    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> pd.DataFrame:
+        """Capture stage 1's thread count and return one usable candidate row."""
+        overrides = kwargs.get("xgb_params_overrides")
+        assert isinstance(overrides, dict)
+        captured["stage1"] = overrides["n_jobs"]
+        raise _StopAfterTrainingConfigError()
+
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(stage1, "_run_wf_compare", _fake_run_wf_compare)
+
+    argv = [
+        "--skip-data-refresh",
+        "--data-path",
+        str(data_path),
+        "--run-id",
+        "weekly_test",
+        "--run-dir",
+        str(tmp_path / "run"),
+        "--output-dir",
+        str(tmp_path / "out"),
+        *extra_argv,
+    ]
+    monkeypatch.setattr(sys, "argv", ["weekly_run.py", *argv])
+    with pytest.raises(_StopAfterTrainingConfigError):
+        pipeline.main()
+
+    assert captured["stage1"] == expected
+    assert run_config.xgb_thread_count(run_config._parse_args(argv)) == expected

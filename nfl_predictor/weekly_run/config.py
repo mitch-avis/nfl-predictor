@@ -34,13 +34,24 @@ _RENAMED_CONFIG_KEYS = {
 }
 
 
+# Config keys that were removed, with what replaces them.
+_REMOVED_CONFIG_KEYS = {
+    "wf_n_jobs": "use xgb_n_jobs, which sets XGBoost's CPU threads for every stage",
+}
+
+
 def _rename_config_keys(config: dict[str, Any]) -> dict[str, Any]:
     """Return ``config`` with renamed keys under their current names.
 
     Raises:
-        ValueError: If a config sets both the old and the new name of one key.
+        ValueError: If a config sets both the old and the new name of one key, or sets a key
+            that was removed.
 
     """
+    removed = sorted(set(config) & set(_REMOVED_CONFIG_KEYS))
+    if removed:
+        details = "; ".join(f"{key}: {_REMOVED_CONFIG_KEYS[key]}" for key in removed)
+        raise ValueError(f"Config sets removed keys ({details}).")
     renamed = dict(config)
     for old, new in _RENAMED_CONFIG_KEYS.items():
         if old in renamed:
@@ -265,12 +276,6 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         help="Walk-forward: XGBoost learning_rate override.",
     )
     parser.add_argument(
-        "--wf-n-jobs",
-        type=int,
-        default=defaults.get("wf_n_jobs", 1),
-        help="Walk-forward: XGBoost n_jobs override.",
-    )
-    parser.add_argument(
         "--holdout-seasons",
         type=int,
         default=defaults.get("holdout_seasons", 0),
@@ -414,7 +419,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         "--xgb-n-jobs",
         type=int,
         default=defaults.get("xgb_n_jobs"),
-        help="XGBoost n_jobs override.",
+        help=(
+            "XGBoost CPU threads for stage 1 and the final fit (default: every CPU core). "
+            "Results do not depend on it."
+        ),
     )
     parser.add_argument(
         "--skip-power-rankings",
@@ -545,6 +553,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     except ValueError as error:
         parser.error(str(error))
     return args
+
+
+def xgb_thread_count(args: argparse.Namespace) -> int:
+    """Return XGBoost's CPU threads for every stage: ``--xgb-n-jobs``, else every core."""
+    if args.xgb_n_jobs is not None:
+        return int(args.xgb_n_jobs)
+    return int(ml_model_core.DEFAULT_XGB_PARAMS["n_jobs"])
 
 
 def _power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOptions:

@@ -2710,20 +2710,6 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": 1,
-   "dest": "wf_n_jobs",
-   "help": "Walk-forward: XGBoost n_jobs override.",
-   "nargs": null,
-   "options": [
-    "--wf-n-jobs"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
    "default": 0,
    "dest": "holdout_seasons",
    "help": "Training: holdout seasons.",
@@ -3018,7 +3004,7 @@
    "choices": null,
    "default": null,
    "dest": "xgb_n_jobs",
-   "help": "XGBoost n_jobs override.",
+   "help": "XGBoost CPU threads for stage 1 and the final fit (default: every CPU core). Results do not depend on it.",
    "nargs": null,
    "options": [
     "--xgb-n-jobs"

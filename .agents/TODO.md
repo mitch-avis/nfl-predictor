@@ -620,15 +620,16 @@ Ground rules for the whole milestone:
 - Edits under `nfl_predictor/ml/` change every walk-forward checkpoint fingerprint, so no
   reference walk-forward is started while this milestone is moving ML code.
 
-Tasks 60.1-60.3 (the generated inventories and the user's sign-off), 60.4 (the
-characterization tests), 60.5 (the library moves), 60.6 (the front door, retirements,
-renames and removals, `0.19.0`-`0.26.0`) and 60.7 (the web jobs on the front door, `0.26.1` and
-`0.27.0`) are done and archived under "Milestone 60 (partial)" in `ARCHIVE.md`; the decisions
-are in `.agents/m60/PROPOSAL.md`, "Sign-off". In short: one `nfl-predictor <command>` front
-door; retire `golden_command`, `backtest_predictions`, `objective_compare_models` (with `nfl_predictor/ml/model_compare.py`),
-`betting_pipeline` (after `build_betting_report` moves) and the whole Excel betting workbook;
-remove ScoreModel (task 55.5); move everything else; keep `scripts/gate.sh`; one naming rule
-with old spellings kept as aliases; old launchers reproduce from their recorded commit.
+Tasks 60.1-60.3 (the generated inventories and the user's sign-off), 60.4 (the characterization
+tests), 60.5 (the library moves), 60.6 (the front door, retirements, renames and removals,
+`0.19.0`-`0.26.0`), 60.7 (the web jobs on the front door, `0.26.1` and `0.27.0`) and 60.8 (CI runs
+the gate; the docs, `0.27.1`) are done and archived under "Milestone 60 (partial)" in `ARCHIVE.md`;
+the decisions are in `.agents/m60/PROPOSAL.md`, "Sign-off". In short: one `nfl-predictor <command>`
+front door; retire `golden_command`, `backtest_predictions`, `objective_compare_models` (with
+`nfl_predictor/ml/model_compare.py`), `betting_pipeline` (after `build_betting_report` moves) and
+the whole Excel betting workbook; remove ScoreModel (task 55.5); move everything else; keep
+`scripts/gate.sh`; one naming rule with old spellings kept as aliases; old launchers reproduce from
+their recorded commit.
 
 - [ ] Open question for the user (found 2026-09-25 in 60.6/60.7, not yet decided): the power
       rankings cannot use a blend model. `_predict_future_games` in
@@ -637,12 +638,6 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       before its blend branch is reached (pinned by `tests/test_blended_model_paths.py`). It has
       never worked; `0.27.0` fixed only the model-kind vocabulary in front of it. Options: read
       the team model's spec for a blend, or reject blend runs for rankings with a clear message.
-- [ ] 60.8 CI, gate and docs: the CLI smoke checks in `scripts/gate.sh`; CI
-      (`.github/workflows/validation.yml`) calls `scripts/gate.sh` instead of repeating its
-      steps; `README.md` (the Scripts section, every command example, and a "Reproducing an old
-      run" note: `git worktree add <commit>`, then the launcher as written); `AGENTS.md` ("Repo
-      scripts", "Project Shape", "Dev Workflows", launch instructions); `CHANGELOG.md`;
-      `ARCHIVE.md`; the handoff prompt.
 - [ ] 60.9 A `compare` command: paired comparison of two walk-forward runs from their fold
       checkpoints (candidate minus reference per game, bootstrap intervals, the windows week 1,
       week 2, weeks 3-18 and all weeks; deterministic Brier, log loss, pick accuracy, margin and

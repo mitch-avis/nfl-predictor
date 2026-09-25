@@ -66,10 +66,10 @@ Follow-ups resolved after their milestones closed:
 
 ## Milestone 60 (partial) - CLI and entrypoint consolidation
 
-Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`), task
-60.4 in versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`, task 60.6 in `0.19.0`-`0.26.0`
-(2026-09-24/25), task 60.7 in `0.26.1` and `0.27.0` (2026-09-25); tasks 60.8-60.9 stay in
-`TODO.md`.
+Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`), task 60.4
+in versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`, task 60.6 in `0.19.0`-`0.26.0`
+(2026-09-24/25), task 60.7 in `0.26.1` and `0.27.0`, task 60.8 in `0.27.1` (2026-09-25); task 60.9
+stays in `TODO.md`.
 
 ### 60.1 and 60.2 - Generated inventories
 
@@ -212,6 +212,27 @@ went from 309 actions in 19 entrypoints to 215 in 15 parsers.
   `web/README.md` record it. Left open: the live check per template in the milestone
   acceptance (several templates rebuild `data/` or run a weekly run or walk-forward, which are
   must-ask), and the blend power-rankings question (`TODO.md`, Milestone 60).
+
+### 60.8 - CI runs the gate; the docs (version `0.27.1`)
+
+- The gate's smoke checks (`0.27.0`) run `nfl-predictor --help` and every command's `--help`,
+  listed by the front door. CI's Python job now sets up the environment and runs
+  `scripts/gate.sh`; it syncs with `--locked`, because the gate's `uv lock --check` runs after
+  the sync and a plain sync would rewrite a stale lock first. The `web` job is unchanged (the
+  gate's `--web` path uses nvm; CI provisions Node with `setup-node`).
+- `README.md`: every command example on the front door with canonical option names, the
+  command-line section, the validation and CI description, and "Reproducing an old run" (a
+  worktree at the run's `git_commit_hash`, the old lock synced, `data/` linked, the launcher
+  copied into the worktree's `models/<run_id>/`, since a launcher changes to the repository two
+  levels above itself). `AGENTS.md`: "Commands" replaces "Repo scripts", the front door in
+  "Project Shape", "Dev Workflows" and the required command forms, and the launch guidance.
+  `web/README.md` moved in `0.27.0`.
+- Found by grep, then guarded by a test: `tests/test_readme_commands.py` parses every
+  `nfl-predictor` command in the README's code blocks with the command's own parser (27 when it
+  landed). It caught a pre-existing error: the leakage-audit example had never passed the two
+  required options. `tests/cli_parsing.py` is the shared resolver; the web job test now also
+  reads the weekly job's config file and validates its keys.
+- The gate on the final tree: 1020 passed, coverage 92.15%.
 
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 

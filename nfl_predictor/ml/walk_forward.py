@@ -512,11 +512,14 @@ def _bootstrap_probability_differences(
     actual_home_win = pd.to_numeric(frame.loc[valid, "actual_home_win"], errors="coerce").to_numpy(
         dtype=int
     )
-    actual_margin = pd.to_numeric(frame.loc[valid, "actual_margin"], errors="coerce").to_numpy(
-        dtype=float
+    # Each resample's metric is a mean of per-game terms, so the terms are computed once and
+    # each resample averages the rows it drew (the same draws, one per resample, as before).
+    model_squared, model_log_loss = metrics_utils.probability_losses_per_row(
+        actual_home_win, model_prob[valid]
     )
-    model_prob = model_prob[valid]
-    market_prob = market_prob[valid]
+    market_squared, market_log_loss = metrics_utils.probability_losses_per_row(
+        actual_home_win, market_prob[valid]
+    )
     n_rows = int(len(actual_home_win))
     rng = np.random.default_rng(int(seed))
 
@@ -525,22 +528,10 @@ def _bootstrap_probability_differences(
 
     for sample_index in range(int(n_samples)):
         indices = rng.integers(0, n_rows, size=n_rows)
-        sampled_actual_home_win = actual_home_win[indices]
-        sampled_actual_margin = actual_margin[indices]
-        sampled_model_prob = model_prob[indices]
-        sampled_market_prob = market_prob[indices]
-        model_metrics = metrics_utils.probability_summary(
-            sampled_actual_home_win,
-            sampled_actual_margin,
-            sampled_model_prob,
+        brier_diffs[sample_index] = model_squared[indices].mean() - market_squared[indices].mean()
+        log_loss_diffs[sample_index] = (
+            model_log_loss[indices].mean() - market_log_loss[indices].mean()
         )
-        market_metrics = metrics_utils.probability_summary(
-            sampled_actual_home_win,
-            sampled_actual_margin,
-            sampled_market_prob,
-        )
-        brier_diffs[sample_index] = model_metrics["brier"] - market_metrics["brier"]
-        log_loss_diffs[sample_index] = model_metrics["log_loss"] - market_metrics["log_loss"]
 
     return {
         f"{prefix}_brier_vs_market_ci_low": float(np.nanpercentile(brier_diffs, 2.5)),

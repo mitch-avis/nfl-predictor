@@ -41,13 +41,20 @@ Follow-ups resolved after their milestones closed:
   reports live in `models/review_wf_2023_2025_pbp_{off,on}/`.
 - Milestone 46: `uv sync --check --active` failed after the `0.4.0` bump because the environment
   still had `0.3.0` installed; a plain `uv sync` cleared it. Re-sync after every version bump.
+- 2026 Week 3 weekly run: the QB identity file is read under nfeloqb's name `data/meta_data.csv`
+  since `0.18.3` (`constants.QB_META_DATA_NAME`, pinned by
+  `test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default`). With the user's approval
+  on 2026-09-24 the temporary copy `data/qb_meta_data.csv` was deleted, together with the stopped
+  run `models/weekly_2026_week_03/` and the backups `data/backup_pre_2026_week_03/` and
+  `data/backup_pre_2026_week_03_full/` (every file in them was still present in `data/`, and
+  the walk-forward cuts byte-identical).
 
 ---
 
 ## Milestone 60 (partial) - CLI and entrypoint consolidation
 
-Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`); tasks
-60.4-60.9 stay in `TODO.md`.
+Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`), task
+60.4 in versions `0.18.2` and `0.18.4`; tasks 60.5-60.9 stay in `TODO.md`.
 
 ### 60.1 and 60.2 - Generated inventories
 
@@ -75,6 +82,41 @@ betting workbook retired end to end; the model-kind defect fixed in 60.7; CI cal
 56.5; survivor picks wait for task 58.1. Housekeeping the same day: the stray checkpoint folder
 `models/wf_checkpoints/ca3e6892daacd42980f4/` was already gone, and the stale
 `../nfl-predictor-web` worktree record was pruned.
+
+### 60.4 - Characterization tests (versions `0.18.2` and `0.18.4`)
+
+Landed against the pre-move layout, green, before anything moved. The fixture is synthetic
+(`tests/weekly_fixture.py`), because the real `data/` is not in git; `tests/snapshots.py` holds
+the shared comparison helpers (exact for text and integers, relative `1e-6` for floats; rewrite
+with `NFLP_UPDATE_SNAPSHOTS=1`). The tests:
+
+- `tests/test_weekly_run_characterization.py`: all four weekly stages (about 12 s). It pins
+  today's stage-1 list-order selection (all nine candidates tie on deterministic Brier and
+  `elo` + blend `0.2` + clamp `0.1` wins; task 56.5). It loads `config/weekly_run.yaml`, which
+  no production run read at the time; the user decided on 2026-09-24 that 60.6 makes the YAML
+  the weekly default, rewritten to the code defaults, which re-points this snapshot.
+- `tests/test_entrypoints_characterization.py`: backtest, sweep, and the leakage audit with a
+  planted leak.
+- `tests/test_cli_surface.py`: the parser surface of 19 entrypoints (309 actions), matching
+  the inventory.
+- `tests/test_shap_analysis_characterization.py` (`0.18.4`): a market-anchored margin/total
+  model and a blended model trained on the fixture, and the SHAP report for the margin head, the
+  total head on a 100-row sample, and both blend components (about 2 s).
+
+Snapshots are identical across runs. Mutations fail them: reversing the stage-1 candidate list
+and deeper trees (weekly test), and taking the maximum instead of the mean absolute SHAP value
+(all four SHAP snapshots). Coverage of `scripts/` rose from 54.0% to 69.6% of statements in
+`0.18.2` (`.agents/m60/SCRIPTS_COVERAGE.md`). Found on the way, with their dispositions:
+
+- the paired bootstrap in `walk_forward._bootstrap_probability_differences` spends 98% of a
+  stage-1 run in scikit-learn metric calls (the tests patch it to 200 resamples); the numpy
+  rewrite was approved 2026-09-24 for the `nfl_predictor/ml/` chunk of 60.6;
+- `shap` was not a declared dependency; the user added it in `0.18.3` and kept `explain`;
+- the backtest CLI prints XGBoost's per-matrix INFO lines (60.6 flag and logging pass);
+- `shap_analysis --component market` never analyzes a market model:
+  `train_blended_margin_total_model` always stores `market_model=None`, so the request falls
+  back to the team model (the report says `model_kind: blend_team`). The inventory had listed
+  the flag as active; its disposition is a question for the user in 60.6.
 
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 

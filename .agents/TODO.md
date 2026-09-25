@@ -521,6 +521,11 @@ Formerly Milestone 41.
       fixes the probability path by evidence, re-choosing among near-identical candidates each
       week only adds noise (Week 3's two runs chose `none`, then `elo`, a day apart) and costs
       most of the run's time. Changing a default is must-ask.
+      Decided by the user 2026-09-24: (a) goes ahead as specified, in the 60.6 front-door
+      chunk. The rewritten YAML only records today's defaults; the user stressed that its
+      settings are still to be optimized, which is part (b) here and task 55.4, not something
+      the rewrite settles. How many seasons stage 1 scores is settled here too (with (c)), not
+      by widening the window now.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.
@@ -623,7 +628,8 @@ Ground rules for the whole milestone:
 - Edits under `nfl_predictor/ml/` change every walk-forward checkpoint fingerprint, so no
   reference walk-forward is started while this milestone is moving ML code.
 
-Tasks 60.1-60.3 (the generated inventories and the user's sign-off) are done and archived under
+Tasks 60.1-60.3 (the generated inventories and the user's sign-off) and 60.4 (the
+characterization tests) are done and archived under
 "Milestone 60 (partial)" in `ARCHIVE.md`; the decisions are in `.agents/m60/PROPOSAL.md`,
 "Sign-off". In short: one `nfl-predictor <command>` front door; retire `golden_command`,
 `backtest_predictions`, `objective_compare_models` (with `nfl_predictor/ml/model_compare.py`),
@@ -631,39 +637,6 @@ Tasks 60.1-60.3 (the generated inventories and the user's sign-off) are done and
 remove ScoreModel (task 55.5); move everything else; keep `scripts/gate.sh`; one naming rule
 with old spellings kept as aliases; old launchers reproduce from their recorded commit.
 
-- [ ] 60.4 Characterization tests first (test-driven): a weekly-run output test on fixed fixture
-      inputs (predictions, confidence picks, betting report, power rankings and standings,
-      identical before and after), a `--help` snapshot per surviving entrypoint, and tests for the
-      library functions about to move. Land them against the current layout, green, before
-      moving anything. The fixture is synthetic (the real `data/` is not in git, so CI cannot
-      read it). The per-entrypoint snapshot pins the parser surface (option strings, dest,
-      default, choices), which is stabler than `--help` text across terminal widths and Python
-      versions; intended renames update it in the same commit.
-      Status 2026-09-24 (`0.18.2`): landed except the SHAP tests. `tests/weekly_fixture.py` (the
-      synthetic dataset), `tests/snapshots.py` (shared comparison helpers),
-      `tests/test_weekly_run_characterization.py` (all four weekly stages with the shipped
-      config; about 12 s), `tests/test_entrypoints_characterization.py` (backtest, sweep,
-      leakage audit with a planted leak), `tests/test_cli_surface.py` (19 entrypoints, 309
-      actions, matching the inventory). Snapshots under `tests/fixtures/` are identical across
-      runs, and two mutations (reversing the stage-1 candidate list, deeper trees) both fail the
-      weekly test. The weekly snapshot pins today's stage-1 list-order selection (task 56.5):
-      all nine candidates tie on deterministic Brier and `elo` + blend 0.2 + clamp 0.1 wins.
-      Coverage of `scripts/` rose from 54.0% to 69.6% of statements; the projected package
-      coverage after the moves is 93.8% (`.agents/m60/SCRIPTS_COVERAGE.md`). Found on the way:
-      (a) the paired bootstrap in `walk_forward._bootstrap_probability_differences` spends 98%
-      of a stage-1 run in 5,000 scikit-learn metric calls per window (the tests patch it to
-      200); a numpy version with identical values is a candidate for the `nfl_predictor/ml/`
-      chunk; (b) `shap` is not a declared dependency, so `shap_analysis` and its web job can
-      only exit "not installed", and its disposition goes back to the user; (c) the backtest
-      CLI prints XGBoost's per-matrix INFO lines. Decided 2026-09-24: (a) the numpy rewrite is
-      approved for the `nfl_predictor/ml/` chunk; (b) the user added `shap` as a dependency and
-      keeps `explain` (the re-audit: about 2 s per head on the production model, and a ranking
-      that differs sharply from gain importance), so the remaining open item of this task is
-      the `shap_analysis` characterization test. New finding: `write_weekly_config` in the
-      weekly test loads `config/weekly_run.yaml`, but no production run reads that file (see
-      "From the 2026 Week 3 weekly run" below), so the snapshot pins a configuration that
-      production does not use. Settle that item before relying on the snapshot as the
-      production pin.
 - [ ] 60.5 Move library code out of `scripts/` into the package (power-rankings computation and
       output writing into `nfl_predictor/reporting/`, the betting-report builder likewise), with
       the scripts temporarily calling the package. Drop every `from scripts import`.
@@ -682,6 +655,9 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       `walk_forward._bootstrap_probability_differences` (approved 2026-09-24; a test first proves
       identical values against the scikit-learn version). Edits under `nfl_predictor/ml/` go in
       one chunk. Each removal or rename gets a deprecation or removal note in `CHANGELOG.md`.
+      Open question for the user (found in 60.4): `shap_analysis --component market` is dead,
+      because the blend trainer never stores a market model, so the request silently analyzes
+      the team model. Remove the flag, or make the request fail when no market model exists?
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the
@@ -727,11 +703,10 @@ Each group names the archived milestone it came from; the milestone's full recor
 
 ### From the 2026 Week 3 weekly run (2026-09-24)
 
-Found while producing the Week 3 picks. Runs: `models/weekly_2026_week_03/` (stopped during
-stage 1), `models/weekly_2026_week_03_fast/` (the picks the user submitted),
-`models/weekly_2026_week_03_full/` (the rerun with a fresh ETL, for the pick 'em pool). Data
-backups: `data/backup_pre_2026_week_03/` (before the first refresh) and
-`data/backup_pre_2026_week_03_full/` (before the rerun's refresh).
+Found while producing the Week 3 picks. Runs: `models/weekly_2026_week_03_fast/` (the picks the
+user submitted) and `models/weekly_2026_week_03_full/` (the rerun with a fresh ETL, for the pick
+'em pool). The stopped first run and the two data backups were deleted with the user's approval
+on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
 
 - [ ] **`config/weekly_run.yaml` is never read.** `scripts/weekly_run.py` loads a config only
       with `--config`, and no launcher passes it; the web UI's weekly job writes its own JSON
@@ -739,18 +714,12 @@ backups: `data/backup_pre_2026_week_03/` (before the first refresh) and
       seasons, 4 calibration weeks, raw moneylines with probability blending, early stopping 50,
       no score rounding, CPU. The YAML differs on all of these, and `wf_n_jobs` / `xgb_n_jobs`
       too. The weekly characterization test pins the YAML's configuration. Scheduled as task
-      56.7 (the default-config move in Milestone 60, the values in step 3).
+      56.7 (the default-config move in Milestone 60, the values in step 3). The user decided
+      on 2026-09-24 that the weekly run reads the YAML by default, rewritten to today's code
+      defaults, in the 60.6 front-door chunk.
 - [ ] **GPU never used by default.** A consequence of the item above: `xgb_device` defaults
       to none (CPU), so stage 1 ran on the CPU (about 6 min per candidate against about 1 min
       on the GPU with `--xgb-device cuda`). The user chose the GPU for everything (task 55.4).
-- [ ] **QB identity rename.** The user renamed `data/qb_meta_data.csv` to
-      `data/meta_data.csv` (the name nfeloqb writes), but `constants.QB_META_DATA_NAME` still
-      said `qb_meta_data`; a missing identity file only logs a warning and degrades QB
-      matching. A copy `data/qb_meta_data.csv` was put in place so the Week 3 runs load it
-      (1,012 identity names). Fixed 2026-09-24 (uncommitted at the time of writing): the
-      constant is `meta_data`, pinned by
-      `test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default`. Left: delete the
-      copy (must-ask: a file under `data/`).
 - [ ] **The final fit never trains on the newest weeks.** Production and walk-forward both hold
       out the newest 4 completed weeks from the tree fit and use them only for calibration, so
       the Week 3 model's trees did not see 2026 Weeks 1-2, which reach it only through the

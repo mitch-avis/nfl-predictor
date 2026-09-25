@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from scripts import power_rankings, weekly_run
+from nfl_predictor.reporting import power_rankings
+from scripts import weekly_run
 
 
 def _options(argv: list[str]) -> power_rankings.RankingOptions:

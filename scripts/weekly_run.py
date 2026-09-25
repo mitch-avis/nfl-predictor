@@ -39,10 +39,11 @@ try:
     from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
     from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
     from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
+    from nfl_predictor.reporting import power_rankings
     from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
+    from nfl_predictor.reporting.betting_report import build_betting_report
     from nfl_predictor.utils import fingerprints
     from nfl_predictor.utils.logger import log
-    from scripts import betting_pipeline, power_rankings
 except ModuleNotFoundError:
     import sys
 
@@ -54,10 +55,11 @@ except ModuleNotFoundError:
     from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
     from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
     from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
+    from nfl_predictor.reporting import power_rankings
     from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
+    from nfl_predictor.reporting.betting_report import build_betting_report
     from nfl_predictor.utils import fingerprints
     from nfl_predictor.utils.logger import log
-    from scripts import betting_pipeline, power_rankings
 
 
 _WEEK_FILE_RE = re.compile(r"week_(\d+)_games_to_predict", re.IGNORECASE)
@@ -1848,7 +1850,7 @@ def main() -> int:
     betting_report_path = output_paths["betting_report"]
 
     try:
-        report_df = betting_pipeline.build_betting_report(predictions)
+        report_df = build_betting_report(predictions)
     except ValueError as exc:
         log.info("Betting report skipped: %s", exc)
     else:
@@ -1893,7 +1895,7 @@ def main() -> int:
             except power_rankings.StrengthSnapshotUnavailableError as exc:
                 log.warning("Power rankings skipped: %s", exc)
             else:
-                power_rankings._write_outputs(
+                power_rankings.write_ranking_outputs(
                     result,
                     out_dir=pr_out_dir,
                     season=pr_season,

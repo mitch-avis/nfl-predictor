@@ -1,4 +1,4 @@
-"""Unit tests for betting recommendation helpers.
+"""Unit tests for the betting report and its moneyline helpers.
 
 These tests validate deterministic conversions and report construction.
 """
@@ -9,32 +9,32 @@ import math
 
 import pandas as pd
 
-from scripts import betting_pipeline
+from nfl_predictor.reporting import betting_report
 
 
 def test_moneyline_to_implied_prob_negative() -> None:
     """-110 should be about 0.5238."""
-    p = betting_pipeline._moneyline_to_implied_prob(-110)
+    p = betting_report._moneyline_to_implied_prob(-110)
     assert abs(p - (110 / 210)) < 1e-6
 
 
 def test_moneyline_to_implied_prob_positive() -> None:
     """+150 should be 0.4."""
-    p = betting_pipeline._moneyline_to_implied_prob(150)
+    p = betting_report._moneyline_to_implied_prob(150)
     assert abs(p - 0.4) < 1e-6
 
 
 def test_implied_prob_to_moneyline_round_trip_close() -> None:
     """Converting p->ml->p should be approximately consistent."""
     p = 0.62
-    ml = betting_pipeline._implied_prob_to_moneyline(p)
-    p2 = betting_pipeline._moneyline_to_implied_prob(ml)
+    ml = betting_report._implied_prob_to_moneyline(p)
+    p2 = betting_report._moneyline_to_implied_prob(ml)
     assert abs(p2 - p) < 1e-6
 
 
 def test_novig_pair_sums_to_one() -> None:
     """No-vig normalization should sum to 1."""
-    ph, pa = betting_pipeline._novig_pair(0.55, 0.52)
+    ph, pa = betting_report._novig_pair(0.55, 0.52)
     assert abs((ph + pa) - 1.0) < 1e-12
 
 
@@ -59,7 +59,7 @@ def test_build_betting_report_basic_columns() -> None:
         }
     )
 
-    report = betting_pipeline.build_betting_report(df)
+    report = betting_report.build_betting_report(df)
 
     assert "moneyline_edge_prob" in report.columns
     assert "moneyline_confidence_1_10" in report.columns
@@ -88,7 +88,7 @@ def test_build_betting_report_labels_totals_diagnostic_only() -> None:
         }
     )
 
-    report = betting_pipeline.build_betting_report(df)
+    report = betting_report.build_betting_report(df)
 
     assert report["total_signal"].tolist() == ["diagnostic_only", "diagnostic_only"]
     columns = report.columns.tolist()

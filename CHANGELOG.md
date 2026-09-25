@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.18.3] - 2026-09-24
+
+### Changed
+
+- `lightgbm` and `shap` are runtime dependencies. `shap` makes `scripts/shap_analysis.py` and
+  its web job work (they could only report "not installed" before); LightGBM is installed but
+  not used by any model yet, because alternative model families stay parked.
+- The quarterback identity file is now `data/meta_data.csv`, the name `../nfeloqb` writes, so it
+  is copied across unchanged (`constants.QB_META_DATA_NAME`; it was `data/qb_meta_data.csv`).
+  A test pins the default path, because a missing file only logs a warning and quietly weakens
+  quarterback matching.
+- `update_requirements.sh` syncs with the LightGBM CUDA build flags on a machine that can use
+  them, then runs `nfl-lightgbm-cuda-install install`; `scripts/gate.sh` passes the same flags
+  to its strict `uv sync --check`. Both are unchanged on CPU-only machines and in CI, which
+  get no flags.
+- Markdownlint skips pasted session transcripts (`.agents/*transcript*.md`), in
+  `.markdownlintignore` and in the gate's `markdownlint-cli2` call.
+
+### Added
+
+- `nfl-lightgbm-cuda-install` (`nfl_predictor/lightgbm_cuda.py`) builds the locked LightGBM
+  from source with CUDA, only when needed. `install` does nothing when LightGBM already trains
+  on the GPU, reinstalls uv's cached CUDA build in seconds after a plain `uv sync` swapped in
+  the CPU wheel, and compiles from source only when no usable cached build exists. `status`
+  reports the state, and `uv-args` prints the `uv sync` flags (`--no-binary-package` plus the
+  CMake settings). uv records those settings, so a sync or sync check given them treats the
+  CUDA build as current. The flags are withheld without a CUDA toolkit, or when the installed
+  NCCL was not built for the toolkit's CUDA major version: that mismatch (Ubuntu's CUDA 12
+  NCCL against the CUDA 13 toolkit) leaves `cudaGetDeviceProperties_v2` unresolved and stops
+  LightGBM loading. The fix is NVIDIA's `libnccl2` / `libnccl-dev` packages tagged
+  `+cuda13.x`, not a compatibility shim.
+
 ## [0.18.2] - 2026-09-24
 
 ### Added

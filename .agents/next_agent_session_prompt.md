@@ -2,67 +2,76 @@
 
 You are resuming work in the `nfl-predictor` workspace (`/home/mitch/workspace/nfl-predictor`).
 Read `AGENTS.md` first and treat its delegation guardrails (rules 1-14) as binding, then
-`.agents/TODO.md` (above all "Roadmap Status" and Milestone 60) and this file.
+`.agents/TODO.md` (above all "Roadmap Status", Milestone 60, task 56.7 and "From the 2026 Week 3
+weekly run") and this file.
 
-## State (written 2026-09-24, Milestone 60 at 60.4)
+## State (written 2026-09-24 evening, Milestone 60 at 60.4)
 
-- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.18.2`. Not
-  pushed; merging and pushing are must-ask. `scripts/gate.sh` exits `0` on the final tree (the
-  check-in carries the numbers).
-- Tasks 60.1-60.3 are done and archived (`ARCHIVE.md`, "Milestone 60 (partial)"). The user
-  signed off on 2026-09-24; every decision is in `.agents/m60/PROPOSAL.md`, "Sign-off", and
-  in the amended 60.4-60.9 texts in `TODO.md`. Headlines:
-  - one `nfl-predictor <command>` front door (`[project.scripts]` plus `python -m
-    nfl_predictor`); subcommands grouped as weekly, research, data, models by hand, web;
-  - retire `golden_command`, `backtest_predictions`, `objective_compare_models` (with
-    `nfl_predictor/ml/model_compare.py`), `betting_pipeline` (after `build_betting_report`
-    moves) and the whole Excel betting workbook (`betting_report_excel`,
-    `nfl_predictor/reporting/betting_excel.py`, `openpyxl`, `--betting-template-path`, the web
-    `betting_xlsx` job, the download routes and button);
-  - remove ScoreModel and everything only it uses (task 55.5);
-  - the signed-off flag removals; `postseason_weight: 1.3` becomes a commented-out example in
-    `config/weekly_run.yaml` (the power rankings never read it; training does when
-    `include_postseason: true`);
-  - the naming rule (`--wf-`, `--tune-`, `--xgb-`, bare final-training flags; old spellings kept
-    as aliases); old launchers reproduce from their recorded git commit;
-  - CI calls `scripts/gate.sh`; a new `compare` command (60.9); the model-kind vocabulary fix in
-    60.7; the step-2 follow-ups (automatic `OMP_WAIT_POLICY=PASSIVE` included);
-  - the `--calibration` default is deferred to task 56.5 (the user wants one calibration used
-    the same way by every run type); survivor picks wait for task 58.1;
-  - the measures of success for steps 3 and 5 are recorded under "Roadmap Status".
-- 60.4 landed in `0.18.2` except the SHAP tests: the weekly-run characterization test, the
-  entrypoint characterization tests, the parser-surface snapshot, the synthetic fixture
-  `tests/weekly_fixture.py` and the shared helpers `tests/snapshots.py`. These snapshots must
-  not change during a move; an intended output change rewrites them with
-  `NFLP_UPDATE_SNAPSHOTS=1` in the same commit and says so in the changelog.
-- Housekeeping done: the stray checkpoint folder was already gone; the stale
-  `../nfl-predictor-web` worktree record is pruned. The fully merged `feat/web-ui` branch still
-  exists locally and on `origin`; nobody asked to delete it.
-- `.agents/gpt-5-4_task_55-8_transcript.md` is the user's untracked file; leave it alone.
+- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.18.3`. Not
+  pushed; merging and pushing are must-ask. `scripts/gate.sh` exits `0` on the final tree
+  (916 passed, coverage 92.55%, every step ok). The working tree is clean apart from the
+  user's untracked `.agents/GPT-5-4_LightGBM_CUDA_session_transcript.md` (leave it untracked;
+  markdownlint now skips `.agents/*transcript*.md`).
+- Tasks 60.1-60.3 are done and archived (`ARCHIVE.md`, "Milestone 60 (partial)"); every
+  sign-off decision is in `.agents/m60/PROPOSAL.md`, "Sign-off", and in the 60.4-60.9 texts.
+- 60.4 landed in `0.18.2` except the SHAP test. The characterization snapshots must not change
+  during a move; an intended output change rewrites them with `NFLP_UPDATE_SNAPSHOTS=1` in the
+  same commit and says so in the changelog.
+- `0.18.3` (today) added `lightgbm` and `shap` as dependencies, the as-needed LightGBM CUDA
+  build (`nfl-lightgbm-cuda-install install | status | uv-args`; the gate's strict sync check
+  gets the `uv-args` flags), and fixed `constants.QB_META_DATA_NAME` to `meta_data` (the user
+  renamed the file to nfeloqb's name). NVIDIA's NCCL 2.31.2 for CUDA 13.3 is installed
+  system-wide (it replaced Ubuntu's CUDA 12 NCCL), so the CUDA build needs no shim.
+- Decisions made 2026-09-24:
+  - keep `explain` and `shap`;
+  - the numpy bootstrap rewrite is approved for the `nfl_predictor/ml/` chunk;
+  - `postseason_weight` stays;
+  - LightGBM stays installed (CUDA build too) and parked in Milestone 57. When that milestone
+    reopens, LightGBM runs on the CPU: on this data its CUDA learner is 13x slower and not
+    reproducible (`.agents/m57/lightgbm_device_check.py`).
+
+## Week 3 weekly run (2026-09-24), for context
+
+- The user's picks came from `models/weekly_2026_week_03_fast/`. The rerun
+  `models/weekly_2026_week_03_full/` (fresh ETL and lines, GPU, default stage-1 window) agreed
+  on every pick. `models/weekly_2026_week_03/` was stopped during stage 1.
+- Data backups: `data/backup_pre_2026_week_03/` and `data/backup_pre_2026_week_03_full/`.
+  `data/qb_meta_data.csv` is a temporary copy of `data/meta_data.csv`, no longer read since
+  `0.18.3`. Deleting any of these is must-ask.
+- How to launch a weekly run today, until task 56.7 lands: `.venv/bin/python
+  scripts/weekly_run.py --run-id <id> --xgb-device cuda` through a `launch.sh` with `nohup
+  setsid` (see `models/weekly_2026_week_03_full/launch.sh`).
+  - Do **not** pass `--config config/weekly_run.yaml`: production has never read that file,
+    and its values are untested.
+  - Without `--xgb-device cuda`, stage 1 runs on the CPU at about six times the time.
 
 ## Your task
 
-1. Get the user's answers to the two open questions below, then continue with 60.5 (move
-   library code into the package, scripts calling it, no `from scripts import` left), keeping
-   every characterization test green without touching its snapshots.
-2. Then 60.6-60.9 in order, each chunk small, gated and committed; group every edit under
-   `nfl_predictor/ml/` into one chunk (it changes every checkpoint fingerprint).
-3. Rewrite this file at every landed chunk (rule 8).
+1. Ask the user the open questions below before anything they block.
+2. Finish 60.4: the `shap_analysis` characterization test (fixture model plus fixture rows, a
+   snapshot of the SHAP summary it writes).
+3. Continue with 60.5 (move library code into the package, no `from scripts import` left),
+   then 60.6-60.9, each chunk small, gated and committed. Group every edit under
+   `nfl_predictor/ml/` into one chunk, because it changes every checkpoint fingerprint; the
+   bootstrap rewrite goes in that chunk.
+4. Rewrite this file at every landed chunk (rule 8).
 
 ## Open questions for the user
 
-- SHAP: `shap` is not a declared dependency, so `scripts/shap_analysis.py` and the web
-  `shap_analysis` job can only exit "not installed". Retire the command and its web job
-  (gain-based feature importance is already written with every model), or add `shap` as an
-  optional dependency and keep `explain`.
-- The paired bootstrap in `walk_forward._bootstrap_probability_differences` takes 98% of a
-  stage-1 run (5,000 scikit-learn metric calls per window). Rewrite it with numpy, proven to
-  give identical values by a test, inside the `nfl_predictor/ml/` chunk?
-- How production probabilities should be formed (task 56.5, roadmap step 3).
+- Task 56.7(a): as part of the 60.6 front door, should the weekly run read
+  `config/weekly_run.yaml` by default, with the YAML rewritten to today's code defaults so no
+  output changes (and `off` quoted, since YAML reads a bare `off` as `false`)? The weekly
+  characterization test currently loads the YAML's untested values, so this also re-points
+  that snapshot at what production really runs (an intended snapshot rewrite, stated in the
+  changelog). The GPU default belongs with it if the user wants it before step 3 (task 55.4).
+- Whether the weekly stage 1 should score more seasons. The default `3` scores two, because
+  the current season counts. The user asked about it on 2026-09-24; the recommendation is to
+  settle it in task 56.7 (possibly retiring the weekly re-selection), not by widening it now.
+- Deleting `data/qb_meta_data.csv`, the stopped run `models/weekly_2026_week_03/`, and the two
+  data backups once the user no longer needs them.
 
 ## Notes
 
-- The Week 3 weekly run can go whenever the user wants; do not run it yourself unless asked,
-  and never alongside another walk-forward.
 - `models/wf_m55_8_review/probability_paths.py` has no second key; none of its numbers go into
   the docs until task 56.5 rescores it independently.
+- Never run two walk-forwards at once; check `uptime` and `pgrep -af walk_forward` first.

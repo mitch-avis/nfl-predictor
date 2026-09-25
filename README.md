@@ -33,7 +33,7 @@ This repo is geared toward:
     - [How postseason games enter today](#how-postseason-games-enter-today)
     - [Authoritative weekly workflow (runs, in this order)](#authoritative-weekly-workflow-runs-in-this-order)
     - [Outputs and conventions](#outputs-and-conventions)
-  - [Scripts](#scripts)
+  - [Command line](#command-line)
   - [Web UI](#web-ui)
   - [Validation](#validation)
   - [Leakage audit](#leakage-audit)
@@ -596,15 +596,25 @@ diagnostics such as season win totals (expected vs actual) and calibration drift
 Walk-forward reports also record the evaluation window, calibration window, and any excluded
 incomplete seasons.
 
-## Scripts
+## Command line
 
-Repo utilities under `scripts/`:
+Every task runs through one command, `nfl-predictor <command>` (installed into `.venv/bin` by
+`uv sync`; `python -m nfl_predictor <command>` is the same). `nfl-predictor --help` lists the
+commands by group, and `nfl-predictor <command> --help` shows a command's options:
 
-- `scripts/shap_analysis.py`: optional SHAP feature attribution for a saved model (requires `shap`).
-- `scripts/wf_compare.py`: sweep calibration + market-prob post-processing variants and summarize
-  walk-forward metrics.
-- `scripts/weekly_run.py`: weekly orchestration (refresh -> wf compare -> train -> predictions +
-  reports), resumable with optional JSON/YAML config.
+| group | commands |
+| --- | --- |
+| weekly | `weekly` (refresh, stage-1 selection, train, predict, reports; resumable, JSON/YAML config) |
+| research | `backtest` (walk-forward, the benchmark), `sweep` (calibration and market-probability variants), `explain` (SHAP attribution for a saved model) |
+| data | `data` (the ETL), `validate` (`--live` compares against the schedule), `leakage-audit`, `lines`, `build-week` |
+| models by hand | `train`, `predict` (`--model-in`), `rankings` |
+| web | `web`, `users` |
+
+The code lives in the package: the weekly run in `nfl_predictor/weekly_run/`, the other
+commands in `nfl_predictor/cli/`. The per-module forms (`python -m nfl_predictor.data_collection`,
+`python -m nfl_predictor.ml_model` and the others) keep working, and so do the old
+`scripts/<name>.py` paths, which now only call the package; `scripts/gate.sh` is the check that
+runs everything CI runs.
 
 **Totals are diagnostic-only.** The total (over/under) columns of the betting report
 (`total_value_side`, `total_edge_points`) come from the model's total head. Since version `0.6.2`

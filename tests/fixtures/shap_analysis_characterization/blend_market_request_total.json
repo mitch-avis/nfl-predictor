@@ -1,0 +1,44 @@
+{
+  "component": "market",
+  "model_kind": "blend_team",
+  "rows": [
+    {
+      "feature": "num__away_points_per_game",
+      "mean_abs_shap": 1.1641830205917358
+    },
+    {
+      "feature": "num__away_power",
+      "mean_abs_shap": 0.8836135268211365
+    },
+    {
+      "feature": "num__away_points_allowed_per_game",
+      "mean_abs_shap": 0.7050858736038208
+    },
+    {
+      "feature": "num__home_power",
+      "mean_abs_shap": 0.6800934672355652
+    },
+    {
+      "feature": "num__home_points_per_game",
+      "mean_abs_shap": 0.59609055519104
+    },
+    {
+      "feature": "num__home_rest",
+      "mean_abs_shap": 0.5484142303466797
+    },
+    {
+      "feature": "num__power_diff",
+      "mean_abs_shap": 0.48827505111694336
+    },
+    {
+      "feature": "num__home_points_allowed_per_game",
+      "mean_abs_shap": 0.40833741426467896
+    },
+    {
+      "feature": "num__away_rest",
+      "mean_abs_shap": 0.20896458625793457
+    }
+  ],
+  "sample_size": 352,
+  "target": "total"
+}

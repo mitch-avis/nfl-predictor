@@ -278,24 +278,6 @@ def _build_power_rankings(ctx: JobContext) -> list[str]:
     ]
 
 
-def _build_betting_xlsx(ctx: JobContext) -> list[str]:
-    """Build the betting-workbook command for the active run's predictions."""
-    run = ctx.require_run()
-    if run.run_files.predictions is None:
-        raise ConflictError(
-            f"Run {run.run_id!r} has no predictions to build a workbook from.",
-            code="no_predictions",
-        )
-    return [
-        ctx.python,
-        ctx.script("betting_report_excel.py"),
-        "--predictions",
-        str(run.run_files.predictions),
-        "--out",
-        str(run.run_dir / "betting_report.xlsx"),
-    ]
-
-
 def _build_leakage_audit(ctx: JobContext) -> list[str]:
     """Build the leakage-audit command."""
     out_json = ctx.params.get("out_json") or str(ctx.settings.reports_path / "leakage_audit.json")
@@ -544,14 +526,6 @@ TEMPLATES: tuple[JobTemplate, ...] = (
                 maximum=22,
             ),
         ),
-        needs_active_run=True,
-    ),
-    JobTemplate(
-        id="betting_xlsx",
-        label="Betting workbook",
-        description="Build the Excel betting workbook from the active run's predictions.",
-        category="Reports",
-        build=_build_betting_xlsx,
         needs_active_run=True,
     ),
     JobTemplate(

@@ -45,7 +45,7 @@ def test_scan_classifies_and_orders_runs(project_root: Path) -> None:
     assert not by_id["wf_report"].has_model
     assert by_id["wf_report"].holdout is not None
     assert by_id["wf_report"].holdout["brier"] == pytest.approx(0.2277)
-    assert by_id["weekly_old"].files["betting_xlsx"] is False
+    assert "betting_xlsx" not in by_id["weekly_old"].files
 
 
 def test_scan_missing_dir_and_partial_runs(project_root: Path) -> None:

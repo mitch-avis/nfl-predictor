@@ -35,7 +35,6 @@ class RunFiles:
     wf_compare_csv: Path
     wf_best: Path
     shap_report: Path
-    betting_xlsx: Path
     leakage_audit: Path
     predictions: Path | None = None
     picks: Path | None = None
@@ -69,7 +68,6 @@ class RunFiles:
             "wf_compare": self.wf_compare_csv,
             "wf_best": self.wf_best,
             "shap_report": self.shap_report,
-            "betting_xlsx": self.betting_xlsx,
             "leakage_audit": self.leakage_audit,
             "predictions": self.predictions,
             "picks": self.picks,
@@ -132,7 +130,6 @@ def resolve_run_files(run_dir: Path) -> RunFiles:
         wf_compare_csv=run_dir / "wf_compare.csv",
         wf_best=run_dir / "wf_best.json",
         shap_report=run_dir / "shap_report.json",
-        betting_xlsx=run_dir / "betting_report.xlsx",
         leakage_audit=run_dir / "leakage_audit.json",
         predictions=predictions[0] if predictions else None,
         picks=picks[0] if picks else None,

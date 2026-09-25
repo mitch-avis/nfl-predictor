@@ -57,7 +57,6 @@ class BettingOut(BaseModel):
     generated_at: str | None
     table: TablePayload
     ladder: list[LadderStep]
-    xlsx_available: bool
     notes: list[str]
 
 

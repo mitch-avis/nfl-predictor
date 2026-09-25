@@ -308,7 +308,6 @@ def make_run_dir(
     created_at: str = "2026-09-09T23:29:04+00:00",
     complete: bool = True,
     with_model: bool = True,
-    with_xlsx: bool = False,
     power_order: list[str] | None = None,
 ) -> Path:
     """Create a run directory of ``kind`` (``weekly``, ``training``, or ``walk_forward``)."""
@@ -346,8 +345,6 @@ def make_run_dir(
         ),
         encoding="utf-8",
     )
-    if with_xlsx:
-        (run_dir / "betting_report.xlsx").write_bytes(b"PK-fake-xlsx")
     stages = ["wf_compare", "train", "predictions"] + (["reports"] if complete else [])
     for stage in stages:
         (run_dir / f"{stage}_state.json").write_text(

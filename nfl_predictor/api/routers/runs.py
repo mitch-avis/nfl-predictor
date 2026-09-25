@@ -17,7 +17,6 @@ from nfl_predictor.api.schemas.runs import RunDetailOut, RunListOut, RunOut
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 DOWNLOADABLE = {
-    "betting_xlsx": ("betting_xlsx", "betting_report.xlsx"),
     "predictions": ("predictions", "predictions.csv"),
     "picks": ("picks", "confidence_picks.csv"),
     "betting_csv": ("betting_csv", "betting_report.csv"),

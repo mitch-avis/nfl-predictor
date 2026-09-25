@@ -1,17 +1,14 @@
-import { Download, FileSpreadsheet, Info } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { useState } from 'react'
 
-import { qs } from '@/api/client'
 import { useBetting } from '@/api/queries'
 import { ErrorState } from '@/components/common/ErrorState'
 import { PageHeader } from '@/components/common/PageHeader'
-import { RunJobButton } from '@/components/jobs/RunJobButton'
 import { ActionBadge } from '@/components/betting/ActionBadge'
 import { ColumnPicker, useColumnGroups } from '@/components/table/ColumnPicker'
 import { DataTable } from '@/components/table/DataTable'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { useNumberParam, useQueryParam } from '@/hooks/useQueryParam'
@@ -33,18 +30,7 @@ export function BettingPage() {
         title="Betting"
         description="Where the model disagrees with the price. Edges are model probability minus the implied probability of the offered line; the ladder turns edge into an action size."
         actions={
-          <>
-            {query.data ? <ColumnPicker groups={groups.groups.filter((g) => g !== 'Total (informational)')} hidden={groups.hidden} onToggle={groups.toggle} onReset={groups.reset} /> : null}
-            {query.data?.xlsx_available ? (
-              <Button asChild variant="outline" size="sm">
-                <a href={`/api/betting/xlsx${qs({ run })}`}>
-                  <Download className="size-4" /> Workbook
-                </a>
-              </Button>
-            ) : (
-              <RunJobButton templateId="betting_xlsx" label="Generate workbook" icon={FileSpreadsheet} />
-            )}
-          </>
+          query.data ? <ColumnPicker groups={groups.groups.filter((g) => g !== 'Total (informational)')} hidden={groups.hidden} onToggle={groups.toggle} onReset={groups.reset} /> : null
         }
       />
       {query.isLoading ? <Skeleton className="h-64 w-full" /> : null}

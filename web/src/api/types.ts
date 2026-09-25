@@ -117,7 +117,6 @@ export interface BettingOut {
   generated_at: string | null
   table: TablePayload
   ladder: { action: string; min_edge: number }[]
-  xlsx_available: boolean
   notes: string[]
 }
 

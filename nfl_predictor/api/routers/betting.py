@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse
 
 from nfl_predictor.api.deps import CurrentUser, DbDep, SettingsDep
-from nfl_predictor.api.errors import NotFoundError
 from nfl_predictor.api.readers import betting as reader
 from nfl_predictor.api.readers import market
 from nfl_predictor.api.routers.resolve import resolve_predictions
@@ -47,7 +45,6 @@ def betting(
     src = resolve_predictions(
         request, db, settings, run_id=run, season=season, week=week, source=None
     )
-    xlsx = src.run.run_files.betting_xlsx if src.run else None
     return BettingOut(
         run_id=src.run_id,
         season=src.season,
@@ -55,23 +52,5 @@ def betting(
         generated_at=src.generated_at,
         table=reader.read_betting(src.path),
         ladder=ladder(),
-        xlsx_available=bool(xlsx and xlsx.is_file()),
         notes=NOTES,
     )
-
-
-@router.get("/xlsx")
-def betting_xlsx(
-    _user: CurrentUser, db: DbDep, settings: SettingsDep, request: Request, run: str | None = None
-) -> FileResponse:
-    """Download the run's betting workbook."""
-    src = resolve_predictions(
-        request, db, settings, run_id=run, season=None, week=None, source=None
-    )
-    xlsx = src.run.run_files.betting_xlsx if src.run else None
-    if xlsx is None or not xlsx.is_file():
-        raise NotFoundError(
-            "No betting workbook for this run; generate one from the Jobs page",
-            code="artifact_missing",
-        )
-    return FileResponse(xlsx, filename=f"{src.run_id}_betting_report.xlsx")

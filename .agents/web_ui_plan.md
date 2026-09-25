@@ -354,6 +354,16 @@ touches on the web side:
   worktree record and where the live instance runs from; if it runs from a checkout of `main`, the
   job templates change as soon as a Milestone 60 chunk merges.
 
+Landed so far:
+
+- **`0.19.0` (2026-09-24): the Excel betting workbook is retired end to end.** Removed: the
+  `betting_xlsx` job template, `GET /betting/xlsx`, the `betting_xlsx` run-file download and
+  `RunFiles.betting_xlsx`, `BettingOut.xlsx_available`, and the Betting page's Workbook /
+  Generate workbook button. The Betting page's table is unchanged, since it never read the
+  workbook. The Data Status page still lists loose `reports/*.xlsx` files already on disk. Seven
+  templates now launch scripts by path. Found on the way, for 60.7: the frontend's catch-all
+  route answers an unknown `/api/...` path with `index.html` and status 200 instead of a 404.
+
 ## Status
 
 - Phase 0 (2026-09-10): done. `nfl_predictor/api/` serves auth, users, runs, and the built SPA;

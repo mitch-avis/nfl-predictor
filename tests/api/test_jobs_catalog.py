@@ -189,7 +189,7 @@ def test_predict_uses_the_active_run_model(settings: Settings, run: RunSummary) 
 def test_templates_that_need_a_run_say_so_when_none_is_pinned(settings: Settings) -> None:
     """Building without an active run is a conflict the API can explain."""
     defaults: dict[str, object] = {"season": 2026, "week": 2, "through_week": 1}
-    for template_id in ("predict", "power_rankings", "betting_xlsx", "shap_analysis"):
+    for template_id in ("predict", "power_rankings", "shap_analysis"):
         template = catalog.get_template(template_id)
         params = {
             spec.name: defaults[spec.name] for spec in template.params if spec.name in defaults
@@ -198,13 +198,10 @@ def test_templates_that_need_a_run_say_so_when_none_is_pinned(settings: Settings
             build(template_id, settings, params)
 
 
-def test_betting_workbook_needs_predictions(settings: Settings) -> None:
-    """A run without a predictions CSV cannot produce a workbook."""
-    run_dir = factories.make_run_dir(settings.models_path, "train_only", kind="training")
-    summary = summarize_run(run_dir)
-    assert summary is not None
-    with pytest.raises(ConflictError, match="predictions"):
-        build("betting_xlsx", settings, {}, summary)
+def test_the_betting_workbook_job_is_retired() -> None:
+    """The Excel betting workbook is no longer built, so its job template is gone."""
+    with pytest.raises(UnprocessableEntityError, match="betting_xlsx"):
+        catalog.get_template("betting_xlsx")
 
 
 def test_read_only_templates_take_no_parameters(settings: Settings) -> None:

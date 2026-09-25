@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.22.0] - 2026-09-24
+
+### Changed
+
+- One naming rule for options: walk-forward settings carry `--wf-`, tuning settings `--tune-`,
+  the XGBoost runtime `--xgb-`. Every renamed option keeps its old spelling as a second name on
+  the same option, so existing commands and launchers still parse:
+  - `backtest`: `--wf-eval-last-n-seasons` (`--eval-last-n-seasons`), `--win-prob-calibration`
+    (`--calibration`), `--wf-exclude-incomplete-seasons` (`--exclude-incomplete-seasons`),
+    `--wf-n-estimators` (`--n-estimators`); `--wf-calibration-weeks` also takes
+    `--calibration-weeks`;
+  - `sweep`: the same window options, `--wf-market-mode` (`--market-mode`), `--wf-n-estimators`,
+    `--wf-max-depth`, `--wf-learning-rate` (the bare forms) and `--xgb-n-jobs` (`--n-jobs`);
+  - `train`/`predict`: `--tune-objective` (`--tune-metric`), `--tune-cv-splits` (`--cv-splits`),
+    `--tune-early-stopping-rounds` (`--early-stopping-rounds`);
+  - `weekly`: `--tune-trials` (`--tune-n-trials`) and `--tune-early-stopping-rounds`
+    (`--train-early-stopping-rounds`). Their config keys are now `tune_trials` and
+    `tune_early_stopping_rounds`; a config file with the old keys still loads (setting both
+    names of one key is an error), and `config/weekly_run.yaml` uses the new key;
+  - `explain`: `--model-in` (`--model-path`).
+- `--market-prob-weight` and `--market-prob-blend` are one option (`--market-prob-weight`, default
+  `0`) in `backtest` and `train`, instead of two options reconciled in code. Run metadata written
+  by `train` records `market_prob_weight`; the web Model page reads it, falling back to the old
+  `market_prob_blend` key for earlier runs.
+- `--wf-eval-last-n-seasons` says in its help that the count includes a current season with no
+  completed week yet, so the weekly default `3` scores two seasons.
+- The `train`/`predict` command code moved from `nfl_predictor/ml/ml_model_cli.py` to
+  `nfl_predictor/cli/train.py`. The walk-forward checkpoint fingerprint hashes every file in
+  `nfl_predictor/ml/`, so the move changes it once more (nothing has been run on the `0.20.0`
+  fingerprints), and command-line edits no longer invalidate checkpoints at all.
+- `nfl_predictor/cli/options.py` builds the option groups that several commands share (the
+  market-probability options, the walk-forward window, `--disable-feature-groups`).
+
+### Removed
+
+- `nfl-predictor leakage-audit --include-market` (`scripts/leakage_audit.py`): it did nothing,
+  since market columns are included unless `--exclude-market` is given.
+
 ## [0.21.0] - 2026-09-24
 
 ### Added

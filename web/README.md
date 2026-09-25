@@ -13,11 +13,11 @@ admins, runs the project's jobs.
 
 ```bash
 # 1. Create the first admin (once)
-.venv/bin/python -m nfl_predictor.api.auth.cli create-user <name> --role admin
+.venv/bin/nfl-predictor users create-user <name> --role admin
 
 # 2. Backend (serves /api and, once built, the SPA)
-.venv/bin/python -m nfl_predictor.api            # http://127.0.0.1:8000
-.venv/bin/python -m nfl_predictor.api --reload   # development
+.venv/bin/nfl-predictor web              # http://127.0.0.1:8000
+.venv/bin/nfl-predictor web --reload     # development
 
 # 3. Frontend
 cd web
@@ -42,7 +42,7 @@ Every setting is an `NFLP_`-prefixed environment variable (see `nfl_predictor/ap
 | `NFLP_JWT_SECRET` | generated into the state dir | Session signing secret |
 | `NFLP_SESSION_HOURS` | `168` | Session lifetime |
 | `NFLP_WEB_DIST` | `web/dist/` | Built frontend |
-| `NFLP_PYTHON` | `.venv/bin/python` | Interpreter for jobs |
+| `NFLP_PYTHON` | `.venv/bin/python` | Interpreter for jobs; each runs `<python> -m nfl_predictor <command>` |
 
 ## Checks
 

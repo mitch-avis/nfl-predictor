@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.27.0] - 2026-09-25
+
+### Changed
+
+- Every web job launches `python -m nfl_predictor <command>` (the front door) with the
+  canonical option names, instead of a `scripts/` path or a module: `data`, `lines`, `weekly`,
+  `train`, `predict`, `build-week`, `rankings`, `leakage-audit`, `validate` (with `--live` for
+  the live check), `backtest` and `explain`. Progress parsing and the weekly job's saved config
+  keys are unchanged. Walk-forward jobs now also get the front door's passive OpenMP wait
+  policy.
+- One model-kind vocabulary: `margin_total` and `blend`, the names training records in a run's
+  metadata. `train`, `predict` and `rankings` take `--model-kind` from the same list and accept
+  `blended_margin_total` as an old name for `blend`; the web train form offers `blend`.
+- The gate's and CI's CLI smoke checks run `nfl-predictor --help` and every command's `--help`,
+  taking the command list from the front door.
+
+### Removed
+
+- The `scripts/` shims: `weekly_run.py`, `walk_forward_backtest.py`, `wf_compare.py`,
+  `power_rankings.py`, `leakage_audit.py`, `shap_analysis.py`, `validate_offline.py` and
+  `validate_live.py`. Use `nfl-predictor weekly`, `backtest`, `sweep`, `rankings`,
+  `leakage-audit`, `explain`, `validate` and `validate --live`. Only `scripts/gate.sh` remains.
+  A launcher that names an old path reproduces from its run's recorded commit.
+
+### Fixed
+
+- Three web launches that failed in argparse on the model kind now run: training a
+  `blended_margin_total` model, predicting with a run recorded under that name, and ranking with
+  a run recorded as `blend`. Ranking with a blend model still fails later, because the rankings
+  read the model's feature spec from the model itself and a blend keeps it on its team model;
+  that is an open question, not part of this fix.
+
 ## [0.26.1] - 2026-09-25
 
 ### Fixed

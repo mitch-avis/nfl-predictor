@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.24.0] - 2026-09-25
+
+### Added
+
+- `nfl-predictor checkpoints`: a read-only listing of the walk-forward checkpoint directories
+  under `models/wf_checkpoints/`, with each one's fold count, size, newest file and whatever
+  names it (a run's report, a review, a launcher or log under `models/`, or `AGENTS.md` and
+  `.agents/`). `--unreferenced-only` lists the ones nothing names. It never deletes anything.
+  Today all 38 directories (285 MB) are referenced.
+
+### Changed
+
+- `weekly`, `backtest` and `sweep` (and their `scripts/` shims) set OpenMP's passive wait policy
+  (`OMP_WAIT_POLICY=PASSIVE`) before XGBoost loads, unless the environment already sets one.
+  Load that arrives mid-run made the default policy's spinning threads stall (a week measured at
+  12-16 minutes instead of about 20 seconds). On a machine known to stay idle,
+  `OMP_WAIT_POLICY=` (empty) keeps the library default. Scheduling only; results are unchanged.
+- The `sweep` console summary shows each probability view with its own pick accuracy: the
+  configured calibrator's `pick_accuracy` and the market's `market_pick_accuracy` next to their
+  Brier and log loss, not only the deterministic one. The CSV it writes is unchanged.
+
 ## [0.23.0] - 2026-09-24
 
 ### Changed

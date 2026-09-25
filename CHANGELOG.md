@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.26.1] - 2026-09-25
+
+### Fixed
+
+- The web API answers an unknown `/api/...` GET with its JSON 404 (`{"error": {"code":
+  "not_found", ...}}`) instead of the frontend's `index.html` with status 200. The frontend's
+  history-API fallback now serves only paths outside `/api`, as its docstring always said, so a
+  mistyped or removed API route shows up as "not found" rather than as a JSON parse failure in
+  the browser.
+
 ## [0.26.0] - 2026-09-25
 
 ### Changed

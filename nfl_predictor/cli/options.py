@@ -4,6 +4,26 @@ from __future__ import annotations
 
 import argparse
 
+# The model kinds a run records in its metadata; ``blended_margin_total`` is an older name.
+MODEL_KINDS = ("margin_total", "blend")
+_MODEL_KIND_ALIASES = {"blended_margin_total": "blend"}
+
+
+def model_kind(value: str) -> str:
+    """Return the canonical model kind for ``value``, mapping the old blend name to ``blend``."""
+    return _MODEL_KIND_ALIASES.get(value, value)
+
+
+def add_model_kind_option(parser: argparse.ArgumentParser, help_text: str) -> None:
+    """Add ``--model-kind`` with the shared vocabulary (default ``margin_total``)."""
+    parser.add_argument(
+        "--model-kind",
+        type=model_kind,
+        choices=MODEL_KINDS,
+        default="margin_total",
+        help=f"{help_text} (margin_total or blend; blended_margin_total also means blend).",
+    )
+
 
 def market_modes(mode: str) -> list[tuple[str, bool, bool]]:
     """Resolve which market modes to evaluate.

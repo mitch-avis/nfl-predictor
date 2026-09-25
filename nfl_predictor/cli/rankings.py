@@ -26,7 +26,7 @@ current record plus the model's win probabilities for the remaining games.
 
 Usage example
 -------------
-python scripts/power_rankings.py \
+nfl-predictor rankings \
   --model-in models/<run_id>/model.joblib \
   --model-kind margin_total \
   --season 2025 \
@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from nfl_predictor.cli import options
 from nfl_predictor.ml import ml_model_core
 from nfl_predictor.reporting.power_rankings import (
     DEFAULT_PRIOR_SEASON_WEIGHT,
@@ -63,13 +64,7 @@ from nfl_predictor.utils.logger import log
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate power rankings + projected standings")
     p.add_argument("--model-in", type=Path, required=True, help="Path to model checkpoint .joblib")
-    p.add_argument(
-        "--model-kind",
-        type=str,
-        default="margin_total",
-        choices=["margin_total", "blended_margin_total"],
-        help="Model kind (must match the saved checkpoint).",
-    )
+    options.add_model_kind_option(p, "Model kind, matching the saved checkpoint")
     p.add_argument("--season", type=int, required=True, help="Season year")
     p.add_argument(
         "--through-week",

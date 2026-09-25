@@ -187,7 +187,7 @@ def test_power_rankings_cannot_predict_with_a_blended_model(tmp_path: Path) -> N
     with pytest.raises(ValueError, match="missing feature_spec"):
         power_rankings._predict_future_games(
             _blended_model(),
-            model_kind="blended_margin_total",
+            model_kind="blend",
             data_ml=data_ml,
             season=2024,
             through_week=4,

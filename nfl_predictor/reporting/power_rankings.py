@@ -934,7 +934,7 @@ def _predict_future_games(
         home_win_prob = ml_model_core.adjust_home_win_prob(
             games, home_win_prob, getattr(mt, "market_prob_config", None)
         )
-    elif model_kind == "blended_margin_total":
+    elif model_kind == "blend":
         bm = cast(ml_model_core.BlendedMarginTotalModel, model)
         # Use the model's blended margin as the win-prob driver.
         # The public helper takes pred_margin; for blended we reuse internal predict path.

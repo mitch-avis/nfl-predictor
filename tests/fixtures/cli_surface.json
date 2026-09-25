@@ -857,18 +857,18 @@
    "action": "_StoreAction",
    "choices": [
     "margin_total",
-    "blended_margin_total"
+    "blend"
    ],
    "default": "margin_total",
    "dest": "model_kind",
-   "help": "Model kind (must match the saved checkpoint).",
+   "help": "Model kind, matching the saved checkpoint (margin_total or blend; blended_margin_total also means blend).",
    "nargs": null,
    "options": [
     "--model-kind"
    ],
    "required": false,
    "subcommand": null,
-   "type": "str"
+   "type": "model_kind"
   },
   {
    "action": "_StoreAction",
@@ -1367,14 +1367,14 @@
    ],
    "default": "margin_total",
    "dest": "model_kind",
-   "help": "Model pipeline to use (margin_total or blend).",
+   "help": "Model pipeline to use (margin_total or blend; blended_margin_total also means blend).",
    "nargs": null,
    "options": [
     "--model-kind"
    ],
    "required": false,
    "subcommand": null,
-   "type": null
+   "type": "model_kind"
   },
   {
    "action": "_StoreAction",

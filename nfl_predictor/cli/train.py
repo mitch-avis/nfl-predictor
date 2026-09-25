@@ -41,12 +41,7 @@ from nfl_predictor.utils.logger import log
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train NFL score prediction models.")
-    parser.add_argument(
-        "--model-kind",
-        choices=["margin_total", "blend"],
-        default="margin_total",
-        help="Model pipeline to use (margin_total or blend).",
-    )
+    options.add_model_kind_option(parser, "Model pipeline to use")
     parser.add_argument(
         "--data-path",
         type=Path,

@@ -492,6 +492,36 @@ Formerly Milestone 41.
       - Keep refreshes manual copies, like `data/qb_elos.csv` from `../nfeloqb`; an automated
         fetch from GitHub would be a new network dependency (must-ask).
 
+- [ ] 56.7 (step 3, with 56.5) One production configuration, every setting decided once. Found
+      2026-09-24: no weekly run reads `config/weekly_run.yaml` (it needs `--config`, and no
+      launcher passes it), so production runs on the code defaults. The YAML's non-default values
+      date from its first version (January 2026, commit `83ba2a7`, reformatted in `67d13e2`) and
+      no measurement behind them is recorded. The settings fall into three groups:
+      - Change nothing a run produces: `wf_checkpoint_per_fold` (resumability only), the thread
+        counts, `tune_timeout` / `tune_cv_splits` (tuning is off), `postseason_weight`
+        (postseason training is off), `score_rounding` (display only; it never touches
+        probabilities or picks).
+      - Change numbers slightly, already decided: `xgb_device` / `xgb_tree_method` (the GPU for
+        everything, task 55.4). `train_early_stopping_rounds` is recorded only, because
+        in-season fits run the full tree budget.
+      - Change which probabilities are submitted, to be measured here: `wf_eval_last_n_seasons`
+        (how many seasons stage 1 scores; the count includes the unscorable current season, so
+        the default `3` scores two), `wf_calibration_weeks` / `train_calibration_weeks` (the
+        newest weeks held out of the tree fit for calibration; the benchmark uses `4`),
+        `wf_market_prob_source` (`raw` against `novig` moneylines) and
+        `wf_market_prob_blend_method` (`prob` against `logit`), plus `market_transform`
+        (`auto`, which is on whenever lines exist, against `true`).
+      Work: (a) as a Milestone 60 behavior-preserving move, make the weekly run read
+      `config/weekly_run.yaml` by default and rewrite the YAML to today's code defaults (so no
+      output changes), quoting `off` as `"off"`: YAML reads a bare `off` as the boolean
+      `false`, a latent bug in the current file; (b) here in step 3, decide the output-changing
+      group with the measures of success under "Roadmap Status", on six seasons and two seeds,
+      against the benchmark configuration, so that production and benchmark share every setting
+      (rule 11); (c) consider retiring the weekly stage-1 re-selection altogether. Once 56.5
+      fixes the probability path by evidence, re-choosing among near-identical candidates each
+      week only adds noise (Week 3's two runs chose `none`, then `elo`, a day apart) and costs
+      most of the run's time. Changing a default is must-ask.
+
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.
 
@@ -508,6 +538,32 @@ Formerly Milestone 42. Parked by user direction on 2026-09-09: XGBoost margin/to
 primary model and benchmark. Reopen only when the user asks. Original scope: direct win-probability
 classifier, logit-space probability ensemble, optional LightGBM/CatBoost extras, season-phase
 specialization.
+
+LightGBM status (2026-09-24, user's decision): stays installed and stays parked. A proper
+comparison with XGBoost, as a replacement or a blend member, waits until this milestone is
+reopened. The CUDA build is set up without a shim (version `0.18.3`): NVIDIA's NCCL 2.31.2 for
+CUDA 13.3 replaced Ubuntu's CUDA 12 build (the mismatch behind the `cudaGetDeviceProperties_v2`
+load failure), and `nfl-lightgbm-cuda-install` keeps a CUDA build of the locked version,
+rebuilding only when needed (README, "Recommended: uv project workflow"). The GPT-5.4 session that first
+got it working used a shim and a startup hook; both are gone (transcript in
+`.agents/GPT-5-4_LightGBM_CUDA_session_transcript.md`).
+
+Device check, 2026-09-24 (`.agents/m57/lightgbm_device_check.py`, output beside it in
+`lightgbm_device_check.txt`; informal: one split, train 1999-2024, predict 2025, 491 numeric
+features, the shared 200-tree settings, idle machine):
+
+| library | CPU s/fit (12 threads) | CUDA s/fit | same seed twice on CUDA |
+| --- | --- | --- | --- |
+| LightGBM | `0.54` | `7.22` | differs, max `1.85` points |
+| XGBoost | `1.59` | `0.70` | identical |
+
+- XGBoost's CUDA build is faithful: with sampling off its predictions match the CPU's to a mean
+  of `0.038` points; with sampling on they differ only as much as a CPU re-seed does.
+- LightGBM's CUDA learner is a different approximation, not reproducible, and 13 times slower on
+  this data. With sampling off it still differs from its CPU build by a mean `0.72` points (a
+  re-seed moves `0.83`), and the same seed twice differs by up to `1.85` points, which breaks
+  the "fixed seed, fixed output" rule. When this milestone reopens, LightGBM runs on the CPU;
+  the CUDA build is optional.
 
 ---
 
@@ -599,7 +655,15 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       200); a numpy version with identical values is a candidate for the `nfl_predictor/ml/`
       chunk; (b) `shap` is not a declared dependency, so `shap_analysis` and its web job can
       only exit "not installed", and its disposition goes back to the user; (c) the backtest
-      CLI prints XGBoost's per-matrix INFO lines.
+      CLI prints XGBoost's per-matrix INFO lines. Decided 2026-09-24: (a) the numpy rewrite is
+      approved for the `nfl_predictor/ml/` chunk; (b) the user added `shap` as a dependency and
+      keeps `explain` (the re-audit: about 2 s per head on the production model, and a ranking
+      that differs sharply from gain importance), so the remaining open item of this task is
+      the `shap_analysis` characterization test. New finding: `write_weekly_config` in the
+      weekly test loads `config/weekly_run.yaml`, but no production run reads that file (see
+      "From the 2026 Week 3 weekly run" below), so the snapshot pins a configuration that
+      production does not use. Settle that item before relying on the snapshot as the
+      production pin.
 - [ ] 60.5 Move library code out of `scripts/` into the package (power-rankings computation and
       output writing into `nfl_predictor/reporting/`, the betting-report builder likewise), with
       the scripts temporarily calling the package. Drop every `from scripts import`.
@@ -660,6 +724,58 @@ Acceptance:
 
 Each group names the archived milestone it came from; the milestone's full record is in
 `ARCHIVE.md`. Resolved items have moved there.
+
+### From the 2026 Week 3 weekly run (2026-09-24)
+
+Found while producing the Week 3 picks. Runs: `models/weekly_2026_week_03/` (stopped during
+stage 1), `models/weekly_2026_week_03_fast/` (the picks the user submitted),
+`models/weekly_2026_week_03_full/` (the rerun with a fresh ETL, for the pick 'em pool). Data
+backups: `data/backup_pre_2026_week_03/` (before the first refresh) and
+`data/backup_pre_2026_week_03_full/` (before the rerun's refresh).
+
+- [ ] **`config/weekly_run.yaml` is never read.** `scripts/weekly_run.py` loads a config only
+      with `--config`, and no launcher passes it; the web UI's weekly job writes its own JSON
+      from the form instead. Every 2026 run so far used the code defaults: stage-1 window 3
+      seasons, 4 calibration weeks, raw moneylines with probability blending, early stopping 50,
+      no score rounding, CPU. The YAML differs on all of these, and `wf_n_jobs` / `xgb_n_jobs`
+      too. The weekly characterization test pins the YAML's configuration. Scheduled as task
+      56.7 (the default-config move in Milestone 60, the values in step 3).
+- [ ] **GPU never used by default.** A consequence of the item above: `xgb_device` defaults
+      to none (CPU), so stage 1 ran on the CPU (about 6 min per candidate against about 1 min
+      on the GPU with `--xgb-device cuda`). The user chose the GPU for everything (task 55.4).
+- [ ] **QB identity rename.** The user renamed `data/qb_meta_data.csv` to
+      `data/meta_data.csv` (the name nfeloqb writes), but `constants.QB_META_DATA_NAME` still
+      said `qb_meta_data`; a missing identity file only logs a warning and degrades QB
+      matching. A copy `data/qb_meta_data.csv` was put in place so the Week 3 runs load it
+      (1,012 identity names). Fixed 2026-09-24 (uncommitted at the time of writing): the
+      constant is `meta_data`, pinned by
+      `test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default`. Left: delete the
+      copy (must-ask: a file under `data/`).
+- [ ] **The final fit never trains on the newest weeks.** Production and walk-forward both hold
+      out the newest 4 completed weeks from the tree fit and use them only for calibration, so
+      the Week 3 model's trees did not see 2026 Weeks 1-2, which reach it only through the
+      features. Measure a refit on all rows (or a smaller hold-out) in step 3 with the
+      out-of-fold calibration pool; the user asked whether this is a design flaw.
+- [ ] **`--wf-eval-last-n-seasons` counts the current season.** It counts the current season
+      even when that season has no scorable weeks: the default 3 scores two seasons, `2`
+      scores one, and `1` fails with "No walk-forward folds available". Make the count mean
+      completed seasons, or document it, in the 60.6 flag pass.
+- [ ] **Stage-1 selection and pick-time timing.** Already scheduled (task 56.5): this week's
+      stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
+      `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
+- [ ] **Stage 1 got slower.** Candidates now fit the shared 200-tree default at learning
+      rate `0.0165` (last week's candidate keys show 120 trees at `0.070`). Expected, but it
+      makes the GPU default matter more.
+- [ ] **ETL rebuilds all 28 seasons every run** (about 9.5 minutes on 2026-09-24: about 19 s
+      per season in `collect_all_data`, then QB features). Only the raw downloads are cached;
+      every feature row from 1999 on is recomputed. An incremental mode (reprocess the current
+      season plus what its week-1 priors need, reuse cached finished seasons keyed on code
+      version and input hashes, and prove identical output with a characterization test) fits
+      step 4 (rebuild reproducibility). The ETL is Polars on the CPU; the GPU does not help it.
+- [ ] **Betting report edges.** The largest moneyline "edges" in Week 3 mostly reflect the gap
+      between each game's spread and its moneyline (the market-anchored margin maps through the
+      deterministic curve, while the edge compares with the no-vig moneyline). Keep the report
+      diagnostic; revisit with task 56.6 (pick-time lines).
 
 ### From Milestone 59 (benchmark instrument; audited 2026-09-19)
 

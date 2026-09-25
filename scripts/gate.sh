@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The one validation gate. Runs every check that .github/workflows/validation.yml runs, in the
-# same order, using the repo's own .venv, and reports every step before exiting non-zero, so a
-# single run shows everything that is wrong rather than the first failure.
+# The one validation gate. CI (.github/workflows/validation.yml) runs this script after setting
+# up the environment, so a local run and CI run the same checks. It uses the repo's own .venv and
+# reports every step before exiting non-zero, so a single run shows everything that is wrong
+# rather than the first failure. The frontend steps (--web) run in CI as their own job.
 #
 # Usage:
 #   scripts/gate.sh          Python gate: lock, sync, ruff format, ruff, ty, pyright, pytest,

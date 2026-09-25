@@ -1,7 +1,7 @@
 """Builders for synthetic run directories and artifact files.
 
 ``data/`` and ``models/`` are gitignored, so every API test fabricates the files it reads. The
-headers below mirror the real artifacts written by ``scripts/weekly_run.py`` and the training CLI.
+headers below mirror the real artifacts written by the weekly run and the training command.
 """
 
 from __future__ import annotations

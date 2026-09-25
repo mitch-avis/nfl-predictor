@@ -1,8 +1,8 @@
 """Typed locations of every artifact a run directory can hold.
 
-``scripts/weekly_run.py`` names its per-week outputs ``season_{S}_week_{WW}_*`` and its power
-rankings ``*_season_{S}_week_{WW}.csv`` (stamped one week earlier than the predictions), so the
-file names are discovered by glob rather than assumed.
+The weekly run (``nfl-predictor weekly``) names its per-week outputs ``season_{S}_week_{WW}_*``
+and its power rankings ``*_season_{S}_week_{WW}.csv`` (stamped one week earlier than the
+predictions), so the file names are discovered by glob rather than assumed.
 """
 
 from __future__ import annotations

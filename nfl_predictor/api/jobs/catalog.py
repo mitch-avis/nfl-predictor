@@ -1,7 +1,8 @@
 """The catalog of jobs the UI can launch, and the argv each one builds.
 
 Every project entrypoint is a CLI that reads ``sys.argv`` and configures logging globally, so jobs
-always run as subprocesses of the venv interpreter rather than in-process. A template declares its
+always run as subprocesses of the venv interpreter rather than in-process, each through the
+``nfl-predictor`` front door (``python -m nfl_predictor <command>``). A template declares its
 parameters once; the API validates submissions against them and the frontend renders the form from
 the same schema.
 """
@@ -18,12 +19,12 @@ from typing import Any, Literal
 from nfl_predictor.api.errors import ConflictError, UnprocessableEntityError
 from nfl_predictor.api.runs.indexer import RunSummary
 from nfl_predictor.api.settings import Settings
+from nfl_predictor.cli.options import MODEL_KINDS
 
 ParamKind = Literal["int", "float", "str", "bool", "choice"]
 WALK_FORWARD_GROUP = "walk_forward"
 DATASET_GROUP = "datasets"
 DEFAULT_MODEL_KIND = "margin_total"
-MODEL_KINDS = ("margin_total", "blended_margin_total")
 
 
 @dataclass(frozen=True)
@@ -73,9 +74,9 @@ class JobContext:
         """Return the repository root jobs run in."""
         return self.settings.root_dir
 
-    def script(self, name: str) -> str:
-        """Return the absolute path of ``scripts/<name>``."""
-        return str(self.root / "scripts" / name)
+    def command(self, name: str) -> list[str]:
+        """Return the argv prefix that runs ``nfl-predictor <name>`` with the job interpreter."""
+        return [self.python, "-m", "nfl_predictor", name]
 
     def data_file(self, name: str) -> str:
         """Return the absolute path of a file in the data directory."""
@@ -154,7 +155,7 @@ def _timestamp() -> str:
 
 def _build_etl_full(ctx: JobContext) -> list[str]:
     """Build the full ETL rebuild command."""
-    argv = [ctx.python, "-m", "nfl_predictor.data_collection", "--data-dir", _data_dir(ctx)]
+    argv = [*ctx.command("data"), "--data-dir", _data_dir(ctx)]
     _flag(argv, "--min-season", ctx.params.get("min_season"))
     _flag(argv, "--max-season", ctx.params.get("max_season"))
     _flag(argv, "--refresh-nflreadpy", ctx.params.get("refresh_nflreadpy"))
@@ -164,9 +165,7 @@ def _build_etl_full(ctx: JobContext) -> list[str]:
 def _build_lines_refresh(ctx: JobContext) -> list[str]:
     """Build the lines-only refresh command."""
     return [
-        ctx.python,
-        "-m",
-        "nfl_predictor.lines_refresh",
+        *ctx.command("lines"),
         "--season",
         str(ctx.params["season"]),
         "--week",
@@ -186,16 +185,14 @@ def _build_weekly_run(ctx: JobContext) -> list[str]:
         config["predict_path"] = _week_predict_path(ctx, int(week))
     path = ctx.config_path()
     path.write_text(json.dumps(config, indent=2, sort_keys=True), encoding="utf-8")
-    return [ctx.python, ctx.script("weekly_run.py"), "--config", str(path)]
+    return [*ctx.command("weekly"), "--config", str(path)]
 
 
 def _build_train(ctx: JobContext) -> list[str]:
     """Build the training command, writing into a fresh run directory."""
     run_id = f"train_{_timestamp()}"
     argv = [
-        ctx.python,
-        "-m",
-        "nfl_predictor.ml_model",
+        *ctx.command("train"),
         "--model-kind",
         str(ctx.params.get("model_kind", DEFAULT_MODEL_KIND)),
         "--data-path",
@@ -217,9 +214,7 @@ def _build_predict(ctx: JobContext) -> list[str]:
     week = int(ctx.params["week"])
     output = run.run_dir / f"season_{season}_week_{week:02d}_predictions.csv"
     return [
-        ctx.python,
-        "-m",
-        "nfl_predictor.ml_model",
+        *ctx.command("predict"),
         "--model-in",
         str(run.run_files.model),
         "--model-kind",
@@ -240,9 +235,7 @@ def _build_predict(ctx: JobContext) -> list[str]:
 def _build_predict_week(ctx: JobContext) -> list[str]:
     """Build the command that extracts a future week's prediction inputs."""
     argv = [
-        ctx.python,
-        "-m",
-        "nfl_predictor.week_builder",
+        *ctx.command("build-week"),
         "--season",
         str(ctx.params["season"]),
         "--week",
@@ -259,8 +252,7 @@ def _build_power_rankings(ctx: JobContext) -> list[str]:
     """Build the power-rankings command writing into the active run directory."""
     run = ctx.require_run()
     return [
-        ctx.python,
-        ctx.script("power_rankings.py"),
+        *ctx.command("rankings"),
         "--model-in",
         str(run.run_files.model),
         "--model-kind",
@@ -282,8 +274,7 @@ def _build_leakage_audit(ctx: JobContext) -> list[str]:
     """Build the leakage-audit command."""
     out_json = ctx.params.get("out_json") or str(ctx.settings.reports_path / "leakage_audit.json")
     return [
-        ctx.python,
-        ctx.script("leakage_audit.py"),
+        *ctx.command("leakage-audit"),
         "--data-path",
         ctx.data_file("completed_games_ml.csv"),
         "--out-json",
@@ -293,23 +284,18 @@ def _build_leakage_audit(ctx: JobContext) -> list[str]:
 
 def _build_validate_offline(ctx: JobContext) -> list[str]:
     """Build the offline validation command."""
-    return [ctx.python, ctx.script("validate_offline.py"), "--data-dir", _data_dir(ctx)]
+    return [*ctx.command("validate"), "--data-dir", _data_dir(ctx)]
 
 
 def _build_validate_live(ctx: JobContext) -> list[str]:
     """Build the live validation command."""
-    return [ctx.python, ctx.script("validate_live.py"), "--data-dir", _data_dir(ctx)]
+    return [*ctx.command("validate"), "--live", "--data-dir", _data_dir(ctx)]
 
 
 def _build_walk_forward(ctx: JobContext) -> list[str]:
     """Build the standalone walk-forward backtest command."""
-    argv = [
-        ctx.python,
-        ctx.script("walk_forward_backtest.py"),
-        "--data-path",
-        ctx.data_file("completed_games_ml.csv"),
-    ]
-    _flag(argv, "--eval-last-n-seasons", ctx.params.get("eval_last_n_seasons"))
+    argv = [*ctx.command("backtest"), "--data-path", ctx.data_file("completed_games_ml.csv")]
+    _flag(argv, "--wf-eval-last-n-seasons", ctx.params.get("eval_last_n_seasons"))
     _flag(argv, "--wf-start-week", ctx.params.get("wf_start_week"))
     _flag(argv, "--out-json", ctx.params.get("out_json"))
     return argv
@@ -319,9 +305,8 @@ def _build_shap_analysis(ctx: JobContext) -> list[str]:
     """Build the SHAP analysis command for the active run's model."""
     run = ctx.require_run()
     argv = [
-        ctx.python,
-        ctx.script("shap_analysis.py"),
-        "--model-path",
+        *ctx.command("explain"),
+        "--model-in",
         str(run.run_files.model),
         "--data-path",
         ctx.data_file("completed_games_ml.csv"),

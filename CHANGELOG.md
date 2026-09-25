@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.21.0] - 2026-09-24
+
+### Added
+
+- One front door, `nfl-predictor <command>` (a console script installed by `uv sync`, and
+  `python -m nfl_predictor`). `nfl-predictor --help` lists the commands by group: `weekly`;
+  `backtest`, `sweep`, `explain`; `data`, `validate`, `leakage-audit`, `lines`, `build-week`;
+  `train`, `predict`, `rankings`; `web`, `users`. Each command keeps its own options, and its help
+  names it `nfl-predictor <command>`. `predict` is `train` with `--model-in`, which it requires.
+- `nfl-predictor validate --live`: the offline and live validation scripts are one command.
+
+### Changed
+
+- The weekly run moved from `scripts/weekly_run.py` into the package `nfl_predictor/weekly_run/`,
+  split into `config` (config file and parser), `inputs` (prediction file and output paths),
+  `stage1` (the walk-forward comparison) and `pipeline` (`main`). All 44 definitions are
+  unchanged apart from module-qualified references (checked by comparing syntax trees), and
+  `python -m nfl_predictor.weekly_run` runs it.
+- The other entrypoints moved from `scripts/` into `nfl_predictor/cli/`: `backtest`
+  (`walk_forward_backtest.py`), `sweep` (`wf_compare.py`), `explain` (`shap_analysis.py`),
+  `leakage_audit`, `rankings` (`power_rankings.py`) and `validate`. Two helpers that existed as
+  identical copies (`market_modes`, `parse_feature_groups`) now live once, in
+  `nfl_predictor/cli/options.py`.
+- The old `scripts/<name>.py` paths still work: each is now a few lines that call the package, so
+  the web jobs and existing launchers run unchanged. No test imports from `scripts/` any more,
+  and the moved code counts toward coverage.
+- No output changes: the weekly-run, backtest, sweep, leakage-audit and SHAP snapshots pass
+  unchanged, and the CLI surface snapshot differs only by the new front door and `--live`
+  (every moved parser is identical under its new module name).
+
 ## [0.20.0] - 2026-09-24
 
 ### Changed

@@ -5,17 +5,22 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-14) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestone 60, task 56.7 and "From the 2026 Week 3
 weekly run") and this file.
 
-## State (written 2026-09-24 late evening, Milestone 60 at 60.5)
+## State (written 2026-09-24 late evening, Milestone 60 at 60.6)
 
-- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.18.4`. Not
-  pushed; merging and pushing are must-ask. `scripts/gate.sh` exits `0` on the final tree
-  (see the `0.18.4` commit). The working tree is clean apart from the user's untracked
+- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.18.5`. Not
+  pushed; merging and pushing are must-ask. `scripts/gate.sh --web` exits `0` on the final
+  tree (see the `0.18.5` commits). The working tree is clean apart from the user's untracked
   `.agents/GPT-5-4_LightGBM_CUDA_session_transcript.md` (leave it untracked; markdownlint skips
   `.agents/*transcript*.md`).
 - Tasks 60.1-60.4 are done and archived (`ARCHIVE.md`, "Milestone 60 (partial)"); every
   sign-off decision is in `.agents/m60/PROPOSAL.md`, "Sign-off", and in the 60.5-60.9 texts.
 - `0.18.4` finished 60.4 with `tests/test_shap_analysis_characterization.py` (snapshots under
-  `tests/fixtures/shap_analysis_characterization/`). The characterization snapshots must not
+  `tests/fixtures/shap_analysis_characterization/`).
+- `0.18.5` landed 60.5 (still `[ ]`, narrowed): the ranking pipeline is in
+  `nfl_predictor/reporting/power_rankings.py` (`write_ranking_outputs` is the old private
+  `_write_outputs`), the betting report builder in `nfl_predictor/reporting/betting_report.py`,
+  and no production code imports `scripts/`. 13 test modules still import entrypoint modules
+  from `scripts/`; that remainder moves with 60.6. The characterization snapshots must not
   change during a move; an intended output change rewrites them with
   `NFLP_UPDATE_SNAPSHOTS=1` in the same commit and says so in the changelog.
 - Decisions made 2026-09-24 (all recorded in `TODO.md` or `ARCHIVE.md`):
@@ -41,21 +46,23 @@ weekly run or any walk-forward unless the user asks.
 
 ## Your task
 
-1. Task 60.5: move library code out of `scripts/` into the package (power-rankings computation
-   and output writing into `nfl_predictor/reporting/`, the betting-report builder likewise),
-   with the scripts temporarily calling the package, and drop every `from scripts import`
-   (production and tests; `grep -rn "from scripts import\|import scripts" nfl_predictor tests`
-   lists them). Every characterization snapshot stays unchanged.
-2. Then 60.6-60.9, each chunk small, gated and committed. Group every edit under
-   `nfl_predictor/ml/` into one chunk, because it changes every checkpoint fingerprint; the
-   bootstrap rewrite goes in that chunk.
+1. Task 60.6, in small chunks, each gated and committed: the `nfl-predictor <command>` front
+   door, the retirements, the shared options module, the flag removals, the weekly run reading
+   `config/weekly_run.yaml` by default (rewritten to today's code defaults, an intended weekly
+   snapshot rewrite), and the step-2 follow-ups. Group every edit under `nfl_predictor/ml/`
+   into one chunk, because it changes every checkpoint fingerprint; the bootstrap rewrite goes
+   in that chunk. When the entrypoints have moved, `grep -rl "from scripts import" tests` must
+   be empty (the 60.5 remainder).
+2. Then 60.7-60.9.
 3. Rewrite this file at every landed chunk (rule 8).
 
 ## Open questions for the user
 
 - (Found in 60.4) `shap_analysis --component market` is dead: `train_blended_margin_total_model`
   always stores `market_model=None`, so the request silently analyzes the team model. Remove
-  the flag in 60.6, or make it fail when no market model exists? Not blocking 60.5.
+  the flag in 60.6, or make it fail when no market model exists?
+- (60.5, narrowed) Confirm that the test modules' `from scripts import` lines go with 60.6,
+  when their entrypoints move, rather than counting as unfinished 60.5 work.
 
 ## Notes
 

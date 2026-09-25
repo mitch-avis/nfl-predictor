@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.20.0] - 2026-09-24
+
+### Changed
+
+- The walk-forward paired bootstrap (the deterministic-minus-market Brier and log-loss
+  intervals) computes each game's loss terms once and averages the rows each resample draws,
+  instead of calling scikit-learn twice per resample. The random draws are unchanged and every
+  interval bound matches the old computation to `1e-12` (a new test pins it against a copy of the
+  old loop); a 1,615-game window with 5,000 resamples takes 0.07 s instead of 9.7 s. Stage 1 of
+  the weekly run spent almost all its non-training time there.
+- Every walk-forward checkpoint fingerprint changes, because files under `nfl_predictor/ml/`
+  changed, so the next run of any configuration retrains from scratch. The walk-forward report's
+  `config` no longer lists `early_stopping_rounds` or `recency_half_life_weeks`; its metrics are
+  unchanged (the backtest characterization snapshot was rewritten for exactly those two keys).
+
+### Removed
+
+- `ScoreModel`, the separate home-score and away-score model, with `--model-kind score` in
+  `ml_model`, `scripts/power_rankings.py` and the web job catalog, `train_score_model`,
+  `predict_week`, the score-only helpers, and the score branches in the checkpoint loader,
+  feature importance, the power-ranking pipeline and `scripts/shap_analysis.py` (`--target` now
+  takes `margin` or `total`). It was never measured, and no run or saved model used it.
+- `scripts/shap_analysis.py --component`: the blend trainer never stores a market model, so
+  `market` silently analyzed the team model. A blend's team model is always analyzed; the report
+  keeps `component: team`.
+- The week-based recency half-life, never used by any run: `--recency-half-life-weeks` in
+  `ml_model` and `scripts/walk_forward_backtest.py`, `--wf-recency-half-life-weeks` and
+  `--train-recency-half-life-weeks` in `scripts/weekly_run.py`, and its plumbing. The
+  season-based half-life stays.
+- Inert early-stopping settings: `WalkForwardConfig.early_stopping_rounds`,
+  `scripts/weekly_run.py --wf-early-stopping-rounds` (and `wf_early_stopping_rounds` in
+  `config/weekly_run.yaml`) and `scripts/wf_compare.py --early-stopping-rounds`. In-season fits
+  already ran the full tree budget; tuning keeps its own early-stopping setting.
+- `nfl_predictor/ml/model_compare.py` (its only caller, `objective_compare_models`, was retired
+  in `0.19.0`) and the unused `LogEvalCallback` logging callback, which XGBoost 3.4's `fit()`
+  never received.
+- 7 more command-line options in all (221 to 214). The weekly-run and SHAP characterization
+  snapshots pass unchanged.
+
 ## [0.19.0] - 2026-09-24
 
 ### Changed

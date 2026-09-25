@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.25.0] - 2026-09-25
+
+### Changed
+
+- `weekly`: `--xgb-n-jobs` (config key `xgb_n_jobs`) alone sets XGBoost's CPU threads, for the
+  stage-1 walk-forward and the final fit alike, and defaults to every CPU core. Until now stage 1
+  ran on one thread unless `--xgb-n-jobs` was given, while the final fit used every core. Results
+  do not depend on the thread count: the weekly characterization fixture run at 1 thread and at
+  24 gave identical outputs in all eight files it pins, apart from the thread count written into
+  each stage-1 candidate key and that key's hash. The fixture keeps pinning one thread, so its
+  snapshots are unchanged. Stage 1 now runs faster on the CPU.
+
+### Removed
+
+- `weekly --wf-n-jobs` and its config key `wf_n_jobs`. A config file that still sets
+  `wf_n_jobs` fails with a message naming `xgb_n_jobs` instead of being read silently.
+
 ## [0.24.0] - 2026-09-25
 
 ### Added

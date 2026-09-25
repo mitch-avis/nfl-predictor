@@ -622,14 +622,16 @@ Ground rules for the whole milestone:
 
 Tasks 60.1-60.3 (the generated inventories and the user's sign-off), 60.4 (the characterization
 tests), 60.5 (the library moves), 60.6 (the front door, retirements, renames and removals,
-`0.19.0`-`0.26.0`), 60.7 (the web jobs on the front door, `0.26.1` and `0.27.0`) and 60.8 (CI runs
-the gate; the docs, `0.27.1`) are done and archived under "Milestone 60 (partial)" in `ARCHIVE.md`;
-the decisions are in `.agents/m60/PROPOSAL.md`, "Sign-off". In short: one `nfl-predictor <command>`
-front door; retire `golden_command`, `backtest_predictions`, `objective_compare_models` (with
-`nfl_predictor/ml/model_compare.py`), `betting_pipeline` (after `build_betting_report` moves) and
-the whole Excel betting workbook; remove ScoreModel (task 55.5); move everything else; keep
-`scripts/gate.sh`; one naming rule with old spellings kept as aliases; old launchers reproduce from
-their recorded commit.
+`0.19.0`-`0.26.0`), 60.7 (the web jobs on the front door, `0.26.1` and `0.27.0`), 60.8 (CI runs the
+gate; the docs, `0.27.1`) and 60.9 (the `compare` command, `0.28.0`) are done and archived under
+"Milestone 60 (partial)" in `ARCHIVE.md`; the decisions are in `.agents/m60/PROPOSAL.md`,
+"Sign-off". In short: one `nfl-predictor <command>` front door; retire `golden_command`,
+`backtest_predictions`, `objective_compare_models` (with `nfl_predictor/ml/model_compare.py`),
+`betting_pipeline` (after `build_betting_report` moves) and the whole Excel betting workbook; remove
+ScoreModel (task 55.5); move everything else; keep `scripts/gate.sh`; one naming rule with old
+spellings kept as aliases; old launchers reproduce from their recorded commit. Every task is done;
+the milestone stays open (closing it is must-ask) until the user decides the two open items below:
+the blend power-rankings question and the per-template live checks in the acceptance list.
 
 - [ ] Open question for the user (found 2026-09-25 in 60.6/60.7, not yet decided): the power
       rankings cannot use a blend model. `_predict_future_games` in
@@ -638,21 +640,18 @@ their recorded commit.
       before its blend branch is reached (pinned by `tests/test_blended_model_paths.py`). It has
       never worked; `0.27.0` fixed only the model-kind vocabulary in front of it. Options: read
       the team model's spec for a blend, or reject blend runs for rankings with a clear message.
-- [ ] 60.9 A `compare` command: paired comparison of two walk-forward runs from their fold
-      checkpoints (candidate minus reference per game, bootstrap intervals, the windows week 1,
-      week 2, weeks 3-18 and all weeks; deterministic Brier, log loss, pick accuracy, margin and
-      total MAE, pool points; two seeds combined per game when given), replacing
-      `objective_compare_models` and the per-run `compare_to_benchmark.py` copies under
-      `models/`. Tooling only; it changes no production output. Its numbers must reproduce an
-      existing `REVIEW.md` rescore exactly before it is trusted.
 
 Acceptance:
 
 - [ ] Every flag and every file under `scripts/` has a disposition the user signed off on, in a
       script-generated inventory checked into `.agents/`.
 - [ ] The weekly-run characterization test passes unchanged from the first chunk to the last.
-- [ ] No production code is imported from `scripts/`, and the moved code counts toward coverage
-      with the `90%` floor still met.
+      Holds for every chunk except `0.23.0`, where the snapshot was rewritten on purpose to pin
+      the production configuration once the weekly run read `config/weekly_run.yaml` (the
+      user's decision, task 56.7(a)); for the user to accept as met or not when closing.
+- [x] No production code is imported from `scripts/`, and the moved code counts toward coverage
+      with the `90%` floor still met. Verified 2026-09-25 (`0.28.0`): `scripts/` holds only
+      `gate.sh`, no module imports `scripts`, and the gate reports coverage above 92%.
 - [ ] Every web job template launches and reports progress (tests plus one live check per
       template), and `web_ui_plan.md` records the changes. Tests and the plan are done
       (`0.27.0`: every template's command parses with its target's own parser); the live checks

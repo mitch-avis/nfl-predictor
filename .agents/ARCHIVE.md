@@ -68,8 +68,8 @@ Follow-ups resolved after their milestones closed:
 
 Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`), task 60.4
 in versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`, task 60.6 in `0.19.0`-`0.26.0`
-(2026-09-24/25), task 60.7 in `0.26.1` and `0.27.0`, task 60.8 in `0.27.1` (2026-09-25); task 60.9
-stays in `TODO.md`.
+(2026-09-24/25), task 60.7 in `0.26.1` and `0.27.0`, task 60.8 in `0.27.1`, task 60.9 in `0.28.0`
+(2026-09-25). The milestone stays open in `TODO.md` for the user's decisions on its open items.
 
 ### 60.1 and 60.2 - Generated inventories
 
@@ -233,6 +233,22 @@ went from 309 actions in 19 entrypoints to 215 in 15 parsers.
   required options. `tests/cli_parsing.py` is the shared resolver; the web job test now also
   reads the weekly job's config file and validates its keys.
 - The gate on the final tree: 1020 passed, coverage 92.15%.
+
+### 60.9 - The `compare` command (version `0.28.0`)
+
+`nfl-predictor compare` (`nfl_predictor/cli/compare.py`; the computation in
+`nfl_predictor/reporting/run_comparison.py`, outside the checkpoint fingerprint) rescores
+walk-forward runs from their fold checkpoints and compares candidate with reference game by game in
+week 1, week 2, weeks 3-18 and all weeks: deterministic Brier, log loss, pick accuracy, margin and
+total MAE and pool points, each run's market Brier and deterministic-minus-market interval, and
+paired differences with 95% bootstrap intervals (games; weeks for pool points), with seed pairs
+averaged per game. Run directories add provenance and the settings that differ. Its definitions
+follow the independent task 55.8 rescore, and the task's condition was met before it was trusted:
+`.agents/m60/verify_compare.py` recomputes every number in
+`models/wf_m55_8_review/independent_rescore.json` (19 contrasts, 9 arms, 4 windows; 1,928 values)
+and finds 0 mismatches at exact float equality (`.agents/m60/verify_compare_output.txt`). Unit
+tests on hand-built checkpoints: `tests/test_run_comparison.py`. The per-run
+`compare_to_benchmark.py` copies under `models/` stay as records.
 
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 

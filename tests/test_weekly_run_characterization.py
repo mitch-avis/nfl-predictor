@@ -29,7 +29,7 @@ import pandas as pd
 import pytest
 
 from nfl_predictor.ml import walk_forward
-from scripts import weekly_run
+from nfl_predictor.weekly_run import pipeline
 from tests import snapshots
 from tests.weekly_fixture import (
     CURRENT_SEASON,
@@ -51,7 +51,7 @@ def _run_weekly(config_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.setattr(walk_forward, "BOOTSTRAP_SAMPLES", TEST_BOOTSTRAP_SAMPLES)
     monkeypatch.setattr(sys, "argv", ["weekly_run.py", "--config", str(config_path)])
-    assert weekly_run.main() == 0
+    assert pipeline.main() == 0
 
 
 def _snapshot_outputs(root: Path, output_dir: Path) -> dict[str, Path]:

@@ -8,8 +8,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from nfl_predictor.cli import sweep
 from nfl_predictor.ml import walk_forward
-from scripts import wf_compare
 
 
 def test_parse_args_resumes_from_the_shared_checkpoint_dir_by_default(
@@ -17,12 +17,12 @@ def test_parse_args_resumes_from_the_shared_checkpoint_dir_by_default(
 ) -> None:
     """Every candidate resumes from saved weeks unless the run asks otherwise."""
     monkeypatch.setattr(sys, "argv", ["wf_compare.py"])
-    defaults = wf_compare._parse_args()
+    defaults = sweep._parse_args()
     assert defaults.resume is True
     assert defaults.checkpoint_dir == walk_forward.DEFAULT_CHECKPOINT_DIR
 
     monkeypatch.setattr(sys, "argv", ["wf_compare.py", "--no-resume"])
-    assert wf_compare._parse_args().resume is False
+    assert sweep._parse_args().resume is False
 
 
 def test_run_one_forwards_checkpoint_settings(
@@ -49,10 +49,10 @@ def test_run_one_forwards_checkpoint_settings(
             "reliability": [],
         }
 
-    monkeypatch.setattr(wf_compare.walk_forward, "run_walk_forward_backtest", fake_run)
-    monkeypatch.setattr(wf_compare.metrics_utils, "reliability_ece", lambda _bins: 0.0)
+    monkeypatch.setattr(sweep.walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(sweep.metrics_utils, "reliability_ece", lambda _bins: 0.0)
 
-    row = wf_compare._run_one(
+    row = sweep._run_one(
         pd.DataFrame(),
         label="candidate",
         eval_last_n_seasons=1,

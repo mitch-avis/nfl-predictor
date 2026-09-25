@@ -18,8 +18,8 @@ from typing import Any
 import pandas as pd
 import pytest
 
+from nfl_predictor.cli import backtest, leakage_audit, sweep
 from nfl_predictor.ml import walk_forward
-from scripts import leakage_audit, walk_forward_backtest, wf_compare
 from tests import snapshots
 from tests.weekly_fixture import build_fixture
 
@@ -104,7 +104,7 @@ def test_walk_forward_backtest_report_matches_snapshot(
     paths = build_fixture(tmp_path)
     out_json = tmp_path / "wf" / "metrics_report.json"
     _run_main(
-        walk_forward_backtest,
+        backtest,
         [
             "--data-path",
             str(paths["completed"]),
@@ -146,7 +146,7 @@ def test_wf_compare_summary_matches_snapshot(
     paths = build_fixture(tmp_path)
     out_csv = tmp_path / "wf_compare.csv"
     code = _run_main(
-        wf_compare,
+        sweep,
         [
             "--data-path",
             str(paths["completed"]),

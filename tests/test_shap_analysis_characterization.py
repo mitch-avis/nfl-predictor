@@ -17,9 +17,9 @@ from pathlib import Path
 import joblib
 import pytest
 
+from nfl_predictor.cli import explain
 from nfl_predictor.ml import ml_model_core, ml_model_training
 from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
-from scripts import shap_analysis
 from tests import snapshots
 from tests.weekly_fixture import build_fixture
 
@@ -88,7 +88,7 @@ def trained(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
 def _run_shap(argv: list[str], monkeypatch: pytest.MonkeyPatch) -> int:
     """Run the entrypoint's ``main`` with ``argv``."""
     monkeypatch.setattr(sys, "argv", ["shap_analysis.py", *argv])
-    return shap_analysis.main()
+    return explain.main()
 
 
 @pytest.mark.parametrize(

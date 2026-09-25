@@ -1,4 +1,4 @@
-"""Tests for walk_forward_backtest script helpers."""
+"""Tests for backtest script helpers."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from nfl_predictor.cli import backtest, options
 from nfl_predictor.ml import walk_forward
-from scripts import walk_forward_backtest
 
 
 def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
@@ -32,7 +32,7 @@ def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
         }
     )
 
-    dropped = walk_forward_backtest._trend_feature_columns(df)
+    dropped = backtest._trend_feature_columns(df)
 
     assert set(dropped) == {
         "week_in_season_norm",
@@ -50,7 +50,7 @@ def test_resume_is_on_by_default_and_uses_the_shared_checkpoint_dir(
 ) -> None:
     """Re-running an identical command picks up saved weeks unless told not to."""
     monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
-    defaults = walk_forward_backtest._parse_args()
+    defaults = backtest._parse_args()
     assert defaults.resume is True
     assert defaults.checkpoint_dir == walk_forward.DEFAULT_CHECKPOINT_DIR
 
@@ -59,7 +59,7 @@ def test_resume_is_on_by_default_and_uses_the_shared_checkpoint_dir(
         "argv",
         ["walk_forward_backtest.py", "--no-resume", "--checkpoint-dir", "models/elsewhere"],
     )
-    overridden = walk_forward_backtest._parse_args()
+    overridden = backtest._parse_args()
     assert overridden.resume is False
     assert overridden.checkpoint_dir == Path("models/elsewhere")
 
@@ -110,7 +110,7 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
         ],
     )
 
-    walk_forward_backtest.main()
+    backtest.main()
 
     assert captured == {"checkpoint_dir": tmp_path / "checkpoints", "resume": False}
     assert json.loads(out_json.read_text())["config"]["checkpoint"] == checkpoint
@@ -125,12 +125,12 @@ def test_disable_feature_groups_arg_parses_comma_separated_list() -> None:
             "--disable-feature-groups",
             "pbp,other",
         ]
-        args = walk_forward_backtest._parse_args()
+        args = backtest._parse_args()
     finally:
         sys.argv = old_argv
 
     assert args.disable_feature_groups == "pbp,other"
-    assert walk_forward_backtest._parse_feature_groups(args.disable_feature_groups) == (
+    assert options.parse_feature_groups(args.disable_feature_groups) == (
         "pbp",
         "other",
     )
@@ -147,7 +147,7 @@ def test_parse_args_accepts_regularization_overrides() -> None:
             "--gamma",
             "2.0",
         ]
-        args = walk_forward_backtest._parse_args()
+        args = backtest._parse_args()
     finally:
         sys.argv = old_argv
 
@@ -160,7 +160,7 @@ def test_parse_args_accepts_sigma_calibration() -> None:
     old_argv = sys.argv
     try:
         sys.argv = ["walk_forward_backtest.py", "--calibration", "sigma"]
-        args = walk_forward_backtest._parse_args()
+        args = backtest._parse_args()
     finally:
         sys.argv = old_argv
 
@@ -169,9 +169,9 @@ def test_parse_args_accepts_sigma_calibration() -> None:
 
 def test_parse_feature_groups_strips_whitespace_and_drops_empty_entries() -> None:
     """Parsing tolerates surrounding whitespace, empty segments, and a missing/empty value."""
-    assert walk_forward_backtest._parse_feature_groups(" pbp , other ,") == ("pbp", "other")
-    assert walk_forward_backtest._parse_feature_groups(None) == ()
-    assert walk_forward_backtest._parse_feature_groups("") == ()
+    assert options.parse_feature_groups(" pbp , other ,") == ("pbp", "other")
+    assert options.parse_feature_groups(None) == ()
+    assert options.parse_feature_groups("") == ()
 
 
 def test_disable_feature_groups_drops_resolved_columns(
@@ -194,7 +194,7 @@ def test_disable_feature_groups_drops_resolved_columns(
             "away_total_yards": [300.0],
         }
     )
-    groups = walk_forward_backtest._parse_feature_groups("pbp")
+    groups = options.parse_feature_groups("pbp")
 
     dropped = walk_forward.resolve_feature_group_columns(list(df.columns), groups)
     remaining = df.drop(columns=dropped)
@@ -212,7 +212,7 @@ def test_disable_feature_groups_unknown_group_raises_from_cli_path(
 ) -> None:
     """An unknown feature group name raises a clear error, not an obscure library traceback."""
     monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
-    groups = walk_forward_backtest._parse_feature_groups("not_a_real_group")
+    groups = options.parse_feature_groups("not_a_real_group")
 
     with pytest.raises(ValueError, match="not_a_real_group"):
         walk_forward.resolve_feature_group_columns(["away_epa"], groups)
@@ -223,9 +223,9 @@ def test_parse_args_accepts_n_estimators_override() -> None:
     old_argv = sys.argv
     try:
         sys.argv = ["walk_forward_backtest.py", "--n-estimators", "900"]
-        args = walk_forward_backtest._parse_args()
+        args = backtest._parse_args()
         sys.argv = ["walk_forward_backtest.py"]
-        defaults = walk_forward_backtest._parse_args()
+        defaults = backtest._parse_args()
     finally:
         sys.argv = old_argv
 
@@ -274,10 +274,10 @@ def test_main_forwards_n_estimators_into_the_xgb_overrides(
     ]
 
     monkeypatch.setattr(sys, "argv", [*base_argv, "--n-estimators", "900"])
-    walk_forward_backtest.main()
+    backtest.main()
 
     monkeypatch.setattr(sys, "argv", base_argv)
-    walk_forward_backtest.main()
+    backtest.main()
 
     overrides = captured[0].xgb_params_overrides or {}
     assert overrides["n_estimators"] == 900

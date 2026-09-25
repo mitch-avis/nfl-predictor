@@ -114,6 +114,1232 @@
    "type": null
   }
  ],
+ "nfl_predictor.cli.backtest": [
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/data/completed_games_ml.csv",
+   "dest": "data_path",
+   "help": "Path to completed games dataset.",
+   "nargs": null,
+   "options": [
+    "--data-path"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 3,
+   "dest": "eval_last_n_seasons",
+   "help": "Evaluate the last N seasons in the dataset.",
+   "nargs": null,
+   "options": [
+    "--eval-last-n-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "eval_seasons",
+   "help": "Explicit seasons to evaluate (overrides --eval-last-n-seasons).",
+   "nargs": "+",
+   "options": [
+    "--eval-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 3,
+   "dest": "wf_start_week",
+   "help": "Walk-forward start week.",
+   "nargs": null,
+   "options": [
+    "--wf-start-week"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "platt",
+    "isotonic",
+    "sigma",
+    "none",
+    "elo",
+    "auto",
+    "logistic"
+   ],
+   "default": "platt",
+   "dest": "calibration",
+   "help": "Win-prob calibration method (logistic is an alias for platt).",
+   "nargs": null,
+   "options": [
+    "--calibration"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 4,
+   "dest": "wf_calibration_weeks",
+   "help": "Number of prior weeks (same season) used for time-aware calibration.",
+   "nargs": null,
+   "options": [
+    "--wf-calibration-weeks"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 42,
+   "dest": "random_seed",
+   "help": "Random seed for reproducibility.",
+   "nargs": null,
+   "options": [
+    "--random-seed"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "include_postseason",
+   "help": "Include postseason games in walk-forward evaluation.",
+   "nargs": 0,
+   "options": [
+    "--include-postseason"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "exclude_incomplete_seasons",
+   "help": "Exclude seasons whose regular season is incomplete in the dataset (useful when the current season is partial).",
+   "nargs": 0,
+   "options": [
+    "--exclude-incomplete-seasons",
+    "--no-exclude-incomplete-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "recency_half_life_seasons",
+   "help": "Optional exponential half-life in seasons for recency weighting.",
+   "nargs": null,
+   "options": [
+    "--recency-half-life-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": true,
+   "dest": "market_anchor",
+   "help": "Enable market anchoring when spread/total lines exist.",
+   "nargs": 0,
+   "options": [
+    "--market-anchor",
+    "--no-market-anchor"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": null,
+   "dest": "market_transform",
+   "help": "Use transformed market features when odds columns exist.",
+   "nargs": 0,
+   "options": [
+    "--market-transform",
+    "--no-market-transform"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "market_prob_weight",
+   "help": "Blend weight for market implied probability (0=off, 1=market only). Alias for --market-prob-blend.",
+   "nargs": null,
+   "options": [
+    "--market-prob-weight"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0.0,
+   "dest": "market_prob_blend",
+   "help": "Blend weight for market implied probability (0=off, 1=market only).",
+   "nargs": null,
+   "options": [
+    "--market-prob-blend"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0.0,
+   "dest": "market_prob_clamp",
+   "help": "Clamp model probability within +/- this delta of market (0=off).",
+   "nargs": null,
+   "options": [
+    "--market-prob-clamp"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "raw",
+    "novig"
+   ],
+   "default": "raw",
+   "dest": "market_prob_source",
+   "help": "Market probability source for blending/clamping.",
+   "nargs": null,
+   "options": [
+    "--market-prob-source"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "prob",
+    "logit"
+   ],
+   "default": "prob",
+   "dest": "market_prob_blend_method",
+   "help": "Blend method for market probabilities (prob or logit space).",
+   "nargs": null,
+   "options": [
+    "--market-prob-blend-method"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "win_prob_uncertainty",
+   "help": "Use margin quantiles to derive uncertainty-aware win probabilities.",
+   "nargs": 0,
+   "options": [
+    "--win-prob-uncertainty",
+    "--no-win-prob-uncertainty"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "disable_pruning",
+   "help": "Disable the feature pruning list.",
+   "nargs": 0,
+   "options": [
+    "--disable-pruning"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "disable_trend_features",
+   "help": "Drop trend + season-phase features for ablation comparisons.",
+   "nargs": 0,
+   "options": [
+    "--disable-trend-features"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "disable_feature_groups",
+   "help": "Comma-separated feature group names to drop for ablation comparisons (e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS.",
+   "nargs": null,
+   "options": [
+    "--disable-feature-groups"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "xgb_tree_method",
+   "help": "XGBoost tree_method override (e.g., hist).",
+   "nargs": null,
+   "options": [
+    "--xgb-tree-method"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "xgb_device",
+   "help": "XGBoost device override (e.g., cuda, cpu).",
+   "nargs": null,
+   "options": [
+    "--xgb-device"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "xgb_n_jobs",
+   "help": "XGBoost n_jobs override.",
+   "nargs": null,
+   "options": [
+    "--xgb-n-jobs"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "min_child_weight",
+   "help": "Optional XGBoost min_child_weight override.",
+   "nargs": null,
+   "options": [
+    "--min-child-weight"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "gamma",
+   "help": "Optional XGBoost gamma override.",
+   "nargs": null,
+   "options": [
+    "--gamma"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "n_estimators",
+   "help": "Optional XGBoost n_estimators override (the tree budget; every in-season fit runs the full budget).",
+   "nargs": null,
+   "options": [
+    "--n-estimators"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": true,
+   "dest": "resume",
+   "help": "Restore weeks already finished by an identical earlier run (same data, config, code and library versions) instead of training them again. Use --no-resume to retrain every week and overwrite its checkpoint.",
+   "nargs": 0,
+   "options": [
+    "--resume",
+    "--no-resume"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/models/wf_checkpoints",
+   "dest": "checkpoint_dir",
+   "help": "Root for per-week checkpoints; each run uses a subdirectory named for its fingerprint (default: models/wf_checkpoints).",
+   "nargs": null,
+   "options": [
+    "--checkpoint-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "out_json",
+   "help": "Path to metrics_report.json (default: models/<run_id>/metrics_report.json).",
+   "nargs": null,
+   "options": [
+    "--out-json"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  }
+ ],
+ "nfl_predictor.cli.explain": [
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "model_path",
+   "help": "Path to a saved model.joblib artifact.",
+   "nargs": null,
+   "options": [
+    "--model-path"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "data_path",
+   "help": "CSV dataset for feature extraction (same schema used for training).",
+   "nargs": null,
+   "options": [
+    "--data-path"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "output_path",
+   "help": "Optional output path for the SHAP report (JSON).",
+   "nargs": null,
+   "options": [
+    "--output-path"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 500,
+   "dest": "sample_size",
+   "help": "Max rows to sample for SHAP (default: 500).",
+   "nargs": null,
+   "options": [
+    "--sample-size"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 42,
+   "dest": "random_seed",
+   "help": "Random seed for row sampling.",
+   "nargs": null,
+   "options": [
+    "--random-seed"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "margin",
+    "total"
+   ],
+   "default": "margin",
+   "dest": "target",
+   "help": "Target model head to analyze (margin or total).",
+   "nargs": null,
+   "options": [
+    "--target"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  }
+ ],
+ "nfl_predictor.cli.leakage_audit": [
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "data_path",
+   "help": "Path to a completed-games ML CSV (e.g., data/completed_games_ml.csv).",
+   "nargs": null,
+   "options": [
+    "--data-path"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "out_json",
+   "help": "Where to write the JSON report.",
+   "nargs": null,
+   "options": [
+    "--out-json"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "away_rest",
+   "dest": "feature_start",
+   "help": "First column in feature range (inclusive).",
+   "nargs": null,
+   "options": [
+    "--feature-start"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "home_moneyline",
+   "dest": "feature_end",
+   "help": "Last column in feature range (inclusive).",
+   "nargs": null,
+   "options": [
+    "--feature-end"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": true,
+   "dest": "include_market",
+   "help": "Include market columns as features when present.",
+   "nargs": 0,
+   "options": [
+    "--include-market"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreFalseAction",
+   "choices": null,
+   "default": true,
+   "dest": "include_market",
+   "help": "Exclude market columns from the feature set.",
+   "nargs": 0,
+   "options": [
+    "--exclude-market"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "market_transform",
+   "help": "Enable market-derived columns (market_home_margin, etc).",
+   "nargs": 0,
+   "options": [
+    "--market-transform"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0.5,
+   "dest": "max_cardinality_ratio",
+   "help": "Drop categoricals with unique_ratio >= threshold.",
+   "nargs": null,
+   "options": [
+    "--max-cardinality-ratio"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  }
+ ],
+ "nfl_predictor.cli.main": [
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "backtest",
+    "build-week",
+    "data",
+    "explain",
+    "leakage-audit",
+    "lines",
+    "predict",
+    "rankings",
+    "sweep",
+    "train",
+    "users",
+    "validate",
+    "web",
+    "weekly"
+   ],
+   "default": null,
+   "dest": "command",
+   "help": null,
+   "nargs": null,
+   "options": [],
+   "required": true,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "args",
+   "help": "==SUPPRESS==",
+   "nargs": "...",
+   "options": [],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  }
+ ],
+ "nfl_predictor.cli.rankings": [
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "model_in",
+   "help": "Path to model checkpoint .joblib",
+   "nargs": null,
+   "options": [
+    "--model-in"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "margin_total",
+    "blended_margin_total"
+   ],
+   "default": "margin_total",
+   "dest": "model_kind",
+   "help": "Model kind (must match the saved checkpoint).",
+   "nargs": null,
+   "options": [
+    "--model-kind"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "season",
+   "help": "Season year",
+   "nargs": null,
+   "options": [
+    "--season"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "through_week",
+   "help": "Compute records through this week (inclusive); future games are week > this.",
+   "nargs": null,
+   "options": [
+    "--through-week"
+   ],
+   "required": true,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "data/all_data_ml.csv",
+   "dest": "data_ml",
+   "help": "ML dataset (must include future game feature rows).",
+   "nargs": null,
+   "options": [
+    "--data-ml"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "data/all_data.csv",
+   "dest": "data_schedule",
+   "help": "Schedule/results dataset (used for current records).",
+   "nargs": null,
+   "options": [
+    "--data-schedule"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "data/predict",
+   "dest": "out_dir",
+   "help": "Directory to write outputs.",
+   "nargs": null,
+   "options": [
+    "--out-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "composite",
+    "bradley_terry"
+   ],
+   "default": null,
+   "dest": "method",
+   "help": "How teams are rated. 'composite' (default) ranks on the ETL's schedule-adjusted strength composite for the week after --through-week: the current-season view. 'bradley_terry' fits ratings to game results with the --ratings-* options. --legacy-franchise-fit implies bradley_terry.",
+   "nargs": null,
+   "options": [
+    "--method"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/data/strength_snapshots.csv",
+   "dest": "strength_snapshots",
+   "help": "Per-team weekly strength file written by the ETL, read by the composite method (default: data/strength_snapshots.csv).",
+   "nargs": null,
+   "options": [
+    "--strength-snapshots"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "ratings_min_season",
+   "help": "Bradley-Terry only. Optional minimum season to include in the ratings fit. Default: include all historical seasons available in --data-schedule.",
+   "nargs": null,
+   "options": [
+    "--ratings-min-season"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "include_postseason",
+   "help": "Include postseason games in records and in the Bradley-Terry fit (default: regular season only). The composite never includes postseason games.",
+   "nargs": 0,
+   "options": [
+    "--include-postseason",
+    "--no-include-postseason"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 2,
+   "dest": "ratings_window_seasons",
+   "help": "Bradley-Terry only. How many seasons the ratings fit sees, counting the current one. Default 2 (current plus previous). Use 0 for every available season.",
+   "nargs": null,
+   "options": [
+    "--ratings-window-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0.25,
+   "dest": "ratings_prior_season_weight",
+   "help": "Bradley-Terry only. Weight applied to games from seasons before the current one. Default 0.25. Current-season games always weigh 1.0.",
+   "nargs": null,
+   "options": [
+    "--ratings-prior-season-weight"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "margin",
+    "binary"
+   ],
+   "default": "margin",
+   "dest": "ratings_target",
+   "help": "Bradley-Terry only. Target for completed games. 'margin' maps the observed point margin through the model's win-probability curve; 'binary' scores every win the same.",
+   "nargs": null,
+   "options": [
+    "--ratings-target"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "ratings_include_future",
+   "help": "Bradley-Terry only. Feed future games' model win probabilities into the strength fit. Off by default: the fit should describe results, not the model's own forecasts. Future games always remain in projected standings.",
+   "nargs": 0,
+   "options": [
+    "--ratings-include-future",
+    "--no-ratings-include-future"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "legacy_franchise_fit",
+   "help": "Reproduce the historical 'franchise' ranking exactly: a Bradley-Terry fit with every season since 1999 weighted equally, binary win/loss targets, and future model probabilities in the fit. Implies --method bradley_terry and overrides the other --ratings-* flags.",
+   "nargs": 0,
+   "options": [
+    "--legacy-franchise-fit"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  }
+ ],
+ "nfl_predictor.cli.sweep": [
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "data/completed_games_ml.csv",
+   "dest": "data_path",
+   "help": "Path to completed games ML CSV.",
+   "nargs": null,
+   "options": [
+    "--data-path"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 3,
+   "dest": "eval_last_n_seasons",
+   "help": "Evaluate the last N seasons (regular season only).",
+   "nargs": null,
+   "options": [
+    "--eval-last-n-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 3,
+   "dest": "wf_start_week",
+   "help": "Walk-forward start week.",
+   "nargs": null,
+   "options": [
+    "--wf-start-week"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "exclude_incomplete_seasons",
+   "help": "Exclude seasons whose regular season is incomplete in the dataset.",
+   "nargs": 0,
+   "options": [
+    "--exclude-incomplete-seasons",
+    "--no-exclude-incomplete-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 4,
+   "dest": "calibration_weeks",
+   "help": "Number of prior weeks used for time-aware calibration.",
+   "nargs": null,
+   "options": [
+    "--calibration-weeks"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "features",
+    "anchor",
+    "hybrid",
+    "all"
+   ],
+   "default": "hybrid",
+   "dest": "market_mode",
+   "help": "Market mode to evaluate (features, anchor, hybrid, or all).",
+   "nargs": null,
+   "options": [
+    "--market-mode"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "raw",
+    "novig",
+    "both"
+   ],
+   "default": "raw",
+   "dest": "market_prob_source",
+   "help": "Market probability source for blending/clamping.",
+   "nargs": null,
+   "options": [
+    "--market-prob-source"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "prob",
+    "logit",
+    "both"
+   ],
+   "default": "prob",
+   "dest": "market_prob_blend_method",
+   "help": "Blend method for market probabilities (prob or logit space).",
+   "nargs": null,
+   "options": [
+    "--market-prob-blend-method"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "off",
+    "on",
+    "both"
+   ],
+   "default": "off",
+   "dest": "win_prob_uncertainty",
+   "help": "Use uncertainty-aware win probabilities (off, on, both).",
+   "nargs": null,
+   "options": [
+    "--win-prob-uncertainty"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "out",
+   "help": "Optional output CSV path (default: models/<run_id>/wf_compare.csv).",
+   "nargs": null,
+   "options": [
+    "--out"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "n_estimators",
+   "help": "Optional XGBoost n_estimators override.",
+   "nargs": null,
+   "options": [
+    "--n-estimators"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "max_depth",
+   "help": "Optional XGBoost max_depth override.",
+   "nargs": null,
+   "options": [
+    "--max-depth"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "learning_rate",
+   "help": "Optional XGBoost learning_rate override.",
+   "nargs": null,
+   "options": [
+    "--learning-rate"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "n_jobs",
+   "help": "Optional XGBoost n_jobs override.",
+   "nargs": null,
+   "options": [
+    "--n-jobs"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "include_quantiles",
+   "help": "Whether to train quantile models (slow).",
+   "nargs": 0,
+   "options": [
+    "--include-quantiles",
+    "--no-include-quantiles"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "disable_feature_groups",
+   "help": "Comma-separated feature group names to drop for ablation comparisons (e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS.",
+   "nargs": null,
+   "options": [
+    "--disable-feature-groups"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": true,
+   "dest": "resume",
+   "help": "Restore weeks already finished by an identical earlier run of each candidate instead of training them again. Use --no-resume to retrain every week.",
+   "nargs": 0,
+   "options": [
+    "--resume",
+    "--no-resume"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/models/wf_checkpoints",
+   "dest": "checkpoint_dir",
+   "help": "Root for per-week checkpoints (default: models/wf_checkpoints).",
+   "nargs": null,
+   "options": [
+    "--checkpoint-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  }
+ ],
+ "nfl_predictor.cli.validate": [
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/data",
+   "dest": "data_dir",
+   "help": "Directory holding the collected datasets (default: the packaged data directory).",
+   "nargs": null,
+   "options": [
+    "--data-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "live",
+   "help": "Compare the latest completed week's scores with the schedule instead.",
+   "nargs": 0,
+   "options": [
+    "--live"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  }
+ ],
  "nfl_predictor.data_collection": [
   {
    "action": "_StoreAction",
@@ -1051,920 +2277,7 @@
    "type": null
   }
  ],
- "scripts.leakage_audit": [
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "data_path",
-   "help": "Path to a completed-games ML CSV (e.g., data/completed_games_ml.csv).",
-   "nargs": null,
-   "options": [
-    "--data-path"
-   ],
-   "required": true,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "out_json",
-   "help": "Where to write the JSON report.",
-   "nargs": null,
-   "options": [
-    "--out-json"
-   ],
-   "required": true,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "away_rest",
-   "dest": "feature_start",
-   "help": "First column in feature range (inclusive).",
-   "nargs": null,
-   "options": [
-    "--feature-start"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "home_moneyline",
-   "dest": "feature_end",
-   "help": "Last column in feature range (inclusive).",
-   "nargs": null,
-   "options": [
-    "--feature-end"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": true,
-   "dest": "include_market",
-   "help": "Include market columns as features when present.",
-   "nargs": 0,
-   "options": [
-    "--include-market"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreFalseAction",
-   "choices": null,
-   "default": true,
-   "dest": "include_market",
-   "help": "Exclude market columns from the feature set.",
-   "nargs": 0,
-   "options": [
-    "--exclude-market"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "market_transform",
-   "help": "Enable market-derived columns (market_home_margin, etc).",
-   "nargs": 0,
-   "options": [
-    "--market-transform"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.5,
-   "dest": "max_cardinality_ratio",
-   "help": "Drop categoricals with unique_ratio >= threshold.",
-   "nargs": null,
-   "options": [
-    "--max-cardinality-ratio"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  }
- ],
- "scripts.power_rankings": [
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "model_in",
-   "help": "Path to model checkpoint .joblib",
-   "nargs": null,
-   "options": [
-    "--model-in"
-   ],
-   "required": true,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "margin_total",
-    "blended_margin_total"
-   ],
-   "default": "margin_total",
-   "dest": "model_kind",
-   "help": "Model kind (must match the saved checkpoint).",
-   "nargs": null,
-   "options": [
-    "--model-kind"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "season",
-   "help": "Season year",
-   "nargs": null,
-   "options": [
-    "--season"
-   ],
-   "required": true,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "through_week",
-   "help": "Compute records through this week (inclusive); future games are week > this.",
-   "nargs": null,
-   "options": [
-    "--through-week"
-   ],
-   "required": true,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "data/all_data_ml.csv",
-   "dest": "data_ml",
-   "help": "ML dataset (must include future game feature rows).",
-   "nargs": null,
-   "options": [
-    "--data-ml"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "data/all_data.csv",
-   "dest": "data_schedule",
-   "help": "Schedule/results dataset (used for current records).",
-   "nargs": null,
-   "options": [
-    "--data-schedule"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "data/predict",
-   "dest": "out_dir",
-   "help": "Directory to write outputs.",
-   "nargs": null,
-   "options": [
-    "--out-dir"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "composite",
-    "bradley_terry"
-   ],
-   "default": null,
-   "dest": "method",
-   "help": "How teams are rated. 'composite' (default) ranks on the ETL's schedule-adjusted strength composite for the week after --through-week: the current-season view. 'bradley_terry' fits ratings to game results with the --ratings-* options. --legacy-franchise-fit implies bradley_terry.",
-   "nargs": null,
-   "options": [
-    "--method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "<repo>/data/strength_snapshots.csv",
-   "dest": "strength_snapshots",
-   "help": "Per-team weekly strength file written by the ETL, read by the composite method (default: data/strength_snapshots.csv).",
-   "nargs": null,
-   "options": [
-    "--strength-snapshots"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "ratings_min_season",
-   "help": "Bradley-Terry only. Optional minimum season to include in the ratings fit. Default: include all historical seasons available in --data-schedule.",
-   "nargs": null,
-   "options": [
-    "--ratings-min-season"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "include_postseason",
-   "help": "Include postseason games in records and in the Bradley-Terry fit (default: regular season only). The composite never includes postseason games.",
-   "nargs": 0,
-   "options": [
-    "--include-postseason",
-    "--no-include-postseason"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 2,
-   "dest": "ratings_window_seasons",
-   "help": "Bradley-Terry only. How many seasons the ratings fit sees, counting the current one. Default 2 (current plus previous). Use 0 for every available season.",
-   "nargs": null,
-   "options": [
-    "--ratings-window-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.25,
-   "dest": "ratings_prior_season_weight",
-   "help": "Bradley-Terry only. Weight applied to games from seasons before the current one. Default 0.25. Current-season games always weigh 1.0.",
-   "nargs": null,
-   "options": [
-    "--ratings-prior-season-weight"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "margin",
-    "binary"
-   ],
-   "default": "margin",
-   "dest": "ratings_target",
-   "help": "Bradley-Terry only. Target for completed games. 'margin' maps the observed point margin through the model's win-probability curve; 'binary' scores every win the same.",
-   "nargs": null,
-   "options": [
-    "--ratings-target"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "ratings_include_future",
-   "help": "Bradley-Terry only. Feed future games' model win probabilities into the strength fit. Off by default: the fit should describe results, not the model's own forecasts. Future games always remain in projected standings.",
-   "nargs": 0,
-   "options": [
-    "--ratings-include-future",
-    "--no-ratings-include-future"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "legacy_franchise_fit",
-   "help": "Reproduce the historical 'franchise' ranking exactly: a Bradley-Terry fit with every season since 1999 weighted equally, binary win/loss targets, and future model probabilities in the fit. Implies --method bradley_terry and overrides the other --ratings-* flags.",
-   "nargs": 0,
-   "options": [
-    "--legacy-franchise-fit"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  }
- ],
- "scripts.shap_analysis": [
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "model_path",
-   "help": "Path to a saved model.joblib artifact.",
-   "nargs": null,
-   "options": [
-    "--model-path"
-   ],
-   "required": true,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "data_path",
-   "help": "CSV dataset for feature extraction (same schema used for training).",
-   "nargs": null,
-   "options": [
-    "--data-path"
-   ],
-   "required": true,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "output_path",
-   "help": "Optional output path for the SHAP report (JSON).",
-   "nargs": null,
-   "options": [
-    "--output-path"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 500,
-   "dest": "sample_size",
-   "help": "Max rows to sample for SHAP (default: 500).",
-   "nargs": null,
-   "options": [
-    "--sample-size"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 42,
-   "dest": "random_seed",
-   "help": "Random seed for row sampling.",
-   "nargs": null,
-   "options": [
-    "--random-seed"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "margin",
-    "total"
-   ],
-   "default": "margin",
-   "dest": "target",
-   "help": "Target model head to analyze (margin or total).",
-   "nargs": null,
-   "options": [
-    "--target"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  }
- ],
- "scripts.validate_live": [
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "<repo>/data",
-   "dest": "data_dir",
-   "help": "Directory holding the collected datasets (default: the packaged data directory).",
-   "nargs": null,
-   "options": [
-    "--data-dir"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  }
- ],
- "scripts.validate_offline": [
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "<repo>/data",
-   "dest": "data_dir",
-   "help": "Directory holding the collected datasets (default: the packaged data directory).",
-   "nargs": null,
-   "options": [
-    "--data-dir"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  }
- ],
- "scripts.walk_forward_backtest": [
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "<repo>/data/completed_games_ml.csv",
-   "dest": "data_path",
-   "help": "Path to completed games dataset.",
-   "nargs": null,
-   "options": [
-    "--data-path"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 3,
-   "dest": "eval_last_n_seasons",
-   "help": "Evaluate the last N seasons in the dataset.",
-   "nargs": null,
-   "options": [
-    "--eval-last-n-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "eval_seasons",
-   "help": "Explicit seasons to evaluate (overrides --eval-last-n-seasons).",
-   "nargs": "+",
-   "options": [
-    "--eval-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 3,
-   "dest": "wf_start_week",
-   "help": "Walk-forward start week.",
-   "nargs": null,
-   "options": [
-    "--wf-start-week"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "platt",
-    "isotonic",
-    "sigma",
-    "none",
-    "elo",
-    "auto",
-    "logistic"
-   ],
-   "default": "platt",
-   "dest": "calibration",
-   "help": "Win-prob calibration method (logistic is an alias for platt).",
-   "nargs": null,
-   "options": [
-    "--calibration"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 4,
-   "dest": "wf_calibration_weeks",
-   "help": "Number of prior weeks (same season) used for time-aware calibration.",
-   "nargs": null,
-   "options": [
-    "--wf-calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 42,
-   "dest": "random_seed",
-   "help": "Random seed for reproducibility.",
-   "nargs": null,
-   "options": [
-    "--random-seed"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "include_postseason",
-   "help": "Include postseason games in walk-forward evaluation.",
-   "nargs": 0,
-   "options": [
-    "--include-postseason"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "exclude_incomplete_seasons",
-   "help": "Exclude seasons whose regular season is incomplete in the dataset (useful when the current season is partial).",
-   "nargs": 0,
-   "options": [
-    "--exclude-incomplete-seasons",
-    "--no-exclude-incomplete-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "recency_half_life_seasons",
-   "help": "Optional exponential half-life in seasons for recency weighting.",
-   "nargs": null,
-   "options": [
-    "--recency-half-life-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": true,
-   "dest": "market_anchor",
-   "help": "Enable market anchoring when spread/total lines exist.",
-   "nargs": 0,
-   "options": [
-    "--market-anchor",
-    "--no-market-anchor"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": null,
-   "dest": "market_transform",
-   "help": "Use transformed market features when odds columns exist.",
-   "nargs": 0,
-   "options": [
-    "--market-transform",
-    "--no-market-transform"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "market_prob_weight",
-   "help": "Blend weight for market implied probability (0=off, 1=market only). Alias for --market-prob-blend.",
-   "nargs": null,
-   "options": [
-    "--market-prob-weight"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_blend",
-   "help": "Blend weight for market implied probability (0=off, 1=market only).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_clamp",
-   "help": "Clamp model probability within +/- this delta of market (0=off).",
-   "nargs": null,
-   "options": [
-    "--market-prob-clamp"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig"
-   ],
-   "default": "raw",
-   "dest": "market_prob_source",
-   "help": "Market probability source for blending/clamping.",
-   "nargs": null,
-   "options": [
-    "--market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit"
-   ],
-   "default": "prob",
-   "dest": "market_prob_blend_method",
-   "help": "Blend method for market probabilities (prob or logit space).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "win_prob_uncertainty",
-   "help": "Use margin quantiles to derive uncertainty-aware win probabilities.",
-   "nargs": 0,
-   "options": [
-    "--win-prob-uncertainty",
-    "--no-win-prob-uncertainty"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "disable_pruning",
-   "help": "Disable the feature pruning list.",
-   "nargs": 0,
-   "options": [
-    "--disable-pruning"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "disable_trend_features",
-   "help": "Drop trend + season-phase features for ablation comparisons.",
-   "nargs": 0,
-   "options": [
-    "--disable-trend-features"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "disable_feature_groups",
-   "help": "Comma-separated feature group names to drop for ablation comparisons (e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS.",
-   "nargs": null,
-   "options": [
-    "--disable-feature-groups"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "xgb_tree_method",
-   "help": "XGBoost tree_method override (e.g., hist).",
-   "nargs": null,
-   "options": [
-    "--xgb-tree-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "xgb_device",
-   "help": "XGBoost device override (e.g., cuda, cpu).",
-   "nargs": null,
-   "options": [
-    "--xgb-device"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "xgb_n_jobs",
-   "help": "XGBoost n_jobs override.",
-   "nargs": null,
-   "options": [
-    "--xgb-n-jobs"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "min_child_weight",
-   "help": "Optional XGBoost min_child_weight override.",
-   "nargs": null,
-   "options": [
-    "--min-child-weight"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "gamma",
-   "help": "Optional XGBoost gamma override.",
-   "nargs": null,
-   "options": [
-    "--gamma"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "n_estimators",
-   "help": "Optional XGBoost n_estimators override (the tree budget; every in-season fit runs the full budget).",
-   "nargs": null,
-   "options": [
-    "--n-estimators"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": true,
-   "dest": "resume",
-   "help": "Restore weeks already finished by an identical earlier run (same data, config, code and library versions) instead of training them again. Use --no-resume to retrain every week and overwrite its checkpoint.",
-   "nargs": 0,
-   "options": [
-    "--resume",
-    "--no-resume"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "<repo>/models/wf_checkpoints",
-   "dest": "checkpoint_dir",
-   "help": "Root for per-week checkpoints; each run uses a subdirectory named for its fingerprint (default: models/wf_checkpoints).",
-   "nargs": null,
-   "options": [
-    "--checkpoint-dir"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "out_json",
-   "help": "Path to metrics_report.json (default: models/<run_id>/metrics_report.json).",
-   "nargs": null,
-   "options": [
-    "--out-json"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  }
- ],
- "scripts.weekly_run": [
+ "nfl_predictor.weekly_run.config": [
   {
    "action": "_StoreAction",
    "choices": null,
@@ -2891,280 +3204,6 @@
    "required": false,
    "subcommand": null,
    "type": null
-  }
- ],
- "scripts.wf_compare": [
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "data/completed_games_ml.csv",
-   "dest": "data_path",
-   "help": "Path to completed games ML CSV.",
-   "nargs": null,
-   "options": [
-    "--data-path"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 3,
-   "dest": "eval_last_n_seasons",
-   "help": "Evaluate the last N seasons (regular season only).",
-   "nargs": null,
-   "options": [
-    "--eval-last-n-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 3,
-   "dest": "wf_start_week",
-   "help": "Walk-forward start week.",
-   "nargs": null,
-   "options": [
-    "--wf-start-week"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "exclude_incomplete_seasons",
-   "help": "Exclude seasons whose regular season is incomplete in the dataset.",
-   "nargs": 0,
-   "options": [
-    "--exclude-incomplete-seasons",
-    "--no-exclude-incomplete-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 4,
-   "dest": "calibration_weeks",
-   "help": "Number of prior weeks used for time-aware calibration.",
-   "nargs": null,
-   "options": [
-    "--calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "features",
-    "anchor",
-    "hybrid",
-    "all"
-   ],
-   "default": "hybrid",
-   "dest": "market_mode",
-   "help": "Market mode to evaluate (features, anchor, hybrid, or all).",
-   "nargs": null,
-   "options": [
-    "--market-mode"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig",
-    "both"
-   ],
-   "default": "raw",
-   "dest": "market_prob_source",
-   "help": "Market probability source for blending/clamping.",
-   "nargs": null,
-   "options": [
-    "--market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit",
-    "both"
-   ],
-   "default": "prob",
-   "dest": "market_prob_blend_method",
-   "help": "Blend method for market probabilities (prob or logit space).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "off",
-    "on",
-    "both"
-   ],
-   "default": "off",
-   "dest": "win_prob_uncertainty",
-   "help": "Use uncertainty-aware win probabilities (off, on, both).",
-   "nargs": null,
-   "options": [
-    "--win-prob-uncertainty"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "out",
-   "help": "Optional output CSV path (default: models/<run_id>/wf_compare.csv).",
-   "nargs": null,
-   "options": [
-    "--out"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "n_estimators",
-   "help": "Optional XGBoost n_estimators override.",
-   "nargs": null,
-   "options": [
-    "--n-estimators"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "max_depth",
-   "help": "Optional XGBoost max_depth override.",
-   "nargs": null,
-   "options": [
-    "--max-depth"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "learning_rate",
-   "help": "Optional XGBoost learning_rate override.",
-   "nargs": null,
-   "options": [
-    "--learning-rate"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "n_jobs",
-   "help": "Optional XGBoost n_jobs override.",
-   "nargs": null,
-   "options": [
-    "--n-jobs"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "include_quantiles",
-   "help": "Whether to train quantile models (slow).",
-   "nargs": 0,
-   "options": [
-    "--include-quantiles",
-    "--no-include-quantiles"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "disable_feature_groups",
-   "help": "Comma-separated feature group names to drop for ablation comparisons (e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS.",
-   "nargs": null,
-   "options": [
-    "--disable-feature-groups"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": true,
-   "dest": "resume",
-   "help": "Restore weeks already finished by an identical earlier run of each candidate instead of training them again. Use --no-resume to retrain every week.",
-   "nargs": 0,
-   "options": [
-    "--resume",
-    "--no-resume"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "<repo>/models/wf_checkpoints",
-   "dest": "checkpoint_dir",
-   "help": "Root for per-week checkpoints (default: models/wf_checkpoints).",
-   "nargs": null,
-   "options": [
-    "--checkpoint-dir"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
   }
  ]
 }

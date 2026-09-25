@@ -142,7 +142,7 @@ remains **90% or higher**, with **100%** as the aspirational ceiling:
 python -m pytest --cov-fail-under=95
 ```
 
-Current validated local baseline as of 2026-09-22 (version `0.16.2`): `889 passed` with `92.45%`
+Current validated local baseline as of 2026-09-25 (version `0.27.1`): `1020 passed` with `92.15%`
 coverage. `scripts/gate.sh` is the source of truth for this number; re-run it rather than trusting
 this line as the project grows.
 
@@ -151,7 +151,7 @@ this line as the project grows.
 The authoritative data build pipeline is:
 
 ```bash
-python -m nfl_predictor.data_collection
+nfl-predictor data
 ```
 
 The default season range is controlled by `constants.MIN_SEASON` (currently 1999).
@@ -258,10 +258,11 @@ Missing data policy (high level):
 
 ## Training + prediction
 
-The primary entrypoint is:
+Training and prediction run through `nfl-predictor train` and `nfl-predictor predict`, which take
+the same options (`predict` needs `--model-in`, a saved model):
 
 ```bash
-python -m nfl_predictor.ml_model --help
+nfl-predictor train --help
 ```
 
 ### Quickstart (train + predict)
@@ -269,7 +270,7 @@ python -m nfl_predictor.ml_model --help
 Train a margin/total model and generate predictions for a weekly input file:
 
 ```bash
-python -m nfl_predictor.ml_model \
+nfl-predictor train \
   --model-kind margin_total \
   --holdout-seasons 0 \
   --calibration-seasons 0 \
@@ -286,7 +287,7 @@ This prints a weekly summary and writes `*_predictions.csv` next to the input fi
 If you want a minimal run without tuning (and with explicit input paths):
 
 ```bash
-python -m nfl_predictor.ml_model \
+nfl-predictor train \
   --data-path data/completed_games_ml.csv \
   --model-kind margin_total \
   --holdout-seasons 1 \
@@ -317,7 +318,7 @@ weekly config: the six-season, two-seed measurement below found no gain from it.
 Example: hold out the most recent season for evaluation and calibrate on the season before it:
 
 ```bash
-python -m nfl_predictor.ml_model \
+nfl-predictor train \
   --model-kind margin_total \
   --holdout-seasons 1 \
   --calibration-seasons 1
@@ -384,7 +385,7 @@ Evaluate with walk-forward (rolling-origin) backtesting, which scores every week
 sample, confidence-pool points included:
 
 ```bash
-python scripts/walk_forward_backtest.py --help
+nfl-predictor backtest --help
 ```
 
 This is the **canonical evaluation protocol** for model selection. By default it evaluates the last
@@ -393,7 +394,7 @@ configured calibrator, the deterministic margin map, and the market-implied home
 Use `--include-postseason` if you want postseason folds included. Optional recency weighting
 is available via `--recency-half-life-seasons`. GPU
 acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`. If the latest season is
-incomplete, either pass `--exclude-incomplete-seasons` or specify `--eval-seasons` explicitly; the
+incomplete, either pass `--wf-exclude-incomplete-seasons` or specify `--eval-seasons` explicitly; the
 metrics report includes the evaluated window and any exclusions. Walk-forward calibration uses the
 calibration frame described above for fitted calibrators; `auto` is the deterministic floor; the
 summary table includes deterministic-minus-market bootstrap intervals for week 1, week 2,
@@ -409,8 +410,8 @@ loads it; over six seasons it takes about 100 minutes idle at the default 200-tr
 3.3 hours at 400 and about 4.8 hours at 598 under load (run directories
 `models/wf_m55_7_2020_2025_trees*/`). Run one walk-forward at a time: XGBoost uses every core, and
 two concurrent runs slow each other down far more than twofold. When anything else is busy on the
-machine, set `OMP_WAIT_POLICY=PASSIVE` (for example `OMP_WAIT_POLICY=PASSIVE python
-scripts/walk_forward_backtest.py ...`): XGBoost's OpenMP threads otherwise spin while waiting for a
+machine, OpenMP's passive wait policy (`OMP_WAIT_POLICY=PASSIVE`, the walk-forward commands'
+default since `0.24.0`, below) matters: XGBoost's OpenMP threads otherwise spin while waiting for a
 preempted peer. On 2026-09-10, with other jobs loading the machine, one walk-forward week took `730s`
 with the default policy and `185s` with `PASSIVE`. On an idle machine keep the default: with
 `PASSIVE` the threads sleep between XGBoost's many small parallel steps and waking them costs more
@@ -423,8 +424,8 @@ the modelling source code, and the installed library versions. Re-running an ide
 after a stop (deliberate or not) restores the finished weeks and trains only the rest; a resumed run
 returns exactly the numbers an uninterrupted one would, which a test pins. Anything that changes the
 fingerprint starts fresh, so stale results are never mixed in. `--no-resume` retrains every week
-and `--checkpoint-dir` moves the root. The same checkpointing runs in `scripts/wf_compare.py`
-(`--resume`, `--checkpoint-dir`) and inside the run directories of `scripts/weekly_run.py` (its
+and `--checkpoint-dir` moves the root. The same checkpointing runs in `nfl-predictor sweep`
+(`--resume`, `--checkpoint-dir`) and inside the run directories of `nfl-predictor weekly` (its
 existing `--resume`). The metrics report records how many weeks
 were restored and how many were trained. Checkpoints are small (a few hundred KB per run) and safe to
 delete once a report is written. Nothing prunes them: `nfl-predictor checkpoints` lists every
@@ -442,24 +443,24 @@ Trend/season-phase ablation (drop trend + season-phase features while keeping ev
 identical) is available via `--disable-trend-features`. Example 2x2 comparison matrix:
 
 ```bash
-python scripts/walk_forward_backtest.py
-python scripts/walk_forward_backtest.py --recency-half-life-seasons 16
-python scripts/walk_forward_backtest.py --disable-trend-features
-python scripts/walk_forward_backtest.py --disable-trend-features --recency-half-life-seasons 16
+nfl-predictor backtest
+nfl-predictor backtest --recency-half-life-seasons 16
+nfl-predictor backtest --disable-trend-features
+nfl-predictor backtest --disable-trend-features --recency-half-life-seasons 16
 ```
 
 Named feature groups can be ablated the same way with `--disable-feature-groups` (available on both
-`scripts/walk_forward_backtest.py` and `scripts/wf_compare.py`). Group names come from
+`nfl-predictor backtest` and `nfl-predictor sweep`). Group names come from
 `constants.FEATURE_GROUP_COLUMN_MARKERS`; a column belongs to a group when any of that group's
 markers is a substring of the column name, which catches the `away_`/`home_` prefixes and the
 `_diff` suffix at once. An unknown group name is a hard error. The dropped column list is recorded
 in the run's metrics report.
 
 ```bash
-python scripts/walk_forward_backtest.py --disable-feature-groups pbp
+nfl-predictor backtest --disable-feature-groups pbp
 ```
 
-`--n-estimators` overrides the XGBoost tree budget for the run (every in-season fit runs the full
+`--wf-n-estimators` overrides the XGBoost tree budget for the run (every in-season fit runs the full
 budget), which is how the budget itself is measured against the default. The six-season ladder
 measured with it (`200`, `400`, `598`) is recorded in `AGENTS.md` under "Tree-budget ladder".
 
@@ -492,12 +493,12 @@ source of truth.
 The canonical "do everything for this week" entrypoint is:
 
 ```bash
-python scripts/weekly_run.py --help
+nfl-predictor weekly --help
 ```
 
 ### High-level stages
 
-1. (optional) refresh data (`python -m nfl_predictor.data_collection`)
+1. (optional) refresh data (`nfl-predictor data`)
 2. (optional) walk-forward compare to choose market/calibration/prob-postprocess variants
 3. train + calibrate the selected configuration
 4. generate weekly predictions + betting outputs + (optional) power rankings
@@ -516,7 +517,7 @@ Notes:
 - `--data-collection-args` forwards extra arguments to the data refresh stage as one
   shell-quoted string, for example
   `--data-collection-args "--min-season 2010 --stat-prior-blend-games 4"`. It is split
-  shell-style and handed to `nfl_predictor.data_collection` as its argument list; when it is
+  shell-style and handed to the data refresh (`nfl-predictor data`) as its argument list; when it is
   unset the refresh runs exactly as before. The same value is a config key
   (`data_collection_args` in `config/weekly_run.yaml`).
 
@@ -540,25 +541,25 @@ This is the current behavior, recorded for reference; none of it is a recommenda
 1. Refresh data (ETL)
 
    ```bash
-   python -m nfl_predictor.data_collection
+   nfl-predictor data
    ```
 
 2. Canonical evaluation + model selection (walk-forward)
 
    ```bash
-   python scripts/walk_forward_backtest.py --help
+   nfl-predictor backtest --help
    ```
 
 3. Train + predict for the upcoming week (writes predictions + artifacts)
 
    ```bash
-   python -m nfl_predictor.ml_model --help
+   nfl-predictor train --help
    ```
 
 4. Power rankings + projected standings
 
    ```bash
-   python scripts/power_rankings.py --help
+   nfl-predictor rankings --help
    ```
 
 ### Outputs and conventions
@@ -589,7 +590,7 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   which describes a club's history more than its current team, and implies this method.
 - Projected standings are the same under both methods: current record plus the model's win
   probabilities for the remaining games.
-- `scripts/weekly_run.py` accepts the same options (`--power-rankings-method`,
+- `nfl-predictor weekly` accepts the same options (`--power-rankings-method`,
   `--power-rankings-strength-snapshots`, `--ratings-*`, `--legacy-franchise-fit`) and writes the
   same files. It skips the rankings with a warning when the snapshot for the requested week is
   missing.
@@ -621,9 +622,29 @@ commands by group, and `nfl-predictor <command> --help` shows a command's option
 
 The code lives in the package: the weekly run in `nfl_predictor/weekly_run/`, the other
 commands in `nfl_predictor/cli/`. The per-module forms (`python -m nfl_predictor.data_collection`,
-`python -m nfl_predictor.ml_model` and the others) keep working, and so do the old
-`scripts/<name>.py` paths, which now only call the package; `scripts/gate.sh` is the check that
-runs everything CI runs.
+`python -m nfl_predictor.ml_model` and the others) keep working. The old `scripts/<name>.py`
+paths were removed in `0.27.0`; `scripts/gate.sh`, the check CI runs, is the one script left.
+
+### Reproducing an old run
+
+A run records the git commit it ran on (`git_commit_hash` in its `metadata.json`), and its
+`launch.sh`, when it has one, names the commands as they were then, including `scripts/<name>.py`
+paths and option spellings that no longer exist. To rerun it exactly, check out that commit in a
+separate worktree with its own environment, and run the launcher as written from there:
+
+```bash
+git worktree add ../nfl-predictor-old <commit>
+cd ../nfl-predictor-old
+uv sync                                    # the environment that commit locked
+ln -s ../nfl-predictor/data data           # the datasets are not in git
+mkdir -p models/<run_id>
+cp ../nfl-predictor/models/<run_id>/launch.sh models/<run_id>/
+bash models/<run_id>/launch.sh
+```
+
+A launcher changes to the repository two levels above itself, so it runs inside the worktree and
+writes its outputs there. Check that the dataset fingerprint in the new run's metadata matches the
+old one. Remove the worktree with `git worktree remove ../nfl-predictor-old` when done.
 
 **Totals are diagnostic-only.** The total (over/under) columns of the betting report
 (`total_value_side`, `total_edge_points`) come from the model's total head. Since version `0.6.2`
@@ -633,20 +654,20 @@ total MAE is `10.3152` in the production configuration (no market anchoring) and
 anchoring, against `10.0847` for the line itself. Treat an over/under lean as a diagnostic, not a
 betting signal. Spreads, moneylines and win probabilities are unaffected.
 
-`wf_compare` examples:
+`sweep` examples:
 
 ```bash
-python scripts/wf_compare.py \
-  --eval-last-n-seasons 3 \
-  --market-mode hybrid \
+nfl-predictor sweep \
+  --wf-eval-last-n-seasons 3 \
+  --wf-market-mode hybrid \
   --market-prob-source raw \
   --market-prob-blend-method prob
 ```
 
 ```bash
-python scripts/wf_compare.py \
-  --eval-last-n-seasons 3 \
-  --market-mode all \
+nfl-predictor sweep \
+  --wf-eval-last-n-seasons 3 \
+  --wf-market-mode all \
   --market-prob-source both \
   --market-prob-blend-method both
 ```
@@ -654,12 +675,12 @@ python scripts/wf_compare.py \
 Uncertainty-aware comparison:
 
 ```bash
-python scripts/wf_compare.py \
-  --eval-last-n-seasons 3 \
+nfl-predictor sweep \
+  --wf-eval-last-n-seasons 3 \
   --win-prob-uncertainty both
 ```
 
-`weekly_run` config example (JSON):
+`weekly` config example (JSON):
 
 ```json
 {
@@ -674,7 +695,7 @@ python scripts/wf_compare.py \
 Run it with:
 
 ```bash
-python scripts/weekly_run.py --config path/to/weekly_run.json
+nfl-predictor weekly --config path/to/weekly_run.json
 ```
 
 GPU note (XGBoost 2.x): prefer `--xgb-tree-method hist --xgb-device cuda`.
@@ -693,8 +714,8 @@ model metrics and data status; the Jobs pages run the ETL, a lines-only refresh
 training, prediction, walk-forward and the reports as streamed background subprocesses.
 
 ```bash
-python -m nfl_predictor.api.auth.cli create-user <name> --role admin   # once
-python -m nfl_predictor.api                                            # http://127.0.0.1:8000
+nfl-predictor users create-user <name> --role admin   # once
+nfl-predictor web                                     # http://127.0.0.1:8000
 ```
 
 The frontend needs Node 26 (`source ~/.nvm/nvm.sh`); `cd web && npm ci && npm run build` writes
@@ -708,13 +729,13 @@ commands and the layout are in `web/README.md`; the design and phase status are 
 Offline validation:
 
 ```bash
-python scripts/validate_offline.py
+nfl-predictor validate
 ```
 
 Live validation (may require network access):
 
 ```bash
-python scripts/validate_live.py
+nfl-predictor validate --live
 ```
 
 Both read `data/all_data.csv` unless `--data-dir` points them at another dataset directory, and
@@ -727,17 +748,18 @@ Canonical local validation sequence, as one command:
 scripts/gate.sh          # add --web when web/ changed; --quick skips pytest
 ```
 
-It runs the steps below in CI's order and reports every one before exiting non-zero:
+It runs the steps below and reports every one before exiting non-zero:
 
 ```bash
-ruff format --check .
-ruff check .
-pyright .
-ty check .
-python -m pytest
-markdownlint .
 uv lock --check
 uv sync --check --active
+ruff format --check .
+ruff check .
+ty check .
+pyright .
+python -m pytest
+markdownlint .
+nfl-predictor --help          # then every command's --help, listed by the front door
 ```
 
 CI installs `markdownlint-cli` for the `markdownlint .` step; on a machine that has
@@ -746,16 +768,18 @@ CI installs `markdownlint-cli` for the `markdownlint .` step; on a machine that 
 `.agents/skills/` folder is an optional, gitignored clone of agent skills; ruff and
 `markdownlint .` skip it through `pyproject.toml` and `.markdownlintignore`.
 
-GitHub Actions mirrors this gate in `.github/workflows/validation.yml` and also runs the
-editable-install smoke check plus `--help` smoke checks for `nfl_predictor.ml_model`,
-`scripts/weekly_run.py`, `scripts/power_rankings.py`, and `nfl_predictor.api`.
+GitHub Actions (`.github/workflows/validation.yml`) sets up the environment, runs the
+editable-install smoke check, and then runs `scripts/gate.sh` itself, so CI and a local run check
+the same things; the frontend steps run there as a separate `web` job.
 
 ## Leakage audit
 
 To detect obvious feature leakage patterns:
 
 ```bash
-python scripts/leakage_audit.py
+nfl-predictor leakage-audit \
+  --data-path data/completed_games_ml.csv \
+  --out-json models/leakage_audit.json
 ```
 
 ## Changelog

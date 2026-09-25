@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import importlib
-import inspect
 import json
-import sys
 from pathlib import Path
 
 import pytest
@@ -17,8 +14,8 @@ from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs.catalog import JobContext
 from nfl_predictor.api.runs.indexer import RunSummary, summarize_run
 from nfl_predictor.api.settings import Settings
-from nfl_predictor.cli import main as front_door
 from tests.api import factories
+from tests.cli_parsing import parse_command
 
 
 @pytest.fixture
@@ -269,8 +266,6 @@ def test_predict_week_can_rebuild_an_existing_file(settings: Settings) -> None:
     assert argv[-1] == "--overwrite"
 
 
-# The parse function of the commands whose module differs from the one the front door runs.
-_PARSER_MODULES = {"weekly": "nfl_predictor.weekly_run.config"}
 SAMPLE_PARAMS: dict[str, object] = {"season": 2026, "week": 2, "through_week": 1}
 
 
@@ -279,22 +274,11 @@ def parse_built(
 ) -> tuple[str, argparse.Namespace]:
     """Parse a built command line with the real parser of the command it launches.
 
-    Every job runs ``<python> -m nfl_predictor <command> ...``; anything else fails here.
+    Every job runs ``<python> -m nfl_predictor <command> ...``; anything else fails here. The
+    weekly job's config file is read and its keys validated, as a real run does.
     """
     assert argv[:3] == [str(settings.python_path), "-m", "nfl_predictor"], argv
-    name, rest = argv[3], argv[4:]
-    command = {command.name: command for command in front_door.COMMANDS}[name]
-    if command.requires is not None:
-        assert command.requires in rest, argv
-    module = importlib.import_module(_PARSER_MODULES.get(name, command.module))
-    if hasattr(module, "_build_parser"):
-        return name, module._build_parser().parse_args(rest)
-    parse = module._parse_args
-    if inspect.signature(parse).parameters:
-        return name, parse(rest)
-    with monkeypatch.context() as patch:
-        patch.setattr(sys, "argv", [name, *rest])
-        return name, parse()
+    return argv[3], parse_command(argv[3], argv[4:], monkeypatch)
 
 
 def _template_cases() -> list[tuple[str, dict[str, object]]]:

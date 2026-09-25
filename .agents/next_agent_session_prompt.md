@@ -7,9 +7,9 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-14) as bindi
 
 ## State (written 2026-09-25, Milestone 60 finishing 60.6)
 
-- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.24.0`. Not
+- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.25.0`. Not
   pushed; merging and pushing are must-ask. `scripts/gate.sh` exits `0` on the final tree
-  (946 passed, coverage 91.96%; `--web` passed on every chunk that touched `web/` or
+  (951 passed, coverage 91.96%; `--web` passed on every chunk that touched `web/` or
   `nfl_predictor/api/`). The working tree is clean.
 - Tasks 60.1-60.5 are done and archived (`ARCHIVE.md`, "Milestone 60 (partial)"). Sign-off
   decisions: `.agents/m60/PROPOSAL.md`, "Sign-off". `.agents/m60/INVENTORY.md` is the signed-off
@@ -44,6 +44,12 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-14) as bindi
 - `0.23.0`: task 56.7(a). The weekly run reads `config/weekly_run.yaml` by default and the file
   holds the code defaults (production output unchanged; `postseason_weight: 1.3` kept, inert).
   The weekly snapshot was rewritten on purpose to pin the production configuration.
+- `0.25.0` (this session): the first of the user's two 60.6 decisions. `--wf-n-jobs` and
+  `wf_n_jobs` removed (an old config that sets it fails with a message naming `xgb_n_jobs`);
+  `--xgb-n-jobs` sets the threads for stage 1 and the final fit, default every core
+  (`weekly_run.config.xgb_thread_count`). The fixture at 1 and 24 threads gave identical
+  outputs apart from the candidate key's `nj` label and hash; snapshots unchanged. Next: the
+  market-model removal below.
 - `0.24.0`: `nfl-predictor checkpoints` (read-only listing; all 38 directories referenced), the
   walk-forward commands default to `OMP_WAIT_POLICY=PASSIVE` unless set, and the `sweep`
   summary shows each probability view's own pick accuracy.
@@ -74,7 +80,7 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-14) as bindi
 ## Your task
 
 1. Finish 60.6 with the user's two decisions, then close it:
-   - **One thread flag** (test first): remove `--wf-n-jobs` and the `wf_n_jobs` config key (map
+   - **One thread flag**: DONE in `0.25.0` (keep for the archive summary). remove `--wf-n-jobs` and the `wf_n_jobs` config key (map
      or reject an old config that sets it, clearly), make `--xgb-n-jobs` govern stage 1 and final
      training, and default it to `os.cpu_count()`; update `config/weekly_run.yaml`, its comment,
      the weekly fixture (`tests/weekly_fixture.py` sets both keys), and the CLI snapshot. Before

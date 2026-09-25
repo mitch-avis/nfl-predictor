@@ -3,3 +3,4 @@ nfl-sos-ratings/
 .agents/skills/
 web/node_modules/
 web/dist/
+.agents/*transcript*.md

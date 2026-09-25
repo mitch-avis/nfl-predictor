@@ -35,7 +35,7 @@ def _dropbacks(season: int, week: int, team: str, passer: str, count: int) -> li
 
 def _identity_file(tmp_path: Path) -> Path:
     """Write a two-quarterback identity file and return its path."""
-    path = tmp_path / "qb_meta_data.csv"
+    path = tmp_path / "meta_data.csv"
     pl.DataFrame({"name_id": ["Tom Brady", "Josh Allen"], "gsis_id": ["TB", "JA"]}).write_csv(path)
     return path
 
@@ -83,6 +83,35 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
     assert row["home_qb_history_dropbacks"] == 12
     assert row["qb_history_dropbacks_diff"] == 38
     assert out["game_id"].to_list() == ["g1"]
+
+
+def test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Without an explicit path, the identity map comes from ``DATA_PATH/meta_data.csv``."""
+    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
+    _identity_file(tmp_path)
+    in_memory = pl.DataFrame(
+        _dropbacks(2001, 1, "NE", "TB", 20) + _dropbacks(2001, 1, "BUF", "JA", 12)
+    )
+    games = pl.DataFrame(
+        {
+            "game_id": ["g1"],
+            "season": [2001],
+            "week": [2],
+            "away_qb": ["Tom Brady"],
+            "home_qb": ["Josh Allen"],
+        }
+    )
+
+    out = data_collection._attach_qb_features(
+        games, in_memory, max_season=2001, current_season=2026
+    )
+
+    row = out.row(0, named=True)
+    assert row["away_qb_history_dropbacks"] == 20
+    assert row["home_qb_history_dropbacks"] == 12
 
 
 def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(

@@ -181,7 +181,7 @@ the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<se
 Before kickoff the current season has no play-by-play published at all; that is non-fatal, and the
 ETL falls back to cache or continues without it.
 
-The quarterback family needs `data/qb_meta_data.csv`, a read-only copy of
+The quarterback family needs `data/meta_data.csv`, a read-only copy of
 `../nfeloqb/Other Data/meta_data.csv` made the same way as `data/qb_elos.csv`. It maps the Elo
 quarterback names to GSIS ids, which are also the play-by-play passer ids. Without the file the
 quarterback columns are null and the ETL logs a warning. Career rates need every earlier season, so
@@ -234,7 +234,7 @@ Primary sources:
 
 - `nflreadpy` (NFLverse): schedules, results, team-level stats, and play-by-play.
 - Local cached CSVs under `data/` for Elo/market data when present.
-- `data/qb_meta_data.csv` (copied from `../nfeloqb`) for the quarterback name-to-id bridge. A name
+- `data/meta_data.csv` (copied from `../nfeloqb`) for the quarterback name-to-id bridge. A name
   missing from it falls back to the play-by-play passer name (`F.Last`) when that is unique; a
   quarterback still unmatched gets null quarterback features, and the ETL logs the unmatched rate.
 - TeamRankings web scrape for select ratings and stats not available in NFLverse (see ETL logs).

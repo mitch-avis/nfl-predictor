@@ -380,17 +380,8 @@ prob|logit` to blend in probability or log-odds space.
 
 ## Backtesting
 
-Backtest and produce weekly confidence ranks and summary metrics:
-
-```bash
-python scripts/backtest_predictions.py \
-  --model-in models/your_model.joblib \
-  --model-kind margin_total \
-  --data-path data/completed_games_ml.csv \
-  --output-dir data/backtest
-```
-
-For the most realistic evaluation, use walk-forward (rolling-origin) backtesting:
+Evaluate with walk-forward (rolling-origin) backtesting, which scores every week out of
+sample, confidence-pool points included:
 
 ```bash
 python scripts/walk_forward_backtest.py --help
@@ -433,9 +424,8 @@ after a stop (deliberate or not) restores the finished weeks and trains only the
 returns exactly the numbers an uninterrupted one would, which a test pins. Anything that changes the
 fingerprint starts fresh, so stale results are never mixed in. `--no-resume` retrains every week
 and `--checkpoint-dir` moves the root. The same checkpointing runs in `scripts/wf_compare.py`
-(`--resume`, `--checkpoint-dir`), `scripts/golden_command.py` (`--wf-resume`,
-`--wf-checkpoint-dir`), and inside the run directories of `scripts/weekly_run.py` and
-`scripts/betting_pipeline.py` (their existing `--resume`). The metrics report records how many weeks
+(`--resume`, `--checkpoint-dir`) and inside the run directories of `scripts/weekly_run.py` (its
+existing `--resume`). The metrics report records how many weeks
 were restored and how many were trained. Checkpoints are small (a few hundred KB per run) and safe to
 delete once a report is written.
 
@@ -593,8 +583,7 @@ This is the current behavior, recorded for reference; none of it is a recommenda
 - `scripts/weekly_run.py` accepts the same options (`--power-rankings-method`,
   `--power-rankings-strength-snapshots`, `--ratings-*`, `--legacy-franchise-fit`) and writes the
   same files. It skips the rankings with a warning when the snapshot for the requested week is
-  missing. `scripts/golden_command.py` writes a separate `model_rating_rankings.csv` from one
-  model's per-game ratings; it is a diagnostic, not the power ranking.
+  missing.
 
 Model selection hierarchy (default):
 
@@ -611,31 +600,19 @@ incomplete seasons.
 
 Repo utilities under `scripts/`:
 
-- `scripts/betting_pipeline.py`: end-to-end orchestration (walk-forward compare -> resumable tuning
-  -> final train -> weekly predictions + betting_report.csv). If `--predict-path` is omitted, the
-  newest `data/predict/week_XX_games_to_predict.csv` file is selected automatically. `--dry-run`
-  previews the planned paths/stages even in a clean checkout before local `data/` files exist. See
-  `--help`.
-- `scripts/objective_compare_models.py`: objective walk-forward comparison of two saved models by
-  retraining per fold under identical splits.
-- `scripts/betting_report_excel.py`: generate an Excel betting template/report.
-- `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
-  and artifact stamping.
 - `scripts/shap_analysis.py`: optional SHAP feature attribution for a saved model (requires `shap`).
 - `scripts/wf_compare.py`: sweep calibration + market-prob post-processing variants and summarize
   walk-forward metrics.
 - `scripts/weekly_run.py`: weekly orchestration (refresh -> wf compare -> train -> predictions +
   reports), resumable with optional JSON/YAML config.
-- `scripts/backtest_predictions.py`: run a backtest using a saved model artifact.
 
-**Totals are diagnostic-only.** The total (over/under) columns of the betting report and workbook
-(`total_value_side`, `total_edge_points`, and the workbook's total edge, confidence and EV cells)
-come from the model's total head. Since version `0.6.2` that head learns again (before, it stopped
-after one tree and predicted about 44 points for every game), but in the 2023-2025 walk-forward it
-still trails the market's own total line: in weeks 3-18, total MAE is `10.3152` in the production
-configuration (no market anchoring) and `10.2295` with anchoring, against `10.0847` for the line
-itself. Treat an over/under lean as a diagnostic, not a betting signal. Spreads, moneylines and win
-probabilities are unaffected.
+**Totals are diagnostic-only.** The total (over/under) columns of the betting report
+(`total_value_side`, `total_edge_points`) come from the model's total head. Since version `0.6.2`
+that head learns again (before, it stopped after one tree and predicted about 44 points for every
+game), but in the 2023-2025 walk-forward it still trails the market's own total line: in weeks 3-18,
+total MAE is `10.3152` in the production configuration (no market anchoring) and `10.2295` with
+anchoring, against `10.0847` for the line itself. Treat an over/under lean as a diagnostic, not a
+betting signal. Spreads, moneylines and win probabilities are unaffected.
 
 `wf_compare` examples:
 

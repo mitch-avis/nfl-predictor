@@ -743,11 +743,6 @@ form that counts as "the gate"; the individual commands are for iteration):
 
 - `scripts/weekly_run.py`: canonical weekly orchestration (data refresh -> compare -> tune/train ->
   predict -> reports).
-- `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
-  and artifact stamping.
-- `scripts/betting_pipeline.py`: end-to-end orchestration for selecting calibration/probability
-  post-processing, resumable Optuna tuning, final training, week predictions, and betting report
-  outputs.
 - `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
 - `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
 - `scripts/power_rankings.py`: power rankings + projected standings. Since 2026-09-11 the default
@@ -756,8 +751,10 @@ form that counts as "the gate"; the individual commands are for iteration):
   the 2026-09-09 current-season fit (two-season window, prior seasons weighted `0.25`, margin
   targets, future model probabilities excluded), and `--legacy-franchise-fit` restores the old
   all-seasons equal-weight fit and implies it. `scripts/weekly_run.py` exposes the same options
-  and calls the same `compute_power_rankings`. `scripts/golden_command.py` writes a separate
-  `model_rating_rankings.csv`, which is a per-model diagnostic, not the power ranking.
+  and calls the same `compute_power_rankings` (`nfl_predictor/reporting/power_rankings.py`).
+- Retired in `0.19.0`: `golden_command.py`, `betting_pipeline.py`, `backtest_predictions.py`,
+  `objective_compare_models.py` and the Excel betting workbook (`betting_report_excel.py`).
+  Old launchers that name them reproduce from their run's recorded git commit.
 
 ### Web UI (FastAPI + React)
 
@@ -1111,9 +1108,8 @@ Unused constants are removed and the file remains organized into clear sections.
   - `.venv/bin/python -m nfl_predictor.ml_model --help`
 - Walk-forward evaluation:
   - `.venv/bin/python scripts/walk_forward_backtest.py --help`
-- Convenience orchestration:
-  - `.venv/bin/python scripts/golden_command.py --help`
-  - `.venv/bin/python scripts/betting_pipeline.py --help`
+- Weekly orchestration:
+  - `.venv/bin/python scripts/weekly_run.py --help`
 - Testing:
   - `.venv/bin/python -m pytest`
 
@@ -1149,9 +1145,9 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
 - Keep walk-forward comparison artifacts under `models/` (do not point `--out-json` at a temporary
   directory). Any number reported in `.agents/` or `AGENTS.md` must be auditable from disk.
 - Walk-forward runs checkpoint every finished week (`models/wf_checkpoints/<fingerprint>/` by
-  default; `wf_compare/wf_folds/` inside `weekly_run` runs, `wf_folds/` inside `betting_pipeline`
-  runs). After a stop, re-run the identical command and it resumes at the next unfinished week;
-  `--no-resume` retrains everything. Watch progress in the run's log: every finished week prints a
+  default; `wf_compare/wf_folds/` inside `weekly_run` runs). After a stop, re-run the
+  identical command and it resumes at the next unfinished week; `--no-resume` retrains
+  everything. Watch progress in the run's log: every finished week prints a
   `Walk-forward fold N/M done` line with elapsed and remaining time. For `weekly_run` comparisons,
   `wf_compare/wf_summary.csv` still shows per-candidate results.
 - Run **one walk-forward at a time**. XGBoost uses every core, and on 2026-09-10 two concurrent

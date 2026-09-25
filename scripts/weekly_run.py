@@ -12,7 +12,6 @@ Outputs land under the run directory (default: models/<run_id>/) and include:
 - model.joblib / metrics_report.json / metadata.json
 - *_predictions.csv / *_confidence_picks.csv
 - *_betting_report.csv (when market columns exist)
-- optional betting template (.xlsx)
 - power rankings + projected standings (when data is available)
 """
 
@@ -40,7 +39,6 @@ try:
     from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
     from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
     from nfl_predictor.reporting import power_rankings
-    from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
     from nfl_predictor.reporting.betting_report import build_betting_report
     from nfl_predictor.utils import fingerprints
     from nfl_predictor.utils.logger import log
@@ -56,7 +54,6 @@ except ModuleNotFoundError:
     from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
     from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
     from nfl_predictor.reporting import power_rankings
-    from nfl_predictor.reporting.betting_excel import write_betting_template_xlsx
     from nfl_predictor.reporting.betting_report import build_betting_report
     from nfl_predictor.utils import fingerprints
     from nfl_predictor.utils.logger import log
@@ -82,7 +79,6 @@ _PATH_KEYS = {
     "predict_path",
     "run_dir",
     "output_dir",
-    "betting_template_path",
     "power_rankings_data_ml",
     "power_rankings_data_schedule",
     "power_rankings_out_dir",
@@ -482,12 +478,6 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         help="XGBoost n_jobs override.",
     )
     parser.add_argument(
-        "--betting-template-path",
-        type=Path,
-        default=defaults.get("betting_template_path"),
-        help="Optional output path for betting template (.xlsx).",
-    )
-    parser.add_argument(
         "--skip-power-rankings",
         action="store_true",
         default=defaults.get("skip_power_rankings", False),
@@ -806,7 +796,6 @@ def _resolve_output_paths(
         "predictions": output_dir / f"{suffix}_predictions.csv",
         "confidence_picks": output_dir / f"{suffix}_confidence_picks.csv",
         "betting_report": output_dir / f"{suffix}_betting_report.csv",
-        "betting_template": output_dir / f"{suffix}_betting_template.xlsx",
     }
 
 
@@ -1824,9 +1813,6 @@ def main() -> int:
     report_config = {
         "predictions_hash": predictions_hash,
         "model_hash": model_hash,
-        "betting_template_path": (
-            str(args.betting_template_path) if args.betting_template_path else None
-        ),
         "skip_power_rankings": bool(args.skip_power_rankings),
         "power_rankings_season": args.power_rankings_season,
         "power_rankings_through_week": args.power_rankings_through_week,
@@ -1857,13 +1843,6 @@ def main() -> int:
         report_df.to_csv(betting_report_path, index=False)
         outputs.append(betting_report_path)
         log.info("Wrote betting report to %s", betting_report_path)
-
-    if args.betting_template_path:
-        write_betting_template_xlsx(
-            predictions=predictions,
-            out_path=args.betting_template_path,
-        )
-        outputs.append(args.betting_template_path)
 
     if not args.skip_power_rankings:
         pr_season = args.power_rankings_season or season

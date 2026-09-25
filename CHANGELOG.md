@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.23.0] - 2026-09-24
+
+### Changed
+
+- The weekly run reads `config/weekly_run.yaml` when no `--config` is given (an explicit
+  `--config` still replaces it, and command-line options override either). Until now no weekly
+  run read the file, so every run used the code defaults.
+- `config/weekly_run.yaml` now holds exactly those code defaults, so what a weekly run produces
+  does not change: `wf_eval_last_n_seasons: 3`, `wf_calibration_weeks: 4`, raw moneylines
+  blended in probability space, `score_rounding: none`, the CPU unless `--xgb-device cuda` is
+  given, and so on. Keys whose default is automatic are commented out. Two exceptions, both
+  inert: `postseason_weight: 1.3` stays for postseason training, and `wf_win_prob_uncertainty`
+  is written as `"off"` (a bare `off` is the YAML boolean `false`). A test pins that the loaded
+  settings equal the code defaults apart from the config path and that weight. The values are
+  not tuned; they record what production runs.
+- The weekly-run characterization snapshot was rewritten on purpose: it had pinned the old YAML
+  values (ten seasons, eight calibration weeks, no-vig logit blending, NFL score rounding), which
+  production never ran. It now pins the production configuration; a fixture run with the pure
+  code defaults reproduces it exactly.
+
 ## [0.22.0] - 2026-09-24
 
 ### Changed

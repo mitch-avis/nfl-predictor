@@ -68,7 +68,8 @@ Follow-ups resolved after their milestones closed:
 
 Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`), task
 60.4 in versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`, task 60.6 in `0.19.0`-`0.26.0`
-(2026-09-24/25); tasks 60.7-60.9 stay in `TODO.md`.
+(2026-09-24/25), task 60.7 in `0.26.1` and `0.27.0` (2026-09-25); tasks 60.8-60.9 stay in
+`TODO.md`.
 
 ### 60.1 and 60.2 - Generated inventories
 
@@ -190,6 +191,27 @@ went from 309 actions in 19 entrypoints to 215 in 15 parsers.
   power rankings cannot use a blend model at all, because they read `feature_spec` from the
   model and a blend keeps it on `team_model` (pinned by
   `tests/test_blended_model_paths.py`).
+
+### 60.7 - The web jobs on the front door (versions `0.26.1` and `0.27.0`)
+
+- `0.26.1`: the API catch-all fix, test first (task 58.5; record under Milestone 58, "58.5").
+- `0.27.0`: every job template in `nfl_predictor/api/jobs/catalog.py` builds `<python> -m
+  nfl_predictor <command>` with the canonical option names (`JobContext.command` replaced
+  `JobContext.script`); the eight `scripts/` shims were deleted, so only `scripts/gate.sh`
+  remains; the gate's and CI's smoke checks run every front-door command's `--help`, listed by
+  the front door. The model-kind defect was fixed test first: one vocabulary
+  (`nfl_predictor.cli.options.MODEL_KINDS`, `margin_total` and `blend`, with
+  `blended_margin_total` accepted as an old name) shared by the train form, `train`/`predict`
+  and `rankings`. The new `test_every_template_builds_a_command_its_target_parses` in
+  `tests/api/test_jobs_catalog.py` builds every template, with every value of every choice
+  parameter, and parses the command with the target command's own parser; it and the new
+  model-kind tests (`tests/test_cli_model_kind.py`) were written and seen failing before the
+  code changed. Progress lines and the weekly job's config keys are unchanged. The weekly
+  characterization snapshots are unchanged; the CLI surface snapshot changed only in the two
+  `--model-kind` actions. `web_ui_plan.md` ("Job runner", "Milestone 60 impact") and
+  `web/README.md` record it. Left open: the live check per template in the milestone
+  acceptance (several templates rebuild `data/` or run a weekly run or walk-forward, which are
+  must-ask), and the blend power-rankings question (`TODO.md`, Milestone 60).
 
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 

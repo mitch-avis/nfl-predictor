@@ -621,34 +621,22 @@ Ground rules for the whole milestone:
   reference walk-forward is started while this milestone is moving ML code.
 
 Tasks 60.1-60.3 (the generated inventories and the user's sign-off), 60.4 (the
-characterization tests), 60.5 (the library moves) and 60.6 (the front door, retirements,
-renames and removals, `0.19.0`-`0.26.0`) are done and archived under "Milestone 60 (partial)"
-in `ARCHIVE.md`; the decisions are in `.agents/m60/PROPOSAL.md`,
-"Sign-off". In short: one `nfl-predictor <command>` front door; retire `golden_command`,
-`backtest_predictions`, `objective_compare_models` (with `nfl_predictor/ml/model_compare.py`),
+characterization tests), 60.5 (the library moves), 60.6 (the front door, retirements,
+renames and removals, `0.19.0`-`0.26.0`) and 60.7 (the web jobs on the front door, `0.26.1` and
+`0.27.0`) are done and archived under "Milestone 60 (partial)" in `ARCHIVE.md`; the decisions
+are in `.agents/m60/PROPOSAL.md`, "Sign-off". In short: one `nfl-predictor <command>` front
+door; retire `golden_command`, `backtest_predictions`, `objective_compare_models` (with `nfl_predictor/ml/model_compare.py`),
 `betting_pipeline` (after `build_betting_report` moves) and the whole Excel betting workbook;
 remove ScoreModel (task 55.5); move everything else; keep `scripts/gate.sh`; one naming rule
 with old spellings kept as aliases; old launchers reproduce from their recorded commit.
 
-- [ ] 60.7 Web API and frontend: update the job templates in
-      `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
-      parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the
-      weekly run, matched by `PROGRESS_RE` in `nfl_predictor/api/jobs/runner.py`); keep the
-      `weekly_run` template's config keys valid (saved job configs under `data/web/job_configs/`
-      use them); update `tests/api/`; run `scripts/gate.sh --web`; amend `web_ui_plan.md` and
-      `web/README.md`. Also here, test first: fix the model-kind vocabulary defect (canonical
-      `blend`, `blended_margin_total` accepted as an alias; three web launches fail today, and
-      the user saw the train failure in the web UI). The `betting_xlsx` job, the workbook
-      download routes and the Betting page's download button were removed early, in `0.19.0`.
-      The API catch-all bug (task 58.5) was fixed first, in `0.26.1` (`ARCHIVE.md`, Milestone
-      58, "58.5").
-      Found 2026-09-25 (question for the user before fixing): with the vocabulary fixed, the
-      power rankings still cannot use a blend model. `_predict_future_games` in
+- [ ] Open question for the user (found 2026-09-25 in 60.6/60.7, not yet decided): the power
+      rankings cannot use a blend model. `_predict_future_games` in
       `nfl_predictor/reporting/power_rankings.py` reads `model.feature_spec`, and a blend keeps
       it on `model.team_model`, so a blend run fails with "Model is missing feature_spec"
-      before its blend branch is reached (pinned by `tests/test_blended_model_paths.py`). It
-      has never worked. Options: read the team model's spec for a blend, or reject blend runs
-      for rankings with a clear message.
+      before its blend branch is reached (pinned by `tests/test_blended_model_paths.py`). It has
+      never worked; `0.27.0` fixed only the model-kind vocabulary in front of it. Options: read
+      the team model's spec for a blend, or reject blend runs for rankings with a clear message.
 - [ ] 60.8 CI, gate and docs: the CLI smoke checks in `scripts/gate.sh`; CI
       (`.github/workflows/validation.yml`) calls `scripts/gate.sh` instead of repeating its
       steps; `README.md` (the Scripts section, every command example, and a "Reproducing an old
@@ -671,7 +659,11 @@ Acceptance:
 - [ ] No production code is imported from `scripts/`, and the moved code counts toward coverage
       with the `90%` floor still met.
 - [ ] Every web job template launches and reports progress (tests plus one live check per
-      template), and `web_ui_plan.md` records the changes.
+      template), and `web_ui_plan.md` records the changes. Tests and the plan are done
+      (`0.27.0`: every template's command parses with its target's own parser); the live checks
+      are not, because several templates rebuild `data/` or run a weekly run or walk-forward,
+      which need the user's go-ahead. Question for the user: which live checks to run, and
+      where the web instance runs from.
 - [ ] Every removal or rename has a deprecation or removal note in `CHANGELOG.md`, and the gate
       (with `--web`) is green on the final tree.
 

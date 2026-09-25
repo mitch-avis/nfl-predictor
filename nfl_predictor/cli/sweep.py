@@ -41,32 +41,11 @@ def _parse_args() -> argparse.Namespace:
         default=Path("data/completed_games_ml.csv"),
         help="Path to completed games ML CSV.",
     )
+    options.add_wf_window_options(parser)
     parser.add_argument(
-        "--eval-last-n-seasons",
-        type=int,
-        default=3,
-        help="Evaluate the last N seasons (regular season only).",
-    )
-    parser.add_argument(
-        "--wf-start-week",
-        type=int,
-        default=3,
-        help="Walk-forward start week.",
-    )
-    parser.add_argument(
-        "--exclude-incomplete-seasons",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Exclude seasons whose regular season is incomplete in the dataset.",
-    )
-    parser.add_argument(
-        "--calibration-weeks",
-        type=int,
-        default=4,
-        help="Number of prior weeks used for time-aware calibration.",
-    )
-    parser.add_argument(
+        "--wf-market-mode",
         "--market-mode",
+        dest="market_mode",
         choices=["features", "anchor", "hybrid", "all"],
         default="hybrid",
         help="Market mode to evaluate (features, anchor, hybrid, or all).",
@@ -96,25 +75,33 @@ def _parse_args() -> argparse.Namespace:
         help="Optional output CSV path (default: models/<run_id>/wf_compare.csv).",
     )
     parser.add_argument(
+        "--wf-n-estimators",
         "--n-estimators",
+        dest="n_estimators",
         type=int,
         default=None,
         help="Optional XGBoost n_estimators override.",
     )
     parser.add_argument(
+        "--wf-max-depth",
         "--max-depth",
+        dest="max_depth",
         type=int,
         default=None,
         help="Optional XGBoost max_depth override.",
     )
     parser.add_argument(
+        "--wf-learning-rate",
         "--learning-rate",
+        dest="learning_rate",
         type=float,
         default=None,
         help="Optional XGBoost learning_rate override.",
     )
     parser.add_argument(
+        "--xgb-n-jobs",
         "--n-jobs",
+        dest="n_jobs",
         type=int,
         default=None,
         help="Optional XGBoost n_jobs override.",
@@ -125,15 +112,7 @@ def _parse_args() -> argparse.Namespace:
         default=False,
         help="Whether to train quantile models (slow).",
     )
-    parser.add_argument(
-        "--disable-feature-groups",
-        type=str,
-        default=None,
-        help=(
-            "Comma-separated feature group names to drop for ablation comparisons "
-            "(e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS."
-        ),
-    )
+    options.add_feature_group_option(parser)
     parser.add_argument(
         "--resume",
         action=argparse.BooleanOptionalAction,
@@ -331,7 +310,7 @@ def main() -> int:
                             eval_last_n_seasons=args.eval_last_n_seasons,
                             wf_start_week=args.wf_start_week,
                             calibration=calib,
-                            calibration_weeks=args.calibration_weeks,
+                            calibration_weeks=args.wf_calibration_weeks,
                             exclude_incomplete_seasons=args.exclude_incomplete_seasons,
                             include_market=include_market,
                             market_anchor=market_anchor,

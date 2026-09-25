@@ -24,6 +24,29 @@ _PATH_KEYS = {
 }
 
 
+# Config keys that were renamed with their option; a config file may still use the old name.
+_RENAMED_CONFIG_KEYS = {
+    "tune_n_trials": "tune_trials",
+    "train_early_stopping_rounds": "tune_early_stopping_rounds",
+}
+
+
+def _rename_config_keys(config: dict[str, Any]) -> dict[str, Any]:
+    """Return ``config`` with renamed keys under their current names.
+
+    Raises:
+        ValueError: If a config sets both the old and the new name of one key.
+
+    """
+    renamed = dict(config)
+    for old, new in _RENAMED_CONFIG_KEYS.items():
+        if old in renamed:
+            if new in renamed:
+                raise ValueError(f"Config sets both {old!r} and its new name {new!r}.")
+            renamed[new] = renamed.pop(old)
+    return renamed
+
+
 def _load_config(path: Path) -> dict[str, Any]:
     """Load a JSON or YAML config file into a dict."""
     if not path.exists():
@@ -143,7 +166,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         "--wf-eval-last-n-seasons",
         type=int,
         default=defaults.get("wf_eval_last_n_seasons", 3),
-        help="Walk-forward: evaluate last N seasons.",
+        help=(
+            "Walk-forward: evaluate the last N seasons. The count includes the current season "
+            "even before it has a completed week, so the default 3 scores two seasons."
+        ),
     )
     parser.add_argument(
         "--wf-start-week",
@@ -302,14 +328,16 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         help="Training: last feature column.",
     )
     parser.add_argument(
+        "--tune-early-stopping-rounds",
         "--train-early-stopping-rounds",
+        dest="tune_early_stopping_rounds",
         type=int,
         default=defaults.get(
-            "train_early_stopping_rounds",
+            "tune_early_stopping_rounds",
             ml_model_core.DEFAULT_EARLY_STOPPING_ROUNDS,
         ),
         help=(
-            "Training: early stopping rounds for Optuna tuning trials only; the final "
+            "Tuning: early stopping rounds for Optuna tuning trials only; the final "
             "in-season fit runs the full n_estimators budget."
         ),
     )
@@ -326,9 +354,11 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         help="Optuna tuning timeout in seconds.",
     )
     parser.add_argument(
+        "--tune-trials",
         "--tune-n-trials",
+        dest="tune_trials",
         type=int,
-        default=defaults.get("tune_n_trials"),
+        default=defaults.get("tune_trials"),
         help="Optuna number of trials (optional).",
     )
     parser.add_argument(
@@ -496,7 +526,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = _build_parser()
     args = parser.parse_args(argv)
     if args.config:
-        config = _load_config(args.config)
+        config = _rename_config_keys(_load_config(args.config))
         _validate_config_keys(config, _allowed_config_keys(parser))
         parser = _build_parser(_normalize_config_defaults(config))
         args = parser.parse_args(argv)

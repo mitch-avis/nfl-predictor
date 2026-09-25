@@ -51,36 +51,21 @@ def _parse_args() -> argparse.Namespace:
         default=Path(constants.DATA_PATH) / "completed_games_ml.csv",
         help="Path to completed games dataset.",
     )
-    parser.add_argument(
-        "--eval-last-n-seasons",
-        type=int,
-        default=3,
-        help="Evaluate the last N seasons in the dataset.",
-    )
+    options.add_wf_window_options(parser)
     parser.add_argument(
         "--eval-seasons",
         type=int,
         nargs="+",
         default=None,
-        help="Explicit seasons to evaluate (overrides --eval-last-n-seasons).",
+        help="Explicit seasons to evaluate (overrides --wf-eval-last-n-seasons).",
     )
     parser.add_argument(
-        "--wf-start-week",
-        type=int,
-        default=3,
-        help="Walk-forward start week.",
-    )
-    parser.add_argument(
+        "--win-prob-calibration",
         "--calibration",
+        dest="calibration",
         choices=["platt", "isotonic", "sigma", "none", "elo", "auto", "logistic"],
         default="platt",
         help="Win-prob calibration method (logistic is an alias for platt).",
-    )
-    parser.add_argument(
-        "--wf-calibration-weeks",
-        type=int,
-        default=walk_forward.DEFAULT_CALIBRATION_WEEKS,
-        help="Number of prior weeks (same season) used for time-aware calibration.",
     )
     parser.add_argument(
         "--random-seed",
@@ -92,15 +77,6 @@ def _parse_args() -> argparse.Namespace:
         "--include-postseason",
         action="store_true",
         help="Include postseason games in walk-forward evaluation.",
-    )
-    parser.add_argument(
-        "--exclude-incomplete-seasons",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help=(
-            "Exclude seasons whose regular season is incomplete in the dataset "
-            "(useful when the current season is partial)."
-        ),
     )
     parser.add_argument(
         "--recency-half-life-seasons",
@@ -120,39 +96,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Use transformed market features when odds columns exist.",
     )
-    parser.add_argument(
-        "--market-prob-weight",
-        type=float,
-        default=None,
-        help=(
-            "Blend weight for market implied probability (0=off, 1=market only). "
-            "Alias for --market-prob-blend."
-        ),
-    )
-    parser.add_argument(
-        "--market-prob-blend",
-        type=float,
-        default=0.0,
-        help="Blend weight for market implied probability (0=off, 1=market only).",
-    )
-    parser.add_argument(
-        "--market-prob-clamp",
-        type=float,
-        default=0.0,
-        help="Clamp model probability within +/- this delta of market (0=off).",
-    )
-    parser.add_argument(
-        "--market-prob-source",
-        choices=["raw", "novig"],
-        default="raw",
-        help="Market probability source for blending/clamping.",
-    )
-    parser.add_argument(
-        "--market-prob-blend-method",
-        choices=["prob", "logit"],
-        default="prob",
-        help="Blend method for market probabilities (prob or logit space).",
-    )
+    options.add_market_prob_options(parser)
     parser.add_argument(
         "--win-prob-uncertainty",
         action=argparse.BooleanOptionalAction,
@@ -169,15 +113,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Drop trend + season-phase features for ablation comparisons.",
     )
-    parser.add_argument(
-        "--disable-feature-groups",
-        type=str,
-        default=None,
-        help=(
-            "Comma-separated feature group names to drop for ablation comparisons "
-            "(e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS."
-        ),
-    )
+    options.add_feature_group_option(parser)
     parser.add_argument(
         "--xgb-tree-method",
         type=str,
@@ -209,7 +145,9 @@ def _parse_args() -> argparse.Namespace:
         help="Optional XGBoost gamma override.",
     )
     parser.add_argument(
+        "--wf-n-estimators",
         "--n-estimators",
+        dest="n_estimators",
         type=int,
         default=None,
         help=(
@@ -273,10 +211,6 @@ def main() -> None:
             len(dropped_feature_group_columns),
         )
 
-    market_prob_weight = args.market_prob_weight
-    if market_prob_weight is None:
-        market_prob_weight = args.market_prob_blend
-
     xgb_overrides: dict[str, Any] = {}
     if args.xgb_tree_method is not None:
         xgb_overrides["tree_method"] = str(args.xgb_tree_method)
@@ -303,7 +237,7 @@ def main() -> None:
         recency_half_life_seasons=args.recency_half_life_seasons,
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
-        market_prob_weight=float(market_prob_weight),
+        market_prob_weight=float(args.market_prob_weight),
         market_prob_clamp=float(args.market_prob_clamp),
         market_prob_source=args.market_prob_source,
         market_prob_blend_method=args.market_prob_blend_method,

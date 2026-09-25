@@ -1,7 +1,9 @@
-"""CLI entrypoint for training and prediction.
+"""Train a model, or predict a week with a saved one.
 
-This module hosts argument parsing and `main()` that were historically defined in
-`nfl_predictor/ml_model.py`.
+``nfl-predictor train`` and ``nfl-predictor predict`` (which requires ``--model-in``) run this
+module's ``main``, as does ``python -m nfl_predictor.ml_model``. It lives outside
+``nfl_predictor/ml/`` so that editing the command line never changes a walk-forward
+checkpoint fingerprint.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from nfl_predictor import constants
+from nfl_predictor.cli import options
 from nfl_predictor.ml import artifacts
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_EARLY_STOPPING_ROUNDS,
@@ -97,39 +100,7 @@ def _parse_args() -> argparse.Namespace:
             "Train on residuals vs market spread/total and add market baseline at prediction time."
         ),
     )
-    parser.add_argument(
-        "--market-prob-weight",
-        type=float,
-        default=None,
-        help=(
-            "Market probability weight for post-processing (0=off, 1=market only). "
-            "Alias for --market-prob-blend."
-        ),
-    )
-    parser.add_argument(
-        "--market-prob-blend",
-        type=float,
-        default=0.0,
-        help="Market probability weight for post-processing (0=off, 1=market only).",
-    )
-    parser.add_argument(
-        "--market-prob-clamp",
-        type=float,
-        default=0.0,
-        help="Clamp model probability within +/- this delta of market (0=off).",
-    )
-    parser.add_argument(
-        "--market-prob-source",
-        choices=["raw", "novig"],
-        default="raw",
-        help="Market probability source for blending/clamping.",
-    )
-    parser.add_argument(
-        "--market-prob-blend-method",
-        choices=["prob", "logit"],
-        default="prob",
-        help="Blend method for market probabilities (prob or logit space).",
-    )
+    options.add_market_prob_options(parser)
     parser.add_argument(
         "--min-season",
         type=int,
@@ -202,7 +173,9 @@ def _parse_args() -> argparse.Namespace:
         help="Optional max number of Optuna trials.",
     )
     parser.add_argument(
+        "--tune-objective",
         "--tune-metric",
+        dest="tune_metric",
         choices=[
             "margin_mae",
             "total_mae",
@@ -215,13 +188,17 @@ def _parse_args() -> argparse.Namespace:
         help="Objective metric for Optuna tuning.",
     )
     parser.add_argument(
+        "--tune-cv-splits",
         "--cv-splits",
+        dest="cv_splits",
         type=int,
         default=DEFAULT_OPTUNA_CV_SPLITS,
         help="Number of time-series CV folds for tuning.",
     )
     parser.add_argument(
+        "--tune-early-stopping-rounds",
         "--early-stopping-rounds",
+        dest="early_stopping_rounds",
         type=int,
         default=DEFAULT_EARLY_STOPPING_ROUNDS,
         help="Early stopping rounds for XGBoost.",
@@ -363,8 +340,6 @@ def main() -> None:
     )
 
     market_prob_weight = args.market_prob_weight
-    if market_prob_weight is None:
-        market_prob_weight = args.market_prob_blend
 
     market_prob_config = MarketProbConfig(
         blend_weight=float(market_prob_weight),

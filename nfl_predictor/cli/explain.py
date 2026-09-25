@@ -19,7 +19,9 @@ from nfl_predictor.utils.logger import log
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Optional SHAP analysis for model features.")
     parser.add_argument(
+        "--model-in",
         "--model-path",
+        dest="model_path",
         type=Path,
         required=True,
         help="Path to a saved model.joblib artifact.",

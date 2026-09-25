@@ -427,10 +427,10 @@ def main() -> int:
     optuna_config = OptunaConfig(
         enabled=bool(args.tune),
         timeout_seconds=int(args.tune_timeout),
-        n_trials=args.tune_n_trials,
+        n_trials=args.tune_trials,
         cv_splits=int(args.tune_cv_splits),
         objective=str(args.tune_objective),
-        early_stopping_rounds=int(args.train_early_stopping_rounds),
+        early_stopping_rounds=int(args.tune_early_stopping_rounds),
         tree_method=args.xgb_tree_method,
         device=args.xgb_device,
         tune_scope="both",

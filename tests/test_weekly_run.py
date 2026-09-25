@@ -281,3 +281,40 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
     assert resolved["learning_rate"] == pytest.approx(defaults["learning_rate"])
     assert resolved["subsample"] == pytest.approx(defaults["subsample"])
     assert resolved["colsample_bytree"] == pytest.approx(defaults["colsample_bytree"])
+
+
+def test_renamed_config_keys_load_under_their_new_names(tmp_path: Path) -> None:
+    """A config file with the old tuning key names still sets the renamed options."""
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text(
+        '{"tune_n_trials": 7, "train_early_stopping_rounds": 30}', encoding="utf-8"
+    )
+
+    args = run_config._parse_args(["--config", str(config_path)])
+
+    assert (args.tune_trials, args.tune_early_stopping_rounds) == (7, 30)
+
+
+def test_a_config_with_both_names_of_a_key_is_rejected(tmp_path: Path) -> None:
+    """Setting a key under both its old and new names is ambiguous and fails."""
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text('{"tune_n_trials": 7, "tune_trials": 8}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="tune_n_trials"):
+        run_config._parse_args(["--config", str(config_path)])
+
+
+@pytest.mark.parametrize(
+    ("argv", "dest", "value"),
+    [
+        (["--tune-trials", "5"], "tune_trials", 5),
+        (["--tune-n-trials", "5"], "tune_trials", 5),
+        (["--tune-early-stopping-rounds", "9"], "tune_early_stopping_rounds", 9),
+        (["--train-early-stopping-rounds", "9"], "tune_early_stopping_rounds", 9),
+    ],
+)
+def test_weekly_tuning_options_accept_both_spellings(
+    argv: list[str], dest: str, value: int
+) -> None:
+    """The renamed tuning options parse under their new and their old spelling."""
+    assert getattr(run_config._build_parser().parse_args(argv), dest) == value

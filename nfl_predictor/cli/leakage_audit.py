@@ -45,12 +45,6 @@ def _parse_args() -> argparse.Namespace:
         help="Last column in feature range (inclusive).",
     )
     parser.add_argument(
-        "--include-market",
-        action="store_true",
-        default=True,
-        help="Include market columns as features when present.",
-    )
-    parser.add_argument(
         "--exclude-market",
         action="store_false",
         dest="include_market",

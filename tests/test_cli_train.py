@@ -551,3 +551,26 @@ def test_main_unknown_model_kind_raises_for_training_path(
 
     with pytest.raises(ValueError, match="Unknown model kind: unknown"):
         ml_model_cli.main()
+
+
+@pytest.mark.parametrize(
+    ("argv", "dest", "value"),
+    [
+        (["--tune-objective", "brier"], "tune_metric", "brier"),
+        (["--tune-metric", "brier"], "tune_metric", "brier"),
+        (["--tune-cv-splits", "4"], "cv_splits", 4),
+        (["--cv-splits", "4"], "cv_splits", 4),
+        (["--tune-early-stopping-rounds", "9"], "early_stopping_rounds", 9),
+        (["--early-stopping-rounds", "9"], "early_stopping_rounds", 9),
+        (["--market-prob-blend", "0.2"], "market_prob_weight", 0.2),
+        (["--market-prob-weight", "0.2"], "market_prob_weight", 0.2),
+    ],
+)
+def test_renamed_options_accept_both_spellings(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str], dest: str, value: object
+) -> None:
+    """Each renamed train option parses under its new and its old spelling."""
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["prog", *argv])
+
+    assert getattr(ml_model_cli._parse_args(), dest) == value

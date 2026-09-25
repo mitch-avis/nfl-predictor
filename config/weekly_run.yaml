@@ -52,8 +52,8 @@ postseason_weight: 1.3
 # exponential recency weighting half-life in seasons for final model training (default: none,
 # i.e. unweighted; keep it equal to wf_recency_half_life_seasons)
 # train_recency_half_life_seasons: 16
-# early stopping rounds for final model training (default: 50)
-train_early_stopping_rounds: 80
+# early stopping rounds for Optuna tuning trials only (default: 50)
+tune_early_stopping_rounds: 80
 # whether to include transformed market-based features in final model training (default: auto)
 market_transform: true
 # number of weeks to use for model calibration in final model training (default: wf_calibration_weeks)

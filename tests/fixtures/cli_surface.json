@@ -134,24 +134,11 @@
    "choices": null,
    "default": 3,
    "dest": "eval_last_n_seasons",
-   "help": "Evaluate the last N seasons in the dataset.",
+   "help": "Evaluate the last N seasons in the dataset (regular season only). The count includes a current season that has no completed week yet.",
    "nargs": null,
    "options": [
+    "--wf-eval-last-n-seasons",
     "--eval-last-n-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "eval_seasons",
-   "help": "Explicit seasons to evaluate (overrides --eval-last-n-seasons).",
-   "nargs": "+",
-   "options": [
-    "--eval-seasons"
    ],
    "required": false,
    "subcommand": null,
@@ -173,6 +160,52 @@
   },
   {
    "action": "_StoreAction",
+   "choices": null,
+   "default": 4,
+   "dest": "wf_calibration_weeks",
+   "help": "Number of prior weeks (same season) used for time-aware calibration.",
+   "nargs": null,
+   "options": [
+    "--wf-calibration-weeks",
+    "--calibration-weeks"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "exclude_incomplete_seasons",
+   "help": "Exclude seasons whose regular season is incomplete in the dataset (useful when the current season is partial).",
+   "nargs": 0,
+   "options": [
+    "--wf-exclude-incomplete-seasons",
+    "--no-wf-exclude-incomplete-seasons",
+    "--exclude-incomplete-seasons",
+    "--no-exclude-incomplete-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "eval_seasons",
+   "help": "Explicit seasons to evaluate (overrides --wf-eval-last-n-seasons).",
+   "nargs": "+",
+   "options": [
+    "--eval-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
    "choices": [
     "platt",
     "isotonic",
@@ -187,25 +220,12 @@
    "help": "Win-prob calibration method (logistic is an alias for platt).",
    "nargs": null,
    "options": [
+    "--win-prob-calibration",
     "--calibration"
    ],
    "required": false,
    "subcommand": null,
    "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 4,
-   "dest": "wf_calibration_weeks",
-   "help": "Number of prior weeks (same season) used for time-aware calibration.",
-   "nargs": null,
-   "options": [
-    "--wf-calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
   },
   {
    "action": "_StoreAction",
@@ -230,21 +250,6 @@
    "nargs": 0,
    "options": [
     "--include-postseason"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "exclude_incomplete_seasons",
-   "help": "Exclude seasons whose regular season is incomplete in the dataset (useful when the current season is partial).",
-   "nargs": 0,
-   "options": [
-    "--exclude-incomplete-seasons",
-    "--no-exclude-incomplete-seasons"
    ],
    "required": false,
    "subcommand": null,
@@ -297,25 +302,12 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": null,
-   "dest": "market_prob_weight",
-   "help": "Blend weight for market implied probability (0=off, 1=market only). Alias for --market-prob-blend.",
-   "nargs": null,
-   "options": [
-    "--market-prob-weight"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
    "default": 0.0,
-   "dest": "market_prob_blend",
-   "help": "Blend weight for market implied probability (0=off, 1=market only).",
+   "dest": "market_prob_weight",
+   "help": "Blend weight for the market's implied win probability (0=off, 1=market only).",
    "nargs": null,
    "options": [
+    "--market-prob-weight",
     "--market-prob-blend"
    ],
    "required": false,
@@ -505,6 +497,7 @@
    "help": "Optional XGBoost n_estimators override (the tree budget; every in-season fit runs the full budget).",
    "nargs": null,
    "options": [
+    "--wf-n-estimators",
     "--n-estimators"
    ],
    "required": false,
@@ -564,6 +557,7 @@
    "help": "Path to a saved model.joblib artifact.",
    "nargs": null,
    "options": [
+    "--model-in",
     "--model-path"
    ],
    "required": true,
@@ -696,20 +690,6 @@
    "nargs": null,
    "options": [
     "--feature-end"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": true,
-   "dest": "include_market",
-   "help": "Include market columns as features when present.",
-   "nargs": 0,
-   "options": [
-    "--include-market"
    ],
    "required": false,
    "subcommand": null,
@@ -1056,9 +1036,10 @@
    "choices": null,
    "default": 3,
    "dest": "eval_last_n_seasons",
-   "help": "Evaluate the last N seasons (regular season only).",
+   "help": "Evaluate the last N seasons in the dataset (regular season only). The count includes a current season that has no completed week yet.",
    "nargs": null,
    "options": [
+    "--wf-eval-last-n-seasons",
     "--eval-last-n-seasons"
    ],
    "required": false,
@@ -1080,33 +1061,36 @@
    "type": "int"
   },
   {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 4,
+   "dest": "wf_calibration_weeks",
+   "help": "Number of prior weeks (same season) used for time-aware calibration.",
+   "nargs": null,
+   "options": [
+    "--wf-calibration-weeks",
+    "--calibration-weeks"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
    "action": "BooleanOptionalAction",
    "choices": null,
    "default": false,
    "dest": "exclude_incomplete_seasons",
-   "help": "Exclude seasons whose regular season is incomplete in the dataset.",
+   "help": "Exclude seasons whose regular season is incomplete in the dataset (useful when the current season is partial).",
    "nargs": 0,
    "options": [
+    "--wf-exclude-incomplete-seasons",
+    "--no-wf-exclude-incomplete-seasons",
     "--exclude-incomplete-seasons",
     "--no-exclude-incomplete-seasons"
    ],
    "required": false,
    "subcommand": null,
    "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 4,
-   "dest": "calibration_weeks",
-   "help": "Number of prior weeks used for time-aware calibration.",
-   "nargs": null,
-   "options": [
-    "--calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
   },
   {
    "action": "_StoreAction",
@@ -1121,6 +1105,7 @@
    "help": "Market mode to evaluate (features, anchor, hybrid, or all).",
    "nargs": null,
    "options": [
+    "--wf-market-mode",
     "--market-mode"
    ],
    "required": false,
@@ -1203,6 +1188,7 @@
    "help": "Optional XGBoost n_estimators override.",
    "nargs": null,
    "options": [
+    "--wf-n-estimators",
     "--n-estimators"
    ],
    "required": false,
@@ -1217,6 +1203,7 @@
    "help": "Optional XGBoost max_depth override.",
    "nargs": null,
    "options": [
+    "--wf-max-depth",
     "--max-depth"
    ],
    "required": false,
@@ -1231,6 +1218,7 @@
    "help": "Optional XGBoost learning_rate override.",
    "nargs": null,
    "options": [
+    "--wf-learning-rate",
     "--learning-rate"
    ],
    "required": false,
@@ -1245,6 +1233,7 @@
    "help": "Optional XGBoost n_jobs override.",
    "nargs": null,
    "options": [
+    "--xgb-n-jobs",
     "--n-jobs"
    ],
    "required": false,
@@ -1308,6 +1297,650 @@
    "required": false,
    "subcommand": null,
    "type": "Path"
+  }
+ ],
+ "nfl_predictor.cli.train": [
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "margin_total",
+    "blend"
+   ],
+   "default": "margin_total",
+   "dest": "model_kind",
+   "help": "Model pipeline to use (margin_total or blend).",
+   "nargs": null,
+   "options": [
+    "--model-kind"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/data/completed_games_ml.csv",
+   "dest": "data_path",
+   "help": "Path to completed games dataset.",
+   "nargs": null,
+   "options": [
+    "--data-path"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 2,
+   "dest": "holdout_seasons",
+   "help": "Number of most recent seasons to hold out for evaluation.",
+   "nargs": null,
+   "options": [
+    "--holdout-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "exclude_market",
+   "help": "Exclude market features like spreads/totals/moneylines.",
+   "nargs": 0,
+   "options": [
+    "--exclude-market"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "include_postseason",
+   "help": "Include postseason games in training when a game_type column exists. Default: False (train on regular season only).",
+   "nargs": 0,
+   "options": [
+    "--include-postseason",
+    "--no-include-postseason"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 1.0,
+   "dest": "postseason_weight",
+   "help": "Sample-weight multiplier for postseason rows when --include-postseason is enabled. Default: 1.0 (no upweight).",
+   "nargs": null,
+   "options": [
+    "--postseason-weight"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "recency_half_life_seasons",
+   "help": "Optional exponential half-life in seasons for recency weighting.",
+   "nargs": null,
+   "options": [
+    "--recency-half-life-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "market_transform",
+   "help": "Use transformed market features (implied probs, home margin) instead of raw lines.",
+   "nargs": 0,
+   "options": [
+    "--market-transform"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "market_anchor",
+   "help": "Train on residuals vs market spread/total and add market baseline at prediction time.",
+   "nargs": 0,
+   "options": [
+    "--market-anchor"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0.0,
+   "dest": "market_prob_weight",
+   "help": "Blend weight for the market's implied win probability (0=off, 1=market only).",
+   "nargs": null,
+   "options": [
+    "--market-prob-weight",
+    "--market-prob-blend"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0.0,
+   "dest": "market_prob_clamp",
+   "help": "Clamp model probability within +/- this delta of market (0=off).",
+   "nargs": null,
+   "options": [
+    "--market-prob-clamp"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "raw",
+    "novig"
+   ],
+   "default": "raw",
+   "dest": "market_prob_source",
+   "help": "Market probability source for blending/clamping.",
+   "nargs": null,
+   "options": [
+    "--market-prob-source"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "prob",
+    "logit"
+   ],
+   "default": "prob",
+   "dest": "market_prob_blend_method",
+   "help": "Blend method for market probabilities (prob or logit space).",
+   "nargs": null,
+   "options": [
+    "--market-prob-blend-method"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "min_season",
+   "help": "Optional minimum season to include.",
+   "nargs": null,
+   "options": [
+    "--min-season"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "max_season",
+   "help": "Optional maximum season to include.",
+   "nargs": null,
+   "options": [
+    "--max-season"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "away_rest",
+   "dest": "feature_start",
+   "help": "First feature column (inclusive).",
+   "nargs": null,
+   "options": [
+    "--feature-start"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "home_moneyline",
+   "dest": "feature_end",
+   "help": "Last feature column (inclusive).",
+   "nargs": null,
+   "options": [
+    "--feature-end"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0.5,
+   "dest": "max_cardinality_ratio",
+   "help": "Drop categorical columns with unique ratio above this threshold.",
+   "nargs": null,
+   "options": [
+    "--max-cardinality-ratio"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 1,
+   "dest": "calibration_seasons",
+   "help": "Number of seasons reserved for calibration/blending.",
+   "nargs": null,
+   "options": [
+    "--calibration-seasons"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0,
+   "dest": "calibration_weeks",
+   "help": "Number of weeks from the latest season reserved for calibration.",
+   "nargs": null,
+   "options": [
+    "--calibration-weeks"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "none",
+    "platt",
+    "isotonic",
+    "sigma",
+    "elo",
+    "auto",
+    "logistic"
+   ],
+   "default": "isotonic",
+   "dest": "win_prob_calibration",
+   "help": "Calibration method for win probabilities (logistic is an alias for platt).",
+   "nargs": null,
+   "options": [
+    "--win-prob-calibration"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "win_prob_uncertainty",
+   "help": "Use margin quantiles to derive uncertainty-aware win probabilities.",
+   "nargs": 0,
+   "options": [
+    "--win-prob-uncertainty",
+    "--no-win-prob-uncertainty"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreTrueAction",
+   "choices": null,
+   "default": false,
+   "dest": "tune",
+   "help": "Run Optuna hyperparameter tuning.",
+   "nargs": 0,
+   "options": [
+    "--tune"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 600,
+   "dest": "tune_timeout",
+   "help": "Optuna timeout in seconds.",
+   "nargs": null,
+   "options": [
+    "--tune-timeout"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "tune_trials",
+   "help": "Optional max number of Optuna trials.",
+   "nargs": null,
+   "options": [
+    "--tune-trials"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "margin_mae",
+    "total_mae",
+    "combined_mae",
+    "winner_accuracy",
+    "brier",
+    "expected_points"
+   ],
+   "default": "combined_mae",
+   "dest": "tune_metric",
+   "help": "Objective metric for Optuna tuning.",
+   "nargs": null,
+   "options": [
+    "--tune-objective",
+    "--tune-metric"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 3,
+   "dest": "cv_splits",
+   "help": "Number of time-series CV folds for tuning.",
+   "nargs": null,
+   "options": [
+    "--tune-cv-splits",
+    "--cv-splits"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 50,
+   "dest": "early_stopping_rounds",
+   "help": "Early stopping rounds for XGBoost.",
+   "nargs": null,
+   "options": [
+    "--tune-early-stopping-rounds",
+    "--early-stopping-rounds"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "auto",
+   "dest": "xgb_tree_method",
+   "help": "XGBoost tree_method (e.g., auto, hist, approx, exact).",
+   "nargs": null,
+   "options": [
+    "--xgb-tree-method"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "auto",
+   "dest": "xgb_device",
+   "help": "XGBoost device (e.g., cpu, cuda).",
+   "nargs": null,
+   "options": [
+    "--xgb-device"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "xgb_n_jobs",
+   "help": "XGBoost parallel threads (default: os.cpu_count()).",
+   "nargs": null,
+   "options": [
+    "--xgb-n-jobs"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "int"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "team",
+    "market",
+    "both"
+   ],
+   "default": "both",
+   "dest": "tune_scope",
+   "help": "Which models to tune when blending.",
+   "nargs": null,
+   "options": [
+    "--tune-scope"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "tune_storage",
+   "help": "Optuna storage URL for persistent studies (e.g., sqlite:///optuna.db).",
+   "nargs": null,
+   "options": [
+    "--tune-storage"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "tune_study_name",
+   "help": "Optuna study name for persistent storage.",
+   "nargs": null,
+   "options": [
+    "--tune-study-name"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "tune_best_params_out",
+   "help": "Optional path to save the best Optuna params JSON after each trial.",
+   "nargs": null,
+   "options": [
+    "--tune-best-params-out"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "model_in",
+   "help": "Optional path to load a saved model checkpoint instead of training.",
+   "nargs": null,
+   "options": [
+    "--model-in"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "model_out",
+   "help": "Optional path to save the trained model checkpoint.",
+   "nargs": null,
+   "options": [
+    "--model-out"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "run_dir",
+   "help": "Optional run directory to write model.joblib, metadata.json, and metrics_report.json. If set, --model-out must be inside this directory (or omitted).",
+   "nargs": null,
+   "options": [
+    "--run-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "run_id",
+   "help": "Optional run id used when writing --run-dir (defaults to directory name).",
+   "nargs": null,
+   "options": [
+    "--run-id"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "predict_path",
+   "help": "Optional path to upcoming games for prediction.",
+   "nargs": null,
+   "options": [
+    "--predict-path"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "output_path",
+   "help": "Optional output path for predictions CSV.",
+   "nargs": null,
+   "options": [
+    "--output-path"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": true,
+   "dest": "pretty_output",
+   "help": "Log a formatted weekly summary when predicting.",
+   "nargs": 0,
+   "options": [
+    "--pretty-output",
+    "--no-pretty-output"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "none",
+    "int",
+    "half",
+    "nfl"
+   ],
+   "default": "none",
+   "dest": "score_rounding",
+   "help": "Optional post-processing for predicted scores (does not change training): none|int|half|nfl.",
+   "nargs": null,
+   "options": [
+    "--score-rounding"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
   }
  ],
  "nfl_predictor.cli.validate": [
@@ -1565,660 +2198,6 @@
    "type": "Path"
   }
  ],
- "nfl_predictor.ml.ml_model_cli": [
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "margin_total",
-    "blend"
-   ],
-   "default": "margin_total",
-   "dest": "model_kind",
-   "help": "Model pipeline to use (margin_total or blend).",
-   "nargs": null,
-   "options": [
-    "--model-kind"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "<repo>/data/completed_games_ml.csv",
-   "dest": "data_path",
-   "help": "Path to completed games dataset.",
-   "nargs": null,
-   "options": [
-    "--data-path"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 2,
-   "dest": "holdout_seasons",
-   "help": "Number of most recent seasons to hold out for evaluation.",
-   "nargs": null,
-   "options": [
-    "--holdout-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "exclude_market",
-   "help": "Exclude market features like spreads/totals/moneylines.",
-   "nargs": 0,
-   "options": [
-    "--exclude-market"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "include_postseason",
-   "help": "Include postseason games in training when a game_type column exists. Default: False (train on regular season only).",
-   "nargs": 0,
-   "options": [
-    "--include-postseason",
-    "--no-include-postseason"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 1.0,
-   "dest": "postseason_weight",
-   "help": "Sample-weight multiplier for postseason rows when --include-postseason is enabled. Default: 1.0 (no upweight).",
-   "nargs": null,
-   "options": [
-    "--postseason-weight"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "recency_half_life_seasons",
-   "help": "Optional exponential half-life in seasons for recency weighting.",
-   "nargs": null,
-   "options": [
-    "--recency-half-life-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "market_transform",
-   "help": "Use transformed market features (implied probs, home margin) instead of raw lines.",
-   "nargs": 0,
-   "options": [
-    "--market-transform"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "market_anchor",
-   "help": "Train on residuals vs market spread/total and add market baseline at prediction time.",
-   "nargs": 0,
-   "options": [
-    "--market-anchor"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "market_prob_weight",
-   "help": "Market probability weight for post-processing (0=off, 1=market only). Alias for --market-prob-blend.",
-   "nargs": null,
-   "options": [
-    "--market-prob-weight"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_blend",
-   "help": "Market probability weight for post-processing (0=off, 1=market only).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_clamp",
-   "help": "Clamp model probability within +/- this delta of market (0=off).",
-   "nargs": null,
-   "options": [
-    "--market-prob-clamp"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig"
-   ],
-   "default": "raw",
-   "dest": "market_prob_source",
-   "help": "Market probability source for blending/clamping.",
-   "nargs": null,
-   "options": [
-    "--market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit"
-   ],
-   "default": "prob",
-   "dest": "market_prob_blend_method",
-   "help": "Blend method for market probabilities (prob or logit space).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "min_season",
-   "help": "Optional minimum season to include.",
-   "nargs": null,
-   "options": [
-    "--min-season"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "max_season",
-   "help": "Optional maximum season to include.",
-   "nargs": null,
-   "options": [
-    "--max-season"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "away_rest",
-   "dest": "feature_start",
-   "help": "First feature column (inclusive).",
-   "nargs": null,
-   "options": [
-    "--feature-start"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "home_moneyline",
-   "dest": "feature_end",
-   "help": "Last feature column (inclusive).",
-   "nargs": null,
-   "options": [
-    "--feature-end"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.5,
-   "dest": "max_cardinality_ratio",
-   "help": "Drop categorical columns with unique ratio above this threshold.",
-   "nargs": null,
-   "options": [
-    "--max-cardinality-ratio"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 1,
-   "dest": "calibration_seasons",
-   "help": "Number of seasons reserved for calibration/blending.",
-   "nargs": null,
-   "options": [
-    "--calibration-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0,
-   "dest": "calibration_weeks",
-   "help": "Number of weeks from the latest season reserved for calibration.",
-   "nargs": null,
-   "options": [
-    "--calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "none",
-    "platt",
-    "isotonic",
-    "sigma",
-    "elo",
-    "auto",
-    "logistic"
-   ],
-   "default": "isotonic",
-   "dest": "win_prob_calibration",
-   "help": "Calibration method for win probabilities (logistic is an alias for platt).",
-   "nargs": null,
-   "options": [
-    "--win-prob-calibration"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "win_prob_uncertainty",
-   "help": "Use margin quantiles to derive uncertainty-aware win probabilities.",
-   "nargs": 0,
-   "options": [
-    "--win-prob-uncertainty",
-    "--no-win-prob-uncertainty"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreTrueAction",
-   "choices": null,
-   "default": false,
-   "dest": "tune",
-   "help": "Run Optuna hyperparameter tuning.",
-   "nargs": 0,
-   "options": [
-    "--tune"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 600,
-   "dest": "tune_timeout",
-   "help": "Optuna timeout in seconds.",
-   "nargs": null,
-   "options": [
-    "--tune-timeout"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "tune_trials",
-   "help": "Optional max number of Optuna trials.",
-   "nargs": null,
-   "options": [
-    "--tune-trials"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "margin_mae",
-    "total_mae",
-    "combined_mae",
-    "winner_accuracy",
-    "brier",
-    "expected_points"
-   ],
-   "default": "combined_mae",
-   "dest": "tune_metric",
-   "help": "Objective metric for Optuna tuning.",
-   "nargs": null,
-   "options": [
-    "--tune-metric"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 3,
-   "dest": "cv_splits",
-   "help": "Number of time-series CV folds for tuning.",
-   "nargs": null,
-   "options": [
-    "--cv-splits"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 50,
-   "dest": "early_stopping_rounds",
-   "help": "Early stopping rounds for XGBoost.",
-   "nargs": null,
-   "options": [
-    "--early-stopping-rounds"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "auto",
-   "dest": "xgb_tree_method",
-   "help": "XGBoost tree_method (e.g., auto, hist, approx, exact).",
-   "nargs": null,
-   "options": [
-    "--xgb-tree-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "auto",
-   "dest": "xgb_device",
-   "help": "XGBoost device (e.g., cpu, cuda).",
-   "nargs": null,
-   "options": [
-    "--xgb-device"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "xgb_n_jobs",
-   "help": "XGBoost parallel threads (default: os.cpu_count()).",
-   "nargs": null,
-   "options": [
-    "--xgb-n-jobs"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "team",
-    "market",
-    "both"
-   ],
-   "default": "both",
-   "dest": "tune_scope",
-   "help": "Which models to tune when blending.",
-   "nargs": null,
-   "options": [
-    "--tune-scope"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "tune_storage",
-   "help": "Optuna storage URL for persistent studies (e.g., sqlite:///optuna.db).",
-   "nargs": null,
-   "options": [
-    "--tune-storage"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "tune_study_name",
-   "help": "Optuna study name for persistent storage.",
-   "nargs": null,
-   "options": [
-    "--tune-study-name"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "tune_best_params_out",
-   "help": "Optional path to save the best Optuna params JSON after each trial.",
-   "nargs": null,
-   "options": [
-    "--tune-best-params-out"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "model_in",
-   "help": "Optional path to load a saved model checkpoint instead of training.",
-   "nargs": null,
-   "options": [
-    "--model-in"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "model_out",
-   "help": "Optional path to save the trained model checkpoint.",
-   "nargs": null,
-   "options": [
-    "--model-out"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "run_dir",
-   "help": "Optional run directory to write model.joblib, metadata.json, and metrics_report.json. If set, --model-out must be inside this directory (or omitted).",
-   "nargs": null,
-   "options": [
-    "--run-dir"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "run_id",
-   "help": "Optional run id used when writing --run-dir (defaults to directory name).",
-   "nargs": null,
-   "options": [
-    "--run-id"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "predict_path",
-   "help": "Optional path to upcoming games for prediction.",
-   "nargs": null,
-   "options": [
-    "--predict-path"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "output_path",
-   "help": "Optional output path for predictions CSV.",
-   "nargs": null,
-   "options": [
-    "--output-path"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": true,
-   "dest": "pretty_output",
-   "help": "Log a formatted weekly summary when predicting.",
-   "nargs": 0,
-   "options": [
-    "--pretty-output",
-    "--no-pretty-output"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "none",
-    "int",
-    "half",
-    "nfl"
-   ],
-   "default": "none",
-   "dest": "score_rounding",
-   "help": "Optional post-processing for predicted scores (does not change training): none|int|half|nfl.",
-   "nargs": null,
-   "options": [
-    "--score-rounding"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  }
- ],
  "nfl_predictor.week_builder": [
   {
    "action": "_StoreAction",
@@ -2443,7 +2422,7 @@
    "choices": null,
    "default": 3,
    "dest": "wf_eval_last_n_seasons",
-   "help": "Walk-forward: evaluate last N seasons.",
+   "help": "Walk-forward: evaluate the last N seasons. The count includes the current season even before it has a completed week, so the default 3 scores two seasons.",
    "nargs": null,
    "options": [
     "--wf-eval-last-n-seasons"
@@ -2829,10 +2808,11 @@
    "action": "_StoreAction",
    "choices": null,
    "default": 50,
-   "dest": "train_early_stopping_rounds",
-   "help": "Training: early stopping rounds for Optuna tuning trials only; the final in-season fit runs the full n_estimators budget.",
+   "dest": "tune_early_stopping_rounds",
+   "help": "Tuning: early stopping rounds for Optuna tuning trials only; the final in-season fit runs the full n_estimators budget.",
    "nargs": null,
    "options": [
+    "--tune-early-stopping-rounds",
     "--train-early-stopping-rounds"
    ],
    "required": false,
@@ -2872,10 +2852,11 @@
    "action": "_StoreAction",
    "choices": null,
    "default": null,
-   "dest": "tune_n_trials",
+   "dest": "tune_trials",
    "help": "Optuna number of trials (optional).",
    "nargs": null,
    "options": [
+    "--tune-trials",
     "--tune-n-trials"
    ],
    "required": false,

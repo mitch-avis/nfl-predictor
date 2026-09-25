@@ -24,6 +24,9 @@ _PATH_KEYS = {
 }
 
 
+# The configuration a weekly run reads when no --config is given.
+DEFAULT_CONFIG_PATH = Path(constants.ROOT_DIR) / "config" / "weekly_run.yaml"
+
 # Config keys that were renamed with their option; a config file may still use the old name.
 _RENAMED_CONFIG_KEYS = {
     "tune_n_trials": "tune_trials",
@@ -97,7 +100,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         "--config",
         type=Path,
         default=defaults.get("config"),
-        help="Optional JSON/YAML config file for arguments.",
+        help=(
+            "JSON/YAML config file for the options (default: config/weekly_run.yaml when it "
+            "exists). Command-line options override it."
+        ),
     )
     parser.add_argument(
         "--data-path",
@@ -522,13 +528,17 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse CLI args, loading config defaults when provided."""
+    """Parse CLI args over the config file's defaults (the shipped config unless --config)."""
     parser = _build_parser()
     args = parser.parse_args(argv)
-    if args.config:
-        config = _rename_config_keys(_load_config(args.config))
+    config_path = args.config
+    if config_path is None and DEFAULT_CONFIG_PATH.exists():
+        config_path = DEFAULT_CONFIG_PATH
+    if config_path is not None:
+        config = _rename_config_keys(_load_config(config_path))
         _validate_config_keys(config, _allowed_config_keys(parser))
-        parser = _build_parser(_normalize_config_defaults(config))
+        # Recording the path as the default keeps it in args.config when it was not passed.
+        parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)
     try:
         _power_ranking_options(args)

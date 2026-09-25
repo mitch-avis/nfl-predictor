@@ -318,3 +318,31 @@ def test_weekly_tuning_options_accept_both_spellings(
 ) -> None:
     """The renamed tuning options parse under their new and their old spelling."""
     assert getattr(run_config._build_parser().parse_args(argv), dest) == value
+
+
+def test_the_shipped_config_is_read_by_default_and_matches_the_code_defaults() -> None:
+    """Without --config the shipped YAML is read, and it changes nothing a run produces.
+
+    The only differences from the bare code defaults are the recorded config path and
+    ``postseason_weight``, which applies only when postseason games are in training (off).
+    """
+    loaded = vars(run_config._parse_args([]))
+    bare = vars(run_config._build_parser().parse_args([]))
+
+    differences = {key for key in bare if loaded[key] != bare[key]}
+    assert differences == {"config", "postseason_weight"}
+    assert loaded["config"] == run_config.DEFAULT_CONFIG_PATH
+    assert loaded["include_postseason"] is False
+    assert loaded["wf_win_prob_uncertainty"] == "off"
+
+
+def test_an_explicit_config_replaces_the_shipped_one(tmp_path: Path) -> None:
+    """``--config`` reads only the given file; keys it omits keep their code defaults."""
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text('{"wf_eval_last_n_seasons": 5}', encoding="utf-8")
+
+    args = run_config._parse_args(["--config", str(config_path)])
+
+    assert args.config == config_path
+    assert args.wf_eval_last_n_seasons == 5
+    assert args.postseason_weight == 1.0

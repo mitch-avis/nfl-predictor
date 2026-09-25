@@ -2262,7 +2262,7 @@
    "choices": null,
    "default": null,
    "dest": "config",
-   "help": "Optional JSON/YAML config file for arguments.",
+   "help": "JSON/YAML config file for the options (default: config/weekly_run.yaml when it exists). Command-line options override it.",
    "nargs": null,
    "options": [
     "--config"

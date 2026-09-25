@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.26.0] - 2026-09-25
+
+### Changed
+
+- `train --model-kind blend --tune` runs one Optuna study for the team model with the whole
+  `--tune-timeout` and the study name as given. Until now the default `--tune-scope both`
+  gave the team study half the timeout, kept the other half for a market study that never ran,
+  and added `_team` to a stored study's name. No other command tunes a blend; the weekly run
+  trains a margin/total model and never read the scope.
+- A blended model's feature-importance report lists only its `team` component; the `market`
+  component it carried was always null.
+- Every walk-forward checkpoint fingerprint changes (the edit is under `nfl_predictor/ml/`).
+  No walk-forward has run since `0.20.0`, so the next reference run retrains from scratch
+  either way.
+
+### Removed
+
+- The market model: the `BlendedMarginTotalModel.market_model` field and every branch that
+  read it (checkpoint loading and early-stopping info, the market-probability config,
+  prediction, the training report, feature importance and the power rankings), and the
+  market-only feature selection that only it used (`market_only` in the feature spec and the
+  Optuna search). The blend trainer never stored one, so every branch was dead. The blended
+  model itself stays: the team model and the market line, combined by the blend layer. No saved
+  model under `models/` is a blend (all twelve are margin/total models), so no checkpoint needs
+  converting.
+- `train --tune-scope` (`team`, `market`, `both`). Its `market` choice tuned nothing and `both`
+  only halved the team study's budget (above).
+
 ## [0.25.0] - 2026-09-25
 
 ### Changed

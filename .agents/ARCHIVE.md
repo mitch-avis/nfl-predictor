@@ -536,6 +536,20 @@ change). What replaces it: hypothesis-driven ladders for single settings (task 5
 for example), the task 55.9 Optuna tune for the XGBoost hyperparameters, and task 56.3 to wire the
 chosen settings into the weekly run and the benchmark from one source.
 
+### 55.5 - ScoreModel removed (version `0.20.0`, 2026-09-24)
+
+Decided by the user on 2026-09-24 (`.agents/m60/PROPOSAL.md`, section 6) and executed in the
+Milestone 60 `nfl_predictor/ml/` chunk. The evidence: no run recorded the `score` model kind,
+every saved model under `models/` was a `MarginTotalModel`, and the walk-forward harness could
+not run it, so it was never measured. The user first asked for a fair model-family comparison,
+then dropped it, because the parity work such a test needs outweighs a candidate unlikely to
+beat the direct margin model. Removed: `ScoreModel`, `train_score_model` and its report
+wrapper, `predict_week`, the score-only helpers (`_fit_models`, `_evaluate_predictions`,
+`_rmse`), the `score` choice of `--model-kind` (`ml_model`, `power_rankings`, the web catalog),
+and the score branches in the checkpoint loader, feature importance, the ranking pipeline and
+`shap_analysis` (whose `--target` is now `margin` or `total`). Weekly-run and SHAP snapshots
+passed unchanged.
+
 ### 55.7 - Choose `n_estimators` time-aware (versions `0.13.0`-`0.13.1`)
 
 In-season fits had run the full `598`-tree budget since `0.12.3` with no early stopping

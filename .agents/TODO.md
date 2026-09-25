@@ -333,15 +333,6 @@ Tasks 55.1 and 55.2 (a general configuration-sweep runner) were retired by the u
       check (the same seed twice on one fold must give identical predictions, or checkpoint resume
       and "only one setting differs" comparisons break), and the GPU reference on two seeds, which
       also measures the GPU's own fit-noise floor (rule 13).
-- [ ] 55.5 (step 2, with Milestone 60) Decide the `ScoreModel` fate: document as experimental
-      or deprecate cleanly. Decided and executed inside Milestone 60, because retiring unused
-      model kinds is part of the same cleanup and removes CLI surface (`--model-kind score`).
-      Evidence generated 2026-09-24 (`.agents/m60/INVENTORY.md`): no run records `score`, every
-      saved model under `models/` is a `MarginTotalModel`, and the walk-forward harness cannot
-      run it, so it was never measured. **Decided 2026-09-24 by the user: remove it**, with
-      everything only it uses (`.agents/m60/PROPOSAL.md`, section 6), inside 60.6. The user first
-      asked for a fair model-family comparison, then dropped it: the parity work a fair test needs
-      outweighs a candidate unlikely to beat the direct margin model.
 - [ ] 55.6 (step 3) Add the stability view by season and week bucket, and a "recommended
       defaults" section. The second-key review script
       (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that
@@ -664,10 +655,16 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
         its test go with the `nfl_predictor/ml/` chunk) and the Excel workbook end to end,
         including its web job, routes and button (pulled forward from 60.7 so no web job
         launches a deleted script). 88 of 309 options removed; weekly snapshots unchanged.
-      - Next: the `nfl_predictor/ml/` chunk (ScoreModel, `model_compare.py`,
-        `WalkForwardConfig.early_stopping_rounds`, the week-based half-life, the dead callback
-        plumbing, the numpy bootstrap), then the entrypoint moves behind the front door, then
-        the shared options module with the renames and the remaining flag removals.
+      - `0.20.0` (2026-09-24), the one `nfl_predictor/ml/` chunk: ScoreModel removed (task
+        55.5, archived), `model_compare.py` and its test, `WalkForwardConfig.early_stopping_rounds`
+        with `weekly_run --wf-early-stopping-rounds`, `wf_compare --early-stopping-rounds` and
+        the YAML key, the week-based recency half-life everywhere, the dead `LogEvalCallback`
+        plumbing, `shap_analysis --component`, and the numpy paired bootstrap (identical to
+        1e-12 against the scikit-learn loop, 146 times faster). 7 more options removed (221 to
+        214). Every walk-forward checkpoint fingerprint changes.
+      - Next: the entrypoint moves behind the front door, then the shared options module with
+        the renames and the remaining flag removals (`leakage_audit --include-market`,
+        `weekly_run --wf-n-jobs`), the YAML default, and the other step-2 follow-ups.
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the

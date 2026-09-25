@@ -662,9 +662,18 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
         plumbing, `shap_analysis --component`, and the numpy paired bootstrap (identical to
         1e-12 against the scikit-learn loop, 146 times faster). 7 more options removed (221 to
         214). Every walk-forward checkpoint fingerprint changes.
-      - Next: the entrypoint moves behind the front door, then the shared options module with
-        the renames and the remaining flag removals (`leakage_audit --include-market`,
-        `weekly_run --wf-n-jobs`), the YAML default, and the other step-2 follow-ups.
+      - `0.21.0` (2026-09-24): the front door `nfl-predictor <command>` (console script and
+        `python -m nfl_predictor`); the weekly run moved into `nfl_predictor/weekly_run/`
+        (split into `config`, `inputs`, `stage1`, `pipeline`, definitions AST-identical), the
+        other entrypoints into `nfl_predictor/cli/`, the two validate scripts merged into
+        `validate --live`, and `nfl_predictor/cli/options.py` started with the two
+        deduplicated helpers. The `scripts/` paths are thin shims until 60.7 repoints the web
+        jobs. No test imports `scripts/` (the 60.5 remainder is done).
+      - Next: the shared options module's argument-group builders with the renames and aliases
+        (PROPOSAL.md section 3), the remaining flag removals (`leakage_audit --include-market`,
+        `weekly_run --wf-n-jobs`), the YAML default (task 56.7(a)), the
+        `--wf-eval-last-n-seasons` note, and the step-2 follow-ups (`wf_compare` pick-accuracy
+        columns, automatic `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint listing).
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the

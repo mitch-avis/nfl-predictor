@@ -7,9 +7,9 @@ weekly run") and this file.
 
 ## State (written 2026-09-24 night, Milestone 60 in 60.6)
 
-- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.23.0`. Not
+- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.24.0`. Not
   pushed; merging and pushing are must-ask. `scripts/gate.sh --web` exits `0` on the final
-  tree (see the `0.23.0` commits). The working tree is clean. (The user deleted their
+  tree (see the `0.24.0` commits). The working tree is clean. (The user deleted their
   untracked LightGBM session transcript on purpose.)
 - Tasks 60.1-60.5 are done and archived (`ARCHIVE.md`, "Milestone 60 (partial)"); every
   sign-off decision is in `.agents/m60/PROPOSAL.md`, "Sign-off", and in the 60.6-60.9 texts.
@@ -30,7 +30,9 @@ weekly run") and this file.
   (the last `nfl_predictor/ml/` edit; the fingerprint changed once more). `0.23.0` made the
   weekly run read `config/weekly_run.yaml` by default and rewrote it to the code defaults
   (production output unchanged); the weekly snapshot was rewritten on purpose to pin the
-  production configuration.
+  production configuration. `0.24.0` finished the step-2 follow-ups (`nfl-predictor
+  checkpoints`, the automatic `OMP_WAIT_POLICY=PASSIVE`, the `sweep` summary's pick-accuracy
+  columns). 60.6 has landed apart from `--wf-n-jobs`, which waits on the user.
 - The characterization snapshots must not change during a move; an intended output change
   rewrites them with `NFLP_UPDATE_SNAPSHOTS=1` in the same commit and says so in the changelog.
   `tests/fixtures/cli_surface.json` changes with every flag removal or rename (intended; audit
@@ -62,10 +64,13 @@ weekly run or any walk-forward unless the user asks.
 
 ## Your task
 
-1. Finish 60.6 with the step-2 follow-ups (`wf_compare` pick-accuracy columns, the automatic
-   `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint listing). Avoid edits under
-   `nfl_predictor/ml/` (they change every checkpoint fingerprint).
-2. Then 60.7-60.9. Rewrite this file at every landed chunk (rule 8).
+1. Settle `--wf-n-jobs` with the user (question below), then close 60.6 (archive it with a
+   summary of `0.19.0`-`0.24.0`).
+2. Then 60.7 (web job templates onto the front door, the model-kind vocabulary fix, the API
+   catch-all returning JSON 404s, then removing the `scripts/` shims), 60.8 (CI calls
+   `scripts/gate.sh`, the gate's smoke checks use `nfl-predictor`, the docs) and 60.9 (the
+   `compare` command). Avoid edits under `nfl_predictor/ml/` (they change every checkpoint
+   fingerprint). Rewrite this file at every landed chunk (rule 8).
 
 ## Open questions for the user
 

@@ -783,7 +783,8 @@ ablation is replaced with this ladder.
 
 Phases 0-3 completed 2026-09-10 (on `feat/web-ui`, worktree `../nfl-predictor-web`) and merged
 into `main` on 2026-09-11 as version `0.8.0`; task 58.4 completed 2026-09-21 (version `0.12.12`);
-phases 4-6 (tasks 58.1-58.3) stay in `TODO.md`. The milestone number was assigned at merge time
+task 58.5 completed 2026-09-25 (version `0.26.1`, in Milestone 60 task 60.7); phases 4-6 (tasks
+58.1-58.3) stay in `TODO.md`. The milestone number was assigned at merge time
 (the plan had reserved 51, which the 2026-09-10 renumbering gave to the power rankings). The full
 design, the decisions made with the user, and the per-phase status with deviations live in
 `web_ui_plan.md`.
@@ -822,6 +823,17 @@ status, the job catalog and power rankings from this checkout's `data/` and `mod
 fast-forwarded to the branch tip, and the `0.8.0` changelog, README and `AGENTS.md` entries
 followed (`814 passed`, `92.90%`). The user's live instance on port 8765 was left running on the
 pre-merge API code.
+
+### 58.5 - The API catch-all answered unknown API routes with the frontend (version `0.26.1`)
+
+Found 2026-09-24 during Milestone 60: the history-API fallback `GET /{path:path}` in
+`nfl_predictor/api/routers/static.py` (`mount_frontend`) did not exclude the `api/` prefix,
+although its docstring said it served only paths outside `/api`, so an unknown `/api/...` GET
+returned `index.html` with status 200 whenever the built frontend was served (the default). Fixed
+test first on 2026-09-25 in task 60.7: the fallback raises the API's `NotFoundError` for `/api`
+and every path under it, so the response is the JSON 404 `{"error": {"code": "not_found", ...}}`;
+paths outside `/api`, including look-alikes such as `/apiary`, still get the frontend
+(`tests/api/test_static.py`). The retired workbook route's test now also checks its status code.
 
 ### 58.4 - Housekeeping: the `web` extra and the ETL's upstream data-directory paths
 

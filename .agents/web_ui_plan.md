@@ -162,7 +162,7 @@ mutating routes require header `X-Requested-With: nflp`.
 | `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 gain importance from `base_features.combined.gain`, calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
 | `GET /data/status`, `GET /data/unattached` | current season/week via `data_collection._determine_nfl_week` (imported, not edited), file inventory with sizes/mtimes/row counts (`pl.scan_csv().select(pl.len())`), lazy cached sha256 via `fingerprints.dataset_fingerprint`, cache parquet coverage, latest leakage audit, last ETL job |
 | `GET /jobs/catalog`, `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/logs?after=`, `GET /jobs/{id}/stream` (SSE), `POST /jobs/{id}/cancel` | 409 when an exclusive group is busy; 422 on bad params |
-| `GET /{path}` fallback | serves `web/dist/index.html` |
+| `GET /{path}` fallback | serves `web/dist/index.html` for paths outside `/api`; an unmatched `/api/...` path gets the JSON 404 (`not_found`) |
 
 ### Job runner
 
@@ -365,6 +365,12 @@ Landed so far:
   `/api/...` GET returns `index.html` with status 200 instead of a JSON 404, because the
   history-API fallback `GET /{path:path}` in `nfl_predictor/api/routers/static.py` does not
   exclude the `api/` prefix, contrary to its docstring.
+- **`0.26.1` (2026-09-25): the API catch-all is fixed (task 58.5).** The fallback raises the
+  API's `NotFoundError` for `/api` and every path under it, so an unmatched API route answers
+  with the JSON error body `{"error": {"code": "not_found", ...}}` and status 404 instead of
+  `index.html`. Paths outside `/api` (including look-alikes such as `/apiary`) still get the
+  frontend. `tests/api/test_static.py` pins both; the retired workbook route is now also checked
+  by status code.
 
 ## Status
 
@@ -436,8 +442,5 @@ Landed so far:
 - Phase 4: not started. Scheduled 2026-09-24 as step 6 of the roadmap in `TODO.md`
   ("Roadmap Status"): phases 4-6 resume after Milestone 60 has moved the scripts the job runner
   launches (see "Milestone 60 impact" above), so the web work starts on the settled entrypoints.
-- Known defect (found 2026-09-24, task 58.5, fix scheduled in Milestone 60 task 60.7): an
-  unknown `/api/...` GET returns the built frontend's `index.html` with status 200 instead of a
-  JSON 404. The history-API fallback `GET /{path:path}` in `nfl_predictor/api/routers/static.py`
-  (`mount_frontend`) does not exclude the `api/` prefix, although its docstring says it serves
-  only paths outside `/api`. It applies whenever the frontend is served (the default).
+- Fixed in `0.26.1` (task 58.5): an unknown `/api/...` GET now returns the JSON 404 instead of
+  the frontend's `index.html` (see "Milestone 60 impact").

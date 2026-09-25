@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nfl-predictor"
-version = "0.18.2"
+version = "0.18.3"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -17,6 +17,7 @@ dependencies = [
     "coloredlogs",
     "fastapi",
     "joblib",
+    "lightgbm",
     "lxml",
     "nflreadpy",
     "numpy",
@@ -30,6 +31,7 @@ dependencies = [
     "requests",
     "scikit-learn",
     "scipy",
+    "shap",
     "sse-starlette",
     "uvicorn[standard]",
     "xgboost",
@@ -39,6 +41,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
 ]
+
+[project.scripts]
+nfl-lightgbm-cuda-install = "nfl_predictor.lightgbm_cuda:main"
 
 [project.urls]
 Homepage = "https://github.com/mitch-avis/nfl-predictor"
@@ -56,6 +61,7 @@ dev = [
     "pytest-sugar",
     "pytest-xdist",
     "ruff",
+    "scikit-build-core",
     "ty",
 ]
 
@@ -65,6 +71,10 @@ packages = ["nfl_predictor"]
 [tool.uv]
 default-groups = ["dev"]
 required-version = ">=0.11.21"
+no-build-isolation-package = ["lightgbm"]
+
+[tool.uv.extra-build-dependencies]
+lightgbm = ["scikit-build-core"]
 
 [tool.ruff]
 line-length = 100

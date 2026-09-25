@@ -84,11 +84,23 @@ The helper expects `uv` on your `PATH` and an activated project virtual environm
 missing, it offers to create one with `uv venv .venv` and then exits so you can activate the
 environment before re-running it.
 
+The lockfile installs the CPU-only LightGBM wheel. On a Linux machine with a CUDA toolkit, the
+helper instead keeps a CUDA build of the same LightGBM version: it syncs with the flags that
+`nfl-lightgbm-cuda-install uv-args` prints, then runs `nfl-lightgbm-cuda-install install`, which
+does nothing when LightGBM already trains on the GPU and otherwise reinstalls uv's cached CUDA
+build (compiling from source, about three minutes, only when no cached build exists). The CUDA
+build needs NVIDIA's NCCL for the toolkit's CUDA major version (`libnccl2` and `libnccl-dev`
+tagged `+cuda13.x` for CUDA 13, from `developer.download.nvidia.com/compute/cuda/repos`); with
+Ubuntu's own NCCL, which is built for CUDA 12, the flags are withheld and LightGBM stays
+CPU-only. `nfl-lightgbm-cuda-install status` reports which build is installed. On this
+repo's data, LightGBM trains faster on the CPU than with CUDA, so the CUDA build is optional.
+
 For a manual upgrade without the helper script:
 
 ```bash
 uv lock --upgrade
-uv sync
+uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)
+.venv/bin/nfl-lightgbm-cuda-install install
 ```
 
 #### Alternative: create the venv manually

@@ -9,9 +9,10 @@ weekly run") and this file.
 
 - Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.18.5`. Not
   pushed; merging and pushing are must-ask. `scripts/gate.sh --web` exits `0` on the final
-  tree (see the `0.18.5` commits). The working tree is clean apart from the user's untracked
-  `.agents/GPT-5-4_LightGBM_CUDA_session_transcript.md` (leave it untracked; markdownlint skips
-  `.agents/*transcript*.md`).
+  tree (see the `0.18.5` commits). The working tree is clean. The user's untracked
+  `.agents/GPT-5-4_LightGBM_CUDA_session_transcript.md` disappeared from disk during the
+  2026-09-24 late-evening session (not by any command of that session); if it comes back,
+  leave it untracked (markdownlint skips `.agents/*transcript*.md`).
 - Tasks 60.1-60.4 are done and archived (`ARCHIVE.md`, "Milestone 60 (partial)"); every
   sign-off decision is in `.agents/m60/PROPOSAL.md`, "Sign-off", and in the 60.5-60.9 texts.
 - `0.18.4` finished 60.4 with `tests/test_shap_analysis_characterization.py` (snapshots under

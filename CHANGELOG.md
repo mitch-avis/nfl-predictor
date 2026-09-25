@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.4] - 2026-09-24
+
+### Added
+
+- A characterization test for `scripts/shap_analysis.py`
+  (`tests/test_shap_analysis_characterization.py`). It trains a market-anchored margin/total
+  model and a blended model on the synthetic fixture and pins the SHAP report for the margin
+  head, the total head on a sampled subset, and both blend components, so moving the entrypoint
+  cannot change what it reports. It also pins a found defect as it stands: the blend trainer
+  never stores a market model, so `--component market` analyzes the team model (the report says
+  `model_kind: blend_team`).
+
 ## [0.18.3] - 2026-09-24
 
 ### Changed

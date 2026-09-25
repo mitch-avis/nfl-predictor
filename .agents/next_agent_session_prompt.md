@@ -7,9 +7,9 @@ weekly run") and this file.
 
 ## State (written 2026-09-24 night, Milestone 60 in 60.6)
 
-- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.22.0`. Not
+- Branch `feat/m60-cli-consolidation`, cut from `main` at `703ea25`; version `0.23.0`. Not
   pushed; merging and pushing are must-ask. `scripts/gate.sh --web` exits `0` on the final
-  tree (see the `0.22.0` commits). The working tree is clean. (The user deleted their
+  tree (see the `0.23.0` commits). The working tree is clean. (The user deleted their
   untracked LightGBM session transcript on purpose.)
 - Tasks 60.1-60.5 are done and archived (`ARCHIVE.md`, "Milestone 60 (partial)"); every
   sign-off decision is in `.agents/m60/PROPOSAL.md`, "Sign-off", and in the 60.6-60.9 texts.
@@ -27,7 +27,10 @@ weekly run") and this file.
   options under one naming rule with every old spelling kept as an alias, merged the market
   weight options, renamed the weekly tuning config keys (old keys still load), removed
   `leakage_audit --include-market`, and moved `ml_model_cli.py` to `nfl_predictor/cli/train.py`
-  (the last `nfl_predictor/ml/` edit; the fingerprint changed once more).
+  (the last `nfl_predictor/ml/` edit; the fingerprint changed once more). `0.23.0` made the
+  weekly run read `config/weekly_run.yaml` by default and rewrote it to the code defaults
+  (production output unchanged); the weekly snapshot was rewritten on purpose to pin the
+  production configuration.
 - The characterization snapshots must not change during a move; an intended output change
   rewrites them with `NFLP_UPDATE_SNAPSHOTS=1` in the same commit and says so in the changelog.
   `tests/fixtures/cli_surface.json` changes with every flag removal or rename (intended; audit
@@ -43,29 +46,25 @@ weekly run") and this file.
   - remove `shap_analysis --component` (the user never asked for a market model; done in
     `0.20.0`);
   - the 13 test modules' `from scripts import` lines go with 60.6, as the entrypoints move;
-  - task 56.7(a): the weekly run reads `config/weekly_run.yaml` by default, with the YAML
-    rewritten to today's code defaults (quote `off` as `"off"`), in 60.6. That re-points the
-    weekly characterization snapshot at what production runs: an intended snapshot rewrite,
-    stated in the changelog. The YAML's values still need optimizing (task 56.7(b), 55.4);
+  - task 56.7(a), done in `0.23.0`: the weekly run reads `config/weekly_run.yaml` by default,
+    rewritten to today's code defaults. The YAML's values still need optimizing (task
+    56.7(b), 55.4);
   - how many seasons weekly stage 1 scores is settled in task 56.7.
 
-## How to launch a weekly run today (until 60.6 lands)
+## How to launch a weekly run today
 
 `.venv/bin/nfl-predictor weekly --run-id <id> --xgb-device cuda` (the old
 `.venv/bin/python scripts/weekly_run.py ...` form still works) through a `launch.sh` with
-`nohup setsid` (see `models/weekly_2026_week_03_full/launch.sh`). Do **not** pass
-`--config config/weekly_run.yaml` until 60.6 has rewritten it: its current values are untested.
-Without `--xgb-device cuda`, stage 1 runs on the CPU at about six times the time. Do not run a
+`nohup setsid` (see `models/weekly_2026_week_03_full/launch.sh`). It reads
+`config/weekly_run.yaml`, which holds the code defaults, so it produces what earlier 2026 runs
+did. Without `--xgb-device cuda`, stage 1 runs on the CPU at about six times the time. Do not run a
 weekly run or any walk-forward unless the user asks.
 
 ## Your task
 
-1. Finish 60.6: the YAML default (task 56.7(a): the weekly run reads
-   `config/weekly_run.yaml` without `--config`, the file rewritten to today's code defaults,
-   `off` quoted; an intended weekly snapshot rewrite), then the step-2 follow-ups (`wf_compare`
-   pick-accuracy columns, the automatic `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint
-   listing). Avoid edits under `nfl_predictor/ml/` (they change every checkpoint
-   fingerprint).
+1. Finish 60.6 with the step-2 follow-ups (`wf_compare` pick-accuracy columns, the automatic
+   `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint listing). Avoid edits under
+   `nfl_predictor/ml/` (they change every checkpoint fingerprint).
 2. Then 60.7-60.9. Rewrite this file at every landed chunk (rule 8).
 
 ## Open questions for the user

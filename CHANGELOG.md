@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.18.5] - 2026-09-24
+
+### Changed
+
+- The power-ranking pipeline moved from `scripts/power_rankings.py` into
+  `nfl_predictor/reporting/power_rankings.py`: loading records, predicting the remaining games,
+  the Bradley-Terry fit inputs, the strength-snapshot reader, `resolve_ranking_options`,
+  `compute_power_rankings`, and the output writer, which is now public as
+  `write_ranking_outputs` (it was the private `_write_outputs`). The script keeps its parser
+  and `main` and calls the package.
+- `build_betting_report` and its moneyline helpers moved from `scripts/betting_pipeline.py`
+  into the new `nfl_predictor/reporting/betting_report.py`; the script imports it from there.
+- `scripts/weekly_run.py` imports both from the package, so no production code imports from
+  `scripts/` any more. The moved code now counts toward coverage.
+- No output changes: the characterization snapshots pass unchanged, and the moved function
+  bodies are byte-identical apart from the rename and three docstring lines. The library tests
+  moved with the code (`tests/test_power_rankings_pipeline.py`, `tests/test_betting_report.py`).
+
 ## [0.18.4] - 2026-09-24
 
 ### Added

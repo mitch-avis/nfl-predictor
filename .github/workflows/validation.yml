@@ -75,10 +75,10 @@ jobs:
 
       - name: CLI help smoke checks
         run: |
-          .venv/bin/python -m nfl_predictor.ml_model --help >/dev/null
-          .venv/bin/python scripts/weekly_run.py --help >/dev/null
-          .venv/bin/python scripts/power_rankings.py --help >/dev/null
-          .venv/bin/python -m nfl_predictor.api --help >/dev/null
+          .venv/bin/nfl-predictor --help >/dev/null
+          for command in $(.venv/bin/python -c 'from nfl_predictor.cli.main import COMMANDS; print(" ".join(c.name for c in COMMANDS))'); do
+            .venv/bin/nfl-predictor "$command" --help >/dev/null
+          done
 
   web:
     runs-on: ubuntu-latest

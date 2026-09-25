@@ -40,9 +40,7 @@ class _ParserCapturedError(Exception):
 
 def _entrypoint_modules() -> list[tuple[str, str]]:
     """Return ``(module, parse function)`` for every module that builds a parser."""
-    candidates = sorted((ROOT / "nfl_predictor").rglob("*.py")) + sorted(
-        (ROOT / "scripts").glob("*.py")
-    )
+    candidates = sorted((ROOT / "nfl_predictor").rglob("*.py"))
     found: list[tuple[str, str]] = []
     for path in candidates:
         tree = ast.parse(path.read_text(encoding="utf-8"))

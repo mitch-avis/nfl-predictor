@@ -1,13 +1,13 @@
-"""Tests for the ``validate`` command (offline checks, or ``--live``) and its script shims."""
+"""Tests for the ``validate`` command (offline checks, or ``--live``)."""
 
 from __future__ import annotations
 
-import runpy
 from pathlib import Path
 
 import polars as pl
 import pytest
 
+from nfl_predictor.cli import main as front_door
 from nfl_predictor.cli import validate as module
 
 LIVE = ["--live"]
@@ -31,11 +31,6 @@ class _FakeLogger:
     def error(self, message: str, *args: object) -> None:
         """Record an error-level message."""
         self.records.append(("error", message % args if args else message))
-
-
-def _script_path(script_name: str) -> Path:
-    """Return the path to a script under the repository's `scripts/` folder."""
-    return Path(__file__).resolve().parents[1] / "scripts" / f"{script_name}.py"
 
 
 def _write_dummy_all_data(tmp_path: Path) -> Path:
@@ -168,21 +163,14 @@ def test_validate_reads_the_data_dir_option(
     assert logger.records == [("error", f"Missing data file: {chosen / 'all_data.csv'}")]
 
 
-@pytest.mark.parametrize("script_name", ["validate_offline", "validate_live"])
-def test_validation_script_shims_propagate_exit_codes(
-    script_name: str,
+@pytest.mark.parametrize("extra", [[], LIVE])
+def test_the_front_door_returns_the_validation_exit_code(
+    extra: list[str],
     tmp_path: Path,
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Both script shims still run the command and exit with its return code."""
-    import sys
+    """``nfl-predictor validate`` (and ``--live``) exits with the command's own return code."""
+    monkeypatch.setattr(module.log, "info", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module.log, "error", lambda *_args, **_kwargs: None)
 
-    from nfl_predictor import constants
-
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
-    monkeypatch.setattr(sys, "argv", [str(_script_path(script_name))])
-
-    with pytest.raises(SystemExit) as exc_info:
-        runpy.run_path(str(_script_path(script_name)), run_name="__main__")
-
-    assert exc_info.value.code == 2
+    assert front_door.main(["validate", *extra, "--data-dir", str(tmp_path)]) == 2

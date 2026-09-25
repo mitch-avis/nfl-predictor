@@ -3,7 +3,7 @@
 Runs a lightweight leakage audit on a CSV dataset and writes a structured JSON report.
 
 Example:
-    python scripts/leakage_audit.py \
+    nfl-predictor leakage-audit \
       --data-path data/completed_games_ml.csv \
       --out-json models/leakage_audit.json
 

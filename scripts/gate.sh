@@ -75,10 +75,18 @@ markdownlint_step() {
 }
 
 cli_smoke_step() {
-    .venv/bin/python -m nfl_predictor.ml_model --help >/dev/null &&
-        .venv/bin/python scripts/weekly_run.py --help >/dev/null &&
-        .venv/bin/python scripts/power_rankings.py --help >/dev/null &&
-        .venv/bin/python -m nfl_predictor.api --help >/dev/null
+    # Every front-door command must print its help. The list comes from the front door itself,
+    # so a new command is checked without editing this script.
+    local commands command
+    commands="$(.venv/bin/python -c 'from nfl_predictor.cli.main import COMMANDS
+print("\n".join(command.name for command in COMMANDS))')" || return 1
+    .venv/bin/nfl-predictor --help >/dev/null || return 1
+    while read -r command; do
+        .venv/bin/nfl-predictor "$command" --help >/dev/null || {
+            echo "nfl-predictor $command --help failed" >&2
+            return 1
+        }
+    done <<<"$commands"
 }
 
 web_step() {

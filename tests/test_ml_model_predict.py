@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -385,7 +385,6 @@ def test_predict_week_blended_uses_market_baseline(monkeypatch, tmp_path: Path) 
 
     blended_model = BlendedMarginTotalModel(
         team_model=team_model,
-        market_model=None,
         blend_layer=blend_layer,
         calibrator=None,
         target_columns=("away_score", "home_score"),
@@ -475,7 +474,7 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     assert captured["df"].equals(output_df)
 
 
-def test_predict_week_blended_with_market_model_pretty(monkeypatch) -> None:
+def test_predict_week_blended_pretty(monkeypatch) -> None:
     """Predict week blended pretty-prints output when requested."""
     games_df = pd.DataFrame(
         {
@@ -505,30 +504,15 @@ def test_predict_week_blended_with_market_model_pretty(monkeypatch) -> None:
         tuned_params=None,
         tuned_cv_summary=None,
     )
-    market_model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-        margin_quantile_models=None,
-        total_quantile_models=None,
-        quantiles=None,
-        market_anchor=False,
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-
-    def fake_predict_margin_total(model: Any, _df: pd.DataFrame):
-        if model is team_model:
-            return np.array([4.0]), np.array([40.0])
-        return np.array([2.0]), np.array([36.0])
-
     monkeypatch.setattr(
-        ml_model_predict, "_predict_margin_total_from_model", fake_predict_margin_total
+        ml_model_predict,
+        "_predict_margin_total_from_model",
+        lambda _model, _df: (np.array([4.0]), np.array([40.0])),
+    )
+    monkeypatch.setattr(
+        ml_model_predict,
+        "get_market_baseline",
+        lambda _df: (np.array([2.0]), np.array([36.0])),
     )
     monkeypatch.setattr(
         ml_model_predict,
@@ -550,7 +534,6 @@ def test_predict_week_blended_with_market_model_pretty(monkeypatch) -> None:
 
     blended_model = BlendedMarginTotalModel(
         team_model=team_model,
-        market_model=market_model,
         blend_layer=blend_layer,
         calibrator=None,
         target_columns=("away_score", "home_score"),
@@ -570,8 +553,8 @@ def test_predict_week_blended_with_market_model_pretty(monkeypatch) -> None:
     assert captured["df"].equals(output_df)
 
 
-def test_predict_week_blended_with_market_model_writes_output(monkeypatch, tmp_path: Path) -> None:
-    """Blended predictions with a market model should write CSV output when requested."""
+def test_predict_week_blended_writes_output(monkeypatch, tmp_path: Path) -> None:
+    """Blended predictions should write CSV output when requested."""
     games_df = pd.DataFrame(
         {
             "game_id": [1],
@@ -600,30 +583,15 @@ def test_predict_week_blended_with_market_model_writes_output(monkeypatch, tmp_p
         tuned_params=None,
         tuned_cv_summary=None,
     )
-    market_model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-        margin_quantile_models=None,
-        total_quantile_models=None,
-        quantiles=None,
-        market_anchor=False,
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-
-    def fake_predict_margin_total(model: Any, _df: pd.DataFrame):
-        if model is team_model:
-            return np.array([4.0]), np.array([40.0])
-        return np.array([2.0]), np.array([36.0])
-
     monkeypatch.setattr(
-        ml_model_predict, "_predict_margin_total_from_model", fake_predict_margin_total
+        ml_model_predict,
+        "_predict_margin_total_from_model",
+        lambda _model, _df: (np.array([4.0]), np.array([40.0])),
+    )
+    monkeypatch.setattr(
+        ml_model_predict,
+        "get_market_baseline",
+        lambda _df: (np.array([2.0]), np.array([36.0])),
     )
     monkeypatch.setattr(
         ml_model_predict,
@@ -637,7 +605,6 @@ def test_predict_week_blended_with_market_model_writes_output(monkeypatch, tmp_p
     )
     blended_model = BlendedMarginTotalModel(
         team_model=team_model,
-        market_model=market_model,
         blend_layer=blend_layer,
         calibrator=None,
         target_columns=("away_score", "home_score"),

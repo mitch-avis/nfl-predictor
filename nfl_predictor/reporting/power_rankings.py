@@ -942,12 +942,7 @@ def _predict_future_games(
         team_margin, _team_total = ml_model_core.predict_margin_total_from_model(
             bm.team_model, games
         )
-        if bm.market_model is None:
-            market_margin, _market_total = ml_model_core.get_market_baseline(games)
-        else:
-            market_margin, _market_total = ml_model_core.predict_margin_total_from_model(
-                bm.market_model, games
-            )
+        market_margin, _market_total = ml_model_core.get_market_baseline(games)
         blended_margin = bm.blend_layer.margin_model.predict(
             np.column_stack([team_margin, market_margin])
         )

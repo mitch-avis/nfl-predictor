@@ -430,7 +430,6 @@ def main() -> int:
         early_stopping_rounds=int(args.tune_early_stopping_rounds),
         tree_method=args.xgb_tree_method,
         device=args.xgb_device,
-        tune_scope="both",
         storage=optuna_storage,
         study_name=args.tune_study_name,
         best_params_out=None,

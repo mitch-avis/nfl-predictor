@@ -54,16 +54,7 @@ def build_feature_importance_report(model: Any) -> dict[str, Any] | None:
             team_report = _build_margin_total_report(model.team_model)
             if team_report is None:
                 return None
-            market_report = None
-            if model.market_model is not None:
-                market_report = _build_margin_total_report(model.market_model)
-            return {
-                "model_kind": "blend",
-                "components": {
-                    "team": team_report,
-                    "market": market_report,
-                },
-            }
+            return {"model_kind": "blend", "components": {"team": team_report}}
         if isinstance(model, MarginTotalModel):
             report = _build_margin_total_report(model)
             if report is None:

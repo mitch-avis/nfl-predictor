@@ -100,7 +100,6 @@ def test_train_blended_margin_total_model_with_report(monkeypatch) -> None:
 
     model = BlendedMarginTotalModel(
         team_model=team_model,
-        market_model=None,
         blend_layer=BlendLayer(
             margin_model=cast(Ridge, _BlendModel(np.array([0.6, 0.4]))),
             total_model=cast(Ridge, _BlendModel(np.array([0.5, 0.5]))),

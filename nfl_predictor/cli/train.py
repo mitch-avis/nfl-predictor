@@ -222,12 +222,6 @@ def _parse_args() -> argparse.Namespace:
         help="XGBoost parallel threads (default: os.cpu_count()).",
     )
     parser.add_argument(
-        "--tune-scope",
-        choices=["team", "market", "both"],
-        default="both",
-        help="Which models to tune when blending.",
-    )
-    parser.add_argument(
         "--tune-storage",
         type=str,
         default=None,
@@ -332,7 +326,6 @@ def main() -> None:
         early_stopping_rounds=args.early_stopping_rounds,
         tree_method=args.xgb_tree_method,
         device=args.xgb_device,
-        tune_scope=args.tune_scope,
         storage=args.tune_storage,
         study_name=study_name,
         best_params_out=args.tune_best_params_out,

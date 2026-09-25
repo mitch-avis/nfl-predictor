@@ -154,10 +154,9 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
     class DummyBlend:
         """Synthetic blended model class for dispatch testing."""
 
-        def __init__(self, team_model: object, market_model: object | None) -> None:
-            """Store component models for the test."""
+        def __init__(self, team_model: object) -> None:
+            """Store the team model for the test."""
             self.team_model = team_model
-            self.market_model = market_model
 
     class DummyMargin:
         """Synthetic margin/total model class for dispatch testing."""
@@ -171,17 +170,12 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
         """Return a synthetic report keyed off the input object."""
         if model == "team":
             return {"team": True}
-        if model == "market":
-            return {"market": True}
         return {"margin": True}
 
     monkeypatch.setattr(feature_importance, "_build_margin_total_report", fake_margin_report)
 
-    blend_report = feature_importance.build_feature_importance_report(DummyBlend("team", "market"))
-    assert blend_report == {
-        "model_kind": "blend",
-        "components": {"team": {"team": True}, "market": {"market": True}},
-    }
+    blend_report = feature_importance.build_feature_importance_report(DummyBlend("team"))
+    assert blend_report == {"model_kind": "blend", "components": {"team": {"team": True}}}
 
     margin_report = feature_importance.build_feature_importance_report(DummyMargin())
     assert margin_report == {"margin": True, "model_kind": "margin_total"}

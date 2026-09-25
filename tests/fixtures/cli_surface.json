@@ -1825,24 +1825,6 @@
   },
   {
    "action": "_StoreAction",
-   "choices": [
-    "team",
-    "market",
-    "both"
-   ],
-   "default": "both",
-   "dest": "tune_scope",
-   "help": "Which models to tune when blending.",
-   "nargs": null,
-   "options": [
-    "--tune-scope"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
    "choices": null,
    "default": null,
    "dest": "tune_storage",

@@ -201,13 +201,10 @@ def test_build_feature_spec_handles_market_transform_pruning_and_drop_categories
     assert "market_home_margin" in spec.dropped_columns
 
 
-def test_build_feature_spec_supports_market_only_and_disable_pruning(
+def test_build_feature_spec_disable_pruning_keeps_pruned_features(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Market-only selection should keep market columns.
-
-    Disable-pruning should preserve candidate pruned features.
-    """
+    """Pruned features are dropped by default and kept when pruning is disabled."""
     monkeypatch.setattr(feature_spec.log, "debug", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(feature_spec.constants, "PRUNED_FEATURE_COLUMNS", ["feat_pruned"])
 
@@ -215,33 +212,28 @@ def test_build_feature_spec_supports_market_only_and_disable_pruning(
         {
             "meta": [1, 2],
             "feat_pruned": [3.0, 4.0],
+            "feat_kept": [5.0, 7.0],
             "home_spread": [-3.0, -2.5],
-            "away_moneyline": [130, 120],
         }
     )
 
-    with pytest.raises(ValueError, match="Market-only model requested"):
-        feature_spec._build_feature_spec(
-            pd.DataFrame({"meta": [1], "feat": [2.0]}),
+    def _spec(disable_pruning: bool) -> feature_spec.FeatureSpec:
+        """Build the spec over the three feature columns."""
+        return feature_spec._build_feature_spec(
+            df,
             include_market=True,
             max_cardinality_ratio=0.9,
-            feature_start="feat",
-            feature_end="feat",
-            market_only=True,
+            feature_start="feat_pruned",
+            feature_end="home_spread",
+            disable_pruning=disable_pruning,
         )
 
-    market_only_spec = feature_spec._build_feature_spec(
-        df,
-        include_market=True,
-        max_cardinality_ratio=0.9,
-        feature_start="feat_pruned",
-        feature_end="away_moneyline",
-        market_only=True,
-        disable_pruning=True,
-    )
-
-    assert market_only_spec.feature_columns == ["home_spread", "away_moneyline"]
-    assert market_only_spec.market_columns == ["home_spread", "away_moneyline"]
+    assert _spec(disable_pruning=False).feature_columns == ["feat_kept", "home_spread"]
+    assert _spec(disable_pruning=True).feature_columns == [
+        "feat_pruned",
+        "feat_kept",
+        "home_spread",
+    ]
 
 
 def test_apply_feature_spec_adds_market_transforms_and_reindexes_missing_columns(

@@ -672,102 +672,23 @@ def train_blended_margin_total_model(
     tuned_cv_summary: dict[str, Any] = {}
     optuna_summary: dict[str, Any] = {}
     if optuna_config.enabled:
-        tune_scope = optuna_config.tune_scope
-        timeout = optuna_config.timeout_seconds
-        team_optuna = optuna_config
-        market_optuna = optuna_config
-        if tune_scope == "both":
-            split_timeout = max(timeout // 2, 1)
-            team_optuna = OptunaConfig(
-                enabled=True,
-                timeout_seconds=split_timeout,
-                n_trials=optuna_config.n_trials,
-                cv_splits=optuna_config.cv_splits,
-                objective=optuna_config.objective,
-                early_stopping_rounds=optuna_config.early_stopping_rounds,
-                tree_method=optuna_config.tree_method,
-                device=optuna_config.device,
-                tune_scope=optuna_config.tune_scope,
-                storage=optuna_config.storage,
-                study_name=optuna_config.study_name,
-                best_params_out=optuna_config.best_params_out,
-                xgb_n_jobs=optuna_config.xgb_n_jobs,
-            )
-            market_optuna = OptunaConfig(
-                enabled=True,
-                timeout_seconds=split_timeout,
-                n_trials=optuna_config.n_trials,
-                cv_splits=optuna_config.cv_splits,
-                objective=optuna_config.objective,
-                early_stopping_rounds=optuna_config.early_stopping_rounds,
-                tree_method=optuna_config.tree_method,
-                device=optuna_config.device,
-                tune_scope=optuna_config.tune_scope,
-                storage=optuna_config.storage,
-                study_name=optuna_config.study_name,
-                best_params_out=optuna_config.best_params_out,
-                xgb_n_jobs=optuna_config.xgb_n_jobs,
-            )
-
-        if optuna_config.storage:
-            suffix = "_team" if tune_scope in {"team", "both"} else ""
-            team_optuna = OptunaConfig(
-                enabled=team_optuna.enabled,
-                timeout_seconds=team_optuna.timeout_seconds,
-                n_trials=team_optuna.n_trials,
-                cv_splits=team_optuna.cv_splits,
-                objective=team_optuna.objective,
-                early_stopping_rounds=team_optuna.early_stopping_rounds,
-                tree_method=team_optuna.tree_method,
-                device=team_optuna.device,
-                tune_scope=team_optuna.tune_scope,
-                storage=team_optuna.storage,
-                study_name=f"{team_optuna.study_name}{suffix}" if team_optuna.study_name else None,
-                best_params_out=team_optuna.best_params_out,
-                xgb_n_jobs=team_optuna.xgb_n_jobs,
-            )
-            suffix = "_market" if tune_scope in {"market", "both"} else ""
-            market_optuna = OptunaConfig(
-                enabled=market_optuna.enabled,
-                timeout_seconds=market_optuna.timeout_seconds,
-                n_trials=market_optuna.n_trials,
-                cv_splits=market_optuna.cv_splits,
-                objective=market_optuna.objective,
-                early_stopping_rounds=market_optuna.early_stopping_rounds,
-                tree_method=market_optuna.tree_method,
-                device=market_optuna.device,
-                tune_scope=market_optuna.tune_scope,
-                storage=market_optuna.storage,
-                study_name=(
-                    f"{market_optuna.study_name}{suffix}" if market_optuna.study_name else None
-                ),
-                best_params_out=market_optuna.best_params_out,
-                xgb_n_jobs=market_optuna.xgb_n_jobs,
-            )
-
-        if tune_scope in {"team", "both"}:
-            log.info("Tuning team-feature model hyperparameters...")
-            (
-                team_params,
-                tuned_cv_summary["team"],
-                optuna_summary["team"],
-            ) = _run_optuna_search(
-                train_df,
-                target_columns=target_columns,
-                include_market=False,
-                max_cardinality_ratio=max_cardinality_ratio,
-                feature_start=feature_start,
-                feature_end=feature_end,
-                optuna_config=team_optuna,
-                market_only=False,
-                market_transform=market_transform,
-                market_prob_config=market_prob_config,
-                holdout_seasons=holdout,
-            )
-        if tune_scope in {"market", "both"}:
-            log.info(
-                "Skipping market-only model tuning: blended models now use market baseline only."
-            )
+        log.info("Tuning team-feature model hyperparameters...")
+        (
+            team_params,
+            tuned_cv_summary["team"],
+            optuna_summary["team"],
+        ) = _run_optuna_search(
+            train_df,
+            target_columns=target_columns,
+            include_market=False,
+            max_cardinality_ratio=max_cardinality_ratio,
+            feature_start=feature_start,
+            feature_end=feature_end,
+            optuna_config=optuna_config,
+            market_transform=market_transform,
+            market_prob_config=market_prob_config,
+            holdout_seasons=holdout,
+        )
 
     team_overrides = team_params.copy()
     if optuna_config.xgb_n_jobs is not None:
@@ -932,7 +853,6 @@ def train_blended_margin_total_model(
     )
     return BlendedMarginTotalModel(
         team_model=team_model,
-        market_model=None,
         blend_layer=BlendLayer(margin_model=margin_blender, total_model=total_blender),
         calibrator=calibrator,
         target_columns=target_columns,
@@ -975,12 +895,7 @@ def train_blended_margin_total_model_with_report(
     holdout_metrics: dict[str, Any] | None = None
     if not holdout_df.empty:
         team_margin, team_total = _predict_margin_total_from_model(model.team_model, holdout_df)
-        if model.market_model is None:
-            market_margin, market_total = get_market_baseline(holdout_df)
-        else:
-            market_margin, market_total = _predict_margin_total_from_model(
-                model.market_model, holdout_df
-            )
+        market_margin, market_total = get_market_baseline(holdout_df)
         blended_margin = model.blend_layer.margin_model.predict(
             np.column_stack([team_margin, market_margin])
         )

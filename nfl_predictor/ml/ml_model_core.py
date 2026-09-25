@@ -125,10 +125,9 @@ class BlendLayer:
 
 @dataclass(frozen=True)
 class BlendedMarginTotalModel:
-    """Blended margin/total model that combines team and market signals."""
+    """Blended margin/total model: the team model and the market line through a blend layer."""
 
     team_model: MarginTotalModel
-    market_model: MarginTotalModel | None
     blend_layer: BlendLayer
     calibrator: WinProbCalibrator | None
     target_columns: tuple[str, str]
@@ -175,7 +174,6 @@ class OptunaConfig:
     early_stopping_rounds: int
     tree_method: str | None
     device: str | None
-    tune_scope: str
     storage: str | None
     study_name: str | None
     best_params_out: Path | None
@@ -1307,9 +1305,6 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
     elif isinstance(model, BlendedMarginTotalModel):
         _capture("team.margin_model", model.team_model.margin_model)
         _capture("team.total_model", model.team_model.total_model)
-        if model.market_model is not None:
-            _capture("market.margin_model", model.market_model.margin_model)
-            _capture("market.total_model", model.market_model.total_model)
     return info
 
 
@@ -1390,8 +1385,6 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
         return model
     if isinstance(model, BlendedMarginTotalModel):
         _ensure_margin_total(model.team_model)
-        if model.market_model is not None:
-            _ensure_margin_total(model.market_model)
         if not hasattr(model, "optuna_summary"):
             _safe_set_attr(model, "optuna_summary", None)
         return model
@@ -1404,16 +1397,10 @@ def _with_market_prob_config(model: Any, config: MarketProbConfig | None) -> Any
     if isinstance(model, MarginTotalModel):
         return replace(model, market_prob_config=config)
     if isinstance(model, BlendedMarginTotalModel):
-        market_model = (
-            replace(model.market_model, market_prob_config=config)
-            if model.market_model is not None
-            else None
-        )
         return replace(
             model,
             market_prob_config=config,
             team_model=replace(model.team_model, market_prob_config=config),
-            market_model=market_model,
         )
     return model
 
@@ -1541,7 +1528,6 @@ def _score_margin_total_fold(
     params: dict[str, Any],
     early_stopping_rounds: int,
     objective: str,
-    market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
     market_prob_config: MarketProbConfig | None = None,
@@ -1552,7 +1538,6 @@ def _score_margin_total_fold(
         max_cardinality_ratio=max_cardinality_ratio,
         feature_start=feature_start,
         feature_end=feature_end,
-        market_only=market_only,
         market_transform=market_transform,
     )
     preprocessor = _build_preprocessor(feature_spec, for_tree=True)
@@ -1610,7 +1595,6 @@ def _evaluate_margin_total_cv(
     cv_splits: int,
     early_stopping_rounds: int,
     objective: str,
-    market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
     market_prob_config: MarketProbConfig | None = None,
@@ -1639,7 +1623,6 @@ def _evaluate_margin_total_cv(
                     params=params,
                     early_stopping_rounds=early_stopping_rounds,
                     objective=objective,
-                    market_only=market_only,
                     market_transform=market_transform,
                     market_anchor=market_anchor,
                     market_prob_config=market_prob_config,
@@ -1661,7 +1644,6 @@ def _evaluate_margin_total_cv_summary(
     cv_splits: int,
     early_stopping_rounds: int,
     objective: str,
-    market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
     market_prob_config: MarketProbConfig | None = None,
@@ -1688,7 +1670,6 @@ def _evaluate_margin_total_cv_summary(
                     params=params,
                     early_stopping_rounds=early_stopping_rounds,
                     objective=objective,
-                    market_only=market_only,
                     market_transform=market_transform,
                     market_anchor=market_anchor,
                     market_prob_config=market_prob_config,
@@ -1713,7 +1694,6 @@ def _run_optuna_search(
     feature_start: str,
     feature_end: str,
     optuna_config: OptunaConfig,
-    market_only: bool = False,
     market_transform: bool = False,
     market_anchor: bool = False,
     market_prob_config: MarketProbConfig | None = None,
@@ -1773,7 +1753,6 @@ def _run_optuna_search(
             cv_splits=optuna_config.cv_splits,
             early_stopping_rounds=optuna_config.early_stopping_rounds,
             objective=optuna_config.objective,
-            market_only=market_only,
             market_transform=market_transform,
             market_anchor=market_anchor,
             market_prob_config=market_prob_config,
@@ -1857,7 +1836,6 @@ def _run_optuna_search(
         cv_splits=optuna_config.cv_splits,
         early_stopping_rounds=optuna_config.early_stopping_rounds,
         objective=optuna_config.objective,
-        market_only=market_only,
         market_transform=market_transform,
         market_anchor=market_anchor,
         market_prob_config=market_prob_config,

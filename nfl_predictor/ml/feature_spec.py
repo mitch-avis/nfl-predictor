@@ -146,7 +146,6 @@ def _build_feature_spec(
     max_cardinality_ratio: float,
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
-    market_only: bool = False,
     market_transform: bool = False,
     disable_pruning: bool = False,
 ) -> FeatureSpec:
@@ -171,16 +170,13 @@ def _build_feature_spec(
     market_feature_columns = derived_market_columns if market_transform else raw_market_columns
     excluded_market_columns: list[str] = []
     dropped_raw_market_columns: list[str] = []
-    if market_only:
-        selected_columns = market_feature_columns
-    else:
-        if market_transform and raw_market_columns:
-            drop_columns.update(raw_market_columns)
-            dropped_raw_market_columns = raw_market_columns
-        if not include_market:
-            excluded_market_columns = market_feature_columns
-            drop_columns.update(excluded_market_columns)
-        selected_columns = [col for col in feature_range if col not in drop_columns]
+    if market_transform and raw_market_columns:
+        drop_columns.update(raw_market_columns)
+        dropped_raw_market_columns = raw_market_columns
+    if not include_market:
+        excluded_market_columns = market_feature_columns
+        drop_columns.update(excluded_market_columns)
+    selected_columns = [col for col in feature_range if col not in drop_columns]
 
     pruned_columns: list[str] = []
     if not disable_pruning:
@@ -191,8 +187,6 @@ def _build_feature_spec(
             drop_columns.update(pruned_columns)
             selected_columns = [col for col in selected_columns if col not in pruned_columns]
 
-    if market_only and not selected_columns:
-        raise ValueError("Market-only model requested but no market columns were found.")
     feature_df = df[selected_columns].copy()
 
     feature_df, id_columns = _drop_identifier_columns(feature_df)
@@ -204,8 +198,6 @@ def _build_feature_spec(
     categorical_columns = feature_df.select_dtypes(include=["object", "category"]).columns.tolist()
     numeric_columns = [col for col in feature_df.columns if col not in categorical_columns]
 
-    if market_only:
-        log.debug("Market-only feature selection enabled.")
     if market_transform:
         log.debug("Market feature transforms enabled: %s", derived_market_columns)
     log.debug("Dropped metadata columns (%d): %s", len(metadata_columns), metadata_columns)

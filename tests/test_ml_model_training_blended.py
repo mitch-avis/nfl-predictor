@@ -160,7 +160,6 @@ def test_train_blended_margin_total_model_full(monkeypatch) -> None:
         early_stopping_rounds=5,
         tree_method="auto",
         device="cpu",
-        tune_scope="both",
         storage="sqlite:///optuna.db",
         study_name="study",
         best_params_out=None,

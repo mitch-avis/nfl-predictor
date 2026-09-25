@@ -33,7 +33,6 @@ OPTUNA_OFF = OptunaConfig(
     early_stopping_rounds=50,
     tree_method=None,
     device=None,
-    tune_scope="margin_total",
     storage=None,
     study_name=None,
     best_params_out=None,

@@ -97,10 +97,7 @@ def predict_week_blended(
     games_df = _load_games(games_path)
 
     team_margin, team_total = _predict_margin_total_from_model(model.team_model, games_df)
-    if model.market_model is None:
-        market_margin, market_total = get_market_baseline(games_df)
-    else:
-        market_margin, market_total = _predict_margin_total_from_model(model.market_model, games_df)
+    market_margin, market_total = get_market_baseline(games_df)
 
     blended_margin = model.blend_layer.margin_model.predict(
         np.column_stack([team_margin, market_margin])

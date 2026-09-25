@@ -1,0 +1,3 @@
+values compared: 1928
+contrasts: 19, arms: 9, windows: 4
+mismatches: 0

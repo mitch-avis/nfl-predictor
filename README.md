@@ -276,7 +276,7 @@ python -m nfl_predictor.ml_model \
   --win-prob-calibration none \
   --tune \
   --tune-timeout 600 \
-  --tune-metric expected_points \
+  --tune-objective expected_points \
   --xgb-tree-method hist \
   --predict-path data/predict/week_17_games_to_predict.csv
 ```
@@ -374,7 +374,7 @@ If spreads/totals/moneylines are present, you can:
   than re-learning what the market already priced
 
 Win probability can also be blended or clamped vs market-implied home win probability via
-`--market-prob-blend` / `--market-prob-clamp` (alias: `--market-prob-weight`). Use
+`--market-prob-weight` / `--market-prob-clamp` (`--market-prob-blend` is the older spelling). Use
 `--market-prob-source raw|novig` to choose implied-prob handling and `--market-prob-blend-method
 prob|logit` to blend in probability or log-odds space.
 

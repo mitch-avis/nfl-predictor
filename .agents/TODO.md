@@ -669,11 +669,21 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
         `validate --live`, and `nfl_predictor/cli/options.py` started with the two
         deduplicated helpers. The `scripts/` paths are thin shims until 60.7 repoints the web
         jobs. No test imports `scripts/` (the 60.5 remainder is done).
-      - Next: the shared options module's argument-group builders with the renames and aliases
-        (PROPOSAL.md section 3), the remaining flag removals (`leakage_audit --include-market`,
-        `weekly_run --wf-n-jobs`), the YAML default (task 56.7(a)), the
-        `--wf-eval-last-n-seasons` note, and the step-2 follow-ups (`wf_compare` pick-accuracy
-        columns, automatic `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint listing).
+      - `0.22.0` (2026-09-24): the renames with aliases (PROPOSAL.md section 3; every old
+        spelling still parses, checked against the snapshot), the merged market-probability
+        weight, the weekly config keys `tune_trials` / `tune_early_stopping_rounds` (old keys
+        still load), the option-group builders in `nfl_predictor/cli/options.py`,
+        `leakage_audit --include-market` removed, the `--wf-eval-last-n-seasons` count
+        documented in its help, and `ml_model_cli.py` moved out of `nfl_predictor/ml/` to
+        `nfl_predictor/cli/train.py` (one more fingerprint change, then none for CLI edits).
+        Not removed: `weekly_run --wf-n-jobs`. The sign-off assumed the YAML sets both thread
+        counts to 12, but production never read the YAML, so today `--wf-n-jobs` (default 1)
+        sets stage 1's CPU threads whenever `--xgb-n-jobs` is unset. Removing it changes stage
+        1's thread count (speed; results should not depend on it, unverified). Question for
+        the user.
+      - Next: the YAML default (task 56.7(a)) and the step-2 follow-ups (`wf_compare`
+        pick-accuracy columns, automatic `OMP_WAIT_POLICY=PASSIVE`, the read-only checkpoint
+        listing).
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the

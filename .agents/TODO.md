@@ -576,6 +576,12 @@ merges back after each phase.
       `web_ui_plan.md`.
 - [ ] 58.2 Phase 5: team and QB pages over the `nfl-sos-ratings` Parquet outputs.
 - [ ] 58.3 Phase 6 (design only): live betting and live odds.
+- [ ] 58.5 Bug (found 2026-09-24 during Milestone 60; fixed in task 60.7, test first): an
+      unknown `/api/...` GET returns the frontend's `index.html` with status 200 instead of a
+      JSON 404, because the history-API fallback `GET /{path:path}` in
+      `nfl_predictor/api/routers/static.py` does not exclude the `api/` prefix (its docstring
+      says it does). A removed or mistyped API route then reaches the frontend as HTML. Close
+      this when 60.7 lands the fix.
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
       2026-09-21 (`0.12.12`, narrowed and accepted by the user's decision): the `web` extra is
       dropped, and `etl_full`/`validate_offline`/`validate_live` now take `--data-dir` with the
@@ -695,8 +701,31 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
         the walk-forward commands unless the environment sets one, and the `sweep` summary
         showing each probability view's own pick accuracy. The five step-2 follow-ups are
         archived (`ARCHIVE.md`, resolved follow-ups).
-      - Left in 60.6: only `weekly_run --wf-n-jobs`, which waits on the user's answer (see
-        `0.22.0` above). Everything else in this task has landed.
+      - Left in 60.6, decided by the user on 2026-09-25 (next session):
+        - **One thread-count flag.** `--xgb-n-jobs` alone sets XGBoost's CPU threads for
+          stage 1 and for final training; remove `--wf-n-jobs` and the `wf_n_jobs` config key
+          (an old config that still sets it should get a clear error or be mapped, as the tuning
+          keys were). Its default becomes the number of CPU cores (`os.cpu_count()`), not unset.
+          Today, with `--xgb-n-jobs` unset, stage 1 runs on `--wf-n-jobs` (default 1 thread)
+          while final training uses every core (`DEFAULT_XGB_PARAMS["n_jobs"]`); `--xgb-n-jobs`
+          overrides both when set. Test first whether a weekly-run fixture gives identical
+          output at 1 thread and at N (XGBoost `hist` on the CPU is expected to, but it is
+          unverified); if it differs, report the difference to the user before landing,
+          because the weekly snapshot pins 1 thread. The GPU default (task 55.4) later makes
+          most of this moot.
+        - **Remove the market model entirely.** The user never asked for one and has no plans
+          for one; it should have been removed with `--component` in `0.20.0`. The blend
+          trainer always stores `BlendedMarginTotalModel.market_model = None`, so every branch
+          that reads it is dead: `ml_model_core` (the field, `_early_stopping_info`,
+          `_ensure_backward_compatible_model`, `_with_market_prob_config`), `ml_model_predict`,
+          `ml_model_training` (including the `market_optuna` config the `--tune-scope`
+          `market`/`both` choices build: verify it tunes nothing, then remove `--tune-scope`),
+          `feature_importance` (the `market` component), the power-ranking pipeline, and the
+          tests that fake a market model. This is an `nfl_predictor/ml/` edit, so it changes
+          every checkpoint fingerprint again; no walk-forward has run since `0.20.0`, so land it
+          before any new reference run. No saved model on disk is a blend (all are
+          `MarginTotalModel`), so no pickle compatibility is needed; confirm under `models/`.
+        Then close 60.6 and archive it with a summary of `0.19.0`-`0.24.0` and these two.
 - [ ] 60.7 Web API and frontend: update the job templates in
       `nfl_predictor/api/jobs/catalog.py` to the new commands; keep the progress lines the runner
       parses (`Walk-forward fold N/M` from the walk-forward loop and `WF candidate N/M` from the
@@ -707,8 +736,16 @@ with old spellings kept as aliases; old launchers reproduce from their recorded 
       `blend`, `blended_margin_total` accepted as an alias; three web launches fail today, and
       the user saw the train failure in the web UI). The `betting_xlsx` job, the workbook
       download routes and the Betting page's download button were removed early, in `0.19.0`.
-      Also here, test first (found 2026-09-24): the frontend's catch-all route answers an
-      unknown `/api/...` path with `index.html` and status 200; it should be a JSON 404.
+      Also here, test first (found 2026-09-24; also listed as task 58.5): the frontend's
+      history-API fallback answers an unknown `/api/...` GET with the app's `index.html` and
+      status 200 instead of a JSON 404. The catch-all `GET /{path:path}` in
+      `nfl_predictor/api/routers/static.py` (`mount_frontend`) does not exclude the `api/`
+      prefix, although its docstring says it serves only paths outside `/api`. It applies
+      whenever the built frontend is served (`serve_frontend=True`, the default). Effect: a
+      request to a removed or mistyped API route gets HTML, so the frontend fails parsing JSON
+      instead of showing a clear "not found", and an API test cannot check a removed route by
+      status code (the `0.19.0` workbook test checks `app.routes` instead). Fix: the fallback
+      returns the API's JSON 404 error for paths under `api/`.
 - [ ] 60.8 CI, gate and docs: the CLI smoke checks in `scripts/gate.sh`; CI
       (`.github/workflows/validation.yml`) calls `scripts/gate.sh` instead of repeating its
       steps; `README.md` (the Scripts section, every command example, and a "Reproducing an old

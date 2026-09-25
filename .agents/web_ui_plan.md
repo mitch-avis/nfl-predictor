@@ -361,8 +361,10 @@ Landed so far:
   `RunFiles.betting_xlsx`, `BettingOut.xlsx_available`, and the Betting page's Workbook /
   Generate workbook button. The Betting page's table is unchanged, since it never read the
   workbook. The Data Status page still lists loose `reports/*.xlsx` files already on disk. Seven
-  templates now launch scripts by path. Found on the way, for 60.7: the frontend's catch-all
-  route answers an unknown `/api/...` path with `index.html` and status 200 instead of a 404.
+  templates now launch scripts by path. Found on the way (task 58.5, fixed in 60.7): an unknown
+  `/api/...` GET returns `index.html` with status 200 instead of a JSON 404, because the
+  history-API fallback `GET /{path:path}` in `nfl_predictor/api/routers/static.py` does not
+  exclude the `api/` prefix, contrary to its docstring.
 
 ## Status
 
@@ -434,3 +436,8 @@ Landed so far:
 - Phase 4: not started. Scheduled 2026-09-24 as step 6 of the roadmap in `TODO.md`
   ("Roadmap Status"): phases 4-6 resume after Milestone 60 has moved the scripts the job runner
   launches (see "Milestone 60 impact" above), so the web work starts on the settled entrypoints.
+- Known defect (found 2026-09-24, task 58.5, fix scheduled in Milestone 60 task 60.7): an
+  unknown `/api/...` GET returns the built frontend's `index.html` with status 200 instead of a
+  JSON 404. The history-API fallback `GET /{path:path}` in `nfl_predictor/api/routers/static.py`
+  (`mount_frontend`) does not exclude the `api/` prefix, although its docstring says it serves
+  only paths outside `/api`. It applies whenever the frontend is served (the default).

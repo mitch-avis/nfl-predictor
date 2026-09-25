@@ -20,9 +20,9 @@ def _import_ml_model_cli(monkeypatch):
         train_blended_margin_total_model=lambda **_kwargs: None,
     )
     monkeypatch.setitem(sys.modules, "nfl_predictor.ml_model", stub)
-    monkeypatch.delitem(sys.modules, "nfl_predictor.ml.ml_model_cli", raising=False)
+    monkeypatch.delitem(sys.modules, "nfl_predictor.cli.train", raising=False)
     monkeypatch.delitem(sys.modules, "nfl_predictor.ml.ml_model_training", raising=False)
-    return importlib.import_module("nfl_predictor.ml.ml_model_cli")
+    return importlib.import_module("nfl_predictor.cli.train")
 
 
 def _default_main_args(ml_model_cli: Any, monkeypatch: pytest.MonkeyPatch) -> Any:

@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.19.0] - 2026-09-24
+
+### Changed
+
+- The web Betting page no longer offers a workbook download or a Generate workbook button; its
+  table is unchanged. `GET /api/betting` no longer returns `xlsx_available`.
+
+### Removed
+
+- The Excel betting workbook, end to end: `scripts/betting_report_excel.py`,
+  `nfl_predictor/reporting/betting_excel.py`, the `openpyxl` dependency,
+  `scripts/weekly_run.py --betting-template-path` (and its config key), the web `betting_xlsx`
+  job, `GET /api/betting/xlsx`, and the `betting_xlsx` run-file download. No weekly output
+  changes: the shipped config never set the path, and the web page computes its own report from
+  the predictions. `betting_report.csv` is still written.
+- `scripts/golden_command.py`, `scripts/betting_pipeline.py`, `scripts/backtest_predictions.py`
+  and `scripts/objective_compare_models.py`, with the tests that existed only for them. None had
+  a web job, a CI check or a benchmark launcher. The weekly run covers `golden_command` and
+  `betting_pipeline`; walk-forward already scores confidence-pool points out of sample, which
+  `backtest_predictions` measured in sample; `objective_compare_models` is replaced by the planned
+  `compare` command. An old launcher that names one of them reproduces from its run's recorded
+  git commit.
+- Together these remove 88 of the 309 command-line options (`tests/fixtures/cli_surface.json`
+  was rewritten for exactly those removals); the weekly-run characterization snapshots pass
+  unchanged.
+
 ## [0.18.5] - 2026-09-24
 
 ### Changed

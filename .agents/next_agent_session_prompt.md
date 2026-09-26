@@ -9,8 +9,8 @@ completed milestones") and this file.
 
 - `main` is at version `0.28.3` and pushed to `origin` with the user's approval: Milestone 60
   (`0.28.1`), the pre-commit hooks (`0.28.2`) and the documentation split (`0.28.3`), each merged
-  with `--no-ff`; the feature branches are deleted. Pushing and merging stay must-ask. The working
-  tree is clean.
+  with `--no-ff`. Branch `docs/rule-2-corrections` carries `0.28.4` (below), committed and not
+  yet merged: merging and pushing stay must-ask.
 - `scripts/gate.sh --web` exits `0` on the `0.28.3` tree: 1032 passed, coverage 92.21% against
   the 90% floor, 22 frontend tests.
 - `git commit` runs pre-commit hooks: file hygiene, ruff on staged Python, and a Conventional
@@ -45,6 +45,10 @@ completed milestones") and this file.
 - `0.28.3`: split `AGENTS.md` (80k to 38k characters) into the files named above, dropped the
   `.agents/skills` excludes (agent skills are installed globally), and pointed the living docs
   at the current modules and commands.
+- `0.28.4`: rewrote Milestone 55's acceptance line for the 55.9 tune and the 56.3 shared source
+  (the user's request), and gave rule 2 a correction clause: small factual errors noticed
+  outside the current task may be fixed without asking, within its limits, and are reported
+  under "Fixed without asking" in the next check-in.
 - `0.25.0`-`0.28.0`: finished Milestone 60 (one thread option, the market model removed, the
   web API catch-all fix, web jobs on the front door, CI on the gate, the `compare` command).
 - `0.28.1`: closed the milestone with the user's approval. It verified that every removed option
@@ -103,10 +107,7 @@ walk-forward unless the user asks.
 
 ## Open questions for the user
 
-- Milestone 55's acceptance line still names `scripts/weekly_run.py --defaults-path
-  best_config.json`. The script is gone, the option never existed, and the sweep runner it
-  assumes was retired with tasks 55.1/55.2. Rewrite the acceptance when Milestone 55 closes?
-  (Rule 2 bars rewriting it to fit a delivery, so the rewrite is the user's call.)
+- None open from the last session.
 
 ## Notes
 

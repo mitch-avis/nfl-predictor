@@ -1,7 +1,7 @@
 # Next Agent Session Prompt
 
 You are resuming work in the `nfl-predictor` workspace (`/home/mitch/workspace/nfl-predictor`).
-Read `AGENTS.md` first and treat its delegation guardrails (rules 1-14) as binding, then
+Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as binding, then
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones") and this file.
 
@@ -9,8 +9,8 @@ completed milestones") and this file.
 
 - `main` is at version `0.28.3` and pushed to `origin` with the user's approval: Milestone 60
   (`0.28.1`), the pre-commit hooks (`0.28.2`) and the documentation split (`0.28.3`), each merged
-  with `--no-ff`. Branch `docs/rule-2-corrections` carries `0.28.4` (below), committed and not
-  yet merged: merging and pushing stay must-ask.
+  with `--no-ff`. Branch `docs/rule-2-corrections` carries `0.28.4` and `0.28.5` (below),
+  committed and not yet merged: merging and pushing stay must-ask.
 - `scripts/gate.sh --web` exits `0` on the `0.28.3` tree: 1032 passed, coverage 92.21% against
   the 90% floor, 22 frontend tests.
 - `git commit` runs pre-commit hooks: file hygiene, ruff on staged Python, and a Conventional
@@ -49,6 +49,11 @@ completed milestones") and this file.
   (the user's request), and gave rule 2 a correction clause: small factual errors noticed
   outside the current task may be fixed without asking, within its limits, and are reported
   under "Fixed without asking" in the next check-in.
+- `0.28.5`: rule 15 (a non-obvious question to the user carries the agent's brief,
+  code-grounded recommendation), Milestone 55's goal rewritten for the hypothesis-driven
+  settings and the 55.9 tune, and the stale "not pushed" baseline line in `AGENTS.md`
+  corrected under rule 2. `AGENTS.md` is at about 39.5k characters, near the 40k size at which
+  Claude Code warns: trim or move detail out before adding to it.
 - `0.25.0`-`0.28.0`: finished Milestone 60 (one thread option, the market model removed, the
   web API catch-all fix, web jobs on the front door, CI on the gate, the `compare` command).
 - `0.28.1`: closed the milestone with the user's approval. It verified that every removed option

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.28.2] - 2026-09-25
+
+### Added
+
+- A real `.pre-commit-config.yaml`, replacing the placeholder template that pointed `ruff` and
+  `ty` at `https://github.com` with no path and pinned versions far behind the ones this repo
+  actually gates on. Generic file hygiene (trailing whitespace, EOF, YAML/TOML/JSON validity,
+  large files, merge conflicts, private keys) runs from the upstream `pre-commit-hooks` mirror; a
+  commit-msg hook (`compilerla/conventional-pre-commit`) enforces the Conventional Commits format
+  and type list from `AGENTS.md`, "Changelog and Commit Workflow"; `ruff format`/`ruff check --fix`
+  run on staged Python files via `.venv/bin/ruff` (never a separately pinned mirror, so they can't
+  drift from `scripts/gate.sh` or CI); and a pre-push hook runs `scripts/gate.sh --quick` directly,
+  so the push-time check is the same script CI runs rather than a second, hand-maintained lint
+  config. Added `pre-commit` as a dev dependency so it's reproducible from `uv sync` instead of an
+  ad hoc install outside the lockfile (which had already left `uv sync --check --active` out of
+  sync before this change).
+
 ## [0.28.1] - 2026-09-25
 
 ### Changed

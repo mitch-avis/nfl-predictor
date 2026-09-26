@@ -1,0 +1,98 @@
+# Local git hooks for nfl-predictor.
+#
+# `scripts/gate.sh` is the one gate (AGENTS.md, "Command execution rules" and "Delegation
+# guardrails"): CI runs it, and a task isn't done until it exits 0. These hooks don't
+# reimplement that gate; they call it. Every Python tool below runs as `.venv/bin/<tool>`
+# (never a separately pinned pre-commit mirror), so a hook run can never disagree with
+# `scripts/gate.sh` or CI about which version ran.
+#
+# Setup (once per clone, after `uv sync`):
+#   .venv/bin/pre-commit install --install-hooks
+#
+# That installs every hook type listed in `default_install_hook_types` below: fast
+# formatting/lint feedback on `git commit`, a commit-message format check, and the
+# quick gate on `git push`.
+
+minimum_pre_commit_version: "3.2.0"
+default_install_hook_types: [pre-commit, pre-push, commit-msg]
+
+exclude: |
+  (?x)^(
+    \.venv/|
+    build/|
+    dist/|
+    \.agents/skills/|
+    web/node_modules/|
+    web/dist/|
+    nfl-sos-ratings/
+  )
+
+repos:
+  # Generic file hygiene. These don't touch the project's Python or Node toolchains, so
+  # pre-commit's own isolated hook environments are fine here.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(uv\.lock|web/package-lock\.json)$
+      - id: end-of-file-fixer
+        exclude: ^(uv\.lock|web/package-lock\.json)$
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        # tsconfig*.json is JSONC (comments, trailing commas), not strict JSON.
+        exclude: ^web/tsconfig.*\.json$
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: debug-statements
+      - id: detect-private-key
+      - id: mixed-line-ending
+
+  # AGENTS.md, "Changelog and Commit Workflow" mandates Conventional Commits with a fixed
+  # type list; enforce it at commit time instead of catching it in review.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - --strict
+          - feat
+          - fix
+          - docs
+          - test
+          - refactor
+          - perf
+          - build
+          - ci
+          - chore
+
+  # Fast, staged-file-only formatting/lint feedback on every commit, using the repo's own
+  # pinned .venv/bin/ruff.
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: .venv/bin/ruff format --force-exclude
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: ruff-check
+        name: ruff check --fix
+        entry: .venv/bin/ruff check --fix --force-exclude
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      # ty, pyright, markdownlint, pytest, and the lock/sync checks all need whole-project
+      # context (or are too slow for every commit); `--quick` runs everything except pytest
+      # and the frontend gate. Run `scripts/gate.sh` (add `--web` if `web/` changed) by hand
+      # before trusting a push further.
+      - id: gate-quick
+        name: scripts/gate.sh --quick
+        entry: scripts/gate.sh --quick
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

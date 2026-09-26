@@ -64,12 +64,15 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
-## Milestone 60 (partial) - CLI and entrypoint consolidation
+## Milestone 60 - CLI and entrypoint consolidation
 
-Tasks 60.1-60.3 completed 2026-09-24 on `feat/m60-cli-consolidation` (version `0.18.1`), task 60.4
-in versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`, task 60.6 in `0.19.0`-`0.26.0`
+Closed 2026-09-25 (version `0.28.1`) by the user's decision, and `feat/m60-cli-consolidation`
+merged into `main`. Tasks 60.1-60.3 completed 2026-09-24 (version `0.18.1`), task 60.4 in
+versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`, task 60.6 in `0.19.0`-`0.26.0`
 (2026-09-24/25), task 60.7 in `0.26.1` and `0.27.0`, task 60.8 in `0.27.1`, task 60.9 in `0.28.0`
-(2026-09-25). The milestone stays open in `TODO.md` for the user's decisions on its open items.
+(2026-09-25); the close-out is at the end of this section. Added 2026-09-21 by the user's
+direction (the entrypoints' flags had grown bloated) and widened on 2026-09-23 to every file under
+`scripts/`, behavior-preserving throughout.
 
 ### 60.1 and 60.2 - Generated inventories
 
@@ -249,6 +252,37 @@ follow the independent task 55.8 rescore, and the task's condition was met befor
 and finds 0 mismatches at exact float equality (`.agents/m60/verify_compare_output.txt`). Unit
 tests on hand-built checkpoints: `tests/test_run_comparison.py`. The per-run
 `compare_to_benchmark.py` copies under `models/` stay as records.
+
+### Close-out (version `0.28.1`, 2026-09-25)
+
+The acceptance list, as checked at the close:
+
+- Every flag and every file under `scripts/` has a signed-off disposition in the
+  script-generated `.agents/m60/INVENTORY.md` (60.1-60.3). Met.
+- The weekly-run characterization test passed unchanged in every chunk except `0.23.0`, where the
+  snapshot was rewritten on purpose to pin the production configuration once the weekly run read
+  `config/weekly_run.yaml` (task 56.7(a)); the user accepted this as met on 2026-09-25.
+- No production code is imported from `scripts/` (it holds only `gate.sh`), and the moved code
+  counts toward coverage with the floor met. Met.
+- Every removal or rename has a note in `CHANGELOG.md`: `.agents/m60/verify_removals.py` compares
+  the CLI surface snapshot at its creation (`aefb287`, 19 parsers) with the final one (16) and
+  finds all 38 options that no longer exist on any parser covered, 11 named in the changelog and
+  27 through their script's recorded retirement (`verify_removals_output.txt`). The gate with
+  `--web` is green on the final tree: 1032 passed, coverage 92.21%, 22 frontend tests. Met.
+- Every web job template launches and reports progress: **narrowed**. The tests landed in
+  `0.27.0` (every template's command parses with its target's own parser) and task 58.5's fix
+  was checked against the user's running server (`/api/nope` and `/api` return a 404 JSON error,
+  a client route returns the app, `/api/health` returns 200), but no template was launched live.
+  The user asked on 2026-09-25 to test the weekly-run and walk-forward jobs later. The remainder
+  is under "From Milestone 60" in `TODO.md`, assigned to roadmap step 3.
+
+Also moved to that follow-up group: the power rankings with a `blend` run (never worked; to be
+settled in task 56.5). Deleted at the close as spent (all in git history):
+`.agents/m60_cli_flag_audit.md` (superseded by the inventory),
+`.agents/independent_review_55_8_prompt.md` and `.agents/web_ui_session_prompt.md`. The rest of
+`.agents/m60/` stays as the milestone's record: the inventory and its generator, the sign-off
+proposal (its section 8 defines how success is measured from step 3 on), the scripts-coverage
+measurement and the two verification scripts.
 
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 

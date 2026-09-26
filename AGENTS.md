@@ -53,12 +53,9 @@ Rules that are always enforced:
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-25 (`main` after the Milestone 60 merge, version `0.28.1`):
-  `scripts/gate.sh --web` exits `0` (`1032 passed`, coverage `92.21%` against the enforced `90%`
-  floor, 22 frontend tests; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
-  `uv sync --check --active`, the `--help` smoke check of every command and the web gate all
-  clean). `main` is not pushed yet; pushing is must-ask. Run `scripts/gate.sh --web` whenever
-  `web/` or `nfl_predictor/api/` changes.
+- Validated baseline on 2026-09-25 (version `0.28.5`): `scripts/gate.sh --web` exits `0`
+  (`1032 passed`, coverage `92.21%` against the enforced `90%` floor, 22 frontend tests). Run
+  `scripts/gate.sh --web` whenever `web/` or `nfl_predictor/api/` changes.
   - Re-run a plain `uv sync` after every version bump (including after merging a branch that
     bumped the version), or `uv sync --check --active` fails on the stale installed package.
 - **Benchmarks and data state live in `.agents/benchmarks.md`.** Read it before any walk-forward
@@ -83,8 +80,8 @@ Rules that are always enforced:
 
 ## Delegation guardrails (every agent session)
 
-Added 2026-09-19 after the Milestone 59 audit and amended on 2026-09-21, 2026-09-23 and
-2026-09-24; what went wrong each time, and so why each rule exists, is in
+Added 2026-09-19 after the Milestone 59 audit and amended on 2026-09-21, 2026-09-23, 2026-09-24
+and 2026-09-25; what went wrong each time, and so why each rule exists, is in
 `.agents/guardrail_history.md`. An autonomous session has no other supervision, so these rules
 are not advisory.
 
@@ -96,7 +93,22 @@ are not advisory.
    substitute method, a skipped acceptance criterion), the task stays `[ ]` with a `Narrowed:`
    note giving the difference, the reason and where the remainder now lives, and the difference
    goes on the user's question list. Rewriting the acceptance text to fit the delivery is not
-   allowed.
+   allowed. **Correcting is not narrowing:** an error noticed outside the current task may be
+   fixed without asking first when all of these hold; if any fails, it is a question.
+   - It is a fact, not a choice: a stale path, command or option name, a broken pointer, a
+     typo, or a bug whose correct behavior the repo already states (a docstring, test,
+     documented contract or error message), with exactly one plausible fix.
+   - Meaning is unchanged. Corrected task or acceptance text names the current equivalent of
+     what was asked, keeps the same bar and every criterion, and no checkbox changes state. A
+     code fix changes no output of a weekly run, walk-forward or ETL, and touches no
+     fingerprinted file (`nfl_predictor/ml/*.py`, `constants.py`, `ml_model.py`).
+   - Nothing under rule 5 is involved, no measured number changes (rule 3), and records stay as
+     written: `.agents/ARCHIVE.md`, past `CHANGELOG.md` entries, run directories, benchmark
+     provenance.
+   - It is small and verified: one logical change of a few lines, a failing test first for
+     code, `scripts/gate.sh` green.
+   - The user is told: the next check-in lists it under "Fixed without asking" (before, after,
+     why), and a code or tooling fix gets a changelog line.
 3. **Two keys on every number.** The agent that produced a run never writes its numbers into
    `AGENTS.md`, `.agents/benchmarks.md`, `.agents/ARCHIVE.md`, `.agents/TODO.md`
    or `CHANGELOG.md`. A reviewer (a separate
@@ -138,8 +150,8 @@ are not advisory.
 6. **May proceed without asking:**
    - commits on the working feature branch after each versioned chunk (Conventional Commits, one
      logical change per commit, the attribution line the harness provides);
-   - fixes with a failing test first, and doc updates that restate numbers already verified
-     under rule 3;
+   - fixes with a failing test first within the current task, corrections under rule 2, and doc
+     updates that restate numbers already verified under rule 3;
    - one walk-forward run per written hypothesis, within rule 4;
    - creating the milestone's feature branch off `main` when none exists.
 7. **Check-ins.** Report at every landed version and after every walk-forward run: what landed,
@@ -196,6 +208,16 @@ are not advisory.
     feature values before tuning. Group changes that invalidate walk-forward checkpoints so they
     share one new reference. Production-changing steps land between game weeks. The step order
     in `.agents/TODO.md` ("Roadmap Status") follows these principles; changing it is must-ask.
+15. **Recommend when the answer isn't obvious.** A question or pending decision for the user
+    carries the agent's brief recommendation unless the answer is plain from the question itself.
+    The user may not remember the details of something built long ago, or may not know the area
+    well, so write for a reader who cannot check it without digging: one line on what the
+    component does today and why the decision comes up, from the code or docs (name the file),
+    not from memory; the recommended option first, with its reason and its main cost or risk;
+    how sure the agent is and what would change its mind. If the evidence is too thin to
+    recommend, say so and name what would settle it. A recommendation is advice, never consent:
+    the agent still waits for the answer on everything under rule 5, and it never bends a
+    written decision rule toward its own preference (rules 9 and 12).
 
 ## Source of truth for work
 

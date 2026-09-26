@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.28.3] - 2026-09-25
+
+### Changed
+
+- `AGENTS.md` shrinks from about 80k to about 38k characters, under the size at which Claude
+  Code warns about a large instructions file; it keeps every rule and points to the detail.
+  Benchmark tables, reference arms and dataset records are in `.agents/benchmarks.md`, run
+  timings in `.agents/walk_forward_runbook.md`, the prediction, evaluation, artifact and feature
+  specification in `.agents/modeling_spec.md`, and the incidents behind each delegation guardrail
+  in `.agents/guardrail_history.md`. Rules for one directory are in nested `AGENTS.md` files under
+  `nfl_predictor/api/`, `nfl_predictor/ml/` and `web/`, which agents load when they work there.
+- The living docs (`README.md`, `.agents/TODO.md`, `.agents/feature_crosswalk.md`,
+  `.agents/web_ui_plan.md`) name the current modules and commands instead of the old
+  `scripts/<name>.py` files, the removed web worktree and a deleted session transcript. The web UI
+  plan's finished "Milestone 60 impact" section is gone.
+
+### Removed
+
+- The `.agents/skills` excludes in `.gitignore`, the ruff configuration, `.markdownlintignore`,
+  `scripts/gate.sh` and `.pre-commit-config.yaml`: agent skills are installed globally, not in
+  the repo.
+
+### Fixed
+
+- The pre-commit commit-message hook failed on every commit: the global `exclude` listed `.git/`,
+  which filtered out `.git/COMMIT_EDITMSG`, so the hook read its last type argument as the message
+  file.
+
 ## [0.28.2] - 2026-09-25
 
 ### Added

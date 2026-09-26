@@ -26,6 +26,19 @@ npm run dev      # Vite dev server on http://localhost:5173, proxies /api to :80
 npm run build    # writes web/dist, which the backend serves
 ```
 
+Which mode to use:
+
+- `nfl-predictor web` serves the API and the built app from `web/dist/` on port 8000. The app is
+  whatever the last `npm run build` produced (`scripts/gate.sh --web` rebuilds it). Use this mode
+  day to day, and always when launching jobs.
+- `--reload` restarts the backend whenever a Python file in the repository changes (an edit, a
+  `git checkout`, a merge). A restart marks every running job failed, and the job's process
+  carries on unwatched. Its file watcher also takes about half a core, which slows walk-forwards.
+  Use it only while changing the API.
+- `npm run dev` serves `web/src` with hot reload on port 5173 and sends `/api` to the backend on
+  port 8000, so the backend must be running too. Use it only while changing the frontend; it binds
+  `0.0.0.0`, so other devices on the network can reach it.
+
 Set `NFLP_HOST=0.0.0.0` (or `--host 0.0.0.0`) to reach the app from another device on the LAN or
 over Tailscale. Set `NFLP_COOKIE_SECURE=1` when the app is behind HTTPS.
 

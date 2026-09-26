@@ -6,13 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from scripts import power_rankings, weekly_run
+from nfl_predictor.reporting import power_rankings
+from nfl_predictor.weekly_run import config as run_config
+from nfl_predictor.weekly_run import inputs
 
 
 def _options(argv: list[str]) -> power_rankings.RankingOptions:
     """Parse weekly-run arguments and resolve the ranking options they describe."""
-    args = weekly_run._build_parser().parse_args(argv)
-    return weekly_run._power_ranking_options(args)
+    args = run_config._build_parser().parse_args(argv)
+    return run_config._power_ranking_options(args)
 
 
 def test_weekly_rankings_default_to_the_composite() -> None:
@@ -69,7 +71,7 @@ def test_weekly_legacy_flag_selects_the_franchise_fit() -> None:
 
 def test_weekly_ranking_flags_are_valid_config_keys() -> None:
     """A config file can set the ranking options the command line can."""
-    allowed = weekly_run._allowed_config_keys(weekly_run._build_parser())
+    allowed = run_config._allowed_config_keys(run_config._build_parser())
 
     assert {
         "power_rankings_method",
@@ -84,9 +86,9 @@ def test_weekly_ranking_flags_are_valid_config_keys() -> None:
 
 def test_weekly_ranking_options_change_the_report_config() -> None:
     """Changing the ranking method invalidates a reused reports stage."""
-    composite = weekly_run._power_rankings_report_config(weekly_run._build_parser().parse_args([]))
-    bradley_terry = weekly_run._power_rankings_report_config(
-        weekly_run._build_parser().parse_args(["--power-rankings-method", "bradley_terry"])
+    composite = run_config._power_rankings_report_config(run_config._build_parser().parse_args([]))
+    bradley_terry = run_config._power_rankings_report_config(
+        run_config._build_parser().parse_args(["--power-rankings-method", "bradley_terry"])
     )
 
     assert composite != bradley_terry
@@ -95,25 +97,25 @@ def test_weekly_ranking_options_change_the_report_config() -> None:
 
 def test_default_through_week_is_the_week_before_the_prediction() -> None:
     """A regular-season prediction week ranks through the week before it."""
-    assert weekly_run._default_power_rankings_through_week(2025, 5) == 4
+    assert inputs._default_power_rankings_through_week(2025, 5) == 4
 
 
 def test_default_through_week_never_goes_below_zero() -> None:
     """Week 1 has no earlier week to rank through."""
-    assert weekly_run._default_power_rankings_through_week(2025, 1) == 0
+    assert inputs._default_power_rankings_through_week(2025, 1) == 0
 
 
 def test_default_through_week_clamps_postseason_weeks() -> None:
     """A postseason prediction week ranks through the last regular-season week."""
-    assert weekly_run._default_power_rankings_through_week(2025, 21) == 18
-    assert weekly_run._default_power_rankings_through_week(2019, 21) == 17
+    assert inputs._default_power_rankings_through_week(2025, 21) == 18
+    assert inputs._default_power_rankings_through_week(2019, 21) == 17
 
 
 def test_default_through_week_without_a_week_is_undefined() -> None:
     """Without a prediction week there is nothing to derive."""
-    assert weekly_run._default_power_rankings_through_week(2025, None) is None
+    assert inputs._default_power_rankings_through_week(2025, None) is None
 
 
 def test_default_through_week_without_a_season_is_unclamped() -> None:
     """Without a season the regular-season length is unknown, so no clamp applies."""
-    assert weekly_run._default_power_rankings_through_week(None, 21) == 20
+    assert inputs._default_power_rankings_through_week(None, 21) == 20

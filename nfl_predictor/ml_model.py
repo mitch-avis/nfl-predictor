@@ -17,7 +17,7 @@ from nfl_predictor.ml import ml_model_training as _training
 
 def main() -> None:
     """CLI entrypoint wrapper for the legacy `nfl_predictor.ml_model` path."""
-    _module = importlib.import_module("nfl_predictor.ml.ml_model_cli")
+    _module = importlib.import_module("nfl_predictor.cli.train")
     _module.main()
 
 

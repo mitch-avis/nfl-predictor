@@ -142,7 +142,6 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
         early_stopping_rounds=5,
         tree_method="auto",
         device="cpu",
-        tune_scope="both",
         storage=None,
         study_name=None,
         best_params_out=None,

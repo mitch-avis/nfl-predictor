@@ -41,8 +41,248 @@ Follow-ups resolved after their milestones closed:
   reports live in `models/review_wf_2023_2025_pbp_{off,on}/`.
 - Milestone 46: `uv sync --check --active` failed after the `0.4.0` bump because the environment
   still had `0.3.0` installed; a plain `uv sync` cleared it. Re-sync after every version bump.
+- 2026 Week 3 weekly run: the QB identity file is read under nfeloqb's name `data/meta_data.csv`
+  since `0.18.3` (`constants.QB_META_DATA_NAME`, pinned by
+  `test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default`). With the user's approval
+  on 2026-09-24 the temporary copy `data/qb_meta_data.csv` was deleted, together with the stopped
+  run `models/weekly_2026_week_03/` and the backups `data/backup_pre_2026_week_03/` and
+  `data/backup_pre_2026_week_03_full/` (every file in them was still present in `data/`, and
+  the walk-forward cuts byte-identical).
+- 2026 Week 3 weekly run: `config/weekly_run.yaml` was never read (it needed `--config`). Since
+  `0.23.0` the weekly run reads it by default, rewritten to the code defaults production had been
+  running, so no output changed (task 56.7(a); its values are decided in task 56.7(b)). The same
+  day `--wf-eval-last-n-seasons` gained help text saying the count includes a current season
+  with no completed week (`0.22.0`).
+- Step-2 follow-ups, resolved in Milestone 60 on 2026-09-24:
+  `WalkForwardConfig.early_stopping_rounds` removed with the flags that fed it (Milestone 59;
+  `0.20.0`); the `sweep` (formerly `wf_compare.py`) summary shows the configured and market pick
+  accuracy next to their Brier and log loss (Milestone 59; `0.24.0`); the walk-forward commands set
+  `OMP_WAIT_POLICY=PASSIVE` unless the environment sets one (Milestone 49; `0.24.0`); `nfl-predictor
+  checkpoints` lists checkpoint directories and what names them, read-only (Milestone 49; `0.24.0`);
+  the dead `LogEvalCallback` plumbing removed, `_build_xgb_fit_kwargs` kept for tuning's eval set
+  (2026-09-11 review; `0.20.0`).
 
 ---
+
+## Milestone 60 - CLI and entrypoint consolidation
+
+Closed 2026-09-25 (version `0.28.1`) by the user's decision, and `feat/m60-cli-consolidation`
+merged into `main`. Tasks 60.1-60.3 completed 2026-09-24 (version `0.18.1`), task 60.4 in
+versions `0.18.2` and `0.18.4`, task 60.5 in `0.18.5`, task 60.6 in `0.19.0`-`0.26.0`
+(2026-09-24/25), task 60.7 in `0.26.1` and `0.27.0`, task 60.8 in `0.27.1`, task 60.9 in `0.28.0`
+(2026-09-25); the close-out is at the end of this section. Added 2026-09-21 by the user's
+direction (the entrypoints' flags had grown bloated) and widened on 2026-09-23 to every file under
+`scripts/`, behavior-preserving throughout.
+
+### 60.1 and 60.2 - Generated inventories
+
+`.agents/m60/inventory.py` builds every entrypoint's parser by intercepting
+`ArgumentParser.parse_args`, traces each flag's read sites and sinks from the AST, parses every
+web job template command with its target's real parser, and scans the production config, tests,
+CI, docs and `models/` launchers; `.agents/m60/INVENTORY.md` and `inventory.json` are its output.
+Hand judgments live in `.agents/m60/annotations.yaml` and apply only while their evidence
+patterns hold. `.agents/m60/scripts_coverage.py` writes `SCRIPTS_COVERAGE.md`. The superseded
+`.agents/m60_cli_flag_audit.md` was not used. Every finding the 2026-09-23 review recorded was
+confirmed except two details: the market-weight alias is two argparse actions, and eleven test
+modules (not ten) import from `scripts`. New findings: three web launches fail on the model-kind
+vocabulary (`blend` against `blended_margin_total`); `wf_compare --early-stopping-rounds`,
+`weekly_run --wf-n-jobs` and `leakage_audit --include-market` do nothing; the backtest's
+`--calibration` default (`platt`) differs from the benchmark's `auto`; ScoreModel was never
+measured.
+
+### 60.3 - Sign-off
+
+The user's decisions are recorded in `.agents/m60/PROPOSAL.md`, "Sign-off": one
+`nfl-predictor <command>` front door; the script dispositions; the flag removals; the naming rule;
+old launchers reproduce from their recorded commit; ScoreModel removed (task 55.5); the Excel
+betting workbook retired end to end; the model-kind defect fixed in 60.7; CI calls
+`scripts/gate.sh`; a new `compare` command (60.9); the `--calibration` default deferred to task
+56.5; survivor picks wait for task 58.1. Housekeeping the same day: the stray checkpoint folder
+`models/wf_checkpoints/ca3e6892daacd42980f4/` was already gone, and the stale
+`../nfl-predictor-web` worktree record was pruned.
+
+### 60.4 - Characterization tests (versions `0.18.2` and `0.18.4`)
+
+Landed against the pre-move layout, green, before anything moved. The fixture is synthetic
+(`tests/weekly_fixture.py`), because the real `data/` is not in git; `tests/snapshots.py` holds
+the shared comparison helpers (exact for text and integers, relative `1e-6` for floats; rewrite
+with `NFLP_UPDATE_SNAPSHOTS=1`). The tests:
+
+- `tests/test_weekly_run_characterization.py`: all four weekly stages (about 12 s). It pins
+  today's stage-1 list-order selection (all nine candidates tie on deterministic Brier and
+  `elo` + blend `0.2` + clamp `0.1` wins; task 56.5). It loads `config/weekly_run.yaml`, which
+  no production run read at the time; the user decided on 2026-09-24 that 60.6 makes the YAML
+  the weekly default, rewritten to the code defaults, which re-points this snapshot.
+- `tests/test_entrypoints_characterization.py`: backtest, sweep, and the leakage audit with a
+  planted leak.
+- `tests/test_cli_surface.py`: the parser surface of 19 entrypoints (309 actions), matching
+  the inventory.
+- `tests/test_shap_analysis_characterization.py` (`0.18.4`): a market-anchored margin/total
+  model and a blended model trained on the fixture, and the SHAP report for the margin head, the
+  total head on a 100-row sample, and both blend components (about 2 s).
+
+Snapshots are identical across runs. Mutations fail them: reversing the stage-1 candidate list
+and deeper trees (weekly test), and taking the maximum instead of the mean absolute SHAP value
+(all four SHAP snapshots). Coverage of `scripts/` rose from 54.0% to 69.6% of statements in
+`0.18.2` (`.agents/m60/SCRIPTS_COVERAGE.md`). Found on the way, with their dispositions:
+
+- the paired bootstrap in `walk_forward._bootstrap_probability_differences` spends 98% of a
+  stage-1 run in scikit-learn metric calls (the tests patch it to 200 resamples); the numpy
+  rewrite was approved 2026-09-24 for the `nfl_predictor/ml/` chunk of 60.6;
+- `shap` was not a declared dependency; the user added it in `0.18.3` and kept `explain`;
+- the backtest CLI prints XGBoost's per-matrix INFO lines (60.6 flag and logging pass);
+- `shap_analysis --component market` never analyzes a market model:
+  `train_blended_margin_total_model` always stores `market_model=None`, so the request falls
+  back to the team model (the report says `model_kind: blend_team`). The inventory had listed
+  the flag as active. The user decided on 2026-09-24 to remove it in 60.6.
+
+### 60.5 - Library code out of `scripts/` (version `0.18.5`)
+
+The power-ranking pipeline (records, future-game predictions, the Bradley-Terry fit inputs, the
+strength-snapshot reader, `resolve_ranking_options`, `compute_power_rankings`, and the output
+writer, now the public `write_ranking_outputs`) moved into
+`nfl_predictor/reporting/power_rankings.py`; `build_betting_report` and its moneyline helpers
+into the new `nfl_predictor/reporting/betting_report.py`. `scripts/weekly_run.py` imports both
+from the package, so no production code imports `scripts/`. The moved bodies are
+byte-identical apart from the rename and three docstring lines (checked by diff against the
+pre-move file), every characterization snapshot passed unchanged, and
+`.agents/m60/inventory.py` still reports 19 entrypoints, 309 flags and 0 evidence failures on
+the moved code. The task text also asked to drop every `from scripts import`; 13 test modules
+still import entrypoint modules, which can only go when those entrypoints move or retire. The
+user moved that remainder into 60.6 on 2026-09-24.
+
+### 60.6 - The front door, retirements, renames and removals (versions `0.19.0`-`0.26.0`)
+
+Every part of the task text landed; each version has its own `CHANGELOG.md` entry with the
+removal and rename notes. The weekly-run characterization snapshot passed unchanged through every
+chunk except `0.23.0`, where it was rewritten on purpose (below). `tests/fixtures/cli_surface.json`
+went from 309 actions in 19 entrypoints to 215 in 15 parsers.
+
+- `0.19.0`: retired `golden_command`, `betting_pipeline`, `backtest_predictions`,
+  `objective_compare_models` and the Excel betting workbook end to end, including its web job,
+  routes and the Betting page's button (88 of 309 options).
+- `0.20.0`, the one planned `nfl_predictor/ml/` chunk: ScoreModel removed (task 55.5),
+  `model_compare.py`, `WalkForwardConfig.early_stopping_rounds` and the flags that fed it, the
+  week-based recency half-life, the dead `LogEvalCallback` plumbing, `explain --component`, and
+  the numpy paired bootstrap (identical to `1e-12` against the scikit-learn loop, 146 times
+  faster).
+- `0.21.0`: the front door `nfl-predictor <command>` (console script and `python -m
+  nfl_predictor`); the weekly run moved into `nfl_predictor/weekly_run/` (definitions
+  AST-identical), the other entrypoints into `nfl_predictor/cli/`, the two validate scripts
+  merged into `validate --live`, and `scripts/<name>.py` kept as thin shims for the web jobs
+  until 60.7. No test imports `scripts/` (the 60.5 remainder).
+- `0.22.0`: one naming rule (`--wf-`, `--tune-`, `--xgb-`) with every old spelling kept as a
+  second option string; the merged `--market-prob-weight`; weekly config keys `tune_trials` and
+  `tune_early_stopping_rounds` (old keys still load); `leakage-audit --include-market` removed;
+  `ml_model_cli.py` moved to `nfl_predictor/cli/train.py`, outside the checkpoint fingerprint.
+- `0.23.0`: task 56.7(a). The weekly run reads `config/weekly_run.yaml` by default, and the file
+  holds the code defaults, so production output did not change; the weekly snapshot was
+  rewritten to pin that production configuration instead of the old unread YAML values.
+- `0.24.0`: the step-2 follow-ups (`nfl-predictor checkpoints`, the automatic
+  `OMP_WAIT_POLICY=PASSIVE`, the `sweep` pick-accuracy columns).
+- `0.25.0`, by the user's decision on 2026-09-25: one thread option. `--wf-n-jobs` and
+  `wf_n_jobs` removed (a config that sets it fails with a message naming `xgb_n_jobs`);
+  `--xgb-n-jobs` sets XGBoost's CPU threads for stage 1 and the final fit and defaults to every
+  core (stage 1 had run on one thread). Checked before landing: the weekly fixture at 1 and 24
+  threads gave identical outputs in all eight pinned files, apart from the thread count in the
+  stage-1 candidate key and its hash.
+- `0.26.0`, by the user's decision on 2026-09-25: the market model removed entirely (the
+  `market_model` field, every branch that read it, and the market-only feature selection), with
+  `train --tune-scope`. Its `market` choice tuned nothing; the default `both` halved the blend's
+  team study budget for a market study that never ran, so a tuned blend now gets the whole
+  timeout. No saved model under `models/` was a blend. Found on the way and added to 60.7: the
+  power rankings cannot use a blend model at all, because they read `feature_spec` from the
+  model and a blend keeps it on `team_model` (pinned by
+  `tests/test_blended_model_paths.py`).
+
+### 60.7 - The web jobs on the front door (versions `0.26.1` and `0.27.0`)
+
+- `0.26.1`: the API catch-all fix, test first (task 58.5; record under Milestone 58, "58.5").
+- `0.27.0`: every job template in `nfl_predictor/api/jobs/catalog.py` builds `<python> -m
+  nfl_predictor <command>` with the canonical option names (`JobContext.command` replaced
+  `JobContext.script`); the eight `scripts/` shims were deleted, so only `scripts/gate.sh`
+  remains; the gate's and CI's smoke checks run every front-door command's `--help`, listed by
+  the front door. The model-kind defect was fixed test first: one vocabulary
+  (`nfl_predictor.cli.options.MODEL_KINDS`, `margin_total` and `blend`, with
+  `blended_margin_total` accepted as an old name) shared by the train form, `train`/`predict`
+  and `rankings`. The new `test_every_template_builds_a_command_its_target_parses` in
+  `tests/api/test_jobs_catalog.py` builds every template, with every value of every choice
+  parameter, and parses the command with the target command's own parser; it and the new
+  model-kind tests (`tests/test_cli_model_kind.py`) were written and seen failing before the
+  code changed. Progress lines and the weekly job's config keys are unchanged. The weekly
+  characterization snapshots are unchanged; the CLI surface snapshot changed only in the two
+  `--model-kind` actions. `web_ui_plan.md` ("Job runner", "Milestone 60 impact") and
+  `web/README.md` record it. Left open: the live check per template in the milestone
+  acceptance (several templates rebuild `data/` or run a weekly run or walk-forward, which are
+  must-ask), and the blend power-rankings question (`TODO.md`, Milestone 60).
+
+### 60.8 - CI runs the gate; the docs (version `0.27.1`)
+
+- The gate's smoke checks (`0.27.0`) run `nfl-predictor --help` and every command's `--help`,
+  listed by the front door. CI's Python job now sets up the environment and runs
+  `scripts/gate.sh`; it syncs with `--locked`, because the gate's `uv lock --check` runs after
+  the sync and a plain sync would rewrite a stale lock first. The `web` job is unchanged (the
+  gate's `--web` path uses nvm; CI provisions Node with `setup-node`).
+- `README.md`: every command example on the front door with canonical option names, the
+  command-line section, the validation and CI description, and "Reproducing an old run" (a
+  worktree at the run's `git_commit_hash`, the old lock synced, `data/` linked, the launcher
+  copied into the worktree's `models/<run_id>/`, since a launcher changes to the repository two
+  levels above itself). `AGENTS.md`: "Commands" replaces "Repo scripts", the front door in
+  "Project Shape", "Dev Workflows" and the required command forms, and the launch guidance.
+  `web/README.md` moved in `0.27.0`.
+- Found by grep, then guarded by a test: `tests/test_readme_commands.py` parses every
+  `nfl-predictor` command in the README's code blocks with the command's own parser (27 when it
+  landed). It caught a pre-existing error: the leakage-audit example had never passed the two
+  required options. `tests/cli_parsing.py` is the shared resolver; the web job test now also
+  reads the weekly job's config file and validates its keys.
+- The gate on the final tree: 1020 passed, coverage 92.15%.
+
+### 60.9 - The `compare` command (version `0.28.0`)
+
+`nfl-predictor compare` (`nfl_predictor/cli/compare.py`; the computation in
+`nfl_predictor/reporting/run_comparison.py`, outside the checkpoint fingerprint) rescores
+walk-forward runs from their fold checkpoints and compares candidate with reference game by game in
+week 1, week 2, weeks 3-18 and all weeks: deterministic Brier, log loss, pick accuracy, margin and
+total MAE and pool points, each run's market Brier and deterministic-minus-market interval, and
+paired differences with 95% bootstrap intervals (games; weeks for pool points), with seed pairs
+averaged per game. Run directories add provenance and the settings that differ. Its definitions
+follow the independent task 55.8 rescore, and the task's condition was met before it was trusted:
+`.agents/m60/verify_compare.py` recomputes every number in
+`models/wf_m55_8_review/independent_rescore.json` (19 contrasts, 9 arms, 4 windows; 1,928 values)
+and finds 0 mismatches at exact float equality (`.agents/m60/verify_compare_output.txt`). Unit
+tests on hand-built checkpoints: `tests/test_run_comparison.py`. The per-run
+`compare_to_benchmark.py` copies under `models/` stay as records.
+
+### Close-out (version `0.28.1`, 2026-09-25)
+
+The acceptance list, as checked at the close:
+
+- Every flag and every file under `scripts/` has a signed-off disposition in the
+  script-generated `.agents/m60/INVENTORY.md` (60.1-60.3). Met.
+- The weekly-run characterization test passed unchanged in every chunk except `0.23.0`, where the
+  snapshot was rewritten on purpose to pin the production configuration once the weekly run read
+  `config/weekly_run.yaml` (task 56.7(a)); the user accepted this as met on 2026-09-25.
+- No production code is imported from `scripts/` (it holds only `gate.sh`), and the moved code
+  counts toward coverage with the floor met. Met.
+- Every removal or rename has a note in `CHANGELOG.md`: `.agents/m60/verify_removals.py` compares
+  the CLI surface snapshot at its creation (`aefb287`, 19 parsers) with the final one (16) and
+  finds all 38 options that no longer exist on any parser covered, 11 named in the changelog and
+  27 through their script's recorded retirement (`verify_removals_output.txt`). The gate with
+  `--web` is green on the final tree: 1032 passed, coverage 92.21%, 22 frontend tests. Met.
+- Every web job template launches and reports progress: **narrowed**. The tests landed in
+  `0.27.0` (every template's command parses with its target's own parser) and task 58.5's fix
+  was checked against the user's running server (`/api/nope` and `/api` return a 404 JSON error,
+  a client route returns the app, `/api/health` returns 200), but no template was launched live.
+  The user asked on 2026-09-25 to test the weekly-run and walk-forward jobs later. The remainder
+  is under "From Milestone 60" in `TODO.md`, assigned to roadmap step 3.
+
+Also moved to that follow-up group: the power rankings with a `blend` run (never worked; to be
+settled in task 56.5). Deleted at the close as spent (all in git history):
+`.agents/m60_cli_flag_audit.md` (superseded by the inventory),
+`.agents/independent_review_55_8_prompt.md` and `.agents/web_ui_session_prompt.md`. The rest of
+`.agents/m60/` stays as the milestone's record: the inventory and its generator, the sign-off
+proposal (its section 8 defines how success is measured from step 3 on), the scripts-coverage
+measurement and the two verification scripts.
 
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 
@@ -446,6 +686,20 @@ change). What replaces it: hypothesis-driven ladders for single settings (task 5
 for example), the task 55.9 Optuna tune for the XGBoost hyperparameters, and task 56.3 to wire the
 chosen settings into the weekly run and the benchmark from one source.
 
+### 55.5 - ScoreModel removed (version `0.20.0`, 2026-09-24)
+
+Decided by the user on 2026-09-24 (`.agents/m60/PROPOSAL.md`, section 6) and executed in the
+Milestone 60 `nfl_predictor/ml/` chunk. The evidence: no run recorded the `score` model kind,
+every saved model under `models/` was a `MarginTotalModel`, and the walk-forward harness could
+not run it, so it was never measured. The user first asked for a fair model-family comparison,
+then dropped it, because the parity work such a test needs outweighs a candidate unlikely to
+beat the direct margin model. Removed: `ScoreModel`, `train_score_model` and its report
+wrapper, `predict_week`, the score-only helpers (`_fit_models`, `_evaluate_predictions`,
+`_rmse`), the `score` choice of `--model-kind` (`ml_model`, `power_rankings`, the web catalog),
+and the score branches in the checkpoint loader, feature importance, the ranking pipeline and
+`shap_analysis` (whose `--target` is now `margin` or `total`). Weekly-run and SHAP snapshots
+passed unchanged.
+
 ### 55.7 - Choose `n_estimators` time-aware (versions `0.13.0`-`0.13.1`)
 
 In-season fits had run the full `598`-tree budget since `0.12.3` with no early stopping
@@ -622,7 +876,8 @@ ablation is replaced with this ladder.
 
 Phases 0-3 completed 2026-09-10 (on `feat/web-ui`, worktree `../nfl-predictor-web`) and merged
 into `main` on 2026-09-11 as version `0.8.0`; task 58.4 completed 2026-09-21 (version `0.12.12`);
-phases 4-6 (tasks 58.1-58.3) stay in `TODO.md`. The milestone number was assigned at merge time
+task 58.5 completed 2026-09-25 (version `0.26.1`, in Milestone 60 task 60.7); phases 4-6 (tasks
+58.1-58.3) stay in `TODO.md`. The milestone number was assigned at merge time
 (the plan had reserved 51, which the 2026-09-10 renumbering gave to the power rankings). The full
 design, the decisions made with the user, and the per-phase status with deviations live in
 `web_ui_plan.md`.
@@ -661,6 +916,17 @@ status, the job catalog and power rankings from this checkout's `data/` and `mod
 fast-forwarded to the branch tip, and the `0.8.0` changelog, README and `AGENTS.md` entries
 followed (`814 passed`, `92.90%`). The user's live instance on port 8765 was left running on the
 pre-merge API code.
+
+### 58.5 - The API catch-all answered unknown API routes with the frontend (version `0.26.1`)
+
+Found 2026-09-24 during Milestone 60: the history-API fallback `GET /{path:path}` in
+`nfl_predictor/api/routers/static.py` (`mount_frontend`) did not exclude the `api/` prefix,
+although its docstring said it served only paths outside `/api`, so an unknown `/api/...` GET
+returned `index.html` with status 200 whenever the built frontend was served (the default). Fixed
+test first on 2026-09-25 in task 60.7: the fallback raises the API's `NotFoundError` for `/api`
+and every path under it, so the response is the JSON 404 `{"error": {"code": "not_found", ...}}`;
+paths outside `/api`, including look-alikes such as `/apiary`, still get the frontend
+(`tests/api/test_static.py`). The retired workbook route's test now also checks its status code.
 
 ### 58.4 - Housekeeping: the `web` extra and the ETL's upstream data-directory paths
 

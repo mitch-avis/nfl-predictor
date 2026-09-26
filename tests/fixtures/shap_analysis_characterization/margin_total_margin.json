@@ -1,0 +1,60 @@
+{
+  "component": "team",
+  "model_kind": "margin_total",
+  "rows": [
+    {
+      "feature": "num__home_points_per_game",
+      "mean_abs_shap": 0.9993430972099304
+    },
+    {
+      "feature": "num__home_points_allowed_per_game",
+      "mean_abs_shap": 0.9545526504516602
+    },
+    {
+      "feature": "num__away_points_per_game",
+      "mean_abs_shap": 0.8156507611274719
+    },
+    {
+      "feature": "num__market_total_line",
+      "mean_abs_shap": 0.7924026250839233
+    },
+    {
+      "feature": "num__home_power",
+      "mean_abs_shap": 0.7414445281028748
+    },
+    {
+      "feature": "num__away_power",
+      "mean_abs_shap": 0.7225267291069031
+    },
+    {
+      "feature": "num__away_rest",
+      "mean_abs_shap": 0.6230404376983643
+    },
+    {
+      "feature": "num__power_diff",
+      "mean_abs_shap": 0.5729488134384155
+    },
+    {
+      "feature": "num__away_points_allowed_per_game",
+      "mean_abs_shap": 0.43442317843437195
+    },
+    {
+      "feature": "num__market_home_margin",
+      "mean_abs_shap": 0.42811229825019836
+    },
+    {
+      "feature": "num__home_market_prob",
+      "mean_abs_shap": 0.2920018136501312
+    },
+    {
+      "feature": "num__home_rest",
+      "mean_abs_shap": 0.12347498536109924
+    },
+    {
+      "feature": "num__away_market_prob",
+      "mean_abs_shap": 0.11630692332983017
+    }
+  ],
+  "sample_size": 352,
+  "target": "margin"
+}

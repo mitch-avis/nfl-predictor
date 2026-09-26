@@ -1,0 +1,22 @@
+{
+  "config": {
+    "equality_rate_threshold": 0.98,
+    "fail_corr_threshold": 0.999999,
+    "feature_end": "home_moneyline",
+    "feature_start": "away_rest",
+    "include_market": true,
+    "market_transform": false,
+    "max_cardinality_ratio": 0.5,
+    "suspicious_corr_threshold": 0.995
+  },
+  "failures": [],
+  "feature_count": 14,
+  "flagged_columns": [],
+  "ok": true,
+  "row_count": 352,
+  "target_columns": [
+    "away_score",
+    "home_score"
+  ],
+  "warnings": []
+}

@@ -1,0 +1,44 @@
+{
+  "component": "team",
+  "model_kind": "blend_team",
+  "rows": [
+    {
+      "feature": "num__power_diff",
+      "mean_abs_shap": 1.6486293077468872
+    },
+    {
+      "feature": "num__away_points_per_game",
+      "mean_abs_shap": 1.6344332695007324
+    },
+    {
+      "feature": "num__home_points_allowed_per_game",
+      "mean_abs_shap": 1.2459670305252075
+    },
+    {
+      "feature": "num__home_power",
+      "mean_abs_shap": 0.9450820684432983
+    },
+    {
+      "feature": "num__home_points_per_game",
+      "mean_abs_shap": 0.8780502676963806
+    },
+    {
+      "feature": "num__away_power",
+      "mean_abs_shap": 0.8775404095649719
+    },
+    {
+      "feature": "num__away_rest",
+      "mean_abs_shap": 0.6359142661094666
+    },
+    {
+      "feature": "num__away_points_allowed_per_game",
+      "mean_abs_shap": 0.5975492596626282
+    },
+    {
+      "feature": "num__home_rest",
+      "mean_abs_shap": 0.17077575623989105
+    }
+  ],
+  "sample_size": 352,
+  "target": "margin"
+}

@@ -20,7 +20,6 @@ def _seed(project_root: Path, app) -> None:  # noqa: ANN001
         season=2026,
         week=1,
         created_at="2026-09-09T00:00:00+00:00",
-        with_xlsx=True,
     )
     factories.make_run_dir(
         models,
@@ -94,11 +93,11 @@ def test_training_run_without_predictions(
 
 
 def test_betting_routes(project_root: Path, viewer_client: TestClient, app) -> None:  # noqa: ANN001
-    """The betting table, ladder, and workbook download work for the active run."""
+    """The betting table and ladder work for the active run; the workbook route is gone."""
     _seed(project_root, app)
     payload = viewer_client.get("/api/betting").json()
     assert payload["run_id"] == "weekly_w1"
-    assert payload["xlsx_available"] is True
+    assert "xlsx_available" not in payload
     assert [step["action"] for step in payload["ladder"]] == [
         "PASS",
         "LEAN",
@@ -107,11 +106,10 @@ def test_betting_routes(project_root: Path, viewer_client: TestClient, app) -> N
         "STRONG",
     ]
     assert payload["table"]["column_metadata"]["total_action"]["actionable"] is False
-    xlsx = viewer_client.get("/api/betting/xlsx")
-    assert xlsx.status_code == 200 and xlsx.content == b"PK-fake-xlsx"
-    assert viewer_client.get("/api/betting/xlsx", params={"run": "weekly_w0"}).status_code == 404
+    assert "/api/betting/xlsx" not in {getattr(route, "path", None) for route in app.routes}
+    assert viewer_client.get("/api/betting/xlsx").status_code == 404
     unattached = viewer_client.get("/api/betting", params={"week": 3}).json()
-    assert unattached["xlsx_available"] is False
+    assert unattached["run_id"] is None
 
 
 def test_power_routes(project_root: Path, viewer_client: TestClient, app) -> None:  # noqa: ANN001

@@ -8,9 +8,9 @@ from typing import TypedDict, cast
 import pandas as pd
 import pytest
 
-from nfl_predictor.ml import wf_compare_utils
+from nfl_predictor.ml import walk_forward, wf_compare_utils
 from nfl_predictor.utils import fingerprints
-from scripts import weekly_run
+from nfl_predictor.weekly_run import stage1
 
 
 class Candidate(TypedDict):
@@ -185,7 +185,7 @@ def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.Mo
     dataset_fp = {"sha256": "deadbeef", "path": "x", "size": 1, "mtime": 0.0}
     wf_fp = "wf123"
     candidates = [_candidate("cand1"), _candidate("cand2")]
-    monkeypatch.setattr(weekly_run, "_build_wf_candidates", lambda **_kwargs: candidates)
+    monkeypatch.setattr(stage1, "_build_wf_candidates", lambda **_kwargs: candidates)
 
     call_count = {"count": 0}
 
@@ -193,9 +193,9 @@ def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.Mo
         call_count["count"] += 1
         return _stub_results(call_count["count"])
 
-    monkeypatch.setattr(weekly_run.walk_forward, "run_walk_forward_backtest", _fake_run)
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
 
-    summary_row = weekly_run._build_summary_row(
+    summary_row = stage1._build_summary_row(
         cast(dict[str, object], candidates[0]),
         _stub_results(1),
         dataset_sha256="deadbeef",
@@ -210,11 +210,11 @@ def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.Mo
         "metrics": _stub_results(1),
         "summary": summary_row,
     }
-    artifact_path = weekly_run._candidate_artifact_path(run_dir, candidates[0]["candidate_key"])
-    weekly_run._atomic_write_json(artifact_path, payload)
+    artifact_path = stage1._candidate_artifact_path(run_dir, candidates[0]["candidate_key"])
+    stage1._atomic_write_json(artifact_path, payload)
 
     df = pd.DataFrame()
-    result = weekly_run._run_wf_compare(
+    result = stage1._run_wf_compare(
         df,
         run_dir=run_dir,
         resume=True,
@@ -226,14 +226,12 @@ def test_resume_skips_completed_candidate(tmp_path: Path, monkeypatch: pytest.Mo
         calibration_weeks=1,
         include_postseason=False,
         exclude_incomplete_seasons=False,
-        recency_half_life_weeks=None,
         recency_half_life_seasons=None,
         market_mode="features",
         market_prob_source="raw",
         market_prob_blend_method="prob",
         win_prob_uncertainty="off",
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
     )
 
@@ -247,16 +245,16 @@ def test_wf_compare_checkpoints_candidate_weeks_under_the_run_dir(
     """Each candidate saves its finished weeks inside the run, honoring the resume flag."""
     run_dir = tmp_path / "run"
     run_dir.mkdir()
-    monkeypatch.setattr(weekly_run, "_build_wf_candidates", lambda **_kwargs: [_candidate("cand1")])
+    monkeypatch.setattr(stage1, "_build_wf_candidates", lambda **_kwargs: [_candidate("cand1")])
     seen: list[dict[str, object]] = []
 
     def _fake_run(*_args: object, **kwargs: object) -> dict[str, object]:
         seen.append(kwargs)
         return _stub_results(1)
 
-    monkeypatch.setattr(weekly_run.walk_forward, "run_walk_forward_backtest", _fake_run)
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
 
-    weekly_run._run_wf_compare(
+    stage1._run_wf_compare(
         pd.DataFrame(),
         run_dir=run_dir,
         resume=False,
@@ -268,19 +266,17 @@ def test_wf_compare_checkpoints_candidate_weeks_under_the_run_dir(
         calibration_weeks=1,
         include_postseason=False,
         exclude_incomplete_seasons=False,
-        recency_half_life_weeks=None,
         recency_half_life_seasons=None,
         market_mode="features",
         market_prob_source="raw",
         market_prob_blend_method="prob",
         win_prob_uncertainty="off",
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
     )
 
     assert len(seen) == 1
-    assert seen[0]["checkpoint_dir"] == weekly_run._wf_compare_dir(run_dir) / "wf_folds"
+    assert seen[0]["checkpoint_dir"] == stage1._wf_compare_dir(run_dir) / "wf_folds"
     assert seen[0]["resume"] is False
 
 
@@ -291,9 +287,9 @@ def test_corrupt_artifact_recomputes(tmp_path: Path, monkeypatch: pytest.MonkeyP
     dataset_fp = {"sha256": "abc123", "path": "x", "size": 1, "mtime": 0.0}
     wf_fp = "wf123"
     candidate = _candidate("cand1")
-    monkeypatch.setattr(weekly_run, "_build_wf_candidates", lambda **_kwargs: [candidate])
+    monkeypatch.setattr(stage1, "_build_wf_candidates", lambda **_kwargs: [candidate])
 
-    artifact_path = weekly_run._candidate_artifact_path(run_dir, candidate["candidate_key"])
+    artifact_path = stage1._candidate_artifact_path(run_dir, candidate["candidate_key"])
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text("{bad json", encoding="utf-8")
 
@@ -303,10 +299,10 @@ def test_corrupt_artifact_recomputes(tmp_path: Path, monkeypatch: pytest.MonkeyP
         call_count["count"] += 1
         return _stub_results(call_count["count"])
 
-    monkeypatch.setattr(weekly_run.walk_forward, "run_walk_forward_backtest", _fake_run)
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
 
     df = pd.DataFrame()
-    weekly_run._run_wf_compare(
+    stage1._run_wf_compare(
         df,
         run_dir=run_dir,
         resume=True,
@@ -318,14 +314,12 @@ def test_corrupt_artifact_recomputes(tmp_path: Path, monkeypatch: pytest.MonkeyP
         calibration_weeks=1,
         include_postseason=False,
         exclude_incomplete_seasons=False,
-        recency_half_life_weeks=None,
         recency_half_life_seasons=None,
         market_mode="features",
         market_prob_source="raw",
         market_prob_blend_method="prob",
         win_prob_uncertainty="off",
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
     )
 
@@ -341,7 +335,7 @@ def test_resume_after_interrupt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     dataset_fp = {"sha256": "abc123", "path": "x", "size": 1, "mtime": 0.0}
     wf_fp = "wf123"
     candidates = [_candidate("cand1"), _candidate("cand2")]
-    monkeypatch.setattr(weekly_run, "_build_wf_candidates", lambda **_kwargs: candidates)
+    monkeypatch.setattr(stage1, "_build_wf_candidates", lambda **_kwargs: candidates)
 
     call_count = {"count": 0}
 
@@ -351,11 +345,11 @@ def test_resume_after_interrupt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
             raise RuntimeError("simulated interrupt")
         return _stub_results(call_count["count"])
 
-    monkeypatch.setattr(weekly_run.walk_forward, "run_walk_forward_backtest", _fake_run)
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
     df = pd.DataFrame()
 
     with pytest.raises(RuntimeError):
-        weekly_run._run_wf_compare(
+        stage1._run_wf_compare(
             df,
             run_dir=run_dir,
             resume=False,
@@ -367,18 +361,16 @@ def test_resume_after_interrupt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
             calibration_weeks=1,
             include_postseason=False,
             exclude_incomplete_seasons=False,
-            recency_half_life_weeks=None,
             recency_half_life_seasons=None,
             market_mode="features",
             market_prob_source="raw",
             market_prob_blend_method="prob",
             win_prob_uncertainty="off",
             xgb_params_overrides={},
-            early_stopping_rounds=1,
             include_quantiles=False,
         )
 
-    assert weekly_run._candidate_artifact_path(run_dir, "cand1").exists()
+    assert stage1._candidate_artifact_path(run_dir, "cand1").exists()
 
     call_count["count"] = 0
 
@@ -386,8 +378,8 @@ def test_resume_after_interrupt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         call_count["count"] += 1
         return _stub_results(call_count["count"])
 
-    monkeypatch.setattr(weekly_run.walk_forward, "run_walk_forward_backtest", _fake_run_resume)
-    result = weekly_run._run_wf_compare(
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run_resume)
+    result = stage1._run_wf_compare(
         df,
         run_dir=run_dir,
         resume=True,
@@ -399,14 +391,12 @@ def test_resume_after_interrupt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         calibration_weeks=1,
         include_postseason=False,
         exclude_incomplete_seasons=False,
-        recency_half_life_weeks=None,
         recency_half_life_seasons=None,
         market_mode="features",
         market_prob_source="raw",
         market_prob_blend_method="prob",
         win_prob_uncertainty="off",
         xgb_params_overrides={},
-        early_stopping_rounds=1,
         include_quantiles=False,
     )
 

@@ -1,0 +1,44 @@
+model: models/weekly_2026_week_03_full/model.joblib
+base features: 462; one-hot base features: ['away_next_opponent_abbr', 'home_next_opponent_abbr', 'stadium_surface', 'stadium_type']
+
+top 10 by summed average gain (the web page's number):
+  away_next_opponent_abbr: 21203.52 (encoded columns 32, used 12, splits 14)
+  home_next_opponent_abbr: 14973.91 (encoded columns 32, used 9, splits 11)
+  stadium_surface: 12445.52 (encoded columns 9, used 6, splits 10)
+  away_opponent_points_per_play: 5257.20 (encoded columns 1, used 1, splits 13)
+  stadium_type: 4783.93 (encoded columns 2, used 2, splits 7)
+  home_scoring_margin: 4703.35 (encoded columns 1, used 1, splits 6)
+  away_off_pass_epa_per_snap: 4689.94 (encoded columns 1, used 1, splits 7)
+  away_points_scored: 4183.23 (encoded columns 1, used 1, splits 5)
+  home_qb_value_pre: 4113.41 (encoded columns 1, used 1, splits 31)
+  home_rating_diff: 4108.57 (encoded columns 1, used 1, splits 29)
+
+top 10 by total gain:
+  special_teams_tds_diff: 115623.16 (encoded columns 1, used 1, splits 68)
+  stuffed_rush_rate_diff: 115111.90 (encoded columns 1, used 1, splits 59)
+  def_fumbles_diff: 112525.27 (encoded columns 1, used 1, splits 61)
+  home_special_teams_tds: 107835.00 (encoded columns 1, used 1, splits 61)
+  home_def_fumbles: 96724.34 (encoded columns 1, used 1, splits 54)
+  opponent_pass_completions_diff: 88792.12 (encoded columns 1, used 1, splits 52)
+  home_def_tds: 88747.27 (encoded columns 1, used 1, splits 52)
+  opponent_fourth_down_pct_diff: 86984.41 (encoded columns 1, used 1, splits 48)
+  opponent_penalties_diff: 86914.90 (encoded columns 1, used 1, splits 50)
+  home_opponent_fourth_down_pct: 86138.77 (encoded columns 1, used 1, splits 53)
+
+top 10 by splits:
+  special_teams_tds_diff: 68.00 (encoded columns 1, used 1, splits 68)
+  def_fumbles_diff: 61.00 (encoded columns 1, used 1, splits 61)
+  home_special_teams_tds: 61.00 (encoded columns 1, used 1, splits 61)
+  home_coach_win_pct_prior: 59.00 (encoded columns 1, used 1, splits 59)
+  stuffed_rush_rate_diff: 59.00 (encoded columns 1, used 1, splits 59)
+  away_opponent_2pt_conversions: 54.00 (encoded columns 1, used 1, splits 54)
+  home_def_fumbles: 54.00 (encoded columns 1, used 1, splits 54)
+  two_point_conversion_pct_diff: 54.00 (encoded columns 1, used 1, splits 54)
+  away_2pt_conversions: 53.00 (encoded columns 1, used 1, splits 53)
+  home_opponent_fourth_down_pct: 53.00 (encoded columns 1, used 1, splits 53)
+
+one-hot base features, rank by each measure (of the base features):
+  away_next_opponent_abbr: summed average gain 1, total gain 334, splits 368
+  home_next_opponent_abbr: summed average gain 2, total gain 410, splits 408
+  stadium_surface: summed average gain 3, total gain 414, splits 425
+  stadium_type: summed average gain 5, total gain 445, splits 445

@@ -8,7 +8,6 @@ and is imported by higher-level training code.
 from __future__ import annotations
 
 import inspect
-from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
@@ -155,7 +154,6 @@ def _build_xgb_fit_kwargs(
     x_eval: np.ndarray | spmatrix | None,
     y_eval: np.ndarray | None,
     early_stopping_rounds: int | None,
-    callbacks: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
     """Build kwargs for `XGBRegressor.fit` across XGBoost versions."""
     fit_kwargs: dict[str, Any] = {}
@@ -166,8 +164,6 @@ def _build_xgb_fit_kwargs(
         fit_kwargs["eval_set"] = [(x_eval, y_eval)]
     if _xgb_fit_supports("verbose"):
         fit_kwargs["verbose"] = False
-    if callbacks and _xgb_fit_supports("callbacks"):
-        fit_kwargs["callbacks"] = list(callbacks)
 
     if not early_stopping_rounds:
         return fit_kwargs

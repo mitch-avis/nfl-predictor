@@ -15,6 +15,7 @@ usage() {
 Usage: ./update_requirements.sh [--python <version-request>]
 
 Updates the project's uv lockfile and syncs the active .venv.
+With a local CUDA toolkit, it then rebuilds LightGBM with CUDA if the synced build lacks it.
 
 If compatibility requirements files are present, they are refreshed from uv.lock:
 - requirements.txt -> runtime dependencies only
@@ -194,8 +195,18 @@ main() {
 	info "Locking project dependencies (upgrade all)"
 	uv lock --upgrade
 
+	# With a CUDA toolkit, sync with the LightGBM CUDA build flags so an unchanged LightGBM
+	# keeps its CUDA build and a new version is built with CUDA (see lightgbm_cuda.py).
+	local -a lightgbm_cuda_args=()
+	if [[ -x .venv/bin/nfl-lightgbm-cuda-install ]]; then
+		mapfile -t lightgbm_cuda_args < <(.venv/bin/nfl-lightgbm-cuda-install uv-args 2>/dev/null)
+	fi
+
 	info "Syncing the active virtual environment from uv.lock"
-	uv sync --active
+	uv sync --active "${lightgbm_cuda_args[@]}"
+
+	info "Making LightGBM a CUDA build if this machine can build one (no-op when it already is)"
+	.venv/bin/nfl-lightgbm-cuda-install install
 
 	refresh_compatibility_requirements
 

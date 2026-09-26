@@ -202,7 +202,6 @@ def test_run_optuna_search_rejects_holdout_seasons(monkeypatch: MonkeyPatch) -> 
         early_stopping_rounds=5,
         tree_method=None,
         device=None,
-        tune_scope="both",
         storage=None,
         study_name=None,
         best_params_out=None,

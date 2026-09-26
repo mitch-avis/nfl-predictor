@@ -17,14 +17,10 @@ from sklearn.linear_model import Ridge
 
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import (
-    DEFAULT_XGB_PARAMS,
-    BlendedMarginTotalModel,
-    BlendLayer,
     FeatureSpec,
     MarginTotalModel,
     MarketProbConfig,
     OptunaConfig,
-    ScoreModel,
 )
 
 xgb.set_config(verbosity=0)
@@ -83,7 +79,6 @@ def _disabled_optuna() -> OptunaConfig:
         early_stopping_rounds=5,
         tree_method="hist",
         device="cpu",
-        tune_scope="both",
         storage=None,
         study_name=None,
         best_params_out=None,
@@ -162,132 +157,6 @@ def test_early_stopping_info_records_last_round_without_xgb_best_iteration() -> 
 
     assert info["margin_model.best_iteration"] == 11
     assert info["total_model.best_iteration"] == 11
-
-
-def test_train_score_model_without_holdout_skips_holdout_evaluation(monkeypatch) -> None:
-    """Skips holdout inference when no holdout seasons are configured."""
-    df = pd.DataFrame(
-        {
-            "season": [2022, 2023],
-            "away_score": [10, 14],
-            "home_score": [20, 17],
-            "feat1": [1.0, 2.0],
-        }
-    )
-
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(
-        ml_model_training,
-        "_build_feature_spec",
-        lambda *_args, **_kwargs: _feature_spec(high_cardinality=True),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_apply_feature_spec",
-        lambda frame, _spec: frame[["feat1"]],
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_build_preprocessor",
-        lambda *_args, **_kwargs: _DummyPreprocessor(),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_fit_models",
-        lambda *_args, **_kwargs: ("away_model", "home_model"),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "compute_postseason_sample_weight",
-        lambda frame, **_kwargs: np.ones(len(frame), dtype=float),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "compute_recency_sample_weight",
-        lambda frame, **_kwargs: np.ones(len(frame), dtype=float),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "combine_sample_weights",
-        lambda postseason, _recency: postseason,
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_transform_matrix",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("holdout transform should be skipped")
-        ),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_evaluate_predictions",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("holdout evaluation should be skipped")
-        ),
-    )
-
-    model = ml_model_training.train_score_model(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=0,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        market_prob_config=None,
-        xgb_n_jobs=7,
-    )
-
-    assert isinstance(model, ScoreModel)
-    assert model.xgb_params is not None
-    assert model.xgb_params["n_jobs"] == 7
-    assert model.feature_spec.high_cardinality_columns == ["team_code"]
-
-
-def test_train_score_model_with_report_without_holdout_uses_default_params(monkeypatch) -> None:
-    """Reports `None` holdout metrics and falls back to default XGBoost params."""
-    df = pd.DataFrame(
-        {
-            "season": [2022, 2023],
-            "away_score": [10, 14],
-            "home_score": [20, 17],
-            "feat1": [1.0, 2.0],
-        }
-    )
-    model = ScoreModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        away_model=cast(xgb.XGBRegressor, object()),
-        home_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params=None,
-    )
-
-    monkeypatch.setattr(ml_model_training, "train_score_model", lambda **_kwargs: model)
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(
-        ml_model_training.feature_importance,
-        "build_feature_importance_report",
-        lambda _model: {"feature_names": []},
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_predict_xgb",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("holdout prediction should be skipped")
-        ),
-    )
-
-    result = ml_model_training.train_score_model_with_report(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=0,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        market_prob_config=None,
-    )
-
-    assert result.metrics_report["metrics"]["holdout"] is None
-    assert result.splits["train_seasons"] == [2022, 2023]
-    assert result.splits["holdout_seasons"] == []
-    assert result.params == DEFAULT_XGB_PARAMS
 
 
 def test_train_margin_total_model_uncertainty_elo_falls_back_to_none(monkeypatch) -> None:
@@ -787,112 +656,3 @@ def test_train_blended_margin_total_model_rejects_invalid_inputs(
             market_anchor=market_anchor,
             market_prob_config=MarketProbConfig(blend_weight=0.0, clamp_delta=0.0),
         )
-
-
-def test_train_blended_margin_total_model_with_report_uses_explicit_market_model(
-    monkeypatch,
-) -> None:
-    """Uses the model-backed market branch when a separate market model is present."""
-    df = pd.DataFrame(
-        {
-            "season": [2020, 2020, 2021, 2021],
-            "week": [1, 2, 1, 2],
-            "away_score": [10, 12, 14, 9],
-            "home_score": [20, 18, 21, 16],
-            "feat1": [0.1, 0.2, 0.4, 0.3],
-        }
-    )
-
-    team_model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-        margin_quantile_models=None,
-        total_quantile_models=None,
-        quantiles=None,
-        market_anchor=False,
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-    market_model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-        margin_quantile_models=None,
-        total_quantile_models=None,
-        quantiles=None,
-        market_anchor=False,
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-    model = BlendedMarginTotalModel(
-        team_model=team_model,
-        market_model=market_model,
-        blend_layer=BlendLayer(
-            margin_model=cast(Ridge, _BlendModel(np.array([0.6, 0.4]))),
-            total_model=cast(Ridge, _BlendModel(np.array([0.5, 0.5]))),
-        ),
-        calibrator=None,
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-        optuna_summary=None,
-    )
-
-    monkeypatch.setattr(
-        ml_model_training,
-        "train_blended_margin_total_model",
-        lambda **_kwargs: model,
-    )
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(
-        ml_model_training.feature_importance,
-        "build_feature_importance_report",
-        lambda _model: {"feature_names": []},
-    )
-
-    def fake_predict_margin_total_from_model(current_model: object, _df: pd.DataFrame):
-        """Return distinct team vs market predictions to exercise both branches."""
-        if current_model is team_model:
-            return np.array([3.0, -2.0]), np.array([40.0, 35.0])
-        return np.array([1.0, -1.0]), np.array([42.0, 33.0])
-
-    monkeypatch.setattr(
-        ml_model_training,
-        "_predict_margin_total_from_model",
-        fake_predict_margin_total_from_model,
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "_predict_home_win_prob",
-        lambda _margin, _calibrator: np.array([0.6, 0.4]),
-    )
-
-    result = ml_model_training.train_blended_margin_total_model_with_report(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=1,
-        calibration_seasons=0,
-        calibration_weeks=0,
-        max_cardinality_ratio=0.5,
-        win_prob_calibration="none",
-        optuna_config=None,
-        market_transform=False,
-        market_anchor=False,
-        market_prob_config=None,
-    )
-
-    assert result.metrics_report["metrics"]["holdout"] is not None
-    assert result.splits["holdout_seasons"] == [2021]
-    assert result.params == DEFAULT_XGB_PARAMS

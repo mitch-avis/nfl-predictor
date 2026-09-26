@@ -28,36 +28,13 @@ jobs:
           version: "latest"
           enable-cache: true
 
-      - name: Verify lockfile
-        run: uv lock --check
-
       - name: Create virtual environment
         run: uv venv .venv
 
       - name: Sync dependencies
         run: |
           source .venv/bin/activate
-          uv sync --active
-
-      - name: Verify synced environment
-        run: |
-          source .venv/bin/activate
-          uv sync --check --active
-
-      - name: Ruff format check
-        run: .venv/bin/ruff format --check .
-
-      - name: Ruff lint
-        run: .venv/bin/ruff check .
-
-      - name: Ty
-        run: .venv/bin/ty check .
-
-      - name: Pyright
-        run: .venv/bin/pyright .
-
-      - name: Pytest
-        run: .venv/bin/python -m pytest
+          uv sync --active --locked
 
       - name: Set up Node.js for markdownlint
         uses: actions/setup-node@v6
@@ -67,18 +44,15 @@ jobs:
       - name: Install markdownlint
         run: npm install --global markdownlint-cli
 
-      - name: Markdownlint
-        run: markdownlint .
-
       - name: Editable install smoke check
         run: uv pip install --python .venv/bin/python -e . --no-deps
 
-      - name: CLI help smoke checks
+      # The one gate: lock and sync checks, ruff format and lint, ty, pyright, pytest,
+      # markdownlint and every front-door command's --help, exactly as it runs locally.
+      - name: Gate
         run: |
-          .venv/bin/python -m nfl_predictor.ml_model --help >/dev/null
-          .venv/bin/python scripts/weekly_run.py --help >/dev/null
-          .venv/bin/python scripts/power_rankings.py --help >/dev/null
-          .venv/bin/python -m nfl_predictor.api --help >/dev/null
+          source .venv/bin/activate
+          scripts/gate.sh
 
   web:
     runs-on: ubuntu-latest

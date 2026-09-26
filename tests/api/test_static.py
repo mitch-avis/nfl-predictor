@@ -38,3 +38,14 @@ def test_frontend_can_be_disabled(settings: Settings) -> None:
     """``serve_frontend=False`` leaves non-API paths unrouted."""
     with TestClient(create_app(settings, serve_frontend=False)) as client:
         assert client.get("/anything").status_code == 404
+
+
+def test_unknown_api_paths_get_a_json_404_not_the_frontend(settings: Settings) -> None:
+    """The fallback serves only paths outside ``/api``; an unknown API route is a JSON 404."""
+    with TestClient(create_app(settings)) as client:
+        for path in ("/api/no-such-route", "/api/runs/x/no-such-child", "/api", "/api/"):
+            response = client.get(path)
+            assert response.status_code == 404, path
+            assert response.headers["content-type"].startswith("application/json"), path
+            assert response.json()["error"]["code"] == "not_found", path
+        assert client.get("/apiary").text == "<html>spa</html>"

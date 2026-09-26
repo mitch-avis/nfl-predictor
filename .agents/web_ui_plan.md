@@ -162,7 +162,7 @@ mutating routes require header `X-Requested-With: nflp`.
 | `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 gain importance from `base_features.combined.gain`, calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
 | `GET /data/status`, `GET /data/unattached` | current season/week via `data_collection._determine_nfl_week` (imported, not edited), file inventory with sizes/mtimes/row counts (`pl.scan_csv().select(pl.len())`), lazy cached sha256 via `fingerprints.dataset_fingerprint`, cache parquet coverage, latest leakage audit, last ETL job |
 | `GET /jobs/catalog`, `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/logs?after=`, `GET /jobs/{id}/stream` (SSE), `POST /jobs/{id}/cancel` | 409 when an exclusive group is busy; 422 on bad params |
-| `GET /{path}` fallback | serves `web/dist/index.html` |
+| `GET /{path}` fallback | serves `web/dist/index.html` for paths outside `/api`; an unmatched `/api/...` path gets the JSON 404 (`not_found`) |
 
 ### Job runner
 
@@ -170,15 +170,17 @@ mutating routes require header `X-Requested-With: nflp`.
   `Popen(cwd=ROOT, stdout=PIPE, stderr=STDOUT, start_new_session=True)`. Reader thread strips
   ANSI (`\x1b\[[0-9;]*m`), parses `[ts][LEVEL][file:func:line] msg`, batches rows into `job_logs`,
   and updates `progress` from the WF fold regex.
-- One worker for `exclusive_group="walk_forward"` (weekly_run, walk_forward_backtest,
-  golden_command); a 2-slot pool for everything else. On startup, `running` rows become
+- One worker for `exclusive_group="walk_forward"` (weekly_run, train, walk_forward_backtest);
+  a 2-slot pool for everything else. On startup, `running` rows become
   `failed (server restarted)`. Cancel sends SIGTERM to the group, SIGKILL after 10s.
 - SSE polls the store every 300ms for new `seq`, replays from `after`, ends on terminal status.
-- Templates: `etl_full`, `lines_refresh` (chains `predict`), `weekly_run` (writes params JSON to
-  `data/web/job_configs/{job_id}.json`, runs `scripts/weekly_run.py --config`, reusing the
-  script's own key validation), `train` (`python -m nfl_predictor.ml_model`), `predict`,
-  `power_rankings`, `betting_xlsx` (`scripts/betting_report_excel.py`), `leakage_audit`,
-  `validate_offline`, `validate_live`, `walk_forward_backtest`, `shap_analysis`.
+- Templates (since `0.27.0` every one runs `<python> -m nfl_predictor <command>`): `etl_full`
+  (`data`), `lines_refresh` (`lines`, chains `predict`), `weekly_run` (`weekly`; writes params
+  JSON to `data/web/job_configs/{job_id}.json` and runs `weekly --config`, reusing the command's
+  own key validation), `train` (`train`), `predict` (`predict`), `predict_week` (`build-week`,
+  chains `predict`), `power_rankings` (`rankings`), `leakage_audit` (`leakage-audit`),
+  `validate_offline` (`validate`), `validate_live` (`validate --live`), `walk_forward_backtest`
+  (`backtest`), `shap_analysis` (`explain`). `betting_xlsx` was retired in `0.19.0`.
 
 ### `nfl_predictor/lines_refresh.py`
 
@@ -354,6 +356,39 @@ touches on the web side:
   worktree record and where the live instance runs from; if it runs from a checkout of `main`, the
   job templates change as soon as a Milestone 60 chunk merges.
 
+Landed so far:
+
+- **`0.19.0` (2026-09-24): the Excel betting workbook is retired end to end.** Removed: the
+  `betting_xlsx` job template, `GET /betting/xlsx`, the `betting_xlsx` run-file download and
+  `RunFiles.betting_xlsx`, `BettingOut.xlsx_available`, and the Betting page's Workbook /
+  Generate workbook button. The Betting page's table is unchanged, since it never read the
+  workbook. The Data Status page still lists loose `reports/*.xlsx` files already on disk. Seven
+  templates now launch scripts by path. Found on the way (task 58.5, fixed in 60.7): an unknown
+  `/api/...` GET returns `index.html` with status 200 instead of a JSON 404, because the
+  history-API fallback `GET /{path:path}` in `nfl_predictor/api/routers/static.py` does not
+  exclude the `api/` prefix, contrary to its docstring.
+- **`0.26.1` (2026-09-25): the API catch-all is fixed (task 58.5).** The fallback raises the
+  API's `NotFoundError` for `/api` and every path under it, so an unmatched API route answers
+  with the JSON error body `{"error": {"code": "not_found", ...}}` and status 404 instead of
+  `index.html`. Paths outside `/api` (including look-alikes such as `/apiary`) still get the
+  frontend. `tests/api/test_static.py` pins both; the retired workbook route is now also checked
+  by status code.
+- **`0.27.0` (2026-09-25): every job template launches the front door, and the `scripts/` shims
+  are gone.** Each template builds `<python> -m nfl_predictor <command>` with the canonical
+  option names (`backtest --wf-eval-last-n-seasons`, `explain --model-in`); the table in "Job
+  runner" above maps templates to commands. The progress lines are unchanged (the same code
+  prints `Walk-forward fold N/M done` and `WF candidate N/M`), and the `weekly_run` template's
+  config keys are the weekly command's own. The model-kind vocabulary is one list
+  (`nfl_predictor.cli.options.MODEL_KINDS`, `margin_total` and `blend`) shared by the train
+  form, `train` and `rankings`, and both commands accept `blended_margin_total` as an old name
+  for `blend`, so the three launches that failed in argparse (train with
+  `blended_margin_total`, predict for a run recorded under that name, power rankings for a run
+  recorded as `blend`) now parse. A new test builds every template, with every value of every
+  choice parameter, and parses the command with the target command's own parser. Still open:
+  the power rankings cannot rank with a blend model even now (its feature spec lives on the
+  team model; question for the user in `TODO.md`, task 60.7). The walk-forward commands launched
+  from the web now also get the front door's passive OpenMP wait policy.
+
 ## Status
 
 - Phase 0 (2026-09-10): done. `nfl_predictor/api/` serves auth, users, runs, and the built SPA;
@@ -424,3 +459,5 @@ touches on the web side:
 - Phase 4: not started. Scheduled 2026-09-24 as step 6 of the roadmap in `TODO.md`
   ("Roadmap Status"): phases 4-6 resume after Milestone 60 has moved the scripts the job runner
   launches (see "Milestone 60 impact" above), so the web work starts on the settled entrypoints.
+- Fixed in `0.26.1` (task 58.5): an unknown `/api/...` GET now returns the JSON 404 instead of
+  the frontend's `index.html` (see "Milestone 60 impact").

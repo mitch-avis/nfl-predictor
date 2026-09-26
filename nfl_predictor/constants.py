@@ -1045,7 +1045,7 @@ QB_RECENT_GAMES = 8
 
 # Base name under DATA_PATH of the quarterback identity file, a read-only copy of
 # `../nfeloqb/Other Data/meta_data.csv` (`name_id` -> `gsis_id`, the play-by-play passer id).
-QB_META_DATA_NAME = "qb_meta_data"
+QB_META_DATA_NAME = "meta_data"
 
 # Quarterback names used by the Elo source that the identity file spells differently.
 QB_NAME_ALIASES = {

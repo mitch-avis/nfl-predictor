@@ -73,6 +73,23 @@ def probability_metrics(actual_home_win: np.ndarray, home_win_prob: np.ndarray) 
     }
 
 
+def probability_losses_per_row(
+    actual_home_win: np.ndarray, home_win_prob: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return each row's squared error and log loss, the terms `probability_metrics` averages.
+
+    Squared error is ``(y - p)**2`` with ``p`` clipped to ``[0, 1]``; log loss is
+    ``-(y * log(p) + (1 - y) * log(1 - p))`` with ``p`` also clipped to
+    ``[PROB_EPSILON, 1 - PROB_EPSILON]``, which is what scikit-learn computes for these inputs.
+    """
+    outcome = np.asarray(actual_home_win, dtype=float)
+    probs = clip_probabilities(np.asarray(home_win_prob, dtype=float))
+    probs_eps = clip_probabilities(probs, eps=PROB_EPSILON)
+    squared_error = (outcome - probs) ** 2
+    log_loss_terms = -(outcome * np.log(probs_eps) + (1.0 - outcome) * np.log(1.0 - probs_eps))
+    return squared_error, log_loss_terms
+
+
 def probability_pick_accuracy(actual_margin: np.ndarray, home_win_prob: np.ndarray) -> float:
     """Compute pick accuracy, treating tied games as incorrect for either side."""
     margins = np.asarray(actual_margin, dtype=float)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import argparse
+import dataclasses
 import json
 from pathlib import Path
 
@@ -13,6 +15,7 @@ from nfl_predictor.api.jobs.catalog import JobContext
 from nfl_predictor.api.runs.indexer import RunSummary, summarize_run
 from nfl_predictor.api.settings import Settings
 from tests.api import factories
+from tests.cli_parsing import parse_command
 
 
 @pytest.fixture
@@ -118,7 +121,8 @@ def test_etl_template_passes_only_the_options_given(settings: Settings) -> None:
     assert build("etl_full", settings, {}) == [
         str(settings.python_path),
         "-m",
-        "nfl_predictor.data_collection",
+        "nfl_predictor",
+        "data",
         "--data-dir",
         str(settings.data_path),
         "--no-refresh-nflreadpy",
@@ -128,9 +132,9 @@ def test_etl_template_passes_only_the_options_given(settings: Settings) -> None:
 
 
 def test_lines_refresh_targets_the_configured_data_directory(settings: Settings) -> None:
-    """The refresh runs the module against the configured data tree."""
+    """The refresh runs the lines command against the configured data tree."""
     argv = build("lines_refresh", settings, {"season": 2026, "week": 2})
-    assert argv[1:3] == ["-m", "nfl_predictor.lines_refresh"]
+    assert argv[1:4] == ["-m", "nfl_predictor", "lines"]
     assert argv[-2:] == ["--data-dir", str(settings.data_path)]
 
 
@@ -150,12 +154,11 @@ def test_templates_without_a_chain_carry_no_chained_params() -> None:
 
 
 def test_weekly_run_writes_a_config_file(settings: Settings) -> None:
-    """The weekly run is launched from a JSON config so the script validates its own keys."""
+    """The weekly run is launched from a JSON config so the command validates its own keys."""
     argv = build("weekly_run", settings, {"week": 2, "run_id": "weekly_2026_week_02"})
 
-    assert argv[1].endswith("scripts/weekly_run.py")
-    assert argv[2] == "--config"
-    config = json.loads(Path(argv[3]).read_text(encoding="utf-8"))
+    assert argv[1:5] == ["-m", "nfl_predictor", "weekly", "--config"]
+    config = json.loads(Path(argv[5]).read_text(encoding="utf-8"))
     assert config["run_id"] == "weekly_2026_week_02"
     assert config["predict_path"].endswith("week_02_games_to_predict.csv")
     assert config["output_dir"] == str(settings.models_path)
@@ -171,7 +174,7 @@ def test_weekly_run_forwards_data_collection_arguments(settings: Settings) -> No
         {"week": 2, "data_collection_args": "--min-season 2010"},
     )
 
-    config = json.loads(Path(argv[3]).read_text(encoding="utf-8"))
+    config = json.loads(Path(argv[5]).read_text(encoding="utf-8"))
     assert config["data_collection_args"] == "--min-season 2010"
 
 
@@ -189,7 +192,7 @@ def test_predict_uses_the_active_run_model(settings: Settings, run: RunSummary) 
 def test_templates_that_need_a_run_say_so_when_none_is_pinned(settings: Settings) -> None:
     """Building without an active run is a conflict the API can explain."""
     defaults: dict[str, object] = {"season": 2026, "week": 2, "through_week": 1}
-    for template_id in ("predict", "power_rankings", "betting_xlsx", "shap_analysis"):
+    for template_id in ("predict", "power_rankings", "shap_analysis"):
         template = catalog.get_template(template_id)
         params = {
             spec.name: defaults[spec.name] for spec in template.params if spec.name in defaults
@@ -198,22 +201,28 @@ def test_templates_that_need_a_run_say_so_when_none_is_pinned(settings: Settings
             build(template_id, settings, params)
 
 
-def test_betting_workbook_needs_predictions(settings: Settings) -> None:
-    """A run without a predictions CSV cannot produce a workbook."""
-    run_dir = factories.make_run_dir(settings.models_path, "train_only", kind="training")
-    summary = summarize_run(run_dir)
-    assert summary is not None
-    with pytest.raises(ConflictError, match="predictions"):
-        build("betting_xlsx", settings, {}, summary)
+def test_the_betting_workbook_job_is_retired() -> None:
+    """The Excel betting workbook is no longer built, so its job template is gone."""
+    with pytest.raises(UnprocessableEntityError, match="betting_xlsx"):
+        catalog.get_template("betting_xlsx")
 
 
 def test_read_only_templates_take_no_parameters(settings: Settings) -> None:
-    """The validation scripts take no parameters but read the configured data tree."""
-    for template_id in ("validate_offline", "validate_live"):
-        argv = build(template_id, settings, {})
-        assert len(argv) == 4
-        assert argv[1].endswith(f"{template_id}.py")
-        assert argv[2:] == ["--data-dir", str(settings.data_path)]
+    """The validation jobs take no parameters but read the configured data tree."""
+    data_dir = ["--data-dir", str(settings.data_path)]
+    assert build("validate_offline", settings, {})[1:] == [
+        "-m",
+        "nfl_predictor",
+        "validate",
+        *data_dir,
+    ]
+    assert build("validate_live", settings, {})[1:] == [
+        "-m",
+        "nfl_predictor",
+        "validate",
+        "--live",
+        *data_dir,
+    ]
 
 
 def test_leakage_audit_defaults_its_report_path(settings: Settings) -> None:
@@ -240,7 +249,7 @@ def test_predict_week_builds_the_missing_week_then_predicts(settings: Settings) 
     """The future-week template extracts the week and chains the prediction of the same week."""
     argv = build("predict_week", settings, {"season": 2026, "week": 5})
 
-    assert argv[1:3] == ["-m", "nfl_predictor.week_builder"]
+    assert argv[1:4] == ["-m", "nfl_predictor", "build-week"]
     assert argv[argv.index("--data-dir") + 1] == str(settings.data_path)
     assert "--overwrite" not in argv
     template = catalog.get_template("predict_week")
@@ -255,3 +264,73 @@ def test_predict_week_can_rebuild_an_existing_file(settings: Settings) -> None:
     """The overwrite switch is passed through as a flag."""
     argv = build("predict_week", settings, {"season": 2026, "week": 5, "overwrite": True})
     assert argv[-1] == "--overwrite"
+
+
+SAMPLE_PARAMS: dict[str, object] = {"season": 2026, "week": 2, "through_week": 1}
+
+
+def parse_built(
+    argv: list[str], settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> tuple[str, argparse.Namespace]:
+    """Parse a built command line with the real parser of the command it launches.
+
+    Every job runs ``<python> -m nfl_predictor <command> ...``; anything else fails here. The
+    weekly job's config file is read and its keys validated, as a real run does.
+    """
+    assert argv[:3] == [str(settings.python_path), "-m", "nfl_predictor"], argv
+    return argv[3], parse_command(argv[3], argv[4:], monkeypatch)
+
+
+def _template_cases() -> list[tuple[str, dict[str, object]]]:
+    """Return one submission per template, and one per value of every choice parameter."""
+    cases: list[tuple[str, dict[str, object]]] = []
+    for template in catalog.TEMPLATES:
+        base = {spec.name: SAMPLE_PARAMS[spec.name] for spec in template.params if spec.required}
+        cases.append((template.id, base))
+        for spec in template.params:
+            cases.extend((template.id, {**base, spec.name: choice}) for choice in spec.choices)
+    return cases
+
+
+@pytest.mark.parametrize(("template_id", "params"), _template_cases())
+def test_every_template_builds_a_command_its_target_parses(
+    template_id: str,
+    params: dict[str, object],
+    settings: Settings,
+    run: RunSummary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each job launches the front door, and the command's own parser accepts every option."""
+    argv = build(template_id, settings, params, run)
+    parse_built(argv, settings, monkeypatch)
+
+
+def test_the_model_kinds_are_the_names_training_records() -> None:
+    """The train form offers ``margin_total`` and ``blend``, the names run metadata carries."""
+    assert catalog.MODEL_KINDS == ("margin_total", "blend")
+
+
+@pytest.mark.parametrize(
+    ("template_id", "recorded", "expected"),
+    [
+        ("predict", "blend", "blend"),
+        ("predict", "blended_margin_total", "blend"),
+        ("power_rankings", "blend", "blend"),
+        ("power_rankings", "blended_margin_total", "blend"),
+        ("power_rankings", "margin_total", "margin_total"),
+    ],
+)
+def test_run_based_jobs_accept_either_name_of_the_blend(
+    template_id: str,
+    recorded: str,
+    expected: str,
+    settings: Settings,
+    run: RunSummary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run recorded under either blend name launches, with the canonical kind parsed."""
+    pinned = dataclasses.replace(run, model_kind=recorded)
+    template = catalog.get_template(template_id)
+    params = {spec.name: SAMPLE_PARAMS[spec.name] for spec in template.params if spec.required}
+    _name, args = parse_built(build(template_id, settings, params, pinned), settings, monkeypatch)
+    assert args.model_kind == expected

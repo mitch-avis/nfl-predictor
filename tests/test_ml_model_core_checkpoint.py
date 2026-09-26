@@ -67,17 +67,18 @@ def test_load_model_checkpoint_type_mismatch_raises(tmp_path: Path) -> None:
     """Raises when a checkpoint type doesn't match the requested model_kind."""
     model_path = tmp_path / "model.joblib"
 
-    score_model = core.ScoreModel(
+    margin_total_model = core.MarginTotalModel(
         preprocessor=cast(ColumnTransformer, None),
         feature_spec=_dummy_feature_spec(),
-        away_model=cast(xgb.XGBRegressor, None),
-        home_model=cast(xgb.XGBRegressor, None),
+        margin_model=cast(xgb.XGBRegressor, None),
+        total_model=cast(xgb.XGBRegressor, None),
         target_columns=("away_score", "home_score"),
+        calibrator=None,
     )
-    joblib.dump(score_model, model_path)
+    joblib.dump(margin_total_model, model_path)
 
     with pytest.raises(ValueError, match=r"type mismatch"):
-        core.load_model_checkpoint(model_path, "margin_total")
+        core.load_model_checkpoint(model_path, "blend")
 
 
 def test_load_model_checkpoint_unknown_kind_raises(tmp_path: Path) -> None:

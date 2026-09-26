@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The one validation gate. Runs every check that .github/workflows/validation.yml runs, in the
-# same order, using the repo's own .venv, and reports every step before exiting non-zero, so a
-# single run shows everything that is wrong rather than the first failure.
+# The one validation gate. CI (.github/workflows/validation.yml) runs this script after setting
+# up the environment, so a local run and CI run the same checks. It uses the repo's own .venv and
+# reports every step before exiting non-zero, so a single run shows everything that is wrong
+# rather than the first failure. The frontend steps (--web) run in CI as their own job.
 #
 # Usage:
 #   scripts/gate.sh          Python gate: lock, sync, ruff format, ruff, ty, pyright, pytest,
@@ -67,7 +68,7 @@ markdownlint_step() {
         markdownlint .
     elif command -v markdownlint-cli2 >/dev/null 2>&1; then
         markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#.agents/skills" \
-            "#web/node_modules" "#web/dist"
+            "#web/node_modules" "#web/dist" "#.agents/*transcript*.md"
     else
         echo "neither markdownlint nor markdownlint-cli2 is installed" >&2
         return 1
@@ -75,10 +76,18 @@ markdownlint_step() {
 }
 
 cli_smoke_step() {
-    .venv/bin/python -m nfl_predictor.ml_model --help >/dev/null &&
-        .venv/bin/python scripts/weekly_run.py --help >/dev/null &&
-        .venv/bin/python scripts/power_rankings.py --help >/dev/null &&
-        .venv/bin/python -m nfl_predictor.api --help >/dev/null
+    # Every front-door command must print its help. The list comes from the front door itself,
+    # so a new command is checked without editing this script.
+    local commands command
+    commands="$(.venv/bin/python -c 'from nfl_predictor.cli.main import COMMANDS
+print("\n".join(command.name for command in COMMANDS))')" || return 1
+    .venv/bin/nfl-predictor --help >/dev/null || return 1
+    while read -r command; do
+        .venv/bin/nfl-predictor "$command" --help >/dev/null || {
+            echo "nfl-predictor $command --help failed" >&2
+            return 1
+        }
+    done <<<"$commands"
 }
 
 web_step() {
@@ -95,7 +104,14 @@ web_step() {
 }
 
 run_step "uv lock --check" uv lock --check
-run_step "uv sync --check --active" uv sync --check --active
+# On a machine with a CUDA toolkit, LightGBM is a local CUDA build of the locked version (see
+# nfl_predictor/lightgbm_cuda.py); the sync check is told the same build flags, so it stays
+# strict. The helper prints nothing on CPU-only machines and in CI.
+LIGHTGBM_CUDA_ARGS=()
+if [[ -x .venv/bin/nfl-lightgbm-cuda-install ]]; then
+    mapfile -t LIGHTGBM_CUDA_ARGS < <(.venv/bin/nfl-lightgbm-cuda-install uv-args 2>/dev/null)
+fi
+run_step "uv sync --check --active" uv sync --check --active "${LIGHTGBM_CUDA_ARGS[@]}"
 run_step "ruff format --check" .venv/bin/ruff format --check .
 run_step "ruff check" .venv/bin/ruff check .
 run_step "ty check" .venv/bin/ty check .

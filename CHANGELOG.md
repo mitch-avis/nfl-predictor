@@ -1,5 +1,428 @@
 # Changelog
 
+## [0.28.1] - 2026-09-25
+
+### Changed
+
+- Milestone 60 (CLI and entrypoint consolidation) is closed and archived, with its acceptance
+  list checked at the close. One item is narrowed: the live launch of each web job template is
+  still to do (the user asked to test the weekly-run and walk-forward jobs later), and it moves,
+  with the power rankings for a `blend` run, to a follow-up group in `.agents/TODO.md`.
+- `README.md` says what drives the default power rankings: per-snap EPA and special teams, not
+  wins or points, blended early in a season with last season's solve; the trained model supplies
+  only the projected standings.
+- `web/README.md`, `README.md` and `AGENTS.md` say when to use `nfl-predictor web`, `--reload`
+  and the Vite dev server. A `--reload` restart marks running jobs failed, so jobs are launched
+  from a server started without it. The guardrail on the running web API names its current port
+  (8000).
+
+### Added
+
+- `.agents/m60/verify_removals.py`: every one of the 38 options that no longer exist on any
+  parser since the CLI surface snapshot was created has a note in this changelog, either by name
+  or through its script's recorded retirement.
+- `.agents/findings_2026_09_25/`: two diagnostics behind new follow-ups. The Model page's feature
+  importance sums XGBoost's average gain per split over one-hot columns, which puts the
+  next-opponent and stadium-surface columns first while total gain ranks them near the bottom;
+  and the early-season strength snapshot is dominated by last season's solve.
+
+### Removed
+
+- Three spent agent documents, all in git history: `.agents/m60_cli_flag_audit.md` (superseded
+  by the generated inventory), `.agents/independent_review_55_8_prompt.md` and
+  `.agents/web_ui_session_prompt.md`.
+
+## [0.28.0] - 2026-09-25
+
+### Added
+
+- `nfl-predictor compare`: a paired comparison of walk-forward runs, rescored from their fold
+  checkpoints (never from `metrics_report.json`). For week 1, week 2, weeks 3-18 and all weeks it
+  reports each run's deterministic Brier, log loss, pick accuracy, margin and total MAE,
+  confidence-pool points and market Brier, the deterministic-minus-market Brier interval, and the
+  candidate-minus-reference difference in each column with a 95% bootstrap interval (over games;
+  over weeks for pool points). Repeating `--candidate` and `--reference` once per seed averages
+  the per-game differences over the seed pairs. A run directory adds provenance (folds, dataset
+  hash, git commit, `best_iteration`, early stopping) and the settings that differ between the
+  runs. `--out-json` and `--out-md` save the report. It reproduces all 1,928 numbers of the task
+  55.8 independent rescore exactly (`.agents/m60/verify_compare.py`), and replaces
+  `objective_compare_models` (retired in `0.19.0`) and the per-run `compare_to_benchmark.py`
+  copies under `models/`. Tooling only; no production output changes.
+
+## [0.27.1] - 2026-09-25
+
+### Changed
+
+- CI's Python job sets up the environment and then runs `scripts/gate.sh` instead of repeating
+  its steps, so CI and a local run check the same things. It now syncs with `--locked`, so an
+  out-of-date `uv.lock` fails instead of being rewritten before the gate's lock check.
+- `README.md` and `AGENTS.md` show every command as `nfl-predictor <command>` with the canonical
+  option names, and the README gains "Reproducing an old run" (a worktree at the run's recorded
+  commit, then its launcher as written).
+
+### Added
+
+- A test that parses every `nfl-predictor` command shown in `README.md` with that command's own
+  parser. It found that the README's leakage-audit example had always lacked the two required
+  options; the example is fixed.
+- The web job test now reads the weekly job's config file and validates its keys, as a real
+  weekly run does, instead of parsing only `--config`.
+
+## [0.27.0] - 2026-09-25
+
+### Changed
+
+- Every web job launches `python -m nfl_predictor <command>` (the front door) with the
+  canonical option names, instead of a `scripts/` path or a module: `data`, `lines`, `weekly`,
+  `train`, `predict`, `build-week`, `rankings`, `leakage-audit`, `validate` (with `--live` for
+  the live check), `backtest` and `explain`. Progress parsing and the weekly job's saved config
+  keys are unchanged. Walk-forward jobs now also get the front door's passive OpenMP wait
+  policy.
+- One model-kind vocabulary: `margin_total` and `blend`, the names training records in a run's
+  metadata. `train`, `predict` and `rankings` take `--model-kind` from the same list and accept
+  `blended_margin_total` as an old name for `blend`; the web train form offers `blend`.
+- The gate's and CI's CLI smoke checks run `nfl-predictor --help` and every command's `--help`,
+  taking the command list from the front door.
+
+### Removed
+
+- The `scripts/` shims: `weekly_run.py`, `walk_forward_backtest.py`, `wf_compare.py`,
+  `power_rankings.py`, `leakage_audit.py`, `shap_analysis.py`, `validate_offline.py` and
+  `validate_live.py`. Use `nfl-predictor weekly`, `backtest`, `sweep`, `rankings`,
+  `leakage-audit`, `explain`, `validate` and `validate --live`. Only `scripts/gate.sh` remains.
+  A launcher that names an old path reproduces from its run's recorded commit.
+
+### Fixed
+
+- Three web launches that failed in argparse on the model kind now run: training a
+  `blended_margin_total` model, predicting with a run recorded under that name, and ranking with
+  a run recorded as `blend`. Ranking with a blend model still fails later, because the rankings
+  read the model's feature spec from the model itself and a blend keeps it on its team model;
+  that is an open question, not part of this fix.
+
+## [0.26.1] - 2026-09-25
+
+### Fixed
+
+- The web API answers an unknown `/api/...` GET with its JSON 404 (`{"error": {"code":
+  "not_found", ...}}`) instead of the frontend's `index.html` with status 200. The frontend's
+  history-API fallback now serves only paths outside `/api`, as its docstring always said, so a
+  mistyped or removed API route shows up as "not found" rather than as a JSON parse failure in
+  the browser.
+
+## [0.26.0] - 2026-09-25
+
+### Changed
+
+- `train --model-kind blend --tune` runs one Optuna study for the team model with the whole
+  `--tune-timeout` and the study name as given. Until now the default `--tune-scope both`
+  gave the team study half the timeout, kept the other half for a market study that never ran,
+  and added `_team` to a stored study's name. No other command tunes a blend; the weekly run
+  trains a margin/total model and never read the scope.
+- A blended model's feature-importance report lists only its `team` component; the `market`
+  component it carried was always null.
+- Every walk-forward checkpoint fingerprint changes (the edit is under `nfl_predictor/ml/`).
+  No walk-forward has run since `0.20.0`, so the next reference run retrains from scratch
+  either way.
+
+### Removed
+
+- The market model: the `BlendedMarginTotalModel.market_model` field and every branch that
+  read it (checkpoint loading and early-stopping info, the market-probability config,
+  prediction, the training report, feature importance and the power rankings), and the
+  market-only feature selection that only it used (`market_only` in the feature spec and the
+  Optuna search). The blend trainer never stored one, so every branch was dead. The blended
+  model itself stays: the team model and the market line, combined by the blend layer. No saved
+  model under `models/` is a blend (all twelve are margin/total models), so no checkpoint needs
+  converting.
+- `train --tune-scope` (`team`, `market`, `both`). Its `market` choice tuned nothing and `both`
+  only halved the team study's budget (above).
+
+## [0.25.0] - 2026-09-25
+
+### Changed
+
+- `weekly`: `--xgb-n-jobs` (config key `xgb_n_jobs`) alone sets XGBoost's CPU threads, for the
+  stage-1 walk-forward and the final fit alike, and defaults to every CPU core. Until now stage 1
+  ran on one thread unless `--xgb-n-jobs` was given, while the final fit used every core. Results
+  do not depend on the thread count: the weekly characterization fixture run at 1 thread and at
+  24 gave identical outputs in all eight files it pins, apart from the thread count written into
+  each stage-1 candidate key and that key's hash. The fixture keeps pinning one thread, so its
+  snapshots are unchanged. Stage 1 now runs faster on the CPU.
+
+### Removed
+
+- `weekly --wf-n-jobs` and its config key `wf_n_jobs`. A config file that still sets
+  `wf_n_jobs` fails with a message naming `xgb_n_jobs` instead of being read silently.
+
+## [0.24.0] - 2026-09-25
+
+### Added
+
+- `nfl-predictor checkpoints`: a read-only listing of the walk-forward checkpoint directories
+  under `models/wf_checkpoints/`, with each one's fold count, size, newest file and whatever
+  names it (a run's report, a review, a launcher or log under `models/`, or `AGENTS.md` and
+  `.agents/`). `--unreferenced-only` lists the ones nothing names. It never deletes anything.
+  Today all 38 directories (285 MB) are referenced.
+
+### Changed
+
+- `weekly`, `backtest` and `sweep` (and their `scripts/` shims) set OpenMP's passive wait policy
+  (`OMP_WAIT_POLICY=PASSIVE`) before XGBoost loads, unless the environment already sets one.
+  Load that arrives mid-run made the default policy's spinning threads stall (a week measured at
+  12-16 minutes instead of about 20 seconds). On a machine known to stay idle,
+  `OMP_WAIT_POLICY=` (empty) keeps the library default. Scheduling only; results are unchanged.
+- The `sweep` console summary shows each probability view with its own pick accuracy: the
+  configured calibrator's `pick_accuracy` and the market's `market_pick_accuracy` next to their
+  Brier and log loss, not only the deterministic one. The CSV it writes is unchanged.
+
+## [0.23.0] - 2026-09-24
+
+### Changed
+
+- The weekly run reads `config/weekly_run.yaml` when no `--config` is given (an explicit
+  `--config` still replaces it, and command-line options override either). Until now no weekly
+  run read the file, so every run used the code defaults.
+- `config/weekly_run.yaml` now holds exactly those code defaults, so what a weekly run produces
+  does not change: `wf_eval_last_n_seasons: 3`, `wf_calibration_weeks: 4`, raw moneylines
+  blended in probability space, `score_rounding: none`, the CPU unless `--xgb-device cuda` is
+  given, and so on. Keys whose default is automatic are commented out. Two exceptions, both
+  inert: `postseason_weight: 1.3` stays for postseason training, and `wf_win_prob_uncertainty`
+  is written as `"off"` (a bare `off` is the YAML boolean `false`). A test pins that the loaded
+  settings equal the code defaults apart from the config path and that weight. The values are
+  not tuned; they record what production runs.
+- The weekly-run characterization snapshot was rewritten on purpose: it had pinned the old YAML
+  values (ten seasons, eight calibration weeks, no-vig logit blending, NFL score rounding), which
+  production never ran. It now pins the production configuration; a fixture run with the pure
+  code defaults reproduces it exactly.
+
+## [0.22.0] - 2026-09-24
+
+### Changed
+
+- One naming rule for options: walk-forward settings carry `--wf-`, tuning settings `--tune-`,
+  the XGBoost runtime `--xgb-`. Every renamed option keeps its old spelling as a second name on
+  the same option, so existing commands and launchers still parse:
+  - `backtest`: `--wf-eval-last-n-seasons` (`--eval-last-n-seasons`), `--win-prob-calibration`
+    (`--calibration`), `--wf-exclude-incomplete-seasons` (`--exclude-incomplete-seasons`),
+    `--wf-n-estimators` (`--n-estimators`); `--wf-calibration-weeks` also takes
+    `--calibration-weeks`;
+  - `sweep`: the same window options, `--wf-market-mode` (`--market-mode`), `--wf-n-estimators`,
+    `--wf-max-depth`, `--wf-learning-rate` (the bare forms) and `--xgb-n-jobs` (`--n-jobs`);
+  - `train`/`predict`: `--tune-objective` (`--tune-metric`), `--tune-cv-splits` (`--cv-splits`),
+    `--tune-early-stopping-rounds` (`--early-stopping-rounds`);
+  - `weekly`: `--tune-trials` (`--tune-n-trials`) and `--tune-early-stopping-rounds`
+    (`--train-early-stopping-rounds`). Their config keys are now `tune_trials` and
+    `tune_early_stopping_rounds`; a config file with the old keys still loads (setting both
+    names of one key is an error), and `config/weekly_run.yaml` uses the new key;
+  - `explain`: `--model-in` (`--model-path`).
+- `--market-prob-weight` and `--market-prob-blend` are one option (`--market-prob-weight`, default
+  `0`) in `backtest` and `train`, instead of two options reconciled in code. Run metadata written
+  by `train` records `market_prob_weight`; the web Model page reads it, falling back to the old
+  `market_prob_blend` key for earlier runs.
+- `--wf-eval-last-n-seasons` says in its help that the count includes a current season with no
+  completed week yet, so the weekly default `3` scores two seasons.
+- The `train`/`predict` command code moved from `nfl_predictor/ml/ml_model_cli.py` to
+  `nfl_predictor/cli/train.py`. The walk-forward checkpoint fingerprint hashes every file in
+  `nfl_predictor/ml/`, so the move changes it once more (nothing has been run on the `0.20.0`
+  fingerprints), and command-line edits no longer invalidate checkpoints at all.
+- `nfl_predictor/cli/options.py` builds the option groups that several commands share (the
+  market-probability options, the walk-forward window, `--disable-feature-groups`).
+
+### Removed
+
+- `nfl-predictor leakage-audit --include-market` (`scripts/leakage_audit.py`): it did nothing,
+  since market columns are included unless `--exclude-market` is given.
+
+## [0.21.0] - 2026-09-24
+
+### Added
+
+- One front door, `nfl-predictor <command>` (a console script installed by `uv sync`, and
+  `python -m nfl_predictor`). `nfl-predictor --help` lists the commands by group: `weekly`;
+  `backtest`, `sweep`, `explain`; `data`, `validate`, `leakage-audit`, `lines`, `build-week`;
+  `train`, `predict`, `rankings`; `web`, `users`. Each command keeps its own options, and its help
+  names it `nfl-predictor <command>`. `predict` is `train` with `--model-in`, which it requires.
+- `nfl-predictor validate --live`: the offline and live validation scripts are one command.
+
+### Changed
+
+- The weekly run moved from `scripts/weekly_run.py` into the package `nfl_predictor/weekly_run/`,
+  split into `config` (config file and parser), `inputs` (prediction file and output paths),
+  `stage1` (the walk-forward comparison) and `pipeline` (`main`). All 44 definitions are
+  unchanged apart from module-qualified references (checked by comparing syntax trees), and
+  `python -m nfl_predictor.weekly_run` runs it.
+- The other entrypoints moved from `scripts/` into `nfl_predictor/cli/`: `backtest`
+  (`walk_forward_backtest.py`), `sweep` (`wf_compare.py`), `explain` (`shap_analysis.py`),
+  `leakage_audit`, `rankings` (`power_rankings.py`) and `validate`. Two helpers that existed as
+  identical copies (`market_modes`, `parse_feature_groups`) now live once, in
+  `nfl_predictor/cli/options.py`.
+- The old `scripts/<name>.py` paths still work: each is now a few lines that call the package, so
+  the web jobs and existing launchers run unchanged. No test imports from `scripts/` any more,
+  and the moved code counts toward coverage.
+- No output changes: the weekly-run, backtest, sweep, leakage-audit and SHAP snapshots pass
+  unchanged, and the CLI surface snapshot differs only by the new front door and `--live`
+  (every moved parser is identical under its new module name).
+
+## [0.20.0] - 2026-09-24
+
+### Changed
+
+- The walk-forward paired bootstrap (the deterministic-minus-market Brier and log-loss
+  intervals) computes each game's loss terms once and averages the rows each resample draws,
+  instead of calling scikit-learn twice per resample. The random draws are unchanged and every
+  interval bound matches the old computation to `1e-12` (a new test pins it against a copy of the
+  old loop); a 1,615-game window with 5,000 resamples takes 0.07 s instead of 9.7 s. Stage 1 of
+  the weekly run spent almost all its non-training time there.
+- Every walk-forward checkpoint fingerprint changes, because files under `nfl_predictor/ml/`
+  changed, so the next run of any configuration retrains from scratch. The walk-forward report's
+  `config` no longer lists `early_stopping_rounds` or `recency_half_life_weeks`; its metrics are
+  unchanged (the backtest characterization snapshot was rewritten for exactly those two keys).
+
+### Removed
+
+- `ScoreModel`, the separate home-score and away-score model, with `--model-kind score` in
+  `ml_model`, `scripts/power_rankings.py` and the web job catalog, `train_score_model`,
+  `predict_week`, the score-only helpers, and the score branches in the checkpoint loader,
+  feature importance, the power-ranking pipeline and `scripts/shap_analysis.py` (`--target` now
+  takes `margin` or `total`). It was never measured, and no run or saved model used it.
+- `scripts/shap_analysis.py --component`: the blend trainer never stores a market model, so
+  `market` silently analyzed the team model. A blend's team model is always analyzed; the report
+  keeps `component: team`.
+- The week-based recency half-life, never used by any run: `--recency-half-life-weeks` in
+  `ml_model` and `scripts/walk_forward_backtest.py`, `--wf-recency-half-life-weeks` and
+  `--train-recency-half-life-weeks` in `scripts/weekly_run.py`, and its plumbing. The
+  season-based half-life stays.
+- Inert early-stopping settings: `WalkForwardConfig.early_stopping_rounds`,
+  `scripts/weekly_run.py --wf-early-stopping-rounds` (and `wf_early_stopping_rounds` in
+  `config/weekly_run.yaml`) and `scripts/wf_compare.py --early-stopping-rounds`. In-season fits
+  already ran the full tree budget; tuning keeps its own early-stopping setting.
+- `nfl_predictor/ml/model_compare.py` (its only caller, `objective_compare_models`, was retired
+  in `0.19.0`) and the unused `LogEvalCallback` logging callback, which XGBoost 3.4's `fit()`
+  never received.
+- 7 more command-line options in all (221 to 214). The weekly-run and SHAP characterization
+  snapshots pass unchanged.
+
+## [0.19.0] - 2026-09-24
+
+### Changed
+
+- The web Betting page no longer offers a workbook download or a Generate workbook button; its
+  table is unchanged. `GET /api/betting` no longer returns `xlsx_available`.
+
+### Removed
+
+- The Excel betting workbook, end to end: `scripts/betting_report_excel.py`,
+  `nfl_predictor/reporting/betting_excel.py`, the `openpyxl` dependency,
+  `scripts/weekly_run.py --betting-template-path` (and its config key), the web `betting_xlsx`
+  job, `GET /api/betting/xlsx`, and the `betting_xlsx` run-file download. No weekly output
+  changes: the shipped config never set the path, and the web page computes its own report from
+  the predictions. `betting_report.csv` is still written.
+- `scripts/golden_command.py`, `scripts/betting_pipeline.py`, `scripts/backtest_predictions.py`
+  and `scripts/objective_compare_models.py`, with the tests that existed only for them. None had
+  a web job, a CI check or a benchmark launcher. The weekly run covers `golden_command` and
+  `betting_pipeline`; walk-forward already scores confidence-pool points out of sample, which
+  `backtest_predictions` measured in sample; `objective_compare_models` is replaced by the planned
+  `compare` command. An old launcher that names one of them reproduces from its run's recorded
+  git commit.
+- Together these remove 88 of the 309 command-line options (`tests/fixtures/cli_surface.json`
+  was rewritten for exactly those removals); the weekly-run characterization snapshots pass
+  unchanged.
+
+## [0.18.5] - 2026-09-24
+
+### Changed
+
+- The power-ranking pipeline moved from `scripts/power_rankings.py` into
+  `nfl_predictor/reporting/power_rankings.py`: loading records, predicting the remaining games,
+  the Bradley-Terry fit inputs, the strength-snapshot reader, `resolve_ranking_options`,
+  `compute_power_rankings`, and the output writer, which is now public as
+  `write_ranking_outputs` (it was the private `_write_outputs`). The script keeps its parser
+  and `main` and calls the package.
+- `build_betting_report` and its moneyline helpers moved from `scripts/betting_pipeline.py`
+  into the new `nfl_predictor/reporting/betting_report.py`; the script imports it from there.
+- `scripts/weekly_run.py` imports both from the package, so no production code imports from
+  `scripts/` any more. The moved code now counts toward coverage.
+- No output changes: the characterization snapshots pass unchanged, and the moved function
+  bodies are byte-identical apart from the rename and three docstring lines. The library tests
+  moved with the code (`tests/test_power_rankings_pipeline.py`, `tests/test_betting_report.py`).
+
+## [0.18.4] - 2026-09-24
+
+### Added
+
+- A characterization test for `scripts/shap_analysis.py`
+  (`tests/test_shap_analysis_characterization.py`). It trains a market-anchored margin/total
+  model and a blended model on the synthetic fixture and pins the SHAP report for the margin
+  head, the total head on a sampled subset, and both blend components, so moving the entrypoint
+  cannot change what it reports. It also pins a found defect as it stands: the blend trainer
+  never stores a market model, so `--component market` analyzes the team model (the report says
+  `model_kind: blend_team`).
+
+## [0.18.3] - 2026-09-24
+
+### Changed
+
+- `lightgbm` and `shap` are runtime dependencies. `shap` makes `scripts/shap_analysis.py` and
+  its web job work (they could only report "not installed" before); LightGBM is installed but
+  not used by any model yet, because alternative model families stay parked.
+- The quarterback identity file is now `data/meta_data.csv`, the name `../nfeloqb` writes, so it
+  is copied across unchanged (`constants.QB_META_DATA_NAME`; it was `data/qb_meta_data.csv`).
+  A test pins the default path, because a missing file only logs a warning and quietly weakens
+  quarterback matching.
+- `update_requirements.sh` syncs with the LightGBM CUDA build flags on a machine that can use
+  them, then runs `nfl-lightgbm-cuda-install install`; `scripts/gate.sh` passes the same flags
+  to its strict `uv sync --check`. Both are unchanged on CPU-only machines and in CI, which
+  get no flags.
+- Markdownlint skips pasted session transcripts (`.agents/*transcript*.md`), in
+  `.markdownlintignore` and in the gate's `markdownlint-cli2` call.
+
+### Added
+
+- `nfl-lightgbm-cuda-install` (`nfl_predictor/lightgbm_cuda.py`) builds the locked LightGBM
+  from source with CUDA, only when needed. `install` does nothing when LightGBM already trains
+  on the GPU, reinstalls uv's cached CUDA build in seconds after a plain `uv sync` swapped in
+  the CPU wheel, and compiles from source only when no usable cached build exists. `status`
+  reports the state, and `uv-args` prints the `uv sync` flags (`--no-binary-package` plus the
+  CMake settings). uv records those settings, so a sync or sync check given them treats the
+  CUDA build as current. The flags are withheld without a CUDA toolkit, or when the installed
+  NCCL was not built for the toolkit's CUDA major version: that mismatch (Ubuntu's CUDA 12
+  NCCL against the CUDA 13 toolkit) leaves `cudaGetDeviceProperties_v2` unresolved and stops
+  LightGBM loading. The fix is NVIDIA's `libnccl2` / `libnccl-dev` packages tagged
+  `+cuda13.x`, not a compatibility shim.
+
+## [0.18.2] - 2026-09-24
+
+### Added
+
+- Characterization tests that pin what the command-line entrypoints produce before they move
+  into the package. `tests/test_weekly_run_characterization.py` runs the weekly run end to end
+  (stage-1 walk-forward, training, predictions, betting report, power rankings and standings)
+  with the shipped `config/weekly_run.yaml` on a small synthetic dataset
+  (`tests/weekly_fixture.py`) and compares every output with snapshots under
+  `tests/fixtures/`. `tests/test_entrypoints_characterization.py` does the same for the
+  walk-forward backtest, the calibration sweep and the leakage audit (including a planted
+  leak), and `tests/test_cli_surface.py` snapshots every entrypoint's flags, defaults and help.
+  Snapshots are rewritten with `NFLP_UPDATE_SNAPSHOTS=1`.
+
+## [0.18.1] - 2026-09-24
+
+### Added
+
+- Generate the CLI and scripts inventory for the entrypoint consolidation from the code itself:
+  `.agents/m60/inventory.py` captures every entrypoint's parser, traces each flag's read sites
+  and sinks, cross-checks the production config, the web job templates (parsing every template
+  command with its target's real parser), tests, CI, docs and the `models/*/launch.sh`
+  launchers, and applies hand judgments from `annotations.yaml` only while their evidence still
+  holds. `.agents/m60/scripts_coverage.py` measures the current test coverage of `scripts/`.
+  The proposed dispositions for the user's sign-off are in `.agents/m60/PROPOSAL.md`; no code
+  has moved.
+
+### Changed
+
+- Refresh the validated baseline in `AGENTS.md` and `.agents/TODO.md` now that the `0.18.0`
+  close-out is merged into `main`.
+
 ## [0.18.0] - 2026-09-24
 
 ### Changed

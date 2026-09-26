@@ -162,7 +162,7 @@ export function ModelPage() {
                   items={[
                     ['Model kind', String(config.model_kind ?? '—')],
                     ['Calibration', String(config.win_prob_calibration ?? config.calibration ?? '—')],
-                    ['Market blend', config.market_prob_blend !== undefined ? String(config.market_prob_blend) : '—'],
+                    ['Market blend', String(config.market_prob_weight ?? config.market_prob_blend ?? '—')],
                     ['Score rounding', String(config.score_rounding ?? '—')],
                     ['Features', data.metadata.feature_count ?? null],
                     ['Git commit', shortHash(data.metadata.git_commit_hash, 12)],

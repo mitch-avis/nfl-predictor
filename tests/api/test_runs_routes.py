@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -16,7 +17,7 @@ def test_list_detail_activate_and_download(
 ) -> None:
     """The run list marks the active run, details expose config, activation pins."""
     models = project_root / "models"
-    make_run_dir(models, "weekly_a", created_at="2026-09-01T00:00:00+00:00", with_xlsx=True)
+    make_run_dir(models, "weekly_a", created_at="2026-09-01T00:00:00+00:00")
     make_run_dir(models, "train_b", kind="training", created_at="2026-09-05T00:00:00+00:00")
     app.state.run_index.invalidate()
 
@@ -43,11 +44,11 @@ def test_list_detail_activate_and_download(
     assert admin_client.delete("/api/runs/active").status_code == 204
     assert admin_client.get("/api/runs").json()["pinned_run_id"] is None
 
-    xlsx = admin_client.get("/api/runs/weekly_a/files/betting_xlsx")
-    assert xlsx.status_code == 200
-    assert xlsx.content == b"PK-fake-xlsx"
-    assert "weekly_a_betting_report.xlsx" in xlsx.headers["content-disposition"]
-    assert admin_client.get("/api/runs/train_b/files/betting_xlsx").status_code == 404
+    metadata = admin_client.get("/api/runs/weekly_a/files/metadata")
+    assert metadata.status_code == 200
+    assert json.loads(metadata.content)["run_id"] == "weekly_a"
+    assert "weekly_a_metadata.json" in metadata.headers["content-disposition"]
+    assert admin_client.get("/api/runs/weekly_a/files/betting_xlsx").status_code == 404
     assert admin_client.get("/api/runs/weekly_a/files/model").status_code == 404
     assert admin_client.get("/api/runs/nope/files/metadata").status_code == 404
 

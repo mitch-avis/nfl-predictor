@@ -1,0 +1,47 @@
+season 2026, snapshot week 3: 2 games per team
+rebuilt blend vs data/strength_snapshots.csv, max abs difference: 0.0
+in-season weight 0.3333; prior weight 0.6667 x regression 0.6667
+
+team  W  pts  published  prior  in-season
+SEA   2   27          1      2          2
+LAR   1    2          2      1         12
+BUF   2   15          3      4          5
+NE    1   14          4      3         15
+JAX   1   17          5      5          7
+SF    2   42          6     10          1
+CHI   1   16          7     13         10
+KC    2   24          8     14          3
+PHI   2    6          9      9         17
+HOU   0  -19         10      7         25
+DET   1   -9         11     11         18
+GB    1  -14         12     12         23
+BAL   1   11         13     15          4
+DEN   1  -14         14      8         24
+IND   0  -21         15      6         28
+MIN   2   23         16     19         11
+PIT   1  -10         17     17         26
+TB    0  -10         18     18         22
+DAL   1    9         19     21         16
+NO    1    6         20     24         13
+LAC   0  -24         21     16         32
+CIN   2   20         22     26          9
+CAR   1    9         23     28          6
+NYG   1  -14         24     22         29
+ARI   1  -12         25     25         20
+ATL   0  -38         26     20         31
+WSH   0  -19         27     27         19
+MIA   0  -36         28     23         30
+CLE   1  -20         29     29         27
+NYJ   1   10         30     31          8
+LV    2   26         31     32         14
+TEN   0  -17         32     30         21
+
+correlation of the published composite with the prior composite: 0.9584
+correlation of the published composite with the in_season composite: 0.4481
+
+component spread (population std) each part contributes to the blend:
+  adj_off_pass_epa_snap: prior 0.0215, in-season 0.0076
+  adj_off_rush_epa_snap: prior 0.0076, in-season 0.0030
+  adj_def_pass_epa_snap: prior 0.0189, in-season 0.0062
+  adj_def_rush_epa_snap: prior 0.0072, in-season 0.0031
+  st_rating: prior 0.0288, in-season 0.0596

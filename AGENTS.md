@@ -112,8 +112,8 @@ Rules that are always enforced:
   play-by-play count, and zero mismatches go the other way
   (`models/pbp_vs_nflverse_m54_2/verify_2pt_doubling.py`). The play-by-play value is correct
   wherever it disagrees with nflverse. Both flags are now the default, including the production
-  fast path `scripts/weekly_run.py` uses when it calls `data_collection.main()` with no
-  arguments; `nflverse`/`scrape` remain selectable explicitly. A full ETL rebuild followed
+  fast path the weekly run (`nfl-predictor weekly`) uses when it calls `data_collection.main()`
+  with no arguments; `nflverse`/`scrape` remain selectable explicitly. A full ETL rebuild followed
   (`0.16.1`, `--refresh-nflreadpy` for the two new raw columns), which closed the JAX 1999-2002
   coverage gap that task 54.0's schedule-skeleton repair was built for, as anticipated when
   Milestone 54 was widened on 2026-09-18 specifically because play-by-play has both sides of
@@ -141,9 +141,10 @@ Rules that are always enforced:
   `config/weekly_run.yaml`. The numbers are under "Season weighting and the six-season fit-noise
   floor" below. The order agreed with the user on 2026-09-24, each step on its own branch and
   merged before the next, with no deadline:
-  (1) close 55.8;
+  (1) close 55.8 (done, `0.18.0`);
   (2) Milestone 60, CLI and entrypoint consolidation widened to every file under `scripts/`,
-  behavior-preserving, with task 55.5;
+  behavior-preserving, with task 55.5 (done: closed and merged into `main` on 2026-09-25 as
+  `0.28.1`, record in `.agents/ARCHIVE.md`, Milestone 60);
   (3) production/benchmark parity: GPU as the default device (55.4), how production
   probabilities are formed (56.5), pick-time lines (56.6), and the out-of-fold calibration pool;
   (4) rebuild reproducibility, then every feature-value change (55.3, 53.7 and the feature
@@ -151,20 +152,18 @@ Rules that are always enforced:
   (5) the Optuna re-tune with wiring into production (55.9 with 56.3);
   (6) the web UI, Milestone 58 phases 4-6.
   Tasks 55.1 and 55.2 are retired. The reasoning and the follow-up assignments are under "Roadmap
-  Status" in `.agents/TODO.md`.
+  Status" in `.agents/TODO.md`. Step 3 is next.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-24 (`feat/m55-8-season-weighting`, version `0.18.0`):
-  `scripts/gate.sh` exits `0` (`889 passed`, coverage `92.45%` against the enforced `90%` floor;
-  ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`, `uv sync --check --active` and
-  the CLI help smoke checks all clean). `main` still reflects the earlier `0.16.2` merge until this
-  branch is merged; this branch carries the task 55.8 close-out (unweighted production training),
-  the 2026-09-24 roadmap and the guardrail rules 9-14. The
-  frontend gate was last verified at the `0.8.0` merge; run `scripts/gate.sh --web` whenever
+- Validated baseline on 2026-09-25 (`main` after the Milestone 60 merge, version `0.28.1`):
+  `scripts/gate.sh --web` exits `0` (`1032 passed`, coverage `92.21%` against the enforced `90%`
+  floor, 22 frontend tests; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
+  `uv sync --check --active`, the `--help` smoke check of every command and the web gate all
+  clean). `main` is not pushed yet; pushing is must-ask. Run `scripts/gate.sh --web` whenever
   `web/` or `nfl_predictor/api/` changes.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
@@ -519,7 +518,8 @@ accepted these amendments.
      change that alters feature values at ETL time;
    - closing a milestone, reopening a parked one (Milestone 57), or reordering the roadmap;
    - merging to `main` or pushing (tags and releases: never, see above);
-   - touching `../nfeloqb`, `../nfl-sos-ratings`, or the web API on port 8765;
+   - touching `../nfeloqb`, `../nfl-sos-ratings`, or the running web API (`nfl-predictor web`,
+     port 8000 by default; it ran on port 8765 from a worktree until 2026-09-23);
    - a third walk-forward run on one task, or any six-season run, unless it is a rung of a
      ladder the user has already accepted under rule 4 and is within that ladder's cap;
    - anything the task text says to decide with the user.
@@ -685,6 +685,8 @@ Use these forms **at all times**:
   - `.venv/bin/pyright`
 - ty:
   - `.venv/bin/ty`
+- the project's own commands:
+  - `.venv/bin/nfl-predictor <command>` (the same as `.venv/bin/python -m nfl_predictor <command>`)
 
 ### Explicitly forbidden
 
@@ -722,7 +724,11 @@ form that counts as "the gate"; the individual commands are for iteration):
 - **Primary Pipeline:** Polars for data processing + `nflreadpy` for NFLverse sources (schedule,
   team stats, etc.). The pipeline integrates schedule/results, team statistics, Elo/QB ratings,
   TeamRankings stats, and market odds to produce ML-ready datasets.
-- **Orchestration Script (ETL):** `nfl_predictor/data_collection.py` (run as a module). This
+- **Front door:** `nfl-predictor <command>` (`nfl_predictor/cli/main.py`, a `[project.scripts]`
+  entry, also `python -m nfl_predictor`) runs every task; see "Commands" below. The weekly run
+  lives in `nfl_predictor/weekly_run/`, the other command-line code in `nfl_predictor/cli/`,
+  shared option builders in `nfl_predictor/cli/options.py`.
+- **Orchestration Script (ETL):** `nfl_predictor/data_collection.py` (`nfl-predictor data`). This
   orchestrator fetches data, applies transformations, and writes output CSVs.
 - **Core Data Transforms:** Polars ETL helpers live under `nfl_predictor/utils/polars/`.
   `nfl_predictor/utils/polars_utils.py` is a compatibility facade that forwards imports to the split
@@ -735,41 +741,60 @@ form that counts as "the gate"; the individual commands are for iteration):
 ### ML implementation layout
 
 - `nfl_predictor/ml/` contains the split ML implementation modules.
-- `nfl_predictor/ml_model.py` is a compatibility facade for legacy imports and a primary CLI
-  entrypoint.
+- `nfl_predictor/ml_model.py` is a compatibility facade for legacy imports and keeps the
+  `python -m nfl_predictor.ml_model` form of `nfl-predictor train`/`predict`
+  (`nfl_predictor/cli/train.py`, outside the checkpoint fingerprint).
 - XGBoost version/build compatibility helpers live in `nfl_predictor/ml/ml_model_xgb_utils.py`.
 
-### Repo scripts (operational entrypoints)
+### Commands (operational entrypoints)
 
-- `scripts/weekly_run.py`: canonical weekly orchestration (data refresh -> compare -> tune/train ->
-  predict -> reports).
-- `scripts/golden_command.py`: convenience orchestration for walk-forward + training + prediction
-  and artifact stamping.
-- `scripts/betting_pipeline.py`: end-to-end orchestration for selecting calibration/probability
-  post-processing, resumable Optuna tuning, final training, week predictions, and betting report
-  outputs.
-- `scripts/walk_forward_backtest.py`: walk-forward evaluation utility.
-- `scripts/wf_compare.py`: sweep calibration + market-prob variants and summarize metrics.
-- `scripts/power_rankings.py`: power rankings + projected standings. Since 2026-09-11 the default
-  (`--method composite`) ranks on the ETL's schedule-adjusted composite, read from
-  `data/strength_snapshots.csv` for the week after `--through-week`. `--method bradley_terry` keeps
-  the 2026-09-09 current-season fit (two-season window, prior seasons weighted `0.25`, margin
-  targets, future model probabilities excluded), and `--legacy-franchise-fit` restores the old
-  all-seasons equal-weight fit and implies it. `scripts/weekly_run.py` exposes the same options
-  and calls the same `compute_power_rankings`. `scripts/golden_command.py` writes a separate
-  `model_rating_rankings.csv`, which is a per-model diagnostic, not the power ranking.
+`nfl-predictor --help` lists every command by group; `nfl-predictor <command> --help` shows its
+options. `scripts/` holds only `gate.sh` since `0.27.0`.
+
+- `nfl-predictor weekly` (`nfl_predictor/weekly_run/`): canonical weekly orchestration (data
+  refresh -> compare -> tune/train -> predict -> reports). Reads `config/weekly_run.yaml` unless
+  `--config` names another file.
+- `nfl-predictor backtest` (`nfl_predictor/cli/backtest.py`): walk-forward evaluation, the
+  benchmark.
+- `nfl-predictor sweep` (`nfl_predictor/cli/sweep.py`): sweep calibration + market-prob variants
+  and summarize metrics.
+- `nfl-predictor compare` (`nfl_predictor/cli/compare.py`, definitions in
+  `nfl_predictor/reporting/run_comparison.py`): paired comparison of walk-forward runs rescored
+  from their fold checkpoints, per window, with bootstrap intervals and two seeds combined per
+  game when given. It reproduces the task 55.8 independent rescore exactly
+  (`.agents/m60/verify_compare.py`), so a reviewer can use it under rule 3(b) as long as the
+  review also checks provenance and the reviewer did not produce the run.
+- `nfl-predictor rankings` (`nfl_predictor/cli/rankings.py`): power rankings + projected
+  standings. Since 2026-09-11 the default (`--method composite`) ranks on the ETL's
+  schedule-adjusted composite, read from `data/strength_snapshots.csv` for the week after
+  `--through-week`. `--method bradley_terry` keeps the 2026-09-09 current-season fit (two-season
+  window, prior seasons weighted `0.25`, margin targets, future model probabilities excluded), and
+  `--legacy-franchise-fit` restores the old all-seasons equal-weight fit and implies it.
+  `nfl-predictor weekly` exposes the same options and calls the same `compute_power_rankings`
+  (`nfl_predictor/reporting/power_rankings.py`).
+- `nfl-predictor train` / `predict`, `data`, `validate` (`--live`), `leakage-audit`, `lines`,
+  `build-week`, `explain`, `checkpoints`, `web`, `users`: see `README.md`, "Command line".
+- Retired in `0.19.0`: `golden_command.py`, `betting_pipeline.py`, `backtest_predictions.py`,
+  `objective_compare_models.py` and the Excel betting workbook (`betting_report_excel.py`).
+  Removed in `0.27.0`: the `scripts/<name>.py` shims. Old launchers that name them reproduce from
+  their run's recorded git commit (`README.md`, "Reproducing an old run").
 
 ### Web UI (FastAPI + React)
 
-- `nfl_predictor/api/` is the FastAPI backend (`python -m nfl_predictor.api`): auth (argon2,
+- `nfl_predictor/api/` is the FastAPI backend (`nfl-predictor web`): auth (argon2,
   JWT cookie, `viewer`/`admin`), a run index over `models/*/metadata.json` with one **active**
   run, readers and a column registry for predictions, betting, power rankings, model and data
-  status, and a job runner (`nfl_predictor/api/jobs/`) that launches the repo CLIs as
-  subprocesses with streamed logs; walk-forward jobs share one worker so two never overlap.
+  status, and a job runner (`nfl_predictor/api/jobs/`) that launches `python -m nfl_predictor
+  <command>` as subprocesses with streamed logs; walk-forward jobs share one worker so two never overlap.
   `nfl_predictor/lines_refresh.py` and `nfl_predictor/week_builder.py` are the CLIs it added.
 - `web/` is the Vite + React 19 + Tailwind app; it is excluded from ruff, pyright and ty.
   Its gate (`source ~/.nvm/nvm.sh`, then in `web/`: `npm run lint`, `npm run typecheck`,
   `npx vitest run`, `npm run build`) runs as the `web` job in CI; run it whenever `web/` changes.
+- `nfl-predictor web` serves the built app from `web/dist/` on port 8000. `--reload` restarts the
+  server on any Python file change in the checkout (so an agent's edits, checkouts and merges
+  restart it), which marks running jobs failed, and its watcher takes about half a core: never
+  launch a web job from a `--reload` server, and say so before editing code while one runs.
+  `web/README.md`, "Which mode to use", covers the Vite dev server on port 5173.
 - Tests for the backend live in `tests/api/`; the design, decisions and phase status live in
   `.agents/web_ui_plan.md`, and `web/README.md` documents the runtime configuration.
 
@@ -1012,7 +1037,8 @@ Blending:
 
 ## Leakage Audit (Required)
 
-Maintain a leakage audit tool/mode (see `scripts/leakage_audit.py`):
+Maintain a leakage audit tool/mode (`nfl-predictor leakage-audit`,
+`nfl_predictor/cli/leakage_audit.py`):
 
 - checks for target/label columns in features
 - flags suspiciously predictive columns (e.g., absurd correlations)
@@ -1105,15 +1131,16 @@ Unused constants are removed and the file remains organized into clear sections.
 
 ## Dev Workflows (How to Run Things)
 
+- Every command:
+  - `.venv/bin/nfl-predictor --help`
 - Refresh data:
-  - `.venv/bin/python -m nfl_predictor.data_collection`
+  - `.venv/bin/nfl-predictor data`
 - Train/predict (CLI):
-  - `.venv/bin/python -m nfl_predictor.ml_model --help`
+  - `.venv/bin/nfl-predictor train --help` (and `predict --model-in <model>`)
 - Walk-forward evaluation:
-  - `.venv/bin/python scripts/walk_forward_backtest.py --help`
-- Convenience orchestration:
-  - `.venv/bin/python scripts/golden_command.py --help`
-  - `.venv/bin/python scripts/betting_pipeline.py --help`
+  - `.venv/bin/nfl-predictor backtest --help`
+- Weekly orchestration:
+  - `.venv/bin/nfl-predictor weekly --help`
 - Testing:
   - `.venv/bin/python -m pytest`
 
@@ -1149,9 +1176,9 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
 - Keep walk-forward comparison artifacts under `models/` (do not point `--out-json` at a temporary
   directory). Any number reported in `.agents/` or `AGENTS.md` must be auditable from disk.
 - Walk-forward runs checkpoint every finished week (`models/wf_checkpoints/<fingerprint>/` by
-  default; `wf_compare/wf_folds/` inside `weekly_run` runs, `wf_folds/` inside `betting_pipeline`
-  runs). After a stop, re-run the identical command and it resumes at the next unfinished week;
-  `--no-resume` retrains everything. Watch progress in the run's log: every finished week prints a
+  default; `wf_compare/wf_folds/` inside `weekly_run` runs). After a stop, re-run the
+  identical command and it resumes at the next unfinished week; `--no-resume` retrains
+  everything. Watch progress in the run's log: every finished week prints a
   `Walk-forward fold N/M done` line with elapsed and remaining time. For `weekly_run` comparisons,
   `wf_compare/wf_summary.csv` still shows per-candidate results.
 - Run **one walk-forward at a time**. XGBoost uses every core, and on 2026-09-10 two concurrent
@@ -1161,15 +1188,17 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
   over `--eval-last-n-seasons 6` about 100 minutes. The earlier observation, kept as a record, put
   a from-week-1 three-season run at about 75 minutes alone and a week-3 start at about 40.
 - Launch every walk-forward through a small `launch.sh` in its own run directory (see
-  `models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh` for the shape) with
-  `nohup setsid`, never through a harness-bound shell, which stops at 10 minutes. Never
+  `models/wf_m59_rebuild_2023_2025_from_week1_seed7/launch.sh` for the shape; launchers written
+  before `0.27.0` name `scripts/<name>.py`, so a new one calls `.venv/bin/nfl-predictor
+  <command>`) with `nohup setsid`, never through a harness-bound shell, which stops at 10 minutes. Never
   `pkill -f` a pattern that can match your own shell. Several accepted rungs run back to back
   through one driver script. Two lessons from 2026-09-23:
   - Any logic added to a `launch.sh` (a load probe, for example) is tested under the script's own
     strict-mode header, because `IFS=$'\n\t'` changes how `read` splits. A probe written without
     it failed and stopped the whole queue overnight.
-  - Never execute a fragment cut from a `launch.sh`: a cut that includes the
-    `walk_forward_backtest.py` line starts a second walk-forward with default settings.
+  - Never execute a fragment cut from a `launch.sh`: a cut that includes the walk-forward line
+    (`nfl-predictor backtest`, formerly `walk_forward_backtest.py`) starts a second walk-forward
+    with default settings.
   Check the driver's log after its first run-to-run transition, not only at the end.
 - Choose the OpenMP wait policy by machine load at launch. Under other load, use
   `OMP_WAIT_POLICY=PASSIVE`: with the default policy XGBoost's threads spin while a preempted peer
@@ -1177,7 +1206,11 @@ Training/prediction entrypoints may be updated/replaced, but must remain runnabl
   machine keep the default, because sleeping threads cost more to wake than they save on this
   small dataset (an idle `PASSIVE` week took `~142s` against `~82s` for the default). The setting
   changes scheduling only, so it neither alters results nor invalidates fold checkpoints; switching
-  mid-run means stop, relaunch with the other policy, and resume.
+  mid-run means stop, relaunch with the other policy, and resume. Since `0.24.0` the walk-forward
+  commands (`nfl-predictor weekly`, `backtest` and `sweep`) set
+  `PASSIVE` themselves unless `OMP_WAIT_POLICY` is already set, because load that arrives mid-run
+  stalls the default policy; on a machine known to stay idle, launch with `OMP_WAIT_POLICY=`
+  (empty) to keep the library default.
 - Load observation from 2026-09-20: with the web API running `--reload` (its file watcher takes
   about half a core continuously) a three-season from-week-1 run took about 110 minutes instead of
   about 50 idle, so the seed-7 arm was relaunched with `OMP_WAIT_POLICY=PASSIVE` and resumed from

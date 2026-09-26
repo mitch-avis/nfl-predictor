@@ -100,8 +100,6 @@ class WalkForwardConfig:
     max_cardinality_ratio: float = 0.5
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
     feature_end: str = ml_model.DEFAULT_FEATURE_END_COLUMN
-    early_stopping_rounds: int = ml_model.DEFAULT_EARLY_STOPPING_ROUNDS
-    recency_half_life_weeks: float | None = None
     recency_half_life_seasons: float | None = None
     disable_pruning: bool = False
     disabled_feature_groups: tuple[str, ...] = ()
@@ -130,8 +128,6 @@ class WalkForwardConfig:
             "max_cardinality_ratio": self.max_cardinality_ratio,
             "feature_start": self.feature_start,
             "feature_end": self.feature_end,
-            "early_stopping_rounds": self.early_stopping_rounds,
-            "recency_half_life_weeks": self.recency_half_life_weeks,
             "recency_half_life_seasons": self.recency_half_life_seasons,
             "disable_pruning": self.disable_pruning,
             "disabled_feature_groups": list(self.disabled_feature_groups),
@@ -512,11 +508,14 @@ def _bootstrap_probability_differences(
     actual_home_win = pd.to_numeric(frame.loc[valid, "actual_home_win"], errors="coerce").to_numpy(
         dtype=int
     )
-    actual_margin = pd.to_numeric(frame.loc[valid, "actual_margin"], errors="coerce").to_numpy(
-        dtype=float
+    # Each resample's metric is a mean of per-game terms, so the terms are computed once and
+    # each resample averages the rows it drew (the same draws, one per resample, as before).
+    model_squared, model_log_loss = metrics_utils.probability_losses_per_row(
+        actual_home_win, model_prob[valid]
     )
-    model_prob = model_prob[valid]
-    market_prob = market_prob[valid]
+    market_squared, market_log_loss = metrics_utils.probability_losses_per_row(
+        actual_home_win, market_prob[valid]
+    )
     n_rows = int(len(actual_home_win))
     rng = np.random.default_rng(int(seed))
 
@@ -525,22 +524,10 @@ def _bootstrap_probability_differences(
 
     for sample_index in range(int(n_samples)):
         indices = rng.integers(0, n_rows, size=n_rows)
-        sampled_actual_home_win = actual_home_win[indices]
-        sampled_actual_margin = actual_margin[indices]
-        sampled_model_prob = model_prob[indices]
-        sampled_market_prob = market_prob[indices]
-        model_metrics = metrics_utils.probability_summary(
-            sampled_actual_home_win,
-            sampled_actual_margin,
-            sampled_model_prob,
+        brier_diffs[sample_index] = model_squared[indices].mean() - market_squared[indices].mean()
+        log_loss_diffs[sample_index] = (
+            model_log_loss[indices].mean() - market_log_loss[indices].mean()
         )
-        market_metrics = metrics_utils.probability_summary(
-            sampled_actual_home_win,
-            sampled_actual_margin,
-            sampled_market_prob,
-        )
-        brier_diffs[sample_index] = model_metrics["brier"] - market_metrics["brier"]
-        log_loss_diffs[sample_index] = model_metrics["log_loss"] - market_metrics["log_loss"]
 
     return {
         f"{prefix}_brier_vs_market_ci_low": float(np.nanpercentile(brier_diffs, 2.5)),
@@ -847,8 +834,7 @@ def run_walk_forward_backtest(
         "include_quantiles": config.include_quantiles,
         "disable_pruning": config.disable_pruning,
         "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
-        # In-season fits run the full `n_estimators` budget; `early_stopping_rounds` in the
-        # config is kept for the fingerprint and for tuning, and is not applied here.
+        # In-season fits run the full `n_estimators` budget, with no early stopping.
         "in_season_early_stopping": False,
     }
 
@@ -921,7 +907,6 @@ def run_walk_forward_backtest(
         )
         train_recency = compute_recency_sample_weight(
             fold.train_df,
-            half_life_weeks=config.recency_half_life_weeks,
             half_life_seasons=config.recency_half_life_seasons,
         )
         train_weight = combine_sample_weights(train_recency)
@@ -1029,7 +1014,6 @@ def run_walk_forward_backtest(
                 ) - calibration_df[away_col].to_numpy(dtype=float)
                 calibration_recency = compute_recency_sample_weight(
                     calibration_df,
-                    half_life_weeks=config.recency_half_life_weeks,
                     half_life_seasons=config.recency_half_life_seasons,
                 )
                 calibration_seasons = (

@@ -104,7 +104,6 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
         early_stopping_rounds=5,
         tree_method=None,
         device=None,
-        tune_scope="none",
         storage=None,
         study_name=None,
         best_params_out=None,

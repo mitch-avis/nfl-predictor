@@ -1,0 +1,42 @@
+parsers: 19 at aefb287, 16 now
+options no longer on any parser: 38
+  --betting-template-path: named in CHANGELOG.md
+  --bootstrap-samples: its script's retirement is in CHANGELOG.md: scripts.objective_compare_models
+  --component: named in CHANGELOG.md
+  --final-win-prob-calibration: its script's retirement is in CHANGELOG.md: scripts.betting_pipeline
+  --include-market: named in CHANGELOG.md
+  --model-a: its script's retirement is in CHANGELOG.md: scripts.objective_compare_models
+  --model-b: its script's retirement is in CHANGELOG.md: scripts.objective_compare_models
+  --no-dry-run: its script's retirement is in CHANGELOG.md: scripts.betting_pipeline
+  --no-reuse-wf-allow-mismatch: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --no-train-tune: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --no-wf-resume: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --no-write-power-rankings: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --output-predictions: its script's retirement is in CHANGELOG.md: scripts.betting_pipeline
+  --output-prefix: its script's retirement is in CHANGELOG.md: scripts.backtest_predictions
+  --predictions: its script's retirement is in CHANGELOG.md: scripts.betting_report_excel
+  --recency-half-life-weeks: named in CHANGELOG.md
+  --reuse-wf-allow-mismatch: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --reuse-wf-run-dir: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-cv-splits: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-holdout-seasons: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-recency-half-life-weeks: named in CHANGELOG.md
+  --train-tune: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-tune-metric: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-tune-timeout-seconds: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-tune-trials: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-xgb-device: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-xgb-n-jobs: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --train-xgb-tree-method: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --tune-scope: named in CHANGELOG.md
+  --wf-checkpoint-dir: named in CHANGELOG.md
+  --wf-early-stopping-rounds: named in CHANGELOG.md
+  --wf-n-jobs: named in CHANGELOG.md
+  --wf-recency-half-life-weeks: named in CHANGELOG.md
+  --wf-resume: named in CHANGELOG.md
+  --wf-xgb-device: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --wf-xgb-n-jobs: its script's retirement is in CHANGELOG.md: scripts.betting_pipeline, scripts.golden_command
+  --wf-xgb-tree-method: its script's retirement is in CHANGELOG.md: scripts.golden_command
+  --write-power-rankings: its script's retirement is in CHANGELOG.md: scripts.golden_command
+retired scripts missing from CHANGELOG.md: 0
+uncovered: 0

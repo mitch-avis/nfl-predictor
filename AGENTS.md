@@ -53,12 +53,9 @@ Rules that are always enforced:
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-25 (`main` after the Milestone 60 merge, version `0.28.1`):
-  `scripts/gate.sh --web` exits `0` (`1032 passed`, coverage `92.21%` against the enforced `90%`
-  floor, 22 frontend tests; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
-  `uv sync --check --active`, the `--help` smoke check of every command and the web gate all
-  clean). `main` is not pushed yet; pushing is must-ask. Run `scripts/gate.sh --web` whenever
-  `web/` or `nfl_predictor/api/` changes.
+- Validated baseline on 2026-09-25 (version `0.28.5`): `scripts/gate.sh --web` exits `0`
+  (`1032 passed`, coverage `92.21%` against the enforced `90%` floor, 22 frontend tests). Run
+  `scripts/gate.sh --web` whenever `web/` or `nfl_predictor/api/` changes.
   - Re-run a plain `uv sync` after every version bump (including after merging a branch that
     bumped the version), or `uv sync --check --active` fails on the stale installed package.
 - **Benchmarks and data state live in `.agents/benchmarks.md`.** Read it before any walk-forward
@@ -83,8 +80,8 @@ Rules that are always enforced:
 
 ## Delegation guardrails (every agent session)
 
-Added 2026-09-19 after the Milestone 59 audit and amended on 2026-09-21, 2026-09-23 and
-2026-09-24; what went wrong each time, and so why each rule exists, is in
+Added 2026-09-19 after the Milestone 59 audit and amended on 2026-09-21, 2026-09-23, 2026-09-24
+and 2026-09-25; what went wrong each time, and so why each rule exists, is in
 `.agents/guardrail_history.md`. An autonomous session has no other supervision, so these rules
 are not advisory.
 
@@ -211,6 +208,16 @@ are not advisory.
     feature values before tuning. Group changes that invalidate walk-forward checkpoints so they
     share one new reference. Production-changing steps land between game weeks. The step order
     in `.agents/TODO.md` ("Roadmap Status") follows these principles; changing it is must-ask.
+15. **Recommend when the answer isn't obvious.** A question or pending decision for the user
+    carries the agent's brief recommendation unless the answer is plain from the question itself.
+    The user may not remember the details of something built long ago, or may not know the area
+    well, so write for a reader who cannot check it without digging: one line on what the
+    component does today and why the decision comes up, from the code or docs (name the file),
+    not from memory; the recommended option first, with its reason and its main cost or risk;
+    how sure the agent is and what would change its mind. If the evidence is too thin to
+    recommend, say so and name what would settle it. A recommendation is advice, never consent:
+    the agent still waits for the answer on everything under rule 5, and it never bends a
+    written decision rule toward its own preference (rules 9 and 12).
 
 ## Source of truth for work
 

@@ -27,3 +27,7 @@ named a deleted script and an option that never existed, and fixing it waited on
 because rule 2 barred any rewrite of acceptance text. The user asked that such small, factual
 errors be fixed on sight and reported, with limits that keep a correction from becoming a
 silent change of scope, output or record.
+Rule 15 was added the same day at the user's request. Questions put to the user often concern a
+component built long ago or an area the user does not know well, so a bare question left them
+digging for the facts before they could answer. A non-obvious question now arrives with the
+agent's recommendation, grounded in the code, while the decision stays the user's.

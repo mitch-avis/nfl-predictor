@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.28.4] - 2026-09-25
+
+### Changed
+
+- Delegation guardrail rule 2 separates correcting from narrowing. An agent that notices a small
+  factual error outside its current task (a stale path, command or option name, a broken
+  pointer, a typo, or a bug whose correct behavior the repo already states) may fix it without
+  asking when meaning, outputs, fingerprinted files, measured numbers and records are all
+  untouched, and reports it under "Fixed without asking" in the next check-in. Anything
+  else stays a question. Rule 6 now names in-task fixes and rule 2 corrections separately.
+- Milestone 55's acceptance line names the task 55.9 tune and the task 56.3 shared settings
+  source, read by `nfl-predictor weekly` and `nfl-predictor backtest`, instead of a deleted
+  script and an option that never existed.
+
 ## [0.28.3] - 2026-09-25
 
 ### Changed

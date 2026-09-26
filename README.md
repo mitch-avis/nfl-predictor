@@ -604,6 +604,13 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   margin curve, and placed on the 1-10 and 0-10 scales. Each row also carries the composite,
   `points_vs_average`, the components (`adj_off_*`, `adj_def_*`, `st_rating`, `adj_srs`) and
   `strength_games_played`. A higher `adj_def_*` is a better defense.
+- The composite weights per-snap passing and rushing EPA (offense and defense) and special teams;
+  wins, losses and points are not in it, so a head-to-head result moves it only through that
+  game's EPA. Early in a season it leans on last season: each component blends the in-season
+  solve with the previous season's full-season solve regressed by one third, weighted
+  `games / (games + 4)`, so after two games last season still sets most of the order (an open
+  follow-up in `.agents/TODO.md`). The trained model does not set the ranking; it supplies only
+  the projected standings.
 - `--method bradley_terry` ranks on a Bradley-Terry fit to game results instead: the current and
   previous season only (`--ratings-window-seasons 2`), prior-season games weighted `0.25`
   (`--ratings-prior-season-weight`), completed games scored by margin (`--ratings-target margin`),
@@ -742,9 +749,10 @@ nfl-predictor web                                     # http://127.0.0.1:8000
 
 The frontend needs Node 26 (`source ~/.nvm/nvm.sh`); `cd web && npm ci && npm run build` writes
 `web/dist/`, which the backend serves. Configuration is by `NFLP_*` environment variables
-(`NFLP_DATA_DIR`, `NFLP_MODELS_DIR`, `NFLP_STATE_DIR`, `NFLP_PORT`, ...). Details, the check
-commands and the layout are in `web/README.md`; the design and phase status are in
-`.agents/web_ui_plan.md`.
+(`NFLP_DATA_DIR`, `NFLP_MODELS_DIR`, `NFLP_STATE_DIR`, `NFLP_PORT`, ...). Launch jobs from a
+server started without `--reload`: a reload restart marks running jobs failed. Details (including
+when to use `--reload` and the Vite dev server), the check commands and the layout are in
+`web/README.md`; the design and phase status are in `.agents/web_ui_plan.md`.
 
 ## Validation
 

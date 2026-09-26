@@ -325,24 +325,23 @@ Tasks 55.1 and 55.2 (a general configuration-sweep runner) were retired by the u
       two seeds; `16` and `32` tied. Record: `ARCHIVE.md`, Milestone 55, "55.8", and
       `.agents/benchmarks.md` under "Season weighting and the six-season fit-noise floor".
 - [ ] 55.9 (step 5, with 56.3) Optuna re-tune. Added 2026-09-21 by the user's decision, to run
-      **after Milestone 54 lands** (tuning before the feature set changes would have to be
-      redone). Scheduled 2026-09-24 as roadmap step 5, after every feature-value change (step 4)
-      and on the final device (step 3), so the tune is fitted to the feature set that ships. It
-      occupies the machine for hours, so it runs overnight. Prerequisites, each its
-      own tested chunk before any trial runs: (1) trials must fit exactly the way production fits.
-      `0.12.3` removed in-season early stopping from production and walk-forward, but
-      `_score_margin_total_fold` in `nfl_predictor/ml/ml_model_core.py` still passes
-      `early_stopping_rounds` to `_fit_margin_total_models`, so every trial is scored on a
-      differently fitted model. (2) the tuning objective must score what the walk-forward instrument
-      scores: the deterministic `Phi(margin / SCORE_DIFF_STD_DEV)` Brier, with the market view
-      alongside, not the configured-calibrator Brier. (3) plumbing so a tuned parameter set actually
-      reaches the walk-forward. Today `weekly_run` takes explicit `wf_*` params and never writes a
-      best-params file; `--defaults-path` and `best_config.json` exist only as Milestone 55
-      acceptance text. Then the study itself: the search space as it stands (`n_estimators`
-      `200`-`1200`, learning rate `0.01`-`0.3` log, depth `3`-`8`, and the rest), TPE with seed
-      `42`, SQLite storage, `300`-`500` trials, about 3-8 hours. The winner is confirmed on a
-      six-season walk-forward against the `200` rung and on a second seed before it becomes a
-      default (must-ask). The old studies under `models/weekly_2025_week_21/` and
+      **after Milestone 54 lands** (tuning before the feature set changes would have to be redone).
+      Scheduled 2026-09-24 as roadmap step 5, after every feature-value change (step 4) and on the
+      final device (step 3), so the tune is fitted to the feature set that ships. It occupies the
+      machine for hours, so it runs overnight. Prerequisites, each its own tested chunk before any
+      trial runs: (1) trials must fit exactly the way production fits. `0.12.3` removed in-season
+      early stopping from production and walk-forward, but `_score_margin_total_fold` in
+      `nfl_predictor/ml/ml_model_core.py` still passes `early_stopping_rounds` to
+      `_fit_margin_total_models`, so every trial is scored on a differently fitted model. (2) the
+      tuning objective must score what the walk-forward instrument scores: the deterministic
+      `Phi(margin / SCORE_DIFF_STD_DEV)` Brier, with the market view alongside, not the
+      configured-calibrator Brier. (3) plumbing so a tuned parameter set actually reaches the
+      walk-forward. Today `weekly_run` takes explicit `wf_*` params and never writes a best-params
+      file; task 56.3 adds the one shared source both read. Then the study itself: the search space
+      as it stands (`n_estimators` `200`-`1200`, learning rate `0.01`-`0.3` log, depth `3`-`8`, and
+      the rest), TPE with seed `42`, SQLite storage, `300`-`500` trials, about 3-8 hours. The winner
+      is confirmed on a six-season walk-forward against the `200` rung and on a second seed before
+      it becomes a default (must-ask). The old studies under `models/weekly_2025_week_21/` and
       `models/weekly_2025_week_22/` are void: their trials early-stopped and they predate the
       `0.6.2` guidance.
 
@@ -353,8 +352,10 @@ alone. Do not reuse old `tune_best_params_out` files or Optuna studies; re-tune 
 
 Acceptance:
 
-- [ ] One command plus one config file produce the sweep summary and `best_config.json`, and
-      `scripts/weekly_run.py --defaults-path best_config.json` runs end to end.
+- [ ] The task 55.9 tune runs from one command and one config file; the settings it chooses,
+      confirmed on two seeds and approved by the user, live in one shared source that
+      `nfl-predictor weekly` and `nfl-predictor backtest` both read (task 56.3); and a weekly
+      run on them runs end to end.
 
 ---
 

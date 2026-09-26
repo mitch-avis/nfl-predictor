@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.28.5] - 2026-09-25
+
+### Added
+
+- Delegation guardrail rule 15: a question or pending decision for the user carries the agent's
+  brief recommendation unless the answer is plain. It gives a line on what the component does
+  today (from the code or docs), the recommended option with its reason and main risk, and how
+  sure the agent is. The decision stays the user's, must-ask items still wait for the answer,
+  and written decision rules are applied as written.
+
+### Changed
+
+- Milestone 55 is "Tune the model and lock the default settings". Its goal names the settings
+  it settles (device, early-season prior blend, tree budget, season weighting, the 55.9
+  re-tune), each by a hypothesis-driven walk-forward on two seeds, and the one shared default
+  they become, instead of the retired configuration sweep.
+
+### Fixed
+
+- `AGENTS.md`'s validated-baseline line no longer says `main` is unpushed.
+
 ## [0.28.4] - 2026-09-25
 
 ### Changed

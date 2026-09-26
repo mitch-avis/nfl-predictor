@@ -587,9 +587,9 @@ time; their predicted margins and therefore their deterministic and market colum
 The deterministic columns of every arm, and the floor `auto` now ships, weeks 3-18: Brier
 `0.2099`, log loss `0.6073`, pick accuracy `0.6861`; market `0.2086` / `0.6042` / `0.6861`;
 paired deterministic-minus-market Brier `+0.0012` `[-0.0030, +0.0054]`. The full four-window
-table is the benchmark in `AGENTS.md`. Against the `0.12.0` arm (`bae0e56db951d1a890d4`, fit with
-early stopping), 247 of 816 predicted margins move by at most `0.34` points; its rescore gives
-weeks 3-18 `0.2098` / `0.6072` and margin MAE `9.9600` against `9.9608`: a tie.
+table is the benchmark in `.agents/benchmarks.md`. Against the `0.12.0` arm (`bae0e56db951d1a890d4`,
+fit with early stopping), 247 of 816 predicted margins move by at most `0.34` points; its rescore
+gives weeks 3-18 `0.2098` / `0.6072` and margin MAE `9.9600` against `9.9608`: a tie.
 
 Six-season arms (`--eval-last-n-seasons 6`, 107 folds, about 1h40m each on an idle machine,
 run in sequence 2026-09-19 10:27 to 15:17), `calibration=auto` (the floor):
@@ -633,14 +633,14 @@ in `HYPOTHESIS.md`; independent rescore in `REVIEW.md`). Weeks 3-18 deterministi
 `0.2096` against the benchmark's `0.2099`, paired `-0.0003` `[-0.0028, +0.0023]`; margin MAE
 `9.9722` against `9.9608`, `+0.0113` `[-0.0890, +0.1142]`: a tie by the rule. All 816 margins
 moved (max `5.16`), and weeks-3-18 pick accuracy fell `0.6861` to `0.6764` (7 games). The full
-four-window table is the reference arm in `AGENTS.md`; new arms on the rebuilt build compare
-against it.
+four-window table is the reference arm in `.agents/benchmarks.md`; new arms on the rebuilt build
+compare against it.
 
 Noise control (`0.12.8`, 2026-09-20): the reference arm rerun with `--random-seed 7`
 (`models/wf_m59_rebuild_2023_2025_from_week1_seed7/`, checkpoints `89dc69c3f18d74ad205b`,
 rescored in its `REVIEW.md`) moves every margin (median `0.91` points), flips 46 picks and lands
 at weeks-3-18 Brier `0.2116` / pick accuracy `0.6847`, so the rebuild arm's 7-game drop is fit
-noise; the floor is recorded beside the reference arm in `AGENTS.md`.
+noise; the floor is recorded beside the reference arm in `.agents/benchmarks.md`.
 
 ### Audit (2026-09-19, version `0.12.5`)
 
@@ -717,7 +717,7 @@ small: weeks 3-18 deterministic Brier `0.2103` / `0.2111` / `0.2117` and margin 
 `9.9978` / `10.0240` for `200` / `400` / `598`, with the `200 - 598` Brier interval covering
 zero by `+0.0000791` and its margin MAE difference `-0.0958` `[-0.1583, -0.0345]` beyond the
 fit-noise floor. The ladder stopped on its own "report all three and ask" branch; the table and
-the pairwise intervals are in `AGENTS.md` under "Tree-budget ladder".
+the pairwise intervals are in `.agents/benchmarks.md` under "Tree-budget ladder".
 
 Decided 2026-09-21 by the user: adopt `200` as the shared default `n_estimators`, in
 walk-forward and production together, conditional on a `100`-tree plateau check (below). In the
@@ -1051,7 +1051,7 @@ inputs changed with the user's refresh; the cause is resolved below.
   quarterback identity files were already current at both checkpoints (`data/qb_elos.csv` and
   `data/qb_meta_data.csv` matched their `../nfeloqb` sources byte-for-byte throughout), so the
   shift is not a quarterback-feature or identity-bridge defect. No further action needed; the
-  `AGENTS.md` benchmark documents which build it was measured on for future audits.
+  benchmark in `.agents/benchmarks.md` documents which build it was measured on for future audits.
 - **Review fixes (2026-09-11, version `0.7.1`).** `_attach_qb_features` no longer passes
   `--refresh-nflreadpy` through to the history seasons it loads for career rates (a one-season
   refresh had become a full 1999+ play-by-play download); they always read the per-season cache.
@@ -1312,10 +1312,10 @@ How the walk-forward arms were run and scored:
   fold with an early-stopping eval set: identical margins, total std `1.886` against `4.912`.
 - Windows were scored from the per-week checkpoints (games, Brier, log loss, pick accuracy, margin
   and total MAE, the line's total MAE, the p50 head, and the std of `predicted_total -
-  total_line`); the same scorer reproduces the `AGENTS.md` benchmark table to four decimals from
-  `models/wf_checkpoints/5ea347bc3339f5d3a9e3/`. Paired bootstrap: 5000 resamples of games,
-  seed 0. In both anchored arms the 2023 weeks 1-4 folds are identical and every fold from week 5
-  differs, so the first four weeks of a season have no early-stopping eval set.
+  total_line`); the same scorer reproduces the benchmark table in `.agents/benchmarks.md` to
+  four decimals from `models/wf_checkpoints/5ea347bc3339f5d3a9e3/`. Paired bootstrap: 5000 resamples
+  of games, seed 0. In both anchored arms the 2023 weeks 1-4 folds are identical and every fold from
+  week 5 differs, so the first four weeks of a season have no early-stopping eval set.
 
 Acceptance:
 
@@ -1607,7 +1607,8 @@ three. With 48 games a week, the week-2 result is supported but not overwhelming
   `walk_forward_backtest.py`, `wf_compare.py`, `golden_command.py`, `weekly_run.py`, and
   `betting_pipeline.py`. The on-arm relaunch in this milestone restored its first week from a
   checkpoint after a deliberate stop.
-- Operational lessons, now in `AGENTS.md`: two concurrent from-week-1 walk-forwards each burned
+- Operational lessons (the rules are in `AGENTS.md`, the measurements in
+  `.agents/walk_forward_runbook.md`): two concurrent from-week-1 walk-forwards each burned
   more than a whole solo run's CPU (42 CPU-hours) without finishing and were stopped; under
   unrelated load a week took `730s` with the default OpenMP wait policy and `185s` with
   `OMP_WAIT_POLICY=PASSIVE`; on an idle machine the default was faster (`75s` against `~142s`).

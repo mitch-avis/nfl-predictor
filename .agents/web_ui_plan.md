@@ -24,7 +24,7 @@ Exploration findings that shape the design:
   that contract and the table ideas (sticky identity columns, heatmap cells, compare workflow,
   glossary) onto shadcn primitives rather than forking its 923-line `App.tsx`.
 - There is no "latest model" concept. `nfl_predictor/ml/artifacts.py` only builds paths
-  (`resolve_run_paths` L117). `scripts/weekly_run.py` writes a self-contained run dir
+  (`resolve_run_paths` L117). The weekly run writes a self-contained run dir
   (`models/weekly_2025_week_22/` is the canonical example) with stage markers
   `{wf_compare,train,predictions,reports}_state.json`; a run is complete iff
   `reports_state.json` exists. Power rankings in a run are stamped `week = predictions_week - 1`.
@@ -39,11 +39,6 @@ Exploration findings that shape the design:
   (`nfl_predictor/ml/feature_spec.py` L88-93), so a lines refresh must be followed by a predict job.
 - `.agents/TODO.md` Milestone 50: the total/over-under head has no signal. `total_*` betting
   columns must never be presented as actionable.
-- Another session is editing `data_collection.py`, `constants.py`, `walk_forward.py`,
-  `strength_snapshot.py`, `teamrankings.py`, `weekly_run.py`, `betting_pipeline.py`,
-  `golden_command.py`, `.agents/TODO.md`, `AGENTS.md`, `README.md`, `CHANGELOG.md`. This plan
-  touches none of those files except tiny additive edits to `pyproject.toml`, `.gitignore`, and
-  CI, and it lives on its own branch/worktree.
 - Repo constraints: Python >= 3.14, `.venv/bin/` prefixes, ruff line-length 100, pyright + ty,
   pytest coverage floor 90% over `nfl_predictor` (baseline 90.83%, so new `api/` code needs ~95%),
   docstrings everywhere, TDD, no `print`. Coverage omits any module named `config.py` (use
@@ -53,8 +48,8 @@ Exploration findings that shape the design:
 
 ## Decisions (made with the user)
 
-1. Code lives in this repo: `nfl_predictor/api/` (FastAPI) + `web/` (React). Work on branch
-   `feat/web-ui` in a separate worktree `../nfl-predictor-web` created from `main`.
+1. Code lives in this repo: `nfl_predictor/api/` (FastAPI) + `web/` (React). Each phase is
+   built on a feature branch off `main` and merged back when it lands.
 2. Frontend: Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui + TanStack Table + TanStack
    Query + react-router 7 + recharts.
 3. Hosting: uvicorn on this WSL box serving API + built SPA over LAN/Tailscale. Auth:
@@ -180,7 +175,7 @@ mutating routes require header `X-Requested-With: nflp`.
   own key validation), `train` (`train`), `predict` (`predict`), `predict_week` (`build-week`,
   chains `predict`), `power_rankings` (`rankings`), `leakage_audit` (`leakage-audit`),
   `validate_offline` (`validate`), `validate_live` (`validate --live`), `walk_forward_backtest`
-  (`backtest`), `shap_analysis` (`explain`). `betting_xlsx` was retired in `0.19.0`.
+  (`backtest`), `shap_analysis` (`explain`).
 
 ### `nfl_predictor/lines_refresh.py`
 
@@ -219,7 +214,7 @@ mutating routes require header `X-Requested-With: nflp`.
 - Jobs: catalog cards, auto-generated form from the params schema (react-hook-form + zod),
   history table, detail page with virtualized log console, level filter, progress bar, cancel.
 - Runs: list with stage chips and holdout Brier/accuracy; Activate with confirm dialog.
-- Charts follow the `dataviz` skill; UI follows the `frontend-design` skill in `.agents/skills`.
+- Charts follow the `dataviz` skill; UI follows the `frontend-design` skill.
 
 ## Phases
 
@@ -264,10 +259,10 @@ active model, and two WF jobs queue rather than overlap.
 
 Template `predict_week {season, week}`: build `data/predict/week_{WW}_games_to_predict.csv` from
 `all_data_ml.csv` when missing (replicating the feature-availability check in
-`scripts/power_rankings.py::_predict_future_games` L328), then predict into the active run.
-`GET /predictions?week=` resolves run-attached files first, then unattached. Week selector shows
-predicted / not-yet status with a Generate action for admins, and a caveat that future weeks lack
-current lines, QB, and rest updates until an ETL runs.
+`nfl_predictor/reporting/power_rankings.py::_predict_future_games`), then predict into the active
+run. `GET /predictions?week=` resolves run-attached files first, then unattached. Week selector
+shows predicted / not-yet status with a Generate action for admins, and a caveat that future weeks
+lack current lines, QB, and rest updates until an ETL runs.
 Done when: in week 1 the user selects week 3 and sees predictions from the active model.
 
 ### Phase 4: pool helpers
@@ -293,7 +288,7 @@ Done when: the current-season team page shows rating heatmaps and a team detail 
 
 ### Phase 6 (deferred, design only): live betting and live odds
 
-Odds-provider adapter interface plus the `Live` blend from `betting_excel.py`
+Odds-provider adapter interface plus a `Live` blend
 (`w_time = min(1, minutes_remaining / 60)`, sigma shrink) as an endpoint. No implementation now.
 
 ## Verification
@@ -313,81 +308,11 @@ Odds-provider adapter interface plus the `Live` blend from `betting_excel.py`
 
 - Coverage floor: budget tests per module before writing code; keep threads and SSE thin and unit
   test parsers separately.
-- Collisions: rebase `feat/web-ui` only after the other session's branch lands; shared-file edits
-  limited to `pyproject.toml`, `.gitignore`, CI.
 - Node not on PATH for uvicorn: the backend never needs node at runtime.
 - Large CSVs: column projection at read, mtime cache, lazy sha256 in a background thread.
 - Lines refresh early in the week may find no lines yet: report unchanged counts and warn.
 - Security: JWT secret from env or generated file, argon2, login rate limit, Tailscale-only
   exposure recommended, cookie Secure flag documented.
-
-## Milestone 60 impact (planned 2026-09-23)
-
-Milestone 60 in `TODO.md` (CLI and entrypoint consolidation) will move most of `scripts/` into the
-package and rename or remove flags. It runs on its own branch after task 55.8 merges, and every
-change below lands with `scripts/gate.sh --web` green and an update to this section. What it
-touches on the web side:
-
-- **Job templates that launch scripts by file path.** `JobContext.script()` in
-  `nfl_predictor/api/jobs/catalog.py` resolves `scripts/<name>`, and eight templates use it:
-  `weekly_run`, `power_rankings`, `betting_xlsx` (`betting_report_excel.py`), `leakage_audit`,
-  `validate_offline`, `validate_live`, `walk_forward_backtest` and `shap_analysis`. Each moves to
-  the new command (`python -m nfl_predictor.<module>` or a console command, per the user's 60.3
-  decision) in the same chunk that moves the script, with its `tests/api/` case updated.
-- **Flags passed by templates.** The templates pass, among others, `--config` (`weekly_run`),
-  `--win-prob-calibration`, `--model-kind`, `--holdout-seasons`, `--model-in`, `--data-path`,
-  `--eval-last-n-seasons`, `--wf-start-week`, `--out-json`, `--season`, `--through-week`,
-  `--data-ml`, `--data-schedule`, `--out-dir` and `--data-dir`. A renamed flag keeps its old
-  spelling as a second option string until the templates move to the new one.
-- **Saved weekly-run configs.** The `weekly_run` template writes its parameters to
-  `data/web/job_configs/{job_id}.json` and runs `weekly_run --config` on it, so the script's own
-  key validation applies. A renamed or removed config key breaks re-running an old job; the
-  inventory (task 60.1) lists every key the template can emit.
-- **Progress parsing.** `PROGRESS_RE` in `nfl_predictor/api/jobs/runner.py` matches
-  `fold N/M` (the walk-forward loop's `Walk-forward fold N/M done` line) and `candidate N/M`
-  (the weekly run's `WF candidate N/M` line). Moving those entrypoints must keep both log lines
-  word for word, or the progress bar stops moving.
-- **Exclusive groups.** `WALK_FORWARD_GROUP` today holds `weekly_run`, `train` and
-  `walk_forward_backtest`. The "Job runner" section above still lists `golden_command`, which
-  never had a template; that script is to be retired (task 60.2).
-- **Deployment state as of 2026-09-23.** `feat/web-ui` is fully merged into `main`; the
-  `../nfl-predictor-web` worktree directory is gone (`git worktree list` marks it prunable) and
-  nothing listens on port `8765`. Before Milestone 60 starts, the user decides whether to prune the
-  worktree record and where the live instance runs from; if it runs from a checkout of `main`, the
-  job templates change as soon as a Milestone 60 chunk merges.
-
-Landed so far:
-
-- **`0.19.0` (2026-09-24): the Excel betting workbook is retired end to end.** Removed: the
-  `betting_xlsx` job template, `GET /betting/xlsx`, the `betting_xlsx` run-file download and
-  `RunFiles.betting_xlsx`, `BettingOut.xlsx_available`, and the Betting page's Workbook /
-  Generate workbook button. The Betting page's table is unchanged, since it never read the
-  workbook. The Data Status page still lists loose `reports/*.xlsx` files already on disk. Seven
-  templates now launch scripts by path. Found on the way (task 58.5, fixed in 60.7): an unknown
-  `/api/...` GET returns `index.html` with status 200 instead of a JSON 404, because the
-  history-API fallback `GET /{path:path}` in `nfl_predictor/api/routers/static.py` does not
-  exclude the `api/` prefix, contrary to its docstring.
-- **`0.26.1` (2026-09-25): the API catch-all is fixed (task 58.5).** The fallback raises the
-  API's `NotFoundError` for `/api` and every path under it, so an unmatched API route answers
-  with the JSON error body `{"error": {"code": "not_found", ...}}` and status 404 instead of
-  `index.html`. Paths outside `/api` (including look-alikes such as `/apiary`) still get the
-  frontend. `tests/api/test_static.py` pins both; the retired workbook route is now also checked
-  by status code.
-- **`0.27.0` (2026-09-25): every job template launches the front door, and the `scripts/` shims
-  are gone.** Each template builds `<python> -m nfl_predictor <command>` with the canonical
-  option names (`backtest --wf-eval-last-n-seasons`, `explain --model-in`); the table in "Job
-  runner" above maps templates to commands. The progress lines are unchanged (the same code
-  prints `Walk-forward fold N/M done` and `WF candidate N/M`), and the `weekly_run` template's
-  config keys are the weekly command's own. The model-kind vocabulary is one list
-  (`nfl_predictor.cli.options.MODEL_KINDS`, `margin_total` and `blend`) shared by the train
-  form, `train` and `rankings`, and both commands accept `blended_margin_total` as an old name
-  for `blend`, so the three launches that failed in argparse (train with
-  `blended_margin_total`, predict for a run recorded under that name, power rankings for a run
-  recorded as `blend`) now parse. A new test builds every template, with every value of every
-  choice parameter, and parses the command with the target command's own parser. Still open:
-  the power rankings cannot rank with a blend model even now (its feature spec lives on the
-  team model; question for the user in `TODO.md`, task 60.7). The walk-forward commands launched
-  from the web now also get the front door's passive OpenMP wait policy.
 
 ## Status
 
@@ -413,7 +338,7 @@ Landed so far:
 
   - **Progress regex.** The plan cited a `Walk-forward fold N/M done` line in
     `nfl_predictor/ml/walk_forward.py`; the line that actually exists is `WF candidate %d/%d` in
-    `scripts/weekly_run.py`. The runner matches both (`(?:fold|candidate) N/M`).
+    the weekly run. The runner matches both (`(?:fold|candidate) N/M`).
   - **Queue vs 409.** Both behaviors are implemented: the runner gives each exclusive group a
     single worker, so queued jobs in a group never overlap (this is the path chained jobs take),
     while `POST /api/jobs` still answers 409 `group_busy` when the group is already occupied.
@@ -448,16 +373,16 @@ Landed so far:
   run's model.
 
   Deviations: the availability check is the ETL's upcoming-game rule (season, week, and a missing
-  score) rather than a copy of `scripts/power_rankings.py::_predict_future_games`, whose feature
-  check needs a loaded model; the week file is written with every column of `all_data_ml.csv`,
-  which the prediction CLI narrows through the model's feature spec.
+  score) rather than a copy of `nfl_predictor/reporting/power_rankings.py::_predict_future_games`,
+  whose feature check needs a loaded model; the week file is written with every column of
+  `all_data_ml.csv`, which the prediction CLI narrows through the model's feature spec.
 
 - Merged (2026-09-11): `feat/web-ui` merged into `main` as version `0.8.0` after merging
   `main` (the calibration-window, total-head and quarterback work, `0.6.1`-`0.7.1`) into it;
   no conflicts. The web server libraries became core dependencies, and `README.md` /
   `AGENTS.md` now describe the app. Open phases continue as Milestone 58 in `.agents/TODO.md`.
 - Phase 4: not started. Scheduled 2026-09-24 as step 6 of the roadmap in `TODO.md`
-  ("Roadmap Status"): phases 4-6 resume after Milestone 60 has moved the scripts the job runner
-  launches (see "Milestone 60 impact" above), so the web work starts on the settled entrypoints.
+  ("Roadmap Status"): phases 4-6 build on the job runner's `nfl-predictor <command>` templates
+  ("Job runner" above).
 - Fixed in `0.26.1` (task 58.5): an unknown `/api/...` GET now returns the JSON 404 instead of
-  the frontend's `index.html` (see "Milestone 60 impact").
+  the frontend's `index.html`.

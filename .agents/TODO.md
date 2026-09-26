@@ -270,18 +270,19 @@ Acceptance:
 
 ---
 
-## Milestone 55 - Off-season configuration sweep + lock default settings
+## Milestone 55 - Tune the model and lock the default settings
 
-Formerly Milestone 39, with former Milestone 40 folded in. Deferred until the feature milestones
-land, because new feature families would invalidate sweep results.
-
-Goal: run an objective, repeatable sweep of modeling configurations under the canonical evaluation
-protocol, then write the selected configuration as the default for weekly runs.
+Goal: settle every modeling setting the weekly run ships, each by a walk-forward measurement
+under the canonical protocol, with its hypothesis and decision rule written first and two seeds
+before any default changes (rules 4 and 13). The settings are the device (55.4), the
+early-season prior blend `K` (55.3), the tree budget (55.7) and season weighting (55.8), and
+last the Optuna re-tune of the XGBoost hyperparameters on the final features and device (55.9).
+The confirmed settings become the one shared default that the weekly run and the benchmark both
+read (task 56.3), and the standard report shows how stable they are by season and week (55.6).
+The tune runs after the feature-value changes of roadmap step 4, because each of them would
+invalidate it.
 
 Tasks:
-
-Tasks 55.1 and 55.2 (a general configuration-sweep runner) were retired by the user on
-2026-09-24; the reason is under "Roadmap Status" and the record in `ARCHIVE.md`.
 
 - [ ] 55.3 (step 4) Choose `PRIOR_BLEND_GAMES` (`K`) instead of inheriting it from the strength
       blend (see the Milestone 49 follow-ups). With the sweep runner retired, this is a small

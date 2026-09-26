@@ -7,10 +7,10 @@ completed milestones") and this file.
 
 ## State (written 2026-09-25, after the `AGENTS.md` split)
 
-- `main` is at version `0.28.3` and pushed to `origin` with the user's approval: Milestone 60
-  (`0.28.1`), the pre-commit hooks (`0.28.2`) and the documentation split (`0.28.3`), each merged
-  with `--no-ff`. Branch `docs/rule-2-corrections` carries `0.28.4` and `0.28.5` (below),
-  committed and not yet merged: merging and pushing stay must-ask.
+- `main` is at version `0.28.5` and pushed to `origin` with the user's approval: Milestone 60
+  (`0.28.1`), the pre-commit hooks (`0.28.2`), the documentation split (`0.28.3`) and the rule
+  2 and 15 amendments (`0.28.4`-`0.28.5`), each merged with `--no-ff`; the feature branches are
+  deleted. Merging and pushing stay must-ask. The working tree is clean.
 - `scripts/gate.sh --web` exits `0` on the `0.28.3` tree: 1032 passed, coverage 92.21% against
   the 90% floor, 22 frontend tests.
 - `git commit` runs pre-commit hooks: file hygiene, ruff on staged Python, and a Conventional

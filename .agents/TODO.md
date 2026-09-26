@@ -70,7 +70,7 @@ Agents and humans should not rely on the shell activation state.
       `models/wf_m54_0_2023_2025_from_week1/` (checkpoints
       `models/wf_checkpoints/d112ebcba3115bafe9d9/`) and the default-flip verification arm
       `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints
-      `models/wf_checkpoints/9779c1cbb0701d23661a/`); numbers in `AGENTS.md`, "Current Focus".
+      `models/wf_checkpoints/9779c1cbb0701d23661a/`); numbers in `.agents/benchmarks.md`.
       Both predate the fingerprint changes above.
 
 ---
@@ -203,14 +203,14 @@ Rules for every feature milestone:
   `--disable-trend-features`).
 - Report a walk-forward comparison with the group on and off before marking done, read on the
   deterministic and market columns (task 59.1), over enough seasons to resolve the effect claimed.
-  The fit-noise floor (`AGENTS.md`, "Fit-noise floor on the same build") is the yardstick: on
-  three seasons a Brier difference under about `0.002`, a pick-accuracy difference under about
-  `0.01` or a margin MAE difference under about `0.06` is re-seeding noise. An arm that claims an
-  improvement runs on six seasons (`--eval-last-n-seasons 6`, about 100 minutes idle) and on
-  two seeds (`AGENTS.md` rule 13); a three-season arm can only show a tie. The 2026-09-23
-  seed-7 pair showed that on six seasons, re-seeding alone can move pick accuracy and pool points
-  by amounts whose game-resampled intervals exclude zero, so a single-seed six-season "win" is
-  not a result.
+  The fit-noise floor (`.agents/benchmarks.md`, "Fit-noise floor on the same build") is the
+  yardstick: on three seasons a Brier difference under about `0.002`, a pick-accuracy difference
+  under about `0.01` or a margin MAE difference under about `0.06` is re-seeding noise. An arm that
+  claims an improvement runs on six seasons (`--eval-last-n-seasons 6`, about 100 minutes idle) and
+  on two seeds (`AGENTS.md` rule 13); a three-season arm can only show a tie. The 2026-09-23 seed-7
+  pair showed that on six seasons, re-seeding alone can move pick accuracy and pool points by
+  amounts whose game-resampled intervals exclude zero, so a single-seed six-season "win" is not a
+  result.
 - Keep the invariant output schema: when a source is missing for a season, emit nulls.
 - XGBoost margin/total remains the only model family in scope.
 - The method borrowed from `nfl-sos-ratings` is its head-to-head-excluded opponent profiling
@@ -250,7 +250,7 @@ follow-ups below.
       the team-level `adj_off_pass_epa` is already opponent-adjusted, so the gain is confined to
       where the quarterback's history diverges from the team's (new and traded starters).
 
-2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`scripts/weekly_run.py --run-id
+2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`--run-id
 weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too late (~18:04 MDT)
 for the Thursday-night DET-at-BUF kickoff (~18:15 MDT) but predictions exist for all 16 Week 2
 games including it. Selected config `hybrid_raw_prob_base_elo_blend0.20_clamp0.10`; weeks-16-2025
@@ -301,10 +301,10 @@ Tasks 55.1 and 55.2 (a general configuration-sweep runner) were retired by the u
       is running: arms of one comparison must share a device. When it lands: a one-fold CPU-vs-GPU
       timing and prediction-difference check, a CPU fallback when no GPU is present, the device
       recorded in run metadata, and a new GPU reference arm, because later arms can no longer be
-      compared with the CPU reference numbers in `AGENTS.md`. Added 2026-09-24: a GPU determinism
-      check (the same seed twice on one fold must give identical predictions, or checkpoint resume
-      and "only one setting differs" comparisons break), and the GPU reference on two seeds, which
-      also measures the GPU's own fit-noise floor (rule 13).
+      compared with the CPU reference numbers in `.agents/benchmarks.md`. Added 2026-09-24: a GPU
+      determinism check (the same seed twice on one fold must give identical predictions, or
+      checkpoint resume and "only one setting differs" comparisons break), and the GPU reference on
+      two seeds, which also measures the GPU's own fit-noise floor (rule 13).
 - [ ] 55.6 (step 3) Add the stability view by season and week bucket, and a "recommended
       defaults" section. The second-key review script
       (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that
@@ -315,15 +315,15 @@ Tasks 55.1 and 55.2 (a general configuration-sweep runner) were retired by the u
       toward fewer trees but small; the user adopted `200` as the shared default `n_estimators`
       in walk-forward and production together, and `config/weekly_run.yaml`'s walk-forward stage
       was aligned to the production XGBoost defaults in the same chunk. Full record, the ladder
-      table and the pairwise intervals: `ARCHIVE.md`, Milestone 55, "55.7", and `AGENTS.md` under
-      "Tree-budget ladder".
+      table and the pairwise intervals: `ARCHIVE.md`, Milestone 55, "55.7", and `.agents/benchmarks.md`
+      under "Tree-budget ladder".
 - [x] 55.8 Season weighting: closed 2026-09-24 (`0.18.0`). Nine six-season arms (unweighted and
       half-lives `4`, `8`, `16`, `32`; seeds `42` and `7`, half-life `8` at seed 42 only), an
       independent review of all nine (`models/wf_m55_8_review/INDEPENDENT_REVIEW.md`), and the
       user's decision: production trains **unweighted**, in the weekly walk-forward stage and the
       final fit alike. Half-life `4` (shipped since `83ba2a7` and never measured before) lost on
-      two seeds; `16` and `32` tied. Record: `ARCHIVE.md`, Milestone 55, "55.8", and `AGENTS.md`
-      under "Season weighting and the six-season fit-noise floor".
+      two seeds; `16` and `32` tied. Record: `ARCHIVE.md`, Milestone 55, "55.8", and
+      `.agents/benchmarks.md` under "Season weighting and the six-season fit-noise floor".
 - [ ] 55.9 (step 5, with 56.3) Optuna re-tune. Added 2026-09-21 by the user's decision, to run
       **after Milestone 54 lands** (tuning before the feature set changes would have to be
       redone). Scheduled 2026-09-24 as roadmap step 5, after every feature-value change (step 4)
@@ -363,7 +363,7 @@ Acceptance:
 Formerly Milestone 41.
 
 - [x] 56.1 Add data-refresh pass-through (`--data-min-season` / `--data-max-season` or a generic
-      `--data-collection-args`) to `scripts/weekly_run.py`; the same pass-through carries the
+      `--data-collection-args`) to `nfl-predictor weekly`; the same pass-through carries the
       `--stat-prior-blend*` flags, which it cannot set today. Done 2026-09-20 (`0.12.11`) as the
       generic `--data-collection-args` string.
 - [x] 56.2 How postseason games enter evaluation, training and the rankings: closed 2026-09-21
@@ -514,9 +514,7 @@ comparison with XGBoost, as a replacement or a blend member, waits until this mi
 reopened. The CUDA build is set up without a shim (version `0.18.3`): NVIDIA's NCCL 2.31.2 for
 CUDA 13.3 replaced Ubuntu's CUDA 12 build (the mismatch behind the `cudaGetDeviceProperties_v2`
 load failure), and `nfl-lightgbm-cuda-install` keeps a CUDA build of the locked version,
-rebuilding only when needed (README, "Recommended: uv project workflow"). The GPT-5.4 session that first
-got it working used a shim and a startup hook; both are gone (transcript in
-`.agents/GPT-5-4_LightGBM_CUDA_session_transcript.md`).
+rebuilding only when needed (README, "Recommended: uv project workflow").
 
 Device check, 2026-09-24 (`.agents/m57/lightgbm_device_check.py`, output beside it in
 `lightgbm_device_check.txt`; informal: one split, train 1999-2024, predict 2025, 491 numeric
@@ -542,8 +540,7 @@ features, the shared 200-tree settings, idle machine):
 Added 2026-09-11. Phases 0-3 (scaffolding and auth, the read-only pages, jobs, future-week
 predictions) and task 58.4 (housekeeping) are done and archived under "Milestone 58 (partial)"
 in `ARCHIVE.md`; the design, decisions and per-phase status live in `web_ui_plan.md`. Work
-happens on a fresh branch off `main` (the `../nfl-predictor-web` worktree is fine for it) and
-merges back after each phase.
+happens on a fresh branch off `main` and merges back after each phase.
 
 - [ ] 58.1 Phase 4: pool helpers (confidence pool sheet, tiebreakers, survivor optimizer) per
       `web_ui_plan.md`.

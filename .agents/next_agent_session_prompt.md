@@ -5,13 +5,22 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-14) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones") and this file.
 
-## State (written 2026-09-25, after the Milestone 60 close)
+## State (written 2026-09-25, after the `AGENTS.md` split)
 
-- `main` carries Milestone 60, merged with `--no-ff` from `feat/m60-cli-consolidation` on
-  2026-09-25 with the user's approval; the local branch is deleted. Version `0.28.1`. **Not
-  pushed**: pushing is must-ask, and so is every merge. The working tree is clean.
-- `scripts/gate.sh --web` exits `0` on the merged tree: 1032 passed, coverage 92.21% against the
-  90% floor, 22 frontend tests.
+- `main` is at version `0.28.3` and pushed to `origin` with the user's approval: Milestone 60
+  (`0.28.1`), the pre-commit hooks (`0.28.2`) and the documentation split (`0.28.3`), each merged
+  with `--no-ff`; the feature branches are deleted. Pushing and merging stay must-ask. The working
+  tree is clean.
+- `scripts/gate.sh --web` exits `0` on the `0.28.3` tree: 1032 passed, coverage 92.21% against
+  the 90% floor, 22 frontend tests.
+- `git commit` runs pre-commit hooks: file hygiene, ruff on staged Python, and a Conventional
+  Commits check on the message (a merge needs a conventional message too, since `--strict` bars
+  git's default "Merge branch" text). `git push` runs `scripts/gate.sh --quick`.
+- `AGENTS.md` holds the rules; detail loads on demand. Read `.agents/benchmarks.md` before any
+  walk-forward comparison, `.agents/modeling_spec.md` before changing prediction, evaluation or
+  feature code, and `.agents/walk_forward_runbook.md` before launching a long run. Nested
+  `AGENTS.md` files under `nfl_predictor/api/`, `nfl_predictor/ml/` and `web/` carry the rules
+  for those directories.
 - Milestone 60 is archived (`ARCHIVE.md`, "Milestone 60", with a close-out listing every
   acceptance item). One acceptance item was narrowed and two leftovers moved to `TODO.md`, "From
   Milestone 60", both assigned to step 3.
@@ -31,6 +40,11 @@ completed milestones") and this file.
 
 ## What the last session did (2026-09-25)
 
+- `0.28.2`: the user's pre-commit configuration, with its commit-message hook fixed (the global
+  exclude filtered out `.git/COMMIT_EDITMSG`).
+- `0.28.3`: split `AGENTS.md` (80k to 38k characters) into the files named above, dropped the
+  `.agents/skills` excludes (agent skills are installed globally), and pointed the living docs
+  at the current modules and commands.
 - `0.25.0`-`0.28.0`: finished Milestone 60 (one thread option, the market model removed, the
   web API catch-all fix, web jobs on the front door, CI on the gate, the `compare` command).
 - `0.28.1`: closed the milestone with the user's approval. It verified that every removed option
@@ -82,16 +96,13 @@ before each Thursday game).
 
 ## How to launch a weekly run today
 
-Run `.venv/bin/nfl-predictor weekly --run-id <id> --xgb-device cuda` through a `launch.sh` with
-`nohup setsid`. Use `models/weekly_2026_week_03_full/launch.sh` for the shape only: it still names
-the deleted `scripts/weekly_run.py`, so put the command above in its place. The run reads
-`config/weekly_run.yaml`, which holds the code defaults. Do not run a weekly run or any
+Run `.venv/bin/nfl-predictor weekly --run-id <id> --xgb-device cuda` through a `launch.sh` in the
+run directory, started with `nohup setsid`. The run reads `config/weekly_run.yaml`, which holds
+the code defaults. Do not run a weekly run or any
 walk-forward unless the user asks.
 
 ## Open questions for the user
 
-- Push `main` to `origin`? It is ahead by every commit of Milestone 60 and its close
-  (must-ask; never a tag or a release).
 - Milestone 55's acceptance line still names `scripts/weekly_run.py --defaults-path
   best_config.json`. The script is gone, the option never existed, and the sweep runner it
   assumes was retired with tasks 55.1/55.2. Rewrite the acceptance when Milestone 55 closes?
@@ -101,7 +112,7 @@ walk-forward unless the user asks.
 
 - Never run two walk-forwards at once; check `uptime` and `pgrep -af "nfl-predictor
   (backtest|weekly|sweep)"` first.
-- Editing under `nfl_predictor/ml/` changes every walk-forward checkpoint fingerprint (the
-  fingerprint hashes every file there). The command-line code in `nfl_predictor/cli/` and
-  `nfl_predictor/reporting/` sits outside the fingerprint.
+- Editing a `.py` file under `nfl_predictor/ml/` (or `constants.py` or `ml_model.py`) changes
+  every walk-forward checkpoint fingerprint; the fingerprint hashes those source files. The
+  command-line code in `nfl_predictor/cli/` and `nfl_predictor/reporting/` sits outside it.
 - Re-run a plain `uv sync` after every version bump and after every merge that bumps the version.

@@ -462,7 +462,8 @@ nfl-predictor backtest --disable-feature-groups pbp
 
 `--wf-n-estimators` overrides the XGBoost tree budget for the run (every in-season fit runs the full
 budget), which is how the budget itself is measured against the default. The six-season ladder
-measured with it (`200`, `400`, `598`) is recorded in `AGENTS.md` under "Tree-budget ladder".
+measured with it (`200`, `400`, `598`) is recorded in `.agents/benchmarks.md` under "Tree-budget
+ladder".
 
 Season weighting was measured on the current `pbp`-default build
 (`data/completed_games_ml.m54_flip_through_2025.csv`): nine six-season arms (`2020-2025`, from
@@ -793,10 +794,11 @@ nfl-predictor --help          # then every command's --help, listed by the front
 ```
 
 CI installs `markdownlint-cli` for the `markdownlint .` step; on a machine that has
-`markdownlint-cli2` instead, the equivalent is
-`markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#.agents/skills"`. The
-`.agents/skills/` folder is an optional, gitignored clone of agent skills; ruff and
-`markdownlint .` skip it through `pyproject.toml` and `.markdownlintignore`.
+`markdownlint-cli2` instead, the equivalent is:
+
+```bash
+markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#web/node_modules" "#web/dist" "#.agents/*transcript*.md"
+```
 
 GitHub Actions (`.github/workflows/validation.yml`) sets up the environment, runs the
 editable-install smoke check, and then runs `scripts/gate.sh` itself, so CI and a local run check

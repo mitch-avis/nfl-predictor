@@ -22,8 +22,8 @@ Verified baseline at time of writing: `412 passed`, coverage `90.03%`, working t
 | External ratings | `nfl_predictor/utils/polars/teamrankings.py` + `scraping_utils.py` | TeamRankings ratings (predictive, SOS, future SOS, last 5/10, luck) and situational stats; floor 2003 Week 2 |
 | Final schema | `nfl_predictor/utils/polars/finalize.py` | metadata, `away_*`, `away_opponent_*`, `home_*`, `home_opponent_*`, `*_diff` (away minus home), lines, results |
 | Modeling | `nfl_predictor/ml/` | XGBoost margin/total heads, feature range `away_rest`..`home_moneyline`, market transform/anchor, calibration, quantiles |
-| Evaluation | `nfl_predictor/ml/walk_forward.py`, `scripts/walk_forward_backtest.py`, `scripts/wf_compare.py` | one fold per (season, week >= 3); train on everything strictly earlier across all seasons; calibrate on last 4 weeks |
-| Power rankings | `nfl_predictor/reporting/power_rankings.py`, `scripts/power_rankings.py`, `scripts/weekly_run.py` | Bradley-Terry fit; see section 2 |
+| Evaluation | `nfl_predictor/ml/walk_forward.py`, `nfl_predictor/cli/backtest.py`, `nfl_predictor/cli/sweep.py` | one fold per (season, week >= 3); train on everything strictly earlier across all seasons; calibrate on last 4 weeks |
+| Power rankings | `nfl_predictor/reporting/power_rankings.py`, `nfl_predictor/cli/rankings.py`, `nfl_predictor/weekly_run/` | Bradley-Terry fit; see section 2 |
 
 EPA footprint today: `passing_epa` and `passing_cpoe` per game (totals from
 `nflreadpy.load_team_stats`), their `opponent_` allowed mirrors, and the four diffs. That is 8 of
@@ -49,7 +49,7 @@ landed on 2026-09-11 (Milestone 51, see `ARCHIVE.md`): the default ranking now r
 adjusted composite from `data/strength_snapshots.csv`. The behavior described below is reachable
 only through `--legacy-franchise-fit`.
 
-As found on 2026-09-09, `scripts/power_rankings.py::_build_games_for_ratings` fit
+As found on 2026-09-09, `nfl_predictor/reporting/power_rankings.py::_build_games_for_ratings` fit
 `fit_bradley_terry_ratings` on:
 
 - every completed game in `data/all_data.csv` from `ratings_min_season` onward, and the default is
@@ -58,14 +58,12 @@ As found on 2026-09-09, `scripts/power_rankings.py::_build_games_for_ratings` fi
 - future current-season games mapped to the trained model's home win probability;
 - ridge alpha `1.0`, one shared home-field term.
 
-`scripts/weekly_run.py` uses `through_week = predicted_week - 1` and passes `ratings_min_season`
-through unchanged, so the default weekly run inherits the all-history fit. For a Week 10 ranking
-each team contributes roughly 9 current-season rows against roughly 450 historical rows. The user's
-skepticism is correct: this is a franchise-history rating with a small current-season nudge, and it
-also blends the model's own forward projections into a "strength now" number.
-
-`scripts/golden_command.py::_build_pregame_power_rankings` is a second, unrelated display artifact
-that ranks teams by the model's pregame/postgame ratings. It is not the weekly-run path.
+The weekly run (`nfl_predictor/weekly_run/`) uses `through_week = predicted_week - 1` and passes
+`ratings_min_season` through unchanged, so the default weekly run inherits the all-history fit. For
+a Week 10 ranking each team contributes roughly 9 current-season rows against roughly 450 historical
+rows. The user's skepticism is correct: this is a franchise-history rating with a small
+current-season nudge, and it also blends the model's own forward projections into a "strength now"
+number.
 
 Recommended redesign (details in section 6): make "strength now" a current-season, schedule-adjusted
 EPA rating built from games strictly before the target week, reuse the exact same snapshot columns
@@ -171,8 +169,8 @@ implementation complexity, and owning layer.
 - What: per-season `nflreadpy.load_pbp` with column selection and a Parquet cache under
   `data/cache/nflreadpy/pbp_<season>.parquet`, then one row per team-game with snap counts and
   the sums needed by every family below.
-- Source: `nfl-sos-ratings/pbp_expressions.py` (`scrimmage_snap_expr`, `value_expr`, `rate_expr`)
-  and `team_stats.compute_team_game_stats_from_pbp`.
+- Source: `nfl-sos-ratings/nfl_sos_ratings/pbp_expressions.py` (`scrimmage_snap_expr`, `value_expr`,
+  `rate_expr`) and `team_stats.compute_team_game_stats_from_pbp`.
 - Why: every high-priority family depends on it; nflreadpy keeps only an in-memory cache, so the
   repo must persist its own.
 - Floor: 1999 (matches `MIN_SEASON`). Roughly 45-50k plays per season; select about 45 columns.
@@ -180,7 +178,7 @@ implementation complexity, and owning layer.
   `aggregate_team_stats_to_week` filter (`week < target`).
 - Complexity: low-medium. Must mirror the current-season refresh and the non-fatal current-season
   404 behavior already used for team stats (pre-kickoff PBP does not exist yet).
-- Layer: ETL (`loaders.py`, new `polars/pbp.py`).
+- Layer: ETL (`loaders.py`, `nfl_predictor/utils/polars/pbp.py`).
 
 ### 4.2 Per-snap team EPA families
 
@@ -336,8 +334,8 @@ implementation complexity, and owning layer.
 
 ## 6. Power rankings redesign recommendation
 
-1. Immediate low-risk defaults (small, tested change to `scripts/power_rankings.py` and
-   `scripts/weekly_run.py`): default the fit window to the current season plus the previous
+1. Immediate low-risk defaults (small, tested change to `nfl_predictor/reporting/power_rankings.py`
+   and `nfl_predictor/weekly_run/`): default the fit window to the current season plus the previous
    season, weight previous-season rows down (about 0.25), use margin-based targets via
    `margin_to_home_win_prob` instead of `0.97 / 0.03`, and exclude future model-probability rows
    from the strength fit. Keep `--ratings-min-season` and a `--legacy-franchise-fit` flag for the
@@ -348,8 +346,6 @@ implementation complexity, and owning layer.
    rank so the ranking is explainable and identical to the model's inputs.
 3. Keep projected standings as they are: current record plus model win probabilities for the
    remaining schedule. That table is the right home for forward-looking information.
-4. Retire or clearly label `golden_command._build_pregame_power_rankings` so there is one
-   canonical ranking artifact.
 
 ## 7. Roadmap order and the first implementation session
 
@@ -384,8 +380,8 @@ The first implementation session delivered Milestone 45 end to end on 2026-09-09
 pick accuracy `0.6833`, margin MAE `9.8954`, total MAE `10.1021`, ECE `0.1308`) is recorded in
 `models/review_walk_forward_2023_2025.json` with a config matching today's defaults, but the
 default configuration did not reproduce it on the pre-change dataset and the cause was not found;
-compare future work against the working baseline in `AGENTS.md`, within one dataset build and
-code version.
+compare future work against the working baseline in `.agents/benchmarks.md`, within one dataset
+build and code version.
 
 ## 8. Guardrails specific to the PBP work
 
@@ -406,6 +402,6 @@ code version.
   still emit the invariant schema when PBP is missing for a season.
 - Cite the formula in the docstring and test each self-computed metric against a hand-built
   fixture, following the sos repo rule.
-- Run `scripts/leakage_audit.py` after every schema change; add a test that perturbing a future
+- Run `nfl-predictor leakage-audit` after every schema change; add a test that perturbing a future
   week's plays does not change an earlier week's features (the sos repo has the pattern in
   `tests/test_validation_walk_forward.py`).

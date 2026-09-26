@@ -141,9 +141,10 @@ Rules that are always enforced:
   `config/weekly_run.yaml`. The numbers are under "Season weighting and the six-season fit-noise
   floor" below. The order agreed with the user on 2026-09-24, each step on its own branch and
   merged before the next, with no deadline:
-  (1) close 55.8;
+  (1) close 55.8 (done, `0.18.0`);
   (2) Milestone 60, CLI and entrypoint consolidation widened to every file under `scripts/`,
-  behavior-preserving, with task 55.5;
+  behavior-preserving, with task 55.5 (done: closed and merged into `main` on 2026-09-25 as
+  `0.28.1`, record in `.agents/ARCHIVE.md`, Milestone 60);
   (3) production/benchmark parity: GPU as the default device (55.4), how production
   probabilities are formed (56.5), pick-time lines (56.6), and the out-of-fold calibration pool;
   (4) rebuild reproducibility, then every feature-value change (55.3, 53.7 and the feature
@@ -151,20 +152,18 @@ Rules that are always enforced:
   (5) the Optuna re-tune with wiring into production (55.9 with 56.3);
   (6) the web UI, Milestone 58 phases 4-6.
   Tasks 55.1 and 55.2 are retired. The reasoning and the follow-up assignments are under "Roadmap
-  Status" in `.agents/TODO.md`.
+  Status" in `.agents/TODO.md`. Step 3 is next.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-24 (`main` at `703ea25`, version `0.18.0`, re-run on the fresh
-  `feat/m60-cli-consolidation` branch): `scripts/gate.sh` exits `0` (`889 passed`, coverage
-  `92.45%` against the enforced `90%` floor; ruff format, ruff, ty, pyright, markdownlint,
-  `uv lock --check`, `uv sync --check --active` and the CLI help smoke checks all clean).
-  `feat/m55-8-season-weighting` (the task 55.8 close-out, the 2026-09-24 roadmap and the
-  guardrail rules 9-14) is merged into `main` and pushed. The
-  frontend gate was last verified at the `0.8.0` merge; run `scripts/gate.sh --web` whenever
+- Validated baseline on 2026-09-25 (`main` after the Milestone 60 merge, version `0.28.1`):
+  `scripts/gate.sh --web` exits `0` (`1032 passed`, coverage `92.21%` against the enforced `90%`
+  floor, 22 frontend tests; ruff format, ruff, ty, pyright, markdownlint, `uv lock --check`,
+  `uv sync --check --active`, the `--help` smoke check of every command and the web gate all
+  clean). `main` is not pushed yet; pushing is must-ask. Run `scripts/gate.sh --web` whenever
   `web/` or `nfl_predictor/api/` changes.
   - `.agents/skills/` is a separate git clone of agent skills: gitignored, excluded from ruff
     (`pyproject.toml`) and markdownlint (`.markdownlintignore`; pass `"#.agents/skills"` to
@@ -519,7 +518,8 @@ accepted these amendments.
      change that alters feature values at ETL time;
    - closing a milestone, reopening a parked one (Milestone 57), or reordering the roadmap;
    - merging to `main` or pushing (tags and releases: never, see above);
-   - touching `../nfeloqb`, `../nfl-sos-ratings`, or the web API on port 8765;
+   - touching `../nfeloqb`, `../nfl-sos-ratings`, or the running web API (`nfl-predictor web`,
+     port 8000 by default; it ran on port 8765 from a worktree until 2026-09-23);
    - a third walk-forward run on one task, or any six-season run, unless it is a rung of a
      ladder the user has already accepted under rule 4 and is within that ladder's cap;
    - anything the task text says to decide with the user.
@@ -790,6 +790,11 @@ options. `scripts/` holds only `gate.sh` since `0.27.0`.
 - `web/` is the Vite + React 19 + Tailwind app; it is excluded from ruff, pyright and ty.
   Its gate (`source ~/.nvm/nvm.sh`, then in `web/`: `npm run lint`, `npm run typecheck`,
   `npx vitest run`, `npm run build`) runs as the `web` job in CI; run it whenever `web/` changes.
+- `nfl-predictor web` serves the built app from `web/dist/` on port 8000. `--reload` restarts the
+  server on any Python file change in the checkout (so an agent's edits, checkouts and merges
+  restart it), which marks running jobs failed, and its watcher takes about half a core: never
+  launch a web job from a `--reload` server, and say so before editing code while one runs.
+  `web/README.md`, "Which mode to use", covers the Vite dev server on port 5173.
 - Tests for the backend live in `tests/api/`; the design, decisions and phase status live in
   `.agents/web_ui_plan.md`, and `web/README.md` documents the runtime configuration.
 

@@ -21,7 +21,6 @@ exclude: |
     \.venv/|
     build/|
     dist/|
-    \.agents/skills/|
     web/node_modules/|
     web/dist/|
     nfl-sos-ratings/

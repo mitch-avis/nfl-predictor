@@ -90,8 +90,6 @@ extend-exclude = [
     "build",
     "dist",
     "web",
-    # A separate git clone of agent skills, not part of this project.
-    ".agents/skills",
 ]
 
 [tool.ruff.lint]

@@ -67,8 +67,8 @@ markdownlint_step() {
     if command -v markdownlint >/dev/null 2>&1; then
         markdownlint .
     elif command -v markdownlint-cli2 >/dev/null 2>&1; then
-        markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#.agents/skills" \
-            "#web/node_modules" "#web/dist" "#.agents/*transcript*.md"
+        markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#web/node_modules" \
+            "#web/dist" "#.agents/*transcript*.md"
     else
         echo "neither markdownlint nor markdownlint-cli2 is installed" >&2
         return 1

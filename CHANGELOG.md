@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.28.1] - 2026-09-25
+
+### Changed
+
+- Milestone 60 (CLI and entrypoint consolidation) is closed and archived, with its acceptance
+  list checked at the close. One item is narrowed: the live launch of each web job template is
+  still to do (the user asked to test the weekly-run and walk-forward jobs later), and it moves,
+  with the power rankings for a `blend` run, to a follow-up group in `.agents/TODO.md`.
+- `README.md` says what drives the default power rankings: per-snap EPA and special teams, not
+  wins or points, blended early in a season with last season's solve; the trained model supplies
+  only the projected standings.
+- `web/README.md`, `README.md` and `AGENTS.md` say when to use `nfl-predictor web`, `--reload`
+  and the Vite dev server. A `--reload` restart marks running jobs failed, so jobs are launched
+  from a server started without it. The guardrail on the running web API names its current port
+  (8000).
+
+### Added
+
+- `.agents/m60/verify_removals.py`: every one of the 38 options that no longer exist on any
+  parser since the CLI surface snapshot was created has a note in this changelog, either by name
+  or through its script's recorded retirement.
+- `.agents/findings_2026_09_25/`: two diagnostics behind new follow-ups. The Model page's feature
+  importance sums XGBoost's average gain per split over one-hot columns, which puts the
+  next-opponent and stadium-surface columns first while total gain ranks them near the bottom;
+  and the early-season strength snapshot is dominated by last season's solve.
+
+### Removed
+
+- Three spent agent documents, all in git history: `.agents/m60_cli_flag_audit.md` (superseded
+  by the generated inventory), `.agents/independent_review_55_8_prompt.md` and
+  `.agents/web_ui_session_prompt.md`.
+
 ## [0.28.0] - 2026-09-25
 
 ### Added

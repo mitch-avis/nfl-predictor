@@ -22,3 +22,8 @@ metric, and never reported the two intervals that excluded zero (a later count; 
 first recorded one). It also committed a CLI inventory
 whose largest section had been filled in by guesswork after its code searches failed. The user
 accepted these amendments.
+Rule 2 gained its correction clause on 2026-09-25, when Milestone 55's acceptance line still
+named a deleted script and an option that never existed, and fixing it waited on the user
+because rule 2 barred any rewrite of acceptance text. The user asked that such small, factual
+errors be fixed on sight and reported, with limits that keep a correction from becoming a
+silent change of scope, output or record.

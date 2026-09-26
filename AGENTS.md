@@ -96,7 +96,22 @@ are not advisory.
    substitute method, a skipped acceptance criterion), the task stays `[ ]` with a `Narrowed:`
    note giving the difference, the reason and where the remainder now lives, and the difference
    goes on the user's question list. Rewriting the acceptance text to fit the delivery is not
-   allowed.
+   allowed. **Correcting is not narrowing:** an error noticed outside the current task may be
+   fixed without asking first when all of these hold; if any fails, it is a question.
+   - It is a fact, not a choice: a stale path, command or option name, a broken pointer, a
+     typo, or a bug whose correct behavior the repo already states (a docstring, test,
+     documented contract or error message), with exactly one plausible fix.
+   - Meaning is unchanged. Corrected task or acceptance text names the current equivalent of
+     what was asked, keeps the same bar and every criterion, and no checkbox changes state. A
+     code fix changes no output of a weekly run, walk-forward or ETL, and touches no
+     fingerprinted file (`nfl_predictor/ml/*.py`, `constants.py`, `ml_model.py`).
+   - Nothing under rule 5 is involved, no measured number changes (rule 3), and records stay as
+     written: `.agents/ARCHIVE.md`, past `CHANGELOG.md` entries, run directories, benchmark
+     provenance.
+   - It is small and verified: one logical change of a few lines, a failing test first for
+     code, `scripts/gate.sh` green.
+   - The user is told: the next check-in lists it under "Fixed without asking" (before, after,
+     why), and a code or tooling fix gets a changelog line.
 3. **Two keys on every number.** The agent that produced a run never writes its numbers into
    `AGENTS.md`, `.agents/benchmarks.md`, `.agents/ARCHIVE.md`, `.agents/TODO.md`
    or `CHANGELOG.md`. A reviewer (a separate
@@ -138,8 +153,8 @@ are not advisory.
 6. **May proceed without asking:**
    - commits on the working feature branch after each versioned chunk (Conventional Commits, one
      logical change per commit, the attribution line the harness provides);
-   - fixes with a failing test first, and doc updates that restate numbers already verified
-     under rule 3;
+   - fixes with a failing test first within the current task, corrections under rule 2, and doc
+     updates that restate numbers already verified under rule 3;
    - one walk-forward run per written hypothesis, within rule 4;
    - creating the milestone's feature branch off `main` when none exists.
 7. **Check-ins.** Report at every landed version and after every walk-forward run: what landed,

@@ -24,11 +24,9 @@ import xgboost as xgb
 from scipy.sparse import spmatrix
 from scipy.stats import norm
 from sklearn.compose import ColumnTransformer
-from sklearn.isotonic import IsotonicRegression
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.linear_model import Ridge
 from sklearn.metrics import (
     brier_score_loss,
-    log_loss,
     mean_absolute_error,
 )
 
@@ -78,16 +76,23 @@ DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
-AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES = 200
 NORMAL_Z_P90 = 1.281551565545
 P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
 MIN_WIN_PROB_SIGMA = 0.5
-PLATT_C_GRID = (0.01, 0.1, 1.0, 10.0)
+# The one win-probability calibration: the deterministic floor, the predicted margin through
+# the fixed normal curve. ``none`` is an accepted second spelling of ``auto``.
+CALIBRATION_FLOOR = "auto"
+_CALIBRATION_ALIASES = frozenset({"auto", "none"})
+RETIRED_CALIBRATIONS = frozenset({"platt", "isotonic", "sigma", "logistic", "elo"})
 
 
 @dataclass(frozen=True)
 class WinProbCalibrator:
-    """Calibration model for mapping margin predictions to win probabilities."""
+    """A saved model's fitted or Elo calibrator; those calibrators were retired.
+
+    Kept only so checkpoints saved before the retirement still unpickle. Loading one logs the
+    calibrator and drops it; predictions are the deterministic floor.
+    """
 
     method: str
     model: Any
@@ -102,7 +107,6 @@ class MarginTotalModel:
     margin_model: xgb.XGBRegressor
     total_model: xgb.XGBRegressor
     target_columns: tuple[str, str]
-    calibrator: WinProbCalibrator | None
     margin_quantile_models: dict[float, xgb.XGBRegressor] | None = None
     total_quantile_models: dict[float, xgb.XGBRegressor] | None = None
     quantiles: tuple[float, ...] | None = None
@@ -707,103 +711,35 @@ def _fit_quantile_models(
     return models
 
 
-def _fit_win_prob_calibrator(
-    pred_margin: np.ndarray,
-    actual_home_win: np.ndarray,
-    method: str,
-    sample_weight: np.ndarray | None = None,
-    actual_margin: np.ndarray | None = None,
-    seasons: np.ndarray | None = None,
-    excluded_season: int | None = None,
-) -> WinProbCalibrator | None:
-    method = resolve_win_prob_calibration_method(method, len(pred_margin))
-    if method == "none":
-        return None
-    if method == "sigma":
-        if actual_margin is None:
-            raise ValueError("Sigma calibration requires actual_margin values.")
-        sigma = _estimate_win_prob_sigma_from_residuals(
-            pred_margin,
-            actual_margin,
-            sample_weight=sample_weight,
+def resolve_calibration(method: str) -> str:
+    """Return ``auto`` for either spelling of the deterministic floor.
+
+    Raises:
+        ValueError: If ``method`` names a retired calibrator or is unknown.
+
+    """
+    normalized = method.lower()
+    if normalized in _CALIBRATION_ALIASES:
+        return CALIBRATION_FLOOR
+    if normalized in RETIRED_CALIBRATIONS:
+        raise ValueError(
+            f"Calibration {method!r} was retired: every run submits the deterministic floor "
+            "(auto, also spelled none)."
         )
-        return WinProbCalibrator(method=method, model=sigma)
-    if method == "elo":
-        # Deterministic mapping; no fitting.
-        return WinProbCalibrator(method=method, model=None)
-    if method == "platt":
-        c_value = _select_platt_regularization(
-            pred_margin,
-            actual_home_win,
-            sample_weight=sample_weight,
-            seasons=seasons,
-            excluded_season=excluded_season,
-        )
-        model = LogisticRegression(solver="lbfgs", C=c_value)
-        model.fit(pred_margin.reshape(-1, 1), actual_home_win, sample_weight=sample_weight)
-        return WinProbCalibrator(method=method, model=model)
-    if method == "isotonic":
-        model = IsotonicRegression(out_of_bounds="clip")
-        model.fit(pred_margin, actual_home_win, sample_weight=sample_weight)
-        return WinProbCalibrator(method=method, model=model)
-    raise ValueError(f"Unknown win probability calibration method: {method}")
-
-
-def normalize_win_prob_calibration_method(method: str) -> str:
-    """Normalize calibration method names (e.g., logistic -> platt)."""
-    method = method.lower()
-    if method == "logistic":
-        return "platt"
-    return method
-
-
-def resolve_win_prob_calibration_method(method: str, sample_count: int) -> str:
-    """Resolve calibration method with support for auto selection."""
-    method = normalize_win_prob_calibration_method(method)
-    if method == "isotonic" and 0 < sample_count < AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES:
-        return "sigma"
-    if method != "auto":
-        return method
-    if sample_count <= 0:
-        return "none"
-    return "none"
+    raise ValueError(f"Unknown win probability calibration method: {method!r}")
 
 
 def _predict_home_win_prob(
     pred_margin: np.ndarray,
-    calibrator: WinProbCalibrator | None,
     *,
     sigma: np.ndarray | None = None,
     use_uncertainty: bool = False,
 ) -> np.ndarray:
     if not use_uncertainty:
-        if calibrator is None:
-            return _margin_to_home_win_prob(pred_margin)
-        if calibrator.method == "sigma":
-            sigma_value = np.full_like(
-                np.asarray(pred_margin, dtype=float),
-                float(calibrator.model),
-            )
-            return np.clip(_margin_to_home_win_prob_with_sigma(pred_margin, sigma_value), 0.0, 1.0)
-        if calibrator.method == "elo":
-            return np.clip(_margin_to_home_win_prob_elo_style(pred_margin), 0.0, 1.0)
-        if calibrator.method == "isotonic":
-            probs = calibrator.model.predict(pred_margin)
-        else:
-            probs = calibrator.model.predict_proba(pred_margin.reshape(-1, 1))[:, 1]
-        return np.clip(probs, 0.0, 1.0)
-
+        return _margin_to_home_win_prob(pred_margin)
     sigma_arr = _coerce_sigma(pred_margin, sigma)
     sigma_arr = np.clip(sigma_arr, MIN_WIN_PROB_SIGMA, None)
-    z_score = np.asarray(pred_margin, dtype=float) / sigma_arr
-
-    if calibrator is None or calibrator.method == "elo":
-        return _margin_to_home_win_prob_with_sigma(pred_margin, sigma_arr)
-    if calibrator.method == "isotonic":
-        probs = calibrator.model.predict(z_score)
-    else:
-        probs = calibrator.model.predict_proba(z_score.reshape(-1, 1))[:, 1]
-    return np.clip(probs, 0.0, 1.0)
+    return _margin_to_home_win_prob_with_sigma(pred_margin, sigma_arr)
 
 
 def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarray:
@@ -988,103 +924,6 @@ def _coerce_sigma(
     if sigma_arr.shape != margin.shape:
         return np.full_like(margin, float(sigma_arr), dtype=float)
     return sigma_arr
-
-
-def _estimate_win_prob_sigma_from_residuals(
-    pred_margin: np.ndarray,
-    actual_margin: np.ndarray,
-    *,
-    sample_weight: np.ndarray | None = None,
-    min_sigma: float = MIN_WIN_PROB_SIGMA,
-) -> float:
-    """Estimate a single sigma from margin residuals for deterministic calibration."""
-    pred_margin_arr = np.asarray(pred_margin, dtype=float)
-    actual_margin_arr = np.asarray(actual_margin, dtype=float)
-    residual = actual_margin_arr - pred_margin_arr
-    if sample_weight is None:
-        residual_centered = residual - float(np.mean(residual))
-        sigma = float(np.sqrt(np.mean(residual_centered**2)))
-    else:
-        weights = np.asarray(sample_weight, dtype=float)
-        residual_mean = float(np.average(residual, weights=weights))
-        sigma = float(np.sqrt(np.average((residual - residual_mean) ** 2, weights=weights)))
-    return max(sigma, float(min_sigma))
-
-
-def _select_platt_regularization(
-    pred_margin: np.ndarray,
-    actual_home_win: np.ndarray,
-    *,
-    sample_weight: np.ndarray | None,
-    seasons: np.ndarray | None,
-    excluded_season: int | None,
-) -> float:
-    """Choose the Platt-scaling regularization strength using only pre-eval seasons."""
-    if seasons is None:
-        return 1.0
-
-    seasons_arr = np.asarray(seasons)
-    if excluded_season is not None:
-        tuning_mask = seasons_arr != excluded_season
-    else:
-        tuning_mask = np.ones(len(seasons_arr), dtype=bool)
-
-    tuning_seasons = sorted({int(season) for season in seasons_arr[tuning_mask]})
-    if len(tuning_seasons) < 2:
-        return 1.0
-
-    validation_season = tuning_seasons[-1]
-    train_mask = tuning_mask & (seasons_arr < validation_season)
-    validation_mask = tuning_mask & (seasons_arr == validation_season)
-    if train_mask.sum() == 0 or validation_mask.sum() == 0:
-        return 1.0
-
-    train_outcomes = np.asarray(actual_home_win)[train_mask]
-    validation_outcomes = np.asarray(actual_home_win)[validation_mask]
-    if len(np.unique(train_outcomes)) < 2 or len(np.unique(validation_outcomes)) < 2:
-        return 1.0
-
-    pred_margin_arr = np.asarray(pred_margin, dtype=float)
-    weights_arr = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
-    best_c = 1.0
-    best_loss = float("inf")
-    for c_value in PLATT_C_GRID:
-        model = LogisticRegression(solver="lbfgs", C=float(c_value))
-        fit_weights = None if weights_arr is None else weights_arr[train_mask]
-        model.fit(
-            pred_margin_arr[train_mask].reshape(-1, 1),
-            train_outcomes,
-            sample_weight=fit_weights,
-        )
-        validation_prob = model.predict_proba(pred_margin_arr[validation_mask].reshape(-1, 1))[:, 1]
-        validation_prob = np.clip(validation_prob, 1e-15, 1.0 - 1e-15)
-        validation_loss = log_loss(validation_outcomes, validation_prob, labels=[0, 1])
-        if validation_loss < best_loss:
-            best_loss = float(validation_loss)
-            best_c = float(c_value)
-    return best_c
-
-
-def _margin_to_home_win_prob_elo_style(
-    margin: np.ndarray,
-    *,
-    points_per_400_elo: float = 16.0,
-) -> np.ndarray:
-    """Map predicted margin to win probability via an Elo-style logistic.
-
-    This is a deterministic mapping:
-
-        p(home win) = 1 / (1 + 10 ** (-margin / points_per_400_elo))
-
-    where `margin` is in points (home_score - away_score).
-
-    Compared to Platt scaling, this tends to produce less extreme probabilities for
-    large-but-plausible margins and can be useful as an alternative for pool display.
-    """
-    if points_per_400_elo <= 0:
-        raise ValueError("points_per_400_elo must be positive.")
-    margin = np.asarray(margin, dtype=float)
-    return 1.0 / (1.0 + np.power(10.0, -margin / points_per_400_elo))
 
 
 def _rank_confidence(strength: np.ndarray, tiebreaker: np.ndarray | None = None) -> np.ndarray:
@@ -1293,9 +1132,23 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
         )
     if not isinstance(model, MarginTotalModel):
         raise ValueError("Model checkpoint type mismatch; expected MarginTotalModel.")
+    _drop_retired_calibrator(model, path)
     _drop_retired_market_blend(model, path)
     log.info("Loaded model checkpoint from %s", path)
     return model
+
+
+def _drop_retired_calibrator(model: Any, path: Path) -> None:
+    """Remove a saved fitted or Elo calibrator from a loaded model, saying what is ignored."""
+    calibrator = model.__dict__.pop("calibrator", None)
+    if calibrator is None:
+        return
+    log.warning(
+        "%s was saved with the '%s' calibrator; fitted and Elo calibrators were retired, so it "
+        "predicts the deterministic floor.",
+        path,
+        getattr(calibrator, "method", type(calibrator).__name__),
+    )
 
 
 def _drop_retired_market_blend(model: Any, path: Path) -> None:
@@ -1375,7 +1228,6 @@ def derive_scores_from_margin_total(
 
 def predict_home_win_prob(
     pred_margin: np.ndarray,
-    calibrator: WinProbCalibrator | None,
     *,
     sigma: np.ndarray | None = None,
     use_uncertainty: bool = False,
@@ -1383,11 +1235,10 @@ def predict_home_win_prob(
     """Predict home win probability from margin predictions.
 
     When `use_uncertainty` is True, the margin is normalized by `sigma` before
-    computing probabilities (and any calibrator is fit/predicted on that scale).
+    computing probabilities.
     """
     return _predict_home_win_prob(
         pred_margin,
-        calibrator,
         sigma=sigma,
         use_uncertainty=use_uncertainty,
     )

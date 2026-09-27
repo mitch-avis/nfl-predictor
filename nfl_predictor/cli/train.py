@@ -24,7 +24,6 @@ from nfl_predictor.ml.ml_model_core import (
     OptunaConfig,
     TrainingResult,
     _load_model_checkpoint,
-    normalize_win_prob_calibration_method,
 )
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
@@ -141,9 +140,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--win-prob-calibration",
-        choices=["none", "platt", "isotonic", "sigma", "elo", "auto", "logistic"],
-        default="isotonic",
-        help="Calibration method for win probabilities (logistic is an alias for platt).",
+        choices=["auto", "none"],
+        default="auto",
+        help=(
+            "Win-probability calibration: auto, the deterministic floor (the predicted margin "
+            "through the fixed normal curve); none is the same."
+        ),
     )
     parser.add_argument(
         "--win-prob-uncertainty",
@@ -295,7 +297,6 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     """CLI entry point for training and prediction."""
     args = _parse_args()
-    args.win_prob_calibration = normalize_win_prob_calibration_method(args.win_prob_calibration)
     win_prob_use_uncertainty = bool(args.win_prob_uncertainty)
 
     created_at = artifacts.now_utc_iso()
@@ -399,7 +400,6 @@ def main() -> None:
         calibration_weeks=args.calibration_weeks,
         include_market=not args.exclude_market,
         max_cardinality_ratio=args.max_cardinality_ratio,
-        win_prob_calibration=args.win_prob_calibration,
         win_prob_use_uncertainty=win_prob_use_uncertainty,
         optuna_config=optuna_config,
         market_transform=args.market_transform,

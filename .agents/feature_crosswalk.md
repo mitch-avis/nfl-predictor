@@ -22,7 +22,7 @@ Verified baseline at time of writing: `412 passed`, coverage `90.03%`, working t
 | External ratings | `nfl_predictor/utils/polars/teamrankings.py` + `scraping_utils.py` | TeamRankings ratings (predictive, SOS, future SOS, last 5/10, luck) and situational stats; floor 2003 Week 2 |
 | Final schema | `nfl_predictor/utils/polars/finalize.py` | metadata, `away_*`, `away_opponent_*`, `home_*`, `home_opponent_*`, `*_diff` (away minus home), lines, results |
 | Modeling | `nfl_predictor/ml/` | XGBoost margin/total heads, feature range `away_rest`..`home_moneyline`, market transform/anchor, calibration, quantiles |
-| Evaluation | `nfl_predictor/ml/walk_forward.py`, `nfl_predictor/cli/backtest.py` | one fold per (season, week >= 3); train on everything strictly earlier across all seasons; calibrate on last 4 weeks |
+| Evaluation | `nfl_predictor/ml/walk_forward.py`, `nfl_predictor/cli/backtest.py` | one fold per (season, week >= 3); train on everything strictly earlier across all seasons; win probability from the fixed normal curve, no fitted calibration |
 | Power rankings | `nfl_predictor/reporting/power_rankings.py`, `nfl_predictor/cli/rankings.py`, `nfl_predictor/weekly_run/` | Bradley-Terry fit; see section 2 |
 
 EPA footprint today: `passing_epa` and `passing_cpoe` per game (totals from

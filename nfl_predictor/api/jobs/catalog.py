@@ -211,7 +211,6 @@ def _build_train(ctx: JobContext) -> list[str]:
         run_id,
     ]
     _flag(argv, "--holdout-seasons", ctx.params.get("holdout_seasons"))
-    _flag(argv, "--win-prob-calibration", ctx.params.get("win_prob_calibration"))
     return argv
 
 
@@ -443,13 +442,6 @@ TEMPLATES: tuple[JobTemplate, ...] = (
                 "Most recent seasons held out of training.",
                 minimum=0,
                 maximum=10,
-            ),
-            ParamSpec(
-                "win_prob_calibration",
-                "Calibration",
-                "choice",
-                "Win-probability calibration method.",
-                choices=("platt", "isotonic", "none"),
             ),
         ),
         exclusive_group=WALK_FORWARD_GROUP,

@@ -282,7 +282,7 @@ def test_the_final_fit_uses_the_configured_market_mode_and_the_floor(
         pipeline.main()
 
     assert (captured["include_market"], captured["market_anchor"]) == (False, True)
-    assert captured["win_prob_calibration"] == "auto"
+    assert "win_prob_calibration" not in captured
     assert "market_prob_config" not in captured
     assert captured["win_prob_use_uncertainty"] is False
 

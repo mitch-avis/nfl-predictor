@@ -450,7 +450,6 @@ def main() -> int:
             calibration_weeks=int(train_calibration_weeks),
             include_market=include_market,
             max_cardinality_ratio=float(args.max_cardinality_ratio),
-            win_prob_calibration=resolved_calibration,
             optuna_config=optuna_config,
             market_transform=bool(market_transform),
             market_anchor=bool(market_anchor),

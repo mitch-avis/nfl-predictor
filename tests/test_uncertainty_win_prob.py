@@ -29,6 +29,6 @@ def test_predict_home_win_prob_uses_sigma() -> None:
     """Uncertainty-aware probabilities should use margin/sigma."""
     margin = np.array([7.0])
     sigma = np.array([7.0])
-    prob = core.predict_home_win_prob(margin, None, sigma=sigma, use_uncertainty=True)
+    prob = core.predict_home_win_prob(margin, sigma=sigma, use_uncertainty=True)
     expected = norm.cdf(margin / sigma)
     assert np.allclose(prob, expected)

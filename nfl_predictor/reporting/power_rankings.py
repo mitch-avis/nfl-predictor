@@ -927,7 +927,6 @@ def _predict_future_games(
             )
         home_win_prob = ml_model_core.predict_home_win_prob(
             pred_margin,
-            mt.calibrator,
             sigma=sigma_margin,
             use_uncertainty=use_uncertainty,
         )

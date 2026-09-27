@@ -24,10 +24,10 @@ wf_checkpoint_per_fold: false
 wf_eval_last_n_seasons: 3
 # starting week for walk-forward evaluation (default: 3)
 wf_start_week: 3
-# walk-forward calibration weeks: a positive value switches on the pooled calibrator frame for
-# fitted calibrators, and walk-forward folds hold nothing out of the tree fit; it is also the
-# default for train_calibration_weeks, where the final fit holds that many newest weeks out of
-# the tree fit (default: 4)
+# walk-forward calibration weeks: in the walk-forward a positive value selects a frame that
+# XGBoost only evaluates (folds hold nothing out of the tree fit, and no calibrator is fitted);
+# it is also the default for train_calibration_weeks, where the final fit holds that many newest
+# weeks out of the tree fit (default: 4)
 wf_calibration_weeks: 4
 # exponential recency weighting half-life in seasons (default: none, i.e. unweighted; keep it
 # equal to train_recency_half_life_seasons)

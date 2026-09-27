@@ -51,7 +51,6 @@ def trained(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
         calibration_weeks=4,
         include_market=True,
         max_cardinality_ratio=0.5,
-        win_prob_calibration="none",
         optuna_config=OPTUNA_OFF,
         market_transform=True,
         market_anchor=True,

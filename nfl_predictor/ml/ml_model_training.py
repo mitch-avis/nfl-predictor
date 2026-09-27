@@ -37,7 +37,6 @@ from nfl_predictor.ml.ml_model_core import (
     _fit_margin_total_models,
     _fit_quantile_models,
     _fit_transform_matrix,
-    _fit_win_prob_calibrator,
     _get_target_columns,
     _load_games,
     _predict_home_win_prob,
@@ -52,9 +51,7 @@ from nfl_predictor.ml.ml_model_core import (
     _summarize_missing_data,
     _transform_matrix,
     _validate_quantiles,
-    describe_season_weeks,
     get_market_baseline,
-    resolve_win_prob_calibration_method,
 )
 from nfl_predictor.ml.sample_weights import (
     combine_sample_weights,
@@ -118,40 +115,6 @@ def _log_calibration_split(split: TrainCalibrationSplit) -> None:
     log.info("Holdout seasons: %s", [int(season) for season in split.holdout_seasons])
 
 
-def _log_calibrator_frame(frame: pd.DataFrame) -> None:
-    """Log the seasons and weeks of the pooled frame fitted calibrators use."""
-    log.info("Calibrator frame: %s (%d rows)", describe_season_weeks(frame), len(frame))
-
-
-def _pooled_calibration_frame(
-    base_pool_df: pd.DataFrame,
-    *,
-    calibration_seasons: int,
-    calibration_weeks: int,
-) -> pd.DataFrame:
-    """Return the pooled calibration frame used for win-probability post-processing."""
-    if calibration_seasons <= 0 and calibration_weeks <= 0:
-        return base_pool_df.iloc[0:0].copy()
-    if (
-        base_pool_df.empty
-        or "season" not in base_pool_df.columns
-        or "week" not in base_pool_df.columns
-    ):
-        return base_pool_df.iloc[0:0].copy()
-    frontier_season = int(pd.to_numeric(base_pool_df["season"], errors="coerce").max())
-    frontier_weeks = pd.to_numeric(
-        base_pool_df.loc[base_pool_df["season"] == frontier_season, "week"], errors="coerce"
-    ).dropna()
-    frontier_week = int(frontier_weeks.max()) + 1 if not frontier_weeks.empty else 1
-    season = pd.to_numeric(base_pool_df["season"], errors="coerce")
-    week = pd.to_numeric(base_pool_df["week"], errors="coerce")
-    lower_season = frontier_season - 2
-    mask = ((season >= lower_season) & (season < frontier_season)) | (
-        (season == frontier_season) & (week < frontier_week)
-    )
-    return base_pool_df.loc[mask].copy()
-
-
 def train_margin_total_model(
     data_path: Path,
     holdout_seasons: int,
@@ -159,7 +122,6 @@ def train_margin_total_model(
     calibration_weeks: int,
     include_market: bool,
     max_cardinality_ratio: float,
-    win_prob_calibration: str,
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
@@ -172,7 +134,7 @@ def train_margin_total_model(
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
     recency_half_life_seasons: float | None = None,
 ) -> MarginTotalModel:
-    """Train margin/total models with optional calibration."""
+    """Train margin/total models; win probabilities are the deterministic floor."""
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
@@ -349,90 +311,6 @@ def train_margin_total_model(
         baseline_margin_calibration,
     ) = _train_models(train_df, calibration_df)
 
-    calibration_fit_df = _pooled_calibration_frame(
-        pd.concat([train_df, calibration_df], ignore_index=True),
-        calibration_seasons=calibration_seasons,
-        calibration_weeks=calibration_weeks,
-    )
-    _log_calibrator_frame(calibration_fit_df)
-
-    resolved_calibration = resolve_win_prob_calibration_method(
-        win_prob_calibration,
-        len(calibration_fit_df),
-    )
-    if win_prob_use_uncertainty and resolved_calibration == "elo":
-        log.info("Elo calibration ignored for uncertainty-aware probabilities; using 'none'.")
-        resolved_calibration = "none"
-    calibrator = None
-    if resolved_calibration == "elo":
-        calibrator = _fit_win_prob_calibrator(
-            np.array([0.0], dtype=float),
-            np.array([0], dtype=int),
-            resolved_calibration,
-        )
-    elif resolved_calibration != "none":
-        if calibration_fit_df.empty:
-            raise ValueError("Calibration requested but no calibration seasons configured.")
-        x_calibration_fit = _transform_matrix(
-            preprocessor,
-            _apply_feature_spec(calibration_fit_df, feature_spec),
-        )
-        pred_margin_calib = _predict_xgb(margin_model, x_calibration_fit)
-        baseline_margin_calibration_fit = None
-        if market_anchor:
-            baseline_margin_calibration_fit, _ = get_market_baseline(calibration_fit_df)
-            pred_margin_calib = pred_margin_calib + baseline_margin_calibration_fit
-        pred_margin_inputs = pred_margin_calib
-        if win_prob_use_uncertainty:
-            pred_margin_quantiles_calib = {
-                q: _predict_xgb(q_model, x_calibration_fit)
-                for q, q_model in margin_quantile_models.items()
-            }
-            if market_anchor and baseline_margin_calibration_fit is not None:
-                for q in list(pred_margin_quantiles_calib.keys()):
-                    pred_margin_quantiles_calib[q] = (
-                        pred_margin_quantiles_calib[q] + baseline_margin_calibration_fit
-                    )
-            sigma_calibration = _resolve_margin_sigma(
-                pred_margin_calib,
-                pred_margin_quantiles_calib,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
-            pred_margin_inputs = pred_margin_calib / sigma_calibration
-        away_col, home_col = target_columns
-        actual_home_win = (calibration_fit_df[home_col] > calibration_fit_df[away_col]).astype(int)
-        actual_margin_calib = calibration_fit_df[home_col].to_numpy(
-            dtype=float
-        ) - calibration_fit_df[away_col].to_numpy(dtype=float)
-        calibration_postseason = compute_postseason_sample_weight(
-            calibration_fit_df,
-            include_postseason=include_postseason,
-            postseason_weight=postseason_weight,
-        )
-        calibration_recency = compute_recency_sample_weight(
-            calibration_fit_df,
-            half_life_seasons=recency_half_life_seasons,
-        )
-        calibration_weight = combine_sample_weights(calibration_postseason, calibration_recency)
-        calibration_season_values = (
-            calibration_fit_df["season"].to_numpy(dtype=int)
-            if "season" in calibration_fit_df.columns
-            else None
-        )
-        calibrator = _fit_win_prob_calibrator(
-            pred_margin_inputs,
-            actual_home_win.to_numpy(),
-            resolved_calibration,
-            sample_weight=calibration_weight,
-            actual_margin=actual_margin_calib,
-            seasons=calibration_season_values,
-            excluded_season=(
-                int(calibration_fit_df["season"].max())
-                if calibration_season_values is not None
-                else None
-            ),
-        )
-
     if not holdout_df.empty:
         x_holdout = _transform_matrix(preprocessor, _apply_feature_spec(holdout_df, feature_spec))
         pred_margin = _predict_xgb(margin_model, x_holdout)
@@ -460,7 +338,6 @@ def train_margin_total_model(
             )
         home_win_prob = _predict_home_win_prob(
             pred_margin,
-            calibrator,
             sigma=sigma_holdout,
             use_uncertainty=win_prob_use_uncertainty,
         )
@@ -487,7 +364,6 @@ def train_margin_total_model(
         margin_model=margin_model,
         total_model=total_model,
         target_columns=target_columns,
-        calibrator=calibrator,
         margin_quantile_models=margin_quantile_models,
         total_quantile_models=total_quantile_models,
         quantiles=quantiles,
@@ -549,7 +425,6 @@ def train_margin_total_model_with_report(
             )
         home_win_prob = _predict_home_win_prob(
             pred_margin,
-            model.calibrator,
             sigma=sigma_holdout,
             use_uncertainty=win_prob_use_uncertainty,
         )

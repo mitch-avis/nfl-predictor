@@ -46,7 +46,6 @@ def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
         margin_model=cast(xgb.XGBRegressor, None),
         total_model=cast(xgb.XGBRegressor, None),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         market_anchor=False,
         xgb_params={"n_estimators": 1},
     )

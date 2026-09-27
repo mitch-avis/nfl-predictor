@@ -25,7 +25,7 @@ This repo is geared toward:
     - [Splits: train, calibration, holdout](#splits-train-calibration-holdout)
   - [Modeling approach](#modeling-approach)
     - [Margin/Total targets (canonical)](#margintotal-targets-canonical)
-    - [Win probability calibration](#win-probability-calibration)
+    - [Win probability](#win-probability)
     - [Market integration (optional, recommended)](#market-integration-optional-recommended)
   - [Backtesting](#backtesting)
   - [Weekly workflow (canonical)](#weekly-workflow-canonical)
@@ -292,7 +292,6 @@ nfl-predictor train \
   --model-kind margin_total \
   --holdout-seasons 1 \
   --calibration-seasons 1 \
-  --win-prob-calibration isotonic \
   --predict-path data/predict/week_17_games_to_predict.csv
 ```
 
@@ -314,17 +313,17 @@ weekly config: the six-season, two-seed measurement below found no gain from it.
 - `--calibration-weeks` holds the newest completed weeks out of the final fit's trees, rolling
   back into the previous season early in a season (at week 2, four weeks are the new season's
   week 1 plus the previous season's last three). Walk-forward folds hold nothing out of the tree
-  fit: there `--wf-calibration-weeks` only switches on the pooled calibrator frame.
+  fit: there `--wf-calibration-weeks` selects a frame (the previous two seasons plus the season's
+  completed weeks) that XGBoost only evaluates and nothing is fitted on.
   `--calibration-seasons` also holds out whole seasons: the newest ones the week window does not
   touch, so with one season and four weeks the calibration season moves forward a year between
   weeks 4 and 5.
-- Both still gate whether a fitted post-processing calibrator is allowed to run, but the fitted
-  calibration pool itself is the pooled calibrator frame described under "Win probability
-  calibration".
-- The run log lists the training, calibration and holdout seasons, the in-season window's
-  `(season, week)` pairs and the calibrator frame's seasons and weeks.
+- The final fit's held-out rows stay out of its trees and XGBoost only evaluates them (the fit
+  runs its full tree budget); no calibrator is fitted on them (see "Win probability").
+- The run log lists the training, calibration and holdout seasons and the in-season window's
+  `(season, week)` pairs.
 
-Example: hold out the most recent season for evaluation and calibrate on the season before it:
+Example: hold out the most recent season for evaluation and the season before it from the trees:
 
 ```bash
 nfl-predictor train \
@@ -350,33 +349,19 @@ Then derive scores:
 This keeps score predictions internally consistent and makes win probability derivation
 straightforward.
 
-### Win probability calibration
+### Win probability
 
-Win probabilities are derived from the predicted margin, then optionally calibrated using a
-time-aware calibration split (seasons and/or weeks immediately preceding the holdout window).
+Every run type (the weekly run, `backtest`, `train`, `predict`) maps the predicted margin to a
+home win probability through one fixed curve, the deterministic floor:
+`Phi(margin / SCORE_DIFF_STD_DEV)`, the normal CDF with the standard deviation of NFL score
+differences in `nfl_predictor/constants.py`. Nothing is fitted on top of it and the market line
+never enters it; the pick and its confidence come from it.
 
-`--win-prob-calibration` options:
-
-- `none`: deterministic Normal-CDF mapping using `constants.SCORE_DIFF_STD_DEV`.
-- `elo`: deterministic Elo-style logistic mapping (no fitting).
-- `sigma`: Normal-CDF mapping with one sigma estimated from the margin residuals of the
-  calibration frame instead of the fixed `SCORE_DIFF_STD_DEV`.
-- `platt`: Platt scaling on the calibration frame, with `C` chosen from a small grid on the
-  latest pre-eval season of that frame.
-- `isotonic`: isotonic regression on the calibration frame; below the 200-row threshold it falls
-  back to `sigma`.
-- `auto`: the deterministic floor (`none`). No fitted calibrator has beaten it on the walk-forward
-  instrument, so `auto` does not fit anything.
-- `logistic`: alias for `platt`.
-
-The calibration frame for the fitted methods is the previous two seasons plus the completed weeks
-of the current season, strictly before the predicted week. The final fit finds the current season
-as the newest season in its training pool, so before week 1, when that is last season, its frame
-covers three full seasons (last season and the two before it); walk-forward folds know the
-predicted season and use two. Its rows are in-sample for the model
-that predicts them (an out-of-fold pool is an open follow-up), which is one reason the fitted
-methods have not beaten the deterministic floor. The walk-forward report carries the configured,
-deterministic and market-implied probability columns side by side so the choice can be measured.
+`--win-prob-calibration` (`train`, `predict`) and `--calibration` (`backtest`) take `auto`, the
+floor, and the default; `none` is accepted and means the same. A model saved with a fitted or
+Elo calibrator, a market blend or a clamp still loads: the run log names what it ignores, and
+the model predicts the floor of its own margins. The walk-forward report carries the floor and
+the market-implied probability side by side, with paired intervals.
 
 ### Market integration (optional, recommended)
 
@@ -399,8 +384,8 @@ nfl-predictor backtest --help
 ```
 
 This is the **canonical evaluation protocol** for model selection. By default it evaluates the last
-N seasons (regular season only) and reports three probability views on the same games: the
-configured calibrator, the deterministic margin map, and the market-implied home win probability.
+N seasons (regular season only) and scores the model's probability, the deterministic floor,
+against the market-implied home win probability on the same games.
 Use `--include-postseason` if you want postseason folds included. Optional recency weighting
 is available via `--recency-half-life-seasons`. XGBoost trains on the GPU by default:
 `--xgb-device auto` (the default) uses CUDA when the installed XGBoost build has it and a usable
@@ -410,10 +395,9 @@ other's weeks, and the run's `metadata.json` records it as `config.xgb_device`. 
 season is incomplete, either pass `--wf-exclude-incomplete-seasons` or specify `--eval-seasons`
 explicitly; the metrics report includes the evaluated window and any exclusions. Each fold's
 trees fit on every completed game before its week: unlike the final fit, walk-forward folds hold
-nothing out of the tree fit, and `--wf-calibration-weeks` only switches on the calibration frame
-described above for fitted calibrators. Each fold logs that frame's seasons and weeks, and says
-when the configured calibration fits nothing; `auto` is the deterministic floor; the summary
-table includes deterministic-minus-market bootstrap intervals for week 1, week 2, weeks 3-18, and
+nothing out of the tree fit, and `--wf-calibration-weeks` only selects the frame XGBoost
+evaluates, described above. Each fold logs that frame's seasons and weeks and that no calibrator
+is fitted on it; the summary table includes deterministic-minus-market bootstrap intervals for week 1, week 2, weeks 3-18, and
 all weeks; and every fold runs the full `n_estimators` budget (no in-season early stopping, in
 walk-forward or in production), with `best_iteration` recorded per head.
 
@@ -423,10 +407,9 @@ an all-seasons row and one row per season with the deterministic Brier, log loss
 margin and total MAE, confidence-pool points, market Brier, and the deterministic-minus-market
 Brier with a 95% game-bootstrap interval. The rows use the definitions and bootstrap defaults of
 `nfl-predictor compare` (below), so they equal what `compare` reports for the run on the same
-games. A row with fewer than two games has no interval. Like the benchmark, the view scores pick
-accuracy and pool points on the deterministic probability, while `metrics.overall` and
-`metrics.per_season` in the same file score the submitted `home_win_prob`, so their pick accuracy
-and pool totals can differ from the stability view's.
+games. A row with fewer than two games has no interval. The view scores pick accuracy and pool
+points on the deterministic probability, and `metrics.overall` and `metrics.per_season` in the
+same file score the submitted `home_win_prob`; both are the floor, so the two agree.
 
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about

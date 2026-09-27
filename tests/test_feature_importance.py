@@ -78,7 +78,6 @@ def test_feature_importance_report_margin_total() -> None:
         margin_model=margin_model,
         total_model=total_model,
         target_columns=("away_score", "home_score"),
-        calibrator=None,
     )
 
     report = feature_importance.build_feature_importance_report(model)
@@ -460,7 +459,6 @@ def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
         margin_model=margin_model,
         total_model=total_model,
         target_columns=("away_score", "home_score"),
-        calibrator=None,
     )
 
     report = feature_importance.build_feature_importance_report(model)

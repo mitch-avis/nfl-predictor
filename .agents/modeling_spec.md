@@ -21,21 +21,18 @@ Direct home/away score regressors are allowed only as secondary ensemble members
 
 ### Win probability
 
-- Win probability is derived from the margin prediction.
-- Win probabilities are calibrated using time-aware calibration data.
+- Win probability is derived from the margin prediction through the deterministic floor,
+  `Phi(margin / SCORE_DIFF_STD_DEV)`, and nothing else: no fitted calibrator, no Elo-style curve,
+  no market blend or clamp.
+- Every run type uses it identically: the weekly run, `backtest`, `train` and `predict`. The
+  weekly run's stage 1 walks this one production configuration forward to report how it scores;
+  it selects nothing.
+- The calibration option takes `auto` (the documented value and the default); `none` is an
+  accepted second spelling. A saved model that carries a retired calibrator or market blend
+  predicts the floor, and loading it logs what is ignored.
 - Calibration metrics (Brier, log loss, reliability table) are reported in evaluation.
-
-Calibration methods (canonical names):
-
-- `none`: deterministic margin->prob mapping (baseline)
-- `platt`: logistic regression (Platt scaling)
-- `isotonic`: isotonic regression
-- `elo`: deterministic Elo-style logistic mapping
-
-Notes:
-
-- Prefer time-aware calibration (`platt` or `isotonic`) when enough calibration rows exist.
-- If adding new CLI options, keep names stable and document them.
+- Changing how probabilities are formed is a default change for the user to decide, measured on
+  the walk-forward instrument against the floor first.
 
 ### Market integration
 
@@ -121,8 +118,7 @@ Market-relative metrics (when market anchoring is enabled):
 
 ### Model selection protocol (how to choose "best" settings)
 
-When multiple options exist (calibration method, market integration mode, probability blend/clamp
-rules, weighting choices):
+When multiple options exist (market integration mode, weighting choices, tuned parameters):
 
 - Prefer selecting settings via walk-forward over multiple seasons.
 - Pick a primary selection metric (typically Brier/log loss for probability quality) and use

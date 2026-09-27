@@ -117,7 +117,6 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
         calibration_weeks=0,
         include_market=True,
         max_cardinality_ratio=1.0,
-        win_prob_calibration="none",
         optuna_config=optuna,
         market_transform=False,
         market_anchor=False,

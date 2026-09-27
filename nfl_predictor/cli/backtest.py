@@ -65,9 +65,12 @@ def _parse_args() -> argparse.Namespace:
         "--win-prob-calibration",
         "--calibration",
         dest="calibration",
-        choices=["platt", "isotonic", "sigma", "none", "elo", "auto", "logistic"],
-        default="platt",
-        help="Win-prob calibration method (logistic is an alias for platt).",
+        choices=["auto", "none"],
+        default="auto",
+        help=(
+            "Win-probability calibration: auto, the deterministic floor (the predicted margin "
+            "through the fixed normal curve); none is the same."
+        ),
     )
     parser.add_argument(
         "--random-seed",

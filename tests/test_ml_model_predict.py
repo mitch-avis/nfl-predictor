@@ -76,7 +76,6 @@ def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch)
         margin_model=margin_model,
         total_model=total_model,
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,
@@ -129,7 +128,6 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
         margin_model=cast(xgb.XGBRegressor, object()),
         total_model=cast(xgb.XGBRegressor, object()),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models={0.1: margin_low, 0.9: margin_high},
         total_quantile_models={0.1: total_low, 0.9: total_high},
         quantiles=(0.1, 0.9),
@@ -185,7 +183,7 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
     monkeypatch.setattr(
         ml_model_predict,
         "_predict_home_win_prob",
-        lambda _m, _c, **_kwargs: np.array([0.6]),
+        lambda _m, **_kwargs: np.array([0.6]),
     )
 
     model = MarginTotalModel(
@@ -194,7 +192,6 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
         margin_model=cast(xgb.XGBRegressor, object()),
         total_model=cast(xgb.XGBRegressor, object()),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,
@@ -224,7 +221,7 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
 
 
 def test_predict_week_margin_total_uses_resolved_uncertainty_sigma(monkeypatch) -> None:
-    """Uncertainty-aware margin/total predictions should pass resolved sigma to the calibrator."""
+    """Uncertainty-aware margin/total predictions should pass the resolved sigma through."""
     games_df = pd.DataFrame(
         {
             "game_id": [1],
@@ -270,13 +267,11 @@ def test_predict_week_margin_total_uses_resolved_uncertainty_sigma(monkeypatch) 
 
     def fake_predict_home_win_prob(
         pred_margin: np.ndarray,
-        calibrator: object,
         *,
         sigma: np.ndarray | None = None,
         use_uncertainty: bool = False,
     ) -> np.ndarray:
         captured["predict_margin"] = pred_margin
-        captured["predict_calibrator"] = calibrator
         captured["predict_sigma"] = sigma
         captured["use_uncertainty"] = use_uncertainty
         return np.array([0.6])
@@ -290,7 +285,6 @@ def test_predict_week_margin_total_uses_resolved_uncertainty_sigma(monkeypatch) 
         margin_model=cast(xgb.XGBRegressor, object()),
         total_model=cast(xgb.XGBRegressor, object()),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,
@@ -346,7 +340,7 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     monkeypatch.setattr(
         ml_model_predict,
         "_predict_home_win_prob",
-        lambda _m, _c, **_kwargs: np.array([0.55]),
+        lambda _m, **_kwargs: np.array([0.55]),
     )
 
     captured: dict[str, pd.DataFrame] = {}
@@ -362,7 +356,6 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
         margin_model=cast(xgb.XGBRegressor, object()),
         total_model=cast(xgb.XGBRegressor, object()),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,

@@ -207,17 +207,12 @@
   {
    "action": "_StoreAction",
    "choices": [
-    "platt",
-    "isotonic",
-    "sigma",
-    "none",
-    "elo",
     "auto",
-    "logistic"
+    "none"
    ],
-   "default": "platt",
+   "default": "auto",
    "dest": "calibration",
-   "help": "Win-prob calibration method (logistic is an alias for platt).",
+   "help": "Win-probability calibration: auto, the deterministic floor (the predicted margin through the fixed normal curve); none is the same.",
    "nargs": null,
    "options": [
     "--win-prob-calibration",
@@ -1328,17 +1323,12 @@
   {
    "action": "_StoreAction",
    "choices": [
-    "none",
-    "platt",
-    "isotonic",
-    "sigma",
-    "elo",
     "auto",
-    "logistic"
+    "none"
    ],
-   "default": "isotonic",
+   "default": "auto",
    "dest": "win_prob_calibration",
-   "help": "Calibration method for win probabilities (logistic is an alias for platt).",
+   "help": "Win-probability calibration: auto, the deterministic floor (the predicted margin through the fixed normal curve); none is the same.",
    "nargs": null,
    "options": [
     "--win-prob-calibration"

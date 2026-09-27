@@ -52,7 +52,6 @@ def predict_week_margin_total(
         )
     home_win_prob = _predict_home_win_prob(
         pred_margin,
-        model.calibrator,
         sigma=sigma_margin,
         use_uncertainty=win_prob_use_uncertainty,
     )

@@ -3,7 +3,8 @@
 ``nfl-predictor compare --candidate <run> --reference <run>`` rescores both runs' fold
 checkpoints and reports, for week 1, week 2, weeks 3-18 and all weeks, each run's deterministic
 Brier, log loss, pick accuracy, margin and total MAE, confidence-pool points and market Brier,
-and the paired candidate-minus-reference differences with bootstrap intervals. A run is a run
+and the paired candidate-minus-reference differences with bootstrap intervals, then the same
+rows and differences split by season ("Stability by season"). A run is a run
 directory with a ``metadata.json`` (which names its checkpoint directory and adds provenance and
 the configuration differences) or a checkpoint directory under ``models/wf_checkpoints/``.
 

@@ -7,11 +7,13 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+import pytest
 import xgboost as xgb
 from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import FeatureSpec, MarginTotalModel, OptunaConfig
+from tests.weekly_fixture import build_fixture
 
 xgb.set_config(verbosity=0)
 
@@ -165,10 +167,16 @@ def test_train_margin_total_model_with_report_records_the_rolling_calibration_wi
     )
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
     monkeypatch.setattr(ml_model_training, "train_margin_total_model", lambda **_kwargs: model)
+    explained: list[pd.DataFrame] = []
+
+    def fake_report(_model: object, shap_rows: pd.DataFrame | None = None) -> dict[str, Any]:
+        """Record the rows the report was asked to explain."""
+        assert shap_rows is not None
+        explained.append(shap_rows)
+        return {"feature_names": []}
+
     monkeypatch.setattr(
-        ml_model_training.feature_importance,
-        "build_feature_importance_report",
-        lambda _model: {"feature_names": []},
+        ml_model_training.feature_importance, "build_feature_importance_report", fake_report
     )
 
     result = ml_model_training.train_margin_total_model_with_report(
@@ -190,3 +198,58 @@ def test_train_margin_total_model_with_report_records_the_rolling_calibration_wi
         "weeks": [1],
         "pairs": [[2020, 2], [2021, 1]],
     }
+    # SHAP explains the final model's tree-training rows, never the calibration window.
+    assert [list(rows[["season", "week"]].itertuples(index=False)) for rows in explained] == [
+        [(2020, 1)]
+    ]
+
+
+def test_trained_report_ranks_base_features_by_shap_over_the_training_rows(
+    tmp_path: Path,
+) -> None:
+    """A real fit records mean |SHAP| for every base feature, over its training rows only."""
+    completed = build_fixture(tmp_path)["completed"]
+    games = pd.read_csv(completed)
+
+    result = ml_model_training.train_margin_total_model_with_report(
+        data_path=completed,
+        holdout_seasons=0,
+        calibration_seasons=0,
+        calibration_weeks=4,
+        include_market=True,
+        max_cardinality_ratio=0.5,
+        win_prob_calibration="none",
+        optuna_config=OptunaConfig(
+            enabled=False,
+            timeout_seconds=0,
+            n_trials=None,
+            cv_splits=2,
+            objective="mae",
+            early_stopping_rounds=50,
+            tree_method=None,
+            device="cpu",
+            storage=None,
+            study_name=None,
+            best_params_out=None,
+            xgb_n_jobs=1,
+        ),
+        market_transform=True,
+        market_anchor=True,
+        market_prob_config=None,
+    )
+
+    report = result.feature_importance
+    assert report is not None
+    completed_games = games.dropna(subset=["away_score", "home_score"])
+    assert report["shap"] == {
+        "rows": "train",
+        "row_count": len(completed_games) - 4 * 16,
+        "seasons": [2021, 2023],
+    }
+    base = report["base_features"]
+    shap_by_head = {head: base[head]["mean_abs_shap"] for head in ("margin", "total")}
+    assert len(base["combined"]["mean_abs_shap"]) == len(base["feature_names"])
+    assert base["combined"]["mean_abs_shap"] == pytest.approx(
+        [m + t for m, t in zip(shap_by_head["margin"], shap_by_head["total"], strict=True)]
+    )
+    assert max(base["combined"]["mean_abs_shap"]) > 0.0

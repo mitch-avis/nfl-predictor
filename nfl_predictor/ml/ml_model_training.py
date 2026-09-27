@@ -600,7 +600,9 @@ def train_margin_total_model_with_report(
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
     feature_list = list(model.feature_spec.feature_columns)
-    feature_importance_report = feature_importance.build_feature_importance_report(model)
+    feature_importance_report = feature_importance.build_feature_importance_report(
+        model, shap_rows=split.train_df
+    )
     return TrainingResult(
         model=model,
         metrics_report=report,

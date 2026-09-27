@@ -945,6 +945,11 @@ the simultaneous ridge that generalizes it, with XGBoost margin/total remaining 
 - Linting and import sorting are enforced via Ruff (includes isort rules).
 - Type checking runs through both Pyright and Ty; both are required local validation gates.
 - Development dependencies are declared in `pyproject.toml` and synced via `uv.lock`.
+- Claude Code subagents are defined in `.claude/agents/`: `implementer` works in its own git
+  worktree under `.claude/worktrees/` (branched from the current `HEAD`, per
+  `.claude/settings.json`), and `reviewer` checks finished work it did not produce. Both follow
+  `AGENTS.md`. Inside a worktree, run `uv sync` once, then run the gate with
+  `VIRTUAL_ENV="$PWD/.venv"` so it uses the worktree's environment.
 
 For users reading this documentation: commands are shown assuming your project virtual environment
 is already activated. Agent-specific files keep the fully qualified `.venv/bin/...` forms for

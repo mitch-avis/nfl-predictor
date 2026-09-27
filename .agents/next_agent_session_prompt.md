@@ -5,14 +5,29 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones") and this file.
 
-## State (written 2026-09-25, after the `AGENTS.md` split)
+## State (written 2026-09-27, on `chore/claude-code-setup`)
 
 - `main` is at version `0.28.5` and pushed to `origin` with the user's approval: Milestone 60
   (`0.28.1`), the pre-commit hooks (`0.28.2`), the documentation split (`0.28.3`) and the rule
-  2 and 15 amendments (`0.28.4`-`0.28.5`), each merged with `--no-ff`; the feature branches are
-  deleted. Merging and pushing stay must-ask. The working tree is clean.
+  2 and 15 amendments (`0.28.4`-`0.28.5`), each merged with `--no-ff`. Merging and pushing stay
+  must-ask.
+- Branch `chore/claude-code-setup` (`0.28.6`, pushed with a draft PR at the user's request) holds
+  the Claude Code setup below. The user is having another agent review it; merging it is
+  must-ask. Its working tree is clean.
 - `scripts/gate.sh --web` exits `0` on the `0.28.3` tree: 1032 passed, coverage 92.21% against
-  the 90% floor, 22 frontend tests.
+  the 90% floor, 22 frontend tests. Plain `scripts/gate.sh` exits `0` on the `0.28.6` tree.
+- Claude Code subagents live in `.claude/agents/`. `implementer` runs in its own worktree under
+  `.claude/worktrees/`, branched from the current `HEAD` (`.claude/settings.json`), with the
+  test-driven-development, systematic-debugging and committing-code skills preloaded. It leaves
+  `CHANGELOG.md`, the version, `TODO.md`, `ARCHIVE.md` and this file to the delegating session
+  unless you hand it a version number. `reviewer` preloads code-review and cannot edit. In a
+  worktree, run `uv sync`, then the gate with `VIRTUAL_ENV="$PWD/.venv"` (the user's shell
+  exports the main checkout's `.venv`). All tests pass without `data/`. Never symlink
+  `web/node_modules` into a worktree: the `--web` gate's `npm ci` would wipe it.
+- A user-scope `UserPromptSubmit` hook reminds every session to invoke test-driven-development
+  before editing production code and systematic-debugging before proposing a fix. The global
+  skills in `~/.agents/skills` (a separate repo, `mitch-avis/agent-skills`) now defer to the
+  repo's own rules; `AGENTS.md` says the repo's rules win when they disagree.
 - `git commit` runs pre-commit hooks: file hygiene, ruff on staged Python, and a Conventional
   Commits check on the message (a merge needs a conventional message too, since `--strict` bars
   git's default "Merge branch" text). `git push` runs `scripts/gate.sh --quick`.
@@ -38,7 +53,22 @@ completed milestones") and this file.
   web"`. If a job is running from it, stop and ask. Never stop or restart the server yourself
   (rule 5).
 
-## What the last session did (2026-09-25)
+## What the last session did (2026-09-27)
+
+- Ran the Claude Code `/doctor` audit. It turned off 13 unused skills for this project (in
+  `.claude/settings.local.json`, not tracked) and trimmed derivable content from `AGENTS.md`,
+  which is now 36.3k characters.
+- Audited the global skills against this repo's rules and fixed their conflicts in
+  `~/.agents/skills` (characterization tests in test-driven-development, repo command forms and
+  gate in `python` and `task-orchestrator`, non-interactive staging in committing-code, the
+  `IFS` pitfall in shell-scripting, Python idioms in clean-code).
+- `0.28.6`: the subagent definitions, the worktree settings, the `.gitignore` entry and the two
+  `AGENTS.md` changes above, on `chore/claude-code-setup`.
+- The user's goal: have a session work through `TODO.md` on its own, delegating to implementer
+  subagents and having reviewer subagents check the work. How the main session orchestrates
+  that (delegating, merging worktree branches, assigning versions) is not written down yet.
+
+## Earlier (2026-09-25)
 
 - `0.28.2`: the user's pre-commit configuration, with its commit-message hook fixed (the global
   exclude filtered out `.git/COMMIT_EDITMSG`).
@@ -52,8 +82,7 @@ completed milestones") and this file.
 - `0.28.5`: rule 15 (a non-obvious question to the user carries the agent's brief,
   code-grounded recommendation), Milestone 55's goal rewritten for the hypothesis-driven
   settings and the 55.9 tune, and the stale "not pushed" baseline line in `AGENTS.md`
-  corrected under rule 2. `AGENTS.md` is at about 39.5k characters, near the 40k size at which
-  Claude Code warns: trim or move detail out before adding to it.
+  corrected under rule 2.
 - `0.25.0`-`0.28.0`: finished Milestone 60 (one thread option, the market model removed, the
   web API catch-all fix, web jobs on the front door, CI on the gate, the `compare` command).
 - `0.28.1`: closed the milestone with the user's approval. It verified that every removed option
@@ -74,7 +103,8 @@ completed milestones") and this file.
 
 ## Your task: roadmap step 3 (production/benchmark parity)
 
-Create a new branch off `main` (for example `feat/step3-parity`). Scope, from "Roadmap Status"
+Once `chore/claude-code-setup` is reviewed and merged (or the user says to go ahead without it),
+create a new branch off `main` (for example `feat/step3-parity`). Scope, from "Roadmap Status"
 and Milestones 55/56 in `TODO.md`:
 
 1. Task 55.4: the GPU as the default device for every XGBoost run. First a one-fold CPU-vs-GPU
@@ -112,7 +142,8 @@ walk-forward unless the user asks.
 
 ## Open questions for the user
 
-- None open from the last session.
+- Merge `chore/claude-code-setup` (`0.28.6`) into `main` once the independent review is done?
+  The companion skill edits are already on `mitch-avis/agent-skills` `main` (`f7031cb..aeb789b`).
 
 ## Notes
 

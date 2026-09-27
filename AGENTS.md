@@ -236,17 +236,18 @@ are not advisory.
 
 ## Engineering Standards (Logic, Docs, Lint, Coverage)
 
-- Docstrings are required for every module, class, and function (including tests).
 - Type hints are required for new/modified code.
-- Fix linter findings introduced by your changes. Do not leave new warnings behind.
 - Avoid adding new `noqa`, `type: ignore`, or `pragma: no cover` suppressions unless they are truly
   necessary, narrowly scoped, and justified by the code rather than convenience.
 - Do not reference temporary planning artifacts in code: do not mention roadmap items, milestone
   numbers, or TODO goal labels in any code, comments, docstrings, or test descriptions.
-- Prefer small, deterministic unit tests.
 - Load and apply relevant skills before acting. Default to `python` for Python work; add
   `test-driven-development`, `clean-code`, `systematic-debugging`, `code-review`, `observability`,
-  `task-orchestrator`, and the `python-*` skills when their domains apply.
+  `task-orchestrator`, and the `python-*` skills when their domains apply. Skills carry general
+  defaults; where one disagrees with this file, the nested `AGENTS.md` files or the `.agents/` docs
+  they point to, this repo's rule wins (for example the `.venv/bin/` command forms,
+  `scripts/gate.sh` as the only gate, characterization tests before behavior-preserving moves, and
+  the ~2000-line split threshold below).
 - If a Python file grows beyond ~2000 lines, propose a refactor plan to split it into smaller,
   focused modules (helpers/utils) and implement the split if it reduces complexity.
 - Keep `.agents/TODO.md` accurate: verify items before checking them off.
@@ -287,12 +288,6 @@ are not advisory.
   type or scope. Examples: `feat(etl): blend early-season stats toward the regressed prior`,
   `docs(agents): regenerate the handoff prompt`, `fix(reporting): balance the workbook formulas`.
 
-## CI Direction
-
-- GitHub Actions stays validation-only: `.github/workflows/validation.yml` runs Ruff, Pyright, Ty,
-  pytest, markdownlint, the `uv` lock and sync checks and the CLI help smoke checks.
-  `.github/workflows/release.yml` fires only on a pushed tag, and no tag is ever pushed.
-
 ## Command execution rules (non-negotiable)
 
 This project uses a **local virtual environment located at `.venv/`**.
@@ -330,13 +325,9 @@ doc example. `uv` is expected to come from `PATH` as an external project manager
 
 ### Formatting, linting, and style
 
-- **Ruff** formatting (line length 100).
-- **Ruff** linting (including import sorting, docstrings, security, simplify, NumPy, and
-  pygrep-hooks rules).
 - **Pyright** and **Ty** are both mandatory local gates today.
 - **Pyright** remains the more mature signal in pandas-heavy code, so keep both green rather than
   replacing one with the other.
-- PEP 8 / PEP 257 conventions unless explicitly overridden by repo tooling.
 
 `scripts/gate.sh` runs every check the way CI does and is the only form that counts as "the
 gate" (add `--web` when `web/` changed, `--quick` to skip pytest while iterating); the individual
@@ -344,15 +335,6 @@ gate" (add `--web` when `web/` changed, `--quick` to skip pytest while iterating
 
 ## Project Shape (Big Picture)
 
-- Polars ETL over `nflreadpy` NFLverse sources (schedule, team stats, play-by-play), Elo/QB
-  ratings, TeamRankings stats and market odds produces the ML-ready datasets.
-  `nfl_predictor/data_collection.py` (`nfl-predictor data`) orchestrates it; transforms live under
-  `nfl_predictor/utils/polars/`, game enrichments in `nfl_predictor/utils/game_utils.py`, web
-  scraping and caching in `nfl_predictor/utils/scraping_utils.py`.
-- **Front door:** `nfl-predictor <command>` (`nfl_predictor/cli/main.py`, a `[project.scripts]`
-  entry, also `python -m nfl_predictor`) runs every task; see "Commands" below. The weekly run
-  lives in `nfl_predictor/weekly_run/`, the other command-line code in `nfl_predictor/cli/`,
-  shared option builders in `nfl_predictor/cli/options.py`.
 - Compatibility facades: `nfl_predictor/utils/polars_utils.py` forwards imports to the split
   Polars modules, and `nfl_predictor/ml_model.py` forwards to `nfl_predictor/ml/` and keeps the
   `python -m nfl_predictor.ml_model` form of `nfl-predictor train`/`predict`
@@ -364,26 +346,12 @@ gate" (add `--web` when `web/` changed, `--quick` to skip pytest while iterating
 `nfl-predictor --help` lists every command by group; `nfl-predictor <command> --help` shows its
 options. `scripts/` holds only `gate.sh`.
 
-- `nfl-predictor weekly` (`nfl_predictor/weekly_run/`): canonical weekly orchestration (data
-  refresh -> compare -> tune/train -> predict -> reports). Reads `config/weekly_run.yaml` unless
-  `--config` names another file.
-- `nfl-predictor backtest` (`nfl_predictor/cli/backtest.py`): walk-forward evaluation, the
-  benchmark.
-- `nfl-predictor sweep` (`nfl_predictor/cli/sweep.py`): sweep calibration + market-prob variants
-  and summarize metrics.
 - `nfl-predictor compare` (`nfl_predictor/cli/compare.py`, definitions in
   `nfl_predictor/reporting/run_comparison.py`): paired comparison of walk-forward runs rescored
   from their fold checkpoints, per window, with bootstrap intervals and two seeds combined per
   game when given. It reproduces the task 55.8 independent rescore exactly
   (`.agents/m60/verify_compare.py`), so a reviewer can use it under rule 3(b) as long as the
   review also checks provenance and the reviewer did not produce the run.
-- `nfl-predictor rankings` (`nfl_predictor/cli/rankings.py`): power rankings + projected
-  standings. The default `--method composite` ranks on the ETL's schedule-adjusted composite from
-  `data/strength_snapshots.csv`; `README.md` covers `--method bradley_terry` and
-  `--legacy-franchise-fit`. `nfl-predictor weekly` calls the same `compute_power_rankings`
-  (`nfl_predictor/reporting/power_rankings.py`).
-- `nfl-predictor train` / `predict`, `data`, `validate` (`--live`), `leakage-audit`, `lines`,
-  `build-week`, `explain`, `checkpoints`, `web`, `users`: see `README.md`, "Command line".
 - Training/prediction entrypoints may be updated/replaced, but must remain runnable and
   documented.
 
@@ -400,7 +368,6 @@ options. `scripts/` holds only `gate.sh`.
 
 ## Modeling Philosophy (Important Context)
 
-- Implementation is purely in Python.
 - Team strength is represented by learned relationships between engineered features and outcomes.
 - Feature interactions and weights are learned by the model; feature engineering provides signal,
   not fixed scoring formulas.
@@ -431,14 +398,11 @@ options. `scripts/` holds only `gate.sh`.
   contract: do not propose schema changes there casually, and never edit `../nfeloqb` outputs from
   this repo. `../nfeloqb/Other Data/meta_data.csv` maps Elo QB names to GSIS ids and is the
   intended identity bridge for QB-level PBP features.
-- `../nfl-sos-ratings` is the reference implementation for the strength-of-schedule method this
-  repo is porting: for each subject (team or QB) and each opponent it faced, build that opponent's
-  statistical profile from only its games against the rest of the league, excluding every
-  head-to-head game with the subject, so subject and opponent profiles are independent for every
-  matchup; then compare the subject to that adjusted schedule. Its simultaneous ridge solve
-  (`simultaneous_adjustment.py`) is the all-hops generalization of that one-hop method and is its
-  published backbone; the one-hop profiles remain for descriptive views. It is also the reference
-  for PBP-derived per-snap EPA, success and explosive rates, and special-teams EPA. Read its
+- `../nfl-sos-ratings` is the reference implementation for the head-to-head-excluded
+  opponent-profiling method this repo is porting and for its simultaneous ridge
+  (`simultaneous_adjustment.py`), the method's all-hops generalization; how the method maps here is
+  in `.agents/feature_crosswalk.md` section 3.1. It is also the reference for PBP-derived per-snap
+  EPA, success and explosive rates, and special-teams EPA. Read its
   `README.md`, `AGENTS.md`, and `docs/` (`methodology.md`, `validation-report.md`, both stats
   catalogs) before designing any adjusted feature, and note that its own walk-forward puts the
   within-season ridge at parity with SRS and raw EPA and behind prior-carrying Elo. Port ideas and
@@ -552,10 +516,7 @@ Unused constants are removed and the file remains organized into clear sections.
 
 ## Assistant guidance
 
-- Use existing project utilities and constants.
-- Implement changes in small, testable increments.
 - Keep outputs deterministic under fixed seeds.
-- Do not change behavior without updating tests and documentation.
 - Do not delete `models/<run_id>/wf_compare/` during active walk-forward runs; those artifacts power
   resume behavior.
 - Keep walk-forward comparison artifacts under `models/` (do not point `--out-json` at a temporary
@@ -582,9 +543,3 @@ Unused constants are removed and the file remains organized into clear sections.
     (`nfl-predictor backtest`) starts a second walk-forward
     with default settings.
   Check the driver's log after its first run-to-run transition, not only at the end.
-- Since `0.24.0` the walk-forward commands (`nfl-predictor weekly`, `backtest` and `sweep`) set
-  `OMP_WAIT_POLICY=PASSIVE` unless it is already set; on a machine known to stay idle, launch
-  with `OMP_WAIT_POLICY=` (empty) to keep the library default. The setting changes scheduling
-  only, so it neither alters results nor invalidates fold checkpoints; switching mid-run means
-  stop, relaunch with the other policy, and resume. The measurements behind it are in
-  `.agents/walk_forward_runbook.md`.

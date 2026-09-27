@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.28.6] - 2026-09-27
+
+### Changed
+
+- `AGENTS.md` drops content a session can read from the code or other docs (the CI summary, the
+  Ruff settings, the file-layout and command tours, generic advice) and points to
+  `.agents/walk_forward_runbook.md` and `.agents/feature_crosswalk.md` for the OpenMP wait policy
+  and the head-to-head-excluded method. It shrinks from 39.5k to 36.3k characters. Every
+  prohibition stays.
+- `AGENTS.md` says the repo's rules win when an agent skill's general defaults disagree with them.
+
+### Added
+
+- Claude Code subagent definitions in `.claude/agents/`. `implementer` works in its own git
+  worktree with the test-driven-development, systematic-debugging and committing-code skills
+  preloaded, stops on must-ask items, and leaves the changelog, version and worklist to the
+  delegating session. `reviewer` preloads code-review, cannot edit files, and applies rule 3 to
+  run reviews.
+- `.claude/settings.json` branches subagent worktrees from the current `HEAD` instead of
+  `origin/main`, and `.gitignore` ignores `.claude/worktrees/` so Ruff in the main checkout does
+  not lint a worktree's files a second time.
+
 ## [0.28.5] - 2026-09-25
 
 ### Added

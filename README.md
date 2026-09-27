@@ -397,9 +397,10 @@ explicitly; the metrics report includes the evaluated window and any exclusions.
 trees fit on every completed game before its week: unlike the final fit, walk-forward folds hold
 nothing out of the tree fit, and `--wf-calibration-weeks` only selects the frame XGBoost
 evaluates, described above. Each fold logs that frame's seasons and weeks and that no calibrator
-is fitted on it; the summary table includes deterministic-minus-market bootstrap intervals for week 1, week 2, weeks 3-18, and
-all weeks; and every fold runs the full `n_estimators` budget (no in-season early stopping, in
-walk-forward or in production), with `best_iteration` recorded per head.
+is fitted on it; the summary table includes deterministic-minus-market bootstrap intervals for
+week 1, week 2, weeks 3-18, and all weeks; and every fold runs the full `n_estimators` budget
+(no in-season early stopping, in walk-forward or in production), with `best_iteration` recorded
+per head.
 
 The report also carries a stability view, `metrics.stability` in `metrics_report.json`, and the run
 logs it as Markdown tables when it finishes. For week 1, week 2, weeks 3-18 and all weeks it gives

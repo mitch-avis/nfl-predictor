@@ -6,12 +6,14 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
+import xgboost as xgb
 
 from nfl_predictor import data_collection
-from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
+from nfl_predictor.ml import artifacts, ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import inputs, pipeline, stage1
@@ -423,3 +425,116 @@ def test_one_thread_count_reaches_stage1_and_the_final_fit(
 
     assert captured["stage1"] == expected
     assert run_config.xgb_thread_count(run_config._parse_args(argv)) == expected
+
+
+def test_xgb_device_defaults_to_auto_in_the_parser_and_the_shipped_config() -> None:
+    """Both stages pick the GPU when one is usable unless told otherwise."""
+    assert run_config._build_parser().parse_args([]).xgb_device == "auto"
+    assert run_config._parse_args([]).xgb_device == "auto"
+
+
+@pytest.mark.parametrize(
+    ("extra_argv", "usable", "expected"),
+    [([], True, "cuda"), ([], False, "cpu"), (["--xgb-device", "cpu"], True, "cpu")],
+)
+def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra_argv: list[str],
+    usable: bool,
+    expected: str,
+) -> None:
+    """``auto`` resolves once; stage 1, the final fit and the run config all get that device."""
+
+    class _StopAtFinalFitError(Exception):
+        """Stop weekly_run once the final fit's settings have been captured."""
+
+    captured: dict[str, object] = {}
+    data_path = tmp_path / "completed_games_ml.csv"
+    data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
+    best_row = {
+        "market_mode": "features",
+        "calibration": "none",
+        "market_prob_weight": 0.0,
+        "market_prob_clamp": 0.0,
+        "market_prob_source": "raw",
+        "market_prob_blend_method": "prob",
+        "win_prob_use_uncertainty": False,
+    }
+
+    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> pd.DataFrame:
+        """Capture stage 1's device and return one candidate row."""
+        overrides = kwargs.get("xgb_params_overrides")
+        assert isinstance(overrides, dict)
+        captured["stage1"] = overrides["device"]
+        return pd.DataFrame([best_row])
+
+    def _fake_train(**kwargs: object) -> None:
+        """Capture the final fit's device and stop."""
+        optuna_config = kwargs["optuna_config"]
+        assert isinstance(optuna_config, ml_model_core.OptunaConfig)
+        captured["final_fit"] = optuna_config.device
+        raise _StopAtFinalFitError()
+
+    def _fake_run_id(_prefix: str, _hash: str, config: dict[str, object]) -> str:
+        """Capture the recorded run config."""
+        captured["run_config"] = config["xgb_device"]
+        return "weekly_test"
+
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: usable)
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(artifacts, "generate_run_id", _fake_run_id)
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(stage1, "_run_wf_compare", _fake_run_wf_compare)
+    monkeypatch.setattr(stage1, "_rank_summary", lambda df: df)
+    monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "weekly_run.py",
+            "--skip-data-refresh",
+            "--data-path",
+            str(data_path),
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--output-dir",
+            str(tmp_path / "out"),
+            *extra_argv,
+        ],
+    )
+
+    with pytest.raises(_StopAtFinalFitError):
+        pipeline.main()
+
+    assert captured == {"run_config": expected, "stage1": expected, "final_fit": expected}
+
+
+def test_training_artifacts_record_the_device_the_model_trained_on(tmp_path: Path) -> None:
+    """The saved model's metadata names the device its estimator was fitted on.
+
+    The requested device says ``cuda`` here, but the fit fell back to the CPU.
+    """
+    result = ml_model_core.TrainingResult(
+        model=SimpleNamespace(margin_model=xgb.XGBRegressor(device="cpu")),
+        metrics_report={},
+        splits={},
+        params={"device": "cuda"},
+        tuned_params=None,
+        feature_list=["feat1"],
+        early_stopping={},
+    )
+
+    paths = pipeline._write_training_artifacts(
+        result,
+        run_id="weekly_test",
+        run_dir=tmp_path,
+        created_at="2026-09-27T00:00:00+00:00",
+        dataset_hash="hash",
+        config_payload={"xgb_device": "cuda"},
+    )
+
+    metadata = json.loads(paths.metadata_path.read_text(encoding="utf-8"))
+    assert metadata["xgb_device"] == "cpu"

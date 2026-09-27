@@ -81,8 +81,10 @@ tune_objective: brier
 ## XGBoost runtime configuration:
 # XGBoost tree method (default: automatic)
 # xgb_tree_method: hist
-# XGBoost device (default: the CPU; pass --xgb-device cuda for the GPU)
-# xgb_device: cuda
+# XGBoost device for stage 1 and the final fit (options: auto, cpu, cuda, default: auto). auto
+# picks the GPU when this XGBoost build has CUDA and a usable GPU is present, else the CPU; the
+# resolved device is what the run records.
+xgb_device: auto
 # XGBoost CPU threads for stage 1 and the final fit; results do not depend on it (default: every
 # CPU core)
 # xgb_n_jobs: 12

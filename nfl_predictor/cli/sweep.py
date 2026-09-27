@@ -26,6 +26,7 @@ import pandas as pd
 from nfl_predictor.cli import options
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.utils.logger import log
 
 # The console summary: each probability view (deterministic, market, configured) with its own
@@ -133,6 +134,12 @@ def _parse_args() -> argparse.Namespace:
         help="Optional XGBoost n_jobs override.",
     )
     parser.add_argument(
+        "--xgb-device",
+        type=xgb_device_arg,
+        default=XGB_DEVICE_AUTO,
+        help=XGB_DEVICE_HELP,
+    )
+    parser.add_argument(
         "--include-quantiles",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -203,6 +210,7 @@ def _run_one(
         xgb_params_overrides=xgb_params_overrides,
         disabled_feature_groups=disabled_feature_groups,
     )
+    cfg = walk_forward.with_resolved_xgb_device(cfg)
 
     out = walk_forward.run_walk_forward_backtest(
         df, cfg, checkpoint_dir=checkpoint_dir, resume=resume
@@ -254,6 +262,7 @@ def _run_one(
         "actual_points_avg": float(overall.get("actual_points_avg", float("nan"))),
         "games": int(overall.get("games", 0) or 0),
         "weeks": int(overall.get("weeks", 0) or 0),
+        "xgb_device": (cfg.xgb_params_overrides or {})["device"],
     }
 
 
@@ -280,7 +289,7 @@ def main() -> int:
             len(dropped_feature_group_columns),
         )
 
-    xgb_params_overrides: dict[str, Any] = {"verbosity": 0}
+    xgb_params_overrides: dict[str, Any] = {"verbosity": 0, "device": args.xgb_device}
     if args.n_estimators is not None:
         xgb_params_overrides["n_estimators"] = int(args.n_estimators)
     if args.max_depth is not None:

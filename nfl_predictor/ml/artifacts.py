@@ -188,8 +188,12 @@ def build_metadata(
     tuned_params: dict[str, Any] | None = None,
     early_stopping: dict[str, Any] | None = None,
     optuna_summary: dict[str, Any] | None = None,
+    xgb_device: str | None = None,
 ) -> dict[str, Any]:
-    """Build a metadata payload meeting the repo's artifact contract."""
+    """Build a metadata payload meeting the repo's artifact contract.
+
+    ``xgb_device`` is the concrete XGBoost device the model trained on (``cpu`` or ``cuda``).
+    """
     payload: dict[str, Any] = {
         "created_at": created_at,
         "run_id": run_id,
@@ -203,6 +207,7 @@ def build_metadata(
         "tuned_params": tuned_params,
         "early_stopping": early_stopping,
         "optuna_summary": optuna_summary,
+        "xgb_device": xgb_device,
     }
     return payload
 

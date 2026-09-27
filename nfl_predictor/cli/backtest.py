@@ -17,6 +17,7 @@ import pandas as pd
 from nfl_predictor import constants
 from nfl_predictor.cli import options
 from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.reporting import run_comparison
 from nfl_predictor.utils.logger import log
 
@@ -123,9 +124,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--xgb-device",
-        type=str,
-        default=None,
-        help="XGBoost device override (e.g., cuda, cpu).",
+        type=xgb_device_arg,
+        default=XGB_DEVICE_AUTO,
+        help=XGB_DEVICE_HELP,
     )
     parser.add_argument(
         "--xgb-n-jobs",
@@ -215,8 +216,7 @@ def main() -> None:
     xgb_overrides: dict[str, Any] = {}
     if args.xgb_tree_method is not None:
         xgb_overrides["tree_method"] = str(args.xgb_tree_method)
-    if args.xgb_device is not None:
-        xgb_overrides["device"] = str(args.xgb_device)
+    xgb_overrides["device"] = str(args.xgb_device)
     if args.xgb_n_jobs is not None:
         xgb_overrides["n_jobs"] = int(args.xgb_n_jobs)
     if args.min_child_weight is not None:
@@ -245,8 +245,12 @@ def main() -> None:
         win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
         disable_pruning=bool(args.disable_pruning),
         disabled_feature_groups=disabled_feature_groups,
-        xgb_params_overrides=xgb_overrides or None,
+        xgb_params_overrides=xgb_overrides,
     )
+    # Resolve `auto` now, so the run id and the recorded config name the device used.
+    config = walk_forward.with_resolved_xgb_device(config)
+    xgb_device = (config.xgb_params_overrides or {})["device"]
+    log.info("XGBoost device: %s", xgb_device)
 
     dataset_hash = walk_forward.dataset_fingerprint(args.data_path)
     run_id = walk_forward.generate_run_id(dataset_hash, config)
@@ -264,6 +268,7 @@ def main() -> None:
     config_payload["data_path"] = str(args.data_path)
     config_payload["out_json"] = str(out_json)
     config_payload["checkpoint"] = results.get("checkpoint")
+    config_payload["xgb_device"] = xgb_device
     config_payload["disable_trend_features"] = bool(args.disable_trend_features)
     if args.disable_trend_features:
         config_payload["dropped_trend_columns"] = drop_columns

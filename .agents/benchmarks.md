@@ -396,3 +396,41 @@ number). The roadmap order is in `AGENTS.md` and `.agents/TODO.md`.
   dataset gives Brier `0.2300`, log loss `0.7501`, pick accuracy `0.6833`, margin MAE `9.9705`. Do
   not treat a gap against those old numbers as a regression. Compare arms only within a single
   dataset build and code version.
+
+## Step 3 evidence (2026-09-27, no retraining beyond one fold)
+
+Each item below has its hypothesis and rule (written before scoring), the producer's script, and
+an independent reviewer's own rescore and `REVIEW.md` in the run directory named.
+
+- **GPU check, rung L0** (`models/step3_l0_gpu_check/`; reproduce with
+  `.venv/bin/python models/step3_l0_gpu_check/independent_check.py`). One fold, 2025 week 18
+  (16 games), of the unweighted six-season reference configuration, seed `42`. Two identical
+  `--xgb-device cuda` legs were equal in every one of 520 numeric columns (GPU fits are
+  deterministic for a fixed seed on this machine: RTX 4070 Ti, XGBoost 3.4.1). GPU minus CPU
+  moved predicted margins by a median `0.61` points (p90 `1.67`, max `2.40`) and flipped one
+  pick, the same order as re-seeding; 16 games cannot say it is smaller. The CPU leg reproduced
+  the reference arm's fold bit for bit. Fold time `64` s on the CPU and `13` s on the GPU, with
+  another process loading the GPU, so not a clean speed result.
+- **Probability paths, part A2** (`models/step3_prob_paths/`; reproduce with
+  `.venv/bin/python models/step3_prob_paths/independent_rescore.py`). Fixed and out-of-fold
+  probability paths rescored on the two unweighted task 55.8 arms (seeds `42` and `7`,
+  2020-2025, 1615 games each), path minus the deterministic floor, two seeds combined per game,
+  all weeks: floor blended `0.2` with the raw moneyline probability and clamped at `0.1` Brier
+  `-0.00052` `[-0.00102, -0.00003]`, log loss `-0.00136` `[-0.00249, -0.00024]`, the only path
+  that beats the floor under the rule; floor clamp `0.1` alone `-0.00017` `[-0.00037, +0.00002]`;
+  `elo` `-0.00061` `[-0.00205, +0.00086]`; the Week 2 production path (`elo`, blend `0.2`, clamp
+  `0.1`) `-0.00089` `[-0.00231, +0.00055]`; out-of-fold Platt `-0.00000` `[-0.00136, +0.00139]`;
+  out-of-fold isotonic `+0.00228` `[-0.00029, +0.00486]` with log loss `+0.083`
+  `[+0.019, +0.163]`, pick accuracy `-0.0152` and pool points `-105` beyond their intervals
+  (isotonic emits exact 0 and 1 probabilities).
+- **Opening lines, part A3** (`models/step3_open_lines/`; reproduce with
+  `.venv/bin/python models/step3_open_lines/independent_rescore.py`). The stored nflverse spread
+  equals `data/nfl_lines.csv`'s last spread in `61%`-`80%` of 2020-2025 games (mean gap
+  `0.14`-`0.33` points), a late snapshot. Spreads mapped to probabilities through one normal map:
+  opening-line Brier minus stored-line Brier, all weeks, `+0.00481` `[+0.00255, +0.00714]`
+  (2020-2025) and `+0.00462` `[+0.00163, +0.00755]` (2023-2025), so openers are measurably worse
+  than the lines the backtests anchor to (the 2024-2025 "openers" are dated Tuesday or Wednesday
+  scrapes, closer to pick time than a true open). The A2 blend rebuilt
+  from the opening spread minus the floor: `+0.00088` `[-0.00033, +0.00209]` (2020-2025),
+  `+0.00041` `[-0.00075, +0.00156]` (2023-2025); it does not beat the floor at pick-time lines.
+  The model is anchored to the stored spread, so any "model minus opening line" gap flatters it.

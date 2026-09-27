@@ -11,11 +11,20 @@ const rows = [
 ]
 
 describe('FeatureImportanceChart', () => {
-  it('says the bars show total gain for current runs', () => {
+  it('says the bars show mean absolute SHAP in points for current runs', () => {
+    const importance: FeatureImportance = { measure: 'mean_abs_shap', rows }
+    render(<FeatureImportanceChart importance={importance} />)
+    expect(screen.getByText(/^Mean \|SHAP\|:/)).toBeInTheDocument()
+    expect(screen.getByText(/in points/)).toBeInTheDocument()
+    expect(screen.getByText(/adjustment to the market line/)).toBeInTheDocument()
+    expect(screen.queryByText(/older run/i)).not.toBeInTheDocument()
+  })
+
+  it('labels runs without SHAP as total gain', () => {
     const importance: FeatureImportance = { measure: 'total_gain', rows }
     render(<FeatureImportanceChart importance={importance} />)
     expect(screen.getByText(/^Total gain:/)).toBeInTheDocument()
-    expect(screen.queryByText(/older run/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/did not record SHAP/i)).toBeInTheDocument()
   })
 
   it('labels older runs as average gain summed over columns', () => {

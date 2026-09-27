@@ -283,7 +283,23 @@ def metrics_payload(run_id: str, created_at: str, *, kind: str) -> dict[str, Any
 
 
 def feature_importance_payload(run_id: str) -> dict[str, Any]:
-    """Return a feature_importance.json payload in the current layout (total gain per feature)."""
+    """Return a feature_importance.json payload in the current layout.
+
+    It records mean |SHAP| and total gain per base feature; SHAP ranks ``away_rest`` first,
+    total gain ``away_elo_pre``.
+    """
+    payload = gain_feature_importance_payload(run_id)
+    payload["schema_version"] = 3
+    payload["shap"] = {"rows": "train", "row_count": 100, "seasons": [2020, 2023]}
+    base = payload["base_features"]
+    base["margin"]["mean_abs_shap"] = [2.5, 1.5, 2.0]
+    base["total"]["mean_abs_shap"] = [0.5, 0.25, 0.5]
+    base["combined"]["mean_abs_shap"] = [3.0, 1.75, 2.5]
+    return payload
+
+
+def gain_feature_importance_payload(run_id: str) -> dict[str, Any]:
+    """Return a feature_importance.json payload written before SHAP (total gain per feature)."""
     names = ["away_rest", "home_rest", "away_elo_pre"]
     return {
         "run_id": run_id,

@@ -138,8 +138,8 @@ export interface CalibrationBin {
   avg_actual: number
 }
 
-/** Which importance measure ranks the features: `summed_average_gain` only for older runs. */
-export type FeatureImportanceMeasure = 'total_gain' | 'summed_average_gain'
+/** Which importance measure ranks the features: SHAP for current runs, the gains for older ones. */
+export type FeatureImportanceMeasure = 'mean_abs_shap' | 'total_gain' | 'summed_average_gain'
 
 /** One base feature; `value`, `margin_value` and `total_value` are in the payload's measure. */
 export interface FeatureImportanceRow {

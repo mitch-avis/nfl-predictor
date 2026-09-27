@@ -123,7 +123,7 @@ export function ModelPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-1 text-base">
-                  Feature importance <InfoTooltip content="How much each feature reduced the trees' loss over the margin and total heads. The note under the chart names the measure." />
+                  Feature importance <InfoTooltip content="How much each feature moves the model's margin and total predictions, added over the two heads. The note under the chart names the measure." />
                 </CardTitle>
                 <CardDescription>Top {Math.min(25, data.feature_importance.rows.length)} of {data.metadata.feature_count ?? '?'} features.</CardDescription>
               </CardHeader>

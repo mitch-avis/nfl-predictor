@@ -21,11 +21,9 @@ from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_START_COLUMN,
     DEFAULT_OPTUNA_CV_SPLITS,
     DEFAULT_OPTUNA_TIMEOUT_SECONDS,
-    MarketProbConfig,
     OptunaConfig,
     TrainingResult,
     _load_model_checkpoint,
-    _with_market_prob_config,
     normalize_win_prob_calibration_method,
 )
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
@@ -96,7 +94,6 @@ def _parse_args() -> argparse.Namespace:
             "Train on residuals vs market spread/total and add market baseline at prediction time."
         ),
     )
-    options.add_market_prob_options(parser)
     parser.add_argument(
         "--min-season",
         type=int,
@@ -330,17 +327,6 @@ def main() -> None:
         xgb_n_jobs=args.xgb_n_jobs,
     )
 
-    market_prob_weight = args.market_prob_weight
-
-    market_prob_config = MarketProbConfig(
-        blend_weight=float(market_prob_weight),
-        clamp_delta=float(args.market_prob_clamp),
-        prob_source=args.market_prob_source,
-        blend_method=args.market_prob_blend_method,
-    )
-    if float(market_prob_weight) == 0.0 and float(args.market_prob_clamp) == 0.0:
-        market_prob_config = None
-
     output_path = args.output_path
     if args.predict_path and output_path is None:
         output_path = args.predict_path.with_name(f"{args.predict_path.stem}_predictions.csv")
@@ -349,7 +335,6 @@ def main() -> None:
         if args.tune:
             log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
         model = _load_model_checkpoint(args.model_in, args.model_kind)
-        model = _with_market_prob_config(model, market_prob_config)
         if not args.predict_path:
             log.info("No --predict-path provided; exiting after loading model.")
             return
@@ -419,7 +404,6 @@ def main() -> None:
         optuna_config=optuna_config,
         market_transform=args.market_transform,
         market_anchor=args.market_anchor,
-        market_prob_config=market_prob_config,
         include_postseason=args.include_postseason,
         postseason_weight=args.postseason_weight,
         recency_half_life_seasons=args.recency_half_life_seasons,

@@ -15,7 +15,6 @@ from nfl_predictor import constants
 from nfl_predictor.ml import ml_utils
 from nfl_predictor.ml.ml_model_core import (
     MarginTotalModel,
-    _adjust_home_win_prob,
     _build_prediction_output,
     _derive_scores_from_margin_total,
     _load_games,
@@ -56,9 +55,6 @@ def predict_week_margin_total(
         model.calibrator,
         sigma=sigma_margin,
         use_uncertainty=win_prob_use_uncertainty,
-    )
-    home_win_prob = _adjust_home_win_prob(
-        games_df, home_win_prob, getattr(model, "market_prob_config", None)
     )
     output_df = _build_prediction_output(
         games_df,

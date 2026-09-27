@@ -151,7 +151,6 @@ def _train(calibration_seasons: int, calibration_weeks: int) -> MarginTotalModel
         optuna_config=_disabled_optuna(),
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
     )
 
 

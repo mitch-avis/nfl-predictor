@@ -180,7 +180,6 @@ def test_stage1_walks_forward_once_on_the_production_configuration(
     assert len(seen) == 1
     config, kwargs = seen[0]
     assert config.calibration == "auto"
-    assert (config.market_prob_weight, config.market_prob_clamp) == (0.0, 0.0)
     assert config.win_prob_use_uncertainty is False
     assert (config.include_market, config.market_anchor) == (True, True)
     assert kwargs["checkpoint_dir"] == run_dir / "wf_compare" / "wf_folds"
@@ -284,7 +283,7 @@ def test_the_final_fit_uses_the_configured_market_mode_and_the_floor(
 
     assert (captured["include_market"], captured["market_anchor"]) == (False, True)
     assert captured["win_prob_calibration"] == "auto"
-    assert captured["market_prob_config"] is None
+    assert "market_prob_config" not in captured
     assert captured["win_prob_use_uncertainty"] is False
 
 

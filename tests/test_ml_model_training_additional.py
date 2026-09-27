@@ -134,7 +134,6 @@ def test_early_stopping_info_records_last_round_without_xgb_best_iteration() -> 
         total_quantile_models=None,
         quantiles=None,
         market_anchor=False,
-        market_prob_config=None,
         xgb_params={"n_estimators": 12},
         tuned_params=None,
         tuned_cv_summary=None,
@@ -265,7 +264,6 @@ def test_train_margin_total_model_uncertainty_elo_falls_back_to_none(monkeypatch
         optuna_config=_disabled_optuna(),
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
         win_prob_use_uncertainty=True,
     )
 
@@ -375,7 +373,6 @@ def test_train_margin_total_model_raises_without_calibration_rows(monkeypatch) -
             optuna_config=_disabled_optuna(),
             market_transform=False,
             market_anchor=False,
-            market_prob_config=None,
         )
 
 
@@ -482,7 +479,6 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
         optuna_config=_disabled_optuna(),
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
     )
 
     assert model.calibrator is None

@@ -386,10 +386,8 @@ If spreads/totals/moneylines are present, you can:
 - train on residuals vs market baselines (`--market-anchor`) so the model learns deviations rather
   than re-learning what the market already priced
 
-Win probability can also be blended or clamped vs market-implied home win probability via
-`--market-prob-weight` / `--market-prob-clamp` (`--market-prob-blend` is the older spelling). Use
-`--market-prob-source raw|novig` to choose implied-prob handling and `--market-prob-blend-method
-prob|logit` to blend in probability or log-odds space.
+The market-implied home win probability (no-vig moneylines, else the spread) is scored beside the
+model in every walk-forward as the yardstick; it never enters the submitted probability.
 
 ## Backtesting
 

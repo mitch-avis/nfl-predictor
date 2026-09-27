@@ -98,7 +98,6 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Use transformed market features when odds columns exist.",
     )
-    options.add_market_prob_options(parser)
     parser.add_argument(
         "--win-prob-uncertainty",
         action=argparse.BooleanOptionalAction,
@@ -238,10 +237,6 @@ def main() -> None:
         recency_half_life_seasons=args.recency_half_life_seasons,
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
-        market_prob_weight=float(args.market_prob_weight),
-        market_prob_clamp=float(args.market_prob_clamp),
-        market_prob_source=args.market_prob_source,
-        market_prob_blend_method=args.market_prob_blend_method,
         win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
         disable_pruning=bool(args.disable_pruning),
         disabled_feature_groups=disabled_feature_groups,

@@ -93,10 +93,6 @@ class WalkForwardConfig:
     include_market: bool = True
     market_transform: bool | None = None
     market_anchor: bool = True
-    market_prob_weight: float = 0.0
-    market_prob_clamp: float = 0.0
-    market_prob_source: str = "raw"
-    market_prob_blend_method: str = "prob"
     win_prob_use_uncertainty: bool = False
     include_quantiles: bool = True
     max_cardinality_ratio: float = 0.5
@@ -121,10 +117,6 @@ class WalkForwardConfig:
             "include_market": self.include_market,
             "market_transform": self.market_transform,
             "market_anchor": self.market_anchor,
-            "market_prob_weight": self.market_prob_weight,
-            "market_prob_clamp": self.market_prob_clamp,
-            "market_prob_source": self.market_prob_source,
-            "market_prob_blend_method": self.market_prob_blend_method,
             "win_prob_use_uncertainty": self.win_prob_use_uncertainty,
             "include_quantiles": self.include_quantiles,
             "max_cardinality_ratio": self.max_cardinality_ratio,
@@ -862,10 +854,6 @@ def run_walk_forward_backtest(
         "include_market": include_market,
         "market_transform": market_transform,
         "market_anchor": market_anchor,
-        "market_prob_weight": config.market_prob_weight,
-        "market_prob_clamp": config.market_prob_clamp,
-        "market_prob_source": config.market_prob_source,
-        "market_prob_blend_method": config.market_prob_blend_method,
         "win_prob_use_uncertainty": config.win_prob_use_uncertainty,
         "include_quantiles": config.include_quantiles,
         "disable_pruning": config.disable_pruning,
@@ -1112,16 +1100,6 @@ def run_walk_forward_backtest(
             sigma=sigma_eval,
             use_uncertainty=config.win_prob_use_uncertainty,
         )
-        if config.market_prob_weight or config.market_prob_clamp:
-            market_prob_config = ml_model.MarketProbConfig(
-                blend_weight=config.market_prob_weight,
-                clamp_delta=config.market_prob_clamp,
-                prob_source=config.market_prob_source,
-                blend_method=config.market_prob_blend_method,
-            )
-            home_win_prob = ml_model.adjust_home_win_prob(
-                fold.eval_df, home_win_prob, market_prob_config
-            )
         home_win_prob = metrics_utils.clip_probabilities(home_win_prob)
         market_home_win_prob = _resolve_market_home_win_prob(fold.eval_df)
 

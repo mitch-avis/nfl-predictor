@@ -24,11 +24,9 @@ from nfl_predictor.ml.ml_model_core import (
     DEFAULT_XGB_PARAMS,
     FeatureSpec,
     MarginTotalModel,
-    MarketProbConfig,
     OptunaConfig,
     TrainCalibrationSplit,
     TrainingResult,
-    _adjust_home_win_prob,
     _apply_feature_spec,
     _build_feature_spec,
     _build_preprocessor,
@@ -165,7 +163,6 @@ def train_margin_total_model(
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
-    market_prob_config: MarketProbConfig | None,
     win_prob_use_uncertainty: bool = False,
     include_postseason: bool = False,
     postseason_weight: float = 1.0,
@@ -196,21 +193,9 @@ def train_margin_total_model(
     )
     if market_transform:
         log.info("Market feature transforms enabled.")
-    if market_prob_config is not None:
-        log.info(
-            "Market win-prob adjustment: blend=%.2f clamp=%.2f",
-            market_prob_config.blend_weight,
-            market_prob_config.clamp_delta,
-        )
     if market_anchor:
         get_market_baseline(train_df)
         log.info("Market anchor enabled: training residuals vs spread/total.")
-    if market_prob_config is not None:
-        log.info(
-            "Market win-prob adjustment: blend=%.2f clamp=%.2f",
-            market_prob_config.blend_weight,
-            market_prob_config.clamp_delta,
-        )
 
     tuned_params: dict[str, Any] = {}
     tuned_cv_summary: dict[str, Any] | None = None
@@ -226,7 +211,6 @@ def train_margin_total_model(
             optuna_config=optuna_config,
             market_transform=market_transform,
             market_anchor=market_anchor,
-            market_prob_config=market_prob_config,
             holdout_seasons=holdout,
         )
 
@@ -480,7 +464,6 @@ def train_margin_total_model(
             sigma=sigma_holdout,
             use_uncertainty=win_prob_use_uncertainty,
         )
-        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, market_prob_config)
 
         metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, target_columns, home_win_prob
@@ -509,7 +492,6 @@ def train_margin_total_model(
         total_quantile_models=total_quantile_models,
         quantiles=quantiles,
         market_anchor=market_anchor,
-        market_prob_config=market_prob_config,
         xgb_params=params,
         tuned_params=tuned_params or None,
         tuned_cv_summary=tuned_cv_summary,
@@ -571,7 +553,6 @@ def train_margin_total_model_with_report(
             sigma=sigma_holdout,
             use_uncertainty=win_prob_use_uncertainty,
         )
-        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, model.market_prob_config)
         holdout_metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, model.target_columns, home_win_prob
         )

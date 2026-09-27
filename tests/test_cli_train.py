@@ -37,13 +37,7 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
         calls["model"] = (path, kind)
         return "model"
 
-    def fake_with_market_prob_config(model: str, config: Any) -> str:
-        """Record config and return model."""
-        calls["config"] = config
-        return model
-
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
-    monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", fake_with_market_prob_config)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
@@ -57,7 +51,6 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
     ml_model_cli.main()
 
     assert calls["model"] == (model_path, "margin_total")
-    assert calls["config"] is None
 
 
 def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> None:
@@ -71,11 +64,6 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         """Record path/kind and return model."""
         calls["model"] = (path, kind)
         return "model"
-
-    def fake_with_market_prob_config(model: str, config: Any) -> str:
-        """Record config and return model."""
-        calls["config"] = config
-        return model
 
     def fake_predict(
         model: str,
@@ -97,7 +85,6 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         return pd.DataFrame()
 
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
-    monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", fake_with_market_prob_config)
     monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", fake_predict)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
@@ -251,7 +238,6 @@ def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr(ml_model_cli.log, "info", fake_log)
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args, **_kwargs: "model")
-    monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", lambda model, _cfg: model)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
@@ -366,8 +352,6 @@ def test_main_margin_total_training_predicts_without_writing_artifacts(
         (["--cv-splits", "4"], "cv_splits", 4),
         (["--tune-early-stopping-rounds", "9"], "early_stopping_rounds", 9),
         (["--early-stopping-rounds", "9"], "early_stopping_rounds", 9),
-        (["--market-prob-blend", "0.2"], "market_prob_weight", 0.2),
-        (["--market-prob-weight", "0.2"], "market_prob_weight", 0.2),
     ],
 )
 def test_renamed_options_accept_both_spellings(

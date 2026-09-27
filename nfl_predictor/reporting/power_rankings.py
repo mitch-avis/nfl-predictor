@@ -931,9 +931,6 @@ def _predict_future_games(
             sigma=sigma_margin,
             use_uncertainty=use_uncertainty,
         )
-        home_win_prob = ml_model_core.adjust_home_win_prob(
-            games, home_win_prob, getattr(mt, "market_prob_config", None)
-        )
     else:
         raise ValueError(f"Unsupported model kind for power rankings: {model_kind!r}")
 

@@ -51,7 +51,6 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: MonkeyPatch) -> None:
 
     monkeypatch.setattr(core, "_predict_xgb", _predict)
     monkeypatch.setattr(core, "_margin_to_home_win_prob", lambda _m: np.array([0.7]))
-    monkeypatch.setattr(core, "_adjust_home_win_prob", lambda _df, probs, _cfg: probs)
     monkeypatch.setattr(
         core,
         "_evaluate_margin_total_predictions",
@@ -89,7 +88,6 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: MonkeyPatch) -> None:
         early_stopping_rounds=5,
         objective="combined_mae",
         market_anchor=True,
-        market_prob_config=core.MarketProbConfig(blend_weight=0.0, clamp_delta=0.0),
     )
 
     assert score == 5.0

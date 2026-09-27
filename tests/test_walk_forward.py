@@ -63,8 +63,6 @@ def _base_config() -> walk_forward.WalkForwardConfig:
         random_seed=7,
         include_market=False,
         market_anchor=False,
-        market_prob_weight=0.0,
-        market_prob_clamp=0.0,
         feature_start="feat1",
         feature_end="feat2",
         xgb_params_overrides={
@@ -463,24 +461,6 @@ def test_walk_forward_can_disable_quantiles() -> None:
     assert "predicted_total" in preds.columns
     assert "predicted_margin_p10" not in preds.columns
     assert "predicted_total_p90" not in preds.columns
-
-
-def test_wf_market_prob_weight_overrides_probs() -> None:
-    """When market_prob_weight=1, home_win_prob should match implied market prob."""
-    df = _fixture_df()
-    config = _base_config()
-    config = replace(
-        config,
-        eval_seasons=[2023],
-        market_prob_weight=1.0,
-        market_prob_clamp=0.0,
-    )
-
-    result = walk_forward.run_walk_forward_backtest(df, config)
-    probs = result["predictions"]["home_win_prob"].to_numpy(dtype=float)
-
-    market_prob = 110.0 / (110.0 + 100.0)
-    assert np.allclose(probs, market_prob)
 
 
 def test_dataset_fingerprint_matches_sha256(tmp_path: Path) -> None:
@@ -935,8 +915,6 @@ def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -
         calibration="platt",
         include_market=True,
         market_anchor=True,
-        market_prob_weight=0.25,
-        market_prob_clamp=0.05,
         win_prob_use_uncertainty=True,
         include_quantiles=True,
     )

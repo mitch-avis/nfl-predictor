@@ -18,7 +18,7 @@ import pytest
 
 from nfl_predictor.cli import explain
 from nfl_predictor.ml import ml_model_core, ml_model_training
-from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
+from nfl_predictor.ml.ml_model_core import OptunaConfig
 from tests import snapshots
 from tests.weekly_fixture import build_fixture
 
@@ -37,7 +37,6 @@ OPTUNA_OFF = OptunaConfig(
     best_params_out=None,
     xgb_n_jobs=1,
 )
-NO_MARKET_PROB_ADJUSTMENT = MarketProbConfig(blend_weight=0.0, clamp_delta=0.0)
 
 
 @pytest.fixture(scope="module")
@@ -56,7 +55,6 @@ def trained(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
         optuna_config=OPTUNA_OFF,
         market_transform=True,
         market_anchor=True,
-        market_prob_config=NO_MARKET_PROB_ADJUSTMENT,
     )
     assert isinstance(margin_total, ml_model_core.MarginTotalModel)
     paths = {"data": completed, "margin_total": root / "margin_total" / "model.joblib"}

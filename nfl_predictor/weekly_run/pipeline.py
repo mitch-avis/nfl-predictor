@@ -380,8 +380,6 @@ def main() -> int:
             train_calibration_weeks,
         )
 
-    market_prob_config = None
-
     optuna_storage = args.tune_storage
     if args.tune and not optuna_storage:
         optuna_storage = f"sqlite:///{(run_dir / 'optuna.db').resolve()}"
@@ -456,7 +454,6 @@ def main() -> int:
             optuna_config=optuna_config,
             market_transform=bool(market_transform),
             market_anchor=bool(market_anchor),
-            market_prob_config=market_prob_config,
             win_prob_use_uncertainty=win_prob_use_uncertainty,
             include_postseason=bool(args.include_postseason),
             postseason_weight=float(args.postseason_weight),

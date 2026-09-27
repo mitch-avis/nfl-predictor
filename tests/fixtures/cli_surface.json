@@ -300,69 +300,6 @@
    "type": null
   },
   {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_weight",
-   "help": "Blend weight for the market's implied win probability (0=off, 1=market only).",
-   "nargs": null,
-   "options": [
-    "--market-prob-weight",
-    "--market-prob-blend"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_clamp",
-   "help": "Clamp model probability within +/- this delta of market (0=off).",
-   "nargs": null,
-   "options": [
-    "--market-prob-clamp"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig"
-   ],
-   "default": "raw",
-   "dest": "market_prob_source",
-   "help": "Market probability source for blending/clamping.",
-   "nargs": null,
-   "options": [
-    "--market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit"
-   ],
-   "default": "prob",
-   "dest": "market_prob_blend_method",
-   "help": "Blend method for market probabilities (prob or logit space).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
    "action": "BooleanOptionalAction",
    "choices": null,
    "default": false,
@@ -1293,69 +1230,6 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_weight",
-   "help": "Blend weight for the market's implied win probability (0=off, 1=market only).",
-   "nargs": null,
-   "options": [
-    "--market-prob-weight",
-    "--market-prob-blend"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_clamp",
-   "help": "Clamp model probability within +/- this delta of market (0=off).",
-   "nargs": null,
-   "options": [
-    "--market-prob-clamp"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig"
-   ],
-   "default": "raw",
-   "dest": "market_prob_source",
-   "help": "Market probability source for blending/clamping.",
-   "nargs": null,
-   "options": [
-    "--market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit"
-   ],
-   "default": "prob",
-   "dest": "market_prob_blend_method",
-   "help": "Blend method for market probabilities (prob or logit space).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
    "default": null,
    "dest": "min_season",
    "help": "Optional minimum season to include.",
@@ -1428,7 +1302,7 @@
    "choices": null,
    "default": 1,
    "dest": "calibration_seasons",
-   "help": "Number of seasons reserved for calibration/blending.",
+   "help": "Number of seasons reserved for calibration.",
    "nargs": null,
    "options": [
     "--calibration-seasons"

@@ -12,7 +12,7 @@ import os
 import time
 import warnings
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -107,7 +107,6 @@ class MarginTotalModel:
     total_quantile_models: dict[float, xgb.XGBRegressor] | None = None
     quantiles: tuple[float, ...] | None = None
     market_anchor: bool = False
-    market_prob_config: MarketProbConfig | None = None
     xgb_params: dict[str, Any] | None = None
     tuned_params: dict[str, Any] | None = None
     tuned_cv_summary: dict[str, Any] | None = None
@@ -148,7 +147,11 @@ class BlendedMarginTotalModel:
 
 @dataclass(frozen=True)
 class MarketProbConfig:
-    """Configuration for blending/clamping win probabilities vs market implied odds."""
+    """A saved model's market blend and clamp; market probability blending was retired.
+
+    Kept only so checkpoints saved before the retirement still unpickle. Loading one logs the
+    setting and drops it; predictions are the deterministic floor.
+    """
 
     blend_weight: float
     clamp_delta: float
@@ -803,85 +806,12 @@ def _predict_home_win_prob(
     return np.clip(probs, 0.0, 1.0)
 
 
-def _adjust_home_win_prob(
-    games_df: pd.DataFrame,
-    home_win_prob: np.ndarray,
-    market_prob_config: MarketProbConfig | None,
-) -> np.ndarray:
-    """Blend/clamp win probabilities toward market implied probabilities."""
-    if market_prob_config is None:
-        return home_win_prob
-
-    blend_weight = market_prob_config.blend_weight
-    clamp_delta = market_prob_config.clamp_delta
-    prob_source = market_prob_config.prob_source.lower()
-    blend_method = market_prob_config.blend_method.lower()
-    if blend_weight < 0 or blend_weight > 1:
-        raise ValueError("Market blend weight must be between 0 and 1.")
-    if clamp_delta < 0 or clamp_delta > 0.5:
-        raise ValueError("Market clamp delta must be between 0 and 0.5.")
-    if prob_source not in {"raw", "novig"}:
-        raise ValueError("Market probability source must be 'raw' or 'novig'.")
-    if blend_method not in {"prob", "logit"}:
-        raise ValueError("Market blend method must be 'prob' or 'logit'.")
-    if blend_weight == 0 and clamp_delta == 0:
-        return home_win_prob
-
-    df = _add_market_transforms(games_df)
-    if "home_market_prob" not in df.columns:
-        log.debug("Market probabilities missing; skipping win-prob adjustments.")
-        return home_win_prob
-    if prob_source == "novig" and "away_market_prob" not in df.columns:
-        log.debug("Away market probabilities missing; skipping no-vig adjustments.")
-        return home_win_prob
-
-    if prob_source == "raw":
-        market_prob = pd.to_numeric(df["home_market_prob"], errors="coerce").to_numpy(dtype=float)
-    else:
-        home_raw = pd.to_numeric(df["home_market_prob"], errors="coerce").to_numpy(dtype=float)
-        away_raw = pd.to_numeric(df["away_market_prob"], errors="coerce").to_numpy(dtype=float)
-        market_prob = _normalize_no_vig(home_raw, away_raw)
-    adjusted = home_win_prob.astype(float, copy=True)
-    valid_mask = ~np.isnan(market_prob)
-    if not valid_mask.any():
-        return adjusted
-
-    if blend_weight:
-        if blend_method == "prob":
-            adjusted[valid_mask] = (
-                blend_weight * market_prob[valid_mask] + (1 - blend_weight) * adjusted[valid_mask]
-            )
-        else:
-            market_logit = _logit(market_prob[valid_mask])
-            model_logit = _logit(adjusted[valid_mask])
-            blended = (blend_weight * market_logit) + ((1 - blend_weight) * model_logit)
-            adjusted[valid_mask] = _sigmoid(blended)
-
-    if clamp_delta:
-        lower = market_prob[valid_mask] - clamp_delta
-        upper = market_prob[valid_mask] + clamp_delta
-        adjusted[valid_mask] = np.clip(adjusted[valid_mask], lower, upper)
-
-    return np.clip(adjusted, 0.0, 1.0)
-
-
 def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarray:
-    """Normalize raw implied probs so home+away sums to 1 (no-vig)."""
+    """Normalize raw implied probs so home+away sums to 1 (no-vig), for the market yardstick."""
     total = home_prob + away_prob
     with np.errstate(invalid="ignore", divide="ignore"):
         normalized = np.where(total > 0, home_prob / total, np.nan)
     return np.clip(normalized, 0.0, 1.0)
-
-
-def _logit(prob: np.ndarray) -> np.ndarray:
-    """Compute logit with clipping for stability."""
-    clipped = np.clip(prob, 1e-6, 1 - 1e-6)
-    return np.log(clipped / (1 - clipped))
-
-
-def _sigmoid(values: np.ndarray) -> np.ndarray:
-    """Compute logistic sigmoid."""
-    return 1.0 / (1.0 + np.exp(-values))
 
 
 def _predict_margin_total_from_model(
@@ -1363,8 +1293,26 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
         )
     if not isinstance(model, MarginTotalModel):
         raise ValueError("Model checkpoint type mismatch; expected MarginTotalModel.")
+    _drop_retired_market_blend(model, path)
     log.info("Loaded model checkpoint from %s", path)
     return model
+
+
+def _drop_retired_market_blend(model: Any, path: Path) -> None:
+    """Remove a saved market blend or clamp from a loaded model, saying what is ignored."""
+    config = model.__dict__.pop("market_prob_config", None)
+    if config is None:
+        return
+    weight = float(getattr(config, "blend_weight", 0.0))
+    clamp = float(getattr(config, "clamp_delta", 0.0))
+    if weight or clamp:
+        log.warning(
+            "%s was saved with a market blend (weight %.2f, clamp %.2f); market probability "
+            "blending was retired, so it predicts the deterministic floor.",
+            path,
+            weight,
+            clamp,
+        )
 
 
 def _ensure_backward_compatible_model(model: Any) -> Any:
@@ -1388,14 +1336,6 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
 
     if isinstance(model, MarginTotalModel):
         _ensure_margin_total(model)
-    return model
-
-
-def _with_market_prob_config(model: Any, config: MarketProbConfig | None) -> Any:
-    if config is None:
-        return model
-    if isinstance(model, MarginTotalModel):
-        return replace(model, market_prob_config=config)
     return model
 
 
@@ -1451,15 +1391,6 @@ def predict_home_win_prob(
         sigma=sigma,
         use_uncertainty=use_uncertainty,
     )
-
-
-def adjust_home_win_prob(
-    games_df: pd.DataFrame,
-    home_win_prob: np.ndarray,
-    market_prob_config: MarketProbConfig | None,
-) -> np.ndarray:
-    """Adjust win probabilities using market blend/clamp settings."""
-    return _adjust_home_win_prob(games_df, home_win_prob, market_prob_config)
 
 
 def predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
@@ -1524,7 +1455,6 @@ def _score_margin_total_fold(
     objective: str,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: MarketProbConfig | None = None,
 ) -> float:
     feature_spec = _build_feature_spec(
         train_df,
@@ -1569,7 +1499,6 @@ def _score_margin_total_fold(
         pred_margin = pred_margin + baseline_margin_val
         pred_total = pred_total + baseline_total_val
     home_win_prob = _margin_to_home_win_prob(pred_margin)
-    home_win_prob = _adjust_home_win_prob(val_df, home_win_prob, market_prob_config)
 
     metrics = _evaluate_margin_total_predictions(
         val_df, pred_margin, pred_total, target_columns, home_win_prob
@@ -1591,7 +1520,6 @@ def _evaluate_margin_total_cv(
     objective: str,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: MarketProbConfig | None = None,
 ) -> float:
     timepoints = _build_season_week_timepoints(df)
     folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
@@ -1619,7 +1547,6 @@ def _evaluate_margin_total_cv(
                     objective=objective,
                     market_transform=market_transform,
                     market_anchor=market_anchor,
-                    market_prob_config=market_prob_config,
                 )
             )
         )
@@ -1640,7 +1567,6 @@ def _evaluate_margin_total_cv_summary(
     objective: str,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: MarketProbConfig | None = None,
 ) -> dict[str, Any]:
     timepoints = _build_season_week_timepoints(df)
     folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
@@ -1666,7 +1592,6 @@ def _evaluate_margin_total_cv_summary(
                     objective=objective,
                     market_transform=market_transform,
                     market_anchor=market_anchor,
-                    market_prob_config=market_prob_config,
                 )
             )
         )
@@ -1690,7 +1615,6 @@ def _run_optuna_search(
     optuna_config: OptunaConfig,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: MarketProbConfig | None = None,
     holdout_seasons: Sequence[int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     if optuna is None:
@@ -1749,7 +1673,6 @@ def _run_optuna_search(
             objective=optuna_config.objective,
             market_transform=market_transform,
             market_anchor=market_anchor,
-            market_prob_config=market_prob_config,
         )
 
     def _persist_best_params(study: Any, trial: Any) -> None:
@@ -1832,7 +1755,6 @@ def _run_optuna_search(
         objective=optuna_config.objective,
         market_transform=market_transform,
         market_anchor=market_anchor,
-        market_prob_config=market_prob_config,
     )
     complete_trials = sum(
         1 for trial in study.trials if trial.state == optuna_module.trial.TrialState.COMPLETE

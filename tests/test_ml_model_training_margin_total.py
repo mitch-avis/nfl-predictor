@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nfl_predictor.ml.ml_model_core import FeatureSpec, MarketProbConfig, OptunaConfig
+from nfl_predictor.ml.ml_model_core import FeatureSpec, OptunaConfig
 
 
 class _DummyPreprocessor:
@@ -159,7 +159,6 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
         optuna_config=optuna_config,
         market_transform=True,
         market_anchor=True,
-        market_prob_config=MarketProbConfig(blend_weight=0.2, clamp_delta=0.1),
     )
 
     assert model.margin_model == "margin_model"

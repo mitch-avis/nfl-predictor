@@ -44,39 +44,6 @@ def parse_feature_groups(raw: str | None) -> tuple[str, ...]:
     return tuple(name.strip() for name in raw.split(",") if name.strip())
 
 
-def add_market_prob_options(parser: argparse.ArgumentParser) -> None:
-    """Add the market-probability post-processing options (blend weight, clamp, source, method).
-
-    ``--market-prob-blend`` is kept as a second spelling of ``--market-prob-weight``.
-    """
-    parser.add_argument(
-        "--market-prob-weight",
-        "--market-prob-blend",
-        dest="market_prob_weight",
-        type=float,
-        default=0.0,
-        help="Blend weight for the market's implied win probability (0=off, 1=market only).",
-    )
-    parser.add_argument(
-        "--market-prob-clamp",
-        type=float,
-        default=0.0,
-        help="Clamp model probability within +/- this delta of market (0=off).",
-    )
-    parser.add_argument(
-        "--market-prob-source",
-        choices=["raw", "novig"],
-        default="raw",
-        help="Market probability source for blending/clamping.",
-    )
-    parser.add_argument(
-        "--market-prob-blend-method",
-        choices=["prob", "logit"],
-        default="prob",
-        help="Blend method for market probabilities (prob or logit space).",
-    )
-
-
 def add_wf_window_options(parser: argparse.ArgumentParser) -> None:
     """Add the walk-forward evaluation window options; the bare spellings stay as aliases."""
     # Imported here so that commands without a walk-forward window never load the model code.

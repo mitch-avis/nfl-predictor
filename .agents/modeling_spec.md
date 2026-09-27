@@ -45,20 +45,17 @@ When market lines exist, the system produces market-derived features and support
   `away_market_prob`.
 - Market anchoring trains residuals vs market baselines and adds the baseline back at prediction
   time.
-- Market probability blending/clamping uses explicit CLI/config values and is validated in
-  time-aware evaluation.
+- The market-implied home win probability (no-vig moneylines, else the spread) is a scored
+  yardstick only: every walk-forward reports it beside the model, with the paired
+  deterministic-minus-market intervals, and it never enters the submitted probability. There is no
+  market probability blend or clamp.
 
 Market anchoring details:
 
 - Prefer residual training: `target_resid = target - market_baseline` and `pred = market_baseline +
 pred_resid`.
 
-Market probability post-processing (blend/clamp):
-
-- Blending must be explicit and bounded (weights in [0, 1]).
-- Clamping must be explicit and bounded (delta in [0, 0.5]).
-- If adding "no-vig" market probability options, implement them consistently (home/away normalize to
-  sum to 1) and validate in walk-forward.
+No-vig market probabilities normalize the home and away implied probabilities to sum to 1.
 
 ### Uncertainty
 

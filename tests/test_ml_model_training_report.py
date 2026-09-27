@@ -64,7 +64,6 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         total_quantile_models=None,
         quantiles=None,
         market_anchor=False,
-        market_prob_config=None,
         xgb_params={"n_estimators": 1},
         tuned_params={"max_depth": 2},
         tuned_cv_summary={"cv_splits": 2},
@@ -113,7 +112,6 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         ),
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
     )
 
     metrics = result.metrics_report["metrics"]["holdout"]
@@ -158,7 +156,6 @@ def test_train_margin_total_model_with_report_records_the_rolling_calibration_wi
         total_quantile_models=None,
         quantiles=None,
         market_anchor=False,
-        market_prob_config=None,
         xgb_params={"n_estimators": 1},
         tuned_params=None,
         tuned_cv_summary=None,
@@ -182,7 +179,6 @@ def test_train_margin_total_model_with_report_records_the_rolling_calibration_wi
         optuna_config=None,
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
     )
 
     assert result.splits["calibration_inseason"] == {

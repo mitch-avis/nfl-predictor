@@ -48,7 +48,6 @@ def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
         target_columns=("away_score", "home_score"),
         calibrator=None,
         market_anchor=False,
-        market_prob_config=core.MarketProbConfig(blend_weight=0.0, clamp_delta=0.0),
         xgb_params={"n_estimators": 1},
     )
     joblib.dump(model, model_path)

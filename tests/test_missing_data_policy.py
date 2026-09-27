@@ -121,7 +121,6 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
         optuna_config=optuna,
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
     )
 
     missing = result.metrics_report["missing_data"]

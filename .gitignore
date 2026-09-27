@@ -243,3 +243,6 @@ web/dist/
 web/coverage/
 web/*.tsbuildinfo
 data/web/
+
+# Claude Code subagent worktrees (each is a full checkout; ruff would lint them twice)
+.claude/worktrees/

@@ -315,14 +315,6 @@ Tasks:
       determinism check (the same seed twice on one fold must give identical predictions, or
       checkpoint resume and "only one setting differs" comparisons break), and the GPU reference on
       two seeds, which also measures the GPU's own fit-noise floor (rule 13).
-- [ ] 55.6 (step 3) Add the stability view by season and week bucket, and a "recommended
-      defaults" section. The second-key review script
-      (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that
-      into the standard walk-forward report while step 3 touches reporting.
-      Narrowed (`0.29.1`, 2026-09-27): the stability view landed in `nfl-predictor backtest`
-      (`metrics.stability`) and `nfl-predictor compare` ("Stability by season"). The task text
-      does not define the "recommended defaults" section; its meaning is on the user's step-3
-      question list, and it stays open until answered.
 - [x] 55.7 Choose `n_estimators` time-aware: closed 2026-09-21 (`0.13.0`-`0.13.1`). A four-rung
       ladder (`200`/`400`/`598`, then a `100` plateau check), each rung a six-season arm with its
       own hypothesis and an independent reviewer rescore, found the aggregate order monotone
@@ -416,6 +408,11 @@ Formerly Milestone 41.
       (`platt`, against the benchmark's `auto`) is settled here too. `auto` resolves to `none`,
       the fixed normal curve with no fitting. Keep it separate from
       Milestone 60's behavior-preserving moves.
+      Decided by the user 2026-09-27 on the step-3 evidence (`.agents/benchmarks.md`, "Step 3
+      evidence"): production submits the deterministic floor (`auto`), the calibration used by
+      every run type; the weekly stage-1 re-selection, the fitted calibrators, `elo`, the market
+      blend and clamp, the `blend` model kind and the `nfl-predictor sweep` matrix are retired.
+      The confirmation on the GPU reference repeats the A2 rule on 2007-2025.
 - [ ] 56.6 (step 3, with 56.5) Measure the model against the lines available at pick time, not
       only the stored ones. Picks are submitted before the Thursday game, and lines move between
       then and Sunday, sometimes a lot. The ETL's lines come from nflverse schedules
@@ -437,7 +434,9 @@ Formerly Milestone 41.
       an existing source (nflverse or nfelo, no new external service); (b) confirm what the
       nflverse schedule lines are (closing, or a snapshot) against this file's `last` columns;
       (c) on 2007-2025, score the model against the opening line as a second market yardstick
-      beside the stored one, since pick-time lines sit between open and close; (d) measure how
+      beside the stored one, since pick-time lines sit between open and close; (2026-09-27: scored
+      on 2020-2025 first; the user asked for the full 2007-2025 window, which the GPU reference
+      covers); (d) measure how
       much anchoring on opening instead of stored lines changes backtest accuracy, a
       feature-value change measured with two builds and two seeds (moved to roadmap step 4 by
       the user on 2026-09-27, to share its rebuild cycle); (e) record the coverage limits
@@ -497,7 +496,10 @@ Formerly Milestone 41.
       `false`, a latent bug in the current file; (b) here in step 3, decide the output-changing
       group with the measures of success under "Roadmap Status", on six seasons and two seeds,
       against the benchmark configuration, so that production and benchmark share every setting
-      (rule 11); (c) consider retiring the weekly stage-1 re-selection altogether. Once 56.5
+      (rule 11), and add a "settings versus production" section to the standard walk-forward
+      report (every setting where a run differs from the production weekly run; moved here from
+      task 55.6 by the user on 2026-09-27); (c) consider retiring the weekly stage-1
+      re-selection altogether. Once 56.5
       fixes the probability path by evidence, re-choosing among near-identical candidates each
       week only adds noise (Week 3's two runs chose `none`, then `elo`, a day apart) and costs
       most of the run's time. Changing a default is must-ask.
@@ -625,8 +627,10 @@ are diagnostics of saved artifacts, not walk-forward results, and have no second
       step 3's other `ml/` edits), the API reader and the web chart.
       Narrowed (`0.29.0`, 2026-09-27): total gain per base feature and per head is the ranking
       measure and the chart names it (older run directories fall back, labelled). SHAP as the
-      headline measure was considered and not built; it waits on the user's answer (step-3
-      question list), which closes this item either way.
+      headline measure was considered and not built. The user decided on 2026-09-27: SHAP
+      becomes the headline measure, computed on every run despite the extra pass, total gain
+      stays as the secondary measure, and the combined (both heads) ranking stays, with a
+      margin-only toggle added in the web phases.
 - [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping

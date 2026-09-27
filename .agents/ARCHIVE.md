@@ -672,7 +672,7 @@ held: every run retrained (no stale-fold resume), the division fix, the acceptan
 Formerly Milestone 39, with former Milestone 40 folded in. Task 55.7 completed 2026-09-21
 (versions `0.13.0`-`0.13.1`). Task 55.8 was closed 2026-09-23 as `0.17.0`, reopened the same day,
 and closed again 2026-09-24 as `0.18.0` (see its section below). Tasks 55.1 and 55.2 were retired
-2026-09-24. Tasks 55.3-55.6 and 55.9 stay in `TODO.md`.
+2026-09-24. Task 55.6 closed 2026-09-27 (`0.29.1`). Tasks 55.3, 55.4 and 55.9 stay in `TODO.md`.
 
 ### 55.1 and 55.2 - Configuration-sweep runner (retired 2026-09-24)
 
@@ -685,6 +685,13 @@ hypothesis and a decision rule written before each run) and rule 13 (two seeds f
 change). What replaces it: hypothesis-driven ladders for single settings (task 55.3 for `K`,
 for example), the task 55.9 Optuna tune for the XGBoost hyperparameters, and task 56.3 to wire the
 chosen settings into the weekly run and the benchmark from one source.
+
+### 55.6 - Stability view by season (version `0.29.1`, 2026-09-27)
+
+`nfl-predictor backtest` writes a per-season, per-week-bucket stability view
+(`metrics.stability`) and `nfl-predictor compare` ends with "Stability by season", both from
+`compare`'s metric definitions and bootstrap. The task's undefined "recommended defaults"
+section was moved by the user to task 56.7(b) as a "settings versus production" section.
 
 ### 55.5 - ScoreModel removed (version `0.20.0`, 2026-09-24)
 

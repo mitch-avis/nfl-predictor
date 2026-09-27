@@ -175,8 +175,13 @@ def evaluate_production(
     market_mode: str,
     xgb_params_overrides: dict[str, Any],
     include_quantiles: bool,
+    market_transform: bool | None = None,
+    max_cardinality_ratio: float = 0.5,
 ) -> dict[str, Any]:
     """Walk the production configuration forward and return its summary row.
+
+    ``market_transform`` and ``max_cardinality_ratio`` are the final fit's own options, so
+    the walk-forward scores the configuration the week's picks come from.
 
     The walk-forward saves every finished week under ``wf_compare/wf_folds/``; with ``resume``
     an identical rerun restores those weeks instead of training them again.
@@ -203,10 +208,10 @@ def evaluate_production(
         exclude_incomplete_seasons=exclude_incomplete_seasons,
         recency_half_life_seasons=recency_half_life_seasons,
         include_market=include_market,
-        market_transform=None,
+        market_transform=market_transform,
         market_anchor=market_anchor,
         include_quantiles=include_quantiles,
-        max_cardinality_ratio=0.5,
+        max_cardinality_ratio=max_cardinality_ratio,
         feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
         feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
         xgb_params_overrides=xgb_params_overrides,

@@ -303,6 +303,60 @@ def test_an_unknown_market_mode_is_an_error() -> None:
         stage1.market_mode_flags("all")
 
 
+@pytest.mark.parametrize(
+    ("extra_argv", "transform", "ratio"),
+    [([], None, 0.5), (["--no-market-transform", "--max-cardinality-ratio", "0.3"], False, 0.3)],
+)
+def test_stage1_walks_forward_with_the_final_fits_market_transform_and_cardinality(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra_argv: list[str],
+    transform: bool | None,
+    ratio: float,
+) -> None:
+    """The stage-1 walk-forward reads the same two training options the final fit reads."""
+
+    class _StopAfterStage1Error(Exception):
+        """Stop weekly_run once the stage-1 walk-forward config has been captured."""
+
+    captured: list[walk_forward.WalkForwardConfig] = []
+    data_path = tmp_path / "completed_games_ml.csv"
+    data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
+
+    def _fake_run(
+        _df: pd.DataFrame, config: walk_forward.WalkForwardConfig, **_kwargs: object
+    ) -> dict[str, object]:
+        captured.append(config)
+        raise _StopAfterStage1Error()
+
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
+    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "weekly_run.py",
+            "--skip-data-refresh",
+            "--data-path",
+            str(data_path),
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--output-dir",
+            str(tmp_path / "out"),
+            *extra_argv,
+        ],
+    )
+
+    with pytest.raises(_StopAfterStage1Error):
+        pipeline.main()
+
+    assert captured[0].market_transform is transform
+    assert captured[0].max_cardinality_ratio == pytest.approx(ratio)
+
+
 def test_the_retired_all_market_mode_no_longer_parses() -> None:
     """One production configuration means one market mode; ``all`` compared three."""
     with pytest.raises(SystemExit):

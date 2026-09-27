@@ -285,6 +285,8 @@ def main() -> int:
             "device": args.xgb_device,
         },
         "include_quantiles": bool(args.wf_include_quantiles),
+        "market_transform": args.market_transform,
+        "max_cardinality_ratio": float(args.max_cardinality_ratio),
     }
 
     # Propagate the tree method to walk-forward folds too.
@@ -302,6 +304,8 @@ def main() -> int:
             "recency_half_life_seasons": args.wf_recency_half_life_seasons,
             "market_mode": args.wf_market_mode,
             "include_quantiles": bool(args.wf_include_quantiles),
+            "market_transform": args.market_transform,
+            "max_cardinality_ratio": float(args.max_cardinality_ratio),
             "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
             "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
             "xgb_params_overrides": wf_config["xgb_params_overrides"],
@@ -338,6 +342,8 @@ def main() -> int:
             market_mode=args.wf_market_mode,
             xgb_params_overrides=wf_config["xgb_params_overrides"],
             include_quantiles=bool(args.wf_include_quantiles),
+            market_transform=args.market_transform,
+            max_cardinality_ratio=float(args.max_cardinality_ratio),
         )
         stage1.write_summary(run_dir, wf_summary)
         _write_stage_marker(

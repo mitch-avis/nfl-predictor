@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 import joblib
 import pytest
 
 from nfl_predictor.cli import explain
+from nfl_predictor.ml import ml_model_core
 from tests.test_feature_importance import _fit_rest_opp_model
 
 
@@ -45,3 +47,16 @@ def test_explain_runs_without_the_shap_library(
     assert {row["feature"] for row in report["rows"]} == set(
         model.preprocessor.get_feature_names_out()
     )
+
+
+def test_explain_refuses_a_saved_blend_model() -> None:
+    """The blend model kind was retired, so a saved blend model is refused with the reason."""
+    blend = ml_model_core.BlendedMarginTotalModel(
+        team_model=cast(ml_model_core.MarginTotalModel, None),
+        blend_layer=cast(ml_model_core.BlendLayer, None),
+        calibrator=None,
+        target_columns=("away_score", "home_score"),
+    )
+
+    with pytest.raises(ValueError, match="blend model kind was retired"):
+        explain._select_model_component(blend)

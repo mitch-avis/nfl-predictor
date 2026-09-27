@@ -13,7 +13,6 @@ from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml.feature_spec import _apply_feature_spec
 from nfl_predictor.ml.ml_model_core import (
-    BlendedMarginTotalModel,
     MarginTotalModel,
 )
 from nfl_predictor.ml.ml_model_xgb_utils import _transform_matrix
@@ -146,11 +145,6 @@ def build_feature_importance_report(
     rows); without them, or when they are empty, the report records only the XGBoost measures.
     """
     try:
-        if isinstance(model, BlendedMarginTotalModel):
-            team_report = _build_margin_total_report(model.team_model)
-            if team_report is None:
-                return None
-            return {"model_kind": "blend", "components": {"team": team_report}}
         if isinstance(model, MarginTotalModel):
             report = _build_margin_total_report(model, shap_rows)
             if report is None:

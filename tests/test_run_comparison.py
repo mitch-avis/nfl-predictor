@@ -431,6 +431,46 @@ def test_a_single_week_has_no_pool_interval(tmp_path: Path) -> None:
     assert None not in several
 
 
+def _one_game_season(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Drop a game so season 2024's week 1 holds a single game."""
+    return predictions[predictions["game_id"] != "2024_01_b"].reset_index(drop=True)
+
+
+def test_a_single_game_row_has_no_market_interval() -> None:
+    """A run's season row with one game gets the det - market estimate and no interval."""
+    stability = run_comparison.stability_report(
+        _one_game_season(_season_predictions()), resamples=50
+    )
+
+    row = stability["windows"]["week 1"]["2024"]
+    assert row["games"] == 1
+    estimate, low, high = row["det_minus_market_brier"]
+    assert (low, high) == (None, None)
+    assert estimate == pytest.approx(0.38**2 - 0.5**2)
+    assert None not in stability["windows"]["week 1"]["2023"]["det_minus_market_brier"]
+
+
+def test_a_single_game_contrast_has_no_intervals(tmp_path: Path) -> None:
+    """A paired season row with one game keeps each estimate and prints ``[n/a]``."""
+    candidate = _loaded(
+        tmp_path, "cand", _one_game_season(_season_predictions(shift=0.05, market=0.55))
+    )
+    reference = _loaded(tmp_path, "ref", _one_game_season(_season_predictions(market=0.55)))
+    report = run_comparison.compare_runs([candidate], [reference], resamples=50)
+
+    contrast = report["windows"]["week 1"]["seasons"]["2024"]["contrast"]
+    for column in run_comparison.LOSS_COLUMNS:
+        assert contrast[column][1:] == (None, None), column
+    assert contrast["brier"][0] == pytest.approx(0.33**2 - 0.38**2)
+    row = next(
+        line
+        for line in run_comparison.format_report(report)
+        if line.startswith("| candidate - reference | 2024 | 1 | ")
+    )
+    brier_cell = row.split(" | ")[3]
+    assert brier_cell == f"{0.33**2 - 0.38**2:+.5f} [n/a]"
+
+
 def test_the_comparison_report_ends_with_the_season_tables(tmp_path: Path) -> None:
     """The Markdown gains a stability section with run rows and contrast rows per season."""
     lines = run_comparison.format_report(_season_comparison(tmp_path))

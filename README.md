@@ -840,7 +840,14 @@ Training/backtests can write a run directory containing reproducible artifacts.
 
 - Use `--run-dir` to write `model.joblib`, `metadata.json`, and (when evaluated)
   `metrics_report.json`.
-- `feature_importance.json` includes XGBoost gain/weight importance per model head.
+- `feature_importance.json` records XGBoost importance per model head and per encoded column
+  (`gain`, the average loss reduction per split; `total_gain`, the loss reduction summed over
+  every split; `weight`, the split count), and per base feature under `base_features`: total gain
+  and splits summed over the feature's one-hot columns, per head and `combined` over both heads.
+  Its `measures` block describes each key. The web Model page ranks base features by combined
+  total gain; runs written before `schema_version` 2 recorded only the per-split average summed
+  over columns, which the page still shows for them, labelled as such, and which favors features
+  with many categories.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
   args, feature list, and tuning/early-stopping info (when used). `models/` and `optuna.db` are
   gitignored by default, so keep run artifacts local unless you copy them elsewhere.

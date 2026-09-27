@@ -233,8 +233,10 @@ def test_build_report_from_models_handles_empty_unsupported_and_no_base_features
         cast(dict[str, xgb.XGBRegressor], {"margin": model}),
     )
     assert report == {
+        "schema_version": feature_importance.SCHEMA_VERSION,
+        "measures": feature_importance.MEASURES,
         "feature_names": ["feat"],
-        "models": {"margin": {"gain": [1.0], "weight": [1.0]}},
+        "models": {"margin": {"gain": [1.0], "total_gain": [1.0], "weight": [1.0]}},
     }
 
 
@@ -248,15 +250,13 @@ def test_score_dict_to_list_and_model_importance_cover_fallback_keys() -> None:
     )
     assert not feature_importance._models_support_importance([object()])
 
-    booster = SimpleNamespace(
-        get_score=lambda importance_type: (
-            {"known": 1.0} if importance_type == "gain" else {"f0": 2.0}
-        )
-    )
+    scores_by_type = {"gain": {"known": 1.0}, "total_gain": {"known": 6.0}, "weight": {"f0": 2.0}}
+    booster = SimpleNamespace(get_score=lambda importance_type: scores_by_type[importance_type])
     model = SimpleNamespace(get_booster=lambda: booster)
 
     assert feature_importance._build_model_importance(_as_regressor(model), ["known"]) == {
         "gain": [1.0],
+        "total_gain": [6.0],
         "weight": [2.0],
     }
 
@@ -274,12 +274,12 @@ def test_build_base_features_and_aggregate_without_combined(
     base_features = feature_importance._build_base_features(
         _as_preprocessor(SimpleNamespace()),
         ["num__yards", "cat__team_A"],
-        {"margin": {"gain": [1.5, 2.0], "weight": [3.0, 4.0]}},
+        {"margin": {"gain": [1.5, 2.0], "total_gain": [4.5, 8.0], "weight": [3.0, 4.0]}},
     )
 
     assert base_features == {
         "feature_names": ["team", "yards"],
-        "margin": {"gain": [2.0, 1.5], "weight": [4.0, 3.0]},
+        "margin": {"total_gain": [8.0, 4.5], "weight": [4.0, 3.0]},
     }
 
 
@@ -371,4 +371,121 @@ def test_normalize_cols_handles_slice_list_and_scalar_inputs() -> None:
             _as_preprocessor(SimpleNamespace()),
         )
         == []
+    )
+
+
+def test_base_features_rank_by_total_gain_not_summed_average_gain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A many-category feature split rarely ranks below a numeric feature the trees use often.
+
+    Summing each one-hot column's average gain would put the categorical feature first
+    (3 x 5.0 = 15.0 against 4.0); total gain (average gain times splits) does not.
+    """
+    columns = ["num__rest", "cat__opp_A", "cat__opp_B", "cat__opp_C"]
+    monkeypatch.setattr(
+        feature_importance,
+        "_build_base_feature_map",
+        lambda *_args: {
+            "num__rest": "rest",
+            "cat__opp_A": "opp",
+            "cat__opp_B": "opp",
+            "cat__opp_C": "opp",
+        },
+    )
+    head = {
+        "gain": [4.0, 5.0, 5.0, 5.0],
+        "weight": [30.0, 1.0, 1.0, 1.0],
+        "total_gain": [120.0, 5.0, 5.0, 5.0],
+    }
+
+    base = feature_importance._build_base_features(
+        _as_preprocessor(SimpleNamespace()),
+        columns,
+        {"margin": head, "total": head},
+    )
+
+    assert base is not None
+    assert base["feature_names"] == ["opp", "rest"]
+    assert base["margin"] == {"total_gain": [15.0, 120.0], "weight": [3.0, 30.0]}
+    assert base["combined"] == {"total_gain": [30.0, 240.0], "weight": [6.0, 60.0]}
+    assert "gain" not in base["combined"]
+
+
+def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
+    """Base-feature total gain is the booster's per-column total gain summed per base feature."""
+    rng = np.random.default_rng(11)
+    rows = 120
+    df = pd.DataFrame(
+        {
+            "rest": rng.normal(size=rows),
+            "opp": rng.choice(["A", "B", "C", "D"], size=rows),
+        }
+    )
+    spec = ml_model_core.FeatureSpec(
+        feature_columns=["rest", "opp"],
+        categorical_columns=["opp"],
+        numeric_columns=["rest"],
+        dropped_columns=[],
+        id_columns=[],
+        constant_columns=[],
+        high_cardinality_columns=[],
+        feature_start="rest",
+        feature_end="opp",
+        metadata_columns=[],
+        post_feature_columns=[],
+        market_columns=[],
+    )
+    preprocessor = ml_model_core._build_preprocessor(spec, for_tree=True)
+    x_matrix = ml_model_core._fit_transform_matrix(preprocessor, df)
+    opp_effect = df["opp"].map({"A": 2.0, "B": -1.0, "C": 0.5, "D": -1.5}).to_numpy()
+    y_margin = 3.0 * df["rest"].to_numpy() + opp_effect + rng.normal(scale=0.1, size=rows)
+    y_total = df["rest"].to_numpy() - opp_effect + rng.normal(scale=0.1, size=rows)
+    params = ml_model_core._resolve_xgb_params(
+        ml_model_core.DEFAULT_XGB_PARAMS,
+        overrides={
+            "n_estimators": 10,
+            "max_depth": 2,
+            "learning_rate": 0.3,
+            "verbosity": 0,
+            "n_jobs": 1,
+        },
+    )
+    margin_model, total_model = ml_model_core._fit_margin_total_models(
+        x_matrix, y_margin, y_total, params
+    )
+    model = ml_model_core.MarginTotalModel(
+        preprocessor=preprocessor,
+        feature_spec=spec,
+        margin_model=margin_model,
+        total_model=total_model,
+        target_columns=("away_score", "home_score"),
+        calibrator=None,
+    )
+
+    report = feature_importance.build_feature_importance_report(model)
+
+    assert report is not None
+    assert report["schema_version"] == feature_importance.SCHEMA_VERSION
+    assert set(report["measures"]) == {"gain", "total_gain", "weight"}
+    names = report["feature_names"]
+    base = report["base_features"]
+    assert base["feature_names"] == ["opp", "rest"]
+    assert sum("opp" in name for name in names) == 4
+    expected: dict[str, list[float]] = {}
+    for head, regressor in (("margin", margin_model), ("total", total_model)):
+        scores = regressor.get_booster().get_score(importance_type="total_gain")
+        per_column: list[float] = []
+        for i, name in enumerate(names):
+            value = scores.get(name, scores.get(f"f{i}", 0.0))
+            assert isinstance(value, float)
+            per_column.append(value)
+        assert report["models"][head]["total_gain"] == pytest.approx(per_column)
+        opp_total = sum(v for n, v in zip(names, per_column, strict=True) if "opp" in n)
+        rest_total = sum(v for n, v in zip(names, per_column, strict=True) if "rest" in n)
+        expected[head] = [opp_total, rest_total]
+        assert opp_total > 0.0
+        assert base[head]["total_gain"] == pytest.approx(expected[head])
+    assert base["combined"]["total_gain"] == pytest.approx(
+        [expected["margin"][i] + expected["total"][i] for i in range(2)]
     )

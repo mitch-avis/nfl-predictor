@@ -123,12 +123,12 @@ export function ModelPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-1 text-base">
-                  Feature importance <InfoTooltip content="XGBoost gain, summed across the margin and total heads. Higher means the feature contributed more to the trees' splits." />
+                  Feature importance <InfoTooltip content="How much each feature reduced the trees' loss over the margin and total heads. The note under the chart names the measure." />
                 </CardTitle>
-                <CardDescription>Top {Math.min(25, data.feature_importance.length)} of {data.metadata.feature_count ?? '?'} features.</CardDescription>
+                <CardDescription>Top {Math.min(25, data.feature_importance.rows.length)} of {data.metadata.feature_count ?? '?'} features.</CardDescription>
               </CardHeader>
               <CardContent>
-                <FeatureImportanceChart rows={data.feature_importance} />
+                <FeatureImportanceChart importance={data.feature_importance} />
               </CardContent>
             </Card>
             <Card>

@@ -17,6 +17,31 @@ from nfl_predictor.utils.logger import log
 
 xgb.set_config(verbosity=0)
 
+SCHEMA_VERSION = 2
+"""Version of the report layout; version 1 files (no ``schema_version`` key) summed ``gain``."""
+
+COLUMN_MEASURES: tuple[str, ...] = ("gain", "total_gain", "weight")
+"""XGBoost importance types recorded for every encoded column of each model head."""
+
+BASE_MEASURES: tuple[str, ...] = ("total_gain", "weight")
+"""Measures that stay meaningful when summed over encoded columns and over heads."""
+
+MEASURES: dict[str, str] = {
+    "gain": (
+        "XGBoost importance_type='gain': average loss reduction per split on the encoded "
+        "column. Recorded per encoded column only; a sum of averages is not a total."
+    ),
+    "total_gain": (
+        "XGBoost importance_type='total_gain': loss reduction summed over every split "
+        "(average gain times splits). base_features sums it over a base feature's encoded "
+        "columns, and 'combined' over the margin and total heads; base features rank by it."
+    ),
+    "weight": (
+        "XGBoost importance_type='weight': number of splits. base_features sums it like total_gain."
+    ),
+}
+"""What each number in the report measures; written into every report."""
+
 
 def resolve_feature_names(
     preprocessor: ColumnTransformer,
@@ -98,6 +123,8 @@ def _build_report_from_models(
         model_importance[label] = _build_model_importance(model, feature_names)
 
     report: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "measures": dict(MEASURES),
         "feature_names": feature_names,
         "models": model_importance,
     }
@@ -112,11 +139,11 @@ def _build_model_importance(
     model: xgb.XGBRegressor,
     feature_names: Sequence[str],
 ) -> dict[str, list[float]]:
-    """Compute gain/weight importance vectors for a model."""
+    """Compute one importance vector per XGBoost importance type for a model."""
     booster = model.get_booster()
     return {
-        "gain": _score_dict_to_list(booster.get_score(importance_type="gain"), feature_names),
-        "weight": _score_dict_to_list(booster.get_score(importance_type="weight"), feature_names),
+        measure: _score_dict_to_list(booster.get_score(importance_type=measure), feature_names)
+        for measure in COLUMN_MEASURES
     }
 
 
@@ -154,7 +181,7 @@ def _build_base_features(
     feature_names: Sequence[str],
     model_importance: dict[str, dict[str, list[float]]],
 ) -> dict[str, Any] | None:
-    """Aggregate importance values by base (pre-encoded) feature."""
+    """Aggregate total gain and split counts by base (pre-encoded) feature."""
     base_map = _build_base_feature_map(preprocessor, feature_names)
     if not base_map:
         return None
@@ -162,30 +189,29 @@ def _build_base_features(
     base_keys: set[str] = set()
     base_values: dict[str, dict[str, dict[str, float]]] = {}
     for label, importance in model_importance.items():
-        gain_map = _aggregate_by_base(feature_names, importance["gain"], base_map)
-        weight_map = _aggregate_by_base(feature_names, importance["weight"], base_map)
-        base_keys.update(gain_map.keys())
-        base_keys.update(weight_map.keys())
-        base_values[label] = {"gain": gain_map, "weight": weight_map}
+        base_values[label] = {
+            measure: _aggregate_by_base(feature_names, importance[measure], base_map)
+            for measure in BASE_MEASURES
+        }
+        for aggregated in base_values[label].values():
+            base_keys.update(aggregated.keys())
 
     base_names = sorted(base_keys)
     base_features: dict[str, Any] = {"feature_names": base_names}
     for label, values in base_values.items():
         base_features[label] = {
-            "gain": [values["gain"].get(name, 0.0) for name in base_names],
-            "weight": [values["weight"].get(name, 0.0) for name in base_names],
+            measure: [values[measure].get(name, 0.0) for name in base_names]
+            for measure in BASE_MEASURES
         }
 
     if len(base_values) > 1:
-        combined_gain = [
-            float(sum(base_features[label]["gain"][idx] for label in base_values))
-            for idx in range(len(base_names))
-        ]
-        combined_weight = [
-            float(sum(base_features[label]["weight"][idx] for label in base_values))
-            for idx in range(len(base_names))
-        ]
-        base_features["combined"] = {"gain": combined_gain, "weight": combined_weight}
+        base_features["combined"] = {
+            measure: [
+                float(sum(base_features[label][measure][idx] for label in base_values))
+                for idx in range(len(base_names))
+            ]
+            for measure in BASE_MEASURES
+        }
 
     return base_features
 

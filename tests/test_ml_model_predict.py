@@ -9,12 +9,9 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import Ridge
 
 from nfl_predictor.ml import ml_model_core, ml_model_predict
 from nfl_predictor.ml.ml_model_core import (
-    BlendedMarginTotalModel,
-    BlendLayer,
     FeatureSpec,
     MarginTotalModel,
 )
@@ -31,16 +28,6 @@ class _DummyPreprocessor:
         """Return a stable dummy feature matrix for tests."""
         self.frames.append(df.copy())
         return np.zeros((len(df), 1))
-
-
-class _BlendModel:
-    def __init__(self, weights: np.ndarray) -> None:
-        """Minimal sklearn-like model with a predict method."""
-        self.weights = weights
-
-    def predict(self, x: np.ndarray) -> np.ndarray:
-        """Apply a fixed linear transformation."""
-        return x @ self.weights
 
 
 def _feature_spec() -> FeatureSpec:
@@ -89,12 +76,10 @@ def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch)
         margin_model=margin_model,
         total_model=total_model,
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,
         market_anchor=True,
-        market_prob_config=None,
         xgb_params=None,
         tuned_params=None,
         tuned_cv_summary=None,
@@ -143,12 +128,10 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
         margin_model=cast(xgb.XGBRegressor, object()),
         total_model=cast(xgb.XGBRegressor, object()),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models={0.1: margin_low, 0.9: margin_high},
         total_quantile_models={0.1: total_low, 0.9: total_high},
         quantiles=(0.1, 0.9),
         market_anchor=True,
-        market_prob_config=None,
         xgb_params=None,
         tuned_params=None,
         tuned_cv_summary=None,
@@ -199,8 +182,8 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
     )
     monkeypatch.setattr(
         ml_model_predict,
-        "_predict_home_win_prob",
-        lambda _m, _c, **_kwargs: np.array([0.6]),
+        "_margin_to_home_win_prob",
+        lambda _m: np.array([0.6]),
     )
 
     model = MarginTotalModel(
@@ -209,12 +192,10 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
         margin_model=cast(xgb.XGBRegressor, object()),
         total_model=cast(xgb.XGBRegressor, object()),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,
         market_anchor=False,
-        market_prob_config=None,
         xgb_params=None,
         tuned_params=None,
         tuned_cv_summary=None,
@@ -237,173 +218,6 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
     total_p75 = pd.to_numeric(output_df["predicted_total_p75"]).iloc[0]
     assert float(margin_p25) == 2.0
     assert float(total_p75) == 48.0
-
-
-def test_predict_week_margin_total_uses_resolved_uncertainty_sigma(monkeypatch) -> None:
-    """Uncertainty-aware margin/total predictions should pass resolved sigma to the calibrator."""
-    games_df = pd.DataFrame(
-        {
-            "game_id": [1],
-            "season": [2023],
-            "week": [1],
-            "away_abbr": ["AAA"],
-            "home_abbr": ["BBB"],
-        }
-    )
-
-    monkeypatch.setattr(ml_model_predict, "_load_games", lambda _: games_df)
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_margin_total_from_model",
-        lambda _model, _df: (np.array([3.5]), np.array([44.2])),
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_margin_total_quantiles_from_model",
-        lambda _model, _df: (
-            {0.1: np.array([1.0]), 0.9: np.array([6.0])},
-            {0.1: np.array([40.0]), 0.9: np.array([48.0])},
-        ),
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_derive_scores_from_margin_total",
-        lambda _m, _t: (np.array([20.0]), np.array([23.5])),
-    )
-
-    captured: dict[str, object] = {}
-
-    def fake_resolve_sigma(
-        pred_margin: np.ndarray,
-        margin_quantiles: dict[float, np.ndarray],
-        *,
-        fallback: float,
-    ) -> np.ndarray:
-        captured["resolve_margin"] = pred_margin
-        captured["resolve_quantiles"] = margin_quantiles
-        captured["resolve_fallback"] = fallback
-        return np.array([7.5])
-
-    def fake_predict_home_win_prob(
-        pred_margin: np.ndarray,
-        calibrator: object,
-        *,
-        sigma: np.ndarray | None = None,
-        use_uncertainty: bool = False,
-    ) -> np.ndarray:
-        captured["predict_margin"] = pred_margin
-        captured["predict_calibrator"] = calibrator
-        captured["predict_sigma"] = sigma
-        captured["use_uncertainty"] = use_uncertainty
-        return np.array([0.6])
-
-    monkeypatch.setattr(ml_model_predict, "_resolve_margin_sigma", fake_resolve_sigma)
-    monkeypatch.setattr(ml_model_predict, "_predict_home_win_prob", fake_predict_home_win_prob)
-
-    model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-        margin_quantile_models=None,
-        total_quantile_models=None,
-        quantiles=None,
-        market_anchor=False,
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-
-    output_df = ml_model_predict.predict_week_margin_total(
-        model,
-        Path("games.csv"),
-        output_path=None,
-        pretty_output=False,
-        win_prob_use_uncertainty=True,
-    )
-
-    assert captured["resolve_fallback"] == ml_model_predict.constants.SCORE_DIFF_STD_DEV
-    assert np.array_equal(cast(np.ndarray, captured["predict_sigma"]), np.array([7.5]))
-    assert captured["use_uncertainty"] is True
-    assert "predicted_margin_p10" in output_df.columns
-    assert "predicted_total_p90" in output_df.columns
-
-
-def test_predict_week_blended_uses_market_baseline(monkeypatch, tmp_path: Path) -> None:
-    """Predict week blended model uses market baseline predictions."""
-    games_df = pd.DataFrame(
-        {
-            "game_id": [1],
-            "season": [2023],
-            "week": [1],
-            "away_abbr": ["AAA"],
-            "home_abbr": ["BBB"],
-        }
-    )
-
-    monkeypatch.setattr(ml_model_predict, "_load_games", lambda _: games_df)
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_margin_total_from_model",
-        lambda _model, _df: (np.array([4.0]), np.array([41.0])),
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "get_market_baseline",
-        lambda _df: (np.array([1.0]), np.array([44.0])),
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_home_win_prob",
-        lambda _m, _c, **_kwargs: np.array([0.7]),
-    )
-
-    blend_layer = BlendLayer(
-        margin_model=cast(Ridge, _BlendModel(np.array([0.6, 0.4]))),
-        total_model=cast(Ridge, _BlendModel(np.array([0.5, 0.5]))),
-    )
-
-    team_model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-        margin_quantile_models=None,
-        total_quantile_models=None,
-        quantiles=None,
-        market_anchor=False,
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-
-    blended_model = BlendedMarginTotalModel(
-        team_model=team_model,
-        blend_layer=blend_layer,
-        calibrator=None,
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-
-    output_df = ml_model_predict.predict_week_blended(
-        blended_model,
-        tmp_path / "games.csv",
-        output_path=None,
-        pretty_output=False,
-    )
-
-    assert "predicted_margin" in output_df.columns
-    assert "predicted_total" in output_df.columns
-    assert "home_win_prob" in output_df.columns
 
 
 def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
@@ -436,8 +250,8 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         ml_model_predict,
-        "_predict_home_win_prob",
-        lambda _m, _c, **_kwargs: np.array([0.55]),
+        "_margin_to_home_win_prob",
+        lambda _m: np.array([0.55]),
     )
 
     captured: dict[str, pd.DataFrame] = {}
@@ -453,12 +267,10 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
         margin_model=cast(xgb.XGBRegressor, object()),
         total_model=cast(xgb.XGBRegressor, object()),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,
         market_anchor=False,
-        market_prob_config=None,
         xgb_params=None,
         tuned_params=None,
         tuned_cv_summary=None,
@@ -472,155 +284,3 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     )
 
     assert captured["df"].equals(output_df)
-
-
-def test_predict_week_blended_pretty(monkeypatch) -> None:
-    """Predict week blended pretty-prints output when requested."""
-    games_df = pd.DataFrame(
-        {
-            "game_id": [1],
-            "season": [2023],
-            "week": [1],
-            "away_abbr": ["AAA"],
-            "home_abbr": ["BBB"],
-        }
-    )
-
-    monkeypatch.setattr(ml_model_predict, "_load_games", lambda _: games_df)
-
-    team_model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-        margin_quantile_models=None,
-        total_quantile_models=None,
-        quantiles=None,
-        market_anchor=False,
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_margin_total_from_model",
-        lambda _model, _df: (np.array([4.0]), np.array([40.0])),
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "get_market_baseline",
-        lambda _df: (np.array([2.0]), np.array([36.0])),
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_home_win_prob",
-        lambda _m, _c, **_kwargs: np.array([0.5]),
-    )
-
-    captured: dict[str, pd.DataFrame] = {}
-    monkeypatch.setattr(
-        ml_model_predict.ml_utils,
-        "display_weekly_predictions",
-        lambda df: captured.setdefault("df", df),
-    )
-
-    blend_layer = BlendLayer(
-        margin_model=cast(Ridge, _BlendModel(np.array([0.6, 0.4]))),
-        total_model=cast(Ridge, _BlendModel(np.array([0.5, 0.5]))),
-    )
-
-    blended_model = BlendedMarginTotalModel(
-        team_model=team_model,
-        blend_layer=blend_layer,
-        calibrator=None,
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-
-    output_df = ml_model_predict.predict_week_blended(
-        blended_model,
-        Path("games.csv"),
-        output_path=None,
-        pretty_output=True,
-    )
-
-    assert captured["df"].equals(output_df)
-
-
-def test_predict_week_blended_writes_output(monkeypatch, tmp_path: Path) -> None:
-    """Blended predictions should write CSV output when requested."""
-    games_df = pd.DataFrame(
-        {
-            "game_id": [1],
-            "season": [2023],
-            "week": [1],
-            "away_abbr": ["AAA"],
-            "home_abbr": ["BBB"],
-        }
-    )
-
-    monkeypatch.setattr(ml_model_predict, "_load_games", lambda _: games_df)
-
-    team_model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-        margin_quantile_models=None,
-        total_quantile_models=None,
-        quantiles=None,
-        market_anchor=False,
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_margin_total_from_model",
-        lambda _model, _df: (np.array([4.0]), np.array([40.0])),
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "get_market_baseline",
-        lambda _df: (np.array([2.0]), np.array([36.0])),
-    )
-    monkeypatch.setattr(
-        ml_model_predict,
-        "_predict_home_win_prob",
-        lambda _m, _c, **_kwargs: np.array([0.5]),
-    )
-
-    blend_layer = BlendLayer(
-        margin_model=cast(Ridge, _BlendModel(np.array([0.6, 0.4]))),
-        total_model=cast(Ridge, _BlendModel(np.array([0.5, 0.5]))),
-    )
-    blended_model = BlendedMarginTotalModel(
-        team_model=team_model,
-        blend_layer=blend_layer,
-        calibrator=None,
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params=None,
-        tuned_params=None,
-        tuned_cv_summary=None,
-    )
-
-    output_path = tmp_path / "blend_preds.csv"
-    output_df = ml_model_predict.predict_week_blended(
-        blended_model,
-        Path("games.csv"),
-        output_path=output_path,
-        pretty_output=False,
-    )
-
-    assert output_path.exists()
-    assert pd.read_csv(output_path).shape == output_df.shape

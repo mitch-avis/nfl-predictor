@@ -210,7 +210,8 @@ mutating routes require header `X-Requested-With: nflp`.
   coverage strip, leakage audit badge, Run ETL / Refresh lines buttons (admin).
 - Model: metadata cards, holdout metric tiles with direction arrows from `metric_strategy`,
   feature importance bar chart (says which measure it shows), calibration reliability chart,
-  wf_compare table with the best row highlighted, collapsible config JSON.
+  walk-forward evaluation table (`wf_compare`; one row for the production configuration, or an
+  older run's candidates with the trained row highlighted), collapsible config JSON.
 - Jobs: catalog cards, auto-generated form from the params schema (react-hook-form + zod),
   history table, detail page with virtualized log console, level filter, progress bar, cancel.
 - Runs: list with stage chips and holdout Brier/accuracy; Activate with confirm dialog.
@@ -336,9 +337,9 @@ Odds-provider adapter interface plus a `Live` blend
 
   Deviations from the plan above, all deliberate:
 
-  - **Progress regex.** The plan cited a `Walk-forward fold N/M done` line in
-    `nfl_predictor/ml/walk_forward.py`; the line that actually exists is `WF candidate %d/%d` in
-    the weekly run. The runner matches both (`(?:fold|candidate) N/M`).
+  - **Progress regex.** Walk-forwards log `Walk-forward fold N/M done`
+    (`nfl_predictor/ml/walk_forward.py`), the weekly run's stage 1 included; older weekly runs
+    logged `WF candidate N/M`. The runner matches both (`(?:fold|candidate) N/M`).
   - **Queue vs 409.** Both behaviors are implemented: the runner gives each exclusive group a
     single worker, so queued jobs in a group never overlap (this is the path chained jobs take),
     while `POST /api/jobs` still answers 409 `group_busy` when the group is already occupied.

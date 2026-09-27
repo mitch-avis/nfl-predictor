@@ -11,20 +11,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nfl_predictor import constants
 from nfl_predictor.ml import ml_utils
 from nfl_predictor.ml.ml_model_core import (
-    BlendedMarginTotalModel,
     MarginTotalModel,
-    _adjust_home_win_prob,
     _build_prediction_output,
     _derive_scores_from_margin_total,
     _load_games,
-    _predict_home_win_prob,
+    _margin_to_home_win_prob,
     _predict_margin_total_from_model,
     _predict_margin_total_quantiles_from_model,
-    _resolve_margin_sigma,
-    get_market_baseline,
 )
 from nfl_predictor.utils.logger import log
 
@@ -35,33 +30,17 @@ def predict_week_margin_total(
     output_path: Path | None = None,
     pretty_output: bool = True,
     score_rounding: str = "none",
-    win_prob_use_uncertainty: bool = False,
 ) -> pd.DataFrame:
     """Generate weekly predictions from a margin/total model.
 
-    When win_prob_use_uncertainty is True, margin quantiles are used to derive
-    uncertainty-aware win probabilities.
+    Win probabilities are the deterministic floor of the predicted margins; the margin and total
+    quantiles, when the model has them, are added as interval columns.
     """
     games_df = _load_games(games_path)
     pred_margin, pred_total = _predict_margin_total_from_model(model, games_df)
     margin_quantiles, total_quantiles = _predict_margin_total_quantiles_from_model(model, games_df)
     pred_away, pred_home = _derive_scores_from_margin_total(pred_margin, pred_total)
-    sigma_margin = None
-    if win_prob_use_uncertainty:
-        sigma_margin = _resolve_margin_sigma(
-            pred_margin,
-            margin_quantiles,
-            fallback=constants.SCORE_DIFF_STD_DEV,
-        )
-    home_win_prob = _predict_home_win_prob(
-        pred_margin,
-        model.calibrator,
-        sigma=sigma_margin,
-        use_uncertainty=win_prob_use_uncertainty,
-    )
-    home_win_prob = _adjust_home_win_prob(
-        games_df, home_win_prob, getattr(model, "market_prob_config", None)
-    )
+    home_win_prob = _margin_to_home_win_prob(pred_margin)
     output_df = _build_prediction_output(
         games_df,
         pred_away,
@@ -74,50 +53,6 @@ def predict_week_margin_total(
         output_df[f"predicted_margin_p{int(round(q * 100)):02d}"] = np.round(margin_quantiles[q], 1)
     for q in sorted(total_quantiles.keys()):
         output_df[f"predicted_total_p{int(round(q * 100)):02d}"] = np.round(total_quantiles[q], 1)
-
-    if output_path:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_df.to_csv(output_path, index=False)
-        log.info("Saved predictions to %s", output_path)
-
-    if pretty_output:
-        ml_utils.display_weekly_predictions(output_df)
-
-    return output_df
-
-
-def predict_week_blended(
-    model: BlendedMarginTotalModel,
-    games_path: Path,
-    output_path: Path | None = None,
-    pretty_output: bool = True,
-    score_rounding: str = "none",
-) -> pd.DataFrame:
-    """Generate weekly predictions from a blended margin/total model."""
-    games_df = _load_games(games_path)
-
-    team_margin, team_total = _predict_margin_total_from_model(model.team_model, games_df)
-    market_margin, market_total = get_market_baseline(games_df)
-
-    blended_margin = model.blend_layer.margin_model.predict(
-        np.column_stack([team_margin, market_margin])
-    )
-    blended_total = model.blend_layer.total_model.predict(
-        np.column_stack([team_total, market_total])
-    )
-    pred_away, pred_home = _derive_scores_from_margin_total(blended_margin, blended_total)
-    home_win_prob = _predict_home_win_prob(blended_margin, model.calibrator)
-    home_win_prob = _adjust_home_win_prob(
-        games_df, home_win_prob, getattr(model, "market_prob_config", None)
-    )
-
-    output_df = _build_prediction_output(
-        games_df,
-        pred_away,
-        pred_home,
-        home_win_prob,
-        score_rounding=score_rounding,
-    )
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)

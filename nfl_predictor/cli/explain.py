@@ -61,9 +61,12 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _select_model_component(model: Any) -> tuple[Any, str]:
-    """Resolve the margin/total model to analyze: the model itself, or a blend's team model."""
+    """Resolve the margin/total model to analyze; a saved blend model is refused."""
     if isinstance(model, ml_model_core.BlendedMarginTotalModel):
-        return model.team_model, "blend_team"
+        raise ValueError(
+            "This is a blend model: the blend model kind was retired; "
+            "explain a margin_total model instead."
+        )
     if isinstance(model, ml_model_core.MarginTotalModel):
         return model, "margin_total"
     raise ValueError(f"Unsupported model type: {type(model).__name__}")

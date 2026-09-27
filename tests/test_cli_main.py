@@ -45,6 +45,15 @@ def test_an_unknown_command_is_a_usage_error(capsys: pytest.CaptureFixture[str])
     assert "invalid choice" in capsys.readouterr().err
 
 
+def test_the_retired_sweep_command_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    """``sweep`` compared probability settings production no longer has, so it is gone."""
+    with pytest.raises(SystemExit) as exit_info:
+        front_door.main(["sweep"])
+
+    assert exit_info.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err
+
+
 def _fake_command(monkeypatch: pytest.MonkeyPatch, *, takes_argv: bool) -> SimpleNamespace:
     """Point the ``validate`` command at a recorder and return what it records."""
     seen = SimpleNamespace(args=None, argv=None)
@@ -90,7 +99,7 @@ def test_sys_argv_is_restored_when_the_command_fails(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(front_door, "_resolve", lambda _command: boom)
 
     with pytest.raises(RuntimeError, match="boom"):
-        front_door.main(["sweep"])
+        front_door.main(["backtest"])
     assert sys.argv == ["original"]
 
 
@@ -161,6 +170,6 @@ def test_an_operator_chosen_openmp_policy_is_kept(monkeypatch: pytest.MonkeyPatc
         monkeypatch.setenv("OMP_WAIT_POLICY", value)
         monkeypatch.setattr(front_door, "_resolve", lambda _command: lambda *_args: 0)
 
-        front_door.main(["sweep"])
+        front_door.main(["backtest"])
 
         assert os.environ["OMP_WAIT_POLICY"] == value

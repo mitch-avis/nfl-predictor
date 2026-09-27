@@ -10,25 +10,6 @@ import pytest
 from nfl_predictor.cli import options
 
 
-@pytest.mark.parametrize(
-    ("mode", "expected"),
-    [
-        ("features", [("features", True, False)]),
-        ("anchor", [("anchor", False, True)]),
-        ("hybrid", [("hybrid", True, True)]),
-        (
-            "all",
-            [("features", True, False), ("anchor", False, True), ("hybrid", True, True)],
-        ),
-    ],
-)
-def test_market_modes_map_each_mode_to_its_market_flags(
-    mode: str, expected: list[tuple[str, bool, bool]]
-) -> None:
-    """Each market mode names whether market features and market anchoring are on."""
-    assert options.market_modes(mode) == expected
-
-
 def test_parse_feature_groups_strips_names_and_drops_empty_entries() -> None:
     """A comma-separated list becomes a tuple of clean names; nothing gives an empty tuple."""
     assert options.parse_feature_groups(" pbp , other ,") == ("pbp", "other")
@@ -42,15 +23,6 @@ def _parser_with(*builders: Callable[[argparse.ArgumentParser], None]) -> argpar
     for builder in builders:
         builder(parser)
     return parser
-
-
-def test_market_prob_options_accept_the_old_blend_spelling() -> None:
-    """``--market-prob-blend`` and ``--market-prob-weight`` set the same value."""
-    parser = _parser_with(options.add_market_prob_options)
-
-    assert parser.parse_args([]).market_prob_weight == 0.0
-    assert parser.parse_args(["--market-prob-blend", "0.2"]).market_prob_weight == 0.2
-    assert parser.parse_args(["--market-prob-weight", "0.3"]).market_prob_weight == 0.3
 
 
 @pytest.mark.parametrize(

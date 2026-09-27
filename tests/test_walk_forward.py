@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pandas.testing as pdt
 import pytest
+from scipy.stats import norm
 
 from nfl_predictor import constants
 from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
@@ -63,8 +64,6 @@ def _base_config() -> walk_forward.WalkForwardConfig:
         random_seed=7,
         include_market=False,
         market_anchor=False,
-        market_prob_weight=0.0,
-        market_prob_clamp=0.0,
         feature_start="feat1",
         feature_end="feat2",
         xgb_params_overrides={
@@ -391,34 +390,18 @@ def test_calibration_data_uses_prior_two_seasons_plus_completed_weeks() -> None:
 
 
 def test_walk_forward_logs_each_fold_calibration_frame(caplog: pytest.LogCaptureFixture) -> None:
-    """Every trained fold logs its calibration frame, and says when nothing is fitted on it."""
+    """Every trained fold logs its calibration frame, and says nothing is fitted on it."""
     caplog.set_level(logging.INFO)
 
     walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
 
     assert (
         "Walk-forward calibration frame for season 2023 week 2: 2022 weeks 1-3, "
-        "2023 week 1 (8 rows; unused: calibration resolves to none)"
+        "2023 week 1 (8 rows; unused: no calibrator is fitted)"
     ) in caplog.messages
     assert (
         "Walk-forward calibration frame for season 2023 week 3: 2022 weeks 1-3, "
-        "2023 weeks 1-2 (10 rows; unused: calibration resolves to none)"
-    ) in caplog.messages
-
-
-def test_walk_forward_logs_a_calibration_frame_that_is_used(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """A calibrator that reads the frame gets the plain frame line."""
-    caplog.set_level(logging.INFO)
-
-    walk_forward.run_walk_forward_backtest(
-        _fixture_df(), replace(_base_config(), calibration="sigma")
-    )
-
-    assert (
-        "Walk-forward calibration frame for season 2023 week 2: 2022 weeks 1-3, "
-        "2023 week 1 (8 rows)"
+        "2023 weeks 1-2 (10 rows; unused: no calibrator is fitted)"
     ) in caplog.messages
 
 
@@ -463,24 +446,6 @@ def test_walk_forward_can_disable_quantiles() -> None:
     assert "predicted_total" in preds.columns
     assert "predicted_margin_p10" not in preds.columns
     assert "predicted_total_p90" not in preds.columns
-
-
-def test_wf_market_prob_weight_overrides_probs() -> None:
-    """When market_prob_weight=1, home_win_prob should match implied market prob."""
-    df = _fixture_df()
-    config = _base_config()
-    config = replace(
-        config,
-        eval_seasons=[2023],
-        market_prob_weight=1.0,
-        market_prob_clamp=0.0,
-    )
-
-    result = walk_forward.run_walk_forward_backtest(df, config)
-    probs = result["predictions"]["home_win_prob"].to_numpy(dtype=float)
-
-    market_prob = 110.0 / (110.0 + 100.0)
-    assert np.allclose(probs, market_prob)
 
 
 def test_dataset_fingerprint_matches_sha256(tmp_path: Path) -> None:
@@ -891,25 +856,6 @@ def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPa
         True,
     )
 
-    assert walk_forward._fit_calibrator(np.array([1.0]), np.array([1]), "none") is None
-    assert walk_forward._fit_calibrator(np.array([1.0, 2.0]), np.array([1, 1]), "platt") is None
-
-    sentinel = object()
-    monkeypatch.setattr(
-        walk_forward.ml_model,
-        "_fit_win_prob_calibrator",
-        lambda *args, **kwargs: sentinel,
-    )
-    assert (
-        walk_forward._fit_calibrator(
-            np.array([1.0, 2.0]),
-            np.array([0, 1]),
-            "platt",
-            sample_weight=np.array([1.0, 0.5]),
-        )
-        is sentinel
-    )
-
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         walk_forward.ml_model,
@@ -924,7 +870,7 @@ def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPa
 
 
 def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -> None:
-    """A market-aware walk-forward run should exercise calibration, quantiles, and callbacks."""
+    """A market-aware walk-forward run should exercise quantiles and callbacks."""
     df = _fixture_df().copy()
     df["home_spread"] = -3.0
     df["total_line"] = 44.5
@@ -932,12 +878,8 @@ def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -
 
     config = replace(
         _base_config(),
-        calibration="platt",
         include_market=True,
         market_anchor=True,
-        market_prob_weight=0.25,
-        market_prob_clamp=0.05,
-        win_prob_use_uncertainty=True,
         include_quantiles=True,
     )
 
@@ -951,40 +893,19 @@ def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -
 
     assert len(folds) == 2
     assert result["resolved_settings"]["market_anchor"] is True
-    assert result["resolved_settings"]["win_prob_use_uncertainty"] is True
     assert "market_baseline_margin" in result["predictions"].columns
     assert "market_baseline_total" in result["predictions"].columns
     assert "predicted_margin_p10" in result["predictions"].columns
     assert result["excluded_incomplete_seasons"] == []
     assert result["eval_window"]["include_postseason"] is False
-    assert set(result["predictions"]["calibration_method"].unique()) == {"platt"}
+    assert set(result["predictions"]["calibration_method"].unique()) == {"none"}
 
 
-def test_walk_forward_backtest_handles_elo_uncertainty_and_incomplete_filters(
+def test_walk_forward_fails_cleanly_when_every_eval_season_is_incomplete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Walk-forward should downgrade unsupported elo uncertainty.
-
-    It should also fail cleanly when incomplete-season filtering removes every eval season.
-    """
+    """Incomplete-season filtering that removes every eval season is an error, not a no-op."""
     df = _fixture_df()
-    info_messages: list[str] = []
-    monkeypatch.setattr(
-        walk_forward.log,
-        "info",
-        lambda message, *args: info_messages.append(message % args if args else message),
-    )
-
-    elo_config = replace(
-        _base_config(),
-        calibration="elo",
-        win_prob_use_uncertainty=True,
-        include_quantiles=True,
-    )
-    elo_result = walk_forward.run_walk_forward_backtest(df, elo_config)
-    assert set(elo_result["predictions"]["calibration_method"].unique()) == {"none"}
-    assert any("Elo calibration ignored" in message for message in info_messages)
-
     monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 99)
     incomplete_config = replace(_base_config(), exclude_incomplete_seasons=True)
     with pytest.raises(ValueError, match="No complete seasons available"):
@@ -994,20 +915,15 @@ def test_walk_forward_backtest_handles_elo_uncertainty_and_incomplete_filters(
 def test_walk_forward_auto_calibration_uses_the_deterministic_floor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Auto calibration should stay on the deterministic floor; no fitted selector exists."""
-    assert not hasattr(walk_forward.ml_model, "_select_auto_calibration_method")
-    assert not hasattr(walk_forward.ml_model, "_sigma_calibrator_improves_on_floor")
-    monkeypatch.setattr(
-        walk_forward.ml_model,
-        "_fit_win_prob_calibrator",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("auto should not fit a calibrator")
-        ),
-    )
-
+    """The submitted probability is the deterministic floor of each predicted margin."""
     result = walk_forward.run_walk_forward_backtest(
         _fixture_df(),
         replace(_base_config(), calibration="auto", include_quantiles=False),
+    )
+    predictions = result["predictions"]
+    np.testing.assert_allclose(
+        predictions["home_win_prob"].to_numpy(),
+        norm.cdf(predictions["predicted_margin"].to_numpy() / constants.SCORE_DIFF_STD_DEV),
     )
 
     assert set(result["predictions"]["calibration_method"].unique()) == {"none"}

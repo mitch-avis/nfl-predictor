@@ -126,10 +126,6 @@
     "include_postseason": false,
     "include_quantiles": true,
     "market_anchor": true,
-    "market_prob_blend_method": "prob",
-    "market_prob_clamp": 0.0,
-    "market_prob_source": "raw",
-    "market_prob_weight": 0.0,
     "market_transform": true,
     "max_cardinality_ratio": 0.5,
     "out_json": "<tmp>/wf/metrics_report.json",
@@ -160,7 +156,6 @@
       "wf_start_week": 1
     },
     "wf_start_week": 1,
-    "win_prob_use_uncertainty": false,
     "xgb_device": "cpu",
     "xgb_params_overrides": {
       "device": "cpu",

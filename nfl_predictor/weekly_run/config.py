@@ -36,8 +36,15 @@ _RENAMED_CONFIG_KEYS = {
 
 
 # Config keys that were removed, with what replaces them.
+_RETIRED_PROBABILITY_OPTION = (
+    "retired; the weekly run submits the deterministic floor, with no market blend and no "
+    "uncertainty-aware probabilities"
+)
 _REMOVED_CONFIG_KEYS = {
     "wf_n_jobs": "use xgb_n_jobs, which sets XGBoost's CPU threads for every stage",
+    "wf_market_prob_source": _RETIRED_PROBABILITY_OPTION,
+    "wf_market_prob_blend_method": _RETIRED_PROBABILITY_OPTION,
+    "wf_win_prob_uncertainty": _RETIRED_PROBABILITY_OPTION,
 }
 
 
@@ -96,6 +103,22 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
 def _allowed_config_keys(parser: argparse.ArgumentParser) -> set[str]:
     """Return allowable config keys based on parser destinations."""
     return {action.dest for action in parser._actions if action.dest != "help"}
+
+
+def _validate_config_choices(config: dict[str, Any], parser: argparse.ArgumentParser) -> None:
+    """Raise if a config value is outside its option's choices.
+
+    argparse checks ``choices`` only for values given on the command line, not for defaults, so
+    a config file's value (for example the retired ``wf_market_mode: all``) is checked here,
+    before the run refreshes any data.
+    """
+    for action in parser._actions:
+        if action.choices is None or action.dest not in config:
+            continue
+        value = config[action.dest]
+        if value not in action.choices:
+            options = ", ".join(str(choice) for choice in action.choices)
+            raise ValueError(f"Config sets {action.dest} to {value!r}; choose one of: {options}.")
 
 
 def _validate_config_keys(config: dict[str, Any], allowed: set[str]) -> None:
@@ -227,27 +250,12 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     )
     parser.add_argument(
         "--wf-market-mode",
-        choices=["features", "anchor", "hybrid", "all"],
+        choices=["features", "anchor", "hybrid"],
         default=defaults.get("wf_market_mode", "hybrid"),
-        help="Walk-forward: market mode selection.",
-    )
-    parser.add_argument(
-        "--wf-market-prob-source",
-        choices=["raw", "novig", "both"],
-        default=defaults.get("wf_market_prob_source", "raw"),
-        help="Walk-forward: market probability source.",
-    )
-    parser.add_argument(
-        "--wf-market-prob-blend-method",
-        choices=["prob", "logit", "both"],
-        default=defaults.get("wf_market_prob_blend_method", "prob"),
-        help="Walk-forward: market probability blend method.",
-    )
-    parser.add_argument(
-        "--wf-win-prob-uncertainty",
-        choices=["off", "on", "both"],
-        default=defaults.get("wf_win_prob_uncertainty", "off"),
-        help="Walk-forward: use uncertainty-aware win probabilities.",
+        help=(
+            "Market mode of the walk-forward and the final fit: market lines as features, "
+            "the model anchored to them, or both (hybrid)."
+        ),
     )
     parser.add_argument(
         "--wf-include-quantiles",
@@ -546,6 +554,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if config_path is not None:
         config = _rename_config_keys(_load_config(config_path))
         _validate_config_keys(config, _allowed_config_keys(parser))
+        _validate_config_choices(config, parser)
         # Recording the path as the default keeps it in args.config when it was not passed.
         parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)

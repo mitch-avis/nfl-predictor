@@ -65,9 +65,12 @@ def _parse_args() -> argparse.Namespace:
         "--win-prob-calibration",
         "--calibration",
         dest="calibration",
-        choices=["platt", "isotonic", "sigma", "none", "elo", "auto", "logistic"],
-        default="platt",
-        help="Win-prob calibration method (logistic is an alias for platt).",
+        choices=["auto", "none"],
+        default="auto",
+        help=(
+            "Win-probability calibration: auto, the deterministic floor (the predicted margin "
+            "through the fixed normal curve); none is the same."
+        ),
     )
     parser.add_argument(
         "--random-seed",
@@ -97,13 +100,6 @@ def _parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Use transformed market features when odds columns exist.",
-    )
-    options.add_market_prob_options(parser)
-    parser.add_argument(
-        "--win-prob-uncertainty",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use margin quantiles to derive uncertainty-aware win probabilities.",
     )
     parser.add_argument(
         "--disable-pruning",
@@ -238,11 +234,6 @@ def main() -> None:
         recency_half_life_seasons=args.recency_half_life_seasons,
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
-        market_prob_weight=float(args.market_prob_weight),
-        market_prob_clamp=float(args.market_prob_clamp),
-        market_prob_source=args.market_prob_source,
-        market_prob_blend_method=args.market_prob_blend_method,
-        win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
         disable_pruning=bool(args.disable_pruning),
         disabled_feature_groups=disabled_feature_groups,
         xgb_params_overrides=xgb_overrides,

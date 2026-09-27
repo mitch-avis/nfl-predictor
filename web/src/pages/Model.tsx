@@ -144,8 +144,8 @@ export function ModelPage() {
           {data.wf_compare ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Walk-forward candidates</CardTitle>
-                <CardDescription>Every configuration the weekly run compared; the top row was trained as the final model.</CardDescription>
+                <CardTitle className="text-base">Walk-forward evaluation</CardTitle>
+                <CardDescription>How the production configuration scored on the recent seasons before the final fit. Runs from before the one production configuration list every candidate they compared, with the trained one on top.</CardDescription>
               </CardHeader>
               <CardContent>
                 <DataTable table={data.wf_compare} defaultSort={{ key: 'wf_rank' }} dense rowClassName={(row) => (row.wf_rank === 1 ? 'bg-accent/40' : undefined)} />
@@ -162,7 +162,6 @@ export function ModelPage() {
                   items={[
                     ['Model kind', String(config.model_kind ?? '—')],
                     ['Calibration', String(config.win_prob_calibration ?? config.calibration ?? '—')],
-                    ['Market blend', String(config.market_prob_weight ?? config.market_prob_blend ?? '—')],
                     ['Score rounding', String(config.score_rounding ?? '—')],
                     ['Features', data.metadata.feature_count ?? null],
                     ['Git commit', shortHash(data.metadata.git_commit_hash, 12)],

@@ -233,18 +233,6 @@ def test_parse_args_accepts_regularization_overrides() -> None:
     assert args.gamma == pytest.approx(2.0)
 
 
-def test_parse_args_accepts_sigma_calibration() -> None:
-    """The residual-sigma calibrator is selectable from the CLI like the other methods."""
-    old_argv = sys.argv
-    try:
-        sys.argv = ["walk_forward_backtest.py", "--calibration", "sigma"]
-        args = backtest._parse_args()
-    finally:
-        sys.argv = old_argv
-
-    assert args.calibration == "sigma"
-
-
 def test_parse_feature_groups_strips_whitespace_and_drops_empty_entries() -> None:
     """Parsing tolerates surrounding whitespace, empty segments, and a missing/empty value."""
     assert options.parse_feature_groups(" pbp , other ,") == ("pbp", "other")

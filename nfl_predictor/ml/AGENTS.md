@@ -16,9 +16,12 @@ Training:
 - Use `random_state` everywhere applicable.
 - Do not hard-code `n_jobs`; prefer `os.cpu_count()` or a config default.
 
-Blending:
+Market and probability path:
 
-- Prefer explicit, interpretable blends (market anchoring often sufficient).
-- If using a blender/regressor, avoid unstable unconstrained weights; prefer non-negative and/or
-  sum-to-1 when appropriate.
-- Validate blends using time-aware splits.
+- The market enters the model only as features and through market anchoring (residual targets
+  against the spread and total); there is no blend layer and no market blend or clamp of the
+  win probability.
+- The win probability is the deterministic floor of the predicted margin
+  (`Phi(margin / SCORE_DIFF_STD_DEV)`), the same in every run type. A different probability
+  path is a default change for the user to decide, measured first against the floor with
+  time-aware splits.

@@ -21,21 +21,18 @@ Direct home/away score regressors are allowed only as secondary ensemble members
 
 ### Win probability
 
-- Win probability is derived from the margin prediction.
-- Win probabilities are calibrated using time-aware calibration data.
+- Win probability is derived from the margin prediction through the deterministic floor,
+  `Phi(margin / SCORE_DIFF_STD_DEV)`, and nothing else: no fitted calibrator, no Elo-style curve,
+  no market blend or clamp.
+- Every run type uses it identically: the weekly run, `backtest`, `train` and `predict`. The
+  weekly run's stage 1 walks this one production configuration forward to report how it scores;
+  it selects nothing.
+- The calibration option takes `auto` (the documented value and the default); `none` is an
+  accepted second spelling. A saved model that carries a retired calibrator or market blend
+  predicts the floor, and loading it logs what is ignored.
 - Calibration metrics (Brier, log loss, reliability table) are reported in evaluation.
-
-Calibration methods (canonical names):
-
-- `none`: deterministic margin->prob mapping (baseline)
-- `platt`: logistic regression (Platt scaling)
-- `isotonic`: isotonic regression
-- `elo`: deterministic Elo-style logistic mapping
-
-Notes:
-
-- Prefer time-aware calibration (`platt` or `isotonic`) when enough calibration rows exist.
-- If adding new CLI options, keep names stable and document them.
+- Changing how probabilities are formed is a default change for the user to decide, measured on
+  the walk-forward instrument against the floor first.
 
 ### Market integration
 
@@ -45,24 +42,23 @@ When market lines exist, the system produces market-derived features and support
   `away_market_prob`.
 - Market anchoring trains residuals vs market baselines and adds the baseline back at prediction
   time.
-- Market probability blending/clamping uses explicit CLI/config values and is validated in
-  time-aware evaluation.
+- The market-implied home win probability (no-vig moneylines, else the spread) is a scored
+  yardstick only: every walk-forward reports it beside the model, with the paired
+  deterministic-minus-market intervals, and it never enters the submitted probability. There is no
+  market probability blend or clamp.
 
 Market anchoring details:
 
 - Prefer residual training: `target_resid = target - market_baseline` and `pred = market_baseline +
 pred_resid`.
 
-Market probability post-processing (blend/clamp):
-
-- Blending must be explicit and bounded (weights in [0, 1]).
-- Clamping must be explicit and bounded (delta in [0, 0.5]).
-- If adding "no-vig" market probability options, implement them consistently (home/away normalize to
-  sum to 1) and validate in walk-forward.
+No-vig market probabilities normalize the home and away implied probabilities to sum to 1.
 
 ### Uncertainty
 
 - Predictions include uncertainty intervals for margin and total (p10/p50/p90 or equivalent).
+- The intervals are outputs only: the win probability never reads them (it is the deterministic
+  floor of the predicted margin, the margin head's squared-error point prediction).
 - Interval outputs are evaluated (coverage/width diagnostics) and are part of the run artifacts.
 
 Minimum requirement:
@@ -124,8 +120,7 @@ Market-relative metrics (when market anchoring is enabled):
 
 ### Model selection protocol (how to choose "best" settings)
 
-When multiple options exist (calibration method, market integration mode, probability blend/clamp
-rules, weighting choices):
+When multiple options exist (market integration mode, weighting choices, tuned parameters):
 
 - Prefer selecting settings via walk-forward over multiple seasons.
 - Pick a primary selection metric (typically Brier/log loss for probability quality) and use

@@ -25,7 +25,7 @@ This repo is geared toward:
     - [Splits: train, calibration, holdout](#splits-train-calibration-holdout)
   - [Modeling approach](#modeling-approach)
     - [Margin/Total targets (canonical)](#margintotal-targets-canonical)
-    - [Win probability calibration](#win-probability-calibration)
+    - [Win probability](#win-probability)
     - [Market integration (optional, recommended)](#market-integration-optional-recommended)
   - [Backtesting](#backtesting)
   - [Weekly workflow (canonical)](#weekly-workflow-canonical)
@@ -292,7 +292,6 @@ nfl-predictor train \
   --model-kind margin_total \
   --holdout-seasons 1 \
   --calibration-seasons 1 \
-  --win-prob-calibration isotonic \
   --predict-path data/predict/week_17_games_to_predict.csv
 ```
 
@@ -314,17 +313,17 @@ weekly config: the six-season, two-seed measurement below found no gain from it.
 - `--calibration-weeks` holds the newest completed weeks out of the final fit's trees, rolling
   back into the previous season early in a season (at week 2, four weeks are the new season's
   week 1 plus the previous season's last three). Walk-forward folds hold nothing out of the tree
-  fit: there `--wf-calibration-weeks` only switches on the pooled calibrator frame.
+  fit: there `--wf-calibration-weeks` selects a frame (the previous two seasons plus the season's
+  completed weeks) that XGBoost only evaluates and nothing is fitted on.
   `--calibration-seasons` also holds out whole seasons: the newest ones the week window does not
   touch, so with one season and four weeks the calibration season moves forward a year between
   weeks 4 and 5.
-- Both still gate whether a fitted post-processing calibrator is allowed to run, but the fitted
-  calibration pool itself is the pooled calibrator frame described under "Win probability
-  calibration".
-- The run log lists the training, calibration and holdout seasons, the in-season window's
-  `(season, week)` pairs and the calibrator frame's seasons and weeks.
+- The final fit's held-out rows stay out of its trees and XGBoost only evaluates them (the fit
+  runs its full tree budget); no calibrator is fitted on them (see "Win probability").
+- The run log lists the training, calibration and holdout seasons and the in-season window's
+  `(season, week)` pairs.
 
-Example: hold out the most recent season for evaluation and calibrate on the season before it:
+Example: hold out the most recent season for evaluation and the season before it from the trees:
 
 ```bash
 nfl-predictor train \
@@ -350,33 +349,19 @@ Then derive scores:
 This keeps score predictions internally consistent and makes win probability derivation
 straightforward.
 
-### Win probability calibration
+### Win probability
 
-Win probabilities are derived from the predicted margin, then optionally calibrated using a
-time-aware calibration split (seasons and/or weeks immediately preceding the holdout window).
+Every run type (the weekly run, `backtest`, `train`, `predict`) maps the predicted margin to a
+home win probability through one fixed curve, the deterministic floor:
+`Phi(margin / SCORE_DIFF_STD_DEV)`, the normal CDF with the standard deviation of NFL score
+differences in `nfl_predictor/constants.py`. Nothing is fitted on top of it and the market line
+never enters it; the pick and its confidence come from it.
 
-`--win-prob-calibration` options:
-
-- `none`: deterministic Normal-CDF mapping using `constants.SCORE_DIFF_STD_DEV`.
-- `elo`: deterministic Elo-style logistic mapping (no fitting).
-- `sigma`: Normal-CDF mapping with one sigma estimated from the margin residuals of the
-  calibration frame instead of the fixed `SCORE_DIFF_STD_DEV`.
-- `platt`: Platt scaling on the calibration frame, with `C` chosen from a small grid on the
-  latest pre-eval season of that frame.
-- `isotonic`: isotonic regression on the calibration frame; below the 200-row threshold it falls
-  back to `sigma`.
-- `auto`: the deterministic floor (`none`). No fitted calibrator has beaten it on the walk-forward
-  instrument, so `auto` does not fit anything.
-- `logistic`: alias for `platt`.
-
-The calibration frame for the fitted methods is the previous two seasons plus the completed weeks
-of the current season, strictly before the predicted week. The final fit finds the current season
-as the newest season in its training pool, so before week 1, when that is last season, its frame
-covers three full seasons (last season and the two before it); walk-forward folds know the
-predicted season and use two. Its rows are in-sample for the model
-that predicts them (an out-of-fold pool is an open follow-up), which is one reason the fitted
-methods have not beaten the deterministic floor. The walk-forward report carries the configured,
-deterministic and market-implied probability columns side by side so the choice can be measured.
+`--win-prob-calibration` (`train`, `predict`) and `--calibration` (`backtest`) take `auto`, the
+floor, and the default; `none` is accepted and means the same. A model saved with a fitted or
+Elo calibrator, a market blend or a clamp still loads: the run log names what it ignores, and
+the model predicts the floor of its own margins. The walk-forward report carries the floor and
+the market-implied probability side by side, with paired intervals.
 
 ### Market integration (optional, recommended)
 
@@ -386,10 +371,8 @@ If spreads/totals/moneylines are present, you can:
 - train on residuals vs market baselines (`--market-anchor`) so the model learns deviations rather
   than re-learning what the market already priced
 
-Win probability can also be blended or clamped vs market-implied home win probability via
-`--market-prob-weight` / `--market-prob-clamp` (`--market-prob-blend` is the older spelling). Use
-`--market-prob-source raw|novig` to choose implied-prob handling and `--market-prob-blend-method
-prob|logit` to blend in probability or log-odds space.
+The market-implied home win probability (no-vig moneylines, else the spread) is scored beside the
+model in every walk-forward as the yardstick; it never enters the submitted probability.
 
 ## Backtesting
 
@@ -401,8 +384,8 @@ nfl-predictor backtest --help
 ```
 
 This is the **canonical evaluation protocol** for model selection. By default it evaluates the last
-N seasons (regular season only) and reports three probability views on the same games: the
-configured calibrator, the deterministic margin map, and the market-implied home win probability.
+N seasons (regular season only) and scores the model's probability, the deterministic floor,
+against the market-implied home win probability on the same games.
 Use `--include-postseason` if you want postseason folds included. Optional recency weighting
 is available via `--recency-half-life-seasons`. XGBoost trains on the GPU by default:
 `--xgb-device auto` (the default) uses CUDA when the installed XGBoost build has it and a usable
@@ -412,12 +395,12 @@ other's weeks, and the run's `metadata.json` records it as `config.xgb_device`. 
 season is incomplete, either pass `--wf-exclude-incomplete-seasons` or specify `--eval-seasons`
 explicitly; the metrics report includes the evaluated window and any exclusions. Each fold's
 trees fit on every completed game before its week: unlike the final fit, walk-forward folds hold
-nothing out of the tree fit, and `--wf-calibration-weeks` only switches on the calibration frame
-described above for fitted calibrators. Each fold logs that frame's seasons and weeks, and says
-when the configured calibration fits nothing; `auto` is the deterministic floor; the summary
-table includes deterministic-minus-market bootstrap intervals for week 1, week 2, weeks 3-18, and
-all weeks; and every fold runs the full `n_estimators` budget (no in-season early stopping, in
-walk-forward or in production), with `best_iteration` recorded per head.
+nothing out of the tree fit, and `--wf-calibration-weeks` only selects the frame XGBoost
+evaluates, described above. Each fold logs that frame's seasons and weeks and that no calibrator
+is fitted on it; the summary table includes deterministic-minus-market bootstrap intervals for
+week 1, week 2, weeks 3-18, and all weeks; and every fold runs the full `n_estimators` budget
+(no in-season early stopping, in walk-forward or in production), with `best_iteration` recorded
+per head.
 
 The report also carries a stability view, `metrics.stability` in `metrics_report.json`, and the run
 logs it as Markdown tables when it finishes. For week 1, week 2, weeks 3-18 and all weeks it gives
@@ -425,10 +408,9 @@ an all-seasons row and one row per season with the deterministic Brier, log loss
 margin and total MAE, confidence-pool points, market Brier, and the deterministic-minus-market
 Brier with a 95% game-bootstrap interval. The rows use the definitions and bootstrap defaults of
 `nfl-predictor compare` (below), so they equal what `compare` reports for the run on the same
-games. A row with fewer than two games has no interval. Like the benchmark, the view scores pick
-accuracy and pool points on the deterministic probability, while `metrics.overall` and
-`metrics.per_season` in the same file score the submitted `home_win_prob`, so their pick accuracy
-and pool totals can differ from the stability view's.
+games. A row with fewer than two games has no interval. The view scores pick accuracy and pool
+points on the deterministic probability, and `metrics.overall` and `metrics.per_season` in the
+same file score the submitted `home_win_prob`; both are the floor, so the two agree.
 
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
@@ -454,16 +436,15 @@ the modelling source code, and the installed library versions. Re-running an ide
 after a stop (deliberate or not) restores the finished weeks and trains only the rest; a resumed run
 returns exactly the numbers an uninterrupted one would, which a test pins. Anything that changes the
 fingerprint starts fresh, so stale results are never mixed in. `--no-resume` retrains every week
-and `--checkpoint-dir` moves the root. The same checkpointing runs in `nfl-predictor sweep`
-(`--resume`, `--checkpoint-dir`) and inside the run directories of `nfl-predictor weekly` (its
-existing `--resume`). The metrics report records how many weeks
+and `--checkpoint-dir` moves the root. The same checkpointing runs inside the run directories of
+`nfl-predictor weekly` (its existing `--resume`). The metrics report records how many weeks
 were restored and how many were trained. Checkpoints are small (a few hundred KB per run) and safe to
 delete once a report is written. Nothing prunes them: `nfl-predictor checkpoints` lists every
 checkpoint directory with its size and whatever names it (a run's report, a review, a launcher,
 `AGENTS.md` or `.agents/`), and `--unreferenced-only` lists the ones nothing names. It never
 deletes anything.
 
-`weekly`, `backtest` and `sweep` run XGBoost with OpenMP's passive wait policy
+`weekly` and `backtest` run XGBoost with OpenMP's passive wait policy
 (`OMP_WAIT_POLICY=PASSIVE`) unless the environment sets one: when other work shares the machine,
 the default policy's spinning threads stall and a week can take several times longer. On a
 dedicated, idle machine the default is faster; set `OMP_WAIT_POLICY=` (empty) to keep it. The
@@ -479,8 +460,8 @@ nfl-predictor backtest --disable-trend-features
 nfl-predictor backtest --disable-trend-features --recency-half-life-seasons 16
 ```
 
-Named feature groups can be ablated the same way with `--disable-feature-groups` (available on both
-`nfl-predictor backtest` and `nfl-predictor sweep`). Group names come from
+Named feature groups can be ablated the same way with `nfl-predictor backtest
+--disable-feature-groups`. Group names come from
 `constants.FEATURE_GROUP_COLUMN_MARKERS`; a column belongs to a group when any of that group's
 markers is a substring of the column name, which catches the `away_`/`home_` prefixes and the
 `_diff` suffix at once. An unknown group name is a hard error. The dropped column list is recorded
@@ -556,23 +537,32 @@ nfl-predictor weekly --help
 ### High-level stages
 
 1. (optional) refresh data (`nfl-predictor data`)
-2. (optional) walk-forward compare to choose market/calibration/prob-postprocess variants
-3. train + calibrate the selected configuration
+2. walk-forward of the production configuration over the recent seasons, so the run reports how
+   production would have scored against the market (stage 1)
+3. train the production configuration, the model the week's picks come from (stage 2)
 4. generate weekly predictions + betting outputs + (optional) power rankings
+
+The weekly run has one production configuration and chooses nothing by itself: the
+probabilities it submits are the deterministic floor (the predicted margin through the fixed
+normal curve, `Phi(margin / SCORE_DIFF_STD_DEV)`, with no fitted calibrator and no market blend),
+from a model trained with `--wf-market-mode` (`hybrid` by default: market lines as features and
+the model anchored to them).
 
 Notes:
 
-- `--wf-*` flags control **walk-forward comparison** behavior (model selection).
-- `--train-*` flags control **final training/calibration** for the model used to produce weekly
-  outputs.
-- `--xgb-*` flags control XGBoost runtime and apply to both comparison and final training.
+- `--wf-*` flags control the stage-1 walk-forward; `--wf-market-mode` also sets the final fit's
+  market mode.
+- `--train-*` flags control the **final training** fit that produces the weekly outputs.
+- `--xgb-*` flags control XGBoost runtime and apply to both the walk-forward and final training.
   `--xgb-device` (`xgb_device` in the config) defaults to `auto`: the GPU when one is usable, else
   the CPU. It is resolved once per run, so stage 1 and the final fit share one device, and the
   model's `metadata.json` records it as `xgb_device`.
 - Outputs are written under the run directory (default: `models/<run_id>/`) unless `--output-dir` is
   provided.
-- Stage 1 walk-forward comparison is resumable and writes `wf_compare/` artifacts under the run
-  directory (including `wf_summary.csv` and per-candidate results).
+- Stage 1 is resumable: its finished weeks are saved under `wf_compare/wf_folds/` in the run
+  directory. Its summary row is written as `wf_compare.csv` and `wf_best.json`, and its per-week,
+  per-season and overall metrics with the reliability table as
+  `wf_compare/wf_candidate_<key>.json`.
 - `--data-collection-args` forwards extra arguments to the data refresh stage as one
   shell-quoted string, for example
   `--data-collection-args "--min-season 2010 --stat-prior-blend-games 4"`. It is split
@@ -682,8 +672,8 @@ commands by group, and `nfl-predictor <command> --help` shows a command's option
 
 | group | commands |
 | --- | --- |
-| weekly | `weekly` (refresh, stage-1 selection, train, predict, reports; resumable, JSON/YAML config) |
-| research | `backtest` (walk-forward, the benchmark), `sweep` (calibration and market-probability variants), `compare` (paired comparison of two walk-forward runs), `explain` (SHAP attribution for a saved model), `checkpoints` (read-only listing of walk-forward checkpoints) |
+| weekly | `weekly` (refresh, walk-forward of the production configuration, train, predict, reports; resumable, JSON/YAML config) |
+| research | `backtest` (walk-forward, the benchmark), `compare` (paired comparison of two walk-forward runs), `explain` (SHAP attribution for a saved model), `checkpoints` (read-only listing of walk-forward checkpoints) |
 | data | `data` (the ETL), `validate` (`--live` compares against the schedule), `leakage-audit`, `lines`, `build-week` |
 | models by hand | `train`, `predict` (`--model-in`), `rankings` |
 | web | `web`, `users` |
@@ -722,40 +712,12 @@ total MAE is `10.3152` in the production configuration (no market anchoring) and
 anchoring, against `10.0847` for the line itself. Treat an over/under lean as a diagnostic, not a
 betting signal. Spreads, moneylines and win probabilities are unaffected.
 
-`sweep` examples:
-
-```bash
-nfl-predictor sweep \
-  --wf-eval-last-n-seasons 3 \
-  --wf-market-mode hybrid \
-  --market-prob-source raw \
-  --market-prob-blend-method prob
-```
-
-```bash
-nfl-predictor sweep \
-  --wf-eval-last-n-seasons 3 \
-  --wf-market-mode all \
-  --market-prob-source both \
-  --market-prob-blend-method both
-```
-
-Uncertainty-aware comparison:
-
-```bash
-nfl-predictor sweep \
-  --wf-eval-last-n-seasons 3 \
-  --win-prob-uncertainty both
-```
-
 `weekly` config example (JSON):
 
 ```json
 {
   "wf_eval_last_n_seasons": 3,
   "wf_market_mode": "hybrid",
-  "wf_market_prob_source": "raw",
-  "wf_market_prob_blend_method": "prob",
   "predict_path": "data/predict/week_03_games_to_predict.csv"
 }
 ```
@@ -766,7 +728,7 @@ Run it with:
 nfl-predictor weekly --config path/to/weekly_run.json
 ```
 
-Every XGBoost command (`backtest`, `sweep`, `weekly`, `train`) defaults to `--xgb-device auto`,
+Every XGBoost command (`backtest`, `weekly`, `train`) defaults to `--xgb-device auto`,
 which trains on the GPU when the XGBoost build has CUDA and a usable GPU is present, and on the
 CPU otherwise. Pass `--xgb-device cpu` to force the CPU; the accepted values are `auto`, `cpu`,
 `cuda` and `cuda:N` (`gpu` means `cuda`), and anything else is a usage error. A CUDA request

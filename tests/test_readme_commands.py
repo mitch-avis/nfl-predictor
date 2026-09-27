@@ -38,7 +38,7 @@ def readme_commands() -> list[str]:
 def test_the_readme_shows_front_door_commands() -> None:
     """The extraction finds the README's examples (guards against a silent empty list)."""
     names = {shlex.split(line, comments=True)[1] for line in readme_commands()}
-    assert {"data", "train", "backtest", "sweep", "weekly", "validate", "web"} <= names
+    assert {"data", "train", "backtest", "weekly", "validate", "web"} <= names
 
 
 @pytest.mark.parametrize("line", readme_commands())

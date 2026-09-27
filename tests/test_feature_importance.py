@@ -78,7 +78,6 @@ def test_feature_importance_report_margin_total() -> None:
         margin_model=margin_model,
         total_model=total_model,
         target_columns=("away_score", "home_score"),
-        calibrator=None,
     )
 
     report = feature_importance.build_feature_importance_report(model)
@@ -149,21 +148,13 @@ def test_resolve_feature_names_falls_back_on_errors_and_mismatches() -> None:
 def test_build_feature_importance_report_dispatches_supported_model_types(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Top-level report building should dispatch across supported model families."""
-
-    class DummyBlend:
-        """Synthetic blended model class for dispatch testing."""
-
-        def __init__(self, team_model: object) -> None:
-            """Store the team model for the test."""
-            self.team_model = team_model
+    """Only margin/total models get a report; a saved blend model of the retired kind gets none."""
 
     class DummyMargin:
         """Synthetic margin/total model class for dispatch testing."""
 
         pass
 
-    monkeypatch.setattr(feature_importance, "BlendedMarginTotalModel", DummyBlend)
     monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
 
     def fake_margin_report(model: object, _shap_rows: object = None) -> dict[str, object] | None:
@@ -174,8 +165,13 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
 
     monkeypatch.setattr(feature_importance, "_build_margin_total_report", fake_margin_report)
 
-    blend_report = feature_importance.build_feature_importance_report(DummyBlend("team"))
-    assert blend_report == {"model_kind": "blend", "components": {"team": {"team": True}}}
+    blend = ml_model_core.BlendedMarginTotalModel(
+        team_model=cast(ml_model_core.MarginTotalModel, "team"),
+        blend_layer=cast(ml_model_core.BlendLayer, None),
+        calibrator=None,
+        target_columns=("away_score", "home_score"),
+    )
+    assert feature_importance.build_feature_importance_report(blend) is None
 
     margin_report = feature_importance.build_feature_importance_report(DummyMargin())
     assert margin_report == {"margin": True, "model_kind": "margin_total"}
@@ -194,7 +190,6 @@ def test_build_feature_importance_report_handles_attribute_errors(
         pass
 
     monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
-    monkeypatch.setattr(feature_importance, "BlendedMarginTotalModel", tuple)
 
     def _raise_attribute_error(
         _model: object, _shap_rows: object = None
@@ -461,7 +456,6 @@ def _fit_rest_opp_model(rows: int = 120) -> tuple[ml_model_core.MarginTotalModel
         margin_model=margin_model,
         total_model=total_model,
         target_columns=("away_score", "home_score"),
-        calibrator=None,
     )
     return model, df
 

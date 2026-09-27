@@ -61,12 +61,10 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         margin_model=margin_sentinel,
         total_model=total_sentinel,
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,
         market_anchor=False,
-        market_prob_config=None,
         xgb_params={"n_estimators": 1},
         tuned_params={"max_depth": 2},
         tuned_cv_summary={"cv_splits": 2},
@@ -98,7 +96,6 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         calibration_weeks=0,
         include_market=True,
         max_cardinality_ratio=0.5,
-        win_prob_calibration="none",
         optuna_config=OptunaConfig(
             enabled=False,
             timeout_seconds=1,
@@ -115,7 +112,6 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         ),
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
     )
 
     metrics = result.metrics_report["metrics"]["holdout"]
@@ -155,12 +151,10 @@ def test_train_margin_total_model_with_report_records_the_rolling_calibration_wi
         margin_model=cast(xgb.XGBRegressor, object()),
         total_model=cast(xgb.XGBRegressor, object()),
         target_columns=("away_score", "home_score"),
-        calibrator=None,
         margin_quantile_models=None,
         total_quantile_models=None,
         quantiles=None,
         market_anchor=False,
-        market_prob_config=None,
         xgb_params={"n_estimators": 1},
         tuned_params=None,
         tuned_cv_summary=None,
@@ -186,11 +180,9 @@ def test_train_margin_total_model_with_report_records_the_rolling_calibration_wi
         calibration_weeks=2,
         include_market=True,
         max_cardinality_ratio=0.5,
-        win_prob_calibration="none",
         optuna_config=None,
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
     )
 
     assert result.splits["calibration_inseason"] == {
@@ -218,7 +210,6 @@ def test_trained_report_ranks_base_features_by_shap_over_the_training_rows(
         calibration_weeks=4,
         include_market=True,
         max_cardinality_ratio=0.5,
-        win_prob_calibration="none",
         optuna_config=OptunaConfig(
             enabled=False,
             timeout_seconds=0,
@@ -235,7 +226,6 @@ def test_trained_report_ranks_base_features_by_shap_over_the_training_rows(
         ),
         market_transform=True,
         market_anchor=True,
-        market_prob_config=None,
     )
 
     report = result.feature_importance

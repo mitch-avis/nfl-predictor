@@ -21,21 +21,12 @@ from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_START_COLUMN,
     DEFAULT_OPTUNA_CV_SPLITS,
     DEFAULT_OPTUNA_TIMEOUT_SECONDS,
-    MarketProbConfig,
     OptunaConfig,
     TrainingResult,
     _load_model_checkpoint,
-    _with_market_prob_config,
-    normalize_win_prob_calibration_method,
 )
-from nfl_predictor.ml.ml_model_predict import (
-    predict_week_blended,
-    predict_week_margin_total,
-)
-from nfl_predictor.ml.ml_model_training import (
-    train_blended_margin_total_model_with_report,
-    train_margin_total_model_with_report,
-)
+from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
+from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
 from nfl_predictor.ml.ml_model_xgb_utils import (
     XGB_DEVICE_AUTO,
     XGB_DEVICE_HELP,
@@ -102,7 +93,6 @@ def _parse_args() -> argparse.Namespace:
             "Train on residuals vs market spread/total and add market baseline at prediction time."
         ),
     )
-    options.add_market_prob_options(parser)
     parser.add_argument(
         "--min-season",
         type=int,
@@ -137,7 +127,7 @@ def _parse_args() -> argparse.Namespace:
         "--calibration-seasons",
         type=int,
         default=1,
-        help="Number of seasons reserved for calibration/blending.",
+        help="Number of seasons reserved for calibration.",
     )
     parser.add_argument(
         "--calibration-weeks",
@@ -150,15 +140,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--win-prob-calibration",
-        choices=["none", "platt", "isotonic", "sigma", "elo", "auto", "logistic"],
-        default="isotonic",
-        help="Calibration method for win probabilities (logistic is an alias for platt).",
-    )
-    parser.add_argument(
-        "--win-prob-uncertainty",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use margin quantiles to derive uncertainty-aware win probabilities.",
+        choices=["auto", "none"],
+        default="auto",
+        help=(
+            "Win-probability calibration: auto, the deterministic floor (the predicted margin "
+            "through the fixed normal curve); none is the same."
+        ),
     )
     parser.add_argument(
         "--tune",
@@ -304,11 +291,6 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     """CLI entry point for training and prediction."""
     args = _parse_args()
-    args.win_prob_calibration = normalize_win_prob_calibration_method(args.win_prob_calibration)
-    win_prob_use_uncertainty = bool(args.win_prob_uncertainty)
-    if args.model_kind != "margin_total" and win_prob_use_uncertainty:
-        log.warning("Uncertainty-aware win prob is only supported for margin_total models.")
-        win_prob_use_uncertainty = False
 
     created_at = artifacts.now_utc_iso()
     dataset_hash = artifacts.sha256_file(args.data_path)
@@ -339,17 +321,6 @@ def main() -> None:
         xgb_n_jobs=args.xgb_n_jobs,
     )
 
-    market_prob_weight = args.market_prob_weight
-
-    market_prob_config = MarketProbConfig(
-        blend_weight=float(market_prob_weight),
-        clamp_delta=float(args.market_prob_clamp),
-        prob_source=args.market_prob_source,
-        blend_method=args.market_prob_blend_method,
-    )
-    if float(market_prob_weight) == 0.0 and float(args.market_prob_clamp) == 0.0:
-        market_prob_config = None
-
     output_path = args.output_path
     if args.predict_path and output_path is None:
         output_path = args.predict_path.with_name(f"{args.predict_path.stem}_predictions.csv")
@@ -358,32 +329,16 @@ def main() -> None:
         if args.tune:
             log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
         model = _load_model_checkpoint(args.model_in, args.model_kind)
-        model = _with_market_prob_config(model, market_prob_config)
         if not args.predict_path:
             log.info("No --predict-path provided; exiting after loading model.")
             return
-        use_uncertainty = win_prob_use_uncertainty or getattr(
-            model, "win_prob_use_uncertainty", False
+        predict_week_margin_total(
+            model,
+            args.predict_path,
+            output_path,
+            pretty_output=args.pretty_output,
+            score_rounding=args.score_rounding,
         )
-        if args.model_kind == "margin_total":
-            predict_week_margin_total(
-                model,
-                args.predict_path,
-                output_path,
-                pretty_output=args.pretty_output,
-                score_rounding=args.score_rounding,
-                win_prob_use_uncertainty=use_uncertainty,
-            )
-        elif args.model_kind == "blend":
-            predict_week_blended(
-                model,
-                args.predict_path,
-                output_path,
-                pretty_output=args.pretty_output,
-                score_rounding=args.score_rounding,
-            )
-        else:
-            raise ValueError(f"Unknown model kind: {args.model_kind}")
         return
 
     def _write_artifacts(result: TrainingResult, model_out: Path) -> None:
@@ -427,80 +382,37 @@ def main() -> None:
             }
             artifacts.write_json(paths.feature_importance_path, importance_payload)
 
-    if args.model_kind == "margin_total":
-        result = train_margin_total_model_with_report(
-            data_path=args.data_path,
-            holdout_seasons=args.holdout_seasons,
-            calibration_seasons=args.calibration_seasons,
-            calibration_weeks=args.calibration_weeks,
-            include_market=not args.exclude_market,
-            max_cardinality_ratio=args.max_cardinality_ratio,
-            win_prob_calibration=args.win_prob_calibration,
-            win_prob_use_uncertainty=win_prob_use_uncertainty,
-            optuna_config=optuna_config,
-            market_transform=args.market_transform,
-            market_anchor=args.market_anchor,
-            market_prob_config=market_prob_config,
-            include_postseason=args.include_postseason,
-            postseason_weight=args.postseason_weight,
-            recency_half_life_seasons=args.recency_half_life_seasons,
-            min_season=args.min_season,
-            max_season=args.max_season,
-            feature_start=args.feature_start,
-            feature_end=args.feature_end,
+    result = train_margin_total_model_with_report(
+        data_path=args.data_path,
+        holdout_seasons=args.holdout_seasons,
+        calibration_seasons=args.calibration_seasons,
+        calibration_weeks=args.calibration_weeks,
+        include_market=not args.exclude_market,
+        max_cardinality_ratio=args.max_cardinality_ratio,
+        optuna_config=optuna_config,
+        market_transform=args.market_transform,
+        market_anchor=args.market_anchor,
+        include_postseason=args.include_postseason,
+        postseason_weight=args.postseason_weight,
+        recency_half_life_seasons=args.recency_half_life_seasons,
+        min_season=args.min_season,
+        max_season=args.max_season,
+        feature_start=args.feature_start,
+        feature_end=args.feature_end,
+    )
+
+    if args.run_dir is not None and args.model_out is None:
+        args.model_out = args.run_dir / "model.joblib"
+    if args.model_out is not None:
+        _write_artifacts(result, args.model_out)
+    if args.predict_path:
+        predict_week_margin_total(
+            result.model,
+            args.predict_path,
+            output_path,
+            pretty_output=args.pretty_output,
+            score_rounding=args.score_rounding,
         )
-
-        if args.run_dir is not None and args.model_out is None:
-            args.model_out = args.run_dir / "model.joblib"
-        if args.model_out is not None:
-            _write_artifacts(result, args.model_out)
-        if args.predict_path:
-            predict_week_margin_total(
-                result.model,
-                args.predict_path,
-                output_path,
-                pretty_output=args.pretty_output,
-                score_rounding=args.score_rounding,
-                win_prob_use_uncertainty=win_prob_use_uncertainty,
-            )
-        return
-
-    if args.model_kind == "blend":
-        result = train_blended_margin_total_model_with_report(
-            data_path=args.data_path,
-            holdout_seasons=args.holdout_seasons,
-            calibration_seasons=args.calibration_seasons,
-            calibration_weeks=args.calibration_weeks,
-            max_cardinality_ratio=args.max_cardinality_ratio,
-            win_prob_calibration=args.win_prob_calibration,
-            optuna_config=optuna_config,
-            market_transform=args.market_transform,
-            market_anchor=args.market_anchor,
-            market_prob_config=market_prob_config,
-            include_postseason=args.include_postseason,
-            postseason_weight=args.postseason_weight,
-            recency_half_life_seasons=args.recency_half_life_seasons,
-            min_season=args.min_season,
-            max_season=args.max_season,
-            feature_start=args.feature_start,
-            feature_end=args.feature_end,
-        )
-
-        if args.run_dir is not None and args.model_out is None:
-            args.model_out = args.run_dir / "model.joblib"
-        if args.model_out is not None:
-            _write_artifacts(result, args.model_out)
-        if args.predict_path:
-            predict_week_blended(
-                result.model,
-                args.predict_path,
-                output_path,
-                pretty_output=args.pretty_output,
-                score_rounding=args.score_rounding,
-            )
-        return
-
-    raise ValueError(f"Unknown model kind: {args.model_kind}")
 
 
 if __name__ == "__main__":

@@ -207,17 +207,12 @@
   {
    "action": "_StoreAction",
    "choices": [
-    "platt",
-    "isotonic",
-    "sigma",
-    "none",
-    "elo",
     "auto",
-    "logistic"
+    "none"
    ],
-   "default": "platt",
+   "default": "auto",
    "dest": "calibration",
-   "help": "Win-prob calibration method (logistic is an alias for platt).",
+   "help": "Win-probability calibration: auto, the deterministic floor (the predicted margin through the fixed normal curve); none is the same.",
    "nargs": null,
    "options": [
     "--win-prob-calibration",
@@ -294,84 +289,6 @@
    "options": [
     "--market-transform",
     "--no-market-transform"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_weight",
-   "help": "Blend weight for the market's implied win probability (0=off, 1=market only).",
-   "nargs": null,
-   "options": [
-    "--market-prob-weight",
-    "--market-prob-blend"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_clamp",
-   "help": "Clamp model probability within +/- this delta of market (0=off).",
-   "nargs": null,
-   "options": [
-    "--market-prob-clamp"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig"
-   ],
-   "default": "raw",
-   "dest": "market_prob_source",
-   "help": "Market probability source for blending/clamping.",
-   "nargs": null,
-   "options": [
-    "--market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit"
-   ],
-   "default": "prob",
-   "dest": "market_prob_blend_method",
-   "help": "Blend method for market probabilities (prob or logit space).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "win_prob_uncertainty",
-   "help": "Use margin quantiles to derive uncertainty-aware win probabilities.",
-   "nargs": 0,
-   "options": [
-    "--win-prob-uncertainty",
-    "--no-win-prob-uncertainty"
    ],
    "required": false,
    "subcommand": null,
@@ -896,7 +813,6 @@
     "lines",
     "predict",
     "rankings",
-    "sweep",
     "train",
     "users",
     "validate",
@@ -943,12 +859,11 @@
   {
    "action": "_StoreAction",
    "choices": [
-    "margin_total",
-    "blend"
+    "margin_total"
    ],
    "default": "margin_total",
    "dest": "model_kind",
-   "help": "Model kind, matching the saved checkpoint (margin_total or blend; blended_margin_total also means blend).",
+   "help": "Model kind, matching the saved checkpoint (margin_total, the only kind).",
    "nargs": null,
    "options": [
     "--model-kind"
@@ -1162,313 +1077,15 @@
    "type": null
   }
  ],
- "nfl_predictor.cli.sweep": [
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "data/completed_games_ml.csv",
-   "dest": "data_path",
-   "help": "Path to completed games ML CSV.",
-   "nargs": null,
-   "options": [
-    "--data-path"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 3,
-   "dest": "eval_last_n_seasons",
-   "help": "Evaluate the last N seasons in the dataset (regular season only). The count includes a current season that has no completed week yet.",
-   "nargs": null,
-   "options": [
-    "--wf-eval-last-n-seasons",
-    "--eval-last-n-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 3,
-   "dest": "wf_start_week",
-   "help": "Walk-forward start week.",
-   "nargs": null,
-   "options": [
-    "--wf-start-week"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 4,
-   "dest": "wf_calibration_weeks",
-   "help": "Walk-forward: a positive value switches on the pooled calibrator frame for fitted calibrators (the previous two seasons plus the eval season's completed weeks); folds hold nothing out of the tree fit.",
-   "nargs": null,
-   "options": [
-    "--wf-calibration-weeks",
-    "--calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "exclude_incomplete_seasons",
-   "help": "Exclude seasons whose regular season is incomplete in the dataset (useful when the current season is partial).",
-   "nargs": 0,
-   "options": [
-    "--wf-exclude-incomplete-seasons",
-    "--no-wf-exclude-incomplete-seasons",
-    "--exclude-incomplete-seasons",
-    "--no-exclude-incomplete-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "features",
-    "anchor",
-    "hybrid",
-    "all"
-   ],
-   "default": "hybrid",
-   "dest": "market_mode",
-   "help": "Market mode to evaluate (features, anchor, hybrid, or all).",
-   "nargs": null,
-   "options": [
-    "--wf-market-mode",
-    "--market-mode"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig",
-    "both"
-   ],
-   "default": "raw",
-   "dest": "market_prob_source",
-   "help": "Market probability source for blending/clamping.",
-   "nargs": null,
-   "options": [
-    "--market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit",
-    "both"
-   ],
-   "default": "prob",
-   "dest": "market_prob_blend_method",
-   "help": "Blend method for market probabilities (prob or logit space).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "off",
-    "on",
-    "both"
-   ],
-   "default": "off",
-   "dest": "win_prob_uncertainty",
-   "help": "Use uncertainty-aware win probabilities (off, on, both).",
-   "nargs": null,
-   "options": [
-    "--win-prob-uncertainty"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "out",
-   "help": "Optional output CSV path (default: models/<run_id>/wf_compare.csv).",
-   "nargs": null,
-   "options": [
-    "--out"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "n_estimators",
-   "help": "Optional XGBoost n_estimators override.",
-   "nargs": null,
-   "options": [
-    "--wf-n-estimators",
-    "--n-estimators"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "max_depth",
-   "help": "Optional XGBoost max_depth override.",
-   "nargs": null,
-   "options": [
-    "--wf-max-depth",
-    "--max-depth"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "learning_rate",
-   "help": "Optional XGBoost learning_rate override.",
-   "nargs": null,
-   "options": [
-    "--wf-learning-rate",
-    "--learning-rate"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "n_jobs",
-   "help": "Optional XGBoost n_jobs override.",
-   "nargs": null,
-   "options": [
-    "--xgb-n-jobs",
-    "--n-jobs"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "auto",
-   "dest": "xgb_device",
-   "help": "XGBoost device: auto (the GPU when this XGBoost build has CUDA and a usable GPU is present, else the CPU), cpu, cuda or cuda:N; gpu means cuda (default: auto).",
-   "nargs": null,
-   "options": [
-    "--xgb-device"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "xgb_device_arg"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "include_quantiles",
-   "help": "Whether to train quantile models (slow).",
-   "nargs": 0,
-   "options": [
-    "--include-quantiles",
-    "--no-include-quantiles"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "disable_feature_groups",
-   "help": "Comma-separated feature group names to drop for ablation comparisons (e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS.",
-   "nargs": null,
-   "options": [
-    "--disable-feature-groups"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "str"
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": true,
-   "dest": "resume",
-   "help": "Restore weeks already finished by an identical earlier run of each candidate instead of training them again. Use --no-resume to retrain every week.",
-   "nargs": 0,
-   "options": [
-    "--resume",
-    "--no-resume"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": "<repo>/models/wf_checkpoints",
-   "dest": "checkpoint_dir",
-   "help": "Root for per-week checkpoints (default: models/wf_checkpoints).",
-   "nargs": null,
-   "options": [
-    "--checkpoint-dir"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "Path"
-  }
- ],
  "nfl_predictor.cli.train": [
   {
    "action": "_StoreAction",
    "choices": [
-    "margin_total",
-    "blend"
+    "margin_total"
    ],
    "default": "margin_total",
    "dest": "model_kind",
-   "help": "Model pipeline to use (margin_total or blend; blended_margin_total also means blend).",
+   "help": "Model pipeline to use (margin_total, the only kind).",
    "nargs": null,
    "options": [
     "--model-kind"
@@ -1593,69 +1210,6 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_weight",
-   "help": "Blend weight for the market's implied win probability (0=off, 1=market only).",
-   "nargs": null,
-   "options": [
-    "--market-prob-weight",
-    "--market-prob-blend"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0.0,
-   "dest": "market_prob_clamp",
-   "help": "Clamp model probability within +/- this delta of market (0=off).",
-   "nargs": null,
-   "options": [
-    "--market-prob-clamp"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig"
-   ],
-   "default": "raw",
-   "dest": "market_prob_source",
-   "help": "Market probability source for blending/clamping.",
-   "nargs": null,
-   "options": [
-    "--market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit"
-   ],
-   "default": "prob",
-   "dest": "market_prob_blend_method",
-   "help": "Blend method for market probabilities (prob or logit space).",
-   "nargs": null,
-   "options": [
-    "--market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
    "default": null,
    "dest": "min_season",
    "help": "Optional minimum season to include.",
@@ -1728,7 +1282,7 @@
    "choices": null,
    "default": 1,
    "dest": "calibration_seasons",
-   "help": "Number of seasons reserved for calibration/blending.",
+   "help": "Number of seasons reserved for calibration.",
    "nargs": null,
    "options": [
     "--calibration-seasons"
@@ -1754,35 +1308,15 @@
   {
    "action": "_StoreAction",
    "choices": [
-    "none",
-    "platt",
-    "isotonic",
-    "sigma",
-    "elo",
     "auto",
-    "logistic"
+    "none"
    ],
-   "default": "isotonic",
+   "default": "auto",
    "dest": "win_prob_calibration",
-   "help": "Calibration method for win probabilities (logistic is an alias for platt).",
+   "help": "Win-probability calibration: auto, the deterministic floor (the predicted margin through the fixed normal curve); none is the same.",
    "nargs": null,
    "options": [
     "--win-prob-calibration"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "win_prob_uncertainty",
-   "help": "Use margin quantiles to derive uncertainty-aware win probabilities.",
-   "nargs": 0,
-   "options": [
-    "--win-prob-uncertainty",
-    "--no-win-prob-uncertainty"
    ],
    "required": false,
    "subcommand": null,
@@ -2665,69 +2199,14 @@
    "choices": [
     "features",
     "anchor",
-    "hybrid",
-    "all"
+    "hybrid"
    ],
    "default": "hybrid",
    "dest": "wf_market_mode",
-   "help": "Walk-forward: market mode selection.",
+   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, or both (hybrid).",
    "nargs": null,
    "options": [
     "--wf-market-mode"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig",
-    "both"
-   ],
-   "default": "raw",
-   "dest": "wf_market_prob_source",
-   "help": "Walk-forward: market probability source.",
-   "nargs": null,
-   "options": [
-    "--wf-market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit",
-    "both"
-   ],
-   "default": "prob",
-   "dest": "wf_market_prob_blend_method",
-   "help": "Walk-forward: market probability blend method.",
-   "nargs": null,
-   "options": [
-    "--wf-market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "off",
-    "on",
-    "both"
-   ],
-   "default": "off",
-   "dest": "wf_win_prob_uncertainty",
-   "help": "Walk-forward: use uncertainty-aware win probabilities.",
-   "nargs": null,
-   "options": [
-    "--wf-win-prob-uncertainty"
    ],
    "required": false,
    "subcommand": null,

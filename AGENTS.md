@@ -243,7 +243,11 @@ are not advisory.
   numbers, or TODO goal labels in any code, comments, docstrings, or test descriptions.
 - Load and apply relevant skills before acting. Default to `python` for Python work; add
   `test-driven-development`, `clean-code`, `systematic-debugging`, `code-review`, `observability`,
-  `task-orchestrator`, and the `python-*` skills when their domains apply.
+  `task-orchestrator`, and the `python-*` skills when their domains apply. Skills carry general
+  defaults; where one disagrees with this file, the nested `AGENTS.md` files or the `.agents/` docs
+  they point to, this repo's rule wins (for example the `.venv/bin/` command forms,
+  `scripts/gate.sh` as the only gate, characterization tests before behavior-preserving moves, and
+  the ~2000-line split threshold below).
 - If a Python file grows beyond ~2000 lines, propose a refactor plan to split it into smaller,
   focused modules (helpers/utils) and implement the split if it reduces complexity.
 - Keep `.agents/TODO.md` accurate: verify items before checking them off.

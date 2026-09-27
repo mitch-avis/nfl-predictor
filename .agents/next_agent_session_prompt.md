@@ -5,15 +5,17 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones") and this file.
 
-## State (written 2026-09-27, on `chore/claude-code-setup`)
+## State (written 2026-09-27, after the `0.28.6` merge)
 
-- `main` is at version `0.28.5` and pushed to `origin` with the user's approval: Milestone 60
-  (`0.28.1`), the pre-commit hooks (`0.28.2`), the documentation split (`0.28.3`) and the rule
-  2 and 15 amendments (`0.28.4`-`0.28.5`), each merged with `--no-ff`. Merging and pushing stay
-  must-ask.
-- Branch `chore/claude-code-setup` (`0.28.6`, pushed with a draft PR at the user's request) holds
-  the Claude Code setup below. The user is having another agent review it; merging it is
-  must-ask. Its working tree is clean.
+- `main` is at version `0.28.6` and pushed to `origin` with the user's approval: Milestone 60
+  (`0.28.1`), the pre-commit hooks (`0.28.2`), the documentation split (`0.28.3`), the rule 2
+  and 15 amendments (`0.28.4`-`0.28.5`) and the Claude Code setup (`0.28.6`, PR #2), each merged
+  with `--no-ff`; the feature branches are deleted. Merging and pushing stay must-ask. The
+  working tree is clean.
+- The auto-mode classifier blocks an agent's merge of a PR that has no recorded review
+  ("Merge Without Review"). Get an approving review on the PR first, or give the user the merge
+  command to run. In their own terminal, not after Claude Code's `!` prefix, a leading `!` is
+  bash negation and stops an `&&` chain after its first command.
 - `scripts/gate.sh --web` exits `0` on the `0.28.3` tree: 1032 passed, coverage 92.21% against
   the 90% floor, 22 frontend tests. Plain `scripts/gate.sh` exits `0` on the `0.28.6` tree.
 - Claude Code subagents live in `.claude/agents/`. `implementer` runs in its own worktree under
@@ -63,7 +65,7 @@ completed milestones") and this file.
   gate in `python` and `task-orchestrator`, non-interactive staging in committing-code, the
   `IFS` pitfall in shell-scripting, Python idioms in clean-code).
 - `0.28.6`: the subagent definitions, the worktree settings, the `.gitignore` entry and the two
-  `AGENTS.md` changes above, on `chore/claude-code-setup`.
+  `AGENTS.md` changes above, merged into `main` as PR #2.
 - The user's goal: have a session work through `TODO.md` on its own, delegating to implementer
   subagents and having reviewer subagents check the work. How the main session orchestrates
   that (delegating, merging worktree branches, assigning versions) is not written down yet.
@@ -103,8 +105,7 @@ completed milestones") and this file.
 
 ## Your task: roadmap step 3 (production/benchmark parity)
 
-Once `chore/claude-code-setup` is reviewed and merged (or the user says to go ahead without it),
-create a new branch off `main` (for example `feat/step3-parity`). Scope, from "Roadmap Status"
+Create a new branch off `main` (for example `feat/step3-parity`). Scope, from "Roadmap Status"
 and Milestones 55/56 in `TODO.md`:
 
 1. Task 55.4: the GPU as the default device for every XGBoost run. First a one-fold CPU-vs-GPU
@@ -142,8 +143,8 @@ walk-forward unless the user asks.
 
 ## Open questions for the user
 
-- Merge `chore/claude-code-setup` (`0.28.6`) into `main` once the independent review is done?
-  The companion skill edits are already on `mitch-avis/agent-skills` `main` (`f7031cb..aeb789b`).
+- None open from the last session. The companion skill edits are on `mitch-avis/agent-skills`
+  `main` (`f7031cb..aeb789b`).
 
 ## Notes
 

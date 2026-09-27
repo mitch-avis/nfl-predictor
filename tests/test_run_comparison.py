@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -17,6 +18,7 @@ import pytest
 from nfl_predictor.cli import compare as command
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.reporting import run_comparison
+from tests import snapshots
 
 # (game_id, season, week, p, actual margin); home wins when the margin is positive.
 GAMES = [
@@ -252,3 +254,245 @@ def test_the_command_exits_two_when_the_runs_cannot_be_compared(tmp_path: Path) 
     reference = _write_run(tmp_path, "ref", _predictions(), seed=42)
 
     assert command.main(["--candidate", str(tmp_path), "--reference", str(reference)]) == 2
+
+
+# Two seasons with several games per week, so every season and week bucket has games and the
+# per-week pool bootstrap has more than one week to resample in the bigger windows.
+# (game_id, season, week, p, actual margin)
+SEASON_GAMES = [
+    ("2023_01_a", 2023, 1, 0.70, 7),
+    ("2023_01_b", 2023, 1, 0.40, 3),
+    ("2023_01_c", 2023, 1, 0.55, -2),
+    ("2023_02_a", 2023, 2, 0.65, 10),
+    ("2023_02_b", 2023, 2, 0.35, -4),
+    ("2023_03_a", 2023, 3, 0.80, 14),
+    ("2023_03_b", 2023, 3, 0.52, -1),
+    ("2023_04_a", 2023, 4, 0.30, -6),
+    ("2023_04_b", 2023, 4, 0.60, 0),
+    ("2024_01_a", 2024, 1, 0.62, 3),
+    ("2024_01_b", 2024, 1, 0.45, -7),
+    ("2024_02_a", 2024, 2, 0.75, -3),
+    ("2024_02_b", 2024, 2, 0.58, 6),
+    ("2024_03_a", 2024, 3, 0.40, 2),
+    ("2024_03_b", 2024, 3, 0.66, 9),
+    ("2024_19_a", 2024, 19, 0.57, -10),
+]
+SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "run_comparison"
+TMP_PLACEHOLDER = "<tmp>"
+
+
+def _season_predictions(shift: float = 0.0, market: float = 0.5) -> pd.DataFrame:
+    """Return prediction rows for ``SEASON_GAMES``; ``shift`` moves every probability."""
+    rows = []
+    for index, (game_id, season, week, p, margin) in enumerate(SEASON_GAMES):
+        rows.append(
+            {
+                "game_id": game_id,
+                "season": season,
+                "week": week,
+                "deterministic_home_win_prob": min(max(p + shift, 0.01), 0.99),
+                "market_home_win_prob": market,
+                "actual_home_win": int(margin > 0),
+                "actual_margin": float(margin),
+                "actual_total": 40.0 + index,
+                "predicted_margin": float(margin) + (index % 5) - 2.0 + 3 * shift,
+                "predicted_total": 44.0 - shift * 10,
+                "calibration_method": "none",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _season_comparison(tmp_path: Path) -> dict[str, Any]:
+    """Compare a shifted candidate with a reference on the two-season fixture."""
+    candidate = _loaded(tmp_path, "cand", _season_predictions(shift=0.05, market=0.55))
+    reference = _loaded(tmp_path, "ref", _season_predictions(market=0.55))
+    return run_comparison.compare_runs([candidate], [reference], resamples=200)
+
+
+def _without_tmp(text: str, tmp_path: Path) -> str:
+    """Replace the test's temporary directory in ``text`` with a fixed placeholder."""
+    return text.replace(str(tmp_path), TMP_PLACEHOLDER)
+
+
+def _assert_contains(where: str, actual: object, expected: object) -> None:
+    """Assert every key in ``expected`` is in ``actual`` with an exactly equal value."""
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict), where
+        for key, value in expected.items():
+            assert key in actual, f"{where}: missing {key}"
+            _assert_contains(f"{where}.{key}", actual[key], value)
+    else:
+        assert actual == expected, f"{where}: {actual!r} != {expected!r}"
+
+
+def test_the_existing_comparison_report_is_unchanged(tmp_path: Path) -> None:
+    """The window tables, provenance and JSON keys that ``compare`` wrote before stay exact.
+
+    The snapshot was written from the report before the per-season view was added; the report
+    may add sections after it and keys beside it, but every existing line and value is kept
+    byte for byte, so the command still reproduces earlier reviewed rescores.
+    """
+    report = _season_comparison(tmp_path)
+    lines = [_without_tmp(line, tmp_path) for line in run_comparison.format_report(report)]
+    payload = json.loads(_without_tmp(json.dumps(report, indent=1, default=str), tmp_path))
+    markdown_snapshot = SNAPSHOT_DIR / "compare_report.txt"
+    json_snapshot = SNAPSHOT_DIR / "compare_report.json"
+    if snapshots.updating():
+        SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+        markdown_snapshot.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        json_snapshot.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
+        return
+
+    expected_lines = markdown_snapshot.read_text(encoding="utf-8").splitlines()
+    assert lines[: len(expected_lines)] == expected_lines
+    _assert_contains("report", payload, json.loads(json_snapshot.read_text(encoding="utf-8")))
+
+
+def test_the_stability_view_splits_every_window_by_season() -> None:
+    """Each window has an all-seasons row and one row per season with games in it."""
+    stability = run_comparison.stability_report(_season_predictions(), resamples=50)
+
+    games = {
+        label: {season: row["games"] for season, row in rows.items()}
+        for label, rows in stability["windows"].items()
+    }
+    assert games == {
+        "week 1": {"all seasons": 5, "2023": 3, "2024": 2},
+        "week 2": {"all seasons": 4, "2023": 2, "2024": 2},
+        "weeks 3-18": {"all seasons": 6, "2023": 4, "2024": 2},
+        "all weeks": {"all seasons": 16, "2023": 9, "2024": 7},
+    }
+    assert stability["resamples"] == 50
+    assert stability["bootstrap_seed"] == run_comparison.DEFAULT_BOOTSTRAP_SEED
+
+
+def test_a_season_row_matches_a_hand_calculation() -> None:
+    """Season 2023, week 1: Brier, pick accuracy, pool points and the market contrast."""
+    stability = run_comparison.stability_report(_season_predictions(), resamples=50)
+
+    row = stability["windows"]["week 1"]["2023"]
+    # p 0.70/0.40/0.55 against home results 1/1/0.
+    assert row["brier"] == pytest.approx((0.09 + 0.36 + 0.3025) / 3)
+    assert row["correct"] == pytest.approx(1 / 3)
+    # Confidence ranks 3, 2, 1; only the most confident pick (rank 3) is right.
+    assert row["pool"] == 3.0
+    assert row["market_brier"] == pytest.approx(0.25)
+    estimate, low, high = row["det_minus_market_brier"]
+    assert estimate == pytest.approx((0.09 + 0.36 + 0.3025) / 3 - 0.25)
+    assert low is not None
+    assert high is not None
+    assert low <= estimate <= high
+    for column in ("log_loss", "margin_ae", "total_ae"):
+        assert column in row
+
+
+def test_the_all_seasons_row_is_the_comparison_window_row(tmp_path: Path) -> None:
+    """One definition: a run's stability rows equal what ``compare`` reports for that run."""
+    predictions = _season_predictions(market=0.55)
+    stability = run_comparison.stability_report(predictions, resamples=200)
+    report = _season_comparison(tmp_path)
+
+    for label, window in report["windows"].items():
+        all_seasons = dict(stability["windows"][label]["all seasons"])
+        assert all_seasons.pop("games") == window["games"]
+        assert all_seasons == window["runs"]["ref"]
+        for season, row in window["seasons"].items():
+            season_row = dict(stability["windows"][label][season])
+            assert season_row.pop("games") == row["games"]
+            assert row["runs"]["ref"] == season_row
+
+
+def test_the_comparison_adds_per_season_rows_for_runs_and_the_contrast(tmp_path: Path) -> None:
+    """Every window gets per-season run rows and a per-season paired contrast."""
+    report = _season_comparison(tmp_path)
+
+    week1 = report["windows"]["week 1"]["seasons"]
+    assert sorted(week1) == ["2023", "2024"]
+    assert week1["2023"]["games"] == 3
+    assert set(week1["2023"]["runs"]) == {"cand", "ref"}
+    # The candidate adds 0.05 to every probability; in 2023 week 1 the results are 1, 1, 0.
+    reference = (0.09 + 0.36 + 0.3025) / 3
+    candidate = (0.25**2 + 0.55**2 + 0.60**2) / 3
+    assert week1["2023"]["contrast"]["brier"][0] == pytest.approx(candidate - reference)
+    all_weeks = report["windows"]["all weeks"]["seasons"]
+    assert sum(row["games"] for row in all_weeks.values()) == 16
+
+
+def test_a_single_week_has_no_pool_interval(tmp_path: Path) -> None:
+    """Pool points resample weeks, so one week alone gets an estimate and no interval."""
+    report = _season_comparison(tmp_path)
+
+    season = report["windows"]["week 1"]["seasons"]["2023"]
+    estimate, low, high = season["contrast"]["pool"]
+    assert (low, high) == (None, None)
+    assert estimate == season["runs"]["cand"]["pool"] - season["runs"]["ref"]["pool"]
+    several = report["windows"]["weeks 3-18"]["seasons"]["2023"]["contrast"]["pool"]
+    assert None not in several
+
+
+def _one_game_season(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Drop a game so season 2024's week 1 holds a single game."""
+    return predictions[predictions["game_id"] != "2024_01_b"].reset_index(drop=True)
+
+
+def test_a_single_game_row_has_no_market_interval() -> None:
+    """A run's season row with one game gets the det - market estimate and no interval."""
+    stability = run_comparison.stability_report(
+        _one_game_season(_season_predictions()), resamples=50
+    )
+
+    row = stability["windows"]["week 1"]["2024"]
+    assert row["games"] == 1
+    estimate, low, high = row["det_minus_market_brier"]
+    assert (low, high) == (None, None)
+    assert estimate == pytest.approx(0.38**2 - 0.5**2)
+    assert None not in stability["windows"]["week 1"]["2023"]["det_minus_market_brier"]
+
+
+def test_a_single_game_contrast_has_no_intervals(tmp_path: Path) -> None:
+    """A paired season row with one game keeps each estimate and prints ``[n/a]``."""
+    candidate = _loaded(
+        tmp_path, "cand", _one_game_season(_season_predictions(shift=0.05, market=0.55))
+    )
+    reference = _loaded(tmp_path, "ref", _one_game_season(_season_predictions(market=0.55)))
+    report = run_comparison.compare_runs([candidate], [reference], resamples=50)
+
+    contrast = report["windows"]["week 1"]["seasons"]["2024"]["contrast"]
+    for column in run_comparison.LOSS_COLUMNS:
+        assert contrast[column][1:] == (None, None), column
+    assert contrast["brier"][0] == pytest.approx(0.33**2 - 0.38**2)
+    row = next(
+        line
+        for line in run_comparison.format_report(report)
+        if line.startswith("| candidate - reference | 2024 | 1 | ")
+    )
+    brier_cell = row.split(" | ")[3]
+    assert brier_cell == f"{0.33**2 - 0.38**2:+.5f} [n/a]"
+
+
+def test_the_comparison_report_ends_with_the_season_tables(tmp_path: Path) -> None:
+    """The Markdown gains a stability section with run rows and contrast rows per season."""
+    lines = run_comparison.format_report(_season_comparison(tmp_path))
+
+    start = lines.index("## Stability by season")
+    section = lines[start:]
+    assert "### week 1" in section
+    assert any(line.startswith("| cand | 2023 | 3 | ") for line in section)
+    assert any(line.startswith("| ref | 2024 | 2 | ") for line in section)
+    assert any(line.startswith("| candidate - reference | 2023 | 3 | ") for line in section)
+    assert any("[n/a]" in line for line in section)
+
+
+def test_the_stability_table_formats_one_row_per_season() -> None:
+    """A single run's view prints an all-seasons row, then each season, per window."""
+    stability = run_comparison.stability_report(_season_predictions(), resamples=50)
+
+    lines = run_comparison.format_stability(stability)
+
+    assert lines[0] == "## Stability by season"
+    week1 = lines.index("### week 1")
+    assert lines[week1 + 2].startswith("| season | games | det Brier |")
+    assert lines[week1 + 4].startswith("| all seasons | 5 | ")
+    assert lines[week1 + 5].startswith("| 2023 | 3 | 0.25083 | ")
+    assert lines[week1 + 6].startswith("| 2024 | 2 | ")

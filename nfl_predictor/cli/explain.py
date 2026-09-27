@@ -16,7 +16,9 @@ from nfl_predictor.utils.logger import log
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Optional SHAP analysis for model features.")
+    parser = argparse.ArgumentParser(
+        description="SHAP analysis of one model head's features (XGBoost TreeSHAP)."
+    )
     parser.add_argument(
         "--model-in",
         "--model-path",

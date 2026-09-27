@@ -116,8 +116,9 @@ def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
         )
 
 
-def test_predict_future_games_rejects_an_unsupported_model_kind(tmp_path) -> None:
-    """Only margin/total and blended models can project the remaining games."""
+@pytest.mark.parametrize("model_kind", ["score", "blend"])
+def test_predict_future_games_rejects_an_unsupported_model_kind(tmp_path, model_kind) -> None:
+    """Only margin/total models can project the remaining games; the blend kind was retired."""
     data_path = tmp_path / "ml.csv"
     pd.DataFrame(
         [
@@ -136,7 +137,7 @@ def test_predict_future_games_rejects_an_unsupported_model_kind(tmp_path) -> Non
     with pytest.raises(ValueError, match="Unsupported model kind"):
         power_rankings._predict_future_games(
             model,
-            model_kind="score",
+            model_kind=model_kind,
             data_ml=data_path,
             season=2025,
             through_week=1,

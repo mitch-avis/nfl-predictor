@@ -10,19 +10,15 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
 import xgboost as xgb
-from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import Ridge
 
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import (
-    BlendedMarginTotalModel,
-    BlendLayer,
     FeatureSpec,
     MarginTotalModel,
     OptunaConfig,
@@ -213,56 +209,6 @@ def test_week_one_calibrator_frame_pools_three_seasons(monkeypatch: pytest.Monke
         + _season_pairs(2024, range(1, 19))
         + _season_pairs(2025, range(1, 19))
     )
-
-
-def test_blended_report_records_the_rolled_back_window(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The blended training report lists the window's season, weeks and pairs."""
-    df = _season_weeks_frame({2024: 18, 2025: 18, 2026: 1})
-    team_model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _ZeroPreprocessor()),
-        feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
-    )
-    model = BlendedMarginTotalModel(
-        team_model=team_model,
-        blend_layer=BlendLayer(
-            margin_model=cast(Ridge, object()), total_model=cast(Ridge, object())
-        ),
-        calibrator=None,
-        target_columns=("away_score", "home_score"),
-        market_prob_config=None,
-        xgb_params={"team": {"n_estimators": 1}},
-    )
-    monkeypatch.setattr(ml_model_training, "train_blended_margin_total_model", lambda **_k: model)
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(
-        ml_model_training.feature_importance,
-        "build_feature_importance_report",
-        lambda _model: {"feature_names": []},
-    )
-
-    result = ml_model_training.train_blended_margin_total_model_with_report(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=0,
-        calibration_seasons=1,
-        calibration_weeks=4,
-        max_cardinality_ratio=0.5,
-        win_prob_calibration="none",
-        optuna_config=None,
-        market_transform=False,
-        market_anchor=False,
-        market_prob_config=None,
-    )
-
-    assert result.splits["calibration_seasons"] == [2024]
-    assert result.splits["calibration_inseason"] == {
-        "season": 2026,
-        "weeks": [1],
-        "pairs": [[2025, 16], [2025, 17], [2025, 18], [2026, 1]],
-    }
 
 
 def test_final_fit_logs_why_the_whole_calibration_season_moved(

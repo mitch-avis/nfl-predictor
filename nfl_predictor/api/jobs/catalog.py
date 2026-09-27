@@ -19,7 +19,7 @@ from typing import Any, Literal
 from nfl_predictor.api.errors import ConflictError, UnprocessableEntityError
 from nfl_predictor.api.runs.indexer import RunSummary
 from nfl_predictor.api.settings import Settings
-from nfl_predictor.cli.options import MODEL_KINDS
+from nfl_predictor.cli.options import RETIRED_BLEND_MESSAGE, RETIRED_MODEL_KINDS
 
 ParamKind = Literal["int", "float", "str", "bool", "choice"]
 WALK_FORWARD_GROUP = "walk_forward"
@@ -148,6 +148,16 @@ def _week_predict_path(ctx: JobContext, week: int) -> str:
     return str(ctx.settings.data_path / "predict" / f"week_{week:02d}_games_to_predict.csv")
 
 
+def _run_model_kind(run: RunSummary) -> str:
+    """Return the model kind a run-based job passes, refusing a retired blend run."""
+    kind = run.model_kind or DEFAULT_MODEL_KIND
+    if kind in RETIRED_MODEL_KINDS:
+        raise ConflictError(
+            f"This run holds a {kind} model: {RETIRED_BLEND_MESSAGE}.", code="retired_model_kind"
+        )
+    return kind
+
+
 def _timestamp() -> str:
     """Return a UTC timestamp usable in a run id."""
     return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
@@ -193,8 +203,6 @@ def _build_train(ctx: JobContext) -> list[str]:
     run_id = f"train_{_timestamp()}"
     argv = [
         *ctx.command("train"),
-        "--model-kind",
-        str(ctx.params.get("model_kind", DEFAULT_MODEL_KIND)),
         "--data-path",
         ctx.data_file("completed_games_ml.csv"),
         "--run-dir",
@@ -218,7 +226,7 @@ def _build_predict(ctx: JobContext) -> list[str]:
         "--model-in",
         str(run.run_files.model),
         "--model-kind",
-        run.model_kind or DEFAULT_MODEL_KIND,
+        _run_model_kind(run),
         # The CLI hashes the training dataset even when predicting, so it always needs a path
         # inside the configured data directory rather than its own default.
         "--data-path",
@@ -256,7 +264,7 @@ def _build_power_rankings(ctx: JobContext) -> list[str]:
         "--model-in",
         str(run.run_files.model),
         "--model-kind",
-        run.model_kind or DEFAULT_MODEL_KIND,
+        _run_model_kind(run),
         "--season",
         str(ctx.params["season"]),
         "--through-week",
@@ -428,14 +436,6 @@ TEMPLATES: tuple[JobTemplate, ...] = (
         category="Model",
         build=_build_train,
         params=(
-            ParamSpec(
-                "model_kind",
-                "Model kind",
-                "choice",
-                "Head configuration to train.",
-                default=DEFAULT_MODEL_KIND,
-                choices=MODEL_KINDS,
-            ),
             ParamSpec(
                 "holdout_seasons",
                 "Holdout seasons",

@@ -358,10 +358,9 @@ def fitted_xgb_device(model: Any) -> str | None:
 
     Reads every head (margin, total and any quantile models) from the estimators themselves,
     so a fit that fell back to the CPU is recorded as ``cpu``, and heads that trained on
-    different devices are recorded as ``mixed``. A blended model is read through its team
-    model. Returns None when the model holds no XGBoost estimator.
+    different devices are recorded as ``mixed``. Returns None when the model holds no XGBoost
+    estimator.
     """
-    model = getattr(model, "team_model", model)
     heads: list[Any] = [getattr(model, "margin_model", None), getattr(model, "total_model", None)]
     for attribute in ("margin_quantile_models", "total_quantile_models"):
         heads.extend((getattr(model, attribute, None) or {}).values())

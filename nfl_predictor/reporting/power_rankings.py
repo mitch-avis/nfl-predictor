@@ -934,22 +934,6 @@ def _predict_future_games(
         home_win_prob = ml_model_core.adjust_home_win_prob(
             games, home_win_prob, getattr(mt, "market_prob_config", None)
         )
-    elif model_kind == "blend":
-        bm = cast(ml_model_core.BlendedMarginTotalModel, model)
-        # Use the model's blended margin as the win-prob driver.
-        # The public helper takes pred_margin; for blended we reuse internal predict path.
-        # We call build_prediction_output via the predict module would require a Path.
-        team_margin, _team_total = ml_model_core.predict_margin_total_from_model(
-            bm.team_model, games
-        )
-        market_margin, _market_total = ml_model_core.get_market_baseline(games)
-        blended_margin = bm.blend_layer.margin_model.predict(
-            np.column_stack([team_margin, market_margin])
-        )
-        home_win_prob = ml_model_core.predict_home_win_prob(blended_margin, bm.calibrator)
-        home_win_prob = ml_model_core.adjust_home_win_prob(
-            games, home_win_prob, getattr(bm, "market_prob_config", None)
-        )
     else:
         raise ValueError(f"Unsupported model kind for power rankings: {model_kind!r}")
 

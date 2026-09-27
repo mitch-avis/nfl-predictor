@@ -4,14 +4,26 @@ from __future__ import annotations
 
 import argparse
 
-# The model kinds a run records in its metadata; ``blended_margin_total`` is an older name.
-MODEL_KINDS = ("margin_total", "blend")
-_MODEL_KIND_ALIASES = {"blended_margin_total": "blend"}
+# The model kinds a run records in its metadata.
+MODEL_KINDS = ("margin_total",)
+# Kinds older runs recorded that can no longer be trained or loaded.
+RETIRED_MODEL_KINDS = frozenset({"blend", "blended_margin_total"})
+RETIRED_BLEND_MESSAGE = (
+    "the blend model kind was retired (production submits the deterministic floor of a "
+    "margin_total model); train a margin_total model instead"
+)
 
 
 def model_kind(value: str) -> str:
-    """Return the canonical model kind for ``value``, mapping the old blend name to ``blend``."""
-    return _MODEL_KIND_ALIASES.get(value, value)
+    """Return ``value``, or refuse a retired kind with the reason.
+
+    Raises:
+        argparse.ArgumentTypeError: If ``value`` names the retired blend kind.
+
+    """
+    if value in RETIRED_MODEL_KINDS:
+        raise argparse.ArgumentTypeError(RETIRED_BLEND_MESSAGE)
+    return value
 
 
 def add_model_kind_option(parser: argparse.ArgumentParser, help_text: str) -> None:
@@ -21,7 +33,7 @@ def add_model_kind_option(parser: argparse.ArgumentParser, help_text: str) -> No
         type=model_kind,
         choices=MODEL_KINDS,
         default="margin_total",
-        help=f"{help_text} (margin_total or blend; blended_margin_total also means blend).",
+        help=f"{help_text} (margin_total, the only kind).",
     )
 
 

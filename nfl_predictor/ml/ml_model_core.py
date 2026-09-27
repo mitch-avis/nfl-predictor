@@ -117,7 +117,10 @@ class MarginTotalModel:
 
 @dataclass(frozen=True)
 class BlendLayer:
-    """Linear blend layer for margin/total predictions."""
+    """Ridge layer of a saved blend model; the blend model kind was retired.
+
+    Kept only so blend checkpoints saved before the retirement still unpickle for display.
+    """
 
     margin_model: Ridge
     total_model: Ridge
@@ -125,7 +128,12 @@ class BlendLayer:
 
 @dataclass(frozen=True)
 class BlendedMarginTotalModel:
-    """Blended margin/total model: the team model and the market line through a blend layer."""
+    """A saved blend model (the team model and the market line through a ridge layer).
+
+    The blend model kind was retired: nothing trains or predicts with one. The class stays
+    so checkpoints saved before the retirement still unpickle, and loading one for prediction
+    fails with the reason (``load_model_checkpoint``).
+    """
 
     team_model: MarginTotalModel
     blend_layer: BlendLayer
@@ -694,31 +702,6 @@ def _fit_quantile_models(
         models = _train_with_params(fallback_params)
 
     return models
-
-
-def _fit_blend_ridge_constrained(
-    x: np.ndarray,
-    y: np.ndarray,
-    *,
-    alpha: float = 1.0,
-) -> Ridge:
-    model = Ridge(alpha=alpha)
-    model.fit(x, y)
-
-    coef = np.asarray(model.coef_, dtype=float)
-    if coef.shape != (2,):
-        raise ValueError(f"Expected blend coefficients shape (2,), got {coef.shape}")
-
-    coef = np.maximum(coef, 0.0)
-    coef_sum = float(coef.sum())
-    coef = np.array([0.5, 0.5], dtype=float) if coef_sum <= 0 else coef / coef_sum
-
-    # Keep an intercept term but recompute it after constraining weights.
-    intercept = float(np.mean(y - x @ coef))
-
-    model.coef_ = coef
-    model.intercept_ = intercept
-    return model
 
 
 def _fit_win_prob_calibrator(
@@ -1328,9 +1311,6 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
         if model.total_quantile_models:
             for q, est in model.total_quantile_models.items():
                 _capture(f"total_q{q}", est)
-    elif isinstance(model, BlendedMarginTotalModel):
-        _capture("team.margin_model", model.team_model.margin_model)
-        _capture("team.total_model", model.team_model.total_model)
     return info
 
 
@@ -1374,15 +1354,15 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
         pass
 
     model = _ensure_backward_compatible_model(model)
-    expected_types = {
-        "margin_total": MarginTotalModel,
-        "blend": BlendedMarginTotalModel,
-    }
-    expected_type = expected_types.get(model_kind)
-    if expected_type is None:
+    if model_kind != "margin_total":
         raise ValueError(f"Unknown model kind: {model_kind}")
-    if not isinstance(model, expected_type):
-        raise ValueError(f"Model checkpoint type mismatch; expected {expected_type.__name__}.")
+    if isinstance(model, BlendedMarginTotalModel):
+        raise ValueError(
+            f"{path} is a blend model: the blend model kind was retired; "
+            "train a margin_total model instead."
+        )
+    if not isinstance(model, MarginTotalModel):
+        raise ValueError("Model checkpoint type mismatch; expected MarginTotalModel.")
     log.info("Loaded model checkpoint from %s", path)
     return model
 
@@ -1408,12 +1388,6 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
 
     if isinstance(model, MarginTotalModel):
         _ensure_margin_total(model)
-        return model
-    if isinstance(model, BlendedMarginTotalModel):
-        _ensure_margin_total(model.team_model)
-        if not hasattr(model, "optuna_summary"):
-            _safe_set_attr(model, "optuna_summary", None)
-        return model
     return model
 
 
@@ -1422,12 +1396,6 @@ def _with_market_prob_config(model: Any, config: MarketProbConfig | None) -> Any
         return model
     if isinstance(model, MarginTotalModel):
         return replace(model, market_prob_config=config)
-    if isinstance(model, BlendedMarginTotalModel):
-        return replace(
-            model,
-            market_prob_config=config,
-            team_model=replace(model.team_model, market_prob_config=config),
-        )
     return model
 
 

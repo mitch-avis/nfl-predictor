@@ -527,21 +527,13 @@ def test_fitted_xgb_device_reads_every_head() -> None:
     assert xgb_utils.fitted_xgb_device(heads("cuda", "cuda", "cuda")) == "cuda"
     assert xgb_utils.fitted_xgb_device(heads("cuda", "cpu", "cuda")) == "mixed"
     assert xgb_utils.fitted_xgb_device(heads("cuda", "cuda", "cpu")) == "mixed"
-    assert (
-        xgb_utils.fitted_xgb_device(SimpleNamespace(team_model=heads("cpu", "cuda", "cpu")))
-        == "mixed"
-    )
 
 
-def test_fitted_xgb_device_reads_plain_and_blended_models() -> None:
-    """The device comes from the fitted estimator, for plain and blended models alike."""
+def test_fitted_xgb_device_reads_the_fitted_estimator() -> None:
+    """The device comes from the fitted estimator; a model without one records none."""
     from types import SimpleNamespace
 
     plain = SimpleNamespace(margin_model=xgb.XGBRegressor(device="cpu"))
-    blended = SimpleNamespace(
-        team_model=SimpleNamespace(margin_model=xgb.XGBRegressor(device="cuda"))
-    )
 
     assert xgb_utils.fitted_xgb_device(plain) == "cpu"
-    assert xgb_utils.fitted_xgb_device(blended) == "cuda"
     assert xgb_utils.fitted_xgb_device({"model": "stub"}) is None

@@ -63,21 +63,29 @@ def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
     assert isinstance(loaded, core.MarginTotalModel)
 
 
-def test_load_model_checkpoint_type_mismatch_raises(tmp_path: Path) -> None:
-    """Raises when a checkpoint type doesn't match the requested model_kind."""
+def test_a_saved_blend_model_is_refused_with_a_reason(tmp_path: Path) -> None:
+    """A checkpoint of the retired blend kind fails to load and says why."""
     model_path = tmp_path / "model.joblib"
-
-    margin_total_model = core.MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, None),
-        feature_spec=_dummy_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, None),
-        total_model=cast(xgb.XGBRegressor, None),
-        target_columns=("away_score", "home_score"),
-        calibrator=None,
+    joblib.dump(
+        core.BlendedMarginTotalModel(
+            team_model=cast(core.MarginTotalModel, None),
+            blend_layer=cast(core.BlendLayer, None),
+            calibrator=None,
+            target_columns=("away_score", "home_score"),
+        ),
+        model_path,
     )
-    joblib.dump(margin_total_model, model_path)
 
-    with pytest.raises(ValueError, match=r"type mismatch"):
+    with pytest.raises(ValueError, match=r"blend model kind was retired"):
+        core.load_model_checkpoint(model_path, "margin_total")
+
+
+def test_the_retired_blend_kind_cannot_be_requested(tmp_path: Path) -> None:
+    """Loading with ``model_kind="blend"`` is an unknown kind now."""
+    model_path = tmp_path / "model.joblib"
+    joblib.dump({"x": 1}, model_path)
+
+    with pytest.raises(ValueError, match=r"Unknown model kind"):
         core.load_model_checkpoint(model_path, "blend")
 
 

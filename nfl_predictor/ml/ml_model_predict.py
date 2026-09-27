@@ -14,7 +14,6 @@ import pandas as pd
 from nfl_predictor import constants
 from nfl_predictor.ml import ml_utils
 from nfl_predictor.ml.ml_model_core import (
-    BlendedMarginTotalModel,
     MarginTotalModel,
     _adjust_home_win_prob,
     _build_prediction_output,
@@ -24,7 +23,6 @@ from nfl_predictor.ml.ml_model_core import (
     _predict_margin_total_from_model,
     _predict_margin_total_quantiles_from_model,
     _resolve_margin_sigma,
-    get_market_baseline,
 )
 from nfl_predictor.utils.logger import log
 
@@ -74,50 +72,6 @@ def predict_week_margin_total(
         output_df[f"predicted_margin_p{int(round(q * 100)):02d}"] = np.round(margin_quantiles[q], 1)
     for q in sorted(total_quantiles.keys()):
         output_df[f"predicted_total_p{int(round(q * 100)):02d}"] = np.round(total_quantiles[q], 1)
-
-    if output_path:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_df.to_csv(output_path, index=False)
-        log.info("Saved predictions to %s", output_path)
-
-    if pretty_output:
-        ml_utils.display_weekly_predictions(output_df)
-
-    return output_df
-
-
-def predict_week_blended(
-    model: BlendedMarginTotalModel,
-    games_path: Path,
-    output_path: Path | None = None,
-    pretty_output: bool = True,
-    score_rounding: str = "none",
-) -> pd.DataFrame:
-    """Generate weekly predictions from a blended margin/total model."""
-    games_df = _load_games(games_path)
-
-    team_margin, team_total = _predict_margin_total_from_model(model.team_model, games_df)
-    market_margin, market_total = get_market_baseline(games_df)
-
-    blended_margin = model.blend_layer.margin_model.predict(
-        np.column_stack([team_margin, market_margin])
-    )
-    blended_total = model.blend_layer.total_model.predict(
-        np.column_stack([team_total, market_total])
-    )
-    pred_away, pred_home = _derive_scores_from_margin_total(blended_margin, blended_total)
-    home_win_prob = _predict_home_win_prob(blended_margin, model.calibrator)
-    home_win_prob = _adjust_home_win_prob(
-        games_df, home_win_prob, getattr(model, "market_prob_config", None)
-    )
-
-    output_df = _build_prediction_output(
-        games_df,
-        pred_away,
-        pred_home,
-        home_win_prob,
-        score_rounding=score_rounding,
-    )
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)

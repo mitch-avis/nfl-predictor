@@ -434,3 +434,9 @@ an independent reviewer's own rescore and `REVIEW.md` in the run directory named
   from the opening spread minus the floor: `+0.00088` `[-0.00033, +0.00209]` (2020-2025),
   `+0.00041` `[-0.00075, +0.00156]` (2023-2025); it does not beat the floor at pick-time lines.
   The model is anchored to the stored spread, so any "model minus opening line" gap flatters it.
+  On 2007-2025 (market only, `data/completed_games_ml.m54_flip_through_2025.csv`, 4930 regular-
+  season games with a real opener; reproduce with
+  `.venv/bin/python models/step3_open_lines/independent_rescore_market_2007.py`), opening-line
+  minus stored-line Brier, all weeks: `+0.00297` `[+0.00175, +0.00420]`; 2007-2019 `+0.00208`
+  `[+0.00068, +0.00351]`; without 2022 `+0.00297` `[+0.00172, +0.00423]`. Weeks 1 and 2 alone
+  (303 games each) include zero.

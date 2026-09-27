@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.29.1] - 2026-09-27
+
+### Changed
+
+- Season rows resampled from a single week or game report no interval (`[n/a]`) instead of a
+  zero-width one.
+
+### Added
+
+- `nfl-predictor compare` ends with a "Stability by season" section: each window's run metrics and
+  paired contrast, split by season. Everything before that section is byte-identical to earlier
+  output, and the JSON is a strict superset (each window gains `seasons`).
+- `nfl-predictor backtest` writes a per-season, per-week-bucket stability view to
+  `metrics_report.json` (`metrics.stability`) and logs it. It uses `compare`'s definitions and
+  bootstrap and scores the deterministic probability, as the benchmark does.
+
 ## [0.29.0] - 2026-09-27
 
 ### Changed

@@ -319,6 +319,10 @@ Tasks:
       defaults" section. The second-key review script
       (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that
       into the standard walk-forward report while step 3 touches reporting.
+      Narrowed (`0.29.1`, 2026-09-27): the stability view landed in `nfl-predictor backtest`
+      (`metrics.stability`) and `nfl-predictor compare` ("Stability by season"). The task text
+      does not define the "recommended defaults" section; its meaning is on the user's step-3
+      question list, and it stays open until answered.
 - [x] 55.7 Choose `n_estimators` time-aware: closed 2026-09-21 (`0.13.0`-`0.13.1`). A four-rung
       ladder (`200`/`400`/`598`, then a `100` plateau check), each rung a six-season arm with its
       own hypothesis and an independent reviewer rescore, found the aggregate order monotone

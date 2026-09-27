@@ -889,10 +889,16 @@ Training/backtests can write a run directory containing reproducible artifacts.
   (`gain`, the average loss reduction per split; `total_gain`, the loss reduction summed over
   every split; `weight`, the split count), and per base feature under `base_features`: total gain
   and splits summed over the feature's one-hot columns, per head and `combined` over both heads.
-  Its `measures` block describes each key. The web Model page ranks base features by combined
-  total gain; runs written before `schema_version` 2 recorded only the per-split average summed
-  over columns, which the page still shows for them, labelled as such, and which favors features
-  with many categories.
+  Every production fit (`nfl-predictor weekly` and `nfl-predictor train`) also records
+  `mean_abs_shap` (`schema_version` 3): the mean absolute SHAP value in points from XGBoost's
+  exact TreeSHAP, over the final model's own tree-training rows (the `shap` block gives the row
+  count and seasons; calibration and holdout rows are left out). A base feature's value sums each
+  row's signed contributions over its one-hot columns before the absolute value, and `combined`
+  adds the margin and total heads. Its `measures` block describes each key. The web Model page
+  ranks base features by combined mean |SHAP|; runs without SHAP fall back to combined total
+  gain, and runs written before `schema_version` 2 to the per-split average summed over columns
+  (which favors features with many categories), each labelled as such. `nfl-predictor explain`
+  uses the same TreeSHAP values for one head, per encoded column, on a sample of any dataset.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
   args, the resolved XGBoost device, feature list, and tuning/early-stopping info (when used).
   `models/` and `optuna.db` are gitignored by default, so keep run artifacts local unless you

@@ -33,6 +33,7 @@ from nfl_predictor.ml.ml_model_core import (
     _apply_feature_spec,
     _build_feature_spec,
     _build_preprocessor,
+    _calibration_window_record,
     _early_stopping_info,
     _evaluate_margin_total_predictions,
     _filter_season_bounds,
@@ -42,7 +43,6 @@ from nfl_predictor.ml.ml_model_core import (
     _fit_transform_matrix,
     _fit_win_prob_calibrator,
     _get_target_columns,
-    _inseason_calibration_pairs,
     _load_games,
     _predict_home_win_prob,
     _predict_margin_total_from_model,
@@ -91,6 +91,18 @@ def _filter_to_regular_season_for_training(
     if dropped:
         log.info("Filtering to regular season for training: dropped %d rows.", dropped)
     return filtered
+
+
+def _log_calibration_window(window_pairs: list[tuple[int, int]]) -> None:
+    """Log the in-season calibration window held out of the tree fit, if there is one."""
+    record = _calibration_window_record(window_pairs)
+    if record["weeks"]:
+        log.info(
+            "Calibration weeks: season %s weeks %s (window pairs %s)",
+            record["season"],
+            record["weeks"],
+            record["pairs"],
+        )
 
 
 def _pooled_calibration_frame(
@@ -157,21 +169,14 @@ def train_margin_total_model(
         train_seasons,
         calibration,
         holdout,
-        calibration_season_inseason,
-        calibration_weeks_inseason,
+        window_pairs,
     ) = _split_train_calibration_holdout(
         df, holdout_seasons, calibration_seasons, calibration_weeks
     )
 
     log.info("Training seasons: %s", train_seasons)
     log.info("Calibration seasons: %s", calibration)
-    if calibration_season_inseason is not None and calibration_weeks_inseason:
-        log.info(
-            "Calibration weeks: season %s weeks %s (window pairs %s)",
-            calibration_season_inseason,
-            calibration_weeks_inseason,
-            _inseason_calibration_pairs(calibration_df, calibration),
-        )
+    _log_calibration_window(window_pairs)
     log.info("Holdout seasons: %s", holdout)
     log.debug(
         "Training rows: %d | Calibration rows: %d | Holdout rows: %d",
@@ -524,12 +529,7 @@ def train_margin_total_model_with_report(
     split = _split_train_calibration_holdout(
         df, holdout_seasons, calibration_seasons, calibration_weeks
     )
-    holdout_df = split[2]
-    train_seasons = split[3]
-    calibration = split[4]
-    holdout = split[5]
-    calibration_season_inseason = split[6]
-    calibration_weeks_inseason = split[7]
+    holdout_df = split.holdout_df
 
     # Train the actual model (this will also log holdout metrics).
     model: MarginTotalModel = train_margin_total_model(**kwargs)
@@ -577,14 +577,10 @@ def train_margin_total_model_with_report(
     }
 
     splits: dict[str, Any] = {
-        "train_seasons": train_seasons,
-        "calibration_seasons": calibration,
-        "holdout_seasons": holdout,
-        "calibration_inseason": {
-            "season": calibration_season_inseason,
-            "weeks": calibration_weeks_inseason,
-            "pairs": _inseason_calibration_pairs(split[1], calibration),
-        },
+        "train_seasons": split.train_seasons,
+        "calibration_seasons": split.calibration_seasons,
+        "holdout_seasons": split.holdout_seasons,
+        "calibration_inseason": _calibration_window_record(split.window_pairs),
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
     feature_list = list(model.feature_spec.feature_columns)
@@ -639,21 +635,14 @@ def train_blended_margin_total_model(
         train_seasons,
         calibration,
         holdout,
-        calibration_season_inseason,
-        calibration_weeks_inseason,
+        window_pairs,
     ) = _split_train_calibration_holdout(
         df, holdout_seasons, calibration_seasons, calibration_weeks
     )
 
     log.info("Training seasons: %s", train_seasons)
     log.info("Calibration seasons: %s", calibration)
-    if calibration_season_inseason is not None and calibration_weeks_inseason:
-        log.info(
-            "Calibration weeks: season %s weeks %s (window pairs %s)",
-            calibration_season_inseason,
-            calibration_weeks_inseason,
-            _inseason_calibration_pairs(calibration_df, calibration),
-        )
+    _log_calibration_window(window_pairs)
     log.info("Holdout seasons: %s", holdout)
     log.debug(
         "Training rows: %d | Calibration rows: %d | Holdout rows: %d",
@@ -885,12 +874,7 @@ def train_blended_margin_total_model_with_report(
         kwargs["calibration_seasons"],
         kwargs["calibration_weeks"],
     )
-    holdout_df = split[2]
-    train_seasons = split[3]
-    calibration = split[4]
-    holdout = split[5]
-    calibration_season_inseason = split[6]
-    calibration_weeks_inseason = split[7]
+    holdout_df = split.holdout_df
 
     holdout_metrics: dict[str, Any] | None = None
     if not holdout_df.empty:
@@ -921,14 +905,10 @@ def train_blended_margin_total_model_with_report(
         "missing_data": missing_data_summary,
     }
     splits = {
-        "train_seasons": train_seasons,
-        "calibration_seasons": calibration,
-        "holdout_seasons": holdout,
-        "calibration_inseason": {
-            "season": calibration_season_inseason,
-            "weeks": calibration_weeks_inseason,
-            "pairs": _inseason_calibration_pairs(split[1], calibration),
-        },
+        "train_seasons": split.train_seasons,
+        "calibration_seasons": split.calibration_seasons,
+        "holdout_seasons": split.holdout_seasons,
+        "calibration_inseason": _calibration_window_record(split.window_pairs),
     }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
     feature_list = list(model.team_model.feature_spec.feature_columns)

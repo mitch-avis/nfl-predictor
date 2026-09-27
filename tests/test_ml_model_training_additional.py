@@ -185,8 +185,7 @@ def test_train_margin_total_model_uncertainty_elo_falls_back_to_none(monkeypatch
             [2022],
             [2023],
             [],
-            2023,
-            [1],
+            [(2023, 1)],
         ),
     )
     monkeypatch.setattr(
@@ -312,7 +311,6 @@ def test_train_margin_total_model_raises_without_calibration_rows(monkeypatch) -
             [2022],
             [],
             [],
-            None,
             [],
         ),
     )
@@ -420,8 +418,7 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
             [2022],
             [2023],
             [],
-            2023,
-            [1],
+            [(2023, 1)],
         ),
     )
     monkeypatch.setattr(
@@ -532,8 +529,7 @@ def test_train_blended_margin_total_model_auto_stays_on_the_deterministic_floor(
             [2022],
             [2023],
             [],
-            2023,
-            [1],
+            [(2023, 1)],
         ),
     )
     monkeypatch.setattr(

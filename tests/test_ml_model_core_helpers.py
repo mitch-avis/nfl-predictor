@@ -174,8 +174,7 @@ def test_split_train_calibration_holdout_supports_season_and_week_calibration() 
         train_seasons,
         calibration_seasons,
         holdout_seasons,
-        inseason_calibration_season,
-        inseason_calibration_weeks,
+        window_pairs,
     ) = core._split_train_calibration_holdout(
         df,
         holdout_seasons=1,
@@ -186,8 +185,7 @@ def test_split_train_calibration_holdout_supports_season_and_week_calibration() 
     assert train_seasons == [2021, 2023]
     assert calibration_seasons == [2022]
     assert holdout_seasons == [2024]
-    assert inseason_calibration_season == 2023
-    assert inseason_calibration_weeks == [3, 4]
+    assert window_pairs == [(2023, 3), (2023, 4)]
 
     assert sorted(train_df["season"].unique().tolist()) == [2021, 2023]
     assert train_df.loc[train_df["season"] == 2023, "week"].tolist() == [1, 2]
@@ -262,8 +260,7 @@ def test_split_rolls_calibration_window_back_across_the_season_boundary() -> Non
         train_seasons,
         calibration_seasons,
         holdout_seasons,
-        inseason_calibration_season,
-        inseason_calibration_weeks,
+        window_pairs,
     ) = core._split_train_calibration_holdout(
         df,
         holdout_seasons=0,
@@ -273,8 +270,7 @@ def test_split_rolls_calibration_window_back_across_the_season_boundary() -> Non
 
     window = [(2025, 16), (2025, 17), (2025, 18), (2026, 1)]
     assert _pairs(calibration_df) == window
-    assert inseason_calibration_season == 2026
-    assert inseason_calibration_weeks == [1]
+    assert window_pairs == window
     assert calibration_seasons == []
     assert holdout_seasons == []
     assert holdout_df.empty
@@ -293,12 +289,11 @@ def test_split_keeps_the_window_inside_a_season_with_enough_weeks() -> None:
         calibration_seasons=1,
         calibration_weeks=4,
     )
-    train_df, calibration_df = split[0], split[1]
+    train_df, calibration_df = split.train_df, split.calibration_df
 
-    assert split[3] == [2024, 2026]
-    assert split[4] == [2025]
-    assert split[6] == 2026
-    assert split[7] == [1, 2, 3, 4]
+    assert split.train_seasons == [2024, 2026]
+    assert split.calibration_seasons == [2025]
+    assert split.window_pairs == [(2026, week) for week in range(1, 5)]
     assert _pairs(calibration_df) == [(2025, week) for week in range(1, 19)] + [
         (2026, week) for week in range(1, 5)
     ]
@@ -315,10 +310,10 @@ def test_split_whole_season_calibration_skips_seasons_the_window_touched() -> No
         calibration_seasons=1,
         calibration_weeks=4,
     )
-    train_df, calibration_df = split[0], split[1]
+    train_df, calibration_df = split.train_df, split.calibration_df
 
-    assert split[4] == [2024]
-    assert split[3] == [2023, 2025, 2026]
+    assert split.calibration_seasons == [2024]
+    assert split.train_seasons == [2023, 2025, 2026]
     window = [(2025, 16), (2025, 17), (2025, 18), (2026, 1)]
     assert _pairs(calibration_df) == [(2024, week) for week in range(1, 19)] + window
     assert _pairs(train_df) == [(2023, week) for week in range(1, 19)] + [
@@ -326,8 +321,8 @@ def test_split_whole_season_calibration_skips_seasons_the_window_touched() -> No
     ]
 
 
-def test_inseason_calibration_pairs_lists_the_rolling_window() -> None:
-    """Lists the in-season window's pairs and ignores whole calibration seasons."""
+def test_calibration_window_record_lists_the_rolling_window() -> None:
+    """Records the window's newest season, its weeks there and every pair, oldest first."""
     df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
     split = core._split_train_calibration_holdout(
         df,
@@ -336,13 +331,12 @@ def test_inseason_calibration_pairs_lists_the_rolling_window() -> None:
         calibration_weeks=4,
     )
 
-    assert core._inseason_calibration_pairs(split[1], split[4]) == [
-        [2025, 16],
-        [2025, 17],
-        [2025, 18],
-        [2026, 1],
-    ]
-    assert core._inseason_calibration_pairs(df.iloc[0:0], []) == []
+    assert core._calibration_window_record(split.window_pairs) == {
+        "season": 2026,
+        "weeks": [1],
+        "pairs": [[2025, 16], [2025, 17], [2025, 18], [2026, 1]],
+    }
+    assert core._calibration_window_record([]) == {"season": None, "weeks": [], "pairs": []}
 
 
 def test_split_lets_window_seasons_feed_training_when_calibration_seasons_are_requested() -> None:
@@ -359,10 +353,10 @@ def test_split_lets_window_seasons_feed_training_when_calibration_seasons_are_re
         calibration_seasons=1,
         calibration_weeks=4,
     )
-    train_df, calibration_df = split[0], split[1]
+    train_df, calibration_df = split.train_df, split.calibration_df
 
-    assert split[4] == [2024]
-    assert split[3] == [2025, 2026]
+    assert split.calibration_seasons == [2024]
+    assert split.train_seasons == [2025, 2026]
     window = [(2025, 16), (2025, 17), (2025, 18), (2026, 1)]
     assert _pairs(calibration_df) == [(2024, week) for week in range(1, 19)] + window
     assert _pairs(train_df) == [(2025, week) for week in range(1, 16)]

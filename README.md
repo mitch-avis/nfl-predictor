@@ -889,12 +889,14 @@ Training/backtests can write a run directory containing reproducible artifacts.
   (`gain`, the average loss reduction per split; `total_gain`, the loss reduction summed over
   every split; `weight`, the split count), and per base feature under `base_features`: total gain
   and splits summed over the feature's one-hot columns, per head and `combined` over both heads.
-  Every production fit (`nfl-predictor weekly` and `nfl-predictor train`) also records
+  Margin/total fits (the weekly run and `nfl-predictor train`'s default model kind) also record
   `mean_abs_shap` (`schema_version` 3): the mean absolute SHAP value in points from XGBoost's
   exact TreeSHAP, over the final model's own tree-training rows (the `shap` block gives the row
-  count and seasons; calibration and holdout rows are left out). A base feature's value sums each
-  row's signed contributions over its one-hot columns before the absolute value, and `combined`
-  adds the margin and total heads. Its `measures` block describes each key. The web Model page
+  count and seasons; calibration and holdout rows are left out). A market-anchored head is
+  explained on its output, the residual over the market line, so the value measures how far a
+  feature moves the model's adjustment to the line. A base feature's value sums each row's signed
+  contributions over its one-hot columns before the absolute value, and `combined` adds the
+  margin and total heads. Its `measures` block describes each key. The web Model page
   ranks base features by combined mean |SHAP|; runs without SHAP fall back to combined total
   gain, and runs written before `schema_version` 2 to the per-split average summed over columns
   (which favors features with many categories), each labelled as such. `nfl-predictor explain`

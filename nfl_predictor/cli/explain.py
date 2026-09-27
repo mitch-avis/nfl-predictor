@@ -1,9 +1,8 @@
-"""Optional SHAP analysis for trained models."""
+"""SHAP analysis for trained models, using XGBoost's exact TreeSHAP (``pred_contribs``)."""
 
 from __future__ import annotations
 
 import argparse
-import importlib
 from pathlib import Path
 from typing import Any
 
@@ -59,14 +58,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _import_shap() -> Any | None:
-    """Return the shap module when available; otherwise None."""
-    try:
-        return importlib.import_module("shap")
-    except ImportError:
-        return None
-
-
 def _select_model_component(model: Any) -> tuple[Any, str]:
     """Resolve the margin/total model to analyze: the model itself, or a blend's team model."""
     if isinstance(model, ml_model_core.BlendedMarginTotalModel):
@@ -88,13 +79,8 @@ def _resolve_head(model: Any, target: str) -> tuple[Any, str]:
 
 
 def main() -> int:
-    """Run optional SHAP analysis; requires the `shap` library."""
+    """Write mean absolute SHAP per encoded column for one head, from XGBoost's own TreeSHAP."""
     args = _parse_args()
-
-    shap = _import_shap()
-    if shap is None:
-        log.warning("SHAP is not installed. Install with: python -m pip install shap (optional).")
-        return 2
 
     if not args.model_path.exists():
         raise FileNotFoundError(f"Missing model: {args.model_path}")
@@ -129,10 +115,7 @@ def main() -> int:
         head_model,
     )
 
-    explainer = shap.TreeExplainer(head_model)
-    shap_values = explainer.shap_values(x_matrix)
-    if isinstance(shap_values, list):
-        shap_values = shap_values[0]
+    shap_values, _ = feature_importance.shap_values(head_model, x_matrix)
     mean_abs = np.abs(shap_values).mean(axis=0)
 
     if len(feature_names) != len(mean_abs):

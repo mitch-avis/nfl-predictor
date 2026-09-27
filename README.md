@@ -407,7 +407,10 @@ an all-seasons row and one row per season with the deterministic Brier, log loss
 margin and total MAE, confidence-pool points, market Brier, and the deterministic-minus-market
 Brier with a 95% game-bootstrap interval. The rows use the definitions and bootstrap defaults of
 `nfl-predictor compare` (below), so they equal what `compare` reports for the run on the same
-games. A row with fewer than two games has no interval.
+games. A row with fewer than two games has no interval. Like the benchmark, the view scores pick
+accuracy and pool points on the deterministic probability, while `metrics.overall` and
+`metrics.per_season` in the same file score the submitted `home_win_prob`, so their pick accuracy
+and pool totals can differ from the stability view's.
 
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
@@ -516,7 +519,9 @@ and total MAE, confidence-pool points and market Brier, and the candidate-minus-
 difference with a 95% bootstrap interval (5,000 resamples over games, over weeks for pool points).
 A closing "Stability by season" section repeats each window per season, for every run and for the
 paired difference; week 1 or week 2 of one season is a single week, so its pool-points difference
-has no interval (`[n/a]`). Repeat `--candidate` and `--reference` once per seed, in the same order,
+has no interval (`[n/a]`). Everything before that section is byte-identical to the report
+`compare` wrote before the section existed, and the JSON is a strict superset of it (each window
+gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the same order,
 to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
 It reproduces the independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and
 replaces the per-run `compare_to_benchmark.py` copies under `models/`.

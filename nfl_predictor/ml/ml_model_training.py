@@ -12,7 +12,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from scipy.sparse import spmatrix
 from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import feature_importance
@@ -193,8 +192,6 @@ def train_margin_total_model(
         dict[float, xgb.XGBRegressor],
         dict[float, xgb.XGBRegressor],
         tuple[float, ...],
-        np.ndarray | spmatrix | None,
-        np.ndarray | None,
     ]:
         local_spec = _build_feature_spec(
             train_frame,
@@ -233,7 +230,6 @@ def train_margin_total_model(
         ) = _prepare_margin_total_targets_with_anchor(train_frame, target_columns, market_anchor)
 
         x_calibration = None
-        baseline_margin_calibration = None
         y_margin_calibration = None
         y_total_calibration = None
         if not calib_frame.empty:
@@ -243,7 +239,7 @@ def train_margin_total_model(
             (
                 y_margin_calibration,
                 y_total_calibration,
-                baseline_margin_calibration,
+                _,
                 _,
             ) = _prepare_margin_total_targets_with_anchor(
                 calib_frame, target_columns, market_anchor
@@ -291,8 +287,6 @@ def train_margin_total_model(
             margin_quantiles,
             total_quantiles,
             quantiles,
-            x_calibration,
-            baseline_margin_calibration,
         )
 
     (
@@ -303,8 +297,6 @@ def train_margin_total_model(
         margin_quantile_models,
         total_quantile_models,
         quantiles,
-        x_calibration,
-        baseline_margin_calibration,
     ) = _train_models(train_df, calibration_df)
 
     if not holdout_df.empty:

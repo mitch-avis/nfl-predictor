@@ -413,6 +413,7 @@ Formerly Milestone 41.
       every run type; the weekly stage-1 re-selection, the fitted calibrators, `elo`, the market
       blend and clamp, the `blend` model kind and the `nfl-predictor sweep` matrix are retired.
       The confirmation on the GPU reference repeats the A2 rule on 2007-2025.
+      Code landed in `0.32.0`; the task stays open until that confirmation.
 - [ ] 56.6 (step 3, with 56.5) Measure the model against the lines available at pick time, not
       only the stored ones. Picks are submitted before the Thursday game, and lines move between
       then and Sunday, sometimes a lot. The ETL's lines come from nflverse schedules
@@ -499,7 +500,9 @@ Formerly Milestone 41.
       (rule 11), and add a "settings versus production" section to the standard walk-forward
       report (every setting where a run differs from the production weekly run; moved here from
       task 55.6 by the user on 2026-09-27); (c) consider retiring the weekly stage-1
-      re-selection altogether. Once 56.5
+      re-selection altogether. (Done in `0.32.0`: retired; the weekly run walks forward
+      the one production configuration. `wf_market_prob_source` and
+      `wf_market_prob_blend_method` no longer exist.) Once 56.5
       fixes the probability path by evidence, re-choosing among near-identical candidates each
       week only adds noise (Week 3's two runs chose `none`, then `elo`, a day apart) and costs
       most of the run's time. Changing a default is must-ask.
@@ -597,7 +600,8 @@ Each group names the archived milestone it came from; the milestone's full recor
       `etl_full` and `lines_refresh` (rewrite `data/`), `predict`, `power_rankings` and
       `shap_analysis` (overwrite files in the active run directory), `weekly_run` and
       `walk_forward_backtest` (long runs). Step 3 runs a weekly run and walk-forwards anyway.
-- [ ] (step 3) Power rankings from a `blend` run have never worked. A blend model (`train
+- [x] (step 3) Power rankings from a `blend` run have never worked. Resolved in `0.32.0`: the
+      `blend` kind is retired (task 56.5), and a blend run is refused with the reason. A blend model (`train
       --model-kind blend`: the team model and the market line through a ridge layer; the weekly
       run never trains one) keeps its `feature_spec` on `team_model`, and
       `_predict_future_games` in `nfl_predictor/reporting/power_rankings.py` reads
@@ -670,7 +674,8 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       newest 4 weeks out of its trees; walk-forward folds train on every earlier game, so every
       benchmark number measures a model without the hold-out. Which side moves is the user's
       step-3 question (recommendation: production stops holding out).
-- [ ] **Stage-1 selection and pick-time timing.** Already scheduled (task 56.5): this week's
+- [x] **Stage-1 selection and pick-time timing.** Resolved in `0.32.0` (task 56.5): the
+      stage-1 re-selection is retired and the floor is submitted. Originally: this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
 - [ ] **Stage 1 got slower.** Candidates now fit the shared 200-tree default at learning
@@ -689,7 +694,8 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
 
 ### From Milestone 59 (benchmark instrument; audited 2026-09-19)
 
-- [ ] Narrowed 59.2: the calibration frame for fitted calibrators is the previous two seasons
+- [x] Narrowed 59.2 (moot since `0.32.0`: no fitted calibrator remains, task 56.5): the
+      calibration frame for fitted calibrators is the previous two seasons
       plus the completed weeks of the eval season, but the rows are in-sample (walk-forward: a
       subset of `fold.train_df` predicted by the model trained on it; production:
       `_pooled_calibration_frame` over `train_df + calibration_df`, the same way). The task asked

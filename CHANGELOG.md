@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.32.0] - 2026-09-27
+
+### Changed
+
+- The weekly run submits the deterministic floor, `Phi(margin / SCORE_DIFF_STD_DEV)`, as every
+  run type does. Its stage 1 walks the one production configuration forward instead of comparing
+  nine calibration and market-blend candidates; `wf_compare.csv` and `wf_best.json` hold that one
+  row, and the final fit takes its market mode from `--wf-market-mode`. Stage 1 uses the final
+  fit's `--market-transform` and `--max-cardinality-ratio`.
+- `backtest --calibration` and `train`/`predict --win-prob-calibration` default to `auto`, the
+  floor (they were `platt` and `isotonic`); `none` is accepted as the same value.
+- A saved model with a fitted or Elo calibrator, a market blend or clamp, or uncertainty-aware
+  probabilities loads, logs what it ignores, and predicts the floor. A saved blend model, and
+  `nfl-predictor explain` on one, is refused with the reason.
+- The web train job no longer asks for a model kind or a calibration; predict and power-rankings
+  jobs refuse a run that holds a blend model.
+- A weekly config value outside its option's choices (for example `wf_market_mode: all`) is
+  rejected when the config is read, before any data refresh.
+
+### Removed
+
+- `nfl-predictor sweep`.
+- The weekly run's candidate matrix and per-week re-selection, `wf_compare/wf_summary.csv`,
+  `--wf-market-mode all`, `--wf-market-prob-source`, `--wf-market-prob-blend-method` and
+  `--wf-win-prob-uncertainty`; a config that sets one of those keys is rejected.
+- The `platt`, `isotonic`, `sigma`, `logistic` and `elo` calibrations, the Platt regularization
+  search and the pooled calibrator frame.
+- Market probability blending and clamping (`--market-prob-weight`/`--market-prob-blend`,
+  `--market-prob-clamp`, `--market-prob-source`, `--market-prob-blend-method` on train, predict
+  and backtest). The market-implied probability stays the scored yardstick.
+- The `blend` model kind (`--model-kind blend`/`blended_margin_total`), its power-rankings branch
+  and its `explain` and feature-importance branches.
+- Uncertainty-aware win probabilities (`--win-prob-uncertainty`); the p10/p90 interval columns
+  remain.
+
 ## [0.31.0] - 2026-09-27
 
 ### Changed

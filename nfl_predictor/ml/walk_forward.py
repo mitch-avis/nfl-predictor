@@ -32,6 +32,7 @@ from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import feature_spec as feature_spec_utils
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml import ml_model_xgb_utils
+from nfl_predictor.ml.ml_model_core import describe_season_weeks
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
 
@@ -1013,6 +1014,14 @@ def run_walk_forward_backtest(
         if config.win_prob_use_uncertainty and resolved_calibration == "elo":
             log.info("Elo calibration ignored for uncertainty-aware probabilities; using 'none'.")
             resolved_calibration = "none"
+        log.info(
+            "Walk-forward calibration frame for season %d week %d: %s (%d rows%s)",
+            int(fold.season),
+            int(fold.week),
+            describe_season_weeks(calibration_df),
+            len(calibration_df),
+            "; unused: calibration resolves to none" if resolved_calibration == "none" else "",
+        )
         calibration_method = resolved_calibration
         if resolved_calibration != "none":
             if calibration_df.empty or x_calibration is None:

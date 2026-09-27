@@ -512,7 +512,28 @@ def test_xgb_device_arg_rejects_a_typo_as_an_argparse_error() -> None:
         xgb_utils.xgb_device_arg("cdua")
 
 
-def test_fitted_xgb_device_reads_the_margin_head() -> None:
+def test_fitted_xgb_device_reads_every_head() -> None:
+    """Every head is read: one device when they agree, ``mixed`` when a head fell back."""
+    from types import SimpleNamespace
+
+    def heads(margin: str, total: str, quantile: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            margin_model=xgb.XGBRegressor(device=margin),
+            total_model=xgb.XGBRegressor(device=total),
+            margin_quantile_models={0.1: xgb.XGBRegressor(device=quantile)},
+            total_quantile_models=None,
+        )
+
+    assert xgb_utils.fitted_xgb_device(heads("cuda", "cuda", "cuda")) == "cuda"
+    assert xgb_utils.fitted_xgb_device(heads("cuda", "cpu", "cuda")) == "mixed"
+    assert xgb_utils.fitted_xgb_device(heads("cuda", "cuda", "cpu")) == "mixed"
+    assert (
+        xgb_utils.fitted_xgb_device(SimpleNamespace(team_model=heads("cpu", "cuda", "cpu")))
+        == "mixed"
+    )
+
+
+def test_fitted_xgb_device_reads_plain_and_blended_models() -> None:
     """The device comes from the fitted estimator, for plain and blended models alike."""
     from types import SimpleNamespace
 

@@ -26,6 +26,8 @@ from nfl_predictor.utils.logger import log
 xgb.set_config(verbosity=0)
 
 XGB_DEVICE_AUTO = "auto"
+# Recorded when a model's XGBoost heads trained on different devices.
+XGB_DEVICE_MIXED = "mixed"
 XGB_DEVICE_HELP = (
     "XGBoost device: auto (the GPU when this XGBoost build has CUDA and a usable GPU is "
     "present, else the CPU), cpu, cuda or cuda:N; gpu means cuda (default: auto)."
@@ -352,15 +354,25 @@ def _coerce_tree_method_on_error(
 
 
 def fitted_xgb_device(model: Any) -> str | None:
-    """Return the device a fitted model's XGBoost margin head was trained on.
+    """Return the device a fitted model's XGBoost heads were trained on.
 
-    Reads the estimator itself, so a fit that fell back to the CPU is recorded as ``cpu``.
-    A blended model is read through its team model. Returns None when the model holds no
-    XGBoost estimator.
+    Reads every head (margin, total and any quantile models) from the estimators themselves,
+    so a fit that fell back to the CPU is recorded as ``cpu``, and heads that trained on
+    different devices are recorded as ``mixed``. A blended model is read through its team
+    model. Returns None when the model holds no XGBoost estimator.
     """
     model = getattr(model, "team_model", model)
-    estimator = getattr(model, "margin_model", None)
-    if not isinstance(estimator, xgb.XGBModel):
+    heads: list[Any] = [getattr(model, "margin_model", None), getattr(model, "total_model", None)]
+    for attribute in ("margin_quantile_models", "total_quantile_models"):
+        heads.extend((getattr(model, attribute, None) or {}).values())
+    devices = {
+        estimator.get_params().get("device")
+        for estimator in heads
+        if isinstance(estimator, xgb.XGBModel)
+    }
+    if not devices:
         return None
-    device = estimator.get_params().get("device")
+    if len(devices) > 1:
+        return XGB_DEVICE_MIXED
+    (device,) = devices
     return None if device is None else str(device)

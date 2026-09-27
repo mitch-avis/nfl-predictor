@@ -143,7 +143,10 @@ def _parse_args() -> argparse.Namespace:
         "--calibration-weeks",
         type=int,
         default=0,
-        help="Number of weeks from the latest season reserved for calibration.",
+        help=(
+            "Number of newest completed weeks held out of the tree fit for calibration; the "
+            "window rolls back into the previous season when the latest season has fewer."
+        ),
     )
     parser.add_argument(
         "--win-prob-calibration",

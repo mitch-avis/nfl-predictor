@@ -108,7 +108,11 @@ def add_wf_window_options(parser: argparse.ArgumentParser) -> None:
         dest="wf_calibration_weeks",
         type=int,
         default=walk_forward.DEFAULT_CALIBRATION_WEEKS,
-        help="Number of prior weeks (same season) used for time-aware calibration.",
+        help=(
+            "Walk-forward: a positive value switches on the pooled calibrator frame for fitted "
+            "calibrators (the previous two seasons plus the eval season's completed weeks); "
+            "folds hold nothing out of the tree fit."
+        ),
     )
     parser.add_argument(
         "--wf-exclude-incomplete-seasons",

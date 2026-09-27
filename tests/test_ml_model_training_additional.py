@@ -21,6 +21,7 @@ from nfl_predictor.ml.ml_model_core import (
     MarginTotalModel,
     MarketProbConfig,
     OptunaConfig,
+    TrainCalibrationSplit,
 )
 
 xgb.set_config(verbosity=0)
@@ -178,15 +179,14 @@ def test_train_margin_total_model_uncertainty_elo_falls_back_to_none(monkeypatch
     monkeypatch.setattr(
         ml_model_training,
         "_split_train_calibration_holdout",
-        lambda *_args, **_kwargs: (
+        lambda *_args, **_kwargs: TrainCalibrationSplit(
             train_df,
             calibration_df,
             holdout_df,
             [2022],
             [2023],
             [],
-            2023,
-            [1],
+            [(2023, 1)],
         ),
     )
     monkeypatch.setattr(
@@ -305,14 +305,13 @@ def test_train_margin_total_model_raises_without_calibration_rows(monkeypatch) -
     monkeypatch.setattr(
         ml_model_training,
         "_split_train_calibration_holdout",
-        lambda *_args, **_kwargs: (
+        lambda *_args, **_kwargs: TrainCalibrationSplit(
             train_df,
             calibration_df,
             calibration_df,
             [2022],
             [],
             [],
-            None,
             [],
         ),
     )
@@ -413,15 +412,14 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
     monkeypatch.setattr(
         ml_model_training,
         "_split_train_calibration_holdout",
-        lambda *_args, **_kwargs: (
+        lambda *_args, **_kwargs: TrainCalibrationSplit(
             train_df,
             calibration_df,
             holdout_df,
             [2022],
             [2023],
             [],
-            2023,
-            [1],
+            [(2023, 1)],
         ),
     )
     monkeypatch.setattr(
@@ -525,15 +523,14 @@ def test_train_blended_margin_total_model_auto_stays_on_the_deterministic_floor(
     monkeypatch.setattr(
         ml_model_training,
         "_split_train_calibration_holdout",
-        lambda *_args, **_kwargs: (
+        lambda *_args, **_kwargs: TrainCalibrationSplit(
             train_df,
             calibration_df,
             holdout_df,
             [2022],
             [2023],
             [],
-            2023,
-            [1],
+            [(2023, 1)],
         ),
     )
     monkeypatch.setattr(

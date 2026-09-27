@@ -192,7 +192,8 @@ def build_metadata(
 ) -> dict[str, Any]:
     """Build a metadata payload meeting the repo's artifact contract.
 
-    ``xgb_device`` is the concrete XGBoost device the model trained on (``cpu`` or ``cuda``).
+    ``xgb_device`` is the concrete XGBoost device the model's heads trained on (``cpu`` or
+    ``cuda``), or ``mixed`` when a head fell back to another device.
     """
     payload: dict[str, Any] = {
         "created_at": created_at,

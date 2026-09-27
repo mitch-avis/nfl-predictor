@@ -2,155 +2,86 @@
 
 You are resuming work in the `nfl-predictor` workspace (`/home/mitch/workspace/nfl-predictor`).
 Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as binding, then
-`.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
-completed milestones") and this file.
+`.agents/TODO.md` (above all "Roadmap Status", step 3, Milestones 55 and 56, and "Open follow-ups
+from completed milestones") and this file.
 
-## State (written 2026-09-27, after the `0.28.6` merge)
+## State (written 2026-09-27, roadmap step 3 in progress)
 
-- `main` is at version `0.28.6` and pushed to `origin` with the user's approval: Milestone 60
-  (`0.28.1`), the pre-commit hooks (`0.28.2`), the documentation split (`0.28.3`), the rule 2
-  and 15 amendments (`0.28.4`-`0.28.5`) and the Claude Code setup (`0.28.6`, PR #2), each merged
-  with `--no-ff`; the feature branches are deleted. Merging and pushing stay must-ask. The
-  working tree is clean.
-- The auto-mode classifier blocks an agent's merge of a PR that has no recorded review
-  ("Merge Without Review"). Get an approving review on the PR first, or give the user the merge
-  command to run. In their own terminal, not after Claude Code's `!` prefix, a leading `!` is
-  bash negation and stops an `&&` chain after its first command.
-- `scripts/gate.sh --web` exits `0` on the `0.28.3` tree: 1032 passed, coverage 92.21% against
-  the 90% floor, 22 frontend tests. Plain `scripts/gate.sh` exits `0` on the `0.28.6` tree.
-- Claude Code subagents live in `.claude/agents/`. `implementer` runs in its own worktree under
-  `.claude/worktrees/`, branched from the current `HEAD` (`.claude/settings.json`), with the
-  test-driven-development, systematic-debugging and committing-code skills preloaded. It leaves
-  `CHANGELOG.md`, the version, `TODO.md`, `ARCHIVE.md` and this file to the delegating session
-  unless you hand it a version number. `reviewer` preloads code-review and cannot edit. In a
-  worktree, run `uv sync`, then the gate with `VIRTUAL_ENV="$PWD/.venv"` (the user's shell
-  exports the main checkout's `.venv`). All tests pass without `data/`. Never symlink
-  `web/node_modules` into a worktree: the `--web` gate's `npm ci` would wipe it.
-- A user-scope `UserPromptSubmit` hook reminds every session to invoke test-driven-development
-  before editing production code and systematic-debugging before proposing a fix. The global
-  skills in `~/.agents/skills` (a separate repo, `mitch-avis/agent-skills`) now defer to the
-  repo's own rules; `AGENTS.md` says the repo's rules win when they disagree.
-- `git commit` runs pre-commit hooks: file hygiene, ruff on staged Python, and a Conventional
-  Commits check on the message (a merge needs a conventional message too, since `--strict` bars
-  git's default "Merge branch" text). `git push` runs `scripts/gate.sh --quick`.
-- `AGENTS.md` holds the rules; detail loads on demand. Read `.agents/benchmarks.md` before any
-  walk-forward comparison, `.agents/modeling_spec.md` before changing prediction, evaluation or
-  feature code, and `.agents/walk_forward_runbook.md` before launching a long run. Nested
-  `AGENTS.md` files under `nfl_predictor/api/`, `nfl_predictor/ml/` and `web/` carry the rules
-  for those directories.
-- Milestone 60 is archived (`ARCHIVE.md`, "Milestone 60", with a close-out listing every
-  acceptance item). One acceptance item was narrowed and two leftovers moved to `TODO.md`, "From
-  Milestone 60", both assigned to step 3.
-- One front door: `nfl-predictor <command>` runs every task (`--help` lists them). `scripts/`
-  holds only `gate.sh`, which CI runs. `nfl-predictor compare` is the paired walk-forward
-  comparison, and under rule 3(b) a reviewer may use it for rescoring (it reproduces the task 55.8
-  independent rescore exactly), as long as the review also checks provenance and the reviewer did
-  not produce the run.
-- Checkpoint fingerprints changed in `0.20.0`, `0.22.0` and `0.26.0`, and no walk-forward has
-  run since, so the next reference run retrains from scratch. The walk-forward input is still
-  `data/completed_games_ml.m54_flip_through_2025.csv` (`2d4111a6...`).
-- The user runs the web app from this checkout on port 8000 (`nfl-predictor web --reload`, last
-  seen 2026-09-25). With `--reload`, every Python edit, checkout or merge you make restarts it, and
-  a restart marks running web jobs failed. Before editing code, check `pgrep -af "nfl-predictor
-  web"`. If a job is running from it, stop and ask. Never stop or restart the server yourself
-  (rule 5).
+- Branch `feat/step3-parity` (off `main` at `624d54f`, the user's `chore: update deps`), version
+  `0.30.0`, not merged and not pushed. Merging and pushing stay must-ask.
+- Landed on the branch, each implemented by an `implementer` subagent in its own worktree,
+  reviewed by a separate `reviewer` subagent, fixed where the review asked, and merged with
+  `--no-ff`; the delegating session wrote the changelog, version and records:
+  - `0.29.0`: feature importance ranks base features by total gain; `GET /model` returns
+    `{measure, rows}`; the chart names its measure (SHAP not built: a question).
+  - `0.29.1`: the per-season stability view in `nfl-predictor backtest` (`metrics.stability`)
+    and `nfl-predictor compare` ("Stability by season"); the "recommended defaults" half of
+    task 55.6 is a question.
+  - `0.30.0`: `--xgb-device auto` is the default for every XGBoost run, resolved before the
+    checkpoint fingerprint and recorded in run and model metadata; a walk-forward stops rather
+    than checkpoint a week whose models fell back to another device.
+- Gate: `scripts/gate.sh` exits `0` on `0.29.1` (1047 passed, 92.26%); `--web` exits `0` on
+  `0.29.0`. The `0.30.0` `--web` gate was running when this was written; rerun it on the final
+  tree before reporting anything as done. Run gates in a separate worktree
+  (`.claude/worktrees/step3-gate`, detached at the branch tip): the `--web` gate rebuilds
+  `web/dist`, which the user's running server serves.
+- The user runs `nfl-predictor web` (without `--reload`, PID seen 32934) from the main checkout.
+  Its Python is the `0.28.6` code in memory; the checkout now has `0.30.0` code, and the rebuilt
+  `web/dist` would expect the new `/model` response shape, so do not rebuild `web/dist` in the
+  main checkout. Never stop or restart the server (rule 5).
+- Every checkpoint fingerprint changed (edits under `nfl_predictor/ml/`); no walk-forward has run
+  on the new code.
 
-## What the last session did (2026-09-27)
+## In flight when this was written
 
-- Ran the Claude Code `/doctor` audit. It turned off 13 unused skills for this project (in
-  `.claude/settings.local.json`, not tracked) and trimmed derivable content from `AGENTS.md`,
-  which is now 36.3k characters.
-- Audited the global skills against this repo's rules and fixed their conflicts in
-  `~/.agents/skills` (characterization tests in test-driven-development, repo command forms and
-  gate in `python` and `task-orchestrator`, non-interactive staging in committing-code, the
-  `IFS` pitfall in shell-scripting, Python idioms in clean-code).
-- `0.28.6`: the subagent definitions, the worktree settings, the `.gitignore` entry and the two
-  `AGENTS.md` changes above, merged into `main` as PR #2.
-- The user's goal: have a session work through `TODO.md` on its own, delegating to implementer
-  subagents and having reviewer subagents check the work. How the main session orchestrates
-  that (delegating, merging worktree branches, assigning versions) is not written down yet.
+- An implementer is working on the four calibration-window follow-ups (from the 2026-09-11
+  review) plus `fitted_xgb_device` reading every head. Item 1 (walk-forward rolls the
+  calibration window back across the season boundary, like production) changes early-season
+  walk-forward folds; the postseason item comes back as a question. Review, merge, version
+  `0.30.1` or `0.31.0` (item 1 changes benchmark output), gate.
 
-## Earlier (2026-09-25)
+## Step-3 evidence so far (reviewed, recorded in `.agents/benchmarks.md`, "Step 3 evidence")
 
-- `0.28.2`: the user's pre-commit configuration, with its commit-message hook fixed (the global
-  exclude filtered out `.git/COMMIT_EDITMSG`).
-- `0.28.3`: split `AGENTS.md` (80k to 38k characters) into the files named above, dropped the
-  `.agents/skills` excludes (agent skills are installed globally), and pointed the living docs
-  at the current modules and commands.
-- `0.28.4`: rewrote Milestone 55's acceptance line for the 55.9 tune and the 56.3 shared source
-  (the user's request), and gave rule 2 a correction clause: small factual errors noticed
-  outside the current task may be fixed without asking, within its limits, and are reported
-  under "Fixed without asking" in the next check-in.
-- `0.28.5`: rule 15 (a non-obvious question to the user carries the agent's brief,
-  code-grounded recommendation), Milestone 55's goal rewritten for the hypothesis-driven
-  settings and the 55.9 tune, and the stale "not pushed" baseline line in `AGENTS.md`
-  corrected under rule 2.
-- `0.25.0`-`0.28.0`: finished Milestone 60 (one thread option, the market model removed, the
-  web API catch-all fix, web jobs on the front door, CI on the gate, the `compare` command).
-- `0.28.1`: closed the milestone with the user's approval. It verified that every removed option
-  has a changelog note (`.agents/m60/verify_removals.py`), deleted three spent `.agents/` docs, and
-  documented when to use `--reload` and the Vite dev server (`web/README.md`, "Which mode to
-  use"). It also documented what drives the default power rankings (`README.md`). Then it
-  merged into `main`.
-- Answered the user's questions on the Week 3 outputs and filed three follow-ups under "From the
-  2026-09-25 review of the Week 3 outputs" in `TODO.md` (evidence in
-  `.agents/findings_2026_09_25/`, with no second key yet):
-  - The Model page's feature importance sums XGBoost's average gain per split over one-hot
-    columns, which puts `*_next_opponent_abbr` and `stadium_surface` on top; by total gain they
-    rank near the bottom. Step 3.
-  - The next-opponent identity columns are a candidate to drop. Step 4.
-  - The early-season strength snapshot (the default power rankings and the `adj_*` features)
-    is dominated by last season, partly because the in-season solve is shrunk twice. Step 4,
-    with task 55.3.
+- L0 (`models/step3_l0_gpu_check/`): GPU fits are bit-deterministic; GPU vs CPU moves margins
+  about as much as re-seeding; fold `13` s GPU vs `64` s CPU.
+- A2 (`models/step3_prob_paths/`): by the pre-written rule, only the floor blended `0.2` with
+  the raw moneyline and clamped at `0.1` beats the deterministic floor (all weeks, two seeds).
+  Out-of-fold isotonic is harmful; out-of-fold Platt ties the floor.
+- A3 (`models/step3_open_lines/`): opening lines are measurably worse than the stored lines
+  (so 56.6(d) stays in step 4), and the A2 blend does not beat the floor when its market input
+  comes from the opening line (so the 56.5 choice is a question for the user).
 
-## Your task: roadmap step 3 (production/benchmark parity)
+## Next
 
-Create a new branch off `main` (for example `feat/step3-parity`). Scope, from "Roadmap Status"
-and Milestones 55/56 in `TODO.md`:
+1. Finish the calibration-window chunk (review, merge, record, gate).
+2. Get the user's answers to the open questions below; 56.5's answer decides the rest of phase B
+   (the production probability path, whether the stage-1 re-selection and fitted calibrators
+   are retired, whether the out-of-fold pool is built, the `blend` power rankings).
+3. Then phase C: the two-seed GPU reference (rungs L1-L2), six seasons from week 1, through one
+   driver script, with the rule written in `.agents/TODO.md`'s step-3 plan; add the reviewer's
+   suggestions (report the per-game CPU-vs-GPU move over the full window next to the GPU's own
+   seed-to-seed move, and repeat the determinism check on an early-week fold).
 
-1. Task 55.4: the GPU as the default device for every XGBoost run. First a one-fold CPU-vs-GPU
-   timing and prediction-difference check, then a GPU determinism check (the same seed twice must
-   give identical predictions). Add a CPU fallback and record the device in metadata. Then a new
-   GPU reference arm on **two seeds** (rule 13); rule 4 needs a written hypothesis and decision
-   rule first.
-2. Task 56.5 with 56.7(b)/(c): how production probabilities are formed, one calibration path for
-   every run type, and whether the weekly stage-1 re-selection is retired. Start by rescoring
-   saved predictions. `models/wf_m55_8_review/probability_paths.py` has no second key and must
-   be rescored independently before any of its numbers enter the docs. The choice of default is
-   the user's (must-ask).
-3. Task 56.6: the pick-time line yardstick (opening lines from `data/nfl_lines.csv` and
-   `data/historic_odds.csv`, as the task describes).
-4. The out-of-fold calibration pool (narrowed 59.2), the four calibration-window follow-ups, task
-   55.6 (the per-season stability view in the standard report), the feature-importance fix, and
-   the Milestone 60 leftovers: the per-template live web checks, and the `blend` power rankings
-   (settle them in 56.5).
+## Open questions for the user (asked 2026-09-27, see the check-in)
 
-Batch every edit under `nfl_predictor/ml/` so they share one new reference (rule 14). Measure
-success as "Roadmap Status" describes: Brier of the probabilities actually submitted against the
-market's Brier, no loss on log loss, then pool points and margin MAE as tie-breakers.
-
-Start by proposing to the user the order of the step-3 work, the first measurement's hypothesis
-and decision rule, and the run budget (a ladder with a cap, rule 4). Do not launch anything
-before they accept it. Production-changing steps land between game weeks (the user makes picks
-before each Thursday game).
+- 56.5: which probability path production submits (the evidence and recommendation are in the
+  check-in and in `models/step3_open_lines/REVIEW.md`).
+- 55.6: what the "recommended defaults" section should be.
+- Feature importance: SHAP as the headline measure, and combined vs margin-head ranking.
+- 56.6(c) was scored on 2020-2025 only (the checkpoints that exist), not 2007-2025.
+- `nfl-predictor compare`'s pool-point tie-break relies on float equality (A3 review, F1): a fix
+  would change pool numbers slightly.
+- The device chunk's two small choices (`sweep --xgb-device` added; an explicit `cuda` without a
+  GPU falls back to the CPU with a warning).
 
 ## How to launch a weekly run today
 
-Run `.venv/bin/nfl-predictor weekly --run-id <id> --xgb-device cuda` through a `launch.sh` in the
-run directory, started with `nohup setsid`. The run reads `config/weekly_run.yaml`, which holds
-the code defaults. Do not run a weekly run or any
-walk-forward unless the user asks.
-
-## Open questions for the user
-
-- None open from the last session. The companion skill edits are on `mitch-avis/agent-skills`
-  `main` (`f7031cb..aeb789b`).
+`.venv/bin/nfl-predictor weekly --run-id <id>` through a `launch.sh` in the run directory, started
+with `nohup setsid`; the GPU is now the default. Do not run a weekly run or any walk-forward
+unless the user asks or it is a rung of the accepted step-3 ladder.
 
 ## Notes
 
-- Never run two walk-forwards at once; check `uptime` and `pgrep -af "nfl-predictor
-  (backtest|weekly|sweep)"` first.
-- Editing a `.py` file under `nfl_predictor/ml/` (or `constants.py` or `ml_model.py`) changes
-  every walk-forward checkpoint fingerprint; the fingerprint hashes those source files. The
-  command-line code in `nfl_predictor/cli/` and `nfl_predictor/reporting/` sits outside it.
+- Never run two walk-forwards at once; check `uptime`, `nvidia-smi` (the user also runs ComfyUI on
+  the GPU) and `pgrep -af "nfl-predictor (backtest|weekly|sweep)"` first.
 - Re-run a plain `uv sync` after every version bump and after every merge that bumps the version.

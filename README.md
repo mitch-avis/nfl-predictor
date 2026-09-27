@@ -753,8 +753,12 @@ nfl-predictor weekly --config path/to/weekly_run.json
 
 Every XGBoost command (`backtest`, `sweep`, `weekly`, `train`) defaults to `--xgb-device auto`,
 which trains on the GPU when the XGBoost build has CUDA and a usable GPU is present, and on the
-CPU otherwise. Pass `--xgb-device cpu` to force the CPU. A CUDA request without a usable GPU, or a
-CUDA error during a fit, falls back to the CPU with a warning.
+CPU otherwise. Pass `--xgb-device cpu` to force the CPU; the accepted values are `auto`, `cpu`,
+`cuda` and `cuda:N` (`gpu` means `cuda`), and anything else is a usage error. A CUDA request
+without a usable GPU runs on the CPU with a warning. A CUDA error during a fit retries that fit on
+the CPU with a warning, and the saved model's metadata records the device it was fitted on; in a
+walk-forward the run stops instead of checkpointing that week, so one checkpoint directory never
+mixes devices, and rerunning resumes from the weeks already saved.
 
 If you see great performance on the exact data a model trained on, that is not evidence the model
 generalizes. Prefer holdout and walk-forward metrics.

@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from typing import Any, cast
 
 import numpy as np
+import pytest
 import xgboost as xgb
 from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
+
+# The suite-wide fixture replaces the module attribute; keep the real cached probe for its test.
+real_xgb_cuda_usable = xgb_utils.xgb_cuda_usable
 
 xgb.set_config(verbosity=0)
 
@@ -67,6 +73,7 @@ def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
         return param in {"device", "predictor"}
 
     monkeypatch.setattr(xgb_utils, "_xgb_param_supported", fake_supported)
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
     params = xgb_utils._resolve_xgb_params(
         {"max_depth": 3},
@@ -210,3 +217,203 @@ def test_predict_xgb_uses_best_iteration() -> None:
     preds = xgb_utils._predict_xgb(cast(xgb.XGBRegressor, model), data)
     assert preds.shape == (2,)
     assert model.get_booster().calls == [None]
+
+
+class _ProbeBooster:
+    """Stands in for the booster a probe fit returns, reporting the device it trained on."""
+
+    def __init__(self, device: str) -> None:
+        self.device = device
+
+    def save_config(self) -> str:
+        """Return the part of XGBoost's JSON config that names the device."""
+        return json.dumps({"learner": {"generic_param": {"device": self.device}}})
+
+
+def _fake_build_info(use_cuda: bool) -> Callable[[], dict[str, Any]]:
+    """Return a stand-in for ``xgb.build_info`` reporting whether the build has CUDA."""
+    return lambda: {"USE_CUDA": use_cuda}
+
+
+def _record_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Capture the module's warning messages, formatted."""
+    messages: list[str] = []
+
+    def _capture(msg: str, *args: object) -> None:
+        messages.append(msg % args if args else msg)
+
+    monkeypatch.setattr(xgb_utils.log, "warning", _capture)
+    return messages
+
+
+def test_detect_xgb_cuda_skips_the_probe_when_the_build_lacks_cuda(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A CPU-only XGBoost build reports no GPU without attempting a fit."""
+    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(False))
+
+    def _no_fit(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("the probe fit must not run on a CPU-only build")
+
+    monkeypatch.setattr(xgb_utils.xgb, "train", _no_fit)
+
+    assert xgb_utils.detect_xgb_cuda() is False
+
+
+@pytest.mark.parametrize(("probe_device", "expected"), [("cuda:0", True), ("cpu", False)])
+def test_detect_xgb_cuda_reads_the_device_the_probe_fit_used(
+    monkeypatch: pytest.MonkeyPatch, probe_device: str, expected: bool
+) -> None:
+    """With no visible GPU, XGBoost moves a CUDA fit to the CPU instead of raising."""
+    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(True))
+    requested: list[dict[str, Any]] = []
+
+    def _fake_train(params: dict[str, Any], *_args: object, **_kwargs: object) -> _ProbeBooster:
+        requested.append(params)
+        return _ProbeBooster(probe_device)
+
+    monkeypatch.setattr(xgb_utils.xgb, "train", _fake_train)
+
+    assert xgb_utils.detect_xgb_cuda() is expected
+    assert requested[0]["device"] == "cuda"
+
+
+def test_detect_xgb_cuda_reports_no_gpu_when_the_probe_fit_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An XGBoost error from the probe fit means the GPU is not usable."""
+    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(True))
+
+    def _failing_train(*_args: object, **_kwargs: object) -> object:
+        raise xgb.core.XGBoostError("CUDA driver version is insufficient")
+
+    monkeypatch.setattr(xgb_utils.xgb, "train", _failing_train)
+
+    assert xgb_utils.detect_xgb_cuda() is False
+
+
+def test_xgb_cuda_usable_probes_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The probe runs on the first call only; later calls reuse its answer."""
+    calls: list[int] = []
+
+    def _counting_detect() -> bool:
+        calls.append(1)
+        return True
+
+    monkeypatch.setattr(xgb_utils, "detect_xgb_cuda", _counting_detect)
+    real_xgb_cuda_usable.cache_clear()
+    try:
+        assert real_xgb_cuda_usable() is True
+        assert real_xgb_cuda_usable() is True
+    finally:
+        real_xgb_cuda_usable.cache_clear()
+
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(("usable", "expected"), [(True, "cuda"), (False, "cpu")])
+@pytest.mark.parametrize("requested", ["auto", None])
+def test_resolve_xgb_device_auto_prefers_a_usable_gpu(
+    monkeypatch: pytest.MonkeyPatch, requested: str | None, usable: bool, expected: str
+) -> None:
+    """``auto`` (and no device at all) resolves to CUDA when a GPU is usable, else the CPU."""
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
+
+    assert xgb_utils.resolve_xgb_device(requested) == expected
+
+
+def test_resolve_xgb_device_keeps_an_explicit_cpu_without_probing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit CPU request never looks for a GPU."""
+
+    def _no_probe() -> bool:
+        raise AssertionError("an explicit cpu request must not probe for a GPU")
+
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", _no_probe)
+
+    assert xgb_utils.resolve_xgb_device("cpu") == "cpu"
+
+
+def test_resolve_xgb_device_keeps_an_explicit_cuda_when_a_gpu_is_usable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit CUDA request stands when the GPU can train."""
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
+
+    assert xgb_utils.resolve_xgb_device("cuda") == "cuda"
+
+
+def test_resolve_xgb_device_moves_an_explicit_cuda_to_the_cpu_with_a_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a usable GPU an explicit CUDA request trains, and is recorded, on the CPU."""
+    _reset_runtime_state()
+    warnings_logged = _record_warnings(monkeypatch)
+
+    assert xgb_utils.resolve_xgb_device("cuda") == "cpu"
+    assert len(warnings_logged) == 1
+    assert "cuda" in warnings_logged[0]
+
+
+@pytest.mark.parametrize(("usable", "expected"), [(True, "cuda"), (False, "cpu")])
+def test_resolve_xgb_params_defaults_to_the_auto_device(
+    monkeypatch: pytest.MonkeyPatch, usable: bool, expected: str
+) -> None:
+    """Params resolved without a device name the concrete device ``auto`` picked."""
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
+
+    params = xgb_utils._resolve_xgb_params({"max_depth": 3})
+
+    assert params["device"] == expected
+    if usable:
+        assert params["tree_method"] == "hist"
+
+
+def test_resolve_xgb_params_resolves_an_auto_device_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A device passed through the overrides is resolved like the device argument."""
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
+
+    params = xgb_utils._resolve_xgb_params({"max_depth": 3}, overrides={"device": "auto"})
+
+    assert params["device"] == "cuda"
+
+
+def test_resolve_xgb_params_gpu_tree_method_without_a_gpu_uses_the_cpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A GPU tree method asks for CUDA, which falls back to the CPU when no GPU is usable."""
+    _reset_runtime_state()
+    monkeypatch.setattr(xgb_utils, "_xgb_param_supported", lambda p: p in {"device", "predictor"})
+
+    params = xgb_utils._resolve_xgb_params({"max_depth": 3}, tree_method="gpu", device="auto")
+
+    assert params["device"] == "cpu"
+    assert params["tree_method"] == "hist"
+
+
+def test_coerce_tree_method_on_error_build_without_gpu_support() -> None:
+    """A CUDA request on a build compiled without GPU support falls back to the CPU."""
+    _reset_runtime_state()
+
+    params = {"device": "cuda", "tree_method": "hist"}
+    updated = xgb_utils._coerce_tree_method_on_error(
+        params, xgb.core.XGBoostError("XGBoost version not compiled with GPU support.")
+    )
+
+    assert updated is not None
+    assert updated["device"] == "cpu"
+
+
+def test_gpu_fallback_is_logged_as_a_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Training on the CPU after a CUDA failure is a warning, not routine information."""
+    _reset_runtime_state()
+    warnings_logged = _record_warnings(monkeypatch)
+
+    xgb_utils._coerce_tree_method_on_error(
+        {"device": "cuda", "tree_method": "hist"}, xgb.core.XGBoostError("CUDA error")
+    )
+
+    assert len(warnings_logged) == 1

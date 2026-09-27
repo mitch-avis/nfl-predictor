@@ -619,6 +619,10 @@ are diagnostics of saved artifacts, not walk-forward results, and have no second
       (`nfl-predictor explain`) as the headline measure. The fix touches
       `nfl_predictor/ml/feature_importance.py` (a checkpoint-fingerprint change, so it belongs with
       step 3's other `ml/` edits), the API reader and the web chart.
+      Narrowed (`0.29.0`, 2026-09-27): total gain per base feature and per head is the ranking
+      measure and the chart names it (older run directories fall back, labelled). SHAP as the
+      headline measure was considered and not built; it waits on the user's answer (step-3
+      question list), which closes this item either way.
 - [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import pytest
 
 from nfl_predictor.cli import backtest, options
 from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
+from nfl_predictor.reporting import run_comparison
 
 
 def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
@@ -351,3 +353,82 @@ def test_main_forwards_n_estimators_into_the_xgb_overrides(
     assert overrides["n_estimators"] == 900
     assert isinstance(overrides["n_estimators"], int)
     assert "n_estimators" not in (captured[1].xgb_params_overrides or {})
+
+
+def _prediction_rows() -> pd.DataFrame:
+    """Return a small walk-forward prediction frame over two seasons."""
+    games = [
+        ("2023_01_a", 2023, 1, 0.70, 7),
+        ("2023_01_b", 2023, 1, 0.40, 3),
+        ("2023_03_a", 2023, 3, 0.60, -4),
+        ("2024_01_a", 2024, 1, 0.55, 6),
+        ("2024_02_a", 2024, 2, 0.35, -2),
+    ]
+    return pd.DataFrame(
+        [
+            {
+                "game_id": game_id,
+                "season": season,
+                "week": week,
+                "deterministic_home_win_prob": p,
+                "market_home_win_prob": 0.5,
+                "actual_home_win": int(margin > 0),
+                "actual_margin": float(margin),
+                "actual_total": 41.0,
+                "predicted_margin": 2.0,
+                "predicted_total": 44.0,
+            }
+            for game_id, season, week, p, margin in games
+        ]
+    )
+
+
+def test_main_adds_the_season_stability_view_to_the_report_and_the_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The report carries the per-season view ``compare`` would compute, and the log prints it."""
+    predictions = _prediction_rows()
+
+    def fake_run(
+        _df: pd.DataFrame, _config: walk_forward.WalkForwardConfig, **_kwargs: object
+    ) -> dict[str, object]:
+        """Return a result carrying the run's prediction frame."""
+        return {"checkpoint": {}, "per_week": [], "predictions": predictions}
+
+    def fake_report(
+        _run_id: str, _created_at: str, payload: dict[str, object], _results: object
+    ) -> dict[str, object]:
+        """Return a report with an empty metrics block, as the engine's report has one."""
+        return {"config": payload, "metrics": {}}
+
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
+    monkeypatch.setattr(walk_forward, "build_metadata", lambda *_args: {})
+    out_json = tmp_path / "metrics_report.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "walk_forward_backtest.py",
+            "--checkpoint-dir",
+            str(tmp_path / "checkpoints"),
+            "--out-json",
+            str(out_json),
+        ],
+    )
+    caplog.set_level(logging.INFO)
+
+    backtest.main()
+
+    stability = json.loads(out_json.read_text())["metrics"]["stability"]
+    expected = json.loads(json.dumps(run_comparison.stability_report(predictions)))
+    assert stability == expected
+    assert stability["resamples"] == run_comparison.DEFAULT_RESAMPLES
+    assert set(stability["windows"]["week 1"]) == {"all seasons", "2023", "2024"}
+    messages = [record.getMessage() for record in caplog.records]
+    assert run_comparison.STABILITY_HEADING in messages
+    assert any(message.startswith("| 2024 | 1 | ") for message in messages)

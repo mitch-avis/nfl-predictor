@@ -159,12 +159,20 @@ def test_model_reader(tmp_path: Path) -> None:
     assert payload["metadata"]["config"]["model_kind"] == "margin_total"
     assert payload["metrics"]["holdout"]["brier"] == pytest.approx(0.2192)
     assert payload["metrics"]["pool"]["weeks"] == 18
-    assert [row["feature"] for row in payload["feature_importance"]] == [
+    importance = payload["feature_importance"]
+    assert importance["measure"] == "total_gain"
+    assert [row["feature"] for row in importance["rows"]] == [
         "away_elo_pre",
         "home_rest",
         "away_rest",
     ]
-    assert payload["feature_importance"][0]["margin_gain"] == 3.0
+    assert importance["rows"][0] == {
+        "feature": "away_elo_pre",
+        "value": 35.0,
+        "margin_value": 30.0,
+        "total_value": 5.0,
+        "splits": 4.0,
+    }
     assert payload["wf_compare"] is not None
     assert payload["wf_compare"].rows[0]["wf_rank"] == 1
     assert payload["wf_best"]["candidate_key"] == "a"
@@ -202,7 +210,7 @@ def test_model_reader(tmp_path: Path) -> None:
     wf_payload = model.model_payload(resolve_run_files(wf))
     assert wf_payload["metrics"]["overall"]["brier"] == pytest.approx(0.2277)
     assert wf_payload["calibration"]["bin_count"] == 2
-    assert wf_payload["feature_importance"] == []
+    assert wf_payload["feature_importance"] == {"measure": None, "rows": []}
     assert wf_payload["wf_compare"] is None
 
     training = factories.make_run_dir(tmp_path, "train", kind="training")
@@ -217,7 +225,9 @@ def test_model_reader_tolerates_odd_shapes(tmp_path: Path) -> None:
     (tmp_path / "fi.json").write_text(
         json.dumps({"base_features": {"feature_names": "x"}}), encoding="utf-8"
     )
-    assert model.feature_importance(tmp_path / "fi.json") == []
+    assert model.feature_importance(tmp_path / "fi.json") == {"measure": None, "rows": []}
+    (tmp_path / "fi_none.json").write_text(json.dumps({"base_features": None}), encoding="utf-8")
+    assert model.feature_importance(tmp_path / "fi_none.json") == {"measure": None, "rows": []}
     (tmp_path / "wf.csv").write_text(
         "label,brier,log_loss\nb,0.3,0.8\na,0.2,0.7\n", encoding="utf-8"
     )
@@ -231,6 +241,43 @@ def test_model_reader_tolerates_odd_shapes(tmp_path: Path) -> None:
     (run / "wf_best.json").write_text(json.dumps({"candidate_key": "a"}), encoding="utf-8")
     cache.clear()
     assert model.best_candidate_calibration(resolve_run_files(run)) is None
+
+
+def test_feature_importance_falls_back_to_summed_average_gain_for_old_files(
+    tmp_path: Path,
+) -> None:
+    """Files without total gain still load, ranked and labelled by their summed average gain."""
+    path = tmp_path / "feature_importance.json"
+    path.write_text(json.dumps(factories.legacy_feature_importance_payload("old")), "utf-8")
+
+    importance = model.feature_importance(path)
+
+    assert importance["measure"] == "summed_average_gain"
+    assert [row["feature"] for row in importance["rows"]] == [
+        "away_rest",
+        "home_rest",
+        "away_elo_pre",
+    ]
+    assert importance["rows"][0] == {
+        "feature": "away_rest",
+        "value": 3.5,
+        "margin_value": 3.0,
+        "total_value": 0.5,
+        "splits": 2.0,
+    }
+
+
+def test_feature_importance_prefers_total_gain_when_both_measures_exist(tmp_path: Path) -> None:
+    """Total gain ranks the features even when a file also carries the summed average gain."""
+    payload = factories.feature_importance_payload("both")
+    payload["base_features"]["combined"]["gain"] = [99.0, 1.0, 1.0]
+    path = tmp_path / "feature_importance.json"
+    path.write_text(json.dumps(payload), "utf-8")
+
+    importance = model.feature_importance(path, top=1)
+
+    assert importance["measure"] == "total_gain"
+    assert [row["feature"] for row in importance["rows"]] == ["away_elo_pre"]
 
 
 def test_wf_compare_prefers_deterministic_ranking(tmp_path: Path) -> None:

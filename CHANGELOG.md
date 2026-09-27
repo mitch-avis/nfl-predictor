@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.29.1] - 2026-09-27
+
+### Changed
+
+- Season rows resampled from a single week or game report no interval (`[n/a]`) instead of a
+  zero-width one.
+
+### Added
+
+- `nfl-predictor compare` ends with a "Stability by season" section: each window's run metrics and
+  paired contrast, split by season. Everything before that section is byte-identical to earlier
+  output, and the JSON is a strict superset (each window gains `seasons`).
+- `nfl-predictor backtest` writes a per-season, per-week-bucket stability view to
+  `metrics_report.json` (`metrics.stability`) and logs it. It uses `compare`'s definitions and
+  bootstrap and scores the deterministic probability, as the benchmark does.
+
+## [0.29.0] - 2026-09-27
+
+### Changed
+
+- `GET /model` returns `feature_importance` as `{measure, rows}` (row keys `value`,
+  `margin_value`, `total_value`, `splits`). The Model page chart names the measure it shows; runs
+  written before total gain was recorded fall back to the old number, labelled as average gain
+  summed over columns.
+
+### Fixed
+
+- `feature_importance.json` ranks base features by XGBoost total gain (average gain times splits),
+  summed over one-hot columns and both heads, instead of summing per-split average gains, which
+  put many-category features such as `*_next_opponent_abbr` and `stadium_surface` first. The file
+  carries `schema_version` 2 and a `measures` block that describes each key. The change is under
+  `nfl_predictor/ml/`, so every walk-forward checkpoint fingerprint changes.
+
 ## [0.28.6] - 2026-09-27
 
 ### Changed

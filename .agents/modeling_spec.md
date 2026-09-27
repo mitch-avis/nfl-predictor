@@ -131,7 +131,9 @@ rules, weighting choices):
 - Pick a primary selection metric (typically Brier/log loss for probability quality) and use
   secondary tie-breakers (confidence pool expected points, then margin/total MAE).
 - Report mean and variance across folds; avoid choosing a setting that wins by a hair on one season
-  but regresses elsewhere.
+  but regresses elsewhere. The stability view (each week bucket split by season, in
+  `metrics_report.json` as `metrics.stability` and at the end of `nfl-predictor compare`'s report,
+  per run and per paired contrast) shows this.
 - Never use the holdout window to tune hyperparameters.
 
 Required run artifacts:

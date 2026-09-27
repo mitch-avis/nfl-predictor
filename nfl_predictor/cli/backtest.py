@@ -18,6 +18,7 @@ from nfl_predictor import constants
 from nfl_predictor.cli import options
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP
+from nfl_predictor.reporting import run_comparison
 from nfl_predictor.utils.logger import log
 
 
@@ -283,6 +284,14 @@ def main() -> None:
         config_payload["excluded_incomplete_seasons"] = results["excluded_incomplete_seasons"]
 
     report = walk_forward.build_metrics_report(run_id, created_at, config_payload, results)
+    predictions = results.get("predictions")
+    if predictions is not None:
+        # Rescored with the comparison's definitions and bootstrap defaults, so this block
+        # equals what ``nfl-predictor compare`` reports for the run on the same games.
+        stability = run_comparison.stability_report(predictions)
+        report["metrics"]["stability"] = stability
+        for line in run_comparison.format_stability(stability):
+            log.info("%s", line)
     config_payload["run_id"] = run_id
     config_payload["feature_list"] = results.get("feature_list")
     config_payload["splits"] = {

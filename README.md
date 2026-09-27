@@ -405,6 +405,17 @@ for week 1, week 2, weeks 3-18, and all weeks; and every fold runs the full `n_e
 (no in-season early stopping, in walk-forward or in production), with `best_iteration` recorded
 per head.
 
+The report also carries a stability view, `metrics.stability` in `metrics_report.json`, and the run
+logs it as Markdown tables when it finishes. For week 1, week 2, weeks 3-18 and all weeks it gives
+an all-seasons row and one row per season with the deterministic Brier, log loss, pick accuracy,
+margin and total MAE, confidence-pool points, market Brier, and the deterministic-minus-market
+Brier with a 95% game-bootstrap interval. The rows use the definitions and bootstrap defaults of
+`nfl-predictor compare` (below), so they equal what `compare` reports for the run on the same
+games. A row with fewer than two games has no interval. Like the benchmark, the view scores pick
+accuracy and pool points on the deterministic probability, while `metrics.overall` and
+`metrics.per_season` in the same file score the submitted `home_win_prob`, so their pick accuracy
+and pool totals can differ from the stability view's.
+
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
 1107s remaining`). The estimate averages the weeks trained so far, so it runs a little low late in a
@@ -511,10 +522,14 @@ hash, the git commit and the settings that differ) or a checkpoint directory. Fo
 weeks 3-18 and all weeks it reports each run's deterministic Brier, log loss, pick accuracy, margin
 and total MAE, confidence-pool points and market Brier, and the candidate-minus-reference
 difference with a 95% bootstrap interval (5,000 resamples over games, over weeks for pool points).
-Repeat `--candidate` and `--reference` once per seed, in the same order, to combine seeds: the
-per-game differences are averaged over the seed pairs before the bootstrap. It reproduces the
-independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and replaces the per-run
-`compare_to_benchmark.py` copies under `models/`.
+A closing "Stability by season" section repeats each window per season, for every run and for the
+paired difference; week 1 or week 2 of one season is a single week, so its pool-points difference
+has no interval (`[n/a]`). Everything before that section is byte-identical to the report
+`compare` wrote before the section existed, and the JSON is a strict superset of it (each window
+gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the same order,
+to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
+It reproduces the independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and
+replaces the per-run `compare_to_benchmark.py` copies under `models/`.
 
 ## Weekly workflow (canonical)
 
@@ -851,7 +866,14 @@ Training/backtests can write a run directory containing reproducible artifacts.
 
 - Use `--run-dir` to write `model.joblib`, `metadata.json`, and (when evaluated)
   `metrics_report.json`.
-- `feature_importance.json` includes XGBoost gain/weight importance per model head.
+- `feature_importance.json` records XGBoost importance per model head and per encoded column
+  (`gain`, the average loss reduction per split; `total_gain`, the loss reduction summed over
+  every split; `weight`, the split count), and per base feature under `base_features`: total gain
+  and splits summed over the feature's one-hot columns, per head and `combined` over both heads.
+  Its `measures` block describes each key. The web Model page ranks base features by combined
+  total gain; runs written before `schema_version` 2 recorded only the per-split average summed
+  over columns, which the page still shows for them, labelled as such, and which favors features
+  with many categories.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
   args, the resolved XGBoost device, feature list, and tuning/early-stopping info (when used).
   `models/` and `optuna.db` are gitignored by default, so keep run artifacts local unless you

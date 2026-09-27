@@ -149,6 +149,15 @@ Steps:
    pool (follow-up from 59.2), so fitted calibrators can be judged fairly as 56.5 options.
    Task 55.6 (the per-season stability view) lands here as part of the standard walk-forward
    report. Absorbs the follow-ups marked "(step 3)".
+   Plan accepted by the user on 2026-09-27 (branch `feat/step3-parity`): (A) evidence with no
+   `ml/` edits: the one-fold CPU-vs-GPU and determinism check (rung L0), the independent rescore
+   of the probability paths on the task 55.8 checkpoints (`models/step3_prob_paths/`), and 56.6
+   (b)/(c) (`models/step3_open_lines/`); (B) every `ml/` edit in one batch, one implementer
+   subagent and one review per chunk; (C) the GPU reference, six seasons from week 1 on seeds
+   `42` and `7` (rungs L1-L2); (D) a no-holdout arm (`--wf-calibration-weeks 0`) on two seeds
+   (rungs L3-L4) only if (B) leaves the holdout with no purpose. Ladder cap: four six-season runs
+   plus L0; each rung's hypothesis and rule are in its run directory. 56.6(d) moved to step 4
+   the same day (it needs a dataset build).
 4. **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
    First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
    a schema version in the play-by-play cache key), because this step compares dataset builds.
@@ -310,6 +319,10 @@ Tasks:
       defaults" section. The second-key review script
       (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that
       into the standard walk-forward report while step 3 touches reporting.
+      Narrowed (`0.29.1`, 2026-09-27): the stability view landed in `nfl-predictor backtest`
+      (`metrics.stability`) and `nfl-predictor compare` ("Stability by season"). The task text
+      does not define the "recommended defaults" section; its meaning is on the user's step-3
+      question list, and it stays open until answered.
 - [x] 55.7 Choose `n_estimators` time-aware: closed 2026-09-21 (`0.13.0`-`0.13.1`). A four-rung
       ladder (`200`/`400`/`598`, then a `100` plateau check), each rung a six-season arm with its
       own hypothesis and an independent reviewer rescore, found the aggregate order monotone
@@ -426,7 +439,8 @@ Formerly Milestone 41.
       (c) on 2007-2025, score the model against the opening line as a second market yardstick
       beside the stored one, since pick-time lines sit between open and close; (d) measure how
       much anchoring on opening instead of stored lines changes backtest accuracy, a
-      feature-value change measured with two builds and two seeds; (e) record the coverage limits
+      feature-value change measured with two builds and two seeds (moved to roadmap step 4 by
+      the user on 2026-09-27, to share its rebuild cycle); (e) record the coverage limits
       (no openers before 2007, uncertain in 2022, undated `legacy` openers) wherever a number
       depends on them. The outcome feeds 56.5: a market blend judged against closing lines
       overstates what it can do at pick time.
@@ -609,6 +623,10 @@ are diagnostics of saved artifacts, not walk-forward results, and have no second
       (`nfl-predictor explain`) as the headline measure. The fix touches
       `nfl_predictor/ml/feature_importance.py` (a checkpoint-fingerprint change, so it belongs with
       step 3's other `ml/` edits), the API reader and the web chart.
+      Narrowed (`0.29.0`, 2026-09-27): total gain per base feature and per head is the ranking
+      measure and the chart names it (older run directories fall back, labelled). SHAP as the
+      headline measure was considered and not built; it waits on the user's answer (step-3
+      question list), which closes this item either way.
 - [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping

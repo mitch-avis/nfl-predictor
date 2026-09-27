@@ -508,12 +508,39 @@ def _preprocessed(model: ml_model_core.MarginTotalModel, df: pd.DataFrame) -> An
     )
 
 
-def test_shap_values_add_up_to_each_rows_prediction() -> None:
-    """Each row's SHAP values plus the base value reproduce the head's prediction."""
+def _early_stopped_head(x_matrix: Any, rows: int) -> xgb.XGBRegressor:
+    """Fit a head on noise with early stopping, so it keeps fewer trees than it grew."""
+    rng = np.random.default_rng(5)
+    target = rng.normal(size=rows)
+    head = xgb.XGBRegressor(
+        n_estimators=200,
+        max_depth=2,
+        learning_rate=0.3,
+        early_stopping_rounds=5,
+        n_jobs=1,
+        verbosity=0,
+    )
+    head.fit(x_matrix[:80], target[:80], eval_set=[(x_matrix[80:], target[80:])], verbose=False)
+    assert head.best_iteration < 199
+    return head
+
+
+@pytest.mark.parametrize("early_stopped", [False, True])
+def test_shap_values_add_up_to_each_rows_prediction(early_stopped: bool) -> None:
+    """Each row's SHAP values plus the base value reproduce the head's prediction.
+
+    An early-stopped head is explained over the trees it predicts with, up to its best
+    iteration, not over every tree it grew.
+    """
     model, df = _fit_rest_opp_model()
     x_matrix = _preprocessed(model, df)
+    heads = (
+        (_early_stopped_head(x_matrix, len(df)),)
+        if early_stopped
+        else (model.margin_model, model.total_model)
+    )
 
-    for head in (model.margin_model, model.total_model):
+    for head in heads:
         values, base_value = feature_importance.shap_values(head, x_matrix)
 
         assert values.shape == (len(df), 5)

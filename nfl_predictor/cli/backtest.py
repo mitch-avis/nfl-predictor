@@ -102,12 +102,6 @@ def _parse_args() -> argparse.Namespace:
         help="Use transformed market features when odds columns exist.",
     )
     parser.add_argument(
-        "--win-prob-uncertainty",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use margin quantiles to derive uncertainty-aware win probabilities.",
-    )
-    parser.add_argument(
         "--disable-pruning",
         action="store_true",
         help="Disable the feature pruning list.",
@@ -240,7 +234,6 @@ def main() -> None:
         recency_half_life_seasons=args.recency_half_life_seasons,
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
-        win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
         disable_pruning=bool(args.disable_pruning),
         disabled_feature_groups=disabled_feature_groups,
         xgb_params_overrides=xgb_overrides,

@@ -76,9 +76,6 @@ DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
-NORMAL_Z_P90 = 1.281551565545
-P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
-MIN_WIN_PROB_SIGMA = 0.5
 # The one win-probability calibration: the deterministic floor, the predicted margin through
 # the fixed normal curve. ``none`` is an accepted second spelling of ``auto``.
 CALIBRATION_FLOOR = "auto"
@@ -114,7 +111,6 @@ class MarginTotalModel:
     xgb_params: dict[str, Any] | None = None
     tuned_params: dict[str, Any] | None = None
     tuned_cv_summary: dict[str, Any] | None = None
-    win_prob_use_uncertainty: bool = False
     optuna_summary: dict[str, Any] | None = None
 
 
@@ -729,19 +725,6 @@ def resolve_calibration(method: str) -> str:
     raise ValueError(f"Unknown win probability calibration method: {method!r}")
 
 
-def _predict_home_win_prob(
-    pred_margin: np.ndarray,
-    *,
-    sigma: np.ndarray | None = None,
-    use_uncertainty: bool = False,
-) -> np.ndarray:
-    if not use_uncertainty:
-        return _margin_to_home_win_prob(pred_margin)
-    sigma_arr = _coerce_sigma(pred_margin, sigma)
-    sigma_arr = np.clip(sigma_arr, MIN_WIN_PROB_SIGMA, None)
-    return _margin_to_home_win_prob_with_sigma(pred_margin, sigma_arr)
-
-
 def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarray:
     """Normalize raw implied probs so home+away sums to 1 (no-vig), for the market yardstick."""
     total = home_prob + away_prob
@@ -855,75 +838,10 @@ def _summarize_confidence_pool(
 
 
 def _margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
+    """Return the deterministic floor, ``Phi(margin / SCORE_DIFF_STD_DEV)``."""
     if constants.SCORE_DIFF_STD_DEV <= 0:
         raise ValueError("SCORE_DIFF_STD_DEV must be positive.")
     return norm.cdf(margin / constants.SCORE_DIFF_STD_DEV)
-
-
-def _margin_to_home_win_prob_with_sigma(
-    margin: np.ndarray,
-    sigma: np.ndarray,
-) -> np.ndarray:
-    """Map margin to win probability using per-game sigma."""
-    margin = np.asarray(margin, dtype=float)
-    sigma_arr = np.asarray(sigma, dtype=float)
-    sigma_arr = np.clip(sigma_arr, MIN_WIN_PROB_SIGMA, None)
-    return norm.cdf(margin / sigma_arr)
-
-
-def _estimate_sigma_from_quantiles(
-    p10: np.ndarray,
-    p90: np.ndarray,
-    *,
-    fallback: float,
-    min_sigma: float = MIN_WIN_PROB_SIGMA,
-) -> np.ndarray:
-    """Estimate sigma from p10/p90 quantiles with a fallback."""
-    if fallback <= 0:
-        raise ValueError("fallback sigma must be positive.")
-    p10_arr = np.asarray(p10, dtype=float)
-    p90_arr = np.asarray(p90, dtype=float)
-    sigma = (p90_arr - p10_arr) / P10_P90_TO_SIGMA_DENOM
-    fallback_arr = np.full_like(p10_arr, float(fallback), dtype=float)
-    sigma = np.where(np.isfinite(sigma) & (sigma > 0), sigma, fallback_arr)
-    return np.clip(sigma, min_sigma, None)
-
-
-def _resolve_margin_sigma(
-    pred_margin: np.ndarray,
-    pred_margin_quantiles: dict[float, np.ndarray] | None,
-    *,
-    fallback: float,
-    min_sigma: float = MIN_WIN_PROB_SIGMA,
-) -> np.ndarray:
-    """Resolve per-game sigma using p10/p90 quantiles when available."""
-    if pred_margin_quantiles is not None:
-        p10 = pred_margin_quantiles.get(0.1)
-        p90 = pred_margin_quantiles.get(0.9)
-        if p10 is not None and p90 is not None:
-            return _estimate_sigma_from_quantiles(
-                p10,
-                p90,
-                fallback=fallback,
-                min_sigma=min_sigma,
-            )
-
-    margin = np.asarray(pred_margin, dtype=float)
-    return np.full_like(margin, float(fallback), dtype=float)
-
-
-def _coerce_sigma(
-    pred_margin: np.ndarray,
-    sigma: np.ndarray | None,
-) -> np.ndarray:
-    """Return a sigma array aligned to pred_margin."""
-    margin = np.asarray(pred_margin, dtype=float)
-    if sigma is None:
-        return np.full_like(margin, constants.SCORE_DIFF_STD_DEV, dtype=float)
-    sigma_arr = np.asarray(sigma, dtype=float)
-    if sigma_arr.shape != margin.shape:
-        return np.full_like(margin, float(sigma_arr), dtype=float)
-    return sigma_arr
 
 
 def _rank_confidence(strength: np.ndarray, tiebreaker: np.ndarray | None = None) -> np.ndarray:
@@ -1134,6 +1052,7 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
         raise ValueError("Model checkpoint type mismatch; expected MarginTotalModel.")
     _drop_retired_calibrator(model, path)
     _drop_retired_market_blend(model, path)
+    _drop_retired_uncertainty(model, path)
     log.info("Loaded model checkpoint from %s", path)
     return model
 
@@ -1165,6 +1084,16 @@ def _drop_retired_market_blend(model: Any, path: Path) -> None:
             path,
             weight,
             clamp,
+        )
+
+
+def _drop_retired_uncertainty(model: Any, path: Path) -> None:
+    """Remove a saved quantile-spread probability flag from a loaded model, saying so."""
+    if model.__dict__.pop("win_prob_use_uncertainty", False):
+        log.warning(
+            "%s was saved with uncertainty-aware win probabilities (a sigma from the margin "
+            "quantiles); that path was retired, so it predicts the deterministic floor.",
+            path,
         )
 
 
@@ -1208,7 +1137,7 @@ def apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
 
 
 def margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
-    """Convert predicted margin to home win probability."""
+    """Convert predicted margin to home win probability through the deterministic floor."""
     return _margin_to_home_win_prob(margin)
 
 
@@ -1224,24 +1153,6 @@ def derive_scores_from_margin_total(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Derive away/home scores from margin and total."""
     return _derive_scores_from_margin_total(pred_margin, pred_total)
-
-
-def predict_home_win_prob(
-    pred_margin: np.ndarray,
-    *,
-    sigma: np.ndarray | None = None,
-    use_uncertainty: bool = False,
-) -> np.ndarray:
-    """Predict home win probability from margin predictions.
-
-    When `use_uncertainty` is True, the margin is normalized by `sigma` before
-    computing probabilities.
-    """
-    return _predict_home_win_prob(
-        pred_margin,
-        sigma=sigma,
-        use_uncertainty=use_uncertainty,
-    )
 
 
 def predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:

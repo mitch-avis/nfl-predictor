@@ -13,7 +13,7 @@ def test_the_floor_maps_margin_through_the_fixed_normal_curve() -> None:
     """Home win probability is Phi(margin / SCORE_DIFF_STD_DEV); a zero margin is a coin flip."""
     margin = np.array([-7.0, 0.0, 3.0, 14.0])
 
-    prob = core.predict_home_win_prob(margin)
+    prob = core.margin_to_home_win_prob(margin)
 
     np.testing.assert_allclose(prob, norm.cdf(margin / constants.SCORE_DIFF_STD_DEV))
     assert prob[1] == 0.5

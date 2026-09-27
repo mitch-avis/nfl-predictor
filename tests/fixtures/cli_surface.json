@@ -295,21 +295,6 @@
    "type": null
   },
   {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "win_prob_uncertainty",
-   "help": "Use margin quantiles to derive uncertainty-aware win probabilities.",
-   "nargs": 0,
-   "options": [
-    "--win-prob-uncertainty",
-    "--no-win-prob-uncertainty"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
    "action": "_StoreTrueAction",
    "choices": null,
    "default": false,
@@ -1332,21 +1317,6 @@
    "nargs": null,
    "options": [
     "--win-prob-calibration"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "BooleanOptionalAction",
-   "choices": null,
-   "default": false,
-   "dest": "win_prob_uncertainty",
-   "help": "Use margin quantiles to derive uncertainty-aware win probabilities.",
-   "nargs": 0,
-   "options": [
-    "--win-prob-uncertainty",
-    "--no-win-prob-uncertainty"
    ],
    "required": false,
    "subcommand": null,

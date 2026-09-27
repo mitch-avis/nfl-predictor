@@ -72,7 +72,6 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         *,
         pretty_output: bool,
         score_rounding: str,
-        win_prob_use_uncertainty: bool = False,
     ) -> pd.DataFrame:
         """Record args and return empty DataFrame."""
         calls["predict_args"] = (
@@ -292,7 +291,7 @@ def test_main_margin_total_training_predicts_without_writing_artifacts(
     predict_args, predict_kwargs = calls["predict"]
     assert predict_args[1] == predict_path
     assert predict_args[2] == predict_path.with_name("games_predictions.csv")
-    assert predict_kwargs["win_prob_use_uncertainty"] is False
+    assert "win_prob_use_uncertainty" not in predict_kwargs
 
 
 @pytest.mark.parametrize(

@@ -914,22 +914,7 @@ def _predict_future_games(
     if model_kind == "margin_total":
         mt = cast(ml_model_core.MarginTotalModel, model)
         pred_margin, _pred_total = ml_model_core.predict_margin_total_from_model(mt, games)
-        use_uncertainty = bool(getattr(mt, "win_prob_use_uncertainty", False))
-        sigma_margin = None
-        if use_uncertainty:
-            margin_quantiles, _ = ml_model_core._predict_margin_total_quantiles_from_model(
-                mt, games
-            )
-            sigma_margin = ml_model_core._resolve_margin_sigma(
-                pred_margin,
-                margin_quantiles,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
-        home_win_prob = ml_model_core.predict_home_win_prob(
-            pred_margin,
-            sigma=sigma_margin,
-            use_uncertainty=use_uncertainty,
-        )
+        home_win_prob = ml_model_core.margin_to_home_win_prob(pred_margin)
     else:
         raise ValueError(f"Unsupported model kind for power rankings: {model_kind!r}")
 

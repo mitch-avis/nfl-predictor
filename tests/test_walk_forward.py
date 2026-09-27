@@ -870,7 +870,7 @@ def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPa
 
 
 def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -> None:
-    """A market-aware walk-forward run should exercise quantiles, uncertainty and callbacks."""
+    """A market-aware walk-forward run should exercise quantiles and callbacks."""
     df = _fixture_df().copy()
     df["home_spread"] = -3.0
     df["total_line"] = 44.5
@@ -880,7 +880,6 @@ def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -
         _base_config(),
         include_market=True,
         market_anchor=True,
-        win_prob_use_uncertainty=True,
         include_quantiles=True,
     )
 
@@ -894,7 +893,6 @@ def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -
 
     assert len(folds) == 2
     assert result["resolved_settings"]["market_anchor"] is True
-    assert result["resolved_settings"]["win_prob_use_uncertainty"] is True
     assert "market_baseline_margin" in result["predictions"].columns
     assert "market_baseline_total" in result["predictions"].columns
     assert "predicted_margin_p10" in result["predictions"].columns

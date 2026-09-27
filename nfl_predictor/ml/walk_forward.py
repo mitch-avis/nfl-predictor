@@ -93,7 +93,6 @@ class WalkForwardConfig:
     include_market: bool = True
     market_transform: bool | None = None
     market_anchor: bool = True
-    win_prob_use_uncertainty: bool = False
     include_quantiles: bool = True
     max_cardinality_ratio: float = 0.5
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
@@ -121,7 +120,6 @@ class WalkForwardConfig:
             "include_market": self.include_market,
             "market_transform": self.market_transform,
             "market_anchor": self.market_anchor,
-            "win_prob_use_uncertainty": self.win_prob_use_uncertainty,
             "include_quantiles": self.include_quantiles,
             "max_cardinality_ratio": self.max_cardinality_ratio,
             "feature_start": self.feature_start,
@@ -833,7 +831,6 @@ def run_walk_forward_backtest(
         "include_market": include_market,
         "market_transform": market_transform,
         "market_anchor": market_anchor,
-        "win_prob_use_uncertainty": config.win_prob_use_uncertainty,
         "include_quantiles": config.include_quantiles,
         "disable_pruning": config.disable_pruning,
         "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
@@ -859,9 +856,6 @@ def run_walk_forward_backtest(
     )
     if not folds:
         raise ValueError("No walk-forward folds available with the provided settings.")
-
-    if config.win_prob_use_uncertainty and not config.include_quantiles:
-        log.info("Uncertainty-aware win probs requested without quantiles; using fallback sigma.")
 
     params = _resolve_xgb_params(config)
 
@@ -1005,20 +999,9 @@ def run_walk_forward_backtest(
                 pred_total_quantiles[q] = pred_total_quantiles[q] + baseline_total_eval
 
         pred_away, pred_home = ml_model.derive_scores_from_margin_total(pred_margin, pred_total)
-        sigma_eval = None
-        if config.win_prob_use_uncertainty:
-            sigma_eval = ml_model._resolve_margin_sigma(
-                pred_margin,
-                pred_margin_quantiles,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
         deterministic_home_win_prob = ml_model._margin_to_home_win_prob(pred_margin)
-        home_win_prob = ml_model.predict_home_win_prob(
-            pred_margin,
-            sigma=sigma_eval,
-            use_uncertainty=config.win_prob_use_uncertainty,
-        )
-        home_win_prob = metrics_utils.clip_probabilities(home_win_prob)
+        # The submitted probability is the deterministic floor.
+        home_win_prob = metrics_utils.clip_probabilities(deterministic_home_win_prob)
         market_home_win_prob = _resolve_market_home_win_prob(fold.eval_df)
 
         away_col, home_col = target_columns

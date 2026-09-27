@@ -170,3 +170,38 @@ def test_the_train_job_form_offers_no_calibration_choice() -> None:
     """The web train job has one calibration, so its form does not ask."""
     names = {spec.name for spec in catalog.get_template("train").params}
     assert "win_prob_calibration" not in names
+
+
+def test_a_saved_uncertainty_flag_is_ignored_and_the_floor_is_predicted(
+    trained: tuple[MarginTotalModel, dict[str, Path]],
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A checkpoint saved with quantile-spread probabilities loads, says so, predicts the floor."""
+    model, paths = trained
+    loaded = _load_legacy(model, "win_prob_use_uncertainty", True, tmp_path, caplog)
+    predictions = ml_model_predict.predict_week_margin_total(
+        loaded, paths["predict"], pretty_output=False
+    )
+
+    assert "uncertainty-aware" in caplog.text
+    assert not hasattr(loaded, "win_prob_use_uncertainty")
+    np.testing.assert_allclose(
+        predictions["home_win_prob"].to_numpy(), _floor(loaded, paths["predict"])
+    )
+
+
+@pytest.mark.parametrize("module", [backtest, train])
+def test_the_uncertainty_option_is_gone(module: object, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--win-prob-uncertainty`` no longer parses; the floor uses one fixed sigma."""
+    parse = backtest._parse_args if module is backtest else train._parse_args
+    monkeypatch.setattr(sys, "argv", ["prog", "--win-prob-uncertainty"])
+    with pytest.raises(SystemExit):
+        parse()
+
+
+def test_the_walk_forward_config_has_no_uncertainty_setting() -> None:
+    """The walk-forward config and its record carry no probability alternative."""
+    config = walk_forward.WalkForwardConfig()
+    assert not hasattr(config, "win_prob_use_uncertainty")
+    assert "win_prob_use_uncertainty" not in config.to_dict()

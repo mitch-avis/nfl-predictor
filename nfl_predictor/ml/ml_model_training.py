@@ -15,7 +15,6 @@ import xgboost as xgb
 from scipy.sparse import spmatrix
 from sklearn.compose import ColumnTransformer
 
-from nfl_predictor import constants
 from nfl_predictor.ml import feature_importance
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_END_COLUMN,
@@ -39,11 +38,9 @@ from nfl_predictor.ml.ml_model_core import (
     _fit_transform_matrix,
     _get_target_columns,
     _load_games,
-    _predict_home_win_prob,
-    _predict_margin_total_quantiles_from_model,
+    _margin_to_home_win_prob,
     _predict_xgb,
     _prepare_margin_total_targets_with_anchor,
-    _resolve_margin_sigma,
     _resolve_xgb_params,
     _run_optuna_search,
     _split_train_calibration_holdout,
@@ -125,7 +122,6 @@ def train_margin_total_model(
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
-    win_prob_use_uncertainty: bool = False,
     include_postseason: bool = False,
     postseason_weight: float = 1.0,
     min_season: int | None = None,
@@ -321,26 +317,7 @@ def train_margin_total_model(
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
-        sigma_holdout = None
-        if win_prob_use_uncertainty and margin_quantile_models:
-            pred_margin_quantiles_holdout = {
-                q: _predict_xgb(q_model, x_holdout) for q, q_model in margin_quantile_models.items()
-            }
-            if market_anchor and baseline_margin_holdout is not None:
-                for q in list(pred_margin_quantiles_holdout.keys()):
-                    pred_margin_quantiles_holdout[q] = (
-                        pred_margin_quantiles_holdout[q] + baseline_margin_holdout
-                    )
-            sigma_holdout = _resolve_margin_sigma(
-                pred_margin,
-                pred_margin_quantiles_holdout,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
-        home_win_prob = _predict_home_win_prob(
-            pred_margin,
-            sigma=sigma_holdout,
-            use_uncertainty=win_prob_use_uncertainty,
-        )
+        home_win_prob = _margin_to_home_win_prob(pred_margin)
 
         metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, target_columns, home_win_prob
@@ -371,7 +348,6 @@ def train_margin_total_model(
         xgb_params=params,
         tuned_params=tuned_params or None,
         tuned_cv_summary=tuned_cv_summary,
-        win_prob_use_uncertainty=win_prob_use_uncertainty,
         optuna_summary=optuna_summary,
     )
 
@@ -381,7 +357,6 @@ def train_margin_total_model_with_report(
 ) -> TrainingResult:
     """Train a margin/total model and return a structured metrics report payload."""
     data_path: Path = kwargs["data_path"]
-    win_prob_use_uncertainty = bool(kwargs.get("win_prob_use_uncertainty", False))
     holdout_seasons: int = kwargs["holdout_seasons"]
     calibration_seasons: int = kwargs["calibration_seasons"]
     calibration_weeks: int = kwargs["calibration_weeks"]
@@ -415,19 +390,7 @@ def train_margin_total_model_with_report(
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
-        sigma_holdout = None
-        if win_prob_use_uncertainty:
-            margin_quantiles, _ = _predict_margin_total_quantiles_from_model(model, holdout_df)
-            sigma_holdout = _resolve_margin_sigma(
-                pred_margin,
-                margin_quantiles,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
-        home_win_prob = _predict_home_win_prob(
-            pred_margin,
-            sigma=sigma_holdout,
-            use_uncertainty=win_prob_use_uncertainty,
-        )
+        home_win_prob = _margin_to_home_win_prob(pred_margin)
         holdout_metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, model.target_columns, home_win_prob
         )

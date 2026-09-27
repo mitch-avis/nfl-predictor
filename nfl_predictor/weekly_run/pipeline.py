@@ -364,7 +364,6 @@ def main() -> int:
     )
 
     resolved_calibration = "auto"
-    win_prob_use_uncertainty = False
     train_calibration_weeks = (
         args.train_calibration_weeks
         if args.train_calibration_weeks is not None
@@ -401,7 +400,6 @@ def main() -> int:
 
     train_config = {
         "calibration": resolved_calibration,
-        "win_prob_use_uncertainty": bool(win_prob_use_uncertainty),
         "market_mode": market_mode,
         "include_market": include_market,
         "market_transform": market_transform,
@@ -453,7 +451,6 @@ def main() -> int:
             optuna_config=optuna_config,
             market_transform=bool(market_transform),
             market_anchor=bool(market_anchor),
-            win_prob_use_uncertainty=win_prob_use_uncertainty,
             include_postseason=bool(args.include_postseason),
             postseason_weight=float(args.postseason_weight),
             recency_half_life_seasons=args.train_recency_half_life_seasons,
@@ -503,7 +500,6 @@ def main() -> int:
         "model_hash": model_hash,
         "score_rounding": args.score_rounding,
         "output_dir": str(output_dir),
-        "win_prob_use_uncertainty": bool(win_prob_use_uncertainty),
     }
     predictions_hash = artifacts.stable_short_hash(predictions_config)
     predictions_marker = _stage_marker_path(run_dir, "predictions")
@@ -521,7 +517,6 @@ def main() -> int:
             output_path=None,
             pretty_output=False,
             score_rounding=str(args.score_rounding),
-            win_prob_use_uncertainty=win_prob_use_uncertainty,
         )
         season, week = inputs._infer_season_week(predictions)
         output_paths = inputs._resolve_output_paths(output_dir, season, week)

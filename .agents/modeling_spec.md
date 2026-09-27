@@ -57,6 +57,8 @@ No-vig market probabilities normalize the home and away implied probabilities to
 ### Uncertainty
 
 - Predictions include uncertainty intervals for margin and total (p10/p50/p90 or equivalent).
+- The intervals are outputs only: the win probability never reads them (it is the deterministic
+  floor of the median margin).
 - Interval outputs are evaluated (coverage/width diagnostics) and are part of the run artifacts.
 
 Minimum requirement:

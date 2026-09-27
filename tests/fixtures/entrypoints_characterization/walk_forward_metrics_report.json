@@ -156,7 +156,6 @@
       "wf_start_week": 1
     },
     "wf_start_week": 1,
-    "win_prob_use_uncertainty": false,
     "xgb_device": "cpu",
     "xgb_params_overrides": {
       "device": "cpu",

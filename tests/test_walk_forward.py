@@ -391,18 +391,34 @@ def test_calibration_data_uses_prior_two_seasons_plus_completed_weeks() -> None:
 
 
 def test_walk_forward_logs_each_fold_calibration_frame(caplog: pytest.LogCaptureFixture) -> None:
-    """Every trained fold logs the seasons and weeks of its calibration frame."""
+    """Every trained fold logs its calibration frame, and says when nothing is fitted on it."""
     caplog.set_level(logging.INFO)
 
     walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
 
     assert (
         "Walk-forward calibration frame for season 2023 week 2: 2022 weeks 1-3, "
-        "2023 week 1 (8 rows)"
+        "2023 week 1 (8 rows; unused: calibration resolves to none)"
     ) in caplog.messages
     assert (
         "Walk-forward calibration frame for season 2023 week 3: 2022 weeks 1-3, "
-        "2023 weeks 1-2 (10 rows)"
+        "2023 weeks 1-2 (10 rows; unused: calibration resolves to none)"
+    ) in caplog.messages
+
+
+def test_walk_forward_logs_a_calibration_frame_that_is_used(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A calibrator that reads the frame gets the plain frame line."""
+    caplog.set_level(logging.INFO)
+
+    walk_forward.run_walk_forward_backtest(
+        _fixture_df(), replace(_base_config(), calibration="sigma")
+    )
+
+    assert (
+        "Walk-forward calibration frame for season 2023 week 2: 2022 weeks 1-3, "
+        "2023 week 1 (8 rows)"
     ) in caplog.messages
 
 

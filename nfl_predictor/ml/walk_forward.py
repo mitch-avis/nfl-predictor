@@ -951,13 +951,6 @@ def run_walk_forward_backtest(
         calibration_df = select_calibration_data(
             fold.train_df, fold.season, fold.week, config.calibration_weeks
         )
-        log.info(
-            "Walk-forward calibration frame for season %d week %d: %s (%d rows)",
-            int(fold.season),
-            int(fold.week),
-            describe_season_weeks(calibration_df),
-            len(calibration_df),
-        )
         x_calibration = None
         y_margin_calibration = None
         y_total_calibration = None
@@ -1021,6 +1014,14 @@ def run_walk_forward_backtest(
         if config.win_prob_use_uncertainty and resolved_calibration == "elo":
             log.info("Elo calibration ignored for uncertainty-aware probabilities; using 'none'.")
             resolved_calibration = "none"
+        log.info(
+            "Walk-forward calibration frame for season %d week %d: %s (%d rows%s)",
+            int(fold.season),
+            int(fold.week),
+            describe_season_weeks(calibration_df),
+            len(calibration_df),
+            "; unused: calibration resolves to none" if resolved_calibration == "none" else "",
+        )
         calibration_method = resolved_calibration
         if resolved_calibration != "none":
             if calibration_df.empty or x_calibration is None:

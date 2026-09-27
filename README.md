@@ -311,9 +311,16 @@ and calibration samples. It is off by default and in the shipped
 weekly config: the six-season, two-seed measurement below found no gain from it.
 
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
-- `--calibration-seasons` and `--calibration-weeks` still gate whether a fitted post-processing
-  calibrator is allowed to run, but the fitted calibration pool itself is now the previous two
-  seasons plus the completed weeks of the current season.
+- `--calibration-weeks` holds the newest completed weeks out of the tree fit, rolling back into
+  the previous season early in a season (at week 2, four weeks are the new season's week 1 plus
+  the previous season's last three). `--calibration-seasons` also holds out whole seasons: the
+  newest ones the week window does not touch, so with one season and four weeks the calibration
+  season moves forward a year between weeks 4 and 5.
+- Both still gate whether a fitted post-processing calibrator is allowed to run, but the fitted
+  calibration pool itself is the previous two seasons plus the completed weeks of the current
+  season.
+- The run log lists the training, calibration and holdout seasons, the in-season window's
+  `(season, week)` pairs and the calibrator frame's seasons and weeks.
 
 Example: hold out the most recent season for evaluation and calibrate on the season before it:
 
@@ -399,9 +406,10 @@ resolved device is part of the fold-checkpoint fingerprint, so CPU and GPU runs 
 other's weeks, and the run's `metadata.json` records it as `config.xgb_device`. If the latest
 season is incomplete, either pass `--wf-exclude-incomplete-seasons` or specify `--eval-seasons`
 explicitly; the metrics report includes the evaluated window and any exclusions. Walk-forward
-calibration uses the calibration frame described above for fitted calibrators; `auto` is the
-deterministic floor; the summary table includes deterministic-minus-market bootstrap intervals
-for week 1, week 2, weeks 3-18, and all weeks; and every fold runs the full `n_estimators` budget
+calibration uses the calibration frame described above for fitted calibrators, and each fold logs
+that frame's seasons and weeks; `auto` is the deterministic floor; the summary table includes
+deterministic-minus-market bootstrap intervals for week 1, week 2, weeks 3-18, and all weeks; and
+every fold runs the full `n_estimators` budget
 (no in-season early stopping, in walk-forward or in production), with `best_iteration` recorded
 per head.
 

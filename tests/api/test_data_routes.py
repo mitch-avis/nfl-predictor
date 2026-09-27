@@ -149,8 +149,8 @@ def test_model_routes(project_root: Path, viewer_client: TestClient, app) -> Non
     assert payload["run_id"] == "weekly_w1" and payload["kind"] == "weekly"
     assert payload["metrics"]["holdout"]["brier"] == 0.2192
     assert payload["wf_compare"]["rows"][0]["label"] == "base"
-    assert payload["feature_importance"]["measure"] == "total_gain"
-    assert payload["feature_importance"]["rows"][0]["feature"] == "away_elo_pre"
+    assert payload["feature_importance"]["measure"] == "mean_abs_shap"
+    assert payload["feature_importance"]["rows"][0]["feature"] == "away_rest"
     by_id = viewer_client.get("/api/runs/weekly_w0/model").json()
     assert by_id["run_id"] == "weekly_w0"
     assert viewer_client.get("/api/runs/nope/model").status_code == 404

@@ -186,8 +186,9 @@ are not advisory.
     `0.18.0` (both train unweighted, task 55.8). Open gaps, all scheduled:
     - the probability path: production submits the stage-1 winner, currently `elo` with a market
       blend and clamp, while the benchmark scores the deterministic map (task 56.5);
-    - the device: the weekly run trains on the GPU, standalone walk-forwards on the CPU (task
-      55.4; the user chose the GPU for everything, 2026-09-23);
+    - the device: since `0.30.0` every run defaults to the GPU (`auto`), but every reference arm
+      in `.agents/benchmarks.md` trained on the CPU until the two-seed GPU reference lands
+      (task 55.4);
     - line timing: backtests anchor to and score against the stored, probably closing, lines,
       while production anchors to mid-week lines and picks are made before Thursday (task 56.6).
 12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is

@@ -652,9 +652,10 @@ user submitted) and `models/weekly_2026_week_03_full/` (the rerun with a fresh E
 'em pool). The stopped first run and the two data backups were deleted with the user's approval
 on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
 
-- [ ] **GPU never used by default.** `xgb_device` defaults to none (the CPU), so stage 1 ran on
+- [x] **GPU never used by default.** `xgb_device` defaulted to none (the CPU), so stage 1 ran on
       the CPU (about 6 min per candidate against about 1 min on the GPU with `--xgb-device
-      cuda`). The user chose the GPU for everything (task 55.4).
+      cuda`). The user chose the GPU for everything (task 55.4). Fixed in `0.30.0`: every run
+      defaults to `auto` (the GPU when usable). The measurement parts stay under task 55.4.
 - [ ] **The final fit never trains on the newest weeks.** Production and walk-forward both hold
       out the newest 4 completed weeks from the tree fit and use them only for calibration, so
       the Week 3 model's trees did not see 2026 Weeks 1-2, which reach it only through the

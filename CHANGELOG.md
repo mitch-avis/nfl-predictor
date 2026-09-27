@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.30.0] - 2026-09-27
+
+### Changed
+
+- Every XGBoost run (`backtest`, `sweep`, `weekly` stage 1 and final fit, `train`) defaults to
+  `--xgb-device auto` (`xgb_device: auto` in `config/weekly_run.yaml`): the GPU when the XGBoost
+  build has CUDA and a usable GPU is present, else the CPU, resolved once per process by a
+  one-round probe fit. An explicit `cuda` without a usable GPU falls back to the CPU with a
+  warning. `--xgb-device` accepts only `auto`, `cpu`, `cuda` and `cuda:N` (`gpu` means `cuda`).
+- The walk-forward resolves the device before fingerprinting fold checkpoints, so CPU and GPU runs
+  never share or resume each other's checkpoints, and an `auto` run on a GPU matches an explicit
+  `cuda` run. Edits under `nfl_predictor/ml/` change every checkpoint fingerprint.
+
+### Added
+
+- The resolved XGBoost device is recorded in the walk-forward `metadata.json` and metrics report
+  (`config.xgb_device`, and per week the device the week's models trained on), each sweep row,
+  the weekly run config, and the saved model's metadata JSON (a new `xgb_device` field in the
+  artifact contract, read from the fitted model).
+- `nfl-predictor sweep --xgb-device`.
+
+### Fixed
+
+- `--xgb-tree-method gpu_hist` crashed on XGBoost 3.4; it now trains with `hist` on CUDA.
+- A CUDA failure during a fit falls back to the CPU for builds compiled without GPU support too,
+  and warns every time. A walk-forward stops instead of checkpointing a week whose models fell
+  back to another device, so one checkpoint store never mixes devices.
+
 ## [0.29.1] - 2026-09-27
 
 ### Changed

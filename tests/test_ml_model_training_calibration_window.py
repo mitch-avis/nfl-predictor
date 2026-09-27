@@ -261,3 +261,36 @@ def test_blended_report_records_the_rolled_back_window(monkeypatch: pytest.Monke
         "weeks": [1],
         "pairs": [[2025, 16], [2025, 17], [2025, 18], [2026, 1]],
     }
+
+
+def test_final_fit_logs_why_the_whole_calibration_season_moved(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The log names the seasons the window touches, which whole seasons must skip."""
+    df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
+    _stub_fitting(monkeypatch, df)
+    caplog.set_level(logging.INFO)
+
+    _train(calibration_seasons=1, calibration_weeks=4)
+
+    assert (
+        "Calibration seasons: [2024] (the newest seasons the in-season window does not "
+        "touch; it touches [2025, 2026])"
+    ) in caplog.messages
+
+
+def test_final_fit_logs_the_calibrator_frame(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The pooled calibrator frame is logged as seasons and week ranges."""
+    df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
+    _stub_fitting(monkeypatch, df)
+    caplog.set_level(logging.INFO)
+
+    _train(calibration_seasons=0, calibration_weeks=4)
+
+    assert "Calibration seasons: []" in caplog.messages
+    assert (
+        "Calibrator frame: 2024 weeks 1-18, 2025 weeks 1-18, 2026 week 1 (37 rows)"
+        in caplog.messages
+    )

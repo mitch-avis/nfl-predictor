@@ -32,6 +32,7 @@ from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import feature_spec as feature_spec_utils
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml import ml_model_xgb_utils
+from nfl_predictor.ml.ml_model_core import describe_season_weeks
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
 
@@ -949,6 +950,13 @@ def run_walk_forward_backtest(
 
         calibration_df = select_calibration_data(
             fold.train_df, fold.season, fold.week, config.calibration_weeks
+        )
+        log.info(
+            "Walk-forward calibration frame for season %d week %d: %s (%d rows)",
+            int(fold.season),
+            int(fold.week),
+            describe_season_weeks(calibration_df),
+            len(calibration_df),
         )
         x_calibration = None
         y_margin_calibration = None

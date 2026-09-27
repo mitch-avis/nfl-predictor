@@ -312,6 +312,37 @@ def _season_week_mask(df: pd.DataFrame, pairs: Sequence[tuple[int, int]]) -> pd.
     return mask
 
 
+def _week_ranges(weeks: Sequence[int]) -> str:
+    """Compress sorted distinct weeks to ranges, for example ``1-3, 5``."""
+    runs: list[tuple[int, int]] = []
+    start = previous = weeks[0]
+    for week in weeks[1:]:
+        if week != previous + 1:
+            runs.append((start, previous))
+            start = week
+        previous = week
+    runs.append((start, previous))
+    return ", ".join(str(first) if first == last else f"{first}-{last}" for first, last in runs)
+
+
+def describe_season_weeks(frame: pd.DataFrame) -> str:
+    """Describe the ``(season, week)`` pairs in ``frame`` for logs.
+
+    Each season appears once, oldest first, with its weeks as ranges, for example
+    ``2024 weeks 1-18, 2025 week 1``; an empty frame is ``none``.
+    """
+    if frame.empty or "season" not in frame.columns or "week" not in frame.columns:
+        return "none"
+    weeks_by_season: dict[int, set[int]] = {}
+    for season, week in frame[["season", "week"]].dropna().itertuples(index=False):
+        weeks_by_season.setdefault(int(season), set()).add(int(week))
+    parts: list[str] = []
+    for season, weeks in sorted(weeks_by_season.items()):
+        label = "week" if len(weeks) == 1 else "weeks"
+        parts.append(f"{season} {label} {_week_ranges(sorted(weeks))}")
+    return ", ".join(parts)
+
+
 class TrainCalibrationSplit(NamedTuple):
     """Time-ordered train, calibration and holdout frames plus the seasons and window behind them.
 

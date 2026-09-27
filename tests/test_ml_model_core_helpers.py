@@ -339,6 +339,20 @@ def test_calibration_window_record_lists_the_rolling_window() -> None:
     assert core._calibration_window_record([]) == {"season": None, "weeks": [], "pairs": []}
 
 
+def test_describe_season_weeks_compresses_each_season_to_week_ranges() -> None:
+    """Lists each season once, oldest first, with its weeks as ranges."""
+    df = pd.concat(
+        [
+            _season_weeks_frame({2024: 18, 2026: 1}),
+            pd.DataFrame({"season": [2025, 2025, 2025, 2025], "week": [5, 1, 2, 3]}),
+        ],
+        ignore_index=True,
+    )
+
+    assert core.describe_season_weeks(df) == ("2024 weeks 1-18, 2025 weeks 1-3, 5, 2026 week 1")
+    assert core.describe_season_weeks(df.iloc[0:0]) == "none"
+
+
 def test_split_lets_window_seasons_feed_training_when_calibration_seasons_are_requested() -> None:
     """Accepts a pool whose only non-window season is the whole calibration season.
 

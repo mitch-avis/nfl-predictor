@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import replace
 from pathlib import Path
 
@@ -387,6 +388,22 @@ def test_calibration_data_uses_prior_two_seasons_plus_completed_weeks() -> None:
 
     assert calibration_df["season"].tolist() == [2020, 2020, 2021, 2021, 2022]
     assert calibration_df["week"].tolist() == [1, 2, 1, 2, 1]
+
+
+def test_walk_forward_logs_each_fold_calibration_frame(caplog: pytest.LogCaptureFixture) -> None:
+    """Every trained fold logs the seasons and weeks of its calibration frame."""
+    caplog.set_level(logging.INFO)
+
+    walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
+
+    assert (
+        "Walk-forward calibration frame for season 2023 week 2: 2022 weeks 1-3, "
+        "2023 week 1 (8 rows)"
+    ) in caplog.messages
+    assert (
+        "Walk-forward calibration frame for season 2023 week 3: 2022 weeks 1-3, "
+        "2023 weeks 1-2 (10 rows)"
+    ) in caplog.messages
 
 
 def test_walk_forward_quantile_intervals_monotonic() -> None:

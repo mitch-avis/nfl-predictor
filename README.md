@@ -392,19 +392,24 @@ This is the **canonical evaluation protocol** for model selection. By default it
 N seasons (regular season only) and reports three probability views on the same games: the
 configured calibrator, the deterministic margin map, and the market-implied home win probability.
 Use `--include-postseason` if you want postseason folds included. Optional recency weighting
-is available via `--recency-half-life-seasons`. GPU
-acceleration is optional: add `--xgb-tree-method hist --xgb-device cuda`. If the latest season is
-incomplete, either pass `--wf-exclude-incomplete-seasons` or specify `--eval-seasons` explicitly; the
-metrics report includes the evaluated window and any exclusions. Walk-forward calibration uses the
-calibration frame described above for fitted calibrators; `auto` is the deterministic floor; the
-summary table includes deterministic-minus-market bootstrap intervals for week 1, week 2,
-weeks 3-18, and all weeks; and every fold runs the full `n_estimators` budget (no in-season early
-stopping, in walk-forward or in production), with `best_iteration` recorded per head.
+is available via `--recency-half-life-seasons`. XGBoost trains on the GPU by default:
+`--xgb-device auto` (the default) uses CUDA when the installed XGBoost build has it and a usable
+GPU is present, and the CPU otherwise; `--xgb-device cpu` or `--xgb-device cuda` picks one. The
+resolved device is part of the fold-checkpoint fingerprint, so CPU and GPU runs never resume each
+other's weeks, and the run's `metadata.json` records it as `config.xgb_device`. If the latest
+season is incomplete, either pass `--wf-exclude-incomplete-seasons` or specify `--eval-seasons`
+explicitly; the metrics report includes the evaluated window and any exclusions. Walk-forward
+calibration uses the calibration frame described above for fitted calibrators; `auto` is the
+deterministic floor; the summary table includes deterministic-minus-market bootstrap intervals
+for week 1, week 2, weeks 3-18, and all weeks; and every fold runs the full `n_estimators` budget
+(no in-season early stopping, in walk-forward or in production), with `best_iteration` recorded
+per head.
 
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
 1107s remaining`). The estimate averages the weeks trained so far, so it runs a little low late in a
-run as training sets grow. Measured on 2026-09-20/21 on a 24-core machine: a from-week-1 run over
+run as training sets grow. Measured on 2026-09-20/21 on a 24-core machine, training on the CPU
+(these runs predate the GPU default): a from-week-1 run over
 three seasons takes about 50 minutes on an idle machine and about 110 minutes when anything else
 loads it; over six seasons it takes about 100 minutes idle at the default 200-tree budget, about
 3.3 hours at 400 and about 4.8 hours at 598 under load (run directories
@@ -531,8 +536,10 @@ Notes:
 - `--wf-*` flags control **walk-forward comparison** behavior (model selection).
 - `--train-*` flags control **final training/calibration** for the model used to produce weekly
   outputs.
-- `--xgb-*` flags control XGBoost runtime (GPU/CPU), and should be used for both comparison and
-  final training.
+- `--xgb-*` flags control XGBoost runtime and apply to both comparison and final training.
+  `--xgb-device` (`xgb_device` in the config) defaults to `auto`: the GPU when one is usable, else
+  the CPU. It is resolved once per run, so stage 1 and the final fit share one device, and the
+  model's `metadata.json` records it as `xgb_device`.
 - Outputs are written under the run directory (default: `models/<run_id>/`) unless `--output-dir` is
   provided.
 - Stage 1 walk-forward comparison is resumable and writes `wf_compare/` artifacts under the run
@@ -590,7 +597,8 @@ This is the current behavior, recorded for reference; none of it is a recommenda
 - Run artifacts (model/metrics/metadata/feature importance) land under `models/<run_id>/` by
   default.
 - Weekly prediction outputs live next to the input prediction file (e.g., `data/predict/`).
-- `metadata.json` includes dataset fingerprint, tuned params, and Optuna summary when tuning runs.
+- `metadata.json` includes dataset fingerprint, the XGBoost device the model trained on
+  (`xgb_device`), tuned params, and Optuna summary when tuning runs.
 - Power rankings outputs:
   - `power_rankings_season_XXXX_week_YY.csv`
   - `projected_standings_season_XXXX_week_YY.csv`
@@ -728,7 +736,10 @@ Run it with:
 nfl-predictor weekly --config path/to/weekly_run.json
 ```
 
-GPU note (XGBoost 2.x): prefer `--xgb-tree-method hist --xgb-device cuda`.
+Every XGBoost command (`backtest`, `sweep`, `weekly`, `train`) defaults to `--xgb-device auto`,
+which trains on the GPU when the XGBoost build has CUDA and a usable GPU is present, and on the
+CPU otherwise. Pass `--xgb-device cpu` to force the CPU. A CUDA request without a usable GPU, or a
+CUDA error during a fit, falls back to the CPU with a warning.
 
 If you see great performance on the exact data a model trained on, that is not evidence the model
 generalizes. Prefer holdout and walk-forward metrics.
@@ -842,8 +853,9 @@ Training/backtests can write a run directory containing reproducible artifacts.
   `metrics_report.json`.
 - `feature_importance.json` includes XGBoost gain/weight importance per model head.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
-  args, feature list, and tuning/early-stopping info (when used). `models/` and `optuna.db` are
-  gitignored by default, so keep run artifacts local unless you copy them elsewhere.
+  args, the resolved XGBoost device, feature list, and tuning/early-stopping info (when used).
+  `models/` and `optuna.db` are gitignored by default, so keep run artifacts local unless you
+  copy them elsewhere.
 
 ## Confidence pool rules (implemented)
 

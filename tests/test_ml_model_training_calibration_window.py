@@ -105,7 +105,9 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
         recorded["train"] = frame.copy()
         return _feature_spec()
 
-    def record_targets(frame: pd.DataFrame, _targets: tuple[str, str], _anchor: bool):
+    def record_targets(
+        frame: pd.DataFrame, _targets: tuple[str, str], _anchor: bool
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         recorded.setdefault("target_frames", []).append(frame.copy())
         rows = len(frame)
         return (

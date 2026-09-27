@@ -401,6 +401,14 @@ summary table includes deterministic-minus-market bootstrap intervals for week 1
 weeks 3-18, and all weeks; and every fold runs the full `n_estimators` budget (no in-season early
 stopping, in walk-forward or in production), with `best_iteration` recorded per head.
 
+The report also carries a stability view, `metrics.stability` in `metrics_report.json`, and the run
+logs it as Markdown tables when it finishes. For week 1, week 2, weeks 3-18 and all weeks it gives
+an all-seasons row and one row per season with the deterministic Brier, log loss, pick accuracy,
+margin and total MAE, confidence-pool points, market Brier, and the deterministic-minus-market
+Brier with a 95% game-bootstrap interval. The rows use the definitions and bootstrap defaults of
+`nfl-predictor compare` (below), so they equal what `compare` reports for the run on the same
+games. A row with fewer than two games has no interval.
+
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
 1107s remaining`). The estimate averages the weeks trained so far, so it runs a little low late in a
@@ -506,10 +514,12 @@ hash, the git commit and the settings that differ) or a checkpoint directory. Fo
 weeks 3-18 and all weeks it reports each run's deterministic Brier, log loss, pick accuracy, margin
 and total MAE, confidence-pool points and market Brier, and the candidate-minus-reference
 difference with a 95% bootstrap interval (5,000 resamples over games, over weeks for pool points).
-Repeat `--candidate` and `--reference` once per seed, in the same order, to combine seeds: the
-per-game differences are averaged over the seed pairs before the bootstrap. It reproduces the
-independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and replaces the per-run
-`compare_to_benchmark.py` copies under `models/`.
+A closing "Stability by season" section repeats each window per season, for every run and for the
+paired difference; week 1 or week 2 of one season is a single week, so its pool-points difference
+has no interval (`[n/a]`). Repeat `--candidate` and `--reference` once per seed, in the same order,
+to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
+It reproduces the independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and
+replaces the per-run `compare_to_benchmark.py` copies under `models/`.
 
 ## Weekly workflow (canonical)
 

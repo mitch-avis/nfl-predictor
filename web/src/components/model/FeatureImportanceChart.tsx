@@ -4,9 +4,15 @@ import type { FeatureImportance, FeatureImportanceMeasure } from '@/api/types'
 import { humanize } from '@/utils/format'
 
 const MEASURES: Record<FeatureImportanceMeasure, { name: string; caption: string }> = {
+  mean_abs_shap: {
+    name: 'Mean |SHAP| (points)',
+    caption:
+      'Mean |SHAP|: how far the feature moves the model’s adjustment to the market line (or the prediction itself when not anchored), in points, averaged over the model’s training games and added across the margin and total heads.',
+  },
   total_gain: {
     name: 'Total gain',
-    caption: 'Total gain: loss reduction summed over every split on the feature, across the margin and total heads.',
+    caption:
+      'Total gain: loss reduction summed over every split on the feature, across the margin and total heads (a run that did not record SHAP).',
   },
   summed_average_gain: {
     name: 'Summed average gain',

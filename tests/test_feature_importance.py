@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -165,7 +165,7 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
     monkeypatch.setattr(feature_importance, "BlendedMarginTotalModel", DummyBlend)
     monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
 
-    def fake_margin_report(model: object) -> dict[str, object] | None:
+    def fake_margin_report(model: object, _shap_rows: object = None) -> dict[str, object] | None:
         """Return a synthetic report keyed off the input object."""
         if model == "team":
             return {"team": True}
@@ -195,7 +195,9 @@ def test_build_feature_importance_report_handles_attribute_errors(
     monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
     monkeypatch.setattr(feature_importance, "BlendedMarginTotalModel", tuple)
 
-    def _raise_attribute_error(_model: object) -> dict[str, object] | None:
+    def _raise_attribute_error(
+        _model: object, _shap_rows: object = None
+    ) -> dict[str, object] | None:
         """Raise an AttributeError to exercise the guarded path."""
         raise AttributeError("missing booster")
 
@@ -411,10 +413,9 @@ def test_base_features_rank_by_total_gain_not_summed_average_gain(
     assert "gain" not in base["combined"]
 
 
-def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
-    """Base-feature total gain is the booster's per-column total gain summed per base feature."""
+def _fit_rest_opp_model(rows: int = 120) -> tuple[ml_model_core.MarginTotalModel, pd.DataFrame]:
+    """Fit a small margin/total model on a numeric feature and a four-category one-hot feature."""
     rng = np.random.default_rng(11)
-    rows = 120
     df = pd.DataFrame(
         {
             "rest": rng.normal(size=rows),
@@ -460,12 +461,21 @@ def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
         total_model=total_model,
         target_columns=("away_score", "home_score"),
     )
+    return model, df
+
+
+def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
+    """Base-feature total gain is the booster's per-column total gain summed per base feature."""
+    model, _ = _fit_rest_opp_model()
+    margin_model, total_model = model.margin_model, model.total_model
 
     report = feature_importance.build_feature_importance_report(model)
 
     assert report is not None
     assert report["schema_version"] == feature_importance.SCHEMA_VERSION
     assert set(report["measures"]) == {"gain", "total_gain", "weight"}
+    assert "shap" not in report
+    assert "mean_abs_shap" not in report["base_features"]["combined"]
     names = report["feature_names"]
     base = report["base_features"]
     assert base["feature_names"] == ["opp", "rest"]
@@ -487,3 +497,123 @@ def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
     assert base["combined"]["total_gain"] == pytest.approx(
         [expected["margin"][i] + expected["total"][i] for i in range(2)]
     )
+
+
+def _preprocessed(model: ml_model_core.MarginTotalModel, df: pd.DataFrame) -> Any:
+    """Return ``df`` encoded by the model's own feature spec and preprocessor."""
+    return ml_model_core._transform_matrix(
+        model.preprocessor, ml_model_core._apply_feature_spec(df, model.feature_spec)
+    )
+
+
+def _early_stopped_head(x_matrix: Any, rows: int) -> xgb.XGBRegressor:
+    """Fit a head on noise with early stopping, so it keeps fewer trees than it grew."""
+    rng = np.random.default_rng(5)
+    target = rng.normal(size=rows)
+    head = xgb.XGBRegressor(
+        n_estimators=200,
+        max_depth=2,
+        learning_rate=0.3,
+        early_stopping_rounds=5,
+        n_jobs=1,
+        verbosity=0,
+    )
+    head.fit(x_matrix[:80], target[:80], eval_set=[(x_matrix[80:], target[80:])], verbose=False)
+    assert head.best_iteration < 199
+    return head
+
+
+@pytest.mark.parametrize("early_stopped", [False, True])
+def test_shap_values_add_up_to_each_rows_prediction(early_stopped: bool) -> None:
+    """Each row's SHAP values plus the base value reproduce the head's prediction.
+
+    An early-stopped head is explained over the trees it predicts with, up to its best
+    iteration, not over every tree it grew.
+    """
+    model, df = _fit_rest_opp_model()
+    x_matrix = _preprocessed(model, df)
+    heads = (
+        (_early_stopped_head(x_matrix, len(df)),)
+        if early_stopped
+        else (model.margin_model, model.total_model)
+    )
+
+    for head in heads:
+        values, base_value = feature_importance.shap_values(head, x_matrix)
+
+        assert values.shape == (len(df), 5)
+        np.testing.assert_allclose(
+            values.sum(axis=1) + base_value,
+            ml_model_core._predict_xgb(head, x_matrix),
+            rtol=1e-5,
+            atol=1e-5,
+        )
+
+
+def test_mean_abs_shap_sums_a_base_features_columns_before_the_absolute_value() -> None:
+    """One-hot columns' signed contributions cancel within a row before the absolute value.
+
+    Row 1 gives ``opp`` +1 and -1 (net 0), row 2 gives +2: the mean is 1, where averaging each
+    column's absolute value and summing would report 2.
+    """
+    values = np.array([[1.0, -1.0, 0.5], [2.0, 0.0, -1.5]])
+
+    result = feature_importance.mean_abs_shap_by_base(
+        values,
+        ["cat__opp_A", "cat__opp_B", "num__rest"],
+        {"cat__opp_A": "opp", "cat__opp_B": "opp", "num__rest": "rest"},
+    )
+
+    assert result == {"opp": pytest.approx(1.0), "rest": pytest.approx(1.0)}
+
+
+def test_fitted_report_records_mean_abs_shap_per_head_and_combined() -> None:
+    """With rows to explain, each head and the combined block carry mean |SHAP| per base feature."""
+    model, df = _fit_rest_opp_model()
+    x_matrix = _preprocessed(model, df)
+
+    report = feature_importance.build_feature_importance_report(model, shap_rows=df)
+
+    assert report is not None
+    assert report["schema_version"] == 3
+    assert "mean_abs_shap" in report["measures"]
+    assert report["shap"]["row_count"] == len(df)
+    names = report["feature_names"]
+    base = report["base_features"]
+    assert base["feature_names"] == ["opp", "rest"]
+    expected: dict[str, list[float]] = {}
+    for head, regressor in (("margin", model.margin_model), ("total", model.total_model)):
+        contribs = regressor.get_booster().predict(xgb.DMatrix(x_matrix), pred_contribs=True)
+        opp = contribs[:, [i for i, n in enumerate(names) if "opp" in n]].sum(axis=1)
+        rest = contribs[:, [i for i, n in enumerate(names) if "rest" in n]].sum(axis=1)
+        expected[head] = [float(np.abs(opp).mean()), float(np.abs(rest).mean())]
+        assert base[head]["mean_abs_shap"] == pytest.approx(expected[head], rel=1e-5)
+        assert report["models"][head]["mean_abs_shap"] == pytest.approx(
+            np.abs(contribs[:, :-1]).mean(axis=0).tolist(), rel=1e-5
+        )
+    assert base["combined"]["mean_abs_shap"] == pytest.approx(
+        [expected["margin"][i] + expected["total"][i] for i in range(2)], rel=1e-5
+    )
+
+
+def test_report_records_the_explained_rows_seasons() -> None:
+    """The SHAP block names the seasons of the rows it explains when they carry a season."""
+    model, df = _fit_rest_opp_model()
+    rows = df.assign(season=[2020] * 60 + [2022] * 60)
+
+    report = feature_importance.build_feature_importance_report(model, shap_rows=rows)
+
+    assert report is not None
+    assert report["shap"]["seasons"] == [2020, 2022]
+
+
+def test_empty_shap_rows_leave_the_report_without_shap() -> None:
+    """No rows to explain means no SHAP section, and the gain measures still load."""
+    model, df = _fit_rest_opp_model()
+
+    report = feature_importance.build_feature_importance_report(model, shap_rows=df.iloc[:0])
+
+    assert report is not None
+    assert "shap" not in report
+    assert "mean_abs_shap" not in report["base_features"]["combined"]
+    assert "total_gain" in report["base_features"]["combined"]

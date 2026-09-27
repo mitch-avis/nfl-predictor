@@ -160,18 +160,18 @@ def test_model_reader(tmp_path: Path) -> None:
     assert payload["metrics"]["holdout"]["brier"] == pytest.approx(0.2192)
     assert payload["metrics"]["pool"]["weeks"] == 18
     importance = payload["feature_importance"]
-    assert importance["measure"] == "total_gain"
+    assert importance["measure"] == "mean_abs_shap"
     assert [row["feature"] for row in importance["rows"]] == [
+        "away_rest",
         "away_elo_pre",
         "home_rest",
-        "away_rest",
     ]
     assert importance["rows"][0] == {
-        "feature": "away_elo_pre",
-        "value": 35.0,
-        "margin_value": 30.0,
-        "total_value": 5.0,
-        "splits": 4.0,
+        "feature": "away_rest",
+        "value": 3.0,
+        "margin_value": 2.5,
+        "total_value": 0.5,
+        "splits": 2.0,
     }
     assert payload["wf_compare"] is not None
     assert payload["wf_compare"].rows[0]["wf_rank"] == 1
@@ -267,9 +267,33 @@ def test_feature_importance_falls_back_to_summed_average_gain_for_old_files(
     }
 
 
+def test_feature_importance_falls_back_to_total_gain_for_files_without_shap(
+    tmp_path: Path,
+) -> None:
+    """Files written before SHAP was recorded rank and label their features by total gain."""
+    path = tmp_path / "feature_importance.json"
+    path.write_text(json.dumps(factories.gain_feature_importance_payload("gain")), "utf-8")
+
+    importance = model.feature_importance(path)
+
+    assert importance["measure"] == "total_gain"
+    assert [row["feature"] for row in importance["rows"]] == [
+        "away_elo_pre",
+        "home_rest",
+        "away_rest",
+    ]
+    assert importance["rows"][0] == {
+        "feature": "away_elo_pre",
+        "value": 35.0,
+        "margin_value": 30.0,
+        "total_value": 5.0,
+        "splits": 4.0,
+    }
+
+
 def test_feature_importance_prefers_total_gain_when_both_measures_exist(tmp_path: Path) -> None:
     """Total gain ranks the features even when a file also carries the summed average gain."""
-    payload = factories.feature_importance_payload("both")
+    payload = factories.gain_feature_importance_payload("both")
     payload["base_features"]["combined"]["gain"] = [99.0, 1.0, 1.0]
     path = tmp_path / "feature_importance.json"
     path.write_text(json.dumps(payload), "utf-8")

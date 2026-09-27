@@ -81,14 +81,16 @@ def metrics_summary(path: Path) -> dict[str, Any]:
 
 
 IMPORTANCE_MEASURES: tuple[tuple[str, str], ...] = (
+    ("mean_abs_shap", "mean_abs_shap"),
     ("total_gain", "total_gain"),
     ("gain", "summed_average_gain"),
 )
 """``(key in feature_importance.json, measure reported to the page)``, in order of preference.
 
-Current files record total gain per base feature. Older files record only XGBoost's average
-gain per split summed over encoded columns and heads, reported as ``summed_average_gain`` so
-the page can say the ranking favors many-category features.
+Current files record mean absolute SHAP (in points) and total gain per base feature. Files
+written before SHAP was recorded fall back to total gain. The oldest record only XGBoost's
+average gain per split summed over encoded columns and heads, reported as
+``summed_average_gain`` so the page can say the ranking favors many-category features.
 """
 
 

@@ -75,12 +75,14 @@ class PowerOut(BaseModel):
 class FeatureImportanceOut(BaseModel):
     """Top base features and the importance measure that ranks them.
 
-    ``total_gain`` is XGBoost's loss reduction summed over every split; ``summed_average_gain``
-    is the average gain per split summed over encoded columns and heads, the only measure older
-    runs recorded. ``None`` means the run recorded no usable importance.
+    ``mean_abs_shap`` is the mean absolute SHAP value in points over the final model's training
+    rows, the headline measure; ``total_gain`` is XGBoost's loss reduction summed over every
+    split, for runs written before SHAP was recorded; ``summed_average_gain`` is the average
+    gain per split summed over encoded columns and heads, the only measure the oldest runs
+    recorded. ``None`` means the run recorded no usable importance.
     """
 
-    measure: Literal["total_gain", "summed_average_gain"] | None
+    measure: Literal["mean_abs_shap", "total_gain", "summed_average_gain"] | None
     rows: list[dict[str, Any]]
 
 

@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from nfl_predictor.cli import backtest, options
-from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
 
 
 def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
@@ -114,6 +114,74 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
 
     assert captured == {"checkpoint_dir": tmp_path / "checkpoints", "resume": False}
     assert json.loads(out_json.read_text())["config"]["checkpoint"] == checkpoint
+
+
+def test_xgb_device_defaults_to_auto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The walk-forward picks the GPU when one is usable unless told otherwise."""
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
+
+    assert backtest._parse_args().xgb_device == "auto"
+
+
+@pytest.mark.parametrize(
+    ("extra_argv", "usable", "expected"),
+    [([], True, "cuda"), ([], False, "cpu"), (["--xgb-device", "cpu"], True, "cpu")],
+)
+def test_main_runs_and_records_the_resolved_xgb_device(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra_argv: list[str],
+    usable: bool,
+    expected: str,
+) -> None:
+    """The engine gets the concrete device, and the run's metadata records it."""
+    captured: list[walk_forward.WalkForwardConfig] = []
+
+    def fake_run(
+        _df: pd.DataFrame, config: walk_forward.WalkForwardConfig, **_kwargs: object
+    ) -> dict[str, object]:
+        """Record the config the CLI built and return a minimal result."""
+        captured.append(config)
+        return {"checkpoint": {}, "per_week": []}
+
+    def fake_report(
+        _run_id: str, _created_at: str, payload: dict[str, object], _results: object
+    ) -> dict[str, object]:
+        """Return the config payload unchanged."""
+        return {"config": payload}
+
+    def fake_metadata(
+        _created_at: str, _hash: str, payload: dict[str, object]
+    ) -> dict[str, object]:
+        """Return the config payload unchanged."""
+        return {"config": payload}
+
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: usable)
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
+    monkeypatch.setattr(walk_forward, "build_metadata", fake_metadata)
+    out_json = tmp_path / "metrics_report.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "walk_forward_backtest.py",
+            "--checkpoint-dir",
+            str(tmp_path / "checkpoints"),
+            "--out-json",
+            str(out_json),
+            *extra_argv,
+        ],
+    )
+
+    backtest.main()
+
+    assert (captured[0].xgb_params_overrides or {})["device"] == expected
+    metadata = json.loads((tmp_path / "metadata.json").read_text())
+    assert metadata["config"]["xgb_device"] == expected
+    assert metadata["config"]["xgb_params_overrides"]["device"] == expected
 
 
 def test_disable_feature_groups_arg_parses_comma_separated_list() -> None:

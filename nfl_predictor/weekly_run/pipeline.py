@@ -30,6 +30,7 @@ from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
 from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
+from nfl_predictor.ml.ml_model_xgb_utils import resolve_xgb_device
 from nfl_predictor.reporting import power_rankings
 from nfl_predictor.reporting.betting_report import build_betting_report
 from nfl_predictor.utils import fingerprints
@@ -174,8 +175,9 @@ def _write_training_artifacts(
     created_at: str,
     dataset_hash: str,
     config_payload: dict[str, Any],
+    xgb_device: str,
 ) -> artifacts.RunPaths:
-    """Write model, metrics, and metadata artifacts."""
+    """Write model, metrics, and metadata artifacts; the metadata names the XGBoost device."""
     paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
     artifacts.save_model(paths.model_path, result.model)
 
@@ -199,6 +201,7 @@ def _write_training_artifacts(
         tuned_params=result.tuned_params,
         early_stopping=result.early_stopping,
         optuna_summary=getattr(result.model, "optuna_summary", None),
+        xgb_device=xgb_device,
     )
     artifacts.write_json(paths.metadata_path, metadata)
     if result.feature_importance:
@@ -236,6 +239,8 @@ def main() -> int:
     args = config._parse_args()
     if args.train_recency_half_life_seasons is None:
         args.train_recency_half_life_seasons = args.wf_recency_half_life_seasons
+    # Resolve `auto` once: stage 1, the final fit and every record then name the same device.
+    args.xgb_device = resolve_xgb_device(args.xgb_device)
 
     if not args.skip_data_refresh:
         _refresh_data(args.data_collection_args)
@@ -290,15 +295,14 @@ def main() -> int:
             "learning_rate": float(args.wf_learning_rate),
             "n_jobs": config.xgb_thread_count(args),
             "verbosity": 0,
+            "device": args.xgb_device,
         },
         "include_quantiles": bool(args.wf_include_quantiles),
     }
 
-    # Propagate GPU/CPU runtime settings to walk-forward folds too.
+    # Propagate the tree method to walk-forward folds too.
     if args.xgb_tree_method:
         wf_config["xgb_params_overrides"]["tree_method"] = args.xgb_tree_method
-    if args.xgb_device:
-        wf_config["xgb_params_overrides"]["device"] = args.xgb_device
 
     wf_run_fingerprint = fingerprints.wf_run_fingerprint(
         dataset_fingerprint,
@@ -515,6 +519,7 @@ def main() -> int:
             created_at=created_at,
             dataset_hash=dataset_hash,
             config_payload={**config_payload, "wf_best": best_row, "train_config": train_config},
+            xgb_device=args.xgb_device,
         )
         _write_stage_marker(
             train_marker,

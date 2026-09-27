@@ -436,9 +436,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": null,
+   "default": "auto",
    "dest": "xgb_device",
-   "help": "XGBoost device override (e.g., cuda, cpu).",
+   "help": "XGBoost device: auto (the GPU when this XGBoost build has CUDA and a usable GPU is present, else the CPU), cpu, or cuda (default: auto).",
    "nargs": null,
    "options": [
     "--xgb-device"
@@ -1387,6 +1387,20 @@
    "type": "int"
   },
   {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "auto",
+   "dest": "xgb_device",
+   "help": "XGBoost device: auto (the GPU when this XGBoost build has CUDA and a usable GPU is present, else the CPU), cpu, or cuda (default: auto).",
+   "nargs": null,
+   "options": [
+    "--xgb-device"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
    "action": "BooleanOptionalAction",
    "choices": null,
    "default": false,
@@ -1887,7 +1901,7 @@
    "choices": null,
    "default": "auto",
    "dest": "xgb_device",
-   "help": "XGBoost device (e.g., cpu, cuda).",
+   "help": "XGBoost device: auto (the GPU when this XGBoost build has CUDA and a usable GPU is present, else the CPU), cpu, or cuda (default: auto).",
    "nargs": null,
    "options": [
     "--xgb-device"
@@ -3057,9 +3071,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": null,
+   "default": "auto",
    "dest": "xgb_device",
-   "help": "XGBoost device override.",
+   "help": "XGBoost device: auto (the GPU when this XGBoost build has CUDA and a usable GPU is present, else the CPU), cpu, or cuda (default: auto). Stage 1 and the final fit use the same device.",
    "nargs": null,
    "options": [
     "--xgb-device"

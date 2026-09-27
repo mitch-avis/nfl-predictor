@@ -18,7 +18,7 @@ import os
 import subprocess
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from pickle import UnpicklingError
@@ -31,6 +31,7 @@ import pandas as pd
 from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import feature_spec as feature_spec_utils
 from nfl_predictor.ml import metrics as metrics_utils
+from nfl_predictor.ml import ml_model_xgb_utils
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
 
@@ -626,6 +627,19 @@ def _iteration_details(models: dict[str, Any]) -> dict[str, Any]:
     return details
 
 
+def with_resolved_xgb_device(config: WalkForwardConfig) -> WalkForwardConfig:
+    """Return ``config`` with its XGBoost device override set to the concrete device.
+
+    ``auto`` or no device becomes the device the run trains on, so the checkpoint
+    fingerprint, the run id and the recorded config never say ``auto``: a CPU run and a GPU
+    run never share checkpoints, and an ``auto`` run that resolved to ``cuda`` shares them
+    with an explicit ``cuda`` run.
+    """
+    overrides = dict(config.xgb_params_overrides or {})
+    overrides["device"] = ml_model_xgb_utils.resolve_xgb_device(overrides.get("device"))
+    return replace(config, xgb_params_overrides=overrides)
+
+
 def _resolve_xgb_params(config: WalkForwardConfig) -> dict[str, Any]:
     overrides: dict[str, Any] = {}
     if config.xgb_params_overrides:
@@ -647,10 +661,12 @@ def fold_checkpoint_fingerprint(df: pd.DataFrame, config: WalkForwardConfig) -> 
     """Return the key that decides whether a saved fold may be reused.
 
     It covers everything a fold's result depends on: the input rows and columns, the full
-    config, the installed library versions, and the source of the modelling code. A saved
-    fold is reused only when all of these are unchanged, so a resumed run reproduces an
-    uninterrupted one instead of mixing results computed from different inputs.
+    config with its XGBoost device resolved, the installed library versions, and the source
+    of the modelling code. A saved fold is reused only when all of these are unchanged, so a
+    resumed run reproduces an uninterrupted one instead of mixing results computed from
+    different inputs or on a different device.
     """
+    config = with_resolved_xgb_device(config)
     digest = hashlib.sha256()
     digest.update(f"fold-checkpoint-v{FOLD_CHECKPOINT_VERSION}".encode())
     digest.update(json.dumps(config.to_dict(), sort_keys=True, default=str).encode())
@@ -798,6 +814,7 @@ def run_walk_forward_backtest(
     weeks that are trained, not for restored ones.
     """
     np.random.seed(config.random_seed)  # noqa: NPY002 (legacy for reproducibility)
+    config = with_resolved_xgb_device(config)
     # Fingerprint the caller's frame before any column drops or row filters below.
     store = (
         _FoldCheckpointStore.create(checkpoint_dir, df, config)
@@ -836,6 +853,7 @@ def run_walk_forward_backtest(
         "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
         # In-season fits run the full `n_estimators` budget, with no early stopping.
         "in_season_early_stopping": False,
+        "xgb_device": (config.xgb_params_overrides or {})["device"],
     }
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)

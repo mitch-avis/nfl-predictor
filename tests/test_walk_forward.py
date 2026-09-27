@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -12,7 +13,7 @@ import pandas.testing as pdt
 import pytest
 
 from nfl_predictor import constants
-from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
 
 
 def _fixture_df() -> pd.DataFrame:
@@ -272,6 +273,67 @@ def test_fold_checkpoint_fingerprint_tracks_data_and_config() -> None:
         walk_forward.fold_checkpoint_fingerprint(df, replace(config, calibration_weeks=2))
         != baseline
     )
+
+
+def _with_device(
+    config: walk_forward.WalkForwardConfig, device: str | None
+) -> walk_forward.WalkForwardConfig:
+    """Return ``config`` with its XGBoost device override set, or removed for ``None``."""
+    overrides = {k: v for k, v in (config.xgb_params_overrides or {}).items() if k != "device"}
+    if device is not None:
+        overrides["device"] = device
+    return replace(config, xgb_params_overrides=overrides)
+
+
+def test_with_resolved_xgb_device_names_the_concrete_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``auto`` or no device becomes the device the run trains on; other overrides stay."""
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    config = _base_config()
+
+    for requested in (None, "auto", "cuda"):
+        resolved = walk_forward.with_resolved_xgb_device(_with_device(config, requested))
+        assert resolved.xgb_params_overrides == {
+            **(config.xgb_params_overrides or {}),
+            "device": "cuda",
+        }
+    no_overrides = walk_forward.with_resolved_xgb_device(replace(config, xgb_params_overrides=None))
+    assert no_overrides.xgb_params_overrides == {"device": "cuda"}
+
+
+def test_fold_checkpoint_fingerprint_hashes_the_resolved_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ``auto`` run shares checkpoints with an explicit run on the same device only."""
+    df = _fixture_df()
+    config = _base_config()
+
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    gpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cuda"))
+    gpu_auto = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "auto"))
+    gpu_default = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, None))
+    cpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cpu"))
+
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: False)
+    cpu_auto = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "auto"))
+
+    assert gpu_auto == gpu
+    assert gpu_default == gpu
+    assert cpu != gpu
+    assert cpu_auto == cpu
+
+
+def test_run_records_the_resolved_xgb_device(tmp_path: Path) -> None:
+    """The result and the checkpoint manifest name the concrete device, never ``auto``."""
+    config = _with_device(_base_config(), "auto")
+
+    result = walk_forward.run_walk_forward_backtest(_fixture_df(), config, checkpoint_dir=tmp_path)
+
+    assert result["resolved_settings"]["xgb_device"] == "cpu"
+    (manifest_path,) = tmp_path.rglob("manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["config"]["xgb_params_overrides"]["device"] == "cpu"
 
 
 def test_walk_forward_probabilities_in_bounds() -> None:

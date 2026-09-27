@@ -36,6 +36,11 @@ from nfl_predictor.ml.ml_model_training import (
     train_blended_margin_total_model_with_report,
     train_margin_total_model_with_report,
 )
+from nfl_predictor.ml.ml_model_xgb_utils import (
+    XGB_DEVICE_AUTO,
+    XGB_DEVICE_HELP,
+    resolve_xgb_device,
+)
 from nfl_predictor.utils.logger import log
 
 
@@ -207,8 +212,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--xgb-device",
         type=str,
-        default="auto",
-        help="XGBoost device (e.g., cpu, cuda).",
+        default=XGB_DEVICE_AUTO,
+        help=XGB_DEVICE_HELP,
     )
     parser.add_argument(
         "--xgb-n-jobs",
@@ -302,6 +307,8 @@ def main() -> None:
 
     created_at = artifacts.now_utc_iso()
     dataset_hash = artifacts.sha256_file(args.data_path)
+    # Resolve `auto` once, so the fit and the recorded config name the same device.
+    args.xgb_device = resolve_xgb_device(args.xgb_device)
 
     config_payload: dict[str, Any] = {
         k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
@@ -404,6 +411,7 @@ def main() -> None:
             tuned_params=result.tuned_params,
             early_stopping=result.early_stopping,
             optuna_summary=getattr(result.model, "optuna_summary", None),
+            xgb_device=args.xgb_device,
         )
         artifacts.write_json(paths.metadata_path, metadata)
         if result.feature_importance:

@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import pandas as pd
 import pytest
+import xgboost as xgb
 
 from nfl_predictor.ml import ml_model_xgb_utils
 from nfl_predictor.ml.ml_model_core import OptunaConfig, TrainingResult
@@ -593,7 +594,7 @@ def test_main_training_uses_and_records_the_resolved_xgb_device(
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: usable)
     run_dir = tmp_path / "run_device"
     result = TrainingResult(
-        model={"model": "stub"},
+        model=types.SimpleNamespace(margin_model=xgb.XGBRegressor(device=expected)),
         metrics_report={"kind": "train"},
         splits={},
         params={"n_estimators": 1},
@@ -626,3 +627,37 @@ def test_main_training_uses_and_records_the_resolved_xgb_device(
     metadata = cast(dict[str, Any], calls["metadata"])
     assert metadata["xgb_device"] == expected
     assert metadata["config"]["xgb_device"] == expected
+
+
+def test_main_training_metadata_records_the_device_the_model_was_fitted_on(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A fit that fell back to the CPU is recorded as CPU even when CUDA was requested."""
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    result = TrainingResult(
+        model=types.SimpleNamespace(margin_model=xgb.XGBRegressor(device="cpu")),
+        metrics_report={},
+        splits={},
+        params={},
+        tuned_params=None,
+        feature_list=["feat1"],
+        early_stopping={},
+    )
+    calls: dict[str, Any] = {}
+
+    def fake_write_json(path: Path, payload: dict[str, object]) -> None:
+        """Record the metadata payload."""
+        if path.name == "metadata.json":
+            calls["metadata"] = payload
+
+    monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", lambda **_: result)
+    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args: None)
+    monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
+    monkeypatch.setattr(sys, "argv", ["prog", "--run-dir", str(tmp_path / "run")])
+
+    ml_model_cli.main()
+
+    assert cast(dict[str, Any], calls["metadata"])["xgb_device"] == "cpu"

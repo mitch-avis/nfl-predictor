@@ -125,6 +125,14 @@ def test_xgb_device_defaults_to_auto(monkeypatch: pytest.MonkeyPatch) -> None:
     assert backtest._parse_args().xgb_device == "auto"
 
 
+def test_xgb_device_typo_is_a_usage_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A misspelled device stops at the parser instead of reaching XGBoost."""
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py", "--xgb-device", "cdua"])
+
+    with pytest.raises(SystemExit):
+        backtest._parse_args()
+
+
 @pytest.mark.parametrize(
     ("extra_argv", "usable", "expected"),
     [([], True, "cuda"), ([], False, "cpu"), (["--xgb-device", "cpu"], True, "cpu")],

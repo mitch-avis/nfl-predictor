@@ -640,6 +640,24 @@ def with_resolved_xgb_device(config: WalkForwardConfig) -> WalkForwardConfig:
     return replace(config, xgb_params_overrides=overrides)
 
 
+def _fold_xgb_device(models: Sequence[Any], *, expected: str, fold: WalkForwardFold) -> str:
+    """Return the device a week's estimators trained on, or raise if it is not ``expected``.
+
+    A CUDA fit that fails is retried on the CPU. Saving that week would put CPU results under
+    the run's CUDA checkpoint fingerprint, so the run stops instead: nothing is saved for the
+    week, and rerunning on a working device resumes from the weeks already saved.
+    """
+    devices = {str(model.get_params().get("device")) for model in models}
+    if devices != {expected}:
+        raise RuntimeError(
+            f"Walk-forward season {int(fold.season)} week {int(fold.week)} trained on "
+            f"{', '.join(sorted(devices))}, but the run is configured for {expected}: a fit "
+            "fell back to another device. The week was not checkpointed; rerun on a working "
+            "device (or pass --xgb-device cpu) to resume."
+        )
+    return expected
+
+
 def _resolve_xgb_params(config: WalkForwardConfig) -> dict[str, Any]:
     overrides: dict[str, Any] = {}
     if config.xgb_params_overrides:
@@ -1158,6 +1176,12 @@ def run_walk_forward_backtest(
                     **{f"total_q{q}": model for q, model in total_quantiles.items()},
                 }
             )
+        )
+        # Before the save: a week that fell back to another device must not be checkpointed.
+        metrics["xgb_device"] = _fold_xgb_device(
+            [margin_model, total_model, *margin_quantiles.values(), *total_quantiles.values()],
+            expected=str(params.get("device")),
+            fold=fold,
         )
         if metrics.get("iteration_warnings"):
             log.warning(

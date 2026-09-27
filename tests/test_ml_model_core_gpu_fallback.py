@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -10,6 +11,8 @@ import xgboost as xgb
 
 from nfl_predictor.ml import ml_model_core as core
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
+from nfl_predictor.ml import walk_forward
+from tests.test_walk_forward import _base_config, _fixture_df
 
 xgb.set_config(verbosity=0)
 
@@ -72,3 +75,28 @@ def test_quantile_fit_falls_back_to_the_cpu_with_a_warning(warnings_logged: list
 
     assert {model.get_params()["device"] for model in models.values()} == {"cpu"}
     assert len(warnings_logged) == 1
+
+
+def test_walk_forward_stops_instead_of_checkpointing_a_week_trained_on_the_wrong_device(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, warnings_logged: list[str]
+) -> None:
+    """A week that fell back to the CPU in a CUDA run fails the run and saves nothing.
+
+    Its checkpoint would sit under the CUDA fingerprint, so resuming would mix devices.
+    """
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
+
+    with pytest.raises(RuntimeError, match="cuda"):
+        walk_forward.run_walk_forward_backtest(
+            _fixture_df(), _base_config(), checkpoint_dir=tmp_path
+        )
+
+    assert not list(tmp_path.rglob("fold_*.joblib"))
+    assert warnings_logged
+
+
+def test_walk_forward_weeks_record_the_device_they_trained_on() -> None:
+    """Each week's metrics name the device its models were fitted on."""
+    result = walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
+
+    assert {week["xgb_device"] for week in result["per_week"]} == {"cpu"}

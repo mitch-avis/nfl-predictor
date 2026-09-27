@@ -6,9 +6,11 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
+import xgboost as xgb
 
 from nfl_predictor import data_collection
 from nfl_predictor.ml import artifacts, ml_model_core, ml_model_xgb_utils, walk_forward
@@ -511,9 +513,12 @@ def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
 
 
 def test_training_artifacts_record_the_device_the_model_trained_on(tmp_path: Path) -> None:
-    """The saved model's metadata JSON names its XGBoost device."""
+    """The saved model's metadata names the device its estimator was fitted on.
+
+    The requested device says ``cuda`` here, but the fit fell back to the CPU.
+    """
     result = ml_model_core.TrainingResult(
-        model={"model": "stub"},
+        model=SimpleNamespace(margin_model=xgb.XGBRegressor(device="cpu")),
         metrics_report={},
         splits={},
         params={"device": "cuda"},
@@ -529,8 +534,7 @@ def test_training_artifacts_record_the_device_the_model_trained_on(tmp_path: Pat
         created_at="2026-09-27T00:00:00+00:00",
         dataset_hash="hash",
         config_payload={"xgb_device": "cuda"},
-        xgb_device="cuda",
     )
 
     metadata = json.loads(paths.metadata_path.read_text(encoding="utf-8"))
-    assert metadata["xgb_device"] == "cuda"
+    assert metadata["xgb_device"] == "cpu"

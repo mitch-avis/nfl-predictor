@@ -417,3 +417,110 @@ def test_gpu_fallback_is_logged_as_a_warning(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     assert len(warnings_logged) == 1
+
+
+def test_every_fit_time_fallback_warns_even_after_a_resolution_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fit that falls back is never silent, whatever was warned about before it."""
+    _reset_runtime_state()
+    warnings_logged = _record_warnings(monkeypatch)
+    cuda_params = {"device": "cuda", "tree_method": "hist"}
+
+    xgb_utils.resolve_xgb_device("cuda")
+    xgb_utils._coerce_tree_method_on_error(cuda_params, xgb.core.XGBoostError("CUDA error"))
+    xgb_utils._coerce_tree_method_on_error(cuda_params, xgb.core.XGBoostError("CUDA error"))
+
+    assert len(warnings_logged) == 3
+
+
+def test_coerce_tree_method_on_error_replaces_a_gpu_tree_method_on_cuda() -> None:
+    """The CPU retry never keeps a GPU tree method, which XGBoost would reject again."""
+    _reset_runtime_state()
+
+    updated = xgb_utils._coerce_tree_method_on_error(
+        {"device": "cuda", "tree_method": "gpu_hist"},
+        xgb.core.XGBoostError("Invalid Input: 'gpu_hist', valid values are: approx, exact, hist"),
+    )
+
+    assert updated is not None
+    assert updated["device"] == "cpu"
+    assert updated["tree_method"] == "hist"
+
+
+@pytest.mark.parametrize(("usable", "expected"), [(True, "cuda"), (False, "cpu")])
+def test_resolve_xgb_params_maps_a_gpu_tree_method_override_to_hist(
+    monkeypatch: pytest.MonkeyPatch, usable: bool, expected: str
+) -> None:
+    """A ``gpu_hist`` override asks for CUDA with ``hist``, like the ``tree_method`` argument."""
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
+
+    params = xgb_utils._resolve_xgb_params(
+        {"max_depth": 3}, overrides={"tree_method": "gpu_hist", "device": "auto"}
+    )
+
+    assert params["tree_method"] == "hist"
+    assert params["device"] == expected
+
+
+def test_a_gpu_hist_override_fits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--xgb-tree-method gpu_hist`` trains instead of failing on XGBoost's rejection."""
+    from nfl_predictor.ml import ml_model_core
+
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
+    params = xgb_utils._resolve_xgb_params(
+        {"n_estimators": 3, "max_depth": 2, "n_jobs": 1},
+        overrides={"tree_method": "gpu_hist", "device": "auto"},
+    )
+    rng = np.random.default_rng(5)
+    x = rng.normal(size=(40, 2))
+
+    margin_model, _total_model = ml_model_core._fit_margin_total_models(
+        x, x[:, 0], 40.0 + x[:, 1], params
+    )
+
+    assert margin_model.get_params()["tree_method"] == "hist"
+
+
+@pytest.mark.parametrize(
+    ("requested", "expected"),
+    [("gpu", "cuda"), ("GPU", "cuda"), ("cuda:1", "cuda:1"), (" CPU ", "cpu")],
+)
+def test_resolve_xgb_device_normalizes_accepted_spellings(
+    monkeypatch: pytest.MonkeyPatch, requested: str, expected: str
+) -> None:
+    """``gpu`` means ``cuda``, so the two never fingerprint differently."""
+    monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
+
+    assert xgb_utils.resolve_xgb_device(requested) == expected
+
+
+@pytest.mark.parametrize("requested", ["cdua", "gpu:0", "cuda:", "cuda:x", "tpu"])
+def test_resolve_xgb_device_rejects_unknown_devices(requested: str) -> None:
+    """A typo fails here instead of reaching XGBoost."""
+    with pytest.raises(ValueError, match="XGBoost device"):
+        xgb_utils.resolve_xgb_device(requested)
+
+
+def test_xgb_device_arg_rejects_a_typo_as_an_argparse_error() -> None:
+    """The command-line type reports a bad device as a usage error and keeps good ones."""
+    import argparse
+
+    assert xgb_utils.xgb_device_arg("auto") == "auto"
+    assert xgb_utils.xgb_device_arg("gpu") == "cuda"
+    with pytest.raises(argparse.ArgumentTypeError):
+        xgb_utils.xgb_device_arg("cdua")
+
+
+def test_fitted_xgb_device_reads_the_margin_head() -> None:
+    """The device comes from the fitted estimator, for plain and blended models alike."""
+    from types import SimpleNamespace
+
+    plain = SimpleNamespace(margin_model=xgb.XGBRegressor(device="cpu"))
+    blended = SimpleNamespace(
+        team_model=SimpleNamespace(margin_model=xgb.XGBRegressor(device="cuda"))
+    )
+
+    assert xgb_utils.fitted_xgb_device(plain) == "cpu"
+    assert xgb_utils.fitted_xgb_device(blended) == "cuda"
+    assert xgb_utils.fitted_xgb_device({"model": "stub"}) is None

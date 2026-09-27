@@ -26,7 +26,7 @@ import pandas as pd
 from nfl_predictor.cli import options
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml import walk_forward
-from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP
+from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.utils.logger import log
 
 # The console summary: each probability view (deterministic, market, configured) with its own
@@ -135,7 +135,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--xgb-device",
-        type=str,
+        type=xgb_device_arg,
         default=XGB_DEVICE_AUTO,
         help=XGB_DEVICE_HELP,
     )

@@ -819,7 +819,8 @@
         "total_q0.9.best_iteration": 19,
         "total_q0.9.early_stopped": false,
         "week": 1,
-        "weeks": 1
+        "weeks": 1,
+        "xgb_device": "cpu"
       },
       {
         "actual_points": 80.0,
@@ -865,7 +866,8 @@
         "total_q0.9.best_iteration": 19,
         "total_q0.9.early_stopped": false,
         "week": 2,
-        "weeks": 1
+        "weeks": 1,
+        "xgb_device": "cpu"
       },
       {
         "actual_points": 79.0,
@@ -911,7 +913,8 @@
         "total_q0.9.best_iteration": 19,
         "total_q0.9.early_stopped": false,
         "week": 3,
-        "weeks": 1
+        "weeks": 1,
+        "xgb_device": "cpu"
       },
       {
         "actual_points": 114.0,
@@ -957,7 +960,8 @@
         "total_q0.9.best_iteration": 19,
         "total_q0.9.early_stopped": false,
         "week": 4,
-        "weeks": 1
+        "weeks": 1,
+        "xgb_device": "cpu"
       }
     ],
     "stability": {

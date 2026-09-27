@@ -7,8 +7,10 @@ and is imported by higher-level training code.
 
 from __future__ import annotations
 
+import argparse
 import inspect
 import json
+import re
 import warnings
 from dataclasses import dataclass
 from functools import lru_cache
@@ -26,8 +28,34 @@ xgb.set_config(verbosity=0)
 XGB_DEVICE_AUTO = "auto"
 XGB_DEVICE_HELP = (
     "XGBoost device: auto (the GPU when this XGBoost build has CUDA and a usable GPU is "
-    "present, else the CPU), cpu, or cuda (default: auto)."
+    "present, else the CPU), cpu, cuda or cuda:N; gpu means cuda (default: auto)."
 )
+_XGB_DEVICE_PATTERN = re.compile(r"auto|cpu|cuda(:\d+)?")
+
+
+def normalize_xgb_device(value: str | None) -> str:
+    """Return the canonical spelling of a requested XGBoost device.
+
+    Accepts ``auto``, ``cpu``, ``cuda``, ``cuda:N`` and ``gpu`` (which means ``cuda``), in any
+    case; no value means ``auto``. Anything else raises ``ValueError``, so a typo never reaches
+    XGBoost and ``gpu`` never fingerprints differently from ``cuda``.
+    """
+    choice = (value or XGB_DEVICE_AUTO).strip().lower()
+    if choice == "gpu":
+        choice = "cuda"
+    if not _XGB_DEVICE_PATTERN.fullmatch(choice):
+        raise ValueError(
+            f"Unknown XGBoost device {value!r}; use auto, cpu, cuda or cuda:N (gpu means cuda)."
+        )
+    return choice
+
+
+def xgb_device_arg(value: str) -> str:
+    """Parse an ``--xgb-device`` value, reporting an unknown device as a usage error."""
+    try:
+        return normalize_xgb_device(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 @dataclass
@@ -161,16 +189,17 @@ def resolve_xgb_device(requested: str | None) -> str:
 
     ``auto`` (or no device) becomes ``cuda`` when a usable GPU is present and ``cpu``
     otherwise. An explicit GPU request without a usable GPU becomes ``cpu`` with a warning,
-    so the recorded device is the one the run trains on. Any other value is kept.
+    so the recorded device is the one the run trains on. The spelling is normalized first
+    (``normalize_xgb_device``), so an unknown device raises ``ValueError``.
     """
-    choice = (requested or XGB_DEVICE_AUTO).strip().lower()
+    choice = normalize_xgb_device(requested)
     if choice == XGB_DEVICE_AUTO:
         device = "cuda" if xgb_cuda_usable() else "cpu"
         if not _RUNTIME_STATE.auto_device_logged:
             log.info("XGBoost device auto resolved to %s.", device)
             _RUNTIME_STATE.auto_device_logged = True
         return device
-    if choice.startswith(("cuda", "gpu")) and not xgb_cuda_usable():
+    if choice.startswith("cuda") and not xgb_cuda_usable():
         _log_gpu_fallback(
             f"XGBoost device {choice} requested but no usable CUDA GPU was found; using the CPU."
         )
@@ -187,7 +216,9 @@ def _resolve_xgb_params(
     """Resolve XGBoost params with build-aware device/tree_method handling.
 
     The device always ends concrete: ``auto`` or no device goes through
-    ``resolve_xgb_device``, and a legacy GPU tree method with no device asks for ``cuda``.
+    ``resolve_xgb_device``. A legacy GPU tree method (``gpu_hist``), whether passed as
+    ``tree_method`` or in ``overrides``, becomes ``hist`` and asks for ``cuda`` unless a
+    device is named, because current XGBoost rejects the ``gpu_*`` names.
     """
     params = base_params.copy()
     supports_device = _xgb_param_supported("device")
@@ -213,6 +244,11 @@ def _resolve_xgb_params(
         params.update(overrides)
 
     if supports_device:
+        if "gpu" in str(params.get("tree_method", "")):
+            params["tree_method"] = "hist"
+            params.pop("predictor", None)
+            if normalize_xgb_device(params.get("device")) == XGB_DEVICE_AUTO:
+                params["device"] = "cuda"
         params["device"] = resolve_xgb_device(params.get("device"))
         if params["device"].startswith("cuda"):
             params.setdefault("tree_method", "hist")
@@ -278,7 +314,11 @@ def _coerce_tree_method_on_error(
     params: dict[str, Any],
     exc: Exception,
 ) -> dict[str, Any] | None:
-    """Coerce tree_method/device when XGBoost errors imply unsupported GPU settings."""
+    """Coerce tree_method/device when XGBoost errors imply unsupported GPU settings.
+
+    Every fallback is logged as a warning: each one retrains a fit on the CPU, which a run on
+    CUDA must not pass over silently.
+    """
     tree_method = params.get("tree_method")
     message = str(exc)
     lower_message = message.lower()
@@ -289,9 +329,10 @@ def _coerce_tree_method_on_error(
         new_params = params.copy()
         new_params["device"] = "cpu"
         new_params.pop("predictor", None)
-        new_params.setdefault("tree_method", "hist")
+        if not tree_method or "gpu" in str(tree_method):
+            new_params["tree_method"] = "hist"
         _RUNTIME_STATE.gpu_tree_method_disabled = True
-        _log_gpu_fallback("CUDA device not available for XGBoost; using CPU hist instead.")
+        log.warning("XGBoost fit failed on CUDA (%s); retrying on the CPU.", message)
         return new_params
 
     if not tree_method or "gpu" not in str(tree_method):
@@ -304,7 +345,22 @@ def _coerce_tree_method_on_error(
     new_params.pop("predictor", None)
     new_params.pop("device", None)
     _RUNTIME_STATE.gpu_tree_method_disabled = True
-    _log_gpu_fallback(
-        f"tree_method={tree_method} is not supported by this XGBoost build; using hist instead."
+    log.warning(
+        "tree_method=%s is not supported by this XGBoost build; using hist instead.", tree_method
     )
     return new_params
+
+
+def fitted_xgb_device(model: Any) -> str | None:
+    """Return the device a fitted model's XGBoost margin head was trained on.
+
+    Reads the estimator itself, so a fit that fell back to the CPU is recorded as ``cpu``.
+    A blended model is read through its team model. Returns None when the model holds no
+    XGBoost estimator.
+    """
+    model = getattr(model, "team_model", model)
+    estimator = getattr(model, "margin_model", None)
+    if not isinstance(estimator, xgb.XGBModel):
+        return None
+    device = estimator.get_params().get("device")
+    return None if device is None else str(device)

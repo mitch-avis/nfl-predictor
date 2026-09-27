@@ -313,6 +313,7 @@ def test_fold_checkpoint_fingerprint_hashes_the_resolved_device(
     gpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cuda"))
     gpu_auto = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "auto"))
     gpu_default = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, None))
+    gpu_alias = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "gpu"))
     cpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cpu"))
 
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: False)
@@ -320,6 +321,7 @@ def test_fold_checkpoint_fingerprint_hashes_the_resolved_device(
 
     assert gpu_auto == gpu
     assert gpu_default == gpu
+    assert gpu_alias == gpu
     assert cpu != gpu
     assert cpu_auto == cpu
 
@@ -994,6 +996,9 @@ def test_walk_forward_disables_small_window_early_stopping(
 
         def get_booster(self) -> _DummyBooster:
             return _DummyBooster()
+
+        def get_params(self) -> dict[str, object]:
+            return {"device": "cpu"}
 
     margin_rounds: list[object] = []
     quantile_rounds: list[object] = []

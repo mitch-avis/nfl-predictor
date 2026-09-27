@@ -39,7 +39,9 @@ from nfl_predictor.ml.ml_model_training import (
 from nfl_predictor.ml.ml_model_xgb_utils import (
     XGB_DEVICE_AUTO,
     XGB_DEVICE_HELP,
+    fitted_xgb_device,
     resolve_xgb_device,
+    xgb_device_arg,
 )
 from nfl_predictor.utils.logger import log
 
@@ -211,7 +213,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--xgb-device",
-        type=str,
+        type=xgb_device_arg,
         default=XGB_DEVICE_AUTO,
         help=XGB_DEVICE_HELP,
     )
@@ -411,7 +413,7 @@ def main() -> None:
             tuned_params=result.tuned_params,
             early_stopping=result.early_stopping,
             optuna_summary=getattr(result.model, "optuna_summary", None),
-            xgb_device=args.xgb_device,
+            xgb_device=fitted_xgb_device(result.model),
         )
         artifacts.write_json(paths.metadata_path, metadata)
         if result.feature_importance:

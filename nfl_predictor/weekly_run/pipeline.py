@@ -30,7 +30,7 @@ from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
 from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
-from nfl_predictor.ml.ml_model_xgb_utils import resolve_xgb_device
+from nfl_predictor.ml.ml_model_xgb_utils import fitted_xgb_device, resolve_xgb_device
 from nfl_predictor.reporting import power_rankings
 from nfl_predictor.reporting.betting_report import build_betting_report
 from nfl_predictor.utils import fingerprints
@@ -175,9 +175,8 @@ def _write_training_artifacts(
     created_at: str,
     dataset_hash: str,
     config_payload: dict[str, Any],
-    xgb_device: str,
 ) -> artifacts.RunPaths:
-    """Write model, metrics, and metadata artifacts; the metadata names the XGBoost device."""
+    """Write model, metrics, and metadata; the metadata names the device the model was fitted on."""
     paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
     artifacts.save_model(paths.model_path, result.model)
 
@@ -201,7 +200,7 @@ def _write_training_artifacts(
         tuned_params=result.tuned_params,
         early_stopping=result.early_stopping,
         optuna_summary=getattr(result.model, "optuna_summary", None),
-        xgb_device=xgb_device,
+        xgb_device=fitted_xgb_device(result.model),
     )
     artifacts.write_json(paths.metadata_path, metadata)
     if result.feature_importance:
@@ -519,7 +518,6 @@ def main() -> int:
             created_at=created_at,
             dataset_hash=dataset_hash,
             config_payload={**config_payload, "wf_best": best_row, "train_config": train_config},
-            xgb_device=args.xgb_device,
         )
         _write_stage_marker(
             train_marker,

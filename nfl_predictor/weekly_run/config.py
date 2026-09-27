@@ -9,7 +9,7 @@ from typing import Any
 
 from nfl_predictor import constants
 from nfl_predictor.ml import ml_model_core, walk_forward
-from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP
+from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.reporting import power_rankings
 
 _PATH_KEYS = {
@@ -412,7 +412,7 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     )
     parser.add_argument(
         "--xgb-device",
-        type=str,
+        type=xgb_device_arg,
         default=defaults.get("xgb_device", XGB_DEVICE_AUTO),
         help=f"{XGB_DEVICE_HELP} Stage 1 and the final fit use the same device.",
     )

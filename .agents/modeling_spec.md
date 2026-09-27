@@ -159,6 +159,7 @@ Every saved model must include adjacent metadata JSON with:
 - dataset fingerprint (hash of training CSV and/or stable row ids)
 - library versions (xgboost, sklearn, numpy, pandas, polars, scipy)
 - training config (CLI args / config object)
+- the XGBoost device the model trained on (`xgb_device`: `cpu` or `cuda`, never `auto`)
 - season/week ranges used for train/calibration/holdout
 - feature list used
 - best params (if tuned) and early-stopping info

@@ -630,7 +630,8 @@ are diagnostics of saved artifacts, not walk-forward results, and have no second
       headline measure was considered and not built. The user decided on 2026-09-27: SHAP
       becomes the headline measure, computed on every run despite the extra pass, total gain
       stays as the secondary measure, and the combined (both heads) ranking stays, with a
-      margin-only toggle added in the web phases.
+      margin-only toggle added in the web phases. SHAP landed in `0.31.0`; the margin-only toggle
+      is the remainder, for the web phases (Milestone 58).
 - [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping

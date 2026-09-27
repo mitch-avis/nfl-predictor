@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.31.0] - 2026-09-27
+
+### Changed
+
+- `feature_importance.json` is `schema_version` 3: margin/total fits (the weekly run and
+  `nfl-predictor train`'s default kind) record mean |SHAP| in points per encoded column and per
+  base feature, per head and combined, over the final model's tree-training rows, using
+  XGBoost's exact TreeSHAP; a base feature's one-hot contributions are summed before the absolute
+  value, and market-anchored heads are explained on their residual over the market line. Total
+  gain stays as the secondary measure. The change is under `nfl_predictor/ml/`, so checkpoint
+  fingerprints change.
+- The web Model page ranks features by combined mean |SHAP| and captions it; runs without SHAP
+  fall back to total gain, and the oldest runs to summed average gain, each labelled.
+- `nfl-predictor explain` computes SHAP with XGBoost's own TreeSHAP (`pred_contribs`) instead of
+  the `shap` package, with unchanged values, and no longer exits 2 when `shap` is missing.
+
 ## [0.30.1] - 2026-09-27
 
 ### Changed

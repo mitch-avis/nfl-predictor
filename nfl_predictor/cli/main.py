@@ -54,14 +54,6 @@ COMMANDS: tuple[Command, ...] = (
         walk_forward=True,
     ),
     Command(
-        "sweep",
-        "research",
-        "Walk-forward sweep of calibration and market-probability settings.",
-        "nfl_predictor.cli.sweep",
-        takes_argv=False,
-        walk_forward=True,
-    ),
-    Command(
         "explain",
         "research",
         "SHAP feature attribution for a saved model.",

@@ -454,16 +454,15 @@ the modelling source code, and the installed library versions. Re-running an ide
 after a stop (deliberate or not) restores the finished weeks and trains only the rest; a resumed run
 returns exactly the numbers an uninterrupted one would, which a test pins. Anything that changes the
 fingerprint starts fresh, so stale results are never mixed in. `--no-resume` retrains every week
-and `--checkpoint-dir` moves the root. The same checkpointing runs in `nfl-predictor sweep`
-(`--resume`, `--checkpoint-dir`) and inside the run directories of `nfl-predictor weekly` (its
-existing `--resume`). The metrics report records how many weeks
+and `--checkpoint-dir` moves the root. The same checkpointing runs inside the run directories of
+`nfl-predictor weekly` (its existing `--resume`). The metrics report records how many weeks
 were restored and how many were trained. Checkpoints are small (a few hundred KB per run) and safe to
 delete once a report is written. Nothing prunes them: `nfl-predictor checkpoints` lists every
 checkpoint directory with its size and whatever names it (a run's report, a review, a launcher,
 `AGENTS.md` or `.agents/`), and `--unreferenced-only` lists the ones nothing names. It never
 deletes anything.
 
-`weekly`, `backtest` and `sweep` run XGBoost with OpenMP's passive wait policy
+`weekly` and `backtest` run XGBoost with OpenMP's passive wait policy
 (`OMP_WAIT_POLICY=PASSIVE`) unless the environment sets one: when other work shares the machine,
 the default policy's spinning threads stall and a week can take several times longer. On a
 dedicated, idle machine the default is faster; set `OMP_WAIT_POLICY=` (empty) to keep it. The
@@ -479,8 +478,8 @@ nfl-predictor backtest --disable-trend-features
 nfl-predictor backtest --disable-trend-features --recency-half-life-seasons 16
 ```
 
-Named feature groups can be ablated the same way with `--disable-feature-groups` (available on both
-`nfl-predictor backtest` and `nfl-predictor sweep`). Group names come from
+Named feature groups can be ablated the same way with `nfl-predictor backtest
+--disable-feature-groups`. Group names come from
 `constants.FEATURE_GROUP_COLUMN_MARKERS`; a column belongs to a group when any of that group's
 markers is a substring of the column name, which catches the `away_`/`home_` prefixes and the
 `_diff` suffix at once. An unknown group name is a hard error. The dropped column list is recorded
@@ -683,7 +682,7 @@ commands by group, and `nfl-predictor <command> --help` shows a command's option
 | group | commands |
 | --- | --- |
 | weekly | `weekly` (refresh, stage-1 selection, train, predict, reports; resumable, JSON/YAML config) |
-| research | `backtest` (walk-forward, the benchmark), `sweep` (calibration and market-probability variants), `compare` (paired comparison of two walk-forward runs), `explain` (SHAP attribution for a saved model), `checkpoints` (read-only listing of walk-forward checkpoints) |
+| research | `backtest` (walk-forward, the benchmark), `compare` (paired comparison of two walk-forward runs), `explain` (SHAP attribution for a saved model), `checkpoints` (read-only listing of walk-forward checkpoints) |
 | data | `data` (the ETL), `validate` (`--live` compares against the schedule), `leakage-audit`, `lines`, `build-week` |
 | models by hand | `train`, `predict` (`--model-in`), `rankings` |
 | web | `web`, `users` |
@@ -722,32 +721,6 @@ total MAE is `10.3152` in the production configuration (no market anchoring) and
 anchoring, against `10.0847` for the line itself. Treat an over/under lean as a diagnostic, not a
 betting signal. Spreads, moneylines and win probabilities are unaffected.
 
-`sweep` examples:
-
-```bash
-nfl-predictor sweep \
-  --wf-eval-last-n-seasons 3 \
-  --wf-market-mode hybrid \
-  --market-prob-source raw \
-  --market-prob-blend-method prob
-```
-
-```bash
-nfl-predictor sweep \
-  --wf-eval-last-n-seasons 3 \
-  --wf-market-mode all \
-  --market-prob-source both \
-  --market-prob-blend-method both
-```
-
-Uncertainty-aware comparison:
-
-```bash
-nfl-predictor sweep \
-  --wf-eval-last-n-seasons 3 \
-  --win-prob-uncertainty both
-```
-
 `weekly` config example (JSON):
 
 ```json
@@ -766,7 +739,7 @@ Run it with:
 nfl-predictor weekly --config path/to/weekly_run.json
 ```
 
-Every XGBoost command (`backtest`, `sweep`, `weekly`, `train`) defaults to `--xgb-device auto`,
+Every XGBoost command (`backtest`, `weekly`, `train`) defaults to `--xgb-device auto`,
 which trains on the GPU when the XGBoost build has CUDA and a usable GPU is present, and on the
 CPU otherwise. Pass `--xgb-device cpu` to force the CPU; the accepted values are `auto`, `cpu`,
 `cuda` and `cuda:N` (`gpu` means `cuda`), and anything else is a usage error. A CUDA request

@@ -143,7 +143,7 @@ walk-forward unless the user asks.
 ## Open questions for the user
 
 - Merge `chore/claude-code-setup` (`0.28.6`) into `main` once the independent review is done?
-  The companion skill edits are on a branch in `mitch-avis/agent-skills` with their own draft PR.
+  The companion skill edits are already on `mitch-avis/agent-skills` `main` (`f7031cb..aeb789b`).
 
 ## Notes
 

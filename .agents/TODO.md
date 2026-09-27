@@ -149,6 +149,15 @@ Steps:
    pool (follow-up from 59.2), so fitted calibrators can be judged fairly as 56.5 options.
    Task 55.6 (the per-season stability view) lands here as part of the standard walk-forward
    report. Absorbs the follow-ups marked "(step 3)".
+   Plan accepted by the user on 2026-09-27 (branch `feat/step3-parity`): (A) evidence with no
+   `ml/` edits: the one-fold CPU-vs-GPU and determinism check (rung L0), the independent rescore
+   of the probability paths on the task 55.8 checkpoints (`models/step3_prob_paths/`), and 56.6
+   (b)/(c) (`models/step3_open_lines/`); (B) every `ml/` edit in one batch, one implementer
+   subagent and one review per chunk; (C) the GPU reference, six seasons from week 1 on seeds
+   `42` and `7` (rungs L1-L2); (D) a no-holdout arm (`--wf-calibration-weeks 0`) on two seeds
+   (rungs L3-L4) only if (B) leaves the holdout with no purpose. Ladder cap: four six-season runs
+   plus L0; each rung's hypothesis and rule are in its run directory. 56.6(d) moved to step 4
+   the same day (it needs a dataset build).
 4. **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
    First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
    a schema version in the play-by-play cache key), because this step compares dataset builds.
@@ -426,7 +435,8 @@ Formerly Milestone 41.
       (c) on 2007-2025, score the model against the opening line as a second market yardstick
       beside the stored one, since pick-time lines sit between open and close; (d) measure how
       much anchoring on opening instead of stored lines changes backtest accuracy, a
-      feature-value change measured with two builds and two seeds; (e) record the coverage limits
+      feature-value change measured with two builds and two seeds (moved to roadmap step 4 by
+      the user on 2026-09-27, to share its rebuild cycle); (e) record the coverage limits
       (no openers before 2007, uncertain in 2022, undated `legacy` openers) wherever a number
       depends on them. The outcome feeds 56.5: a market blend judged against closing lines
       overstates what it can do at pick time.

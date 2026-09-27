@@ -665,6 +665,10 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       the Week 3 model's trees did not see 2026 Weeks 1-2, which reach it only through the
       features. Measure a refit on all rows (or a smaller hold-out) in step 3 with the
       out-of-fold calibration pool; the user asked whether this is a design flaw.
+      Correction (2026-09-27, verified by an independent review): only the final fit holds the
+      newest 4 weeks out of its trees; walk-forward folds train on every earlier game, so every
+      benchmark number measures a model without the hold-out. Which side moves is the user's
+      step-3 question (recommendation: production stops holding out).
 - [ ] **Stage-1 selection and pick-time timing.** Already scheduled (task 56.5): this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
@@ -760,19 +764,30 @@ the identity warning. Still open:
       training now rolls the window back into the previous season. The backtest therefore does
       not measure the early-season regime the weekly model uses. Roll the walk-forward window
       back the same way and re-measure from week 1.
-- [ ] With `--train-calibration-seasons 1` and the default four weeks, the whole calibration
+      Narrowed (2026-09-27): the premise predates the pooled calibration frame (`0.12.x`). Today
+      the frame is the previous two seasons plus the eval season's completed weeks, never empty,
+      and walk-forward folds hold nothing out of the tree fit; the real gap is the final fit's
+      hold-out (the Week 3 item "The final fit never trains on the newest weeks"), a user
+      question. `0.30.1` documents both paths in the help, config and README.
+- [x] With `--train-calibration-seasons 1` and the default four weeks, the whole calibration
       season is the newest season the window does not touch, so it jumps (for example from 2024
       to 2025) between weeks 4 and 5 of a season and swaps a whole season between train and
       calibration. Correct by construction, but not logged; log the candidates or document it.
+      Done in `0.30.1`: the final fit logs the calibration seasons and why they move, and each
+      walk-forward fold logs its calibration frame.
 - [ ] With `--include-postseason`, the rolled-back window is filled by the previous season's
       playoff weeks (divisional, conference, Super Bowl: seven games), so a week-1 or week-2
       window can hold about 23 games. The weekly default excludes the postseason; consider
       skipping postseason weeks when the window rolls back, or counting games instead of weeks.
-- [ ] `_split_train_calibration_holdout` still returns the lossy `(newest season, its weeks)`
+      Open (2026-09-27): moot if production stops holding weeks out (the user's step-3
+      question); otherwise the recommendation is to skip postseason weeks when rolling back.
+- [x] `_split_train_calibration_holdout` still returns the lossy `(newest season, its weeks)`
       pair and `_inseason_calibration_pairs` re-derives the window from the calibration frame;
       returning `window_pairs` from the split would remove the duplication (touches the two
       destructuring sites in `ml_model_training.py` and two 8-tuple mocks in
       `tests/test_ml_model_training_additional.py`).
+      Done in `0.30.1`: the split returns a `TrainCalibrationSplit` carrying `window_pairs`,
+      pinned by characterization tests written before the change.
 - [ ] `_attach_qb_features` requests a not-yet-published current season a second time before
       kickoff (the first `load_pbp` skipped it, so it is "missing"), doubling that network attempt
       and its warning; and every ETL run, however narrow its `--min-season`, needs all

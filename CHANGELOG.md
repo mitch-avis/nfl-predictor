@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.30.1] - 2026-09-27
+
+### Changed
+
+- `_split_train_calibration_holdout` returns a `TrainCalibrationSplit` carrying the in-season
+  window's `(season, week)` pairs; the report's `calibration_inseason` record is built from them
+  instead of being re-derived from the calibration frame (no output change).
+- The final fit logs why whole calibration seasons move and the pooled calibrator frame's seasons
+  and weeks; each walk-forward fold logs its calibration frame and says when it is unused because
+  calibration resolves to `none`.
+- The `--wf-calibration-weeks` and `train --calibration-weeks` help, the `weekly_run.yaml`
+  comment and the README say what each path holds out: walk-forward folds hold nothing out of
+  the tree fit, and the final fit holds out the newest weeks, rolling back across seasons.
+
+### Fixed
+
+- `metadata.json` `xgb_device` reads every XGBoost head (margin, total, quantiles) and records
+  `mixed` when they trained on different devices.
+
 ## [0.30.0] - 2026-09-27
 
 ### Changed

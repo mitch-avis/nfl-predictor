@@ -7,7 +7,7 @@ const MEASURES: Record<FeatureImportanceMeasure, { name: string; caption: string
   mean_abs_shap: {
     name: 'Mean |SHAP| (points)',
     caption:
-      'Mean |SHAP|: how far the feature moves a game’s predicted margin and total, in points, averaged over the model’s training games and added across the two heads.',
+      'Mean |SHAP|: how far the feature moves the model’s adjustment to the market line (or the prediction itself when not anchored), in points, averaged over the model’s training games and added across the margin and total heads.',
   },
   total_gain: {
     name: 'Total gain',

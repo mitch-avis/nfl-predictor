@@ -16,6 +16,7 @@ describe('FeatureImportanceChart', () => {
     render(<FeatureImportanceChart importance={importance} />)
     expect(screen.getByText(/^Mean \|SHAP\|:/)).toBeInTheDocument()
     expect(screen.getByText(/in points/)).toBeInTheDocument()
+    expect(screen.getByText(/adjustment to the market line/)).toBeInTheDocument()
     expect(screen.queryByText(/older run/i)).not.toBeInTheDocument()
   })
 

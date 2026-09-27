@@ -163,7 +163,7 @@
    "choices": null,
    "default": 4,
    "dest": "wf_calibration_weeks",
-   "help": "Number of prior weeks (same season) used for time-aware calibration.",
+   "help": "Walk-forward: a positive value switches on the pooled calibrator frame for fitted calibrators (the previous two seasons plus the eval season's completed weeks); folds hold nothing out of the tree fit.",
    "nargs": null,
    "options": [
     "--wf-calibration-weeks",
@@ -1211,7 +1211,7 @@
    "choices": null,
    "default": 4,
    "dest": "wf_calibration_weeks",
-   "help": "Number of prior weeks (same season) used for time-aware calibration.",
+   "help": "Walk-forward: a positive value switches on the pooled calibrator frame for fitted calibrators (the previous two seasons plus the eval season's completed weeks); folds hold nothing out of the tree fit.",
    "nargs": null,
    "options": [
     "--wf-calibration-weeks",
@@ -1742,7 +1742,7 @@
    "choices": null,
    "default": 0,
    "dest": "calibration_weeks",
-   "help": "Number of weeks from the latest season reserved for calibration.",
+   "help": "Number of newest completed weeks held out of the tree fit for calibration; the window rolls back into the previous season when the latest season has fewer.",
    "nargs": null,
    "options": [
     "--calibration-weeks"

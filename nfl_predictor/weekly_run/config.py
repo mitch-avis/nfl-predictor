@@ -105,6 +105,22 @@ def _allowed_config_keys(parser: argparse.ArgumentParser) -> set[str]:
     return {action.dest for action in parser._actions if action.dest != "help"}
 
 
+def _validate_config_choices(config: dict[str, Any], parser: argparse.ArgumentParser) -> None:
+    """Raise if a config value is outside its option's choices.
+
+    argparse checks ``choices`` only for values given on the command line, not for defaults, so
+    a config file's value (for example the retired ``wf_market_mode: all``) is checked here,
+    before the run refreshes any data.
+    """
+    for action in parser._actions:
+        if action.choices is None or action.dest not in config:
+            continue
+        value = config[action.dest]
+        if value not in action.choices:
+            options = ", ".join(str(choice) for choice in action.choices)
+            raise ValueError(f"Config sets {action.dest} to {value!r}; choose one of: {options}.")
+
+
 def _validate_config_keys(config: dict[str, Any], allowed: set[str]) -> None:
     """Raise if config includes unsupported keys."""
     unknown = sorted(set(config) - allowed)
@@ -538,6 +554,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if config_path is not None:
         config = _rename_config_keys(_load_config(config_path))
         _validate_config_keys(config, _allowed_config_keys(parser))
+        _validate_config_choices(config, parser)
         # Recording the path as the default keeps it in args.config when it was not passed.
         parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)

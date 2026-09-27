@@ -357,6 +357,15 @@ def test_stage1_walks_forward_with_the_final_fits_market_transform_and_cardinali
     assert captured[0].max_cardinality_ratio == pytest.approx(ratio)
 
 
+def test_a_config_with_the_retired_all_market_mode_is_rejected(tmp_path: Path) -> None:
+    """``wf_market_mode: all`` in a config file fails at parse time, before any ETL refresh."""
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text('{"wf_market_mode": "all"}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"wf_market_mode.*all.*features, anchor, hybrid"):
+        run_config._parse_args(["--config", str(config_path)])
+
+
 def test_the_retired_all_market_mode_no_longer_parses() -> None:
     """One production configuration means one market mode; ``all`` compared three."""
     with pytest.raises(SystemExit):

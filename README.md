@@ -613,7 +613,8 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   default.
 - Weekly prediction outputs live next to the input prediction file (e.g., `data/predict/`).
 - `metadata.json` includes dataset fingerprint, the XGBoost device the model trained on
-  (`xgb_device`), tuned params, and Optuna summary when tuning runs.
+  (`xgb_device`, read from every head: `mixed` when a head fell back to another device), tuned
+  params, and Optuna summary when tuning runs.
 - Power rankings outputs:
   - `power_rankings_season_XXXX_week_YY.csv`
   - `projected_standings_season_XXXX_week_YY.csv`

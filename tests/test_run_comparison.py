@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -17,6 +18,7 @@ import pytest
 from nfl_predictor.cli import compare as command
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.reporting import run_comparison
+from tests import snapshots
 
 # (game_id, season, week, p, actual margin); home wins when the margin is positive.
 GAMES = [
@@ -252,3 +254,96 @@ def test_the_command_exits_two_when_the_runs_cannot_be_compared(tmp_path: Path) 
     reference = _write_run(tmp_path, "ref", _predictions(), seed=42)
 
     assert command.main(["--candidate", str(tmp_path), "--reference", str(reference)]) == 2
+
+
+# Two seasons with several games per week, so every season and week bucket has games and the
+# per-week pool bootstrap has more than one week to resample in the bigger windows.
+# (game_id, season, week, p, actual margin)
+SEASON_GAMES = [
+    ("2023_01_a", 2023, 1, 0.70, 7),
+    ("2023_01_b", 2023, 1, 0.40, 3),
+    ("2023_01_c", 2023, 1, 0.55, -2),
+    ("2023_02_a", 2023, 2, 0.65, 10),
+    ("2023_02_b", 2023, 2, 0.35, -4),
+    ("2023_03_a", 2023, 3, 0.80, 14),
+    ("2023_03_b", 2023, 3, 0.52, -1),
+    ("2023_04_a", 2023, 4, 0.30, -6),
+    ("2023_04_b", 2023, 4, 0.60, 0),
+    ("2024_01_a", 2024, 1, 0.62, 3),
+    ("2024_01_b", 2024, 1, 0.45, -7),
+    ("2024_02_a", 2024, 2, 0.75, -3),
+    ("2024_02_b", 2024, 2, 0.58, 6),
+    ("2024_03_a", 2024, 3, 0.40, 2),
+    ("2024_03_b", 2024, 3, 0.66, 9),
+    ("2024_19_a", 2024, 19, 0.57, -10),
+]
+SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "run_comparison"
+TMP_PLACEHOLDER = "<tmp>"
+
+
+def _season_predictions(shift: float = 0.0, market: float = 0.5) -> pd.DataFrame:
+    """Return prediction rows for ``SEASON_GAMES``; ``shift`` moves every probability."""
+    rows = []
+    for index, (game_id, season, week, p, margin) in enumerate(SEASON_GAMES):
+        rows.append(
+            {
+                "game_id": game_id,
+                "season": season,
+                "week": week,
+                "deterministic_home_win_prob": min(max(p + shift, 0.01), 0.99),
+                "market_home_win_prob": market,
+                "actual_home_win": int(margin > 0),
+                "actual_margin": float(margin),
+                "actual_total": 40.0 + index,
+                "predicted_margin": float(margin) + (index % 5) - 2.0 + 3 * shift,
+                "predicted_total": 44.0 - shift * 10,
+                "calibration_method": "none",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _season_comparison(tmp_path: Path) -> dict[str, Any]:
+    """Compare a shifted candidate with a reference on the two-season fixture."""
+    candidate = _loaded(tmp_path, "cand", _season_predictions(shift=0.05, market=0.55))
+    reference = _loaded(tmp_path, "ref", _season_predictions(market=0.55))
+    return run_comparison.compare_runs([candidate], [reference], resamples=200)
+
+
+def _without_tmp(text: str, tmp_path: Path) -> str:
+    """Replace the test's temporary directory in ``text`` with a fixed placeholder."""
+    return text.replace(str(tmp_path), TMP_PLACEHOLDER)
+
+
+def _assert_contains(where: str, actual: object, expected: object) -> None:
+    """Assert every key in ``expected`` is in ``actual`` with an exactly equal value."""
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict), where
+        for key, value in expected.items():
+            assert key in actual, f"{where}: missing {key}"
+            _assert_contains(f"{where}.{key}", actual[key], value)
+    else:
+        assert actual == expected, f"{where}: {actual!r} != {expected!r}"
+
+
+def test_the_existing_comparison_report_is_unchanged(tmp_path: Path) -> None:
+    """The window tables, provenance and JSON keys that ``compare`` wrote before stay exact.
+
+    The snapshot was written from the report before the per-season view was added; the report
+    may add sections after it and keys beside it, but every existing line and value is kept
+    byte for byte, so the command still reproduces earlier reviewed rescores.
+    """
+    report = _season_comparison(tmp_path)
+    lines = [_without_tmp(line, tmp_path) for line in run_comparison.format_report(report)]
+    payload = json.loads(_without_tmp(json.dumps(report, indent=1, default=str), tmp_path))
+    markdown_snapshot = SNAPSHOT_DIR / "compare_report.txt"
+    json_snapshot = SNAPSHOT_DIR / "compare_report.json"
+    if snapshots.updating():
+        SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+        markdown_snapshot.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        json_snapshot.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
+        return
+
+    expected_lines = markdown_snapshot.read_text(encoding="utf-8").splitlines()
+    assert lines[: len(expected_lines)] == expected_lines
+    _assert_contains("report", payload, json.loads(json_snapshot.read_text(encoding="utf-8")))

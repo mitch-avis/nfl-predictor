@@ -311,14 +311,16 @@ and calibration samples. It is off by default and in the shipped
 weekly config: the six-season, two-seed measurement below found no gain from it.
 
 - `--holdout-seasons` reserves the most recent seasons for evaluation only.
-- `--calibration-weeks` holds the newest completed weeks out of the tree fit, rolling back into
-  the previous season early in a season (at week 2, four weeks are the new season's week 1 plus
-  the previous season's last three). `--calibration-seasons` also holds out whole seasons: the
-  newest ones the week window does not touch, so with one season and four weeks the calibration
-  season moves forward a year between weeks 4 and 5.
+- `--calibration-weeks` holds the newest completed weeks out of the final fit's trees, rolling
+  back into the previous season early in a season (at week 2, four weeks are the new season's
+  week 1 plus the previous season's last three). Walk-forward folds hold nothing out of the tree
+  fit: there `--wf-calibration-weeks` only switches on the pooled calibrator frame.
+  `--calibration-seasons` also holds out whole seasons: the newest ones the week window does not
+  touch, so with one season and four weeks the calibration season moves forward a year between
+  weeks 4 and 5.
 - Both still gate whether a fitted post-processing calibrator is allowed to run, but the fitted
-  calibration pool itself is the previous two seasons plus the completed weeks of the current
-  season.
+  calibration pool itself is the pooled calibrator frame described under "Win probability
+  calibration".
 - The run log lists the training, calibration and holdout seasons, the in-season window's
   `(season, week)` pairs and the calibrator frame's seasons and weeks.
 
@@ -368,7 +370,10 @@ time-aware calibration split (seasons and/or weeks immediately preceding the hol
 - `logistic`: alias for `platt`.
 
 The calibration frame for the fitted methods is the previous two seasons plus the completed weeks
-of the current season, strictly before the predicted week. Its rows are in-sample for the model
+of the current season, strictly before the predicted week. The final fit finds the current season
+as the newest season in its training pool, so before week 1, when that is last season, its frame
+covers three full seasons (last season and the two before it); walk-forward folds know the
+predicted season and use two. Its rows are in-sample for the model
 that predicts them (an out-of-fold pool is an open follow-up), which is one reason the fitted
 methods have not beaten the deterministic floor. The walk-forward report carries the configured,
 deterministic and market-implied probability columns side by side so the choice can be measured.
@@ -405,13 +410,14 @@ GPU is present, and the CPU otherwise; `--xgb-device cpu` or `--xgb-device cuda`
 resolved device is part of the fold-checkpoint fingerprint, so CPU and GPU runs never resume each
 other's weeks, and the run's `metadata.json` records it as `config.xgb_device`. If the latest
 season is incomplete, either pass `--wf-exclude-incomplete-seasons` or specify `--eval-seasons`
-explicitly; the metrics report includes the evaluated window and any exclusions. Walk-forward
-calibration uses the calibration frame described above for fitted calibrators, and each fold logs
-that frame's seasons and weeks; `auto` is the deterministic floor; the summary table includes
-deterministic-minus-market bootstrap intervals for week 1, week 2, weeks 3-18, and all weeks; and
-every fold runs the full `n_estimators` budget
-(no in-season early stopping, in walk-forward or in production), with `best_iteration` recorded
-per head.
+explicitly; the metrics report includes the evaluated window and any exclusions. Each fold's
+trees fit on every completed game before its week: unlike the final fit, walk-forward folds hold
+nothing out of the tree fit, and `--wf-calibration-weeks` only switches on the calibration frame
+described above for fitted calibrators. Each fold logs that frame's seasons and weeks, and says
+when the configured calibration fits nothing; `auto` is the deterministic floor; the summary
+table includes deterministic-minus-market bootstrap intervals for week 1, week 2, weeks 3-18, and
+all weeks; and every fold runs the full `n_estimators` budget (no in-season early stopping, in
+walk-forward or in production), with `best_iteration` recorded per head.
 
 The report also carries a stability view, `metrics.stability` in `metrics_report.json`, and the run
 logs it as Markdown tables when it finishes. For week 1, week 2, weeks 3-18 and all weeks it gives

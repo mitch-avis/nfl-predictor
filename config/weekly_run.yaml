@@ -14,10 +14,11 @@ skip_data_refresh: false
 # data_collection_args: "--min-season 2010 --stat-prior-blend-games 4"
 # resume from previous run or start fresh (default: true)
 resume: true
-# write a progress line and checkpoint after every walk-forward fold of stage 1 (default: false)
+# write a progress line after every walk-forward week of stage 1 (default: false)
 wf_checkpoint_per_fold: false
 
-## Walk-forward evaluation parameters (stage 1):
+## Walk-forward evaluation parameters (stage 1, one walk-forward of the production configuration:
+## the deterministic floor, trained with wf_market_mode):
 # number of most recent seasons to include; the current season counts even before it has a
 # completed week, so 3 scores two seasons (default: 3)
 wf_eval_last_n_seasons: 3
@@ -33,15 +34,9 @@ wf_calibration_weeks: 4
 # wf_recency_half_life_seasons: 16
 # whether to include postseason games in walk-forward evaluation (default: false)
 wf_include_postseason: false
-# market mode (options: features, anchor, hybrid, all, default: hybrid)
+# market mode of the walk-forward and the final fit: market lines as features, the model
+# anchored to them, or both (options: features, anchor, hybrid, default: hybrid)
 wf_market_mode: hybrid
-# market probability source (options: raw, novig, both, default: raw)
-wf_market_prob_source: raw
-# blending method for market probabilities (options: prob, logit, both, default: prob)
-wf_market_prob_blend_method: prob
-# uncertainty-aware win probabilities (options: off, on, both, default: off); quoted, because
-# YAML reads a bare off as the boolean false
-wf_win_prob_uncertainty: "off"
 # include quantile models in walk-forward training (default: false)
 wf_include_quantiles: false
 

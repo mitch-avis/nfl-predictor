@@ -374,7 +374,10 @@ TEMPLATES: tuple[JobTemplate, ...] = (
     JobTemplate(
         id="weekly_run",
         label="Weekly run",
-        description="Compare, train, predict, and report in one orchestrated run.",
+        description=(
+            "Walk the production configuration forward, train, predict, and report in one "
+            "orchestrated run."
+        ),
         category="Pipeline",
         build=_build_weekly_run,
         params=(
@@ -413,7 +416,7 @@ TEMPLATES: tuple[JobTemplate, ...] = (
                 "wf_eval_last_n_seasons",
                 "Walk-forward seasons",
                 "int",
-                "Seasons in the comparison window.",
+                "Seasons the production walk-forward scores.",
             ),
         ),
         exclusive_group=WALK_FORWARD_GROUP,

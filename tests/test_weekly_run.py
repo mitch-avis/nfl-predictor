@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,10 +14,14 @@ import pytest
 import xgboost as xgb
 
 from nfl_predictor import data_collection
+from nfl_predictor.api.readers import cache as api_cache
+from nfl_predictor.api.readers import model as api_model
+from nfl_predictor.api.runs.files import resolve_run_files
 from nfl_predictor.ml import artifacts, ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import inputs, pipeline, stage1
+from tests.api import factories
 
 
 def test_load_config_json(tmp_path: Path) -> None:
@@ -128,52 +133,194 @@ def test_stage_marker_reuse(tmp_path: Path) -> None:
     assert not pipeline._stage_can_reuse(marker, "abc123", "wrong", [output_path])
 
 
-def test_pick_best_row_prefers_deterministic_metrics() -> None:
-    """WF candidate selection should use the deterministic probability instrument."""
-    rows = [
-        {
-            "label": "configured-better",
-            "brier": 0.20,
-            "log_loss": 0.60,
-            "deterministic_brier": 0.22,
-            "deterministic_log_loss": 0.62,
-        },
-        {
-            "label": "deterministic-better",
-            "brier": 0.23,
-            "log_loss": 0.63,
-            "deterministic_brier": 0.19,
-            "deterministic_log_loss": 0.59,
-        },
-    ]
-
-    assert stage1._pick_best_row(rows)["label"] == "deterministic-better"
+def _stub_walk_forward_results() -> dict[str, object]:
+    """Return a minimal walk-forward result for the production evaluation."""
+    return {
+        "overall": {"brier": 0.21, "deterministic_brier": 0.21, "games": 2, "weeks": 1},
+        "per_week": [{"season": 2024, "week": 3, "games": 2}],
+        "per_season": [{"season": 2024, "games": 2}],
+        "reliability": [{"bin_lower": 0.0, "bin_upper": 0.1, "count": 2}],
+        "resolved_settings": {"market_anchor": True},
+    }
 
 
-def test_rank_summary_prefers_deterministic_metrics() -> None:
-    """WF comparison ranking should sort by deterministic Brier then deterministic log loss."""
-    frame = pd.DataFrame(
-        [
-            {
-                "label": "configured-better",
-                "brier": 0.20,
-                "log_loss": 0.60,
-                "deterministic_brier": 0.22,
-                "deterministic_log_loss": 0.62,
-            },
-            {
-                "label": "deterministic-better",
-                "brier": 0.23,
-                "log_loss": 0.63,
-                "deterministic_brier": 0.19,
-                "deterministic_log_loss": 0.59,
-            },
-        ]
+def test_stage1_walks_forward_once_on_the_production_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stage 1 is one walk-forward of what production submits: the deterministic floor."""
+    seen: list[tuple[walk_forward.WalkForwardConfig, dict[str, object]]] = []
+
+    def _fake_run(
+        _df: pd.DataFrame, config: walk_forward.WalkForwardConfig, **kwargs: object
+    ) -> dict[str, object]:
+        seen.append((config, kwargs))
+        return _stub_walk_forward_results()
+
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
+    run_dir = tmp_path / "run"
+
+    summary = stage1.evaluate_production(
+        pd.DataFrame(),
+        run_dir=run_dir,
+        resume=True,
+        dataset_fingerprint={"sha256": "fp"},
+        wf_run_fingerprint="wf123",
+        checkpoint_per_fold=False,
+        eval_last_n_seasons=3,
+        wf_start_week=3,
+        calibration_weeks=4,
+        include_postseason=False,
+        exclude_incomplete_seasons=False,
+        recency_half_life_seasons=None,
+        market_mode="hybrid",
+        xgb_params_overrides={"n_estimators": 20},
+        include_quantiles=False,
     )
 
-    ranked = stage1._rank_summary(frame)
-    assert ranked.iloc[0]["label"] == "deterministic-better"
-    assert ranked.iloc[0]["rank"] == 1
+    assert len(seen) == 1
+    config, kwargs = seen[0]
+    assert config.calibration == "auto"
+    assert (config.market_prob_weight, config.market_prob_clamp) == (0.0, 0.0)
+    assert config.win_prob_use_uncertainty is False
+    assert (config.include_market, config.market_anchor) == (True, True)
+    assert kwargs["checkpoint_dir"] == run_dir / "wf_compare" / "wf_folds"
+    assert kwargs["resume"] is True
+    assert summary["market_mode"] == "hybrid"
+    assert summary["brier"] == pytest.approx(0.21)
+    for retired in ("calibration", "market_prob_weight", "market_prob_clamp"):
+        assert retired not in summary
+    artifact = json.loads(
+        (run_dir / "wf_compare" / f"wf_candidate_{summary['candidate_key']}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact["metrics"]["reliability"] == [{"bin_lower": 0.0, "bin_upper": 0.1, "count": 2}]
+    assert artifact["summary"]["candidate_key"] == summary["candidate_key"]
+
+
+def test_the_model_page_reads_the_production_walk_forward_of_a_weekly_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The web Model page shows stage 1's one row and its reliability bins."""
+    monkeypatch.setattr(
+        walk_forward, "run_walk_forward_backtest", lambda *_a, **_k: _stub_walk_forward_results()
+    )
+    run_dir = factories.make_run_dir(tmp_path, "weekly_floor")
+    shutil.rmtree(run_dir / "wf_compare", ignore_errors=True)
+    summary = stage1.evaluate_production(
+        pd.DataFrame(),
+        run_dir=run_dir,
+        resume=True,
+        dataset_fingerprint={"sha256": "fp"},
+        wf_run_fingerprint="wf123",
+        checkpoint_per_fold=False,
+        eval_last_n_seasons=3,
+        wf_start_week=3,
+        calibration_weeks=4,
+        include_postseason=False,
+        exclude_incomplete_seasons=False,
+        recency_half_life_seasons=None,
+        market_mode="hybrid",
+        xgb_params_overrides={},
+        include_quantiles=False,
+    )
+    stage1.write_summary(run_dir, summary)
+    api_cache.clear()
+
+    payload = api_model.model_payload(resolve_run_files(run_dir))
+
+    table = payload["wf_compare"]
+    assert table is not None
+    assert [row["label"] for row in table.rows] == ["production"]
+    assert table.rows[0]["wf_rank"] == 1
+    assert "calibration" not in table.visible_columns
+    assert payload["wf_best"]["candidate_key"] == summary["candidate_key"]
+    assert payload["calibration"]["bin_count"] == 1
+
+
+def test_the_final_fit_uses_the_configured_market_mode_and_the_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The final fit trains with ``--wf-market-mode`` and submits the floor, with no blend."""
+
+    class _StopAtFinalFitError(Exception):
+        """Stop weekly_run once the final fit's settings have been captured."""
+
+    captured: dict[str, object] = {}
+    data_path = tmp_path / "completed_games_ml.csv"
+    data_path.write_text("season,week,home_spread,total_line\n2025,1,-3.0,44.5\n", encoding="utf-8")
+
+    def _fake_train(**kwargs: object) -> None:
+        captured.update(kwargs)
+        raise _StopAtFinalFitError()
+
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        stage1, "evaluate_production", lambda _df, **kwargs: {"market_mode": kwargs["market_mode"]}
+    )
+    monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "weekly_run.py",
+            "--skip-data-refresh",
+            "--data-path",
+            str(data_path),
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--wf-market-mode",
+            "anchor",
+        ],
+    )
+
+    with pytest.raises(_StopAtFinalFitError):
+        pipeline.main()
+
+    assert (captured["include_market"], captured["market_anchor"]) == (False, True)
+    assert captured["win_prob_calibration"] == "auto"
+    assert captured["market_prob_config"] is None
+    assert captured["win_prob_use_uncertainty"] is False
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [("features", (True, False)), ("anchor", (False, True)), ("hybrid", (True, True))],
+)
+def test_market_mode_flags_name_market_features_and_anchoring(
+    mode: str, expected: tuple[bool, bool]
+) -> None:
+    """Each market mode says whether market features and market anchoring are on."""
+    assert stage1.market_mode_flags(mode) == expected
+
+
+def test_an_unknown_market_mode_is_an_error() -> None:
+    """A market mode outside the three is refused rather than guessed."""
+    with pytest.raises(ValueError, match="all"):
+        stage1.market_mode_flags("all")
+
+
+def test_the_retired_all_market_mode_no_longer_parses() -> None:
+    """One production configuration means one market mode; ``all`` compared three."""
+    with pytest.raises(SystemExit):
+        run_config._build_parser().parse_args(["--wf-market-mode", "all"])
+
+
+@pytest.mark.parametrize(
+    "key", ["wf_market_prob_source", "wf_market_prob_blend_method", "wf_win_prob_uncertainty"]
+)
+def test_a_config_with_a_retired_probability_key_is_rejected(tmp_path: Path, key: str) -> None:
+    """Old configs that set a retired stage-1 probability option fail with a clear message."""
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text(json.dumps({key: "raw"}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=rf"{key}.*deterministic floor"):
+        run_config._parse_args(["--config", str(config_path)])
 
 
 def test_data_refresh_without_arguments_calls_data_collection_bare(
@@ -236,7 +383,7 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
     data_path = tmp_path / "completed_games_ml.csv"
     data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
 
-    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> pd.DataFrame:
+    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> dict[str, object]:
         """Capture the Stage 1 overrides and stop before later stages run."""
         xgb_params_overrides = kwargs.get("xgb_params_overrides")
         assert isinstance(xgb_params_overrides, dict)
@@ -251,7 +398,7 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
         lambda _path: {"sha256": "fp"},
     )
     monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(stage1, "_run_wf_compare", _fake_run_wf_compare)
+    monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
 
     old_argv = sys.argv
     try:
@@ -336,7 +483,6 @@ def test_the_shipped_config_is_read_by_default_and_matches_the_code_defaults() -
     assert differences == {"config", "postseason_weight"}
     assert loaded["config"] == run_config.DEFAULT_CONFIG_PATH
     assert loaded["include_postseason"] is False
-    assert loaded["wf_win_prob_uncertainty"] == "off"
 
 
 def test_an_explicit_config_replaces_the_shipped_one(tmp_path: Path) -> None:
@@ -394,7 +540,7 @@ def test_one_thread_count_reaches_stage1_and_the_final_fit(
     data_path = tmp_path / "completed_games_ml.csv"
     data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
 
-    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> pd.DataFrame:
+    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> dict[str, object]:
         """Capture stage 1's thread count and return one usable candidate row."""
         overrides = kwargs.get("xgb_params_overrides")
         assert isinstance(overrides, dict)
@@ -405,7 +551,7 @@ def test_one_thread_count_reaches_stage1_and_the_final_fit(
     monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
     monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
     monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(stage1, "_run_wf_compare", _fake_run_wf_compare)
+    monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
 
     argv = [
         "--skip-data-refresh",
@@ -452,22 +598,14 @@ def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
     captured: dict[str, object] = {}
     data_path = tmp_path / "completed_games_ml.csv"
     data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
-    best_row = {
-        "market_mode": "features",
-        "calibration": "none",
-        "market_prob_weight": 0.0,
-        "market_prob_clamp": 0.0,
-        "market_prob_source": "raw",
-        "market_prob_blend_method": "prob",
-        "win_prob_use_uncertainty": False,
-    }
+    best_row: dict[str, object] = {"market_mode": "hybrid"}
 
-    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> pd.DataFrame:
-        """Capture stage 1's device and return one candidate row."""
+    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> dict[str, object]:
+        """Capture stage 1's device and return its summary row."""
         overrides = kwargs.get("xgb_params_overrides")
         assert isinstance(overrides, dict)
         captured["stage1"] = overrides["device"]
-        return pd.DataFrame([best_row])
+        return best_row
 
     def _fake_train(**kwargs: object) -> None:
         """Capture the final fit's device and stop."""
@@ -487,8 +625,7 @@ def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
     monkeypatch.setattr(artifacts, "generate_run_id", _fake_run_id)
     monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
     monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(stage1, "_run_wf_compare", _fake_run_wf_compare)
-    monkeypatch.setattr(stage1, "_rank_summary", lambda df: df)
+    monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
     monkeypatch.setattr(
         sys,

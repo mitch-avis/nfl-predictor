@@ -555,23 +555,32 @@ nfl-predictor weekly --help
 ### High-level stages
 
 1. (optional) refresh data (`nfl-predictor data`)
-2. (optional) walk-forward compare to choose market/calibration/prob-postprocess variants
-3. train + calibrate the selected configuration
+2. walk-forward of the production configuration over the recent seasons, so the run reports how
+   production would have scored against the market (stage 1)
+3. train the production configuration, the model the week's picks come from (stage 2)
 4. generate weekly predictions + betting outputs + (optional) power rankings
+
+The weekly run has one production configuration and chooses nothing by itself: the
+probabilities it submits are the deterministic floor (the predicted margin through the fixed
+normal curve, `Phi(margin / SCORE_DIFF_STD_DEV)`, with no fitted calibrator and no market blend),
+from a model trained with `--wf-market-mode` (`hybrid` by default: market lines as features and
+the model anchored to them).
 
 Notes:
 
-- `--wf-*` flags control **walk-forward comparison** behavior (model selection).
-- `--train-*` flags control **final training/calibration** for the model used to produce weekly
-  outputs.
-- `--xgb-*` flags control XGBoost runtime and apply to both comparison and final training.
+- `--wf-*` flags control the stage-1 walk-forward; `--wf-market-mode` also sets the final fit's
+  market mode.
+- `--train-*` flags control the **final training** fit that produces the weekly outputs.
+- `--xgb-*` flags control XGBoost runtime and apply to both the walk-forward and final training.
   `--xgb-device` (`xgb_device` in the config) defaults to `auto`: the GPU when one is usable, else
   the CPU. It is resolved once per run, so stage 1 and the final fit share one device, and the
   model's `metadata.json` records it as `xgb_device`.
 - Outputs are written under the run directory (default: `models/<run_id>/`) unless `--output-dir` is
   provided.
-- Stage 1 walk-forward comparison is resumable and writes `wf_compare/` artifacts under the run
-  directory (including `wf_summary.csv` and per-candidate results).
+- Stage 1 is resumable: its finished weeks are saved under `wf_compare/wf_folds/` in the run
+  directory. Its summary row is written as `wf_compare.csv` and `wf_best.json`, and its per-week,
+  per-season and overall metrics with the reliability table as
+  `wf_compare/wf_candidate_<key>.json`.
 - `--data-collection-args` forwards extra arguments to the data refresh stage as one
   shell-quoted string, for example
   `--data-collection-args "--min-season 2010 --stat-prior-blend-games 4"`. It is split
@@ -681,7 +690,7 @@ commands by group, and `nfl-predictor <command> --help` shows a command's option
 
 | group | commands |
 | --- | --- |
-| weekly | `weekly` (refresh, stage-1 selection, train, predict, reports; resumable, JSON/YAML config) |
+| weekly | `weekly` (refresh, walk-forward of the production configuration, train, predict, reports; resumable, JSON/YAML config) |
 | research | `backtest` (walk-forward, the benchmark), `compare` (paired comparison of two walk-forward runs), `explain` (SHAP attribution for a saved model), `checkpoints` (read-only listing of walk-forward checkpoints) |
 | data | `data` (the ETL), `validate` (`--live` compares against the schedule), `leakage-audit`, `lines`, `build-week` |
 | models by hand | `train`, `predict` (`--model-in`), `rankings` |
@@ -727,8 +736,6 @@ betting signal. Spreads, moneylines and win probabilities are unaffected.
 {
   "wf_eval_last_n_seasons": 3,
   "wf_market_mode": "hybrid",
-  "wf_market_prob_source": "raw",
-  "wf_market_prob_blend_method": "prob",
   "predict_path": "data/predict/week_03_games_to_predict.csv"
 }
 ```

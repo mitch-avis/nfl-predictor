@@ -36,8 +36,15 @@ _RENAMED_CONFIG_KEYS = {
 
 
 # Config keys that were removed, with what replaces them.
+_RETIRED_PROBABILITY_OPTION = (
+    "retired; the weekly run submits the deterministic floor, with no market blend and no "
+    "uncertainty-aware probabilities"
+)
 _REMOVED_CONFIG_KEYS = {
     "wf_n_jobs": "use xgb_n_jobs, which sets XGBoost's CPU threads for every stage",
+    "wf_market_prob_source": _RETIRED_PROBABILITY_OPTION,
+    "wf_market_prob_blend_method": _RETIRED_PROBABILITY_OPTION,
+    "wf_win_prob_uncertainty": _RETIRED_PROBABILITY_OPTION,
 }
 
 
@@ -227,27 +234,12 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     )
     parser.add_argument(
         "--wf-market-mode",
-        choices=["features", "anchor", "hybrid", "all"],
+        choices=["features", "anchor", "hybrid"],
         default=defaults.get("wf_market_mode", "hybrid"),
-        help="Walk-forward: market mode selection.",
-    )
-    parser.add_argument(
-        "--wf-market-prob-source",
-        choices=["raw", "novig", "both"],
-        default=defaults.get("wf_market_prob_source", "raw"),
-        help="Walk-forward: market probability source.",
-    )
-    parser.add_argument(
-        "--wf-market-prob-blend-method",
-        choices=["prob", "logit", "both"],
-        default=defaults.get("wf_market_prob_blend_method", "prob"),
-        help="Walk-forward: market probability blend method.",
-    )
-    parser.add_argument(
-        "--wf-win-prob-uncertainty",
-        choices=["off", "on", "both"],
-        default=defaults.get("wf_win_prob_uncertainty", "off"),
-        help="Walk-forward: use uncertainty-aware win probabilities.",
+        help=(
+            "Market mode of the walk-forward and the final fit: market lines as features, "
+            "the model anchored to them, or both (hybrid)."
+        ),
     )
     parser.add_argument(
         "--wf-include-quantiles",

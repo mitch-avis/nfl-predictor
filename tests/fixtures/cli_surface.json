@@ -2367,69 +2367,14 @@
    "choices": [
     "features",
     "anchor",
-    "hybrid",
-    "all"
+    "hybrid"
    ],
    "default": "hybrid",
    "dest": "wf_market_mode",
-   "help": "Walk-forward: market mode selection.",
+   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, or both (hybrid).",
    "nargs": null,
    "options": [
     "--wf-market-mode"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "raw",
-    "novig",
-    "both"
-   ],
-   "default": "raw",
-   "dest": "wf_market_prob_source",
-   "help": "Walk-forward: market probability source.",
-   "nargs": null,
-   "options": [
-    "--wf-market-prob-source"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "prob",
-    "logit",
-    "both"
-   ],
-   "default": "prob",
-   "dest": "wf_market_prob_blend_method",
-   "help": "Walk-forward: market probability blend method.",
-   "nargs": null,
-   "options": [
-    "--wf-market-prob-blend-method"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": null
-  },
-  {
-   "action": "_StoreAction",
-   "choices": [
-    "off",
-    "on",
-    "both"
-   ],
-   "default": "off",
-   "dest": "wf_win_prob_uncertainty",
-   "help": "Walk-forward: use uncertainty-aware win probabilities.",
-   "nargs": null,
-   "options": [
-    "--wf-win-prob-uncertainty"
    ],
    "required": false,
    "subcommand": null,

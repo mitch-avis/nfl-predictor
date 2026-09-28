@@ -30,8 +30,6 @@ def _parser_with(*builders: Callable[[argparse.ArgumentParser], None]) -> argpar
     [
         (["--wf-eval-last-n-seasons", "6"], "eval_last_n_seasons", 6),
         (["--eval-last-n-seasons", "6"], "eval_last_n_seasons", 6),
-        (["--wf-calibration-weeks", "2"], "wf_calibration_weeks", 2),
-        (["--calibration-weeks", "2"], "wf_calibration_weeks", 2),
         (["--wf-exclude-incomplete-seasons"], "exclude_incomplete_seasons", True),
         (["--exclude-incomplete-seasons"], "exclude_incomplete_seasons", True),
         (["--no-exclude-incomplete-seasons"], "exclude_incomplete_seasons", False),
@@ -46,8 +44,8 @@ def test_window_options_accept_both_spellings(argv: list[str], dest: str, value:
 
 
 def test_window_option_defaults_match_the_walk_forward_defaults() -> None:
-    """With no options the window is three seasons from week 3 with four calibration weeks."""
+    """With no options the window is three seasons from week 3."""
     args = _parser_with(options.add_wf_window_options).parse_args([])
 
-    assert (args.eval_last_n_seasons, args.wf_start_week, args.wf_calibration_weeks) == (3, 3, 4)
+    assert (args.eval_last_n_seasons, args.wf_start_week) == (3, 3)
     assert args.exclude_incomplete_seasons is False

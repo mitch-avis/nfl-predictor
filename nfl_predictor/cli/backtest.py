@@ -227,7 +227,6 @@ def main() -> None:
         eval_last_n_seasons=args.eval_last_n_seasons,
         wf_start_week=args.wf_start_week,
         calibration=args.calibration,
-        calibration_weeks=args.wf_calibration_weeks,
         random_seed=args.random_seed,
         include_postseason=args.include_postseason,
         exclude_incomplete_seasons=args.exclude_incomplete_seasons,

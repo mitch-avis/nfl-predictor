@@ -51,8 +51,6 @@ def trained(tmp_path_factory: pytest.TempPathFactory) -> tuple[MarginTotalModel,
     model = ml_model_training.train_margin_total_model(
         data_path=paths["completed"],
         holdout_seasons=0,
-        calibration_seasons=0,
-        calibration_weeks=4,
         include_market=True,
         max_cardinality_ratio=0.5,
         optuna_config=OPTUNA_OFF,

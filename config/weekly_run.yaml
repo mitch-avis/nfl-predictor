@@ -18,17 +18,13 @@ resume: true
 wf_checkpoint_per_fold: false
 
 ## Walk-forward evaluation parameters (stage 1, one walk-forward of the production configuration:
-## the deterministic floor, trained with wf_market_mode):
+## the deterministic floor, trained with wf_market_mode; each week's fold trains on every earlier
+## completed game, as the final fit does):
 # number of most recent seasons to include; the current season counts even before it has a
 # completed week, so 3 scores two seasons (default: 3)
 wf_eval_last_n_seasons: 3
 # starting week for walk-forward evaluation (default: 3)
 wf_start_week: 3
-# walk-forward calibration weeks: in the walk-forward a positive value selects a frame that
-# XGBoost only evaluates (folds hold nothing out of the tree fit, and no calibrator is fitted);
-# it is also the default for train_calibration_weeks, where the final fit holds that many newest
-# weeks out of the tree fit (default: 4)
-wf_calibration_weeks: 4
 # exponential recency weighting half-life in seasons (default: none, i.e. unweighted; keep it
 # equal to train_recency_half_life_seasons)
 # wf_recency_half_life_seasons: 16
@@ -48,7 +44,10 @@ wf_max_depth: 5
 # learning rate for walk-forward XGBoost model (default: 0.0165)
 wf_learning_rate: 0.0165
 
-## Final model training parameters:
+## Final model training parameters (the final fit trains on every completed game except the
+## holdout seasons, the newest week included, with no eval frame):
+# newest whole seasons held out of the final fit and scored as an evaluation holdout (default: 0)
+holdout_seasons: 0
 # whether to include postseason games in final model training (default: false)
 include_postseason: false
 # weight multiplier for postseason games in final model training; applies only with
@@ -62,8 +61,6 @@ tune_early_stopping_rounds: 50
 # transformed market features in final model training (default: automatic, on whenever market
 # lines exist)
 # market_transform: true
-# number of newest weeks held out for calibration in final training (default: wf_calibration_weeks)
-# train_calibration_weeks: 4
 
 ## Optuna hyperparameter tuning settings:
 # whether to perform hyperparameter tuning before final model training (default: false)

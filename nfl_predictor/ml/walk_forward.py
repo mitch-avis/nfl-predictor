@@ -32,11 +32,9 @@ from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import feature_spec as feature_spec_utils
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml import ml_model_xgb_utils
-from nfl_predictor.ml.ml_model_core import describe_season_weeks
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
 
-DEFAULT_CALIBRATION_WEEKS = 4
 DEFAULT_RANDOM_SEED = 42
 RELIABILITY_BINS = 10
 BOOTSTRAP_SAMPLES = 5000
@@ -86,7 +84,6 @@ class WalkForwardConfig:
     eval_last_n_seasons: int = 3
     wf_start_week: int = 3
     calibration: str = ml_model.CALIBRATION_FLOOR
-    calibration_weeks: int = DEFAULT_CALIBRATION_WEEKS
     random_seed: int = DEFAULT_RANDOM_SEED
     include_postseason: bool = False
     exclude_incomplete_seasons: bool = False
@@ -113,7 +110,6 @@ class WalkForwardConfig:
             "eval_last_n_seasons": self.eval_last_n_seasons,
             "wf_start_week": self.wf_start_week,
             "calibration": self.calibration,
-            "calibration_weeks": self.calibration_weeks,
             "random_seed": self.random_seed,
             "include_postseason": self.include_postseason,
             "exclude_incomplete_seasons": self.exclude_incomplete_seasons,
@@ -268,30 +264,6 @@ def build_walk_forward_folds(
                 WalkForwardFold(season=season, week=week, train_df=train_df, eval_df=eval_df)
             )
     return folds
-
-
-def select_calibration_data(
-    train_df: pd.DataFrame, eval_season: int, eval_week: int, calibration_weeks: int
-) -> pd.DataFrame:
-    """Select the fold's calibration frame from the training window.
-
-    Uses the previous two seasons plus the completed weeks of the eval season strictly before
-    `eval_week`. A positive `calibration_weeks` enables the pooled selector; zero disables it.
-    The frame is in the tree fit already; XGBoost only evaluates it (the fit runs its full tree
-    budget), and no calibrator is fitted on it.
-    """
-    if calibration_weeks <= 0:
-        return train_df.iloc[0:0].copy()
-    if "season" not in train_df.columns or "week" not in train_df.columns:
-        return train_df.iloc[0:0].copy()
-
-    season = pd.to_numeric(train_df["season"], errors="coerce")
-    week = pd.to_numeric(train_df["week"], errors="coerce")
-    lower_season = int(eval_season) - 2
-    mask = ((season >= lower_season) & (season < eval_season)) | (
-        (season == eval_season) & (week < eval_week)
-    )
-    return train_df.loc[mask].copy()
 
 
 def summarize_eval_window(
@@ -909,35 +881,12 @@ def run_walk_forward_backtest(
         )
         train_weight = combine_sample_weights(train_recency)
 
-        calibration_df = select_calibration_data(
-            fold.train_df, fold.season, fold.week, config.calibration_weeks
-        )
-        x_calibration = None
-        y_margin_calibration = None
-        y_total_calibration = None
-        baseline_margin_calibration = None
-        if not calibration_df.empty:
-            x_calibration = preprocessor.transform(
-                ml_model.apply_feature_spec(calibration_df, feature_spec)
-            )
-            (
-                y_margin_calibration,
-                y_total_calibration,
-                baseline_margin_calibration,
-                _,
-            ) = ml_model._prepare_margin_total_targets_with_anchor(
-                calibration_df, target_columns, market_anchor
-            )
-
+        # Every head runs its full tree budget on every earlier game, with no eval frame.
         margin_model, total_model = ml_model._fit_margin_total_models(
             x_train,
             y_margin_train,
             y_total_train,
             params,
-            x_eval=x_calibration,
-            y_margin_eval=y_margin_calibration,
-            y_total_eval=y_total_calibration,
-            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
 
@@ -951,9 +900,6 @@ def run_walk_forward_backtest(
                 y_margin_train,
                 params,
                 quantiles,
-                x_eval=x_calibration,
-                y_eval=y_margin_calibration,
-                early_stopping_rounds=None,
                 sample_weight=train_weight,
             )
             total_quantiles = ml_model._fit_quantile_models(
@@ -961,20 +907,9 @@ def run_walk_forward_backtest(
                 y_total_train,
                 params,
                 quantiles,
-                x_eval=x_calibration,
-                y_eval=y_total_calibration,
-                early_stopping_rounds=None,
                 sample_weight=train_weight,
             )
 
-        log.info(
-            "Walk-forward calibration frame for season %d week %d: %s (%d rows; unused: no "
-            "calibrator is fitted)",
-            int(fold.season),
-            int(fold.week),
-            describe_season_weeks(calibration_df),
-            len(calibration_df),
-        )
         # The submitted probability is the deterministic floor; the column keeps its name.
         calibration_method = "none"
 
@@ -1214,7 +1149,6 @@ def build_metrics_report(
             "excluded_incomplete_seasons": results.get("excluded_incomplete_seasons", []),
             "calibration_window": {
                 "method": config_payload.get("calibration"),
-                "calibration_weeks": config_payload.get("calibration_weeks"),
             },
         },
     }

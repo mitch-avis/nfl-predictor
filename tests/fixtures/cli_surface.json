@@ -159,21 +159,6 @@
    "type": "int"
   },
   {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 4,
-   "dest": "wf_calibration_weeks",
-   "help": "Walk-forward: a positive value switches on the pooled calibrator frame for fitted calibrators (the previous two seasons plus the eval season's completed weeks); folds hold nothing out of the tree fit.",
-   "nargs": null,
-   "options": [
-    "--wf-calibration-weeks",
-    "--calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
    "action": "BooleanOptionalAction",
    "choices": null,
    "default": false,
@@ -1113,7 +1098,7 @@
    "choices": null,
    "default": 2,
    "dest": "holdout_seasons",
-   "help": "Number of most recent seasons to hold out for evaluation.",
+   "help": "Number of most recent seasons to hold out for evaluation; the model trains on every other completed game.",
    "nargs": null,
    "options": [
     "--holdout-seasons"
@@ -1276,34 +1261,6 @@
    "required": false,
    "subcommand": null,
    "type": "float"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 1,
-   "dest": "calibration_seasons",
-   "help": "Number of seasons reserved for calibration.",
-   "nargs": null,
-   "options": [
-    "--calibration-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0,
-   "dest": "calibration_weeks",
-   "help": "Number of newest completed weeks held out of the tree fit for calibration; the window rolls back into the previous season when the latest season has fewer.",
-   "nargs": null,
-   "options": [
-    "--calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
   },
   {
    "action": "_StoreAction",
@@ -2122,20 +2079,6 @@
    "type": "int"
   },
   {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 4,
-   "dest": "wf_calibration_weeks",
-   "help": "Walk-forward: calibration weeks.",
-   "nargs": null,
-   "options": [
-    "--wf-calibration-weeks"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
    "action": "BooleanOptionalAction",
    "choices": null,
    "default": false,
@@ -2274,38 +2217,10 @@
    "choices": null,
    "default": 0,
    "dest": "holdout_seasons",
-   "help": "Training: holdout seasons.",
+   "help": "Training: newest whole seasons held out of the final fit and scored as an evaluation holdout; the final fit trains on every other completed game.",
    "nargs": null,
    "options": [
     "--holdout-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": 0,
-   "dest": "train_calibration_seasons",
-   "help": "Training: calibration seasons.",
-   "nargs": null,
-   "options": [
-    "--train-calibration-seasons"
-   ],
-   "required": false,
-   "subcommand": null,
-   "type": "int"
-  },
-  {
-   "action": "_StoreAction",
-   "choices": null,
-   "default": null,
-   "dest": "train_calibration_weeks",
-   "help": "Training: calibration weeks (default: use wf-calibration-weeks).",
-   "nargs": null,
-   "options": [
-    "--train-calibration-weeks"
    ],
    "required": false,
    "subcommand": null,

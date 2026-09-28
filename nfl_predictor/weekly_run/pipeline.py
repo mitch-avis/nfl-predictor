@@ -270,7 +270,6 @@ def main() -> int:
     wf_config = {
         "eval_last_n_seasons": args.wf_eval_last_n_seasons,
         "wf_start_week": args.wf_start_week,
-        "calibration_weeks": args.wf_calibration_weeks,
         "include_postseason": args.wf_include_postseason,
         "recency_half_life_seasons": args.wf_recency_half_life_seasons,
         "market_mode": args.wf_market_mode,
@@ -298,7 +297,6 @@ def main() -> int:
         {
             "eval_last_n_seasons": args.wf_eval_last_n_seasons,
             "wf_start_week": args.wf_start_week,
-            "calibration_weeks": args.wf_calibration_weeks,
             "include_postseason": bool(args.wf_include_postseason),
             "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
             "recency_half_life_seasons": args.wf_recency_half_life_seasons,
@@ -335,7 +333,6 @@ def main() -> int:
             checkpoint_per_fold=bool(args.wf_checkpoint_per_fold),
             eval_last_n_seasons=args.wf_eval_last_n_seasons,
             wf_start_week=args.wf_start_week,
-            calibration_weeks=args.wf_calibration_weeks,
             include_postseason=bool(args.wf_include_postseason),
             exclude_incomplete_seasons=bool(args.wf_exclude_incomplete_seasons),
             recency_half_life_seasons=args.wf_recency_half_life_seasons,
@@ -370,20 +367,6 @@ def main() -> int:
     )
 
     resolved_calibration = "auto"
-    train_calibration_weeks = (
-        args.train_calibration_weeks
-        if args.train_calibration_weeks is not None
-        else args.wf_calibration_weeks
-    )
-    train_calibration_seasons = int(args.train_calibration_seasons)
-    if train_calibration_weeks <= 0 and train_calibration_seasons <= 0:
-        # The final fit has always held at least one in-season week out of the tree fit here.
-        # What it holds out is a separate decision, so the rows it fits on stay as they were.
-        train_calibration_weeks = max(1, int(args.wf_calibration_weeks))
-        log.warning(
-            "No calibration weeks or seasons configured; holding out %s in-season weeks.",
-            train_calibration_weeks,
-        )
 
     optuna_storage = args.tune_storage
     if args.tune and not optuna_storage:
@@ -411,8 +394,6 @@ def main() -> int:
         "market_transform": market_transform,
         "market_anchor": market_anchor,
         "holdout_seasons": int(args.holdout_seasons),
-        "calibration_seasons": train_calibration_seasons,
-        "calibration_weeks": int(train_calibration_weeks),
         "include_postseason": bool(args.include_postseason),
         "postseason_weight": float(args.postseason_weight),
         "recency_half_life_seasons": args.train_recency_half_life_seasons,
@@ -450,8 +431,6 @@ def main() -> int:
         result = train_margin_total_model_with_report(
             data_path=args.data_path,
             holdout_seasons=int(args.holdout_seasons),
-            calibration_seasons=train_calibration_seasons,
-            calibration_weeks=int(train_calibration_weeks),
             include_market=include_market,
             max_cardinality_ratio=float(args.max_cardinality_ratio),
             optuna_config=optuna_config,

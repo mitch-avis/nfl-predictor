@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from nfl_predictor.ml.metrics import confidence_ranks
 from nfl_predictor.utils.logger import log
 
 
@@ -64,8 +65,10 @@ def display_weekly_predictions(predictions: pd.DataFrame) -> None:
     sorted_df = predictions.copy()
     if "confidence_rank" in sorted_df.columns:
         sorted_df = sorted_df.sort_values("confidence_rank", ascending=False)
-    elif "confidence_strength" in sorted_df.columns:
-        sorted_df = sorted_df.sort_values("confidence_strength", ascending=False)
+    elif "home_win_prob" in sorted_df.columns:
+        tiebreaker = sorted_df["game_id"].to_numpy() if "game_id" in sorted_df.columns else None
+        ranks = confidence_ranks(sorted_df["home_win_prob"].to_numpy(float), tiebreaker)
+        sorted_df = sorted_df.iloc[np.argsort(-ranks)]
 
     season = sorted_df["season"].iloc[0] if "season" in sorted_df.columns else None
     week = sorted_df["week"].iloc[0] if "week" in sorted_df.columns else None

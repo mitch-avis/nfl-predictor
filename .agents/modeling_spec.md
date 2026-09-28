@@ -83,8 +83,16 @@ If implementing score "realism":
 ### Confidence pool deliverable
 
 - Weekly outputs include a **1..N** unique confidence ranking across that week's games.
-- Predicted winner is derived from calibrated win probability.
-- Confidence strength is derived from calibrated win probability (default: `abs(p - 0.5)`).
+- Predicted winner is derived from the deterministic win probability.
+- Confidence strength is derived from the deterministic win probability (default:
+  `abs(p - 0.5)`), rounded to 12 decimals (`CONFIDENCE_DECIMALS` in `nfl_predictor/ml/metrics.py`)
+  so that mathematically equal confidences (a home favorite and a home underdog by the same
+  spread) almost always tie instead of differing by floating-point noise; a pair whose noise
+  straddles a 12-decimal rounding boundary can still differ.
+- Ranks run from least confident (`1`) to most confident (`N`); equal rounded confidences are
+  ordered by `game_id`. One shared rule (`confidence_ranks` in `nfl_predictor/ml/metrics.py`)
+  ranks the weekly picks, walk-forward pool points, training pool summaries and
+  `nfl-predictor compare`.
 
 Authoritative pool scoring rules:
 

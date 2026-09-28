@@ -33,6 +33,7 @@ from sklearn.metrics import (
 import __main__
 from nfl_predictor import constants
 from nfl_predictor.ml import feature_spec as _feature_spec
+from nfl_predictor.ml.metrics import confidence_ranks, confidence_strength
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,
     _coerce_tree_method_on_error,
@@ -630,11 +631,10 @@ def _summarize_confidence_pool(
         "home",
         np.where(summary_df[home_col] < summary_df[away_col], "away", "tie"),
     )
-    summary_df["confidence_strength"] = np.abs(summary_df["home_win_prob"] - 0.5)
-    summary_df["confidence_rank"] = (
-        summary_df.groupby(["season", "week"])["confidence_strength"]
-        .rank(method="first", ascending=True)
-        .astype(int)
+    summary_df["confidence_rank"] = confidence_ranks(
+        home_win_prob,
+        tiebreaker=df["game_id"].to_numpy() if "game_id" in df.columns else None,
+        groups=(summary_df["season"].to_numpy(), summary_df["week"].to_numpy()),
     )
     summary_df["pick_correct"] = (summary_df["predicted_winner"] == summary_df["actual_winner"]) & (
         summary_df["actual_winner"] != "tie"
@@ -673,17 +673,6 @@ def _margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
     if constants.SCORE_DIFF_STD_DEV <= 0:
         raise ValueError("SCORE_DIFF_STD_DEV must be positive.")
     return norm.cdf(margin / constants.SCORE_DIFF_STD_DEV)
-
-
-def _rank_confidence(strength: np.ndarray, tiebreaker: np.ndarray | None = None) -> np.ndarray:
-    strength = np.asarray(strength)
-    if tiebreaker is None:
-        order = np.argsort(strength, kind="mergesort")
-    else:
-        order = np.lexsort((tiebreaker, strength))
-    ranks = np.empty_like(order)
-    ranks[order] = np.arange(1, len(strength) + 1)
-    return ranks
 
 
 def _build_prediction_output(
@@ -797,10 +786,9 @@ def _build_prediction_output(
             output_df[away_team_col],
         )
 
-    confidence_strength = np.abs(home_win_prob_out - 0.5)
-    output_df["confidence_strength"] = confidence_strength
+    output_df["confidence_strength"] = confidence_strength(home_win_prob_out)
     tiebreaker = output_df["game_id"].to_numpy() if "game_id" in output_df.columns else None
-    output_df["confidence_rank"] = _rank_confidence(confidence_strength, tiebreaker)
+    output_df["confidence_rank"] = confidence_ranks(home_win_prob_out, tiebreaker)
 
     return output_df
 

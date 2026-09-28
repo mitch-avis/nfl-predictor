@@ -30,6 +30,7 @@ import pandas as pd
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
+from nfl_predictor.ml.metrics import confidence_ranks
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
 from nfl_predictor.ml.ml_model_xgb_utils import fitted_xgb_device
@@ -103,8 +104,10 @@ def _build_confidence_picks(predictions: pd.DataFrame) -> pd.DataFrame:
             )
 
     if "confidence_rank" not in picks.columns:
-        strength = (picks["home_win_prob"] - 0.5).abs()
-        picks["confidence_rank"] = strength.rank(method="first", ascending=True).astype(int)
+        tiebreaker = picks["game_id"].to_numpy() if "game_id" in picks.columns else None
+        picks["confidence_rank"] = confidence_ranks(
+            picks["home_win_prob"].to_numpy(float), tiebreaker
+        )
 
     columns = [
         "season",

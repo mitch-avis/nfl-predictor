@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import sqlite3
 from pathlib import Path
 
@@ -37,3 +38,13 @@ def test_rollback_on_error(tmp_path: Path) -> None:
         conn.execute("INSERT INTO kv (key, value) VALUES ('k', 'v')")
         conn.execute("SELECT * FROM missing_table")
     assert db.get_value("k") is None
+
+
+@pytest.mark.filterwarnings(
+    "error::ResourceWarning", "error::pytest.PytestUnraisableExceptionWarning"
+)
+def test_initialize_closes_its_connection(tmp_path: Path) -> None:
+    """Creating the schema leaves no SQLite connection open for the garbage collector."""
+    db = Database(tmp_path / "app.db")
+    db.initialize()
+    gc.collect()

@@ -440,3 +440,32 @@ an independent reviewer's own rescore and `REVIEW.md` in the run directory named
   minus stored-line Brier, all weeks: `+0.00297` `[+0.00175, +0.00420]`; 2007-2019 `+0.00208`
   `[+0.00068, +0.00351]`; without 2022 `+0.00297` `[+0.00172, +0.00423]`. Weeks 1 and 2 alone
   (303 games each) include zero.
+
+## GPU reference (2026-09-28, rungs L1-L2, current)
+
+The reference for every later arm: `models/step3_gpu_reference/l1_seed42/` and `l2_seed7/`
+(checkpoints named in each `metadata.json`), `nfl-predictor backtest` on
+`data/completed_games_ml.m54_flip_through_2025.csv` (`2d4111a6...`), seasons 2007-2025 from week
+1 (328 folds, 4943 games), the floor, `market_anchor` and `market_transform` on, 200 trees,
+unweighted, device `auto` (the GPU: an RTX 4070 Ti, every fold `cuda`), seeds `42` and `7`, code
+`0.33.0` (commits `43d2a7d`/`42afe0d`, docs-only apart). About 32 minutes per seed. Rules and
+launch record: `HYPOTHESIS.md` there; second key: `REVIEW.md` there (a separate reviewer), reproduce
+with `.venv/bin/python models/step3_gpu_reference/independent_rescore.py`.
+
+- Determinism: two GPU runs of the whole 2025 season (18 folds) are identical in every column.
+- Against the CPU task 55.8 unweighted pair on 2020-2025, all weeks, two seeds (GPU minus CPU):
+  deterministic Brier `+0.00015` `[-0.00069, +0.00098]`, pick accuracy `+0.0046`
+  `[-0.0000, +0.0096]`, pool points `-2.5` `[-45.5, +39.5]`, margin MAE `+0.0213`
+  `[-0.0121, +0.0550]`, all inside the six-season noise floors; weeks 3-18 pick accuracy `+0.0060`
+  `[+0.0004, +0.0116]` is the one interval that excludes zero. The per-game GPU-vs-CPU margin move
+  (median `0.62`-`0.66` points) is about the size of a reseed on either device. The CPU pair ran on
+  code 246 commits older; the changes in between are documented as prediction-neutral.
+- The retired market blend (`0.2` toward the raw moneyline, clamp `0.1`) minus the floor, 2007-2025
+  with an opener (4930 games), all weeks, two seeds: at the stored moneyline Brier `-0.00072`
+  `[-0.00105, -0.00041]`, log loss `-0.00173` `[-0.00244, -0.00104]`; built from the opening spread
+  Brier `+0.00010` `[-0.00051, +0.00071]`, pick accuracy `-0.0041` `[-0.0078, -0.0006]`.
+- The floor against the market, same games: against the stored spread Brier `+0.0003`
+  `[-0.0007, +0.0013]` (a tie); against the opening spread `-0.00267` `[-0.00425, -0.00107]`
+  (flattered: the model is anchored to the stored spread). The market-view pool-point columns are
+  left out here: exact spread ties are ranked by float noise in `nfl-predictor compare`'s pool
+  definition.

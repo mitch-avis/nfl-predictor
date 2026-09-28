@@ -305,19 +305,6 @@ Tasks:
       53.7. Context from task 55.8: each two-seed weighting contrast (half-lives `4`, `16`, `32`)
       improved week-2 total MAE by `0.2`-`0.3` points beyond its interval (96 games), the only
       consistent early-season signal that ladder found; report week-2 total MAE for each `K`.
-- [ ] 55.4 (step 3) Add `xgb_device=auto` (prefer `cuda`, else CPU) used identically in evaluation
-      and final training. **Decided by the user on 2026-09-23: the GPU (CUDA) becomes the default
-      device for every XGBoost run, standalone walk-forwards included.** Today only the weekly run
-      uses it (`xgb_device: cuda` in `config/weekly_run.yaml`, both stages), while
-      `nfl-predictor backtest` defaults to the CPU, so every benchmark arm so far trained
-      on the CPU (an `AGENTS.md` rule 11 parity gap). Do not change the default while a CPU ladder
-      is running: arms of one comparison must share a device. When it lands: a one-fold CPU-vs-GPU
-      timing and prediction-difference check, a CPU fallback when no GPU is present, the device
-      recorded in run metadata, and a new GPU reference arm, because later arms can no longer be
-      compared with the CPU reference numbers in `.agents/benchmarks.md`. Added 2026-09-24: a GPU
-      determinism check (the same seed twice on one fold must give identical predictions, or
-      checkpoint resume and "only one setting differs" comparisons break), and the GPU reference on
-      two seeds, which also measures the GPU's own fit-noise floor (rule 13).
 - [x] 55.7 Choose `n_estimators` time-aware: closed 2026-09-21 (`0.13.0`-`0.13.1`). A four-rung
       ladder (`200`/`400`/`598`, then a `100` plateau check), each rung a six-season arm with its
       own hypothesis and an independent reviewer rescore, found the aggregate order monotone

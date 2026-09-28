@@ -672,7 +672,8 @@ held: every run retrained (no stale-fold resume), the division fix, the acceptan
 Formerly Milestone 39, with former Milestone 40 folded in. Task 55.7 completed 2026-09-21
 (versions `0.13.0`-`0.13.1`). Task 55.8 was closed 2026-09-23 as `0.17.0`, reopened the same day,
 and closed again 2026-09-24 as `0.18.0` (see its section below). Tasks 55.1 and 55.2 were retired
-2026-09-24. Task 55.6 closed 2026-09-27 (`0.29.1`). Tasks 55.3, 55.4 and 55.9 stay in `TODO.md`.
+2026-09-24. Task 55.6 closed 2026-09-27 (`0.29.1`). Task 55.4 closed 2026-09-28 (`0.30.0` and the GPU reference). Tasks 55.3 and 55.9 stay in
+`TODO.md`.
 
 ### 55.1 and 55.2 - Configuration-sweep runner (retired 2026-09-24)
 
@@ -685,6 +686,15 @@ hypothesis and a decision rule written before each run) and rule 13 (two seeds f
 change). What replaces it: hypothesis-driven ladders for single settings (task 55.3 for `K`,
 for example), the task 55.9 Optuna tune for the XGBoost hyperparameters, and task 56.3 to wire the
 chosen settings into the weekly run and the benchmark from one source.
+
+### 55.4 - The GPU as the default device (versions `0.30.0`, 2026-09-27; reference 2026-09-28)
+
+Every XGBoost run defaults to `--xgb-device auto` (the GPU when usable, else the CPU), resolved
+before the checkpoint fingerprint and recorded in run and model metadata; a walk-forward stops
+rather than checkpoint a week that fell back to another device. A one-fold check
+(`models/step3_l0_gpu_check/`) and a full-season repeat showed GPU fits are bit-deterministic.
+The two-seed GPU reference (`models/step3_gpu_reference/`, 2007-2025) tied the CPU pair within
+every noise floor and is the reference for later arms (`.agents/benchmarks.md`, "GPU reference").
 
 ### 55.6 - Stability view by season (version `0.29.1`, 2026-09-27)
 

@@ -7,10 +7,19 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 from nfl_predictor import constants
-from nfl_predictor.ml import ml_model_core
-from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
+from nfl_predictor.ml import ml_model_core, walk_forward
+from nfl_predictor.ml.ml_model_core import OptunaConfig
+from nfl_predictor.ml.ml_model_xgb_utils import (
+    XGB_DEVICE_AUTO,
+    XGB_DEVICE_HELP,
+    resolve_xgb_device,
+    xgb_device_arg,
+)
 from nfl_predictor.reporting import power_rankings
+from nfl_predictor.weekly_run import stage1
 
 _PATH_KEYS = {
     "config",
@@ -563,6 +572,110 @@ def xgb_thread_count(args: argparse.Namespace) -> int:
     if args.xgb_n_jobs is not None:
         return int(args.xgb_n_jobs)
     return int(ml_model_core.DEFAULT_XGB_PARAMS["n_jobs"])
+
+
+def apply_run_defaults(args: argparse.Namespace) -> None:
+    """Fill the options that default to another one, and resolve ``auto`` to a device.
+
+    The final fit's recency half-life follows stage 1's when unset. The device is resolved
+    once, so stage 1, the final fit and every record name the same device.
+    """
+    if args.train_recency_half_life_seasons is None:
+        args.train_recency_half_life_seasons = args.wf_recency_half_life_seasons
+    args.xgb_device = resolve_xgb_device(args.xgb_device)
+
+
+def stage1_options(args: argparse.Namespace) -> dict[str, Any]:
+    """Return the configuration options stage 1 walks forward, from resolved run options."""
+    xgb_params_overrides: dict[str, Any] = {
+        "n_estimators": int(args.wf_n_estimators),
+        "max_depth": int(args.wf_max_depth),
+        "learning_rate": float(args.wf_learning_rate),
+        "n_jobs": xgb_thread_count(args),
+        "verbosity": 0,
+        "device": args.xgb_device,
+    }
+    # Stage 1 trains with the final fit's tree method too.
+    if args.xgb_tree_method:
+        xgb_params_overrides["tree_method"] = args.xgb_tree_method
+    return {
+        "eval_last_n_seasons": args.wf_eval_last_n_seasons,
+        "wf_start_week": args.wf_start_week,
+        "include_postseason": bool(args.wf_include_postseason),
+        "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
+        "recency_half_life_seasons": args.wf_recency_half_life_seasons,
+        "market_mode": args.wf_market_mode,
+        "xgb_params_overrides": xgb_params_overrides,
+        "include_quantiles": bool(args.wf_include_quantiles),
+        "market_transform": args.market_transform,
+        "max_cardinality_ratio": float(args.max_cardinality_ratio),
+    }
+
+
+def final_fit_options(
+    args: argparse.Namespace, frame: pd.DataFrame, *, run_dir: Path | None
+) -> tuple[OptunaConfig, dict[str, Any]]:
+    """Return the final fit's tuning config and its training settings.
+
+    ``frame`` needs only the dataset's columns: the market settings resolve against the lines
+    it has. Without a ``run_dir`` a tuning run gets no default Optuna storage.
+    """
+    market_mode = str(args.wf_market_mode)
+    include_market, market_anchor = stage1.market_mode_flags(market_mode)
+    market_transform = args.market_transform
+    if market_transform is None and include_market:
+        market_transform = True
+    include_market, market_transform, market_anchor = walk_forward.resolve_market_settings(
+        frame, include_market, market_transform, market_anchor
+    )
+
+    optuna_storage = args.tune_storage
+    if args.tune and not optuna_storage and run_dir is not None:
+        optuna_storage = f"sqlite:///{(run_dir / 'optuna.db').resolve()}"
+
+    optuna_config = OptunaConfig(
+        enabled=bool(args.tune),
+        timeout_seconds=int(args.tune_timeout),
+        n_trials=args.tune_trials,
+        cv_splits=int(args.tune_cv_splits),
+        objective=str(args.tune_objective),
+        early_stopping_rounds=int(args.tune_early_stopping_rounds),
+        tree_method=args.xgb_tree_method,
+        device=args.xgb_device,
+        storage=optuna_storage,
+        study_name=args.tune_study_name,
+        best_params_out=None,
+        xgb_n_jobs=xgb_thread_count(args),
+    )
+
+    train_config: dict[str, Any] = {
+        "calibration": "auto",
+        "market_mode": market_mode,
+        "include_market": include_market,
+        "market_transform": market_transform,
+        "market_anchor": market_anchor,
+        "holdout_seasons": int(args.holdout_seasons),
+        "include_postseason": bool(args.include_postseason),
+        "postseason_weight": float(args.postseason_weight),
+        "recency_half_life_seasons": args.train_recency_half_life_seasons,
+        "max_cardinality_ratio": float(args.max_cardinality_ratio),
+        "feature_start": str(args.feature_start),
+        "feature_end": str(args.feature_end),
+        "optuna": {
+            "enabled": optuna_config.enabled,
+            "timeout_seconds": optuna_config.timeout_seconds,
+            "n_trials": optuna_config.n_trials,
+            "cv_splits": optuna_config.cv_splits,
+            "objective": optuna_config.objective,
+            "early_stopping_rounds": optuna_config.early_stopping_rounds,
+            "tree_method": optuna_config.tree_method,
+            "device": optuna_config.device,
+            "storage": optuna_config.storage,
+            "study_name": optuna_config.study_name,
+            "xgb_n_jobs": optuna_config.xgb_n_jobs,
+        },
+    }
+    return optuna_config, train_config
 
 
 def _power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOptions:

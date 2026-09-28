@@ -212,7 +212,7 @@
    "choices": null,
    "default": null,
    "dest": "floor_sigma_reference_runs",
-   "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors join this run's own earlier weeks in each week's floor sigma; their checkpoints are only read, and a week this run predicts replaces theirs. Default: none, so each week's sigma comes from this run's earlier weeks (the constant until they span three earlier seasons).",
+   "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors join this run's own earlier weeks in each week's floor sigma; their checkpoints are only read, and a week this run predicts replaces theirs. Default: none, so each week's sigma comes from this run's earlier weeks (the constant until they span three earlier seasons, any weeks).",
    "nargs": "+",
    "options": [
     "--floor-sigma-reference-runs"
@@ -2365,7 +2365,7 @@
     "models/step3_gpu_reference/l2_seed7"
    ],
    "dest": "floor_sigma_reference_runs",
-   "help": "Walk-forward runs (run directories or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the probability floor's sigma, with stage 1's own folds; their checkpoints are only read. Several runs are averaged per game. A missing run is an error; give no paths to use only stage 1's folds (the constant until they span three earlier seasons).",
+   "help": "Walk-forward runs (run directories or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the probability floor's sigma, with stage 1's own folds; their checkpoints are only read. Several runs are averaged per game. A missing run is an error; give no paths to use only stage 1's folds (the constant until they span three earlier seasons, any weeks).",
    "nargs": "*",
    "options": [
     "--floor-sigma-reference-runs"

@@ -351,7 +351,7 @@ in season `s`, week `w`, sigma is the root-mean-square of (actual minus predicte
 every out-of-fold prediction strictly before `(s, w)`: earlier seasons, and season `s` weeks
 before `w` (`nfl_predictor/ml/floor_sigma.py`). It is one value per week, so it changes how
 confident the probabilities are but never a pick or a confidence rank. Until that pool spans
-three complete earlier seasons (`FLOOR_SIGMA_MIN_POOL_SEASONS`), sigma is the fixed
+three earlier seasons, any weeks of them (`FLOOR_SIGMA_MIN_POOL_SEASONS`), sigma is the fixed
 `SCORE_DIFF_STD_DEV` (`14.21`, in `nfl_predictor/constants.py`), and the outputs say it fell back.
 Nothing is fitted on top of the floor and the market line never enters it; the pick and its
 confidence come from it.

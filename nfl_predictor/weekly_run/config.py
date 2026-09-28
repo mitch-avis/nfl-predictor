@@ -369,7 +369,7 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "the repository root) whose out-of-fold margin errors set the probability floor's "
             "sigma, with stage 1's own folds; their checkpoints are only read. Several runs "
             "are averaged per game. A missing run is an error; give no paths to use only "
-            "stage 1's folds (the constant until they span three earlier seasons)."
+            "stage 1's folds (the constant until they span three earlier seasons, any weeks)."
         ),
     )
     parser.add_argument(

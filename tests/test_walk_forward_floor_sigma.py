@@ -112,7 +112,7 @@ def test_a_standalone_run_reproduces_the_measured_expanding_sigma(
 
 
 def test_the_first_three_seasons_use_the_constant(standalone: dict[str, object]) -> None:
-    """Before the pool spans three complete earlier seasons the floor falls back."""
+    """Before the pool spans three earlier seasons (any weeks) the floor falls back."""
     predictions = standalone["predictions"]
     assert isinstance(predictions, pd.DataFrame)
     early = predictions[predictions["season"] < EVAL_SEASONS[0] + 3]

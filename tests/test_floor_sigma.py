@@ -77,12 +77,24 @@ def test_fewer_than_the_minimum_earlier_seasons_falls_back_to_the_constant() -> 
     assert estimate.pool_seasons == (2020, 2021, 2022)
 
 
-def test_the_minimum_counts_complete_earlier_seasons_only() -> None:
-    """At a new season's week 1 the three seasons before it are enough."""
+def test_the_minimum_counts_earlier_seasons_only() -> None:
+    """At a new season's week 1 the three seasons before it are enough; its own weeks are not."""
     pool = _four_seasons()
 
     assert floor_sigma.estimate(pool, 2022, 1).fallback is False
     assert floor_sigma.estimate(pool, 2021, 3).fallback is True
+
+
+def test_an_earlier_season_counts_with_any_of_its_weeks() -> None:
+    """A partial earlier season (one week of it) counts toward the three seasons."""
+    pool = _four_seasons()
+    partial = pool[(pool["season"] != 2019) | (pool["week"] == 3)]
+
+    estimate = floor_sigma.estimate(partial, 2022, 1)
+
+    assert estimate.fallback is False
+    assert estimate.pool_seasons == (2019, 2020, 2021)
+    assert estimate.sigma == np.sqrt(partial.loc[partial["season"] < 2022, "squared_error"].mean())
 
 
 def test_an_empty_pool_falls_back_to_the_constant() -> None:

@@ -27,7 +27,8 @@ wf_checkpoint_per_fold: false
 # directories or fold checkpoint directories, relative to the repository root; their checkpoints
 # are only read, and several runs are averaged per game. A listed run that is missing stops the
 # run. An empty list ([]) uses only stage 1's folds, which fall back to the constant 14.21 until
-# they span three earlier seasons (default: both seeds of the GPU reference walk-forward)
+# they span three earlier seasons, any weeks of them (default: both seeds of the GPU reference
+# walk-forward)
 floor_sigma_reference_runs:
   - models/step3_gpu_reference/l1_seed42
   - models/step3_gpu_reference/l2_seed7

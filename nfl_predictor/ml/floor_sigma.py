@@ -8,8 +8,9 @@ spread of the model's own errors. For a game in ``(season, week)``:
 
 over every out-of-fold prediction strictly before ``(season, week)`` (earlier seasons, and the
 same season's earlier weeks). It is one value per week, so it never changes a pick or a
-confidence rank. Until the pool spans ``constants.FLOOR_SIGMA_MIN_POOL_SEASONS`` complete
-earlier seasons, sigma is ``constants.SCORE_DIFF_STD_DEV`` and the record says it fell back.
+confidence rank. Until the pool spans ``constants.FLOOR_SIGMA_MIN_POOL_SEASONS`` earlier seasons
+(any weeks of them: a walk-forward that starts at week 3 still counts the season), sigma is
+``constants.SCORE_DIFF_STD_DEV`` and the record says it fell back.
 
 The root mean square, not the standard deviation around the mean error, is used because the
 formula centers the noise on the predicted margin.

@@ -83,7 +83,7 @@ def _parse_args() -> argparse.Namespace:
             "root) whose out-of-fold margin errors join this run's own earlier weeks in each "
             "week's floor sigma; their checkpoints are only read, and a week this run predicts "
             "replaces theirs. Default: none, so each week's sigma comes from this run's earlier "
-            "weeks (the constant until they span three earlier seasons)."
+            "weeks (the constant until they span three earlier seasons, any weeks)."
         ),
     )
     parser.add_argument(

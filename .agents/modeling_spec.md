@@ -28,7 +28,7 @@ Direct home/away score regressors are allowed only as secondary ensemble members
   margin) over every out-of-fold prediction strictly before `(s, w)`: earlier seasons, and season
   `s` weeks before `w` (`nfl_predictor/ml/floor_sigma.py`, one implementation for every run
   type). It is one value per week, so it never changes a pick or a confidence rank. Until the
-  pool spans `FLOOR_SIGMA_MIN_POOL_SEASONS` (`3`) complete earlier seasons, sigma is
+  pool spans `FLOOR_SIGMA_MIN_POOL_SEASONS` (`3`) earlier seasons (any weeks), sigma is
   `SCORE_DIFF_STD_DEV` (`14.21`), recorded as the fallback.
 - The pool: a walk-forward pools its own earlier weeks with any supplied history (none for a
   standalone `backtest` unless `--floor-sigma-reference-runs` names runs; the reference runs in

@@ -558,6 +558,14 @@ Acceptance:
 Each group names the archived milestone it came from; the milestone's full record is in
 `ARCHIVE.md`. Resolved items have moved there.
 
+### From the step-3 merge test (2026-09-28)
+
+- [ ] (step 3) `nfl-predictor weekly --dry-run` runs the whole ETL refresh (about 10 minutes,
+      rewriting `data/`) before printing its plan, although its help says "Print planned outputs
+      without running stages". Found when a dry run on `0.35.0` started collecting data. Either
+      skip the refresh under `--dry-run` or say in the help that the refresh runs; the help text is
+      the documented contract, so the likely fix is to skip it (with a test).
+
 ### From Milestone 60 (CLI and entrypoint consolidation, closed 2026-09-25)
 
 - [ ] (step 3) Narrowed acceptance item: "every web job template launches and reports progress

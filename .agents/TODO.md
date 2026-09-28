@@ -161,6 +161,10 @@ Steps:
    2007-2025 (every season with real opening lines, for 56.6(c)); rung (D) is dropped, because
    walk-forward folds never held weeks out and `0.33.0` moved production to match, so the arm
    would reproduce the reference exactly. Ladder: L0-L2.
+   Added by the user on 2026-09-28: measure the spread in the probability floor
+   `Phi(margin / sigma)` (today the constant `SCORE_DIFF_STD_DEV = 14.21`) against sigmas estimated
+   from the model's own earlier errors, by rescoring the GPU reference
+   (`models/step3_sigma/HYPOTHESIS.md`); adopting one is a default change (must-ask).
 4. **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
    First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
    a schema version in the play-by-play cache key), because this step compares dataset builds.
@@ -373,37 +377,6 @@ Formerly Milestone 41.
 - [ ] 56.3 (step 5, with 55.9) Wire the settings chosen by the task 55.9 tune into the weekly run
       and the benchmark from one shared source (today `weekly_run` takes explicit `wf_*` params and
       never reads a best-params file); confirm resume behavior.
-- [ ] 56.5 (step 3) The weekly run's stage-1 winner is chosen by list order, not by evidence.
-      Found by the 2026-09-23 review. `nfl-predictor weekly` (`_pick_best_row` in
-      `nfl_predictor/weekly_run/stage1.py`) ranks the stage-1 candidates
-      by deterministic Brier, then deterministic log loss, but those two columns depend only on
-      the predicted margin, which is identical across the nine calibration and market-blend
-      candidates of one market mode. Every candidate therefore ties, and the stable sort returns
-      whichever candidate the input list puts first; the list is sorted by the configured
-      calibrator's Brier, the column the 2026-09-18 audit found noise-dominated. The week-2
-      production run (`models/weekly_2026_week_02_refresh/wf_best.json`) selected
-      `elo` + `market_prob_weight 0.2` + `market_prob_clamp 0.1`, so the probabilities submitted
-      to the pool come from a different path than the one every benchmark measures, chosen
-      without an interval, and eight of the nine candidates are trained every week for nothing.
-      Related, from rescoring the six-season task 55.8 checkpoints
-      (`models/wf_m55_8_review/probability_paths.py`, the producer's analysis only): a market
-      blend chosen from earlier seasons appears to settle at high weights, which would mean the
-      model's probabilities add little on top of the closing line. That script has **no second
-      key** (`INDEPENDENT_REVIEW.md` there, disagreement 8), so 56.5 rescores it independently
-      before any of its numbers enter the docs. Deciding how production probabilities should be
-      formed (the deterministic floor, a blend weight fixed by a pre-registered walk-forward rule,
-      or something else) is a must-ask default change for the user. Direction from the user
-      (2026-09-24): one calibration used the same way by every run type (backtest, benchmark,
-      weekly run), `auto` or `platt`, and the `nfl-predictor backtest --calibration` default
-      (`platt`, against the benchmark's `auto`) is settled here too. `auto` resolves to `none`,
-      the fixed normal curve with no fitting. Keep it separate from
-      Milestone 60's behavior-preserving moves.
-      Decided by the user 2026-09-27 on the step-3 evidence (`.agents/benchmarks.md`, "Step 3
-      evidence"): production submits the deterministic floor (`auto`), the calibration used by
-      every run type; the weekly stage-1 re-selection, the fitted calibrators, `elo`, the market
-      blend and clamp, the `blend` model kind and the `nfl-predictor sweep` matrix are retired.
-      The confirmation on the GPU reference repeats the A2 rule on 2007-2025.
-      Code landed in `0.32.0`; the task stays open until that confirmation.
 - [ ] 56.6 (step 3, with 56.5) Measure the model against the lines available at pick time, not
       only the stored ones. Picks are submitted before the Thursday game, and lines move between
       then and Sunday, sometimes a lot. The ETL's lines come from nflverse schedules
@@ -427,7 +400,8 @@ Formerly Milestone 41.
       (c) on 2007-2025, score the model against the opening line as a second market yardstick
       beside the stored one, since pick-time lines sit between open and close; (2026-09-27: scored
       on 2020-2025 first; the user asked for the full 2007-2025 window, which the GPU reference
-      covers); (d) measure how
+      covers; done 2026-09-28 on the GPU reference, `.agents/benchmarks.md`, "GPU reference");
+      (d) measure how
       much anchoring on opening instead of stored lines changes backtest accuracy, a
       feature-value change measured with two builds and two seeds (moved to roadmap step 4 by
       the user on 2026-09-27, to share its rebuild cycle); (e) record the coverage limits

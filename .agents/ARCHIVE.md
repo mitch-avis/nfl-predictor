@@ -1346,7 +1346,20 @@ Acceptance:
 ## Milestone 56 (partial) - Weekly orchestration residuals
 
 Task 56.4 completed 2026-09-11 (version `0.6.1`); task 56.2 completed 2026-09-21 (version
-`0.13.0`); tasks 56.1, 56.3 stay in `TODO.md`.
+`0.13.0`); task 56.5 completed 2026-09-28 (version `0.32.0`); tasks 56.3, 56.6 and 56.7 stay in
+`TODO.md`.
+
+### 56.5 - How production probabilities are formed (version `0.32.0`, closed 2026-09-28)
+
+The weekly stage 1 picked its probability path among nine calibration and market-blend
+candidates by list order. By the user's decisions of 2026-09-27 and 2026-09-28, every run type
+submits the deterministic floor `Phi(margin / SCORE_DIFF_STD_DEV)`; the stage-1 matrix, the fitted
+and Elo calibrators, market blending and clamping, the `blend` model kind, `nfl-predictor sweep`
+and uncertainty-aware probabilities are retired (`0.32.0`). The confirmation on the GPU reference
+(`.agents/benchmarks.md`, "GPU reference"): a blend toward the stored moneyline beats the floor on
+2007-2025, but the same blend built from the opening spread does not, so its gain rests on lines
+that do not exist at pick time. The user kept the floor; the question returns with task 56.6(d)
+(anchoring to pick-time lines, roadmap step 4).
 
 ### 56.2 - How postseason games enter evaluation, training and the rankings (version `0.13.0`)
 

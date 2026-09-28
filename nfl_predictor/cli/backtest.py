@@ -18,7 +18,7 @@ from nfl_predictor import constants
 from nfl_predictor.cli import options
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
-from nfl_predictor.reporting import run_comparison
+from nfl_predictor.reporting import production_settings, run_comparison
 from nfl_predictor.utils.logger import log
 
 
@@ -282,6 +282,18 @@ def main() -> None:
         report["metrics"]["stability"] = stability
         for line in run_comparison.format_stability(stability):
             log.info("%s", line)
+    versus_production = production_settings.settings_versus_production(
+        config,
+        df,
+        run_extras={"disable_trend_features": True} if args.disable_trend_features else None,
+        run_scope={
+            "data_path": str(args.data_path),
+            "checkpoint_dir": str(args.checkpoint_dir),
+        },
+    )
+    report[production_settings.SECTION_KEY] = versus_production
+    for line in production_settings.format_section(versus_production):
+        log.info("%s", line)
     config_payload["run_id"] = run_id
     config_payload["feature_list"] = results.get("feature_list")
     config_payload["splits"] = {

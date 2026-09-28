@@ -20,6 +20,7 @@ import pytest
 
 from nfl_predictor.cli import backtest, leakage_audit
 from nfl_predictor.ml import walk_forward
+from nfl_predictor.reporting import production_settings
 from tests import snapshots
 from tests.weekly_fixture import build_fixture
 
@@ -131,6 +132,9 @@ def test_walk_forward_backtest_report_matches_snapshot(
         report.pop(key)
     report["config"].pop("run_id")
     report["config"]["checkpoint"].pop("dir")
+    # The comparison with production names this machine's device, threads and config path;
+    # tests/test_production_settings.py covers it.
+    assert "stage1" in report.pop(production_settings.SECTION_KEY)
     snapshots.check_json(
         "metrics_report.json",
         _portable(report, tmp_path),

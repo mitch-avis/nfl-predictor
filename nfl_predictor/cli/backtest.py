@@ -16,7 +16,7 @@ import pandas as pd
 
 from nfl_predictor import constants
 from nfl_predictor.cli import options
-from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml import floor_sigma, walk_forward
 from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.reporting import production_settings, run_comparison
 from nfl_predictor.utils.logger import log
@@ -69,7 +69,21 @@ def _parse_args() -> argparse.Namespace:
         default="auto",
         help=(
             "Win-probability calibration: auto, the deterministic floor (the predicted margin "
-            "through the fixed normal curve); none is the same."
+            "through a normal curve whose spread is the root-mean-square out-of-fold error "
+            "before the predicted week); none is the same."
+        ),
+    )
+    parser.add_argument(
+        "--floor-sigma-reference-runs",
+        type=Path,
+        nargs="+",
+        default=None,
+        help=(
+            "Walk-forward runs (run or fold checkpoint directories, relative to the repository "
+            "root) whose out-of-fold margin errors join this run's own earlier weeks in each "
+            "week's floor sigma; their checkpoints are only read, and a week this run predicts "
+            "replaces theirs. Default: none, so each week's sigma comes from this run's earlier "
+            "weeks (the constant until they span three earlier seasons, any weeks)."
         ),
     )
     parser.add_argument(
@@ -246,8 +260,17 @@ def main() -> None:
     run_id = walk_forward.generate_run_id(dataset_hash, config)
     created_at = datetime.now(UTC).isoformat()
 
+    history = (
+        None
+        if args.floor_sigma_reference_runs is None
+        else floor_sigma.load_reference_pool(args.floor_sigma_reference_runs)
+    )
     results = walk_forward.run_walk_forward_backtest(
-        df, config, checkpoint_dir=args.checkpoint_dir, resume=bool(args.resume)
+        df,
+        config,
+        checkpoint_dir=args.checkpoint_dir,
+        resume=bool(args.resume),
+        floor_sigma_history=history,
     )
 
     run_dir = Path(constants.ROOT_DIR) / "models" / run_id
@@ -258,6 +281,7 @@ def main() -> None:
     config_payload["data_path"] = str(args.data_path)
     config_payload["out_json"] = str(out_json)
     config_payload["checkpoint"] = results.get("checkpoint")
+    config_payload["floor_sigma"] = results.get("floor_sigma")
     config_payload["xgb_device"] = xgb_device
     # Every parameter the folds trained with, so later comparisons need not infer defaults.
     xgb_params = walk_forward._resolve_xgb_params(config)

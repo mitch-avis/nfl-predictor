@@ -33,6 +33,7 @@ _PATH_KEYS = {
     "power_rankings_out_dir",
     "power_rankings_strength_snapshots",
 }
+_PATH_LIST_KEYS = {"floor_sigma_reference_runs"}
 
 
 # The configuration a weekly run reads when no --config is given.
@@ -115,6 +116,11 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
     for key in _PATH_KEYS:
         if key in normalized and normalized[key] is not None:
             normalized[key] = Path(normalized[key])
+    for key in _PATH_LIST_KEYS:
+        if key in normalized and normalized[key] is not None:
+            if isinstance(normalized[key], str):
+                raise ValueError(f"Config key {key} must be a list of paths.")
+            normalized[key] = [Path(value) for value in normalized[key]]
     return normalized
 
 
@@ -233,8 +239,11 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     parser.add_argument(
         "--wf-start-week",
         type=int,
-        default=defaults.get("wf_start_week", 3),
-        help="Walk-forward: start week.",
+        default=defaults.get("wf_start_week", 1),
+        help=(
+            "Walk-forward: start week (default 1, so every week is scored and its errors reach "
+            "the final fit's floor-sigma pool)."
+        ),
     )
     parser.add_argument(
         "--wf-include-postseason",
@@ -349,6 +358,22 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         type=str,
         default=defaults.get("feature_end", ml_model_core.DEFAULT_FEATURE_END_COLUMN),
         help="Training: last feature column.",
+    )
+    parser.add_argument(
+        "--floor-sigma-reference-runs",
+        type=Path,
+        nargs="*",
+        default=defaults.get(
+            "floor_sigma_reference_runs",
+            [Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS],
+        ),
+        help=(
+            "Walk-forward runs (run directories or fold checkpoint directories, relative to "
+            "the repository root) whose out-of-fold margin errors set the probability floor's "
+            "sigma, with stage 1's own folds; their checkpoints are only read. Several runs "
+            "are averaged per game. A missing run is an error; give no paths to use only "
+            "stage 1's folds (the constant until they span three earlier seasons, any weeks)."
+        ),
     )
     parser.add_argument(
         "--tune-early-stopping-rounds",

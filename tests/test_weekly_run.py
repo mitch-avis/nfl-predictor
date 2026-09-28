@@ -17,11 +17,32 @@ from nfl_predictor import data_collection
 from nfl_predictor.api.readers import cache as api_cache
 from nfl_predictor.api.readers import model as api_model
 from nfl_predictor.api.runs.files import resolve_run_files
-from nfl_predictor.ml import artifacts, ml_model_core, ml_model_xgb_utils, walk_forward
+from nfl_predictor.ml import (
+    artifacts,
+    floor_sigma,
+    ml_model_core,
+    ml_model_xgb_utils,
+    walk_forward,
+)
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import inputs, pipeline, stage1
 from tests.api import factories
+
+
+@pytest.fixture(autouse=True)
+def _no_floor_sigma_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the floor sigma's reference runs and the final fit's pool.
+
+    These tests stub the stages around them; the pools are tested in
+    ``tests/test_weekly_run_floor_sigma.py``.
+    """
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _paths: floor_sigma.ErrorPool())
+    monkeypatch.setattr(
+        pipeline,
+        "_production_floor_sigma",
+        lambda _args, _run_dir, _reference: (floor_sigma.ErrorPool(), (2025, 2)),
+    )
 
 
 def test_load_config_json(tmp_path: Path) -> None:
@@ -141,6 +162,9 @@ def _stub_walk_forward_results() -> dict[str, object]:
         "per_season": [{"season": 2024, "games": 2}],
         "reliability": [{"bin_lower": 0.0, "bin_upper": 0.1, "count": 2}],
         "resolved_settings": {"market_anchor": True},
+        "predictions": pd.DataFrame(
+            columns=["game_id", "season", "week", "actual_margin", "predicted_margin"]
+        ),
     }
 
 

@@ -15,13 +15,18 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from nfl_predictor.ml import artifacts, ml_model_core, ml_model_xgb_utils, walk_forward
+from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import pipeline, stage1
 
 
 class _StopAtFinalFitError(Exception):
     """Stop the weekly run once the final fit's settings have been captured."""
+
+
+# The floor sigma's pools, stubbed: their contents are tested in test_weekly_run_floor_sigma.py.
+REFERENCE_POOL = floor_sigma.ErrorPool()
+PRODUCTION_POOL = floor_sigma.ErrorPool(sources=("stage1",))
 
 
 def _capture_weekly_settings(
@@ -56,6 +61,12 @@ def _capture_weekly_settings(
     monkeypatch.setattr(pipeline, "_stage_can_reuse", fake_reuse)
     monkeypatch.setattr(stage1, "evaluate_production", fake_stage1)
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", fake_train)
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _paths: REFERENCE_POOL)
+    monkeypatch.setattr(
+        pipeline,
+        "_production_floor_sigma",
+        lambda _args, _run_dir, _reference: (PRODUCTION_POOL, (2025, 2)),
+    )
     monkeypatch.setattr(
         sys,
         "argv",
@@ -75,6 +86,9 @@ def _capture_weekly_settings(
     )
     with pytest.raises(_StopAtFinalFitError):
         pipeline.main()
+    assert captured["stage1"].pop("floor_sigma_history") is REFERENCE_POOL
+    assert captured["train"].pop("floor_sigma_pool") is PRODUCTION_POOL
+    assert captured["train"].pop("floor_sigma_week") == (2025, 2)
     return captured
 
 
@@ -88,7 +102,7 @@ def test_default_weekly_settings_and_hashes(
         "resume": True,
         "checkpoint_per_fold": False,
         "eval_last_n_seasons": 3,
-        "wf_start_week": 3,
+        "wf_start_week": 1,
         "include_postseason": False,
         "exclude_incomplete_seasons": False,
         "recency_half_life_seasons": None,
@@ -135,7 +149,10 @@ def test_default_weekly_settings_and_hashes(
         "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
         "xgb_params_overrides": {"n_estimators": 200, "max_depth": 5, "learning_rate": 0.0165},
     }
-    assert captured["hashes"] == ["308cff44", "3a81c72a"]
+    # Both markers cover the floor sigma's inputs (the reference errors and the final fit's
+    # pool and week), so a run directory from before them retrains instead of resuming. The
+    # stage-1 hash also covers the start week (now 1).
+    assert captured["hashes"] == ["ca6a81c8", "082f6915"]
 
 
 def test_overridden_weekly_settings_and_hashes(
@@ -184,7 +201,7 @@ def test_overridden_weekly_settings_and_hashes(
         captured["train"]["market_anchor"],
     ) == (False, False, True)
     # The final fit's hash covers the Optuna storage path, which names the temporary directory.
-    assert captured["hashes"][0] == "4c1df46b"
+    assert captured["hashes"][0] == "8ae118ca"
 
 
 def test_config_tree_settings_reach_stage1_and_the_final_fit(

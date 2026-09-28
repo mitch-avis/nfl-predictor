@@ -1,7 +1,8 @@
 """The deterministic floor is the one probability path, and old models predict with it.
 
-Every run type now submits the deterministic floor, ``Phi(margin / SCORE_DIFF_STD_DEV)``. A
-checkpoint saved earlier can still carry a fitted or Elo calibrator or a market blend or clamp;
+Every run type now submits the deterministic floor, ``Phi(margin / sigma)``; a checkpoint saved
+before the sigma was recorded predicts with ``SCORE_DIFF_STD_DEV``. A checkpoint saved earlier
+can still carry a fitted or Elo calibrator or a market blend or clamp;
 loading it logs what is ignored and drops it, and its predictions are the floor of its own
 predicted margins. Asking a command or a walk-forward for a retired calibrator fails with the
 reason.

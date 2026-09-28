@@ -68,6 +68,7 @@ RECORDED_CONFIG_EXTRAS = frozenset(
         "eval_window",
         "excluded_incomplete_seasons",
         "feature_list",
+        "floor_sigma",
         "in_season_early_stopping",
         "out_json",
         "resolved_eval_seasons",

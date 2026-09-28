@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from nfl_predictor.cli import backtest, options
-from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
+from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils, walk_forward
 from nfl_predictor.reporting import run_comparison
 
 
@@ -114,7 +114,11 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
 
     backtest.main()
 
-    assert captured == {"checkpoint_dir": tmp_path / "checkpoints", "resume": False}
+    assert captured == {
+        "checkpoint_dir": tmp_path / "checkpoints",
+        "resume": False,
+        "floor_sigma_history": None,
+    }
     assert json.loads(out_json.read_text())["config"]["checkpoint"] == checkpoint
 
 
@@ -428,3 +432,61 @@ def test_main_adds_the_season_stability_view_to_the_report_and_the_log(
     messages = [record.getMessage() for record in caplog.records]
     assert run_comparison.STABILITY_HEADING in messages
     assert any(message.startswith("| 2024 | 1 | ") for message in messages)
+
+
+def test_a_standalone_backtest_supplies_no_floor_sigma_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """By default each week's sigma comes from the run's own earlier weeks only."""
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
+
+    assert backtest._parse_args().floor_sigma_reference_runs is None
+
+
+def test_named_reference_runs_become_the_walk_forwards_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reference runs are read once, handed to the engine and named in the run's config."""
+    captured: dict[str, object] = {}
+    history = floor_sigma.ErrorPool(sources=("ref_a",))
+    loaded: list[object] = []
+
+    def fake_run(
+        _df: pd.DataFrame, _config: walk_forward.WalkForwardConfig, **kwargs: object
+    ) -> dict[str, object]:
+        """Record the history and return a minimal result naming it."""
+        captured.update(kwargs)
+        return {"checkpoint": {}, "per_week": [], "floor_sigma": {"history_sources": ["ref_a"]}}
+
+    def fake_load(paths: object) -> floor_sigma.ErrorPool:
+        """Record the requested runs."""
+        loaded.append(paths)
+        return history
+
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", fake_load)
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(
+        walk_forward, "build_metrics_report", lambda _r, _c, payload, _res: {"config": payload}
+    )
+    monkeypatch.setattr(walk_forward, "build_metadata", lambda _c, _h, payload: {"config": payload})
+    out_json = tmp_path / "metrics_report.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "walk_forward_backtest.py",
+            "--out-json",
+            str(out_json),
+            "--floor-sigma-reference-runs",
+            "ref_a",
+        ],
+    )
+
+    backtest.main()
+
+    assert loaded == [[Path("ref_a")]]
+    assert captured["floor_sigma_history"] is history
+    config = json.loads(out_json.read_text())["config"]
+    assert config["floor_sigma"] == {"history_sources": ["ref_a"]}

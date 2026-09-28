@@ -183,7 +183,7 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
     monkeypatch.setattr(
         ml_model_predict,
         "_margin_to_home_win_prob",
-        lambda _m: np.array([0.6]),
+        lambda _m, _sigma: np.array([0.6]),
     )
 
     model = MarginTotalModel(
@@ -251,7 +251,7 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     monkeypatch.setattr(
         ml_model_predict,
         "_margin_to_home_win_prob",
-        lambda _m: np.array([0.55]),
+        lambda _m, _sigma: np.array([0.55]),
     )
 
     captured: dict[str, pd.DataFrame] = {}

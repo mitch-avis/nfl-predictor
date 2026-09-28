@@ -6,8 +6,12 @@ The weekly run does the whole workflow in one command:
 3) train the production configuration on every completed game
 4) generate weekly predictions and reporting outputs
 
-Production submits the deterministic floor: the predicted margin through the fixed normal
-curve, with no fitted calibrator and no market blend or clamp.
+Production submits the deterministic floor, Phi(predicted margin / sigma), with no fitted
+calibrator and no market blend or clamp. Sigma is the root-mean-square out-of-fold margin error
+before the predicted week: stage 1 pools the configured reference runs' fold checkpoints with its
+own earlier weeks, and the final fit pools the reference runs with stage 1's weeks before the
+predicted week that the reference runs have no rows for, then records the sigma in the saved
+model.
 
 Outputs land under the run directory (default: models/<run_id>/) and include:
 - wf_compare.csv / wf_best.json (the walk-forward summary row) and wf_compare/
@@ -29,7 +33,7 @@ from typing import Any
 import pandas as pd
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
+from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, walk_forward
 from nfl_predictor.ml.metrics import confidence_ranks
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
@@ -206,6 +210,7 @@ def _write_training_artifacts(
         early_stopping=result.early_stopping,
         optuna_summary=getattr(result.model, "optuna_summary", None),
         xgb_device=fitted_xgb_device(result.model),
+        floor_sigma=floor_sigma.model_record(result.model),
     )
     artifacts.write_json(paths.metadata_path, metadata)
     if result.feature_importance:
@@ -216,6 +221,37 @@ def _write_training_artifacts(
         }
         artifacts.write_json(paths.feature_importance_path, importance_payload)
     return paths
+
+
+def _production_floor_sigma(
+    args: argparse.Namespace, run_dir: Path, reference: floor_sigma.ErrorPool
+) -> tuple[floor_sigma.ErrorPool, tuple[int, int]]:
+    """Return the final fit's error pool and the week its sigma is for.
+
+    The week is the one being predicted (the prediction file's single season and week), or,
+    for a file spanning several weeks, the week after the newest completed game. The pool is
+    the reference runs' errors plus stage 1's errors before that week at every (season, week)
+    the reference runs have no rows for: the seasons after the reference, and the predicted
+    season's earlier weeks. Where both have a week, the reference's errors are used.
+    """
+    predict_path = inputs._resolve_predict_path(args.predict_path, Path(constants.DATA_PATH))
+    season, week = inputs._infer_season_week(pd.read_csv(predict_path, usecols=["season", "week"]))
+    if season is None or week is None:
+        completed = pd.read_csv(args.data_path, usecols=["season", "week"])
+        season, week = floor_sigma.week_after(completed)
+        log.info(
+            "%s spans several weeks; the floor sigma is for season %d week %d.",
+            predict_path,
+            season,
+            week,
+        )
+    own = stage1.read_margin_errors(run_dir)
+    before = (own["season"] < season) | ((own["season"] == season) & (own["week"] < week))
+    pool = floor_sigma.ErrorPool(
+        floor_sigma.fill_gaps(reference.errors, own[before]),
+        (*reference.sources, str(stage1.margin_errors_path(run_dir))),
+    )
+    return pool, (int(season), int(week))
 
 
 def _power_rankings_outputs(out_dir: Path, season: int, through_week: int) -> list[Path]:
@@ -263,11 +299,24 @@ def main() -> int:
         log.info("Dry-run: outputs would land under %s", output_dir)
         return 0
 
+    # The reference runs' out-of-fold errors, for the floor sigma of stage 1 and the final fit.
+    # A configured run that is missing stops the run here rather than changing the sigma.
+    reference_pool = floor_sigma.load_reference_pool(args.floor_sigma_reference_runs)
+    log.info(
+        "Floor sigma reference: %d games from %s",
+        len(reference_pool.errors),
+        list(reference_pool.sources) or "no reference runs",
+    )
+
     # --------------------------------------------------
     # Stage 1: walk-forward of the production configuration
     # --------------------------------------------------
     stage1_kwargs = config.stage1_options(args)
-    wf_config = {**stage1_kwargs, "checkpoint_per_fold": bool(args.wf_checkpoint_per_fold)}
+    wf_config = {
+        **stage1_kwargs,
+        "checkpoint_per_fold": bool(args.wf_checkpoint_per_fold),
+        "floor_sigma_history": reference_pool.digest(),
+    }
 
     wf_run_fingerprint = fingerprints.wf_run_fingerprint(
         dataset_fingerprint,
@@ -284,6 +333,7 @@ def main() -> int:
             "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
             "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
             "xgb_params_overrides": stage1_kwargs["xgb_params_overrides"],
+            "floor_sigma_history": reference_pool.digest(),
         },
         code_version=artifacts.git_commit_hash(),
     )
@@ -295,7 +345,7 @@ def main() -> int:
         wf_marker,
         dataset_hash,
         wf_config_hash,
-        [wf_compare_csv, wf_best_json],
+        [wf_compare_csv, wf_best_json, stage1.margin_errors_path(run_dir)],
     ):
         log.info("Stage 1: reuse %s", wf_best_json)
         wf_summary = json.loads(wf_best_json.read_text(encoding="utf-8"))
@@ -308,6 +358,7 @@ def main() -> int:
             dataset_fingerprint=dataset_fingerprint,
             wf_run_fingerprint=wf_run_fingerprint,
             checkpoint_per_fold=bool(args.wf_checkpoint_per_fold),
+            floor_sigma_history=reference_pool,
             **stage1_kwargs,
         )
         stage1.write_summary(run_dir, wf_summary)
@@ -325,6 +376,12 @@ def main() -> int:
     # -----------------
     columns_only = pd.read_csv(args.data_path, nrows=1)
     optuna_config, train_config = config.final_fit_options(args, columns_only, run_dir=run_dir)
+    sigma_pool, sigma_week = _production_floor_sigma(args, run_dir, reference_pool)
+    train_config["floor_sigma"] = {
+        "sources": list(sigma_pool.sources),
+        "pool_digest": sigma_pool.digest(),
+        "week": list(sigma_week),
+    }
     train_config_hash = artifacts.stable_short_hash(train_config)
     train_marker = _stage_marker_path(run_dir, "train")
     paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
@@ -355,6 +412,8 @@ def main() -> int:
             feature_start=str(args.feature_start),
             feature_end=str(args.feature_end),
             xgb_params_overrides=train_config["xgb_params_overrides"],
+            floor_sigma_pool=sigma_pool,
+            floor_sigma_week=sigma_week,
         )
         model = result.model
         _write_training_artifacts(

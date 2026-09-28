@@ -27,7 +27,8 @@ register(
     ColumnMeta(
         "home_win_prob",
         "Home win %",
-        "Probability the home team wins: the predicted margin through the fixed normal curve.",
+        "Probability the home team wins: the predicted margin through a normal curve whose "
+        "spread is the model's root-mean-square error on earlier weeks it had not seen.",
         MODEL,
         "prob",
         "neutral",

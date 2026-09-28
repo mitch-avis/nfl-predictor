@@ -197,7 +197,7 @@
    ],
    "default": "auto",
    "dest": "calibration",
-   "help": "Win-probability calibration: auto, the deterministic floor (the predicted margin through the fixed normal curve); none is the same.",
+   "help": "Win-probability calibration: auto, the deterministic floor (the predicted margin through a normal curve whose spread is the root-mean-square out-of-fold error before the predicted week); none is the same.",
    "nargs": null,
    "options": [
     "--win-prob-calibration",
@@ -206,6 +206,20 @@
    "required": false,
    "subcommand": null,
    "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "floor_sigma_reference_runs",
+   "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors join this run's own earlier weeks in each week's floor sigma; their checkpoints are only read, and a week this run predicts replaces theirs. Default: none, so each week's sigma comes from this run's earlier weeks (the constant until they span three earlier seasons, any weeks).",
+   "nargs": "+",
+   "options": [
+    "--floor-sigma-reference-runs"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
   },
   {
    "action": "_StoreAction",
@@ -1270,7 +1284,7 @@
    ],
    "default": "auto",
    "dest": "win_prob_calibration",
-   "help": "Win-probability calibration: auto, the deterministic floor (the predicted margin through the fixed normal curve); none is the same.",
+   "help": "Win-probability calibration: auto, the deterministic floor (the predicted margin through a normal curve whose spread is the root-mean-square out-of-fold error before the predicted week); none is the same.",
    "nargs": null,
    "options": [
     "--win-prob-calibration"
@@ -1278,6 +1292,23 @@
    "required": false,
    "subcommand": null,
    "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [
+    "models/step3_gpu_reference/l1_seed42",
+    "models/step3_gpu_reference/l2_seed7"
+   ],
+   "dest": "floor_sigma_reference_runs",
+   "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the floor's sigma, which the saved model records; their checkpoints are only read. A missing run is an error; give no paths to train without them (the constant, recorded as the fallback).",
+   "nargs": "*",
+   "options": [
+    "--floor-sigma-reference-runs"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
   },
   {
    "action": "_StoreTrueAction",
@@ -2067,9 +2098,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": 3,
+   "default": 1,
    "dest": "wf_start_week",
-   "help": "Walk-forward: start week.",
+   "help": "Walk-forward: start week (default 1, so every week is scored and its errors reach the final fit's floor-sigma pool).",
    "nargs": null,
    "options": [
     "--wf-start-week"
@@ -2325,6 +2356,23 @@
    "required": false,
    "subcommand": null,
    "type": "str"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [
+    "models/step3_gpu_reference/l1_seed42",
+    "models/step3_gpu_reference/l2_seed7"
+   ],
+   "dest": "floor_sigma_reference_runs",
+   "help": "Walk-forward runs (run directories or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the probability floor's sigma, with stage 1's own folds; their checkpoints are only read. Several runs are averaged per game. A missing run is an error; give no paths to use only stage 1's folds (the constant until they span three earlier seasons, any weeks).",
+   "nargs": "*",
+   "options": [
+    "--floor-sigma-reference-runs"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
   },
   {
    "action": "_StoreAction",

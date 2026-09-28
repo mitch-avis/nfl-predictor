@@ -914,7 +914,9 @@ def _predict_future_games(
     if model_kind == "margin_total":
         mt = cast(ml_model_core.MarginTotalModel, model)
         pred_margin, _pred_total = ml_model_core.predict_margin_total_from_model(mt, games)
-        home_win_prob = ml_model_core.margin_to_home_win_prob(pred_margin)
+        # The sigma the model's weekly predictions use (the constant for older models).
+        sigma, _fallback = ml_model_core.model_floor_sigma(mt)
+        home_win_prob = ml_model_core.margin_to_home_win_prob(pred_margin, sigma)
     else:
         raise ValueError(f"Unsupported model kind for power rankings: {model_kind!r}")
 

@@ -189,11 +189,15 @@ def build_metadata(
     early_stopping: dict[str, Any] | None = None,
     optuna_summary: dict[str, Any] | None = None,
     xgb_device: str | None = None,
+    floor_sigma: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a metadata payload meeting the repo's artifact contract.
 
     ``xgb_device`` is the concrete XGBoost device the model's heads trained on (``cpu`` or
-    ``cuda``), or ``mixed`` when a head fell back to another device.
+    ``cuda``), or ``mixed`` when a head fell back to another device. ``floor_sigma`` is the
+    model's recorded floor sigma (``FloorSigma.to_dict``): the value its probabilities use, the
+    week it was estimated for, its pool's size and seasons, whether it fell back to the
+    constant, and the reference runs it came from.
     """
     payload: dict[str, Any] = {
         "created_at": created_at,
@@ -209,6 +213,7 @@ def build_metadata(
         "early_stopping": early_stopping,
         "optuna_summary": optuna_summary,
         "xgb_device": xgb_device,
+        "floor_sigma": floor_sigma,
     }
     return payload
 

@@ -7,9 +7,11 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
+from scipy.stats import norm
 
 from nfl_predictor import constants
 from nfl_predictor.reporting import power_rankings
@@ -598,3 +600,37 @@ def test_an_unknown_ranking_method_is_rejected() -> None:
     """Only the documented methods are accepted."""
     with pytest.raises(ValueError, match="method"):
         power_rankings.resolve_ranking_options(method="elo", legacy_franchise_fit=False)
+
+
+def test_predict_future_games_use_the_models_recorded_floor_sigma(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Projected-standings probabilities go through the sigma the model predicts with."""
+    data_path = tmp_path / "ml.csv"
+    pd.DataFrame(
+        [
+            {
+                "season": 2025,
+                "week": 2,
+                "game_type": "REG",
+                "away_abbr": "AAA",
+                "home_abbr": "BBB",
+                "feat1": 1.0,
+            }
+        ]
+    ).to_csv(data_path, index=False)
+    record = SimpleNamespace(sigma=10.0, fallback=False)
+    model = SimpleNamespace(
+        feature_spec=SimpleNamespace(feature_columns=["feat1"]), floor_sigma=record
+    )
+    monkeypatch.setattr(
+        power_rankings.ml_model_core,
+        "predict_margin_total_from_model",
+        lambda _model, _games: (np.array([5.0]), np.array([44.0])),
+    )
+
+    out = power_rankings._predict_future_games(
+        model, model_kind="margin_total", data_ml=data_path, season=2025, through_week=1
+    )
+
+    assert out["home_win_prob"].tolist() == [norm.cdf(0.5)]

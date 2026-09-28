@@ -22,8 +22,24 @@ Direct home/away score regressors are allowed only as secondary ensemble members
 ### Win probability
 
 - Win probability is derived from the margin prediction through the deterministic floor,
-  `Phi(margin / SCORE_DIFF_STD_DEV)`, and nothing else: no fitted calibrator, no Elo-style curve,
-  no market blend or clamp.
+  `Phi(margin / sigma)`, and nothing else: no fitted calibrator, no Elo-style curve, no market
+  blend or clamp.
+- Sigma for a game in season `s`, week `w` is the root-mean-square of (actual minus predicted
+  margin) over every out-of-fold prediction strictly before `(s, w)`: earlier seasons, and season
+  `s` weeks before `w` (`nfl_predictor/ml/floor_sigma.py`, one implementation for every run
+  type). It is one value per week, so it never changes a pick or a confidence rank. Until the
+  pool spans `FLOOR_SIGMA_MIN_POOL_SEASONS` (`3`) earlier seasons (any weeks), sigma is
+  `SCORE_DIFF_STD_DEV` (`14.21`), recorded as the fallback.
+- The pool: a walk-forward pools its own earlier weeks with any supplied history (none for a
+  standalone `backtest` unless `--floor-sigma-reference-runs` names runs; the reference runs in
+  the weekly run's stage 1), a week the run predicts replacing the history's. The production
+  final fit pools the reference runs' fold checkpoints (`floor_sigma_reference_runs`, default
+  the two GPU reference seeds, averaged per game) with the weekly run's stage-1 errors before
+  the predicted week at every `(season, week)` the reference has no rows for (the seasons after
+  it and the predicted season's earlier weeks; the reference keeps its own weeks), estimates
+  sigma for the predicted week, and records it in the saved model; prediction from a saved
+  model uses the recorded value, and a model saved without one uses the constant. A configured
+  reference run that is missing is an error, never a silent fallback.
 - Every run type uses it identically: the weekly run, `backtest`, `train` and `predict`. The
   weekly run's stage 1 walks this one production configuration forward to report how it scores;
   it selects nothing.
@@ -83,7 +99,9 @@ If implementing score "realism":
 ### Confidence pool deliverable
 
 - Weekly outputs include a **1..N** unique confidence ranking across that week's games.
-- Predicted winner is derived from the deterministic win probability.
+- Predicted winner is derived from the deterministic win probability: home when the unrounded
+  `p >= 0.5` (an exact 0.5 picks home), else away (`picks_home` in `nfl_predictor/ml/metrics.py`,
+  shared by the walk-forward, the training pool summaries and the weekly output).
 - Confidence strength is derived from the deterministic win probability (default:
   `abs(p - 0.5)`), rounded to 12 decimals (`CONFIDENCE_DECIMALS` in `nfl_predictor/ml/metrics.py`)
   so that mathematically equal confidences (a home favorite and a home underdog by the same
@@ -93,6 +111,9 @@ If implementing score "realism":
   ordered by `game_id`. One shared rule (`confidence_ranks` in `nfl_predictor/ml/metrics.py`)
   ranks the weekly picks, walk-forward pool points, training pool summaries and
   `nfl-predictor compare`.
+- Picks, ranks and the published confidence strength come from the unrounded probability; the
+  published probability columns are rounded to 4 decimals for display only, so the weekly picks
+  choose sides and rank exactly as the walk-forward does.
 
 Authoritative pool scoring rules:
 
@@ -170,6 +191,9 @@ Every saved model must include adjacent metadata JSON with:
 - training config (CLI args / config object)
 - the XGBoost device the model trained on (`xgb_device`: `cpu` or `cuda`, never `auto`)
 - the seasons used for training and for the evaluation holdout (`splits`)
+- the probability floor's sigma (`floor_sigma`): the value the model predicts with, whether it is
+  the fallback constant, the week it was estimated for, its pool's game count and seasons, and
+  the runs the pool came from
 - feature list used
 - best params (if tuned) and early-stopping info
 

@@ -20,11 +20,25 @@ wf_checkpoint_per_fold: false
 ## Walk-forward evaluation parameters (stage 1, one walk-forward of the production configuration:
 ## the deterministic floor, trained with wf_market_mode; each week's fold trains on every earlier
 ## completed game, as the final fit does):
+# walk-forward runs whose out-of-fold margin errors set the probability floor's sigma,
+# Phi(margin / sigma), with sigma the root-mean-square error of every out-of-fold prediction before
+# the predicted week. Stage 1 pools them with its own earlier weeks; the final fit pools them with
+# stage 1's weeks before the predicted week that the runs have no rows for (the seasons after
+# them and the predicted season's earlier weeks) and records the sigma in the saved model. Run
+# directories or fold checkpoint directories, relative to the repository root; their checkpoints
+# are only read, and several runs are averaged per game. A listed run that is missing stops the
+# run. An empty list ([]) uses only stage 1's folds, which fall back to the constant 14.21 until
+# they span three earlier seasons, any weeks of them (default: both seeds of the GPU reference
+# walk-forward)
+floor_sigma_reference_runs:
+  - models/step3_gpu_reference/l1_seed42
+  - models/step3_gpu_reference/l2_seed7
 # number of most recent seasons to include; the current season counts even before it has a
 # completed week, so 3 scores two seasons (default: 3)
 wf_eval_last_n_seasons: 3
-# starting week for walk-forward evaluation (default: 3)
-wf_start_week: 3
+# starting week for walk-forward evaluation; week 1 scores every week, so the errors of weeks 1
+# and 2 also reach the final fit's floor-sigma pool (default: 1)
+wf_start_week: 1
 # exponential recency weighting half-life in seasons (default: none, i.e. unweighted; keep it
 # equal to train_recency_half_life_seasons)
 # wf_recency_half_life_seasons: 16

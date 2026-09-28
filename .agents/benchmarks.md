@@ -469,3 +469,7 @@ with `.venv/bin/python models/step3_gpu_reference/independent_rescore.py`.
   (flattered: the model is anchored to the stored spread). The market-view pool-point columns are
   left out here: exact spread ties are ranked by float noise in `nfl-predictor compare`'s pool
   definition.
+- Later code: `0.34.1` edited `nfl_predictor/ml/ml_model_training.py` (the final fit only), so
+  runs on newer code cannot reuse these checkpoints; walk-forward predictions are unchanged (the
+  walk-forward never calls the edited function; its reviewer's before/after synthetic run was
+  hash-identical), so the reference stays comparable.

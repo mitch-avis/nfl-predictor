@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.34.1] - 2026-09-28
+
+### Fixed
+
+- The weekly run's final fit trains with `wf_n_estimators`, `wf_max_depth` and
+  `wf_learning_rate` from `config/weekly_run.yaml`, the tree settings stage 1 walks forward (one
+  helper, `xgb_model_params`); before, it always used the code defaults, so editing those keys
+  would have made stage 1 measure a model the weekly run does not submit. The shipped values
+  equal the defaults, so weekly outputs are unchanged; with `--tune`, the tuned values still
+  win. The final fit's resume hash changes, so resuming an older weekly run retrains it.
+- The settings-versus-production report reads the final fit's tree settings from the weekly
+  config.
+
+### Changed
+
+- `train_margin_total_model` accepts `xgb_params_overrides`. It is under `nfl_predictor/ml/`, so
+  walk-forward checkpoint fingerprints change; walk-forward predictions do not (the walk-forward
+  never calls it, and a before/after synthetic run is hash-identical).
+
 ## [0.34.0] - 2026-09-28
 
 ### Added

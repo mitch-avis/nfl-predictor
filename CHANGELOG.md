@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.34.0] - 2026-09-28
+
+### Added
+
+- `nfl-predictor backtest` writes a `settings_versus_production` section to `metrics_report.json`
+  and its log: every model-affecting setting where the run differs from the production weekly
+  run (`config/weekly_run.yaml` merged with the code defaults), for stage 1's walk-forward and for
+  the final fit, including the values each side applies implicitly. Settings an older run did not
+  record are listed as not recorded, never inferred, and retired settings are listed with their
+  values; scope and runtime settings are listed apart. `nfl-predictor compare` shows the same
+  section for each run, rebuilt from its `metadata.json`.
+- The backtest records the XGBoost parameters its folds trained with as `config.xgb_params`;
+  `weekly_run.config.parse_args` is public.
+
+### Changed
+
+- The weekly run builds its stage-1 and final-fit settings in shared helpers
+  (`apply_run_defaults`, `stage1_options`, `final_fit_options`,
+  `production_walk_forward_config`) instead of inline; behavior and the resume hashes are
+  unchanged and pinned by tests.
+
 ## [0.33.0] - 2026-09-28
 
 ### Changed

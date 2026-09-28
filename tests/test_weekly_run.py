@@ -168,7 +168,6 @@ def test_stage1_walks_forward_once_on_the_production_configuration(
         checkpoint_per_fold=False,
         eval_last_n_seasons=3,
         wf_start_week=3,
-        calibration_weeks=4,
         include_postseason=False,
         exclude_incomplete_seasons=False,
         recency_half_life_seasons=None,
@@ -214,7 +213,6 @@ def test_the_model_page_reads_the_production_walk_forward_of_a_weekly_run(
         checkpoint_per_fold=False,
         eval_last_n_seasons=3,
         wf_start_week=3,
-        calibration_weeks=4,
         include_postseason=False,
         exclude_incomplete_seasons=False,
         recency_half_life_seasons=None,
@@ -284,6 +282,10 @@ def test_the_final_fit_uses_the_configured_market_mode_and_the_floor(
     assert "win_prob_calibration" not in captured
     assert "market_prob_config" not in captured
     assert "win_prob_use_uncertainty" not in captured
+    # The final fit trains on every completed game: no weeks or seasons are held out.
+    assert captured["holdout_seasons"] == 0
+    assert "calibration_weeks" not in captured
+    assert "calibration_seasons" not in captured
 
 
 @pytest.mark.parametrize(

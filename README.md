@@ -22,7 +22,7 @@ This repo is geared toward:
   - [Data sources + missing data](#data-sources--missing-data)
   - [Training + prediction](#training--prediction)
     - [Quickstart (train + predict)](#quickstart-train--predict)
-    - [Splits: train, calibration, holdout](#splits-train-calibration-holdout)
+    - [Splits: train and holdout](#splits-train-and-holdout)
   - [Modeling approach](#modeling-approach)
     - [Margin/Total targets (canonical)](#margintotal-targets-canonical)
     - [Win probability](#win-probability)
@@ -273,7 +273,6 @@ Train a margin/total model and generate predictions for a weekly input file:
 nfl-predictor train \
   --model-kind margin_total \
   --holdout-seasons 0 \
-  --calibration-seasons 0 \
   --win-prob-calibration none \
   --tune \
   --tune-timeout 600 \
@@ -291,13 +290,14 @@ nfl-predictor train \
   --data-path data/completed_games_ml.csv \
   --model-kind margin_total \
   --holdout-seasons 1 \
-  --calibration-seasons 1 \
   --predict-path data/predict/week_17_games_to_predict.csv
 ```
 
-### Splits: train, calibration, holdout
+### Splits: train and holdout
 
-Splits are time-aware by season and (optionally) by in-season week.
+Splits are time-aware by season: the model trains on every eligible completed game except the
+evaluation holdout seasons, the newest completed week included, exactly as each walk-forward fold
+trains on every game before its week.
 
 By default, training/evaluation uses **regular season** games only when the input data includes a
 `game_type` column (i.e., postseason rows are filtered out). You can still generate predictions for
@@ -306,30 +306,23 @@ playoff games as long as the feature row exists.
 To include postseason games in training, pass `--include-postseason`. To emphasize postseason games,
 also set `--postseason-weight` (e.g., `--postseason-weight 1.5`). Optional recency weighting is
 available via `--recency-half-life-seasons` to apply exponential decay by season to training
-and calibration samples. It is off by default and in the shipped
+samples. It is off by default and in the shipped
 weekly config: the six-season, two-seed measurement below found no gain from it.
 
-- `--holdout-seasons` reserves the most recent seasons for evaluation only.
-- `--calibration-weeks` holds the newest completed weeks out of the final fit's trees, rolling
-  back into the previous season early in a season (at week 2, four weeks are the new season's
-  week 1 plus the previous season's last three). Walk-forward folds hold nothing out of the tree
-  fit: there `--wf-calibration-weeks` selects a frame (the previous two seasons plus the season's
-  completed weeks) that XGBoost only evaluates and nothing is fitted on.
-  `--calibration-seasons` also holds out whole seasons: the newest ones the week window does not
-  touch, so with one season and four weeks the calibration season moves forward a year between
-  weeks 4 and 5.
-- The final fit's held-out rows stay out of its trees and XGBoost only evaluates them (the fit
-  runs its full tree budget); no calibrator is fitted on them (see "Win probability").
-- The run log lists the training, calibration and holdout seasons and the in-season window's
-  `(season, week)` pairs.
+- `--holdout-seasons` reserves the most recent whole seasons for evaluation only (`train`
+  defaults to 2, the weekly run to 0); their metrics are logged and written to
+  `metrics_report.json`.
+- No fit hands XGBoost an eval frame: every head runs its full tree budget, and no calibrator is
+  fitted (see "Win probability").
+- The run log lists the training and holdout seasons, and `metadata.json` records them under
+  `splits`.
 
-Example: hold out the most recent season for evaluation and the season before it from the trees:
+Example: hold out the most recent season for evaluation:
 
 ```bash
 nfl-predictor train \
   --model-kind margin_total \
-  --holdout-seasons 1 \
-  --calibration-seasons 1
+  --holdout-seasons 1
 ```
 
 ## Modeling approach
@@ -394,13 +387,11 @@ resolved device is part of the fold-checkpoint fingerprint, so CPU and GPU runs 
 other's weeks, and the run's `metadata.json` records it as `config.xgb_device`. If the latest
 season is incomplete, either pass `--wf-exclude-incomplete-seasons` or specify `--eval-seasons`
 explicitly; the metrics report includes the evaluated window and any exclusions. Each fold's
-trees fit on every completed game before its week: unlike the final fit, walk-forward folds hold
-nothing out of the tree fit, and `--wf-calibration-weeks` only selects the frame XGBoost
-evaluates, described above. Each fold logs that frame's seasons and weeks and that no calibrator
-is fitted on it; the summary table includes deterministic-minus-market bootstrap intervals for
-week 1, week 2, weeks 3-18, and all weeks; and every fold runs the full `n_estimators` budget
-(no in-season early stopping, in walk-forward or in production), with `best_iteration` recorded
-per head.
+trees fit on every completed game before its week, as the final fit trains on every completed
+game, with no eval frame; the summary table includes deterministic-minus-market bootstrap
+intervals for week 1, week 2, weeks 3-18, and all weeks; and every fold runs the full
+`n_estimators` budget (no in-season early stopping, in walk-forward or in production), with
+`best_iteration` recorded per head.
 
 The report also carries a stability view, `metrics.stability` in `metrics_report.json`, and the run
 logs it as Markdown tables when it finishes. For week 1, week 2, weeks 3-18 and all weeks it gives
@@ -661,7 +652,7 @@ Model selection hierarchy (default):
 
 Metrics reports include a summary table (with metric priority + direction), plus optional
 diagnostics such as season win totals (expected vs actual) and calibration drift by season/week.
-Walk-forward reports also record the evaluation window, calibration window, and any excluded
+Walk-forward reports also record the evaluation window, the calibration method, and any excluded
 incomplete seasons.
 
 ## Command line
@@ -854,7 +845,7 @@ Training/backtests can write a run directory containing reproducible artifacts.
   Margin/total fits (the weekly run and `nfl-predictor train`'s default model kind) also record
   `mean_abs_shap` (`schema_version` 3): the mean absolute SHAP value in points from XGBoost's
   exact TreeSHAP, over the final model's own tree-training rows (the `shap` block gives the row
-  count and seasons; calibration and holdout rows are left out). A market-anchored head is
+  count and seasons; holdout rows are left out). A market-anchored head is
   explained on its output, the residual over the market line, so the value measures how far a
   feature moves the model's adjustment to the line. A base feature's value sums each row's signed
   contributions over its one-hot columns before the absolute value, and `combined` adds the

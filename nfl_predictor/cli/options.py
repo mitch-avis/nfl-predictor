@@ -46,9 +46,6 @@ def parse_feature_groups(raw: str | None) -> tuple[str, ...]:
 
 def add_wf_window_options(parser: argparse.ArgumentParser) -> None:
     """Add the walk-forward evaluation window options; the bare spellings stay as aliases."""
-    # Imported here so that commands without a walk-forward window never load the model code.
-    from nfl_predictor.ml import walk_forward
-
     parser.add_argument(
         "--wf-eval-last-n-seasons",
         "--eval-last-n-seasons",
@@ -65,18 +62,6 @@ def add_wf_window_options(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=3,
         help="Walk-forward start week.",
-    )
-    parser.add_argument(
-        "--wf-calibration-weeks",
-        "--calibration-weeks",
-        dest="wf_calibration_weeks",
-        type=int,
-        default=walk_forward.DEFAULT_CALIBRATION_WEEKS,
-        help=(
-            "Walk-forward: a positive value switches on the pooled calibrator frame for fitted "
-            "calibrators (the previous two seasons plus the eval season's completed weeks); "
-            "folds hold nothing out of the tree fit."
-        ),
     )
     parser.add_argument(
         "--wf-exclude-incomplete-seasons",

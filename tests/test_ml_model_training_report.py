@@ -92,8 +92,6 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
     result = ml_model_training.train_margin_total_model_with_report(
         data_path=Path("dummy.csv"),
         holdout_seasons=1,
-        calibration_seasons=1,
-        calibration_weeks=0,
         include_market=True,
         max_cardinality_ratio=0.5,
         optuna_config=OptunaConfig(
@@ -125,18 +123,14 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
     assert pool_summary is not None
     assert pool_summary["weeks"] == 2.0
 
-    splits = result.splits
-    assert splits["train_seasons"] == [2020]
-    assert splits["calibration_seasons"] == [2021]
-    assert splits["holdout_seasons"] == [2022]
-    assert splits["calibration_inseason"] == {"season": None, "weeks": [], "pairs": []}
+    assert result.splits == {"train_seasons": [2020, 2021], "holdout_seasons": [2022]}
     assert result.metrics_report["tuning_cv"] == {"cv_splits": 2}
 
 
-def test_train_margin_total_model_with_report_records_the_rolling_calibration_window(
+def test_train_margin_total_model_with_report_explains_every_training_row(
     monkeypatch,
 ) -> None:
-    """Records every in-season calibration pair when the window spans two seasons."""
+    """SHAP explains every row the trees trained on, the newest completed week included."""
     df = pd.DataFrame(
         {
             "season": [2020, 2020, 2021],
@@ -176,8 +170,6 @@ def test_train_margin_total_model_with_report_records_the_rolling_calibration_wi
     result = ml_model_training.train_margin_total_model_with_report(
         data_path=Path("dummy.csv"),
         holdout_seasons=0,
-        calibration_seasons=0,
-        calibration_weeks=2,
         include_market=True,
         max_cardinality_ratio=0.5,
         optuna_config=None,
@@ -185,14 +177,9 @@ def test_train_margin_total_model_with_report_records_the_rolling_calibration_wi
         market_anchor=False,
     )
 
-    assert result.splits["calibration_inseason"] == {
-        "season": 2021,
-        "weeks": [1],
-        "pairs": [[2020, 2], [2021, 1]],
-    }
-    # SHAP explains the final model's tree-training rows, never the calibration window.
+    assert result.splits == {"train_seasons": [2020, 2021], "holdout_seasons": []}
     assert [list(rows[["season", "week"]].itertuples(index=False)) for rows in explained] == [
-        [(2020, 1)]
+        [(2020, 1), (2020, 2), (2021, 1)]
     ]
 
 
@@ -206,8 +193,6 @@ def test_trained_report_ranks_base_features_by_shap_over_the_training_rows(
     result = ml_model_training.train_margin_total_model_with_report(
         data_path=completed,
         holdout_seasons=0,
-        calibration_seasons=0,
-        calibration_weeks=4,
         include_market=True,
         max_cardinality_ratio=0.5,
         optuna_config=OptunaConfig(
@@ -233,8 +218,8 @@ def test_trained_report_ranks_base_features_by_shap_over_the_training_rows(
     completed_games = games.dropna(subset=["away_score", "home_score"])
     assert report["shap"] == {
         "rows": "train",
-        "row_count": len(completed_games) - 4 * 16,
-        "seasons": [2021, 2023],
+        "row_count": len(completed_games),
+        "seasons": [2021, 2024],
     }
     base = report["base_features"]
     shap_by_head = {head: base[head]["mean_abs_shap"] for head in ("margin", "total")}

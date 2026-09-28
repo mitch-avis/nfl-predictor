@@ -134,8 +134,6 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
     model = ml_model_training.train_margin_total_model(
         data_path=Path("dummy.csv"),
         holdout_seasons=1,
-        calibration_seasons=1,
-        calibration_weeks=0,
         include_market=True,
         max_cardinality_ratio=0.5,
         optuna_config=optuna_config,

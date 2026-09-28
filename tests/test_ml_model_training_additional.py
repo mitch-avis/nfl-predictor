@@ -18,7 +18,6 @@ from nfl_predictor.ml.ml_model_core import (
     FeatureSpec,
     MarginTotalModel,
     OptunaConfig,
-    TrainCalibrationSplit,
 )
 
 xgb.set_config(verbosity=0)
@@ -154,24 +153,7 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
             "feat1": [1.0, 2.0],
         }
     )
-    train_df = df.iloc[[0]].copy()
-    calibration_df = df.iloc[[1]].copy()
-    holdout_df = df.iloc[0:0].copy()
-
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(
-        ml_model_training,
-        "_split_train_calibration_holdout",
-        lambda *_args, **_kwargs: TrainCalibrationSplit(
-            train_df,
-            calibration_df,
-            holdout_df,
-            [2022],
-            [2023],
-            [],
-            [(2023, 1)],
-        ),
-    )
     monkeypatch.setattr(
         ml_model_training,
         "_build_feature_spec",
@@ -238,8 +220,6 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
     model = ml_model_training.train_margin_total_model(
         data_path=Path("dummy.csv"),
         holdout_seasons=0,
-        calibration_seasons=1,
-        calibration_weeks=0,
         include_market=False,
         max_cardinality_ratio=0.5,
         optuna_config=_disabled_optuna(),

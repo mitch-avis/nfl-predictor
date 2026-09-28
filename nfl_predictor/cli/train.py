@@ -50,7 +50,10 @@ def _parse_args() -> argparse.Namespace:
         "--holdout-seasons",
         type=int,
         default=2,
-        help="Number of most recent seasons to hold out for evaluation.",
+        help=(
+            "Number of most recent seasons to hold out for evaluation; the model trains on "
+            "every other completed game."
+        ),
     )
     parser.add_argument(
         "--exclude-market",
@@ -122,21 +125,6 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         default=0.5,
         help="Drop categorical columns with unique ratio above this threshold.",
-    )
-    parser.add_argument(
-        "--calibration-seasons",
-        type=int,
-        default=1,
-        help="Number of seasons reserved for calibration.",
-    )
-    parser.add_argument(
-        "--calibration-weeks",
-        type=int,
-        default=0,
-        help=(
-            "Number of newest completed weeks held out of the tree fit for calibration; the "
-            "window rolls back into the previous season when the latest season has fewer."
-        ),
     )
     parser.add_argument(
         "--win-prob-calibration",
@@ -385,8 +373,6 @@ def main() -> None:
     result = train_margin_total_model_with_report(
         data_path=args.data_path,
         holdout_seasons=args.holdout_seasons,
-        calibration_seasons=args.calibration_seasons,
-        calibration_weeks=args.calibration_weeks,
         include_market=not args.exclude_market,
         max_cardinality_ratio=args.max_cardinality_ratio,
         optuna_config=optuna_config,

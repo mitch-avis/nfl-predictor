@@ -4,55 +4,55 @@
   "rows": [
     {
       "feature": "num__home_points_per_game",
-      "mean_abs_shap": 0.9993430972099304
-    },
-    {
-      "feature": "num__home_points_allowed_per_game",
-      "mean_abs_shap": 0.9545526504516602
+      "mean_abs_shap": 0.9290744588982885
     },
     {
       "feature": "num__away_points_per_game",
-      "mean_abs_shap": 0.8156507611274719
+      "mean_abs_shap": 0.8761895831108135
     },
     {
-      "feature": "num__market_total_line",
-      "mean_abs_shap": 0.7924026250839233
+      "feature": "num__home_points_allowed_per_game",
+      "mean_abs_shap": 0.8696409522672184
     },
     {
       "feature": "num__home_power",
-      "mean_abs_shap": 0.7414445281028748
+      "mean_abs_shap": 0.7431064489283017
+    },
+    {
+      "feature": "num__market_total_line",
+      "mean_abs_shap": 0.6436015587784244
     },
     {
       "feature": "num__away_power",
-      "mean_abs_shap": 0.7225267291069031
+      "mean_abs_shap": 0.5837207692493394
     },
     {
       "feature": "num__away_rest",
-      "mean_abs_shap": 0.6230404376983643
+      "mean_abs_shap": 0.5474003409544821
     },
     {
       "feature": "num__power_diff",
-      "mean_abs_shap": 0.5729488134384155
+      "mean_abs_shap": 0.539262944002985
     },
     {
       "feature": "num__away_points_allowed_per_game",
-      "mean_abs_shap": 0.43442317843437195
+      "mean_abs_shap": 0.4953795230910394
     },
     {
       "feature": "num__market_home_margin",
-      "mean_abs_shap": 0.42811229825019836
+      "mean_abs_shap": 0.39971746829608246
     },
     {
       "feature": "num__home_market_prob",
-      "mean_abs_shap": 0.2920018136501312
-    },
-    {
-      "feature": "num__home_rest",
-      "mean_abs_shap": 0.12347498536109924
+      "mean_abs_shap": 0.155554453696492
     },
     {
       "feature": "num__away_market_prob",
-      "mean_abs_shap": 0.11630692332983017
+      "mean_abs_shap": 0.11871684439723719
+    },
+    {
+      "feature": "num__home_rest",
+      "mean_abs_shap": 0.09281528554079573
     }
   ],
   "sample_size": 352,

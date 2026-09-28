@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 from dataclasses import replace
 from pathlib import Path
 
@@ -60,7 +59,6 @@ def _base_config() -> walk_forward.WalkForwardConfig:
         eval_last_n_seasons=1,
         wf_start_week=2,
         calibration="none",
-        calibration_weeks=1,
         random_seed=7,
         include_market=False,
         market_anchor=False,
@@ -270,8 +268,7 @@ def test_fold_checkpoint_fingerprint_tracks_data_and_config() -> None:
     assert walk_forward.fold_checkpoint_fingerprint(df.copy(), config) == baseline
     assert walk_forward.fold_checkpoint_fingerprint(changed_df, config) != baseline
     assert (
-        walk_forward.fold_checkpoint_fingerprint(df, replace(config, calibration_weeks=2))
-        != baseline
+        walk_forward.fold_checkpoint_fingerprint(df, replace(config, wf_start_week=3)) != baseline
     )
 
 
@@ -348,61 +345,6 @@ def test_walk_forward_probabilities_in_bounds() -> None:
 
     assert (probs >= 0).all()
     assert (probs <= 1).all()
-
-
-def test_calibration_data_is_time_aware() -> None:
-    """Calibration data uses prior seasons plus earlier weeks of the current season only."""
-    df = _fixture_df()
-    folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
-
-    for fold in folds:
-        calibration_df = walk_forward.select_calibration_data(
-            fold.train_df, fold.season, fold.week, calibration_weeks=1
-        )
-        if not calibration_df.empty:
-            current_season = calibration_df[calibration_df["season"] == fold.season]
-            if not current_season.empty:
-                assert current_season["week"].max() < fold.week
-            assert calibration_df["season"].min() >= fold.season - 2
-            assert calibration_df["season"].max() <= fold.season
-
-
-def test_calibration_data_uses_prior_two_seasons_plus_completed_weeks() -> None:
-    """Calibration selection should pool the previous two seasons and current completed weeks."""
-    df = pd.DataFrame(
-        {
-            "season": [2020, 2020, 2021, 2021, 2022, 2022],
-            "week": [1, 2, 1, 2, 1, 2],
-            "away_score": [10, 11, 12, 13, 14, 15],
-            "home_score": [20, 21, 22, 23, 24, 25],
-        }
-    )
-
-    calibration_df = walk_forward.select_calibration_data(
-        df,
-        eval_season=2022,
-        eval_week=2,
-        calibration_weeks=1,
-    )
-
-    assert calibration_df["season"].tolist() == [2020, 2020, 2021, 2021, 2022]
-    assert calibration_df["week"].tolist() == [1, 2, 1, 2, 1]
-
-
-def test_walk_forward_logs_each_fold_calibration_frame(caplog: pytest.LogCaptureFixture) -> None:
-    """Every trained fold logs its calibration frame, and says nothing is fitted on it."""
-    caplog.set_level(logging.INFO)
-
-    walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
-
-    assert (
-        "Walk-forward calibration frame for season 2023 week 2: 2022 weeks 1-3, "
-        "2023 week 1 (8 rows; unused: no calibrator is fitted)"
-    ) in caplog.messages
-    assert (
-        "Walk-forward calibration frame for season 2023 week 3: 2022 weeks 1-3, "
-        "2023 weeks 1-2 (10 rows; unused: no calibrator is fitted)"
-    ) in caplog.messages
 
 
 def test_walk_forward_quantile_intervals_monotonic() -> None:
@@ -804,27 +746,8 @@ def test_resolve_eval_seasons_and_fold_building_edge_cases(
     assert postseason_folds[0].week == 20
 
 
-def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Calibration, market, and XGBoost helper branches should resolve edge cases cleanly."""
-    df = _fixture_df()
-
-    assert walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=0).empty
-    assert walk_forward.select_calibration_data(df, 2030, 2, calibration_weeks=1).empty
-    pooled = walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=1)
-    assert not pooled.empty
-    pooled_pairs = sorted(
-        {
-            (int(season), int(week))
-            for season, week in zip(pooled["season"], pooled["week"], strict=True)
-        }
-    )
-    assert pooled_pairs == [
-        (2022, 1),
-        (2022, 2),
-        (2022, 3),
-        (2023, 1),
-    ]
-
+def test_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eval-window, market, and XGBoost helper branches should resolve edge cases cleanly."""
     postseason_summary = walk_forward.summarize_eval_window(
         pd.DataFrame({"season": [2024], "week": [20]}),
         eval_seasons=[2024],

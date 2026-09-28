@@ -76,7 +76,6 @@
   },
   "config": {
     "calibration": "auto",
-    "calibration_weeks": 4,
     "checkpoint": {
       "computed_folds": 4,
       "restored_folds": 0
@@ -1468,7 +1467,6 @@
   },
   "splits": {
     "calibration_window": {
-      "calibration_weeks": 4,
       "method": "auto"
     },
     "eval_window": {

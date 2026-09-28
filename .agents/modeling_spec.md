@@ -103,6 +103,10 @@ Required evaluation modes:
 - **Walk-forward evaluation (authoritative):** for each season and each week `w` (e.g., `3..end`),
   train on all games strictly before week `w` (plus prior seasons if configured), predict week `w`,
   and record metrics.
+- The production final fit trains the same way: on every eligible completed game except the
+  evaluation holdout seasons (`--holdout-seasons`, `0` in the weekly run), the newest completed
+  week included. No fit holds weeks out of its trees or hands XGBoost an eval frame, and every
+  head runs its full tree budget.
 
 Required metrics:
 
@@ -157,7 +161,7 @@ Every saved model must include adjacent metadata JSON with:
 - library versions (xgboost, sklearn, numpy, pandas, polars, scipy)
 - training config (CLI args / config object)
 - the XGBoost device the model trained on (`xgb_device`: `cpu` or `cuda`, never `auto`)
-- season/week ranges used for train/calibration/holdout
+- the seasons used for training and for the evaluation holdout (`splits`)
 - feature list used
 - best params (if tuned) and early-stopping info
 

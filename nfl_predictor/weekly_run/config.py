@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from nfl_predictor import constants
-from nfl_predictor.ml import ml_model_core, walk_forward
+from nfl_predictor.ml import ml_model_core
 from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.reporting import power_rankings
 
@@ -40,11 +40,18 @@ _RETIRED_PROBABILITY_OPTION = (
     "retired; the weekly run submits the deterministic floor, with no market blend and no "
     "uncertainty-aware probabilities"
 )
+_RETIRED_HOLD_OUT_OPTION = (
+    "retired; the final fit and every walk-forward fold train on every eligible completed game, "
+    "with no held-out weeks or seasons and no XGBoost eval frame"
+)
 _REMOVED_CONFIG_KEYS = {
     "wf_n_jobs": "use xgb_n_jobs, which sets XGBoost's CPU threads for every stage",
     "wf_market_prob_source": _RETIRED_PROBABILITY_OPTION,
     "wf_market_prob_blend_method": _RETIRED_PROBABILITY_OPTION,
     "wf_win_prob_uncertainty": _RETIRED_PROBABILITY_OPTION,
+    "wf_calibration_weeks": _RETIRED_HOLD_OUT_OPTION,
+    "train_calibration_weeks": _RETIRED_HOLD_OUT_OPTION,
+    "train_calibration_seasons": _RETIRED_HOLD_OUT_OPTION,
 }
 
 
@@ -219,12 +226,6 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         help="Walk-forward: start week.",
     )
     parser.add_argument(
-        "--wf-calibration-weeks",
-        type=int,
-        default=defaults.get("wf_calibration_weeks", walk_forward.DEFAULT_CALIBRATION_WEEKS),
-        help="Walk-forward: calibration weeks.",
-    )
-    parser.add_argument(
         "--wf-include-postseason",
         action=argparse.BooleanOptionalAction,
         default=defaults.get("wf_include_postseason", False),
@@ -288,19 +289,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         "--holdout-seasons",
         type=int,
         default=defaults.get("holdout_seasons", 0),
-        help="Training: holdout seasons.",
-    )
-    parser.add_argument(
-        "--train-calibration-seasons",
-        type=int,
-        default=defaults.get("train_calibration_seasons", 0),
-        help="Training: calibration seasons.",
-    )
-    parser.add_argument(
-        "--train-calibration-weeks",
-        type=int,
-        default=defaults.get("train_calibration_weeks"),
-        help="Training: calibration weeks (default: use wf-calibration-weeks).",
+        help=(
+            "Training: newest whole seasons held out of the final fit and scored as an "
+            "evaluation holdout; the final fit trains on every other completed game."
+        ),
     )
     parser.add_argument(
         "--include-postseason",

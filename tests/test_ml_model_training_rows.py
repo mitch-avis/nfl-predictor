@@ -1,9 +1,8 @@
-"""Pin which rows production training fits on and holds out.
+"""Pin which rows production training fits its trees on.
 
-The final fit trains its trees on the pool minus the in-season calibration window (the newest
-completed ``(season, week)`` pairs, rolling back across the season boundary) and minus any whole
-calibration seasons. These tests pin those row sets, the window record in the training report
-and the window log line.
+The final fit trains on every eligible completed game, exactly as each walk-forward fold does:
+nothing newer is held out of the trees, and no frame is handed to XGBoost as an eval set. Only
+the evaluation holdout (the newest ``holdout_seasons`` whole seasons) stays out of training.
 """
 
 from __future__ import annotations
@@ -25,8 +24,6 @@ from nfl_predictor.ml.ml_model_core import (
 )
 
 xgb.set_config(verbosity=0)
-
-WINDOW_2026_WEEK_2 = [(2025, 16), (2025, 17), (2025, 18), (2026, 1)]
 
 
 class _ZeroPreprocessor:
@@ -89,13 +86,9 @@ def _pairs(frame: pd.DataFrame) -> list[tuple[int, int]]:
     return sorted({(int(s), int(w)) for s, w in zip(frame["season"], frame["week"], strict=True)})
 
 
-def _season_pairs(season: int, weeks: range) -> list[tuple[int, int]]:
-    return [(season, week) for week in weeks]
-
-
 def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str, Any]:
     """Replace every fit with a stub and record the frames production hands to it."""
-    recorded: dict[str, Any] = {}
+    recorded: dict[str, Any] = {"fit_kwargs": [], "target_frames": []}
 
     def record_spec(frame: pd.DataFrame, **_kwargs: Any) -> FeatureSpec:
         recorded["train"] = frame.copy()
@@ -104,7 +97,7 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
     def record_targets(
         frame: pd.DataFrame, _targets: tuple[str, str], _anchor: bool
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        recorded.setdefault("target_frames", []).append(frame.copy())
+        recorded["target_frames"].append(frame.copy())
         rows = len(frame)
         return (
             np.zeros(rows, dtype=float),
@@ -112,6 +105,14 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
             np.zeros(rows, dtype=float),
             np.zeros(rows, dtype=float),
         )
+
+    def record_heads(*_args: Any, **kwargs: Any) -> tuple[str, str]:
+        recorded["fit_kwargs"].append(kwargs)
+        return "margin_model", "total_model"
+
+    def record_quantiles(*_args: Any, **kwargs: Any) -> dict[float, Any]:
+        recorded["fit_kwargs"].append(kwargs)
+        return {}
 
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
     monkeypatch.setattr(ml_model_training, "_build_feature_spec", record_spec)
@@ -122,21 +123,18 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
     monkeypatch.setattr(
         ml_model_training, "_prepare_margin_total_targets_with_anchor", record_targets
     )
+    monkeypatch.setattr(ml_model_training, "_fit_margin_total_models", record_heads)
+    monkeypatch.setattr(ml_model_training, "_fit_quantile_models", record_quantiles)
     monkeypatch.setattr(
-        ml_model_training,
-        "_fit_margin_total_models",
-        lambda *_a, **_k: ("margin_model", "total_model"),
+        ml_model_training, "_predict_xgb", lambda _model, x: np.zeros(x.shape[0], dtype=float)
     )
-    monkeypatch.setattr(ml_model_training, "_fit_quantile_models", lambda *_a, **_k: {})
     return recorded
 
 
-def _train(calibration_seasons: int, calibration_weeks: int) -> MarginTotalModel:
+def _train(holdout_seasons: int = 0) -> MarginTotalModel:
     return ml_model_training.train_margin_total_model(
         data_path=Path("dummy.csv"),
-        holdout_seasons=0,
-        calibration_seasons=calibration_seasons,
-        calibration_weeks=calibration_weeks,
+        holdout_seasons=holdout_seasons,
         include_market=False,
         max_cardinality_ratio=0.5,
         optuna_config=_disabled_optuna(),
@@ -145,53 +143,49 @@ def _train(calibration_seasons: int, calibration_weeks: int) -> MarginTotalModel
     )
 
 
-def test_final_fit_holds_the_rolled_back_window_out_of_the_trees(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """At week 2 the four held-out weeks are 2026 week 1 plus 2025 weeks 16-18."""
-    df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
-    recorded = _stub_fitting(monkeypatch, df)
-    caplog.set_level(logging.INFO)
-
-    _train(calibration_seasons=0, calibration_weeks=4)
-
-    assert _pairs(recorded["train"]) == sorted(set(_pairs(df)) - set(WINDOW_2026_WEEK_2))
-    train_targets, calibration_targets = recorded["target_frames"]
-    assert _pairs(train_targets) == _pairs(recorded["train"])
-    assert _pairs(calibration_targets) == WINDOW_2026_WEEK_2
-    assert (
-        "Calibration weeks: season 2026 weeks [1] "
-        "(window pairs [[2025, 16], [2025, 17], [2025, 18], [2026, 1]])"
-    ) in caplog.messages
-
-
-def test_final_fit_holds_the_window_and_a_whole_season_out(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A whole calibration season is the newest one the window leaves untouched."""
+def test_final_fit_trains_on_every_completed_week(monkeypatch: pytest.MonkeyPatch) -> None:
+    """At week 2 the trees see 2026 week 1 and the end of 2025, as a walk-forward fold does."""
     df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
     recorded = _stub_fitting(monkeypatch, df)
 
-    _train(calibration_seasons=1, calibration_weeks=4)
+    _train()
 
-    assert _pairs(recorded["train"]) == (
-        _season_pairs(2023, range(1, 19)) + _season_pairs(2025, range(1, 16))
-    )
-    _, calibration_targets = recorded["target_frames"]
-    assert _pairs(calibration_targets) == _season_pairs(2024, range(1, 19)) + WINDOW_2026_WEEK_2
+    assert _pairs(recorded["train"]) == _pairs(df)
+    (train_targets,) = recorded["target_frames"]
+    assert _pairs(train_targets) == _pairs(df)
 
 
-def test_final_fit_logs_why_the_whole_calibration_season_moved(
+def test_final_fit_hands_xgboost_no_eval_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No head receives an eval frame, so none can early-stop on one or report metrics for it."""
+    df = _season_weeks_frame({2025: 18, 2026: 1})
+    recorded = _stub_fitting(monkeypatch, df)
+
+    _train()
+
+    assert len(recorded["fit_kwargs"]) == 3
+    for kwargs in recorded["fit_kwargs"]:
+        assert kwargs.get("x_eval") is None
+
+
+def test_final_fit_leaves_only_the_evaluation_holdout_out(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The log names the seasons the window touches, which whole seasons must skip."""
-    df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
-    _stub_fitting(monkeypatch, df)
+    """The newest whole season is the evaluation holdout; every other game trains."""
+    df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18})
+    recorded = _stub_fitting(monkeypatch, df)
     caplog.set_level(logging.INFO)
 
-    _train(calibration_seasons=1, calibration_weeks=4)
+    _train(holdout_seasons=1)
 
-    assert (
-        "Calibration seasons: [2024] (the newest seasons the in-season window does not "
-        "touch; it touches [2025, 2026])"
-    ) in caplog.messages
+    assert _pairs(recorded["train"]) == _pairs(df[df["season"] < 2025])
+    assert "Training seasons: [2023, 2024]" in caplog.messages
+    assert "Holdout seasons: [2025]" in caplog.messages
+    assert not [message for message in caplog.messages if "alibration" in message]
+
+
+def test_a_negative_holdout_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A negative season count is an input error, not an empty holdout."""
+    _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
+
+    with pytest.raises(ValueError, match="non-negative"):
+        _train(holdout_seasons=-1)

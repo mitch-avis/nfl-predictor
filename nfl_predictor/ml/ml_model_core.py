@@ -786,7 +786,7 @@ def _build_prediction_output(
     output_df["predicted_margin"] = np.round(display_home_scores - display_away_scores, 1)
 
     # Round first (for stable output), then clip so values don't collapse to 0.0/1.0
-    # at 4-decimal precision (which can distort pool rankings and log-loss stability).
+    # at 4-decimal precision (which would make log loss unstable).
     home_win_prob_out = np.clip(np.round(home_win_prob, 4), 0.0001, 0.9999)
     output_df["home_win_prob"] = home_win_prob_out
     output_df["away_win_prob"] = np.round(1.0 - home_win_prob_out, 4)
@@ -805,9 +805,12 @@ def _build_prediction_output(
             output_df[away_team_col],
         )
 
-    output_df["confidence_strength"] = confidence_strength(home_win_prob_out)
+    # Confidence comes from the unrounded probability, as in the walk-forward, so two games
+    # that share a published 4-decimal probability still rank by their real difference.
+    unrounded = np.asarray(home_win_prob, dtype=float)
+    output_df["confidence_strength"] = confidence_strength(unrounded)
     tiebreaker = output_df["game_id"].to_numpy() if "game_id" in output_df.columns else None
-    output_df["confidence_rank"] = confidence_ranks(home_win_prob_out, tiebreaker)
+    output_df["confidence_rank"] = confidence_ranks(unrounded, tiebreaker)
 
     return output_df
 

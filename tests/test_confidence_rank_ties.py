@@ -98,6 +98,29 @@ def test_prediction_output_ranks_break_the_tie_by_game_id() -> None:
     assert output["confidence_strength"].iloc[0] == output["confidence_strength"].iloc[1]
 
 
+def test_prediction_output_ranks_on_the_unrounded_probability() -> None:
+    """Two games that share a 4-decimal probability rank by their unrounded values.
+
+    Game "a" sorts first by game_id, so ranking on the published (rounded) probabilities would
+    call it the less confident of a tie; unrounded, it is the more confident one.
+    """
+    probs = np.array([0.612364, 0.612356])
+    assert np.round(probs[0], 4) == np.round(probs[1], 4)
+    games = pd.DataFrame(
+        {
+            "game_id": ["2026_01_AAA_BBB", "2026_01_CCC_DDD"],
+            "away_abbr": ["AAA", "CCC"],
+            "home_abbr": ["BBB", "DDD"],
+        }
+    )
+
+    output = _build_prediction_output(games, np.array([20.0, 20.0]), np.array([22.0, 22.0]), probs)
+
+    assert output["confidence_rank"].tolist() == [2, 1]
+    assert output["home_win_prob"].tolist() == [0.6124, 0.6124]
+    assert output["confidence_strength"].tolist() == metrics.confidence_strength(probs).tolist()
+
+
 def test_summarize_confidence_pool_breaks_the_tie_by_game_id() -> None:
     """The training pool summary ranks the tied pair by game_id: the correct pick scores 2."""
     df = pd.DataFrame(

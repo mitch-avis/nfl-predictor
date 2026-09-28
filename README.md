@@ -932,6 +932,10 @@ Training/backtests can write a run directory containing reproducible artifacts.
   rounding makes mathematically equal confidences (a home favorite and a home underdog by the
   same spread) almost always tie instead of differing by floating-point noise. The weekly picks,
   walk-forward pool points, the prediction log and `nfl-predictor compare` all rank this way.
+- The weekly picks rank on the unrounded probability, as the walk-forward does: the published
+  `home_win_prob` and `away_win_prob` are rounded to 4 decimals, but two games that share a
+  published value still rank by their real difference, and the published `confidence_strength`
+  is the unrounded confidence (rounded to the 12 decimals above), so it agrees with the rank.
 - Max weekly points: `N*(N+1)/2`.
 - Realized points: `sum(confidence_value * 1[pick_correct])`.
 - Ties count as incorrect.

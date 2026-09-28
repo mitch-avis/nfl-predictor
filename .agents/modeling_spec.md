@@ -108,6 +108,9 @@ If implementing score "realism":
   ordered by `game_id`. One shared rule (`confidence_ranks` in `nfl_predictor/ml/metrics.py`)
   ranks the weekly picks, walk-forward pool points, training pool summaries and
   `nfl-predictor compare`.
+- Ranks and the published confidence strength come from the unrounded probability; the
+  published probability columns are rounded to 4 decimals for display only, so the weekly picks
+  rank exactly as the walk-forward does.
 
 Authoritative pool scoring rules:
 

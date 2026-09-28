@@ -98,6 +98,30 @@ def test_prediction_output_ranks_break_the_tie_by_game_id() -> None:
     assert output["confidence_strength"].iloc[0] == output["confidence_strength"].iloc[1]
 
 
+def test_prediction_output_picks_the_side_from_the_unrounded_probability() -> None:
+    """A home probability of 0.49996 publishes as 0.5 but picks the away side, as walk-forward does.
+
+    At exactly 0.5 the home side is picked (``p >= 0.5``), the walk-forward's rule.
+    """
+    probs = np.array([0.49996, 0.5])
+    games = pd.DataFrame(
+        {
+            "game_id": ["2026_01_AAA_BBB", "2026_01_CCC_DDD"],
+            "away_abbr": ["AAA", "CCC"],
+            "home_abbr": ["BBB", "DDD"],
+        }
+    )
+
+    output = _build_prediction_output(games, np.array([20.0, 20.0]), np.array([20.0, 20.0]), probs)
+
+    assert output["home_win_prob"].tolist() == [0.5, 0.5]
+    assert output["predicted_winner"].tolist() == ["AAA", "DDD"]
+    walk_forward_home = metrics.confidence_pool_columns(
+        probs, home_score=np.array([20.0, 20.0]), away_score=np.array([17.0, 17.0])
+    )["pick_correct"]
+    assert walk_forward_home.tolist() == [False, True]
+
+
 def test_prediction_output_ranks_on_the_unrounded_probability() -> None:
     """Two games that share a 4-decimal probability rank by their unrounded values.
 

@@ -33,7 +33,7 @@ import __main__
 from nfl_predictor import constants
 from nfl_predictor.ml import feature_spec as _feature_spec
 from nfl_predictor.ml.floor_sigma import FloorSigma, home_win_prob
-from nfl_predictor.ml.metrics import confidence_ranks, confidence_strength
+from nfl_predictor.ml.metrics import confidence_ranks, confidence_strength, picks_home
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,
     _coerce_tree_method_on_error,
@@ -629,7 +629,7 @@ def _summarize_confidence_pool(
     summary_df = df[["season", "week", away_col, home_col]].copy()
     summary_df["home_win_prob"] = home_win_prob
     summary_df["away_win_prob"] = 1.0 - home_win_prob
-    summary_df["predicted_winner"] = np.where(home_win_prob >= 0.5, "home", "away")
+    summary_df["predicted_winner"] = np.where(picks_home(home_win_prob), "home", "away")
     summary_df["actual_winner"] = np.where(
         summary_df[home_col] > summary_df[away_col],
         "home",
@@ -791,6 +791,9 @@ def _build_prediction_output(
     output_df["home_win_prob"] = home_win_prob_out
     output_df["away_win_prob"] = np.round(1.0 - home_win_prob_out, 4)
 
+    # The side and the confidence come from the unrounded probability, as in the walk-forward,
+    # so a published 0.5000 or a shared 4-decimal value never decides a pick or a rank.
+    unrounded = np.asarray(home_win_prob, dtype=float)
     team_cols = [
         col
         for col in constants.METADATA_COLUMNS
@@ -800,14 +803,11 @@ def _build_prediction_output(
     home_team_col = next((col for col in team_cols if col.startswith("home_")), None)
     if away_team_col and home_team_col:
         output_df["predicted_winner"] = np.where(
-            home_win_prob_out >= 0.5,
+            picks_home(unrounded),
             output_df[home_team_col],
             output_df[away_team_col],
         )
 
-    # Confidence comes from the unrounded probability, as in the walk-forward, so two games
-    # that share a published 4-decimal probability still rank by their real difference.
-    unrounded = np.asarray(home_win_prob, dtype=float)
     output_df["confidence_strength"] = confidence_strength(unrounded)
     tiebreaker = output_df["game_id"].to_numpy() if "game_id" in output_df.columns else None
     output_df["confidence_rank"] = confidence_ranks(unrounded, tiebreaker)

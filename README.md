@@ -932,8 +932,13 @@ Training/backtests can write a run directory containing reproducible artifacts.
   rounding makes mathematically equal confidences (a home favorite and a home underdog by the
   same spread) almost always tie instead of differing by floating-point noise. The weekly picks,
   walk-forward pool points, the prediction log and `nfl-predictor compare` all rank this way.
-- The weekly picks rank on the unrounded probability, as the walk-forward does: the published
-  `home_win_prob` and `away_win_prob` are rounded to 4 decimals, but two games that share a
+- The pick is the home team when the unrounded home win probability is at least `0.5`
+  (`p >= 0.5`, so an exact coin flip picks home), else the away team (`picks_home` in
+  `nfl_predictor/ml/metrics.py`); the walk-forward, the training pool summaries and the weekly
+  `predicted_winner` all use this rule.
+- The weekly picks and ranks use the unrounded probability, as the walk-forward does: the
+  published `home_win_prob` and `away_win_prob` are rounded to 4 decimals, but a game published
+  at `0.5000` still picks the side its unrounded probability favors, two games that share a
   published value still rank by their real difference, and the published `confidence_strength`
   is the unrounded confidence (rounded to the 12 decimals above), so it agrees with the rank.
 - Max weekly points: `N*(N+1)/2`.

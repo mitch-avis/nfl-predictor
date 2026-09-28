@@ -102,7 +102,7 @@ def probability_pick_accuracy(actual_margin: np.ndarray, home_win_prob: np.ndarr
     probs = clip_probabilities(home_win_prob)
     if len(margins) == 0:
         return 0.0
-    predicted_home = probs >= 0.5
+    predicted_home = picks_home(probs)
     actual_home = margins > 0
     correct = (predicted_home == actual_home) & (margins != 0)
     return float(np.mean(correct))
@@ -121,6 +121,14 @@ def probability_summary(
     if prefix is None:
         return metrics
     return {f"{prefix}_{key}": value for key, value in metrics.items()}
+
+
+def picks_home(home_win_prob: np.ndarray) -> np.ndarray:
+    """Return whether each game picks the home side: ``p >= 0.5``, so an exact 0.5 picks home.
+
+    Every pick uses the unrounded probability; published 4-decimal values never decide a side.
+    """
+    return np.asarray(home_win_prob, dtype=float) >= 0.5
 
 
 def confidence_strength(home_win_prob: np.ndarray) -> np.ndarray:
@@ -171,7 +179,7 @@ def confidence_pool_columns(
     """
     ranks = confidence_ranks(home_win_prob, tiebreaker)
 
-    predicted_home = home_win_prob >= 0.5
+    predicted_home = picks_home(home_win_prob)
     actual_outcome = np.where(home_score > away_score, 1, np.where(home_score < away_score, -1, 0))
     predicted_outcome = np.where(predicted_home, 1, -1)
     pick_correct = (predicted_outcome == actual_outcome) & (actual_outcome != 0)

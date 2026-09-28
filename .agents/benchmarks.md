@@ -473,3 +473,17 @@ with `.venv/bin/python models/step3_gpu_reference/independent_rescore.py`.
   runs on newer code cannot reuse these checkpoints; walk-forward predictions are unchanged (the
   walk-forward never calls the edited function; its reviewer's before/after synthetic run was
   hash-identical), so the reference stays comparable.
+
+## The spread in the probability floor (2026-09-28, rescoring the GPU reference)
+
+`Phi(margin / sigma)` with the fixed `SCORE_DIFF_STD_DEV = 14.21` against sigmas estimated from the
+model's own earlier errors (root-mean-square of actual minus predicted margin over strictly
+earlier folds), scored on 2010-2025 (4175 games per seed, seeds 42 and 7), all weeks, candidate
+minus fixed: `expanding` (all earlier folds, from 2007) Brier `-0.00021` `[-0.00039, -0.00004]`,
+log loss `-0.00058` `[-0.00104, -0.00012]`; `trailing3` (the three seasons before plus the
+current season's earlier weeks) Brier `-0.00028` `[-0.00059, +0.00002]`, log loss `-0.00078`
+`[-0.00159, +0.00003]`; `trailing3` minus `expanding` includes zero everywhere. Picks and pool
+points cannot change (one sigma per week keeps every side and every rank). The expanding sigma
+falls from `13.93` (2010) to `13.27` (2025), the trailing one to `12.39`. Rules and data:
+`models/step3_sigma/HYPOTHESIS.md`; second key `models/step3_sigma/REVIEW.md` (a separate
+reviewer); reproduce with `.venv/bin/python models/step3_sigma/independent_rescore.py`.

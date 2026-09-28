@@ -12,9 +12,11 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 from nfl_predictor import constants
 from nfl_predictor.cli import options
-from nfl_predictor.ml import artifacts
+from nfl_predictor.ml import artifacts, floor_sigma
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_EARLY_STOPPING_ROUNDS,
     DEFAULT_FEATURE_END_COLUMN,
@@ -132,7 +134,20 @@ def _parse_args() -> argparse.Namespace:
         default="auto",
         help=(
             "Win-probability calibration: auto, the deterministic floor (the predicted margin "
-            "through the fixed normal curve); none is the same."
+            "through a normal curve whose spread is the root-mean-square out-of-fold error "
+            "before the predicted week); none is the same."
+        ),
+    )
+    parser.add_argument(
+        "--floor-sigma-reference-runs",
+        type=Path,
+        nargs="*",
+        default=[Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS],
+        help=(
+            "Walk-forward runs (run or fold checkpoint directories, relative to the repository "
+            "root) whose out-of-fold margin errors set the floor's sigma, which the saved model "
+            "records; their checkpoints are only read. A missing run is an error; give no "
+            "paths to train without them (the constant, recorded as the fallback)."
         ),
     )
     parser.add_argument(
@@ -276,6 +291,16 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _predicted_week(predict_path: Path | None) -> tuple[int, int] | None:
+    """Return the one season and week of a prediction file, else None (the week after the data)."""
+    if predict_path is None:
+        return None
+    weeks = pd.read_csv(predict_path, usecols=["season", "week"]).drop_duplicates()
+    if len(weeks) != 1:
+        return None
+    return int(weeks["season"].iloc[0]), int(weeks["week"].iloc[0])
+
+
 def main() -> None:
     """CLI entry point for training and prediction."""
     args = _parse_args()
@@ -360,6 +385,7 @@ def main() -> None:
             early_stopping=result.early_stopping,
             optuna_summary=getattr(result.model, "optuna_summary", None),
             xgb_device=fitted_xgb_device(result.model),
+            floor_sigma=floor_sigma.model_record(result.model),
         )
         artifacts.write_json(paths.metadata_path, metadata)
         if result.feature_importance:
@@ -370,6 +396,7 @@ def main() -> None:
             }
             artifacts.write_json(paths.feature_importance_path, importance_payload)
 
+    reference_pool = floor_sigma.load_reference_pool(args.floor_sigma_reference_runs)
     result = train_margin_total_model_with_report(
         data_path=args.data_path,
         holdout_seasons=args.holdout_seasons,
@@ -385,6 +412,8 @@ def main() -> None:
         max_season=args.max_season,
         feature_start=args.feature_start,
         feature_end=args.feature_end,
+        floor_sigma_pool=reference_pool,
+        floor_sigma_week=_predicted_week(args.predict_path),
     )
 
     if args.run_dir is not None and args.model_out is None:

@@ -345,10 +345,43 @@ straightforward.
 ### Win probability
 
 Every run type (the weekly run, `backtest`, `train`, `predict`) maps the predicted margin to a
-home win probability through one fixed curve, the deterministic floor:
-`Phi(margin / SCORE_DIFF_STD_DEV)`, the normal CDF with the standard deviation of NFL score
-differences in `nfl_predictor/constants.py`. Nothing is fitted on top of it and the market line
-never enters it; the pick and its confidence come from it.
+home win probability through one curve, the deterministic floor: `Phi(margin / sigma)`, the
+normal CDF of the predicted margin over sigma, the spread of the model's own errors. For a game
+in season `s`, week `w`, sigma is the root-mean-square of (actual minus predicted margin) over
+every out-of-fold prediction strictly before `(s, w)`: earlier seasons, and season `s` weeks
+before `w` (`nfl_predictor/ml/floor_sigma.py`). It is one value per week, so it changes how
+confident the probabilities are but never a pick or a confidence rank. Until that pool spans
+three complete earlier seasons (`FLOOR_SIGMA_MIN_POOL_SEASONS`), sigma is the fixed
+`SCORE_DIFF_STD_DEV` (`14.21`, in `nfl_predictor/constants.py`), and the outputs say it fell back.
+Nothing is fitted on top of the floor and the market line never enters it; the pick and its
+confidence come from it.
+
+Where the pool comes from:
+
+- A walk-forward (`nfl-predictor backtest`, and the weekly run's stage 1) pools its own earlier
+  weeks with any supplied history: `backtest --floor-sigma-reference-runs <run dirs>` (none by
+  default), and the weekly run's reference runs in stage 1. A week the run predicts itself
+  replaces the history's errors for that week. Every week's `floor_sigma`,
+  `floor_sigma_fallback` and `floor_sigma_pool_games` are in its per-week metrics, the
+  prediction frame carries `floor_sigma` and `floor_sigma_fallback`, and the report's
+  `floor_sigma` block names the history.
+- The production final fit (the weekly run, `nfl-predictor train`) pools the out-of-fold errors
+  of the reference runs, `floor_sigma_reference_runs` in `config/weekly_run.yaml` and
+  `--floor-sigma-reference-runs` for `train` (default: the two seeds of the GPU reference
+  walk-forward, `models/step3_gpu_reference/l1_seed42` and `l2_seed7`, whose fold checkpoints
+  are only read), with, in the weekly run, stage 1's weeks of the predicted season before the
+  predicted week. Two seeds are averaged per game, so each game counts once (over the same games
+  this equals pooling every row). The sigma is estimated for the predicted week (for `train`
+  without a single-week `--predict-path`, the week after the newest game in the data) and
+  recorded in the saved model and in its `metadata.json` (`floor_sigma`: the value, whether it
+  fell back, the week, the pool's size and seasons, and the runs it came from). Prediction from
+  a saved model (`nfl-predictor predict --model-in`) uses the recorded value and reads no
+  reference run; a model saved before the sigma was recorded predicts with the constant. A
+  configured reference run that is missing stops the run with an error naming it; an empty list
+  (`floor_sigma_reference_runs: []`, or `--floor-sigma-reference-runs` with no paths) runs
+  without reference errors, and the record then says whether the sigma fell back.
+- Weekly predictions carry `floor_sigma` and `floor_sigma_fallback` columns, and the projected
+  standings use the model's recorded sigma for the remaining games.
 
 `--win-prob-calibration` (`train`, `predict`) and `--calibration` (`backtest`) take `auto`, the
 floor, and the default; `none` is accepted and means the same. A model saved with a fitted or
@@ -562,10 +595,11 @@ nfl-predictor weekly --help
 4. generate weekly predictions + betting outputs + (optional) power rankings
 
 The weekly run has one production configuration and chooses nothing by itself: the
-probabilities it submits are the deterministic floor (the predicted margin through the fixed
-normal curve, `Phi(margin / SCORE_DIFF_STD_DEV)`, with no fitted calibrator and no market blend),
-from a model trained with `--wf-market-mode` (`hybrid` by default: market lines as features and
-the model anchored to them).
+probabilities it submits are the deterministic floor (`Phi(margin / sigma)`, with sigma
+estimated from the reference runs' and stage 1's earlier out-of-fold errors as in "Win
+probability" above, and no fitted calibrator or market blend), from a model trained with
+`--wf-market-mode` (`hybrid` by default: market lines as features and the model anchored to
+them).
 
 Notes:
 
@@ -885,7 +919,8 @@ Training/backtests can write a run directory containing reproducible artifacts.
   (which favors features with many categories), each labelled as such. `nfl-predictor explain`
   uses the same TreeSHAP values for one head, per encoded column, on a sample of any dataset.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
-  args, the resolved XGBoost device, feature list, and tuning/early-stopping info (when used).
+  args, the resolved XGBoost device, the floor's recorded sigma (`floor_sigma`), feature list, and
+  tuning/early-stopping info (when used).
   `models/` and `optuna.db` are gitignored by default, so keep run artifacts local unless you
   copy them elsewhere.
 

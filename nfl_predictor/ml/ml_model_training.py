@@ -14,7 +14,8 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.compose import ColumnTransformer
 
-from nfl_predictor.ml import feature_importance
+from nfl_predictor import constants
+from nfl_predictor.ml import feature_importance, floor_sigma
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_END_COLUMN,
     DEFAULT_FEATURE_START_COLUMN,
@@ -119,11 +120,19 @@ def train_margin_total_model(
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
     recency_half_life_seasons: float | None = None,
     xgb_params_overrides: dict[str, Any] | None = None,
+    floor_sigma_pool: floor_sigma.ErrorPool | None = None,
+    floor_sigma_week: tuple[int, int] | None = None,
 ) -> MarginTotalModel:
     """Train margin/total models; win probabilities are the deterministic floor.
 
     ``xgb_params_overrides`` replace default XGBoost parameters, as a walk-forward's do; tuned
     parameters, when tuning runs, take precedence over them.
+
+    With ``floor_sigma_pool`` (earlier out-of-fold errors), the model records the floor's
+    sigma for ``floor_sigma_week`` (default: the week after the newest game in the data),
+    estimated from the pool strictly before that week, and predicts with it. Holdout games are
+    scored with their own week's sigma from the same pool. Without a pool the model records
+    none and predicts with the constant ``SCORE_DIFF_STD_DEV``.
     """
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
@@ -271,7 +280,7 @@ def train_margin_total_model(
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
-        home_win_prob = _margin_to_home_win_prob(pred_margin)
+        home_win_prob = _holdout_home_win_prob(pred_margin, holdout_df, floor_sigma_pool)
 
         metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, target_columns, home_win_prob
@@ -289,6 +298,24 @@ def train_margin_total_model(
     else:
         log.info("No holdout seasons configured; skipping holdout evaluation.")
 
+    sigma_record = None
+    if floor_sigma_pool is not None:
+        season, week = floor_sigma_week or floor_sigma.week_after(df)
+        sigma_record = floor_sigma.estimate(
+            floor_sigma_pool.errors, season, week, sources=floor_sigma_pool.sources
+        )
+        log.info(
+            "Floor sigma for season %d week %d: %.4f%s, from %d earlier games in seasons %s",
+            season,
+            week,
+            sigma_record.sigma,
+            f" (the constant: fewer than {constants.FLOOR_SIGMA_MIN_POOL_SEASONS} earlier seasons)"
+            if sigma_record.fallback
+            else "",
+            sigma_record.pool_games,
+            list(sigma_record.pool_seasons),
+        )
+
     return MarginTotalModel(
         preprocessor=preprocessor,
         feature_spec=feature_spec,
@@ -303,6 +330,23 @@ def train_margin_total_model(
         tuned_params=tuned_params or None,
         tuned_cv_summary=tuned_cv_summary,
         optuna_summary=optuna_summary,
+        floor_sigma=sigma_record,
+    )
+
+
+def _holdout_home_win_prob(
+    pred_margin: np.ndarray,
+    holdout_df: pd.DataFrame,
+    pool: floor_sigma.ErrorPool | None,
+) -> np.ndarray:
+    """Return holdout probabilities: each week's pool sigma, or the constant without a pool."""
+    if pool is None:
+        return _margin_to_home_win_prob(pred_margin)
+    return floor_sigma.weekly_home_win_prob(
+        pred_margin,
+        holdout_df["season"].to_numpy(dtype=int),
+        holdout_df["week"].to_numpy(dtype=int),
+        pool.errors,
     )
 
 
@@ -339,7 +383,9 @@ def train_margin_total_model_with_report(
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
-        home_win_prob = _margin_to_home_win_prob(pred_margin)
+        home_win_prob = _holdout_home_win_prob(
+            pred_margin, holdout_df, kwargs.get("floor_sigma_pool")
+        )
         holdout_metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, model.target_columns, home_win_prob
         )
@@ -353,6 +399,7 @@ def train_margin_total_model_with_report(
         "tuning_cv": model.tuned_cv_summary,
         "tuning_optuna": getattr(model, "optuna_summary", None),
         "missing_data": missing_data_summary,
+        "floor_sigma": floor_sigma.model_record(model),
     }
 
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()

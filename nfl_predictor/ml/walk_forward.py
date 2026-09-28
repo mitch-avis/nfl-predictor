@@ -2,7 +2,10 @@
 
 Implements time-aware walk-forward training/evaluation:
 - trains only on games strictly before the evaluated (season, week)
-- maps every predicted margin to a win probability through the deterministic floor
+- maps every predicted margin to a win probability through the deterministic floor,
+  ``Phi(margin / sigma)``, where each week's sigma is the root-mean-square error of every
+  out-of-fold prediction before it (a supplied history plus the run's own earlier weeks; see
+  ``floor_sigma``)
 - produces metrics summaries plus a calibration reliability table
 
 This module is intentionally small and importable so tests can validate split correctness
@@ -30,8 +33,8 @@ import pandas as pd
 
 from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import feature_spec as feature_spec_utils
+from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils
 from nfl_predictor.ml import metrics as metrics_utils
-from nfl_predictor.ml import ml_model_xgb_utils
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
 
@@ -617,18 +620,24 @@ def _modelling_source_files() -> list[Path]:
     return [path for path in files if path.exists()]
 
 
-def fold_checkpoint_fingerprint(df: pd.DataFrame, config: WalkForwardConfig) -> str:
+def fold_checkpoint_fingerprint(
+    df: pd.DataFrame,
+    config: WalkForwardConfig,
+    floor_sigma_history: floor_sigma.ErrorPool | None = None,
+) -> str:
     """Return the key that decides whether a saved fold may be reused.
 
     It covers everything a fold's result depends on: the input rows and columns, the full
-    config with its XGBoost device resolved, the installed library versions, and the source
-    of the modelling code. A saved fold is reused only when all of these are unchanged, so a
-    resumed run reproduces an uninterrupted one instead of mixing results computed from
-    different inputs or on a different device.
+    config with its XGBoost device resolved, the supplied floor-sigma history, the installed
+    library versions, and the source of the modelling code. A saved fold is reused only when
+    all of these are unchanged, so a resumed run reproduces an uninterrupted one instead of
+    mixing results computed from different inputs or on a different device.
     """
     config = with_resolved_xgb_device(config)
     digest = hashlib.sha256()
     digest.update(f"fold-checkpoint-v{FOLD_CHECKPOINT_VERSION}".encode())
+    if floor_sigma_history is not None:
+        digest.update(f"floor-sigma-history:{floor_sigma_history.digest()}".encode())
     digest.update(json.dumps(config.to_dict(), sort_keys=True, default=str).encode())
     digest.update(json.dumps([str(column) for column in df.columns]).encode())
     digest.update(json.dumps([str(dtype) for dtype in df.dtypes]).encode())
@@ -662,10 +671,14 @@ class _FoldCheckpointStore:
 
     @classmethod
     def create(
-        cls, root: Path, df: pd.DataFrame, config: WalkForwardConfig
+        cls,
+        root: Path,
+        df: pd.DataFrame,
+        config: WalkForwardConfig,
+        floor_sigma_history: floor_sigma.ErrorPool | None = None,
     ) -> _FoldCheckpointStore:
         """Open (creating if needed) the checkpoint directory for this run's inputs."""
-        fingerprint = fold_checkpoint_fingerprint(df, config)
+        fingerprint = fold_checkpoint_fingerprint(df, config, floor_sigma_history)
         directory = Path(root) / fingerprint[:20]
         directory.mkdir(parents=True, exist_ok=True)
         manifest_path = directory / "manifest.json"
@@ -759,6 +772,7 @@ def run_walk_forward_backtest(
     fold_callback: Callable[[dict[str, Any], WalkForwardFold], None] | None = None,
     checkpoint_dir: Path | None = None,
     resume: bool = True,
+    floor_sigma_history: floor_sigma.ErrorPool | None = None,
 ) -> dict[str, Any]:
     """Run walk-forward training/evaluation and return metrics plus per-game predictions.
 
@@ -772,12 +786,17 @@ def run_walk_forward_backtest(
     trained and its checkpoint overwritten. Weeks are independent and seeded, so a resumed
     run returns exactly what an uninterrupted one would. `fold_callback` fires only for
     weeks that are trained, not for restored ones.
+
+    Each week's probabilities are the floor `Phi(margin / sigma)`, with sigma estimated by
+    `floor_sigma.estimate` from the out-of-fold errors strictly before that week: the
+    `floor_sigma_history` (for example a reference run's folds), minus any week this run
+    predicts itself, plus this run's own earlier weeks.
     """
     np.random.seed(config.random_seed)  # noqa: NPY002 (legacy for reproducibility)
     config = with_resolved_xgb_device(config)
     # Fingerprint the caller's frame before any column drops or row filters below.
     store = (
-        _FoldCheckpointStore.create(checkpoint_dir, df, config)
+        _FoldCheckpointStore.create(checkpoint_dir, df, config, floor_sigma_history)
         if checkpoint_dir is not None
         else None
     )
@@ -831,6 +850,9 @@ def run_walk_forward_backtest(
 
     params = _resolve_xgb_params(config)
 
+    history = floor_sigma_history or floor_sigma.ErrorPool()
+    own_errors: list[pd.DataFrame] = []
+
     per_week_metrics: list[dict[str, Any]] = []
     prediction_frames: list[pd.DataFrame] = []
     feature_list: list[str] | None = None
@@ -845,6 +867,7 @@ def run_walk_forward_backtest(
                 feature_list = restored.feature_columns
             per_week_metrics.append(restored.metrics)
             prediction_frames.append(restored.predictions)
+            own_errors.append(floor_sigma.margin_errors(restored.predictions))
             restored_folds += 1
             log.info(
                 "Walk-forward fold %d/%d restored from checkpoint: season %d week %d",
@@ -934,7 +957,12 @@ def run_walk_forward_backtest(
                 pred_total_quantiles[q] = pred_total_quantiles[q] + baseline_total_eval
 
         pred_away, pred_home = ml_model.derive_scores_from_margin_total(pred_margin, pred_total)
-        deterministic_home_win_prob = ml_model._margin_to_home_win_prob(pred_margin)
+        # Every earlier week of this run is in `own_errors` by now, so its history rows drop.
+        own = pd.concat(own_errors, ignore_index=True) if own_errors else floor_sigma.empty_errors()
+        week_sigma = floor_sigma.estimate(
+            floor_sigma.combine(history.errors, own), int(fold.season), int(fold.week)
+        )
+        deterministic_home_win_prob = floor_sigma.home_win_prob(pred_margin, week_sigma.sigma)
         # The submitted probability is the deterministic floor.
         home_win_prob = metrics_utils.clip_probabilities(deterministic_home_win_prob)
         market_home_win_prob = _resolve_market_home_win_prob(fold.eval_df)
@@ -978,11 +1006,14 @@ def run_walk_forward_backtest(
         fold_predictions["actual_points"] = confidence_cols["actual_points"]
         fold_predictions["pick_correct"] = confidence_cols["pick_correct"]
         fold_predictions["calibration_method"] = calibration_method
+        fold_predictions["floor_sigma"] = week_sigma.sigma
+        fold_predictions["floor_sigma_fallback"] = week_sigma.fallback
         if baseline_margin_eval is not None and baseline_total_eval is not None:
             fold_predictions["market_baseline_margin"] = baseline_margin_eval
             fold_predictions["market_baseline_total"] = baseline_total_eval
 
         prediction_frames.append(fold_predictions)
+        own_errors.append(floor_sigma.margin_errors(fold_predictions))
 
         games_count = int(len(fold_predictions))
         metrics = _aggregate_metrics(fold_predictions, market_anchor)
@@ -990,6 +1021,9 @@ def run_walk_forward_backtest(
         metrics["week"] = int(fold.week)
         metrics["games"] = games_count
         metrics["calibration_method"] = calibration_method
+        metrics["floor_sigma"] = week_sigma.sigma
+        metrics["floor_sigma_fallback"] = week_sigma.fallback
+        metrics["floor_sigma_pool_games"] = week_sigma.pool_games
         metrics.update(
             _iteration_details(
                 {
@@ -1098,6 +1132,12 @@ def run_walk_forward_backtest(
             include_postseason=config.include_postseason,
         ),
         "excluded_incomplete_seasons": excluded_incomplete,
+        "floor_sigma": {
+            "min_pool_seasons": constants.FLOOR_SIGMA_MIN_POOL_SEASONS,
+            "fallback_sigma": constants.SCORE_DIFF_STD_DEV,
+            "history_sources": list(history.sources),
+            "history_games": len(history.errors),
+        },
         "checkpoint": (
             None
             if store is None
@@ -1136,6 +1176,7 @@ def build_metrics_report(
             "windows": results.get("probability_windows") or [],
             "summary_table": summary_table,
         },
+        "floor_sigma": results.get("floor_sigma"),
         "calibration": {
             "bins": results["reliability"],
             "bin_count": RELIABILITY_BINS,

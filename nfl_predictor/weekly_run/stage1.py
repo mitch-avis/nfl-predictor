@@ -7,11 +7,16 @@ reports how production would have done against the market on games it had not se
 finished weeks are checkpointed under the run directory, so a stopped run resumes at its next
 unfinished week.
 
+Each week's floor uses the sigma estimated from the reference runs' out-of-fold errors
+(``floor_sigma_history``) and stage 1's own earlier weeks.
+
 Outputs under ``<run_dir>/wf_compare/``: the fold checkpoints (``wf_folds/``), one evaluation
 artifact (``wf_candidate_<key>.json``, with the per-week, per-season and overall metrics and the
-reliability table) and, with ``checkpoint_per_fold``, a progress line per finished week
-(``wf_fold_progress.jsonl``). The pipeline writes the summary row as ``wf_compare.csv`` and
-``wf_best.json``, the names older runs used for their candidate table and its winner.
+reliability table), the squared margin error of every game stage 1 predicted
+(``wf_margin_errors.csv``, which the final fit's sigma reads for the current season) and, with
+``checkpoint_per_fold``, a progress line per finished week (``wf_fold_progress.jsonl``). The
+pipeline writes the summary row as ``wf_compare.csv`` and ``wf_best.json``, the names older runs
+used for their candidate table and its winner.
 """
 
 from __future__ import annotations
@@ -27,8 +32,8 @@ from typing import Any
 
 import pandas as pd
 
+from nfl_predictor.ml import floor_sigma, ml_model_core, walk_forward, wf_compare_utils
 from nfl_predictor.ml import metrics as metrics_utils
-from nfl_predictor.ml import ml_model_core, walk_forward, wf_compare_utils
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.utils.logger import log
 
@@ -76,6 +81,29 @@ def _atomic_write_csv(path: Path, frame: pd.DataFrame) -> None:
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     frame.to_csv(tmp_path, index=False)
     os.replace(tmp_path, path)
+
+
+def margin_errors_path(run_dir: Path) -> Path:
+    """Return the file holding stage 1's squared margin error per game."""
+    return _wf_compare_dir(run_dir) / "wf_margin_errors.csv"
+
+
+def write_margin_errors(run_dir: Path, errors: pd.DataFrame) -> None:
+    """Write stage 1's squared margin errors (``floor_sigma.ERROR_COLUMNS``)."""
+    _atomic_write_csv(margin_errors_path(run_dir), errors.loc[:, list(floor_sigma.ERROR_COLUMNS)])
+
+
+def read_margin_errors(run_dir: Path) -> pd.DataFrame:
+    """Read stage 1's squared margin errors.
+
+    Raises:
+        FileNotFoundError: If stage 1 has not written them.
+
+    """
+    path = margin_errors_path(run_dir)
+    if not path.exists():
+        raise FileNotFoundError(f"Stage 1 margin errors are missing: {path}")
+    return pd.read_csv(path, dtype={"game_id": str})
 
 
 def _build_summary_row(
@@ -211,6 +239,7 @@ def evaluate_production(
     include_quantiles: bool,
     market_transform: bool | None = None,
     max_cardinality_ratio: float = 0.5,
+    floor_sigma_history: floor_sigma.ErrorPool | None = None,
 ) -> dict[str, Any]:
     """Walk the production configuration forward and return its summary row.
 
@@ -219,6 +248,10 @@ def evaluate_production(
 
     The walk-forward saves every finished week under ``wf_compare/wf_folds/``; with ``resume``
     an identical rerun restores those weeks instead of training them again.
+
+    ``floor_sigma_history`` (the reference runs' errors) joins the walk-forward's own earlier
+    weeks in each week's floor sigma. The squared margin errors of every predicted game are
+    written to ``wf_margin_errors.csv``.
     """
     wf_dir = _wf_compare_dir(run_dir)
     wf_dir.mkdir(parents=True, exist_ok=True)
@@ -263,7 +296,9 @@ def evaluate_production(
         fold_callback=fold_callback,
         checkpoint_dir=wf_dir / "wf_folds",
         resume=resume,
+        floor_sigma_history=floor_sigma_history,
     )
+    write_margin_errors(run_dir, floor_sigma.margin_errors(out["predictions"]))
     duration = time.monotonic() - start
     summary_row = _build_summary_row(
         candidate_key,

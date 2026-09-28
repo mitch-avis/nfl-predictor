@@ -22,8 +22,23 @@ Direct home/away score regressors are allowed only as secondary ensemble members
 ### Win probability
 
 - Win probability is derived from the margin prediction through the deterministic floor,
-  `Phi(margin / SCORE_DIFF_STD_DEV)`, and nothing else: no fitted calibrator, no Elo-style curve,
-  no market blend or clamp.
+  `Phi(margin / sigma)`, and nothing else: no fitted calibrator, no Elo-style curve, no market
+  blend or clamp.
+- Sigma for a game in season `s`, week `w` is the root-mean-square of (actual minus predicted
+  margin) over every out-of-fold prediction strictly before `(s, w)`: earlier seasons, and season
+  `s` weeks before `w` (`nfl_predictor/ml/floor_sigma.py`, one implementation for every run
+  type). It is one value per week, so it never changes a pick or a confidence rank. Until the
+  pool spans `FLOOR_SIGMA_MIN_POOL_SEASONS` (`3`) complete earlier seasons, sigma is
+  `SCORE_DIFF_STD_DEV` (`14.21`), recorded as the fallback.
+- The pool: a walk-forward pools its own earlier weeks with any supplied history (none for a
+  standalone `backtest` unless `--floor-sigma-reference-runs` names runs; the reference runs in
+  the weekly run's stage 1), a week the run predicts replacing the history's. The production
+  final fit pools the reference runs' fold checkpoints (`floor_sigma_reference_runs`, default
+  the two GPU reference seeds, averaged per game) with the weekly run's stage-1 weeks of the
+  predicted season before the predicted week, estimates sigma for the predicted week, and
+  records it in the saved model; prediction from a saved model uses the recorded value, and a
+  model saved without one uses the constant. A configured reference run that is missing is an
+  error, never a silent fallback.
 - Every run type uses it identically: the weekly run, `backtest`, `train` and `predict`. The
   weekly run's stage 1 walks this one production configuration forward to report how it scores;
   it selects nothing.
@@ -170,6 +185,9 @@ Every saved model must include adjacent metadata JSON with:
 - training config (CLI args / config object)
 - the XGBoost device the model trained on (`xgb_device`: `cpu` or `cuda`, never `auto`)
 - the seasons used for training and for the evaluation holdout (`splits`)
+- the probability floor's sigma (`floor_sigma`): the value the model predicts with, whether it is
+  the fallback constant, the week it was estimated for, its pool's game count and seasons, and
+  the runs the pool came from
 - feature list used
 - best params (if tuned) and early-stopping info
 

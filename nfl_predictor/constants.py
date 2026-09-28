@@ -37,6 +37,18 @@ def get_regular_season_weeks(season: int) -> int:
 # Standard deviation of score differences
 SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for analysis
 
+# The spread (sigma) of the probability floor, Phi(predicted margin / sigma). For a game in
+# (season, week) it is the root-mean-square out-of-fold margin error of every prediction strictly
+# before that week (`nfl_predictor/ml/floor_sigma.py`). Until that pool spans this many complete
+# earlier seasons the floor uses SCORE_DIFF_STD_DEV instead, and records that it fell back.
+FLOOR_SIGMA_MIN_POOL_SEASONS = 3
+# The walk-forward runs whose out-of-fold errors form the production pool (the weekly run and
+# `nfl-predictor train`), relative to the repository root; their fold checkpoints are only read.
+FLOOR_SIGMA_REFERENCE_RUNS = (
+    "models/step3_gpu_reference/l1_seed42",
+    "models/step3_gpu_reference/l2_seed7",
+)
+
 # URL for SurvivorGrid spreads (future games)
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"
 DEFAULT_TOTAL_LINE = 45.6  # Average total score across 20+ seasons

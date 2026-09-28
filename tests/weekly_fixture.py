@@ -7,16 +7,22 @@ weeks and three scheduled ones. Team strength drifts between seasons; scores, ma
 the few features are drawn around it from one seeded generator, so every call writes the same
 bytes. The column layout mirrors the real dataset: identifiers, then the positional feature
 range from ``away_rest`` to ``home_moneyline`` (market columns last), then the scores.
+
+It also writes ``reference_run/``, a walk-forward run directory whose fold checkpoints predict
+every history game at the market spread; the weekly config names it as the floor sigma's
+reference run, so the pool spans three earlier seasons from the current season's first week.
 """
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Iterator
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 import pandas as pd
 import yaml
@@ -209,7 +215,33 @@ def build_fixture(root: Path) -> dict[str, Path]:
     predict_rows = (games["season"] == CURRENT_SEASON) & (games["week"] == PREDICT_WEEK)
     games.loc[predict_rows].to_csv(paths["predict"], index=False)
     pd.DataFrame(snapshots, columns=list(SNAPSHOT_COLUMNS)).to_csv(paths["snapshots"], index=False)
+    paths["reference"] = write_reference_run(root, games[games["season"].isin(HISTORY_SEASONS)])
     return paths
+
+
+def write_reference_run(root: Path, games: pd.DataFrame) -> Path:
+    """Write a walk-forward run whose folds predict each game at the market spread."""
+    checkpoint_dir = root / "reference_checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    predictions = pd.DataFrame(
+        {
+            "game_id": games["game_id"],
+            "season": games["season"],
+            "week": games["week"],
+            "actual_margin": games["home_score"] - games["away_score"],
+            "predicted_margin": games["away_spread"],
+        }
+    )
+    for (season, week), fold in predictions.groupby(["season", "week"]):
+        joblib.dump(
+            {"predictions": fold.reset_index(drop=True)},
+            checkpoint_dir / f"fold_{season}_w{week:02d}.joblib",
+        )
+    run_dir = root / "reference_run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    metadata = {"config": {"checkpoint": {"dir": str(checkpoint_dir)}}}
+    (run_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    return run_dir
 
 
 def write_weekly_config(root: Path, paths: dict[str, Path], output_dir: Path) -> Path:
@@ -230,6 +262,7 @@ def write_weekly_config(root: Path, paths: dict[str, Path], output_dir: Path) ->
             "power_rankings_data_ml": str(paths["all_ml"]),
             "power_rankings_data_schedule": str(paths["all"]),
             "power_rankings_strength_snapshots": str(paths["snapshots"]),
+            "floor_sigma_reference_runs": [str(paths["reference"])],
         }
     )
     config_path = root / "weekly_run.yaml"

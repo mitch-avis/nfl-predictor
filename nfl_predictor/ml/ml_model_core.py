@@ -22,7 +22,6 @@ import optuna
 import pandas as pd
 import xgboost as xgb
 from scipy.sparse import spmatrix
-from scipy.stats import norm
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import Ridge
 from sklearn.metrics import (
@@ -33,6 +32,7 @@ from sklearn.metrics import (
 import __main__
 from nfl_predictor import constants
 from nfl_predictor.ml import feature_spec as _feature_spec
+from nfl_predictor.ml.floor_sigma import FloorSigma, home_win_prob
 from nfl_predictor.ml.metrics import confidence_ranks, confidence_strength
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,
@@ -78,7 +78,8 @@ DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
 # The one win-probability calibration: the deterministic floor, the predicted margin through
-# the fixed normal curve. ``none`` is an accepted second spelling of ``auto``.
+# a normal curve whose spread is estimated from earlier out-of-fold errors (``floor_sigma``).
+# ``none`` is an accepted second spelling of ``auto``.
 CALIBRATION_FLOOR = "auto"
 _CALIBRATION_ALIASES = frozenset({"auto", "none"})
 RETIRED_CALIBRATIONS = frozenset({"platt", "isotonic", "sigma", "logistic", "elo"})
@@ -113,6 +114,9 @@ class MarginTotalModel:
     tuned_params: dict[str, Any] | None = None
     tuned_cv_summary: dict[str, Any] | None = None
     optuna_summary: dict[str, Any] | None = None
+    # The floor's sigma for the week this model predicts, estimated at the final fit from
+    # earlier out-of-fold errors. None (models saved before it was recorded) means the constant.
+    floor_sigma: FloorSigma | None = None
 
 
 @dataclass(frozen=True)
@@ -668,11 +672,26 @@ def _summarize_confidence_pool(
     }
 
 
-def _margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
-    """Return the deterministic floor, ``Phi(margin / SCORE_DIFF_STD_DEV)``."""
-    if constants.SCORE_DIFF_STD_DEV <= 0:
-        raise ValueError("SCORE_DIFF_STD_DEV must be positive.")
-    return norm.cdf(margin / constants.SCORE_DIFF_STD_DEV)
+def _margin_to_home_win_prob(
+    margin: np.ndarray, sigma: float = constants.SCORE_DIFF_STD_DEV
+) -> np.ndarray:
+    """Return the deterministic floor, ``Phi(margin / sigma)``.
+
+    ``sigma`` defaults to ``SCORE_DIFF_STD_DEV``, the fallback spread; the submitted
+    probabilities pass the week's estimated sigma (``floor_sigma``).
+    """
+    return home_win_prob(margin, sigma)
+
+
+def model_floor_sigma(model: Any) -> tuple[float, bool]:
+    """Return the sigma a saved model predicts with, and whether it is the fallback constant.
+
+    A model saved before the sigma was recorded has none and uses the constant.
+    """
+    record = getattr(model, "floor_sigma", None)
+    if record is None:
+        return float(constants.SCORE_DIFF_STD_DEV), True
+    return float(record.sigma), bool(record.fallback)
 
 
 def _build_prediction_output(
@@ -934,6 +953,8 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
             _safe_set_attr(instance, "quantiles", None)
         if not hasattr(instance, "optuna_summary"):
             _safe_set_attr(instance, "optuna_summary", None)
+        if not hasattr(instance, "floor_sigma"):
+            _safe_set_attr(instance, "floor_sigma", None)
 
     if isinstance(model, MarginTotalModel):
         _ensure_margin_total(model)
@@ -955,9 +976,11 @@ def apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
     return _apply_feature_spec(df, spec)
 
 
-def margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
+def margin_to_home_win_prob(
+    margin: np.ndarray, sigma: float = constants.SCORE_DIFF_STD_DEV
+) -> np.ndarray:
     """Convert predicted margin to home win probability through the deterministic floor."""
-    return _margin_to_home_win_prob(margin)
+    return _margin_to_home_win_prob(margin, sigma)
 
 
 def predict_margin_total_from_model(

@@ -1,11 +1,13 @@
 """Characterization test: the weekly run's outputs on a fixed synthetic dataset.
 
-The weekly run is the production path: it compares probability candidates in a walk-forward
-(stage 1), trains the final margin/total model (stage 2), predicts the week (stage 3), and
+The weekly run is the production path: it scores the production configuration in a
+walk-forward (stage 1), trains the final margin/total model (stage 2), predicts the week, whose
+probabilities are the deterministic floor (stage 3), and
 writes the betting report, power rankings and projected standings (stage 4). This test runs
 all four stages end to end on the synthetic seasons of ``tests/weekly_fixture.py``, with the
 shipped ``config/weekly_run.yaml`` settings except where the fixture needs otherwise (paths,
-one evaluation season, CPU and one thread for determinism, no data refresh), and compares
+one evaluation season, CPU and one thread for determinism, no data refresh, and the fixture's
+synthetic reference run for the floor sigma), and compares
 every output with the snapshots under ``tests/fixtures/weekly_run_characterization/``. The
 shipped config holds the code defaults, which production runs, so the snapshots pin the
 production configuration.

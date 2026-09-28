@@ -80,42 +80,72 @@ def metrics_summary(path: Path) -> dict[str, Any]:
     }
 
 
-def feature_importance(path: Path, top: int = TOP_FEATURES) -> list[dict[str, Any]]:
-    """Return the top features by combined gain.
+IMPORTANCE_MEASURES: tuple[tuple[str, str], ...] = (
+    ("mean_abs_shap", "mean_abs_shap"),
+    ("total_gain", "total_gain"),
+    ("gain", "summed_average_gain"),
+)
+"""``(key in feature_importance.json, measure reported to the page)``, in order of preference.
 
-    Each row is ``{feature, gain, weight, margin_gain, total_gain}``.
+Current files record mean absolute SHAP (in points) and total gain per base feature. Files
+written before SHAP was recorded fall back to total gain. The oldest record only XGBoost's
+average gain per split summed over encoded columns and heads, reported as
+``summed_average_gain`` so the page can say the ranking favors many-category features.
+"""
+
+
+def _empty_importance() -> dict[str, Any]:
+    """Return the importance payload for a run without usable importance."""
+    return {"measure": None, "rows": []}
+
+
+def feature_importance(path: Path, top: int = TOP_FEATURES) -> dict[str, Any]:
+    """Return the top base features by the best importance measure the file records.
+
+    The payload is ``{measure, rows}``; each row is
+    ``{feature, value, margin_value, total_value, splits}``, where ``value`` is the measure
+    over both heads, ``margin_value``/``total_value`` the same measure per head and ``splits``
+    the split count over both heads.
     """
     base = _opt_dict(_dict(load_json(path)).get("base_features"))
     if base is None:
-        return []
+        return _empty_importance()
     names = _opt_list(base.get("feature_names"))
     combined = _dict(base.get("combined"))
     margin = _dict(base.get("margin"))
     total = _dict(base.get("total"))
-    gains = _opt_list(combined.get("gain"))
-    if names is None or gains is None:
-        return []
+    found = next(
+        (
+            (key, measure, values)
+            for key, measure in IMPORTANCE_MEASURES
+            if (values := _opt_list(combined.get(key))) is not None
+        ),
+        None,
+    )
+    if names is None or found is None:
+        return _empty_importance()
+    key, measure, values = found
 
-    def _at(block: dict[str, Any], key: str, index: int) -> float | None:
-        values = block.get(key)
-        if isinstance(values, list) and index < len(values):
-            value = values[index]
+    def _at(block: dict[str, Any], block_key: str, index: int) -> float | None:
+        block_values = block.get(block_key)
+        if isinstance(block_values, list) and index < len(block_values):
+            value = block_values[index]
             return float(value) if isinstance(value, int | float) else None
         return None
 
     rows: list[dict[str, Any]] = [
         {
             "feature": str(name),
-            "gain": float(gain),
-            "weight": _at(combined, "weight", i),
-            "margin_gain": _at(margin, "gain", i),
-            "total_gain": _at(total, "gain", i),
+            "value": float(value),
+            "margin_value": _at(margin, key, i),
+            "total_value": _at(total, key, i),
+            "splits": _at(combined, "weight", i),
         }
-        for i, (name, gain) in enumerate(zip(names, gains, strict=False))
-        if isinstance(gain, int | float)
+        for i, (name, value) in enumerate(zip(names, values, strict=False))
+        if isinstance(value, int | float)
     ]
-    rows.sort(key=lambda r: float(r["gain"]), reverse=True)
-    return rows[:top]
+    rows.sort(key=lambda r: float(r["value"]), reverse=True)
+    return {"measure": measure, "rows": rows[:top]}
 
 
 def wf_compare(path: Path) -> TablePayload:
@@ -168,7 +198,7 @@ def model_payload(files: RunFiles) -> dict[str, Any]:
         "metrics": metrics,
         "feature_importance": feature_importance(files.feature_importance)
         if files.feature_importance.is_file()
-        else [],
+        else _empty_importance(),
         "calibration": calibration,
         "wf_compare": wf_compare(files.wf_compare_csv) if files.wf_compare_csv.is_file() else None,
         "wf_best": load_json(files.wf_best) if files.wf_best.is_file() else None,

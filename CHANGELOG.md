@@ -1,5 +1,250 @@
 # Changelog
 
+## [0.35.0] - 2026-09-28
+
+### Changed
+
+- The probability floor's spread is no longer the fixed `SCORE_DIFF_STD_DEV`: for each week it is
+  the root-mean-square out-of-fold margin error strictly before that week (`nfl_predictor/ml/
+  floor_sigma.py`), with the constant as the fallback until the pool spans three earlier seasons
+  (any weeks). Margins, picks and confidence ranks are unchanged; probabilities move away from
+  0.5.
+- The weekly run and `nfl-predictor train` pool the reference walk-forward's fold checkpoints
+  (`floor_sigma_reference_runs`, default both GPU reference seeds, averaged per game) with stage
+  1's errors at every week the reference lacks. The sigma is recorded in the saved model and in
+  `metadata.json` (`floor_sigma`), and prediction uses it; a missing reference run is an error
+  (set `floor_sigma_reference_runs: []` to run without one).
+- The weekly stage 1 walks forward from week 1 (`wf_start_week: 1`, was 3), so weeks 1-2 are
+  scored and enter the sigma pool; existing run directories redo stage 1.
+
+### Added
+
+- `nfl-predictor backtest --floor-sigma-reference-runs`; walk-forward weeks and predictions record
+  `floor_sigma` and `floor_sigma_fallback`; stage 1 writes `wf_compare/wf_margin_errors.csv`.
+
+### Fixed
+
+- Weekly confidence ranks, `confidence_strength` and `predicted_winner` come from the unrounded
+  probability (`p >= 0.5` picks home, through the shared `metrics.picks_home`), so a game
+  published at `0.5000` or two games sharing a 4-decimal probability pick and rank as the
+  walk-forward does.
+
+## [0.34.2] - 2026-09-28
+
+### Fixed
+
+- Confidence-pool ranks break mathematically equal confidences by `game_id`, as documented,
+  instead of by floating-point noise (a home favorite and a home underdog by the same spread were
+  ordered by the last bits of `|p - 0.5|`). Confidence is rounded to 12 decimals
+  (`CONFIDENCE_DECIMALS` in `nfl_predictor/ml/metrics.py`) before ranking, through one shared
+  rule, `confidence_ranks`, used by the weekly pick ranks, walk-forward pool points, training
+  pool summaries, the prediction log and `nfl-predictor compare`. Games whose confidences differ
+  rank exactly as before; rescoring every saved walk-forward moved no rank. The edit under
+  `nfl_predictor/ml/` changes checkpoint fingerprints, not predictions.
+
+## [0.34.1] - 2026-09-28
+
+### Fixed
+
+- The weekly run's final fit trains with `wf_n_estimators`, `wf_max_depth` and
+  `wf_learning_rate` from `config/weekly_run.yaml`, the tree settings stage 1 walks forward (one
+  helper, `xgb_model_params`); before, it always used the code defaults, so editing those keys
+  would have made stage 1 measure a model the weekly run does not submit. The shipped values
+  equal the defaults, so weekly outputs are unchanged; with `--tune`, the tuned values still
+  win. The final fit's resume hash changes, so resuming an older weekly run retrains it.
+- The settings-versus-production report reads the final fit's tree settings from the weekly
+  config.
+
+### Changed
+
+- `train_margin_total_model` accepts `xgb_params_overrides`. It is under `nfl_predictor/ml/`, so
+  walk-forward checkpoint fingerprints change; walk-forward predictions do not (the walk-forward
+  never calls it, and a before/after synthetic run is hash-identical).
+
+## [0.34.0] - 2026-09-28
+
+### Added
+
+- `nfl-predictor backtest` writes a `settings_versus_production` section to `metrics_report.json`
+  and its log: every model-affecting setting where the run differs from the production weekly
+  run (`config/weekly_run.yaml` merged with the code defaults), for stage 1's walk-forward and for
+  the final fit, including the values each side applies implicitly. Settings an older run did not
+  record are listed as not recorded, never inferred, and retired settings are listed with their
+  values; scope and runtime settings are listed apart. `nfl-predictor compare` shows the same
+  section for each run, rebuilt from its `metadata.json`.
+- The backtest records the XGBoost parameters its folds trained with as `config.xgb_params`;
+  `weekly_run.config.parse_args` is public.
+
+### Changed
+
+- The weekly run builds its stage-1 and final-fit settings in shared helpers
+  (`apply_run_defaults`, `stage1_options`, `final_fit_options`,
+  `production_walk_forward_config`) instead of inline; behavior and the resume hashes are
+  unchanged and pinned by tests.
+
+## [0.33.0] - 2026-09-28
+
+### Changed
+
+- The weekly run's final fit trains on every eligible completed game, the newest week included,
+  exactly as each walk-forward fold does; it no longer holds the newest four completed weeks (at
+  least one) out of its trees. `nfl-predictor train` likewise trains on every season except
+  `--holdout-seasons` (it held one more season out by default). SHAP in
+  `feature_importance.json` explains those same rows.
+- `metadata.json` `splits` records `train_seasons` and `holdout_seasons` only; run directories
+  written before still read.
+- Walk-forward folds no longer hand XGBoost an eval frame. No prediction changes; the checkpoint
+  fingerprint does, and `nfl-predictor compare` lists the dropped `calibration_weeks` key as a
+  configuration difference against older runs.
+
+### Removed
+
+- `train --calibration-weeks` and `--calibration-seasons`, `backtest --wf-calibration-weeks`
+  (`--calibration-weeks`), and `weekly --wf-calibration-weeks`, `--train-calibration-weeks` and
+  `--train-calibration-seasons`. A weekly config that sets `wf_calibration_weeks`,
+  `train_calibration_weeks` or `train_calibration_seasons` is rejected with the reason.
+- The pooled walk-forward calibration frame (`select_calibration_data`) and its per-fold log
+  line.
+
+## [0.32.1] - 2026-09-27
+
+### Removed
+
+- The `shap` dependency (and with it `numba` and `llvmlite`). SHAP values come from XGBoost's
+  built-in TreeSHAP (`pred_contribs`), the same exact algorithm on the same trees, since
+  `0.31.0`; nothing imported the package any more.
+
+## [0.32.0] - 2026-09-27
+
+### Changed
+
+- The weekly run submits the deterministic floor, `Phi(margin / SCORE_DIFF_STD_DEV)`, as every
+  run type does. Its stage 1 walks the one production configuration forward instead of comparing
+  nine calibration and market-blend candidates; `wf_compare.csv` and `wf_best.json` hold that one
+  row, and the final fit takes its market mode from `--wf-market-mode`. Stage 1 uses the final
+  fit's `--market-transform` and `--max-cardinality-ratio`.
+- `backtest --calibration` and `train`/`predict --win-prob-calibration` default to `auto`, the
+  floor (they were `platt` and `isotonic`); `none` is accepted as the same value.
+- A saved model with a fitted or Elo calibrator, a market blend or clamp, or uncertainty-aware
+  probabilities loads, logs what it ignores, and predicts the floor. A saved blend model, and
+  `nfl-predictor explain` on one, is refused with the reason.
+- The web train job no longer asks for a model kind or a calibration; predict and power-rankings
+  jobs refuse a run that holds a blend model.
+- A weekly config value outside its option's choices (for example `wf_market_mode: all`) is
+  rejected when the config is read, before any data refresh.
+
+### Removed
+
+- `nfl-predictor sweep`.
+- The weekly run's candidate matrix and per-week re-selection, `wf_compare/wf_summary.csv`,
+  `--wf-market-mode all`, `--wf-market-prob-source`, `--wf-market-prob-blend-method` and
+  `--wf-win-prob-uncertainty`; a config that sets one of those keys is rejected.
+- The `platt`, `isotonic`, `sigma`, `logistic` and `elo` calibrations, the Platt regularization
+  search and the pooled calibrator frame.
+- Market probability blending and clamping (`--market-prob-weight`/`--market-prob-blend`,
+  `--market-prob-clamp`, `--market-prob-source`, `--market-prob-blend-method` on train, predict
+  and backtest). The market-implied probability stays the scored yardstick.
+- The `blend` model kind (`--model-kind blend`/`blended_margin_total`), its power-rankings branch
+  and its `explain` and feature-importance branches.
+- Uncertainty-aware win probabilities (`--win-prob-uncertainty`); the p10/p90 interval columns
+  remain.
+
+## [0.31.0] - 2026-09-27
+
+### Changed
+
+- `feature_importance.json` is `schema_version` 3: margin/total fits (the weekly run and
+  `nfl-predictor train`'s default kind) record mean |SHAP| in points per encoded column and per
+  base feature, per head and combined, over the final model's tree-training rows, using
+  XGBoost's exact TreeSHAP; a base feature's one-hot contributions are summed before the absolute
+  value, and market-anchored heads are explained on their residual over the market line. Total
+  gain stays as the secondary measure. The change is under `nfl_predictor/ml/`, so checkpoint
+  fingerprints change.
+- The web Model page ranks features by combined mean |SHAP| and captions it; runs without SHAP
+  fall back to total gain, and the oldest runs to summed average gain, each labelled.
+- `nfl-predictor explain` computes SHAP with XGBoost's own TreeSHAP (`pred_contribs`) instead of
+  the `shap` package, with unchanged values, and no longer exits 2 when `shap` is missing.
+
+## [0.30.1] - 2026-09-27
+
+### Changed
+
+- `_split_train_calibration_holdout` returns a `TrainCalibrationSplit` carrying the in-season
+  window's `(season, week)` pairs; the report's `calibration_inseason` record is built from them
+  instead of being re-derived from the calibration frame (no output change).
+- The final fit logs why whole calibration seasons move and the pooled calibrator frame's seasons
+  and weeks; each walk-forward fold logs its calibration frame and says when it is unused because
+  calibration resolves to `none`.
+- The `--wf-calibration-weeks` and `train --calibration-weeks` help, the `weekly_run.yaml`
+  comment and the README say what each path holds out: walk-forward folds hold nothing out of
+  the tree fit, and the final fit holds out the newest weeks, rolling back across seasons.
+
+### Fixed
+
+- `metadata.json` `xgb_device` reads every XGBoost head (margin, total, quantiles) and records
+  `mixed` when they trained on different devices.
+
+## [0.30.0] - 2026-09-27
+
+### Changed
+
+- Every XGBoost run (`backtest`, `sweep`, `weekly` stage 1 and final fit, `train`) defaults to
+  `--xgb-device auto` (`xgb_device: auto` in `config/weekly_run.yaml`): the GPU when the XGBoost
+  build has CUDA and a usable GPU is present, else the CPU, resolved once per process by a
+  one-round probe fit. An explicit `cuda` without a usable GPU falls back to the CPU with a
+  warning. `--xgb-device` accepts only `auto`, `cpu`, `cuda` and `cuda:N` (`gpu` means `cuda`).
+- The walk-forward resolves the device before fingerprinting fold checkpoints, so CPU and GPU runs
+  never share or resume each other's checkpoints, and an `auto` run on a GPU matches an explicit
+  `cuda` run. Edits under `nfl_predictor/ml/` change every checkpoint fingerprint.
+
+### Added
+
+- The resolved XGBoost device is recorded in the walk-forward `metadata.json` and metrics report
+  (`config.xgb_device`, and per week the device the week's models trained on), each sweep row,
+  the weekly run config, and the saved model's metadata JSON (a new `xgb_device` field in the
+  artifact contract, read from the fitted model).
+- `nfl-predictor sweep --xgb-device`.
+
+### Fixed
+
+- `--xgb-tree-method gpu_hist` crashed on XGBoost 3.4; it now trains with `hist` on CUDA.
+- A CUDA failure during a fit falls back to the CPU for builds compiled without GPU support too,
+  and warns every time. A walk-forward stops instead of checkpointing a week whose models fell
+  back to another device, so one checkpoint store never mixes devices.
+
+## [0.29.1] - 2026-09-27
+
+### Changed
+
+- Season rows resampled from a single week or game report no interval (`[n/a]`) instead of a
+  zero-width one.
+
+### Added
+
+- `nfl-predictor compare` ends with a "Stability by season" section: each window's run metrics and
+  paired contrast, split by season. Everything before that section is byte-identical to earlier
+  output, and the JSON is a strict superset (each window gains `seasons`).
+- `nfl-predictor backtest` writes a per-season, per-week-bucket stability view to
+  `metrics_report.json` (`metrics.stability`) and logs it. It uses `compare`'s definitions and
+  bootstrap and scores the deterministic probability, as the benchmark does.
+
+## [0.29.0] - 2026-09-27
+
+### Changed
+
+- `GET /model` returns `feature_importance` as `{measure, rows}` (row keys `value`,
+  `margin_value`, `total_value`, `splits`). The Model page chart names the measure it shows; runs
+  written before total gain was recorded fall back to the old number, labelled as average gain
+  summed over columns.
+
+### Fixed
+
+- `feature_importance.json` ranks base features by XGBoost total gain (average gain times splits),
+  summed over one-hot columns and both heads, instead of summing per-split average gains, which
+  put many-category features such as `*_next_opponent_abbr` and `stadium_surface` first. The file
+  carries `schema_version` 2 and a `measures` block that describes each key. The change is under
+  `nfl_predictor/ml/`, so every walk-forward checkpoint fingerprint changes.
+
 ## [0.28.6] - 2026-09-27
 
 ### Changed

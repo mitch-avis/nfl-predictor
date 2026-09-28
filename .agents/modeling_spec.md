@@ -21,21 +21,34 @@ Direct home/away score regressors are allowed only as secondary ensemble members
 
 ### Win probability
 
-- Win probability is derived from the margin prediction.
-- Win probabilities are calibrated using time-aware calibration data.
+- Win probability is derived from the margin prediction through the deterministic floor,
+  `Phi(margin / sigma)`, and nothing else: no fitted calibrator, no Elo-style curve, no market
+  blend or clamp.
+- Sigma for a game in season `s`, week `w` is the root-mean-square of (actual minus predicted
+  margin) over every out-of-fold prediction strictly before `(s, w)`: earlier seasons, and season
+  `s` weeks before `w` (`nfl_predictor/ml/floor_sigma.py`, one implementation for every run
+  type). It is one value per week, so it never changes a pick or a confidence rank. Until the
+  pool spans `FLOOR_SIGMA_MIN_POOL_SEASONS` (`3`) earlier seasons (any weeks), sigma is
+  `SCORE_DIFF_STD_DEV` (`14.21`), recorded as the fallback.
+- The pool: a walk-forward pools its own earlier weeks with any supplied history (none for a
+  standalone `backtest` unless `--floor-sigma-reference-runs` names runs; the reference runs in
+  the weekly run's stage 1), a week the run predicts replacing the history's. The production
+  final fit pools the reference runs' fold checkpoints (`floor_sigma_reference_runs`, default
+  the two GPU reference seeds, averaged per game) with the weekly run's stage-1 errors before
+  the predicted week at every `(season, week)` the reference has no rows for (the seasons after
+  it and the predicted season's earlier weeks; the reference keeps its own weeks), estimates
+  sigma for the predicted week, and records it in the saved model; prediction from a saved
+  model uses the recorded value, and a model saved without one uses the constant. A configured
+  reference run that is missing is an error, never a silent fallback.
+- Every run type uses it identically: the weekly run, `backtest`, `train` and `predict`. The
+  weekly run's stage 1 walks this one production configuration forward to report how it scores;
+  it selects nothing.
+- The calibration option takes `auto` (the documented value and the default); `none` is an
+  accepted second spelling. A saved model that carries a retired calibrator or market blend
+  predicts the floor, and loading it logs what is ignored.
 - Calibration metrics (Brier, log loss, reliability table) are reported in evaluation.
-
-Calibration methods (canonical names):
-
-- `none`: deterministic margin->prob mapping (baseline)
-- `platt`: logistic regression (Platt scaling)
-- `isotonic`: isotonic regression
-- `elo`: deterministic Elo-style logistic mapping
-
-Notes:
-
-- Prefer time-aware calibration (`platt` or `isotonic`) when enough calibration rows exist.
-- If adding new CLI options, keep names stable and document them.
+- Changing how probabilities are formed is a default change for the user to decide, measured on
+  the walk-forward instrument against the floor first.
 
 ### Market integration
 
@@ -45,24 +58,23 @@ When market lines exist, the system produces market-derived features and support
   `away_market_prob`.
 - Market anchoring trains residuals vs market baselines and adds the baseline back at prediction
   time.
-- Market probability blending/clamping uses explicit CLI/config values and is validated in
-  time-aware evaluation.
+- The market-implied home win probability (no-vig moneylines, else the spread) is a scored
+  yardstick only: every walk-forward reports it beside the model, with the paired
+  deterministic-minus-market intervals, and it never enters the submitted probability. There is no
+  market probability blend or clamp.
 
 Market anchoring details:
 
 - Prefer residual training: `target_resid = target - market_baseline` and `pred = market_baseline +
 pred_resid`.
 
-Market probability post-processing (blend/clamp):
-
-- Blending must be explicit and bounded (weights in [0, 1]).
-- Clamping must be explicit and bounded (delta in [0, 0.5]).
-- If adding "no-vig" market probability options, implement them consistently (home/away normalize to
-  sum to 1) and validate in walk-forward.
+No-vig market probabilities normalize the home and away implied probabilities to sum to 1.
 
 ### Uncertainty
 
 - Predictions include uncertainty intervals for margin and total (p10/p50/p90 or equivalent).
+- The intervals are outputs only: the win probability never reads them (it is the deterministic
+  floor of the predicted margin, the margin head's squared-error point prediction).
 - Interval outputs are evaluated (coverage/width diagnostics) and are part of the run artifacts.
 
 Minimum requirement:
@@ -87,8 +99,21 @@ If implementing score "realism":
 ### Confidence pool deliverable
 
 - Weekly outputs include a **1..N** unique confidence ranking across that week's games.
-- Predicted winner is derived from calibrated win probability.
-- Confidence strength is derived from calibrated win probability (default: `abs(p - 0.5)`).
+- Predicted winner is derived from the deterministic win probability: home when the unrounded
+  `p >= 0.5` (an exact 0.5 picks home), else away (`picks_home` in `nfl_predictor/ml/metrics.py`,
+  shared by the walk-forward, the training pool summaries and the weekly output).
+- Confidence strength is derived from the deterministic win probability (default:
+  `abs(p - 0.5)`), rounded to 12 decimals (`CONFIDENCE_DECIMALS` in `nfl_predictor/ml/metrics.py`)
+  so that mathematically equal confidences (a home favorite and a home underdog by the same
+  spread) almost always tie instead of differing by floating-point noise; a pair whose noise
+  straddles a 12-decimal rounding boundary can still differ.
+- Ranks run from least confident (`1`) to most confident (`N`); equal rounded confidences are
+  ordered by `game_id`. One shared rule (`confidence_ranks` in `nfl_predictor/ml/metrics.py`)
+  ranks the weekly picks, walk-forward pool points, training pool summaries and
+  `nfl-predictor compare`.
+- Picks, ranks and the published confidence strength come from the unrounded probability; the
+  published probability columns are rounded to 4 decimals for display only, so the weekly picks
+  choose sides and rank exactly as the walk-forward does.
 
 Authoritative pool scoring rules:
 
@@ -107,6 +132,10 @@ Required evaluation modes:
 - **Walk-forward evaluation (authoritative):** for each season and each week `w` (e.g., `3..end`),
   train on all games strictly before week `w` (plus prior seasons if configured), predict week `w`,
   and record metrics.
+- The production final fit trains the same way: on every eligible completed game except the
+  evaluation holdout seasons (`--holdout-seasons`, `0` in the weekly run), the newest completed
+  week included. No fit holds weeks out of its trees or hands XGBoost an eval frame, and every
+  head runs its full tree budget.
 
 Required metrics:
 
@@ -124,14 +153,15 @@ Market-relative metrics (when market anchoring is enabled):
 
 ### Model selection protocol (how to choose "best" settings)
 
-When multiple options exist (calibration method, market integration mode, probability blend/clamp
-rules, weighting choices):
+When multiple options exist (market integration mode, weighting choices, tuned parameters):
 
 - Prefer selecting settings via walk-forward over multiple seasons.
 - Pick a primary selection metric (typically Brier/log loss for probability quality) and use
   secondary tie-breakers (confidence pool expected points, then margin/total MAE).
 - Report mean and variance across folds; avoid choosing a setting that wins by a hair on one season
-  but regresses elsewhere.
+  but regresses elsewhere. The stability view (each week bucket split by season, in
+  `metrics_report.json` as `metrics.stability` and at the end of `nfl-predictor compare`'s report,
+  per run and per paired contrast) shows this.
 - Never use the holdout window to tune hyperparameters.
 
 Required run artifacts:
@@ -159,7 +189,11 @@ Every saved model must include adjacent metadata JSON with:
 - dataset fingerprint (hash of training CSV and/or stable row ids)
 - library versions (xgboost, sklearn, numpy, pandas, polars, scipy)
 - training config (CLI args / config object)
-- season/week ranges used for train/calibration/holdout
+- the XGBoost device the model trained on (`xgb_device`: `cpu` or `cuda`, never `auto`)
+- the seasons used for training and for the evaluation holdout (`splits`)
+- the probability floor's sigma (`floor_sigma`): the value the model predicts with, whether it is
+  the fallback constant, the week it was estimated for, its pool's game count and seasons, and
+  the runs the pool came from
 - feature list used
 - best params (if tuned) and early-stopping info
 

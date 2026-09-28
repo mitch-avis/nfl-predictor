@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -10,9 +11,10 @@ import numpy as np
 import pandas as pd
 import pandas.testing as pdt
 import pytest
+from scipy.stats import norm
 
 from nfl_predictor import constants
-from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
 
 
 def _fixture_df() -> pd.DataFrame:
@@ -57,12 +59,9 @@ def _base_config() -> walk_forward.WalkForwardConfig:
         eval_last_n_seasons=1,
         wf_start_week=2,
         calibration="none",
-        calibration_weeks=1,
         random_seed=7,
         include_market=False,
         market_anchor=False,
-        market_prob_weight=0.0,
-        market_prob_clamp=0.0,
         feature_start="feat1",
         feature_end="feat2",
         xgb_params_overrides={
@@ -269,9 +268,71 @@ def test_fold_checkpoint_fingerprint_tracks_data_and_config() -> None:
     assert walk_forward.fold_checkpoint_fingerprint(df.copy(), config) == baseline
     assert walk_forward.fold_checkpoint_fingerprint(changed_df, config) != baseline
     assert (
-        walk_forward.fold_checkpoint_fingerprint(df, replace(config, calibration_weeks=2))
-        != baseline
+        walk_forward.fold_checkpoint_fingerprint(df, replace(config, wf_start_week=3)) != baseline
     )
+
+
+def _with_device(
+    config: walk_forward.WalkForwardConfig, device: str | None
+) -> walk_forward.WalkForwardConfig:
+    """Return ``config`` with its XGBoost device override set, or removed for ``None``."""
+    overrides = {k: v for k, v in (config.xgb_params_overrides or {}).items() if k != "device"}
+    if device is not None:
+        overrides["device"] = device
+    return replace(config, xgb_params_overrides=overrides)
+
+
+def test_with_resolved_xgb_device_names_the_concrete_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``auto`` or no device becomes the device the run trains on; other overrides stay."""
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    config = _base_config()
+
+    for requested in (None, "auto", "cuda"):
+        resolved = walk_forward.with_resolved_xgb_device(_with_device(config, requested))
+        assert resolved.xgb_params_overrides == {
+            **(config.xgb_params_overrides or {}),
+            "device": "cuda",
+        }
+    no_overrides = walk_forward.with_resolved_xgb_device(replace(config, xgb_params_overrides=None))
+    assert no_overrides.xgb_params_overrides == {"device": "cuda"}
+
+
+def test_fold_checkpoint_fingerprint_hashes_the_resolved_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ``auto`` run shares checkpoints with an explicit run on the same device only."""
+    df = _fixture_df()
+    config = _base_config()
+
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    gpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cuda"))
+    gpu_auto = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "auto"))
+    gpu_default = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, None))
+    gpu_alias = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "gpu"))
+    cpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cpu"))
+
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: False)
+    cpu_auto = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "auto"))
+
+    assert gpu_auto == gpu
+    assert gpu_default == gpu
+    assert gpu_alias == gpu
+    assert cpu != gpu
+    assert cpu_auto == cpu
+
+
+def test_run_records_the_resolved_xgb_device(tmp_path: Path) -> None:
+    """The result and the checkpoint manifest name the concrete device, never ``auto``."""
+    config = _with_device(_base_config(), "auto")
+
+    result = walk_forward.run_walk_forward_backtest(_fixture_df(), config, checkpoint_dir=tmp_path)
+
+    assert result["resolved_settings"]["xgb_device"] == "cpu"
+    (manifest_path,) = tmp_path.rglob("manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["config"]["xgb_params_overrides"]["device"] == "cpu"
 
 
 def test_walk_forward_probabilities_in_bounds() -> None:
@@ -284,45 +345,6 @@ def test_walk_forward_probabilities_in_bounds() -> None:
 
     assert (probs >= 0).all()
     assert (probs <= 1).all()
-
-
-def test_calibration_data_is_time_aware() -> None:
-    """Calibration data uses prior seasons plus earlier weeks of the current season only."""
-    df = _fixture_df()
-    folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
-
-    for fold in folds:
-        calibration_df = walk_forward.select_calibration_data(
-            fold.train_df, fold.season, fold.week, calibration_weeks=1
-        )
-        if not calibration_df.empty:
-            current_season = calibration_df[calibration_df["season"] == fold.season]
-            if not current_season.empty:
-                assert current_season["week"].max() < fold.week
-            assert calibration_df["season"].min() >= fold.season - 2
-            assert calibration_df["season"].max() <= fold.season
-
-
-def test_calibration_data_uses_prior_two_seasons_plus_completed_weeks() -> None:
-    """Calibration selection should pool the previous two seasons and current completed weeks."""
-    df = pd.DataFrame(
-        {
-            "season": [2020, 2020, 2021, 2021, 2022, 2022],
-            "week": [1, 2, 1, 2, 1, 2],
-            "away_score": [10, 11, 12, 13, 14, 15],
-            "home_score": [20, 21, 22, 23, 24, 25],
-        }
-    )
-
-    calibration_df = walk_forward.select_calibration_data(
-        df,
-        eval_season=2022,
-        eval_week=2,
-        calibration_weeks=1,
-    )
-
-    assert calibration_df["season"].tolist() == [2020, 2020, 2021, 2021, 2022]
-    assert calibration_df["week"].tolist() == [1, 2, 1, 2, 1]
 
 
 def test_walk_forward_quantile_intervals_monotonic() -> None:
@@ -366,24 +388,6 @@ def test_walk_forward_can_disable_quantiles() -> None:
     assert "predicted_total" in preds.columns
     assert "predicted_margin_p10" not in preds.columns
     assert "predicted_total_p90" not in preds.columns
-
-
-def test_wf_market_prob_weight_overrides_probs() -> None:
-    """When market_prob_weight=1, home_win_prob should match implied market prob."""
-    df = _fixture_df()
-    config = _base_config()
-    config = replace(
-        config,
-        eval_seasons=[2023],
-        market_prob_weight=1.0,
-        market_prob_clamp=0.0,
-    )
-
-    result = walk_forward.run_walk_forward_backtest(df, config)
-    probs = result["predictions"]["home_win_prob"].to_numpy(dtype=float)
-
-    market_prob = 110.0 / (110.0 + 100.0)
-    assert np.allclose(probs, market_prob)
 
 
 def test_dataset_fingerprint_matches_sha256(tmp_path: Path) -> None:
@@ -742,27 +746,8 @@ def test_resolve_eval_seasons_and_fold_building_edge_cases(
     assert postseason_folds[0].week == 20
 
 
-def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Calibration, market, and XGBoost helper branches should resolve edge cases cleanly."""
-    df = _fixture_df()
-
-    assert walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=0).empty
-    assert walk_forward.select_calibration_data(df, 2030, 2, calibration_weeks=1).empty
-    pooled = walk_forward.select_calibration_data(df, 2023, 2, calibration_weeks=1)
-    assert not pooled.empty
-    pooled_pairs = sorted(
-        {
-            (int(season), int(week))
-            for season, week in zip(pooled["season"], pooled["week"], strict=True)
-        }
-    )
-    assert pooled_pairs == [
-        (2022, 1),
-        (2022, 2),
-        (2022, 3),
-        (2023, 1),
-    ]
-
+def test_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eval-window, market, and XGBoost helper branches should resolve edge cases cleanly."""
     postseason_summary = walk_forward.summarize_eval_window(
         pd.DataFrame({"season": [2024], "week": [20]}),
         eval_seasons=[2024],
@@ -794,25 +779,6 @@ def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPa
         True,
     )
 
-    assert walk_forward._fit_calibrator(np.array([1.0]), np.array([1]), "none") is None
-    assert walk_forward._fit_calibrator(np.array([1.0, 2.0]), np.array([1, 1]), "platt") is None
-
-    sentinel = object()
-    monkeypatch.setattr(
-        walk_forward.ml_model,
-        "_fit_win_prob_calibrator",
-        lambda *args, **kwargs: sentinel,
-    )
-    assert (
-        walk_forward._fit_calibrator(
-            np.array([1.0, 2.0]),
-            np.array([0, 1]),
-            "platt",
-            sample_weight=np.array([1.0, 0.5]),
-        )
-        is sentinel
-    )
-
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         walk_forward.ml_model,
@@ -827,7 +793,7 @@ def test_calibration_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPa
 
 
 def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -> None:
-    """A market-aware walk-forward run should exercise calibration, quantiles, and callbacks."""
+    """A market-aware walk-forward run should exercise quantiles and callbacks."""
     df = _fixture_df().copy()
     df["home_spread"] = -3.0
     df["total_line"] = 44.5
@@ -835,12 +801,8 @@ def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -
 
     config = replace(
         _base_config(),
-        calibration="platt",
         include_market=True,
         market_anchor=True,
-        market_prob_weight=0.25,
-        market_prob_clamp=0.05,
-        win_prob_use_uncertainty=True,
         include_quantiles=True,
     )
 
@@ -854,40 +816,19 @@ def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -
 
     assert len(folds) == 2
     assert result["resolved_settings"]["market_anchor"] is True
-    assert result["resolved_settings"]["win_prob_use_uncertainty"] is True
     assert "market_baseline_margin" in result["predictions"].columns
     assert "market_baseline_total" in result["predictions"].columns
     assert "predicted_margin_p10" in result["predictions"].columns
     assert result["excluded_incomplete_seasons"] == []
     assert result["eval_window"]["include_postseason"] is False
-    assert set(result["predictions"]["calibration_method"].unique()) == {"platt"}
+    assert set(result["predictions"]["calibration_method"].unique()) == {"none"}
 
 
-def test_walk_forward_backtest_handles_elo_uncertainty_and_incomplete_filters(
+def test_walk_forward_fails_cleanly_when_every_eval_season_is_incomplete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Walk-forward should downgrade unsupported elo uncertainty.
-
-    It should also fail cleanly when incomplete-season filtering removes every eval season.
-    """
+    """Incomplete-season filtering that removes every eval season is an error, not a no-op."""
     df = _fixture_df()
-    info_messages: list[str] = []
-    monkeypatch.setattr(
-        walk_forward.log,
-        "info",
-        lambda message, *args: info_messages.append(message % args if args else message),
-    )
-
-    elo_config = replace(
-        _base_config(),
-        calibration="elo",
-        win_prob_use_uncertainty=True,
-        include_quantiles=True,
-    )
-    elo_result = walk_forward.run_walk_forward_backtest(df, elo_config)
-    assert set(elo_result["predictions"]["calibration_method"].unique()) == {"none"}
-    assert any("Elo calibration ignored" in message for message in info_messages)
-
     monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 99)
     incomplete_config = replace(_base_config(), exclude_incomplete_seasons=True)
     with pytest.raises(ValueError, match="No complete seasons available"):
@@ -897,20 +838,15 @@ def test_walk_forward_backtest_handles_elo_uncertainty_and_incomplete_filters(
 def test_walk_forward_auto_calibration_uses_the_deterministic_floor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Auto calibration should stay on the deterministic floor; no fitted selector exists."""
-    assert not hasattr(walk_forward.ml_model, "_select_auto_calibration_method")
-    assert not hasattr(walk_forward.ml_model, "_sigma_calibrator_improves_on_floor")
-    monkeypatch.setattr(
-        walk_forward.ml_model,
-        "_fit_win_prob_calibrator",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("auto should not fit a calibrator")
-        ),
-    )
-
+    """The submitted probability is the deterministic floor of each predicted margin."""
     result = walk_forward.run_walk_forward_backtest(
         _fixture_df(),
         replace(_base_config(), calibration="auto", include_quantiles=False),
+    )
+    predictions = result["predictions"]
+    np.testing.assert_allclose(
+        predictions["home_win_prob"].to_numpy(),
+        norm.cdf(predictions["predicted_margin"].to_numpy() / constants.SCORE_DIFF_STD_DEV),
     )
 
     assert set(result["predictions"]["calibration_method"].unique()) == {"none"}
@@ -932,6 +868,9 @@ def test_walk_forward_disables_small_window_early_stopping(
 
         def get_booster(self) -> _DummyBooster:
             return _DummyBooster()
+
+        def get_params(self) -> dict[str, object]:
+            return {"device": "cpu"}
 
     margin_rounds: list[object] = []
     quantile_rounds: list[object] = []

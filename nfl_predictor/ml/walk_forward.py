@@ -2,7 +2,10 @@
 
 Implements time-aware walk-forward training/evaluation:
 - trains only on games strictly before the evaluated (season, week)
-- optional time-aware calibration using the last K training weeks of the eval season
+- maps every predicted margin to a win probability through the deterministic floor,
+  ``Phi(margin / sigma)``, where each week's sigma is the root-mean-square error of every
+  out-of-fold prediction before it (a supplied history plus the run's own earlier weeks; see
+  ``floor_sigma``)
 - produces metrics summaries plus a calibration reliability table
 
 This module is intentionally small and importable so tests can validate split correctness
@@ -18,7 +21,7 @@ import os
 import subprocess
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from pickle import UnpicklingError
@@ -30,11 +33,11 @@ import pandas as pd
 
 from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import feature_spec as feature_spec_utils
+from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
 
-DEFAULT_CALIBRATION_WEEKS = 4
 DEFAULT_RANDOM_SEED = 42
 RELIABILITY_BINS = 10
 BOOTSTRAP_SAMPLES = 5000
@@ -83,19 +86,13 @@ class WalkForwardConfig:
     eval_seasons: Sequence[int] | None = None
     eval_last_n_seasons: int = 3
     wf_start_week: int = 3
-    calibration: str = "platt"
-    calibration_weeks: int = DEFAULT_CALIBRATION_WEEKS
+    calibration: str = ml_model.CALIBRATION_FLOOR
     random_seed: int = DEFAULT_RANDOM_SEED
     include_postseason: bool = False
     exclude_incomplete_seasons: bool = False
     include_market: bool = True
     market_transform: bool | None = None
     market_anchor: bool = True
-    market_prob_weight: float = 0.0
-    market_prob_clamp: float = 0.0
-    market_prob_source: str = "raw"
-    market_prob_blend_method: str = "prob"
-    win_prob_use_uncertainty: bool = False
     include_quantiles: bool = True
     max_cardinality_ratio: float = 0.5
     feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
@@ -105,6 +102,10 @@ class WalkForwardConfig:
     disabled_feature_groups: tuple[str, ...] = ()
     xgb_params_overrides: dict[str, Any] | None = None
 
+    def __post_init__(self) -> None:
+        """Record either spelling of the deterministic floor as ``auto``; refuse retired ones."""
+        object.__setattr__(self, "calibration", ml_model.resolve_calibration(self.calibration))
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable dict representation of the config."""
         return {
@@ -112,18 +113,12 @@ class WalkForwardConfig:
             "eval_last_n_seasons": self.eval_last_n_seasons,
             "wf_start_week": self.wf_start_week,
             "calibration": self.calibration,
-            "calibration_weeks": self.calibration_weeks,
             "random_seed": self.random_seed,
             "include_postseason": self.include_postseason,
             "exclude_incomplete_seasons": self.exclude_incomplete_seasons,
             "include_market": self.include_market,
             "market_transform": self.market_transform,
             "market_anchor": self.market_anchor,
-            "market_prob_weight": self.market_prob_weight,
-            "market_prob_clamp": self.market_prob_clamp,
-            "market_prob_source": self.market_prob_source,
-            "market_prob_blend_method": self.market_prob_blend_method,
-            "win_prob_use_uncertainty": self.win_prob_use_uncertainty,
             "include_quantiles": self.include_quantiles,
             "max_cardinality_ratio": self.max_cardinality_ratio,
             "feature_start": self.feature_start,
@@ -274,28 +269,6 @@ def build_walk_forward_folds(
     return folds
 
 
-def select_calibration_data(
-    train_df: pd.DataFrame, eval_season: int, eval_week: int, calibration_weeks: int
-) -> pd.DataFrame:
-    """Select time-aware calibration data from the training window.
-
-    Uses the previous two seasons plus the completed weeks of the eval season strictly before
-    `eval_week`. A positive `calibration_weeks` enables the pooled selector; zero disables it.
-    """
-    if calibration_weeks <= 0:
-        return train_df.iloc[0:0].copy()
-    if "season" not in train_df.columns or "week" not in train_df.columns:
-        return train_df.iloc[0:0].copy()
-
-    season = pd.to_numeric(train_df["season"], errors="coerce")
-    week = pd.to_numeric(train_df["week"], errors="coerce")
-    lower_season = int(eval_season) - 2
-    mask = ((season >= lower_season) & (season < eval_season)) | (
-        (season == eval_season) & (week < eval_week)
-    )
-    return train_df.loc[mask].copy()
-
-
 def summarize_eval_window(
     df: pd.DataFrame,
     eval_seasons: Sequence[int],
@@ -364,33 +337,6 @@ def resolve_market_settings(
         resolved_transform = False
 
     return resolved_include, resolved_transform, resolved_anchor
-
-
-def _fit_calibrator(
-    pred_margin: np.ndarray,
-    actual_home_win: np.ndarray,
-    method: str,
-    sample_weight: np.ndarray | None = None,
-    actual_margin: np.ndarray | None = None,
-    seasons: np.ndarray | None = None,
-    excluded_season: int | None = None,
-) -> ml_model.WinProbCalibrator | None:
-    method = method.lower()
-    if method == "none":
-        return None
-    unique = np.unique(actual_home_win)
-    if len(unique) < 2:
-        log.info("Calibration skipped: only one outcome class present.")
-        return None
-    return ml_model._fit_win_prob_calibrator(
-        pred_margin,
-        actual_home_win,
-        method,
-        sample_weight=sample_weight,
-        actual_margin=actual_margin,
-        seasons=seasons,
-        excluded_season=excluded_season,
-    )
 
 
 def _resolve_market_home_win_prob(frame: pd.DataFrame) -> np.ndarray:
@@ -626,6 +572,37 @@ def _iteration_details(models: dict[str, Any]) -> dict[str, Any]:
     return details
 
 
+def with_resolved_xgb_device(config: WalkForwardConfig) -> WalkForwardConfig:
+    """Return ``config`` with its XGBoost device override set to the concrete device.
+
+    ``auto`` or no device becomes the device the run trains on, so the checkpoint
+    fingerprint, the run id and the recorded config never say ``auto``: a CPU run and a GPU
+    run never share checkpoints, and an ``auto`` run that resolved to ``cuda`` shares them
+    with an explicit ``cuda`` run.
+    """
+    overrides = dict(config.xgb_params_overrides or {})
+    overrides["device"] = ml_model_xgb_utils.resolve_xgb_device(overrides.get("device"))
+    return replace(config, xgb_params_overrides=overrides)
+
+
+def _fold_xgb_device(models: Sequence[Any], *, expected: str, fold: WalkForwardFold) -> str:
+    """Return the device a week's estimators trained on, or raise if it is not ``expected``.
+
+    A CUDA fit that fails is retried on the CPU. Saving that week would put CPU results under
+    the run's CUDA checkpoint fingerprint, so the run stops instead: nothing is saved for the
+    week, and rerunning on a working device resumes from the weeks already saved.
+    """
+    devices = {str(model.get_params().get("device")) for model in models}
+    if devices != {expected}:
+        raise RuntimeError(
+            f"Walk-forward season {int(fold.season)} week {int(fold.week)} trained on "
+            f"{', '.join(sorted(devices))}, but the run is configured for {expected}: a fit "
+            "fell back to another device. The week was not checkpointed; rerun on a working "
+            "device (or pass --xgb-device cpu) to resume."
+        )
+    return expected
+
+
 def _resolve_xgb_params(config: WalkForwardConfig) -> dict[str, Any]:
     overrides: dict[str, Any] = {}
     if config.xgb_params_overrides:
@@ -643,16 +620,24 @@ def _modelling_source_files() -> list[Path]:
     return [path for path in files if path.exists()]
 
 
-def fold_checkpoint_fingerprint(df: pd.DataFrame, config: WalkForwardConfig) -> str:
+def fold_checkpoint_fingerprint(
+    df: pd.DataFrame,
+    config: WalkForwardConfig,
+    floor_sigma_history: floor_sigma.ErrorPool | None = None,
+) -> str:
     """Return the key that decides whether a saved fold may be reused.
 
     It covers everything a fold's result depends on: the input rows and columns, the full
-    config, the installed library versions, and the source of the modelling code. A saved
-    fold is reused only when all of these are unchanged, so a resumed run reproduces an
-    uninterrupted one instead of mixing results computed from different inputs.
+    config with its XGBoost device resolved, the supplied floor-sigma history, the installed
+    library versions, and the source of the modelling code. A saved fold is reused only when
+    all of these are unchanged, so a resumed run reproduces an uninterrupted one instead of
+    mixing results computed from different inputs or on a different device.
     """
+    config = with_resolved_xgb_device(config)
     digest = hashlib.sha256()
     digest.update(f"fold-checkpoint-v{FOLD_CHECKPOINT_VERSION}".encode())
+    if floor_sigma_history is not None:
+        digest.update(f"floor-sigma-history:{floor_sigma_history.digest()}".encode())
     digest.update(json.dumps(config.to_dict(), sort_keys=True, default=str).encode())
     digest.update(json.dumps([str(column) for column in df.columns]).encode())
     digest.update(json.dumps([str(dtype) for dtype in df.dtypes]).encode())
@@ -686,10 +671,14 @@ class _FoldCheckpointStore:
 
     @classmethod
     def create(
-        cls, root: Path, df: pd.DataFrame, config: WalkForwardConfig
+        cls,
+        root: Path,
+        df: pd.DataFrame,
+        config: WalkForwardConfig,
+        floor_sigma_history: floor_sigma.ErrorPool | None = None,
     ) -> _FoldCheckpointStore:
         """Open (creating if needed) the checkpoint directory for this run's inputs."""
-        fingerprint = fold_checkpoint_fingerprint(df, config)
+        fingerprint = fold_checkpoint_fingerprint(df, config, floor_sigma_history)
         directory = Path(root) / fingerprint[:20]
         directory.mkdir(parents=True, exist_ok=True)
         manifest_path = directory / "manifest.json"
@@ -783,6 +772,7 @@ def run_walk_forward_backtest(
     fold_callback: Callable[[dict[str, Any], WalkForwardFold], None] | None = None,
     checkpoint_dir: Path | None = None,
     resume: bool = True,
+    floor_sigma_history: floor_sigma.ErrorPool | None = None,
 ) -> dict[str, Any]:
     """Run walk-forward training/evaluation and return metrics plus per-game predictions.
 
@@ -796,11 +786,17 @@ def run_walk_forward_backtest(
     trained and its checkpoint overwritten. Weeks are independent and seeded, so a resumed
     run returns exactly what an uninterrupted one would. `fold_callback` fires only for
     weeks that are trained, not for restored ones.
+
+    Each week's probabilities are the floor `Phi(margin / sigma)`, with sigma estimated by
+    `floor_sigma.estimate` from the out-of-fold errors strictly before that week: the
+    `floor_sigma_history` (for example a reference run's folds), minus any week this run
+    predicts itself, plus this run's own earlier weeks.
     """
     np.random.seed(config.random_seed)  # noqa: NPY002 (legacy for reproducibility)
+    config = with_resolved_xgb_device(config)
     # Fingerprint the caller's frame before any column drops or row filters below.
     store = (
-        _FoldCheckpointStore.create(checkpoint_dir, df, config)
+        _FoldCheckpointStore.create(checkpoint_dir, df, config, floor_sigma_history)
         if checkpoint_dir is not None
         else None
     )
@@ -826,16 +822,12 @@ def run_walk_forward_backtest(
         "include_market": include_market,
         "market_transform": market_transform,
         "market_anchor": market_anchor,
-        "market_prob_weight": config.market_prob_weight,
-        "market_prob_clamp": config.market_prob_clamp,
-        "market_prob_source": config.market_prob_source,
-        "market_prob_blend_method": config.market_prob_blend_method,
-        "win_prob_use_uncertainty": config.win_prob_use_uncertainty,
         "include_quantiles": config.include_quantiles,
         "disable_pruning": config.disable_pruning,
         "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
         # In-season fits run the full `n_estimators` budget, with no early stopping.
         "in_season_early_stopping": False,
+        "xgb_device": (config.xgb_params_overrides or {})["device"],
     }
 
     eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
@@ -856,10 +848,10 @@ def run_walk_forward_backtest(
     if not folds:
         raise ValueError("No walk-forward folds available with the provided settings.")
 
-    if config.win_prob_use_uncertainty and not config.include_quantiles:
-        log.info("Uncertainty-aware win probs requested without quantiles; using fallback sigma.")
-
     params = _resolve_xgb_params(config)
+
+    history = floor_sigma_history or floor_sigma.ErrorPool()
+    own_errors: list[pd.DataFrame] = []
 
     per_week_metrics: list[dict[str, Any]] = []
     prediction_frames: list[pd.DataFrame] = []
@@ -875,6 +867,7 @@ def run_walk_forward_backtest(
                 feature_list = restored.feature_columns
             per_week_metrics.append(restored.metrics)
             prediction_frames.append(restored.predictions)
+            own_errors.append(floor_sigma.margin_errors(restored.predictions))
             restored_folds += 1
             log.info(
                 "Walk-forward fold %d/%d restored from checkpoint: season %d week %d",
@@ -911,35 +904,12 @@ def run_walk_forward_backtest(
         )
         train_weight = combine_sample_weights(train_recency)
 
-        calibration_df = select_calibration_data(
-            fold.train_df, fold.season, fold.week, config.calibration_weeks
-        )
-        x_calibration = None
-        y_margin_calibration = None
-        y_total_calibration = None
-        baseline_margin_calibration = None
-        if not calibration_df.empty:
-            x_calibration = preprocessor.transform(
-                ml_model.apply_feature_spec(calibration_df, feature_spec)
-            )
-            (
-                y_margin_calibration,
-                y_total_calibration,
-                baseline_margin_calibration,
-                _,
-            ) = ml_model._prepare_margin_total_targets_with_anchor(
-                calibration_df, target_columns, market_anchor
-            )
-
+        # Every head runs its full tree budget on every earlier game, with no eval frame.
         margin_model, total_model = ml_model._fit_margin_total_models(
             x_train,
             y_margin_train,
             y_total_train,
             params,
-            x_eval=x_calibration,
-            y_margin_eval=y_margin_calibration,
-            y_total_eval=y_total_calibration,
-            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
 
@@ -953,9 +923,6 @@ def run_walk_forward_backtest(
                 y_margin_train,
                 params,
                 quantiles,
-                x_eval=x_calibration,
-                y_eval=y_margin_calibration,
-                early_stopping_rounds=None,
                 sample_weight=train_weight,
             )
             total_quantiles = ml_model._fit_quantile_models(
@@ -963,74 +930,11 @@ def run_walk_forward_backtest(
                 y_total_train,
                 params,
                 quantiles,
-                x_eval=x_calibration,
-                y_eval=y_total_calibration,
-                early_stopping_rounds=None,
                 sample_weight=train_weight,
             )
 
-        calibrator = None
-        resolved_calibration = ml_model.resolve_win_prob_calibration_method(
-            config.calibration,
-            len(calibration_df),
-        )
-        if config.win_prob_use_uncertainty and resolved_calibration == "elo":
-            log.info("Elo calibration ignored for uncertainty-aware probabilities; using 'none'.")
-            resolved_calibration = "none"
-        calibration_method = resolved_calibration
-        if resolved_calibration != "none":
-            if calibration_df.empty or x_calibration is None:
-                log.info(
-                    "Calibration skipped for season %s week %s: insufficient calibration data.",
-                    fold.season,
-                    fold.week,
-                )
-                calibration_method = "none"
-            else:
-                pred_margin_calibration = ml_model._predict_xgb(margin_model, x_calibration)
-                if market_anchor and baseline_margin_calibration is not None:
-                    pred_margin_calibration = pred_margin_calibration + baseline_margin_calibration
-                pred_margin_inputs = pred_margin_calibration
-                if config.win_prob_use_uncertainty:
-                    pred_margin_quantiles_calibration = {
-                        q: ml_model._predict_xgb(q_model, x_calibration)
-                        for q, q_model in margin_quantiles.items()
-                    }
-                    if market_anchor and baseline_margin_calibration is not None:
-                        for q in list(pred_margin_quantiles_calibration.keys()):
-                            pred_margin_quantiles_calibration[q] = (
-                                pred_margin_quantiles_calibration[q] + baseline_margin_calibration
-                            )
-                    sigma_calibration = ml_model._resolve_margin_sigma(
-                        pred_margin_calibration,
-                        pred_margin_quantiles_calibration,
-                        fallback=constants.SCORE_DIFF_STD_DEV,
-                    )
-                    pred_margin_inputs = pred_margin_calibration / sigma_calibration
-                away_col, home_col = target_columns
-                actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
-                actual_margin_calibration = calibration_df[home_col].to_numpy(
-                    dtype=float
-                ) - calibration_df[away_col].to_numpy(dtype=float)
-                calibration_recency = compute_recency_sample_weight(
-                    calibration_df,
-                    half_life_seasons=config.recency_half_life_seasons,
-                )
-                calibration_seasons = (
-                    calibration_df["season"].to_numpy(dtype=int)
-                    if "season" in calibration_df.columns
-                    else None
-                )
-                calibrator = _fit_calibrator(
-                    pred_margin_inputs,
-                    actual_home_win.to_numpy(),
-                    resolved_calibration,
-                    sample_weight=calibration_recency,
-                    actual_margin=actual_margin_calibration,
-                    seasons=calibration_seasons,
-                    excluded_season=(int(fold.season) if calibration_seasons is not None else None),
-                )
-                calibration_method = "none" if calibrator is None else calibrator.method
+        # The submitted probability is the deterministic floor; the column keeps its name.
+        calibration_method = "none"
 
         x_eval = preprocessor.transform(ml_model.apply_feature_spec(fold.eval_df, feature_spec))
         pred_margin = ml_model._predict_xgb(margin_model, x_eval)
@@ -1053,31 +957,14 @@ def run_walk_forward_backtest(
                 pred_total_quantiles[q] = pred_total_quantiles[q] + baseline_total_eval
 
         pred_away, pred_home = ml_model.derive_scores_from_margin_total(pred_margin, pred_total)
-        sigma_eval = None
-        if config.win_prob_use_uncertainty:
-            sigma_eval = ml_model._resolve_margin_sigma(
-                pred_margin,
-                pred_margin_quantiles,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
-        deterministic_home_win_prob = ml_model._margin_to_home_win_prob(pred_margin)
-        home_win_prob = ml_model.predict_home_win_prob(
-            pred_margin,
-            calibrator,
-            sigma=sigma_eval,
-            use_uncertainty=config.win_prob_use_uncertainty,
+        # Every earlier week of this run is in `own_errors` by now, so its history rows drop.
+        own = pd.concat(own_errors, ignore_index=True) if own_errors else floor_sigma.empty_errors()
+        week_sigma = floor_sigma.estimate(
+            floor_sigma.combine(history.errors, own), int(fold.season), int(fold.week)
         )
-        if config.market_prob_weight or config.market_prob_clamp:
-            market_prob_config = ml_model.MarketProbConfig(
-                blend_weight=config.market_prob_weight,
-                clamp_delta=config.market_prob_clamp,
-                prob_source=config.market_prob_source,
-                blend_method=config.market_prob_blend_method,
-            )
-            home_win_prob = ml_model.adjust_home_win_prob(
-                fold.eval_df, home_win_prob, market_prob_config
-            )
-        home_win_prob = metrics_utils.clip_probabilities(home_win_prob)
+        deterministic_home_win_prob = floor_sigma.home_win_prob(pred_margin, week_sigma.sigma)
+        # The submitted probability is the deterministic floor.
+        home_win_prob = metrics_utils.clip_probabilities(deterministic_home_win_prob)
         market_home_win_prob = _resolve_market_home_win_prob(fold.eval_df)
 
         away_col, home_col = target_columns
@@ -1119,11 +1006,14 @@ def run_walk_forward_backtest(
         fold_predictions["actual_points"] = confidence_cols["actual_points"]
         fold_predictions["pick_correct"] = confidence_cols["pick_correct"]
         fold_predictions["calibration_method"] = calibration_method
+        fold_predictions["floor_sigma"] = week_sigma.sigma
+        fold_predictions["floor_sigma_fallback"] = week_sigma.fallback
         if baseline_margin_eval is not None and baseline_total_eval is not None:
             fold_predictions["market_baseline_margin"] = baseline_margin_eval
             fold_predictions["market_baseline_total"] = baseline_total_eval
 
         prediction_frames.append(fold_predictions)
+        own_errors.append(floor_sigma.margin_errors(fold_predictions))
 
         games_count = int(len(fold_predictions))
         metrics = _aggregate_metrics(fold_predictions, market_anchor)
@@ -1131,6 +1021,9 @@ def run_walk_forward_backtest(
         metrics["week"] = int(fold.week)
         metrics["games"] = games_count
         metrics["calibration_method"] = calibration_method
+        metrics["floor_sigma"] = week_sigma.sigma
+        metrics["floor_sigma_fallback"] = week_sigma.fallback
+        metrics["floor_sigma_pool_games"] = week_sigma.pool_games
         metrics.update(
             _iteration_details(
                 {
@@ -1140,6 +1033,12 @@ def run_walk_forward_backtest(
                     **{f"total_q{q}": model for q, model in total_quantiles.items()},
                 }
             )
+        )
+        # Before the save: a week that fell back to another device must not be checkpointed.
+        metrics["xgb_device"] = _fold_xgb_device(
+            [margin_model, total_model, *margin_quantiles.values(), *total_quantiles.values()],
+            expected=str(params.get("device")),
+            fold=fold,
         )
         if metrics.get("iteration_warnings"):
             log.warning(
@@ -1233,6 +1132,12 @@ def run_walk_forward_backtest(
             include_postseason=config.include_postseason,
         ),
         "excluded_incomplete_seasons": excluded_incomplete,
+        "floor_sigma": {
+            "min_pool_seasons": constants.FLOOR_SIGMA_MIN_POOL_SEASONS,
+            "fallback_sigma": constants.SCORE_DIFF_STD_DEV,
+            "history_sources": list(history.sources),
+            "history_games": len(history.errors),
+        },
         "checkpoint": (
             None
             if store is None
@@ -1271,6 +1176,7 @@ def build_metrics_report(
             "windows": results.get("probability_windows") or [],
             "summary_table": summary_table,
         },
+        "floor_sigma": results.get("floor_sigma"),
         "calibration": {
             "bins": results["reliability"],
             "bin_count": RELIABILITY_BINS,
@@ -1284,7 +1190,6 @@ def build_metrics_report(
             "excluded_incomplete_seasons": results.get("excluded_incomplete_seasons", []),
             "calibration_window": {
                 "method": config_payload.get("calibration"),
-                "calibration_weeks": config_payload.get("calibration_weeks"),
             },
         },
     }

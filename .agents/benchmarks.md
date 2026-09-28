@@ -396,3 +396,98 @@ number). The roadmap order is in `AGENTS.md` and `.agents/TODO.md`.
   dataset gives Brier `0.2300`, log loss `0.7501`, pick accuracy `0.6833`, margin MAE `9.9705`. Do
   not treat a gap against those old numbers as a regression. Compare arms only within a single
   dataset build and code version.
+
+## Step 3 evidence (2026-09-27, no retraining beyond one fold)
+
+Each item below has its hypothesis and rule (written before scoring), the producer's script, and
+an independent reviewer's own rescore and `REVIEW.md` in the run directory named.
+
+- **GPU check, rung L0** (`models/step3_l0_gpu_check/`; reproduce with
+  `.venv/bin/python models/step3_l0_gpu_check/independent_check.py`). One fold, 2025 week 18
+  (16 games), of the unweighted six-season reference configuration, seed `42`. Two identical
+  `--xgb-device cuda` legs were equal in every one of 520 numeric columns (GPU fits are
+  deterministic for a fixed seed on this machine: RTX 4070 Ti, XGBoost 3.4.1). GPU minus CPU
+  moved predicted margins by a median `0.61` points (p90 `1.67`, max `2.40`) and flipped one
+  pick, the same order as re-seeding; 16 games cannot say it is smaller. The CPU leg reproduced
+  the reference arm's fold bit for bit. Fold time `64` s on the CPU and `13` s on the GPU, with
+  another process loading the GPU, so not a clean speed result.
+- **Probability paths, part A2** (`models/step3_prob_paths/`; reproduce with
+  `.venv/bin/python models/step3_prob_paths/independent_rescore.py`). Fixed and out-of-fold
+  probability paths rescored on the two unweighted task 55.8 arms (seeds `42` and `7`,
+  2020-2025, 1615 games each), path minus the deterministic floor, two seeds combined per game,
+  all weeks: floor blended `0.2` with the raw moneyline probability and clamped at `0.1` Brier
+  `-0.00052` `[-0.00102, -0.00003]`, log loss `-0.00136` `[-0.00249, -0.00024]`, the only path
+  that beats the floor under the rule; floor clamp `0.1` alone `-0.00017` `[-0.00037, +0.00002]`;
+  `elo` `-0.00061` `[-0.00205, +0.00086]`; the Week 2 production path (`elo`, blend `0.2`, clamp
+  `0.1`) `-0.00089` `[-0.00231, +0.00055]`; out-of-fold Platt `-0.00000` `[-0.00136, +0.00139]`;
+  out-of-fold isotonic `+0.00228` `[-0.00029, +0.00486]` with log loss `+0.083`
+  `[+0.019, +0.163]`, pick accuracy `-0.0152` and pool points `-105` beyond their intervals
+  (isotonic emits exact 0 and 1 probabilities).
+- **Opening lines, part A3** (`models/step3_open_lines/`; reproduce with
+  `.venv/bin/python models/step3_open_lines/independent_rescore.py`). The stored nflverse spread
+  equals `data/nfl_lines.csv`'s last spread in `61%`-`80%` of 2020-2025 games (mean gap
+  `0.14`-`0.33` points), a late snapshot. Spreads mapped to probabilities through one normal map:
+  opening-line Brier minus stored-line Brier, all weeks, `+0.00481` `[+0.00255, +0.00714]`
+  (2020-2025) and `+0.00462` `[+0.00163, +0.00755]` (2023-2025), so openers are measurably worse
+  than the lines the backtests anchor to (the 2024-2025 "openers" are dated Tuesday or Wednesday
+  scrapes, closer to pick time than a true open). The A2 blend rebuilt
+  from the opening spread minus the floor: `+0.00088` `[-0.00033, +0.00209]` (2020-2025),
+  `+0.00041` `[-0.00075, +0.00156]` (2023-2025); it does not beat the floor at pick-time lines.
+  The model is anchored to the stored spread, so any "model minus opening line" gap flatters it.
+  On 2007-2025 (market only, `data/completed_games_ml.m54_flip_through_2025.csv`, 4930 regular-
+  season games with a real opener; reproduce with
+  `.venv/bin/python models/step3_open_lines/independent_rescore_market_2007.py`), opening-line
+  minus stored-line Brier, all weeks: `+0.00297` `[+0.00175, +0.00420]`; 2007-2019 `+0.00208`
+  `[+0.00068, +0.00351]`; without 2022 `+0.00297` `[+0.00172, +0.00423]`. Weeks 1 and 2 alone
+  (303 games each) include zero.
+
+## GPU reference (2026-09-28, rungs L1-L2, current)
+
+The reference for every later arm: `models/step3_gpu_reference/l1_seed42/` and `l2_seed7/`
+(checkpoints named in each `metadata.json`), `nfl-predictor backtest` on
+`data/completed_games_ml.m54_flip_through_2025.csv` (`2d4111a6...`), seasons 2007-2025 from week
+1 (328 folds, 4943 games), the floor, `market_anchor` and `market_transform` on, 200 trees,
+unweighted, device `auto` (the GPU: an RTX 4070 Ti, every fold `cuda`), seeds `42` and `7`, code
+`0.33.0` (commits `43d2a7d`/`42afe0d`, docs-only apart). About 32 minutes per seed. Rules and
+launch record: `HYPOTHESIS.md` there; second key: `REVIEW.md` there (a separate reviewer), reproduce
+with `.venv/bin/python models/step3_gpu_reference/independent_rescore.py`.
+
+- Determinism: two GPU runs of the whole 2025 season (18 folds) are identical in every column.
+- Against the CPU task 55.8 unweighted pair on 2020-2025, all weeks, two seeds (GPU minus CPU):
+  deterministic Brier `+0.00015` `[-0.00069, +0.00098]`, pick accuracy `+0.0046`
+  `[-0.0000, +0.0096]`, pool points `-2.5` `[-45.5, +39.5]`, margin MAE `+0.0213`
+  `[-0.0121, +0.0550]`, all inside the six-season noise floors; weeks 3-18 pick accuracy `+0.0060`
+  `[+0.0004, +0.0116]` is the one interval that excludes zero. The per-game GPU-vs-CPU margin move
+  (median `0.62`-`0.66` points) is about the size of a reseed on either device. The CPU pair ran on
+  code 246 commits older; the changes in between are documented as prediction-neutral.
+- The retired market blend (`0.2` toward the raw moneyline, clamp `0.1`) minus the floor, 2007-2025
+  with an opener (4930 games), all weeks, two seeds: at the stored moneyline Brier `-0.00072`
+  `[-0.00105, -0.00041]`, log loss `-0.00173` `[-0.00244, -0.00104]`; built from the opening spread
+  Brier `+0.00010` `[-0.00051, +0.00071]`, pick accuracy `-0.0041` `[-0.0078, -0.0006]`.
+- The floor against the market, same games: against the stored spread Brier `+0.0003`
+  `[-0.0007, +0.0013]` (a tie); against the opening spread `-0.00267` `[-0.00425, -0.00107]`
+  (flattered: the model is anchored to the stored spread). The market-view pool-point columns are
+  left out here: exact spread ties are ranked by float noise in `nfl-predictor compare`'s pool
+  definition.
+- Later code: `0.34.1` edited `nfl_predictor/ml/ml_model_training.py` (the final fit only), so
+  runs on newer code cannot reuse these checkpoints; walk-forward predictions are unchanged (the
+  walk-forward never calls the edited function; its reviewer's before/after synthetic run was
+  hash-identical), so the reference stays comparable.
+
+## The spread in the probability floor (2026-09-28, rescoring the GPU reference)
+
+`Phi(margin / sigma)` with the fixed `SCORE_DIFF_STD_DEV = 14.21` against sigmas estimated from the
+model's own earlier errors (root-mean-square of actual minus predicted margin over strictly
+earlier folds), scored on 2010-2025 (4175 games per seed, seeds 42 and 7), all weeks, candidate
+minus fixed: `expanding` (all earlier folds, from 2007) Brier `-0.00021` `[-0.00039, -0.00004]`,
+log loss `-0.00058` `[-0.00104, -0.00012]`; `trailing3` (the three seasons before plus the
+current season's earlier weeks) Brier `-0.00028` `[-0.00059, +0.00002]`, log loss `-0.00078`
+`[-0.00159, +0.00003]`; `trailing3` minus `expanding` includes zero everywhere. Picks and pool
+points cannot change (one sigma per week keeps every side and every rank). The expanding sigma
+falls from `13.93` (2010) to `13.27` (2025), the trailing one to `12.39`. Rules and data:
+`models/step3_sigma/HYPOTHESIS.md`; second key `models/step3_sigma/REVIEW.md` (a separate
+reviewer); reproduce with `.venv/bin/python models/step3_sigma/independent_rescore.py`.
+
+Adopted by the user on 2026-09-28 as `0.35.0`: the floor uses the `expanding` sigma
+(`nfl_predictor/ml/floor_sigma.py`); production pools the GPU reference runs with stage 1's weeks
+the reference lacks (2026 week 1 sigma `13.248`, both seeds averaged per game).

@@ -261,6 +261,20 @@ def test_module_version_library_versions_and_metadata_payload(
     assert metadata["git_commit_hash"] == "commit123"
     assert metadata["library_versions"] == {"python": "3.14-test"}
     assert metadata["optuna_summary"] == {"best_value": 0.2}
+    assert metadata["xgb_device"] is None
+
+
+def test_build_metadata_records_the_xgb_device() -> None:
+    """The artifact contract names the device the model trained on."""
+    metadata = artifacts.build_metadata(
+        created_at="2026-09-27T00:00:00+00:00",
+        run_id="train_20260927",
+        dataset_hash="dataset123",
+        config={},
+        xgb_device="cuda",
+    )
+
+    assert metadata["xgb_device"] == "cuda"
 
 
 def test_write_json_serializes_paths(tmp_path: Path) -> None:

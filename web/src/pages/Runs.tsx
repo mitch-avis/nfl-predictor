@@ -30,7 +30,7 @@ const KIND_LABEL: Record<RunKind, string> = {
 
 const STAGE_ORDER = ['wf_compare', 'train', 'predictions', 'reports'] as const
 const STAGE_LABEL: Record<(typeof STAGE_ORDER)[number], string> = {
-  wf_compare: 'Compare',
+  wf_compare: 'Walk-forward',
   train: 'Train',
   predictions: 'Predict',
   reports: 'Reports',

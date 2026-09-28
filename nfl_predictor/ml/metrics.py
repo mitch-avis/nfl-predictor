@@ -9,12 +9,18 @@ This module centralizes evaluation metrics used by the walk-forward backtest:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 from sklearn.metrics import brier_score_loss, log_loss, mean_absolute_error
 
 PROB_EPSILON = 1e-15
+# Confidence |p - 0.5| is rounded to this many decimals before games are ranked. Probabilities
+# that are mathematically equally confident (a home favorite and a home underdog by the same
+# spread) differ by about 1e-16 in floating point, which would otherwise decide their order;
+# 1e-12 is far above that noise and far below any meaningful difference in probability.
+CONFIDENCE_DECIMALS = 12
 METRIC_STRATEGY: dict[str, list[dict[str, str]]] = {
     "primary": [
         {"metric": "brier", "direction": "lower"},
@@ -96,7 +102,7 @@ def probability_pick_accuracy(actual_margin: np.ndarray, home_win_prob: np.ndarr
     probs = clip_probabilities(home_win_prob)
     if len(margins) == 0:
         return 0.0
-    predicted_home = probs >= 0.5
+    predicted_home = picks_home(probs)
     actual_home = margins > 0
     correct = (predicted_home == actual_home) & (margins != 0)
     return float(np.mean(correct))
@@ -117,6 +123,49 @@ def probability_summary(
     return {f"{prefix}_{key}": value for key, value in metrics.items()}
 
 
+def picks_home(home_win_prob: np.ndarray) -> np.ndarray:
+    """Return whether each game picks the home side: ``p >= 0.5``, so an exact 0.5 picks home.
+
+    Every pick uses the unrounded probability; published 4-decimal values never decide a side.
+    """
+    return np.asarray(home_win_prob, dtype=float) >= 0.5
+
+
+def confidence_strength(home_win_prob: np.ndarray) -> np.ndarray:
+    """Return each game's confidence ``|p - 0.5|`` rounded to ``CONFIDENCE_DECIMALS``."""
+    return np.round(np.abs(np.asarray(home_win_prob, dtype=float) - 0.5), CONFIDENCE_DECIMALS)
+
+
+def confidence_ranks(
+    home_win_prob: np.ndarray,
+    tiebreaker: np.ndarray | None = None,
+    groups: Sequence[np.ndarray] = (),
+) -> np.ndarray:
+    """Return confidence-pool ranks ``1..N``, least confident first.
+
+    Games are ordered by ``confidence_strength`` ascending; equal confidences are ordered by
+    ``tiebreaker`` (the ``game_id``) and then by input order. With ``groups`` (for example the
+    season and week columns), ranks restart at 1 within each distinct combination of them.
+    """
+    strength = confidence_strength(home_win_prob)
+    n = len(strength)
+    position = np.arange(n)
+    ties = (position,) if tiebreaker is None else (position, np.asarray(tiebreaker))
+    group_keys = tuple(np.asarray(group) for group in groups)
+    order = np.lexsort((*ties, strength, *reversed(group_keys)))
+    starts = np.zeros(n, dtype=int)
+    if group_keys and n:
+        new_group = np.zeros(n, dtype=bool)
+        new_group[0] = True
+        for key in group_keys:
+            ordered = key[order]
+            new_group[1:] |= ordered[1:] != ordered[:-1]
+        starts = np.maximum.accumulate(np.where(new_group, position, 0))
+    ranks = np.empty(n, dtype=int)
+    ranks[order] = position - starts + 1
+    return ranks
+
+
 def confidence_pool_columns(
     home_win_prob: np.ndarray,
     home_score: np.ndarray,
@@ -125,20 +174,12 @@ def confidence_pool_columns(
 ) -> dict[str, np.ndarray]:
     """Return per-game confidence pool columns.
 
-    Uses confidence strength = abs(p - 0.5) to assign unique ranks 1..N.
-
-    When `tiebreaker` is provided, it is used to deterministically break ties in
-    confidence strength (important because some workflows round probabilities for output).
+    Ranks come from ``confidence_ranks``: unique ranks 1..N by rounded confidence
+    ``|p - 0.5|``, with equal confidences ordered by ``tiebreaker`` (the ``game_id``).
     """
-    strength = np.abs(home_win_prob - 0.5)
-    if tiebreaker is None:
-        order = np.argsort(strength, kind="mergesort")
-    else:
-        order = np.lexsort((tiebreaker, strength))
-    ranks = np.empty_like(order)
-    ranks[order] = np.arange(1, len(strength) + 1)
+    ranks = confidence_ranks(home_win_prob, tiebreaker)
 
-    predicted_home = home_win_prob >= 0.5
+    predicted_home = picks_home(home_win_prob)
     actual_outcome = np.where(home_score > away_score, 1, np.where(home_score < away_score, -1, 0))
     predicted_outcome = np.where(predicted_home, 1, -1)
     pick_correct = (predicted_outcome == actual_outcome) & (actual_outcome != 0)

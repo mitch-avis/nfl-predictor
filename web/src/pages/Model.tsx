@@ -123,12 +123,12 @@ export function ModelPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-1 text-base">
-                  Feature importance <InfoTooltip content="XGBoost gain, summed across the margin and total heads. Higher means the feature contributed more to the trees' splits." />
+                  Feature importance <InfoTooltip content="How much each feature moves the model's margin and total predictions, added over the two heads. The note under the chart names the measure." />
                 </CardTitle>
-                <CardDescription>Top {Math.min(25, data.feature_importance.length)} of {data.metadata.feature_count ?? '?'} features.</CardDescription>
+                <CardDescription>Top {Math.min(25, data.feature_importance.rows.length)} of {data.metadata.feature_count ?? '?'} features.</CardDescription>
               </CardHeader>
               <CardContent>
-                <FeatureImportanceChart rows={data.feature_importance} />
+                <FeatureImportanceChart importance={data.feature_importance} />
               </CardContent>
             </Card>
             <Card>
@@ -144,8 +144,8 @@ export function ModelPage() {
           {data.wf_compare ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Walk-forward candidates</CardTitle>
-                <CardDescription>Every configuration the weekly run compared; the top row was trained as the final model.</CardDescription>
+                <CardTitle className="text-base">Walk-forward evaluation</CardTitle>
+                <CardDescription>How the production configuration scored on the recent seasons before the final fit. Runs from before the one production configuration list every candidate they compared, with the trained one on top.</CardDescription>
               </CardHeader>
               <CardContent>
                 <DataTable table={data.wf_compare} defaultSort={{ key: 'wf_rank' }} dense rowClassName={(row) => (row.wf_rank === 1 ? 'bg-accent/40' : undefined)} />
@@ -162,7 +162,6 @@ export function ModelPage() {
                   items={[
                     ['Model kind', String(config.model_kind ?? '—')],
                     ['Calibration', String(config.win_prob_calibration ?? config.calibration ?? '—')],
-                    ['Market blend', String(config.market_prob_weight ?? config.market_prob_blend ?? '—')],
                     ['Score rounding', String(config.score_rounding ?? '—')],
                     ['Features', data.metadata.feature_count ?? null],
                     ['Git commit', shortHash(data.metadata.git_commit_hash, 12)],

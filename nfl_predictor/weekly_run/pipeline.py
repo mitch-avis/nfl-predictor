@@ -1,13 +1,20 @@
-"""Weekly orchestration for data refresh, model selection, training, and reporting.
+"""Weekly orchestration for data refresh, evaluation, training, and reporting.
 
 The weekly run does the whole workflow in one command:
 1) refresh data (ETL)
-2) walk-forward compare to select calibration + market settings
-3) train the selected model configuration
+2) walk-forward the production configuration over the recent seasons, to report how it scores
+3) train the production configuration on every completed game
 4) generate weekly predictions and reporting outputs
 
+Production submits the deterministic floor, Phi(predicted margin / sigma), with no fitted
+calibrator and no market blend or clamp. Sigma is the root-mean-square out-of-fold margin error
+before the predicted week: stage 1 pools the configured reference runs' fold checkpoints with its
+own earlier weeks, and the final fit pools the reference runs with stage 1's weeks before the
+predicted week that the reference runs have no rows for, then records the sigma in the saved
+model.
+
 Outputs land under the run directory (default: models/<run_id>/) and include:
-- wf_compare.csv / wf_best.json
+- wf_compare.csv / wf_best.json (the walk-forward summary row) and wf_compare/
 - model.joblib / metrics_report.json / metadata.json
 - *_predictions.csv / *_confidence_picks.csv
 - *_betting_report.csv (when market columns exist)
@@ -26,10 +33,11 @@ from typing import Any
 import pandas as pd
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
-from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
+from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, walk_forward
+from nfl_predictor.ml.metrics import confidence_ranks
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
+from nfl_predictor.ml.ml_model_xgb_utils import fitted_xgb_device
 from nfl_predictor.reporting import power_rankings
 from nfl_predictor.reporting.betting_report import build_betting_report
 from nfl_predictor.utils import fingerprints
@@ -100,8 +108,10 @@ def _build_confidence_picks(predictions: pd.DataFrame) -> pd.DataFrame:
             )
 
     if "confidence_rank" not in picks.columns:
-        strength = (picks["home_win_prob"] - 0.5).abs()
-        picks["confidence_rank"] = strength.rank(method="first", ascending=True).astype(int)
+        tiebreaker = picks["game_id"].to_numpy() if "game_id" in picks.columns else None
+        picks["confidence_rank"] = confidence_ranks(
+            picks["home_win_prob"].to_numpy(float), tiebreaker
+        )
 
     columns = [
         "season",
@@ -175,7 +185,7 @@ def _write_training_artifacts(
     dataset_hash: str,
     config_payload: dict[str, Any],
 ) -> artifacts.RunPaths:
-    """Write model, metrics, and metadata artifacts."""
+    """Write model, metrics, and metadata; the metadata names the device the model was fitted on."""
     paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
     artifacts.save_model(paths.model_path, result.model)
 
@@ -199,6 +209,8 @@ def _write_training_artifacts(
         tuned_params=result.tuned_params,
         early_stopping=result.early_stopping,
         optuna_summary=getattr(result.model, "optuna_summary", None),
+        xgb_device=fitted_xgb_device(result.model),
+        floor_sigma=floor_sigma.model_record(result.model),
     )
     artifacts.write_json(paths.metadata_path, metadata)
     if result.feature_importance:
@@ -211,15 +223,35 @@ def _write_training_artifacts(
     return paths
 
 
-def _market_mode_flags(mode: str) -> tuple[bool, bool]:
-    """Return include_market and market_anchor flags for a mode label."""
-    if mode == "features":
-        return True, False
-    if mode == "anchor":
-        return False, True
-    if mode == "hybrid":
-        return True, True
-    raise ValueError(f"Unknown market mode: {mode}")
+def _production_floor_sigma(
+    args: argparse.Namespace, run_dir: Path, reference: floor_sigma.ErrorPool
+) -> tuple[floor_sigma.ErrorPool, tuple[int, int]]:
+    """Return the final fit's error pool and the week its sigma is for.
+
+    The week is the one being predicted (the prediction file's single season and week), or,
+    for a file spanning several weeks, the week after the newest completed game. The pool is
+    the reference runs' errors plus stage 1's errors before that week at every (season, week)
+    the reference runs have no rows for: the seasons after the reference, and the predicted
+    season's earlier weeks. Where both have a week, the reference's errors are used.
+    """
+    predict_path = inputs._resolve_predict_path(args.predict_path, Path(constants.DATA_PATH))
+    season, week = inputs._infer_season_week(pd.read_csv(predict_path, usecols=["season", "week"]))
+    if season is None or week is None:
+        completed = pd.read_csv(args.data_path, usecols=["season", "week"])
+        season, week = floor_sigma.week_after(completed)
+        log.info(
+            "%s spans several weeks; the floor sigma is for season %d week %d.",
+            predict_path,
+            season,
+            week,
+        )
+    own = stage1.read_margin_errors(run_dir)
+    before = (own["season"] < season) | ((own["season"] == season) & (own["week"] < week))
+    pool = floor_sigma.ErrorPool(
+        floor_sigma.fill_gaps(reference.errors, own[before]),
+        (*reference.sources, str(stage1.margin_errors_path(run_dir))),
+    )
+    return pool, (int(season), int(week))
 
 
 def _power_rankings_outputs(out_dir: Path, season: int, through_week: int) -> list[Path]:
@@ -234,8 +266,7 @@ def _power_rankings_outputs(out_dir: Path, season: int, through_week: int) -> li
 def main() -> int:
     """CLI entrypoint."""
     args = config._parse_args()
-    if args.train_recency_half_life_seasons is None:
-        args.train_recency_half_life_seasons = args.wf_recency_half_life_seasons
+    config.apply_run_defaults(args)
 
     if not args.skip_data_refresh:
         _refresh_data(args.data_collection_args)
@@ -268,55 +299,41 @@ def main() -> int:
         log.info("Dry-run: outputs would land under %s", output_dir)
         return 0
 
-    # ----------------------
-    # Stage 1: WF comparison
-    # ----------------------
-    wf_config = {
-        "eval_last_n_seasons": args.wf_eval_last_n_seasons,
-        "wf_start_week": args.wf_start_week,
-        "calibration_weeks": args.wf_calibration_weeks,
-        "include_postseason": args.wf_include_postseason,
-        "recency_half_life_seasons": args.wf_recency_half_life_seasons,
-        "market_mode": args.wf_market_mode,
-        "market_prob_source": args.wf_market_prob_source,
-        "market_prob_blend_method": args.wf_market_prob_blend_method,
-        "win_prob_uncertainty": args.wf_win_prob_uncertainty,
-        "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
-        "checkpoint_per_fold": bool(args.wf_checkpoint_per_fold),
-        "wf_matrix": stage1._WF_MATRIX,
-        "xgb_params_overrides": {
-            "n_estimators": int(args.wf_n_estimators),
-            "max_depth": int(args.wf_max_depth),
-            "learning_rate": float(args.wf_learning_rate),
-            "n_jobs": config.xgb_thread_count(args),
-            "verbosity": 0,
-        },
-        "include_quantiles": bool(args.wf_include_quantiles),
-    }
+    # The reference runs' out-of-fold errors, for the floor sigma of stage 1 and the final fit.
+    # A configured run that is missing stops the run here rather than changing the sigma.
+    reference_pool = floor_sigma.load_reference_pool(args.floor_sigma_reference_runs)
+    log.info(
+        "Floor sigma reference: %d games from %s",
+        len(reference_pool.errors),
+        list(reference_pool.sources) or "no reference runs",
+    )
 
-    # Propagate GPU/CPU runtime settings to walk-forward folds too.
-    if args.xgb_tree_method:
-        wf_config["xgb_params_overrides"]["tree_method"] = args.xgb_tree_method
-    if args.xgb_device:
-        wf_config["xgb_params_overrides"]["device"] = args.xgb_device
+    # --------------------------------------------------
+    # Stage 1: walk-forward of the production configuration
+    # --------------------------------------------------
+    stage1_kwargs = config.stage1_options(args)
+    wf_config = {
+        **stage1_kwargs,
+        "checkpoint_per_fold": bool(args.wf_checkpoint_per_fold),
+        "floor_sigma_history": reference_pool.digest(),
+    }
 
     wf_run_fingerprint = fingerprints.wf_run_fingerprint(
         dataset_fingerprint,
         {
             "eval_last_n_seasons": args.wf_eval_last_n_seasons,
             "wf_start_week": args.wf_start_week,
-            "calibration_weeks": args.wf_calibration_weeks,
             "include_postseason": bool(args.wf_include_postseason),
             "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
             "recency_half_life_seasons": args.wf_recency_half_life_seasons,
             "market_mode": args.wf_market_mode,
-            "market_prob_source": args.wf_market_prob_source,
-            "market_prob_blend_method": args.wf_market_prob_blend_method,
-            "win_prob_uncertainty": args.wf_win_prob_uncertainty,
             "include_quantiles": bool(args.wf_include_quantiles),
+            "market_transform": args.market_transform,
+            "max_cardinality_ratio": float(args.max_cardinality_ratio),
             "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
             "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
-            "xgb_params_overrides": wf_config["xgb_params_overrides"],
+            "xgb_params_overrides": stage1_kwargs["xgb_params_overrides"],
+            "floor_sigma_history": reference_pool.digest(),
         },
         code_version=artifacts.git_commit_hash(),
     )
@@ -328,43 +345,23 @@ def main() -> int:
         wf_marker,
         dataset_hash,
         wf_config_hash,
-        [wf_compare_csv, wf_best_json],
+        [wf_compare_csv, wf_best_json, stage1.margin_errors_path(run_dir)],
     ):
-        log.info("Stage 1: reuse %s", wf_compare_csv)
-        wf_result_df = pd.read_csv(wf_compare_csv)
-        best_row = json.loads(wf_best_json.read_text(encoding="utf-8"))
+        log.info("Stage 1: reuse %s", wf_best_json)
+        wf_summary = json.loads(wf_best_json.read_text(encoding="utf-8"))
     else:
-        log.info("Stage 1: running walk-forward comparison")
         df = walk_forward.load_games(args.data_path)
-        wf_result_df = stage1._run_wf_compare(
+        wf_summary = stage1.evaluate_production(
             df,
             run_dir=run_dir,
             resume=bool(args.resume),
             dataset_fingerprint=dataset_fingerprint,
             wf_run_fingerprint=wf_run_fingerprint,
             checkpoint_per_fold=bool(args.wf_checkpoint_per_fold),
-            eval_last_n_seasons=args.wf_eval_last_n_seasons,
-            wf_start_week=args.wf_start_week,
-            calibration_weeks=args.wf_calibration_weeks,
-            include_postseason=bool(args.wf_include_postseason),
-            exclude_incomplete_seasons=bool(args.wf_exclude_incomplete_seasons),
-            recency_half_life_seasons=args.wf_recency_half_life_seasons,
-            market_mode=args.wf_market_mode,
-            market_prob_source=args.wf_market_prob_source,
-            market_prob_blend_method=args.wf_market_prob_blend_method,
-            win_prob_uncertainty=args.wf_win_prob_uncertainty,
-            xgb_params_overrides=wf_config["xgb_params_overrides"],
-            include_quantiles=bool(args.wf_include_quantiles),
+            floor_sigma_history=reference_pool,
+            **stage1_kwargs,
         )
-        if not wf_result_df.empty:
-            wf_result_df = stage1._rank_summary(wf_result_df)
-        stage1._atomic_write_csv(wf_compare_csv, wf_result_df)
-        best_rows = [
-            {str(key): value for key, value in row.items()}
-            for row in wf_result_df.to_dict(orient="records")
-        ]
-        best_row = stage1._pick_best_row(best_rows)
-        wf_best_json.write_text(json.dumps(best_row, indent=2, sort_keys=True), encoding="utf-8")
+        stage1.write_summary(run_dir, wf_summary)
         _write_stage_marker(
             wf_marker,
             dataset_hash=dataset_hash,
@@ -372,105 +369,18 @@ def main() -> int:
             stage="wf_compare",
         )
 
-    log.info("WF best row: %s", best_row)
+    log.info("Walk-forward summary: %s", wf_summary)
 
     # -----------------
     # Stage 2: training
     # -----------------
-    market_mode = str(best_row["market_mode"])
-    include_market, market_anchor = _market_mode_flags(market_mode)
-    market_transform = args.market_transform
-    if market_transform is None and include_market:
-        market_transform = True
-
     columns_only = pd.read_csv(args.data_path, nrows=1)
-    include_market, market_transform, market_anchor = walk_forward.resolve_market_settings(
-        columns_only, include_market, market_transform, market_anchor
-    )
-
-    resolved_calibration = ml_model_core.normalize_win_prob_calibration_method(
-        str(best_row["calibration"])
-    )
-    win_prob_use_uncertainty = bool(best_row.get("win_prob_use_uncertainty", False))
-    train_calibration_weeks = (
-        args.train_calibration_weeks
-        if args.train_calibration_weeks is not None
-        else args.wf_calibration_weeks
-    )
-    train_calibration_seasons = int(args.train_calibration_seasons)
-    if (
-        resolved_calibration in {"platt", "isotonic", "auto"}
-        and train_calibration_weeks <= 0
-        and train_calibration_seasons <= 0
-    ):
-        train_calibration_weeks = max(1, int(args.wf_calibration_weeks))
-        log.warning(
-            "Calibration '%s' requires data; using %s in-season weeks.",
-            resolved_calibration,
-            train_calibration_weeks,
-        )
-
-    market_prob_config = MarketProbConfig(
-        blend_weight=float(best_row["market_prob_weight"]),
-        clamp_delta=float(best_row["market_prob_clamp"]),
-        prob_source=str(best_row["market_prob_source"]),
-        blend_method=str(best_row["market_prob_blend_method"]),
-    )
-
-    optuna_storage = args.tune_storage
-    if args.tune and not optuna_storage:
-        optuna_storage = f"sqlite:///{(run_dir / 'optuna.db').resolve()}"
-
-    optuna_config = OptunaConfig(
-        enabled=bool(args.tune),
-        timeout_seconds=int(args.tune_timeout),
-        n_trials=args.tune_trials,
-        cv_splits=int(args.tune_cv_splits),
-        objective=str(args.tune_objective),
-        early_stopping_rounds=int(args.tune_early_stopping_rounds),
-        tree_method=args.xgb_tree_method,
-        device=args.xgb_device,
-        storage=optuna_storage,
-        study_name=args.tune_study_name,
-        best_params_out=None,
-        xgb_n_jobs=config.xgb_thread_count(args),
-    )
-
-    train_config = {
-        "calibration": resolved_calibration,
-        "win_prob_use_uncertainty": bool(win_prob_use_uncertainty),
-        "market_mode": market_mode,
-        "include_market": include_market,
-        "market_transform": market_transform,
-        "market_anchor": market_anchor,
-        "market_prob_config": {
-            "blend_weight": market_prob_config.blend_weight,
-            "clamp_delta": market_prob_config.clamp_delta,
-            "prob_source": market_prob_config.prob_source,
-            "blend_method": market_prob_config.blend_method,
-        },
-        "holdout_seasons": int(args.holdout_seasons),
-        "calibration_seasons": train_calibration_seasons,
-        "calibration_weeks": int(train_calibration_weeks),
-        "include_postseason": bool(args.include_postseason),
-        "postseason_weight": float(args.postseason_weight),
-        "recency_half_life_seasons": args.train_recency_half_life_seasons,
-        "max_cardinality_ratio": float(args.max_cardinality_ratio),
-        "feature_start": str(args.feature_start),
-        "feature_end": str(args.feature_end),
-        "optuna": {
-            "enabled": optuna_config.enabled,
-            "timeout_seconds": optuna_config.timeout_seconds,
-            "n_trials": optuna_config.n_trials,
-            "cv_splits": optuna_config.cv_splits,
-            "objective": optuna_config.objective,
-            "early_stopping_rounds": optuna_config.early_stopping_rounds,
-            "tree_method": optuna_config.tree_method,
-            "device": optuna_config.device,
-            "storage": optuna_config.storage,
-            "study_name": optuna_config.study_name,
-            "xgb_n_jobs": optuna_config.xgb_n_jobs,
-        },
+    optuna_config, train_config = config.final_fit_options(args, columns_only, run_dir=run_dir)
+    sigma_pool, sigma_week = _production_floor_sigma(args, run_dir, reference_pool)
+    train_config["floor_sigma"] = {
+        "sources": list(sigma_pool.sources),
+        "pool_digest": sigma_pool.digest(),
+        "week": list(sigma_week),
     }
     train_config_hash = artifacts.stable_short_hash(train_config)
     train_marker = _stage_marker_path(run_dir, "train")
@@ -489,16 +399,11 @@ def main() -> int:
         result = train_margin_total_model_with_report(
             data_path=args.data_path,
             holdout_seasons=int(args.holdout_seasons),
-            calibration_seasons=train_calibration_seasons,
-            calibration_weeks=int(train_calibration_weeks),
-            include_market=include_market,
+            include_market=train_config["include_market"],
             max_cardinality_ratio=float(args.max_cardinality_ratio),
-            win_prob_calibration=resolved_calibration,
             optuna_config=optuna_config,
-            market_transform=bool(market_transform),
-            market_anchor=bool(market_anchor),
-            market_prob_config=market_prob_config,
-            win_prob_use_uncertainty=win_prob_use_uncertainty,
+            market_transform=bool(train_config["market_transform"]),
+            market_anchor=bool(train_config["market_anchor"]),
             include_postseason=bool(args.include_postseason),
             postseason_weight=float(args.postseason_weight),
             recency_half_life_seasons=args.train_recency_half_life_seasons,
@@ -506,6 +411,9 @@ def main() -> int:
             max_season=None,
             feature_start=str(args.feature_start),
             feature_end=str(args.feature_end),
+            xgb_params_overrides=train_config["xgb_params_overrides"],
+            floor_sigma_pool=sigma_pool,
+            floor_sigma_week=sigma_week,
         )
         model = result.model
         _write_training_artifacts(
@@ -514,7 +422,11 @@ def main() -> int:
             run_dir=run_dir,
             created_at=created_at,
             dataset_hash=dataset_hash,
-            config_payload={**config_payload, "wf_best": best_row, "train_config": train_config},
+            config_payload={
+                **config_payload,
+                "wf_best": wf_summary,
+                "train_config": train_config,
+            },
         )
         _write_stage_marker(
             train_marker,
@@ -544,7 +456,6 @@ def main() -> int:
         "model_hash": model_hash,
         "score_rounding": args.score_rounding,
         "output_dir": str(output_dir),
-        "win_prob_use_uncertainty": bool(win_prob_use_uncertainty),
     }
     predictions_hash = artifacts.stable_short_hash(predictions_config)
     predictions_marker = _stage_marker_path(run_dir, "predictions")
@@ -562,7 +473,6 @@ def main() -> int:
             output_path=None,
             pretty_output=False,
             score_rounding=str(args.score_rounding),
-            win_prob_use_uncertainty=win_prob_use_uncertainty,
         )
         season, week = inputs._infer_season_week(predictions)
         output_paths = inputs._resolve_output_paths(output_dir, season, week)

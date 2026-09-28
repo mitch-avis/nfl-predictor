@@ -12,54 +12,41 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from scipy.sparse import spmatrix
 from sklearn.compose import ColumnTransformer
 
 from nfl_predictor import constants
-from nfl_predictor.ml import feature_importance
+from nfl_predictor.ml import feature_importance, floor_sigma
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_END_COLUMN,
     DEFAULT_FEATURE_START_COLUMN,
     DEFAULT_QUANTILES,
     DEFAULT_XGB_PARAMS,
-    BlendedMarginTotalModel,
-    BlendLayer,
     FeatureSpec,
     MarginTotalModel,
-    MarketProbConfig,
     OptunaConfig,
     TrainingResult,
-    _adjust_home_win_prob,
     _apply_feature_spec,
     _build_feature_spec,
     _build_preprocessor,
     _early_stopping_info,
     _evaluate_margin_total_predictions,
     _filter_season_bounds,
-    _fit_blend_ridge_constrained,
     _fit_margin_total_models,
     _fit_quantile_models,
     _fit_transform_matrix,
-    _fit_win_prob_calibrator,
     _get_target_columns,
-    _inseason_calibration_pairs,
     _load_games,
-    _predict_home_win_prob,
-    _predict_margin_total_from_model,
-    _predict_margin_total_quantiles_from_model,
+    _margin_to_home_win_prob,
     _predict_xgb,
-    _prepare_margin_total_targets,
     _prepare_margin_total_targets_with_anchor,
-    _resolve_margin_sigma,
     _resolve_xgb_params,
     _run_optuna_search,
-    _split_train_calibration_holdout,
+    _split_by_season,
     _summarize_confidence_pool,
     _summarize_missing_data,
     _transform_matrix,
     _validate_quantiles,
     get_market_baseline,
-    resolve_win_prob_calibration_method,
 )
 from nfl_predictor.ml.sample_weights import (
     combine_sample_weights,
@@ -93,48 +80,38 @@ def _filter_to_regular_season_for_training(
     return filtered
 
 
-def _pooled_calibration_frame(
-    base_pool_df: pd.DataFrame,
-    *,
-    calibration_seasons: int,
-    calibration_weeks: int,
-) -> pd.DataFrame:
-    """Return the pooled calibration frame used for win-probability post-processing."""
-    if calibration_seasons <= 0 and calibration_weeks <= 0:
-        return base_pool_df.iloc[0:0].copy()
-    if (
-        base_pool_df.empty
-        or "season" not in base_pool_df.columns
-        or "week" not in base_pool_df.columns
-    ):
-        return base_pool_df.iloc[0:0].copy()
-    frontier_season = int(pd.to_numeric(base_pool_df["season"], errors="coerce").max())
-    frontier_weeks = pd.to_numeric(
-        base_pool_df.loc[base_pool_df["season"] == frontier_season, "week"], errors="coerce"
-    ).dropna()
-    frontier_week = int(frontier_weeks.max()) + 1 if not frontier_weeks.empty else 1
-    season = pd.to_numeric(base_pool_df["season"], errors="coerce")
-    week = pd.to_numeric(base_pool_df["week"], errors="coerce")
-    lower_season = frontier_season - 2
-    mask = ((season >= lower_season) & (season < frontier_season)) | (
-        (season == frontier_season) & (week < frontier_week)
-    )
-    return base_pool_df.loc[mask].copy()
+def _split_train_holdout(
+    df: pd.DataFrame, holdout_seasons: int
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, list[int]]]:
+    """Split eligible games into the training rows and the evaluation holdout.
+
+    The newest ``holdout_seasons`` whole seasons are held out and scored; every other eligible
+    completed game trains the trees, the newest completed week included, as in each
+    walk-forward fold. Returns the two frames and the seasons of each, as recorded in
+    ``metadata.json`` ``splits``.
+
+    Raises:
+        ValueError: If ``holdout_seasons`` is negative or leaves no season to train on.
+
+    """
+    if holdout_seasons < 0:
+        raise ValueError("Holdout seasons must be non-negative.")
+    train_df, holdout_df, holdout = _split_by_season(df, holdout_seasons)
+    splits = {
+        "train_seasons": sorted(int(season) for season in train_df["season"].dropna().unique()),
+        "holdout_seasons": [int(season) for season in holdout],
+    }
+    return train_df, holdout_df, splits
 
 
 def train_margin_total_model(
     data_path: Path,
     holdout_seasons: int,
-    calibration_seasons: int,
-    calibration_weeks: int,
     include_market: bool,
     max_cardinality_ratio: float,
-    win_prob_calibration: str,
     optuna_config: OptunaConfig,
     market_transform: bool,
     market_anchor: bool,
-    market_prob_config: MarketProbConfig | None,
-    win_prob_use_uncertainty: bool = False,
     include_postseason: bool = False,
     postseason_weight: float = 1.0,
     min_season: int | None = None,
@@ -142,60 +119,37 @@ def train_margin_total_model(
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
     recency_half_life_seasons: float | None = None,
+    xgb_params_overrides: dict[str, Any] | None = None,
+    floor_sigma_pool: floor_sigma.ErrorPool | None = None,
+    floor_sigma_week: tuple[int, int] | None = None,
 ) -> MarginTotalModel:
-    """Train margin/total models with optional calibration."""
+    """Train margin/total models; win probabilities are the deterministic floor.
+
+    ``xgb_params_overrides`` replace default XGBoost parameters, as a walk-forward's do; tuned
+    parameters, when tuning runs, take precedence over them.
+
+    With ``floor_sigma_pool`` (earlier out-of-fold errors), the model records the floor's
+    sigma for ``floor_sigma_week`` (default: the week after the newest game in the data),
+    estimated from the pool strictly before that week, and predicts with it. Holdout games are
+    scored with their own week's sigma from the same pool. Without a pool the model records
+    none and predicts with the constant ``SCORE_DIFF_STD_DEV``.
+    """
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
 
     df = _filter_season_bounds(df, min_season, max_season)
     df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
-    (
-        train_df,
-        calibration_df,
-        holdout_df,
-        train_seasons,
-        calibration,
-        holdout,
-        calibration_season_inseason,
-        calibration_weeks_inseason,
-    ) = _split_train_calibration_holdout(
-        df, holdout_seasons, calibration_seasons, calibration_weeks
-    )
-
-    log.info("Training seasons: %s", train_seasons)
-    log.info("Calibration seasons: %s", calibration)
-    if calibration_season_inseason is not None and calibration_weeks_inseason:
-        log.info(
-            "Calibration weeks: season %s weeks %s (window pairs %s)",
-            calibration_season_inseason,
-            calibration_weeks_inseason,
-            _inseason_calibration_pairs(calibration_df, calibration),
-        )
+    train_df, holdout_df, splits = _split_train_holdout(df, holdout_seasons)
+    holdout = splits["holdout_seasons"]
+    log.info("Training seasons: %s", splits["train_seasons"])
     log.info("Holdout seasons: %s", holdout)
-    log.debug(
-        "Training rows: %d | Calibration rows: %d | Holdout rows: %d",
-        len(train_df),
-        len(calibration_df),
-        len(holdout_df),
-    )
+    log.debug("Training rows: %d | Holdout rows: %d", len(train_df), len(holdout_df))
     if market_transform:
         log.info("Market feature transforms enabled.")
-    if market_prob_config is not None:
-        log.info(
-            "Market win-prob adjustment: blend=%.2f clamp=%.2f",
-            market_prob_config.blend_weight,
-            market_prob_config.clamp_delta,
-        )
     if market_anchor:
         get_market_baseline(train_df)
         log.info("Market anchor enabled: training residuals vs spread/total.")
-    if market_prob_config is not None:
-        log.info(
-            "Market win-prob adjustment: blend=%.2f clamp=%.2f",
-            market_prob_config.blend_weight,
-            market_prob_config.clamp_delta,
-        )
 
     tuned_params: dict[str, Any] = {}
     tuned_cv_summary: dict[str, Any] | None = None
@@ -211,11 +165,10 @@ def train_margin_total_model(
             optuna_config=optuna_config,
             market_transform=market_transform,
             market_anchor=market_anchor,
-            market_prob_config=market_prob_config,
             holdout_seasons=holdout,
         )
 
-    params_overrides = tuned_params.copy()
+    params_overrides = {**(xgb_params_overrides or {}), **tuned_params}
     if optuna_config.xgb_n_jobs is not None:
         params_overrides["n_jobs"] = optuna_config.xgb_n_jobs
     params = _resolve_xgb_params(
@@ -227,7 +180,6 @@ def train_margin_total_model(
 
     def _train_models(
         train_frame: pd.DataFrame,
-        calib_frame: pd.DataFrame,
     ) -> tuple[
         ColumnTransformer,
         FeatureSpec,
@@ -236,8 +188,6 @@ def train_margin_total_model(
         dict[float, xgb.XGBRegressor],
         dict[float, xgb.XGBRegressor],
         tuple[float, ...],
-        np.ndarray | spmatrix | None,
-        np.ndarray | None,
     ]:
         local_spec = _build_feature_spec(
             train_frame,
@@ -275,32 +225,12 @@ def train_margin_total_model(
             _,
         ) = _prepare_margin_total_targets_with_anchor(train_frame, target_columns, market_anchor)
 
-        x_calibration = None
-        baseline_margin_calibration = None
-        y_margin_calibration = None
-        y_total_calibration = None
-        if not calib_frame.empty:
-            x_calibration = _transform_matrix(
-                local_preprocessor, _apply_feature_spec(calib_frame, local_spec)
-            )
-            (
-                y_margin_calibration,
-                y_total_calibration,
-                baseline_margin_calibration,
-                _,
-            ) = _prepare_margin_total_targets_with_anchor(
-                calib_frame, target_columns, market_anchor
-            )
-
+        # Every head runs its full tree budget on every training row, with no eval frame.
         margin_model, total_model = _fit_margin_total_models(
             x_train,
             y_margin_train,
             y_total_train,
             params,
-            x_eval=x_calibration,
-            y_margin_eval=y_margin_calibration,
-            y_total_eval=y_total_calibration,
-            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
 
@@ -310,9 +240,6 @@ def train_margin_total_model(
             y_margin_train,
             params,
             quantiles,
-            x_eval=x_calibration,
-            y_eval=y_margin_calibration,
-            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
         total_quantiles = _fit_quantile_models(
@@ -320,9 +247,6 @@ def train_margin_total_model(
             y_total_train,
             params,
             quantiles,
-            x_eval=x_calibration,
-            y_eval=y_total_calibration,
-            early_stopping_rounds=None,
             sample_weight=train_weight,
         )
 
@@ -334,8 +258,6 @@ def train_margin_total_model(
             margin_quantiles,
             total_quantiles,
             quantiles,
-            x_calibration,
-            baseline_margin_calibration,
         )
 
     (
@@ -346,92 +268,7 @@ def train_margin_total_model(
         margin_quantile_models,
         total_quantile_models,
         quantiles,
-        x_calibration,
-        baseline_margin_calibration,
-    ) = _train_models(train_df, calibration_df)
-
-    calibration_fit_df = _pooled_calibration_frame(
-        pd.concat([train_df, calibration_df], ignore_index=True),
-        calibration_seasons=calibration_seasons,
-        calibration_weeks=calibration_weeks,
-    )
-
-    resolved_calibration = resolve_win_prob_calibration_method(
-        win_prob_calibration,
-        len(calibration_fit_df),
-    )
-    if win_prob_use_uncertainty and resolved_calibration == "elo":
-        log.info("Elo calibration ignored for uncertainty-aware probabilities; using 'none'.")
-        resolved_calibration = "none"
-    calibrator = None
-    if resolved_calibration == "elo":
-        calibrator = _fit_win_prob_calibrator(
-            np.array([0.0], dtype=float),
-            np.array([0], dtype=int),
-            resolved_calibration,
-        )
-    elif resolved_calibration != "none":
-        if calibration_fit_df.empty:
-            raise ValueError("Calibration requested but no calibration seasons configured.")
-        x_calibration_fit = _transform_matrix(
-            preprocessor,
-            _apply_feature_spec(calibration_fit_df, feature_spec),
-        )
-        pred_margin_calib = _predict_xgb(margin_model, x_calibration_fit)
-        baseline_margin_calibration_fit = None
-        if market_anchor:
-            baseline_margin_calibration_fit, _ = get_market_baseline(calibration_fit_df)
-            pred_margin_calib = pred_margin_calib + baseline_margin_calibration_fit
-        pred_margin_inputs = pred_margin_calib
-        if win_prob_use_uncertainty:
-            pred_margin_quantiles_calib = {
-                q: _predict_xgb(q_model, x_calibration_fit)
-                for q, q_model in margin_quantile_models.items()
-            }
-            if market_anchor and baseline_margin_calibration_fit is not None:
-                for q in list(pred_margin_quantiles_calib.keys()):
-                    pred_margin_quantiles_calib[q] = (
-                        pred_margin_quantiles_calib[q] + baseline_margin_calibration_fit
-                    )
-            sigma_calibration = _resolve_margin_sigma(
-                pred_margin_calib,
-                pred_margin_quantiles_calib,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
-            pred_margin_inputs = pred_margin_calib / sigma_calibration
-        away_col, home_col = target_columns
-        actual_home_win = (calibration_fit_df[home_col] > calibration_fit_df[away_col]).astype(int)
-        actual_margin_calib = calibration_fit_df[home_col].to_numpy(
-            dtype=float
-        ) - calibration_fit_df[away_col].to_numpy(dtype=float)
-        calibration_postseason = compute_postseason_sample_weight(
-            calibration_fit_df,
-            include_postseason=include_postseason,
-            postseason_weight=postseason_weight,
-        )
-        calibration_recency = compute_recency_sample_weight(
-            calibration_fit_df,
-            half_life_seasons=recency_half_life_seasons,
-        )
-        calibration_weight = combine_sample_weights(calibration_postseason, calibration_recency)
-        calibration_season_values = (
-            calibration_fit_df["season"].to_numpy(dtype=int)
-            if "season" in calibration_fit_df.columns
-            else None
-        )
-        calibrator = _fit_win_prob_calibrator(
-            pred_margin_inputs,
-            actual_home_win.to_numpy(),
-            resolved_calibration,
-            sample_weight=calibration_weight,
-            actual_margin=actual_margin_calib,
-            seasons=calibration_season_values,
-            excluded_season=(
-                int(calibration_fit_df["season"].max())
-                if calibration_season_values is not None
-                else None
-            ),
-        )
+    ) = _train_models(train_df)
 
     if not holdout_df.empty:
         x_holdout = _transform_matrix(preprocessor, _apply_feature_spec(holdout_df, feature_spec))
@@ -443,28 +280,7 @@ def train_margin_total_model(
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
-        sigma_holdout = None
-        if win_prob_use_uncertainty and margin_quantile_models:
-            pred_margin_quantiles_holdout = {
-                q: _predict_xgb(q_model, x_holdout) for q, q_model in margin_quantile_models.items()
-            }
-            if market_anchor and baseline_margin_holdout is not None:
-                for q in list(pred_margin_quantiles_holdout.keys()):
-                    pred_margin_quantiles_holdout[q] = (
-                        pred_margin_quantiles_holdout[q] + baseline_margin_holdout
-                    )
-            sigma_holdout = _resolve_margin_sigma(
-                pred_margin,
-                pred_margin_quantiles_holdout,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
-        home_win_prob = _predict_home_win_prob(
-            pred_margin,
-            calibrator,
-            sigma=sigma_holdout,
-            use_uncertainty=win_prob_use_uncertainty,
-        )
-        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, market_prob_config)
+        home_win_prob = _holdout_home_win_prob(pred_margin, holdout_df, floor_sigma_pool)
 
         metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, target_columns, home_win_prob
@@ -482,23 +298,55 @@ def train_margin_total_model(
     else:
         log.info("No holdout seasons configured; skipping holdout evaluation.")
 
+    sigma_record = None
+    if floor_sigma_pool is not None:
+        season, week = floor_sigma_week or floor_sigma.week_after(df)
+        sigma_record = floor_sigma.estimate(
+            floor_sigma_pool.errors, season, week, sources=floor_sigma_pool.sources
+        )
+        log.info(
+            "Floor sigma for season %d week %d: %.4f%s, from %d earlier games in seasons %s",
+            season,
+            week,
+            sigma_record.sigma,
+            f" (the constant: fewer than {constants.FLOOR_SIGMA_MIN_POOL_SEASONS} earlier seasons)"
+            if sigma_record.fallback
+            else "",
+            sigma_record.pool_games,
+            list(sigma_record.pool_seasons),
+        )
+
     return MarginTotalModel(
         preprocessor=preprocessor,
         feature_spec=feature_spec,
         margin_model=margin_model,
         total_model=total_model,
         target_columns=target_columns,
-        calibrator=calibrator,
         margin_quantile_models=margin_quantile_models,
         total_quantile_models=total_quantile_models,
         quantiles=quantiles,
         market_anchor=market_anchor,
-        market_prob_config=market_prob_config,
         xgb_params=params,
         tuned_params=tuned_params or None,
         tuned_cv_summary=tuned_cv_summary,
-        win_prob_use_uncertainty=win_prob_use_uncertainty,
         optuna_summary=optuna_summary,
+        floor_sigma=sigma_record,
+    )
+
+
+def _holdout_home_win_prob(
+    pred_margin: np.ndarray,
+    holdout_df: pd.DataFrame,
+    pool: floor_sigma.ErrorPool | None,
+) -> np.ndarray:
+    """Return holdout probabilities: each week's pool sigma, or the constant without a pool."""
+    if pool is None:
+        return _margin_to_home_win_prob(pred_margin)
+    return floor_sigma.weekly_home_win_prob(
+        pred_margin,
+        holdout_df["season"].to_numpy(dtype=int),
+        holdout_df["week"].to_numpy(dtype=int),
+        pool.errors,
     )
 
 
@@ -507,10 +355,7 @@ def train_margin_total_model_with_report(
 ) -> TrainingResult:
     """Train a margin/total model and return a structured metrics report payload."""
     data_path: Path = kwargs["data_path"]
-    win_prob_use_uncertainty = bool(kwargs.get("win_prob_use_uncertainty", False))
     holdout_seasons: int = kwargs["holdout_seasons"]
-    calibration_seasons: int = kwargs["calibration_seasons"]
-    calibration_weeks: int = kwargs["calibration_weeks"]
 
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
@@ -521,15 +366,7 @@ def train_margin_total_model_with_report(
         include_postseason=bool(kwargs.get("include_postseason", False)),
     )
     missing_data_summary = _summarize_missing_data(df)
-    split = _split_train_calibration_holdout(
-        df, holdout_seasons, calibration_seasons, calibration_weeks
-    )
-    holdout_df = split[2]
-    train_seasons = split[3]
-    calibration = split[4]
-    holdout = split[5]
-    calibration_season_inseason = split[6]
-    calibration_weeks_inseason = split[7]
+    train_df, holdout_df, splits = _split_train_holdout(df, holdout_seasons)
 
     # Train the actual model (this will also log holdout metrics).
     model: MarginTotalModel = train_margin_total_model(**kwargs)
@@ -546,21 +383,9 @@ def train_margin_total_model_with_report(
             baseline_margin_holdout, baseline_total_holdout = get_market_baseline(holdout_df)
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
-        sigma_holdout = None
-        if win_prob_use_uncertainty:
-            margin_quantiles, _ = _predict_margin_total_quantiles_from_model(model, holdout_df)
-            sigma_holdout = _resolve_margin_sigma(
-                pred_margin,
-                margin_quantiles,
-                fallback=constants.SCORE_DIFF_STD_DEV,
-            )
-        home_win_prob = _predict_home_win_prob(
-            pred_margin,
-            model.calibrator,
-            sigma=sigma_holdout,
-            use_uncertainty=win_prob_use_uncertainty,
+        home_win_prob = _holdout_home_win_prob(
+            pred_margin, holdout_df, kwargs.get("floor_sigma_pool")
         )
-        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, model.market_prob_config)
         holdout_metrics = _evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, model.target_columns, home_win_prob
         )
@@ -574,369 +399,18 @@ def train_margin_total_model_with_report(
         "tuning_cv": model.tuned_cv_summary,
         "tuning_optuna": getattr(model, "optuna_summary", None),
         "missing_data": missing_data_summary,
+        "floor_sigma": floor_sigma.model_record(model),
     }
 
-    splits: dict[str, Any] = {
-        "train_seasons": train_seasons,
-        "calibration_seasons": calibration,
-        "holdout_seasons": holdout,
-        "calibration_inseason": {
-            "season": calibration_season_inseason,
-            "weeks": calibration_weeks_inseason,
-            "pairs": _inseason_calibration_pairs(split[1], calibration),
-        },
-    }
     params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
     feature_list = list(model.feature_spec.feature_columns)
-    feature_importance_report = feature_importance.build_feature_importance_report(model)
+    feature_importance_report = feature_importance.build_feature_importance_report(
+        model, shap_rows=train_df
+    )
     return TrainingResult(
         model=model,
         metrics_report=report,
-        splits=splits,
-        params=params,
-        tuned_params=model.tuned_params,
-        feature_list=feature_list,
-        early_stopping=_early_stopping_info(model),
-        feature_importance=feature_importance_report,
-    )
-
-
-def train_blended_margin_total_model(
-    data_path: Path,
-    holdout_seasons: int,
-    calibration_seasons: int,
-    calibration_weeks: int,
-    max_cardinality_ratio: float,
-    win_prob_calibration: str,
-    optuna_config: OptunaConfig,
-    market_transform: bool,
-    market_anchor: bool,
-    market_prob_config: MarketProbConfig | None,
-    include_postseason: bool = False,
-    postseason_weight: float = 1.0,
-    min_season: int | None = None,
-    max_season: int | None = None,
-    feature_start: str = DEFAULT_FEATURE_START_COLUMN,
-    feature_end: str = DEFAULT_FEATURE_END_COLUMN,
-    recency_half_life_seasons: float | None = None,
-) -> BlendedMarginTotalModel:
-    """Train blended margin/total models using team vs market signals."""
-    if calibration_seasons <= 0 and calibration_weeks <= 0:
-        raise ValueError("Blended models require calibration seasons or calibration weeks.")
-    if market_anchor:
-        raise ValueError("Market anchoring is only supported for margin_total models.")
-
-    df = _load_games(data_path)
-    target_columns = _get_target_columns(df)
-    df = df.dropna(subset=list(target_columns))
-
-    df = _filter_season_bounds(df, min_season, max_season)
-    df = _filter_to_regular_season_for_training(df, include_postseason=include_postseason)
-    (
-        train_df,
-        calibration_df,
-        holdout_df,
-        train_seasons,
-        calibration,
-        holdout,
-        calibration_season_inseason,
-        calibration_weeks_inseason,
-    ) = _split_train_calibration_holdout(
-        df, holdout_seasons, calibration_seasons, calibration_weeks
-    )
-
-    log.info("Training seasons: %s", train_seasons)
-    log.info("Calibration seasons: %s", calibration)
-    if calibration_season_inseason is not None and calibration_weeks_inseason:
-        log.info(
-            "Calibration weeks: season %s weeks %s (window pairs %s)",
-            calibration_season_inseason,
-            calibration_weeks_inseason,
-            _inseason_calibration_pairs(calibration_df, calibration),
-        )
-    log.info("Holdout seasons: %s", holdout)
-    log.debug(
-        "Training rows: %d | Calibration rows: %d | Holdout rows: %d",
-        len(train_df),
-        len(calibration_df),
-        len(holdout_df),
-    )
-
-    calibration_fit_df = _pooled_calibration_frame(
-        pd.concat([train_df, calibration_df], ignore_index=True),
-        calibration_seasons=calibration_seasons,
-        calibration_weeks=calibration_weeks,
-    )
-
-    team_params: dict[str, Any] = {}
-    tuned_cv_summary: dict[str, Any] = {}
-    optuna_summary: dict[str, Any] = {}
-    if optuna_config.enabled:
-        log.info("Tuning team-feature model hyperparameters...")
-        (
-            team_params,
-            tuned_cv_summary["team"],
-            optuna_summary["team"],
-        ) = _run_optuna_search(
-            train_df,
-            target_columns=target_columns,
-            include_market=False,
-            max_cardinality_ratio=max_cardinality_ratio,
-            feature_start=feature_start,
-            feature_end=feature_end,
-            optuna_config=optuna_config,
-            market_transform=market_transform,
-            market_prob_config=market_prob_config,
-            holdout_seasons=holdout,
-        )
-
-    team_overrides = team_params.copy()
-    if optuna_config.xgb_n_jobs is not None:
-        team_overrides["n_jobs"] = optuna_config.xgb_n_jobs
-    team_xgb_params = _resolve_xgb_params(
-        DEFAULT_XGB_PARAMS,
-        overrides=team_overrides or None,
-        tree_method=optuna_config.tree_method,
-        device=optuna_config.device,
-    )
-    team_spec = _build_feature_spec(
-        train_df,
-        include_market=False,
-        max_cardinality_ratio=max_cardinality_ratio,
-        feature_start=feature_start,
-        feature_end=feature_end,
-        market_transform=market_transform,
-    )
-    team_preprocessor = _build_preprocessor(team_spec, for_tree=True)
-
-    team_train = _fit_transform_matrix(team_preprocessor, _apply_feature_spec(train_df, team_spec))
-    y_margin_train, y_total_train = _prepare_margin_total_targets(train_df, target_columns)
-    postseason_weights = compute_postseason_sample_weight(
-        train_df,
-        include_postseason=include_postseason,
-        postseason_weight=postseason_weight,
-    )
-    recency_weights = compute_recency_sample_weight(
-        train_df,
-        half_life_seasons=recency_half_life_seasons,
-    )
-    train_weight = combine_sample_weights(postseason_weights, recency_weights)
-
-    team_calib = _transform_matrix(
-        team_preprocessor, _apply_feature_spec(calibration_df, team_spec)
-    )
-    y_margin_calib, y_total_calib = _prepare_margin_total_targets(calibration_df, target_columns)
-    market_margin_calib, market_total_calib = get_market_baseline(calibration_df)
-
-    team_margin_model, team_total_model = _fit_margin_total_models(
-        team_train,
-        y_margin_train,
-        y_total_train,
-        team_xgb_params,
-        x_eval=team_calib,
-        y_margin_eval=y_margin_calib,
-        y_total_eval=y_total_calib,
-        early_stopping_rounds=None,
-        sample_weight=train_weight,
-    )
-    team_margin_calib = _predict_xgb(team_margin_model, team_calib)
-    team_total_calib = _predict_xgb(team_total_model, team_calib)
-
-    margin_blender = _fit_blend_ridge_constrained(
-        np.column_stack([team_margin_calib, market_margin_calib]),
-        y_margin_calib,
-        alpha=1.0,
-    )
-    total_blender = _fit_blend_ridge_constrained(
-        np.column_stack([team_total_calib, market_total_calib]),
-        y_total_calib,
-        alpha=1.0,
-    )
-
-    away_col, home_col = target_columns
-    actual_home_win = (calibration_df[home_col] > calibration_df[away_col]).astype(int)
-    resolved_calibration = resolve_win_prob_calibration_method(
-        win_prob_calibration,
-        len(calibration_fit_df),
-    )
-    calibrator = None
-    if resolved_calibration != "none":
-        x_calibration_fit = _transform_matrix(
-            team_preprocessor, _apply_feature_spec(calibration_fit_df, team_spec)
-        )
-        blended_margin_fit = margin_blender.predict(
-            np.column_stack(
-                [
-                    _predict_xgb(team_margin_model, x_calibration_fit),
-                    get_market_baseline(calibration_fit_df)[0],
-                ]
-            )
-        )
-        actual_home_win = (calibration_fit_df[home_col] > calibration_fit_df[away_col]).astype(int)
-        actual_margin_calib = calibration_fit_df[home_col].to_numpy(
-            dtype=float
-        ) - calibration_fit_df[away_col].to_numpy(dtype=float)
-        calibration_postseason = compute_postseason_sample_weight(
-            calibration_fit_df,
-            include_postseason=include_postseason,
-            postseason_weight=postseason_weight,
-        )
-        calibration_recency = compute_recency_sample_weight(
-            calibration_fit_df,
-            half_life_seasons=recency_half_life_seasons,
-        )
-        calibration_weight = combine_sample_weights(calibration_postseason, calibration_recency)
-        calibration_season_values = (
-            calibration_fit_df["season"].to_numpy(dtype=int)
-            if "season" in calibration_fit_df.columns
-            else None
-        )
-        calibrator = _fit_win_prob_calibrator(
-            blended_margin_fit,
-            actual_home_win.to_numpy(),
-            resolved_calibration,
-            sample_weight=calibration_weight,
-            actual_margin=actual_margin_calib,
-            seasons=calibration_season_values,
-            excluded_season=(
-                int(calibration_fit_df["season"].max())
-                if calibration_season_values is not None
-                else None
-            ),
-        )
-
-    if not holdout_df.empty:
-        team_holdout = _transform_matrix(
-            team_preprocessor, _apply_feature_spec(holdout_df, team_spec)
-        )
-        market_margin_holdout, market_total_holdout = get_market_baseline(holdout_df)
-
-        team_margin_holdout = _predict_xgb(team_margin_model, team_holdout)
-        team_total_holdout = _predict_xgb(team_total_model, team_holdout)
-
-        blended_margin = margin_blender.predict(
-            np.column_stack([team_margin_holdout, market_margin_holdout])
-        )
-        blended_total = total_blender.predict(
-            np.column_stack([team_total_holdout, market_total_holdout])
-        )
-        home_win_prob = _predict_home_win_prob(blended_margin, calibrator)
-        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, market_prob_config)
-
-        metrics = _evaluate_margin_total_predictions(
-            holdout_df, blended_margin, blended_total, target_columns, home_win_prob
-        )
-        log.info("Holdout metrics: %s", {k: round(v, 4) for k, v in metrics.items()})
-
-        pool_summary = _summarize_confidence_pool(holdout_df, home_win_prob, target_columns)
-        if pool_summary:
-            log.info(
-                "Confidence pool (avg weekly): expected=%.1f actual=%.1f picks=%.2f",
-                pool_summary["weekly_expected_points_avg"],
-                pool_summary["weekly_actual_points_avg"],
-                pool_summary["weekly_picks_correct_avg"],
-            )
-    else:
-        log.info("No holdout seasons configured; skipping holdout evaluation.")
-
-    team_model = MarginTotalModel(
-        preprocessor=team_preprocessor,
-        feature_spec=team_spec,
-        margin_model=team_margin_model,
-        total_model=team_total_model,
-        target_columns=target_columns,
-        calibrator=None,
-        market_prob_config=market_prob_config,
-        tuned_params=team_params or None,
-        tuned_cv_summary=tuned_cv_summary.get("team"),
-        optuna_summary=optuna_summary.get("team") if optuna_summary else None,
-    )
-    return BlendedMarginTotalModel(
-        team_model=team_model,
-        blend_layer=BlendLayer(margin_model=margin_blender, total_model=total_blender),
-        calibrator=calibrator,
-        target_columns=target_columns,
-        market_prob_config=market_prob_config,
-        xgb_params={"team": team_xgb_params},
-        tuned_params={"team": team_params or None},
-        tuned_cv_summary=tuned_cv_summary or None,
-        optuna_summary=optuna_summary or None,
-    )
-
-
-def train_blended_margin_total_model_with_report(
-    **kwargs: Any,
-) -> TrainingResult:
-    """Train a blended model and return a structured metrics report payload."""
-    data_path: Path = kwargs["data_path"]
-
-    model: BlendedMarginTotalModel = train_blended_margin_total_model(**kwargs)
-    df = _load_games(data_path)
-    df = df.dropna(subset=list(model.target_columns))
-    df = _filter_season_bounds(df, kwargs.get("min_season"), kwargs.get("max_season"))
-    df = _filter_to_regular_season_for_training(
-        df,
-        include_postseason=bool(kwargs.get("include_postseason", False)),
-    )
-    missing_data_summary = _summarize_missing_data(df)
-    split = _split_train_calibration_holdout(
-        df,
-        kwargs["holdout_seasons"],
-        kwargs["calibration_seasons"],
-        kwargs["calibration_weeks"],
-    )
-    holdout_df = split[2]
-    train_seasons = split[3]
-    calibration = split[4]
-    holdout = split[5]
-    calibration_season_inseason = split[6]
-    calibration_weeks_inseason = split[7]
-
-    holdout_metrics: dict[str, Any] | None = None
-    if not holdout_df.empty:
-        team_margin, team_total = _predict_margin_total_from_model(model.team_model, holdout_df)
-        market_margin, market_total = get_market_baseline(holdout_df)
-        blended_margin = model.blend_layer.margin_model.predict(
-            np.column_stack([team_margin, market_margin])
-        )
-        blended_total = model.blend_layer.total_model.predict(
-            np.column_stack([team_total, market_total])
-        )
-        home_win_prob = _predict_home_win_prob(blended_margin, model.calibrator)
-        home_win_prob = _adjust_home_win_prob(holdout_df, home_win_prob, model.market_prob_config)
-        holdout_metrics = _evaluate_margin_total_predictions(
-            holdout_df,
-            blended_margin,
-            blended_total,
-            model.target_columns,
-            home_win_prob,
-        )
-
-    report = {
-        "kind": "train",
-        "model_kind": "blend",
-        "metrics": {"holdout": holdout_metrics},
-        "tuning_cv": model.tuned_cv_summary,
-        "tuning_optuna": getattr(model, "optuna_summary", None),
-        "missing_data": missing_data_summary,
-    }
-    splits = {
-        "train_seasons": train_seasons,
-        "calibration_seasons": calibration,
-        "holdout_seasons": holdout,
-        "calibration_inseason": {
-            "season": calibration_season_inseason,
-            "weeks": calibration_weeks_inseason,
-            "pairs": _inseason_calibration_pairs(split[1], calibration),
-        },
-    }
-    params = model.xgb_params or DEFAULT_XGB_PARAMS.copy()
-    feature_list = list(model.team_model.feature_spec.feature_columns)
-    feature_importance_report = feature_importance.build_feature_importance_report(model)
-    return TrainingResult(
-        model=model,
-        metrics_report=report,
-        splits=splits,
+        splits=dict(splits),
         params=params,
         tuned_params=model.tuned_params,
         feature_list=feature_list,

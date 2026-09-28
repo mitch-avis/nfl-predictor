@@ -16,7 +16,9 @@ import pandas as pd
 
 from nfl_predictor import constants
 from nfl_predictor.cli import options
-from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml import floor_sigma, walk_forward
+from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
+from nfl_predictor.reporting import production_settings, run_comparison
 from nfl_predictor.utils.logger import log
 
 
@@ -63,9 +65,26 @@ def _parse_args() -> argparse.Namespace:
         "--win-prob-calibration",
         "--calibration",
         dest="calibration",
-        choices=["platt", "isotonic", "sigma", "none", "elo", "auto", "logistic"],
-        default="platt",
-        help="Win-prob calibration method (logistic is an alias for platt).",
+        choices=["auto", "none"],
+        default="auto",
+        help=(
+            "Win-probability calibration: auto, the deterministic floor (the predicted margin "
+            "through a normal curve whose spread is the root-mean-square out-of-fold error "
+            "before the predicted week); none is the same."
+        ),
+    )
+    parser.add_argument(
+        "--floor-sigma-reference-runs",
+        type=Path,
+        nargs="+",
+        default=None,
+        help=(
+            "Walk-forward runs (run or fold checkpoint directories, relative to the repository "
+            "root) whose out-of-fold margin errors join this run's own earlier weeks in each "
+            "week's floor sigma; their checkpoints are only read, and a week this run predicts "
+            "replaces theirs. Default: none, so each week's sigma comes from this run's earlier "
+            "weeks (the constant until they span three earlier seasons, any weeks)."
+        ),
     )
     parser.add_argument(
         "--random-seed",
@@ -96,13 +115,6 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Use transformed market features when odds columns exist.",
     )
-    options.add_market_prob_options(parser)
-    parser.add_argument(
-        "--win-prob-uncertainty",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use margin quantiles to derive uncertainty-aware win probabilities.",
-    )
     parser.add_argument(
         "--disable-pruning",
         action="store_true",
@@ -122,9 +134,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--xgb-device",
-        type=str,
-        default=None,
-        help="XGBoost device override (e.g., cuda, cpu).",
+        type=xgb_device_arg,
+        default=XGB_DEVICE_AUTO,
+        help=XGB_DEVICE_HELP,
     )
     parser.add_argument(
         "--xgb-n-jobs",
@@ -214,8 +226,7 @@ def main() -> None:
     xgb_overrides: dict[str, Any] = {}
     if args.xgb_tree_method is not None:
         xgb_overrides["tree_method"] = str(args.xgb_tree_method)
-    if args.xgb_device is not None:
-        xgb_overrides["device"] = str(args.xgb_device)
+    xgb_overrides["device"] = str(args.xgb_device)
     if args.xgb_n_jobs is not None:
         xgb_overrides["n_jobs"] = int(args.xgb_n_jobs)
     if args.min_child_weight is not None:
@@ -230,29 +241,36 @@ def main() -> None:
         eval_last_n_seasons=args.eval_last_n_seasons,
         wf_start_week=args.wf_start_week,
         calibration=args.calibration,
-        calibration_weeks=args.wf_calibration_weeks,
         random_seed=args.random_seed,
         include_postseason=args.include_postseason,
         exclude_incomplete_seasons=args.exclude_incomplete_seasons,
         recency_half_life_seasons=args.recency_half_life_seasons,
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
-        market_prob_weight=float(args.market_prob_weight),
-        market_prob_clamp=float(args.market_prob_clamp),
-        market_prob_source=args.market_prob_source,
-        market_prob_blend_method=args.market_prob_blend_method,
-        win_prob_use_uncertainty=bool(args.win_prob_uncertainty),
         disable_pruning=bool(args.disable_pruning),
         disabled_feature_groups=disabled_feature_groups,
-        xgb_params_overrides=xgb_overrides or None,
+        xgb_params_overrides=xgb_overrides,
     )
+    # Resolve `auto` now, so the run id and the recorded config name the device used.
+    config = walk_forward.with_resolved_xgb_device(config)
+    xgb_device = (config.xgb_params_overrides or {})["device"]
+    log.info("XGBoost device: %s", xgb_device)
 
     dataset_hash = walk_forward.dataset_fingerprint(args.data_path)
     run_id = walk_forward.generate_run_id(dataset_hash, config)
     created_at = datetime.now(UTC).isoformat()
 
+    history = (
+        None
+        if args.floor_sigma_reference_runs is None
+        else floor_sigma.load_reference_pool(args.floor_sigma_reference_runs)
+    )
     results = walk_forward.run_walk_forward_backtest(
-        df, config, checkpoint_dir=args.checkpoint_dir, resume=bool(args.resume)
+        df,
+        config,
+        checkpoint_dir=args.checkpoint_dir,
+        resume=bool(args.resume),
+        floor_sigma_history=history,
     )
 
     run_dir = Path(constants.ROOT_DIR) / "models" / run_id
@@ -263,6 +281,11 @@ def main() -> None:
     config_payload["data_path"] = str(args.data_path)
     config_payload["out_json"] = str(out_json)
     config_payload["checkpoint"] = results.get("checkpoint")
+    config_payload["floor_sigma"] = results.get("floor_sigma")
+    config_payload["xgb_device"] = xgb_device
+    # Every parameter the folds trained with, so later comparisons need not infer defaults.
+    xgb_params = walk_forward._resolve_xgb_params(config)
+    config_payload[production_settings.RESOLVED_XGB_PARAMS_KEY] = xgb_params
     config_payload["disable_trend_features"] = bool(args.disable_trend_features)
     if args.disable_trend_features:
         config_payload["dropped_trend_columns"] = drop_columns
@@ -278,6 +301,27 @@ def main() -> None:
         config_payload["excluded_incomplete_seasons"] = results["excluded_incomplete_seasons"]
 
     report = walk_forward.build_metrics_report(run_id, created_at, config_payload, results)
+    predictions = results.get("predictions")
+    if predictions is not None:
+        # Rescored with the comparison's definitions and bootstrap defaults, so this block
+        # equals what ``nfl-predictor compare`` reports for the run on the same games.
+        stability = run_comparison.stability_report(predictions)
+        report["metrics"]["stability"] = stability
+        for line in run_comparison.format_stability(stability):
+            log.info("%s", line)
+    versus_production = production_settings.settings_versus_production(
+        config,
+        df,
+        disable_trend_features=bool(args.disable_trend_features),
+        run_xgb_params=xgb_params,
+        run_scope={
+            "data_path": str(args.data_path),
+            "checkpoint_dir": str(args.checkpoint_dir),
+        },
+    )
+    report[production_settings.SECTION_KEY] = versus_production
+    for line in production_settings.format_section(versus_production):
+        log.info("%s", line)
     config_payload["run_id"] = run_id
     config_payload["feature_list"] = results.get("feature_list")
     config_payload["splits"] = {

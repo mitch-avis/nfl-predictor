@@ -1,9 +1,8 @@
 """Characterization tests for the SHAP analysis entrypoint.
 
-Two small models are trained once on the synthetic seasons of ``tests/weekly_fixture.py``: a
-market-anchored margin/total model shaped like the weekly run's, and a blended team/market
-model. The command-line ``main`` then writes a SHAP report for each head (a blended model's
-team model is analyzed), and the report is compared with a snapshot under
+A small market-anchored margin/total model shaped like the weekly run's is trained once on the
+synthetic seasons of ``tests/weekly_fixture.py``. The command-line ``main`` then writes a SHAP
+report for each head, and the report is compared with a snapshot under
 ``tests/fixtures/shap_analysis_characterization/``, so moving the entrypoint cannot change what
 it reports. Rewrite the snapshots with ``NFLP_UPDATE_SNAPSHOTS=1``.
 """
@@ -19,7 +18,7 @@ import pytest
 
 from nfl_predictor.cli import explain
 from nfl_predictor.ml import ml_model_core, ml_model_training
-from nfl_predictor.ml.ml_model_core import MarketProbConfig, OptunaConfig
+from nfl_predictor.ml.ml_model_core import OptunaConfig
 from tests import snapshots
 from tests.weekly_fixture import build_fixture
 
@@ -38,49 +37,26 @@ OPTUNA_OFF = OptunaConfig(
     best_params_out=None,
     xgb_n_jobs=1,
 )
-NO_MARKET_PROB_ADJUSTMENT = MarketProbConfig(blend_weight=0.0, clamp_delta=0.0)
 
 
 @pytest.fixture(scope="module")
 def trained(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
-    """Train both model kinds on the fixture and return the model and data paths."""
+    """Train the model on the fixture and return the model and data paths."""
     root = tmp_path_factory.mktemp("shap_fixture")
     completed = build_fixture(root)["completed"]
     margin_total = ml_model_training.train_margin_total_model(
         data_path=completed,
         holdout_seasons=0,
-        calibration_seasons=0,
-        calibration_weeks=4,
         include_market=True,
         max_cardinality_ratio=0.5,
-        win_prob_calibration="none",
         optuna_config=OPTUNA_OFF,
         market_transform=True,
         market_anchor=True,
-        market_prob_config=NO_MARKET_PROB_ADJUSTMENT,
-    )
-    blend = ml_model_training.train_blended_margin_total_model(
-        data_path=completed,
-        holdout_seasons=0,
-        calibration_seasons=0,
-        calibration_weeks=4,
-        max_cardinality_ratio=0.5,
-        win_prob_calibration="none",
-        optuna_config=OPTUNA_OFF,
-        market_transform=True,
-        market_anchor=False,
-        market_prob_config=NO_MARKET_PROB_ADJUSTMENT,
     )
     assert isinstance(margin_total, ml_model_core.MarginTotalModel)
-    assert isinstance(blend, ml_model_core.BlendedMarginTotalModel)
-    paths = {
-        "data": completed,
-        "margin_total": root / "margin_total" / "model.joblib",
-        "blend": root / "blend" / "model.joblib",
-    }
-    for kind, model in (("margin_total", margin_total), ("blend", blend)):
-        paths[kind].parent.mkdir()
-        joblib.dump(model, paths[kind])
+    paths = {"data": completed, "margin_total": root / "margin_total" / "model.joblib"}
+    paths["margin_total"].parent.mkdir()
+    joblib.dump(margin_total, paths["margin_total"])
     return paths
 
 
@@ -99,7 +75,6 @@ def _run_shap(argv: list[str], monkeypatch: pytest.MonkeyPatch) -> int:
             ["--target", "total", "--sample-size", "100", "--random-seed", "3"],
             "margin_total_total_sampled.json",
         ),
-        ("blend", [], "blend_team_margin.json"),
     ],
 )
 def test_shap_report_matches_snapshot(

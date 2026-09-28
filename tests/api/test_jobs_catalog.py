@@ -305,32 +305,35 @@ def test_every_template_builds_a_command_its_target_parses(
     parse_built(argv, settings, monkeypatch)
 
 
-def test_the_model_kinds_are_the_names_training_records() -> None:
-    """The train form offers ``margin_total`` and ``blend``, the names run metadata carries."""
-    assert catalog.MODEL_KINDS == ("margin_total", "blend")
+def test_the_train_form_offers_no_model_kind_choice() -> None:
+    """``margin_total`` is the only model kind, so the train form does not ask for one."""
+    names = {spec.name for spec in catalog.get_template("train").params}
+    assert "model_kind" not in names
 
 
-@pytest.mark.parametrize(
-    ("template_id", "recorded", "expected"),
-    [
-        ("predict", "blend", "blend"),
-        ("predict", "blended_margin_total", "blend"),
-        ("power_rankings", "blend", "blend"),
-        ("power_rankings", "blended_margin_total", "blend"),
-        ("power_rankings", "margin_total", "margin_total"),
-    ],
-)
-def test_run_based_jobs_accept_either_name_of_the_blend(
+@pytest.mark.parametrize("template_id", ["predict", "power_rankings"])
+def test_run_based_jobs_pass_the_recorded_margin_total_kind(
     template_id: str,
-    recorded: str,
-    expected: str,
     settings: Settings,
     run: RunSummary,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A run recorded under either blend name launches, with the canonical kind parsed."""
-    pinned = dataclasses.replace(run, model_kind=recorded)
+    """A run recorded as ``margin_total`` launches with that kind."""
+    pinned = dataclasses.replace(run, model_kind="margin_total")
     template = catalog.get_template(template_id)
     params = {spec.name: SAMPLE_PARAMS[spec.name] for spec in template.params if spec.required}
     _name, args = parse_built(build(template_id, settings, params, pinned), settings, monkeypatch)
-    assert args.model_kind == expected
+    assert args.model_kind == "margin_total"
+
+
+@pytest.mark.parametrize("template_id", ["predict", "power_rankings"])
+@pytest.mark.parametrize("recorded", ["blend", "blended_margin_total"])
+def test_run_based_jobs_refuse_a_retired_blend_run(
+    template_id: str, recorded: str, settings: Settings, run: RunSummary
+) -> None:
+    """A run holding a retired blend model cannot launch a job that loads it."""
+    pinned = dataclasses.replace(run, model_kind=recorded)
+    template = catalog.get_template(template_id)
+    params = {spec.name: SAMPLE_PARAMS[spec.name] for spec in template.params if spec.required}
+    with pytest.raises(ConflictError, match="blend model kind was retired"):
+        build(template_id, settings, params, pinned)

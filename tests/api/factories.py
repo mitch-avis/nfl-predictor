@@ -283,7 +283,44 @@ def metrics_payload(run_id: str, created_at: str, *, kind: str) -> dict[str, Any
 
 
 def feature_importance_payload(run_id: str) -> dict[str, Any]:
-    """Return a feature_importance.json payload."""
+    """Return a feature_importance.json payload in the current layout.
+
+    It records mean |SHAP| and total gain per base feature; SHAP ranks ``away_rest`` first,
+    total gain ``away_elo_pre``.
+    """
+    payload = gain_feature_importance_payload(run_id)
+    payload["schema_version"] = 3
+    payload["shap"] = {"rows": "train", "row_count": 100, "seasons": [2020, 2023]}
+    base = payload["base_features"]
+    base["margin"]["mean_abs_shap"] = [2.5, 1.5, 2.0]
+    base["total"]["mean_abs_shap"] = [0.5, 0.25, 0.5]
+    base["combined"]["mean_abs_shap"] = [3.0, 1.75, 2.5]
+    return payload
+
+
+def gain_feature_importance_payload(run_id: str) -> dict[str, Any]:
+    """Return a feature_importance.json payload written before SHAP (total gain per feature)."""
+    names = ["away_rest", "home_rest", "away_elo_pre"]
+    return {
+        "run_id": run_id,
+        "schema_version": 2,
+        "model_kind": "margin_total",
+        "feature_names": [f"num__{n}" for n in names],
+        "base_features": {
+            "feature_names": names,
+            "margin": {"total_gain": [10.0, 20.0, 30.0], "weight": [1, 2, 3]},
+            "total": {"total_gain": [5.0, 5.0, 5.0], "weight": [1, 1, 1]},
+            "combined": {"total_gain": [15.0, 25.0, 35.0], "weight": [2, 3, 4]},
+        },
+    }
+
+
+def legacy_feature_importance_payload(run_id: str) -> dict[str, Any]:
+    """Return a feature_importance.json payload written before total gain was recorded.
+
+    Its only per-feature measure is XGBoost's average gain per split summed over encoded
+    columns and heads, which ranks ``away_rest`` first here.
+    """
     names = ["away_rest", "home_rest", "away_elo_pre"]
     return {
         "run_id": run_id,
@@ -291,9 +328,9 @@ def feature_importance_payload(run_id: str) -> dict[str, Any]:
         "feature_names": [f"num__{n}" for n in names],
         "base_features": {
             "feature_names": names,
-            "margin": {"gain": [1.0, 2.0, 3.0], "weight": [1, 2, 3]},
+            "margin": {"gain": [3.0, 2.0, 1.0], "weight": [1, 2, 3]},
             "total": {"gain": [0.5, 0.5, 0.5], "weight": [1, 1, 1]},
-            "combined": {"gain": [1.5, 2.5, 3.5], "weight": [2, 3, 4]},
+            "combined": {"gain": [3.5, 2.5, 1.5], "weight": [2, 3, 4]},
         },
     }
 

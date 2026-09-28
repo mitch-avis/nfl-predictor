@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -72,6 +72,20 @@ class PowerOut(BaseModel):
     division_standings: TablePayload | None
 
 
+class FeatureImportanceOut(BaseModel):
+    """Top base features and the importance measure that ranks them.
+
+    ``mean_abs_shap`` is the mean absolute SHAP value in points over the final model's training
+    rows, the headline measure; ``total_gain`` is XGBoost's loss reduction summed over every
+    split, for runs written before SHAP was recorded; ``summed_average_gain`` is the average
+    gain per split summed over encoded columns and heads, the only measure the oldest runs
+    recorded. ``None`` means the run recorded no usable importance.
+    """
+
+    measure: Literal["mean_abs_shap", "total_gain", "summed_average_gain"] | None
+    rows: list[dict[str, Any]]
+
+
 class ModelOut(BaseModel):
     """Everything the Model page shows."""
 
@@ -79,7 +93,7 @@ class ModelOut(BaseModel):
     kind: str
     metadata: dict[str, Any]
     metrics: dict[str, Any]
-    feature_importance: list[dict[str, Any]]
+    feature_importance: FeatureImportanceOut
     calibration: dict[str, Any] | None
     wf_compare: TablePayload | None
     wf_best: dict[str, Any] | None

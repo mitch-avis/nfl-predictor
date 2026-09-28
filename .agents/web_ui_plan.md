@@ -154,7 +154,7 @@ mutating routes require header `X-Requested-With: nflp`.
 | `GET /predictions/picks`, `GET /predictions/weeks` | picks CSV as-is; weeks lists run-attached + unattached files |
 | `GET /betting`, `GET /betting/xlsx` | 25-col betting CSV, or derived from predictions when the CSV is older than the predictions file; ladder thresholds 0.02/0.04/0.07/0.10; `total_*` columns `actionable=false` |
 | `GET /power` | rankings + movement vs the prior run's `through_week - 1` file + standings + division standings |
-| `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 gain importance from `base_features.combined.gain`, calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
+| `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 base features by mean absolute SHAP in points (`base_features.combined.mean_abs_shap`, returned as `{measure, rows}` with per-head `margin_value`/`total_value`; runs without SHAP fall back to `combined.total_gain`, and runs written before total gain was recorded to `combined.gain`, labelled `summed_average_gain`), calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
 | `GET /data/status`, `GET /data/unattached` | current season/week via `data_collection._determine_nfl_week` (imported, not edited), file inventory with sizes/mtimes/row counts (`pl.scan_csv().select(pl.len())`), lazy cached sha256 via `fingerprints.dataset_fingerprint`, cache parquet coverage, latest leakage audit, last ETL job |
 | `GET /jobs/catalog`, `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/logs?after=`, `GET /jobs/{id}/stream` (SSE), `POST /jobs/{id}/cancel` | 409 when an exclusive group is busy; 422 on bad params |
 | `GET /{path}` fallback | serves `web/dist/index.html` for paths outside `/api`; an unmatched `/api/...` path gets the JSON 404 (`not_found`) |
@@ -209,8 +209,9 @@ mutating routes require header `X-Requested-With: nflp`.
 - Data/ETL: stat tiles (season/week, rows, seasons, dataset hash, last ETL), file table, cache
   coverage strip, leakage audit badge, Run ETL / Refresh lines buttons (admin).
 - Model: metadata cards, holdout metric tiles with direction arrows from `metric_strategy`,
-  feature importance bar chart, calibration reliability chart, wf_compare table with the best row
-  highlighted, collapsible config JSON.
+  feature importance bar chart (says which measure it shows), calibration reliability chart,
+  walk-forward evaluation table (`wf_compare`; one row for the production configuration, or an
+  older run's candidates with the trained row highlighted), collapsible config JSON.
 - Jobs: catalog cards, auto-generated form from the params schema (react-hook-form + zod),
   history table, detail page with virtualized log console, level filter, progress bar, cancel.
 - Runs: list with stage chips and holdout Brier/accuracy; Activate with confirm dialog.
@@ -336,9 +337,9 @@ Odds-provider adapter interface plus a `Live` blend
 
   Deviations from the plan above, all deliberate:
 
-  - **Progress regex.** The plan cited a `Walk-forward fold N/M done` line in
-    `nfl_predictor/ml/walk_forward.py`; the line that actually exists is `WF candidate %d/%d` in
-    the weekly run. The runner matches both (`(?:fold|candidate) N/M`).
+  - **Progress regex.** Walk-forwards log `Walk-forward fold N/M done`
+    (`nfl_predictor/ml/walk_forward.py`), the weekly run's stage 1 included; older weekly runs
+    logged `WF candidate N/M`. The runner matches both (`(?:fold|candidate) N/M`).
   - **Queue vs 409.** Both behaviors are implemented: the runner gives each exclusive group a
     single worker, so queued jobs in a group never overlap (this is the path chained jobs take),
     while `POST /api/jobs` still answers 409 `group_busy` when the group is already occupied.

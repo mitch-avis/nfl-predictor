@@ -12,7 +12,7 @@ import os
 import time
 import warnings
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -22,19 +22,18 @@ import optuna
 import pandas as pd
 import xgboost as xgb
 from scipy.sparse import spmatrix
-from scipy.stats import norm
 from sklearn.compose import ColumnTransformer
-from sklearn.isotonic import IsotonicRegression
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.linear_model import Ridge
 from sklearn.metrics import (
     brier_score_loss,
-    log_loss,
     mean_absolute_error,
 )
 
 import __main__
 from nfl_predictor import constants
 from nfl_predictor.ml import feature_spec as _feature_spec
+from nfl_predictor.ml.floor_sigma import FloorSigma, home_win_prob
+from nfl_predictor.ml.metrics import confidence_ranks, confidence_strength, picks_home
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,
     _coerce_tree_method_on_error,
@@ -78,16 +77,21 @@ DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
 DEFAULT_OPTUNA_CV_SPLITS = 3
 DEFAULT_EARLY_STOPPING_ROUNDS = 50
 DEFAULT_QUANTILES = (0.1, 0.5, 0.9)
-AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES = 200
-NORMAL_Z_P90 = 1.281551565545
-P10_P90_TO_SIGMA_DENOM = 2 * NORMAL_Z_P90
-MIN_WIN_PROB_SIGMA = 0.5
-PLATT_C_GRID = (0.01, 0.1, 1.0, 10.0)
+# The one win-probability calibration: the deterministic floor, the predicted margin through
+# a normal curve whose spread is estimated from earlier out-of-fold errors (``floor_sigma``).
+# ``none`` is an accepted second spelling of ``auto``.
+CALIBRATION_FLOOR = "auto"
+_CALIBRATION_ALIASES = frozenset({"auto", "none"})
+RETIRED_CALIBRATIONS = frozenset({"platt", "isotonic", "sigma", "logistic", "elo"})
 
 
 @dataclass(frozen=True)
 class WinProbCalibrator:
-    """Calibration model for mapping margin predictions to win probabilities."""
+    """A saved model's fitted or Elo calibrator; those calibrators were retired.
+
+    Kept only so checkpoints saved before the retirement still unpickle. Loading one logs the
+    calibrator and drops it; predictions are the deterministic floor.
+    """
 
     method: str
     model: Any
@@ -102,22 +106,25 @@ class MarginTotalModel:
     margin_model: xgb.XGBRegressor
     total_model: xgb.XGBRegressor
     target_columns: tuple[str, str]
-    calibrator: WinProbCalibrator | None
     margin_quantile_models: dict[float, xgb.XGBRegressor] | None = None
     total_quantile_models: dict[float, xgb.XGBRegressor] | None = None
     quantiles: tuple[float, ...] | None = None
     market_anchor: bool = False
-    market_prob_config: MarketProbConfig | None = None
     xgb_params: dict[str, Any] | None = None
     tuned_params: dict[str, Any] | None = None
     tuned_cv_summary: dict[str, Any] | None = None
-    win_prob_use_uncertainty: bool = False
     optuna_summary: dict[str, Any] | None = None
+    # The floor's sigma for the week this model predicts, estimated at the final fit from
+    # earlier out-of-fold errors. None (models saved before it was recorded) means the constant.
+    floor_sigma: FloorSigma | None = None
 
 
 @dataclass(frozen=True)
 class BlendLayer:
-    """Linear blend layer for margin/total predictions."""
+    """Ridge layer of a saved blend model; the blend model kind was retired.
+
+    Kept only so blend checkpoints saved before the retirement still unpickle for display.
+    """
 
     margin_model: Ridge
     total_model: Ridge
@@ -125,7 +132,12 @@ class BlendLayer:
 
 @dataclass(frozen=True)
 class BlendedMarginTotalModel:
-    """Blended margin/total model: the team model and the market line through a blend layer."""
+    """A saved blend model (the team model and the market line through a ridge layer).
+
+    The blend model kind was retired: nothing trains or predicts with one. The class stays
+    so checkpoints saved before the retirement still unpickle, and loading one for prediction
+    fails with the reason (``load_model_checkpoint``).
+    """
 
     team_model: MarginTotalModel
     blend_layer: BlendLayer
@@ -140,7 +152,11 @@ class BlendedMarginTotalModel:
 
 @dataclass(frozen=True)
 class MarketProbConfig:
-    """Configuration for blending/clamping win probabilities vs market implied odds."""
+    """A saved model's market blend and clamp; market probability blending was retired.
+
+    Kept only so checkpoints saved before the retirement still unpickle. Loading one logs the
+    setting and drops it; predictions are the deterministic floor.
+    """
 
     blend_weight: float
     clamp_delta: float
@@ -278,149 +294,6 @@ def _split_by_season(
     train_df = df[~df["season"].isin(holdout)].copy()
     holdout_df = df[df["season"].isin(holdout)].copy()
     return train_df, holdout_df, holdout
-
-
-def _latest_season_week_pairs(df: pd.DataFrame, count: int) -> list[tuple[int, int]]:
-    """Return the newest ``count`` distinct ``(season, week)`` pairs in ``df``, oldest first.
-
-    Pairs are ordered by ``season * 100 + week``, so the window rolls back across the season
-    boundary when the newest season has fewer than ``count`` completed weeks.
-
-    Raises:
-        ValueError: If ``df`` holds fewer than ``count`` distinct pairs.
-
-    """
-    frame = df[["season", "week"]].dropna().drop_duplicates()
-    pairs = sorted((int(season), int(week)) for season, week in frame.itertuples(index=False))
-    if len(pairs) < count:
-        raise ValueError(
-            "Not enough weeks in the training pool for calibration: "
-            f"{len(pairs)} available, {count} requested."
-        )
-    return pairs[-count:]
-
-
-def _season_week_mask(df: pd.DataFrame, pairs: Sequence[tuple[int, int]]) -> pd.Series:
-    """Return a boolean mask of the rows of ``df`` whose ``(season, week)`` is in ``pairs``."""
-    mask = pd.Series(False, index=df.index)
-    if not pairs:
-        return mask
-    season = pd.to_numeric(df["season"], errors="coerce")
-    week = pd.to_numeric(df["week"], errors="coerce")
-    for pair_season, pair_week in pairs:
-        mask |= (season == pair_season) & (week == pair_week)
-    return mask
-
-
-def _inseason_calibration_pairs(
-    calibration_df: pd.DataFrame,
-    calibration_seasons: Sequence[int],
-) -> list[list[int]]:
-    """List the in-season calibration window as sorted ``[season, week]`` pairs.
-
-    The window is every calibration row outside the whole calibration seasons; the split
-    never gives a whole calibration season to a season the window touches, so this is exact.
-    """
-    if calibration_df.empty or "week" not in calibration_df.columns:
-        return []
-    window = calibration_df[~calibration_df["season"].isin(list(calibration_seasons))]
-    frame = window[["season", "week"]].dropna().drop_duplicates()
-    return [[int(season), int(week)] for season, week in sorted(frame.itertuples(index=False))]
-
-
-def _split_train_calibration_holdout(
-    df: pd.DataFrame,
-    holdout_seasons: int,
-    calibration_seasons: int,
-    calibration_weeks: int,
-) -> tuple[
-    pd.DataFrame,
-    pd.DataFrame,
-    pd.DataFrame,
-    list[int],
-    list[int],
-    list[int],
-    int | None,
-    list[int],
-]:
-    """Split games into train, calibration and holdout frames by time.
-
-    The newest ``holdout_seasons`` seasons are held out. From the remaining pool, the
-    in-season calibration window is the newest ``calibration_weeks`` completed
-    ``(season, week)`` pairs in time order, so early in a season it reaches back into the
-    previous season (week 2 with four weeks requested: the new season's week 1 plus the
-    previous season's last three). Whole calibration seasons are the newest
-    ``calibration_seasons`` pool seasons the window does not touch. Training is every other
-    pool row, with the window's pairs removed.
-
-    Returns:
-        ``(train_df, calibration_df, holdout_df, train_seasons, calibration_seasons,
-        holdout_seasons, inseason_season, inseason_weeks)``, where ``inseason_season`` is
-        the newest season in the window and ``inseason_weeks`` its weeks in the window.
-
-    Raises:
-        ValueError: If the pool has fewer weeks than ``calibration_weeks`` or too few seasons
-            for the requested holdout and calibration seasons.
-
-    """
-    if "season" not in df.columns:
-        raise ValueError("Expected a season column for time-aware splits.")
-    seasons = sorted(df["season"].dropna().unique())
-    if holdout_seasons < 0 or calibration_seasons < 0 or calibration_weeks < 0:
-        raise ValueError("Holdout and calibration values must be non-negative.")
-    if len(seasons) <= holdout_seasons:
-        raise ValueError("Not enough seasons to create a holdout split.")
-
-    holdout = seasons[-holdout_seasons:] if holdout_seasons else []
-    base_pool = seasons[:-holdout_seasons] if holdout_seasons else seasons
-    if not base_pool:
-        raise ValueError("Not enough seasons to create a training split.")
-
-    inseason_calibration_season: int | None = None
-    inseason_calibration_weeks: list[int] = []
-    window_pairs: list[tuple[int, int]] = []
-    if calibration_weeks:
-        if "week" not in df.columns:
-            raise ValueError("Expected a week column for in-season calibration.")
-        window_pairs = _latest_season_week_pairs(
-            df[df["season"].isin(base_pool)], calibration_weeks
-        )
-        inseason_calibration_season = window_pairs[-1][0]
-        inseason_calibration_weeks = [
-            week for season, week in window_pairs if season == inseason_calibration_season
-        ]
-
-    window_seasons = {season for season, _ in window_pairs}
-    calibration_candidates = [s for s in base_pool if s not in window_seasons]
-
-    if calibration_seasons and len(calibration_candidates) < calibration_seasons:
-        raise ValueError("Not enough seasons to create train/calibration/holdout splits.")
-    calibration = calibration_candidates[-calibration_seasons:] if calibration_seasons else []
-    # Seasons the window touches never become whole calibration seasons, so their remaining
-    # weeks always train; the pool is too small only when no season is left for training.
-    train = [season for season in base_pool if season not in calibration]
-    if not train:
-        raise ValueError("Not enough seasons to create train/calibration/holdout splits.")
-
-    window_mask = _season_week_mask(df, window_pairs)
-    train_df = df[df["season"].isin(train) & ~window_mask].copy()
-
-    calibration_df = df[df["season"].isin(calibration)].copy()
-    if window_pairs:
-        calibration_df = pd.concat([calibration_df, df[window_mask].copy()], axis=0)
-
-    holdout_df = df[df["season"].isin(holdout)].copy()
-
-    return (
-        train_df,
-        calibration_df,
-        holdout_df,
-        train,
-        calibration,
-        holdout,
-        inseason_calibration_season,
-        inseason_calibration_weeks,
-    )
 
 
 def _build_time_series_folds(
@@ -670,209 +543,30 @@ def _fit_quantile_models(
     return models
 
 
-def _fit_blend_ridge_constrained(
-    x: np.ndarray,
-    y: np.ndarray,
-    *,
-    alpha: float = 1.0,
-) -> Ridge:
-    model = Ridge(alpha=alpha)
-    model.fit(x, y)
+def resolve_calibration(method: str) -> str:
+    """Return ``auto`` for either spelling of the deterministic floor.
 
-    coef = np.asarray(model.coef_, dtype=float)
-    if coef.shape != (2,):
-        raise ValueError(f"Expected blend coefficients shape (2,), got {coef.shape}")
+    Raises:
+        ValueError: If ``method`` names a retired calibrator or is unknown.
 
-    coef = np.maximum(coef, 0.0)
-    coef_sum = float(coef.sum())
-    coef = np.array([0.5, 0.5], dtype=float) if coef_sum <= 0 else coef / coef_sum
-
-    # Keep an intercept term but recompute it after constraining weights.
-    intercept = float(np.mean(y - x @ coef))
-
-    model.coef_ = coef
-    model.intercept_ = intercept
-    return model
-
-
-def _fit_win_prob_calibrator(
-    pred_margin: np.ndarray,
-    actual_home_win: np.ndarray,
-    method: str,
-    sample_weight: np.ndarray | None = None,
-    actual_margin: np.ndarray | None = None,
-    seasons: np.ndarray | None = None,
-    excluded_season: int | None = None,
-) -> WinProbCalibrator | None:
-    method = resolve_win_prob_calibration_method(method, len(pred_margin))
-    if method == "none":
-        return None
-    if method == "sigma":
-        if actual_margin is None:
-            raise ValueError("Sigma calibration requires actual_margin values.")
-        sigma = _estimate_win_prob_sigma_from_residuals(
-            pred_margin,
-            actual_margin,
-            sample_weight=sample_weight,
+    """
+    normalized = method.lower()
+    if normalized in _CALIBRATION_ALIASES:
+        return CALIBRATION_FLOOR
+    if normalized in RETIRED_CALIBRATIONS:
+        raise ValueError(
+            f"Calibration {method!r} was retired: every run submits the deterministic floor "
+            "(auto, also spelled none)."
         )
-        return WinProbCalibrator(method=method, model=sigma)
-    if method == "elo":
-        # Deterministic mapping; no fitting.
-        return WinProbCalibrator(method=method, model=None)
-    if method == "platt":
-        c_value = _select_platt_regularization(
-            pred_margin,
-            actual_home_win,
-            sample_weight=sample_weight,
-            seasons=seasons,
-            excluded_season=excluded_season,
-        )
-        model = LogisticRegression(solver="lbfgs", C=c_value)
-        model.fit(pred_margin.reshape(-1, 1), actual_home_win, sample_weight=sample_weight)
-        return WinProbCalibrator(method=method, model=model)
-    if method == "isotonic":
-        model = IsotonicRegression(out_of_bounds="clip")
-        model.fit(pred_margin, actual_home_win, sample_weight=sample_weight)
-        return WinProbCalibrator(method=method, model=model)
-    raise ValueError(f"Unknown win probability calibration method: {method}")
-
-
-def normalize_win_prob_calibration_method(method: str) -> str:
-    """Normalize calibration method names (e.g., logistic -> platt)."""
-    method = method.lower()
-    if method == "logistic":
-        return "platt"
-    return method
-
-
-def resolve_win_prob_calibration_method(method: str, sample_count: int) -> str:
-    """Resolve calibration method with support for auto selection."""
-    method = normalize_win_prob_calibration_method(method)
-    if method == "isotonic" and 0 < sample_count < AUTO_CALIBRATION_ISOTONIC_MIN_SAMPLES:
-        return "sigma"
-    if method != "auto":
-        return method
-    if sample_count <= 0:
-        return "none"
-    return "none"
-
-
-def _predict_home_win_prob(
-    pred_margin: np.ndarray,
-    calibrator: WinProbCalibrator | None,
-    *,
-    sigma: np.ndarray | None = None,
-    use_uncertainty: bool = False,
-) -> np.ndarray:
-    if not use_uncertainty:
-        if calibrator is None:
-            return _margin_to_home_win_prob(pred_margin)
-        if calibrator.method == "sigma":
-            sigma_value = np.full_like(
-                np.asarray(pred_margin, dtype=float),
-                float(calibrator.model),
-            )
-            return np.clip(_margin_to_home_win_prob_with_sigma(pred_margin, sigma_value), 0.0, 1.0)
-        if calibrator.method == "elo":
-            return np.clip(_margin_to_home_win_prob_elo_style(pred_margin), 0.0, 1.0)
-        if calibrator.method == "isotonic":
-            probs = calibrator.model.predict(pred_margin)
-        else:
-            probs = calibrator.model.predict_proba(pred_margin.reshape(-1, 1))[:, 1]
-        return np.clip(probs, 0.0, 1.0)
-
-    sigma_arr = _coerce_sigma(pred_margin, sigma)
-    sigma_arr = np.clip(sigma_arr, MIN_WIN_PROB_SIGMA, None)
-    z_score = np.asarray(pred_margin, dtype=float) / sigma_arr
-
-    if calibrator is None or calibrator.method == "elo":
-        return _margin_to_home_win_prob_with_sigma(pred_margin, sigma_arr)
-    if calibrator.method == "isotonic":
-        probs = calibrator.model.predict(z_score)
-    else:
-        probs = calibrator.model.predict_proba(z_score.reshape(-1, 1))[:, 1]
-    return np.clip(probs, 0.0, 1.0)
-
-
-def _adjust_home_win_prob(
-    games_df: pd.DataFrame,
-    home_win_prob: np.ndarray,
-    market_prob_config: MarketProbConfig | None,
-) -> np.ndarray:
-    """Blend/clamp win probabilities toward market implied probabilities."""
-    if market_prob_config is None:
-        return home_win_prob
-
-    blend_weight = market_prob_config.blend_weight
-    clamp_delta = market_prob_config.clamp_delta
-    prob_source = market_prob_config.prob_source.lower()
-    blend_method = market_prob_config.blend_method.lower()
-    if blend_weight < 0 or blend_weight > 1:
-        raise ValueError("Market blend weight must be between 0 and 1.")
-    if clamp_delta < 0 or clamp_delta > 0.5:
-        raise ValueError("Market clamp delta must be between 0 and 0.5.")
-    if prob_source not in {"raw", "novig"}:
-        raise ValueError("Market probability source must be 'raw' or 'novig'.")
-    if blend_method not in {"prob", "logit"}:
-        raise ValueError("Market blend method must be 'prob' or 'logit'.")
-    if blend_weight == 0 and clamp_delta == 0:
-        return home_win_prob
-
-    df = _add_market_transforms(games_df)
-    if "home_market_prob" not in df.columns:
-        log.debug("Market probabilities missing; skipping win-prob adjustments.")
-        return home_win_prob
-    if prob_source == "novig" and "away_market_prob" not in df.columns:
-        log.debug("Away market probabilities missing; skipping no-vig adjustments.")
-        return home_win_prob
-
-    if prob_source == "raw":
-        market_prob = pd.to_numeric(df["home_market_prob"], errors="coerce").to_numpy(dtype=float)
-    else:
-        home_raw = pd.to_numeric(df["home_market_prob"], errors="coerce").to_numpy(dtype=float)
-        away_raw = pd.to_numeric(df["away_market_prob"], errors="coerce").to_numpy(dtype=float)
-        market_prob = _normalize_no_vig(home_raw, away_raw)
-    adjusted = home_win_prob.astype(float, copy=True)
-    valid_mask = ~np.isnan(market_prob)
-    if not valid_mask.any():
-        return adjusted
-
-    if blend_weight:
-        if blend_method == "prob":
-            adjusted[valid_mask] = (
-                blend_weight * market_prob[valid_mask] + (1 - blend_weight) * adjusted[valid_mask]
-            )
-        else:
-            market_logit = _logit(market_prob[valid_mask])
-            model_logit = _logit(adjusted[valid_mask])
-            blended = (blend_weight * market_logit) + ((1 - blend_weight) * model_logit)
-            adjusted[valid_mask] = _sigmoid(blended)
-
-    if clamp_delta:
-        lower = market_prob[valid_mask] - clamp_delta
-        upper = market_prob[valid_mask] + clamp_delta
-        adjusted[valid_mask] = np.clip(adjusted[valid_mask], lower, upper)
-
-    return np.clip(adjusted, 0.0, 1.0)
+    raise ValueError(f"Unknown win probability calibration method: {method!r}")
 
 
 def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarray:
-    """Normalize raw implied probs so home+away sums to 1 (no-vig)."""
+    """Normalize raw implied probs so home+away sums to 1 (no-vig), for the market yardstick."""
     total = home_prob + away_prob
     with np.errstate(invalid="ignore", divide="ignore"):
         normalized = np.where(total > 0, home_prob / total, np.nan)
     return np.clip(normalized, 0.0, 1.0)
-
-
-def _logit(prob: np.ndarray) -> np.ndarray:
-    """Compute logit with clipping for stability."""
-    clipped = np.clip(prob, 1e-6, 1 - 1e-6)
-    return np.log(clipped / (1 - clipped))
-
-
-def _sigmoid(values: np.ndarray) -> np.ndarray:
-    """Compute logistic sigmoid."""
-    return 1.0 / (1.0 + np.exp(-values))
 
 
 def _predict_margin_total_from_model(
@@ -935,17 +629,16 @@ def _summarize_confidence_pool(
     summary_df = df[["season", "week", away_col, home_col]].copy()
     summary_df["home_win_prob"] = home_win_prob
     summary_df["away_win_prob"] = 1.0 - home_win_prob
-    summary_df["predicted_winner"] = np.where(home_win_prob >= 0.5, "home", "away")
+    summary_df["predicted_winner"] = np.where(picks_home(home_win_prob), "home", "away")
     summary_df["actual_winner"] = np.where(
         summary_df[home_col] > summary_df[away_col],
         "home",
         np.where(summary_df[home_col] < summary_df[away_col], "away", "tie"),
     )
-    summary_df["confidence_strength"] = np.abs(summary_df["home_win_prob"] - 0.5)
-    summary_df["confidence_rank"] = (
-        summary_df.groupby(["season", "week"])["confidence_strength"]
-        .rank(method="first", ascending=True)
-        .astype(int)
+    summary_df["confidence_rank"] = confidence_ranks(
+        home_win_prob,
+        tiebreaker=df["game_id"].to_numpy() if "game_id" in df.columns else None,
+        groups=(summary_df["season"].to_numpy(), summary_df["week"].to_numpy()),
     )
     summary_df["pick_correct"] = (summary_df["predicted_winner"] == summary_df["actual_winner"]) & (
         summary_df["actual_winner"] != "tie"
@@ -979,184 +672,26 @@ def _summarize_confidence_pool(
     }
 
 
-def _margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
-    if constants.SCORE_DIFF_STD_DEV <= 0:
-        raise ValueError("SCORE_DIFF_STD_DEV must be positive.")
-    return norm.cdf(margin / constants.SCORE_DIFF_STD_DEV)
-
-
-def _margin_to_home_win_prob_with_sigma(
-    margin: np.ndarray,
-    sigma: np.ndarray,
+def _margin_to_home_win_prob(
+    margin: np.ndarray, sigma: float = constants.SCORE_DIFF_STD_DEV
 ) -> np.ndarray:
-    """Map margin to win probability using per-game sigma."""
-    margin = np.asarray(margin, dtype=float)
-    sigma_arr = np.asarray(sigma, dtype=float)
-    sigma_arr = np.clip(sigma_arr, MIN_WIN_PROB_SIGMA, None)
-    return norm.cdf(margin / sigma_arr)
+    """Return the deterministic floor, ``Phi(margin / sigma)``.
 
-
-def _estimate_sigma_from_quantiles(
-    p10: np.ndarray,
-    p90: np.ndarray,
-    *,
-    fallback: float,
-    min_sigma: float = MIN_WIN_PROB_SIGMA,
-) -> np.ndarray:
-    """Estimate sigma from p10/p90 quantiles with a fallback."""
-    if fallback <= 0:
-        raise ValueError("fallback sigma must be positive.")
-    p10_arr = np.asarray(p10, dtype=float)
-    p90_arr = np.asarray(p90, dtype=float)
-    sigma = (p90_arr - p10_arr) / P10_P90_TO_SIGMA_DENOM
-    fallback_arr = np.full_like(p10_arr, float(fallback), dtype=float)
-    sigma = np.where(np.isfinite(sigma) & (sigma > 0), sigma, fallback_arr)
-    return np.clip(sigma, min_sigma, None)
-
-
-def _resolve_margin_sigma(
-    pred_margin: np.ndarray,
-    pred_margin_quantiles: dict[float, np.ndarray] | None,
-    *,
-    fallback: float,
-    min_sigma: float = MIN_WIN_PROB_SIGMA,
-) -> np.ndarray:
-    """Resolve per-game sigma using p10/p90 quantiles when available."""
-    if pred_margin_quantiles is not None:
-        p10 = pred_margin_quantiles.get(0.1)
-        p90 = pred_margin_quantiles.get(0.9)
-        if p10 is not None and p90 is not None:
-            return _estimate_sigma_from_quantiles(
-                p10,
-                p90,
-                fallback=fallback,
-                min_sigma=min_sigma,
-            )
-
-    margin = np.asarray(pred_margin, dtype=float)
-    return np.full_like(margin, float(fallback), dtype=float)
-
-
-def _coerce_sigma(
-    pred_margin: np.ndarray,
-    sigma: np.ndarray | None,
-) -> np.ndarray:
-    """Return a sigma array aligned to pred_margin."""
-    margin = np.asarray(pred_margin, dtype=float)
-    if sigma is None:
-        return np.full_like(margin, constants.SCORE_DIFF_STD_DEV, dtype=float)
-    sigma_arr = np.asarray(sigma, dtype=float)
-    if sigma_arr.shape != margin.shape:
-        return np.full_like(margin, float(sigma_arr), dtype=float)
-    return sigma_arr
-
-
-def _estimate_win_prob_sigma_from_residuals(
-    pred_margin: np.ndarray,
-    actual_margin: np.ndarray,
-    *,
-    sample_weight: np.ndarray | None = None,
-    min_sigma: float = MIN_WIN_PROB_SIGMA,
-) -> float:
-    """Estimate a single sigma from margin residuals for deterministic calibration."""
-    pred_margin_arr = np.asarray(pred_margin, dtype=float)
-    actual_margin_arr = np.asarray(actual_margin, dtype=float)
-    residual = actual_margin_arr - pred_margin_arr
-    if sample_weight is None:
-        residual_centered = residual - float(np.mean(residual))
-        sigma = float(np.sqrt(np.mean(residual_centered**2)))
-    else:
-        weights = np.asarray(sample_weight, dtype=float)
-        residual_mean = float(np.average(residual, weights=weights))
-        sigma = float(np.sqrt(np.average((residual - residual_mean) ** 2, weights=weights)))
-    return max(sigma, float(min_sigma))
-
-
-def _select_platt_regularization(
-    pred_margin: np.ndarray,
-    actual_home_win: np.ndarray,
-    *,
-    sample_weight: np.ndarray | None,
-    seasons: np.ndarray | None,
-    excluded_season: int | None,
-) -> float:
-    """Choose the Platt-scaling regularization strength using only pre-eval seasons."""
-    if seasons is None:
-        return 1.0
-
-    seasons_arr = np.asarray(seasons)
-    if excluded_season is not None:
-        tuning_mask = seasons_arr != excluded_season
-    else:
-        tuning_mask = np.ones(len(seasons_arr), dtype=bool)
-
-    tuning_seasons = sorted({int(season) for season in seasons_arr[tuning_mask]})
-    if len(tuning_seasons) < 2:
-        return 1.0
-
-    validation_season = tuning_seasons[-1]
-    train_mask = tuning_mask & (seasons_arr < validation_season)
-    validation_mask = tuning_mask & (seasons_arr == validation_season)
-    if train_mask.sum() == 0 or validation_mask.sum() == 0:
-        return 1.0
-
-    train_outcomes = np.asarray(actual_home_win)[train_mask]
-    validation_outcomes = np.asarray(actual_home_win)[validation_mask]
-    if len(np.unique(train_outcomes)) < 2 or len(np.unique(validation_outcomes)) < 2:
-        return 1.0
-
-    pred_margin_arr = np.asarray(pred_margin, dtype=float)
-    weights_arr = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
-    best_c = 1.0
-    best_loss = float("inf")
-    for c_value in PLATT_C_GRID:
-        model = LogisticRegression(solver="lbfgs", C=float(c_value))
-        fit_weights = None if weights_arr is None else weights_arr[train_mask]
-        model.fit(
-            pred_margin_arr[train_mask].reshape(-1, 1),
-            train_outcomes,
-            sample_weight=fit_weights,
-        )
-        validation_prob = model.predict_proba(pred_margin_arr[validation_mask].reshape(-1, 1))[:, 1]
-        validation_prob = np.clip(validation_prob, 1e-15, 1.0 - 1e-15)
-        validation_loss = log_loss(validation_outcomes, validation_prob, labels=[0, 1])
-        if validation_loss < best_loss:
-            best_loss = float(validation_loss)
-            best_c = float(c_value)
-    return best_c
-
-
-def _margin_to_home_win_prob_elo_style(
-    margin: np.ndarray,
-    *,
-    points_per_400_elo: float = 16.0,
-) -> np.ndarray:
-    """Map predicted margin to win probability via an Elo-style logistic.
-
-    This is a deterministic mapping:
-
-        p(home win) = 1 / (1 + 10 ** (-margin / points_per_400_elo))
-
-    where `margin` is in points (home_score - away_score).
-
-    Compared to Platt scaling, this tends to produce less extreme probabilities for
-    large-but-plausible margins and can be useful as an alternative for pool display.
+    ``sigma`` defaults to ``SCORE_DIFF_STD_DEV``, the fallback spread; the submitted
+    probabilities pass the week's estimated sigma (``floor_sigma``).
     """
-    if points_per_400_elo <= 0:
-        raise ValueError("points_per_400_elo must be positive.")
-    margin = np.asarray(margin, dtype=float)
-    return 1.0 / (1.0 + np.power(10.0, -margin / points_per_400_elo))
+    return home_win_prob(margin, sigma)
 
 
-def _rank_confidence(strength: np.ndarray, tiebreaker: np.ndarray | None = None) -> np.ndarray:
-    strength = np.asarray(strength)
-    if tiebreaker is None:
-        order = np.argsort(strength, kind="mergesort")
-    else:
-        order = np.lexsort((tiebreaker, strength))
-    ranks = np.empty_like(order)
-    ranks[order] = np.arange(1, len(strength) + 1)
-    return ranks
+def model_floor_sigma(model: Any) -> tuple[float, bool]:
+    """Return the sigma a saved model predicts with, and whether it is the fallback constant.
+
+    A model saved before the sigma was recorded has none and uses the constant.
+    """
+    record = getattr(model, "floor_sigma", None)
+    if record is None:
+        return float(constants.SCORE_DIFF_STD_DEV), True
+    return float(record.sigma), bool(record.fallback)
 
 
 def _build_prediction_output(
@@ -1251,11 +786,14 @@ def _build_prediction_output(
     output_df["predicted_margin"] = np.round(display_home_scores - display_away_scores, 1)
 
     # Round first (for stable output), then clip so values don't collapse to 0.0/1.0
-    # at 4-decimal precision (which can distort pool rankings and log-loss stability).
+    # at 4-decimal precision (which would make log loss unstable).
     home_win_prob_out = np.clip(np.round(home_win_prob, 4), 0.0001, 0.9999)
     output_df["home_win_prob"] = home_win_prob_out
     output_df["away_win_prob"] = np.round(1.0 - home_win_prob_out, 4)
 
+    # The side and the confidence come from the unrounded probability, as in the walk-forward,
+    # so a published 0.5000 or a shared 4-decimal value never decides a pick or a rank.
+    unrounded = np.asarray(home_win_prob, dtype=float)
     team_cols = [
         col
         for col in constants.METADATA_COLUMNS
@@ -1265,15 +803,14 @@ def _build_prediction_output(
     home_team_col = next((col for col in team_cols if col.startswith("home_")), None)
     if away_team_col and home_team_col:
         output_df["predicted_winner"] = np.where(
-            home_win_prob_out >= 0.5,
+            picks_home(unrounded),
             output_df[home_team_col],
             output_df[away_team_col],
         )
 
-    confidence_strength = np.abs(home_win_prob_out - 0.5)
-    output_df["confidence_strength"] = confidence_strength
+    output_df["confidence_strength"] = confidence_strength(unrounded)
     tiebreaker = output_df["game_id"].to_numpy() if "game_id" in output_df.columns else None
-    output_df["confidence_rank"] = _rank_confidence(confidence_strength, tiebreaker)
+    output_df["confidence_rank"] = confidence_ranks(unrounded, tiebreaker)
 
     return output_df
 
@@ -1302,9 +839,6 @@ def _early_stopping_info(model: Any) -> dict[str, Any]:
         if model.total_quantile_models:
             for q, est in model.total_quantile_models.items():
                 _capture(f"total_q{q}", est)
-    elif isinstance(model, BlendedMarginTotalModel):
-        _capture("team.margin_model", model.team_model.margin_model)
-        _capture("team.total_model", model.team_model.total_model)
     return info
 
 
@@ -1348,17 +882,60 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
         pass
 
     model = _ensure_backward_compatible_model(model)
-    expected_types = {
-        "margin_total": MarginTotalModel,
-        "blend": BlendedMarginTotalModel,
-    }
-    expected_type = expected_types.get(model_kind)
-    if expected_type is None:
+    if model_kind != "margin_total":
         raise ValueError(f"Unknown model kind: {model_kind}")
-    if not isinstance(model, expected_type):
-        raise ValueError(f"Model checkpoint type mismatch; expected {expected_type.__name__}.")
+    if isinstance(model, BlendedMarginTotalModel):
+        raise ValueError(
+            f"{path} is a blend model: the blend model kind was retired; "
+            "train a margin_total model instead."
+        )
+    if not isinstance(model, MarginTotalModel):
+        raise ValueError("Model checkpoint type mismatch; expected MarginTotalModel.")
+    _drop_retired_calibrator(model, path)
+    _drop_retired_market_blend(model, path)
+    _drop_retired_uncertainty(model, path)
     log.info("Loaded model checkpoint from %s", path)
     return model
+
+
+def _drop_retired_calibrator(model: Any, path: Path) -> None:
+    """Remove a saved fitted or Elo calibrator from a loaded model, saying what is ignored."""
+    calibrator = model.__dict__.pop("calibrator", None)
+    if calibrator is None:
+        return
+    log.warning(
+        "%s was saved with the '%s' calibrator; fitted and Elo calibrators were retired, so it "
+        "predicts the deterministic floor.",
+        path,
+        getattr(calibrator, "method", type(calibrator).__name__),
+    )
+
+
+def _drop_retired_market_blend(model: Any, path: Path) -> None:
+    """Remove a saved market blend or clamp from a loaded model, saying what is ignored."""
+    config = model.__dict__.pop("market_prob_config", None)
+    if config is None:
+        return
+    weight = float(getattr(config, "blend_weight", 0.0))
+    clamp = float(getattr(config, "clamp_delta", 0.0))
+    if weight or clamp:
+        log.warning(
+            "%s was saved with a market blend (weight %.2f, clamp %.2f); market probability "
+            "blending was retired, so it predicts the deterministic floor.",
+            path,
+            weight,
+            clamp,
+        )
+
+
+def _drop_retired_uncertainty(model: Any, path: Path) -> None:
+    """Remove a saved quantile-spread probability flag from a loaded model, saying so."""
+    if model.__dict__.pop("win_prob_use_uncertainty", False):
+        log.warning(
+            "%s was saved with uncertainty-aware win probabilities (a sigma from the margin "
+            "quantiles); that path was retired, so it predicts the deterministic floor.",
+            path,
+        )
 
 
 def _ensure_backward_compatible_model(model: Any) -> Any:
@@ -1379,29 +956,11 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
             _safe_set_attr(instance, "quantiles", None)
         if not hasattr(instance, "optuna_summary"):
             _safe_set_attr(instance, "optuna_summary", None)
+        if not hasattr(instance, "floor_sigma"):
+            _safe_set_attr(instance, "floor_sigma", None)
 
     if isinstance(model, MarginTotalModel):
         _ensure_margin_total(model)
-        return model
-    if isinstance(model, BlendedMarginTotalModel):
-        _ensure_margin_total(model.team_model)
-        if not hasattr(model, "optuna_summary"):
-            _safe_set_attr(model, "optuna_summary", None)
-        return model
-    return model
-
-
-def _with_market_prob_config(model: Any, config: MarketProbConfig | None) -> Any:
-    if config is None:
-        return model
-    if isinstance(model, MarginTotalModel):
-        return replace(model, market_prob_config=config)
-    if isinstance(model, BlendedMarginTotalModel):
-        return replace(
-            model,
-            market_prob_config=config,
-            team_model=replace(model.team_model, market_prob_config=config),
-        )
     return model
 
 
@@ -1420,9 +979,11 @@ def apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
     return _apply_feature_spec(df, spec)
 
 
-def margin_to_home_win_prob(margin: np.ndarray) -> np.ndarray:
-    """Convert predicted margin to home win probability."""
-    return _margin_to_home_win_prob(margin)
+def margin_to_home_win_prob(
+    margin: np.ndarray, sigma: float = constants.SCORE_DIFF_STD_DEV
+) -> np.ndarray:
+    """Convert predicted margin to home win probability through the deterministic floor."""
+    return _margin_to_home_win_prob(margin, sigma)
 
 
 def predict_margin_total_from_model(
@@ -1437,35 +998,6 @@ def derive_scores_from_margin_total(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Derive away/home scores from margin and total."""
     return _derive_scores_from_margin_total(pred_margin, pred_total)
-
-
-def predict_home_win_prob(
-    pred_margin: np.ndarray,
-    calibrator: WinProbCalibrator | None,
-    *,
-    sigma: np.ndarray | None = None,
-    use_uncertainty: bool = False,
-) -> np.ndarray:
-    """Predict home win probability from margin predictions.
-
-    When `use_uncertainty` is True, the margin is normalized by `sigma` before
-    computing probabilities (and any calibrator is fit/predicted on that scale).
-    """
-    return _predict_home_win_prob(
-        pred_margin,
-        calibrator,
-        sigma=sigma,
-        use_uncertainty=use_uncertainty,
-    )
-
-
-def adjust_home_win_prob(
-    games_df: pd.DataFrame,
-    home_win_prob: np.ndarray,
-    market_prob_config: MarketProbConfig | None,
-) -> np.ndarray:
-    """Adjust win probabilities using market blend/clamp settings."""
-    return _adjust_home_win_prob(games_df, home_win_prob, market_prob_config)
 
 
 def predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
@@ -1530,7 +1062,6 @@ def _score_margin_total_fold(
     objective: str,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: MarketProbConfig | None = None,
 ) -> float:
     feature_spec = _build_feature_spec(
         train_df,
@@ -1575,7 +1106,6 @@ def _score_margin_total_fold(
         pred_margin = pred_margin + baseline_margin_val
         pred_total = pred_total + baseline_total_val
     home_win_prob = _margin_to_home_win_prob(pred_margin)
-    home_win_prob = _adjust_home_win_prob(val_df, home_win_prob, market_prob_config)
 
     metrics = _evaluate_margin_total_predictions(
         val_df, pred_margin, pred_total, target_columns, home_win_prob
@@ -1597,7 +1127,6 @@ def _evaluate_margin_total_cv(
     objective: str,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: MarketProbConfig | None = None,
 ) -> float:
     timepoints = _build_season_week_timepoints(df)
     folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
@@ -1625,7 +1154,6 @@ def _evaluate_margin_total_cv(
                     objective=objective,
                     market_transform=market_transform,
                     market_anchor=market_anchor,
-                    market_prob_config=market_prob_config,
                 )
             )
         )
@@ -1646,7 +1174,6 @@ def _evaluate_margin_total_cv_summary(
     objective: str,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: MarketProbConfig | None = None,
 ) -> dict[str, Any]:
     timepoints = _build_season_week_timepoints(df)
     folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
@@ -1672,7 +1199,6 @@ def _evaluate_margin_total_cv_summary(
                     objective=objective,
                     market_transform=market_transform,
                     market_anchor=market_anchor,
-                    market_prob_config=market_prob_config,
                 )
             )
         )
@@ -1696,7 +1222,6 @@ def _run_optuna_search(
     optuna_config: OptunaConfig,
     market_transform: bool = False,
     market_anchor: bool = False,
-    market_prob_config: MarketProbConfig | None = None,
     holdout_seasons: Sequence[int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     if optuna is None:
@@ -1755,7 +1280,6 @@ def _run_optuna_search(
             objective=optuna_config.objective,
             market_transform=market_transform,
             market_anchor=market_anchor,
-            market_prob_config=market_prob_config,
         )
 
     def _persist_best_params(study: Any, trial: Any) -> None:
@@ -1838,7 +1362,6 @@ def _run_optuna_search(
         objective=optuna_config.objective,
         market_transform=market_transform,
         market_anchor=market_anchor,
-        market_prob_config=market_prob_config,
     )
     complete_trials = sum(
         1 for trial in study.trials if trial.state == optuna_module.trial.TrialState.COMPLETE

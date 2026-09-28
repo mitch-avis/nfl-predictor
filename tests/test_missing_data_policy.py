@@ -113,15 +113,11 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
     result = ml_model.train_margin_total_model_with_report(
         data_path=data_path,
         holdout_seasons=0,
-        calibration_seasons=0,
-        calibration_weeks=0,
         include_market=True,
         max_cardinality_ratio=1.0,
-        win_prob_calibration="none",
         optuna_config=optuna,
         market_transform=False,
         market_anchor=False,
-        market_prob_config=None,
     )
 
     missing = result.metrics_report["missing_data"]

@@ -4,12 +4,23 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 from nfl_predictor import constants
 from nfl_predictor.ml import ml_model_core, walk_forward
+from nfl_predictor.ml.ml_model_core import OptunaConfig
+from nfl_predictor.ml.ml_model_xgb_utils import (
+    XGB_DEVICE_AUTO,
+    XGB_DEVICE_HELP,
+    resolve_xgb_device,
+    xgb_device_arg,
+)
 from nfl_predictor.reporting import power_rankings
+from nfl_predictor.weekly_run import stage1
 
 _PATH_KEYS = {
     "config",
@@ -22,6 +33,7 @@ _PATH_KEYS = {
     "power_rankings_out_dir",
     "power_rankings_strength_snapshots",
 }
+_PATH_LIST_KEYS = {"floor_sigma_reference_runs"}
 
 
 # The configuration a weekly run reads when no --config is given.
@@ -35,8 +47,23 @@ _RENAMED_CONFIG_KEYS = {
 
 
 # Config keys that were removed, with what replaces them.
+_RETIRED_PROBABILITY_OPTION = (
+    "retired; the weekly run submits the deterministic floor, with no market blend and no "
+    "uncertainty-aware probabilities"
+)
+_RETIRED_HOLD_OUT_OPTION = (
+    "retired; the final fit and every walk-forward fold train on every eligible completed game, "
+    "except holdout_seasons (the evaluation holdout), with no held-out calibration weeks and "
+    "no XGBoost eval frame"
+)
 _REMOVED_CONFIG_KEYS = {
     "wf_n_jobs": "use xgb_n_jobs, which sets XGBoost's CPU threads for every stage",
+    "wf_market_prob_source": _RETIRED_PROBABILITY_OPTION,
+    "wf_market_prob_blend_method": _RETIRED_PROBABILITY_OPTION,
+    "wf_win_prob_uncertainty": _RETIRED_PROBABILITY_OPTION,
+    "wf_calibration_weeks": _RETIRED_HOLD_OUT_OPTION,
+    "train_calibration_weeks": _RETIRED_HOLD_OUT_OPTION,
+    "train_calibration_seasons": _RETIRED_HOLD_OUT_OPTION,
 }
 
 
@@ -89,12 +116,33 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
     for key in _PATH_KEYS:
         if key in normalized and normalized[key] is not None:
             normalized[key] = Path(normalized[key])
+    for key in _PATH_LIST_KEYS:
+        if key in normalized and normalized[key] is not None:
+            if isinstance(normalized[key], str):
+                raise ValueError(f"Config key {key} must be a list of paths.")
+            normalized[key] = [Path(value) for value in normalized[key]]
     return normalized
 
 
 def _allowed_config_keys(parser: argparse.ArgumentParser) -> set[str]:
     """Return allowable config keys based on parser destinations."""
     return {action.dest for action in parser._actions if action.dest != "help"}
+
+
+def _validate_config_choices(config: dict[str, Any], parser: argparse.ArgumentParser) -> None:
+    """Raise if a config value is outside its option's choices.
+
+    argparse checks ``choices`` only for values given on the command line, not for defaults, so
+    a config file's value (for example the retired ``wf_market_mode: all``) is checked here,
+    before the run refreshes any data.
+    """
+    for action in parser._actions:
+        if action.choices is None or action.dest not in config:
+            continue
+        value = config[action.dest]
+        if value not in action.choices:
+            options = ", ".join(str(choice) for choice in action.choices)
+            raise ValueError(f"Config sets {action.dest} to {value!r}; choose one of: {options}.")
 
 
 def _validate_config_keys(config: dict[str, Any], allowed: set[str]) -> None:
@@ -191,14 +239,11 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     parser.add_argument(
         "--wf-start-week",
         type=int,
-        default=defaults.get("wf_start_week", 3),
-        help="Walk-forward: start week.",
-    )
-    parser.add_argument(
-        "--wf-calibration-weeks",
-        type=int,
-        default=defaults.get("wf_calibration_weeks", walk_forward.DEFAULT_CALIBRATION_WEEKS),
-        help="Walk-forward: calibration weeks.",
+        default=defaults.get("wf_start_week", 1),
+        help=(
+            "Walk-forward: start week (default 1, so every week is scored and its errors reach "
+            "the final fit's floor-sigma pool)."
+        ),
     )
     parser.add_argument(
         "--wf-include-postseason",
@@ -226,27 +271,12 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     )
     parser.add_argument(
         "--wf-market-mode",
-        choices=["features", "anchor", "hybrid", "all"],
+        choices=["features", "anchor", "hybrid"],
         default=defaults.get("wf_market_mode", "hybrid"),
-        help="Walk-forward: market mode selection.",
-    )
-    parser.add_argument(
-        "--wf-market-prob-source",
-        choices=["raw", "novig", "both"],
-        default=defaults.get("wf_market_prob_source", "raw"),
-        help="Walk-forward: market probability source.",
-    )
-    parser.add_argument(
-        "--wf-market-prob-blend-method",
-        choices=["prob", "logit", "both"],
-        default=defaults.get("wf_market_prob_blend_method", "prob"),
-        help="Walk-forward: market probability blend method.",
-    )
-    parser.add_argument(
-        "--wf-win-prob-uncertainty",
-        choices=["off", "on", "both"],
-        default=defaults.get("wf_win_prob_uncertainty", "off"),
-        help="Walk-forward: use uncertainty-aware win probabilities.",
+        help=(
+            "Market mode of the walk-forward and the final fit: market lines as features, "
+            "the model anchored to them, or both (hybrid)."
+        ),
     )
     parser.add_argument(
         "--wf-include-quantiles",
@@ -258,13 +288,13 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         "--wf-n-estimators",
         type=int,
         default=defaults.get("wf_n_estimators", ml_model_core.DEFAULT_XGB_PARAMS["n_estimators"]),
-        help="Walk-forward: XGBoost n_estimators override.",
+        help="Stage 1 and the final fit: XGBoost n_estimators (the tree budget).",
     )
     parser.add_argument(
         "--wf-max-depth",
         type=int,
         default=defaults.get("wf_max_depth", ml_model_core.DEFAULT_XGB_PARAMS["max_depth"]),
-        help="Walk-forward: XGBoost max_depth override.",
+        help="Stage 1 and the final fit: XGBoost max_depth.",
     )
     parser.add_argument(
         "--wf-learning-rate",
@@ -273,25 +303,16 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "wf_learning_rate",
             ml_model_core.DEFAULT_XGB_PARAMS["learning_rate"],
         ),
-        help="Walk-forward: XGBoost learning_rate override.",
+        help="Stage 1 and the final fit: XGBoost learning_rate.",
     )
     parser.add_argument(
         "--holdout-seasons",
         type=int,
         default=defaults.get("holdout_seasons", 0),
-        help="Training: holdout seasons.",
-    )
-    parser.add_argument(
-        "--train-calibration-seasons",
-        type=int,
-        default=defaults.get("train_calibration_seasons", 0),
-        help="Training: calibration seasons.",
-    )
-    parser.add_argument(
-        "--train-calibration-weeks",
-        type=int,
-        default=defaults.get("train_calibration_weeks"),
-        help="Training: calibration weeks (default: use wf-calibration-weeks).",
+        help=(
+            "Training: newest whole seasons held out of the final fit and scored as an "
+            "evaluation holdout; the final fit trains on every other completed game."
+        ),
     )
     parser.add_argument(
         "--include-postseason",
@@ -337,6 +358,22 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         type=str,
         default=defaults.get("feature_end", ml_model_core.DEFAULT_FEATURE_END_COLUMN),
         help="Training: last feature column.",
+    )
+    parser.add_argument(
+        "--floor-sigma-reference-runs",
+        type=Path,
+        nargs="*",
+        default=defaults.get(
+            "floor_sigma_reference_runs",
+            [Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS],
+        ),
+        help=(
+            "Walk-forward runs (run directories or fold checkpoint directories, relative to "
+            "the repository root) whose out-of-fold margin errors set the probability floor's "
+            "sigma, with stage 1's own folds; their checkpoints are only read. Several runs "
+            "are averaged per game. A missing run is an error; give no paths to use only "
+            "stage 1's folds (the constant until they span three earlier seasons, any weeks)."
+        ),
     )
     parser.add_argument(
         "--tune-early-stopping-rounds",
@@ -411,9 +448,9 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     )
     parser.add_argument(
         "--xgb-device",
-        type=str,
-        default=defaults.get("xgb_device"),
-        help="XGBoost device override.",
+        type=xgb_device_arg,
+        default=defaults.get("xgb_device", XGB_DEVICE_AUTO),
+        help=f"{XGB_DEVICE_HELP} Stage 1 and the final fit use the same device.",
     )
     parser.add_argument(
         "--xgb-n-jobs",
@@ -545,6 +582,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if config_path is not None:
         config = _rename_config_keys(_load_config(config_path))
         _validate_config_keys(config, _allowed_config_keys(parser))
+        _validate_config_choices(config, parser)
         # Recording the path as the default keeps it in args.config when it was not passed.
         parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)
@@ -555,11 +593,134 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    """Parse ``argv`` as the weekly run parses its command line, never reading ``sys.argv``.
+
+    Without ``--config`` the shipped config file supplies the defaults, as in a real run.
+    """
+    return _parse_args(list(argv))
+
+
 def xgb_thread_count(args: argparse.Namespace) -> int:
     """Return XGBoost's CPU threads for every stage: ``--xgb-n-jobs``, else every core."""
     if args.xgb_n_jobs is not None:
         return int(args.xgb_n_jobs)
     return int(ml_model_core.DEFAULT_XGB_PARAMS["n_jobs"])
+
+
+def apply_run_defaults(args: argparse.Namespace) -> None:
+    """Fill the options that default to another one, and resolve ``auto`` to a device.
+
+    The final fit's recency half-life follows stage 1's when unset. The device is resolved
+    once, so stage 1, the final fit and every record name the same device.
+    """
+    if args.train_recency_half_life_seasons is None:
+        args.train_recency_half_life_seasons = args.wf_recency_half_life_seasons
+    args.xgb_device = resolve_xgb_device(args.xgb_device)
+
+
+def xgb_model_params(args: argparse.Namespace) -> dict[str, Any]:
+    """Return the XGBoost tree budget, depth and learning rate of stage 1 and the final fit.
+
+    Both stages train with these, so the walk-forward measures the model the weekly run submits.
+    """
+    return {
+        "n_estimators": int(args.wf_n_estimators),
+        "max_depth": int(args.wf_max_depth),
+        "learning_rate": float(args.wf_learning_rate),
+    }
+
+
+def stage1_options(args: argparse.Namespace) -> dict[str, Any]:
+    """Return the configuration options stage 1 walks forward, from resolved run options."""
+    xgb_params_overrides: dict[str, Any] = {
+        **xgb_model_params(args),
+        "n_jobs": xgb_thread_count(args),
+        "verbosity": 0,
+        "device": args.xgb_device,
+    }
+    # Stage 1 trains with the final fit's tree method too.
+    if args.xgb_tree_method:
+        xgb_params_overrides["tree_method"] = args.xgb_tree_method
+    return {
+        "eval_last_n_seasons": args.wf_eval_last_n_seasons,
+        "wf_start_week": args.wf_start_week,
+        "include_postseason": bool(args.wf_include_postseason),
+        "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
+        "recency_half_life_seasons": args.wf_recency_half_life_seasons,
+        "market_mode": args.wf_market_mode,
+        "xgb_params_overrides": xgb_params_overrides,
+        "include_quantiles": bool(args.wf_include_quantiles),
+        "market_transform": args.market_transform,
+        "max_cardinality_ratio": float(args.max_cardinality_ratio),
+    }
+
+
+def final_fit_options(
+    args: argparse.Namespace, frame: pd.DataFrame, *, run_dir: Path | None
+) -> tuple[OptunaConfig, dict[str, Any]]:
+    """Return the final fit's tuning config and its training settings.
+
+    ``frame`` needs only the dataset's columns: the market settings resolve against the lines
+    it has. Without a ``run_dir`` a tuning run gets no default Optuna storage.
+    """
+    market_mode = str(args.wf_market_mode)
+    include_market, market_anchor = stage1.market_mode_flags(market_mode)
+    market_transform = args.market_transform
+    if market_transform is None and include_market:
+        market_transform = True
+    include_market, market_transform, market_anchor = walk_forward.resolve_market_settings(
+        frame, include_market, market_transform, market_anchor
+    )
+
+    optuna_storage = args.tune_storage
+    if args.tune and not optuna_storage and run_dir is not None:
+        optuna_storage = f"sqlite:///{(run_dir / 'optuna.db').resolve()}"
+
+    optuna_config = OptunaConfig(
+        enabled=bool(args.tune),
+        timeout_seconds=int(args.tune_timeout),
+        n_trials=args.tune_trials,
+        cv_splits=int(args.tune_cv_splits),
+        objective=str(args.tune_objective),
+        early_stopping_rounds=int(args.tune_early_stopping_rounds),
+        tree_method=args.xgb_tree_method,
+        device=args.xgb_device,
+        storage=optuna_storage,
+        study_name=args.tune_study_name,
+        best_params_out=None,
+        xgb_n_jobs=xgb_thread_count(args),
+    )
+
+    train_config: dict[str, Any] = {
+        "calibration": "auto",
+        "market_mode": market_mode,
+        "include_market": include_market,
+        "market_transform": market_transform,
+        "market_anchor": market_anchor,
+        "holdout_seasons": int(args.holdout_seasons),
+        "include_postseason": bool(args.include_postseason),
+        "postseason_weight": float(args.postseason_weight),
+        "recency_half_life_seasons": args.train_recency_half_life_seasons,
+        "max_cardinality_ratio": float(args.max_cardinality_ratio),
+        "feature_start": str(args.feature_start),
+        "feature_end": str(args.feature_end),
+        "xgb_params_overrides": xgb_model_params(args),
+        "optuna": {
+            "enabled": optuna_config.enabled,
+            "timeout_seconds": optuna_config.timeout_seconds,
+            "n_trials": optuna_config.n_trials,
+            "cv_splits": optuna_config.cv_splits,
+            "objective": optuna_config.objective,
+            "early_stopping_rounds": optuna_config.early_stopping_rounds,
+            "tree_method": optuna_config.tree_method,
+            "device": optuna_config.device,
+            "storage": optuna_config.storage,
+            "study_name": optuna_config.study_name,
+            "xgb_n_jobs": optuna_config.xgb_n_jobs,
+        },
+    }
+    return optuna_config, train_config
 
 
 def _power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOptions:

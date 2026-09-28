@@ -13,8 +13,12 @@ against ``actual_home_win`` (ties are coded 0 and scored that way):
   when that side won outright, so ties are incorrect for both sides.
 - Margin and total absolute error against ``actual_margin`` and ``actual_total``.
 - Confidence-pool points: within each (season, week), games are ranked ``1..N`` by ``|p - 0.5|``
-  ascending (ties broken by ``game_id`` order) and a correct pick scores its rank. Reported as the
-  window's total.
+  rounded to 12 decimals (``CONFIDENCE_DECIMALS`` in ``nfl_predictor.ml.metrics``), ascending,
+  with equal rounded confidences broken by ``game_id`` order, and a correct pick scores its rank.
+  Rounding makes mathematically equal confidences (a home favorite and a home underdog by the
+  same spread) tie almost always instead of being ordered by floating-point noise; a pair whose
+  noise straddles a 12-decimal rounding boundary can still differ. Reported as the window's
+  total.
 - The market view is ``market_home_win_prob`` from the same rows.
 
 Paired differences are candidate minus reference. Loss columns are bootstrapped over games (5,000
@@ -25,6 +29,13 @@ per-week) differences are averaged over the pairs before bootstrapping, so seed-
 is folded into the estimate.
 
 Windows: week 1, week 2, weeks 3-18, and all weeks.
+
+The stability view splits every window by season with the same definitions: one row per season
+(and, for a single run, an all-seasons row), for each run and for the paired contrast. A row with
+fewer than two games has no game-bootstrap interval, and a row with fewer than two weeks (week 1
+or week 2 of one season) has no pool-points interval, because resampling a single unit only
+returns it. ``stability_report`` builds the same view for one run from its prediction frame, which
+is how ``nfl-predictor backtest`` adds it to ``metrics_report.json``.
 """
 
 from __future__ import annotations
@@ -38,6 +49,8 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+
+from nfl_predictor.ml.metrics import confidence_ranks
 
 DEFAULT_RESAMPLES = 5000
 DEFAULT_BOOTSTRAP_SEED = 0
@@ -72,6 +85,11 @@ REQUIRED_COLUMNS = (
     "predicted_margin",
     "predicted_total",
 )
+RUN_COLUMNS = ("brier", "log_loss", "correct", "margin_ae", "total_ae", "pool", "market_brier")
+ALL_SEASONS = "all seasons"
+STABILITY_HEADING = "## Stability by season"
+# An interval needs at least this many resampling units (games, or weeks for pool points).
+_MIN_RESAMPLING_UNITS = 2
 _PROB_CLIP = 1e-15
 _HEADS = ("margin_model", "total_model")
 # Metadata config keys left out of the configuration difference: where the run's files live, and
@@ -193,12 +211,10 @@ def per_game_scores(predictions: pd.DataFrame) -> pd.DataFrame:
             "market_brier": (frame["market_home_win_prob"].to_numpy(float) - y) ** 2,
         }
     )
-    confidence = (games["p"] - 0.5).abs()
-    games["rank"] = (
-        games.assign(confidence=confidence)
-        .groupby(["season", "week"])["confidence"]
-        .rank(method="first")
-        .astype(int)
+    games["rank"] = confidence_ranks(
+        p,
+        tiebreaker=games["game_id"].to_numpy(),
+        groups=(games["season"].to_numpy(), games["week"].to_numpy()),
     )
     games["pool"] = games["rank"] * games["correct"]
     return games
@@ -274,6 +290,79 @@ def paired_contrast(
     return result
 
 
+def _week_count(games: pd.DataFrame, mask: np.ndarray) -> int:
+    """Return how many (season, week) blocks the masked rows cover."""
+    return len(games.loc[mask, ["season", "week"]].drop_duplicates())
+
+
+def _drop_interval(values: Sequence[float | None], units: int) -> tuple[Any, ...]:
+    """Return ``values`` unchanged, or without its interval when too few units were resampled."""
+    if units < _MIN_RESAMPLING_UNITS:
+        return (values[0], None, None)
+    return tuple(values)
+
+
+def _season_masks(games: pd.DataFrame, mask: np.ndarray) -> dict[str, np.ndarray]:
+    """Split a window mask by season, keyed by the season as text, in season order."""
+    seasons = games["season"].to_numpy()
+    return {
+        str(season): mask & (seasons == season) for season in sorted(set(seasons[mask].tolist()))
+    }
+
+
+def stability_run_row(
+    games: pd.DataFrame, mask: np.ndarray, resamples: int, seed: int
+) -> dict[str, Any]:
+    """Return one run's metrics on one stability row: ``run_metrics`` with the interval guard."""
+    row = run_metrics(games, mask, resamples, seed)
+    row["det_minus_market_brier"] = _drop_interval(row["det_minus_market_brier"], int(mask.sum()))
+    return row
+
+
+def stability_contrast(
+    pairs: Sequence[tuple[pd.DataFrame, pd.DataFrame]],
+    mask: np.ndarray,
+    resamples: int,
+    seed: int,
+) -> dict[str, tuple[Any, ...]]:
+    """Return ``paired_contrast`` on one stability row, with the interval guard."""
+    contrast: dict[str, tuple[Any, ...]] = dict(paired_contrast(pairs, mask, resamples, seed))
+    games = int(mask.sum())
+    for column in LOSS_COLUMNS:
+        contrast[column] = _drop_interval(contrast[column], games)
+    contrast["pool"] = _drop_interval(contrast["pool"], _week_count(pairs[0][0], mask))
+    return contrast
+
+
+def stability_report(
+    predictions: pd.DataFrame,
+    *,
+    resamples: int = DEFAULT_RESAMPLES,
+    seed: int = DEFAULT_BOOTSTRAP_SEED,
+) -> dict[str, Any]:
+    """Return one run's metrics per window, for all seasons and for each season.
+
+    ``predictions`` is a walk-forward prediction frame (the fold checkpoints' rows); the metrics
+    are the ones ``compare`` reports for a run, from ``per_game_scores`` and ``run_metrics``.
+    """
+    games = per_game_scores(predictions)
+    weeks = games["week"].to_numpy()
+    windows: dict[str, dict[str, dict[str, Any]]] = {}
+    for label, first, last in WINDOWS:
+        mask = window_mask(weeks, first, last)
+        if not mask.any():
+            continue
+        rows = {ALL_SEASONS: mask, **_season_masks(games, mask)}
+        windows[label] = {
+            season: {
+                "games": int(season_mask.sum()),
+                **stability_run_row(games, season_mask, resamples, seed),
+            }
+            for season, season_mask in rows.items()
+        }
+    return {"resamples": resamples, "bootstrap_seed": seed, "windows": windows}
+
+
 def _flatten(config: dict[str, Any], prefix: str = "") -> dict[str, Any]:
     """Flatten nested config dicts into dotted keys."""
     flat: dict[str, Any] = {}
@@ -344,6 +433,17 @@ def compare_runs(
             "games": int(mask.sum()),
             "runs": {run.run.label: run_metrics(run.games, mask, resamples, seed) for run in runs},
             "contrast": paired_contrast(pairs, mask, resamples, seed),
+            "seasons": {
+                season: {
+                    "games": int(season_mask.sum()),
+                    "runs": {
+                        run.run.label: stability_run_row(run.games, season_mask, resamples, seed)
+                        for run in runs
+                    },
+                    "contrast": stability_contrast(pairs, season_mask, resamples, seed),
+                }
+                for season, season_mask in _season_masks(base, mask).items()
+            },
         }
     return {
         "candidates": [run.run.label for run in candidates],
@@ -363,12 +463,89 @@ def compare_runs(
     }
 
 
-def _format_interval(values: Sequence[float], column: str) -> str:
-    """Format an estimate and interval; ``*`` marks an interval that excludes zero."""
+def _format_interval(values: Sequence[float | None], column: str) -> str:
+    """Format an estimate and interval; ``*`` marks an interval that excludes zero.
+
+    An interval left out for too few resampling units prints as ``[n/a]``.
+    """
     estimate, low, high = values
     digits = 1 if column == "pool" else 4 if column in ("margin_ae", "total_ae", "correct") else 5
+    if low is None or high is None:
+        return f"{estimate:+.{digits}f} [n/a]"
     flag = " *" if low > 0 or high < 0 else ""
     return f"{estimate:+.{digits}f} [{low:+.{digits}f}, {high:+.{digits}f}]{flag}"
+
+
+def _run_cells(row: dict[str, Any]) -> list[str]:
+    """Format one run's metric cells, in ``RUN_COLUMNS`` order, then the market interval."""
+    return [
+        f"{row['brier']:.5f}",
+        f"{row['log_loss']:.5f}",
+        f"{row['correct']:.4f}",
+        f"{row['margin_ae']:.4f}",
+        f"{row['total_ae']:.4f}",
+        f"{row['pool']:.0f}",
+        f"{row['market_brier']:.5f}",
+        _format_interval(row["det_minus_market_brier"], "brier"),
+    ]
+
+
+def _table_header(leading: Sequence[str], columns: Sequence[str], market: bool) -> list[str]:
+    """Return a Markdown table header: the leading labels, the metric columns, the interval."""
+    cells = [*leading, *(COLUMN_LABELS[c] for c in columns)]
+    if market:
+        cells.append("det - market Brier [95%]")
+    return ["| " + " | ".join(cells) + " |", "| --- " * len(cells) + "|"]
+
+
+def _stability_preamble() -> list[str]:
+    """Return the stability section's heading and its one-line reading guide."""
+    return [
+        STABILITY_HEADING,
+        "",
+        (
+            "Each window split by season, with the same columns and definitions. [n/a] = too "
+            "few games (weeks, for pool pts) to resample."
+        ),
+    ]
+
+
+def format_stability(stability: dict[str, Any]) -> list[str]:
+    """Return one run's stability view as Markdown: per window, all seasons then each season."""
+    lines = _stability_preamble()
+    for label, rows in stability["windows"].items():
+        lines += ["", f"### {label}", "", *_table_header(("season", "games"), RUN_COLUMNS, True)]
+        for season, row in rows.items():
+            lines.append(f"| {season} | {row['games']} | " + " | ".join(_run_cells(row)) + " |")
+    return lines
+
+
+def _format_comparison_stability(report: dict[str, Any]) -> list[str]:
+    """Return the comparison's per-season run rows and paired contrasts, window by window."""
+    lines = _stability_preamble()
+    for label, window in report["windows"].items():
+        seasons = window["seasons"]
+        lines += [
+            "",
+            f"### {label}",
+            "",
+            *_table_header(("run", "season", "games"), RUN_COLUMNS, True),
+        ]
+        for run_label in window["runs"]:
+            for season, entry in seasons.items():
+                cells = _run_cells(entry["runs"][run_label])
+                lines.append(
+                    f"| {run_label} | {season} | {entry['games']} | " + " | ".join(cells) + " |"
+                )
+        lines += ["", *_table_header(("contrast", "season", "games"), CONTRAST_COLUMNS, False)]
+        for season, entry in seasons.items():
+            cells = [_format_interval(entry["contrast"][c], c) for c in CONTRAST_COLUMNS]
+            lines.append(
+                f"| candidate - reference | {season} | {entry['games']} | "
+                + " | ".join(cells)
+                + " |"
+            )
+    return lines
 
 
 def format_report(report: dict[str, Any]) -> list[str]:
@@ -391,35 +568,20 @@ def format_report(report: dict[str, Any]) -> list[str]:
         lines.append(f"- config differences, {pair}: {json.dumps(differences, default=str)}")
     if not report["market_view_identical"]:
         lines.append("- warning: the market view differs between runs on the same games")
-    metric_columns = ("brier", "log_loss", "correct", "margin_ae", "total_ae", "pool")
     for label, window in report["windows"].items():
         lines += [
             "",
             f"## {label} ({window['games']} games)",
             "",
-            "| run | "
-            + " | ".join(COLUMN_LABELS[c] for c in (*metric_columns, "market_brier"))
-            + " | det - market Brier [95%] |",
-            "| --- " * (len(metric_columns) + 3) + "|",
+            *_table_header(("run",), RUN_COLUMNS, True),
         ]
         for run_label, row in window["runs"].items():
-            cells = [
-                f"{row['brier']:.5f}",
-                f"{row['log_loss']:.5f}",
-                f"{row['correct']:.4f}",
-                f"{row['margin_ae']:.4f}",
-                f"{row['total_ae']:.4f}",
-                f"{row['pool']:.0f}",
-                f"{row['market_brier']:.5f}",
-                _format_interval(row["det_minus_market_brier"], "brier"),
-            ]
-            lines.append(f"| {run_label} | " + " | ".join(cells) + " |")
+            lines.append(f"| {run_label} | " + " | ".join(_run_cells(row)) + " |")
         lines += [
             "",
-            "| contrast | " + " | ".join(COLUMN_LABELS[c] for c in CONTRAST_COLUMNS) + " |",
-            "| --- " * (len(CONTRAST_COLUMNS) + 1) + "|",
+            *_table_header(("contrast",), CONTRAST_COLUMNS, False),
             "| candidate - reference | "
             + " | ".join(_format_interval(window["contrast"][c], c) for c in CONTRAST_COLUMNS)
             + " |",
         ]
-    return lines
+    return [*lines, "", *_format_comparison_stability(report)]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -10,7 +11,8 @@ import pandas as pd
 import pytest
 
 from nfl_predictor.cli import backtest, options
-from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils, walk_forward
+from nfl_predictor.reporting import run_comparison
 
 
 def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
@@ -112,8 +114,88 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
 
     backtest.main()
 
-    assert captured == {"checkpoint_dir": tmp_path / "checkpoints", "resume": False}
+    assert captured == {
+        "checkpoint_dir": tmp_path / "checkpoints",
+        "resume": False,
+        "floor_sigma_history": None,
+    }
     assert json.loads(out_json.read_text())["config"]["checkpoint"] == checkpoint
+
+
+def test_xgb_device_defaults_to_auto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The walk-forward picks the GPU when one is usable unless told otherwise."""
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
+
+    assert backtest._parse_args().xgb_device == "auto"
+
+
+def test_xgb_device_typo_is_a_usage_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A misspelled device stops at the parser instead of reaching XGBoost."""
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py", "--xgb-device", "cdua"])
+
+    with pytest.raises(SystemExit):
+        backtest._parse_args()
+
+
+@pytest.mark.parametrize(
+    ("extra_argv", "usable", "expected"),
+    [([], True, "cuda"), ([], False, "cpu"), (["--xgb-device", "cpu"], True, "cpu")],
+)
+def test_main_runs_and_records_the_resolved_xgb_device(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra_argv: list[str],
+    usable: bool,
+    expected: str,
+) -> None:
+    """The engine gets the concrete device, and the run's metadata records it."""
+    captured: list[walk_forward.WalkForwardConfig] = []
+
+    def fake_run(
+        _df: pd.DataFrame, config: walk_forward.WalkForwardConfig, **_kwargs: object
+    ) -> dict[str, object]:
+        """Record the config the CLI built and return a minimal result."""
+        captured.append(config)
+        return {"checkpoint": {}, "per_week": []}
+
+    def fake_report(
+        _run_id: str, _created_at: str, payload: dict[str, object], _results: object
+    ) -> dict[str, object]:
+        """Return the config payload unchanged."""
+        return {"config": payload}
+
+    def fake_metadata(
+        _created_at: str, _hash: str, payload: dict[str, object]
+    ) -> dict[str, object]:
+        """Return the config payload unchanged."""
+        return {"config": payload}
+
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: usable)
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
+    monkeypatch.setattr(walk_forward, "build_metadata", fake_metadata)
+    out_json = tmp_path / "metrics_report.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "walk_forward_backtest.py",
+            "--checkpoint-dir",
+            str(tmp_path / "checkpoints"),
+            "--out-json",
+            str(out_json),
+            *extra_argv,
+        ],
+    )
+
+    backtest.main()
+
+    assert (captured[0].xgb_params_overrides or {})["device"] == expected
+    metadata = json.loads((tmp_path / "metadata.json").read_text())
+    assert metadata["config"]["xgb_device"] == expected
+    assert metadata["config"]["xgb_params_overrides"]["device"] == expected
 
 
 def test_disable_feature_groups_arg_parses_comma_separated_list() -> None:
@@ -153,18 +235,6 @@ def test_parse_args_accepts_regularization_overrides() -> None:
 
     assert args.min_child_weight == pytest.approx(4.5)
     assert args.gamma == pytest.approx(2.0)
-
-
-def test_parse_args_accepts_sigma_calibration() -> None:
-    """The residual-sigma calibrator is selectable from the CLI like the other methods."""
-    old_argv = sys.argv
-    try:
-        sys.argv = ["walk_forward_backtest.py", "--calibration", "sigma"]
-        args = backtest._parse_args()
-    finally:
-        sys.argv = old_argv
-
-    assert args.calibration == "sigma"
 
 
 def test_parse_feature_groups_strips_whitespace_and_drops_empty_entries() -> None:
@@ -283,3 +353,140 @@ def test_main_forwards_n_estimators_into_the_xgb_overrides(
     assert overrides["n_estimators"] == 900
     assert isinstance(overrides["n_estimators"], int)
     assert "n_estimators" not in (captured[1].xgb_params_overrides or {})
+
+
+def _prediction_rows() -> pd.DataFrame:
+    """Return a small walk-forward prediction frame over two seasons."""
+    games = [
+        ("2023_01_a", 2023, 1, 0.70, 7),
+        ("2023_01_b", 2023, 1, 0.40, 3),
+        ("2023_03_a", 2023, 3, 0.60, -4),
+        ("2024_01_a", 2024, 1, 0.55, 6),
+        ("2024_02_a", 2024, 2, 0.35, -2),
+    ]
+    return pd.DataFrame(
+        [
+            {
+                "game_id": game_id,
+                "season": season,
+                "week": week,
+                "deterministic_home_win_prob": p,
+                "market_home_win_prob": 0.5,
+                "actual_home_win": int(margin > 0),
+                "actual_margin": float(margin),
+                "actual_total": 41.0,
+                "predicted_margin": 2.0,
+                "predicted_total": 44.0,
+            }
+            for game_id, season, week, p, margin in games
+        ]
+    )
+
+
+def test_main_adds_the_season_stability_view_to_the_report_and_the_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The report carries the per-season view ``compare`` would compute, and the log prints it."""
+    predictions = _prediction_rows()
+
+    def fake_run(
+        _df: pd.DataFrame, _config: walk_forward.WalkForwardConfig, **_kwargs: object
+    ) -> dict[str, object]:
+        """Return a result carrying the run's prediction frame."""
+        return {"checkpoint": {}, "per_week": [], "predictions": predictions}
+
+    def fake_report(
+        _run_id: str, _created_at: str, payload: dict[str, object], _results: object
+    ) -> dict[str, object]:
+        """Return a report with an empty metrics block, as the engine's report has one."""
+        return {"config": payload, "metrics": {}}
+
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
+    monkeypatch.setattr(walk_forward, "build_metadata", lambda *_args: {})
+    out_json = tmp_path / "metrics_report.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "walk_forward_backtest.py",
+            "--checkpoint-dir",
+            str(tmp_path / "checkpoints"),
+            "--out-json",
+            str(out_json),
+        ],
+    )
+    caplog.set_level(logging.INFO)
+
+    backtest.main()
+
+    stability = json.loads(out_json.read_text())["metrics"]["stability"]
+    expected = json.loads(json.dumps(run_comparison.stability_report(predictions)))
+    assert stability == expected
+    assert stability["resamples"] == run_comparison.DEFAULT_RESAMPLES
+    assert set(stability["windows"]["week 1"]) == {"all seasons", "2023", "2024"}
+    messages = [record.getMessage() for record in caplog.records]
+    assert run_comparison.STABILITY_HEADING in messages
+    assert any(message.startswith("| 2024 | 1 | ") for message in messages)
+
+
+def test_a_standalone_backtest_supplies_no_floor_sigma_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """By default each week's sigma comes from the run's own earlier weeks only."""
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
+
+    assert backtest._parse_args().floor_sigma_reference_runs is None
+
+
+def test_named_reference_runs_become_the_walk_forwards_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reference runs are read once, handed to the engine and named in the run's config."""
+    captured: dict[str, object] = {}
+    history = floor_sigma.ErrorPool(sources=("ref_a",))
+    loaded: list[object] = []
+
+    def fake_run(
+        _df: pd.DataFrame, _config: walk_forward.WalkForwardConfig, **kwargs: object
+    ) -> dict[str, object]:
+        """Record the history and return a minimal result naming it."""
+        captured.update(kwargs)
+        return {"checkpoint": {}, "per_week": [], "floor_sigma": {"history_sources": ["ref_a"]}}
+
+    def fake_load(paths: object) -> floor_sigma.ErrorPool:
+        """Record the requested runs."""
+        loaded.append(paths)
+        return history
+
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", fake_load)
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
+    monkeypatch.setattr(
+        walk_forward, "build_metrics_report", lambda _r, _c, payload, _res: {"config": payload}
+    )
+    monkeypatch.setattr(walk_forward, "build_metadata", lambda _c, _h, payload: {"config": payload})
+    out_json = tmp_path / "metrics_report.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "walk_forward_backtest.py",
+            "--out-json",
+            str(out_json),
+            "--floor-sigma-reference-runs",
+            "ref_a",
+        ],
+    )
+
+    backtest.main()
+
+    assert loaded == [[Path("ref_a")]]
+    assert captured["floor_sigma_history"] is history
+    config = json.loads(out_json.read_text())["config"]
+    assert config["floor_sigma"] == {"history_sources": ["ref_a"]}

@@ -11,20 +11,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nfl_predictor import constants
 from nfl_predictor.ml import ml_utils
 from nfl_predictor.ml.ml_model_core import (
-    BlendedMarginTotalModel,
     MarginTotalModel,
-    _adjust_home_win_prob,
     _build_prediction_output,
     _derive_scores_from_margin_total,
     _load_games,
-    _predict_home_win_prob,
+    _margin_to_home_win_prob,
     _predict_margin_total_from_model,
     _predict_margin_total_quantiles_from_model,
-    _resolve_margin_sigma,
-    get_market_baseline,
+    model_floor_sigma,
 )
 from nfl_predictor.utils.logger import log
 
@@ -35,33 +31,21 @@ def predict_week_margin_total(
     output_path: Path | None = None,
     pretty_output: bool = True,
     score_rounding: str = "none",
-    win_prob_use_uncertainty: bool = False,
 ) -> pd.DataFrame:
     """Generate weekly predictions from a margin/total model.
 
-    When win_prob_use_uncertainty is True, margin quantiles are used to derive
-    uncertainty-aware win probabilities.
+    Win probabilities are the deterministic floor of the predicted margins, through the sigma
+    the model recorded at its final fit (the constant for a model saved without one); the
+    ``floor_sigma`` and ``floor_sigma_fallback`` columns say which. The margin and total
+    quantiles, when the model has them, are added as interval columns.
     """
     games_df = _load_games(games_path)
     pred_margin, pred_total = _predict_margin_total_from_model(model, games_df)
     margin_quantiles, total_quantiles = _predict_margin_total_quantiles_from_model(model, games_df)
     pred_away, pred_home = _derive_scores_from_margin_total(pred_margin, pred_total)
-    sigma_margin = None
-    if win_prob_use_uncertainty:
-        sigma_margin = _resolve_margin_sigma(
-            pred_margin,
-            margin_quantiles,
-            fallback=constants.SCORE_DIFF_STD_DEV,
-        )
-    home_win_prob = _predict_home_win_prob(
-        pred_margin,
-        model.calibrator,
-        sigma=sigma_margin,
-        use_uncertainty=win_prob_use_uncertainty,
-    )
-    home_win_prob = _adjust_home_win_prob(
-        games_df, home_win_prob, getattr(model, "market_prob_config", None)
-    )
+    sigma, fallback = model_floor_sigma(model)
+    _log_floor_sigma(model, games_df, sigma)
+    home_win_prob = _margin_to_home_win_prob(pred_margin, sigma)
     output_df = _build_prediction_output(
         games_df,
         pred_away,
@@ -74,6 +58,8 @@ def predict_week_margin_total(
         output_df[f"predicted_margin_p{int(round(q * 100)):02d}"] = np.round(margin_quantiles[q], 1)
     for q in sorted(total_quantiles.keys()):
         output_df[f"predicted_total_p{int(round(q * 100)):02d}"] = np.round(total_quantiles[q], 1)
+    output_df["floor_sigma"] = sigma
+    output_df["floor_sigma_fallback"] = fallback
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -86,45 +72,30 @@ def predict_week_margin_total(
     return output_df
 
 
-def predict_week_blended(
-    model: BlendedMarginTotalModel,
-    games_path: Path,
-    output_path: Path | None = None,
-    pretty_output: bool = True,
-    score_rounding: str = "none",
-) -> pd.DataFrame:
-    """Generate weekly predictions from a blended margin/total model."""
-    games_df = _load_games(games_path)
-
-    team_margin, team_total = _predict_margin_total_from_model(model.team_model, games_df)
-    market_margin, market_total = get_market_baseline(games_df)
-
-    blended_margin = model.blend_layer.margin_model.predict(
-        np.column_stack([team_margin, market_margin])
+def _log_floor_sigma(model: MarginTotalModel, games_df: pd.DataFrame, sigma: float) -> None:
+    """Log the sigma the probabilities use, and warn when it was estimated for another week."""
+    record = getattr(model, "floor_sigma", None)
+    if record is None:
+        log.info("The model records no floor sigma; using the constant %.4f.", sigma)
+        return
+    log.info(
+        "Floor sigma %.4f%s for season %d week %d, from %d earlier games.",
+        sigma,
+        " (the fallback constant)" if record.fallback else "",
+        record.season,
+        record.week,
+        record.pool_games,
     )
-    blended_total = model.blend_layer.total_model.predict(
-        np.column_stack([team_total, market_total])
-    )
-    pred_away, pred_home = _derive_scores_from_margin_total(blended_margin, blended_total)
-    home_win_prob = _predict_home_win_prob(blended_margin, model.calibrator)
-    home_win_prob = _adjust_home_win_prob(
-        games_df, home_win_prob, getattr(model, "market_prob_config", None)
-    )
-
-    output_df = _build_prediction_output(
-        games_df,
-        pred_away,
-        pred_home,
-        home_win_prob,
-        score_rounding=score_rounding,
-    )
-
-    if output_path:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_df.to_csv(output_path, index=False)
-        log.info("Saved predictions to %s", output_path)
-
-    if pretty_output:
-        ml_utils.display_weekly_predictions(output_df)
-
-    return output_df
+    if {"season", "week"}.issubset(games_df.columns):
+        weeks = {
+            (int(season), int(week))
+            for season, week in zip(games_df["season"], games_df["week"], strict=True)
+        }
+        if weeks != {(record.season, record.week)}:
+            log.warning(
+                "The model's floor sigma was estimated for season %d week %d, but these games "
+                "are in %s; it is used as recorded.",
+                record.season,
+                record.week,
+                sorted(weeks),
+            )

@@ -10,25 +10,39 @@ from typing import Any, cast
 
 import pandas as pd
 import pytest
+import xgboost as xgb
 
+from nfl_predictor import constants
+from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils
 from nfl_predictor.ml.ml_model_core import OptunaConfig, TrainingResult
+
+REFERENCE_POOL = floor_sigma.ErrorPool(
+    pd.DataFrame({"game_id": ["g"], "season": [2020], "week": [1], "squared_error": [100.0]}),
+    ("models/reference",),
+)
+
+
+@pytest.fixture(autouse=True)
+def _reference_pool(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+    """Serve a fixed reference pool instead of reading run directories; record the request."""
+    requests: list[object] = []
+
+    def _load(paths: object) -> floor_sigma.ErrorPool:
+        requests.append(paths)
+        return REFERENCE_POOL
+
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", _load)
+    return requests
 
 
 def _import_ml_model_cli(monkeypatch):
     stub = types.SimpleNamespace(
         train_margin_total_model=lambda **_kwargs: None,
-        train_blended_margin_total_model=lambda **_kwargs: None,
     )
     monkeypatch.setitem(sys.modules, "nfl_predictor.ml_model", stub)
     monkeypatch.delitem(sys.modules, "nfl_predictor.cli.train", raising=False)
     monkeypatch.delitem(sys.modules, "nfl_predictor.ml.ml_model_training", raising=False)
     return importlib.import_module("nfl_predictor.cli.train")
-
-
-def _default_main_args(ml_model_cli: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
-    """Return the parsed default CLI namespace for targeted main() tests."""
-    monkeypatch.setattr(sys, "argv", ["prog"])
-    return ml_model_cli._parse_args()
 
 
 def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
@@ -42,13 +56,7 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
         calls["model"] = (path, kind)
         return "model"
 
-    def fake_with_market_prob_config(model: str, config: Any) -> str:
-        """Record config and return model."""
-        calls["config"] = config
-        return model
-
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
-    monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", fake_with_market_prob_config)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
@@ -57,13 +65,11 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
         raise AssertionError("prediction should not run without --predict-path")
 
     monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", fail_predict)
-    monkeypatch.setattr(ml_model_cli, "predict_week_blended", fail_predict)
 
     monkeypatch.setattr(sys, "argv", ["prog", "--model-in", str(model_path)])
     ml_model_cli.main()
 
     assert calls["model"] == (model_path, "margin_total")
-    assert calls["config"] is None
 
 
 def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> None:
@@ -78,11 +84,6 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         calls["model"] = (path, kind)
         return "model"
 
-    def fake_with_market_prob_config(model: str, config: Any) -> str:
-        """Record config and return model."""
-        calls["config"] = config
-        return model
-
     def fake_predict(
         model: str,
         games_path: Path,
@@ -90,7 +91,6 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         *,
         pretty_output: bool,
         score_rounding: str,
-        win_prob_use_uncertainty: bool = False,
     ) -> pd.DataFrame:
         """Record args and return empty DataFrame."""
         calls["predict_args"] = (
@@ -103,7 +103,6 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         return pd.DataFrame()
 
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
-    monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", fake_with_market_prob_config)
     monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", fake_predict)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
@@ -197,54 +196,6 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
     assert metadata_payload["run_id"] == run_dir.name
 
 
-def test_main_training_logistic_alias(monkeypatch, tmp_path: Path) -> None:
-    """Logistic alias should map to platt for training."""
-    ml_model_cli = _import_ml_model_cli(monkeypatch)
-    run_dir = tmp_path / "run_alias"
-    result = TrainingResult(
-        model={"model": "stub"},
-        metrics_report={"kind": "train"},
-        splits={"train_seasons": [2020], "holdout_seasons": [2021]},
-        params={"n_estimators": 1},
-        tuned_params=None,
-        feature_list=["feat1"],
-        early_stopping={"best_iteration": 1},
-    )
-    calls: dict[str, Any] = {}
-
-    def fake_train_margin_total_model_with_report(**kwargs: object) -> TrainingResult:
-        """Record win-prob calibration argument."""
-        calls["win_prob_calibration"] = kwargs["win_prob_calibration"]
-        return result
-
-    monkeypatch.setattr(
-        ml_model_cli,
-        "train_margin_total_model_with_report",
-        fake_train_margin_total_model_with_report,
-    )
-    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(ml_model_cli.artifacts, "write_json", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda *_: "hash")
-    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "prog",
-            "--model-kind",
-            "margin_total",
-            "--win-prob-calibration",
-            "logistic",
-            "--run-dir",
-            str(run_dir),
-        ],
-    )
-    ml_model_cli.main()
-
-    assert calls["win_prob_calibration"] == "platt"
-
-
 def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
     """Loading model with --tune logs appropriate messages."""
     ml_model_cli = _import_ml_model_cli(monkeypatch)
@@ -257,7 +208,6 @@ def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr(ml_model_cli.log, "info", fake_log)
     monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args, **_kwargs: "model")
-    monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", lambda model, _cfg: model)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
@@ -266,51 +216,6 @@ def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
 
     assert any("Model checkpoint provided; ignoring training" in msg for msg in messages)
     assert any("No --predict-path provided" in msg for msg in messages)
-
-
-def test_main_blend_training_predict(monkeypatch, tmp_path: Path) -> None:
-    """Training blended model runs prediction."""
-    ml_model_cli = _import_ml_model_cli(monkeypatch)
-    result = TrainingResult(
-        model={"model": "stub"},
-        metrics_report={"kind": "train"},
-        splits={"train_seasons": [2020], "holdout_seasons": [2021]},
-        params={"n_estimators": 1},
-        tuned_params=None,
-        feature_list=["feat1"],
-        early_stopping={"best_iteration": 1},
-    )
-    calls: dict[str, Any] = {}
-
-    monkeypatch.setattr(
-        ml_model_cli,
-        "train_blended_margin_total_model_with_report",
-        lambda **_kwargs: result,
-    )
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
-    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-
-    def fake_predict(*_args: object, **_kwargs: object) -> pd.DataFrame:
-        """Record that prediction was called and return empty DataFrame."""
-        calls["predicted"] = True
-        return pd.DataFrame()
-
-    monkeypatch.setattr(ml_model_cli, "predict_week_blended", fake_predict)
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "prog",
-            "--model-kind",
-            "blend",
-            "--predict-path",
-            str(tmp_path / "games.csv"),
-        ],
-    )
-    ml_model_cli.main()
-
-    assert calls["predicted"] is True
 
 
 def test_main_model_outside_run_dir_raises(monkeypatch, tmp_path: Path) -> None:
@@ -350,64 +255,6 @@ def test_main_model_outside_run_dir_raises(monkeypatch, tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         ml_model_cli.main()
-
-
-def test_main_model_in_blend_predict_uses_market_prob_config_and_disables_uncertainty(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Blend checkpoint loads should keep explicit market config and warn on uncertainty flags."""
-    ml_model_cli = _import_ml_model_cli(monkeypatch)
-    model_path = tmp_path / "blend.joblib"
-    predict_path = tmp_path / "week.csv"
-    calls: dict[str, Any] = {}
-    warnings: list[str] = []
-
-    monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args, **_kwargs: "model")
-    monkeypatch.setattr(
-        ml_model_cli,
-        "_with_market_prob_config",
-        lambda model, config: calls.setdefault("config", config) or model,
-    )
-    monkeypatch.setattr(
-        ml_model_cli,
-        "predict_week_blended",
-        lambda *args, **kwargs: calls.setdefault("predict", (args, kwargs)) or pd.DataFrame(),
-    )
-    monkeypatch.setattr(
-        ml_model_cli.log, "warning", lambda message, *_args: warnings.append(message)
-    )
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda *_args, **_kwargs: "hash")
-    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "prog",
-            "--model-in",
-            str(model_path),
-            "--model-kind",
-            "blend",
-            "--predict-path",
-            str(predict_path),
-            "--market-prob-weight",
-            "0.25",
-            "--win-prob-uncertainty",
-        ],
-    )
-
-    ml_model_cli.main()
-
-    config = calls["config"]
-    assert config is not None
-    assert config.blend_weight == 0.25
-    assert config.clamp_delta == 0.0
-    assert any("Uncertainty-aware win prob is only supported" in warning for warning in warnings)
-    predict_args, predict_kwargs = calls["predict"]
-    assert predict_args[1] == predict_path
-    assert predict_args[2] == predict_path.with_name("week_predictions.csv")
-    assert predict_kwargs["score_rounding"] == "none"
 
 
 def test_main_margin_total_training_predicts_without_writing_artifacts(
@@ -452,6 +299,7 @@ def test_main_margin_total_training_predicts_without_writing_artifacts(
         return pd.DataFrame()
 
     monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", fake_predict)
+    pd.DataFrame({"season": [2025], "week": [3]}).to_csv(predict_path, index=False)
 
     monkeypatch.setattr(
         sys,
@@ -463,94 +311,7 @@ def test_main_margin_total_training_predicts_without_writing_artifacts(
     predict_args, predict_kwargs = calls["predict"]
     assert predict_args[1] == predict_path
     assert predict_args[2] == predict_path.with_name("games_predictions.csv")
-    assert predict_kwargs["win_prob_use_uncertainty"] is False
-
-
-def test_main_blend_training_writes_feature_importance_artifact(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Blend training should write the optional feature-importance artifact when available."""
-    ml_model_cli = _import_ml_model_cli(monkeypatch)
-    run_dir = tmp_path / "run_blend"
-    result = TrainingResult(
-        model={"model": "stub"},
-        metrics_report={"kind": "train"},
-        splits={"train_seasons": [2020], "holdout_seasons": [2021]},
-        params={"n_estimators": 1},
-        tuned_params=None,
-        feature_list=["feat1"],
-        early_stopping={"best_iteration": 1},
-        feature_importance={"team": {"feat1": 0.7}},
-    )
-    calls: dict[str, dict[str, object]] = {}
-
-    monkeypatch.setattr(
-        ml_model_cli,
-        "train_blended_margin_total_model_with_report",
-        lambda **_kwargs: result,
-    )
-    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda *_args, **_kwargs: "hash")
-    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-    monkeypatch.setattr(
-        ml_model_cli.artifacts,
-        "write_json",
-        lambda path, payload: calls.setdefault(path.name, cast(dict[str, object], payload)),
-    )
-    monkeypatch.setattr(
-        ml_model_cli,
-        "predict_week_blended",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("predict not expected")),
-    )
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["prog", "--model-kind", "blend", "--run-dir", str(run_dir)],
-    )
-    ml_model_cli.main()
-
-    assert "feature_importance.json" in calls
-    assert calls["feature_importance.json"]["team"] == {"feat1": 0.7}
-
-
-def test_main_unknown_model_kind_raises_for_loaded_models(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """The model-loading path should still reject unknown model kinds defensively."""
-    ml_model_cli = _import_ml_model_cli(monkeypatch)
-    args = _default_main_args(ml_model_cli, monkeypatch)
-    args.model_kind = "unknown"
-    args.model_in = tmp_path / "model.joblib"
-    args.predict_path = tmp_path / "week.csv"
-
-    monkeypatch.setattr(ml_model_cli, "_parse_args", lambda: args)
-    monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args, **_kwargs: "model")
-    monkeypatch.setattr(ml_model_cli, "_with_market_prob_config", lambda model, _cfg: model)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda *_args, **_kwargs: "hash")
-    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-
-    with pytest.raises(ValueError, match="Unknown model kind: unknown"):
-        ml_model_cli.main()
-
-
-def test_main_unknown_model_kind_raises_for_training_path(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The training path should still reject unknown model kinds defensively."""
-    ml_model_cli = _import_ml_model_cli(monkeypatch)
-    args = _default_main_args(ml_model_cli, monkeypatch)
-    args.model_kind = "unknown"
-    args.model_in = None
-
-    monkeypatch.setattr(ml_model_cli, "_parse_args", lambda: args)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda *_args, **_kwargs: "hash")
-    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
-
-    with pytest.raises(ValueError, match="Unknown model kind: unknown"):
-        ml_model_cli.main()
+    assert "win_prob_use_uncertainty" not in predict_kwargs
 
 
 @pytest.mark.parametrize(
@@ -562,8 +323,6 @@ def test_main_unknown_model_kind_raises_for_training_path(
         (["--cv-splits", "4"], "cv_splits", 4),
         (["--tune-early-stopping-rounds", "9"], "early_stopping_rounds", 9),
         (["--early-stopping-rounds", "9"], "early_stopping_rounds", 9),
-        (["--market-prob-blend", "0.2"], "market_prob_weight", 0.2),
-        (["--market-prob-weight", "0.2"], "market_prob_weight", 0.2),
     ],
 )
 def test_renamed_options_accept_both_spellings(
@@ -574,3 +333,184 @@ def test_renamed_options_accept_both_spellings(
     monkeypatch.setattr(sys, "argv", ["prog", *argv])
 
     assert getattr(ml_model_cli._parse_args(), dest) == value
+
+
+@pytest.mark.parametrize(
+    ("extra_argv", "usable", "expected"),
+    [([], True, "cuda"), ([], False, "cpu"), (["--xgb-device", "cpu"], True, "cpu")],
+)
+def test_main_training_uses_and_records_the_resolved_xgb_device(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    extra_argv: list[str],
+    usable: bool,
+    expected: str,
+) -> None:
+    """``auto`` becomes a concrete device before training, and the model metadata names it."""
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: usable)
+    run_dir = tmp_path / "run_device"
+    result = TrainingResult(
+        model=types.SimpleNamespace(margin_model=xgb.XGBRegressor(device=expected)),
+        metrics_report={"kind": "train"},
+        splits={},
+        params={"n_estimators": 1},
+        tuned_params=None,
+        feature_list=["feat1"],
+        early_stopping={},
+    )
+    calls: dict[str, Any] = {}
+
+    def fake_train(**kwargs: object) -> TrainingResult:
+        """Record the Optuna config and return the stub result."""
+        calls["optuna_config"] = kwargs["optuna_config"]
+        return result
+
+    def fake_write_json(path: Path, payload: dict[str, object]) -> None:
+        """Record the metadata payload."""
+        if path.name == "metadata.json":
+            calls["metadata"] = payload
+
+    monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", fake_train)
+    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args: None)
+    monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
+    monkeypatch.setattr(sys, "argv", ["prog", "--run-dir", str(run_dir), *extra_argv])
+
+    ml_model_cli.main()
+
+    assert cast(OptunaConfig, calls["optuna_config"]).device == expected
+    metadata = cast(dict[str, Any], calls["metadata"])
+    assert metadata["xgb_device"] == expected
+    assert metadata["config"]["xgb_device"] == expected
+
+
+def test_main_training_metadata_records_the_device_the_model_was_fitted_on(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A fit that fell back to the CPU is recorded as CPU even when CUDA was requested."""
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    result = TrainingResult(
+        model=types.SimpleNamespace(margin_model=xgb.XGBRegressor(device="cpu")),
+        metrics_report={},
+        splits={},
+        params={},
+        tuned_params=None,
+        feature_list=["feat1"],
+        early_stopping={},
+    )
+    calls: dict[str, Any] = {}
+
+    def fake_write_json(path: Path, payload: dict[str, object]) -> None:
+        """Record the metadata payload."""
+        if path.name == "metadata.json":
+            calls["metadata"] = payload
+
+    monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", lambda **_: result)
+    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args: None)
+    monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
+    monkeypatch.setattr(sys, "argv", ["prog", "--run-dir", str(tmp_path / "run")])
+
+    ml_model_cli.main()
+
+    assert cast(dict[str, Any], calls["metadata"])["xgb_device"] == "cpu"
+
+
+def test_training_pools_the_reference_runs_for_the_predicted_week(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _reference_pool: list[object]
+) -> None:
+    """The final fit gets the reference pool and the prediction file's week; metadata records it."""
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    predict_path = tmp_path / "games.csv"
+    pd.DataFrame({"season": [2026, 2026], "week": [1, 1]}).to_csv(predict_path, index=False)
+    record = floor_sigma.estimate(REFERENCE_POOL.errors, 2026, 1, sources=REFERENCE_POOL.sources)
+    result = TrainingResult(
+        model=types.SimpleNamespace(
+            margin_model=xgb.XGBRegressor(device="cpu"), floor_sigma=record
+        ),
+        metrics_report={},
+        splits={},
+        params={},
+        tuned_params=None,
+        feature_list=["feat1"],
+        early_stopping={},
+    )
+    calls: dict[str, Any] = {}
+
+    def fake_train(**kwargs: object) -> TrainingResult:
+        """Record the floor-sigma options."""
+        calls["pool"] = kwargs["floor_sigma_pool"]
+        calls["week"] = kwargs["floor_sigma_week"]
+        return result
+
+    def fake_write_json(path: Path, payload: dict[str, object]) -> None:
+        """Record the metadata payload."""
+        if path.name == "metadata.json":
+            calls["metadata"] = payload
+
+    monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", fake_train)
+    monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", lambda *_a, **_k: None)
+    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args: None)
+    monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["prog", "--run-dir", str(tmp_path / "run"), "--predict-path", str(predict_path)],
+    )
+
+    ml_model_cli.main()
+
+    assert _reference_pool == [[Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS]]
+    assert calls["pool"] is REFERENCE_POOL
+    assert calls["week"] == (2026, 1)
+    metadata = cast(dict[str, Any], calls["metadata"])
+    assert floor_sigma.FloorSigma.from_dict(metadata["floor_sigma"]) == record
+
+
+def test_training_without_a_prediction_file_estimates_for_the_week_after_the_data(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With no week to predict, the final fit picks the week after its newest game."""
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    calls: dict[str, Any] = {}
+
+    def fake_train(**kwargs: object) -> TrainingResult:
+        calls["week"] = kwargs["floor_sigma_week"]
+        raise SystemExit(0)
+
+    monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", fake_train)
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(sys, "argv", ["prog"])
+
+    with pytest.raises(SystemExit):
+        ml_model_cli.main()
+
+    assert calls["week"] is None
+
+
+def test_no_reference_runs_is_an_explicit_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The option with no paths trains without reference errors (recorded as the fallback)."""
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["prog", "--floor-sigma-reference-runs"])
+
+    assert ml_model_cli._parse_args().floor_sigma_reference_runs == []
+
+
+def test_loading_a_saved_model_reads_no_reference_runs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _reference_pool: list[object]
+) -> None:
+    """Prediction from a saved model uses its recorded sigma and needs no reference run."""
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args: "model")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(sys, "argv", ["prog", "--model-in", str(tmp_path / "model.joblib")])
+
+    ml_model_cli.main()
+
+    assert _reference_pool == []

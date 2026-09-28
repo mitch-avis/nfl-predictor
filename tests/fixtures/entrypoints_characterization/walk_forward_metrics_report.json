@@ -76,7 +76,6 @@
   },
   "config": {
     "calibration": "auto",
-    "calibration_weeks": 4,
     "checkpoint": {
       "computed_folds": 4,
       "restored_folds": 0
@@ -121,15 +120,17 @@
       "away_market_prob"
     ],
     "feature_start": "away_rest",
+    "floor_sigma": {
+      "fallback_sigma": 14.21377923,
+      "history_games": 0,
+      "history_sources": [],
+      "min_pool_seasons": 3
+    },
     "in_season_early_stopping": false,
     "include_market": true,
     "include_postseason": false,
     "include_quantiles": true,
     "market_anchor": true,
-    "market_prob_blend_method": "prob",
-    "market_prob_clamp": 0.0,
-    "market_prob_source": "raw",
-    "market_prob_weight": 0.0,
     "market_transform": true,
     "max_cardinality_ratio": 0.5,
     "out_json": "<tmp>/wf/metrics_report.json",
@@ -160,8 +161,9 @@
       "wf_start_week": 1
     },
     "wf_start_week": 1,
-    "win_prob_use_uncertainty": false,
+    "xgb_device": "cpu",
     "xgb_params_overrides": {
+      "device": "cpu",
       "n_estimators": 20,
       "n_jobs": 1
     }
@@ -540,6 +542,12 @@
       ]
     }
   },
+  "floor_sigma": {
+    "fallback_sigma": 14.21377923,
+    "history_games": 0,
+    "history_sources": [],
+    "min_pool_seasons": 3
+  },
   "metric_strategy": {
     "primary": [
       {
@@ -785,6 +793,9 @@
         "deterministic_pick_accuracy": 0.6875,
         "expected_points": 88.13771794170347,
         "expected_points_avg": 88.13771794170347,
+        "floor_sigma": 14.21377923,
+        "floor_sigma_fallback": true,
+        "floor_sigma_pool_games": 0,
         "games": 16,
         "log_loss": 0.6500264463245462,
         "margin_mae": 9.000845982227474,
@@ -817,7 +828,8 @@
         "total_q0.9.best_iteration": 19,
         "total_q0.9.early_stopped": false,
         "week": 1,
-        "weeks": 1
+        "weeks": 1,
+        "xgb_device": "cpu"
       },
       {
         "actual_points": 80.0,
@@ -831,6 +843,9 @@
         "deterministic_pick_accuracy": 0.4375,
         "expected_points": 90.54078349218841,
         "expected_points_avg": 90.54078349218841,
+        "floor_sigma": 14.21377923,
+        "floor_sigma_fallback": true,
+        "floor_sigma_pool_games": 16,
         "games": 16,
         "log_loss": 0.6489939896856906,
         "margin_mae": 8.775980014819652,
@@ -863,7 +878,8 @@
         "total_q0.9.best_iteration": 19,
         "total_q0.9.early_stopped": false,
         "week": 2,
-        "weeks": 1
+        "weeks": 1,
+        "xgb_device": "cpu"
       },
       {
         "actual_points": 79.0,
@@ -877,6 +893,9 @@
         "deterministic_pick_accuracy": 0.5,
         "expected_points": 90.10585666513416,
         "expected_points_avg": 90.10585666513416,
+        "floor_sigma": 14.21377923,
+        "floor_sigma_fallback": true,
+        "floor_sigma_pool_games": 32,
         "games": 16,
         "log_loss": 0.6521402327316284,
         "margin_mae": 9.9211509344168,
@@ -909,7 +928,8 @@
         "total_q0.9.best_iteration": 19,
         "total_q0.9.early_stopped": false,
         "week": 3,
-        "weeks": 1
+        "weeks": 1,
+        "xgb_device": "cpu"
       },
       {
         "actual_points": 114.0,
@@ -923,6 +943,9 @@
         "deterministic_pick_accuracy": 0.75,
         "expected_points": 91.48480431542455,
         "expected_points_avg": 91.48480431542455,
+        "floor_sigma": 14.21377923,
+        "floor_sigma_fallback": true,
+        "floor_sigma_pool_games": 48,
         "games": 16,
         "log_loss": 0.5485078039466571,
         "margin_mae": 11.362785495352,
@@ -955,9 +978,144 @@
         "total_q0.9.best_iteration": 19,
         "total_q0.9.early_stopped": false,
         "week": 4,
-        "weeks": 1
+        "weeks": 1,
+        "xgb_device": "cpu"
       }
     ],
+    "stability": {
+      "bootstrap_seed": 0,
+      "resamples": 5000,
+      "windows": {
+        "all weeks": {
+          "2024": {
+            "brier": 0.2175551627409391,
+            "correct": 0.59375,
+            "det_minus_market_brier": [
+              0.0035665339344656015,
+              -0.002217707848796602,
+              0.00920580942262303
+            ],
+            "games": 64,
+            "log_loss": 0.6249171181721307,
+            "margin_ae": 9.765190606703982,
+            "market_brier": 0.2139886288064735,
+            "pool": 370.0,
+            "total_ae": 8.623205890122335
+          },
+          "all seasons": {
+            "brier": 0.2175551627409391,
+            "correct": 0.59375,
+            "det_minus_market_brier": [
+              0.0035665339344656015,
+              -0.002217707848796602,
+              0.00920580942262303
+            ],
+            "games": 64,
+            "log_loss": 0.6249171181721307,
+            "margin_ae": 9.765190606703982,
+            "market_brier": 0.2139886288064735,
+            "pool": 370.0,
+            "total_ae": 8.623205890122335
+          }
+        },
+        "week 1": {
+          "2024": {
+            "brier": 0.22707544668808505,
+            "correct": 0.6875,
+            "det_minus_market_brier": [
+              2.5184900997192363e-05,
+              -0.013215985260670634,
+              0.012743254249926663
+            ],
+            "games": 16,
+            "log_loss": 0.6500264463245462,
+            "margin_ae": 9.000845982227474,
+            "market_brier": 0.22705026178708787,
+            "pool": 97.0,
+            "total_ae": 5.644795834086835
+          },
+          "all seasons": {
+            "brier": 0.22707544668808505,
+            "correct": 0.6875,
+            "det_minus_market_brier": [
+              2.5184900997192363e-05,
+              -0.013215985260670634,
+              0.012743254249926663
+            ],
+            "games": 16,
+            "log_loss": 0.6500264463245462,
+            "margin_ae": 9.000845982227474,
+            "market_brier": 0.22705026178708787,
+            "pool": 97.0,
+            "total_ae": 5.644795834086835
+          }
+        },
+        "week 2": {
+          "2024": {
+            "brier": 0.23231662382823032,
+            "correct": 0.4375,
+            "det_minus_market_brier": [
+              0.008761188712294527,
+              -0.002563260424728745,
+              0.019650982520760626
+            ],
+            "games": 16,
+            "log_loss": 0.6489939896856907,
+            "margin_ae": 8.775980014819652,
+            "market_brier": 0.2235554351159358,
+            "pool": 80.0,
+            "total_ae": 8.83257117960602
+          },
+          "all seasons": {
+            "brier": 0.23231662382823032,
+            "correct": 0.4375,
+            "det_minus_market_brier": [
+              0.008761188712294527,
+              -0.002563260424728745,
+              0.019650982520760626
+            ],
+            "games": 16,
+            "log_loss": 0.6489939896856907,
+            "margin_ae": 8.775980014819652,
+            "market_brier": 0.2235554351159358,
+            "pool": 80.0,
+            "total_ae": 8.83257117960602
+          }
+        },
+        "weeks 3-18": {
+          "2024": {
+            "brier": 0.20541429022372049,
+            "correct": 0.625,
+            "det_minus_market_brier": [
+              0.0027398810622853435,
+              -0.0046915063027338335,
+              0.010189627530293099
+            ],
+            "games": 32,
+            "log_loss": 0.6003240183391427,
+            "margin_ae": 10.6419682148844,
+            "market_brier": 0.20267440916143514,
+            "pool": 193.0,
+            "total_ae": 10.007728273398243
+          },
+          "all seasons": {
+            "brier": 0.20541429022372049,
+            "correct": 0.625,
+            "det_minus_market_brier": [
+              0.0027398810622853435,
+              -0.0046915063027338335,
+              0.010189627530293099
+            ],
+            "games": 32,
+            "log_loss": 0.6003240183391427,
+            "margin_ae": 10.6419682148844,
+            "market_brier": 0.20267440916143514,
+            "pool": 193.0,
+            "total_ae": 10.007728273398243
+          }
+        }
+      }
+    },
     "summary_table": [
       {
         "direction": "lower",
@@ -1333,7 +1491,6 @@
   },
   "splits": {
     "calibration_window": {
-      "calibration_weeks": 4,
       "method": "auto"
     },
     "eval_window": {

@@ -672,7 +672,8 @@ held: every run retrained (no stale-fold resume), the division fix, the acceptan
 Formerly Milestone 39, with former Milestone 40 folded in. Task 55.7 completed 2026-09-21
 (versions `0.13.0`-`0.13.1`). Task 55.8 was closed 2026-09-23 as `0.17.0`, reopened the same day,
 and closed again 2026-09-24 as `0.18.0` (see its section below). Tasks 55.1 and 55.2 were retired
-2026-09-24. Tasks 55.3-55.6 and 55.9 stay in `TODO.md`.
+2026-09-24. Task 55.6 closed 2026-09-27 (`0.29.1`), task 55.4 on 2026-09-28 (`0.30.0` and the
+GPU reference). Tasks 55.3 and 55.9 stay in `TODO.md`.
 
 ### 55.1 and 55.2 - Configuration-sweep runner (retired 2026-09-24)
 
@@ -685,6 +686,22 @@ hypothesis and a decision rule written before each run) and rule 13 (two seeds f
 change). What replaces it: hypothesis-driven ladders for single settings (task 55.3 for `K`,
 for example), the task 55.9 Optuna tune for the XGBoost hyperparameters, and task 56.3 to wire the
 chosen settings into the weekly run and the benchmark from one source.
+
+### 55.4 - The GPU as the default device (versions `0.30.0`, 2026-09-27; reference 2026-09-28)
+
+Every XGBoost run defaults to `--xgb-device auto` (the GPU when usable, else the CPU), resolved
+before the checkpoint fingerprint and recorded in run and model metadata; a walk-forward stops
+rather than checkpoint a week that fell back to another device. A one-fold check
+(`models/step3_l0_gpu_check/`) and a full-season repeat showed GPU fits are bit-deterministic.
+The two-seed GPU reference (`models/step3_gpu_reference/`, 2007-2025) tied the CPU pair within
+every noise floor and is the reference for later arms (`.agents/benchmarks.md`, "GPU reference").
+
+### 55.6 - Stability view by season (version `0.29.1`, 2026-09-27)
+
+`nfl-predictor backtest` writes a per-season, per-week-bucket stability view
+(`metrics.stability`) and `nfl-predictor compare` ends with "Stability by season", both from
+`compare`'s metric definitions and bootstrap. The task's undefined "recommended defaults"
+section was moved by the user to task 56.7(b) as a "settings versus production" section.
 
 ### 55.5 - ScoreModel removed (version `0.20.0`, 2026-09-24)
 
@@ -1329,7 +1346,20 @@ Acceptance:
 ## Milestone 56 (partial) - Weekly orchestration residuals
 
 Task 56.4 completed 2026-09-11 (version `0.6.1`); task 56.2 completed 2026-09-21 (version
-`0.13.0`); tasks 56.1, 56.3 stay in `TODO.md`.
+`0.13.0`); task 56.5 completed 2026-09-28 (version `0.32.0`); tasks 56.3, 56.6 and 56.7 stay in
+`TODO.md`.
+
+### 56.5 - How production probabilities are formed (version `0.32.0`, closed 2026-09-28)
+
+The weekly stage 1 picked its probability path among nine calibration and market-blend
+candidates by list order. By the user's decisions of 2026-09-27 and 2026-09-28, every run type
+submits the deterministic floor `Phi(margin / SCORE_DIFF_STD_DEV)`; the stage-1 matrix, the fitted
+and Elo calibrators, market blending and clamping, the `blend` model kind, `nfl-predictor sweep`
+and uncertainty-aware probabilities are retired (`0.32.0`). The confirmation on the GPU reference
+(`.agents/benchmarks.md`, "GPU reference"): a blend toward the stored moneyline beats the floor on
+2007-2025, but the same blend built from the opening spread does not, so its gain rests on lines
+that do not exist at pick time. The user kept the floor; the question returns with task 56.6(d)
+(anchoring to pick-time lines, roadmap step 4).
 
 ### 56.2 - How postseason games enter evaluation, training and the rankings (version `0.13.0`)
 

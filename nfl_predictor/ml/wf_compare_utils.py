@@ -1,4 +1,4 @@
-"""Helpers for walk-forward comparison candidate keys."""
+"""The key that names a walk-forward configuration in the weekly run's artifacts."""
 
 from __future__ import annotations
 
@@ -12,13 +12,7 @@ def build_candidate_key(
     model_kind: str,
     feature_start: str,
     feature_end: str,
-    calibration: str,
     market_mode: str,
-    market_prob_source: str,
-    market_prob_blend_method: str,
-    win_prob_use_uncertainty: bool,
-    market_prob_weight: float,
-    market_prob_clamp: float,
     include_quantiles: bool,
     xgb_params_overrides: dict[str, Any] | None,
 ) -> str:
@@ -27,28 +21,18 @@ def build_candidate_key(
         "model_kind": model_kind,
         "feature_start": feature_start,
         "feature_end": feature_end,
-        "calibration": calibration,
         "market_mode": market_mode,
-        "market_prob_source": market_prob_source,
-        "market_prob_blend_method": market_prob_blend_method,
-        "win_prob_use_uncertainty": bool(win_prob_use_uncertainty),
-        "market_prob_weight": float(market_prob_weight),
-        "market_prob_clamp": float(market_prob_clamp),
         "include_quantiles": bool(include_quantiles),
         "xgb_params_overrides": xgb_params_overrides or {},
     }
     short_hash = artifacts.stable_short_hash(payload)
 
-    weight = _format_float(market_prob_weight)
-    clamp = _format_float(market_prob_clamp)
-    uncertainty = "on" if win_prob_use_uncertainty else "off"
     quantiles = "on" if include_quantiles else "off"
     xgb_tag = _format_xgb_overrides(xgb_params_overrides or {})
 
     return (
-        f"{model_kind}_fs-{feature_start}_fe-{feature_end}_calib-{calibration}"
-        f"_mkt-{market_mode}_src-{market_prob_source}_blend-{market_prob_blend_method}"
-        f"_w{weight}_c{clamp}_uncert-{uncertainty}_quant-{quantiles}_xgb-{xgb_tag}_{short_hash}"
+        f"{model_kind}_fs-{feature_start}_fe-{feature_end}_mkt-{market_mode}"
+        f"_quant-{quantiles}_xgb-{xgb_tag}_{short_hash}"
     )
 
 

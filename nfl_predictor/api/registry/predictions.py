@@ -23,13 +23,12 @@ register(
     ColumnMeta("away_abbr", "Away", "Away team.", IDENTITY, "team", sticky=True),
     ColumnMeta("home_abbr", "Home", "Home team.", IDENTITY, "team", sticky=True),
     ColumnMeta("matchup", "Matchup", "Away @ Home.", IDENTITY, "text", sticky=True),
-    ColumnMeta(
-        "predicted_winner", "Pick", "Team favored by the calibrated win probability.", MODEL, "team"
-    ),
+    ColumnMeta("predicted_winner", "Pick", "Team favored by the win probability.", MODEL, "team"),
     ColumnMeta(
         "home_win_prob",
         "Home win %",
-        "Calibrated probability the home team wins, after any market blend.",
+        "Probability the home team wins: the predicted margin through a normal curve whose "
+        "spread is the model's root-mean-square error on earlier weeks it had not seen.",
         MODEL,
         "prob",
         "neutral",

@@ -183,11 +183,17 @@ are not advisory.
     reference walk-forward configuration (the benchmark arms in `.agents/benchmarks.md`) and the
     production weekly run (`config/weekly_run.yaml` and the weekly stage-1 selection) is a
     defect until the user approves it and it is recorded here. The season-weighting gap closed in
-    `0.18.0` (both train unweighted, task 55.8). Open gaps, all scheduled:
-    - the probability path: production submits the stage-1 winner, currently `elo` with a market
-      blend and clamp, while the benchmark scores the deterministic map (task 56.5);
-    - the device: the weekly run trains on the GPU, standalone walk-forwards on the CPU (task
-      55.4; the user chose the GPU for everything, 2026-09-23);
+    `0.18.0` (both train unweighted, task 55.8), and the probability-path gap in `0.32.0` (every
+    run type submits the deterministic floor, task 56.5), the device in 2026-09-28 (the two-seed
+    GPU reference, task 55.4), and the final fit's hold-out in
+    `0.33.0` (the final fit trains on every completed game, like each fold). Open gaps, all
+    scheduled:
+    - the floor's sigma and start week (approved by the user 2026-09-28): a default
+      `nfl-predictor backtest` (three seasons from week 3, no `--floor-sigma-reference-runs`)
+      scores every week at `SCORE_DIFF_STD_DEV`, while production pools the GPU reference and
+      stage 1 walks forward from week 1. An arm that judges probabilities runs from 2007 week 1 or
+      passes `--floor-sigma-reference-runs` with the GPU reference, and passes
+      `--wf-start-week 1`; arms compared only with each other may keep the default;
     - line timing: backtests anchor to and score against the stored, probably closing, lines,
       while production anchors to mid-week lines and picks are made before Thursday (task 56.6).
 12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is
@@ -440,7 +446,7 @@ options. `scripts/` holds only `gate.sh`.
 
 ## Prediction, evaluation and feature rules
 
-The full specification (targets, calibration methods, market anchoring and blend/clamp bounds,
+The full specification (targets, the probability path, market anchoring,
 uncertainty outputs, realistic scores, confidence-pool scoring, evaluation modes and metrics,
 the model-selection protocol, the leakage audit, the model artifact contract and the feature
 development rules) is in `.agents/modeling_spec.md`. Read it before changing prediction,
@@ -448,14 +454,17 @@ calibration, market, pool, evaluation, artifact, leakage-audit or feature code. 
 must never be missed:
 
 - The model predicts `margin = home_score - away_score` and `total = home_score + away_score`,
-  and scores derive from them. Win probability derives from the margin prediction; the pick and
-  its confidence come from the calibrated probability.
+  and scores derive from them. Win probability is the deterministic floor `Phi(margin / sigma)`
+  in every run type, where sigma is the root-mean-square out-of-fold margin error strictly before
+  the predicted week (`nfl_predictor/ml/floor_sigma.py`; `SCORE_DIFF_STD_DEV` until that pool spans
+  three earlier seasons); the pick and its confidence come from the unrounded probability.
 - Confidence pools: unique `1..N` per week; a tie scores as incorrect for both sides; picks are
   single-shot before the week's first game (no in-week updates in backtests).
 - Realistic score adjustments are display-only: they never alter win probabilities, confidence
   rankings, pool scoring, tuning objectives or training targets.
-- Market blending and clamping are explicit and bounded (weights in `[0, 1]`, clamp delta in
-  `[0, 0.5]`); edges against the market are diagnostics only, never a profitability claim.
+- The market enters only as features and through anchoring; there is no market blend or clamp
+  on the probability. Edges against the market are diagnostics only, never a profitability
+  claim.
 - Walk-forward is the authoritative evaluation; never use the holdout window to tune.
 - Every saved model carries adjacent metadata JSON (the artifact contract) and loads without
   hidden external state; `nfl-predictor leakage-audit` stays maintained.
@@ -525,8 +534,8 @@ Unused constants are removed and the file remains organized into clear sections.
   default; `wf_compare/wf_folds/` inside `weekly_run` runs). After a stop, re-run the
   identical command and it resumes at the next unfinished week; `--no-resume` retrains
   everything. Watch progress in the run's log: every finished week prints a
-  `Walk-forward fold N/M done` line with elapsed and remaining time. For `weekly_run` comparisons,
-  `wf_compare/wf_summary.csv` still shows per-candidate results.
+  `Walk-forward fold N/M done` line with elapsed and remaining time. A `weekly_run`'s own
+  walk-forward of the production configuration is in `wf_compare/wf_compare.csv`.
 - Run **one walk-forward at a time**: XGBoost uses every core, and two concurrent runs each cost
   more CPU than a solo run without finishing. Check `uptime` and
   `ps -eo pcpu,args --sort=-pcpu | head -4` before a launch; run timings and load measurements

@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nfl_predictor.ml.ml_model_core import FeatureSpec, MarketProbConfig, OptunaConfig
+from nfl_predictor.ml.ml_model_core import FeatureSpec, OptunaConfig
 
 
 class _DummyPreprocessor:
@@ -110,23 +110,6 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
 
     monkeypatch.setattr(ml_model_training, "_predict_xgb", fake_predict_xgb)
 
-    class DummyCalibrator:
-        """Dummy calibrator for testing."""
-
-        method = "isotonic"
-
-        def __init__(self) -> None:
-            self.model = self
-
-        def predict(self, margin: np.ndarray) -> np.ndarray:
-            """Predict dummy probabilities."""
-            return np.full_like(margin, 0.6, dtype=float)
-
-    monkeypatch.setattr(
-        ml_model_training,
-        "_fit_win_prob_calibrator",
-        lambda *_args, **_kwargs: DummyCalibrator(),
-    )
     monkeypatch.setattr(
         ml_model_training,
         "get_market_baseline",
@@ -151,15 +134,11 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
     model = ml_model_training.train_margin_total_model(
         data_path=Path("dummy.csv"),
         holdout_seasons=1,
-        calibration_seasons=1,
-        calibration_weeks=0,
         include_market=True,
         max_cardinality_ratio=0.5,
-        win_prob_calibration="isotonic",
         optuna_config=optuna_config,
         market_transform=True,
         market_anchor=True,
-        market_prob_config=MarketProbConfig(blend_weight=0.2, clamp_delta=0.1),
     )
 
     assert model.margin_model == "margin_model"

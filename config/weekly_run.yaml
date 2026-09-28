@@ -14,43 +14,55 @@ skip_data_refresh: false
 # data_collection_args: "--min-season 2010 --stat-prior-blend-games 4"
 # resume from previous run or start fresh (default: true)
 resume: true
-# write a progress line and checkpoint after every walk-forward fold of stage 1 (default: false)
+# write a progress line after every walk-forward week of stage 1 (default: false)
 wf_checkpoint_per_fold: false
 
-## Walk-forward evaluation parameters (stage 1):
+## Walk-forward evaluation parameters (stage 1, one walk-forward of the production configuration:
+## the deterministic floor, trained with wf_market_mode; each week's fold trains on every earlier
+## completed game, as the final fit does):
+# walk-forward runs whose out-of-fold margin errors set the probability floor's sigma,
+# Phi(margin / sigma), with sigma the root-mean-square error of every out-of-fold prediction before
+# the predicted week. Stage 1 pools them with its own earlier weeks; the final fit pools them with
+# stage 1's weeks before the predicted week that the runs have no rows for (the seasons after
+# them and the predicted season's earlier weeks) and records the sigma in the saved model. Run
+# directories or fold checkpoint directories, relative to the repository root; their checkpoints
+# are only read, and several runs are averaged per game. A listed run that is missing stops the
+# run. An empty list ([]) uses only stage 1's folds, which fall back to the constant 14.21 until
+# they span three earlier seasons, any weeks of them (default: both seeds of the GPU reference
+# walk-forward)
+floor_sigma_reference_runs:
+  - models/step3_gpu_reference/l1_seed42
+  - models/step3_gpu_reference/l2_seed7
 # number of most recent seasons to include; the current season counts even before it has a
 # completed week, so 3 scores two seasons (default: 3)
 wf_eval_last_n_seasons: 3
-# starting week for walk-forward evaluation (default: 3)
-wf_start_week: 3
-# number of newest weeks held out of the tree fit for calibration (default: 4)
-wf_calibration_weeks: 4
+# starting week for walk-forward evaluation; week 1 scores every week, so the errors of weeks 1
+# and 2 also reach the final fit's floor-sigma pool (default: 1)
+wf_start_week: 1
 # exponential recency weighting half-life in seasons (default: none, i.e. unweighted; keep it
 # equal to train_recency_half_life_seasons)
 # wf_recency_half_life_seasons: 16
 # whether to include postseason games in walk-forward evaluation (default: false)
 wf_include_postseason: false
-# market mode (options: features, anchor, hybrid, all, default: hybrid)
+# market mode of the walk-forward and the final fit: market lines as features, the model
+# anchored to them, or both (options: features, anchor, hybrid, default: hybrid)
 wf_market_mode: hybrid
-# market probability source (options: raw, novig, both, default: raw)
-wf_market_prob_source: raw
-# blending method for market probabilities (options: prob, logit, both, default: prob)
-wf_market_prob_blend_method: prob
-# uncertainty-aware win probabilities (options: off, on, both, default: off); quoted, because
-# YAML reads a bare off as the boolean false
-wf_win_prob_uncertainty: "off"
 # include quantile models in walk-forward training (default: false)
 wf_include_quantiles: false
 
-## Walk-forward model hyperparameters:
-# number of estimators for walk-forward XGBoost model (default: 200)
+## XGBoost model hyperparameters of stage 1 and the final fit (tuned values replace them in the
+## final fit when tune is on):
+# number of estimators, the tree budget (default: 200)
 wf_n_estimators: 200
-# maximum depth for walk-forward XGBoost model (default: 5)
+# maximum tree depth (default: 5)
 wf_max_depth: 5
-# learning rate for walk-forward XGBoost model (default: 0.0165)
+# learning rate (default: 0.0165)
 wf_learning_rate: 0.0165
 
-## Final model training parameters:
+## Final model training parameters (the final fit trains on every completed game except the
+## holdout seasons, the newest week included, with no eval frame):
+# newest whole seasons held out of the final fit and scored as an evaluation holdout (default: 0)
+holdout_seasons: 0
 # whether to include postseason games in final model training (default: false)
 include_postseason: false
 # weight multiplier for postseason games in final model training; applies only with
@@ -64,8 +76,6 @@ tune_early_stopping_rounds: 50
 # transformed market features in final model training (default: automatic, on whenever market
 # lines exist)
 # market_transform: true
-# number of newest weeks held out for calibration in final training (default: wf_calibration_weeks)
-# train_calibration_weeks: 4
 
 ## Optuna hyperparameter tuning settings:
 # whether to perform hyperparameter tuning before final model training (default: false)
@@ -81,8 +91,10 @@ tune_objective: brier
 ## XGBoost runtime configuration:
 # XGBoost tree method (default: automatic)
 # xgb_tree_method: hist
-# XGBoost device (default: the CPU; pass --xgb-device cuda for the GPU)
-# xgb_device: cuda
+# XGBoost device for stage 1 and the final fit (options: auto, cpu, cuda, default: auto). auto
+# picks the GPU when this XGBoost build has CUDA and a usable GPU is present, else the CPU; the
+# resolved device is what the run records.
+xgb_device: auto
 # XGBoost CPU threads for stage 1 and the final fit; results do not depend on it (default: every
 # CPU core)
 # xgb_n_jobs: 12

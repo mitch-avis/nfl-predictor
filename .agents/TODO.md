@@ -149,6 +149,28 @@ Steps:
    pool (follow-up from 59.2), so fitted calibrators can be judged fairly as 56.5 options.
    Task 55.6 (the per-season stability view) lands here as part of the standard walk-forward
    report. Absorbs the follow-ups marked "(step 3)".
+   Plan accepted by the user on 2026-09-27 (branch `feat/step3-parity`): (A) evidence with no
+   `ml/` edits: the one-fold CPU-vs-GPU and determinism check (rung L0), the independent rescore
+   of the probability paths on the task 55.8 checkpoints (`models/step3_prob_paths/`), and 56.6
+   (b)/(c) (`models/step3_open_lines/`); (B) every `ml/` edit in one batch, one implementer
+   subagent and one review per chunk; (C) the GPU reference, six seasons from week 1 on seeds
+   `42` and `7` (rungs L1-L2); (D) a no-holdout arm (`--wf-calibration-weeks 0`) on two seeds
+   (rungs L3-L4) only if (B) leaves the holdout with no purpose. Ladder cap: four six-season runs
+   plus L0; each rung's hypothesis and rule are in its run directory. 56.6(d) moved to step 4
+   the same day (it needs a dataset build). Changed by the user the same day: L1-L2 cover
+   2007-2025 (every season with real opening lines, for 56.6(c)); rung (D) is dropped, because
+   walk-forward folds never held weeks out and `0.33.0` moved production to match, so the arm
+   would reproduce the reference exactly. Ladder: L0-L2.
+   Added by the user on 2026-09-28: measure the spread in the probability floor
+   `Phi(margin / sigma)` (today the constant `SCORE_DIFF_STD_DEV = 14.21`) against sigmas estimated
+   from the model's own earlier errors, by rescoring the GPU reference
+   (`models/step3_sigma/HYPOTHESIS.md`); adopting one is a default change (must-ask).
+   The user adopted `expanding` on 2026-09-28 (`0.35.0`), with picks and ranks from the unrounded
+   probability and the weekly stage 1 from week 1.
+   Standing process item (the user, 2026-09-28): rerun the GPU reference (two seeds, 2007 through
+   the last completed season, current code) whenever a step changes the model (steps 4 and 5
+   already require a new reference) and once each off-season before week 1, so the floor's sigma
+   pool describes the current model; point `floor_sigma_reference_runs` at the new runs.
 4. **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
    First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
    a schema version in the play-by-play cache key), because this step compares dataset builds.
@@ -293,23 +315,6 @@ Tasks:
       53.7. Context from task 55.8: each two-seed weighting contrast (half-lives `4`, `16`, `32`)
       improved week-2 total MAE by `0.2`-`0.3` points beyond its interval (96 games), the only
       consistent early-season signal that ladder found; report week-2 total MAE for each `K`.
-- [ ] 55.4 (step 3) Add `xgb_device=auto` (prefer `cuda`, else CPU) used identically in evaluation
-      and final training. **Decided by the user on 2026-09-23: the GPU (CUDA) becomes the default
-      device for every XGBoost run, standalone walk-forwards included.** Today only the weekly run
-      uses it (`xgb_device: cuda` in `config/weekly_run.yaml`, both stages), while
-      `nfl-predictor backtest` defaults to the CPU, so every benchmark arm so far trained
-      on the CPU (an `AGENTS.md` rule 11 parity gap). Do not change the default while a CPU ladder
-      is running: arms of one comparison must share a device. When it lands: a one-fold CPU-vs-GPU
-      timing and prediction-difference check, a CPU fallback when no GPU is present, the device
-      recorded in run metadata, and a new GPU reference arm, because later arms can no longer be
-      compared with the CPU reference numbers in `.agents/benchmarks.md`. Added 2026-09-24: a GPU
-      determinism check (the same seed twice on one fold must give identical predictions, or
-      checkpoint resume and "only one setting differs" comparisons break), and the GPU reference on
-      two seeds, which also measures the GPU's own fit-noise floor (rule 13).
-- [ ] 55.6 (step 3) Add the stability view by season and week bucket, and a "recommended
-      defaults" section. The second-key review script
-      (`models/wf_m55_8_review/review_55_8.py`) already produces per-season tables; promote that
-      into the standard walk-forward report while step 3 touches reporting.
 - [x] 55.7 Choose `n_estimators` time-aware: closed 2026-09-21 (`0.13.0`-`0.13.1`). A four-rung
       ladder (`200`/`400`/`598`, then a `100` plateau check), each rung a six-season arm with its
       own hypothesis and an independent reviewer rescore, found the aggregate order monotone
@@ -378,31 +383,6 @@ Formerly Milestone 41.
 - [ ] 56.3 (step 5, with 55.9) Wire the settings chosen by the task 55.9 tune into the weekly run
       and the benchmark from one shared source (today `weekly_run` takes explicit `wf_*` params and
       never reads a best-params file); confirm resume behavior.
-- [ ] 56.5 (step 3) The weekly run's stage-1 winner is chosen by list order, not by evidence.
-      Found by the 2026-09-23 review. `nfl-predictor weekly` (`_pick_best_row` in
-      `nfl_predictor/weekly_run/stage1.py`) ranks the stage-1 candidates
-      by deterministic Brier, then deterministic log loss, but those two columns depend only on
-      the predicted margin, which is identical across the nine calibration and market-blend
-      candidates of one market mode. Every candidate therefore ties, and the stable sort returns
-      whichever candidate the input list puts first; the list is sorted by the configured
-      calibrator's Brier, the column the 2026-09-18 audit found noise-dominated. The week-2
-      production run (`models/weekly_2026_week_02_refresh/wf_best.json`) selected
-      `elo` + `market_prob_weight 0.2` + `market_prob_clamp 0.1`, so the probabilities submitted
-      to the pool come from a different path than the one every benchmark measures, chosen
-      without an interval, and eight of the nine candidates are trained every week for nothing.
-      Related, from rescoring the six-season task 55.8 checkpoints
-      (`models/wf_m55_8_review/probability_paths.py`, the producer's analysis only): a market
-      blend chosen from earlier seasons appears to settle at high weights, which would mean the
-      model's probabilities add little on top of the closing line. That script has **no second
-      key** (`INDEPENDENT_REVIEW.md` there, disagreement 8), so 56.5 rescores it independently
-      before any of its numbers enter the docs. Deciding how production probabilities should be
-      formed (the deterministic floor, a blend weight fixed by a pre-registered walk-forward rule,
-      or something else) is a must-ask default change for the user. Direction from the user
-      (2026-09-24): one calibration used the same way by every run type (backtest, benchmark,
-      weekly run), `auto` or `platt`, and the `nfl-predictor backtest --calibration` default
-      (`platt`, against the benchmark's `auto`) is settled here too. `auto` resolves to `none`,
-      the fixed normal curve with no fitting. Keep it separate from
-      Milestone 60's behavior-preserving moves.
 - [ ] 56.6 (step 3, with 56.5) Measure the model against the lines available at pick time, not
       only the stored ones. Picks are submitted before the Thursday game, and lines move between
       then and Sunday, sometimes a lot. The ETL's lines come from nflverse schedules
@@ -424,9 +404,13 @@ Formerly Milestone 41.
       an existing source (nflverse or nfelo, no new external service); (b) confirm what the
       nflverse schedule lines are (closing, or a snapshot) against this file's `last` columns;
       (c) on 2007-2025, score the model against the opening line as a second market yardstick
-      beside the stored one, since pick-time lines sit between open and close; (d) measure how
+      beside the stored one, since pick-time lines sit between open and close; (2026-09-27: scored
+      on 2020-2025 first; the user asked for the full 2007-2025 window, which the GPU reference
+      covers; done 2026-09-28 on the GPU reference, `.agents/benchmarks.md`, "GPU reference");
+      (d) measure how
       much anchoring on opening instead of stored lines changes backtest accuracy, a
-      feature-value change measured with two builds and two seeds; (e) record the coverage limits
+      feature-value change measured with two builds and two seeds (moved to roadmap step 4 by
+      the user on 2026-09-27, to share its rebuild cycle); (e) record the coverage limits
       (no openers before 2007, uncertain in 2022, undated `legacy` openers) wherever a number
       depends on them. The outcome feeds 56.5: a market blend judged against closing lines
       overstates what it can do at pick time.
@@ -472,9 +456,9 @@ Formerly Milestone 41.
         in-season fits run the full tree budget.
       - Change which probabilities are submitted, to be measured here: `wf_eval_last_n_seasons`
         (how many seasons stage 1 scores; the count includes the unscorable current season, so
-        the default `3` scores two), `wf_calibration_weeks` / `train_calibration_weeks` (the
-        newest weeks held out of the tree fit for calibration; the benchmark uses `4`),
-        `wf_market_prob_source` (`raw` against `novig` moneylines) and
+        the default `3` scores two), the calibration hold-out (retired in `0.33.0`: the final
+        fit trains on every completed game, like the benchmark), `wf_market_prob_source`
+        (`raw` against `novig` moneylines) and
         `wf_market_prob_blend_method` (`prob` against `logit`), plus `market_transform`
         (`auto`, which is on whenever lines exist, against `true`).
       Work: (a) as a Milestone 60 behavior-preserving move, make the weekly run read
@@ -483,7 +467,12 @@ Formerly Milestone 41.
       `false`, a latent bug in the current file; (b) here in step 3, decide the output-changing
       group with the measures of success under "Roadmap Status", on six seasons and two seeds,
       against the benchmark configuration, so that production and benchmark share every setting
-      (rule 11); (c) consider retiring the weekly stage-1 re-selection altogether. Once 56.5
+      (rule 11), and add a "settings versus production" section to the standard walk-forward
+      report (every setting where a run differs from the production weekly run; moved here from
+      task 55.6 by the user on 2026-09-27); (c) consider retiring the weekly stage-1
+      re-selection altogether. (Done in `0.32.0`: retired; the weekly run walks forward
+      the one production configuration. `wf_market_prob_source` and
+      `wf_market_prob_blend_method` no longer exist.) Once 56.5
       fixes the probability path by evidence, re-choosing among near-identical candidates each
       week only adds noise (Week 3's two runs chose `none`, then `elo`, a day apart) and costs
       most of the run's time. Changing a default is must-ask.
@@ -581,9 +570,10 @@ Each group names the archived milestone it came from; the milestone's full recor
       `etl_full` and `lines_refresh` (rewrite `data/`), `predict`, `power_rankings` and
       `shap_analysis` (overwrite files in the active run directory), `weekly_run` and
       `walk_forward_backtest` (long runs). Step 3 runs a weekly run and walk-forwards anyway.
-- [ ] (step 3) Power rankings from a `blend` run have never worked. A blend model (`train
-      --model-kind blend`: the team model and the market line through a ridge layer; the weekly
-      run never trains one) keeps its `feature_spec` on `team_model`, and
+- [x] (step 3) Power rankings from a `blend` run have never worked. Resolved in `0.32.0`: the
+      `blend` kind is retired (task 56.5), and a blend run is refused with the reason. A blend
+      model (`train --model-kind blend`: the team model and the market line through a ridge
+      layer; the weekly run never trains one) keeps its `feature_spec` on `team_model`, and
       `_predict_future_games` in `nfl_predictor/reporting/power_rankings.py` reads
       `model.feature_spec` before its blend branch, so it fails with "Model is missing
       feature_spec" (pinned by `tests/test_blended_model_paths.py`). The model only feeds the
@@ -609,6 +599,13 @@ are diagnostics of saved artifacts, not walk-forward results, and have no second
       (`nfl-predictor explain`) as the headline measure. The fix touches
       `nfl_predictor/ml/feature_importance.py` (a checkpoint-fingerprint change, so it belongs with
       step 3's other `ml/` edits), the API reader and the web chart.
+      Narrowed (`0.29.0`, 2026-09-27): total gain per base feature and per head is the ranking
+      measure and the chart names it (older run directories fall back, labelled). SHAP as the
+      headline measure was considered and not built. The user decided on 2026-09-27: SHAP
+      becomes the headline measure, computed on every run despite the extra pass, total gain
+      stays as the secondary measure, and the combined (both heads) ranking stays, with a
+      margin-only toggle added in the web phases. SHAP landed in `0.31.0`; the margin-only toggle
+      is the remainder, for the web phases (Milestone 58).
 - [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping
@@ -634,15 +631,23 @@ user submitted) and `models/weekly_2026_week_03_full/` (the rerun with a fresh E
 'em pool). The stopped first run and the two data backups were deleted with the user's approval
 on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
 
-- [ ] **GPU never used by default.** `xgb_device` defaults to none (the CPU), so stage 1 ran on
+- [x] **GPU never used by default.** `xgb_device` defaulted to none (the CPU), so stage 1 ran on
       the CPU (about 6 min per candidate against about 1 min on the GPU with `--xgb-device
-      cuda`). The user chose the GPU for everything (task 55.4).
-- [ ] **The final fit never trains on the newest weeks.** Production and walk-forward both hold
+      cuda`). The user chose the GPU for everything (task 55.4). Fixed in `0.30.0`: every run
+      defaults to `auto` (the GPU when usable). The measurement parts stay under task 55.4.
+- [x] **The final fit never trains on the newest weeks.** Resolved in `0.33.0` by the user's
+      decision: the final fit trains on every eligible completed game, like every walk-forward
+      fold. Originally: Production and walk-forward both hold
       out the newest 4 completed weeks from the tree fit and use them only for calibration, so
       the Week 3 model's trees did not see 2026 Weeks 1-2, which reach it only through the
       features. Measure a refit on all rows (or a smaller hold-out) in step 3 with the
       out-of-fold calibration pool; the user asked whether this is a design flaw.
-- [ ] **Stage-1 selection and pick-time timing.** Already scheduled (task 56.5): this week's
+      Correction (2026-09-27, verified by an independent review): only the final fit holds the
+      newest 4 weeks out of its trees; walk-forward folds train on every earlier game, so every
+      benchmark number measures a model without the hold-out. Which side moves is the user's
+      step-3 question (recommendation: production stops holding out).
+- [x] **Stage-1 selection and pick-time timing.** Resolved in `0.32.0` (task 56.5): the
+      stage-1 re-selection is retired and the floor is submitted. Originally: this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
 - [ ] **Stage 1 got slower.** Candidates now fit the shared 200-tree default at learning
@@ -661,7 +666,8 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
 
 ### From Milestone 59 (benchmark instrument; audited 2026-09-19)
 
-- [ ] Narrowed 59.2: the calibration frame for fitted calibrators is the previous two seasons
+- [x] Narrowed 59.2 (moot since `0.32.0`: no fitted calibrator remains, task 56.5): the
+      calibration frame for fitted calibrators is the previous two seasons
       plus the completed weeks of the eval season, but the rows are in-sample (walk-forward: a
       subset of `fold.train_df` predicted by the model trained on it; production:
       `_pooled_calibration_frame` over `train_df + calibration_df`, the same way). The task asked
@@ -731,25 +737,38 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
 Fixed in `0.7.1`: the season guard, the window log line, the quarterback history refresh and
 the identity warning. Still open:
 
-- [ ] `walk_forward.select_calibration_data` still takes calibration weeks from the eval season
+- [x] `walk_forward.select_calibration_data` (retired in `0.33.0` with the calibration frame;
+      see the Week 3 hold-out item) still takes calibration weeks from the eval season
       only and returns an empty frame when fewer than `calibration_weeks` exist, so walk-forward
       folds for weeks 2-4 fit with no calibration frame (and no early stopping) while production
       training now rolls the window back into the previous season. The backtest therefore does
       not measure the early-season regime the weekly model uses. Roll the walk-forward window
       back the same way and re-measure from week 1.
-- [ ] With `--train-calibration-seasons 1` and the default four weeks, the whole calibration
+      Narrowed (2026-09-27): the premise predates the pooled calibration frame (`0.12.x`). Today
+      the frame is the previous two seasons plus the eval season's completed weeks, never empty,
+      and walk-forward folds hold nothing out of the tree fit; the real gap is the final fit's
+      hold-out (the Week 3 item "The final fit never trains on the newest weeks"), a user
+      question. `0.30.1` documents both paths in the help, config and README.
+- [x] With `--train-calibration-seasons 1` and the default four weeks, the whole calibration
       season is the newest season the window does not touch, so it jumps (for example from 2024
       to 2025) between weeks 4 and 5 of a season and swaps a whole season between train and
       calibration. Correct by construction, but not logged; log the candidates or document it.
-- [ ] With `--include-postseason`, the rolled-back window is filled by the previous season's
+      Done in `0.30.1`: the final fit logs the calibration seasons and why they move, and each
+      walk-forward fold logs its calibration frame.
+- [x] With `--include-postseason` (moot since `0.33.0`: no window rolls back), the rolled-back
+      window is filled by the previous season's
       playoff weeks (divisional, conference, Super Bowl: seven games), so a week-1 or week-2
       window can hold about 23 games. The weekly default excludes the postseason; consider
       skipping postseason weeks when the window rolls back, or counting games instead of weeks.
-- [ ] `_split_train_calibration_holdout` still returns the lossy `(newest season, its weeks)`
+      Open (2026-09-27): moot if production stops holding weeks out (the user's step-3
+      question); otherwise the recommendation is to skip postseason weeks when rolling back.
+- [x] `_split_train_calibration_holdout` still returns the lossy `(newest season, its weeks)`
       pair and `_inseason_calibration_pairs` re-derives the window from the calibration frame;
       returning `window_pairs` from the split would remove the duplication (touches the two
       destructuring sites in `ml_model_training.py` and two 8-tuple mocks in
       `tests/test_ml_model_training_additional.py`).
+      Done in `0.30.1`: the split returns a `TrainCalibrationSplit` carrying `window_pairs`,
+      pinned by characterization tests written before the change.
 - [ ] `_attach_qb_features` requests a not-yet-published current season a second time before
       kickoff (the first `load_pbp` skipped it, so it is "missing"), doubling that network attempt
       and its warning; and every ETL run, however narrow its `--min-season`, needs all

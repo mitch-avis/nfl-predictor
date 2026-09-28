@@ -1,4 +1,4 @@
-"""Characterization tests for the backtest, sweep and leakage-audit entrypoints.
+"""Characterization tests for the backtest and leakage-audit entrypoints.
 
 Each runs its command-line ``main`` on the synthetic seasons of ``tests/weekly_fixture.py``
 and compares the report it writes with a snapshot under
@@ -18,14 +18,14 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from nfl_predictor.cli import backtest, leakage_audit, sweep
+from nfl_predictor.cli import backtest, leakage_audit
 from nfl_predictor.ml import walk_forward
+from nfl_predictor.reporting import production_settings
 from tests import snapshots
 from tests.weekly_fixture import build_fixture
 
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "entrypoints_characterization"
 TEST_BOOTSTRAP_SAMPLES = 200
-SWEEP_VOLATILE_COLUMNS = ("duration_seconds", "completed_at", "wf_run_fingerprint")
 
 
 def _run_main(module: Any, argv: list[str], monkeypatch: pytest.MonkeyPatch) -> int:
@@ -132,40 +132,13 @@ def test_walk_forward_backtest_report_matches_snapshot(
         report.pop(key)
     report["config"].pop("run_id")
     report["config"]["checkpoint"].pop("dir")
+    # The comparison with production and the recorded XGBoost parameters name this machine's
+    # device, threads and config path; tests/test_production_settings.py covers them.
+    assert "stage1" in report.pop(production_settings.SECTION_KEY)
+    trained = report["config"].pop(production_settings.RESOLVED_XGB_PARAMS_KEY)
+    assert trained["n_estimators"] == 20
     snapshots.check_json(
         "metrics_report.json",
         _portable(report, tmp_path),
         SNAPSHOT_DIR / "walk_forward_metrics_report.json",
     )
-
-
-def test_wf_compare_summary_matches_snapshot(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The calibration and market-blend sweep ranks the same candidates the same way."""
-    paths = build_fixture(tmp_path)
-    out_csv = tmp_path / "wf_compare.csv"
-    code = _run_main(
-        sweep,
-        [
-            "--data-path",
-            str(paths["completed"]),
-            "--eval-last-n-seasons",
-            "1",
-            "--market-mode",
-            "anchor",
-            "--n-estimators",
-            "20",
-            "--n-jobs",
-            "1",
-            "--checkpoint-dir",
-            str(tmp_path / "checkpoints"),
-            "--out",
-            str(out_csv),
-        ],
-        monkeypatch,
-    )
-    assert code == 0
-    summary = pd.read_csv(out_csv)
-    summary = summary.drop(columns=[c for c in SWEEP_VOLATILE_COLUMNS if c in summary.columns])
-    snapshots.check_csv("wf_compare.csv", summary, SNAPSHOT_DIR / "wf_compare.csv")

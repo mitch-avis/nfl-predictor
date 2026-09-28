@@ -16,7 +16,7 @@ walk-forward at a time, `launch.sh` with `nohup setsid`, the OpenMP wait policy)
   small dataset (an idle `PASSIVE` week took `~142s` against `~82s` for the default). The setting
   changes scheduling only, so it neither alters results nor invalidates fold checkpoints; switching
   mid-run means stop, relaunch with the other policy, and resume. Since `0.24.0` the walk-forward
-  commands (`nfl-predictor weekly`, `backtest` and `sweep`) set
+  commands (`nfl-predictor weekly` and `backtest`) set
   `PASSIVE` themselves unless `OMP_WAIT_POLICY` is already set, because load that arrives mid-run
   stalls the default policy; on a machine known to stay idle, launch with `OMP_WAIT_POLICY=`
   (empty) to keep the library default.

@@ -4,55 +4,55 @@
   "rows": [
     {
       "feature": "num__market_total_line",
-      "mean_abs_shap": 1.2286778688430786
-    },
-    {
-      "feature": "num__away_points_per_game",
-      "mean_abs_shap": 0.8300592303276062
-    },
-    {
-      "feature": "num__away_points_allowed_per_game",
-      "mean_abs_shap": 0.6527538299560547
+      "mean_abs_shap": 1.0057784220646135
     },
     {
       "feature": "num__away_power",
-      "mean_abs_shap": 0.6101455092430115
+      "mean_abs_shap": 0.925655328258872
+    },
+    {
+      "feature": "num__away_points_allowed_per_game",
+      "mean_abs_shap": 0.7509488059114665
     },
     {
       "feature": "num__home_rest",
-      "mean_abs_shap": 0.6095125079154968
+      "mean_abs_shap": 0.701006253361702
+    },
+    {
+      "feature": "num__away_points_per_game",
+      "mean_abs_shap": 0.5884344526939094
     },
     {
       "feature": "num__home_points_per_game",
-      "mean_abs_shap": 0.4977635145187378
-    },
-    {
-      "feature": "num__home_power",
-      "mean_abs_shap": 0.4710195064544678
-    },
-    {
-      "feature": "num__home_points_allowed_per_game",
-      "mean_abs_shap": 0.40252482891082764
+      "mean_abs_shap": 0.5683992357738316
     },
     {
       "feature": "num__power_diff",
-      "mean_abs_shap": 0.3920293152332306
+      "mean_abs_shap": 0.4925539181940258
+    },
+    {
+      "feature": "num__home_power",
+      "mean_abs_shap": 0.44443130284547805
+    },
+    {
+      "feature": "num__home_points_allowed_per_game",
+      "mean_abs_shap": 0.35723050639033316
     },
     {
       "feature": "num__market_home_margin",
-      "mean_abs_shap": 0.28924667835235596
+      "mean_abs_shap": 0.32513327069580555
     },
     {
       "feature": "num__home_market_prob",
-      "mean_abs_shap": 0.17905570566654205
+      "mean_abs_shap": 0.15954349163221196
     },
     {
       "feature": "num__away_rest",
-      "mean_abs_shap": 0.11520256847143173
+      "mean_abs_shap": 0.11059548900928348
     },
     {
       "feature": "num__away_market_prob",
-      "mean_abs_shap": 0.06872967630624771
+      "mean_abs_shap": 0.0531650201138109
     }
   ],
   "sample_size": 100,

@@ -138,12 +138,21 @@ export interface CalibrationBin {
   avg_actual: number
 }
 
+/** Which importance measure ranks the features: SHAP for current runs, the gains for older ones. */
+export type FeatureImportanceMeasure = 'mean_abs_shap' | 'total_gain' | 'summed_average_gain'
+
+/** One base feature; `value`, `margin_value` and `total_value` are in the payload's measure. */
 export interface FeatureImportanceRow {
   feature: string
-  gain: number
-  weight: number | null
-  margin_gain: number | null
-  total_gain: number | null
+  value: number
+  margin_value: number | null
+  total_value: number | null
+  splits: number | null
+}
+
+export interface FeatureImportance {
+  measure: FeatureImportanceMeasure | null
+  rows: FeatureImportanceRow[]
 }
 
 export interface MetricStrategyEntry {
@@ -180,7 +189,7 @@ export interface ModelOut {
     metric_strategy?: Record<string, MetricStrategyEntry[]> | null
     calibration?: { bin_count: number; bins: CalibrationBin[] } | null
   }
-  feature_importance: FeatureImportanceRow[]
+  feature_importance: FeatureImportance
   calibration: { bin_count: number; bins: CalibrationBin[]; source?: string } | null
   wf_compare: TablePayload | null
   wf_best: Record<string, unknown> | null

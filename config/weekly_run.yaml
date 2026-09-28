@@ -36,8 +36,9 @@ floor_sigma_reference_runs:
 # number of most recent seasons to include; the current season counts even before it has a
 # completed week, so 3 scores two seasons (default: 3)
 wf_eval_last_n_seasons: 3
-# starting week for walk-forward evaluation (default: 3)
-wf_start_week: 3
+# starting week for walk-forward evaluation; week 1 scores every week, so the errors of weeks 1
+# and 2 also reach the final fit's floor-sigma pool (default: 1)
+wf_start_week: 1
 # exponential recency weighting half-life in seasons (default: none, i.e. unweighted; keep it
 # equal to train_recency_half_life_seasons)
 # wf_recency_half_life_seasons: 16

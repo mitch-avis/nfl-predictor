@@ -102,7 +102,7 @@ def test_default_weekly_settings_and_hashes(
         "resume": True,
         "checkpoint_per_fold": False,
         "eval_last_n_seasons": 3,
-        "wf_start_week": 3,
+        "wf_start_week": 1,
         "include_postseason": False,
         "exclude_incomplete_seasons": False,
         "recency_half_life_seasons": None,
@@ -150,8 +150,9 @@ def test_default_weekly_settings_and_hashes(
         "xgb_params_overrides": {"n_estimators": 200, "max_depth": 5, "learning_rate": 0.0165},
     }
     # Both markers cover the floor sigma's inputs (the reference errors and the final fit's
-    # pool and week), so a run directory from before them retrains instead of resuming.
-    assert captured["hashes"] == ["44ec15e5", "082f6915"]
+    # pool and week), so a run directory from before them retrains instead of resuming. The
+    # stage-1 hash also covers the start week (now 1).
+    assert captured["hashes"] == ["ca6a81c8", "082f6915"]
 
 
 def test_overridden_weekly_settings_and_hashes(
@@ -200,7 +201,7 @@ def test_overridden_weekly_settings_and_hashes(
         captured["train"]["market_anchor"],
     ) == (False, False, True)
     # The final fit's hash covers the Optuna storage path, which names the temporary directory.
-    assert captured["hashes"][0] == "d4656686"
+    assert captured["hashes"][0] == "8ae118ca"
 
 
 def test_config_tree_settings_reach_stage1_and_the_final_fit(

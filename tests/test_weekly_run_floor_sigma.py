@@ -293,3 +293,9 @@ def test_training_artifacts_record_the_models_floor_sigma(tmp_path: Path) -> Non
 
     metadata = json.loads(paths.metadata_path.read_text(encoding="utf-8"))
     assert floor_sigma.FloorSigma.from_dict(metadata["floor_sigma"]) == record
+
+
+def test_stage1_starts_at_week_1_so_every_week_reaches_the_pool() -> None:
+    """Weeks 1 and 2 are walked forward too, in code and in the shipped config."""
+    assert run_config._build_parser().parse_args([]).wf_start_week == 1
+    assert run_config._parse_args([]).wf_start_week == 1

@@ -239,8 +239,11 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     parser.add_argument(
         "--wf-start-week",
         type=int,
-        default=defaults.get("wf_start_week", 3),
-        help="Walk-forward: start week.",
+        default=defaults.get("wf_start_week", 1),
+        help=(
+            "Walk-forward: start week (default 1, so every week is scored and its errors reach "
+            "the final fit's floor-sigma pool)."
+        ),
     )
     parser.add_argument(
         "--wf-include-postseason",

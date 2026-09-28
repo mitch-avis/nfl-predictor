@@ -605,7 +605,9 @@ them).
 
 Notes:
 
-- `--wf-*` flags control the stage-1 walk-forward. `--wf-market-mode` also sets the final fit's
+- `--wf-*` flags control the stage-1 walk-forward. Stage 1 starts at week 1 (`--wf-start-week`,
+  default `1` in the weekly run), so the errors of weeks 1 and 2 reach the final fit's sigma pool;
+  `nfl-predictor backtest` keeps its own default of week 3. `--wf-market-mode` also sets the final fit's
   market mode, and `--wf-n-estimators`, `--wf-max-depth` and `--wf-learning-rate` (the tree
   budget, depth and learning rate) train both stage 1 and the final fit, so stage 1 measures the
   model the weekly run submits. With `--tune`, the tuned values replace them in the final fit.

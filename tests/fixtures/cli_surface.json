@@ -2098,9 +2098,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": 3,
+   "default": 1,
    "dest": "wf_start_week",
-   "help": "Walk-forward: start week.",
+   "help": "Walk-forward: start week (default 1, so every week is scored and its errors reach the final fit's floor-sigma pool).",
    "nargs": null,
    "options": [
     "--wf-start-week"

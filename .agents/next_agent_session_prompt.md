@@ -5,12 +5,16 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-09-28, after the step-3 merge)
+## State (written 2026-09-28, after the 0.35.1 merge)
 
-- `main` is at `0.35.0`: roadmap step 3 (production/benchmark parity) merged from
-  `feat/step3-parity` with the user's approval on 2026-09-28 (merge commit `ec1879e`). Not
-  pushed; pushing stays must-ask. The working tree is clean apart from this file's commit.
-- `scripts/gate.sh --web` exits `0` on the merged tree (1193 passed).
+- `main` is at `0.35.1` and pushed to `origin` with the user's approval on 2026-09-28 (pushing
+  stays must-ask each time). Roadmap step 3 (production/benchmark parity) merged from
+  `feat/step3-parity` (merge commit `ec1879e`); `0.35.1` (merge commit `0a99b02`, from
+  `fix/gate-hygiene`) closes the web database's leaked SQLite connection, swaps the test
+  client's `httpx` for `httpx2`, and keeps the gitignored `models/` and `.claude/worktrees/` out
+  of the local pyright and markdownlint steps. All agent worktrees were removed. The working tree
+  is clean.
+- `scripts/gate.sh --web` exits `0` on the merged tree (1194 passed, no pytest warnings).
 - What step 3 changed (full list in `CHANGELOG.md`, `0.29.0`-`0.35.0`):
   - every run type submits the deterministic floor `Phi(margin / sigma)`, with sigma the
     root-mean-square out-of-fold margin error before the week (`nfl_predictor/ml/floor_sigma.py`);

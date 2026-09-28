@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.34.2] - 2026-09-28
+
+### Fixed
+
+- Confidence-pool ranks break mathematically equal confidences by `game_id`, as documented,
+  instead of by floating-point noise (a home favorite and a home underdog by the same spread were
+  ordered by the last bits of `|p - 0.5|`). Confidence is rounded to 12 decimals
+  (`CONFIDENCE_DECIMALS` in `nfl_predictor/ml/metrics.py`) before ranking, through one shared
+  rule, `confidence_ranks`, used by the weekly pick ranks, walk-forward pool points, training
+  pool summaries, the prediction log and `nfl-predictor compare`. Games whose confidences differ
+  rank exactly as before; rescoring every saved walk-forward moved no rank. The edit under
+  `nfl_predictor/ml/` changes checkpoint fingerprints, not predictions.
+
 ## [0.34.1] - 2026-09-28
 
 ### Fixed

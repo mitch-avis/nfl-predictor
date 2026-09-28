@@ -490,7 +490,8 @@ Formerly Milestone 41.
       - Change which probabilities are submitted, to be measured here: `wf_eval_last_n_seasons`
         (how many seasons stage 1 scores; the count includes the unscorable current season, so
         the default `3` scores two), the calibration hold-out (retired in `0.33.0`: the final
-        fit trains on every completed game, like the benchmark), `wf_market_prob_source` (`raw` against `novig` moneylines) and
+        fit trains on every completed game, like the benchmark), `wf_market_prob_source`
+        (`raw` against `novig` moneylines) and
         `wf_market_prob_blend_method` (`prob` against `logit`), plus `market_transform`
         (`auto`, which is on whenever lines exist, against `true`).
       Work: (a) as a Milestone 60 behavior-preserving move, make the weekly run read

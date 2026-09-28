@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -565,6 +566,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     except ValueError as error:
         parser.error(str(error))
     return args
+
+
+def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    """Parse ``argv`` as the weekly run parses its command line, never reading ``sys.argv``.
+
+    Without ``--config`` the shipped config file supplies the defaults, as in a real run.
+    """
+    return _parse_args(list(argv))
 
 
 def xgb_thread_count(args: argparse.Namespace) -> int:

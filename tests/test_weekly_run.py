@@ -444,6 +444,59 @@ def test_data_refresh_forwards_split_arguments(monkeypatch: pytest.MonkeyPatch) 
     assert captured == [["--min-season", "2010", "--stat-prior-blend-games", "4"]]
 
 
+def _weekly_argv(tmp_path: Path, *extra: str) -> list[str]:
+    """Build a weekly_run argv whose dataset and outputs all live under ``tmp_path``."""
+    data_path = tmp_path / "completed_games_ml.csv"
+    data_path.write_text("season,week,home_spread,total_line\n2025,1,-3.0,44.5\n", encoding="utf-8")
+    return [
+        "weekly_run.py",
+        "--data-path",
+        str(data_path),
+        "--run-dir",
+        str(tmp_path / "run"),
+        "--output-dir",
+        str(tmp_path / "out"),
+        *extra,
+    ]
+
+
+def test_a_dry_run_does_not_refresh_the_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--dry-run`` prints the plan without running any stage, the data refresh included."""
+
+    def _fail_refresh(_spec: str | None) -> None:
+        raise AssertionError("a dry run must not refresh the data")
+
+    monkeypatch.setattr(pipeline, "_refresh_data", _fail_refresh)
+    monkeypatch.setattr(sys, "argv", _weekly_argv(tmp_path, "--dry-run"))
+
+    assert pipeline.main() == 0
+
+
+def test_a_run_without_dry_run_refreshes_the_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without ``--dry-run`` or ``--skip-data-refresh`` the refresh runs before the stages."""
+
+    class _StopAfterRefreshError(Exception):
+        """Stop weekly_run once the refresh has been called."""
+
+    calls: list[str | None] = []
+
+    def _record_refresh(spec: str | None) -> None:
+        calls.append(spec)
+        raise _StopAfterRefreshError()
+
+    monkeypatch.setattr(pipeline, "_refresh_data", _record_refresh)
+    monkeypatch.setattr(sys, "argv", _weekly_argv(tmp_path))
+
+    with pytest.raises(_StopAfterRefreshError):
+        pipeline.main()
+
+    assert calls == [None]
+
+
 def test_data_collection_args_is_a_valid_config_key() -> None:
     """A config file can set the data-collection pass-through arguments."""
     allowed = run_config._allowed_config_keys(run_config._build_parser())

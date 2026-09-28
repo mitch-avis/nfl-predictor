@@ -13,7 +13,10 @@ against ``actual_home_win`` (ties are coded 0 and scored that way):
   when that side won outright, so ties are incorrect for both sides.
 - Margin and total absolute error against ``actual_margin`` and ``actual_total``.
 - Confidence-pool points: within each (season, week), games are ranked ``1..N`` by ``|p - 0.5|``
-  ascending (ties broken by ``game_id`` order) and a correct pick scores its rank. Reported as the
+  rounded to 12 decimals (``CONFIDENCE_DECIMALS`` in ``nfl_predictor.ml.metrics``), ascending,
+  with equal rounded confidences broken by ``game_id`` order, and a correct pick scores its rank.
+  Rounding makes mathematically equal confidences (a home favorite and a home underdog by the
+  same spread) tie exactly instead of being ordered by floating-point noise. Reported as the
   window's total.
 - The market view is ``market_home_win_prob`` from the same rows.
 
@@ -45,6 +48,8 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+
+from nfl_predictor.ml.metrics import confidence_ranks
 
 DEFAULT_RESAMPLES = 5000
 DEFAULT_BOOTSTRAP_SEED = 0
@@ -205,12 +210,10 @@ def per_game_scores(predictions: pd.DataFrame) -> pd.DataFrame:
             "market_brier": (frame["market_home_win_prob"].to_numpy(float) - y) ** 2,
         }
     )
-    confidence = (games["p"] - 0.5).abs()
-    games["rank"] = (
-        games.assign(confidence=confidence)
-        .groupby(["season", "week"])["confidence"]
-        .rank(method="first")
-        .astype(int)
+    games["rank"] = confidence_ranks(
+        p,
+        tiebreaker=games["game_id"].to_numpy(),
+        groups=(games["season"].to_numpy(), games["week"].to_numpy()),
     )
     games["pool"] = games["rank"] * games["correct"]
     return games

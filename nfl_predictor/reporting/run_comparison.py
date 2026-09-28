@@ -16,8 +16,9 @@ against ``actual_home_win`` (ties are coded 0 and scored that way):
   rounded to 12 decimals (``CONFIDENCE_DECIMALS`` in ``nfl_predictor.ml.metrics``), ascending,
   with equal rounded confidences broken by ``game_id`` order, and a correct pick scores its rank.
   Rounding makes mathematically equal confidences (a home favorite and a home underdog by the
-  same spread) tie exactly instead of being ordered by floating-point noise. Reported as the
-  window's total.
+  same spread) tie almost always instead of being ordered by floating-point noise; a pair whose
+  noise straddles a 12-decimal rounding boundary can still differ. Reported as the window's
+  total.
 - The market view is ``market_home_win_prob`` from the same rows.
 
 Paired differences are candidate minus reference. Loss columns are bootstrapped over games (5,000

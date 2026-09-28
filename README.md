@@ -894,7 +894,9 @@ Training/backtests can write a run directory containing reproducible artifacts.
 - Each week assigns unique confidence values `1..N` to each picked winner, least confident first.
   Confidence is `|p - 0.5|` rounded to 12 decimals (`CONFIDENCE_DECIMALS` in
   `nfl_predictor/ml/metrics.py`), and equal rounded confidences are ordered by `game_id`. The
-  weekly picks, walk-forward pool points and `nfl-predictor compare` all rank this way.
+  rounding makes mathematically equal confidences (a home favorite and a home underdog by the
+  same spread) almost always tie instead of differing by floating-point noise. The weekly picks,
+  walk-forward pool points, the prediction log and `nfl-predictor compare` all rank this way.
 - Max weekly points: `N*(N+1)/2`.
 - Realized points: `sum(confidence_value * 1[pick_correct])`.
 - Ties count as incorrect.

@@ -165,6 +165,12 @@ Steps:
    `Phi(margin / sigma)` (today the constant `SCORE_DIFF_STD_DEV = 14.21`) against sigmas estimated
    from the model's own earlier errors, by rescoring the GPU reference
    (`models/step3_sigma/HYPOTHESIS.md`); adopting one is a default change (must-ask).
+   The user adopted `expanding` on 2026-09-28 (`0.35.0`), with picks and ranks from the unrounded
+   probability and the weekly stage 1 from week 1.
+   Standing process item (the user, 2026-09-28): rerun the GPU reference (two seeds, 2007 through
+   the last completed season, current code) whenever a step changes the model (steps 4 and 5
+   already require a new reference) and once each off-season before week 1, so the floor's sigma
+   pool describes the current model; point `floor_sigma_reference_runs` at the new runs.
 4. **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
    First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
    a schema version in the play-by-play cache key), because this step compares dataset builds.

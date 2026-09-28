@@ -184,12 +184,16 @@ are not advisory.
     production weekly run (`config/weekly_run.yaml` and the weekly stage-1 selection) is a
     defect until the user approves it and it is recorded here. The season-weighting gap closed in
     `0.18.0` (both train unweighted, task 55.8), and the probability-path gap in `0.32.0` (every
-    run type submits the deterministic floor, task 56.5), and the final fit's hold-out in
+    run type submits the deterministic floor, task 56.5), the device in 2026-09-28 (the two-seed
+    GPU reference, task 55.4), and the final fit's hold-out in
     `0.33.0` (the final fit trains on every completed game, like each fold). Open gaps, all
     scheduled:
-    - the device: since `0.30.0` every run defaults to the GPU (`auto`), but every reference arm
-      in `.agents/benchmarks.md` trained on the CPU until the two-seed GPU reference lands
-      (task 55.4);
+    - the floor's sigma and start week (approved by the user 2026-09-28): a default
+      `nfl-predictor backtest` (three seasons from week 3, no `--floor-sigma-reference-runs`)
+      scores every week at `SCORE_DIFF_STD_DEV`, while production pools the GPU reference and
+      stage 1 walks forward from week 1. An arm that judges probabilities runs from 2007 week 1 or
+      passes `--floor-sigma-reference-runs` with the GPU reference, and passes
+      `--wf-start-week 1`; arms compared only with each other may keep the default;
     - line timing: backtests anchor to and score against the stored, probably closing, lines,
       while production anchors to mid-week lines and picks are made before Thursday (task 56.6).
 12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is
@@ -450,8 +454,10 @@ calibration, market, pool, evaluation, artifact, leakage-audit or feature code. 
 must never be missed:
 
 - The model predicts `margin = home_score - away_score` and `total = home_score + away_score`,
-  and scores derive from them. Win probability is the deterministic floor
-  `Phi(margin / SCORE_DIFF_STD_DEV)` in every run type; the pick and its confidence come from it.
+  and scores derive from them. Win probability is the deterministic floor `Phi(margin / sigma)`
+  in every run type, where sigma is the root-mean-square out-of-fold margin error strictly before
+  the predicted week (`nfl_predictor/ml/floor_sigma.py`; `SCORE_DIFF_STD_DEV` until that pool spans
+  three earlier seasons); the pick and its confidence come from the unrounded probability.
 - Confidence pools: unique `1..N` per week; a tie scores as incorrect for both sides; picks are
   single-shot before the week's first game (no in-week updates in backtests).
 - Realistic score adjustments are display-only: they never alter win probabilities, confidence

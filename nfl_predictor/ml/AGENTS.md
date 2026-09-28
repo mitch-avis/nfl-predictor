@@ -24,6 +24,6 @@ Market and probability path:
   against the spread and total); there is no blend layer and no market blend or clamp of the
   win probability.
 - The win probability is the deterministic floor of the predicted margin
-  (`Phi(margin / SCORE_DIFF_STD_DEV)`), the same in every run type. A different probability
-  path is a default change for the user to decide, measured first against the floor with
-  time-aware splits.
+  (`Phi(margin / sigma)`, sigma from `floor_sigma.estimate`), the same in every run type. A
+  different probability path is a default change for the user to decide, measured first against
+  the floor with time-aware splits.

@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.35.0] - 2026-09-28
+
+### Changed
+
+- The probability floor's spread is no longer the fixed `SCORE_DIFF_STD_DEV`: for each week it is
+  the root-mean-square out-of-fold margin error strictly before that week (`nfl_predictor/ml/
+  floor_sigma.py`), with the constant as the fallback until the pool spans three earlier seasons
+  (any weeks). Margins, picks and confidence ranks are unchanged; probabilities move away from
+  0.5.
+- The weekly run and `nfl-predictor train` pool the reference walk-forward's fold checkpoints
+  (`floor_sigma_reference_runs`, default both GPU reference seeds, averaged per game) with stage
+  1's errors at every week the reference lacks. The sigma is recorded in the saved model and in
+  `metadata.json` (`floor_sigma`), and prediction uses it; a missing reference run is an error
+  (set `floor_sigma_reference_runs: []` to run without one).
+- The weekly stage 1 walks forward from week 1 (`wf_start_week: 1`, was 3), so weeks 1-2 are
+  scored and enter the sigma pool; existing run directories redo stage 1.
+
+### Added
+
+- `nfl-predictor backtest --floor-sigma-reference-runs`; walk-forward weeks and predictions record
+  `floor_sigma` and `floor_sigma_fallback`; stage 1 writes `wf_compare/wf_margin_errors.csv`.
+
+### Fixed
+
+- Weekly confidence ranks, `confidence_strength` and `predicted_winner` come from the unrounded
+  probability (`p >= 0.5` picks home, through the shared `metrics.picks_home`), so a game
+  published at `0.5000` or two games sharing a 4-decimal probability pick and rank as the
+  walk-forward does.
+
 ## [0.34.2] - 2026-09-28
 
 ### Fixed

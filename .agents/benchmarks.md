@@ -487,3 +487,7 @@ points cannot change (one sigma per week keeps every side and every rank). The e
 falls from `13.93` (2010) to `13.27` (2025), the trailing one to `12.39`. Rules and data:
 `models/step3_sigma/HYPOTHESIS.md`; second key `models/step3_sigma/REVIEW.md` (a separate
 reviewer); reproduce with `.venv/bin/python models/step3_sigma/independent_rescore.py`.
+
+Adopted by the user on 2026-09-28 as `0.35.0`: the floor uses the `expanding` sigma
+(`nfl_predictor/ml/floor_sigma.py`); production pools the GPU reference runs with stage 1's weeks
+the reference lacks (2026 week 1 sigma `13.248`, both seeds averaged per game).

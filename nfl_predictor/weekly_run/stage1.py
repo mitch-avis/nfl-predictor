@@ -158,6 +158,41 @@ def write_summary(run_dir: Path, summary: dict[str, Any]) -> None:
     _atomic_write_json(run_dir / "wf_best.json", summary)
 
 
+def production_walk_forward_config(
+    *,
+    eval_last_n_seasons: int,
+    wf_start_week: int,
+    include_postseason: bool,
+    exclude_incomplete_seasons: bool,
+    recency_half_life_seasons: float | None,
+    market_mode: str,
+    xgb_params_overrides: dict[str, Any],
+    include_quantiles: bool,
+    market_transform: bool | None = None,
+    max_cardinality_ratio: float = 0.5,
+) -> walk_forward.WalkForwardConfig:
+    """Return the walk-forward configuration stage 1 runs for these options."""
+    include_market, market_anchor = market_mode_flags(market_mode)
+    return walk_forward.WalkForwardConfig(
+        eval_seasons=None,
+        eval_last_n_seasons=eval_last_n_seasons,
+        wf_start_week=wf_start_week,
+        calibration="auto",
+        random_seed=walk_forward.DEFAULT_RANDOM_SEED,
+        include_postseason=include_postseason,
+        exclude_incomplete_seasons=exclude_incomplete_seasons,
+        recency_half_life_seasons=recency_half_life_seasons,
+        include_market=include_market,
+        market_transform=market_transform,
+        market_anchor=market_anchor,
+        include_quantiles=include_quantiles,
+        max_cardinality_ratio=max_cardinality_ratio,
+        feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
+        feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+        xgb_params_overrides=xgb_params_overrides,
+    )
+
+
 def evaluate_production(
     df: pd.DataFrame,
     *,
@@ -187,7 +222,6 @@ def evaluate_production(
     """
     wf_dir = _wf_compare_dir(run_dir)
     wf_dir.mkdir(parents=True, exist_ok=True)
-    include_market, market_anchor = market_mode_flags(market_mode)
     candidate_key = wf_compare_utils.build_candidate_key(
         model_kind="margin_total",
         feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
@@ -196,23 +230,17 @@ def evaluate_production(
         include_quantiles=include_quantiles,
         xgb_params_overrides=xgb_params_overrides,
     )
-    cfg = walk_forward.WalkForwardConfig(
-        eval_seasons=None,
+    cfg = production_walk_forward_config(
         eval_last_n_seasons=eval_last_n_seasons,
         wf_start_week=wf_start_week,
-        calibration="auto",
-        random_seed=walk_forward.DEFAULT_RANDOM_SEED,
         include_postseason=include_postseason,
         exclude_incomplete_seasons=exclude_incomplete_seasons,
         recency_half_life_seasons=recency_half_life_seasons,
-        include_market=include_market,
-        market_transform=market_transform,
-        market_anchor=market_anchor,
-        include_quantiles=include_quantiles,
-        max_cardinality_ratio=max_cardinality_ratio,
-        feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
-        feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+        market_mode=market_mode,
         xgb_params_overrides=xgb_params_overrides,
+        include_quantiles=include_quantiles,
+        market_transform=market_transform,
+        max_cardinality_ratio=max_cardinality_ratio,
     )
 
     fold_callback: Callable[[dict[str, Any], walk_forward.WalkForwardFold], None] | None = None

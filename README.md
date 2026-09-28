@@ -403,6 +403,27 @@ games. A row with fewer than two games has no interval. The view scores pick acc
 points on the deterministic probability, and `metrics.overall` and `metrics.per_season` in the
 same file score the submitted `home_win_prob`; both are the floor, so the two agree.
 
+The report also says how the run differs from production: `settings_versus_production` in
+`metrics_report.json`, logged under "Settings versus production" when the run finishes. The
+production side is what `nfl-predictor weekly` would use today, read through the weekly run's own
+parser and `config/weekly_run.yaml` merged with the code defaults, for both of its halves: stage
+1's walk-forward and the final fit. For each half, `differences` lists every model-affecting
+setting where the run's resolved value differs (the XGBoost device and parameters, built by the
+resolver training uses, market features, anchoring and transform resolved against the dataset's
+lines, recency weighting, calibration, postseason games and their weight, disabled feature
+groups, trend-feature ablation, pruning, holdout seasons, tuning). A setting one side applies
+implicitly is compared at that value: production never drops pruning, feature groups or trend
+features, and a walk-forward fold holds out no season, never tunes and weights postseason games
+like any other. What remains on one side only is listed under `run_only` or `production_only`
+(every `tune_*` option when production tunes), and `not_recorded` names production settings an
+older run's metadata lacks (its resolved XGBoost parameters, which the backtest now records as
+`config.xgb_params`); settings an older run recorded that no longer exist are listed under
+`retired` with their values. A half reads "no model-affecting differences" only when all four
+lists are empty and nothing is retired; the run then trains what production trains. Scope (the
+scored seasons and weeks, the seed, the dataset and checkpoint paths, production's dataset and
+data-collection arguments) and runtime settings that change no prediction (XGBoost threads and
+verbosity, quantile models) are listed apart, never as differences.
+
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
 1107s remaining`). The estimate averages the weeks trained so far, so it runs a little low late in a
@@ -514,6 +535,12 @@ has no interval (`[n/a]`). Everything before that section is byte-identical to t
 `compare` wrote before the section existed, and the JSON is a strict superset of it (each window
 gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the same order,
 to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
+A last "Settings versus production" section gives each run's differences from today's production
+weekly run, as the walk-forward report does (JSON key `settings_versus_production`, by run),
+rebuilt from the run's `metadata.json` and its dataset's columns. Nothing is inferred from
+today's defaults: an older run that recorded only its XGBoost overrides has the rest listed as
+not recorded. A run with no metadata, whose dataset is gone, or whose recorded configuration no
+longer loads (a retired calibration method) says why instead.
 It reproduces the independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and
 replaces the per-run `compare_to_benchmark.py` copies under `models/`.
 

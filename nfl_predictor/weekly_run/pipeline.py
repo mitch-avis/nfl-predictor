@@ -30,10 +30,9 @@ import pandas as pd
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.ml import artifacts, ml_model_core, walk_forward
-from nfl_predictor.ml.ml_model_core import OptunaConfig
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
-from nfl_predictor.ml.ml_model_xgb_utils import fitted_xgb_device, resolve_xgb_device
+from nfl_predictor.ml.ml_model_xgb_utils import fitted_xgb_device
 from nfl_predictor.reporting import power_rankings
 from nfl_predictor.reporting.betting_report import build_betting_report
 from nfl_predictor.utils import fingerprints
@@ -228,10 +227,7 @@ def _power_rankings_outputs(out_dir: Path, season: int, through_week: int) -> li
 def main() -> int:
     """CLI entrypoint."""
     args = config._parse_args()
-    if args.train_recency_half_life_seasons is None:
-        args.train_recency_half_life_seasons = args.wf_recency_half_life_seasons
-    # Resolve `auto` once: stage 1, the final fit and every record then name the same device.
-    args.xgb_device = resolve_xgb_device(args.xgb_device)
+    config.apply_run_defaults(args)
 
     if not args.skip_data_refresh:
         _refresh_data(args.data_collection_args)
@@ -267,30 +263,8 @@ def main() -> int:
     # --------------------------------------------------
     # Stage 1: walk-forward of the production configuration
     # --------------------------------------------------
-    wf_config = {
-        "eval_last_n_seasons": args.wf_eval_last_n_seasons,
-        "wf_start_week": args.wf_start_week,
-        "include_postseason": args.wf_include_postseason,
-        "recency_half_life_seasons": args.wf_recency_half_life_seasons,
-        "market_mode": args.wf_market_mode,
-        "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
-        "checkpoint_per_fold": bool(args.wf_checkpoint_per_fold),
-        "xgb_params_overrides": {
-            "n_estimators": int(args.wf_n_estimators),
-            "max_depth": int(args.wf_max_depth),
-            "learning_rate": float(args.wf_learning_rate),
-            "n_jobs": config.xgb_thread_count(args),
-            "verbosity": 0,
-            "device": args.xgb_device,
-        },
-        "include_quantiles": bool(args.wf_include_quantiles),
-        "market_transform": args.market_transform,
-        "max_cardinality_ratio": float(args.max_cardinality_ratio),
-    }
-
-    # Propagate the tree method to walk-forward folds too.
-    if args.xgb_tree_method:
-        wf_config["xgb_params_overrides"]["tree_method"] = args.xgb_tree_method
+    stage1_kwargs = config.stage1_options(args)
+    wf_config = {**stage1_kwargs, "checkpoint_per_fold": bool(args.wf_checkpoint_per_fold)}
 
     wf_run_fingerprint = fingerprints.wf_run_fingerprint(
         dataset_fingerprint,
@@ -306,7 +280,7 @@ def main() -> int:
             "max_cardinality_ratio": float(args.max_cardinality_ratio),
             "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
             "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
-            "xgb_params_overrides": wf_config["xgb_params_overrides"],
+            "xgb_params_overrides": stage1_kwargs["xgb_params_overrides"],
         },
         code_version=artifacts.git_commit_hash(),
     )
@@ -331,16 +305,7 @@ def main() -> int:
             dataset_fingerprint=dataset_fingerprint,
             wf_run_fingerprint=wf_run_fingerprint,
             checkpoint_per_fold=bool(args.wf_checkpoint_per_fold),
-            eval_last_n_seasons=args.wf_eval_last_n_seasons,
-            wf_start_week=args.wf_start_week,
-            include_postseason=bool(args.wf_include_postseason),
-            exclude_incomplete_seasons=bool(args.wf_exclude_incomplete_seasons),
-            recency_half_life_seasons=args.wf_recency_half_life_seasons,
-            market_mode=args.wf_market_mode,
-            xgb_params_overrides=wf_config["xgb_params_overrides"],
-            include_quantiles=bool(args.wf_include_quantiles),
-            market_transform=args.market_transform,
-            max_cardinality_ratio=float(args.max_cardinality_ratio),
+            **stage1_kwargs,
         )
         stage1.write_summary(run_dir, wf_summary)
         _write_stage_marker(
@@ -355,65 +320,8 @@ def main() -> int:
     # -----------------
     # Stage 2: training
     # -----------------
-    market_mode = str(args.wf_market_mode)
-    include_market, market_anchor = stage1.market_mode_flags(market_mode)
-    market_transform = args.market_transform
-    if market_transform is None and include_market:
-        market_transform = True
-
     columns_only = pd.read_csv(args.data_path, nrows=1)
-    include_market, market_transform, market_anchor = walk_forward.resolve_market_settings(
-        columns_only, include_market, market_transform, market_anchor
-    )
-
-    resolved_calibration = "auto"
-
-    optuna_storage = args.tune_storage
-    if args.tune and not optuna_storage:
-        optuna_storage = f"sqlite:///{(run_dir / 'optuna.db').resolve()}"
-
-    optuna_config = OptunaConfig(
-        enabled=bool(args.tune),
-        timeout_seconds=int(args.tune_timeout),
-        n_trials=args.tune_trials,
-        cv_splits=int(args.tune_cv_splits),
-        objective=str(args.tune_objective),
-        early_stopping_rounds=int(args.tune_early_stopping_rounds),
-        tree_method=args.xgb_tree_method,
-        device=args.xgb_device,
-        storage=optuna_storage,
-        study_name=args.tune_study_name,
-        best_params_out=None,
-        xgb_n_jobs=config.xgb_thread_count(args),
-    )
-
-    train_config = {
-        "calibration": resolved_calibration,
-        "market_mode": market_mode,
-        "include_market": include_market,
-        "market_transform": market_transform,
-        "market_anchor": market_anchor,
-        "holdout_seasons": int(args.holdout_seasons),
-        "include_postseason": bool(args.include_postseason),
-        "postseason_weight": float(args.postseason_weight),
-        "recency_half_life_seasons": args.train_recency_half_life_seasons,
-        "max_cardinality_ratio": float(args.max_cardinality_ratio),
-        "feature_start": str(args.feature_start),
-        "feature_end": str(args.feature_end),
-        "optuna": {
-            "enabled": optuna_config.enabled,
-            "timeout_seconds": optuna_config.timeout_seconds,
-            "n_trials": optuna_config.n_trials,
-            "cv_splits": optuna_config.cv_splits,
-            "objective": optuna_config.objective,
-            "early_stopping_rounds": optuna_config.early_stopping_rounds,
-            "tree_method": optuna_config.tree_method,
-            "device": optuna_config.device,
-            "storage": optuna_config.storage,
-            "study_name": optuna_config.study_name,
-            "xgb_n_jobs": optuna_config.xgb_n_jobs,
-        },
-    }
+    optuna_config, train_config = config.final_fit_options(args, columns_only, run_dir=run_dir)
     train_config_hash = artifacts.stable_short_hash(train_config)
     train_marker = _stage_marker_path(run_dir, "train")
     paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
@@ -431,11 +339,11 @@ def main() -> int:
         result = train_margin_total_model_with_report(
             data_path=args.data_path,
             holdout_seasons=int(args.holdout_seasons),
-            include_market=include_market,
+            include_market=train_config["include_market"],
             max_cardinality_ratio=float(args.max_cardinality_ratio),
             optuna_config=optuna_config,
-            market_transform=bool(market_transform),
-            market_anchor=bool(market_anchor),
+            market_transform=bool(train_config["market_transform"]),
+            market_anchor=bool(train_config["market_anchor"]),
             include_postseason=bool(args.include_postseason),
             postseason_weight=float(args.postseason_weight),
             recency_half_life_seasons=args.train_recency_half_life_seasons,

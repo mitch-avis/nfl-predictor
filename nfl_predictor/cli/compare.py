@@ -4,7 +4,9 @@
 checkpoints and reports, for week 1, week 2, weeks 3-18 and all weeks, each run's deterministic
 Brier, log loss, pick accuracy, margin and total MAE, confidence-pool points and market Brier,
 and the paired candidate-minus-reference differences with bootstrap intervals, then the same
-rows and differences split by season ("Stability by season"). A run is a run
+rows and differences split by season ("Stability by season"), and last each run's differences
+from today's production weekly run ("Settings versus production",
+``nfl_predictor.reporting.production_settings``). A run is a run
 directory with a ``metadata.json`` (which names its checkpoint directory and adds provenance and
 the configuration differences) or a checkpoint directory under ``models/wf_checkpoints/``.
 
@@ -27,8 +29,9 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
-from nfl_predictor.reporting import run_comparison
+from nfl_predictor.reporting import production_settings, run_comparison
 from nfl_predictor.utils.logger import log
 
 
@@ -78,6 +81,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _format_sections(sections: dict[str, dict[str, Any]]) -> list[str]:
+    """Return each run's settings-versus-production section as Markdown lines."""
+    lines = ["", f"## {production_settings.HEADING}"]
+    for label, section in sections.items():
+        lines += ["", f"### {label}", "", *production_settings.format_section(section)]
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the comparison; return 0, or 2 when the runs cannot be compared."""
     args = _parse_args(argv)
@@ -94,7 +105,12 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as error:
         log.error("compare: %s", error)
         return 2
-    lines = run_comparison.format_report(report)
+    sections = {
+        run.label: production_settings.section_for_metadata(run.metadata)
+        for run in (loaded.run for loaded in [*candidates, *references])
+    }
+    report[production_settings.SECTION_KEY] = sections
+    lines = [*run_comparison.format_report(report), *_format_sections(sections)]
     for line in lines:
         log.info("%s", line)
     if args.out_json is not None:

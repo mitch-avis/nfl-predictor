@@ -157,7 +157,10 @@ Steps:
    `42` and `7` (rungs L1-L2); (D) a no-holdout arm (`--wf-calibration-weeks 0`) on two seeds
    (rungs L3-L4) only if (B) leaves the holdout with no purpose. Ladder cap: four six-season runs
    plus L0; each rung's hypothesis and rule are in its run directory. 56.6(d) moved to step 4
-   the same day (it needs a dataset build).
+   the same day (it needs a dataset build). Changed by the user the same day: L1-L2 cover
+   2007-2025 (every season with real opening lines, for 56.6(c)); rung (D) is dropped, because
+   walk-forward folds never held weeks out and `0.33.0` moved production to match, so the arm
+   would reproduce the reference exactly. Ladder: L0-L2.
 4. **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
    First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
    a schema version in the play-by-play cache key), because this step compares dataset builds.
@@ -486,9 +489,8 @@ Formerly Milestone 41.
         in-season fits run the full tree budget.
       - Change which probabilities are submitted, to be measured here: `wf_eval_last_n_seasons`
         (how many seasons stage 1 scores; the count includes the unscorable current season, so
-        the default `3` scores two), `wf_calibration_weeks` / `train_calibration_weeks` (the
-        newest weeks held out of the tree fit for calibration; the benchmark uses `4`),
-        `wf_market_prob_source` (`raw` against `novig` moneylines) and
+        the default `3` scores two), the calibration hold-out (retired in `0.33.0`: the final
+        fit trains on every completed game, like the benchmark), `wf_market_prob_source` (`raw` against `novig` moneylines) and
         `wf_market_prob_blend_method` (`prob` against `logit`), plus `market_transform`
         (`auto`, which is on whenever lines exist, against `true`).
       Work: (a) as a Milestone 60 behavior-preserving move, make the weekly run read
@@ -665,7 +667,9 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       the CPU (about 6 min per candidate against about 1 min on the GPU with `--xgb-device
       cuda`). The user chose the GPU for everything (task 55.4). Fixed in `0.30.0`: every run
       defaults to `auto` (the GPU when usable). The measurement parts stay under task 55.4.
-- [ ] **The final fit never trains on the newest weeks.** Production and walk-forward both hold
+- [x] **The final fit never trains on the newest weeks.** Resolved in `0.33.0` by the user's
+      decision: the final fit trains on every eligible completed game, like every walk-forward
+      fold. Originally: Production and walk-forward both hold
       out the newest 4 completed weeks from the tree fit and use them only for calibration, so
       the Week 3 model's trees did not see 2026 Weeks 1-2, which reach it only through the
       features. Measure a refit on all rows (or a smaller hold-out) in step 3 with the
@@ -765,7 +769,8 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
 Fixed in `0.7.1`: the season guard, the window log line, the quarterback history refresh and
 the identity warning. Still open:
 
-- [ ] `walk_forward.select_calibration_data` still takes calibration weeks from the eval season
+- [x] `walk_forward.select_calibration_data` (retired in `0.33.0` with the calibration frame;
+      see the Week 3 hold-out item) still takes calibration weeks from the eval season
       only and returns an empty frame when fewer than `calibration_weeks` exist, so walk-forward
       folds for weeks 2-4 fit with no calibration frame (and no early stopping) while production
       training now rolls the window back into the previous season. The backtest therefore does
@@ -782,7 +787,8 @@ the identity warning. Still open:
       calibration. Correct by construction, but not logged; log the candidates or document it.
       Done in `0.30.1`: the final fit logs the calibration seasons and why they move, and each
       walk-forward fold logs its calibration frame.
-- [ ] With `--include-postseason`, the rolled-back window is filled by the previous season's
+- [x] With `--include-postseason` (moot since `0.33.0`: no window rolls back), the rolled-back
+      window is filled by the previous season's
       playoff weeks (divisional, conference, Super Bowl: seven games), so a week-1 or week-2
       window can hold about 23 games. The weekly default excludes the postseason; consider
       skipping postseason weeks when the window rolls back, or counting games instead of weeks.

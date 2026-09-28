@@ -11,7 +11,9 @@ Preprocessing:
 
 Training:
 
-- Use early stopping and set `eval_metric` explicitly (aligned to objective).
+- Optuna tuning trials early-stop on their validation fold with `eval_metric` set explicitly
+  (aligned to the objective); the final fit and walk-forward folds run the full tree budget
+  with no eval set.
 - Tune hyperparameters consistently with the evaluation metric (Optuna supported).
 - Use `random_state` everywhere applicable.
 - Do not hard-code `n_jobs`; prefer `os.cpu_count()` or a config default.

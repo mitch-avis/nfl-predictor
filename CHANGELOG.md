@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.33.0] - 2026-09-28
+
+### Changed
+
+- The weekly run's final fit trains on every eligible completed game, the newest week included,
+  exactly as each walk-forward fold does; it no longer holds the newest four completed weeks (at
+  least one) out of its trees. `nfl-predictor train` likewise trains on every season except
+  `--holdout-seasons` (it held one more season out by default). SHAP in
+  `feature_importance.json` explains those same rows.
+- `metadata.json` `splits` records `train_seasons` and `holdout_seasons` only; run directories
+  written before still read.
+- Walk-forward folds no longer hand XGBoost an eval frame. No prediction changes; the checkpoint
+  fingerprint does, and `nfl-predictor compare` lists the dropped `calibration_weeks` key as a
+  configuration difference against older runs.
+
+### Removed
+
+- `train --calibration-weeks` and `--calibration-seasons`, `backtest --wf-calibration-weeks`
+  (`--calibration-weeks`), and `weekly --wf-calibration-weeks`, `--train-calibration-weeks` and
+  `--train-calibration-seasons`. A weekly config that sets `wf_calibration_weeks`,
+  `train_calibration_weeks` or `train_calibration_seasons` is rejected with the reason.
+- The pooled walk-forward calibration frame (`select_calibration_data`) and its per-fold log
+  line.
+
 ## [0.32.1] - 2026-09-27
 
 ### Removed

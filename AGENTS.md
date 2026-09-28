@@ -184,10 +184,9 @@ are not advisory.
     production weekly run (`config/weekly_run.yaml` and the weekly stage-1 selection) is a
     defect until the user approves it and it is recorded here. The season-weighting gap closed in
     `0.18.0` (both train unweighted, task 55.8), and the probability-path gap in `0.32.0` (every
-    run type submits the deterministic floor, task 56.5). Open gaps, all scheduled:
-    - the final fit's hold-out: production's final fit holds the newest four completed weeks out
-      of its trees, while every walk-forward fold trains on all earlier games (found 2026-09-27;
-      which side moves is the user's step-3 decision);
+    run type submits the deterministic floor, task 56.5), and the final fit's hold-out in
+    `0.33.0` (the final fit trains on every completed game, like each fold). Open gaps, all
+    scheduled:
     - the device: since `0.30.0` every run defaults to the GPU (`auto`), but every reference arm
       in `.agents/benchmarks.md` trained on the CPU until the two-seed GPU reference lands
       (task 55.4);

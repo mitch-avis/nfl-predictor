@@ -42,7 +42,8 @@ _RETIRED_PROBABILITY_OPTION = (
 )
 _RETIRED_HOLD_OUT_OPTION = (
     "retired; the final fit and every walk-forward fold train on every eligible completed game, "
-    "with no held-out weeks or seasons and no XGBoost eval frame"
+    "except holdout_seasons (the evaluation holdout), with no held-out calibration weeks and "
+    "no XGBoost eval frame"
 )
 _REMOVED_CONFIG_KEYS = {
     "wf_n_jobs": "use xgb_n_jobs, which sets XGBoost's CPU threads for every stage",

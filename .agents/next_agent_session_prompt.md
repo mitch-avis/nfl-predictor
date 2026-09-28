@@ -5,58 +5,44 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", step 3, Milestones 55 and 56, and "Open follow-ups
 from completed milestones") and this file.
 
-## State (written 2026-09-28, roadmap step 3 in progress)
+## State (written 2026-09-28, roadmap step 3 nearly done)
 
-- Branch `feat/step3-parity` (off `main` at `624d54f`), version `0.33.0`, not merged and not
-  pushed. Merging and pushing stay must-ask. `scripts/gate.sh --web` exits `0` on `43d2a7d`
-  (1092 passed).
+- Branch `feat/step3-parity` (off `main` at `624d54f`), version `0.34.1`, not merged and not
+  pushed. Merging and pushing stay must-ask. `scripts/gate.sh --web` exits `0` on `7c96531`.
 - How the session works: each code chunk goes to an `implementer` subagent in its own worktree,
-  then to a separate `reviewer` subagent, back to the implementer for fixes, then merged with
-  `--no-ff`; the delegating session writes the changelog, version, `TODO.md`, `ARCHIVE.md`,
-  `AGENTS.md` and this file, lints the Markdown it edits (`markdownlint` on the files), and runs
-  the gate in `.claude/worktrees/step3-gate` (detached at the branch tip), because the `--web`
-  gate rebuilds `web/dist`, which the user's running server serves.
-- Landed on the branch (all reviewed): `0.29.0` total-gain importance; `0.29.1` the per-season
-  stability view (task 55.6, closed); `0.30.0` `--xgb-device auto` default; `0.30.1` the
-  calibration-window follow-ups; `0.31.0` SHAP headline importance (XGBoost TreeSHAP);
-  `0.32.0` the one probability path (task 56.5 code: every run type submits the deterministic
-  floor; the stage-1 matrix, fitted and Elo calibrators, market blend and clamp, the `blend`
-  kind, `sweep` and uncertainty-aware probabilities are retired); `0.32.1` the `shap` dependency
-  dropped; `0.33.0` the final fit trains on every completed game (no calibration hold-out), and
-  the walk-forward's unused calibration frame and options are retired.
-- The user runs `nfl-predictor web` (without `--reload`) from the main checkout; its Python is
-  older code in memory. Do not rebuild `web/dist` there, never stop or restart the server.
+  then to a separate `reviewer`, back for fixes, then merged with `--no-ff`; the delegating
+  session writes the changelog, version and records, lints the Markdown it edits, and runs the
+  gate in `.claude/worktrees/step3-gate` (the `--web` gate rebuilds `web/dist`, which the user's
+  running server serves). Watchers for long runs must poll a PID, not `pgrep -f` a pattern that
+  matches the watcher's own command line (that stalled the 2026-09-28 check-in for 7 hours).
+- Landed (all reviewed): `0.29.0`-`0.31.0` importance (total gain, then SHAP headline), the
+  stability view (55.6 closed), `--xgb-device auto`, the calibration-window follow-ups;
+  `0.32.0` the one probability path (the floor; stage-1 matrix, calibrators, market blend,
+  `blend` kind, `sweep` retired); `0.32.1` `shap` dependency dropped; `0.33.0` no calibration
+  hold-out; `0.34.0` the settings-versus-production report section (56.7(b) code);
+  `0.34.1` the final fit uses stage 1's tree settings.
+- The GPU reference (`models/step3_gpu_reference/`, 2007-2025, seeds 42 and 7) is recorded and
+  reviewed (`.agents/benchmarks.md`, "GPU reference"); task 55.4 is closed.
+- The user runs `nfl-predictor web` (without `--reload`) from the main checkout on older code in
+  memory. Do not rebuild `web/dist` there; never stop or restart the server.
 
-## Running when this was written
+## Open question for the user (asked 2026-09-28)
 
-- The GPU reference (rungs L1-L2), `models/step3_gpu_reference/` (`HYPOTHESIS.md` with the
-  rules R-ref, R-5.5, R-6.6 and the launch record, `driver.sh`, `driver.log`), launched
-  2026-09-28 00:12 on commit `43d2a7d`: determinism legs `det_a`/`det_b` (the 2025 season), then
-  `l1_seed42` and `l2_seed7` (2007-2025 from week 1). About 6 s per fold on the GPU. Do not merge
-  anything into the main checkout until `driver.log` says `driver done` (L2 would load different
-  code than L1). If the driver stopped, rerun `driver.sh` (the L1/L2 arms resume from their fold
-  checkpoints; the determinism legs use `--no-resume`).
+- Task 56.5, rule R-5.5: on 2007-2025 the retired blend toward the stored moneyline beats the
+  floor (Brier `-0.00072` `[-0.00105, -0.00041]`), the same blend built from the opening spread
+  does not (`+0.00010` `[-0.00051, +0.00071]`). Recommendation (both the session and the
+  reviewer): keep the floor, close 56.5 on it, and revisit with 56.6(d) in step 4.
 
 ## Next
 
-1. When the driver finishes: check `det_a` against `det_b` (identical on every fold), then
-   write the check-in with the governing numbers of R-ref, R-5.5 and R-6.6 (rule 7), and have an
-   independent `reviewer` rescore from the fold checkpoints (rule 3) before any number enters the
-   docs. Compare against the CPU task 55.8 unweighted pair on 2020-2025 with `nfl-predictor
-   compare` (it lists the dropped `calibration_weeks` key and the device as config differences).
-2. Close task 55.4 (the GPU reference) and task 56.5 (if R-5.5 confirms the floor) with the
-   user; 56.6(c) on 2007-2025.
-3. Remaining step 3: task 56.7(b) (the "settings versus production" report section and the
-   remaining settings: `wf_eval_last_n_seasons`, `market_transform`), the Milestone 60 per-template
-   live web checks (must-ask launches, on a server without `--reload`), then the step-3
-   close-out and the merge question for the user.
-
-## Open questions for the user
-
-- None pending. Recent answers (2026-09-27/28): floor everywhere; 55.6 closed with a "settings
-  versus production" section moved to 56.7(b); SHAP headline with total gain secondary, combined
-  ranking, margin toggle later; 56.6(c) on 2007-2025 with new runs; the pool tie-break stays
-  as is; GPU free (ComfyUI closed); production stops holding weeks out; `shap` dropped.
+1. The user's R-5.5 answer: close 56.5 (floor) or restore a fixed blend (a new chunk).
+2. 56.6: record (c) as done on 2007-2025 (reviewed numbers in `benchmarks.md`); (d) is step 4.
+3. 56.7(b) measurement part: the remaining output-changing settings (`wf_eval_last_n_seasons`,
+   `market_transform`) need a hypothesis and rule first, and are must-ask as default changes.
+4. The Milestone 60 per-template live web checks (must-ask launches, a server without
+   `--reload`).
+5. Step-3 close-out: every step-3 item in `TODO.md` resolved or moved, then ask the user to
+   merge `feat/step3-parity` into `main` (between game weeks).
 
 ## Notes
 

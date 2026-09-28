@@ -279,13 +279,13 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         "--wf-n-estimators",
         type=int,
         default=defaults.get("wf_n_estimators", ml_model_core.DEFAULT_XGB_PARAMS["n_estimators"]),
-        help="Walk-forward: XGBoost n_estimators override.",
+        help="Stage 1 and the final fit: XGBoost n_estimators (the tree budget).",
     )
     parser.add_argument(
         "--wf-max-depth",
         type=int,
         default=defaults.get("wf_max_depth", ml_model_core.DEFAULT_XGB_PARAMS["max_depth"]),
-        help="Walk-forward: XGBoost max_depth override.",
+        help="Stage 1 and the final fit: XGBoost max_depth.",
     )
     parser.add_argument(
         "--wf-learning-rate",
@@ -294,7 +294,7 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "wf_learning_rate",
             ml_model_core.DEFAULT_XGB_PARAMS["learning_rate"],
         ),
-        help="Walk-forward: XGBoost learning_rate override.",
+        help="Stage 1 and the final fit: XGBoost learning_rate.",
     )
     parser.add_argument(
         "--holdout-seasons",
@@ -594,12 +594,22 @@ def apply_run_defaults(args: argparse.Namespace) -> None:
     args.xgb_device = resolve_xgb_device(args.xgb_device)
 
 
-def stage1_options(args: argparse.Namespace) -> dict[str, Any]:
-    """Return the configuration options stage 1 walks forward, from resolved run options."""
-    xgb_params_overrides: dict[str, Any] = {
+def xgb_model_params(args: argparse.Namespace) -> dict[str, Any]:
+    """Return the XGBoost tree budget, depth and learning rate of stage 1 and the final fit.
+
+    Both stages train with these, so the walk-forward measures the model the weekly run submits.
+    """
+    return {
         "n_estimators": int(args.wf_n_estimators),
         "max_depth": int(args.wf_max_depth),
         "learning_rate": float(args.wf_learning_rate),
+    }
+
+
+def stage1_options(args: argparse.Namespace) -> dict[str, Any]:
+    """Return the configuration options stage 1 walks forward, from resolved run options."""
+    xgb_params_overrides: dict[str, Any] = {
+        **xgb_model_params(args),
         "n_jobs": xgb_thread_count(args),
         "verbosity": 0,
         "device": args.xgb_device,
@@ -670,6 +680,7 @@ def final_fit_options(
         "max_cardinality_ratio": float(args.max_cardinality_ratio),
         "feature_start": str(args.feature_start),
         "feature_end": str(args.feature_end),
+        "xgb_params_overrides": xgb_model_params(args),
         "optuna": {
             "enabled": optuna_config.enabled,
             "timeout_seconds": optuna_config.timeout_seconds,

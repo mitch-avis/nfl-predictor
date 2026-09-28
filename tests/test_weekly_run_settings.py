@@ -7,6 +7,7 @@ directory resumes from.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -132,8 +133,9 @@ def test_default_weekly_settings_and_hashes(
         "max_season": None,
         "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
         "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+        "xgb_params_overrides": {"n_estimators": 200, "max_depth": 5, "learning_rate": 0.0165},
     }
-    assert captured["hashes"] == ["308cff44", "deabbb27"]
+    assert captured["hashes"] == ["308cff44", "3a81c72a"]
 
 
 def test_overridden_weekly_settings_and_hashes(
@@ -183,3 +185,21 @@ def test_overridden_weekly_settings_and_hashes(
     ) == (False, False, True)
     # The final fit's hash covers the Optuna storage path, which names the temporary directory.
     assert captured["hashes"][0] == "4c1df46b"
+
+
+def test_config_tree_settings_reach_stage1_and_the_final_fit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The config file's tree budget, depth and learning rate train both stages."""
+    config_path = tmp_path / "weekly_run.json"
+    config_path.write_text(
+        json.dumps({"wf_n_estimators": 300, "wf_max_depth": 3, "wf_learning_rate": 0.05}),
+        encoding="utf-8",
+    )
+
+    captured = _capture_weekly_settings(tmp_path, monkeypatch, ["--config", str(config_path)])
+
+    expected = {"n_estimators": 300, "max_depth": 3, "learning_rate": 0.05}
+    stage1_overrides = captured["stage1"]["xgb_params_overrides"]
+    assert {name: stage1_overrides[name] for name in expected} == expected
+    assert captured["train"]["xgb_params_overrides"] == expected

@@ -153,8 +153,11 @@ exclude = [
     ".venv",
     "**/node_modules",
 # `nfl-sos-ratings` is a gitignored symlink to the read-only reference repo; it is not part
-# of this project's type-check surface. The rest of the list restores pyright's defaults.
+# of this project's type-check surface. `models/` holds gitignored run directories whose review
+# scripts are frozen records of the code they ran against, so CI never sees them either. The
+# rest of the list restores pyright's defaults.
     "nfl-sos-ratings",
+    "models",
     "web",
 ]
 # --- Standard-mode diagnostics promoted to errors (also surfaced by Pylance) ----------

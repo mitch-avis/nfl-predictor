@@ -3,3 +3,4 @@ nfl-sos-ratings/
 web/node_modules/
 web/dist/
 .agents/*transcript*.md
+.claude/worktrees/

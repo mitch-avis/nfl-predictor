@@ -156,9 +156,9 @@ def _final_fit_settings(
     train_config: Mapping[str, Any], optuna_config: ml_model_core.OptunaConfig
 ) -> dict[str, dict[str, Any]]:
     """Return the weekly final fit's model, scope and runtime settings."""
-    overrides = (
-        {"n_jobs": optuna_config.xgb_n_jobs} if optuna_config.xgb_n_jobs is not None else None
-    )
+    overrides = dict(train_config["xgb_params_overrides"])
+    if optuna_config.xgb_n_jobs is not None:
+        overrides["n_jobs"] = optuna_config.xgb_n_jobs
     params = ml_model_xgb_utils._resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides=overrides,

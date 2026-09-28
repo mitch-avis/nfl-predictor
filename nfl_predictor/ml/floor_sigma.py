@@ -17,9 +17,9 @@ formula centers the noise on the predicted margin.
 
 The pool is a table of squared errors, one row per game (``ERROR_COLUMNS``). A walk-forward
 pools a supplied history with its own earlier folds (``combine``); production pools the
-reference runs' fold checkpoints (``load_reference_pool``) with the weekly run's own
-current-season folds. Several runs of one configuration (seeds) are averaged per game
-(``average_over_runs``), so every game counts once.
+reference runs' fold checkpoints (``load_reference_pool``) with the weekly run's stage-1 folds at
+every week the reference runs have no rows for (``fill_gaps``). Several runs of one
+configuration (seeds) are averaged per game (``average_over_runs``), so every game counts once.
 """
 
 from __future__ import annotations
@@ -162,6 +162,16 @@ def combine(history: pd.DataFrame, own: pd.DataFrame) -> pd.DataFrame:
     covered = pd.MultiIndex.from_frame(history[_WEEK_KEY]).isin(own_weeks)
     kept = history.loc[~covered, list(ERROR_COLUMNS)]
     return pd.concat([kept, own.loc[:, list(ERROR_COLUMNS)]], ignore_index=True)
+
+
+def fill_gaps(base: pd.DataFrame, extra: pd.DataFrame) -> pd.DataFrame:
+    """Pool ``base`` with the rows of ``extra`` at the weeks ``base`` has no rows for."""
+    base_weeks = pd.MultiIndex.from_frame(base[_WEEK_KEY].drop_duplicates())
+    new = ~pd.MultiIndex.from_frame(extra[_WEEK_KEY]).isin(base_weeks)
+    return pd.concat(
+        [base.loc[:, list(ERROR_COLUMNS)], extra.loc[new, list(ERROR_COLUMNS)]],
+        ignore_index=True,
+    )
 
 
 def estimate(

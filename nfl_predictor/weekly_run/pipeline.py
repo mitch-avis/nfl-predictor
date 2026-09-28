@@ -9,8 +9,9 @@ The weekly run does the whole workflow in one command:
 Production submits the deterministic floor, Phi(predicted margin / sigma), with no fitted
 calibrator and no market blend or clamp. Sigma is the root-mean-square out-of-fold margin error
 before the predicted week: stage 1 pools the configured reference runs' fold checkpoints with its
-own earlier weeks, and the final fit pools the reference runs with stage 1's weeks of the
-predicted season before the predicted week, then records the sigma in the saved model.
+own earlier weeks, and the final fit pools the reference runs with stage 1's weeks before the
+predicted week that the reference runs have no rows for, then records the sigma in the saved
+model.
 
 Outputs land under the run directory (default: models/<run_id>/) and include:
 - wf_compare.csv / wf_best.json (the walk-forward summary row) and wf_compare/
@@ -229,8 +230,9 @@ def _production_floor_sigma(
 
     The week is the one being predicted (the prediction file's single season and week), or,
     for a file spanning several weeks, the week after the newest completed game. The pool is
-    the reference runs' errors plus stage 1's errors from that season before that week, which
-    replace the reference's errors for the same weeks.
+    the reference runs' errors plus stage 1's errors before that week at every (season, week)
+    the reference runs have no rows for: the seasons after the reference, and the predicted
+    season's earlier weeks. Where both have a week, the reference's errors are used.
     """
     predict_path = inputs._resolve_predict_path(args.predict_path, Path(constants.DATA_PATH))
     season, week = inputs._infer_season_week(pd.read_csv(predict_path, usecols=["season", "week"]))
@@ -244,9 +246,9 @@ def _production_floor_sigma(
             week,
         )
     own = stage1.read_margin_errors(run_dir)
-    current = own[(own["season"] == season) & (own["week"] < week)]
+    before = (own["season"] < season) | ((own["season"] == season) & (own["week"] < week))
     pool = floor_sigma.ErrorPool(
-        floor_sigma.combine(reference.errors, current),
+        floor_sigma.fill_gaps(reference.errors, own[before]),
         (*reference.sources, str(stage1.margin_errors_path(run_dir))),
     )
     return pool, (int(season), int(week))

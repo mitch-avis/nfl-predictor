@@ -160,6 +160,16 @@ def test_a_runs_own_weeks_replace_the_history_for_those_weeks() -> None:
     assert sorted(combined["squared_error"].tolist()) == [1.0, 25.0]
 
 
+def test_filling_gaps_adds_only_weeks_the_base_lacks() -> None:
+    """Extra rows join at weeks the base has no rows for; the base keeps its own weeks."""
+    base = _errors([(2020, 1, 1.0), (2020, 2, 2.0)])
+    extra = _errors([(2020, 2, 5.0), (2020, 3, 6.0), (2021, 1, 7.0)]).assign(game_id="x")
+
+    combined = floor_sigma.fill_gaps(base, extra)
+
+    assert sorted(combined["squared_error"].tolist()) == [1.0, 4.0, 36.0, 49.0]
+
+
 def test_the_floor_is_the_normal_curve_at_the_given_spread() -> None:
     """Margins map through Phi(margin / sigma); a larger sigma pulls toward a coin flip."""
     margin = np.array([-7.0, 0.0, 7.0])

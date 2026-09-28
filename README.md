@@ -369,8 +369,10 @@ Where the pool comes from:
   of the reference runs, `floor_sigma_reference_runs` in `config/weekly_run.yaml` and
   `--floor-sigma-reference-runs` for `train` (default: the two seeds of the GPU reference
   walk-forward, `models/step3_gpu_reference/l1_seed42` and `l2_seed7`, whose fold checkpoints
-  are only read), with, in the weekly run, stage 1's weeks of the predicted season before the
-  predicted week. Two seeds are averaged per game, so each game counts once (over the same games
+  are only read), with, in the weekly run, stage 1's errors before the predicted week at every
+  `(season, week)` the reference runs have no rows for: the seasons after the reference and the
+  predicted season's earlier weeks (where both have a week, the reference's errors are used).
+  Two seeds are averaged per game, so each game counts once (over the same games
   this equals pooling every row). The sigma is estimated for the predicted week (for `train`
   without a single-week `--predict-path`, the week after the newest game in the data) and
   recorded in the saved model and in its `metadata.json` (`floor_sigma`: the value, whether it

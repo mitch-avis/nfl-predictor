@@ -34,11 +34,12 @@ Direct home/away score regressors are allowed only as secondary ensemble members
   standalone `backtest` unless `--floor-sigma-reference-runs` names runs; the reference runs in
   the weekly run's stage 1), a week the run predicts replacing the history's. The production
   final fit pools the reference runs' fold checkpoints (`floor_sigma_reference_runs`, default
-  the two GPU reference seeds, averaged per game) with the weekly run's stage-1 weeks of the
-  predicted season before the predicted week, estimates sigma for the predicted week, and
-  records it in the saved model; prediction from a saved model uses the recorded value, and a
-  model saved without one uses the constant. A configured reference run that is missing is an
-  error, never a silent fallback.
+  the two GPU reference seeds, averaged per game) with the weekly run's stage-1 errors before
+  the predicted week at every `(season, week)` the reference has no rows for (the seasons after
+  it and the predicted season's earlier weeks; the reference keeps its own weeks), estimates
+  sigma for the predicted week, and records it in the saved model; prediction from a saved
+  model uses the recorded value, and a model saved without one uses the constant. A configured
+  reference run that is missing is an error, never a silent fallback.
 - Every run type uses it identically: the weekly run, `backtest`, `train` and `predict`. The
   weekly run's stage 1 walks this one production configuration forward to report how it scores;
   it selects nothing.

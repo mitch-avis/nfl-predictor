@@ -121,10 +121,10 @@ def _stage1_errors(run_dir: Path) -> None:
     stage1.write_margin_errors(run_dir, frame)
 
 
-def test_the_production_pool_is_the_reference_plus_this_seasons_earlier_stage1_weeks(
+def test_the_reference_keeps_its_weeks_and_stage1_adds_the_rest_before_the_week(
     tmp_path: Path,
 ) -> None:
-    """Reference errors, with stage 1's weeks of the predicted season before the predicted week."""
+    """Stage 1's rows join only at weeks the reference lacks, and only before the predicted week."""
     _stage1_errors(tmp_path)
     reference = floor_sigma.ErrorPool(
         _errors([("r2023_3", 2023, 3, 100.0), ("r2024_3", 2024, 3, 100.0)]), ("ref",)
@@ -134,8 +134,48 @@ def test_the_production_pool_is_the_reference_plus_this_seasons_earlier_stage1_w
     pool, week = pipeline._production_floor_sigma(args, tmp_path, reference)
 
     assert week == (2024, 5)
-    assert sorted(pool.errors["game_id"]) == ["r2023_3", "s2024_3", "s2024_4"]
+    assert sorted(pool.errors["game_id"]) == ["r2023_3", "r2024_3", "s2024_4"]
     assert pool.sources == ("ref", str(stage1.margin_errors_path(tmp_path)))
+
+
+def test_stage1_fills_every_season_after_the_reference(tmp_path: Path) -> None:
+    """A reference ending in 2025: stage 1 adds all of 2026 and 2027 weeks 1-4, not 2025 again."""
+    reference = floor_sigma.ErrorPool(
+        _errors(
+            [
+                (f"r{season}_{week}", season, week, 100.0)
+                for season in range(2007, 2026)
+                for week in (1, 2, 3, 4, 5, 6)
+            ]
+        ),
+        ("ref",),
+    )
+    stage1.write_margin_errors(
+        tmp_path,
+        _errors(
+            [
+                (f"s{season}_{week}", season, week, 1.0)
+                for season in (2025, 2026, 2027)
+                for week in (1, 2, 3, 4, 5, 6)
+            ]
+        ),
+    )
+    args = _args(tmp_path, pd.DataFrame({"season": [2027], "week": [5]}))
+
+    pool, week = pipeline._production_floor_sigma(args, tmp_path, reference)
+
+    assert week == (2027, 5)
+    errors = pool.errors
+    assert sorted(errors.loc[errors["game_id"].str.startswith("r"), "season"].unique()) == list(
+        range(2007, 2026)
+    )
+    stage1_rows = errors[errors["game_id"].str.startswith("s")]
+    assert sorted(zip(stage1_rows["season"], stage1_rows["week"], strict=True)) == [
+        *((2026, week) for week in range(1, 7)),
+        *((2027, week) for week in range(1, 5)),
+    ]
+    reference_weeks = set(zip(reference.errors["season"], reference.errors["week"], strict=True))
+    assert not reference_weeks & set(zip(stage1_rows["season"], stage1_rows["week"], strict=True))
 
 
 def test_a_multi_week_prediction_file_estimates_for_the_week_after_the_data(

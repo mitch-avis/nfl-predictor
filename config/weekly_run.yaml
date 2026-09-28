@@ -23,7 +23,8 @@ wf_checkpoint_per_fold: false
 # walk-forward runs whose out-of-fold margin errors set the probability floor's sigma,
 # Phi(margin / sigma), with sigma the root-mean-square error of every out-of-fold prediction before
 # the predicted week. Stage 1 pools them with its own earlier weeks; the final fit pools them with
-# stage 1's weeks of the predicted season and records the sigma in the saved model. Run
+# stage 1's weeks before the predicted week that the runs have no rows for (the seasons after
+# them and the predicted season's earlier weeks) and records the sigma in the saved model. Run
 # directories or fold checkpoint directories, relative to the repository root; their checkpoints
 # are only read, and several runs are averaged per game. A listed run that is missing stops the
 # run. An empty list ([]) uses only stage 1's folds, which fall back to the constant 14.21 until

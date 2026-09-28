@@ -13,7 +13,8 @@ Each week's floor uses the sigma estimated from the reference runs' out-of-fold 
 Outputs under ``<run_dir>/wf_compare/``: the fold checkpoints (``wf_folds/``), one evaluation
 artifact (``wf_candidate_<key>.json``, with the per-week, per-season and overall metrics and the
 reliability table), the squared margin error of every game stage 1 predicted
-(``wf_margin_errors.csv``, which the final fit's sigma reads for the current season) and, with
+(``wf_margin_errors.csv``, which the final fit's sigma reads for the weeks the reference runs
+lack) and, with
 ``checkpoint_per_fold``, a progress line per finished week (``wf_fold_progress.jsonl``). The
 pipeline writes the summary row as ``wf_compare.csv`` and ``wf_best.json``, the names older runs
 used for their candidate table and its winner.

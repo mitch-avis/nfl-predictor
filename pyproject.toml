@@ -50,7 +50,7 @@ Homepage = "https://github.com/mitch-avis/nfl-predictor"
 [dependency-groups]
 dev = [
     "colorama",
-    "httpx",
+    "httpx2>=2.13.1",
     "pandas-stubs",
     "pre-commit",
     "pyright",

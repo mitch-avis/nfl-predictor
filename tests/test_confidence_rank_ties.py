@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from nfl_predictor.ml import metrics
+from nfl_predictor.ml import metrics, ml_utils
 from nfl_predictor.ml.ml_model_core import (
     _build_prediction_output,
     _margin_to_home_win_prob,
@@ -178,3 +178,27 @@ def test_untied_games_rank_exactly_as_before() -> None:
     assert cols["confidence_rank"].tolist() == expected.tolist()
     games = run_comparison.per_game_scores(_comparison_rows(probs, game_ids))
     assert games["rank"].tolist() == expected.tolist()
+
+
+def test_display_weekly_predictions_orders_the_tie_by_game_id(monkeypatch) -> None:
+    """Without a rank column, the log display lists games by the shared ranking rule."""
+    messages: list[str] = []
+    monkeypatch.setattr(ml_utils.log, "info", lambda msg, *args: messages.append(msg % args))
+    probs = _tied_probs()
+    ml_utils.display_weekly_predictions(
+        pd.DataFrame(
+            {
+                "game_id": TIED_GAME_IDS,
+                "away_abbr": ["AAA", "CCC"],
+                "home_abbr": ["BBB", "DDD"],
+                "home_win_prob": probs,
+                "away_win_prob": 1 - probs,
+                "confidence_strength": np.abs(probs - 0.5),
+            }
+        )
+    )
+
+    games = [msg for msg in messages if msg.startswith("#")]
+    # Most confident first: the later game_id holds rank 2 of the tied pair.
+    assert "CCC" in games[0]
+    assert "AAA" in games[1]

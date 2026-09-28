@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.1] - 2026-09-27
+
+### Removed
+
+- The `shap` dependency (and with it `numba` and `llvmlite`). SHAP values come from XGBoost's
+  built-in TreeSHAP (`pred_contribs`), the same exact algorithm on the same trees, since
+  `0.31.0`; nothing imported the package any more.
+
 ## [0.32.0] - 2026-09-27
 
 ### Changed

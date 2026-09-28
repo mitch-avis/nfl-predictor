@@ -601,9 +601,9 @@ Each group names the archived milestone it came from; the milestone's full recor
       `shap_analysis` (overwrite files in the active run directory), `weekly_run` and
       `walk_forward_backtest` (long runs). Step 3 runs a weekly run and walk-forwards anyway.
 - [x] (step 3) Power rankings from a `blend` run have never worked. Resolved in `0.32.0`: the
-      `blend` kind is retired (task 56.5), and a blend run is refused with the reason. A blend model (`train
-      --model-kind blend`: the team model and the market line through a ridge layer; the weekly
-      run never trains one) keeps its `feature_spec` on `team_model`, and
+      `blend` kind is retired (task 56.5), and a blend run is refused with the reason. A blend
+      model (`train --model-kind blend`: the team model and the market line through a ridge
+      layer; the weekly run never trains one) keeps its `feature_spec` on `team_model`, and
       `_predict_future_games` in `nfl_predictor/reporting/power_rankings.py` reads
       `model.feature_spec` before its blend branch, so it fails with "Model is missing
       feature_spec" (pinned by `tests/test_blended_model_paths.py`). The model only feeds the

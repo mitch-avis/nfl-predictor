@@ -568,8 +568,10 @@ the model anchored to them).
 
 Notes:
 
-- `--wf-*` flags control the stage-1 walk-forward; `--wf-market-mode` also sets the final fit's
-  market mode.
+- `--wf-*` flags control the stage-1 walk-forward. `--wf-market-mode` also sets the final fit's
+  market mode, and `--wf-n-estimators`, `--wf-max-depth` and `--wf-learning-rate` (the tree
+  budget, depth and learning rate) train both stage 1 and the final fit, so stage 1 measures the
+  model the weekly run submits. With `--tune`, the tuned values replace them in the final fit.
 - `--train-*` flags control the **final training** fit that produces the weekly outputs.
 - `--xgb-*` flags control XGBoost runtime and apply to both the walk-forward and final training.
   `--xgb-device` (`xgb_device` in the config) defaults to `auto`: the GPU when one is usable, else

@@ -2175,7 +2175,7 @@
    "choices": null,
    "default": 200,
    "dest": "wf_n_estimators",
-   "help": "Walk-forward: XGBoost n_estimators override.",
+   "help": "Stage 1 and the final fit: XGBoost n_estimators (the tree budget).",
    "nargs": null,
    "options": [
     "--wf-n-estimators"
@@ -2189,7 +2189,7 @@
    "choices": null,
    "default": 5,
    "dest": "wf_max_depth",
-   "help": "Walk-forward: XGBoost max_depth override.",
+   "help": "Stage 1 and the final fit: XGBoost max_depth.",
    "nargs": null,
    "options": [
     "--wf-max-depth"
@@ -2203,7 +2203,7 @@
    "choices": null,
    "default": 0.0165,
    "dest": "wf_learning_rate",
-   "help": "Walk-forward: XGBoost learning_rate override.",
+   "help": "Stage 1 and the final fit: XGBoost learning_rate.",
    "nargs": null,
    "options": [
     "--wf-learning-rate"

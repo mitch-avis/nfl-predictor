@@ -36,12 +36,13 @@ wf_market_mode: hybrid
 # include quantile models in walk-forward training (default: false)
 wf_include_quantiles: false
 
-## Walk-forward model hyperparameters:
-# number of estimators for walk-forward XGBoost model (default: 200)
+## XGBoost model hyperparameters of stage 1 and the final fit (tuned values replace them in the
+## final fit when tune is on):
+# number of estimators, the tree budget (default: 200)
 wf_n_estimators: 200
-# maximum depth for walk-forward XGBoost model (default: 5)
+# maximum tree depth (default: 5)
 wf_max_depth: 5
-# learning rate for walk-forward XGBoost model (default: 0.0165)
+# learning rate (default: 0.0165)
 wf_learning_rate: 0.0165
 
 ## Final model training parameters (the final fit trains on every completed game except the

@@ -7,6 +7,7 @@ the evaluation holdout (the newest ``holdout_seasons`` whole seasons) stays out 
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ import xgboost as xgb
 
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import (
+    DEFAULT_XGB_PARAMS,
     FeatureSpec,
     MarginTotalModel,
     OptunaConfig,
@@ -88,7 +90,7 @@ def _pairs(frame: pd.DataFrame) -> list[tuple[int, int]]:
 
 def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str, Any]:
     """Replace every fit with a stub and record the frames production hands to it."""
-    recorded: dict[str, Any] = {"fit_kwargs": [], "target_frames": []}
+    recorded: dict[str, Any] = {"fit_kwargs": [], "fit_params": [], "target_frames": []}
 
     def record_spec(frame: pd.DataFrame, **_kwargs: Any) -> FeatureSpec:
         recorded["train"] = frame.copy()
@@ -106,12 +108,14 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
             np.zeros(rows, dtype=float),
         )
 
-    def record_heads(*_args: Any, **kwargs: Any) -> tuple[str, str]:
+    def record_heads(*args: Any, **kwargs: Any) -> tuple[str, str]:
         recorded["fit_kwargs"].append(kwargs)
+        recorded["fit_params"].append(args[3])
         return "margin_model", "total_model"
 
-    def record_quantiles(*_args: Any, **kwargs: Any) -> dict[float, Any]:
+    def record_quantiles(*args: Any, **kwargs: Any) -> dict[float, Any]:
         recorded["fit_kwargs"].append(kwargs)
+        recorded["fit_params"].append(args[2])
         return {}
 
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
@@ -189,3 +193,70 @@ def test_a_negative_holdout_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValueError, match="non-negative"):
         _train(holdout_seasons=-1)
+
+
+def test_final_fit_trains_with_the_given_xgboost_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tree budget, depth and learning rate passed in reach every head and the saved params."""
+    recorded = _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
+    overrides = {"n_estimators": 7, "max_depth": 2, "learning_rate": 0.3}
+
+    model = ml_model_training.train_margin_total_model(
+        data_path=Path("dummy.csv"),
+        holdout_seasons=0,
+        include_market=False,
+        max_cardinality_ratio=0.5,
+        optuna_config=_disabled_optuna(),
+        market_transform=False,
+        market_anchor=False,
+        xgb_params_overrides=overrides,
+    )
+
+    assert model.xgb_params is not None
+    assert {name: model.xgb_params[name] for name in overrides} == overrides
+    assert len(recorded["fit_params"]) == 3
+    for params in recorded["fit_params"]:
+        assert {name: params[name] for name in overrides} == overrides
+    # The runtime settings still come from the tuning config.
+    assert model.xgb_params["n_jobs"] == 1
+
+
+def test_tuned_params_take_precedence_over_the_given_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tuning run's parameters replace the configured ones; the untuned ones stay."""
+    recorded = _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
+    monkeypatch.setattr(
+        ml_model_training,
+        "_run_optuna_search",
+        lambda *_args, **_kwargs: ({"n_estimators": 11}, None, None),
+    )
+
+    model = ml_model_training.train_margin_total_model(
+        data_path=Path("dummy.csv"),
+        holdout_seasons=0,
+        include_market=False,
+        max_cardinality_ratio=0.5,
+        optuna_config=dataclasses.replace(_disabled_optuna(), enabled=True),
+        market_transform=False,
+        market_anchor=False,
+        xgb_params_overrides={"n_estimators": 7, "max_depth": 2},
+    )
+
+    assert model.xgb_params is not None
+    assert (model.xgb_params["n_estimators"], model.xgb_params["max_depth"]) == (11, 2)
+    assert recorded["fit_params"][0]["n_estimators"] == 11
+
+
+def test_final_fit_defaults_to_the_default_xgboost_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without overrides the heads train with the default tree budget, depth and rate."""
+    _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
+
+    model = _train()
+
+    assert model.xgb_params is not None
+    for name in ("n_estimators", "max_depth", "learning_rate"):
+        assert model.xgb_params[name] == DEFAULT_XGB_PARAMS[name]

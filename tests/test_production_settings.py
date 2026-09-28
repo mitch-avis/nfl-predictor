@@ -155,6 +155,45 @@ def test_the_production_side_reads_the_weekly_config_file(
     assert section["final_fit"]["differences"] == expected
 
 
+def test_the_final_fit_trains_with_the_weekly_config_tree_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run matching the config file's tree budget matches production in both halves."""
+    section = _run_backtest(
+        tmp_path, monkeypatch, ["--n-estimators", "400"], production_config={"wf_n_estimators": 400}
+    )[SECTION]
+
+    for stage in ("stage1", "final_fit"):
+        assert section[stage]["differences"] == []
+
+
+def test_the_final_fit_follows_the_weekly_config_depth_and_learning_rate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The config file's depth and learning rate are production's for both halves."""
+    section = _run_backtest(
+        tmp_path,
+        monkeypatch,
+        [],
+        production_config={"wf_max_depth": 3, "wf_learning_rate": 0.05},
+    )[SECTION]
+
+    expected = [
+        {
+            "setting": "xgb.learning_rate",
+            "run": ml_model_core.DEFAULT_XGB_PARAMS["learning_rate"],
+            "production": 0.05,
+        },
+        {
+            "setting": "xgb.max_depth",
+            "run": ml_model_core.DEFAULT_XGB_PARAMS["max_depth"],
+            "production": 3,
+        },
+    ]
+    assert section["stage1"]["differences"] == expected
+    assert section["final_fit"]["differences"] == expected
+
+
 def test_xgboost_and_market_overrides_are_named_setting_by_setting(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

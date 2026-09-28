@@ -118,8 +118,13 @@ def train_margin_total_model(
     feature_start: str = DEFAULT_FEATURE_START_COLUMN,
     feature_end: str = DEFAULT_FEATURE_END_COLUMN,
     recency_half_life_seasons: float | None = None,
+    xgb_params_overrides: dict[str, Any] | None = None,
 ) -> MarginTotalModel:
-    """Train margin/total models; win probabilities are the deterministic floor."""
+    """Train margin/total models; win probabilities are the deterministic floor.
+
+    ``xgb_params_overrides`` replace default XGBoost parameters, as a walk-forward's do; tuned
+    parameters, when tuning runs, take precedence over them.
+    """
     df = _load_games(data_path)
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
@@ -154,7 +159,7 @@ def train_margin_total_model(
             holdout_seasons=holdout,
         )
 
-    params_overrides = tuned_params.copy()
+    params_overrides = {**(xgb_params_overrides or {}), **tuned_params}
     if optuna_config.xgb_n_jobs is not None:
         params_overrides["n_jobs"] = optuna_config.xgb_n_jobs
     params = _resolve_xgb_params(

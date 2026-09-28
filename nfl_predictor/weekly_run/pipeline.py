@@ -351,6 +351,7 @@ def main() -> int:
             max_season=None,
             feature_start=str(args.feature_start),
             feature_end=str(args.feature_end),
+            xgb_params_overrides=train_config["xgb_params_overrides"],
         )
         model = result.model
         _write_training_artifacts(

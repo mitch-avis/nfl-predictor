@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.35.1] - 2026-09-28
+
+### Changed
+
+- The test client uses `httpx2` (dev dependency, replacing `httpx`), which Starlette 1.7 requires
+  in place of the deprecated `httpx`.
+- `scripts/gate.sh` no longer type-checks or lints what lives outside the tracked tree: pyright
+  skips the gitignored `models/` run directories (their review scripts stay as they ran) and
+  markdownlint skips `.claude/worktrees/`.
+
+### Fixed
+
+- The web API's database no longer leaves the schema-creation SQLite connection open, which
+  produced over a hundred `ResourceWarning`s in the test run.
+
 ## [0.35.0] - 2026-09-28
 
 ### Changed

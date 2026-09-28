@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 SCHEMA = """
@@ -66,7 +66,7 @@ class Database:
             if self._initialized:
                 return
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with sqlite3.connect(self.path) as conn:
+            with closing(sqlite3.connect(self.path)) as conn:
                 conn.executescript(SCHEMA)
             self._initialized = True
 

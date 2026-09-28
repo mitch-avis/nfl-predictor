@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nfl-predictor"
-version = "0.35.0"
+version = "0.35.1"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -50,7 +50,7 @@ Homepage = "https://github.com/mitch-avis/nfl-predictor"
 [dependency-groups]
 dev = [
     "colorama",
-    "httpx",
+    "httpx2>=2.13.1",
     "pandas-stubs",
     "pre-commit",
     "pyright",
@@ -153,8 +153,11 @@ exclude = [
     ".venv",
     "**/node_modules",
 # `nfl-sos-ratings` is a gitignored symlink to the read-only reference repo; it is not part
-# of this project's type-check surface. The rest of the list restores pyright's defaults.
+# of this project's type-check surface. `models/` holds gitignored run directories whose review
+# scripts are frozen records of the code they ran against, so CI never sees them either. The
+# rest of the list restores pyright's defaults.
     "nfl-sos-ratings",
+    "models",
     "web",
 ]
 # --- Standard-mode diagnostics promoted to errors (also surfaced by Pylance) ----------

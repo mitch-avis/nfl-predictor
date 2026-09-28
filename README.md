@@ -403,6 +403,21 @@ games. A row with fewer than two games has no interval. The view scores pick acc
 points on the deterministic probability, and `metrics.overall` and `metrics.per_season` in the
 same file score the submitted `home_win_prob`; both are the floor, so the two agree.
 
+The report also says how the run differs from production: `settings_versus_production` in
+`metrics_report.json`, logged under "Settings versus production" when the run finishes. The
+production side is what `nfl-predictor weekly` would use today, read through the weekly run's own
+parser and `config/weekly_run.yaml` merged with the code defaults, for both of its halves: stage
+1's walk-forward and the final fit. For each half, `differences` lists every model-affecting
+setting where the run's resolved value differs (the XGBoost device and parameters as trained,
+market features, anchoring and transform resolved against the dataset's lines, recency
+weighting, calibration, postseason games, disabled feature groups, trend-feature ablation,
+pruning), and `run_only` and `production_only` list settings only one side has (the final fit's
+`holdout_seasons`, `postseason_weight` and tuning; the run's pruning and feature-group options).
+Scope (the scored seasons and weeks, the seed, the dataset and checkpoint paths) and runtime
+settings that change no prediction (XGBoost threads and verbosity, quantile models) are listed
+apart, never as differences. A run whose `differences` are empty for both halves trains what
+production trains.
+
 Every finished week logs its position, running time, and an estimate of the time remaining
 (`Walk-forward fold 37/54 done: season 2024 week 5 (14 games, Brier 0.2213), 2410s elapsed, about
 1107s remaining`). The estimate averages the weeks trained so far, so it runs a little low late in a
@@ -514,6 +529,10 @@ has no interval (`[n/a]`). Everything before that section is byte-identical to t
 `compare` wrote before the section existed, and the JSON is a strict superset of it (each window
 gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the same order,
 to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
+A last "Settings versus production" section gives each run's differences from today's production
+weekly run, as the walk-forward report does (JSON key `settings_versus_production`, by run),
+rebuilt from the run's `metadata.json` and its dataset's columns; a run with no metadata, whose
+dataset is gone, or whose recorded settings no longer load says why instead.
 It reproduces the independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and
 replaces the per-run `compare_to_benchmark.py` copies under `models/`.
 

@@ -7,6 +7,7 @@ the production side read through the weekly run's own parser and config file.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import sys
@@ -22,6 +23,7 @@ from nfl_predictor.ml import ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.reporting import production_settings
 from nfl_predictor.weekly_run import config as weekly_config
 from tests import test_run_comparison
+from tests.weekly_fixture import build_fixture
 
 SECTION = production_settings.SECTION_KEY
 
@@ -564,3 +566,66 @@ def test_retired_settings_an_older_run_recorded_are_listed_with_their_values(
         in lines
     )
     assert not any(production_settings.NO_DIFFERENCES in line for line in lines)
+
+
+def _real_backtest_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra_argv: list[str]
+) -> dict[str, Any]:
+    """Run the backtest on the small fixture, unfaked, and return its ``metadata.json``."""
+    paths = build_fixture(tmp_path)
+    out_json = tmp_path / "wf" / "metrics_report.json"
+    monkeypatch.setattr(walk_forward, "BOOTSTRAP_SAMPLES", 50)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "walk_forward_backtest.py",
+            "--data-path",
+            str(paths["completed"]),
+            "--eval-last-n-seasons",
+            "1",
+            "--wf-start-week",
+            "3",
+            "--n-estimators",
+            "5",
+            "--xgb-n-jobs",
+            "1",
+            "--xgb-device",
+            "cpu",
+            "--checkpoint-dir",
+            str(tmp_path / "checkpoints"),
+            "--out-json",
+            str(out_json),
+            *extra_argv,
+        ],
+    )
+    backtest.main()
+    return json.loads((out_json.parent / "metadata.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    "extra_argv",
+    [[], ["--disable-trend-features", "--disable-feature-groups", "pbp"]],
+    ids=["plain", "ablations"],
+)
+def test_a_real_backtests_metadata_round_trips_with_nothing_retired_or_unrecorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra_argv: list[str]
+) -> None:
+    """What a backtest writes today reads back complete: no key is mistaken for a retired one.
+
+    The keys it records beside the walk-forward configuration are exactly the known records,
+    so a new key written by the backtest, or a stale one in the list, fails here.
+    """
+    metadata = _real_backtest_metadata(tmp_path, monkeypatch, extra_argv)
+
+    section = production_settings.section_for_metadata(metadata)
+
+    assert section["retired"] == {}
+    for stage in ("stage1", "final_fit"):
+        assert section[stage]["not_recorded"] == []
+    fields = {item.name for item in dataclasses.fields(walk_forward.WalkForwardConfig)}
+    written = set(metadata["config"]) - fields
+    assert written <= production_settings.RECORDED_CONFIG_EXTRAS
+    if extra_argv:
+        # The ablation run writes every conditional record too.
+        assert written == production_settings.RECORDED_CONFIG_EXTRAS

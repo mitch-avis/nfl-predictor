@@ -55,8 +55,10 @@ _WALK_FORWARD_SCOPE = (
     "wf_start_week",
     "exclude_incomplete_seasons",
 )
-# Keys a backtest records in its metadata config besides the walk-forward configuration.
-_RECORDED_EXTRAS = frozenset(
+# Keys a backtest records in its metadata config besides the walk-forward configuration. The
+# backtest writes them inline (and the walk-forward adds its resolved settings), so the list
+# is pinned by a test that runs a real backtest and requires exactly these keys back.
+RECORDED_CONFIG_EXTRAS = frozenset(
     {
         "checkpoint",
         "data_path",
@@ -333,7 +335,7 @@ def _recorded_config(config: Mapping[str, Any]) -> walk_forward.WalkForwardConfi
 def _retired_settings(config: Mapping[str, Any]) -> dict[str, Any]:
     """Return the recorded keys that are neither configuration fields nor known records."""
     names = {item.name for item in fields(walk_forward.WalkForwardConfig)}
-    return {key: config[key] for key in sorted(config) if key not in names | _RECORDED_EXTRAS}
+    return {key: config[key] for key in sorted(config) if key not in names | RECORDED_CONFIG_EXTRAS}
 
 
 def _recorded_xgb_params(config: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:

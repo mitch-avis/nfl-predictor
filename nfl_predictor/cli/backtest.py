@@ -259,6 +259,9 @@ def main() -> None:
     config_payload["out_json"] = str(out_json)
     config_payload["checkpoint"] = results.get("checkpoint")
     config_payload["xgb_device"] = xgb_device
+    # Every parameter the folds trained with, so later comparisons need not infer defaults.
+    xgb_params = walk_forward._resolve_xgb_params(config)
+    config_payload[production_settings.RESOLVED_XGB_PARAMS_KEY] = xgb_params
     config_payload["disable_trend_features"] = bool(args.disable_trend_features)
     if args.disable_trend_features:
         config_payload["dropped_trend_columns"] = drop_columns
@@ -285,7 +288,8 @@ def main() -> None:
     versus_production = production_settings.settings_versus_production(
         config,
         df,
-        run_extras={"disable_trend_features": True} if args.disable_trend_features else None,
+        disable_trend_features=bool(args.disable_trend_features),
+        run_xgb_params=xgb_params,
         run_scope={
             "data_path": str(args.data_path),
             "checkpoint_dir": str(args.checkpoint_dir),

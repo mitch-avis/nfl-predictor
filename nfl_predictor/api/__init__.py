@@ -5,8 +5,8 @@ Build the app with :func:`create_app`; run it with ``python -m nfl_predictor.api
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -29,6 +29,9 @@ from nfl_predictor.api.routers.static import mount_frontend
 from nfl_predictor.api.routers.users import router as users_router
 from nfl_predictor.api.runs.indexer import RunIndex
 from nfl_predictor.api.settings import CSRF_HEADER_NAME, CSRF_HEADER_VALUE, Settings
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
 API_PREFIX = "/api"
 MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})

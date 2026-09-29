@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Request
 
 from nfl_predictor.api.deps import CurrentUser, DbDep
@@ -9,8 +11,10 @@ from nfl_predictor.api.errors import NotFoundError
 from nfl_predictor.api.readers import power as reader
 from nfl_predictor.api.routers.resolve import get_index
 from nfl_predictor.api.runs import active
-from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
 from nfl_predictor.api.schemas.data import PowerOut
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
 
 router = APIRouter(prefix="/power", tags=["power"])
 
@@ -36,9 +40,8 @@ def power(_user: CurrentUser, db: DbDep, request: Request, run: str | None = Non
     current = active.require_run(db, index, run)
     files = current.run_files
     if files.power_rankings is None:
-        raise NotFoundError(
-            f"Run {current.run_id!r} has no power rankings", code="no_power_rankings"
-        )
+        msg = f"Run {current.run_id!r} has no power rankings"
+        raise NotFoundError(msg, code="no_power_rankings")
     previous = previous_rankings(index, current)
     previous_path = previous.run_files.power_rankings if previous else None
     return PowerOut(

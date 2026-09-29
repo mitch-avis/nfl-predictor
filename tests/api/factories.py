@@ -7,8 +7,11 @@ headers below mirror the real artifacts written by the weekly run and the traini
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 PREDICTION_COLUMNS = [
     "game_id", "season", "week", "date", "gametime", "game_datetime",
@@ -66,8 +69,7 @@ GAMES: list[tuple[str, str, str, float, float, float, int, int]] = [
 def _write_csv(path: Path, columns: list[str], rows: list[list[Any]]) -> Path:
     """Write ``rows`` under ``columns`` as CSV."""
     lines = [",".join(columns)]
-    for row in rows:
-        lines.append(",".join("" if v is None else str(v) for v in row))
+    lines.extend(",".join("" if v is None else str(v) for v in row) for row in rows)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -151,7 +153,7 @@ def write_power_csvs(
     suffix = f"season_{season}_week_{through_week:02d}.csv"
     _write_csv(run_dir / f"power_rankings_{suffix}", POWER_COLUMNS, power_rows)
     _write_csv(run_dir / f"projected_standings_{suffix}", STANDINGS_COLUMNS, standings_rows)
-    division_rows = [row + [1 + i % 2] for i, row in enumerate(standings_rows)]
+    division_rows = [[*row, 1 + i % 2] for i, row in enumerate(standings_rows)]
     _write_csv(
         run_dir / f"projected_division_standings_{suffix}",
         [*STANDINGS_COLUMNS, "projected_division_rank"],
@@ -335,19 +337,23 @@ def legacy_feature_importance_payload(run_id: str) -> dict[str, Any]:
     }
 
 
-def make_run_dir(
-    models_dir: Path,
-    run_id: str,
-    *,
-    kind: str = "weekly",
-    season: int = 2026,
-    week: int = 1,
-    created_at: str = "2026-09-09T23:29:04+00:00",
-    complete: bool = True,
-    with_model: bool = True,
-    power_order: list[str] | None = None,
-) -> Path:
-    """Create a run directory of ``kind`` (``weekly``, ``training``, or ``walk_forward``)."""
+@dataclass(frozen=True, kw_only=True)
+class RunSpec:
+    """What a fixture run directory holds: its kind, week, timestamp and optional parts."""
+
+    kind: str = "weekly"
+    season: int = 2026
+    week: int = 1
+    created_at: str = "2026-09-09T23:29:04+00:00"
+    complete: bool = True
+    with_model: bool = True
+    power_order: list[str] | None = None
+
+
+def make_run_dir(models_dir: Path, run_id: str, spec: RunSpec | None = None) -> Path:
+    """Create a run directory of ``spec.kind`` (``weekly``, ``training``, or ``walk_forward``)."""
+    spec = spec or RunSpec()
+    kind, season, week, created_at = spec.kind, spec.season, spec.week, spec.created_at
     run_dir = models_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "metadata.json").write_text(
@@ -359,7 +365,7 @@ def make_run_dir(
     )
     if kind == "walk_forward":
         return run_dir
-    if with_model:
+    if spec.with_model:
         (run_dir / "model.joblib").write_bytes(b"not-a-real-model")
     (run_dir / "feature_importance.json").write_text(
         json.dumps(feature_importance_payload(run_id)), encoding="utf-8"
@@ -370,7 +376,7 @@ def make_run_dir(
     write_predictions_csv(run_dir / f"{prefix}_predictions.csv", season, week)
     write_picks_csv(run_dir / f"{prefix}_confidence_picks.csv", season, week)
     write_betting_csv(run_dir / f"{prefix}_betting_report.csv", season, week)
-    write_power_csvs(run_dir, season, week - 1, power_order)
+    write_power_csvs(run_dir, season, week - 1, spec.power_order)
     (run_dir / "wf_compare.csv").write_text(
         "candidate_key,label,calibration,brier,log_loss,pick_accuracy,rank\n"
         "a,base,platt,0.22,0.74,0.69,1\nb,elo,elo,0.23,0.75,0.68,2\n",
@@ -382,7 +388,7 @@ def make_run_dir(
         ),
         encoding="utf-8",
     )
-    stages = ["wf_compare", "train", "predictions"] + (["reports"] if complete else [])
+    stages = ["wf_compare", "train", "predictions"] + (["reports"] if spec.complete else [])
     for stage in stages:
         (run_dir / f"{stage}_state.json").write_text(
             json.dumps({"stage": stage, "created_at": created_at, "outputs": []}), encoding="utf-8"

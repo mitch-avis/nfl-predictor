@@ -7,13 +7,15 @@ from __future__ import annotations
 
 import threading
 from collections import OrderedDict
-from collections.abc import Callable
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Hashable
+    from pathlib import Path
 
 MAX_ENTRIES = 64
 
-_entries: OrderedDict[tuple[Any, ...], Any] = OrderedDict()
+_entries: OrderedDict[tuple[Hashable, ...], object] = OrderedDict()
 _lock = threading.Lock()
 
 
@@ -23,7 +25,7 @@ def file_key(path: Path) -> tuple[str, int, int]:
     return (str(path), stat.st_size, stat.st_mtime_ns)
 
 
-def cached(path: Path, loader: Callable[[Path], Any], *tags: Any) -> Any:
+def cached[T](path: Path, loader: Callable[[Path], T], *tags: Hashable) -> T:
     """Return ``loader(path)``, memoized until the file's size or mtime changes.
 
     ``tags`` distinguish different loaders applied to the same file.
@@ -32,7 +34,8 @@ def cached(path: Path, loader: Callable[[Path], Any], *tags: Any) -> Any:
     with _lock:
         if key in _entries:
             _entries.move_to_end(key)
-            return _entries[key]
+            # Each key holds what its own loader returned, so the stored value is a T.
+            return cast("T", _entries[key])
     value = loader(path)
     with _lock:
         _entries[key] = value

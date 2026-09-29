@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import datetime as dt
 import math
-from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
-from typing import Any
-
-import polars as pl
+from typing import TYPE_CHECKING
 
 from nfl_predictor.api.schemas.common import ColumnKind, ColumnMetaOut, Polarity, TablePayload
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
+    import polars as pl
 
 
 @dataclass(frozen=True)
@@ -40,7 +42,8 @@ def register(*metas: ColumnMeta) -> None:
     """Add ``metas`` to the registry; duplicate keys are a programming error."""
     for meta in metas:
         if meta.key in REGISTRY:
-            raise ValueError(f"Column {meta.key!r} is already registered")
+            msg = f"Column {meta.key!r} is already registered"
+            raise ValueError(msg)
         REGISTRY[meta.key] = meta
 
 
@@ -55,7 +58,7 @@ def group_map(keys: Iterable[str]) -> dict[str, list[str]]:
     return groups
 
 
-def jsonable(value: Any) -> Any:
+def jsonable(value: object) -> object:
     """Convert a Polars cell to a JSON-safe value (NaN -> null, dates -> ISO strings)."""
     if value is None:
         return None

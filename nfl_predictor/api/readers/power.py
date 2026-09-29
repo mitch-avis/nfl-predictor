@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 
 from nfl_predictor.api.readers.cache import cached
 from nfl_predictor.api.registry import project
 from nfl_predictor.api.registry.power import POWER_COLUMNS, STANDINGS_COLUMNS
-from nfl_predictor.api.schemas.common import TablePayload
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.api.schemas.common import TablePayload
 
 
 def _read_csv(path: Path) -> pl.DataFrame:

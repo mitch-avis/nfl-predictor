@@ -20,7 +20,9 @@ def test_every_column_is_documented() -> None:
     assert len(REGISTRY) > 100
     for key, meta in REGISTRY.items():
         assert meta.key == key
-        assert meta.label and meta.description and meta.group, key
+        assert meta.label, key
+        assert meta.description, key
+        assert meta.group, key
 
 
 @pytest.mark.parametrize(

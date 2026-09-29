@@ -9,6 +9,20 @@ from pydantic import BaseModel
 from nfl_predictor.api.schemas.common import TablePayload
 
 
+class WeekQuery(BaseModel):
+    """Which week's predictions a request asks for: a run, or a season and week."""
+
+    run: str | None = None
+    season: int | None = None
+    week: int | None = None
+
+
+class PredictionQuery(WeekQuery):
+    """A week query that may also insist on an unattached ``data/predict`` file."""
+
+    source: str | None = None
+
+
 class WeekRef(BaseModel):
     """A week for which predictions exist, and where they live."""
 

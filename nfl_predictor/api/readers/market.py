@@ -10,6 +10,8 @@ import math
 from statistics import NormalDist
 from typing import TypeIs
 
+from nfl_predictor import constants
+
 NORMAL = NormalDist()
 NORMAL_Z_P90 = 1.281551565545
 P10_P90_TO_SIGMA_DENOM = 2.0 * NORMAL_Z_P90
@@ -48,7 +50,7 @@ def prob_to_moneyline(prob: object) -> float | None:
     p = float(prob)
     if not 0.0 < p < 1.0:
         return None
-    if p >= 0.5:
+    if p >= constants.EVEN_ODDS_PROBABILITY:
         return round(-100.0 * p / (1.0 - p))
     return round(100.0 * (1.0 - p) / p)
 
@@ -77,7 +79,7 @@ def expected_value(prob: float, moneyline: float) -> float:
 
 def action_label(edge: float | None) -> str:
     """Map a probability edge to PASS / LEAN / SMALL / MEDIUM / STRONG."""
-    if edge is None or edge < 0.02:
+    if edge is None:
         return "PASS"
     for threshold, label in ACTION_LADDER:
         if edge >= threshold:
@@ -89,7 +91,7 @@ def confidence_1_to_10(edge: float | None) -> int:
     """Map a probability edge to a 1..10 ladder (one step per point of edge, capped)."""
     if edge is None or edge <= 0:
         return 1
-    return max(1, min(10, int(math.floor(edge * 100.0)) + 1))
+    return max(1, min(10, math.floor(edge * 100.0) + 1))
 
 
 def sigma_from_quantiles(p10: object, p90: object, default: float) -> float:

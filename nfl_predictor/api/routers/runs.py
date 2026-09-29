@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
@@ -11,8 +11,10 @@ from fastapi.responses import FileResponse
 from nfl_predictor.api.deps import AdminUser, CurrentUser, DbDep
 from nfl_predictor.api.errors import NotFoundError
 from nfl_predictor.api.runs import active
-from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
 from nfl_predictor.api.schemas.runs import RunDetailOut, RunListOut, RunOut
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -64,7 +66,7 @@ def list_runs(
     index = get_index(request)
     current = active.resolve_active_run(db, index)
     active_id = current.run_id if current else None
-    runs = [run for run in index.runs() if kind == "all" or run.kind == kind]
+    runs = [run for run in index.runs() if kind in ("all", run.kind)]
     return RunListOut(
         active_run_id=active_id,
         pinned_run_id=active.pinned_run_id(db),
@@ -78,7 +80,8 @@ def run_detail(run_id: str, _user: CurrentUser, db: DbDep, request: Request) -> 
     index = get_index(request)
     run = index.get(run_id)
     if run is None:
-        raise NotFoundError(f"Run {run_id!r} not found", code="run_not_found")
+        msg = f"Run {run_id!r} not found"
+        raise NotFoundError(msg, code="run_not_found")
     current = active.resolve_active_run(db, index)
     metadata = json.loads(run.run_files.metadata.read_text(encoding="utf-8"))
     features = metadata.get("feature_list")
@@ -112,11 +115,14 @@ def download_file(run_id: str, name: str, _user: CurrentUser, request: Request) 
     """Download one allow-listed artifact of a run."""
     run = get_index(request).get(run_id)
     if run is None:
-        raise NotFoundError(f"Run {run_id!r} not found", code="run_not_found")
+        msg = f"Run {run_id!r} not found"
+        raise NotFoundError(msg, code="run_not_found")
     if name not in DOWNLOADABLE:
-        raise NotFoundError(f"Unknown artifact {name!r}", code="unknown_artifact")
+        msg = f"Unknown artifact {name!r}"
+        raise NotFoundError(msg, code="unknown_artifact")
     attr, download_name = DOWNLOADABLE[name]
     path = getattr(run.run_files, attr)
     if path is None or not path.is_file():
-        raise NotFoundError(f"Run {run_id!r} has no {name}", code="artifact_missing")
+        msg = f"Run {run_id!r} has no {name}"
+        raise NotFoundError(msg, code="artifact_missing")
     return FileResponse(path, filename=f"{run_id}_{download_name}")

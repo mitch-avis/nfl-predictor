@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import NotFoundError
+
+if TYPE_CHECKING:
+    import sqlite3
+    from collections.abc import Sequence
+
+    from nfl_predictor.api.db import Database
 
 JobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
 TERMINAL_STATUSES: frozenset[str] = frozenset({"succeeded", "failed", "canceled"})
@@ -71,14 +75,14 @@ class JobRecord:
         return self.status in TERMINAL_STATUSES
 
 
-def _to_record(row: Any) -> JobRecord:
+def _to_record(row: sqlite3.Row) -> JobRecord:
     """Build a :class:`JobRecord` from a database row."""
     progress = _loads(row["progress_json"])
     return JobRecord(
         id=str(row["id"]),
         template_id=str(row["template_id"]),
         params=_loads(row["params_json"]),
-        status=cast(JobStatus, str(row["status"])),
+        status=cast("JobStatus", str(row["status"])),
         created_at=str(row["created_at"]),
         started_at=row["started_at"],
         finished_at=row["finished_at"],
@@ -141,7 +145,8 @@ class JobStore:
         """Return one job or raise 404."""
         record = self.get(job_id)
         if record is None:
-            raise NotFoundError(f"Job {job_id!r} not found", code="job_not_found")
+            msg = f"Job {job_id!r} not found"
+            raise NotFoundError(msg, code="job_not_found")
         return record
 
     def recent(self, *, limit: int = 50, template_id: str | None = None) -> list[JobRecord]:

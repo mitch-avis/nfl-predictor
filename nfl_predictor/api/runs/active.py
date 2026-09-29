@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from nfl_predictor.api.db import Database
+from typing import TYPE_CHECKING
+
 from nfl_predictor.api.errors import ConflictError, NotFoundError
-from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.db import Database
+    from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
 
 ACTIVE_RUN_KEY = "active_run_id"
 
@@ -19,9 +23,11 @@ def set_active_run(db: Database, index: RunIndex, run_id: str) -> RunSummary:
     """Pin ``run_id`` as the active run; it must exist and carry a model."""
     run = index.get(run_id)
     if run is None:
-        raise NotFoundError(f"Run {run_id!r} not found", code="run_not_found")
+        msg = f"Run {run_id!r} not found"
+        raise NotFoundError(msg, code="run_not_found")
     if not run.has_model:
-        raise ConflictError(f"Run {run_id!r} has no model.joblib", code="run_has_no_model")
+        msg = f"Run {run_id!r} has no model.joblib"
+        raise ConflictError(msg, code="run_has_no_model")
     db.set_value(ACTIVE_RUN_KEY, run_id)
     return run
 
@@ -54,9 +60,11 @@ def require_run(db: Database, index: RunIndex, run_id: str | None) -> RunSummary
     if run_id is not None:
         run = index.get(run_id)
         if run is None:
-            raise NotFoundError(f"Run {run_id!r} not found", code="run_not_found")
+            msg = f"Run {run_id!r} not found"
+            raise NotFoundError(msg, code="run_not_found")
         return run
     run = resolve_active_run(db, index)
     if run is None:
-        raise NotFoundError("No active run; pin one from the Runs page", code="no_active_run")
+        msg = "No active run; pin one from the Runs page"
+        raise NotFoundError(msg, code="no_active_run")
     return run

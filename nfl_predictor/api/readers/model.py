@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
 from nfl_predictor.api.readers.cache import cached
 from nfl_predictor.api.registry import project
 from nfl_predictor.api.registry.model import WF_COMPARE_COLUMNS
-from nfl_predictor.api.runs.files import RunFiles
-from nfl_predictor.api.schemas.common import TablePayload
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.api.runs.files import RunFiles
+    from nfl_predictor.api.schemas.common import TablePayload
 
 TOP_FEATURES = 40
 METADATA_KEYS = (
@@ -21,27 +24,27 @@ METADATA_KEYS = (
 )  # fmt: skip
 
 
-def _dict(value: Any) -> dict[str, Any]:
+def _dict(value: object) -> dict[str, Any]:
     """Return ``value`` when it is a dict, else an empty dict."""
     return value if isinstance(value, dict) else {}
 
 
-def _opt_dict(value: Any) -> dict[str, Any] | None:
+def _opt_dict(value: object) -> dict[str, Any] | None:
     """Return ``value`` when it is a dict, else ``None``."""
     return value if isinstance(value, dict) else None
 
 
-def _opt_list(value: Any) -> list[Any] | None:
+def _opt_list(value: object) -> list[Any] | None:
     """Return ``value`` when it is a list, else ``None``."""
     return value if isinstance(value, list) else None
 
 
-def _read_json(path: Path) -> Any:
+def _read_json(path: Path) -> object:
     """Parse a JSON file."""
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def load_json(path: Path) -> Any:
+def load_json(path: Path) -> object:
     """Return the cached parsed JSON at ``path``."""
     return cached(path, _read_json)
 

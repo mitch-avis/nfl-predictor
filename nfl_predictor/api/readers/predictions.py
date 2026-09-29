@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
+from nfl_predictor import constants
 from nfl_predictor.api.readers import market
 from nfl_predictor.api.readers.cache import cached
 from nfl_predictor.api.registry import project
 from nfl_predictor.api.registry.predictions import PICK_COLUMNS, PREDICTION_COLUMNS
-from nfl_predictor.api.schemas.common import TablePayload
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.api.schemas.common import TablePayload
 
 
 @dataclass(frozen=True)
@@ -62,7 +66,8 @@ def enrich_row(row: dict[str, Any]) -> dict[str, Any]:
     market_margin = -home_spread if home_spread is not None else None
     favorite: str | None = None
     if novig_home is not None:
-        favorite = str(row.get("home_abbr")) if novig_home >= 0.5 else str(row.get("away_abbr"))
+        home_favored = novig_home >= constants.EVEN_ODDS_PROBABILITY
+        favorite = str(row.get("home_abbr")) if home_favored else str(row.get("away_abbr"))
     elif market_margin is not None and market_margin != 0:
         favorite = str(row.get("home_abbr")) if market_margin > 0 else str(row.get("away_abbr"))
     pick = row.get("predicted_winner")

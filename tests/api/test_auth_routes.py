@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi.testclient import TestClient
+from tests.api.conftest import ADMIN_PASSWORD, CSRF_HEADERS, TEST_SECRET
 
 from nfl_predictor.api.auth.ratelimit import LoginRateLimiter
 from nfl_predictor.api.auth.tokens import issue_token, read_token
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.settings import COOKIE_NAME
-from tests.api.conftest import ADMIN_PASSWORD, CSRF_HEADERS, TEST_SECRET
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.db import Database
 
 OTHER_SECRET = "other-secret-" * 4
 
@@ -43,7 +47,7 @@ def test_login_rejects_bad_password(client: TestClient, db: Database) -> None:
     assert COOKIE_NAME not in client.cookies
 
 
-def test_login_rate_limited(client: TestClient, app) -> None:  # noqa: ANN001
+def test_login_rate_limited(client: TestClient, app) -> None:
     """After the failure budget is spent the login returns 429."""
     app.state.login_limiter = LoginRateLimiter(max_attempts=2, window_seconds=60)
     for _ in range(2):
@@ -71,7 +75,7 @@ def test_logout_clears_cookie(admin_client: TestClient) -> None:
     assert admin_client.get("/api/auth/me").status_code == 401
 
 
-def test_csrf_header_required(app, db: Database) -> None:  # noqa: ANN001
+def test_csrf_header_required(app, db: Database) -> None:
     """Mutating API calls without the custom header are refused."""
     with TestClient(app) as bare:
         response = bare.post("/api/auth/login", json={"username": "a", "password": "b"})

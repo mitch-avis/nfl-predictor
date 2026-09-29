@@ -33,10 +33,11 @@ def current_user(request: Request, settings: SettingsDep) -> User:
     """Return the user for the session cookie or raise 401."""
     token = request.cookies.get(COOKIE_NAME)
     if not token:
-        raise UnauthorizedError()
+        raise UnauthorizedError
     payload = read_token(settings.resolve_jwt_secret(), token)
     if payload is None:
-        raise UnauthorizedError("Session expired or invalid", code="invalid_session")
+        msg = "Session expired or invalid"
+        raise UnauthorizedError(msg, code="invalid_session")
     try:
         return User(
             id=int(str(payload["sub"])),
@@ -45,7 +46,8 @@ def current_user(request: Request, settings: SettingsDep) -> User:
             created_at="",
         )
     except (KeyError, ValueError) as exc:
-        raise UnauthorizedError("Malformed session", code="invalid_session") from exc
+        msg = "Malformed session"
+        raise UnauthorizedError(msg, code="invalid_session") from exc
 
 
 CurrentUser = Annotated[User, Depends(current_user)]
@@ -54,7 +56,7 @@ CurrentUser = Annotated[User, Depends(current_user)]
 def require_admin(user: CurrentUser) -> User:
     """Return the user when they are an admin, else raise 403."""
     if not user.is_admin:
-        raise ForbiddenError()
+        raise ForbiddenError
     return user
 
 

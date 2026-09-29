@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Request
 
 from nfl_predictor.api.deps import CurrentUser, DbDep, SettingsDep
 from nfl_predictor.api.readers import betting as reader
 from nfl_predictor.api.readers import market
 from nfl_predictor.api.routers.resolve import resolve_predictions
-from nfl_predictor.api.schemas.data import BettingOut, LadderStep
+from nfl_predictor.api.schemas.data import BettingOut, LadderStep, WeekQuery
 
 router = APIRouter(prefix="/betting", tags=["betting"])
 
 NOTES = [
-    "Moneyline edges compare the model probability with the implied probability of the offered "
-    "price, vig included.",
-    "Spread and total probabilities assume a normal distribution centered on the prediction "
-    "with σ from the p10/p90 quantiles.",
+    (
+        "Moneyline edges compare the model probability with the implied probability of the offered "
+        "price, vig included."
+    ),
+    (
+        "Spread and total probabilities assume a normal distribution centered on the prediction "
+        "with σ from the p10/p90 quantiles."
+    ),
     "Totals are informational only: the total model has not shown an edge against the market line.",
     "Lines are as of the last data refresh; refresh lines before acting on them.",
 ]
@@ -37,14 +43,10 @@ def betting(
     db: DbDep,
     settings: SettingsDep,
     request: Request,
-    run: str | None = None,
-    season: int | None = None,
-    week: int | None = None,
+    query: Annotated[WeekQuery, Query()],
 ) -> BettingOut:
     """Return the betting table derived from the week's predictions."""
-    src = resolve_predictions(
-        request, db, settings, run_id=run, season=season, week=week, source=None
-    )
+    src = resolve_predictions(request, db, settings, query)
     return BettingOut(
         run_id=src.run_id,
         season=src.season,

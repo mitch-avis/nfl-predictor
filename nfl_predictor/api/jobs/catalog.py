@@ -10,16 +10,19 @@ the same schema.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from nfl_predictor.api.errors import ConflictError, UnprocessableEntityError
-from nfl_predictor.api.runs.indexer import RunSummary
-from nfl_predictor.api.settings import Settings
 from nfl_predictor.cli.options import RETIRED_BLEND_MESSAGE, RETIRED_MODEL_KINDS
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+    from pathlib import Path
+
+    from nfl_predictor.api.runs.indexer import RunSummary
+    from nfl_predictor.api.settings import Settings
 
 ParamKind = Literal["int", "float", "str", "bool", "choice"]
 WALK_FORWARD_GROUP = "walk_forward"
@@ -85,8 +88,9 @@ class JobContext:
     def require_run(self) -> RunSummary:
         """Return the active run, or explain that one is needed."""
         if self.run is None:
+            msg = "This job needs an active run with a model; pin one on the Runs page."
             raise ConflictError(
-                "This job needs an active run with a model; pin one on the Runs page.",
+                msg,
                 code="no_active_run",
             )
         return self.run
@@ -128,7 +132,7 @@ class JobTemplate:
     needs_active_run: bool = False
 
 
-def _flag(argv: list[str], flag: str, value: Any) -> None:
+def _flag(argv: list[str], flag: str, value: object) -> None:
     """Append ``flag value`` when ``value`` is set, or the boolean form of the flag."""
     if value is None:
         return
@@ -152,9 +156,8 @@ def _run_model_kind(run: RunSummary) -> str:
     """Return the model kind a run-based job passes, refusing a retired blend run."""
     kind = run.model_kind or DEFAULT_MODEL_KIND
     if kind in RETIRED_MODEL_KINDS:
-        raise ConflictError(
-            f"This run holds a {kind} model: {RETIRED_BLEND_MESSAGE}.", code="retired_model_kind"
-        )
+        msg = f"This run holds a {kind} model: {RETIRED_BLEND_MESSAGE}."
+        raise ConflictError(msg, code="retired_model_kind")
     return kind
 
 
@@ -587,40 +590,41 @@ def get_template(template_id: str) -> JobTemplate:
     """Return the template with ``template_id`` or raise 422."""
     template = TEMPLATES_BY_ID.get(template_id)
     if template is None:
-        raise UnprocessableEntityError(f"Unknown job template {template_id!r}", code="unknown_job")
+        msg = f"Unknown job template {template_id!r}"
+        raise UnprocessableEntityError(msg, code="unknown_job")
     return template
 
 
-def _coerce_bool(spec: ParamSpec, value: Any) -> bool:
+def _coerce_bool(spec: ParamSpec, value: object) -> bool:
     """Coerce ``value`` to a bool, accepting the strings a form may send."""
     if isinstance(value, bool):
         return value
     if isinstance(value, str) and value.lower() in {"true", "false", "1", "0", "yes", "no"}:
         return value.lower() in {"true", "1", "yes"}
-    raise UnprocessableEntityError(f"{spec.label} must be true or false", code="invalid_param")
+    msg = f"{spec.label} must be true or false"
+    raise UnprocessableEntityError(msg, code="invalid_param")
 
 
-def _coerce_number(spec: ParamSpec, value: Any) -> int | float:
+def _coerce_number(spec: ParamSpec, value: object) -> int | float:
     """Coerce ``value`` to the spec's numeric type and range-check it."""
+    msg = f"{spec.label} must be a{'n integer' if spec.kind == 'int' else ' number'}"
+    # A JSON form value is a string or a number (a bool is an int); nothing else converts.
+    if not isinstance(value, str | int | float):
+        raise UnprocessableEntityError(msg, code="invalid_param")
     try:
         number = int(value) if spec.kind == "int" else float(value)
-    except (TypeError, ValueError) as exc:
-        raise UnprocessableEntityError(
-            f"{spec.label} must be a{'n integer' if spec.kind == 'int' else ' number'}",
-            code="invalid_param",
-        ) from exc
+    except ValueError as exc:
+        raise UnprocessableEntityError(msg, code="invalid_param") from exc
     if spec.minimum is not None and number < spec.minimum:
-        raise UnprocessableEntityError(
-            f"{spec.label} must be at least {spec.minimum:g}", code="invalid_param"
-        )
+        msg = f"{spec.label} must be at least {spec.minimum:g}"
+        raise UnprocessableEntityError(msg, code="invalid_param")
     if spec.maximum is not None and number > spec.maximum:
-        raise UnprocessableEntityError(
-            f"{spec.label} must be at most {spec.maximum:g}", code="invalid_param"
-        )
+        msg = f"{spec.label} must be at most {spec.maximum:g}"
+        raise UnprocessableEntityError(msg, code="invalid_param")
     return number
 
 
-def _coerce(spec: ParamSpec, value: Any) -> Any:
+def _coerce(spec: ParamSpec, value: object) -> bool | int | float | str:
     """Coerce one submitted value to the type its spec declares."""
     if spec.kind == "bool":
         return _coerce_bool(spec, value)
@@ -628,9 +632,8 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
         return _coerce_number(spec, value)
     text = str(value)
     if spec.kind == "choice" and text not in spec.choices:
-        raise UnprocessableEntityError(
-            f"{spec.label} must be one of: {', '.join(spec.choices)}", code="invalid_param"
-        )
+        msg = f"{spec.label} must be one of: {', '.join(spec.choices)}"
+        raise UnprocessableEntityError(msg, code="invalid_param")
     return text
 
 
@@ -653,15 +656,15 @@ def validate_params(template: JobTemplate, raw: Mapping[str, Any] | None) -> dic
     known = {spec.name for spec in template.params}
     unknown = sorted(set(submitted) - known)
     if unknown:
-        raise UnprocessableEntityError(
-            f"Unknown parameters for {template.id}: {', '.join(unknown)}", code="unknown_param"
-        )
+        msg = f"Unknown parameters for {template.id}: {', '.join(unknown)}"
+        raise UnprocessableEntityError(msg, code="unknown_param")
     coerced: dict[str, Any] = {}
     for spec in template.params:
         value = submitted.get(spec.name)
         if value is None or value == "":
             if spec.required:
-                raise UnprocessableEntityError(f"{spec.label} is required", code="missing_param")
+                msg = f"{spec.label} is required"
+                raise UnprocessableEntityError(msg, code="missing_param")
             if spec.default is not None:
                 coerced[spec.name] = spec.default
             continue

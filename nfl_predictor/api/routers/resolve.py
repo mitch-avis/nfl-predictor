@@ -5,17 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-
-from fastapi import Request
+from typing import TYPE_CHECKING
 
 from nfl_predictor import week_builder
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import NotFoundError
 from nfl_predictor.api.readers.data_status import current_season_week, unattached_files
 from nfl_predictor.api.runs import active
-from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
-from nfl_predictor.api.schemas.data import WeekRef
-from nfl_predictor.api.settings import Settings
+from nfl_predictor.api.schemas.data import PredictionQuery, WeekQuery, WeekRef
+
+if TYPE_CHECKING:
+    from fastapi import Request
+
+    from nfl_predictor.api.db import Database
+    from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
+    from nfl_predictor.api.settings import Settings
 
 
 @dataclass(frozen=True)
@@ -121,57 +124,68 @@ def generatable_weeks(
     ]
 
 
-def resolve_predictions(
-    request: Request,
-    db: Database,
-    settings: Settings,
-    *,
-    run_id: str | None,
-    season: int | None,
-    week: int | None,
-    source: str | None,
-) -> PredictionSource:
-    """Pick the predictions file for the query.
+def _matches(query: WeekQuery, season: int | None, week: int | None) -> bool:
+    """Return whether a season and week satisfy the query's season and week, where given."""
+    return (query.season is None or season == query.season) and (
+        query.week is None or week == query.week
+    )
 
-    Precedence: an explicit ``run_id``; else the active run when it matches (or no week was
-    asked for); else any run predicting that week; else an unattached ``data/predict`` file.
-    """
-    index = get_index(request)
-    if run_id is not None:
-        run = active.require_run(db, index, run_id)
-        if run.run_files.predictions is None:
-            raise NotFoundError(f"Run {run_id!r} has no predictions", code="no_predictions")
-        return PredictionSource(run.run_files.predictions, "run", run, run.season, run.week)
+
+def _explicit_run_source(db: Database, index: RunIndex, run_id: str) -> PredictionSource:
+    """Return the named run's predictions, or 404 when it has none."""
+    run = active.require_run(db, index, run_id)
+    if run.run_files.predictions is None:
+        msg = f"Run {run_id!r} has no predictions"
+        raise NotFoundError(msg, code="no_predictions")
+    return PredictionSource(run.run_files.predictions, "run", run, run.season, run.week)
+
+
+def _run_source(db: Database, index: RunIndex, query: WeekQuery) -> PredictionSource | None:
+    """Return the active run's predictions when they fit the query, else any run's that do."""
     current = active.resolve_active_run(db, index)
-    wants_week = season is not None or week is not None
-
-    def _matches(run: RunSummary) -> bool:
-        return (season is None or run.season == season) and (week is None or run.week == week)
-
+    wants_week = query.season is not None or query.week is not None
     if (
-        source != "unattached"
-        and current
+        current
         and current.run_files.predictions is not None
-        and (not wants_week or _matches(current))
+        and (not wants_week or _matches(query, current.season, current.week))
     ):
         return PredictionSource(
             current.run_files.predictions, "active", current, current.season, current.week
         )
-    if source != "unattached":
-        for run in index.runs():
-            if run.run_files.predictions is not None and _matches(run):
-                return PredictionSource(run.run_files.predictions, "run", run, run.season, run.week)
+    for run in index.runs():
+        if run.run_files.predictions is not None and _matches(query, run.season, run.week):
+            return PredictionSource(run.run_files.predictions, "run", run, run.season, run.week)
+    return None
+
+
+def _unattached_source(settings: Settings, query: WeekQuery) -> PredictionSource | None:
+    """Return the first unattached ``data/predict`` file that fits the query."""
     for item in unattached_files(settings.data_path, settings.reports_path):
-        if item["kind"] != "predictions":
-            continue
-        if (season is None or item["season"] == season) and (week is None or item["week"] == week):
+        if item["kind"] == "predictions" and _matches(query, item["season"], item["week"]):
             return PredictionSource(
                 Path(item["path"]), "unattached", None, item["season"], item["week"]
             )
-    if wants_week:
-        raise NotFoundError(
-            f"No predictions for season {season} week {week}", code="no_predictions"
-        )
-    raise NotFoundError(
-        "No predictions found; run a weekly run or a predict job", code="no_predictions"
-    )
+    return None
+
+
+def resolve_predictions(
+    request: Request, db: Database, settings: Settings, query: WeekQuery
+) -> PredictionSource:
+    """Pick the predictions file for the query.
+
+    Precedence: an explicit ``run``; else the active run when it matches (or no week was
+    asked for); else any run predicting that week; else an unattached ``data/predict`` file.
+    """
+    index = get_index(request)
+    if query.run is not None:
+        return _explicit_run_source(db, index, query.run)
+    unattached_only = isinstance(query, PredictionQuery) and query.source == "unattached"
+    found = None if unattached_only else _run_source(db, index, query)
+    found = found or _unattached_source(settings, query)
+    if found is not None:
+        return found
+    if query.season is not None or query.week is not None:
+        msg = f"No predictions for season {query.season} week {query.week}"
+        raise NotFoundError(msg, code="no_predictions")
+    msg = "No predictions found; run a weekly run or a predict job"
+    raise NotFoundError(msg, code="no_predictions")

@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Request
 
 from nfl_predictor.api.deps import CurrentUser, DbDep, SettingsDep
 from nfl_predictor.api.readers import predictions as reader
 from nfl_predictor.api.routers.resolve import available_weeks, get_index, resolve_predictions
 from nfl_predictor.api.runs import active
-from nfl_predictor.api.schemas.data import PicksOut, PredictionsOut, WeekRef
+from nfl_predictor.api.schemas.data import (
+    PicksOut,
+    PredictionQuery,
+    PredictionsOut,
+    WeekQuery,
+    WeekRef,
+)
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
@@ -19,15 +27,10 @@ def predictions(
     db: DbDep,
     settings: SettingsDep,
     request: Request,
-    run: str | None = None,
-    season: int | None = None,
-    week: int | None = None,
-    source: str | None = None,
+    query: Annotated[PredictionQuery, Query()],
 ) -> PredictionsOut:
     """Return a week of predictions with market context."""
-    src = resolve_predictions(
-        request, db, settings, run_id=run, season=season, week=week, source=source
-    )
+    src = resolve_predictions(request, db, settings, query)
     table, summary = reader.read_predictions(src.path)
     index = get_index(request)
     return PredictionsOut(
@@ -55,14 +58,10 @@ def picks(
     db: DbDep,
     settings: SettingsDep,
     request: Request,
-    run: str | None = None,
-    season: int | None = None,
-    week: int | None = None,
+    query: Annotated[WeekQuery, Query()],
 ) -> PicksOut:
     """Return the confidence picks, most confident first."""
-    src = resolve_predictions(
-        request, db, settings, run_id=run, season=season, week=week, source=None
-    )
+    src = resolve_predictions(request, db, settings, query)
     picks_path = src.run.run_files.picks if src.run else None
     table = (
         reader.read_picks(picks_path)

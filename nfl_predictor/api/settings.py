@@ -10,6 +10,7 @@ from __future__ import annotations
 import secrets
 import sys
 from pathlib import Path
+from typing import override
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +21,14 @@ SIGNING_KEY_FILENAME = "secret.key"
 COOKIE_NAME = "nflp_session"
 CSRF_HEADER_NAME = "x-requested-with"
 CSRF_HEADER_VALUE = "nflp"
+
+
+def _filled(value: Path | None, name: str) -> Path:
+    """Return a path ``model_post_init`` filled in; ``None`` means it never ran."""
+    if value is None:
+        msg = f"Settings.{name} is unset; model_post_init fills it when settings are built"
+        raise RuntimeError(msg)
+    return value
 
 
 class Settings(BaseSettings):
@@ -61,7 +70,8 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
-    def model_post_init(self, __context: object) -> None:
+    @override
+    def model_post_init(self, context: object, /) -> None:
         """Fill every unset path from ``root_dir`` so callers never see ``None``."""
         root = self.root_dir.resolve()
         self.root_dir = root
@@ -80,50 +90,42 @@ class Settings(BaseSettings):
     @property
     def data_path(self) -> Path:
         """Return the resolved data directory."""
-        assert self.data_dir is not None  # noqa: S101 - filled in model_post_init
-        return self.data_dir
+        return _filled(self.data_dir, "data_dir")
 
     @property
     def models_path(self) -> Path:
         """Return the resolved models directory."""
-        assert self.models_dir is not None  # noqa: S101 - filled in model_post_init
-        return self.models_dir
+        return _filled(self.models_dir, "models_dir")
 
     @property
     def reports_path(self) -> Path:
         """Return the resolved reports directory."""
-        assert self.reports_dir is not None  # noqa: S101 - filled in model_post_init
-        return self.reports_dir
+        return _filled(self.reports_dir, "reports_dir")
 
     @property
     def state_path(self) -> Path:
         """Return the resolved API state directory."""
-        assert self.state_dir is not None  # noqa: S101 - filled in model_post_init
-        return self.state_dir
+        return _filled(self.state_dir, "state_dir")
 
     @property
     def database_path(self) -> Path:
         """Return the resolved SQLite database path."""
-        assert self.db_path is not None  # noqa: S101 - filled in model_post_init
-        return self.db_path
+        return _filled(self.db_path, "db_path")
 
     @property
     def web_dist_path(self) -> Path:
         """Return the resolved built-frontend directory."""
-        assert self.web_dist is not None  # noqa: S101 - filled in model_post_init
-        return self.web_dist
+        return _filled(self.web_dist, "web_dist")
 
     @property
     def sos_data_path(self) -> Path:
         """Return the resolved nfl-sos-ratings data directory."""
-        assert self.sos_data_dir is not None  # noqa: S101 - filled in model_post_init
-        return self.sos_data_dir
+        return _filled(self.sos_data_dir, "sos_data_dir")
 
     @property
     def python_path(self) -> Path:
         """Return the interpreter used for subprocess jobs."""
-        assert self.python_executable is not None  # noqa: S101 - filled in model_post_init
-        return self.python_executable
+        return _filled(self.python_executable, "python_executable")
 
     def resolve_jwt_secret(self) -> str:
         """Return the signing secret, generating and persisting one on first use.

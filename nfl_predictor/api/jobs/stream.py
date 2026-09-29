@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from nfl_predictor.api.jobs.store import JobRecord, JobStore
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from nfl_predictor.api.jobs.store import JobRecord, JobStore
 
 POLL_SECONDS = 0.3
 LOG_PAGE = 500

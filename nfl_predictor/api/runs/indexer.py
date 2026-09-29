@@ -12,11 +12,13 @@ import json
 import re
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from nfl_predictor.api.runs.files import RunFiles, resolve_run_files
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 RunKind = Literal["weekly", "training", "walk_forward"]
 PREDICT_PATH_WEEK_RE = re.compile(r"week_(\d{2})")

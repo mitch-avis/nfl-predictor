@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from nfl_predictor.api.auth import users as user_store
 from nfl_predictor.api.auth.passwords import hash_password, verify_password
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import BadRequestError, ConflictError, NotFoundError
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.db import Database
 
 
 def test_password_hash_roundtrip() -> None:

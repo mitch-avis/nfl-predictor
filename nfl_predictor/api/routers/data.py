@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from nfl_predictor.api.deps import CurrentUser, DbDep, SettingsDep
+from nfl_predictor.api.deps import CurrentUser, SettingsDep
 from nfl_predictor.api.readers import data_status as reader
 from nfl_predictor.api.schemas.data import DataFileOut, DataStatusOut
 
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/data", tags=["data"])
 
 
 @router.get("/status", response_model=DataStatusOut)
-def status(_user: CurrentUser, db: DbDep, settings: SettingsDep, request: Request) -> DataStatusOut:
+def status(_user: CurrentUser, settings: SettingsDep, request: Request) -> DataStatusOut:
     """Describe the dataset files, their freshness, cache coverage, and the latest leakage audit."""
     fingerprints: reader.FingerprintCache = request.app.state.fingerprints
     season, week = reader.current_season_week()

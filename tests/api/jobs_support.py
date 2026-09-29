@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from nfl_predictor.api.jobs.catalog import JobContext, JobTemplate
-from nfl_predictor.api.jobs.store import JobStore
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from nfl_predictor.api.jobs.store import JobStore
 
 FAKE_SCRIPT = Path(__file__).parent / "fake_script.py"
 TIMEOUT_SECONDS = 20.0
@@ -44,7 +48,8 @@ def wait_for(predicate: Callable[[], bool], *, timeout: float = TIMEOUT_SECONDS)
         if predicate():
             return
         time.sleep(0.02)
-    raise AssertionError("Timed out waiting for the job runner")
+    msg = "Timed out waiting for the job runner"
+    raise AssertionError(msg)
 
 
 def wait_for_status(store: JobStore, job_id: str, status: str) -> None:

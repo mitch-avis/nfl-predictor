@@ -20,17 +20,19 @@ import signal
 import subprocess
 import threading
 from dataclasses import dataclass
-from typing import IO, Any
+from typing import IO, TYPE_CHECKING, Any
 
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import ApiError, ConflictError
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs.catalog import JobContext, JobTemplate
 from nfl_predictor.api.jobs.store import JobRecord, JobStore, LogLine
 from nfl_predictor.api.runs import active as active_run
 from nfl_predictor.api.runs.indexer import RunIndex
-from nfl_predictor.api.settings import Settings
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.db import Database
+    from nfl_predictor.api.settings import Settings
 
 DEFAULT_POOL = "default"
 DEFAULT_POOL_WORKERS = 2
@@ -165,8 +167,9 @@ class JobRunner:
         """Queue a job, refusing when its exclusive group is already busy."""
         group = submission.template.exclusive_group
         if group and group in self.busy_groups():
+            msg = f"Another {group.replace('_', ' ')} job is already queued or running."
             raise ConflictError(
-                f"Another {group.replace('_', ' ')} job is already queued or running.",
+                msg,
                 code="group_busy",
             )
         record = self.store.create(
@@ -190,9 +193,8 @@ class JobRunner:
         """Cancel a queued or running job and return its record."""
         record = self.store.require(job_id)
         if record.is_terminal:
-            raise ConflictError(
-                f"Job {job_id} already finished as {record.status}.", code="job_finished"
-            )
+            msg = f"Job {job_id} already finished as {record.status}."
+            raise ConflictError(msg, code="job_finished")
         with self._lock:
             self._canceled.add(job_id)
             process = self._processes.get(job_id)
@@ -259,7 +261,7 @@ class JobRunner:
         """Launch ``argv``, drain its output into the store, and return its exit code."""
         env = os.environ | {"PYTHONUNBUFFERED": "1"}
         try:
-            process = subprocess.Popen(  # noqa: S603 - argv is built from the vetted catalog
+            process = subprocess.Popen(
                 argv,
                 cwd=self.settings.root_dir,
                 env=env,

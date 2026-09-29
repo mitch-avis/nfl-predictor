@@ -5,13 +5,18 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from nfl_predictor.api.auth.passwords import hash_password, verify_password
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import BadRequestError, ConflictError, NotFoundError
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.db import Database
 
 ROLES = ("viewer", "admin")
 MIN_PASSWORD_LENGTH = 8
+
+MAX_USERNAME_LENGTH = 64
 
 
 @dataclass(frozen=True)
@@ -41,14 +46,15 @@ def _row_to_user(row: sqlite3.Row) -> User:
 
 def _validate(username: str, role: str, password: str | None) -> None:
     """Raise :class:`BadRequestError` when a username, role, or password is unacceptable."""
-    if not username or not username.strip() or len(username) > 64:
-        raise BadRequestError("Username must be 1-64 characters", code="invalid_username")
+    if not username or not username.strip() or len(username) > MAX_USERNAME_LENGTH:
+        msg = f"Username must be 1-{MAX_USERNAME_LENGTH} characters"
+        raise BadRequestError(msg, code="invalid_username")
     if role not in ROLES:
-        raise BadRequestError(f"Role must be one of {', '.join(ROLES)}", code="invalid_role")
+        msg = f"Role must be one of {', '.join(ROLES)}"
+        raise BadRequestError(msg, code="invalid_role")
     if password is not None and len(password) < MIN_PASSWORD_LENGTH:
-        raise BadRequestError(
-            f"Password must be at least {MIN_PASSWORD_LENGTH} characters", code="weak_password"
-        )
+        msg = f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        raise BadRequestError(msg, code="weak_password")
 
 
 def list_users(db: Database) -> list[User]:
@@ -63,7 +69,8 @@ def get_user(db: Database, user_id: int) -> User:
     with db.connect() as conn:
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     if row is None:
-        raise NotFoundError(f"User {user_id} not found", code="user_not_found")
+        msg = f"User {user_id} not found"
+        raise NotFoundError(msg, code="user_not_found")
     return _row_to_user(row)
 
 
@@ -79,9 +86,8 @@ def create_user(db: Database, username: str, password: str, role: str) -> User:
                 (username, hash_password(password), role, created_at),
             )
         except sqlite3.IntegrityError as exc:
-            raise ConflictError(
-                f"Username {username!r} already exists", code="username_taken"
-            ) from exc
+            msg = f"Username {username!r} already exists"
+            raise ConflictError(msg, code="username_taken") from exc
         user_id = int(cursor.lastrowid or 0)
     return User(id=user_id, username=username, role=role, created_at=created_at)
 
@@ -114,7 +120,8 @@ def update_user(
     new_role = role or user.role
     _validate(user.username, new_role, password)
     if user.is_admin and new_role != "admin" and count_admins(db) <= 1:
-        raise ConflictError("Cannot demote the last admin", code="last_admin")
+        msg = "Cannot demote the last admin"
+        raise ConflictError(msg, code="last_admin")
     with db.connect() as conn:
         conn.execute("UPDATE users SET role = ? WHERE id = ?", (new_role, user_id))
         if password is not None:
@@ -129,8 +136,10 @@ def delete_user(db: Database, user_id: int, *, acting_user_id: int) -> None:
     """Delete a user, refusing to delete the caller or the last admin."""
     user = get_user(db, user_id)
     if user.id == acting_user_id:
-        raise ConflictError("Cannot delete your own account", code="self_delete")
+        msg = "Cannot delete your own account"
+        raise ConflictError(msg, code="self_delete")
     if user.is_admin and count_admins(db) <= 1:
-        raise ConflictError("Cannot delete the last admin", code="last_admin")
+        msg = "Cannot delete the last admin"
+        raise ConflictError(msg, code="last_admin")
     with db.connect() as conn:
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))

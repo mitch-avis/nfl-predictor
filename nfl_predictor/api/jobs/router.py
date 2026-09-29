@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Annotated
+
 from fastapi import APIRouter, Query, Request
 from sse_starlette.sse import EventSourceResponse
 
 from nfl_predictor.api.deps import AdminUser, CurrentUser
 from nfl_predictor.api.jobs import catalog, stream
 from nfl_predictor.api.jobs.runner import JobRunner, Submission
-from nfl_predictor.api.jobs.store import JobRecord
 from nfl_predictor.api.schemas.jobs import (
     JobCatalogOut,
     JobCreateIn,
@@ -18,6 +19,9 @@ from nfl_predictor.api.schemas.jobs import (
     JobOut,
     JobTemplateOut,
 )
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.jobs.store import JobRecord
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 MAX_JOBS = 200
@@ -76,7 +80,7 @@ def create_job(payload: JobCreateIn, admin: AdminUser, request: Request) -> JobO
 def list_jobs(
     _user: CurrentUser,
     request: Request,
-    limit: int = Query(default=50, ge=1, le=MAX_JOBS),
+    limit: Annotated[int, Query(ge=1, le=MAX_JOBS)] = 50,
     template: str | None = None,
 ) -> JobListOut:
     """List recent jobs, newest first."""
@@ -99,7 +103,7 @@ def job_logs(
     job_id: str,
     _user: CurrentUser,
     request: Request,
-    after: int = Query(default=0, ge=0),
+    after: Annotated[int, Query(ge=0)] = 0,
 ) -> JobLogsOut:
     """Return the job's log lines after ``after``."""
     store = get_runner(request).store
@@ -118,7 +122,7 @@ def job_stream(
     job_id: str,
     _user: CurrentUser,
     request: Request,
-    after: int = Query(default=0, ge=0),
+    after: Annotated[int, Query(ge=0)] = 0,
 ) -> EventSourceResponse:
     """Stream the job's logs and status until it reaches a terminal state."""
     store = get_runner(request).store

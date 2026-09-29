@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from nfl_predictor.ml.artifacts import resolve_run_paths
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 STAGES: tuple[str, ...] = ("wf_compare", "train", "predictions", "reports")
 WEEK_FILE_RE = re.compile(

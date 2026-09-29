@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import gc
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from nfl_predictor.api.db import Database
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_schema_created_lazily(tmp_path: Path) -> None:
@@ -34,10 +37,16 @@ def test_kv_roundtrip(tmp_path: Path) -> None:
 def test_rollback_on_error(tmp_path: Path) -> None:
     """A failing block rolls back its writes."""
     db = Database(tmp_path / "app.db")
-    with pytest.raises(sqlite3.OperationalError), db.connect() as conn:
+    with pytest.raises(sqlite3.OperationalError):
+        _write_then_fail(db)
+    assert db.get_value("k") is None
+
+
+def _write_then_fail(db: Database) -> None:
+    """Write a row, then fail inside the same transaction."""
+    with db.connect() as conn:
         conn.execute("INSERT INTO kv (key, value) VALUES ('k', 'v')")
         conn.execute("SELECT * FROM missing_table")
-    assert db.get_value("k") is None
 
 
 @pytest.mark.filterwarnings(

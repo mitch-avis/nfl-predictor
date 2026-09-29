@@ -8,8 +8,7 @@ report behind, and so the moneyline, spread, and total sections share one set of
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -17,7 +16,11 @@ from nfl_predictor.api.readers import market
 from nfl_predictor.api.readers.predictions import enrich, load_frame
 from nfl_predictor.api.registry import project
 from nfl_predictor.api.registry.betting import BETTING_COLUMNS
-from nfl_predictor.api.schemas.common import TablePayload
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.api.schemas.common import TablePayload
 
 BREAK_EVEN_110 = market.moneyline_to_prob(market.DEFAULT_SPREAD_TOTAL_ODDS) or 0.5238
 

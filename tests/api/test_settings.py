@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 from nfl_predictor.api.settings import SIGNING_KEY_FILENAME, Settings
 
 
@@ -28,7 +30,7 @@ def test_explicit_paths_win(tmp_path: Path) -> None:
     assert settings.state_path == tmp_path / "elsewhere" / "web"
 
 
-def test_environment_overrides(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+def test_environment_overrides(tmp_path: Path, monkeypatch) -> None:
     """``NFLP_``-prefixed variables override defaults."""
     monkeypatch.setenv("NFLP_ROOT_DIR", str(tmp_path))
     monkeypatch.setenv("NFLP_PORT", "9999")
@@ -73,3 +75,11 @@ def test_python_executable_can_be_given_relative_to_the_root(tmp_path: Path) -> 
     """A relative override is anchored at the repository root."""
     settings = Settings(root_dir=tmp_path, python_executable=Path(".venv/bin/python"))
     assert settings.python_path == tmp_path / ".venv" / "bin" / "python"
+
+
+def test_an_unfilled_path_is_an_error_not_none(tmp_path: Path) -> None:
+    """A path that is somehow unset raises instead of handing out ``None``."""
+    settings = Settings(root_dir=tmp_path)
+    settings.data_dir = None
+    with pytest.raises(RuntimeError, match="data_dir is unset"):
+        _ = settings.data_path

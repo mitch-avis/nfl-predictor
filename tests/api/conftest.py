@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,8 +13,12 @@ from nfl_predictor.api import create_app
 from nfl_predictor.api.auth import users as user_store
 from nfl_predictor.api.db import Database
 from nfl_predictor.api.jobs import catalog
-from nfl_predictor.api.jobs.catalog import JobTemplate
 from nfl_predictor.api.settings import CSRF_HEADER_VALUE, Settings
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
+    from nfl_predictor.api.jobs.catalog import JobTemplate
 
 TEST_SECRET = "test-secret-" * 4
 CSRF_HEADERS = {"X-Requested-With": CSRF_HEADER_VALUE}
@@ -48,13 +52,13 @@ def db(settings: Settings) -> Database:
 
 
 @pytest.fixture
-def app(settings: Settings):  # noqa: ANN201 - FastAPI has no stable public type alias here
+def app(settings: Settings):
     """Return the application for ``settings``."""
     return create_app(settings)
 
 
 @pytest.fixture
-def client(app) -> Iterator[TestClient]:  # noqa: ANN001
+def client(app) -> Iterator[TestClient]:
     """Return an anonymous client that sends the CSRF header."""
     with TestClient(app, base_url="http://testserver") as test_client:
         test_client.headers.update(CSRF_HEADERS)
@@ -70,7 +74,7 @@ def login(test_client: TestClient, username: str, password: str) -> None:
 
 
 @pytest.fixture
-def admin_client(app, db: Database) -> Iterator[TestClient]:  # noqa: ANN001
+def admin_client(app, db: Database) -> Iterator[TestClient]:
     """Return a client logged in as an admin user named ``admin``."""
     user_store.create_user(db, "admin", ADMIN_PASSWORD, "admin")
     with TestClient(app, base_url="http://testserver") as test_client:
@@ -80,7 +84,7 @@ def admin_client(app, db: Database) -> Iterator[TestClient]:  # noqa: ANN001
 
 
 @pytest.fixture
-def viewer_client(app, db: Database) -> Iterator[TestClient]:  # noqa: ANN001
+def viewer_client(app, db: Database) -> Iterator[TestClient]:
     """Return a client logged in as a viewer named ``viewer``."""
     user_store.create_user(db, "viewer", VIEWER_PASSWORD, "viewer")
     with TestClient(app, base_url="http://testserver") as test_client:

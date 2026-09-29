@@ -11,7 +11,10 @@ import argparse
 import signal
 import sys
 import time
-from types import FrameType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from types import FrameType
 
 GREEN = "\x1b[32m"
 RESET = "\x1b[0m"

@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Request, Response
 
 from nfl_predictor.api.auth import users as user_store
-from nfl_predictor.api.auth.ratelimit import LoginRateLimiter
 from nfl_predictor.api.auth.tokens import issue_token
 from nfl_predictor.api.deps import CurrentUser, DbDep, SettingsDep
 from nfl_predictor.api.errors import ApiError, UnauthorizedError
 from nfl_predictor.api.schemas.auth import LoginIn, SessionOut, UserOut
 from nfl_predictor.api.settings import COOKIE_NAME
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.auth.ratelimit import LoginRateLimiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -39,7 +43,8 @@ def login(
     user = user_store.authenticate(db, payload.username, payload.password)
     if user is None:
         limiter.record_failure(key)
-        raise UnauthorizedError("Invalid username or password", code="invalid_credentials")
+        msg = "Invalid username or password"
+        raise UnauthorizedError(msg, code="invalid_credentials")
     limiter.reset(key)
     token = issue_token(
         settings.resolve_jwt_secret(),

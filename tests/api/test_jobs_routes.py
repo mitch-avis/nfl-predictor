@@ -3,19 +3,24 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import pytest
-from fastapi.testclient import TestClient
+from tests.api.jobs_support import fake_template, wait_for, wait_for_status
 
 from nfl_predictor.api.jobs import catalog
-from nfl_predictor.api.jobs.runner import JobRunner
 from nfl_predictor.api.jobs.store import JobStore, LogLine
-from tests.api.jobs_support import fake_template, wait_for, wait_for_status
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from fastapi.testclient import TestClient
+
+    from nfl_predictor.api.jobs.runner import JobRunner
 
 
 @pytest.fixture
-def runner(app) -> JobRunner:  # noqa: ANN001 - the app fixture has no public type alias
+def runner(app) -> JobRunner:
     """Return the runner the application built."""
     return app.state.job_runner
 

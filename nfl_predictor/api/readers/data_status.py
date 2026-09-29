@@ -10,15 +10,19 @@ import re
 import threading
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.readers.cache import cached
+from nfl_predictor.utils import clock
 from nfl_predictor.utils.fingerprints import dataset_fingerprint
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.api.db import Database
 
 DATASET_FILES: tuple[tuple[str, str], ...] = (
     ("all_data_ml.csv", "Full ML matrix: every game 1999 to now with engineered features."),
@@ -33,7 +37,7 @@ PREDICT_FILE_RE = re.compile(r"^week_(\d{2})_(games_to_predict|predictions)\.csv
 FINGERPRINT_KEY_PREFIX = "fingerprint:"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class FileStatus:
     """One dataset file."""
 
@@ -72,20 +76,32 @@ def file_status(data_dir: Path, name: str, description: str) -> FileStatus:
     """Describe ``data_dir/name``."""
     path = data_dir / name
     if not path.is_file():
-        return FileStatus(name, description, False, None, None, None, None)
+        return FileStatus(
+            name=name,
+            description=description,
+            exists=False,
+            size=None,
+            modified_at=None,
+            rows=None,
+            seasons=None,
+        )
     stat = path.stat()
     rows, seasons = cached(path, _csv_shape, "shape")
-    return FileStatus(name, description, True, stat.st_size, _iso(stat.st_mtime), rows, seasons)
+    return FileStatus(
+        name=name,
+        description=description,
+        exists=True,
+        size=stat.st_size,
+        modified_at=_iso(stat.st_mtime),
+        rows=rows,
+        seasons=seasons,
+    )
 
 
 def current_season_week(today: date | None = None) -> tuple[int, int]:
     """Return the current NFL season and week using the ETL's own calendar rules."""
-    from nfl_predictor import constants  # noqa: PLC0415 - avoid import cost at module load
-    from nfl_predictor.data_collection import _determine_nfl_week  # noqa: PLC0415
-
-    today = today or date.today()
-    season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
-    return season, _determine_nfl_week(today)
+    today = today or clock.local_today()
+    return clock.nfl_season(today), clock.nfl_week(today)
 
 
 def cache_coverage(cache_dir: Path) -> dict[str, list[int]]:

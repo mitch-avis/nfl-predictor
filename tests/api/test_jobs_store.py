@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 import pytest
 
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import NotFoundError
 from nfl_predictor.api.jobs.store import JobStore, LogLine
 from nfl_predictor.api.jobs.stream import job_events
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from nfl_predictor.api.db import Database
 
 
 @pytest.fixture
@@ -38,7 +42,7 @@ def test_list_filters_by_template_and_orders_newest_first(store: JobStore) -> No
     first = store.create("predict", {})
     second = store.create("etl_full", {})
 
-    assert [job.id for job in store.recent()][0] == second.id
+    assert next(job.id for job in store.recent()) == second.id
     assert [job.id for job in store.recent(template_id="predict")] == [first.id]
     assert store.recent(limit=1) != []
 

@@ -18,7 +18,7 @@ from nfl_predictor.api.db import Database
 from nfl_predictor.api.settings import Settings
 from nfl_predictor.utils.logger import log
 
-PASSWORD_ENV = "NFLP_PASSWORD"  # noqa: S105 - name of the variable, not a secret
+PASSWORD_ENV = "NFLP_PASSWORD"
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

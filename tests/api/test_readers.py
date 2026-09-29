@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import os
+import time
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
+from tests.api import factories
 
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.readers import betting, cache, data_status, model, power, predictions
 from nfl_predictor.api.runs.files import resolve_run_files
-from tests.api import factories
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.api.db import Database
 
 
 @pytest.fixture(autouse=True)
@@ -33,12 +39,14 @@ def test_predictions_reader_enriches_and_summarizes(tmp_path: Path) -> None:
     assert den["agrees_with_market"] is False
     assert den["edge_home_prob"] == pytest.approx(0.4023 - 0.5830, abs=1e-3)
     nyj = by_id["2026_01_NYJ_NE"]
-    assert nyj["market_favorite"] == "NE" and nyj["predicted_winner"] == "NE"
+    assert nyj["market_favorite"] == "NE"
+    assert nyj["predicted_winner"] == "NE"
     assert summary.games == 4
     assert summary.market_disagreements == 2
     assert summary.games_with_lines == 4
-    assert summary.first_kickoff is not None and summary.first_kickoff.startswith("2026-09-13")
-    assert [row["game_id"] for row in table.rows][0].startswith("2026_01_")
+    assert summary.first_kickoff is not None
+    assert summary.first_kickoff.startswith("2026-09-13")
+    assert next(row["game_id"] for row in table.rows).startswith("2026_01_")
 
 
 def test_predictions_reader_without_lines() -> None:
@@ -56,7 +64,8 @@ def test_predictions_reader_without_lines() -> None:
     assert row["agrees_with_market"] is False
     assert row["market_home_prob_novig"] is None
     bare = predictions.enrich_row({"home_abbr": "KC", "away_abbr": "DEN"})
-    assert bare["market_favorite"] is None and bare["agrees_with_market"] is None
+    assert bare["market_favorite"] is None
+    assert bare["agrees_with_market"] is None
     empty = predictions.enrich(pl.DataFrame({"game_id": []}))
     assert empty.height == 0
     assert predictions.summarize(empty).avg_confidence is None
@@ -119,11 +128,9 @@ def test_power_reader_with_movement(tmp_path: Path) -> None:
     previous = tmp_path / "power_rankings_season_2026_week_00.csv"
     table = power.read_rankings(current, previous)
     rows = {row["team_abbr"]: row for row in table.rows}
-    assert (
-        rows["KC"]["rank"] == 1
-        and rows["KC"]["previous_rank"] == 2
-        and rows["KC"]["rank_change"] == 1
-    )
+    assert rows["KC"]["rank"] == 1
+    assert rows["KC"]["previous_rank"] == 2
+    assert rows["KC"]["rank_change"] == 1
     assert rows["DEN"]["rank_change"] == -1
     assert rows["MIN"]["rank_change"] == 0
     assert rows["KC"]["record"] == "9-1"
@@ -145,9 +152,9 @@ def test_power_record_with_ties() -> None:
     )
     out = power.with_movement(df, None)
     assert power.read_standings.__name__ == "read_standings"
-    records = power._with_record(out)["record"].to_list()  # noqa: SLF001 - helper under test
+    records = power._with_record(out)["record"].to_list()
     assert records == ["3-1-1", "2-2"]
-    assert power._with_record(pl.DataFrame({"x": [1]})).columns == ["x"]  # noqa: SLF001
+    assert power._with_record(pl.DataFrame({"x": [1]})).columns == ["x"]
 
 
 def test_model_reader(tmp_path: Path) -> None:
@@ -206,14 +213,14 @@ def test_model_reader(tmp_path: Path) -> None:
     assert payload["calibration"]["bin_count"] == 1
     assert payload["calibration"]["source"] == "wf_candidate_a.json"
 
-    wf = factories.make_run_dir(tmp_path, "wf", kind="walk_forward")
+    wf = factories.make_run_dir(tmp_path, "wf", factories.RunSpec(kind="walk_forward"))
     wf_payload = model.model_payload(resolve_run_files(wf))
     assert wf_payload["metrics"]["overall"]["brier"] == pytest.approx(0.2277)
     assert wf_payload["calibration"]["bin_count"] == 2
     assert wf_payload["feature_importance"] == {"measure": None, "rows": []}
     assert wf_payload["wf_compare"] is None
 
-    training = factories.make_run_dir(tmp_path, "train", kind="training")
+    training = factories.make_run_dir(tmp_path, "train", factories.RunSpec(kind="training"))
     assert model.model_payload(resolve_run_files(training))["calibration"] is None
 
 
@@ -321,15 +328,22 @@ def test_wf_compare_prefers_deterministic_ranking(tmp_path: Path) -> None:
     assert table.rows[0]["wf_rank"] == 1
 
 
-def test_data_status_helpers(project_root: Path, db: Database) -> None:
-    """File status, cache coverage, leakage audits, and unattached files are discovered."""
+def test_file_status_reads_rows_and_seasons(project_root: Path) -> None:
+    """A dataset file reports its rows and season range; a missing one does not exist."""
     data = project_root / "data"
     (data / "all_data_ml.csv").write_text("season,week,x\n2024,1,1\n2025,2,2\n", encoding="utf-8")
     (data / "qb_elos.csv").write_text("a,b\n1,2\n", encoding="utf-8")
     status = data_status.file_status(data, "all_data_ml.csv", "d")
-    assert status.exists and status.rows == 2 and status.seasons == (2024, 2025)
+    assert status.exists
+    assert status.rows == 2
+    assert status.seasons == (2024, 2025)
     assert data_status.file_status(data, "qb_elos.csv", "d").seasons is None
     assert not data_status.file_status(data, "missing.csv", "d").exists
+
+
+def test_cache_coverage_lists_seasons_per_family(project_root: Path) -> None:
+    """Cache coverage lists each nflreadpy family's seasons and ignores other files."""
+    data = project_root / "data"
     cache_dir = data / "cache" / "nflreadpy"
     cache_dir.mkdir(parents=True)
     for name in (
@@ -341,6 +355,10 @@ def test_data_status_helpers(project_root: Path, db: Database) -> None:
         (cache_dir / name).write_bytes(b"")
     assert data_status.cache_coverage(cache_dir) == {"schedule": [2024, 2025], "pbp": [2024]}
     assert data_status.cache_coverage(data / "nope") == {"schedule": [], "pbp": []}
+
+
+def test_latest_leakage_audit_reads_the_newest_readable_report(project_root: Path) -> None:
+    """The newest leakage audit is found in nested run folders; unreadable ones are skipped."""
     assert data_status.latest_leakage_audit(project_root / "models") is None
     (project_root / "models" / "old_leakage_audit.json").write_text(
         json.dumps({"ok": False}), encoding="utf-8"
@@ -350,20 +368,20 @@ def test_data_status_helpers(project_root: Path, db: Database) -> None:
     (nested / "leakage_audit.json").write_text(
         json.dumps({"ok": True, "findings": []}), encoding="utf-8"
     )
-    import os
-
     os.utime(nested / "leakage_audit.json", (2_000_000_000, 2_000_000_000))
     audit = data_status.latest_leakage_audit(project_root / "models", project_root / "reports")
-    assert (
-        audit is not None
-        and audit["ok"] is True
-        and audit["path"].endswith("run/leakage_audit.json")
-    )
+    assert audit is not None
+    assert audit["ok"] is True
+    assert audit["path"].endswith("run/leakage_audit.json")
     (nested / "leakage_audit.json").write_text("broken", encoding="utf-8")
     assert data_status.latest_leakage_audit(project_root / "models") is None
     (nested / "leakage_audit.json").write_text("[1]", encoding="utf-8")
     assert data_status.latest_leakage_audit(project_root / "models") is None
 
+
+def test_unattached_files_and_current_week(project_root: Path) -> None:
+    """Prediction, games and report files outside runs are listed with their weeks."""
+    data = project_root / "data"
     predict = data / "predict"
     factories.write_predictions_csv(predict / "week_03_predictions.csv", 2026, 3)
     (predict / "week_04_games_to_predict.csv").write_text("game_id\nx\n", encoding="utf-8")
@@ -376,19 +394,24 @@ def test_data_status_helpers(project_root: Path, db: Database) -> None:
         ("week_01_2026_betting.xlsx", None, None),
     ]
     season, week = data_status.current_season_week()
-    assert season >= 2026 and 0 <= week <= 22
+    assert season >= 2026
+    assert 0 <= week <= 22
 
-    fingerprints = data_status.FingerprintCache(db)
+
+def test_fingerprint_cache_hashes_in_the_background(project_root: Path, db: Database) -> None:
+    """A fingerprint is computed in the background, then cached; a corrupt entry reads as none."""
+    data = project_root / "data"
     target = data / "all_data_ml.csv"
+    target.write_text("season,week,x\n2024,1,1\n", encoding="utf-8")
+    fingerprints = data_status.FingerprintCache(db)
     assert fingerprints.get(data / "missing.csv") is None
     assert fingerprints.get(target) is None
-    import time
-
     for _ in range(50):
         if fingerprints.get(target) is not None:
             break
         time.sleep(0.05)
     payload = fingerprints.get(target)
-    assert payload is not None and len(payload["sha256"]) == 64
+    assert payload is not None
+    assert len(payload["sha256"]) == 64
     db.set_value(f"{data_status.FINGERPRINT_KEY_PREFIX}{target}", "not json")
     assert fingerprints.get(target) is None

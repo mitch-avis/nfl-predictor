@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from nfl_predictor.api.errors import NotFoundError
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 MISSING_BUILD_HTML = """<!doctype html><title>nfl-predictor</title>
 <h1>Frontend not built</h1>
@@ -45,7 +48,8 @@ def mount_frontend(app: FastAPI, dist_dir: Path) -> None:
     def spa(path: str) -> Response:
         """Serve a built file or fall back to ``index.html``."""
         if path == "api" or path.startswith("api/"):
-            raise NotFoundError(f"No API route for /{path}")
+            msg = f"No API route for /{path}"
+            raise NotFoundError(msg)
         index = dist_dir / "index.html"
         if not index.is_file():
             return HTMLResponse(MISSING_BUILD_HTML, status_code=503)

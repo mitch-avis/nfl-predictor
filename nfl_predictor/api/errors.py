@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from typing import TYPE_CHECKING
+
 from fastapi.responses import JSONResponse
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI, Request
 
 
 class ApiError(Exception):
@@ -69,7 +73,8 @@ class BadRequestError(ApiError):
 
 def render_api_error(_request: Request, exc: Exception) -> JSONResponse:
     """Render an ``ApiError`` as ``{"error": {"code", "message"}}``."""
-    assert isinstance(exc, ApiError)  # noqa: S101 - registered only for ApiError
+    if not isinstance(exc, ApiError):
+        raise exc
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": {"code": exc.code, "message": exc.message}},

@@ -28,12 +28,16 @@ Example:
 
 """
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import polars as pl
-from polars.datatypes.classes import DataTypeClass
 
 from nfl_predictor import constants
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from polars.datatypes.classes import DataTypeClass
 
 NUMERIC_DTYPES = {
     pl.Int8,
@@ -47,6 +51,9 @@ NUMERIC_DTYPES = {
     pl.Float32,
     pl.Float64,
 }
+
+# The last playoff seed in each conference, whose record sets the wild-card cutoff.
+WILD_CARD_CUTOFF_SEED = 7
 
 
 def _division_expr(
@@ -117,7 +124,8 @@ def compute_team_records_before_week(
     }
     missing = sorted(required - set(schedule_df.columns))
     if missing:
-        raise ValueError(f"schedule_df missing required columns: {missing}")
+        msg = f"schedule_df missing required columns: {missing}"
+        raise ValueError(msg)
 
     prior_games = schedule_df.filter(
         (pl.col("season") == season)
@@ -186,10 +194,10 @@ def compute_team_records_before_week(
     ).with_columns(
         [
             (pl.col("team_division") == pl.col("opp_division"))
-            .fill_null(False)
+            .fill_null(value=False)
             .alias("is_division_game"),
             (pl.col("team_conference") == pl.col("opp_conference"))
-            .fill_null(False)
+            .fill_null(value=False)
             .alias("is_conference_game"),
         ]
     )
@@ -273,7 +281,8 @@ def add_divisional_matchup_feature(df: pl.DataFrame) -> pl.DataFrame:
     required = {"away_abbr", "home_abbr"}
     missing = sorted(required - set(df.columns))
     if missing:
-        raise ValueError(f"df missing required columns: {missing}")
+        msg = f"df missing required columns: {missing}"
+        raise ValueError(msg)
 
     if "season" in df.columns:
         away_div = _division_expr("away_abbr", season_col="season")
@@ -283,7 +292,12 @@ def add_divisional_matchup_feature(df: pl.DataFrame) -> pl.DataFrame:
         home_div = _division_expr("home_abbr")
 
     return df.with_columns(
-        [(away_div == home_div).fill_null(False).cast(pl.Int32).alias("is_divisional_matchup")]
+        [
+            (away_div == home_div)
+            .fill_null(value=False)
+            .cast(pl.Int32)
+            .alias("is_divisional_matchup")
+        ]
     )
 
 
@@ -311,7 +325,8 @@ def compute_team_next_week_context(
     required = {"season", "week", "game_type", "date", "away_abbr", "home_abbr"}
     missing = sorted(required - set(schedule_df.columns))
     if missing:
-        raise ValueError(f"schedule_df missing required columns: {missing}")
+        msg = f"schedule_df missing required columns: {missing}"
+        raise ValueError(msg)
 
     schedule = schedule_df.filter(pl.col("season") == season)
     if not include_postseason:
@@ -381,7 +396,7 @@ def compute_team_next_week_context(
             .alias("next_location_change"),
             pl.when(pl.col("next_opponent_abbr").is_null())
             .then(pl.lit(None, dtype=pl.Int32))
-            .otherwise(next_is_div.fill_null(False).cast(pl.Int32))
+            .otherwise(next_is_div.fill_null(value=False).cast(pl.Int32))
             .alias("next_is_divisional_matchup"),
         ]
     ).select(
@@ -406,7 +421,7 @@ def add_lookahead_features(
 ) -> pl.DataFrame:
     """Join lookahead/trap-style features (next-week context) onto game rows.
 
-    Next opponent win% is taken from the current week’s pre-game record features present in
+    Next opponent win% is taken from the current week's pre-game record features present in
     `games_df` (e.g., `away_win_pct` / `home_win_pct`), avoiding any use of future results.
 
     Missing-data behavior:
@@ -423,24 +438,6 @@ def add_lookahead_features(
         `games_df` with all `constants.LOOKAHEAD_FEATURE_COLUMNS` present.
 
     """
-
-    def _expected_dtype(column: str) -> DataTypeClass:
-        if column.endswith("_abbr"):
-            return pl.Utf8
-        if column.endswith("_win_pct"):
-            return pl.Float32
-        return pl.Int32
-
-    def _ensure_null_cols(df: pl.DataFrame) -> pl.DataFrame:
-        exprs: list[pl.Expr] = []
-        for col in constants.LOOKAHEAD_FEATURE_COLUMNS:
-            dtype = _expected_dtype(col)
-            if col in df.columns:
-                exprs.append(pl.col(col).cast(dtype, strict=False).alias(col))
-            else:
-                exprs.append(pl.lit(None, dtype=dtype).alias(col))
-        return df.with_columns(exprs)
-
     try:
         team_context = compute_team_next_week_context(
             schedule_df,
@@ -449,69 +446,76 @@ def add_lookahead_features(
             include_postseason=include_postseason,
         )
     except ValueError:
-        return _ensure_null_cols(games_df)
+        return _with_lookahead_columns(games_df)
 
     if team_context.height == 0:
-        return _ensure_null_cols(games_df)
+        return _with_lookahead_columns(games_df)
 
-    # Build a per-team win% table from the current week’s rows.
-    win_pct_rows = []
-    if "away_abbr" in games_df.columns and "away_win_pct" in games_df.columns:
-        win_pct_rows.append(
-            games_df.select(
-                pl.col("away_abbr").alias("team_abbr"),
-                pl.col("away_win_pct").cast(pl.Float32).alias("win_pct"),
-            )
-        )
-    if "home_abbr" in games_df.columns and "home_win_pct" in games_df.columns:
-        win_pct_rows.append(
-            games_df.select(
-                pl.col("home_abbr").alias("team_abbr"),
-                pl.col("home_win_pct").cast(pl.Float32).alias("win_pct"),
-            )
-        )
+    team_context = _with_next_opponent_win_pct(team_context, games_df)
+    out = games_df.join(_side_context(team_context, "away"), on="away_abbr", how="left").join(
+        _side_context(team_context, "home"), on="home_abbr", how="left"
+    )
+    return _with_lookahead_columns(out)
 
-    if win_pct_rows:
-        team_win_pct = pl.concat(win_pct_rows, how="vertical").unique(subset=["team_abbr"])
-        team_context = team_context.join(
-            team_win_pct.rename(
-                {"team_abbr": "next_opponent_abbr", "win_pct": "next_opponent_win_pct"}
-            ),
-            on="next_opponent_abbr",
-            how="left",
+
+def _lookahead_dtype(column: str) -> DataTypeClass:
+    """Return a lookahead column's published type: team, win% or count."""
+    if column.endswith("_abbr"):
+        return pl.Utf8
+    if column.endswith("_win_pct"):
+        return pl.Float32
+    return pl.Int32
+
+
+def _with_lookahead_columns(df: pl.DataFrame) -> pl.DataFrame:
+    """Cast every lookahead column to its type, adding any missing one as nulls."""
+    exprs: list[pl.Expr] = []
+    for col in constants.LOOKAHEAD_FEATURE_COLUMNS:
+        dtype = _lookahead_dtype(col)
+        if col in df.columns:
+            exprs.append(pl.col(col).cast(dtype, strict=False).alias(col))
+        else:
+            exprs.append(pl.lit(None, dtype=dtype).alias(col))
+    return df.with_columns(exprs)
+
+
+def _with_next_opponent_win_pct(team_context: pl.DataFrame, games_df: pl.DataFrame) -> pl.DataFrame:
+    """Add each team's next opponent's pre-game win% from the current week's rows."""
+    win_pct_rows = [
+        games_df.select(
+            pl.col(f"{side}_abbr").alias("team_abbr"),
+            pl.col(f"{side}_win_pct").cast(pl.Float32).alias("win_pct"),
         )
-    else:
-        team_context = team_context.with_columns(
+        for side in ("away", "home")
+        if f"{side}_abbr" in games_df.columns and f"{side}_win_pct" in games_df.columns
+    ]
+    if not win_pct_rows:
+        return team_context.with_columns(
             pl.lit(None, dtype=pl.Float32).alias("next_opponent_win_pct")
         )
-
-    away_ctx = team_context.rename(
-        {
-            "team_abbr": "away_abbr",
-            "next_opponent_abbr": "away_next_opponent_abbr",
-            "next_is_home": "away_next_is_home",
-            "days_to_next_game": "away_days_to_next_game",
-            "next_location_change": "away_next_location_change",
-            "next_is_divisional_matchup": "away_next_is_divisional_matchup",
-            "next_opponent_win_pct": "away_next_opponent_win_pct",
-        }
-    )
-    home_ctx = team_context.rename(
-        {
-            "team_abbr": "home_abbr",
-            "next_opponent_abbr": "home_next_opponent_abbr",
-            "next_is_home": "home_next_is_home",
-            "days_to_next_game": "home_days_to_next_game",
-            "next_location_change": "home_next_location_change",
-            "next_is_divisional_matchup": "home_next_is_divisional_matchup",
-            "next_opponent_win_pct": "home_next_opponent_win_pct",
-        }
+    team_win_pct = pl.concat(win_pct_rows, how="vertical").unique(subset=["team_abbr"])
+    return team_context.join(
+        team_win_pct.rename(
+            {"team_abbr": "next_opponent_abbr", "win_pct": "next_opponent_win_pct"}
+        ),
+        on="next_opponent_abbr",
+        how="left",
     )
 
-    out = games_df.join(away_ctx, on="away_abbr", how="left").join(
-        home_ctx, on="home_abbr", how="left"
+
+def _side_context(team_context: pl.DataFrame, side: str) -> pl.DataFrame:
+    """Return the next-week context keyed and prefixed for one side of the game."""
+    return team_context.rename(
+        {
+            "team_abbr": f"{side}_abbr",
+            "next_opponent_abbr": f"{side}_next_opponent_abbr",
+            "next_is_home": f"{side}_next_is_home",
+            "days_to_next_game": f"{side}_days_to_next_game",
+            "next_location_change": f"{side}_next_location_change",
+            "next_is_divisional_matchup": f"{side}_next_is_divisional_matchup",
+            "next_opponent_win_pct": f"{side}_next_opponent_win_pct",
+        }
     )
-    return _ensure_null_cols(out)
 
 
 def compute_team_standings_before_week(
@@ -546,7 +550,8 @@ def compute_team_standings_before_week(
     }
     missing = sorted(required - set(schedule_df.columns))
     if missing:
-        raise ValueError(f"schedule_df missing required columns: {missing}")
+        msg = f"schedule_df missing required columns: {missing}"
+        raise ValueError(msg)
 
     # Base records from prior games; then expand to all teams with 0s.
     records = compute_team_records_before_week(
@@ -578,7 +583,8 @@ def compute_team_standings_before_week(
     # Note: regular-season weeks are not the same as games played (e.g., 18-week season but 17
     # games per team). We count scheduled REG games per team from the schedule to avoid
     # over/under-stating games remaining.
-    expected_games_per_team = 17 if season >= 2021 else 16
+    # Every team has one bye week, so it plays one game fewer than the season has weeks.
+    expected_games_per_team = constants.get_regular_season_weeks(season) - 1
     season_schedule = schedule_df.filter(pl.col("season") == season)
     if not include_postseason:
         season_schedule = season_schedule.filter(pl.col("game_type") == "REG")
@@ -652,7 +658,7 @@ def compute_team_standings_before_week(
     seed7 = (
         records.sort(["conference", "win_pct", "wins"], descending=[False, True, True])
         .with_columns(pl.int_range(1, pl.len() + 1).over("conference").alias("conf_order"))
-        .filter(pl.col("conf_order") == 7)
+        .filter(pl.col("conf_order") == WILD_CARD_CUTOFF_SEED)
         .select(
             [
                 pl.col("conference"),
@@ -1026,7 +1032,7 @@ def build_qb_trends(
     if not exprs:
         return pl.DataFrame(schema=schema)
 
-    out = long_df.with_columns(exprs).select(
+    return long_df.with_columns(exprs).select(
         [
             "season",
             "week",
@@ -1035,7 +1041,6 @@ def build_qb_trends(
             "qb_value_4wk_trend",
         ]
     )
-    return out
 
 
 def build_team_stat_trends(

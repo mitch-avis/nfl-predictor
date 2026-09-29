@@ -4,18 +4,22 @@ This module centralizes paths, season rules, team mappings, and schema metadata 
 modeling, and reporting code stay aligned.
 """
 
-import os
 from pathlib import Path
 
 # Project directory configurations
 ROOT_DIR = Path(__file__).parent.parent
-DATA_PATH = os.path.join(ROOT_DIR, "data")
-NFLREADPY_CACHE_DIR = os.path.join(DATA_PATH, "cache", "nflreadpy")
+DATA_PATH = ROOT_DIR / "data"
+NFLREADPY_CACHE_DIR = DATA_PATH / "cache" / "nflreadpy"
 
 # NFL season configurations
 SEASON_END_MONTH = 2  # NFL season typically ends in February
 WEEKS_BEFORE_2021 = 17  # Number of weeks in NFL seasons before 2021
 WEEKS_FROM_2021_ONWARDS = 18  # Number of weeks in NFL seasons from 2021 onwards
+FIRST_18_WEEK_SEASON = 2021  # First season with an 18-week regular season
+
+
+# A win probability at even odds; at or above it, a side is the favorite and the pick.
+EVEN_ODDS_PROBABILITY = 0.5
 
 
 def get_regular_season_weeks(season: int) -> int:
@@ -31,7 +35,7 @@ def get_regular_season_weeks(season: int) -> int:
         Number of regular season weeks (17 before 2021, 18 from 2021 onwards)
 
     """
-    return WEEKS_FROM_2021_ONWARDS if season >= 2021 else WEEKS_BEFORE_2021
+    return WEEKS_FROM_2021_ONWARDS if season >= FIRST_18_WEEK_SEASON else WEEKS_BEFORE_2021
 
 
 # Standard deviation of score differences

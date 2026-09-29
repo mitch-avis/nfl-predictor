@@ -40,8 +40,8 @@ def _double_round_robin(
 ) -> pl.DataFrame:
     """Build a noiseless double round-robin team-game frame from known strengths."""
     rows: list[dict[str, object]] = []
-    for home in offense:
-        for away in offense:
+    for home, home_offense in offense.items():
+        for away, away_offense in offense.items():
             if home == away:
                 continue
             rows.append(
@@ -49,7 +49,7 @@ def _double_round_robin(
                     "team_abbr": home,
                     "opponent_abbr": away,
                     "is_home": True,
-                    "response": offense[home] - defense[away] + home_field_advantage,
+                    "response": home_offense - defense[away] + home_field_advantage,
                 }
             )
             rows.append(
@@ -57,7 +57,7 @@ def _double_round_robin(
                     "team_abbr": away,
                     "opponent_abbr": home,
                     "is_home": False,
-                    "response": offense[away] - defense[home] - home_field_advantage,
+                    "response": away_offense - defense[home] - home_field_advantage,
                 }
             )
     return pl.DataFrame(rows)
@@ -266,7 +266,8 @@ def test_singular_matrix_error_falls_back_to_least_squares(
         matrix: npt.NDArray[np.float64], vector: npt.NDArray[np.float64]
     ) -> npt.NDArray[np.float64]:
         """Stand in for ``numpy.linalg.solve`` and always report a singular matrix."""
-        raise np.linalg.LinAlgError("singular matrix")
+        msg = "singular matrix"
+        raise np.linalg.LinAlgError(msg)
 
     monkeypatch.setattr(np.linalg, "solve", _raise_singular)
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
@@ -333,9 +334,9 @@ def test_build_team_design_matrix_encodes_signs_and_team_universe() -> None:
     design, response, teams = adjusted_strength.build_team_design_matrix(
         team_games,
         "response",
-        team_col="team_abbr",
-        opponent_col="opponent_abbr",
-        home_col="is_home",
+        columns=adjusted_strength.GameColumns(
+            team="team_abbr", opponent="opponent_abbr", home="is_home"
+        ),
     )
 
     assert teams == ["GB", "KC", "SEA"]
@@ -439,9 +440,9 @@ def test_tune_ridge_lambda_returns_grid_member_and_is_deterministic() -> None:
     design, response, _ = adjusted_strength.build_team_design_matrix(
         team_games,
         "response",
-        team_col="team_abbr",
-        opponent_col="opponent_abbr",
-        home_col="is_home",
+        columns=adjusted_strength.GameColumns(
+            team="team_abbr", opponent="opponent_abbr", home="is_home"
+        ),
     )
 
     first = adjusted_strength.tune_ridge_lambda(design, response)
@@ -471,9 +472,9 @@ def test_tune_ridge_lambda_prefers_a_larger_penalty_under_heavy_noise() -> None:
     design, response, _ = adjusted_strength.build_team_design_matrix(
         team_games,
         "response",
-        team_col="team_abbr",
-        opponent_col="opponent_abbr",
-        home_col="is_home",
+        columns=adjusted_strength.GameColumns(
+            team="team_abbr", opponent="opponent_abbr", home="is_home"
+        ),
     )
     noisy_response = response + rng.normal(0.0, 40.0, response.shape[0])
 

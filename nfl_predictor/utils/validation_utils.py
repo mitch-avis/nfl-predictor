@@ -4,14 +4,17 @@ These helpers focus on offline checks for schema, ranges, and internal consisten
 with optional hooks to compare latest results against an external schedule source.
 """
 
-from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import polars as pl
 
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 @dataclass
@@ -29,8 +32,7 @@ class ValidationResult:
 def validate_required_columns(df: pl.DataFrame, required_cols: Iterable[str]) -> list[str]:
     """Return a list of missing required columns."""
     required = list(required_cols)
-    missing = [col for col in required if col not in df.columns]
-    return missing
+    return [col for col in required if col not in df.columns]
 
 
 def validate_team_abbrs(
@@ -157,6 +159,16 @@ def validate_dataframe(df: pl.DataFrame) -> ValidationResult:
     return ValidationResult(errors=errors, warnings=warnings)
 
 
+def _load_schedule(season: int) -> pl.DataFrame | None:
+    """Load one season's schedule, or return ``None`` when it cannot be fetched."""
+    # nflreadpy network failures are ConnectionError (an OSError); bad data is ValueError.
+    try:
+        return polars_utils.load_schedule([season])
+    except (OSError, ValueError) as exc:
+        log.warning("Failed to load schedule for validation: %s", exc)
+        return None
+
+
 def compare_latest_week_scores(
     all_data_df: pl.DataFrame,
     schedule_df: pl.DataFrame | None = None,
@@ -198,19 +210,11 @@ def compare_latest_week_scores(
     latest_season = int(latest_week.select("season").item())
     latest_week_num = int(latest_week.select("week").item())
 
-    if schedule_df is None:
-        try:
-            schedule_df = polars_utils.load_schedule([latest_season])
-        except Exception as exc:
-            log.warning("Failed to load schedule for validation: %s", exc)
-            return pl.DataFrame()
+    schedule = schedule_df if schedule_df is not None else _load_schedule(latest_season)
+    if schedule is None:
+        return pl.DataFrame()
 
-    # Type-narrowing guard: the try block always assigns schedule_df when it
-    # doesn't raise; the except branch returns. Pyright cannot narrow through
-    # try/except so this guard makes the non-None invariant explicit.
-    if schedule_df is None:
-        return pl.DataFrame()  # pragma: no cover
-    schedule_week = schedule_df.filter(
+    schedule_week = schedule.filter(
         (pl.col("season") == latest_season) & (pl.col("week") == latest_week_num)
     )
 
@@ -232,9 +236,7 @@ def compare_latest_week_scores(
     if joined.height == 0:
         return pl.DataFrame()
 
-    mismatches = joined.filter(
+    return joined.filter(
         (pl.col("away_score") != pl.col("away_score_schedule"))
         | (pl.col("home_score") != pl.col("home_score_schedule"))
     )
-
-    return mismatches

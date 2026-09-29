@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import polars as pl
+import pytest
 
 from nfl_predictor.utils import polars_utils
 
@@ -50,12 +51,8 @@ def test_add_divisional_matchup_feature_validates_schema() -> None:
     """Helper should raise a clear error if required columns are missing."""
     df = pl.DataFrame({"away_abbr": ["PHI"]})
 
-    try:
+    with pytest.raises(ValueError, match="missing required columns"):
         polars_utils.add_divisional_matchup_feature(df)
-    except ValueError as exc:
-        assert "missing required columns" in str(exc)
-    else:
-        raise AssertionError("Expected ValueError for missing required columns")
 
 
 def test_add_divisional_matchup_feature_uses_historical_alignment_by_season() -> None:

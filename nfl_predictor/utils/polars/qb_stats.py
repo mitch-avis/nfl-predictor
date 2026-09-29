@@ -48,7 +48,7 @@ them belong to the starter.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 
@@ -56,6 +56,9 @@ from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import pbp
 from nfl_predictor.utils.polars.teamrankings import calculate_stat_differentials
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Per quarterback-game sums carried from play-by-play into the pre-game rates.
 QB_GAME_SUM_COLUMNS = [
@@ -158,7 +161,7 @@ def load_qb_identity(path: Path) -> pl.DataFrame:
 
 def _flag(columns: list[str], column: str) -> pl.Expr:
     """Return a null-safe ``column > 0`` expression, False when the column is absent."""
-    return pbp._flag_expr(columns, column) > 0
+    return pbp.flag_expr(columns, column) > 0
 
 
 def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
@@ -216,9 +219,9 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
 
     is_attempt = pl.col("_passer").is_not_null() & ~_flag(columns, "sack")
     is_sack = _flag(columns, "sack")
-    yards = pbp._value_expr(columns, "yards_gained")
+    yards = pbp.value_expr(columns, "yards_gained")
     has_cpoe = is_attempt & (pl.col("cpoe").is_not_null() if "cpoe" in columns else pl.lit(False))
-    count, sum_when = pbp._count, pbp._sum_when
+    count, sum_when = pbp.count_where, pbp.sum_where
 
     games = drops.group_by([*team_game, "qb_id"]).agg(
         pl.col("defteam").first().alias("opponent_abbr"),
@@ -231,8 +234,8 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
         count(is_attempt & _flag(columns, "interception"), "interceptions"),
         count(is_sack, "sacks"),
         sum_when(is_sack, (-yards).clip(0.0, None), "sack_yards"),
-        pbp._value_expr(columns, "qb_epa").sum().alias("qb_epa_sum"),
-        sum_when(has_cpoe, pbp._value_expr(columns, "cpoe"), "cpoe_sum"),
+        pbp.value_expr(columns, "qb_epa").sum().alias("qb_epa_sum"),
+        sum_when(has_cpoe, pbp.value_expr(columns, "cpoe"), "cpoe_sum"),
         count(has_cpoe, "cpoe_count"),
     )
     return (

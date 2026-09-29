@@ -4,12 +4,13 @@ These functions load and prepare schedule/team stats and related data sources.
 Implementation was split out of `nfl_predictor.utils.polars_utils`.
 """
 
-import os
+import functools
+import operator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import nflreadpy as nfl
 import polars as pl
-from polars.datatypes import DataType
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
@@ -17,6 +18,11 @@ from nfl_predictor.utils.scraping_utils import (
     get_current_nfl_week,
     normalize_team_column,
 )
+
+if TYPE_CHECKING:
+    import os
+
+    from polars.datatypes import DataType
 
 NUMERIC_DTYPES = {
     pl.Int8,
@@ -99,7 +105,7 @@ def _is_numeric_dtype(dtype: DataType) -> bool:
 
 def _resolve_cache_dir(cache_dir: os.PathLike | str | None) -> Path:
     """Resolve the nflreadpy cache directory and ensure it exists."""
-    resolved = Path(cache_dir) if cache_dir is not None else Path(constants.NFLREADPY_CACHE_DIR)
+    resolved = Path(cache_dir) if cache_dir is not None else constants.NFLREADPY_CACHE_DIR
     resolved.mkdir(parents=True, exist_ok=True)
     return resolved
 
@@ -117,13 +123,13 @@ def _schedule_cache_path(cache_dir: Path, season: int) -> Path:
     return cache_dir / f"schedule_{season}.parquet"
 
 
-def _team_stats_cache_path(cache_dir: Path, season: int, regular_season_only: bool) -> Path:
+def _team_stats_cache_path(cache_dir: Path, season: int, *, regular_season_only: bool) -> Path:
     """Build the cache path for season team stats."""
     suffix = "reg" if regular_season_only else "all"
     return cache_dir / f"team_stats_{season}_{suffix}.parquet"
 
 
-def _pbp_cache_path(cache_dir: Path, season: int, regular_season_only: bool) -> Path:
+def _pbp_cache_path(cache_dir: Path, season: int, *, regular_season_only: bool) -> Path:
     """Build the cache path for a season of play-by-play data."""
     suffix = "reg" if regular_season_only else "all"
     return cache_dir / f"pbp_{season}_{suffix}.parquet"
@@ -205,8 +211,7 @@ def _apply_schedule_enrichments(df: pl.DataFrame) -> pl.DataFrame:
     """Add optional stadium features to a schedule DataFrame."""
     if "stadium_id" in df.columns and "stadium_city" not in df.columns:
         df = _add_stadium_location(df)
-    df = _add_stadium_features(df)
-    return df
+    return _add_stadium_features(df)
 
 
 def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
@@ -277,7 +282,7 @@ def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
     return schedule_df
 
 
-def _prepare_team_stats(team_stats_df: pl.DataFrame, regular_season_only: bool) -> pl.DataFrame:
+def _prepare_team_stats(team_stats_df: pl.DataFrame, *, regular_season_only: bool) -> pl.DataFrame:
     """Normalize raw nflreadpy team stats to the project schema."""
     # Filter to regular season only (exclude preseason and postseason)
     if regular_season_only and "season_type" in team_stats_df.columns:
@@ -301,9 +306,7 @@ def _prepare_team_stats(team_stats_df: pl.DataFrame, regular_season_only: bool) 
     team_stats_df = team_stats_df.rename(rename_mapping)
 
     # Combine stats as specified
-    team_stats_df = combine_stats(team_stats_df)
-
-    return team_stats_df
+    return combine_stats(team_stats_df)
 
 
 def load_schedule(
@@ -386,7 +389,7 @@ def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
         name_expr = pl.coalesce([pl.col("stadium_name"), name_expr])
 
     # Add name/city/state columns using replace_strict (Polars >=1.0)
-    df = df.with_columns(
+    return df.with_columns(
         [
             name_expr.alias("stadium_name"),
             pl.col("stadium_id").replace_strict(city_map, default=None).alias("stadium_city"),
@@ -394,13 +397,11 @@ def _add_stadium_location(df: pl.DataFrame) -> pl.DataFrame:
         ]
     )
 
-    return df
-
 
 def load_team_stats(
     seasons: list[int],
-    regular_season_only: bool = True,
     *,
+    regular_season_only: bool = True,
     cache_dir: os.PathLike | str | None = None,
     force_refresh: bool = False,
     current_season: int | None = None,
@@ -431,7 +432,9 @@ def load_team_stats(
 
     team_frames: list[pl.DataFrame] = []
     for season in seasons:
-        cache_path = _team_stats_cache_path(resolved_cache_dir, season, regular_season_only)
+        cache_path = _team_stats_cache_path(
+            resolved_cache_dir, season, regular_season_only=regular_season_only
+        )
         use_cache = (season < resolved_current_season) and not force_refresh
         cached = _read_cached_frame(cache_path) if use_cache else None
         if cached is not None:
@@ -748,13 +751,11 @@ def add_scoring_data_to_team_stats(
     )
 
     # Merge with team_stats
-    result = team_stats_df.join(
+    return team_stats_df.join(
         all_scores,
         on=["season", "week", "team_abbr"],
         how="left",
     )
-
-    return result
 
 
 def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
@@ -774,85 +775,22 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
         DataFrame with combined stats
 
     """
-    combine_operations = []
-
-    # Fumbles (sack + rushing + receiving)
-    fumble_cols = ["sack_fumbles", "rushing_fumbles", "receiving_fumbles"]
-    if all(c in df.columns for c in fumble_cols):
-        combine_operations.append(
-            (
-                pl.col("sack_fumbles") + pl.col("rushing_fumbles") + pl.col("receiving_fumbles")
-            ).alias("fumbles")
-        )
-
-    # Fumbles lost (sack + rushing + receiving)
-    fumble_lost_cols = [
-        "sack_fumbles_lost",
-        "rushing_fumbles_lost",
-        "receiving_fumbles_lost",
+    # Each summed stat, from its parts, when every part is present; the parts are dropped.
+    # First downs are passing + rushing only: receiving first downs overlap with passing.
+    combine_operations = [
+        functools.reduce(operator.add, [pl.col(part) for part in parts]).alias(name)
+        for name, parts in _SUMMED_STATS
+        if all(part in df.columns for part in parts)
     ]
-    if all(c in df.columns for c in fumble_lost_cols):
-        combine_operations.append(
-            (
-                pl.col("sack_fumbles_lost")
-                + pl.col("rushing_fumbles_lost")
-                + pl.col("receiving_fumbles_lost")
-            ).alias("fumbles_lost")
-        )
-
-    # First downs (passing + rushing only - receiving first downs overlap with passing)
-    first_down_cols = ["passing_first_downs", "rushing_first_downs"]
-    if all(c in df.columns for c in first_down_cols):
-        combine_operations.append(
-            (pl.col("passing_first_downs") + pl.col("rushing_first_downs")).alias("first_downs")
-        )
-
-    # 2pt conversions (passing + rushing + receiving)
-    two_pt_cols = [
-        "passing_2pt_conversions",
-        "rushing_2pt_conversions",
-        "receiving_2pt_conversions",
-    ]
-    if all(c in df.columns for c in two_pt_cols):
-        combine_operations.append(
-            (
-                pl.col("passing_2pt_conversions")
-                + pl.col("rushing_2pt_conversions")
-                + pl.col("receiving_2pt_conversions")
-            ).alias("2pt_conversions")
-        )
-
-    # Fumble recoveries (own + opponent)
-    fumble_recovery_cols = ["fumble_recovery_own", "fumble_recovery_opp"]
-    if all(c in df.columns for c in fumble_recovery_cols):
-        combine_operations.append(
-            (pl.col("fumble_recovery_own") + pl.col("fumble_recovery_opp")).alias(
-                "fumble_recoveries"
-            )
-        )
-
-    # Computed: Turnover margin = turnovers gained - turnovers lost
-    # turnovers_gained = def_interceptions + fumble_recovery_opp
-    # turnovers_lost = interceptions_thrown + fumbles_lost (after combining)
-    # Note: passing_interceptions is renamed to interceptions_thrown before this function
-    turnover_gain_cols = ["def_interceptions", "fumble_recovery_opp"]
-    turnover_loss_cols = ["interceptions_thrown"]
-    fumbles_lost_available = any(
-        c in df.columns for c in ["sack_fumbles_lost", "rushing_fumbles_lost", "fumbles_lost"]
-    )
-    has_turnover_cols = all(c in df.columns for c in turnover_gain_cols + turnover_loss_cols)
-    if has_turnover_cols and fumbles_lost_available:
-        # We'll compute this after fumbles_lost is created, so use a placeholder
-        pass  # Will be computed after with_columns
-
-    # Apply combinations
     if combine_operations:
         df = df.with_columns(combine_operations)
 
-    # Now compute turnover_margin (after fumbles_lost exists)
-    has_fumbles_lost = "fumbles_lost" in df.columns
-    has_all_turnover = all(c in df.columns for c in turnover_gain_cols + turnover_loss_cols)
-    if has_fumbles_lost and has_all_turnover:
+    # Computed after fumbles_lost exists: turnover margin is turnovers gained minus turnovers
+    # lost, where turnovers gained are def_interceptions plus fumble_recovery_opp and
+    # turnovers lost are interceptions_thrown plus fumbles_lost.
+    # Note: passing_interceptions is renamed to interceptions_thrown before this function
+    turnover_cols = ["def_interceptions", "fumble_recovery_opp", "interceptions_thrown"]
+    if "fumbles_lost" in df.columns and all(c in df.columns for c in turnover_cols):
         df = df.with_columns(
             (
                 (pl.col("def_interceptions") + pl.col("fumble_recovery_opp"))
@@ -870,14 +808,24 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
         df = df.with_columns(total_yards_expr.alias("total_yards"))
 
     # Drop original columns that were combined
-    cols_to_drop = (
-        fumble_cols + fumble_lost_cols + first_down_cols + two_pt_cols + fumble_recovery_cols
-    )
-    cols_to_drop = [c for c in cols_to_drop if c in df.columns]
+    cols_to_drop = [part for _, parts in _SUMMED_STATS for part in parts if part in df.columns]
     if cols_to_drop:
         df = df.drop(cols_to_drop)
 
     return df
+
+
+# The stats `combine_stats` sums from their parts.
+_SUMMED_STATS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("fumbles", ("sack_fumbles", "rushing_fumbles", "receiving_fumbles")),
+    ("fumbles_lost", ("sack_fumbles_lost", "rushing_fumbles_lost", "receiving_fumbles_lost")),
+    ("first_downs", ("passing_first_downs", "rushing_first_downs")),
+    (
+        "2pt_conversions",
+        ("passing_2pt_conversions", "rushing_2pt_conversions", "receiving_2pt_conversions"),
+    ),
+    ("fumble_recoveries", ("fumble_recovery_own", "fumble_recovery_opp")),
+)
 
 
 def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
@@ -923,15 +871,13 @@ def add_per_game_opponent_stats(team_stats_df: pl.DataFrame) -> pl.DataFrame:
 
     # Join: for each team's game, look up the opponent's record using opponent_abbr
     # The join key is: this team's opponent_abbr = lookup's team_abbr (same game)
-    result = team_stats_df.join(
+    return team_stats_df.join(
         opponent_lookup,
         left_on=["season", "week", "opponent_abbr"],
         right_on=["season", "week", "team_abbr"],
         how="left",
         suffix="_opp_lookup",
     )
-
-    return result
 
 
 def _empty_pbp_frame() -> pl.DataFrame:
@@ -1022,7 +968,9 @@ def load_pbp(
 
     pbp_frames: list[pl.DataFrame] = []
     for season in seasons:
-        cache_path = _pbp_cache_path(resolved_cache_dir, season, regular_season_only)
+        cache_path = _pbp_cache_path(
+            resolved_cache_dir, season, regular_season_only=regular_season_only
+        )
         use_cache = (season < resolved_current_season) and not force_refresh
         cached = _read_cached_frame(cache_path) if use_cache else None
         if cached is not None:
@@ -1085,9 +1033,9 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
         Polars DataFrame with ELO ratings per game
 
     """
-    elo_path = os.path.join(constants.DATA_PATH, "qb_elos.csv")
+    elo_path = constants.DATA_PATH / "qb_elos.csv"
 
-    if not os.path.exists(elo_path):
+    if not elo_path.exists():
         log.warning("ELO file not found: %s", elo_path)
         return pl.DataFrame()
 
@@ -1173,9 +1121,9 @@ def load_raw_elo_data() -> pl.DataFrame:
         Raw Polars DataFrame with ELO data
 
     """
-    elo_path = os.path.join(constants.DATA_PATH, "qb_elos.csv")
+    elo_path = constants.DATA_PATH / "qb_elos.csv"
 
-    if not os.path.exists(elo_path):
+    if not elo_path.exists():
         log.warning("ELO file not found: %s", elo_path)
         return pl.DataFrame()
 
@@ -1243,10 +1191,8 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
     all_team_elo = all_team_elo.sort("week", descending=True)
 
     # Group by team and take the first (most recent) row
-    latest_elo = all_team_elo.group_by("team_abbr").agg(
+    return all_team_elo.group_by("team_abbr").agg(
         pl.col("elo_pre").first(),
         pl.col("qb_value_pre").first(),
         pl.col("qb_elo_pre").first(),
     )
-
-    return latest_elo

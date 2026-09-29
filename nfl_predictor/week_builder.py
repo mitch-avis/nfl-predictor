@@ -21,7 +21,7 @@ from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.logger import log
 
-DEFAULT_DATA_DIR = Path(constants.DATA_PATH)
+DEFAULT_DATA_DIR = constants.DATA_PATH
 SOURCE_FILENAME = "all_data_ml.csv"
 MARKET_COLUMNS: tuple[str, ...] = (
     "total_line",
@@ -63,7 +63,8 @@ def _source_path(data_dir: Path) -> Path:
     """Return the ML dataset path, or explain that it is missing."""
     path = data_dir / SOURCE_FILENAME
     if not path.is_file():
-        raise FileNotFoundError(f"{path} is missing; run the ETL before predicting a future week.")
+        msg = f"{path} is missing; run the ETL before predicting a future week."
+        raise FileNotFoundError(msg)
     return path
 
 
@@ -126,10 +127,11 @@ def build_week_file(
     frame = pl.read_csv(_source_path(resolved), infer_schema_length=None)
     upcoming = polars_utils.filter_upcoming_games(frame, season, week)
     if upcoming.is_empty():
-        raise ValueError(
+        msg = (
             f"Season {season} week {week} has no upcoming games in {SOURCE_FILENAME}; "
             "it may already be played or beyond the schedule the ETL loaded."
         )
+        raise ValueError(msg)
     missing = tuple(
         column
         for column in MARKET_COLUMNS

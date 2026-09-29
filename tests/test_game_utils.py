@@ -248,7 +248,7 @@ def test_fill_future_game_lines_passthrough_branches(monkeypatch) -> None:
             "home_spread": [None],
         }
     )
-    monkeypatch.setattr(game_utils, "scrape_survivor_grid_spreads", lambda: {})
+    monkeypatch.setattr(game_utils, "scrape_survivor_grid_spreads", dict)
     assert game_utils.fill_future_game_lines(future_without_spreads) is future_without_spreads
 
 

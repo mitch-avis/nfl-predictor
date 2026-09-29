@@ -115,7 +115,8 @@ def test_feature_group_column_markers_shape() -> None:
     assert isinstance(markers, dict)
     assert "pbp" in markers
     for group, group_markers in markers.items():
-        assert isinstance(group, str) and group
+        assert isinstance(group, str)
+        assert group
         assert isinstance(group_markers, tuple)
         assert len(group_markers) == len(set(group_markers))
         assert all(isinstance(m, str) and m for m in group_markers)

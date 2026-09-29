@@ -4,7 +4,10 @@ Loads, validates, scrapes, and merges TeamRankings.com team-week data.
 Implementation was split out of `nfl_predictor.utils.polars_utils`.
 """
 
-import os
+import functools
+import operator
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, NamedTuple
 
 import polars as pl
 
@@ -21,6 +24,9 @@ from nfl_predictor.utils.scraping_utils import (
     scrape_team_rankings_for_week,
     update_season_team_rankings,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _get_required_tr_columns() -> set[str]:
@@ -91,195 +97,236 @@ def load_team_rankings(
     if current_season is None or current_week is None:
         current_season, current_week = get_current_nfl_week()
 
-    season_dir = os.path.join(constants.DATA_PATH, str(season))
-    os.makedirs(season_dir, exist_ok=True)
-
-    # Determine weeks to load for this season (including playoffs)
-    regular_season_weeks = constants.get_regular_season_weeks(season)
-    # Playoff weeks: WC, DIV, CON, SB = 4 additional weeks
-    max_playoff_week = regular_season_weeks + 4
+    season_dir = constants.DATA_PATH / str(season)
+    season_dir.mkdir(parents=True, exist_ok=True)
 
     min_week = max(min_week, 1)
     if season == constants.TEAMRANKINGS_MIN_SEASON:
         min_week = max(min_week, constants.TEAMRANKINGS_MIN_WEEK)
-
-    if season < current_season:
-        # Past season: load all regular season weeks plus playoff weeks
-        weeks_to_load = list(range(min_week, max_playoff_week + 1))
-    elif season == current_season:
-        # Current season: load weeks 1 through current week + a few future weeks
-        # Future weeks use current week's data as a placeholder
-        weeks_to_load = list(range(min_week, min(current_week + 3, max_playoff_week + 1)))
-    else:
-        # Future season: no data to load
-        return pl.DataFrame()
-
+    weeks_to_load = _weeks_to_load(season, (current_season, current_week), min_week)
     if not weeks_to_load:
         return pl.DataFrame()
 
-    existing_data = []
-    weeks_to_full_scrape = []  # Weeks that need complete scraping (no file or empty)
-    weeks_to_partial_scrape = []  # Weeks with files that need additional columns
-
-    # Check each week file for validity
+    plan = _WeekLoadPlan()
     for week in weeks_to_load:
-        week_file = os.path.join(season_dir, f"{season}_week_{week:02d}_team_rankings.csv")
-
-        force_refresh = season == current_season and week == current_week
-
-        if os.path.exists(week_file):
-            try:
-                week_df = pl.read_csv(week_file)
-            except (
-                pl.exceptions.ComputeError,
-                pl.exceptions.NoDataError,
-                OSError,
-            ) as e:
-                log.warning("Failed to read TR file for week %d: %s", week, e)
-                weeks_to_full_scrape.append((week, None))
-                continue
-
-            week_df = _normalize_tr_dataframe(week_df)
-
-            if week_df.height == 0:
-                # Empty file, need full scrape
-                weeks_to_full_scrape.append((week, None))
-                continue
-
-            is_valid, missing_cols = _validate_tr_dataframe(week_df)
-            if force_refresh:
-                # Always refresh the current week for the in-progress season; keep cached
-                # data as a fallback if scraping fails.
-                weeks_to_full_scrape.append((week, week_df if is_valid else None))
-            else:
-                if is_valid:
-                    log.debug(
-                        "Using cached TeamRankings data for season %d week %d (%s)",
-                        season,
-                        week,
-                        week_file,
-                    )
-                    existing_data.append(week_df)
-                else:
-                    # File exists but missing columns - need partial scrape
-                    log.debug(
-                        "Week %d TR file missing %d columns: %s",
-                        week,
-                        len(missing_cols),
-                        missing_cols[:3],
-                    )
-                    weeks_to_partial_scrape.append((week, week_df, missing_cols))
-        else:
-            # No file - need full scrape for past weeks
-            if season < current_season or week <= current_week:
-                weeks_to_full_scrape.append((week, None))
-            # Future weeks of current season will get current week's data copied later
-
-    # Full scrape for weeks without any data
-    if weeks_to_full_scrape:
-        log.info(
-            "Full scraping %d weeks of TR data for season %d",
-            len(weeks_to_full_scrape),
+        _plan_week(
+            plan,
+            season_dir / f"{season}_week_{week:02d}_team_rankings.csv",
+            week,
             season,
+            (current_season, current_week),
         )
-        for week, fallback_df in weeks_to_full_scrape:
-            week_date = get_week_date(season, week)
-            scraped_df = scrape_team_rankings_for_week(week, week_date)
-
-            if scraped_df.height > 0:
-                save_team_rankings_week(scraped_df, season, week)
-                existing_data.append(scraped_df)
-            else:
-                if fallback_df is not None and fallback_df.height > 0:
-                    log.warning(
-                        "Failed to scrape TR data for season %d week %d; using cached fallback",
-                        season,
-                        week,
-                    )
-                    existing_data.append(fallback_df)
-                else:
-                    log.warning("Failed to scrape TR data for season %d week %d", season, week)
-
-    # Partial scrape for weeks with files missing some columns
-    if weeks_to_partial_scrape:
-        log.info(
-            "Partial scraping %d weeks of TR data for season %d (missing columns only)",
-            len(weeks_to_partial_scrape),
-            season,
-        )
-        for week, existing_week_df, _missing_cols in weeks_to_partial_scrape:
-            # Determine which ratings and stats to scrape
-            missing_ratings, missing_stats = get_missing_tr_columns(existing_week_df)
-
-            if not missing_ratings and not missing_stats:
-                # No columns to scrape, use existing data
-                existing_data.append(existing_week_df)
-                continue
-
-            log.debug(
-                "Week %d: scraping %d ratings, %d stats",
-                week,
-                len(missing_ratings),
-                len(missing_stats),
-            )
-
-            week_date = get_week_date(season, week)
-            scraped_df = scrape_team_rankings_for_week(
-                week,
-                week_date,
-                ratings_to_scrape=missing_ratings,
-                stats_to_scrape=missing_stats,
-            )
-
-            if scraped_df.height > 0:
-                # Merge new columns with existing data
-                merged_df = merge_tr_data(existing_week_df, scraped_df)
-                save_team_rankings_week(merged_df, season, week)
-                existing_data.append(merged_df)
-            else:
-                # Scraping failed, use existing data anyway
-                log.warning(
-                    "Failed to scrape missing columns for season %d week %d, using existing data",
-                    season,
-                    week,
-                )
-                existing_data.append(existing_week_df)
+    _run_full_scrapes(plan, season)
+    _run_partial_scrapes(plan, season)
 
     # Update the consolidated season file if we scraped anything
-    if weeks_to_full_scrape or weeks_to_partial_scrape:
+    if plan.full_scrape or plan.partial_scrape:
         update_season_team_rankings(season)
 
     # For current season, copy current week data to future weeks if needed
-    if season == current_season and existing_data:
-        # Get the latest scraped data (current week)
-        current_week_data = None
-        for df in existing_data:
-            if "week" in df.columns:
-                week_vals = df.select(pl.col("week")).to_series().to_list()
-                if current_week in week_vals:
-                    current_week_data = df.filter(pl.col("week") == current_week)
-                    break
+    if season == current_season and plan.existing:
+        start_week = max(current_week + 1, min_week)
+        future_weeks = range(start_week, _max_playoff_week(season) + 1)
+        _copy_current_week_forward(plan, season, current_week, future_weeks)
 
-        if current_week_data is not None and current_week_data.height > 0:
-            start_week = max(current_week + 1, min_week)
-            for future_week in range(start_week, max_playoff_week + 1):
-                # Always overwrite future-week caches with the most recently scraped week.
-                # This prevents stale future-week placeholders from persisting across runs.
-                future_data = current_week_data.with_columns(pl.lit(future_week).alias("week"))
-                save_team_rankings_week(future_data, season, future_week)
-                existing_data.append(future_data)
+    if not plan.existing:
+        log.debug("No TeamRankings data found for season %d", season)
+        return pl.DataFrame()
+    # Cast week column to consistent type before concat
+    existing_data = [df.cast({"week": pl.Int64}) for df in plan.existing]
+    combined = pl.concat(existing_data, how="diagonal")
+    # Remove duplicates by keeping latest data for each team/week
+    combined = combined.unique(subset=["team_abbr", "week"], keep="last")
+    return combined.sort(["week", "team_abbr"])
 
-    # Combine all data
-    if existing_data:
-        # Cast week column to consistent type before concat
-        existing_data = [df.cast({"week": pl.Int64}) for df in existing_data]
-        combined = pl.concat(existing_data, how="diagonal")
-        # Remove duplicates by keeping latest data for each team/week
-        combined = combined.unique(subset=["team_abbr", "week"], keep="last")
-        return combined.sort(["week", "team_abbr"])
 
-    log.debug("No TeamRankings data found for season %d", season)
-    return pl.DataFrame()
+# Playoff weeks after the regular season: wild card, divisional, conference, Super Bowl.
+PLAYOFF_WEEKS = 4
+
+
+def _max_playoff_week(season: int) -> int:
+    """Return the season's last week, the Super Bowl."""
+    return constants.get_regular_season_weeks(season) + PLAYOFF_WEEKS
+
+
+def _weeks_to_load(season: int, current: tuple[int, int], min_week: int) -> list[int]:
+    """Return the weeks to load: all of a past season, or the current season so far.
+
+    The current season also loads a few weeks ahead, each a placeholder copy of the current
+    week; a future season loads nothing.
+    """
+    current_season, current_week = current
+    max_playoff_week = _max_playoff_week(season)
+    if season < current_season:
+        # Past season: load all regular season weeks plus playoff weeks
+        return list(range(min_week, max_playoff_week + 1))
+    if season == current_season:
+        # Current season: load weeks 1 through current week + a few future weeks
+        return list(range(min_week, min(current_week + 3, max_playoff_week + 1)))
+    return []
+
+
+@dataclass
+class _WeekLoadPlan:
+    """The weeks a season load has read, and the weeks it still has to scrape."""
+
+    existing: list[pl.DataFrame] = field(default_factory=list)
+    # Weeks that need complete scraping (no file, an empty or unreadable file, or the
+    # current week), each with its cached rows as a fallback when there are any.
+    full_scrape: list[tuple[int, pl.DataFrame | None]] = field(default_factory=list)
+    # Weeks whose files need additional columns.
+    partial_scrape: list[tuple[int, pl.DataFrame]] = field(default_factory=list)
+
+
+def _plan_week(
+    plan: _WeekLoadPlan, week_file: Path, week: int, season: int, current: tuple[int, int]
+) -> None:
+    """Use a week's cached file, or schedule a full or partial scrape for it."""
+    current_season, current_week = current
+    if not week_file.exists():
+        # No file - need full scrape for past weeks
+        if season < current_season or week <= current_week:
+            plan.full_scrape.append((week, None))
+        # Future weeks of current season will get current week's data copied later
+        return
+
+    try:
+        week_df = pl.read_csv(week_file)
+    except (
+        pl.exceptions.ComputeError,
+        pl.exceptions.NoDataError,
+        OSError,
+    ) as e:
+        log.warning("Failed to read TR file for week %d: %s", week, e)
+        plan.full_scrape.append((week, None))
+        return
+
+    week_df = _normalize_tr_dataframe(week_df)
+    if week_df.height == 0:
+        # Empty file, need full scrape
+        plan.full_scrape.append((week, None))
+        return
+
+    is_valid, missing_cols = _validate_tr_dataframe(week_df)
+    if season == current_season and week == current_week:
+        # Always refresh the current week for the in-progress season; keep cached
+        # data as a fallback if scraping fails.
+        plan.full_scrape.append((week, week_df if is_valid else None))
+    elif is_valid:
+        log.debug(
+            "Using cached TeamRankings data for season %d week %d (%s)",
+            season,
+            week,
+            week_file,
+        )
+        plan.existing.append(week_df)
+    else:
+        # File exists but missing columns - need partial scrape
+        log.debug(
+            "Week %d TR file missing %d columns: %s",
+            week,
+            len(missing_cols),
+            missing_cols[:3],
+        )
+        plan.partial_scrape.append((week, week_df))
+
+
+def _run_full_scrapes(plan: _WeekLoadPlan, season: int) -> None:
+    """Scrape each week that has no usable data, falling back to cached rows on failure."""
+    if not plan.full_scrape:
+        return
+    log.info(
+        "Full scraping %d weeks of TR data for season %d",
+        len(plan.full_scrape),
+        season,
+    )
+    for week, fallback_df in plan.full_scrape:
+        week_date = get_week_date(season, week)
+        scraped_df = scrape_team_rankings_for_week(week, week_date)
+
+        if scraped_df.height > 0:
+            save_team_rankings_week(scraped_df, season, week)
+            plan.existing.append(scraped_df)
+        elif fallback_df is not None and fallback_df.height > 0:
+            log.warning(
+                "Failed to scrape TR data for season %d week %d; using cached fallback",
+                season,
+                week,
+            )
+            plan.existing.append(fallback_df)
+        else:
+            log.warning("Failed to scrape TR data for season %d week %d", season, week)
+
+
+def _run_partial_scrapes(plan: _WeekLoadPlan, season: int) -> None:
+    """Scrape only the missing columns of each week whose file lacks some."""
+    if not plan.partial_scrape:
+        return
+    log.info(
+        "Partial scraping %d weeks of TR data for season %d (missing columns only)",
+        len(plan.partial_scrape),
+        season,
+    )
+    for week, existing_week_df in plan.partial_scrape:
+        # Determine which ratings and stats to scrape
+        missing_ratings, missing_stats = get_missing_tr_columns(existing_week_df)
+
+        if not missing_ratings and not missing_stats:
+            # No columns to scrape, use existing data
+            plan.existing.append(existing_week_df)
+            continue
+
+        log.debug(
+            "Week %d: scraping %d ratings, %d stats",
+            week,
+            len(missing_ratings),
+            len(missing_stats),
+        )
+
+        week_date = get_week_date(season, week)
+        scraped_df = scrape_team_rankings_for_week(
+            week,
+            week_date,
+            ratings_to_scrape=missing_ratings,
+            stats_to_scrape=missing_stats,
+        )
+
+        if scraped_df.height > 0:
+            # Merge new columns with existing data
+            merged_df = merge_tr_data(existing_week_df, scraped_df)
+            save_team_rankings_week(merged_df, season, week)
+            plan.existing.append(merged_df)
+        else:
+            # Scraping failed, use existing data anyway
+            log.warning(
+                "Failed to scrape missing columns for season %d week %d, using existing data",
+                season,
+                week,
+            )
+            plan.existing.append(existing_week_df)
+
+
+def _copy_current_week_forward(
+    plan: _WeekLoadPlan, season: int, current_week: int, future_weeks: range
+) -> None:
+    """Save the current week's rows as every later week's placeholder."""
+    # Get the latest scraped data (current week)
+    current_week_data = None
+    for df in plan.existing:
+        if "week" in df.columns:
+            week_vals = df.select(pl.col("week")).to_series().to_list()
+            if current_week in week_vals:
+                current_week_data = df.filter(pl.col("week") == current_week)
+                break
+
+    if current_week_data is None or current_week_data.height == 0:
+        return
+    for future_week in future_weeks:
+        # Always overwrite future-week caches with the most recently scraped week.
+        # This prevents stale future-week placeholders from persisting across runs.
+        future_data = current_week_data.with_columns(pl.lit(future_week).alias("week"))
+        save_team_rankings_week(future_data, season, future_week)
+        plan.existing.append(future_data)
 
 
 def _normalize_tr_dataframe(tr_df: pl.DataFrame) -> pl.DataFrame:
@@ -338,9 +385,7 @@ def get_latest_team_rankings(tr_df: pl.DataFrame) -> pl.DataFrame:
 
     # Group by team and take first (most recent) value for each column
     agg_exprs = [pl.col(c).first() for c in non_key_cols]
-    latest_tr = tr_sorted.group_by("team_abbr").agg(agg_exprs)
-
-    return latest_tr
+    return tr_sorted.group_by("team_abbr").agg(agg_exprs)
 
 
 def aggregate_team_stats_to_week(
@@ -403,9 +448,7 @@ def aggregate_team_stats_to_week(
     agg_df = prior_games.group_by("team_abbr").agg(agg_exprs)
 
     # Compute derived ratio metrics from the aggregated averages
-    agg_df = _compute_derived_metrics(agg_df)
-
-    return agg_df
+    return _compute_derived_metrics(agg_df)
 
 
 # Play-by-play rate specs: (output name, numerator column, denominator column).
@@ -547,6 +590,26 @@ def _compute_pbp_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
         if numerator in available and denominator in available:
             derived.append(_safe_ratio(100.0 * pl.col(numerator), pl.col(denominator), output))
 
+    derived.extend(_pbp_combined_rate_exprs(available))
+
+    if derived:
+        agg_df = agg_df.with_columns(derived)
+
+    # Keep the schema invariant when a season has no play-by-play source at all.
+    missing = [
+        pl.lit(None, dtype=pl.Float64).alias(stat)
+        for stat in constants.PBP_STATS
+        if stat not in agg_df.columns
+    ]
+    if missing:
+        agg_df = agg_df.with_columns(missing)
+
+    return agg_df
+
+
+def _pbp_combined_rate_exprs(available: set[str]) -> list[pl.Expr]:
+    """Return the rates built from several counts: success rates and the EPA margins."""
+    derived: list[pl.Expr] = []
     # Overall success rate combines the pass and rush components on both sides.
     success_specs = (
         ("success_rate", ("pass_success_count", "rush_success_count"), ("dropbacks", "carries")),
@@ -595,20 +658,7 @@ def _compute_pbp_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
                 "st_epa_margin_per_play",
             )
         )
-
-    if derived:
-        agg_df = agg_df.with_columns(derived)
-
-    # Keep the schema invariant when a season has no play-by-play source at all.
-    missing = [
-        pl.lit(None, dtype=pl.Float64).alias(stat)
-        for stat in constants.PBP_STATS
-        if stat not in agg_df.columns
-    ]
-    if missing:
-        agg_df = agg_df.with_columns(missing)
-
-    return agg_df
+    return derived
 
 
 def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
@@ -635,112 +685,79 @@ def _compute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
         DataFrame with additional derived metric columns
 
     """
-    derived_cols = []
-
-    # --- Yards per point metrics ---
-    # Yards per point = total_yards / points_scored
-    if "total_yards" in agg_df.columns and "points_scored" in agg_df.columns:
-        derived_cols.append(
-            pl.when(pl.col("points_scored") > 0)
-            .then(pl.col("total_yards") / pl.col("points_scored"))
-            .otherwise(pl.lit(0.0))
-            .alias("yards_per_point")
-        )
-
-    # Opponent yards per point (from opponent_total_yards and points_allowed)
-    if "opponent_total_yards" in agg_df.columns and "points_allowed" in agg_df.columns:
-        derived_cols.append(
-            pl.when(pl.col("points_allowed") > 0)
-            .then(pl.col("opponent_total_yards") / pl.col("points_allowed"))
-            .otherwise(pl.lit(0.0))
-            .alias("opponent_yards_per_point")
-        )
-
-    # Apply yards_per_point metrics first so we can calculate margin
-    if derived_cols:
-        agg_df = agg_df.with_columns(derived_cols)
-        derived_cols = []
-
-    # Yards per point margin = yards_per_point - opponent_yards_per_point
-    if "yards_per_point" in agg_df.columns and "opponent_yards_per_point" in agg_df.columns:
-        derived_cols.append(
-            (pl.col("yards_per_point") - pl.col("opponent_yards_per_point")).alias(
-                "yards_per_point_margin"
-            )
-        )
-
-    # --- Points per play metrics ---
-    # Total plays = pass_attempts + rush_attempts + times_sacked
-    has_plays = all(c in agg_df.columns for c in ["pass_attempts", "rush_attempts", "times_sacked"])
-    if has_plays and "points_scored" in agg_df.columns:
-        total_plays = pl.col("pass_attempts") + pl.col("rush_attempts") + pl.col("times_sacked")
-        derived_cols.append(
-            pl.when(total_plays > 0)
-            .then(pl.col("points_scored") / total_plays)
-            .otherwise(pl.lit(0.0))
-            .alias("points_per_play")
-        )
-
-    # Opponent points per play
-    has_opp_plays = all(
-        c in agg_df.columns
-        for c in [
-            "opponent_pass_attempts",
-            "opponent_rush_attempts",
-            "opponent_times_sacked",
+    # Each stage reads the columns the one before it added: the margins subtract ratios.
+    for stage in _BOX_SCORE_RATIO_STAGES:
+        columns = set(agg_df.columns)
+        derived = [
+            _box_score_ratio(spec)
+            for spec in stage
+            if columns.issuperset(spec.numerator) and columns.issuperset(spec.denominator)
         ]
-    )
-    if has_opp_plays and "points_allowed" in agg_df.columns:
-        opp_total_plays = (
-            pl.col("opponent_pass_attempts")
-            + pl.col("opponent_rush_attempts")
-            + pl.col("opponent_times_sacked")
-        )
-        derived_cols.append(
-            pl.when(opp_total_plays > 0)
-            .then(pl.col("points_allowed") / opp_total_plays)
-            .otherwise(pl.lit(0.0))
-            .alias("opponent_points_per_play")
-        )
-
-    # Apply points_per_play metrics first so we can calculate margin
-    if derived_cols:
-        agg_df = agg_df.with_columns(derived_cols)
-        derived_cols = []
-
-    # Points per play margin
-    if "points_per_play" in agg_df.columns and "opponent_points_per_play" in agg_df.columns:
-        derived_cols.append(
-            (pl.col("points_per_play") - pl.col("opponent_points_per_play")).alias(
-                "points_per_play_margin"
-            )
-        )
-
-    # --- Penalty efficiency metrics ---
-    # Penalty yards per penalty = penalty_yards / penalties
-    if "penalty_yards" in agg_df.columns and "penalties" in agg_df.columns:
-        derived_cols.append(
-            pl.when(pl.col("penalties") > 0)
-            .then(pl.col("penalty_yards") / pl.col("penalties"))
-            .otherwise(pl.lit(0.0))
-            .alias("penalty_yards_per_penalty")
-        )
-
-    # Opponent penalty yards per penalty
-    opp_pen_yards = "opponent_penalty_yards"
-    opp_pens = "opponent_penalties"
-    if opp_pen_yards in agg_df.columns and opp_pens in agg_df.columns:
-        derived_cols.append(
-            pl.when(pl.col(opp_pens) > 0)
-            .then(pl.col(opp_pen_yards) / pl.col(opp_pens))
-            .otherwise(pl.lit(0.0))
-            .alias("opponent_penalty_yards_per_penalty")
-        )
-
-    if derived_cols:
-        agg_df = agg_df.with_columns(derived_cols)
-
+        if derived:
+            agg_df = agg_df.with_columns(derived)
     return _compute_pbp_derived_metrics(agg_df)
+
+
+class _BoxScoreRatio(NamedTuple):
+    """A derived box-score column: a ratio of summed columns, or a difference of two."""
+
+    name: str
+    numerator: tuple[str, ...]
+    denominator: tuple[str, ...]
+    difference: bool = False
+
+
+def _box_score_ratio(spec: _BoxScoreRatio) -> pl.Expr:
+    """Return the ratio (0.0 without a positive denominator) or difference ``spec`` names."""
+    if spec.difference:
+        return (pl.col(spec.numerator[0]) - pl.col(spec.denominator[0])).alias(spec.name)
+    numerator = functools.reduce(operator.add, [pl.col(column) for column in spec.numerator])
+    denominator = functools.reduce(operator.add, [pl.col(column) for column in spec.denominator])
+    return (
+        pl.when(denominator > 0)
+        .then(numerator / denominator)
+        .otherwise(pl.lit(0.0))
+        .alias(spec.name)
+    )
+
+
+# Total plays = pass_attempts + rush_attempts + times_sacked, for a team and its opponents.
+_TOTAL_PLAYS = ("pass_attempts", "rush_attempts", "times_sacked")
+_OPPONENT_TOTAL_PLAYS = (
+    "opponent_pass_attempts",
+    "opponent_rush_attempts",
+    "opponent_times_sacked",
+)
+_BOX_SCORE_RATIO_STAGES: tuple[tuple[_BoxScoreRatio, ...], ...] = (
+    (
+        _BoxScoreRatio("yards_per_point", ("total_yards",), ("points_scored",)),
+        _BoxScoreRatio("opponent_yards_per_point", ("opponent_total_yards",), ("points_allowed",)),
+    ),
+    (
+        _BoxScoreRatio(
+            "yards_per_point_margin",
+            ("yards_per_point",),
+            ("opponent_yards_per_point",),
+            difference=True,
+        ),
+        _BoxScoreRatio("points_per_play", ("points_scored",), _TOTAL_PLAYS),
+        _BoxScoreRatio("opponent_points_per_play", ("points_allowed",), _OPPONENT_TOTAL_PLAYS),
+    ),
+    (
+        _BoxScoreRatio(
+            "points_per_play_margin",
+            ("points_per_play",),
+            ("opponent_points_per_play",),
+            difference=True,
+        ),
+        _BoxScoreRatio("penalty_yards_per_penalty", ("penalty_yards",), ("penalties",)),
+        _BoxScoreRatio(
+            "opponent_penalty_yards_per_penalty",
+            ("opponent_penalty_yards",),
+            ("opponent_penalties",),
+        ),
+    ),
+)
 
 
 def recompute_derived_metrics(agg_df: pl.DataFrame) -> pl.DataFrame:
@@ -886,7 +903,7 @@ def regress_to_mean(
     regression_exprs = []
     for col in team_stats.columns:
         if col in league_means and col not in {"team_abbr", "games_played"}:
-            # regressed = team_value * (1 - factor) + league_mean * factor
+            # Regress toward the league mean: team_value * (1 - factor) + league_mean * factor
             regressed = (
                 pl.col(col) * (1 - regression_factor)
                 + pl.lit(league_means[col]) * regression_factor
@@ -1000,9 +1017,7 @@ def merge_schedule_with_team_stats(
 
     # Join with schedule
     merged = schedule_df.join(away_stats, on="away_abbr", how="left")
-    merged = merged.join(home_stats, on="home_abbr", how="left")
-
-    return merged
+    return merged.join(home_stats, on="home_abbr", how="left")
 
 
 def calculate_stat_differentials(
@@ -1117,32 +1132,6 @@ def remove_diff_columns(df: pl.DataFrame) -> pl.DataFrame:
     return df.select(non_diff_cols)
 
 
-def polars_to_pandas(df: pl.DataFrame):
-    """Convert a Polars DataFrame to pandas for compatibility with existing code.
-
-    Args:
-        df: Polars DataFrame
-
-    Returns:
-        pandas DataFrame
-
-    """
-    return df.to_pandas()
-
-
-def pandas_to_polars(df) -> pl.DataFrame:
-    """Convert a pandas DataFrame to Polars.
-
-    Args:
-        df: pandas DataFrame
-
-    Returns:
-        Polars DataFrame
-
-    """
-    return pl.from_pandas(df)
-
-
 def get_stats_for_diff() -> list[str]:
     """Get list of stats that should have differentials calculated.
 
@@ -1165,9 +1154,7 @@ def get_stats_for_diff() -> list[str]:
 
     # Opponent stats (excluding duplicates)
     excluded = set(constants.EXCLUDE_FROM_OPPONENT_STATS)
-    for stat in get_stat_columns():
-        if stat not in excluded:
-            all_stats.append(f"opponent_{stat}")
+    all_stats.extend(f"opponent_{stat}" for stat in get_stat_columns() if stat not in excluded)
 
     # ELO columns
     all_stats.extend(get_elo_columns())

@@ -34,7 +34,7 @@ def test_build_qb_trends_groups_by_qb_name() -> None:
     qb1_week2 = qb_trends.filter((pl.col("qb_name") == "QB1") & (pl.col("week") == 2))
 
     assert qb1_week2.height == 1
-    qb1_trend = cast(float, qb1_week2["qb_elo_4wk_trend"][0])
+    qb1_trend = cast("float", qb1_week2["qb_elo_4wk_trend"][0])
     assert qb1_trend == pytest.approx(100.0)
 
 
@@ -83,8 +83,8 @@ def test_build_team_stat_trends_compare_recent_to_season_mean() -> None:
     week6 = trends.filter((pl.col("team_abbr") == "AAA") & (pl.col("week") == 6))
     assert week6.height == 1
 
-    scoring_trend = cast(float, week6["scoring_margin_4wk_trend"][0])
-    turnover_trend = cast(float, week6["turnover_margin_4wk_trend"][0])
+    scoring_trend = cast("float", week6["scoring_margin_4wk_trend"][0])
+    turnover_trend = cast("float", week6["turnover_margin_4wk_trend"][0])
 
     assert scoring_trend == pytest.approx(0.45, abs=1e-2)
     assert turnover_trend == pytest.approx(0.1, abs=1e-2)

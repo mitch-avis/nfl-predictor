@@ -36,6 +36,8 @@ function fall back to the plain mean of that rate over the opponent's games.
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import polars as pl
 
 PLAYED_ADJUSTED_COLUMN = "sos_played_adj"
@@ -67,7 +69,8 @@ def _require_columns(frame: pl.DataFrame, required: tuple[str, ...], label: str)
     """
     missing = sorted(set(required) - set(frame.columns))
     if missing:
-        raise ValueError(f"{label} missing required columns: {missing}")
+        msg = f"{label} missing required columns: {missing}"
+        raise ValueError(msg)
 
 
 def _empty_adjusted_frame(team_col: str) -> pl.DataFrame:
@@ -143,14 +146,43 @@ def _mean_opponent_rating(
     )
 
 
+class RatingColumns(NamedTuple):
+    """The rating value column and the team key column of a ratings snapshot."""
+
+    rating: str = "rating"
+    team: str = "team_abbr"
+
+
+class TeamColumns(NamedTuple):
+    """The subject team and opponent columns of a team-game frame."""
+
+    team: str = "team_abbr"
+    opponent: str = "opponent_abbr"
+
+
+class MarginSource(NamedTuple):
+    """How an opponent's margin is read: a per-game rate, or a ratio of two summed columns.
+
+    ``numerator`` and ``denominator`` are supplied together or not at all.
+    """
+
+    rate: str = "epa_margin_per_play"
+    numerator: str | None = None
+    denominator: str | None = None
+
+
+DEFAULT_RATING_COLUMNS = RatingColumns()
+DEFAULT_TEAM_COLUMNS = TeamColumns()
+PER_GAME_MARGIN = MarginSource()
+
+
 def compute_schedule_strength_adjusted(
     schedule: pl.DataFrame,
     ratings: pl.DataFrame,
     *,
     season: int,
     week: int,
-    rating_col: str = "rating",
-    team_col: str = "team_abbr",
+    columns: RatingColumns = DEFAULT_RATING_COLUMNS,
 ) -> pl.DataFrame:
     """Average a pre-week ratings snapshot over each team's played and remaining opponents.
 
@@ -176,11 +208,11 @@ def compute_schedule_strength_adjusted(
         ratings: Pre-week ratings snapshot with one row per team, keyed by ``team_col``.
         season: Season to summarise.
         week: Boundary week. Games strictly before it are "played", the rest "remaining".
-        rating_col: Name of the rating value column in ``ratings``.
-        team_col: Team key column in ``ratings`` and in the returned frame.
+        columns: The rating value column in ``ratings`` and the team key column, which also
+            keys the returned frame.
 
     Returns:
-        DataFrame with ``[team_col, "sos_played_adj", "sos_remaining_adj"]``, one row per
+        DataFrame with ``[columns.team, "sos_played_adj", "sos_remaining_adj"]``, one row per
         team appearing in the season's schedule, sorted by team, both value columns Float64.
         An empty, correctly typed frame when the season has no games.
 
@@ -188,11 +220,13 @@ def compute_schedule_strength_adjusted(
         ValueError: If required columns are missing or ``ratings`` repeats a team.
 
     """
+    rating_col, team_col = columns
     _require_columns(schedule, _SCHEDULE_REQUIRED_COLUMNS, "schedule")
     _require_columns(ratings, (team_col, rating_col), "ratings")
 
     if ratings.select(team_col).n_unique() != ratings.height:
-        raise ValueError("ratings must contain one rating per team")
+        msg = "ratings must contain one rating per team"
+        raise ValueError(msg)
 
     season_schedule = schedule.filter(pl.col("season") == season)
     if season_schedule.is_empty():
@@ -264,11 +298,8 @@ def compute_schedule_strength_raw(
     *,
     season: int,
     week: int,
-    margin_col: str = "epa_margin_per_play",
-    team_col: str = "team_abbr",
-    opponent_col: str = "opponent_abbr",
-    numerator_col: str | None = None,
-    denominator_col: str | None = None,
+    columns: TeamColumns = DEFAULT_TEAM_COLUMNS,
+    margin: MarginSource = PER_GAME_MARGIN,
 ) -> pl.DataFrame:
     """Average each faced opponent's head-to-head-excluded EPA margin per play.
 
@@ -305,24 +336,27 @@ def compute_schedule_strength_raw(
         season: Season to summarise.
         week: Boundary week; only games strictly before it are used, on both hops, so
             current-week and postseason rows can never leak in.
-        margin_col: Per-game EPA margin per play column, used for the mean-of-rates path.
-        team_col: Subject team column, also the key of the returned frame.
-        opponent_col: Opponent column.
-        numerator_col: Optional summable margin numerator, e.g. ``epa_margin_sum``.
-        denominator_col: Optional summable play count, e.g. ``total_play_count``.
+        columns: The subject team column, also the key of the returned frame, and the
+            opponent column.
+        margin: The per-game EPA margin per play column (the mean-of-rates path), or the
+            summable margin numerator and play count, e.g. ``epa_margin_sum`` and
+            ``total_play_count``.
 
     Returns:
-        DataFrame with ``[team_col, "sos_played_raw"]``, one row per team appearing in the
+        DataFrame with ``[columns.team, "sos_played_raw"]``, one row per team appearing in the
         season, sorted by team, Float64 values. An empty, correctly typed frame when the
         season has no games.
 
     Raises:
-        ValueError: If required columns are missing, or only one of ``numerator_col`` and
-            ``denominator_col`` is supplied.
+        ValueError: If required columns are missing, or only one of the margin's numerator
+            and denominator is supplied.
 
     """
+    team_col, opponent_col = columns
+    margin_col, numerator_col, denominator_col = margin
     if (numerator_col is None) != (denominator_col is None):
-        raise ValueError("numerator_col and denominator_col must be supplied together")
+        msg = "numerator_col and denominator_col must be supplied together"
+        raise ValueError(msg)
 
     required = ("season", "week", team_col, opponent_col)
     if numerator_col is not None and denominator_col is not None:

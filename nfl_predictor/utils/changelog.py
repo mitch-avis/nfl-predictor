@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _RELEASE_HEADER_PATTERN = re.compile(
     r"^## \[(?P<version>[^\]]+)\] - (?P<date>\d{4}-\d{2}-\d{2})\s*$",
@@ -52,11 +55,13 @@ def extract_release_notes(changelog_path: Path, tag_name: str) -> ReleaseNotes:
         next_start = matches[index + 1].start() if index + 1 < len(matches) else len(changelog_text)
         body = changelog_text[match.end() : next_start].strip()
         if not body:
-            raise ValueError(f"Changelog entry for version {version} has no release notes body")
+            msg = f"Changelog entry for version {version} has no release notes body"
+            raise ValueError(msg)
 
         return ReleaseNotes(version=version, date=match.group("date"), body=body)
 
-    raise ValueError(f"No changelog entry found for version {version}")
+    msg = f"No changelog entry found for version {version}"
+    raise ValueError(msg)
 
 
 __all__ = ["ReleaseNotes", "extract_release_notes", "normalize_release_version"]

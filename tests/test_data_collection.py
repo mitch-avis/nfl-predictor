@@ -1,5 +1,7 @@
 """Tests for the Polars data collection pipeline."""
 
+from dataclasses import KW_ONLY, dataclass
+
 import polars as pl
 import pytest
 
@@ -33,14 +35,11 @@ def test_process_week_uses_fallback_stats_for_week1() -> None:
     )
 
     result = process_week(
-        season=2007,
-        week=1,
-        schedule_df=schedule_df,
-        team_stats_df=team_stats_df,
-        min_season=2006,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
+        2007,
+        1,
+        schedule_df,
+        team_stats_df,
+        data_collection.SeasonInputs(min_season=2006, elo_df=None, tr_df=None, prev_tr_df=None),
     )
 
     assert result.height == 1
@@ -62,11 +61,7 @@ def test_merge_team_rankings_week1_uses_prev() -> None:
     )
 
     result = _merge_team_rankings(
-        merged=merged,
-        season=2007,
-        week=1,
-        tr_df=None,
-        prev_tr_df=prev_tr_df,
+        merged, 2007, 1, data_collection.TeamRankingsFrames(None, prev_tr_df)
     )
 
     row = result.row(0, named=True)
@@ -74,38 +69,42 @@ def test_merge_team_rankings_week1_uses_prev() -> None:
     assert row["home_predictive_rating"] == pytest.approx(4.0)
 
 
-def _pbp_play(
-    season: int,
-    week: int,
-    posteam: str,
-    defteam: str,
-    *,
-    epa: float,
-    dropback: int = 0,
-    rush: int = 0,
-    yards: float = 0.0,
-    success: int = 0,
-    down: int = 1,
-) -> dict[str, object]:
-    """Build one synthetic scrimmage play row for play-by-play fixtures."""
-    return {
-        "season": season,
-        "week": week,
-        "season_type": "REG",
-        "posteam": posteam,
-        "defteam": defteam,
-        "qb_dropback": dropback,
-        "rush": rush,
-        "qb_kneel": 0,
-        "qb_spike": 0,
-        "epa": epa,
-        "success": success,
-        "yards_gained": yards,
-        "down": down,
-        "play_type": "pass" if dropback else "run",
-        "yardline_100": 50,
-        "special": 0,
-    }
+@dataclass(frozen=True)
+class _PbpPlay:
+    """One synthetic scrimmage play row for play-by-play fixtures."""
+
+    season: int
+    week: int
+    posteam: str
+    defteam: str
+    _: KW_ONLY
+    epa: float
+    dropback: int = 0
+    rush: int = 0
+    yards: float = 0.0
+    success: int = 0
+    down: int = 1
+
+    def row(self) -> dict[str, object]:
+        """Return the play as a play-by-play row."""
+        return {
+            "season": self.season,
+            "week": self.week,
+            "season_type": "REG",
+            "posteam": self.posteam,
+            "defteam": self.defteam,
+            "qb_dropback": self.dropback,
+            "rush": self.rush,
+            "qb_kneel": 0,
+            "qb_spike": 0,
+            "epa": self.epa,
+            "success": self.success,
+            "yards_gained": self.yards,
+            "down": self.down,
+            "play_type": "pass" if self.dropback else "run",
+            "yardline_100": 50,
+            "special": 0,
+        }
 
 
 def _three_week_pbp(epa_scale_after_week_1: float) -> pl.DataFrame:
@@ -119,7 +118,7 @@ def _three_week_pbp(epa_scale_after_week_1: float) -> pl.DataFrame:
         scale = 1.0 if week == 1 else epa_scale_after_week_1
         for posteam, defteam, base in (("AAA", "BBB", 0.4), ("BBB", "AAA", -0.2)):
             rows.append(
-                _pbp_play(
+                _PbpPlay(
                     2007,
                     week,
                     posteam,
@@ -128,12 +127,12 @@ def _three_week_pbp(epa_scale_after_week_1: float) -> pl.DataFrame:
                     dropback=1,
                     yards=25.0,
                     success=1,
-                )
+                ).row()
             )
             rows.append(
-                _pbp_play(
+                _PbpPlay(
                     2007, week, posteam, defteam, epa=-base * scale, rush=1, yards=2.0, down=2
-                )
+                ).row()
             )
     return pl.DataFrame(rows)
 
@@ -156,14 +155,11 @@ def _week_two_features(pbp_df: pl.DataFrame) -> dict[str, object]:
         {"season": [2007], "week": [2], "away_abbr": ["AAA"], "home_abbr": ["BBB"]}
     )
     result = process_week(
-        season=2007,
-        week=2,
-        schedule_df=schedule_df,
-        team_stats_df=team_stats_df,
-        min_season=2006,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
+        2007,
+        2,
+        schedule_df,
+        team_stats_df,
+        data_collection.SeasonInputs(min_season=2006, elo_df=None, tr_df=None, prev_tr_df=None),
     )
     assert result.height == 1
     row = result.row(0, named=True)
@@ -213,14 +209,11 @@ def test_week1_fallback_regresses_pbp_rates_toward_the_league_mean() -> None:
     )
 
     result = process_week(
-        season=2007,
-        week=1,
-        schedule_df=schedule_df,
-        team_stats_df=prior,
-        min_season=2006,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
+        2007,
+        1,
+        schedule_df,
+        prior,
+        data_collection.SeasonInputs(min_season=2006, elo_df=None, tr_df=None, prev_tr_df=None),
     )
 
     row = result.row(0, named=True)
@@ -241,7 +234,7 @@ def _season_pbp(
     for week in weeks:
         for posteam, defteam, base in (("AAA", "BBB", 0.4), ("BBB", "AAA", -0.2)):
             rows.append(
-                _pbp_play(
+                _PbpPlay(
                     season,
                     week,
                     posteam,
@@ -250,11 +243,11 @@ def _season_pbp(
                     dropback=1,
                     yards=25.0,
                     success=1,
-                )
+                ).row()
                 | {"season_type": season_type}
             )
             rows.append(
-                _pbp_play(
+                _PbpPlay(
                     season,
                     week,
                     posteam,
@@ -263,7 +256,7 @@ def _season_pbp(
                     rush=1,
                     yards=2.0,
                     down=2,
-                )
+                ).row()
                 | {"season_type": season_type}
             )
     return pl.DataFrame(rows)
@@ -297,14 +290,13 @@ def _pbp_features_for_week(
         {"season": [season], "week": [week], "away_abbr": ["AAA"], "home_abbr": ["BBB"]}
     )
     result = process_week(
-        season=season,
-        week=week,
-        schedule_df=schedule_df,
-        team_stats_df=joined,
-        min_season=min_season,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
+        season,
+        week,
+        schedule_df,
+        joined,
+        data_collection.SeasonInputs(
+            min_season=min_season, elo_df=None, tr_df=None, prev_tr_df=None
+        ),
     )
     assert result.height == 1
     row = result.row(0, named=True)
@@ -412,14 +404,13 @@ def _strength_features_for_week(
         }
     )
     result = process_week(
-        season=season,
-        week=week,
-        schedule_df=schedule_df,
-        team_stats_df=joined,
-        min_season=min_season,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
+        season,
+        week,
+        schedule_df,
+        joined,
+        data_collection.SeasonInputs(
+            min_season=min_season, elo_df=None, tr_df=None, prev_tr_df=None
+        ),
     )
     assert result.height == 1
     row = result.row(0, named=True)
@@ -553,11 +544,7 @@ def test_strength_features_degrade_when_the_schedule_is_incomplete() -> None:
     incomplete_schedule = pl.DataFrame({"season": [2007], "week": [3]})
 
     features = data_collection.build_strength_features(
-        team_games,
-        incomplete_schedule,
-        season=2007,
-        week=3,
-        blend_prior=False,
+        team_games, incomplete_schedule, season=2007, week=3
     )
 
     assert features.columns == ["team_abbr", *constants.ADJUSTED_STRENGTH_STATS]
@@ -601,8 +588,9 @@ def test_remaining_schedule_strength_ignores_the_postseason_bracket() -> None:
             ratings,
             season=2007,
             week=2,
-            rating_col="adj_strength_composite",
-            team_col="team_abbr",
+            columns=schedule_strength.RatingColumns(
+                rating="adj_strength_composite", team="team_abbr"
+            ),
         )
         return adjusted.filter(pl.col("team_abbr") == "AAA")["sos_remaining_adj"].item()
 
@@ -686,14 +674,13 @@ def test_process_week_publishes_no_games_played_for_a_week1_fallback_row() -> No
     schedule_df = _two_team_schedule(season)
 
     result = process_week(
-        season=season,
-        week=1,
-        schedule_df=schedule_df,
-        team_stats_df=_two_team_prior_stats(season),
-        min_season=season - 1,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
+        season,
+        1,
+        schedule_df,
+        _two_team_prior_stats(season),
+        data_collection.SeasonInputs(
+            min_season=season - 1, elo_df=None, tr_df=None, prev_tr_df=None
+        ),
     )
 
     row = result.row(0, named=True)
@@ -724,14 +711,13 @@ def test_process_week_games_played_agrees_with_the_published_record() -> None:
     )
 
     result = process_week(
-        season=season,
-        week=2,
-        schedule_df=schedule_df,
-        team_stats_df=team_stats_df,
-        min_season=season - 1,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
+        season,
+        2,
+        schedule_df,
+        team_stats_df,
+        data_collection.SeasonInputs(
+            min_season=season - 1, elo_df=None, tr_df=None, prev_tr_df=None
+        ),
     )
 
     row = result.row(0, named=True)

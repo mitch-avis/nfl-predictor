@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from nfl_predictor.ml import artifacts
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def dataset_fingerprint(path: Path) -> dict[str, Any]:
@@ -23,7 +25,7 @@ def dataset_fingerprint(path: Path) -> dict[str, Any]:
 
 def stable_fingerprint(payload: dict[str, Any]) -> str:
     """Return a full SHA-256 fingerprint for a payload."""
-    encoded = json.dumps(to_jsonable(payload), sort_keys=True).encode("utf-8")
+    encoded = json.dumps(artifacts.to_jsonable(payload), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -40,38 +42,3 @@ def wf_run_fingerprint(
         "code_version": code_version,
     }
     return stable_fingerprint(payload)
-
-
-def to_jsonable(value: Any) -> Any:
-    """Convert nested payloads to JSON-serializable primitives."""
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, dict):
-        return {str(k): to_jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [to_jsonable(v) for v in value]
-
-    item = getattr(value, "item", None)
-    if callable(item):
-        try:
-            return to_jsonable(item())
-        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
-            pass
-
-    tolist = getattr(value, "tolist", None)
-    if callable(tolist):
-        try:
-            return to_jsonable(tolist())
-        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
-            pass
-
-    isoformat = getattr(value, "isoformat", None)
-    if callable(isoformat):
-        try:
-            return str(isoformat())
-        except Exception:  # noqa: S110 (silent fallback to str() is intentional)
-            pass
-
-    return str(value)

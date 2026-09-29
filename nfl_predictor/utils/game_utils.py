@@ -8,6 +8,7 @@ This module provides functions for handling game-specific data:
 """
 
 import math
+from typing import Any
 
 import polars as pl
 
@@ -55,7 +56,7 @@ def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
         # Pick'em (spread = 0): slight underdog due to vig
         moneyline = 100 * ((1 - adjusted_implied_probability) / adjusted_implied_probability)
 
-    return int(round(moneyline))
+    return round(moneyline)
 
 
 def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
@@ -100,7 +101,7 @@ def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
     # Calculate moneylines from spreads using map_elements
     # For home team: use home_spread directly
     # For away team: use away_spread (which is -home_spread)
-    df = df.with_columns(
+    return df.with_columns(
         [
             pl.when(pl.col("home_spread").is_not_null() & pl.col("home_moneyline").is_null())
             .then(
@@ -122,8 +123,6 @@ def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
             .alias("away_moneyline"),
         ]
     )
-
-    return df
 
 
 def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
@@ -178,15 +177,13 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
     all_qbs = all_qbs.sort("date", descending=True)
 
     # Get most recent QB per team
-    latest_qbs = all_qbs.group_by("team_abbr").agg(
+    return all_qbs.group_by("team_abbr").agg(
         [
             pl.col("qb_name").first(),
             pl.col("qb_value_pre").first(),
             pl.col("qb_elo_pre").first(),
         ]
     )
-
-    return latest_qbs
 
 
 def get_qb_elo_by_name(elo_df: pl.DataFrame, qb_name: str) -> dict:
@@ -280,84 +277,45 @@ def fill_future_qb_data(
             "qb_elo_pre": row["qb_elo_pre"],
         }
 
-    # Fill in away QB data
     if null_away.height > 0:
-        new_cols = [
-            pl.when(pl.col("away_qb").is_null() if has_away_qb else pl.lit(True))
-            .then(
-                pl.col("away_abbr").map_elements(
-                    lambda t: qb_lookup.get(t, {}).get("qb_name"), return_dtype=pl.Utf8
-                )
-            )
-            .otherwise(pl.col("away_qb") if has_away_qb else pl.lit(None))
-            .alias("away_qb"),
-        ]
-        # Only fill ELO values if columns exist and are null
-        if "away_qb_value_pre" in df.columns:
-            new_cols.append(
-                pl.when(pl.col("away_qb_value_pre").is_null())
-                .then(
-                    pl.col("away_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_value_pre"),
-                        return_dtype=pl.Float64,
-                    )
-                )
-                .otherwise(pl.col("away_qb_value_pre"))
-                .alias("away_qb_value_pre")
-            )
-        if "away_qb_elo_pre" in df.columns:
-            new_cols.append(
-                pl.when(pl.col("away_qb_elo_pre").is_null())
-                .then(
-                    pl.col("away_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_elo_pre"),
-                        return_dtype=pl.Float64,
-                    )
-                )
-                .otherwise(pl.col("away_qb_elo_pre"))
-                .alias("away_qb_elo_pre")
-            )
-        df = df.with_columns(new_cols)
-
-    # Fill in home QB data
+        df = _fill_side_qb(df, "away", qb_lookup, has_qb_column=has_away_qb)
     if null_home.height > 0:
-        new_cols = [
-            pl.when(pl.col("home_qb").is_null() if has_home_qb else pl.lit(True))
-            .then(
-                pl.col("home_abbr").map_elements(
-                    lambda t: qb_lookup.get(t, {}).get("qb_name"), return_dtype=pl.Utf8
-                )
-            )
-            .otherwise(pl.col("home_qb") if has_home_qb else pl.lit(None))
-            .alias("home_qb"),
-        ]
-        if "home_qb_value_pre" in df.columns:
-            new_cols.append(
-                pl.when(pl.col("home_qb_value_pre").is_null())
-                .then(
-                    pl.col("home_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_value_pre"),
-                        return_dtype=pl.Float64,
-                    )
-                )
-                .otherwise(pl.col("home_qb_value_pre"))
-                .alias("home_qb_value_pre")
-            )
-        if "home_qb_elo_pre" in df.columns:
-            new_cols.append(
-                pl.when(pl.col("home_qb_elo_pre").is_null())
-                .then(
-                    pl.col("home_abbr").map_elements(
-                        lambda t: qb_lookup.get(t, {}).get("qb_elo_pre"),
-                        return_dtype=pl.Float64,
-                    )
-                )
-                .otherwise(pl.col("home_qb_elo_pre"))
-                .alias("home_qb_elo_pre")
-            )
-        df = df.with_columns(new_cols)
-
+        df = _fill_side_qb(df, "home", qb_lookup, has_qb_column=has_home_qb)
     return df
+
+
+def _fill_side_qb(
+    df: pl.DataFrame,
+    side: str,
+    qb_lookup: dict[str, dict[str, Any]],
+    *,
+    has_qb_column: bool,
+) -> pl.DataFrame:
+    """Fill one side's missing quarterback name and ELO values from the latest starters."""
+
+    def looked_up(key: str, dtype: type[pl.DataType]) -> pl.Expr:
+        return pl.col(f"{side}_abbr").map_elements(
+            lambda t: qb_lookup.get(t, {}).get(key), return_dtype=dtype
+        )
+
+    qb_col = f"{side}_qb"
+    new_cols = [
+        pl.when(pl.col(qb_col).is_null() if has_qb_column else pl.lit(True))
+        .then(looked_up("qb_name", pl.Utf8))
+        .otherwise(pl.col(qb_col) if has_qb_column else pl.lit(None))
+        .alias(qb_col),
+    ]
+    # Only fill ELO values if columns exist and are null
+    for key in ("qb_value_pre", "qb_elo_pre"):
+        column = f"{side}_{key}"
+        if column in df.columns:
+            new_cols.append(
+                pl.when(pl.col(column).is_null())
+                .then(looked_up(key, pl.Float64))
+                .otherwise(pl.col(column))
+                .alias(column)
+            )
+    return df.with_columns(new_cols)
 
 
 def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
@@ -382,12 +340,11 @@ def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
     # Identify future games (no score data)
     if "away_score" in df.columns:
         future_mask = pl.col("away_score").is_null()
+    # Fall back to checking if lines are missing
+    elif "home_spread" in df.columns:
+        future_mask = pl.col("home_spread").is_null()
     else:
-        # Fall back to checking if lines are missing
-        if "home_spread" in df.columns:
-            future_mask = pl.col("home_spread").is_null()
-        else:
-            return df
+        return df
 
     future_games = df.filter(future_mask)
     if future_games.height == 0:
@@ -402,86 +359,85 @@ def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
         log.warning("No spreads data available from SurvivorGrid")
         return df
 
-    # Build lookup function for home spread
-    # SurvivorGrid shows spread from perspective of the team listed
-    # Positive = underdog, Negative = favorite
-    # We need to convert to home_spread perspective
-    def get_home_spread(week: int, home_abbr: str, away_abbr: str) -> float | None:
-        """Get the home spread for a given game from SurvivorGrid data."""
-        home_spread = spreads_data.get(home_abbr, {}).get(week)
-        if home_spread is not None:
-            return home_spread
-        # Try getting from away perspective (negate)
-        away_spread = spreads_data.get(away_abbr, {}).get(week)
-        if away_spread is not None:
-            return -away_spread
-        return None
+    updates = _future_line_updates(df, spreads_data)
+    if not updates:
+        return df
 
-    # Apply spreads to future games
+    log.info("Filling lines for %d future games from SurvivorGrid", len(updates))
+    df = _apply_line_updates(df, pl.DataFrame(updates))
+
+    # Now calculate moneylines from the new spreads
+    return fill_missing_moneylines(df)
+
+
+def _home_spread(
+    spreads_data: dict[str, dict[int, float]], week: int, home_abbr: str, away_abbr: str
+) -> float | None:
+    """Return a game's home spread from SurvivorGrid data, negating the away side's if needed.
+
+    SurvivorGrid shows the spread from the perspective of the team listed: a positive spread
+    marks the underdog, a negative one the favorite.
+    """
+    home_spread = spreads_data.get(home_abbr, {}).get(week)
+    if home_spread is not None:
+        return home_spread
+    # Try getting from away perspective (negate)
+    away_spread = spreads_data.get(away_abbr, {}).get(week)
+    if away_spread is not None:
+        return -away_spread
+    return None
+
+
+def _future_line_updates(
+    df: pl.DataFrame, spreads_data: dict[str, dict[int, float]]
+) -> list[dict[str, Any]]:
+    """Return new lines for each unplayed game that has no spread yet."""
     updates = []
     for row in df.iter_rows(named=True):
         week = row.get("week")
         home_abbr = row.get("home_abbr")
         away_abbr = row.get("away_abbr")
-        away_score = row.get("away_score")
-
         # Only update future games (no score) with missing spreads
-        is_future = away_score is None
+        is_future = row.get("away_score") is None
         has_spread = row.get("home_spread") is not None
+        if not (is_future and not has_spread and week and home_abbr and away_abbr):
+            continue
+        home_spread = _home_spread(spreads_data, week, home_abbr, away_abbr)
+        if home_spread is not None:
+            updates.append(
+                {
+                    "game_id": row.get("game_id"),
+                    "new_home_spread": home_spread,
+                    "new_away_spread": -home_spread,
+                    "new_total_line": constants.DEFAULT_TOTAL_LINE,
+                }
+            )
+    return updates
 
-        if is_future and not has_spread and week and home_abbr and away_abbr:
-            home_spread = get_home_spread(week, home_abbr, away_abbr)
-            if home_spread is not None:
-                updates.append(
-                    {
-                        "game_id": row.get("game_id"),
-                        "new_home_spread": home_spread,
-                        "new_away_spread": -home_spread,
-                        "new_total_line": constants.DEFAULT_TOTAL_LINE,
-                    }
-                )
 
-    if not updates:
-        return df
-
-    log.info("Filling lines for %d future games from SurvivorGrid", len(updates))
-
-    # Create updates DataFrame
-    updates_df = pl.DataFrame(updates)
-
-    # Join and update
+def _apply_line_updates(df: pl.DataFrame, updates_df: pl.DataFrame) -> pl.DataFrame:
+    """Write the new spreads, and totals where none exist, onto the matching games."""
     df = df.join(updates_df, on="game_id", how="left")
-
-    # Apply updates where we have new values
-    if "new_home_spread" in df.columns:
-        df = df.with_columns(
-            [
-                pl.when(pl.col("new_home_spread").is_not_null())
-                .then(pl.col("new_home_spread"))
-                .otherwise(pl.col("home_spread") if "home_spread" in df.columns else pl.lit(None))
-                .alias("home_spread"),
-                pl.when(pl.col("new_away_spread").is_not_null())
-                .then(pl.col("new_away_spread"))
-                .otherwise(pl.col("away_spread") if "away_spread" in df.columns else pl.lit(None))
-                .alias("away_spread"),
-                pl.when(
-                    pl.col("new_total_line").is_not_null()
-                    & (
-                        pl.col("total_line").is_null()
-                        if "total_line" in df.columns
-                        else pl.lit(True)
-                    )
-                )
-                .then(pl.col("new_total_line"))
-                .otherwise(pl.col("total_line") if "total_line" in df.columns else pl.lit(None))
-                .alias("total_line"),
-            ]
-        )
-
-        # Drop temporary columns
-        df = df.drop(["new_home_spread", "new_away_spread", "new_total_line"])
-
-    # Now calculate moneylines from the new spreads
-    df = fill_missing_moneylines(df)
-
-    return df
+    if "new_home_spread" not in df.columns:
+        return df
+    df = df.with_columns(
+        [
+            pl.when(pl.col("new_home_spread").is_not_null())
+            .then(pl.col("new_home_spread"))
+            .otherwise(pl.col("home_spread") if "home_spread" in df.columns else pl.lit(None))
+            .alias("home_spread"),
+            pl.when(pl.col("new_away_spread").is_not_null())
+            .then(pl.col("new_away_spread"))
+            .otherwise(pl.col("away_spread") if "away_spread" in df.columns else pl.lit(None))
+            .alias("away_spread"),
+            pl.when(
+                pl.col("new_total_line").is_not_null()
+                & (pl.col("total_line").is_null() if "total_line" in df.columns else pl.lit(True))
+            )
+            .then(pl.col("new_total_line"))
+            .otherwise(pl.col("total_line") if "total_line" in df.columns else pl.lit(None))
+            .alias("total_line"),
+        ]
+    )
+    # Drop temporary columns
+    return df.drop(["new_home_spread", "new_away_spread", "new_total_line"])

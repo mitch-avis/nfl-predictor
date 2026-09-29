@@ -435,8 +435,9 @@ def test_raw_uses_ratio_of_sums_when_numerator_and_denominator_are_supplied() ->
         team_games,
         season=2024,
         week=4,
-        numerator_col="epa_margin_sum",
-        denominator_col="total_play_count",
+        margin=schedule_strength.MarginSource(
+            numerator="epa_margin_sum", denominator="total_play_count"
+        ),
     )
     rates = schedule_strength.compute_schedule_strength_raw(team_games, season=2024, week=4)
 
@@ -523,5 +524,8 @@ def test_invalid_inputs_raise_value_errors() -> None:
 
     with pytest.raises(ValueError, match="numerator_col and denominator_col"):
         schedule_strength.compute_schedule_strength_raw(
-            _team_games_frame(), season=2024, week=4, numerator_col="epa_margin_sum"
+            _team_games_frame(),
+            season=2024,
+            week=4,
+            margin=schedule_strength.MarginSource(numerator="epa_margin_sum"),
         )

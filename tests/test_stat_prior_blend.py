@@ -75,13 +75,15 @@ def _run_week(
         week,
         _schedule(week),
         _team_stats(),
-        min_season=min_season,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
-        prior_season_stats=prior_season_stats,
-        blend_stat_prior=blend_stat_prior,
-        stat_prior_blend_games=stat_prior_blend_games,
+        data_collection.SeasonInputs(
+            min_season=min_season,
+            elo_df=None,
+            tr_df=None,
+            prev_tr_df=None,
+            prior_season_stats=prior_season_stats,
+            blend_stat_prior=blend_stat_prior,
+            stat_prior_blend_games=stat_prior_blend_games,
+        ),
     )
     return result.sort("away_abbr")
 
@@ -227,9 +229,13 @@ def test_process_season_builds_the_prior_once_per_season(monkeypatch: pytest.Mon
         calls.append(season)
         return sentinel
 
-    def fake_process_week(*_args: object, **kwargs: object) -> pl.DataFrame:
+    def fake_process_week(
+        *args: object,
+    ) -> pl.DataFrame:
         """Capture the prior frame each week receives."""
-        seen.append(kwargs["prior_season_stats"])
+        inputs = args[-1]
+        assert isinstance(inputs, data_collection.SeasonInputs)
+        seen.append(inputs.prior_season_stats)
         return pl.DataFrame()
 
     monkeypatch.setattr(data_collection, "build_prior_season_stats", fake_build)
@@ -243,7 +249,9 @@ def test_process_season_builds_the_prior_once_per_season(monkeypatch: pytest.Mon
             "home_abbr": ["KC"] * 3,
         }
     )
-    data_collection.process_season(2007, schedule, pl.DataFrame(), min_season=2006)
+    data_collection.process_season(
+        2007, schedule, pl.DataFrame(), data_collection.SeasonInputs(min_season=2006)
+    )
 
     assert calls == [2007]
     assert seen == [sentinel] * 3

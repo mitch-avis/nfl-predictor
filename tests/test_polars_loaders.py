@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
@@ -11,6 +11,9 @@ import pytest
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.polars import loaders, teamrankings
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_is_numeric_dtype() -> None:
@@ -112,7 +115,8 @@ def test_load_schedule_uses_cache_for_historical_seasons(monkeypatch, tmp_path: 
 
     def fail_load_schedules(*_args, **_kwargs):
         """Fail if nflreadpy is called."""
-        raise AssertionError("nflreadpy schedule load should not be called")
+        msg = "nflreadpy schedule load should not be called"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_schedules", fail_load_schedules)
 
@@ -211,7 +215,8 @@ def test_load_team_stats_uses_cache_for_historical_seasons(monkeypatch, tmp_path
 
     def fail_load_team_stats(*_args, **_kwargs):
         """Fail if nflreadpy is called."""
-        raise AssertionError("nflreadpy team stats load should not be called")
+        msg = "nflreadpy team stats load should not be called"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
 
@@ -267,7 +272,8 @@ def test_load_team_stats_handles_unavailable_current_season(monkeypatch, tmp_pat
 
     def fail_load_team_stats(*_args, **_kwargs):
         """Simulate nflreadpy not publishing the current season stats parquet yet."""
-        raise ConnectionError("404 Client Error: stats_team_week_2026.parquet")
+        msg = "404 Client Error: stats_team_week_2026.parquet"
+        raise ConnectionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
 
@@ -296,7 +302,8 @@ def test_load_team_stats_uses_cached_fallback_when_current_refresh_fails(
 
     def fail_load_team_stats(*_args, **_kwargs):
         """Simulate nflreadpy not publishing the current season stats parquet yet."""
-        raise ConnectionError("404 Client Error: stats_team_week_2026.parquet")
+        msg = "404 Client Error: stats_team_week_2026.parquet"
+        raise ConnectionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
 
@@ -312,7 +319,8 @@ def test_load_team_stats_reraises_historical_download_failures(monkeypatch, tmp_
 
     def fail_load_team_stats(*_args, **_kwargs):
         """Simulate a broken historical load."""
-        raise ConnectionError("historical load failed")
+        msg = "historical load failed"
+        raise ConnectionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
 
@@ -439,7 +447,7 @@ def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
         "2023,2.0,AAA,BBB,1510,1440,QB1,QB2,1.6,0.9,1405,1345\n"
     )
 
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     elo_df = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -504,7 +512,8 @@ def test_load_pbp_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path)
 
     def fail_load_pbp(*_args, **_kwargs) -> pl.DataFrame:
         """Fail if nflreadpy is called."""
-        raise AssertionError("nflreadpy play-by-play load should not be called")
+        msg = "nflreadpy play-by-play load should not be called"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_pbp", fail_load_pbp)
 
@@ -556,7 +565,8 @@ def test_load_pbp_current_season_failure_uses_cache(monkeypatch, tmp_path: Path)
     def failing_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Simulate an nflreadpy outage."""
         _ = seasons
-        raise ConnectionError("boom")
+        msg = "boom"
+        raise ConnectionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
 
@@ -571,7 +581,8 @@ def test_load_pbp_current_season_failure_without_cache(monkeypatch, tmp_path: Pa
     def failing_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Simulate an nflreadpy outage."""
         _ = seasons
-        raise ConnectionError("boom")
+        msg = "boom"
+        raise ConnectionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
 
@@ -591,7 +602,8 @@ def test_load_pbp_historical_failure_raises(monkeypatch, tmp_path: Path) -> None
     def failing_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Simulate an nflreadpy outage."""
         _ = seasons
-        raise ConnectionError("boom")
+        msg = "boom"
+        raise ConnectionError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
 
@@ -690,7 +702,8 @@ def test_load_pbp_current_season_out_of_range_is_non_fatal(monkeypatch, tmp_path
     """
 
     def out_of_range_load_pbp(seasons: list[int]) -> pl.DataFrame:
-        raise ValueError("Season must be between 1999 and 2025")
+        msg = "Season must be between 1999 and 2025"
+        raise ValueError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_pbp", out_of_range_load_pbp)
 
@@ -704,7 +717,8 @@ def test_load_pbp_historical_out_of_range_still_raises(monkeypatch, tmp_path: Pa
     """A historical season that cannot be served is a real failure and is not swallowed."""
 
     def out_of_range_load_pbp(seasons: list[int]) -> pl.DataFrame:
-        raise ValueError("Season must be between 1999 and 2025")
+        msg = "Season must be between 1999 and 2025"
+        raise ValueError(msg)
 
     monkeypatch.setattr(loaders.nfl, "load_pbp", out_of_range_load_pbp)
 

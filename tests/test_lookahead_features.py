@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 
 import polars as pl
+import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
@@ -105,12 +106,8 @@ def test_compute_team_next_week_context_validates_schema() -> None:
     """Helper should raise a clear error if required schedule columns are missing."""
     bad_schedule_df = pl.DataFrame({"season": [2024], "week": [1]})
 
-    try:
+    with pytest.raises(ValueError, match="missing required columns"):
         polars_utils.compute_team_next_week_context(bad_schedule_df, season=2024, week=1)
-    except ValueError as exc:
-        assert "missing required columns" in str(exc)
-    else:
-        raise AssertionError("Expected ValueError for missing required columns")
 
 
 def test_add_lookahead_features_uses_historical_divisions_before_2002() -> None:

@@ -26,6 +26,8 @@ indicator is null or absent. The stacked system is solved with ridge-regularized
 and the resulting offense and defense blocks are centered independently.
 """
 
+from typing import NamedTuple
+
 import numpy as np
 import numpy.typing as npt
 import polars as pl
@@ -38,6 +40,11 @@ DEFAULT_RIDGE_LAMBDAS: npt.NDArray[np.float64] = np.logspace(-6, 2, 17, dtype=np
 _COEFFICIENT_DECIMALS = 6
 
 FloatArray = npt.NDArray[np.float64]
+
+# The design is a (games x teams) matrix.
+MATRIX_NDIM = 2
+# Cross-validating a penalty needs at least two folds, each with at least one row.
+MIN_CV_FOLDS = 2
 
 
 def _sorted_teams(team_games: pl.DataFrame, *columns: str) -> list[str]:
@@ -55,7 +62,8 @@ def _require_columns(team_games: pl.DataFrame, *columns: str) -> None:
     """Raise when any required column is missing from the team-game frame."""
     missing = [column for column in columns if column not in team_games.columns]
     if missing:
-        raise ValueError(f"team_games is missing required column(s): {', '.join(missing)}")
+        msg = f"team_games is missing required column(s): {', '.join(missing)}"
+        raise ValueError(msg)
 
 
 def _response_array(team_games: pl.DataFrame, response_col: str) -> FloatArray:
@@ -113,13 +121,25 @@ def _empty_team_ratings(team_col: str) -> pl.DataFrame:
     )
 
 
+class GameColumns(NamedTuple):
+    """The team-game columns a solve reads: subject team, opponent, and the home flag.
+
+    The home column is optional in the data; when absent, the home-field term stays zero.
+    """
+
+    team: str = "team_abbr"
+    opponent: str = "opponent_abbr"
+    home: str = "is_home"
+
+
+DEFAULT_GAME_COLUMNS = GameColumns()
+
+
 def build_team_design_matrix(
     team_games: pl.DataFrame,
     response_col: str,
     *,
-    team_col: str = "team_abbr",
-    opponent_col: str = "opponent_abbr",
-    home_col: str = "is_home",
+    columns: GameColumns = DEFAULT_GAME_COLUMNS,
 ) -> tuple[FloatArray, FloatArray, list[str]]:
     """Build the offense/defense/home design matrix and response vector for a team-game frame.
 
@@ -131,15 +151,14 @@ def build_team_design_matrix(
     Args:
         team_games: One row per team-game.
         response_col: Name of the numeric response column.
-        team_col: Column holding the subject team label.
-        opponent_col: Column holding the opposing team label.
-        home_col: Optional boolean column that is true for the subject team's home games.
+        columns: The subject team, opponent and (optional boolean) home columns.
 
     Returns:
         A ``(design, response, teams)`` tuple where ``design`` has shape
         ``(rows, 2 * len(teams) + 1)`` and ``teams`` is the sorted team universe.
 
     """
+    team_col, opponent_col, home_col = columns
     _require_columns(team_games, team_col, opponent_col, response_col)
     frame = team_games.drop_nulls([team_col, opponent_col, response_col])
     teams = _sorted_teams(frame, team_col, opponent_col)
@@ -162,6 +181,37 @@ def build_team_design_matrix(
             design[row_index, -1] = 1.0 if bool(home_value[0]) else -1.0
 
     return design, response, teams
+
+
+def _check_ridge_inputs(design: FloatArray, response: FloatArray) -> None:
+    """Raise unless ``design`` is a matrix and ``response`` a vector with the same rows."""
+    if design.ndim != MATRIX_NDIM:
+        msg = "design must be a 2D matrix"
+        raise ValueError(msg)
+    if response.ndim != 1:
+        msg = "response must be a 1D vector"
+        raise ValueError(msg)
+    if design.shape[0] != response.shape[0]:
+        msg = "design and response must have the same number of rows"
+        raise ValueError(msg)
+
+
+def _cross_validated_error(
+    design: FloatArray, response: FloatArray, fold_ids: np.ndarray, ridge_lambda: float
+) -> float | None:
+    """Return a penalty's mean validation MSE over the folds, or None if no fold is usable."""
+    fold_errors: list[float] = []
+    for fold_id in range(int(fold_ids.max()) + 1):
+        validation_mask = fold_ids == fold_id
+        training_mask = ~validation_mask
+        if not validation_mask.any() or not training_mask.any():
+            continue
+        coefficients = _solve_linear_system(
+            design[training_mask], response[training_mask], ridge_lambda
+        )
+        residuals = response[validation_mask] - (design[validation_mask] @ coefficients)
+        fold_errors.append(float(np.mean(residuals**2)))
+    return float(np.mean(fold_errors)) if fold_errors else None
 
 
 def tune_ridge_lambda(
@@ -195,48 +245,30 @@ def tune_ridge_lambda(
             candidate penalties are supplied.
 
     """
-    if design.ndim != 2:
-        raise ValueError("design must be a 2D matrix")
-    if response.ndim != 1:
-        raise ValueError("response must be a 1D vector")
-    if design.shape[0] != response.shape[0]:
-        raise ValueError("design and response must have the same number of rows")
-
+    _check_ridge_inputs(design, response)
     lambdas = (
         np.asarray(candidate_lambdas, dtype=np.float64)
         if candidate_lambdas is not None
         else DEFAULT_RIDGE_LAMBDAS
     )
     if lambdas.size == 0:
-        raise ValueError("candidate_lambdas must contain at least one value")
+        msg = "candidate_lambdas must contain at least one value"
+        raise ValueError(msg)
 
     row_count = design.shape[0]
-    if row_count < 2:
+    if row_count < MIN_CV_FOLDS:
         return float(lambdas[0])
 
-    effective_folds = min(max(folds, 2), row_count)
+    effective_folds = min(max(folds, MIN_CV_FOLDS), row_count)
     fold_ids = np.arange(row_count, dtype=np.int64) % effective_folds
     best_lambda = float(lambdas[0])
     best_error = float("inf")
 
     for candidate in lambdas:
         ridge_lambda = float(candidate)
-        fold_errors: list[float] = []
-        for fold_id in range(effective_folds):
-            validation_mask = fold_ids == fold_id
-            training_mask = ~validation_mask
-            if not validation_mask.any() or not training_mask.any():
-                continue
-            coefficients = _solve_linear_system(
-                design[training_mask], response[training_mask], ridge_lambda
-            )
-            residuals = response[validation_mask] - (design[validation_mask] @ coefficients)
-            fold_errors.append(float(np.mean(residuals**2)))
-
-        if not fold_errors:
+        mean_error = _cross_validated_error(design, response, fold_ids, ridge_lambda)
+        if mean_error is None:
             continue
-
-        mean_error = float(np.mean(fold_errors))
         if mean_error < best_error or (
             bool(np.isclose(mean_error, best_error)) and ridge_lambda < best_lambda
         ):
@@ -251,9 +283,7 @@ def solve_team_ridge(
     response_col: str,
     *,
     ridge_lambda: float,
-    team_col: str = "team_abbr",
-    opponent_col: str = "opponent_abbr",
-    home_col: str = "is_home",
+    columns: GameColumns = DEFAULT_GAME_COLUMNS,
 ) -> tuple[pl.DataFrame, float]:
     """Jointly estimate offense and defense coefficients for one response column.
 
@@ -266,9 +296,7 @@ def solve_team_ridge(
         team_games: One row per team-game.
         response_col: Name of the numeric response column.
         ridge_lambda: Ridge penalty; values at or below zero fall back to least squares.
-        team_col: Column holding the subject team label.
-        opponent_col: Column holding the opposing team label.
-        home_col: Optional boolean column that is true for the subject team's home games.
+        columns: The subject team, opponent and (optional boolean) home columns.
 
     Returns:
         A ``(ratings, home_field_advantage)`` tuple. ``ratings`` holds one row per team with
@@ -277,16 +305,11 @@ def solve_team_ridge(
         null rows are dropped, returns a typed empty frame and ``0.0``.
 
     """
+    team_col = columns.team
     if team_games.is_empty():
         return _empty_team_ratings(team_col), 0.0
 
-    design, response, teams = build_team_design_matrix(
-        team_games,
-        response_col,
-        team_col=team_col,
-        opponent_col=opponent_col,
-        home_col=home_col,
-    )
+    design, response, teams = build_team_design_matrix(team_games, response_col, columns=columns)
     if not teams or design.shape[0] == 0:
         return _empty_team_ratings(team_col), 0.0
 

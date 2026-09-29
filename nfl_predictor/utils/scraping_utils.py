@@ -7,17 +7,25 @@ This module provides functions for scraping data from external sources:
 All scraping functions include appropriate rate limiting and error handling.
 """
 
-import os
 import re
 from datetime import date, timedelta
 from time import sleep
+from typing import TYPE_CHECKING
 
 import polars as pl
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from nfl_predictor import constants
+from nfl_predictor.utils import clock
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+# A TeamRankings table row holds the rank, the team and the value.
+MIN_TEAM_ROW_CELLS = 3
+NFL_TEAM_COUNT = 32
 
 
 def get_season_start(year: int) -> date:
@@ -44,7 +52,7 @@ def get_current_nfl_week() -> tuple[int, int]:
         Tuple of (season, week)
 
     """
-    today = date.today()
+    today = clock.local_today()
     current_season = today.year if today.month > constants.SEASON_END_MONTH else today.year - 1
 
     def adjust_to_tuesday(start_date: date) -> date:
@@ -77,8 +85,7 @@ def get_week_date(season: int, week: int) -> date:
     # Go back 8 days from season start to get the base date
     base_date = season_start - timedelta(days=8)
     # Add weeks to get to the target week
-    week_date = base_date + timedelta(weeks=week)
-    return week_date
+    return base_date + timedelta(weeks=week)
 
 
 def normalize_team_column(df: pl.DataFrame, column: str) -> pl.DataFrame:
@@ -138,113 +145,74 @@ def scrape_team_rankings_for_week(
     # Use a team-keyed dictionary to properly match data across tables
     # Each team maps to a dict of {column_name: value}
     team_data: dict[str, dict[str, float]] = {}
-
-    # Scrape ratings
-    for rating, rating_name in ratings_to_scrape.items():
-        log.debug("Scraping rating: %s", rating_name)
-        url = f"{constants.TEAM_RANKINGS_URL}/ranking/{rating}?date={week_date}"
-
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, "html.parser")
-            table = soup.find("table")
-
-            if table:
-                teams, ratings = _parse_tr_rating_table(table)
-
-                # Store each team's rating, keyed by team abbreviation
-                try:
-                    pairs = zip(teams, ratings, strict=True)
-                except ValueError:
-                    log.warning(
-                        "TeamRankings parse length mismatch for %s on %s "
-                        "(teams=%d, values=%d); truncating",
-                        rating_name,
-                        week_date,
-                        len(teams),
-                        len(ratings),
-                    )
-                    pairs = zip(teams, ratings, strict=False)
-
-                for team_abbr, rating_value in pairs:
-                    if team_abbr not in team_data:
-                        team_data[team_abbr] = {}
-                    team_data[team_abbr][rating_name] = rating_value
-            else:
-                log.warning("No data found for %s on %s", rating_name, week_date)
-
-        except requests.RequestException as e:
-            log.warning("Failed to scrape %s: %s", rating_name, e)
-        except (ValueError, AttributeError) as e:
-            log.warning("Failed to parse %s: %s", rating_name, e)
-
+    tables = [
+        *(
+            (f"ranking/{path}", name, _parse_tr_rating_table)
+            for path, name in ratings_to_scrape.items()
+        ),
+        *((f"stat/{path}", name, _parse_tr_stat_table) for path, name in stats_to_scrape.items()),
+    ]
+    for path, column_name, parse_table in tables:
+        log.debug("Scraping %s", column_name)
+        url = f"{constants.TEAM_RANKINGS_URL}/{path}?date={week_date}"
+        for team_abbr, value in _scrape_tr_table(url, column_name, week_date, parse_table):
+            team_data.setdefault(team_abbr, {})[column_name] = value
         sleep(constants.TEAM_RANKINGS_SLEEP)
 
-    # Scrape statistics
-    for statistic, stat_name in stats_to_scrape.items():
-        log.debug("Scraping statistic: %s", stat_name)
-        url = f"{constants.TEAM_RANKINGS_URL}/stat/{statistic}?date={week_date}"
-
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, "html.parser")
-            table = soup.find("table")
-
-            if table:
-                teams, stats = _parse_tr_stat_table(table)
-
-                # Store each team's stat, keyed by team abbreviation
-                try:
-                    pairs = zip(teams, stats, strict=True)
-                except ValueError:
-                    log.warning(
-                        "TeamRankings parse length mismatch for %s on %s "
-                        "(teams=%d, values=%d); truncating",
-                        stat_name,
-                        week_date,
-                        len(teams),
-                        len(stats),
-                    )
-                    pairs = zip(teams, stats, strict=False)
-
-                for team_abbr, stat_value in pairs:
-                    if team_abbr not in team_data:
-                        team_data[team_abbr] = {}
-                    team_data[team_abbr][stat_name] = stat_value
-            else:
-                log.warning("No data found for %s on %s", stat_name, week_date)
-
-        except requests.RequestException as e:
-            log.warning("Failed to scrape %s: %s", stat_name, e)
-        except (ValueError, AttributeError) as e:
-            log.warning("Failed to parse %s: %s", stat_name, e)
-
-        sleep(constants.TEAM_RANKINGS_SLEEP)
+    if not team_data:
+        log.warning("No TR data scraped for week %d", week_number)
+        return pl.DataFrame()
 
     # Build DataFrame from team-keyed dictionary
-    if team_data:
-        # Convert team_data dict to columnar format
-        rows = []
-        for team_abbr, metrics in team_data.items():
-            row = {"team_abbr": team_abbr, **metrics}
-            rows.append(row)
+    tr_df = pl.DataFrame(
+        [{"team_abbr": team_abbr, **metrics} for team_abbr, metrics in team_data.items()]
+    )
+    tr_df = tr_df.with_columns(pl.lit(week_number).alias("week"))
 
-        tr_df = pl.DataFrame(rows)
-        tr_df = tr_df.with_columns(pl.lit(week_number).alias("week"))
+    # Normalize team abbreviations
+    tr_df = normalize_team_column(tr_df, "team_abbr")
 
-        # Normalize team abbreviations
-        tr_df = normalize_team_column(tr_df, "team_abbr")
-
-        log.info("Scraped TR data for %d teams", tr_df.height)
-        return tr_df
-
-    log.warning("No TR data scraped for week %d", week_number)
-    return pl.DataFrame()
+    log.info("Scraped TR data for %d teams", tr_df.height)
+    return tr_df
 
 
-def _parse_tr_rating_table(table) -> tuple[list[str], list[float]]:
+def _scrape_tr_table(
+    url: str,
+    column_name: str,
+    week_date: date,
+    parse_table: Callable[[Tag], tuple[list[str], list[float]]],
+) -> list[tuple[str, float]]:
+    """Fetch one TeamRankings table and return its ``(team, value)`` pairs.
+
+    A request or parse failure, or a page without a table, is logged and gives no pairs. When
+    the parser finds more teams than values (or the reverse) the matched pairs are kept.
+    """
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        table = BeautifulSoup(response.content, "html.parser").find("table")
+        if not isinstance(table, Tag):
+            log.warning("No data found for %s on %s", column_name, week_date)
+            return []
+        teams, values = parse_table(table)
+    except requests.RequestException as e:
+        log.warning("Failed to scrape %s: %s", column_name, e)
+        return []
+    except (ValueError, AttributeError) as e:
+        log.warning("Failed to parse %s: %s", column_name, e)
+        return []
+    if len(teams) != len(values):
+        log.warning(
+            "TeamRankings parse length mismatch for %s on %s (teams=%d, values=%d); truncating",
+            column_name,
+            week_date,
+            len(teams),
+            len(values),
+        )
+    return list(zip(teams, values, strict=False))
+
+
+def _parse_tr_rating_table(table: Tag) -> tuple[list[str], list[float]]:
     """Parse a TeamRankings rating table using BeautifulSoup.
 
     Args:
@@ -260,7 +228,7 @@ def _parse_tr_rating_table(table) -> tuple[list[str], list[float]]:
     rows = table.find_all("tr")
     for row in rows[1:]:  # Skip header row
         cells = row.find_all("td")
-        if len(cells) >= 3:
+        if len(cells) >= MIN_TEAM_ROW_CELLS:
             # Column 1 is team name, column 2 is rating
             team_text = cells[1].get_text(strip=True)
             rating_text = cells[2].get_text(strip=True)
@@ -279,7 +247,7 @@ def _parse_tr_rating_table(table) -> tuple[list[str], list[float]]:
     return teams, ratings
 
 
-def _parse_tr_stat_table(table) -> tuple[list[str], list[float]]:
+def _parse_tr_stat_table(table: Tag) -> tuple[list[str], list[float]]:
     """Parse a TeamRankings statistics table using BeautifulSoup.
 
     Args:
@@ -295,7 +263,7 @@ def _parse_tr_stat_table(table) -> tuple[list[str], list[float]]:
     rows = table.find_all("tr")
     for row in rows[1:]:  # Skip header row
         cells = row.find_all("td")
-        if len(cells) >= 3:
+        if len(cells) >= MIN_TEAM_ROW_CELLS:
             # Column 1 is team name, column 2 is stat value
             team_text = cells[1].get_text(strip=True)
             stat_text = cells[2].get_text(strip=True)
@@ -333,15 +301,16 @@ def get_missing_tr_columns(
     """
     existing_cols = set(existing_df.columns)
 
-    missing_ratings = {}
-    for url_path, col_name in constants.TEAM_RANKINGS_RATINGS.items():
-        if col_name not in existing_cols:
-            missing_ratings[url_path] = col_name
-
-    missing_stats = {}
-    for url_path, col_name in constants.TEAM_RANKINGS_STATS.items():
-        if col_name not in existing_cols:
-            missing_stats[url_path] = col_name
+    missing_ratings = {
+        url_path: col_name
+        for url_path, col_name in constants.TEAM_RANKINGS_RATINGS.items()
+        if col_name not in existing_cols
+    }
+    missing_stats = {
+        url_path: col_name
+        for url_path, col_name in constants.TEAM_RANKINGS_STATS.items()
+        if col_name not in existing_cols
+    }
 
     return missing_ratings, missing_stats
 
@@ -382,9 +351,7 @@ def merge_tr_data(
     new_df_subset = new_df.select(join_cols + new_cols)
 
     # Join the new data
-    merged = existing_df.join(new_df_subset, on=join_cols, how="left")
-
-    return merged
+    return existing_df.join(new_df_subset, on=join_cols, how="left")
 
 
 def save_team_rankings_week(tr_df: pl.DataFrame, season: int, week: int) -> None:
@@ -396,10 +363,10 @@ def save_team_rankings_week(tr_df: pl.DataFrame, season: int, week: int) -> None
         week: Week number
 
     """
-    season_dir = os.path.join(constants.DATA_PATH, str(season))
-    os.makedirs(season_dir, exist_ok=True)
+    season_dir = constants.DATA_PATH / str(season)
+    season_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = os.path.join(season_dir, f"{season}_week_{week:02d}_team_rankings.csv")
+    file_path = season_dir / f"{season}_week_{week:02d}_team_rankings.csv"
     tr_df.write_csv(file_path)
     log.debug("Saved TR data to %s", file_path)
 
@@ -411,20 +378,20 @@ def update_season_team_rankings(season: int) -> None:
         season: Season year
 
     """
-    season_dir = os.path.join(constants.DATA_PATH, str(season))
+    season_dir = constants.DATA_PATH / str(season)
     all_weeks_data = []
 
     # Find and load all week files
     for week in range(1, 23):  # Up to playoff weeks
-        week_file = os.path.join(season_dir, f"{season}_week_{week:02d}_team_rankings.csv")
-        if os.path.exists(week_file):
+        week_file = season_dir / f"{season}_week_{week:02d}_team_rankings.csv"
+        if week_file.exists():
             week_df = pl.read_csv(week_file)
             if week_df.height > 0:
                 all_weeks_data.append(week_df)
 
     if all_weeks_data:
         combined_df = pl.concat(all_weeks_data, how="diagonal")
-        combined_path = os.path.join(season_dir, f"{season}_team_rankings.csv")
+        combined_path = season_dir / f"{season}_team_rankings.csv"
         combined_df.write_csv(combined_path)
         log.debug("Updated season TR file: %s", combined_path)
 
@@ -448,35 +415,64 @@ def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
         log.warning("Failed to fetch SurvivorGrid data: %s", e)
         return {}
 
-    soup = BeautifulSoup(response.text, "lxml")
+    data_table = _survivor_grid_table(BeautifulSoup(response.text, "lxml"))
+    if data_table is None:
+        return {}
+    grid_columns = _survivor_grid_columns(data_table)
+    if grid_columns is None:
+        return {}
+    team_col_idx, week_columns = grid_columns
+    log.debug("Found SurvivorGrid week columns: %s", list(week_columns.values()))
 
-    # Find the main data table
+    # Parse team rows
+    spreads = {}
+    for row in data_table.find_all("tr")[1:]:  # Skip header
+        cells = row.find_all(["th", "td"])
+        if len(cells) <= team_col_idx:
+            continue
+
+        # Get team abbreviation from the Team column
+        team_cell = cells[team_col_idx].get_text(strip=True)
+        # Extract team abbr (may have record in parentheses like "BUF(10-4)")
+        team_abbr_raw = team_cell.split("(")[0].strip() if "(" in team_cell else team_cell.strip()
+        # Normalize to canonical abbreviation
+        team_abbr = constants.normalize_team_abbr(team_abbr_raw)
+        if team_abbr not in constants.TEAM_ABBR:
+            continue  # Not a valid team
+
+        team_spreads = {
+            week: spread
+            for col_idx, week in week_columns.items()
+            if col_idx < len(cells)
+            and (spread := _parse_grid_spread(cells[col_idx].get_text(strip=True))) is not None
+        }
+        if team_spreads:
+            spreads[team_abbr] = team_spreads
+
+    log.info("Scraped SurvivorGrid spreads for %d teams", len(spreads))
+    return spreads
+
+
+def _survivor_grid_table(soup: BeautifulSoup) -> Tag | None:
+    """Return the page's team grid: the first table with a row for every team."""
     tables = soup.find_all("table")
     if not tables:
         log.warning("No tables found on SurvivorGrid page")
-        return {}
-
+        return None
     # The main grid table is typically the first/largest table
-    data_table = None
     for table in tables:
-        rows = table.find_all("tr")
-        if len(rows) >= 32:  # Should have all 32 teams
-            data_table = table
-            break
+        if len(table.find_all("tr")) >= NFL_TEAM_COUNT:  # Should have a row for every team
+            return table
+    log.warning("Could not find SurvivorGrid data table")
+    return None
 
-    if not data_table:
-        log.warning("Could not find SurvivorGrid data table")
-        return {}
 
-    # Parse header row to get week numbers
+def _survivor_grid_columns(data_table: Tag) -> tuple[int, dict[int, int]] | None:
+    """Return the Team column index and each week column's index and week number."""
     header_row = data_table.find("tr")
-    if not header_row:
-        return {}
-
-    headers = []
-    for th in header_row.find_all(["th", "td"]):
-        text = th.get_text(strip=True)
-        headers.append(text)
+    if not isinstance(header_row, Tag):
+        return None
+    headers = [th.get_text(strip=True) for th in header_row.find_all(["th", "td"])]
 
     # Find which columns contain week numbers and which has Team
     week_columns = {}  # index -> week number
@@ -489,68 +485,29 @@ def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
 
     if not week_columns:
         log.warning("No week columns found in SurvivorGrid table")
-        return {}
-
+        return None
     if team_col_idx is None:
         log.warning("No Team column found in SurvivorGrid table")
-        return {}
+        return None
+    return team_col_idx, week_columns
 
-    log.debug("Found SurvivorGrid week columns: %s", list(week_columns.values()))
 
-    # Parse team rows
-    spreads = {}
-    rows = data_table.find_all("tr")[1:]  # Skip header
+def _parse_grid_spread(cell_text: str) -> float | None:
+    """Return a grid cell's spread ("@CLE-10.5", "LV+3", "PK"), or None for a bye or blank.
 
-    for row in rows:
-        cells = row.find_all(["th", "td"])
-        if len(cells) <= team_col_idx:
-            continue
-
-        # Get team abbreviation from the Team column
-        team_cell = cells[team_col_idx].get_text(strip=True)
-
-        # Extract team abbr (may have record in parentheses like "BUF(10-4)")
-        team_abbr_raw = team_cell.split("(")[0].strip() if "(" in team_cell else team_cell.strip()
-
-        # Normalize to canonical abbreviation
-        team_abbr = constants.normalize_team_abbr(team_abbr_raw)
-        if team_abbr not in constants.TEAM_ABBR:
-            continue  # Not a valid team
-
-        team_spreads = {}
-
-        for col_idx, week in week_columns.items():
-            if col_idx >= len(cells):
-                continue
-
-            cell = cells[col_idx]
-            # Get cell text - format is like "@CLE-10.5" or "LV-14" or "@KC+3.5"
-            cell_text = cell.get_text(strip=True)
-
-            # Skip bye weeks and empty cells
-            if not cell_text or cell_text == "BYE":
-                continue
-
-            # Extract spread from cell text
-            # The spread is at the end, after the opponent indicator
-            # Patterns: "@CLE-10.5", "LV+3", "@KC-7", "PK"
-            # Look for spread pattern: optional sign followed by number or PK
-            match = re.search(r"([+-]?\d+\.?\d*|PK)$", cell_text)
-            if not match:
-                continue
-
-            spread_text = match.group(1)
-            if spread_text == "PK":
-                team_spreads[week] = 0.0
-            else:
-                try:
-                    spread_val = float(spread_text)
-                    team_spreads[week] = spread_val
-                except ValueError:
-                    continue
-
-        if team_spreads:
-            spreads[team_abbr] = team_spreads
-
-    log.info("Scraped SurvivorGrid spreads for %d teams", len(spreads))
-    return spreads
+    The spread is at the end, after the opponent indicator: an optional sign and a number, or
+    PK for a pick'em.
+    """
+    # Skip bye weeks and empty cells
+    if not cell_text or cell_text == "BYE":
+        return None
+    match = re.search(r"([+-]?\d+\.?\d*|PK)$", cell_text)
+    if not match:
+        return None
+    spread_text = match.group(1)
+    if spread_text == "PK":
+        return 0.0
+    try:
+        return float(spread_text)
+    except ValueError:
+        return None

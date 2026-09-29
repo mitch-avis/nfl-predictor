@@ -55,13 +55,16 @@ opponent's per-snap output. The display composite adds the defensive components
 with positive weights for the same reason.
 """
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
 
 from nfl_predictor import constants
-from nfl_predictor.utils.polars.adjusted_strength import solve_srs, solve_team_ridge
+from nfl_predictor.utils.polars.adjusted_strength import GameColumns, solve_srs, solve_team_ridge
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # Ridge penalty, frozen for reproducibility instead of tuned per solve.
 #
@@ -245,9 +248,7 @@ def _solve_components(prior_games: pl.DataFrame, teams: list[str]) -> tuple[pl.D
             usable,
             response,
             ridge_lambda=STRENGTH_RIDGE_LAMBDA,
-            team_col=_TEAM,
-            opponent_col=_OPPONENT,
-            home_col=_HOME,
+            columns=GameColumns(_TEAM, _OPPONENT, _HOME),
         )
         if np.isnan(home_field):
             home_field = solved_hfa
@@ -374,7 +375,6 @@ def build_strength_snapshot(
     season: int,
     week: int,
     prior_snapshot: pl.DataFrame | None = None,
-    blend_prior: bool = True,
     teams: Sequence[str] | None = None,
 ) -> pl.DataFrame:
     """Build the pre-week schedule-adjusted strength snapshot for one season week.
@@ -389,10 +389,8 @@ def build_strength_snapshot(
         week: Week the snapshot is for. Values are solved from games strictly before
             it, or from the whole regular season for a playoff week.
         prior_snapshot: The previous season's final snapshot, keyed by team. Supplies
-            the early-season prior; ``None`` means a team with no in-season games
-            gets nulls.
-        blend_prior: Set to ``False`` to ablate the prior entirely and publish the
-            raw in-season solve.
+            the early-season prior; ``None`` (the ablation) publishes the raw in-season
+            solve, so a team with no in-season games gets nulls.
         teams: The season's full team list, normally taken from the schedule. Supply it
             so that a team yet to play still gets a row carrying the prior; without it
             the universe is drawn from played games only, which is empty before a season
@@ -422,7 +420,7 @@ def build_strength_snapshot(
     solved, _ = _solve_components(prior_games, season_teams)
     solved = solved.join(_games_played(prior_games, season_teams), on=_TEAM, how="left")
 
-    if blend_prior and prior_snapshot is not None and not prior_snapshot.is_empty():
+    if prior_snapshot is not None and not prior_snapshot.is_empty():
         solved = _blend_prior(solved, prior_snapshot)
 
     solved = _with_composite(solved)

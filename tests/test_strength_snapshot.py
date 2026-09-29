@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import KW_ONLY, dataclass
 
 import polars as pl
 import pytest
@@ -11,38 +12,42 @@ from nfl_predictor import constants
 from nfl_predictor.utils.polars import strength_snapshot
 
 
-def _team_game(
-    season: int,
-    week: int,
-    team: str,
-    opponent: str,
-    *,
-    is_home: bool,
-    pass_epa: float = 0.0,
-    rush_epa: float = 0.0,
-    snaps: float = 60.0,
-    points_scored: float = 20.0,
-    points_allowed: float = 17.0,
-    st_for: float = 0.0,
-    st_against: float = 0.0,
-    st_plays: float = 10.0,
-) -> dict[str, object]:
-    """Build one synthetic team-game row in the shape the snapshot builder consumes."""
-    return {
-        "season": season,
-        "week": week,
-        "team_abbr": team,
-        "opponent_abbr": opponent,
-        "is_home": is_home,
-        "offensive_snaps": snaps,
-        "pass_epa_sum": pass_epa * snaps,
-        "rush_epa_sum": rush_epa * snaps,
-        "points_scored": points_scored,
-        "points_allowed": points_allowed,
-        "st_epa_for": st_for,
-        "st_epa_against": st_against,
-        "st_plays": st_plays,
-    }
+@dataclass(frozen=True)
+class _TeamGame:
+    """One synthetic team-game row in the shape the snapshot builder consumes."""
+
+    season: int
+    week: int
+    team: str
+    opponent: str
+    _: KW_ONLY
+    is_home: bool
+    pass_epa: float = 0.0
+    rush_epa: float = 0.0
+    snaps: float = 60.0
+    points_scored: float = 20.0
+    points_allowed: float = 17.0
+    st_for: float = 0.0
+    st_against: float = 0.0
+    st_plays: float = 10.0
+
+    def row(self) -> dict[str, object]:
+        """Return the row, with per-snap EPA turned into the summed columns."""
+        return {
+            "season": self.season,
+            "week": self.week,
+            "team_abbr": self.team,
+            "opponent_abbr": self.opponent,
+            "is_home": self.is_home,
+            "offensive_snaps": self.snaps,
+            "pass_epa_sum": self.pass_epa * self.snaps,
+            "rush_epa_sum": self.rush_epa * self.snaps,
+            "points_scored": self.points_scored,
+            "points_allowed": self.points_allowed,
+            "st_epa_for": self.st_for,
+            "st_epa_against": self.st_against,
+            "st_plays": self.st_plays,
+        }
 
 
 def _round_robin(
@@ -67,7 +72,7 @@ def _round_robin(
         for team, opponent, home_flag in ((home, away, True), (away, home, False)):
             strength = offense.get(team, 0.0) * epa_scale
             rows.append(
-                _team_game(
+                _TeamGame(
                     season,
                     week,
                     team,
@@ -78,7 +83,7 @@ def _round_robin(
                     points_scored=20.0 + 10.0 * strength,
                     points_allowed=20.0 - 10.0 * strength,
                     st_for=strength,
-                )
+                ).row()
             )
     return pl.DataFrame(rows)
 
@@ -101,9 +106,7 @@ def test_snapshot_orders_teams_by_their_known_offensive_strength() -> None:
     """A team given a stronger offense ranks above a weaker one on the adjusted value."""
     games = _round_robin(2024, (1, 2, 3, 4, 5, 6), _TEAMS, offense=_OFFENSE)
 
-    snapshot = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=7, blend_prior=False
-    )
+    snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=7)
     ranked = snapshot.sort("adj_off_pass_epa_snap", descending=True)["team_abbr"].to_list()
 
     assert ranked == sorted(_TEAMS, key=lambda team: -_OFFENSE[team])
@@ -113,9 +116,7 @@ def test_adjusted_components_are_centered_across_the_league() -> None:
     """Offense and defense coefficients each average to zero across the league."""
     games = _round_robin(2024, (1, 2, 3, 4), _TEAMS, offense=_OFFENSE)
 
-    snapshot = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=5, blend_prior=False
-    )
+    snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=5)
 
     for column in (
         "adj_off_pass_epa_snap",
@@ -231,9 +232,7 @@ def test_prior_blend_weight_follows_the_documented_games_formula() -> None:
     blended = strength_snapshot.build_strength_snapshot(
         games, season=2024, week=3, prior_snapshot=prior
     )
-    in_season_only = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=3, prior_snapshot=prior, blend_prior=False
-    )
+    in_season_only = strength_snapshot.build_strength_snapshot(games, season=2024, week=3)
 
     played = blended.filter(pl.col("team_abbr") == "AAA")["strength_games_played"].item()
     weight = played / (played + constants.PRIOR_BLEND_GAMES)
@@ -245,33 +244,11 @@ def test_prior_blend_weight_follows_the_documented_games_formula() -> None:
     assert got == pytest.approx(expected)
 
 
-def test_disabling_the_prior_blend_leaves_the_in_season_solve_untouched() -> None:
-    """The ablation switch removes the prior entirely rather than down-weighting it."""
-    prior = pl.DataFrame(
-        {
-            "team_abbr": list(_TEAMS),
-            **{column: [5.0] * len(_TEAMS) for column in constants.STRENGTH_SNAPSHOT_STATS},
-        }
-    )
-    games = _round_robin(2024, (1, 2, 3), _TEAMS, offense=_OFFENSE)
-
-    without_prior = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=4, prior_snapshot=prior, blend_prior=False
-    )
-    no_prior_supplied = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=4, blend_prior=False
-    )
-
-    assert_snapshots_equal(without_prior, no_prior_supplied)
-
-
 def test_composite_uses_the_documented_weights_over_standardized_components() -> None:
     """The composite is the weighted sum of within-snapshot z-scored components."""
     games = _round_robin(2024, (1, 2, 3, 4), _TEAMS, offense=_OFFENSE)
 
-    snapshot = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=5, blend_prior=False
-    )
+    snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=5)
 
     expected = [0.0] * snapshot.height
     for column, weight in strength_snapshot.COMPOSITE_WEIGHTS.items():
@@ -303,18 +280,16 @@ def test_a_better_defense_earns_a_higher_defense_rating() -> None:
     rows: list[dict[str, object]] = []
     for week in (1, 2, 3):
         # STOUT smothers every opponent; SIEVE lets the same opponents move the ball.
-        rows.append(_team_game(2024, week, "OFFA", "STOUT", is_home=False, pass_epa=-0.20))
-        rows.append(_team_game(2024, week, "STOUT", "OFFA", is_home=True, pass_epa=0.0))
-        rows.append(_team_game(2024, week, "OFFB", "SIEVE", is_home=False, pass_epa=0.20))
-        rows.append(_team_game(2024, week, "SIEVE", "OFFB", is_home=True, pass_epa=0.0))
-        rows.append(_team_game(2024, week, "OFFA", "SIEVE", is_home=True, pass_epa=0.20))
-        rows.append(_team_game(2024, week, "SIEVE", "OFFA", is_home=False, pass_epa=0.0))
-        rows.append(_team_game(2024, week, "OFFB", "STOUT", is_home=True, pass_epa=-0.20))
-        rows.append(_team_game(2024, week, "STOUT", "OFFB", is_home=False, pass_epa=0.0))
+        rows.append(_TeamGame(2024, week, "OFFA", "STOUT", is_home=False, pass_epa=-0.20).row())
+        rows.append(_TeamGame(2024, week, "STOUT", "OFFA", is_home=True, pass_epa=0.0).row())
+        rows.append(_TeamGame(2024, week, "OFFB", "SIEVE", is_home=False, pass_epa=0.20).row())
+        rows.append(_TeamGame(2024, week, "SIEVE", "OFFB", is_home=True, pass_epa=0.0).row())
+        rows.append(_TeamGame(2024, week, "OFFA", "SIEVE", is_home=True, pass_epa=0.20).row())
+        rows.append(_TeamGame(2024, week, "SIEVE", "OFFA", is_home=False, pass_epa=0.0).row())
+        rows.append(_TeamGame(2024, week, "OFFB", "STOUT", is_home=True, pass_epa=-0.20).row())
+        rows.append(_TeamGame(2024, week, "STOUT", "OFFB", is_home=False, pass_epa=0.0).row())
 
-    snapshot = strength_snapshot.build_strength_snapshot(
-        pl.DataFrame(rows), season=2024, week=4, blend_prior=False
-    )
+    snapshot = strength_snapshot.build_strength_snapshot(pl.DataFrame(rows), season=2024, week=4)
     ratings = dict(zip(snapshot["team_abbr"], snapshot["adj_def_pass_epa_snap"], strict=True))
 
     assert ratings["STOUT"] > ratings["SIEVE"]
@@ -324,9 +299,7 @@ def test_home_field_term_is_shared_by_every_team() -> None:
     """The solve fits one home-field value, so every row reports the same number."""
     games = _round_robin(2024, (1, 2, 3), _TEAMS, offense=_OFFENSE)
 
-    snapshot = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=4, blend_prior=False
-    )
+    snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=4)
 
     assert snapshot["adj_hfa"].n_unique() == 1
 
@@ -349,9 +322,7 @@ def test_special_teams_rating_is_null_when_the_source_is_missing() -> None:
         pl.lit(None, dtype=pl.Float64).alias("st_plays"),
     )
 
-    snapshot = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=4, blend_prior=False
-    )
+    snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=4)
 
     assert snapshot["st_rating"].null_count() == snapshot.height
     # The rest of the snapshot still solves.

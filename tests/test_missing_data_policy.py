@@ -9,7 +9,7 @@ We intentionally keep these tests lightweight (no nflreadpy network calls).
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import polars as pl
@@ -17,6 +17,9 @@ import polars as pl
 from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.utils import polars_utils
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_select_final_columns_enforces_invariant_schema() -> None:
@@ -93,7 +96,9 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
             market_columns=[],
         )
 
-    monkeypatch.setattr(ml_model_training, "train_margin_total_model", lambda **_: _DummyModel())
+    monkeypatch.setattr(
+        ml_model_training, "train_margin_total_model", lambda _options: _DummyModel()
+    )
 
     optuna = ml_model.OptunaConfig(
         enabled=False,
@@ -111,13 +116,15 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
     )
 
     result = ml_model.train_margin_total_model_with_report(
-        data_path=data_path,
-        holdout_seasons=0,
-        include_market=True,
-        max_cardinality_ratio=1.0,
-        optuna_config=optuna,
-        market_transform=False,
-        market_anchor=False,
+        ml_model_training.TrainingOptions(
+            data_path=data_path,
+            holdout_seasons=0,
+            include_market=True,
+            max_cardinality_ratio=1.0,
+            optuna_config=optuna,
+            market_transform=False,
+            market_anchor=False,
+        )
     )
 
     missing = result.metrics_report["missing_data"]

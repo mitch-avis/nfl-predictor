@@ -12,7 +12,6 @@ features feed the model, a prediction run should follow a refresh.
 from __future__ import annotations
 
 import argparse
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -32,7 +31,7 @@ LINE_COLUMNS: tuple[str, ...] = (
 JOIN_COLUMN = "game_id"
 MATCHUP_COLUMNS: tuple[str, ...] = ("season", "week", "away_abbr", "home_abbr")
 SEASON_COLUMN = "season"
-DEFAULT_DATA_DIR = Path(constants.DATA_PATH)
+DEFAULT_DATA_DIR = constants.DATA_PATH
 _INCOMING_PREFIX = "__incoming_"
 
 
@@ -113,7 +112,8 @@ def load_lines(season: int, *, cache_dir: Path | None = None) -> pl.DataFrame:
         current_season=season,
     )
     if schedule.is_empty() or JOIN_COLUMN not in schedule.columns:
-        raise ValueError(f"The schedule for season {season} has no games to refresh lines from.")
+        msg = f"The schedule for season {season} has no games to refresh lines from."
+        raise ValueError(msg)
     schedule = game_utils.fill_missing_moneylines(schedule)
     keys = [JOIN_COLUMN, *(c for c in MATCHUP_COLUMNS if c in schedule.columns)]
     present = [column for column in LINE_COLUMNS if column in schedule.columns]
@@ -151,7 +151,7 @@ def _write_atomic(frame: pl.DataFrame, path: Path) -> None:
     """Write ``frame`` to ``path`` through a temporary file in the same directory."""
     tmp_path = path.with_name(f"{path.name}.tmp")
     frame.write_csv(tmp_path)
-    os.replace(tmp_path, path)
+    tmp_path.replace(path)
 
 
 def refresh_file(path: Path, lines: pl.DataFrame, season: int) -> FileRefresh:

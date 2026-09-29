@@ -43,7 +43,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -133,7 +132,8 @@ def outcome_to_home_prob(
 
     """
     if target not in {"binary", "margin"}:
-        raise ValueError(f"target must be 'binary' or 'margin', got: {target!r}")
+        msg = f"target must be 'binary' or 'margin', got: {target!r}"
+        raise ValueError(msg)
 
     home = pd.to_numeric(home_score, errors="coerce")
     away = pd.to_numeric(away_score, errors="coerce")
@@ -153,12 +153,15 @@ def outcome_to_home_prob(
     return p
 
 
+# The columns a Bradley-Terry fit reads from each game.
+HOME_TEAM_COLUMN = "home_abbr"
+AWAY_TEAM_COLUMN = "away_abbr"
+P_HOME_COLUMN = "p_home"
+
+
 def fit_bradley_terry_ratings(
     games: pd.DataFrame,
     *,
-    home_team_col: str = "home_abbr",
-    away_team_col: str = "away_abbr",
-    p_home_col: str = "p_home",
     include_home_advantage: bool = True,
     ridge_alpha: float = 1.0,
     sample_weights: pd.Series | np.ndarray | None = None,
@@ -166,10 +169,8 @@ def fit_bradley_terry_ratings(
     """Fit latent team ratings from per-game home win probabilities.
 
     Args:
-        games: Must include home/away team columns and a probability column.
-        home_team_col: Home team abbreviation column.
-        away_team_col: Away team abbreviation column.
-        p_home_col: Home win probability column.
+        games: Must include ``home_abbr``, ``away_abbr`` and the home win probability
+            ``p_home``.
         include_home_advantage: If True, fit a global home-field advantage term.
         ridge_alpha: L2 regularization strength.
         sample_weights: Optional non-negative per-game weights. Rows are scaled by the
@@ -182,23 +183,27 @@ def fit_bradley_terry_ratings(
         (team_rating_series, home_advantage)
 
     """
-    required = {home_team_col, away_team_col, p_home_col}
+    required = {HOME_TEAM_COLUMN, AWAY_TEAM_COLUMN, P_HOME_COLUMN}
     missing = sorted(required - set(games.columns))
     if missing:
-        raise ValueError(f"games missing required columns: {missing}")
+        msg = f"games missing required columns: {missing}"
+        raise ValueError(msg)
 
-    df = games[[home_team_col, away_team_col, p_home_col]].copy()
+    df = games[[HOME_TEAM_COLUMN, AWAY_TEAM_COLUMN, P_HOME_COLUMN]].copy()
     if sample_weights is not None:
         weights = np.asarray(sample_weights, dtype=float)
         if weights.shape[0] != df.shape[0]:
-            raise ValueError("sample_weights must have one entry per game")
+            msg = "sample_weights must have one entry per game"
+            raise ValueError(msg)
         df[_WEIGHT_COLUMN] = weights
     df = df.dropna().copy()
     if df.empty:
-        raise ValueError("No games available after dropping nulls")
+        msg = "No games available after dropping nulls"
+        raise ValueError(msg)
 
     teams: list[str] = sorted(
-        set(df[home_team_col].astype(str).tolist()) | set(df[away_team_col].astype(str).tolist())
+        set(df[HOME_TEAM_COLUMN].astype(str).tolist())
+        | set(df[AWAY_TEAM_COLUMN].astype(str).tolist())
     )
     team_to_idx = {t: i for i, t in enumerate(teams)}
 
@@ -207,14 +212,14 @@ def fit_bradley_terry_ratings(
     extra = 1 if include_home_advantage else 0
 
     x = np.zeros((n_games, n_teams + extra), dtype=float)
-    home_idx = df[home_team_col].astype(str).map(team_to_idx).to_numpy()
-    away_idx = df[away_team_col].astype(str).map(team_to_idx).to_numpy()
+    home_idx = df[HOME_TEAM_COLUMN].astype(str).map(team_to_idx).to_numpy()
+    away_idx = df[AWAY_TEAM_COLUMN].astype(str).map(team_to_idx).to_numpy()
     x[np.arange(n_games), home_idx] = 1.0
     x[np.arange(n_games), away_idx] = -1.0
     if include_home_advantage:
         x[:, -1] = 1.0
 
-    p = clamp_prob(df[p_home_col].to_numpy())
+    p = clamp_prob(df[P_HOME_COLUMN].to_numpy())
     y = _logit(p)
 
     if _WEIGHT_COLUMN in df.columns:
@@ -267,7 +272,7 @@ def scale_ratings_1_to_10(ratings_raw: pd.Series) -> pd.Series:
     Interpretation:
     - `rating_raw` is centered so the average team is ~0.
     - `sigmoid(rating_raw)` is the implied win probability vs an average team
-      on a neutral field (under the Bradley–Terry logit model).
+      on a neutral field (under the Bradley-Terry logit model).
     - We map that probability into a display-friendly 1..10 scale.
     """
     x = ratings_raw.astype(float)
@@ -279,7 +284,7 @@ def scale_ratings_1_to_10(ratings_raw: pd.Series) -> pd.Series:
 def ratings_to_power_0_to_10(ratings_raw: pd.Series) -> pd.Series:
     """Convert raw ratings to a stable 0-10 scale.
 
-    `10 * sigmoid(rating_raw)` is interpretable as a 0–10 strength score derived
+    `10 * sigmoid(rating_raw)` is interpretable as a 0-10 strength score derived
     from win probability vs an average team on a neutral field.
     """
     x = ratings_raw.astype(float)
@@ -380,7 +385,8 @@ def compute_projected_standings(
     required_records = {"team_abbr", "wins", "losses", "ties", "games_played"}
     missing = sorted(required_records - set(current_records.columns))
     if missing:
-        raise ValueError(f"current_records missing required columns: {missing}")
+        msg = f"current_records missing required columns: {missing}"
+        raise ValueError(msg)
 
     df_rec = current_records.copy()
     df_rec["team_abbr"] = df_rec["team_abbr"].astype(str)
@@ -395,7 +401,8 @@ def compute_projected_standings(
         if len(future) == 0:
             future = pd.DataFrame(columns=sorted(required_future))
         else:
-            raise ValueError(f"future_games missing required columns: {missing_f}")
+            msg = f"future_games missing required columns: {missing_f}"
+            raise ValueError(msg)
 
     future["home_abbr"] = future["home_abbr"].astype(str)
     future["away_abbr"] = future["away_abbr"].astype(str)
@@ -476,11 +483,10 @@ def compute_projected_standings(
     out["projected_win_pct"] = out["projected_win_pct"].fillna(0.0).round(4)
 
     out["season"] = int(season)
-    out = out.sort_values(
+    return out.sort_values(
         ["projected_win_pct", "projected_wins", "team_abbr"],
         ascending=[False, False, True],
     ).reset_index(drop=True)
-    return out
 
 
 def _team_frame(team_universe: list[str]) -> pd.DataFrame:
@@ -601,12 +607,19 @@ def _bradley_terry_power_rankings(
     return pr
 
 
+@dataclass(frozen=True)
+class LeagueStandings:
+    """The league through a week: each team's record and the remaining games' probabilities."""
+
+    season: int
+    through_week: int
+    current_records: pd.DataFrame
+    future_games_with_probs: pd.DataFrame
+
+
 def build_power_rankings_and_standings(
+    standings: LeagueStandings,
     *,
-    season: int,
-    through_week: int,
-    current_records: pd.DataFrame,
-    future_games_with_probs: pd.DataFrame,
     games_for_ratings: pd.DataFrame | None = None,
     strength_snapshot: pd.DataFrame | None = None,
 ) -> PowerRatingsResult:
@@ -628,6 +641,10 @@ def build_power_rankings_and_standings(
         ValueError: If neither or both ratings sources are given.
 
     """
+    season = standings.season
+    through_week = standings.through_week
+    current_records = standings.current_records
+    future_games_with_probs = standings.future_games_with_probs
     if strength_snapshot is not None and games_for_ratings is None:
         pr = _composite_power_rankings(
             strength_snapshot, current_records, season=season, through_week=through_week
@@ -637,10 +654,11 @@ def build_power_rankings_and_standings(
             games_for_ratings, current_records, season=season, through_week=through_week
         )
     else:
-        raise ValueError(
+        msg = (
             "Pass exactly one ratings source: games_for_ratings (Bradley-Terry) or "
             "strength_snapshot (adjusted composite)."
         )
+        raise ValueError(msg)
 
     projected = compute_projected_standings(
         current_records=current_records,
@@ -690,7 +708,7 @@ _RATINGS_COLUMNS = (
 RANKING_METHODS = ("composite", "bradley_terry")
 
 # Where the ETL writes the per-team weekly strength snapshots the composite method reads.
-DEFAULT_STRENGTH_SNAPSHOTS = Path(constants.DATA_PATH) / f"{constants.STRENGTH_SNAPSHOTS_NAME}.csv"
+DEFAULT_STRENGTH_SNAPSHOTS = constants.DATA_PATH / f"{constants.STRENGTH_SNAPSHOTS_NAME}.csv"
 
 # Scores are read as numbers explicitly. The ETL writes the newest games first, so the rows
 # Polars samples to infer types can all be unplayed, and scores inferred as text compare
@@ -864,32 +882,37 @@ def _format_missing_columns(missing: list[str], *, limit: int = 10) -> str:
     return f"{shown} (+{len(unique) - limit} more)"
 
 
+@dataclass(frozen=True, kw_only=True)
+class RankingInputs:
+    """The data a ranking reads and the season and week it ranks through."""
+
+    data_ml: Path
+    data_schedule: Path
+    season: int
+    through_week: int
+    include_postseason: bool = False
+
+
 def _predict_future_games(
-    model: Any,
-    *,
-    model_kind: str,
-    data_ml: Path,
-    season: int,
-    through_week: int,
-    include_postseason: bool = False,
+    model: ml_model_core.MarginTotalModel, inputs: RankingInputs
 ) -> pd.DataFrame:
     """Predict future games for the specified season."""
     # Load a season slice from the ML dataset (REG only by default), then predict for future games.
     # We read only the columns required by the model's FeatureSpec.
     spec = getattr(model, "feature_spec", None)
     if spec is None:
-        raise ValueError("Model is missing feature_spec; cannot predict")
+        msg = "Model is missing feature_spec; cannot predict"
+        raise ValueError(msg)
 
-    available_cols = set(pl.read_csv(data_ml, n_rows=0).columns)
+    available_cols = set(pl.read_csv(inputs.data_ml, n_rows=0).columns)
     derived_cols = set(ml_model_core.MARKET_DERIVED_COLUMNS)
     required_features = list(getattr(spec, "feature_columns", []))
     missing_required = set(required_features) - available_cols - derived_cols
     missing_required.update(_missing_market_inputs(required_features, available_cols))
     if missing_required:
         missing_text = _format_missing_columns(sorted(missing_required))
-        raise ValueError(
-            f"Missing required feature columns ({len(missing_required)}): {missing_text}"
-        )
+        msg = f"Missing required feature columns ({len(missing_required)}): {missing_text}"
+        raise ValueError(msg)
     base_cols = ["season", "week", "game_type", "away_abbr", "home_abbr"]
     market_raw_cols = [
         "home_spread",
@@ -902,23 +925,19 @@ def _predict_future_games(
     feature_cols = [c for c in list(getattr(spec, "feature_columns", [])) if c in available_cols]
     usecols = sorted(set(base_cols + feature_cols))
 
-    games = pl.read_csv(data_ml, columns=usecols).filter(pl.col("season") == season)
-    games = _filter_by_game_type(games, include_postseason=include_postseason)
-    games = games.filter(pl.col("week") > through_week)
+    games = pl.read_csv(inputs.data_ml, columns=usecols).filter(pl.col("season") == inputs.season)
+    games = _filter_by_game_type(games, include_postseason=inputs.include_postseason)
+    games = games.filter(pl.col("week") > inputs.through_week)
 
     games = _pl_to_pandas(games)
 
     if games.empty:
         return games.assign(home_win_prob=pd.Series(dtype=float))
 
-    if model_kind == "margin_total":
-        mt = cast(ml_model_core.MarginTotalModel, model)
-        pred_margin, _pred_total = ml_model_core.predict_margin_total_from_model(mt, games)
-        # The sigma the model's weekly predictions use (the constant for older models).
-        sigma, _fallback = ml_model_core.model_floor_sigma(mt)
-        home_win_prob = ml_model_core.margin_to_home_win_prob(pred_margin, sigma)
-    else:
-        raise ValueError(f"Unsupported model kind for power rankings: {model_kind!r}")
+    pred_margin, _pred_total = ml_model_core.predict_margin_total_from_model(model, games)
+    # The sigma the model's weekly predictions use (the constant for older models).
+    sigma, _fallback = ml_model_core.model_floor_sigma(model)
+    home_win_prob = ml_model_core.margin_to_home_win_prob(pred_margin, sigma)
 
     out = games[["season", "week", "away_abbr", "home_abbr"]].copy()
     out["home_win_prob"] = home_win_prob
@@ -926,17 +945,7 @@ def _predict_future_games(
 
 
 def _build_games_for_ratings(
-    *,
-    schedule_path: Path,
-    season: int,
-    through_week: int,
-    ratings_min_season: int | None,
-    future_games_with_probs: pd.DataFrame,
-    include_postseason: bool,
-    window_seasons: int = DEFAULT_RATINGS_WINDOW_SEASONS,
-    prior_season_weight: float = DEFAULT_PRIOR_SEASON_WEIGHT,
-    target: str = "margin",
-    include_future: bool = False,
+    inputs: RankingInputs, options: RankingOptions, future_games_with_probs: pd.DataFrame
 ) -> pd.DataFrame:
     """Assemble the games the strength fit sees, with a per-game weight.
 
@@ -949,22 +958,26 @@ def _build_games_for_ratings(
     projected standings.
 
     Args:
-        schedule_path: Schedule/results dataset.
-        season: Season being ranked.
-        through_week: Records and results are counted through this week inclusive.
-        ratings_min_season: Optional hard floor on seasons included.
+        inputs: The schedule/results dataset, the season being ranked, and the week through
+            which records and results count (inclusive).
+        options: The fit's settings: ``ratings_min_season`` (a hard floor on seasons),
+            ``window_seasons`` (seasons the fit sees, counting the current one; 0 means all),
+            ``prior_season_weight`` (weight for games before the current season), ``target``
+            ("margin" or "binary" for completed games) and ``include_future`` (whether future
+            model probabilities enter the fit).
         future_games_with_probs: Future games carrying model win probabilities.
-        include_postseason: Whether postseason games count.
-        window_seasons: Seasons the fit sees, counting the current one; 0 means all.
-        prior_season_weight: Weight for games before the current season.
-        target: "margin" or "binary" target for completed games.
-        include_future: Whether future model probabilities enter the fit.
 
     Returns:
         Games with `season`, `week`, `away_abbr`, `home_abbr`, `p_home` and `fit_weight`.
 
     """
-    sched = pl.read_csv(schedule_path, schema_overrides=_SCORE_DTYPES).select(
+    season = inputs.season
+    through_week = inputs.through_week
+    window_seasons = options.window_seasons
+    prior_season_weight = options.prior_season_weight
+    target = options.target
+    include_future = options.include_future
+    sched = pl.read_csv(inputs.data_schedule, schema_overrides=_SCORE_DTYPES).select(
         [
             "season",
             "week",
@@ -975,9 +988,9 @@ def _build_games_for_ratings(
             "home_score",
         ]
     )
-    sched = _filter_by_game_type(sched, include_postseason=include_postseason)
+    sched = _filter_by_game_type(sched, include_postseason=inputs.include_postseason)
 
-    floor_season = ratings_min_season
+    floor_season = options.ratings_min_season
     if window_seasons and window_seasons > 0:
         window_floor = season - window_seasons + 1
         floor_season = (
@@ -1044,45 +1057,53 @@ def load_strength_snapshot(path: Path, *, season: int, through_week: int) -> pd.
         "--method bradley_terry."
     )
     if not path.exists():
-        raise StrengthSnapshotUnavailableError(f"Missing strength snapshot file {path}. {hint}")
+        msg = f"Missing strength snapshot file {path}. {hint}"
+        raise StrengthSnapshotUnavailableError(msg)
 
     header = pl.read_csv(path, n_rows=0).columns
     missing = sorted({*_SNAPSHOT_KEY_DTYPES, COMPOSITE_COLUMN} - set(header))
     if missing:
-        raise StrengthSnapshotUnavailableError(f"{path} lacks the columns {missing}. {hint}")
+        msg = f"{path} lacks the columns {missing}. {hint}"
+        raise StrengthSnapshotUnavailableError(msg)
 
     overrides = {column: _SNAPSHOT_KEY_DTYPES.get(column, pl.Float64) for column in header}
     frame = pl.read_csv(path, schema_overrides=overrides).filter(
         (pl.col("season") == int(season)) & (pl.col("week") == target_week)
     )
     if frame.is_empty():
-        raise StrengthSnapshotUnavailableError(
+        msg = (
             f"No strength snapshot for season {season} week {target_week} (a ranking "
             f"through week {through_week}) in {path}. {hint}"
         )
+        raise StrengthSnapshotUnavailableError(msg)
     duplicated = sorted(set(frame.filter(pl.col("team_abbr").is_duplicated())["team_abbr"]))
     if duplicated:
-        raise StrengthSnapshotUnavailableError(
+        msg = (
             f"{path} has duplicate rows for {duplicated} in season {season} week "
             f"{target_week}. {hint}"
         )
+        raise StrengthSnapshotUnavailableError(msg)
     return _pl_to_pandas(frame.sort("team_abbr"))
 
 
-def resolve_ranking_options(
-    *,
-    method: str | None,
-    legacy_franchise_fit: bool,
-    window_seasons: int = DEFAULT_RATINGS_WINDOW_SEASONS,
-    prior_season_weight: float = DEFAULT_PRIOR_SEASON_WEIGHT,
-    target: str = "margin",
-    include_future: bool = False,
-    ratings_min_season: int | None = None,
-    strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS,
-) -> RankingOptions:
+@dataclass(frozen=True, kw_only=True)
+class RankingRequest:
+    """The ranking settings as a command line gives them, before they are resolved."""
+
+    method: str | None
+    legacy_franchise_fit: bool
+    window_seasons: int = DEFAULT_RATINGS_WINDOW_SEASONS
+    prior_season_weight: float = DEFAULT_PRIOR_SEASON_WEIGHT
+    target: str = "margin"
+    include_future: bool = False
+    ratings_min_season: int | None = None
+    strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS
+
+
+def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
     """Turn the ranking settings from a command line into one consistent set of options.
 
-    ``method=None`` means the default, the composite, unless ``legacy_franchise_fit`` is
+    ``request.method=None`` means the default, the composite, unless ``legacy_franchise_fit`` is
     set: the legacy fit is a Bradley-Terry fit, so it implies that method and replaces
     the other Bradley-Terry settings with the historical ones (every season weighted
     equally, binary targets, future model probabilities in the fit).
@@ -1092,16 +1113,17 @@ def resolve_ranking_options(
             composite.
 
     """
+    method = request.method
     if method is not None and method not in RANKING_METHODS:
-        raise ValueError(
-            f"Unknown ranking method {method!r}; expected one of {', '.join(RANKING_METHODS)}."
-        )
-    if legacy_franchise_fit:
+        msg = f"Unknown ranking method {method!r}; expected one of {', '.join(RANKING_METHODS)}."
+        raise ValueError(msg)
+    if request.legacy_franchise_fit:
         if method == "composite":
-            raise ValueError(
+            msg = (
                 "--legacy-franchise-fit is a Bradley-Terry fit and cannot be combined with "
                 "--method composite."
             )
+            raise ValueError(msg)
         log.info("Legacy franchise fit requested; the other --ratings-* options are ignored.")
         return RankingOptions(
             method="bradley_terry",
@@ -1109,36 +1131,28 @@ def resolve_ranking_options(
             prior_season_weight=1.0,
             target="binary",
             include_future=True,
-            ratings_min_season=ratings_min_season,
-            strength_snapshots=Path(strength_snapshots),
+            ratings_min_season=request.ratings_min_season,
+            strength_snapshots=Path(request.strength_snapshots),
         )
     return RankingOptions(
         method=method or RANKING_METHODS[0],
-        window_seasons=int(window_seasons),
-        prior_season_weight=float(prior_season_weight),
-        target=str(target),
-        include_future=bool(include_future),
-        ratings_min_season=ratings_min_season,
-        strength_snapshots=Path(strength_snapshots),
+        window_seasons=int(request.window_seasons),
+        prior_season_weight=float(request.prior_season_weight),
+        target=str(request.target),
+        include_future=bool(request.include_future),
+        ratings_min_season=request.ratings_min_season,
+        strength_snapshots=Path(request.strength_snapshots),
     )
 
 
 def compute_power_rankings(
-    model: Any,
-    *,
-    model_kind: str,
-    data_ml: Path,
-    data_schedule: Path,
-    season: int,
-    through_week: int,
-    include_postseason: bool,
-    options: RankingOptions,
+    model: ml_model_core.MarginTotalModel, inputs: RankingInputs, options: RankingOptions
 ) -> PowerRatingsResult:
     """Build the ranking and projected standings for one season through one week.
 
     Shared by the rankings command and the weekly run so both write the same artifact.
-    Records count results through ``through_week``; projected standings add the model's
-    win probabilities for the later games; the ranking follows ``options.method``.
+    Records count results through ``inputs.through_week``; projected standings add the
+    model's win probabilities for the later games; the ranking follows ``options.method``.
 
     Raises:
         StrengthSnapshotUnavailableError: For the composite method, when the snapshot for
@@ -1149,58 +1163,29 @@ def compute_power_rankings(
     snapshot = None
     if options.method == "composite":
         snapshot = load_strength_snapshot(
-            options.strength_snapshots, season=season, through_week=through_week
+            options.strength_snapshots, season=inputs.season, through_week=inputs.through_week
         )
 
     current_records = _load_current_records(
-        data_schedule,
-        season=season,
-        through_week=through_week,
-        include_postseason=include_postseason,
+        inputs.data_schedule,
+        season=inputs.season,
+        through_week=inputs.through_week,
+        include_postseason=inputs.include_postseason,
     )
-    future_games = _predict_future_games(
-        model,
-        model_kind=model_kind,
-        data_ml=data_ml,
-        season=season,
-        through_week=through_week,
-        include_postseason=include_postseason,
-    )
+    future_games = _predict_future_games(model, inputs)
+    standings = LeagueStandings(inputs.season, inputs.through_week, current_records, future_games)
 
     if snapshot is not None:
         log.info(
             "Ranking on the adjusted composite: season %d, snapshot week %d, from %s",
-            season,
-            through_week + 1,
+            inputs.season,
+            inputs.through_week + 1,
             options.strength_snapshots,
         )
-        return build_power_rankings_and_standings(
-            season=season,
-            through_week=through_week,
-            current_records=current_records,
-            future_games_with_probs=future_games,
-            strength_snapshot=snapshot,
-        )
+        return build_power_rankings_and_standings(standings, strength_snapshot=snapshot)
 
-    games_for_ratings = _build_games_for_ratings(
-        schedule_path=data_schedule,
-        season=season,
-        through_week=through_week,
-        ratings_min_season=options.ratings_min_season,
-        future_games_with_probs=future_games,
-        include_postseason=include_postseason,
-        window_seasons=options.window_seasons,
-        prior_season_weight=options.prior_season_weight,
-        target=options.target,
-        include_future=options.include_future,
-    )
-    return build_power_rankings_and_standings(
-        season=season,
-        through_week=through_week,
-        current_records=current_records,
-        games_for_ratings=games_for_ratings,
-        future_games_with_probs=future_games,
-    )
+    games_for_ratings = _build_games_for_ratings(inputs, options, future_games)
+    return build_power_rankings_and_standings(standings, games_for_ratings=games_for_ratings)
 
 
 def write_ranking_outputs(

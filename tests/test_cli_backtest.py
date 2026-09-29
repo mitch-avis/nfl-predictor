@@ -115,8 +115,7 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
     backtest.main()
 
     assert captured == {
-        "checkpoint_dir": tmp_path / "checkpoints",
-        "resume": False,
+        "checkpoints": walk_forward.FoldCheckpoints(tmp_path / "checkpoints", resume=False),
         "floor_sigma_history": None,
     }
     assert json.loads(out_json.read_text())["config"]["checkpoint"] == checkpoint
@@ -145,6 +144,7 @@ def test_main_runs_and_records_the_resolved_xgb_device(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     extra_argv: list[str],
+    *,
     usable: bool,
     expected: str,
 ) -> None:

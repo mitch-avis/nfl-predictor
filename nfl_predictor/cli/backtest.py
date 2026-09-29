@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
-
-import pandas as pd
+from typing import TYPE_CHECKING, Any
 
 from nfl_predictor import constants
 from nfl_predictor.cli import options
@@ -20,6 +19,9 @@ from nfl_predictor.ml import floor_sigma, walk_forward
 from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.reporting import production_settings, run_comparison
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 def _trend_feature_columns(df: pd.DataFrame) -> list[str]:
@@ -50,7 +52,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-path",
         type=Path,
-        default=Path(constants.DATA_PATH) / "completed_games_ml.csv",
+        default=constants.DATA_PATH / "completed_games_ml.csv",
         help="Path to completed games dataset.",
     )
     options.add_wf_window_options(parser)
@@ -195,47 +197,64 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    """CLI entrypoint for walk-forward backtests."""
-    args = _parse_args()
-    df = walk_forward.load_games(args.data_path)
-    drop_columns: list[str] = []
+@dataclass(frozen=True)
+class _Ablation:
+    """The columns a run dropped, and why."""
+
+    trend_columns: list[str]
+    disabled_groups: tuple[str, ...]
+    group_columns: list[str]
+
+
+def _apply_ablations(df: pd.DataFrame, args: argparse.Namespace) -> tuple[pd.DataFrame, _Ablation]:
+    """Drop the trend features and disabled feature groups the arguments ask to leave out."""
+    trend_columns: list[str] = []
     if args.disable_trend_features:
-        drop_columns = _trend_feature_columns(df)
-        if drop_columns:
-            df = df.drop(columns=drop_columns)
+        trend_columns = _trend_feature_columns(df)
+        if trend_columns:
+            df = df.drop(columns=trend_columns)
         log.info(
             "Trend feature ablation enabled; dropped %d columns.",
-            len(drop_columns),
+            len(trend_columns),
         )
 
-    disabled_feature_groups = options.parse_feature_groups(args.disable_feature_groups)
-    dropped_feature_group_columns: list[str] = []
-    if disabled_feature_groups:
-        dropped_feature_group_columns = walk_forward.resolve_feature_group_columns(
-            list(df.columns), disabled_feature_groups
+    disabled_groups = options.parse_feature_groups(args.disable_feature_groups)
+    group_columns: list[str] = []
+    if disabled_groups:
+        group_columns = walk_forward.resolve_feature_group_columns(
+            list(df.columns), disabled_groups
         )
-        if dropped_feature_group_columns:
-            df = df.drop(columns=dropped_feature_group_columns)
+        if group_columns:
+            df = df.drop(columns=group_columns)
         log.info(
             "Feature group ablation enabled for %s; dropped %d columns.",
-            list(disabled_feature_groups),
-            len(dropped_feature_group_columns),
+            list(disabled_groups),
+            len(group_columns),
         )
+    return df, _Ablation(trend_columns, disabled_groups, group_columns)
 
-    xgb_overrides: dict[str, Any] = {}
+
+def _xgb_overrides(args: argparse.Namespace) -> dict[str, Any]:
+    """Return the XGBoost parameters the arguments override."""
+    overrides: dict[str, Any] = {}
     if args.xgb_tree_method is not None:
-        xgb_overrides["tree_method"] = str(args.xgb_tree_method)
-    xgb_overrides["device"] = str(args.xgb_device)
+        overrides["tree_method"] = str(args.xgb_tree_method)
+    overrides["device"] = str(args.xgb_device)
     if args.xgb_n_jobs is not None:
-        xgb_overrides["n_jobs"] = int(args.xgb_n_jobs)
+        overrides["n_jobs"] = int(args.xgb_n_jobs)
     if args.min_child_weight is not None:
-        xgb_overrides["min_child_weight"] = float(args.min_child_weight)
+        overrides["min_child_weight"] = float(args.min_child_weight)
     if args.gamma is not None:
-        xgb_overrides["gamma"] = float(args.gamma)
+        overrides["gamma"] = float(args.gamma)
     if args.n_estimators is not None:
-        xgb_overrides["n_estimators"] = int(args.n_estimators)
+        overrides["n_estimators"] = int(args.n_estimators)
+    return overrides
 
+
+def _walk_forward_config(
+    args: argparse.Namespace, disabled_groups: tuple[str, ...]
+) -> walk_forward.WalkForwardConfig:
+    """Build the walk-forward config, with the XGBoost device resolved to the one it uses."""
     config = walk_forward.WalkForwardConfig(
         eval_seasons=args.eval_seasons,
         eval_last_n_seasons=args.eval_last_n_seasons,
@@ -248,13 +267,81 @@ def main() -> None:
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
         disable_pruning=bool(args.disable_pruning),
-        disabled_feature_groups=disabled_feature_groups,
-        xgb_params_overrides=xgb_overrides,
+        disabled_feature_groups=disabled_groups,
+        xgb_params_overrides=_xgb_overrides(args),
     )
     # Resolve `auto` now, so the run id and the recorded config name the device used.
-    config = walk_forward.with_resolved_xgb_device(config)
-    xgb_device = (config.xgb_params_overrides or {})["device"]
-    log.info("XGBoost device: %s", xgb_device)
+    return walk_forward.with_resolved_xgb_device(config)
+
+
+def _config_payload(
+    args: argparse.Namespace,
+    config: walk_forward.WalkForwardConfig,
+    results: dict[str, Any],
+    ablation: _Ablation,
+    xgb_params: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the run's recorded config: its settings, inputs, ablations and resolved values."""
+    payload = config.to_dict()
+    payload["data_path"] = str(args.data_path)
+    payload["checkpoint"] = results.get("checkpoint")
+    payload["floor_sigma"] = results.get("floor_sigma")
+    payload["xgb_device"] = (config.xgb_params_overrides or {})["device"]
+    payload[production_settings.RESOLVED_XGB_PARAMS_KEY] = xgb_params
+    payload["disable_trend_features"] = bool(args.disable_trend_features)
+    if args.disable_trend_features:
+        payload["dropped_trend_columns"] = ablation.trend_columns
+    payload["disabled_feature_groups"] = list(ablation.disabled_groups)
+    if ablation.disabled_groups:
+        payload["dropped_feature_group_columns"] = ablation.group_columns
+    payload.update(results.get("resolved_settings", {}))
+    for key in ("resolved_eval_seasons", "eval_window", "excluded_incomplete_seasons"):
+        if key in results:
+            payload[key] = results[key]
+    return payload
+
+
+def _add_stability(report: dict[str, Any], results: dict[str, Any]) -> None:
+    """Add the stability block, rescored exactly as ``nfl-predictor compare`` scores the run."""
+    predictions = results.get("predictions")
+    if predictions is None:
+        return
+    # Rescored with the comparison's definitions and bootstrap defaults, so this block
+    # equals what ``nfl-predictor compare`` reports for the run on the same games.
+    stability = run_comparison.stability_report(predictions)
+    report["metrics"]["stability"] = stability
+    for line in run_comparison.format_stability(stability):
+        log.info("%s", line)
+
+
+def _add_versus_production(
+    report: dict[str, Any],
+    args: argparse.Namespace,
+    config: walk_forward.WalkForwardConfig,
+    df: pd.DataFrame,
+    xgb_params: dict[str, Any],
+) -> None:
+    """Add the section listing where the run's settings differ from the production run's."""
+    record = production_settings.RunRecord(
+        disable_trend_features=bool(args.disable_trend_features),
+        xgb_params=xgb_params,
+        scope={
+            "data_path": str(args.data_path),
+            "checkpoint_dir": str(args.checkpoint_dir),
+        },
+    )
+    versus_production = production_settings.settings_versus_production(config, df, record)
+    report[production_settings.SECTION_KEY] = versus_production
+    for line in production_settings.format_section(versus_production):
+        log.info("%s", line)
+
+
+def main() -> None:
+    """CLI entrypoint for walk-forward backtests."""
+    args = _parse_args()
+    df, ablation = _apply_ablations(walk_forward.load_games(args.data_path), args)
+    config = _walk_forward_config(args, ablation.disabled_groups)
+    log.info("XGBoost device: %s", (config.xgb_params_overrides or {})["device"])
 
     dataset_hash = walk_forward.dataset_fingerprint(args.data_path)
     run_id = walk_forward.generate_run_id(dataset_hash, config)
@@ -268,8 +355,7 @@ def main() -> None:
     results = walk_forward.run_walk_forward_backtest(
         df,
         config,
-        checkpoint_dir=args.checkpoint_dir,
-        resume=bool(args.resume),
+        checkpoints=walk_forward.FoldCheckpoints(args.checkpoint_dir, resume=bool(args.resume)),
         floor_sigma_history=history,
     )
 
@@ -277,51 +363,13 @@ def main() -> None:
     out_json = args.out_json or (run_dir / "metrics_report.json")
     out_json.parent.mkdir(parents=True, exist_ok=True)
 
-    config_payload = config.to_dict()
-    config_payload["data_path"] = str(args.data_path)
-    config_payload["out_json"] = str(out_json)
-    config_payload["checkpoint"] = results.get("checkpoint")
-    config_payload["floor_sigma"] = results.get("floor_sigma")
-    config_payload["xgb_device"] = xgb_device
     # Every parameter the folds trained with, so later comparisons need not infer defaults.
-    xgb_params = walk_forward._resolve_xgb_params(config)
-    config_payload[production_settings.RESOLVED_XGB_PARAMS_KEY] = xgb_params
-    config_payload["disable_trend_features"] = bool(args.disable_trend_features)
-    if args.disable_trend_features:
-        config_payload["dropped_trend_columns"] = drop_columns
-    config_payload["disabled_feature_groups"] = list(disabled_feature_groups)
-    if disabled_feature_groups:
-        config_payload["dropped_feature_group_columns"] = dropped_feature_group_columns
-    config_payload.update(results.get("resolved_settings", {}))
-    if "resolved_eval_seasons" in results:
-        config_payload["resolved_eval_seasons"] = results["resolved_eval_seasons"]
-    if "eval_window" in results:
-        config_payload["eval_window"] = results["eval_window"]
-    if "excluded_incomplete_seasons" in results:
-        config_payload["excluded_incomplete_seasons"] = results["excluded_incomplete_seasons"]
-
+    xgb_params = walk_forward.xgb_params_for_config(config)
+    config_payload = _config_payload(args, config, results, ablation, xgb_params)
+    config_payload["out_json"] = str(out_json)
     report = walk_forward.build_metrics_report(run_id, created_at, config_payload, results)
-    predictions = results.get("predictions")
-    if predictions is not None:
-        # Rescored with the comparison's definitions and bootstrap defaults, so this block
-        # equals what ``nfl-predictor compare`` reports for the run on the same games.
-        stability = run_comparison.stability_report(predictions)
-        report["metrics"]["stability"] = stability
-        for line in run_comparison.format_stability(stability):
-            log.info("%s", line)
-    versus_production = production_settings.settings_versus_production(
-        config,
-        df,
-        disable_trend_features=bool(args.disable_trend_features),
-        run_xgb_params=xgb_params,
-        run_scope={
-            "data_path": str(args.data_path),
-            "checkpoint_dir": str(args.checkpoint_dir),
-        },
-    )
-    report[production_settings.SECTION_KEY] = versus_production
-    for line in production_settings.format_section(versus_production):
-        log.info("%s", line)
+    _add_stability(report, results)
+    _add_versus_production(report, args, config, df, xgb_params)
     config_payload["run_id"] = run_id
     config_payload["feature_list"] = results.get("feature_list")
     config_payload["splits"] = {

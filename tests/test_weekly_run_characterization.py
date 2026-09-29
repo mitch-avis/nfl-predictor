@@ -31,9 +31,6 @@ from typing import Any
 
 import pandas as pd
 import pytest
-
-from nfl_predictor.ml import walk_forward
-from nfl_predictor.weekly_run import pipeline
 from tests import snapshots
 from tests.weekly_fixture import (
     CURRENT_SEASON,
@@ -41,6 +38,9 @@ from tests.weekly_fixture import (
     build_fixture,
     write_weekly_config,
 )
+
+from nfl_predictor.ml import walk_forward
+from nfl_predictor.weekly_run import pipeline
 
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "weekly_run_characterization"
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 
 import pandas as pd
+import pytest
 
 from nfl_predictor.reporting import betting_report
 
@@ -93,3 +94,36 @@ def test_build_betting_report_labels_totals_diagnostic_only() -> None:
     assert report["total_signal"].tolist() == ["diagnostic_only", "diagnostic_only"]
     columns = report.columns.tolist()
     assert columns.index("total_signal") == columns.index("total_edge_points") + 1
+
+
+@pytest.mark.parametrize(
+    ("edge", "score"),
+    [
+        (0.0, 1),
+        (0.0099, 1),
+        (0.01, 2),
+        (-0.035, 4),
+        (0.0799, 8),
+        (0.08, 9),
+        (0.0999, 9),
+        (0.10, 10),
+    ],
+)
+def test_edge_confidence_scores_step_at_each_bound(edge: float, score: int) -> None:
+    """Each bound starts the next score; the edge's sign does not matter."""
+    assert betting_report._edge_to_confidence_1_to_10(edge) == score
+
+
+@pytest.mark.parametrize(
+    ("edge", "action"),
+    [(0.0199, "PASS"), (0.02, "LEAN"), (-0.05, "SMALL"), (0.07, "MEDIUM"), (0.10, "STRONG")],
+)
+def test_edge_actions_step_at_each_bound(edge: float, action: str) -> None:
+    """Each bound starts the next action label; the edge's sign does not matter."""
+    assert betting_report._edge_to_action(edge) == action
+
+
+def test_a_missing_edge_lands_on_the_top_rung() -> None:
+    """A NaN edge fails every bound, so it scores 10 and reads STRONG (unchanged behavior)."""
+    assert betting_report._edge_to_confidence_1_to_10(float("nan")) == 10
+    assert betting_report._edge_to_action(float("nan")) == "STRONG"

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, override
 
-import pandas as pd
+import yaml
 
 from nfl_predictor import constants
 from nfl_predictor.ml import ml_model_core, walk_forward
@@ -21,6 +20,11 @@ from nfl_predictor.ml.ml_model_xgb_utils import (
 )
 from nfl_predictor.reporting import power_rankings
 from nfl_predictor.weekly_run import stage1
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    import pandas as pd
 
 _PATH_KEYS = {
     "config",
@@ -78,12 +82,14 @@ def _rename_config_keys(config: dict[str, Any]) -> dict[str, Any]:
     removed = sorted(set(config) & set(_REMOVED_CONFIG_KEYS))
     if removed:
         details = "; ".join(f"{key}: {_REMOVED_CONFIG_KEYS[key]}" for key in removed)
-        raise ValueError(f"Config sets removed keys ({details}).")
+        msg = f"Config sets removed keys ({details})."
+        raise ValueError(msg)
     renamed = dict(config)
     for old, new in _RENAMED_CONFIG_KEYS.items():
         if old in renamed:
             if new in renamed:
-                raise ValueError(f"Config sets both {old!r} and its new name {new!r}.")
+                msg = f"Config sets both {old!r} and its new name {new!r}."
+                raise ValueError(msg)
             renamed[new] = renamed.pop(old)
     return renamed
 
@@ -91,22 +97,21 @@ def _rename_config_keys(config: dict[str, Any]) -> dict[str, Any]:
 def _load_config(path: Path) -> dict[str, Any]:
     """Load a JSON or YAML config file into a dict."""
     if not path.exists():
-        raise FileNotFoundError(f"Missing config file: {path}")
+        msg = f"Missing config file: {path}"
+        raise FileNotFoundError(msg)
 
     suffix = path.suffix.lower()
     if suffix == ".json":
         payload = json.loads(path.read_text(encoding="utf-8"))
     elif suffix in {".yaml", ".yml"}:
-        try:
-            import yaml
-        except ImportError as exc:
-            raise RuntimeError("PyYAML is required to load YAML configs.") from exc
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     else:
-        raise ValueError(f"Unsupported config extension: {path.suffix}")
+        msg = f"Unsupported config extension: {path.suffix}"
+        raise ValueError(msg)
 
     if not isinstance(payload, dict):
-        raise ValueError("Config file must parse to a JSON/YAML object.")
+        msg = "Config file must parse to a JSON/YAML object."
+        raise TypeError(msg)
     return payload
 
 
@@ -119,42 +124,63 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
     for key in _PATH_LIST_KEYS:
         if key in normalized and normalized[key] is not None:
             if isinstance(normalized[key], str):
-                raise ValueError(f"Config key {key} must be a list of paths.")
+                msg = f"Config key {key} must be a list of paths."
+                raise ValueError(msg)
             normalized[key] = [Path(value) for value in normalized[key]]
     return normalized
 
 
-def _allowed_config_keys(parser: argparse.ArgumentParser) -> set[str]:
+class WeeklyParser(argparse.ArgumentParser):
+    """The weekly run's parser, keeping the options it defines so a config can be checked.
+
+    argparse holds its option list privately; config validation needs every option's
+    destination and choices, so the parser records each option as it is added.
+    """
+
+    @override
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.defined_actions: list[argparse.Action] = []
+        super().__init__(*args, **kwargs)
+
+    @override
+    def add_argument(self, *name_or_flags: str, **kwargs: Any) -> argparse.Action:
+        action = super().add_argument(*name_or_flags, **kwargs)
+        self.defined_actions.append(action)
+        return action
+
+
+def _allowed_config_keys(parser: WeeklyParser) -> set[str]:
     """Return allowable config keys based on parser destinations."""
-    return {action.dest for action in parser._actions if action.dest != "help"}
+    return {action.dest for action in parser.defined_actions if action.dest != "help"}
 
 
-def _validate_config_choices(config: dict[str, Any], parser: argparse.ArgumentParser) -> None:
+def _validate_config_choices(config: dict[str, Any], parser: WeeklyParser) -> None:
     """Raise if a config value is outside its option's choices.
 
     argparse checks ``choices`` only for values given on the command line, not for defaults, so
     a config file's value (for example the retired ``wf_market_mode: all``) is checked here,
     before the run refreshes any data.
     """
-    for action in parser._actions:
+    for action in parser.defined_actions:
         if action.choices is None or action.dest not in config:
             continue
         value = config[action.dest]
         if value not in action.choices:
             options = ", ".join(str(choice) for choice in action.choices)
-            raise ValueError(f"Config sets {action.dest} to {value!r}; choose one of: {options}.")
+            msg = f"Config sets {action.dest} to {value!r}; choose one of: {options}."
+            raise ValueError(msg)
 
 
 def _validate_config_keys(config: dict[str, Any], allowed: set[str]) -> None:
     """Raise if config includes unsupported keys."""
     unknown = sorted(set(config) - allowed)
     if unknown:
-        raise ValueError(f"Unknown config keys: {unknown}")
+        msg = f"Unknown config keys: {unknown}"
+        raise ValueError(msg)
 
 
-def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentParser:
-    defaults = defaults or {}
-    parser = argparse.ArgumentParser(description="Weekly orchestration runner")
+def _add_run_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> None:
+    """Add the run's identity, inputs, outputs and resume options."""
     parser.add_argument(
         "--config",
         type=Path,
@@ -167,7 +193,7 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
     parser.add_argument(
         "--data-path",
         type=Path,
-        default=defaults.get("data_path", Path(constants.DATA_PATH) / "completed_games_ml.csv"),
+        default=defaults.get("data_path", constants.DATA_PATH / "completed_games_ml.csv"),
         help="Completed games dataset path.",
     )
     parser.add_argument(
@@ -227,6 +253,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         default=defaults.get("score_rounding", "none"),
         help="Score rounding for weekly predictions.",
     )
+
+
+def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> None:
+    """Add stage 1's walk-forward options."""
     parser.add_argument(
         "--wf-eval-last-n-seasons",
         type=int,
@@ -305,6 +335,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         ),
         help="Stage 1 and the final fit: XGBoost learning_rate.",
     )
+
+
+def _add_final_fit_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> None:
+    """Add the final fit's training options."""
     parser.add_argument(
         "--holdout-seasons",
         type=int,
@@ -375,6 +409,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "stage 1's folds (the constant until they span three earlier seasons, any weeks)."
         ),
     )
+
+
+def _add_tuning_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> None:
+    """Add the final fit's Optuna tuning options."""
     parser.add_argument(
         "--tune-early-stopping-rounds",
         "--train-early-stopping-rounds",
@@ -440,6 +478,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         default=defaults.get("tune_study_name"),
         help="Optuna study name.",
     )
+
+
+def _add_xgboost_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> None:
+    """Add the XGBoost tree method, device and thread options."""
     parser.add_argument(
         "--xgb-tree-method",
         type=str,
@@ -461,6 +503,10 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "Results do not depend on it."
         ),
     )
+
+
+def _add_power_rankings_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> None:
+    """Add the power-rankings report options."""
     parser.add_argument(
         "--skip-power-rankings",
         action="store_true",
@@ -484,16 +530,14 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
         type=Path,
         default=defaults.get(
             "power_rankings_data_ml",
-            Path(constants.DATA_PATH) / "all_data_ml.csv",
+            constants.DATA_PATH / "all_data_ml.csv",
         ),
         help="Power rankings ML dataset path.",
     )
     parser.add_argument(
         "--power-rankings-data-schedule",
         type=Path,
-        default=defaults.get(
-            "power_rankings_data_schedule", Path(constants.DATA_PATH) / "all_data.csv"
-        ),
+        default=defaults.get("power_rankings_data_schedule", constants.DATA_PATH / "all_data.csv"),
         help="Power rankings schedule dataset path.",
     )
     parser.add_argument(
@@ -569,6 +613,17 @@ def _build_parser(defaults: dict[str, Any] | None = None) -> argparse.ArgumentPa
             "fit; overrides the other ranking options."
         ),
     )
+
+
+def _build_parser(defaults: dict[str, Any] | None = None) -> WeeklyParser:
+    defaults = defaults or {}
+    parser = WeeklyParser(description="Weekly orchestration runner")
+    _add_run_arguments(parser, defaults)
+    _add_stage1_arguments(parser, defaults)
+    _add_final_fit_arguments(parser, defaults)
+    _add_tuning_arguments(parser, defaults)
+    _add_xgboost_arguments(parser, defaults)
+    _add_power_rankings_arguments(parser, defaults)
     return parser
 
 
@@ -587,7 +642,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)
     try:
-        _power_ranking_options(args)
+        power_ranking_options(args)
     except ValueError as error:
         parser.error(str(error))
     return args
@@ -631,7 +686,7 @@ def xgb_model_params(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def stage1_options(args: argparse.Namespace) -> dict[str, Any]:
+def stage1_options(args: argparse.Namespace) -> stage1.ProductionOptions:
     """Return the configuration options stage 1 walks forward, from resolved run options."""
     xgb_params_overrides: dict[str, Any] = {
         **xgb_model_params(args),
@@ -642,18 +697,18 @@ def stage1_options(args: argparse.Namespace) -> dict[str, Any]:
     # Stage 1 trains with the final fit's tree method too.
     if args.xgb_tree_method:
         xgb_params_overrides["tree_method"] = args.xgb_tree_method
-    return {
-        "eval_last_n_seasons": args.wf_eval_last_n_seasons,
-        "wf_start_week": args.wf_start_week,
-        "include_postseason": bool(args.wf_include_postseason),
-        "exclude_incomplete_seasons": bool(args.wf_exclude_incomplete_seasons),
-        "recency_half_life_seasons": args.wf_recency_half_life_seasons,
-        "market_mode": args.wf_market_mode,
-        "xgb_params_overrides": xgb_params_overrides,
-        "include_quantiles": bool(args.wf_include_quantiles),
-        "market_transform": args.market_transform,
-        "max_cardinality_ratio": float(args.max_cardinality_ratio),
-    }
+    return stage1.ProductionOptions(
+        eval_last_n_seasons=args.wf_eval_last_n_seasons,
+        wf_start_week=args.wf_start_week,
+        include_postseason=bool(args.wf_include_postseason),
+        exclude_incomplete_seasons=bool(args.wf_exclude_incomplete_seasons),
+        recency_half_life_seasons=args.wf_recency_half_life_seasons,
+        market_mode=args.wf_market_mode,
+        xgb_params_overrides=xgb_params_overrides,
+        include_quantiles=bool(args.wf_include_quantiles),
+        market_transform=args.market_transform,
+        max_cardinality_ratio=float(args.max_cardinality_ratio),
+    )
 
 
 def final_fit_options(
@@ -670,7 +725,10 @@ def final_fit_options(
     if market_transform is None and include_market:
         market_transform = True
     include_market, market_transform, market_anchor = walk_forward.resolve_market_settings(
-        frame, include_market, market_transform, market_anchor
+        frame,
+        include_market=include_market,
+        market_transform=market_transform,
+        market_anchor=market_anchor,
     )
 
     optuna_storage = args.tune_storage
@@ -723,23 +781,25 @@ def final_fit_options(
     return optuna_config, train_config
 
 
-def _power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOptions:
+def power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOptions:
     """Resolve the ranking options the weekly run's flags describe."""
     return power_rankings.resolve_ranking_options(
-        method=args.power_rankings_method,
-        legacy_franchise_fit=bool(args.legacy_franchise_fit),
-        window_seasons=int(args.ratings_window_seasons),
-        prior_season_weight=float(args.ratings_prior_season_weight),
-        target=str(args.ratings_target),
-        include_future=bool(args.ratings_include_future),
-        ratings_min_season=args.ratings_min_season,
-        strength_snapshots=Path(args.power_rankings_strength_snapshots),
+        power_rankings.RankingRequest(
+            method=args.power_rankings_method,
+            legacy_franchise_fit=bool(args.legacy_franchise_fit),
+            window_seasons=int(args.ratings_window_seasons),
+            prior_season_weight=float(args.ratings_prior_season_weight),
+            target=str(args.ratings_target),
+            include_future=bool(args.ratings_include_future),
+            ratings_min_season=args.ratings_min_season,
+            strength_snapshots=Path(args.power_rankings_strength_snapshots),
+        )
     )
 
 
-def _power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
+def power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
     """Return the ranking settings that decide whether a reports stage can be reused."""
-    options = _power_ranking_options(args)
+    options = power_ranking_options(args)
     return {
         "power_rankings_method": options.method,
         "power_rankings_strength_snapshots": str(options.strength_snapshots),

@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pytest
@@ -18,6 +17,11 @@ import pytest
 from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import pipeline, stage1
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.ml.ml_model_training import TrainingOptions
 
 
 class _StopAtFinalFitError(Exception):
@@ -41,17 +45,22 @@ def _capture_weekly_settings(
         captured["hashes"].append(config_hash)
         return False
 
-    def fake_stage1(_df: pd.DataFrame, **kwargs: Any) -> dict[str, Any]:
+    def fake_stage1(
+        _df: pd.DataFrame, options: stage1.ProductionOptions, run: stage1.Stage1Run
+    ) -> dict[str, Any]:
         captured["stage1"] = {
-            key: value
-            for key, value in kwargs.items()
-            if key not in {"run_dir", "dataset_fingerprint", "wf_run_fingerprint"}
+            "resume": run.resume,
+            "checkpoint_per_fold": run.checkpoint_per_fold,
+            "floor_sigma_history": run.floor_sigma_history,
+            **vars(options),
         }
-        return {"market_mode": kwargs["market_mode"]}
+        return {"market_mode": options.market_mode}
 
-    def fake_train(**kwargs: Any) -> None:
-        captured["train"] = {key: value for key, value in kwargs.items() if key != "data_path"}
-        raise _StopAtFinalFitError()
+    def fake_train(options: TrainingOptions) -> None:
+        captured["train"] = {
+            key: value for key, value in vars(options).items() if key != "data_path"
+        }
+        raise _StopAtFinalFitError
 
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: False)
     monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())

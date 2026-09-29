@@ -6,14 +6,17 @@ examples in ``README.md``. Parsing never runs the command.
 
 from __future__ import annotations
 
-import argparse
 import importlib
 import inspect
 import sys
-
-import pytest
+from typing import TYPE_CHECKING
 
 from nfl_predictor.cli import main as front_door
+
+if TYPE_CHECKING:
+    import argparse
+
+    import pytest
 
 # Commands whose parser lives in a different module from the one the front door runs.
 _PARSER_MODULES = {"weekly": "nfl_predictor.weekly_run.config"}

@@ -7,16 +7,20 @@ import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
 import xgboost as xgb
 
 from nfl_predictor import constants
-from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, walk_forward
+from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, ml_model_training, walk_forward
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import pipeline, stage1
+
+if TYPE_CHECKING:
+    from nfl_predictor.ml.ml_model_training import TrainingOptions
 
 
 def _errors(rows: list[tuple[str, int, int, float]]) -> pd.DataFrame:
@@ -70,20 +74,24 @@ def test_stage1_walks_forward_with_the_history_and_saves_its_own_errors(
 
     stage1.evaluate_production(
         pd.DataFrame(),
-        run_dir=tmp_path,
-        resume=True,
-        dataset_fingerprint={"sha256": "fp"},
-        wf_run_fingerprint="wf",
-        checkpoint_per_fold=False,
-        eval_last_n_seasons=3,
-        wf_start_week=3,
-        include_postseason=False,
-        exclude_incomplete_seasons=False,
-        recency_half_life_seasons=None,
-        market_mode="hybrid",
-        xgb_params_overrides={},
-        include_quantiles=False,
-        floor_sigma_history=history,
+        stage1.ProductionOptions(
+            eval_last_n_seasons=3,
+            wf_start_week=3,
+            include_postseason=False,
+            exclude_incomplete_seasons=False,
+            recency_half_life_seasons=None,
+            market_mode="hybrid",
+            xgb_params_overrides={},
+            include_quantiles=False,
+        ),
+        stage1.Stage1Run(
+            run_dir=tmp_path,
+            resume=True,
+            dataset_fingerprint={"sha256": "fp"},
+            wf_run_fingerprint="wf",
+            checkpoint_per_fold=False,
+            floor_sigma_history=history,
+        ),
     )
 
     assert seen["floor_sigma_history"] is history
@@ -245,14 +253,16 @@ def test_stage1_and_the_final_fit_receive_the_floor_sigma_pools(
     reference = floor_sigma.ErrorPool(_errors([("r", 2020, 1, 4.0)]), ("ref",))
     production = floor_sigma.ErrorPool(_errors([("p", 2020, 1, 9.0)]), ("ref", "stage1"))
 
-    def _fake_stage1(_df: pd.DataFrame, **kwargs: object) -> dict[str, object]:
-        captured["stage1"] = kwargs["floor_sigma_history"]
+    def _fake_stage1(
+        _df: pd.DataFrame, _options: stage1.ProductionOptions, run: stage1.Stage1Run
+    ) -> dict[str, object]:
+        captured["stage1"] = run.floor_sigma_history
         return {"market_mode": "hybrid"}
 
-    def _fake_train(**kwargs: object) -> None:
-        captured["pool"] = kwargs["floor_sigma_pool"]
-        captured["week"] = kwargs["floor_sigma_week"]
-        raise _StopAtFinalFitError()
+    def _fake_train(options: TrainingOptions) -> None:
+        captured["pool"] = options.floor_sigma_pool
+        captured["week"] = options.floor_sigma_week
+        raise _StopAtFinalFitError
 
     _stub_run_inputs(monkeypatch)
     monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _paths: reference)
@@ -271,7 +281,15 @@ def test_stage1_and_the_final_fit_receive_the_floor_sigma_pools(
 
 def test_training_artifacts_record_the_models_floor_sigma(tmp_path: Path) -> None:
     """The saved model's metadata carries its sigma record, so it predicts without the pool."""
-    record = floor_sigma.FloorSigma(13.2, False, 2025, 2, 900, (2020, 2021, 2022), ("ref",))
+    record = floor_sigma.FloorSigma(
+        sigma=13.2,
+        fallback=False,
+        season=2025,
+        week=2,
+        pool_games=900,
+        pool_seasons=(2020, 2021, 2022),
+        sources=("ref",),
+    )
     result = ml_model_core.TrainingResult(
         model=SimpleNamespace(margin_model=xgb.XGBRegressor(device="cpu"), floor_sigma=record),
         metrics_report={},
@@ -282,14 +300,13 @@ def test_training_artifacts_record_the_models_floor_sigma(tmp_path: Path) -> Non
         early_stopping={},
     )
 
-    paths = pipeline._write_training_artifacts(
-        result,
+    training_record = ml_model_training.TrainingRecord(
         run_id="weekly_test",
-        run_dir=tmp_path,
         created_at="2026-09-28T00:00:00+00:00",
         dataset_hash="hash",
         config_payload={},
     )
+    paths = ml_model_training.write_training_artifacts(result, training_record, tmp_path)
 
     metadata = json.loads(paths.metadata_path.read_text(encoding="utf-8"))
     assert floor_sigma.FloorSigma.from_dict(metadata["floor_sigma"]) == record

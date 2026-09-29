@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import pytest
 
 from nfl_predictor.cli import options
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def test_parse_feature_groups_strips_names_and_drops_empty_entries() -> None:

@@ -31,7 +31,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default=Path(constants.DATA_PATH),
+        default=constants.DATA_PATH,
         help="Directory holding the collected datasets (default: the packaged data directory).",
     )
     parser.add_argument(

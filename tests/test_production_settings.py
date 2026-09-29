@@ -11,19 +11,21 @@ import dataclasses
 import json
 import logging
 import sys
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pytest
+from tests import test_run_comparison
+from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.cli import backtest
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.ml import ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.reporting import production_settings
 from nfl_predictor.weekly_run import config as weekly_config
-from tests import test_run_comparison
-from tests.weekly_fixture import build_fixture
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SECTION = production_settings.SECTION_KEY
 
@@ -225,28 +227,33 @@ def test_xgboost_and_market_overrides_are_named_setting_by_setting(
 
 
 @pytest.mark.parametrize(
-    ("extra_argv", "setting", "run_value", "production_value"),
+    ("extra_argv", "difference"),
     [
-        (["--disable-pruning"], "disable_pruning", True, False),
-        (["--disable-feature-groups", "pbp"], "disabled_feature_groups", ["pbp"], []),
-        (["--disable-trend-features"], "disable_trend_features", True, False),
+        (
+            ["--disable-pruning"],
+            {"setting": "disable_pruning", "run": True, "production": False},
+        ),
+        (
+            ["--disable-feature-groups", "pbp"],
+            {"setting": "disabled_feature_groups", "run": ["pbp"], "production": []},
+        ),
+        (
+            ["--disable-trend-features"],
+            {"setting": "disable_trend_features", "run": True, "production": False},
+        ),
     ],
 )
 def test_each_ablation_alone_is_a_difference_in_both_halves(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     extra_argv: list[str],
-    setting: str,
-    run_value: object,
-    production_value: object,
+    difference: dict[str, object],
 ) -> None:
     """Production never drops pruning, feature groups or trend features, in either half."""
     section = _run_backtest(tmp_path, monkeypatch, extra_argv)[SECTION]
 
     for stage in ("stage1", "final_fit"):
-        assert section[stage]["differences"] == [
-            {"setting": setting, "run": run_value, "production": production_value}
-        ]
+        assert section[stage]["differences"] == [difference]
         assert section[stage]["run_only"] == {}
         assert section[stage]["production_only"] == {}
     lines = production_settings.format_section(section)
@@ -400,7 +407,8 @@ def test_a_production_setting_that_fails_to_resolve_is_unavailable(
     """Resolving production's options (its device, for one) is guarded like loading them."""
 
     def refuse(_args: object) -> None:
-        raise ValueError("unknown XGBoost device 'tpu'")
+        msg = "unknown XGBoost device 'tpu'"
+        raise ValueError(msg)
 
     monkeypatch.setattr(weekly_config, "apply_run_defaults", refuse)
 
@@ -571,7 +579,7 @@ def test_recorded_resolved_parameters_are_compared_in_full(
 ) -> None:
     """A run that recorded its trained parameters has nothing left unrecorded."""
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
-    trained = walk_forward._resolve_xgb_params(
+    trained = walk_forward.xgb_params_for_config(
         walk_forward.WalkForwardConfig(xgb_params_overrides={"device": "cuda"})
     )
     section = _metadata_section(
@@ -668,3 +676,12 @@ def test_a_real_backtests_metadata_round_trips_with_nothing_retired_or_unrecorde
     if extra_argv:
         # The ablation run writes every conditional record too.
         assert written == production_settings.RECORDED_CONFIG_EXTRAS
+
+
+def test_a_config_that_is_not_an_object_is_a_type_error(tmp_path: Path) -> None:
+    """A config file must hold a mapping; a list is refused as the wrong type."""
+    path = tmp_path / "weekly_run.json"
+    path.write_text(json.dumps([1, 2]), encoding="utf-8")
+
+    with pytest.raises(TypeError, match="must parse to a JSON/YAML object"):
+        weekly_config._load_config(path)

@@ -44,11 +44,18 @@ def _entrypoint_modules() -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
     for path in candidates:
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        # A module may build its parser from its own ArgumentParser subclass.
+        parser_classes = {"ArgumentParser"} | {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ClassDef)
+            and any(ast.unparse(base).endswith("ArgumentParser") for base in node.bases)
+        }
         builds_parser = any(
             isinstance(node, ast.Call)
             and (
-                getattr(node.func, "attr", None) == "ArgumentParser"
-                or getattr(node.func, "id", None) == "ArgumentParser"
+                getattr(node.func, "attr", None) in parser_classes
+                or getattr(node.func, "id", None) in parser_classes
             )
             for node in ast.walk(tree)
         )
@@ -83,7 +90,8 @@ def _capture(
                 function()
         except _ParserCapturedError as captured:
             return captured.parser
-    raise AssertionError(f"{module_name}.{function_name} returned without parsing")
+    msg = f"{module_name}.{function_name} returned without parsing"
+    raise AssertionError(msg)
 
 
 def _portable(value: Any) -> Any:
@@ -98,10 +106,10 @@ def _portable(value: Any) -> Any:
 def _surface(parser: argparse.ArgumentParser, prefix: str = "") -> list[dict[str, Any]]:
     """Describe every action of ``parser``, recursing into subcommands."""
     actions: list[dict[str, Any]] = []
-    for action in parser._actions:  # noqa: SLF001 - argparse has no public action list
-        if isinstance(action, argparse._HelpAction):  # noqa: SLF001
+    for action in parser._actions:
+        if isinstance(action, argparse._HelpAction):
             continue
-        if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+        if isinstance(action, argparse._SubParsersAction):
             for name, child in action.choices.items():
                 actions.extend(_surface(child, prefix=f"{prefix}{name} "))
             continue

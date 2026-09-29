@@ -41,16 +41,19 @@ is how ``nfl-predictor backtest`` adds it to ``metrics_report.json``.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import joblib
 import numpy as np
 import pandas as pd
 
+from nfl_predictor import constants
 from nfl_predictor.ml.metrics import confidence_ranks
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 DEFAULT_RESAMPLES = 5000
 DEFAULT_BOOTSTRAP_SEED = 0
@@ -127,18 +130,21 @@ def resolve_run(path: Path) -> RunInput:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         checkpoint = (metadata.get("config") or {}).get("checkpoint") or {}
         if not checkpoint.get("dir"):
-            raise ValueError(f"{metadata_path} names no walk-forward checkpoint directory")
+            msg = f"{metadata_path} names no walk-forward checkpoint directory"
+            raise ValueError(msg)
         return RunInput(path.name, Path(checkpoint["dir"]), metadata)
     if any(path.glob("fold_*.joblib")):
         return RunInput(path.name, path)
-    raise ValueError(f"{path} is neither a walk-forward run directory nor a checkpoint directory")
+    msg = f"{path} is neither a walk-forward run directory nor a checkpoint directory"
+    raise ValueError(msg)
 
 
 def _fold_files(checkpoint_dir: Path) -> list[Path]:
     """Return a checkpoint directory's fold files in order, or raise when it has none."""
     files = sorted(checkpoint_dir.glob("fold_*.joblib"))
     if not files:
-        raise ValueError(f"no fold checkpoints in {checkpoint_dir}")
+        msg = f"no fold checkpoints in {checkpoint_dir}"
+        raise ValueError(msg)
     return files
 
 
@@ -167,9 +173,11 @@ def load_run(run: RunInput) -> LoadedRun:
     predictions = pd.concat(frames, ignore_index=True)
     missing = [column for column in REQUIRED_COLUMNS if column not in predictions.columns]
     if missing:
-        raise ValueError(f"{run.label}: fold checkpoints lack {missing}")
+        msg = f"{run.label}: fold checkpoints lack {missing}"
+        raise ValueError(msg)
     if predictions["game_id"].duplicated().any():
-        raise ValueError(f"{run.label}: fold checkpoints repeat a game")
+        msg = f"{run.label}: fold checkpoints repeat a game"
+        raise ValueError(msg)
     metadata = run.metadata or {}
     config = metadata.get("config") or {}
     provenance = {
@@ -194,6 +202,7 @@ def per_game_scores(predictions: pd.DataFrame) -> pd.DataFrame:
     p = frame["deterministic_home_win_prob"].to_numpy(float)
     y = frame["actual_home_win"].to_numpy(float)
     margin = frame["actual_margin"].to_numpy(float)
+    even = constants.EVEN_ODDS_PROBABILITY
     clipped = np.clip(p, _PROB_CLIP, 1 - _PROB_CLIP)
     games = pd.DataFrame(
         {
@@ -207,7 +216,7 @@ def per_game_scores(predictions: pd.DataFrame) -> pd.DataFrame:
             "total_ae": np.abs(
                 frame["predicted_total"].to_numpy(float) - frame["actual_total"].to_numpy(float)
             ),
-            "correct": (((p > 0.5) & (margin > 0)) | ((p < 0.5) & (margin < 0))).astype(float),
+            "correct": (((p > even) & (margin > 0)) | ((p < even) & (margin < 0))).astype(float),
             "market_brier": (frame["market_home_win_prob"].to_numpy(float) - y) ** 2,
         }
     )
@@ -409,15 +418,17 @@ def compare_runs(
 
     """
     if not candidates or len(candidates) != len(references):
-        raise ValueError("give one reference run per candidate run (same seeds, same order)")
+        msg = "give one reference run per candidate run (same seeds, same order)"
+        raise ValueError(msg)
     runs = [*candidates, *references]
     base = runs[0].games
     for run in runs[1:]:
         if not np.array_equal(run.games["game_id"].to_numpy(), base["game_id"].to_numpy()):
-            raise ValueError(
+            msg = (
                 f"{run.run.label} and {runs[0].run.label} cover different games; "
                 "a paired comparison needs the same games"
             )
+            raise ValueError(msg)
     market_view_identical = all(
         np.array_equal(run.games["market_brier"].to_numpy(), base["market_brier"].to_numpy())
         for run in runs[1:]
@@ -490,7 +501,7 @@ def _run_cells(row: dict[str, Any]) -> list[str]:
     ]
 
 
-def _table_header(leading: Sequence[str], columns: Sequence[str], market: bool) -> list[str]:
+def _table_header(leading: Sequence[str], columns: Sequence[str], *, market: bool) -> list[str]:
     """Return a Markdown table header: the leading labels, the metric columns, the interval."""
     cells = [*leading, *(COLUMN_LABELS[c] for c in columns)]
     if market:
@@ -514,7 +525,12 @@ def format_stability(stability: dict[str, Any]) -> list[str]:
     """Return one run's stability view as Markdown: per window, all seasons then each season."""
     lines = _stability_preamble()
     for label, rows in stability["windows"].items():
-        lines += ["", f"### {label}", "", *_table_header(("season", "games"), RUN_COLUMNS, True)]
+        lines += [
+            "",
+            f"### {label}",
+            "",
+            *_table_header(("season", "games"), RUN_COLUMNS, market=True),
+        ]
         for season, row in rows.items():
             lines.append(f"| {season} | {row['games']} | " + " | ".join(_run_cells(row)) + " |")
     return lines
@@ -529,7 +545,7 @@ def _format_comparison_stability(report: dict[str, Any]) -> list[str]:
             "",
             f"### {label}",
             "",
-            *_table_header(("run", "season", "games"), RUN_COLUMNS, True),
+            *_table_header(("run", "season", "games"), RUN_COLUMNS, market=True),
         ]
         for run_label in window["runs"]:
             for season, entry in seasons.items():
@@ -537,7 +553,10 @@ def _format_comparison_stability(report: dict[str, Any]) -> list[str]:
                 lines.append(
                     f"| {run_label} | {season} | {entry['games']} | " + " | ".join(cells) + " |"
                 )
-        lines += ["", *_table_header(("contrast", "season", "games"), CONTRAST_COLUMNS, False)]
+        lines += [
+            "",
+            *_table_header(("contrast", "season", "games"), CONTRAST_COLUMNS, market=False),
+        ]
         for season, entry in seasons.items():
             cells = [_format_interval(entry["contrast"][c], c) for c in CONTRAST_COLUMNS]
             lines.append(
@@ -573,13 +592,13 @@ def format_report(report: dict[str, Any]) -> list[str]:
             "",
             f"## {label} ({window['games']} games)",
             "",
-            *_table_header(("run",), RUN_COLUMNS, True),
+            *_table_header(("run",), RUN_COLUMNS, market=True),
         ]
         for run_label, row in window["runs"].items():
             lines.append(f"| {run_label} | " + " | ".join(_run_cells(row)) + " |")
         lines += [
             "",
-            *_table_header(("contrast",), CONTRAST_COLUMNS, False),
+            *_table_header(("contrast",), CONTRAST_COLUMNS, market=False),
             "| candidate - reference | "
             + " | ".join(_format_interval(window["contrast"][c], c) for c in CONTRAST_COLUMNS)
             + " |",

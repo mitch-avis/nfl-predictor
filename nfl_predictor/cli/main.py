@@ -13,11 +13,13 @@ from __future__ import annotations
 import argparse
 import importlib
 import sys
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from nfl_predictor.cli.openmp import prefer_passive_wait_policy
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 PROG = "nfl-predictor"
 

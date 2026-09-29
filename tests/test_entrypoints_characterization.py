@@ -13,16 +13,18 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-import pytest
+from tests import snapshots
+from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.cli import backtest, leakage_audit
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.reporting import production_settings
-from tests import snapshots
-from tests.weekly_fixture import build_fixture
+
+if TYPE_CHECKING:
+    import pytest
 
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "entrypoints_characterization"
 TEST_BOOTSTRAP_SAMPLES = 200

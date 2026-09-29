@@ -54,6 +54,8 @@ from nfl_predictor.reporting.power_rankings import (
     DEFAULT_RATINGS_WINDOW_SEASONS,
     DEFAULT_STRENGTH_SNAPSHOTS,
     RANKING_METHODS,
+    RankingInputs,
+    RankingRequest,
     compute_power_rankings,
     resolve_ranking_options,
     write_ranking_outputs,
@@ -186,41 +188,46 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
         options = resolve_ranking_options(
-            method=args.method,
-            legacy_franchise_fit=bool(args.legacy_franchise_fit),
-            window_seasons=int(args.ratings_window_seasons),
-            prior_season_weight=float(args.ratings_prior_season_weight),
-            target=str(args.ratings_target),
-            include_future=bool(args.ratings_include_future),
-            ratings_min_season=args.ratings_min_season,
-            strength_snapshots=args.strength_snapshots,
+            RankingRequest(
+                method=args.method,
+                legacy_franchise_fit=bool(args.legacy_franchise_fit),
+                window_seasons=int(args.ratings_window_seasons),
+                prior_season_weight=float(args.ratings_prior_season_weight),
+                target=str(args.ratings_target),
+                include_future=bool(args.ratings_include_future),
+                ratings_min_season=args.ratings_min_season,
+                strength_snapshots=args.strength_snapshots,
+            )
         )
     except ValueError as error:
-        raise SystemExit(f"error: {error}") from error
+        msg = f"error: {error}"
+        raise SystemExit(msg) from error
 
     if not args.model_in.exists():
-        raise FileNotFoundError(f"Missing model checkpoint: {args.model_in}")
+        msg = f"Missing model checkpoint: {args.model_in}"
+        raise FileNotFoundError(msg)
     if not args.data_ml.exists():
-        raise FileNotFoundError(f"Missing ML dataset: {args.data_ml}")
+        msg = f"Missing ML dataset: {args.data_ml}"
+        raise FileNotFoundError(msg)
     if not args.data_schedule.exists():
-        raise FileNotFoundError(f"Missing schedule dataset: {args.data_schedule}")
+        msg = f"Missing schedule dataset: {args.data_schedule}"
+        raise FileNotFoundError(msg)
     if options.method == "composite" and not options.strength_snapshots.exists():
-        raise FileNotFoundError(
+        msg = (
             f"Missing strength snapshot file: {options.strength_snapshots}. Rebuild the data "
             "or rank with --method bradley_terry."
         )
+        raise FileNotFoundError(msg)
 
     model = ml_model_core.load_model_checkpoint(args.model_in, args.model_kind)
-    result = compute_power_rankings(
-        model,
-        model_kind=args.model_kind,
+    inputs = RankingInputs(
         data_ml=args.data_ml,
         data_schedule=args.data_schedule,
         season=args.season,
         through_week=args.through_week,
         include_postseason=bool(args.include_postseason),
-        options=options,
     )
+    result = compute_power_rankings(model, inputs, options)
 
     write_ranking_outputs(
         result, out_dir=args.out_dir, season=args.season, through_week=args.through_week

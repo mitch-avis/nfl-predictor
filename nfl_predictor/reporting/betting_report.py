@@ -12,6 +12,13 @@ from __future__ import annotations
 
 import pandas as pd
 
+from nfl_predictor import constants
+
+# Upper edge bounds (exclusive) of the 1..9 confidence scores; a larger edge scores 10.
+CONFIDENCE_EDGE_BOUNDS = (0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.10)
+# Upper edge bounds (exclusive) of each action label; a larger edge is STRONG.
+ACTION_EDGE_BOUNDS = ((0.02, "PASS"), (0.04, "LEAN"), (0.07, "SMALL"), (0.10, "MEDIUM"))
+
 
 def _moneyline_to_implied_prob(moneyline: float) -> float:
     """Convert American moneyline to implied probability.
@@ -42,7 +49,7 @@ def _implied_prob_to_moneyline(prob: float) -> float:
         return float("nan")
     if not 0.0 < p < 1.0:
         return float("nan")
-    if p >= 0.5:
+    if p >= constants.EVEN_ODDS_PROBABILITY:
         return -100.0 * p / (1.0 - p)
     return 100.0 * (1.0 - p) / p
 
@@ -63,38 +70,18 @@ def _edge_to_confidence_1_to_10(edge: float) -> int:
     This is a heuristic scale for readability, not bankroll management.
     """
     e = float(abs(edge))
-    if e < 0.01:
-        return 1
-    if e < 0.02:
-        return 2
-    if e < 0.03:
-        return 3
-    if e < 0.04:
-        return 4
-    if e < 0.05:
-        return 5
-    if e < 0.06:
-        return 6
-    if e < 0.07:
-        return 7
-    if e < 0.08:
-        return 8
-    if e < 0.10:
-        return 9
-    return 10
+    for score, upper_bound in enumerate(CONFIDENCE_EDGE_BOUNDS, start=1):
+        if e < upper_bound:
+            return score
+    return len(CONFIDENCE_EDGE_BOUNDS) + 1
 
 
 def _edge_to_action(edge: float) -> str:
     """Map absolute probability edge to a simple action label."""
     e = float(abs(edge))
-    if e < 0.02:
-        return "PASS"
-    if e < 0.04:
-        return "LEAN"
-    if e < 0.07:
-        return "SMALL"
-    if e < 0.10:
-        return "MEDIUM"
+    for upper_bound, label in ACTION_EDGE_BOUNDS:
+        if e < upper_bound:
+            return label
     return "STRONG"
 
 
@@ -127,7 +114,8 @@ def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
     }
     missing = sorted([c for c in required if c not in predictions.columns])
     if missing:
-        raise ValueError(f"Predictions missing required columns: {missing}")
+        msg = f"Predictions missing required columns: {missing}"
+        raise ValueError(msg)
 
     df = predictions.copy()
 
@@ -223,8 +211,7 @@ def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
     ]
     cols_present = [c for c in cols if c in df.columns]
     report = df[cols_present].copy()
-    report = report.sort_values(
+    return report.sort_values(
         ["moneyline_edge_prob", "total_edge_points"],
         ascending=[False, False],
     )
-    return report

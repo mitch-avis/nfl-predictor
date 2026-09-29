@@ -6,7 +6,7 @@ import importlib
 import sys
 import types
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 import pytest
@@ -16,6 +16,9 @@ from nfl_predictor import constants
 from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils
 from nfl_predictor.ml.ml_model_core import OptunaConfig, TrainingResult
 
+if TYPE_CHECKING:
+    from nfl_predictor.ml.ml_model_training import TrainingOptions
+
 REFERENCE_POOL = floor_sigma.ErrorPool(
     pd.DataFrame({"game_id": ["g"], "season": [2020], "week": [1], "squared_error": [100.0]}),
     ("models/reference",),
@@ -23,7 +26,7 @@ REFERENCE_POOL = floor_sigma.ErrorPool(
 
 
 @pytest.fixture(autouse=True)
-def _reference_pool(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+def reference_pool_requests(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     """Serve a fixed reference pool instead of reading run directories; record the request."""
     requests: list[object] = []
 
@@ -37,7 +40,7 @@ def _reference_pool(monkeypatch: pytest.MonkeyPatch) -> list[object]:
 
 def _import_ml_model_cli(monkeypatch):
     stub = types.SimpleNamespace(
-        train_margin_total_model=lambda **_kwargs: None,
+        train_margin_total_model=lambda _options: None,
     )
     monkeypatch.setitem(sys.modules, "nfl_predictor.ml_model", stub)
     monkeypatch.delitem(sys.modules, "nfl_predictor.cli.train", raising=False)
@@ -56,13 +59,14 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
         calls["model"] = (path, kind)
         return "model"
 
-    monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
+    monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", fake_load_model_checkpoint)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     def fail_predict(*_args: object, **_kwargs: object) -> None:
         """Fail if prediction is attempted."""
-        raise AssertionError("prediction should not run without --predict-path")
+        msg = "prediction should not run without --predict-path"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", fail_predict)
 
@@ -102,7 +106,7 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
         )
         return pd.DataFrame()
 
-    monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", fake_load_model_checkpoint)
+    monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", fake_load_model_checkpoint)
     monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", fake_predict)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
@@ -142,9 +146,9 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
     )
     calls: dict[str, Any] = {}
 
-    def fake_train_margin_total_model_with_report(**kwargs: object) -> TrainingResult:
+    def fake_train_margin_total_model_with_report(options: TrainingOptions) -> TrainingResult:
         """Record Optuna config and return training result."""
-        calls["optuna_config"] = kwargs["optuna_config"]
+        calls["optuna_config"] = options.optuna_config
         return result
 
     def fake_save_model(path: Path, model: object) -> None:
@@ -185,13 +189,13 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
     )
     ml_model_cli.main()
 
-    optuna_config = cast(OptunaConfig, calls["optuna_config"])
+    optuna_config = cast("OptunaConfig", calls["optuna_config"])
     assert optuna_config.storage == "sqlite:///optuna.db"
     assert optuna_config.study_name == "nfl_predictor_margin_total_combined_mae"
-    model_path = cast(Path, calls["model_path"])
+    model_path = cast("Path", calls["model_path"])
     assert model_path.parent == run_dir
-    metrics_payload = cast(dict[str, Any], calls["metrics_payload"])
-    metadata_payload = cast(dict[str, Any], calls["metadata_payload"])
+    metrics_payload = cast("dict[str, Any]", calls["metrics_payload"])
+    metadata_payload = cast("dict[str, Any]", calls["metadata_payload"])
     assert metrics_payload["run_id"] == run_dir.name
     assert metadata_payload["run_id"] == run_dir.name
 
@@ -207,7 +211,7 @@ def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
         messages.append(fmt % args if args else fmt)
 
     monkeypatch.setattr(ml_model_cli.log, "info", fake_log)
-    monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args, **_kwargs: "model")
+    monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", lambda *_args, **_kwargs: "model")
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
@@ -234,7 +238,7 @@ def test_main_model_outside_run_dir_raises(monkeypatch, tmp_path: Path) -> None:
     )
 
     monkeypatch.setattr(
-        ml_model_cli, "train_margin_total_model_with_report", lambda **_kwargs: result
+        ml_model_cli, "train_margin_total_model_with_report", lambda _options: result
     )
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
@@ -253,7 +257,7 @@ def test_main_model_outside_run_dir_raises(monkeypatch, tmp_path: Path) -> None:
         ],
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="--model-out must be inside --run-dir"):
         ml_model_cli.main()
 
 
@@ -278,7 +282,7 @@ def test_main_margin_total_training_predicts_without_writing_artifacts(
     monkeypatch.setattr(
         ml_model_cli,
         "train_margin_total_model_with_report",
-        lambda **_kwargs: result,
+        lambda _options: result,
     )
     monkeypatch.setattr(
         ml_model_cli.artifacts,
@@ -343,6 +347,7 @@ def test_main_training_uses_and_records_the_resolved_xgb_device(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     extra_argv: list[str],
+    *,
     usable: bool,
     expected: str,
 ) -> None:
@@ -361,9 +366,9 @@ def test_main_training_uses_and_records_the_resolved_xgb_device(
     )
     calls: dict[str, Any] = {}
 
-    def fake_train(**kwargs: object) -> TrainingResult:
+    def fake_train(options: TrainingOptions) -> TrainingResult:
         """Record the Optuna config and return the stub result."""
-        calls["optuna_config"] = kwargs["optuna_config"]
+        calls["optuna_config"] = options.optuna_config
         return result
 
     def fake_write_json(path: Path, payload: dict[str, object]) -> None:
@@ -380,8 +385,8 @@ def test_main_training_uses_and_records_the_resolved_xgb_device(
 
     ml_model_cli.main()
 
-    assert cast(OptunaConfig, calls["optuna_config"]).device == expected
-    metadata = cast(dict[str, Any], calls["metadata"])
+    assert cast("OptunaConfig", calls["optuna_config"]).device == expected
+    metadata = cast("dict[str, Any]", calls["metadata"])
     assert metadata["xgb_device"] == expected
     assert metadata["config"]["xgb_device"] == expected
 
@@ -408,7 +413,9 @@ def test_main_training_metadata_records_the_device_the_model_was_fitted_on(
         if path.name == "metadata.json":
             calls["metadata"] = payload
 
-    monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", lambda **_: result)
+    monkeypatch.setattr(
+        ml_model_cli, "train_margin_total_model_with_report", lambda _options: result
+    )
     monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args: None)
     monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
@@ -417,11 +424,11 @@ def test_main_training_metadata_records_the_device_the_model_was_fitted_on(
 
     ml_model_cli.main()
 
-    assert cast(dict[str, Any], calls["metadata"])["xgb_device"] == "cpu"
+    assert cast("dict[str, Any]", calls["metadata"])["xgb_device"] == "cpu"
 
 
 def test_training_pools_the_reference_runs_for_the_predicted_week(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _reference_pool: list[object]
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, reference_pool_requests: list[object]
 ) -> None:
     """The final fit gets the reference pool and the prediction file's week; metadata records it."""
     ml_model_cli = _import_ml_model_cli(monkeypatch)
@@ -441,10 +448,10 @@ def test_training_pools_the_reference_runs_for_the_predicted_week(
     )
     calls: dict[str, Any] = {}
 
-    def fake_train(**kwargs: object) -> TrainingResult:
+    def fake_train(options: TrainingOptions) -> TrainingResult:
         """Record the floor-sigma options."""
-        calls["pool"] = kwargs["floor_sigma_pool"]
-        calls["week"] = kwargs["floor_sigma_week"]
+        calls["pool"] = options.floor_sigma_pool
+        calls["week"] = options.floor_sigma_week
         return result
 
     def fake_write_json(path: Path, payload: dict[str, object]) -> None:
@@ -466,10 +473,12 @@ def test_training_pools_the_reference_runs_for_the_predicted_week(
 
     ml_model_cli.main()
 
-    assert _reference_pool == [[Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS]]
+    assert reference_pool_requests == [
+        [Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS]
+    ]
     assert calls["pool"] is REFERENCE_POOL
     assert calls["week"] == (2026, 1)
-    metadata = cast(dict[str, Any], calls["metadata"])
+    metadata = cast("dict[str, Any]", calls["metadata"])
     assert floor_sigma.FloorSigma.from_dict(metadata["floor_sigma"]) == record
 
 
@@ -480,8 +489,8 @@ def test_training_without_a_prediction_file_estimates_for_the_week_after_the_dat
     ml_model_cli = _import_ml_model_cli(monkeypatch)
     calls: dict[str, Any] = {}
 
-    def fake_train(**kwargs: object) -> TrainingResult:
-        calls["week"] = kwargs["floor_sigma_week"]
+    def fake_train(options: TrainingOptions) -> TrainingResult:
+        calls["week"] = options.floor_sigma_week
         raise SystemExit(0)
 
     monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", fake_train)
@@ -503,14 +512,14 @@ def test_no_reference_runs_is_an_explicit_option(monkeypatch: pytest.MonkeyPatch
 
 
 def test_loading_a_saved_model_reads_no_reference_runs(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _reference_pool: list[object]
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, reference_pool_requests: list[object]
 ) -> None:
     """Prediction from a saved model uses its recorded sigma and needs no reference run."""
     ml_model_cli = _import_ml_model_cli(monkeypatch)
-    monkeypatch.setattr(ml_model_cli, "_load_model_checkpoint", lambda *_args: "model")
+    monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", lambda *_args: "model")
     monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
     monkeypatch.setattr(sys, "argv", ["prog", "--model-in", str(tmp_path / "model.joblib")])
 
     ml_model_cli.main()
 
-    assert _reference_pool == []
+    assert reference_pool_requests == []

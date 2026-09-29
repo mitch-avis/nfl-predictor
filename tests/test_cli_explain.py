@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import joblib
 import pytest
+from tests.test_feature_importance import _fit_rest_opp_model
 
 from nfl_predictor.cli import explain
 from nfl_predictor.ml import ml_model_core
-from tests.test_feature_importance import _fit_rest_opp_model
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_explain_runs_without_the_shap_library(
@@ -52,11 +54,26 @@ def test_explain_runs_without_the_shap_library(
 def test_explain_refuses_a_saved_blend_model() -> None:
     """The blend model kind was retired, so a saved blend model is refused with the reason."""
     blend = ml_model_core.BlendedMarginTotalModel(
-        team_model=cast(ml_model_core.MarginTotalModel, None),
-        blend_layer=cast(ml_model_core.BlendLayer, None),
+        team_model=cast("ml_model_core.MarginTotalModel", None),
+        blend_layer=cast("ml_model_core.BlendLayer", None),
         calibrator=None,
         target_columns=("away_score", "home_score"),
     )
 
-    with pytest.raises(ValueError, match="blend model kind was retired"):
+    with pytest.raises(TypeError, match="blend model kind was retired"):
         explain._select_model_component(blend)
+
+
+def test_explain_refuses_an_object_that_is_not_a_model() -> None:
+    """A pickle that holds something other than a margin/total model is the wrong type."""
+    with pytest.raises(TypeError, match="Unsupported model type: dict"):
+        explain._select_model_component({"not": "a model"})
+
+
+def test_explain_accepts_only_the_margin_and_total_heads() -> None:
+    """The target names one of the two heads."""
+    model, _ = _fit_rest_opp_model()
+    assert explain._resolve_head(model, "margin") == (model.margin_model, "margin")
+    assert explain._resolve_head(model, "total") == (model.total_model, "total")
+    with pytest.raises(ValueError, match=r"--target margin\|total"):
+        explain._resolve_head(model, "spread")

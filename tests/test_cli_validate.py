@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
 
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.cli import validate as module
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 LIVE = ["--live"]
 
@@ -45,7 +48,7 @@ def test_validate_offline_main_missing_file_logs_error(tmp_path: Path, monkeypat
     logger = _FakeLogger()
 
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
 
     assert module.main([]) == 2
     assert logger.records == [("error", f"Missing data file: {tmp_path / 'all_data.csv'}")]
@@ -57,7 +60,7 @@ def test_validate_offline_main_logs_errors_and_warnings(tmp_path: Path, monkeypa
 
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(
         module.pl, "read_csv", lambda _path, **_kwargs: pl.DataFrame({"season": [2024]})
     )
@@ -83,7 +86,7 @@ def test_validate_offline_main_logs_success(tmp_path: Path, monkeypatch) -> None
 
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(
         module.pl, "read_csv", lambda _path, **_kwargs: pl.DataFrame({"season": [2024]})
     )
@@ -102,7 +105,7 @@ def test_validate_live_main_missing_file_logs_error(tmp_path: Path, monkeypatch)
     logger = _FakeLogger()
 
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
 
     assert module.main(LIVE) == 2
     assert logger.records == [("error", f"Missing data file: {tmp_path / 'all_data.csv'}")]
@@ -114,7 +117,7 @@ def test_validate_live_main_logs_success_without_mismatches(tmp_path: Path, monk
 
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(
         module.pl, "read_csv", lambda _path, **_kwargs: pl.DataFrame({"season": [2024]})
     )
@@ -135,7 +138,7 @@ def test_validate_live_main_logs_mismatches(tmp_path: Path, monkeypatch) -> None
     mismatches = pl.DataFrame({"away_abbr": ["BUF"], "home_abbr": ["KC"]})
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(
         module.pl, "read_csv", lambda _path, **_kwargs: pl.DataFrame({"season": [2024]})
     )
@@ -165,7 +168,7 @@ def test_validate_reads_the_data_dir_option(
     chosen.mkdir()
 
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", str(tmp_path / "packaged"))
+    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path / "packaged")
 
     assert module.main([*mode, "--data-dir", str(chosen)]) == 2
     assert logger.records == [("error", f"Missing data file: {chosen / 'all_data.csv'}")]

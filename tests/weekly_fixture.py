@@ -17,10 +17,9 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Iterator
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import joblib
 import numpy as np
@@ -28,6 +27,9 @@ import pandas as pd
 import yaml
 
 from nfl_predictor import constants
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 SHIPPED_CONFIG = Path(constants.ROOT_DIR) / "config" / "weekly_run.yaml"
 

@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -16,9 +15,13 @@ from nfl_predictor import constants
 from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import (
+    TrainingOptions,
     train_margin_total_model,
     train_margin_total_model_with_report,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SEASONS = (2021, 2022, 2023)
 
@@ -106,7 +109,9 @@ def test_the_final_fit_records_the_sigma_for_the_week_it_predicts(data_path: Pat
     pool = _pool()
 
     model = train_margin_total_model(
-        **_train_kwargs(data_path, floor_sigma_pool=pool, floor_sigma_week=(2023, 3))
+        TrainingOptions(
+            **_train_kwargs(data_path, floor_sigma_pool=pool, floor_sigma_week=(2023, 3))
+        )
     )
 
     assert model.floor_sigma is not None
@@ -119,7 +124,9 @@ def test_without_a_named_week_the_sigma_is_for_the_week_after_the_newest_game(
     data_path: Path,
 ) -> None:
     """The newest completed game is 2023 week 4, so the record is for 2023 week 5."""
-    model = train_margin_total_model(**_train_kwargs(data_path, floor_sigma_pool=_pool()))
+    model = train_margin_total_model(
+        TrainingOptions(**_train_kwargs(data_path, floor_sigma_pool=_pool()))
+    )
 
     assert model.floor_sigma is not None
     assert (model.floor_sigma.season, model.floor_sigma.week) == (2023, 5)
@@ -131,7 +138,9 @@ def test_a_short_pool_records_the_fallback(data_path: Path) -> None:
     short = floor_sigma.ErrorPool(_pool().errors.query("season >= 2022"), ("ref",))
 
     model = train_margin_total_model(
-        **_train_kwargs(data_path, floor_sigma_pool=short, floor_sigma_week=(2024, 1))
+        TrainingOptions(
+            **_train_kwargs(data_path, floor_sigma_pool=short, floor_sigma_week=(2024, 1))
+        )
     )
 
     assert model.floor_sigma is not None
@@ -142,9 +151,11 @@ def test_a_short_pool_records_the_fallback(data_path: Path) -> None:
 def test_holdout_probabilities_use_each_weeks_sigma_from_the_pool(data_path: Path) -> None:
     """Holdout games are scored with the sigma the pool gives strictly before their week."""
     with_pool = train_margin_total_model_with_report(
-        **_train_kwargs(data_path, holdout_seasons=1, floor_sigma_pool=_pool())
+        TrainingOptions(**_train_kwargs(data_path, holdout_seasons=1, floor_sigma_pool=_pool()))
     )
-    constant = train_margin_total_model_with_report(**_train_kwargs(data_path, holdout_seasons=1))
+    constant = train_margin_total_model_with_report(
+        TrainingOptions(**_train_kwargs(data_path, holdout_seasons=1))
+    )
 
     pooled_brier = with_pool.metrics_report["metrics"]["holdout"]["brier"]
     constant_brier = constant.metrics_report["metrics"]["holdout"]["brier"]
@@ -183,7 +194,9 @@ def test_prediction_uses_the_recorded_sigma_and_says_so(data_path: Path, tmp_pat
     """A saved model predicts with its own sigma; margins and ranks match the constant path."""
     pool = _pool()
     model = train_margin_total_model(
-        **_train_kwargs(data_path, floor_sigma_pool=pool, floor_sigma_week=(2023, 3))
+        TrainingOptions(
+            **_train_kwargs(data_path, floor_sigma_pool=pool, floor_sigma_week=(2023, 3))
+        )
     )
     assert model.floor_sigma is not None
     predict_path = _write_predict_rows(tmp_path)
@@ -208,7 +221,7 @@ def test_a_model_saved_before_the_sigma_was_recorded_predicts_with_the_constant(
     data_path: Path, tmp_path: Path
 ) -> None:
     """An old checkpoint has no ``floor_sigma``: it loads and uses the constant, flagged."""
-    model = train_margin_total_model(**_train_kwargs(data_path))
+    model = train_margin_total_model(TrainingOptions(**_train_kwargs(data_path)))
     checkpoint = tmp_path / "model.joblib"
     artifacts.save_model(checkpoint, model)
     loaded = ml_model_core.load_model_checkpoint(checkpoint, "margin_total")
@@ -237,7 +250,7 @@ def test_the_metadata_records_the_models_sigma(tmp_path: Path) -> None:
         run_id="run",
         dataset_hash="hash",
         config={},
-        floor_sigma=record.to_dict(),
+        details=artifacts.TrainedModelDetails(floor_sigma=record.to_dict()),
     )
     path = tmp_path / "metadata.json"
     artifacts.write_json(path, metadata)

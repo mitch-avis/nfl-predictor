@@ -9,6 +9,7 @@ import pytest
 
 from nfl_predictor.reporting.power_rankings import (
     COMPOSITE_PUBLISHED_COLUMNS,
+    LeagueStandings,
     build_power_rankings_and_standings,
     composite_points_scale,
     compute_projected_standings,
@@ -95,11 +96,7 @@ def test_build_power_rankings_and_standings_smoke() -> None:
     )
 
     result = build_power_rankings_and_standings(
-        season=2025,
-        through_week=3,
-        current_records=current_records,
-        games_for_ratings=games_for_ratings,
-        future_games_with_probs=future_games,
+        LeagueStandings(2025, 3, current_records, future_games), games_for_ratings=games_for_ratings
     )
 
     assert not result.power_rankings.empty
@@ -255,11 +252,7 @@ def _composite_rankings(
     if records is None:
         records = _empty_records(snapshot["team_abbr"].tolist())
     return build_power_rankings_and_standings(
-        season=2024,
-        through_week=8,
-        current_records=records,
-        future_games_with_probs=pd.DataFrame(),
-        strength_snapshot=snapshot,
+        LeagueStandings(2024, 8, records, pd.DataFrame()), strength_snapshot=snapshot
     ).power_rankings
 
 
@@ -379,18 +372,10 @@ def test_exactly_one_ratings_source_is_required() -> None:
     games = pd.DataFrame({"home_abbr": ["AAA"], "away_abbr": ["BBB"], "p_home": [0.6]})
 
     with pytest.raises(ValueError, match="exactly one"):
-        build_power_rankings_and_standings(
-            season=2024,
-            through_week=1,
-            current_records=records,
-            future_games_with_probs=pd.DataFrame(),
-        )
+        build_power_rankings_and_standings(LeagueStandings(2024, 1, records, pd.DataFrame()))
     with pytest.raises(ValueError, match="exactly one"):
         build_power_rankings_and_standings(
-            season=2024,
-            through_week=1,
-            current_records=records,
-            future_games_with_probs=pd.DataFrame(),
+            LeagueStandings(2024, 1, records, pd.DataFrame()),
             games_for_ratings=games,
             strength_snapshot=snapshot,
         )
@@ -445,7 +430,7 @@ def test_a_breakout_team_ranks_first_late_in_the_season() -> None:
     last_year = {"AAA": 0.30, "BBB": 0.15, "CCC": 0.05, "DDD": -0.05, "EEE": -0.15, "FFF": -0.30}
     this_year = {"AAA": 0.15, "BBB": 0.10, "CCC": 0.05, "DDD": -0.05, "EEE": -0.20, "FFF": 0.45}
     prior = strength_snapshot.build_strength_snapshot(
-        _season_team_games(2023, 15, last_year), season=2023, week=19, blend_prior=False
+        _season_team_games(2023, 15, last_year), season=2023, week=19
     )
     games = _season_team_games(2024, 15, this_year)
 

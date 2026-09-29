@@ -26,16 +26,18 @@ columns, and the XGBoost parameters are built on both sides by the resolver trai
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
-from dataclasses import fields
+from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
 from nfl_predictor.ml import ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.weekly_run import config as weekly_config
 from nfl_predictor.weekly_run import stage1
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 SECTION_KEY = "settings_versus_production"
 HEADING = "Settings versus production"
@@ -100,11 +102,14 @@ def _xgb_settings(params: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, 
 
 
 def _market_settings(
-    frame: pd.DataFrame, include_market: bool, market_transform: bool | None, market_anchor: bool
+    frame: pd.DataFrame, *, include_market: bool, market_transform: bool | None, market_anchor: bool
 ) -> dict[str, Any]:
     """Return the market settings a fit on ``frame`` resolves to."""
     include, transform, anchor = walk_forward.resolve_market_settings(
-        frame, include_market, market_transform, market_anchor
+        frame,
+        include_market=include_market,
+        market_transform=market_transform,
+        market_anchor=market_anchor,
     )
     return {"include_market": include, "market_transform": transform, "market_anchor": anchor}
 
@@ -123,7 +128,10 @@ def _walk_forward_settings(
         "include_postseason": bool(config.include_postseason),
         "recency_half_life_seasons": config.recency_half_life_seasons,
         **_market_settings(
-            frame, config.include_market, config.market_transform, config.market_anchor
+            frame,
+            include_market=config.include_market,
+            market_transform=config.market_transform,
+            market_anchor=config.market_anchor,
         ),
         "max_cardinality_ratio": config.max_cardinality_ratio,
         "feature_start": config.feature_start,
@@ -160,7 +168,7 @@ def _final_fit_settings(
     overrides = dict(train_config["xgb_params_overrides"])
     if optuna_config.xgb_n_jobs is not None:
         overrides["n_jobs"] = optuna_config.xgb_n_jobs
-    params = ml_model_xgb_utils._resolve_xgb_params(
+    params = ml_model_xgb_utils.resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides=overrides,
         tree_method=optuna_config.tree_method,
@@ -240,21 +248,39 @@ def _production_settings(
     """
     args = weekly_config.parse_args(production_argv)
     weekly_config.apply_run_defaults(args)
-    production_stage1 = stage1.production_walk_forward_config(**weekly_config.stage1_options(args))
+    production_stage1 = stage1.production_walk_forward_config(weekly_config.stage1_options(args))
     optuna_config, train_config = weekly_config.final_fit_options(args, frame, run_dir=None)
     return args, production_stage1, optuna_config, train_config
+
+
+@dataclass(frozen=True, kw_only=True)
+class RunRecord:
+    """What a walk-forward run recorded about itself beside its configuration.
+
+    Attributes:
+        disable_trend_features: Whether the run dropped the trend features before training.
+        xgb_params: The XGBoost parameters the run trained with; by default they are
+            resolved from the run's configuration as its folds resolve them.
+        xgb_recorded: ``False`` when ``xgb_params`` holds only what an older run recorded
+            (its overrides), so production's other parameters are "not recorded".
+        retired: Settings the run recorded that no longer exist, with their values.
+        scope: Scope settings the run records outside its configuration (paths).
+
+    """
+
+    disable_trend_features: bool = False
+    xgb_params: Mapping[str, Any] | None = None
+    xgb_recorded: bool = True
+    retired: Mapping[str, Any] | None = None
+    scope: Mapping[str, Any] | None = None
 
 
 def settings_versus_production(
     run_config: walk_forward.WalkForwardConfig,
     frame: pd.DataFrame,
+    record: RunRecord | None = None,
     *,
     production_argv: Sequence[str] = (),
-    disable_trend_features: bool = False,
-    run_xgb_params: Mapping[str, Any] | None = None,
-    xgb_recorded: bool = True,
-    retired: Mapping[str, Any] | None = None,
-    run_scope: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the settings-versus-production section for a walk-forward run.
 
@@ -262,15 +288,10 @@ def settings_versus_production(
         run_config: The run's configuration, with its XGBoost device already resolved.
         frame: The run's dataset, or any frame with its columns; market settings resolve
             against it on both sides.
+        record: What the run recorded beside its configuration; none means nothing beyond
+            the defaults of `RunRecord`.
         production_argv: Weekly-run options that stand in for production's command line; none
             reads the shipped config file with the code defaults.
-        disable_trend_features: Whether the run dropped the trend features before training.
-        run_xgb_params: The XGBoost parameters the run trained with; by default they are
-            resolved from ``run_config`` as its folds resolve them.
-        xgb_recorded: ``False`` when ``run_xgb_params`` holds only what an older run recorded
-            (its overrides), so production's other parameters are "not recorded".
-        retired: Settings the run recorded that no longer exist, with their values.
-        run_scope: Scope settings the run records outside its configuration (paths).
 
     Returns:
         The section, or ``{"unavailable": reason}`` when the weekly configuration does not
@@ -287,23 +308,27 @@ def settings_versus_production(
         # The weekly parser exits on option combinations it rejects (the ranking options).
         return {"unavailable": "the production weekly configuration does not parse"}
 
+    record = record or RunRecord()
+    run_xgb_params = record.xgb_params
     if run_xgb_params is None:
-        run_xgb_params = walk_forward._resolve_xgb_params(run_config)
+        run_xgb_params = walk_forward.xgb_params_for_config(run_config)
     run = _walk_forward_settings(
-        run_config, frame, run_xgb_params, disable_trend_features=disable_trend_features
+        run_config, frame, run_xgb_params, disable_trend_features=record.disable_trend_features
     )
-    run["scope"].update(run_scope or {})
+    run["scope"].update(record.scope or {})
     stage1_settings = _walk_forward_settings(
-        production_stage1, frame, walk_forward._resolve_xgb_params(production_stage1)
+        production_stage1, frame, walk_forward.xgb_params_for_config(production_stage1)
     )
     final_fit = _final_fit_settings(train_config, optuna_config)
     return {
         "production_config": str(args.config) if args.config is not None else None,
-        "stage1": _compare(run["model"], stage1_settings["model"], xgb_recorded=xgb_recorded),
-        "final_fit": _compare(
-            _as_final_fit(run["model"]), final_fit["model"], xgb_recorded=xgb_recorded
+        "stage1": _compare(
+            run["model"], stage1_settings["model"], xgb_recorded=record.xgb_recorded
         ),
-        "retired": dict(retired or {}),
+        "final_fit": _compare(
+            _as_final_fit(run["model"]), final_fit["model"], xgb_recorded=record.xgb_recorded
+        ),
+        "retired": dict(record.retired or {}),
         "scope": {
             "run": run["scope"],
             "stage1": stage1_settings["scope"],
@@ -375,18 +400,17 @@ def section_for_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
         return {"unavailable": f"the recorded configuration no longer loads: {error}"}
     xgb_params, xgb_recorded = _recorded_xgb_params(config)
     checkpoint = config.get("checkpoint") or {}
-    return settings_versus_production(
-        run_config,
-        pd.read_csv(data_path, nrows=0),
+    record = RunRecord(
         disable_trend_features=bool(config.get("disable_trend_features")),
-        run_xgb_params=xgb_params,
+        xgb_params=xgb_params,
         xgb_recorded=xgb_recorded,
         retired=_retired_settings(config),
-        run_scope={"data_path": str(data_path), "checkpoint_dir": checkpoint.get("dir")},
+        scope={"data_path": str(data_path), "checkpoint_dir": checkpoint.get("dir")},
     )
+    return settings_versus_production(run_config, pd.read_csv(data_path, nrows=0), record)
 
 
-def _value(value: Any) -> str:
+def _value(value: object) -> str:
     """Return a setting's value as JSON, so ``None`` and strings read unambiguously."""
     return json.dumps(value, default=str)
 

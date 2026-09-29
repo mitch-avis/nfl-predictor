@@ -24,15 +24,18 @@ from nfl_predictor.ml.ml_model_core import (
     DEFAULT_OPTUNA_CV_SPLITS,
     DEFAULT_OPTUNA_TIMEOUT_SECONDS,
     OptunaConfig,
-    TrainingResult,
-    _load_model_checkpoint,
+    load_model_checkpoint,
 )
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
-from nfl_predictor.ml.ml_model_training import train_margin_total_model_with_report
+from nfl_predictor.ml.ml_model_training import (
+    TrainingOptions,
+    TrainingRecord,
+    train_margin_total_model_with_report,
+    write_training_artifacts,
+)
 from nfl_predictor.ml.ml_model_xgb_utils import (
     XGB_DEVICE_AUTO,
     XGB_DEVICE_HELP,
-    fitted_xgb_device,
     resolve_xgb_device,
     xgb_device_arg,
 )
@@ -45,7 +48,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-path",
         type=Path,
-        default=Path(constants.DATA_PATH) / "completed_games_ml.csv",
+        default=constants.DATA_PATH / "completed_games_ml.csv",
         help="Path to completed games dataset.",
     )
     parser.add_argument(
@@ -301,25 +304,14 @@ def _predicted_week(predict_path: Path | None) -> tuple[int, int] | None:
     return int(weeks["season"].iloc[0]), int(weeks["week"].iloc[0])
 
 
-def main() -> None:
-    """CLI entry point for training and prediction."""
-    args = _parse_args()
-
-    created_at = artifacts.now_utc_iso()
-    dataset_hash = artifacts.sha256_file(args.data_path)
-    # Resolve `auto` once, so the fit and the recorded config name the same device.
-    args.xgb_device = resolve_xgb_device(args.xgb_device)
-
-    config_payload: dict[str, Any] = {
-        k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
-    }
-
+def _optuna_config(args: argparse.Namespace) -> OptunaConfig:
+    """Build the Optuna config, naming a default study when a storage is given without one."""
     study_name = args.tune_study_name
     if args.tune_storage and study_name is None:
         study_name = f"nfl_predictor_{args.model_kind}_{args.tune_metric}"
         log.info("Using default Optuna study name: %s", study_name)
 
-    optuna_config = OptunaConfig(
+    return OptunaConfig(
         enabled=args.tune,
         timeout_seconds=args.tune_timeout,
         n_trials=args.tune_trials,
@@ -334,70 +326,36 @@ def main() -> None:
         xgb_n_jobs=args.xgb_n_jobs,
     )
 
-    output_path = args.output_path
-    if args.predict_path and output_path is None:
-        output_path = args.predict_path.with_name(f"{args.predict_path.stem}_predictions.csv")
 
-    if args.model_in is not None:
-        if args.tune:
-            log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
-        model = _load_model_checkpoint(args.model_in, args.model_kind)
-        if not args.predict_path:
-            log.info("No --predict-path provided; exiting after loading model.")
-            return
-        predict_week_margin_total(
-            model,
-            args.predict_path,
-            output_path,
-            pretty_output=args.pretty_output,
-            score_rounding=args.score_rounding,
-        )
+def _artifact_run_dir(args: argparse.Namespace) -> Path:
+    """Return the run directory: ``--run-dir``, which must hold ``--model-out``, or its folder."""
+    model_out: Path = args.model_out
+    if args.run_dir is not None and model_out.parent != args.run_dir:
+        msg = "--model-out must be inside --run-dir"
+        raise ValueError(msg)
+    return args.run_dir or model_out.parent
+
+
+def _predict_from_checkpoint(args: argparse.Namespace, output_path: Path | None) -> None:
+    """Load ``--model-in`` and predict ``--predict-path`` with it, training nothing."""
+    if args.tune:
+        log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
+    model = load_model_checkpoint(args.model_in, args.model_kind)
+    if not args.predict_path:
+        log.info("No --predict-path provided; exiting after loading model.")
         return
+    predict_week_margin_total(
+        model,
+        args.predict_path,
+        output_path,
+        pretty_output=args.pretty_output,
+        score_rounding=args.score_rounding,
+    )
 
-    def _write_artifacts(result: TrainingResult, model_out: Path) -> None:
-        run_dir = args.run_dir or model_out.parent
-        if args.run_dir is not None and model_out.parent != args.run_dir:
-            raise ValueError("--model-out must be inside --run-dir")
 
-        run_id = args.run_id or run_dir.name
-        paths = artifacts.resolve_run_paths(run_id, run_dir=run_dir)
-
-        artifacts.save_model(paths.model_path, result.model)
-
-        metrics_report = {
-            "run_id": run_id,
-            "created_at": created_at,
-            "config": config_payload,
-            "splits": result.splits,
-            "metrics": result.metrics_report,
-        }
-        artifacts.write_json(paths.metrics_path, metrics_report)
-
-        metadata = artifacts.build_metadata(
-            created_at=created_at,
-            run_id=run_id,
-            dataset_hash=dataset_hash,
-            config=config_payload,
-            feature_list=result.feature_list,
-            splits=result.splits,
-            params=result.params,
-            tuned_params=result.tuned_params,
-            early_stopping=result.early_stopping,
-            optuna_summary=getattr(result.model, "optuna_summary", None),
-            xgb_device=fitted_xgb_device(result.model),
-            floor_sigma=floor_sigma.model_record(result.model),
-        )
-        artifacts.write_json(paths.metadata_path, metadata)
-        if result.feature_importance:
-            importance_payload = {
-                "run_id": run_id,
-                "created_at": created_at,
-                **result.feature_importance,
-            }
-            artifacts.write_json(paths.feature_importance_path, importance_payload)
-
-    reference_pool = floor_sigma.load_reference_pool(args.floor_sigma_reference_runs)
-    result = train_margin_total_model_with_report(
+def _training_options(args: argparse.Namespace, optuna_config: OptunaConfig) -> TrainingOptions:
+    """Return the training options the arguments ask for, with the reference sigma pool."""
+    return TrainingOptions(
         data_path=args.data_path,
         holdout_seasons=args.holdout_seasons,
         include_market=not args.exclude_market,
@@ -412,14 +370,46 @@ def main() -> None:
         max_season=args.max_season,
         feature_start=args.feature_start,
         feature_end=args.feature_end,
-        floor_sigma_pool=reference_pool,
+        floor_sigma_pool=floor_sigma.load_reference_pool(args.floor_sigma_reference_runs),
         floor_sigma_week=_predicted_week(args.predict_path),
     )
+
+
+def main() -> None:
+    """CLI entry point for training and prediction."""
+    args = _parse_args()
+
+    created_at = artifacts.now_utc_iso()
+    dataset_hash = artifacts.sha256_file(args.data_path)
+    # Resolve `auto` once, so the fit and the recorded config name the same device.
+    args.xgb_device = resolve_xgb_device(args.xgb_device)
+
+    config_payload: dict[str, Any] = {
+        k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
+    }
+    optuna_config = _optuna_config(args)
+
+    output_path = args.output_path
+    if args.predict_path and output_path is None:
+        output_path = args.predict_path.with_name(f"{args.predict_path.stem}_predictions.csv")
+
+    if args.model_in is not None:
+        _predict_from_checkpoint(args, output_path)
+        return
+
+    result = train_margin_total_model_with_report(_training_options(args, optuna_config))
 
     if args.run_dir is not None and args.model_out is None:
         args.model_out = args.run_dir / "model.joblib"
     if args.model_out is not None:
-        _write_artifacts(result, args.model_out)
+        run_dir = _artifact_run_dir(args)
+        record = TrainingRecord(
+            run_id=args.run_id or run_dir.name,
+            created_at=created_at,
+            dataset_hash=dataset_hash,
+            config_payload=config_payload,
+        )
+        write_training_artifacts(result, record, run_dir)
     if args.predict_path:
         predict_week_margin_total(
             result.model,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
@@ -12,7 +12,11 @@ import pandas as pd
 from scipy.sparse import spmatrix
 
 from nfl_predictor.ml import artifacts, feature_importance, ml_model_core
+from nfl_predictor.ml.ml_model_xgb_utils import transform_matrix
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    import xgboost as xgb
 
 
 def _parse_args() -> argparse.Namespace:
@@ -60,27 +64,30 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _select_model_component(model: Any) -> tuple[Any, str]:
+def _select_model_component(model: object) -> tuple[ml_model_core.MarginTotalModel, str]:
     """Resolve the margin/total model to analyze; a saved blend model is refused."""
     if isinstance(model, ml_model_core.BlendedMarginTotalModel):
-        raise ValueError(
+        msg = (
             "This is a blend model: the blend model kind was retired; "
             "explain a margin_total model instead."
         )
+        raise TypeError(msg)
     if isinstance(model, ml_model_core.MarginTotalModel):
         return model, "margin_total"
-    raise ValueError(f"Unsupported model type: {type(model).__name__}")
+    msg = f"Unsupported model type: {type(model).__name__}"
+    raise TypeError(msg)
 
 
-def _resolve_head(model: Any, target: str) -> tuple[Any, str]:
+def _resolve_head(
+    model: ml_model_core.MarginTotalModel, target: str
+) -> tuple[xgb.XGBRegressor, str]:
     """Resolve the specific model head to analyze."""
-    if isinstance(model, ml_model_core.MarginTotalModel):
-        if target == "margin":
-            return model.margin_model, "margin"
-        if target == "total":
-            return model.total_model, "total"
-        raise ValueError("Margin/total models support --target margin|total.")
-    raise ValueError("Unsupported model type for SHAP target resolution.")
+    if target == "margin":
+        return model.margin_model, "margin"
+    if target == "total":
+        return model.total_model, "total"
+    msg = "Margin/total models support --target margin|total."
+    raise ValueError(msg)
 
 
 def main() -> int:
@@ -88,32 +95,26 @@ def main() -> int:
     args = _parse_args()
 
     if not args.model_path.exists():
-        raise FileNotFoundError(f"Missing model: {args.model_path}")
+        msg = f"Missing model: {args.model_path}"
+        raise FileNotFoundError(msg)
     if not args.data_path.exists():
-        raise FileNotFoundError(f"Missing dataset: {args.data_path}")
+        msg = f"Missing dataset: {args.data_path}"
+        raise FileNotFoundError(msg)
 
     model = joblib.load(args.model_path)
     base_model, model_kind = _select_model_component(model)
     head_model, target = _resolve_head(base_model, args.target)
 
     df = pd.read_csv(args.data_path)
-    feature_df = ml_model_core._apply_feature_spec(df, base_model.feature_spec)
-    x_matrix = base_model.preprocessor.transform(feature_df)
+    feature_df = ml_model_core.apply_feature_spec(df, base_model.feature_spec)
+    matrix = transform_matrix(base_model.preprocessor, feature_df)
+    x_matrix = np.asarray(matrix.todense()) if isinstance(matrix, spmatrix) else np.asarray(matrix)
 
     sample_size = max(int(args.sample_size), 1)
     if x_matrix.shape[0] > sample_size:
         rng = np.random.default_rng(int(args.random_seed))
         indices = rng.choice(x_matrix.shape[0], size=sample_size, replace=False)
         x_matrix = x_matrix[indices]
-
-    if isinstance(x_matrix, spmatrix):
-        to_dense = getattr(x_matrix, "toarray", None)
-        if to_dense is None:
-            to_dense = getattr(x_matrix, "todense", None)
-        if callable(to_dense):
-            x_matrix = np.asarray(to_dense())
-        else:
-            raise TypeError("Unsupported sparse matrix type for SHAP conversion.")
 
     feature_names = feature_importance.resolve_feature_names(
         base_model.preprocessor,

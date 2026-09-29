@@ -23,20 +23,21 @@ used for their candidate table and its winner.
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
-from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
-from nfl_predictor.ml import floor_sigma, ml_model_core, walk_forward, wf_compare_utils
+from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, walk_forward, wf_compare_utils
 from nfl_predictor.ml import metrics as metrics_utils
-from nfl_predictor.utils import fingerprints
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 PRODUCTION_LABEL = "production"
 _MARKET_MODE_FLAGS = {
@@ -51,7 +52,8 @@ def market_mode_flags(mode: str) -> tuple[bool, bool]:
     try:
         return _MARKET_MODE_FLAGS[mode]
     except KeyError:
-        raise ValueError(f"Unknown market mode: {mode}") from None
+        msg = f"Unknown market mode: {mode}"
+        raise ValueError(msg) from None
 
 
 def _wf_compare_dir(run_dir: Path) -> Path:
@@ -70,10 +72,10 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     tmp_path.write_text(
-        json.dumps(fingerprints.to_jsonable(payload), indent=2, sort_keys=True),
+        json.dumps(artifacts.to_jsonable(payload), indent=2, sort_keys=True),
         encoding="utf-8",
     )
-    os.replace(tmp_path, path)
+    tmp_path.replace(path)
 
 
 def _atomic_write_csv(path: Path, frame: pd.DataFrame) -> None:
@@ -81,7 +83,7 @@ def _atomic_write_csv(path: Path, frame: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     frame.to_csv(tmp_path, index=False)
-    os.replace(tmp_path, path)
+    tmp_path.replace(path)
 
 
 def margin_errors_path(run_dir: Path) -> Path:
@@ -103,7 +105,8 @@ def read_margin_errors(run_dir: Path) -> pd.DataFrame:
     """
     path = margin_errors_path(run_dir)
     if not path.exists():
-        raise FileNotFoundError(f"Stage 1 margin errors are missing: {path}")
+        msg = f"Stage 1 margin errors are missing: {path}"
+        raise FileNotFoundError(msg)
     return pd.read_csv(path, dtype={"game_id": str})
 
 
@@ -111,9 +114,7 @@ def _build_summary_row(
     candidate_key: str,
     market_mode: str,
     results: dict[str, Any],
-    *,
-    dataset_sha256: str,
-    wf_run_fingerprint: str,
+    run: Stage1Run,
     duration_seconds: float,
 ) -> dict[str, Any]:
     """Build the summary row of the production configuration's walk-forward."""
@@ -155,8 +156,8 @@ def _build_summary_row(
         "market_total_resid_mae": metric("market_total_resid_mae"),
         "games": int(overall.get("games", 0) or 0),
         "weeks": int(overall.get("weeks", 0) or 0),
-        "dataset_fingerprint": dataset_sha256,
-        "wf_run_fingerprint": wf_run_fingerprint,
+        "dataset_fingerprint": str(run.dataset_fingerprint.get("sha256")),
+        "wf_run_fingerprint": run.wf_run_fingerprint,
         "duration_seconds": float(duration_seconds),
         "completed_at": datetime.now(UTC).isoformat(),
     }
@@ -178,7 +179,7 @@ def _append_fold_progress(
         "created_at": datetime.now(UTC).isoformat(),
     }
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(fingerprints.to_jsonable(payload)) + "\n")
+        handle.write(json.dumps(artifacts.to_jsonable(payload)) + "\n")
 
 
 def write_summary(run_dir: Path, summary: dict[str, Any]) -> None:
@@ -187,98 +188,90 @@ def write_summary(run_dir: Path, summary: dict[str, Any]) -> None:
     _atomic_write_json(run_dir / "wf_best.json", summary)
 
 
-def production_walk_forward_config(
-    *,
-    eval_last_n_seasons: int,
-    wf_start_week: int,
-    include_postseason: bool,
-    exclude_incomplete_seasons: bool,
-    recency_half_life_seasons: float | None,
-    market_mode: str,
-    xgb_params_overrides: dict[str, Any],
-    include_quantiles: bool,
-    market_transform: bool | None = None,
-    max_cardinality_ratio: float = 0.5,
-) -> walk_forward.WalkForwardConfig:
+@dataclass(frozen=True, kw_only=True)
+class ProductionOptions:
+    """The production configuration's walk-forward options, from the weekly run's settings.
+
+    ``market_transform`` and ``max_cardinality_ratio`` are the final fit's own options, so
+    the walk-forward scores the configuration the week's picks come from.
+    """
+
+    eval_last_n_seasons: int
+    wf_start_week: int
+    include_postseason: bool
+    exclude_incomplete_seasons: bool
+    recency_half_life_seasons: float | None
+    market_mode: str
+    xgb_params_overrides: dict[str, Any]
+    include_quantiles: bool
+    market_transform: bool | None = None
+    max_cardinality_ratio: float = 0.5
+
+
+@dataclass(frozen=True, kw_only=True)
+class Stage1Run:
+    """Where stage 1 writes, whether it may resume, and the provenance it records.
+
+    With ``resume`` an identical rerun restores the finished weeks saved under
+    ``wf_compare/wf_folds/`` instead of training them again. ``floor_sigma_history`` (the
+    reference runs' errors) joins the walk-forward's own earlier weeks in each week's sigma.
+    """
+
+    run_dir: Path
+    resume: bool
+    dataset_fingerprint: dict[str, Any]
+    wf_run_fingerprint: str
+    checkpoint_per_fold: bool
+    floor_sigma_history: floor_sigma.ErrorPool | None = None
+
+
+def production_walk_forward_config(options: ProductionOptions) -> walk_forward.WalkForwardConfig:
     """Return the walk-forward configuration stage 1 runs for these options."""
-    include_market, market_anchor = market_mode_flags(market_mode)
+    include_market, market_anchor = market_mode_flags(options.market_mode)
     return walk_forward.WalkForwardConfig(
         eval_seasons=None,
-        eval_last_n_seasons=eval_last_n_seasons,
-        wf_start_week=wf_start_week,
+        eval_last_n_seasons=options.eval_last_n_seasons,
+        wf_start_week=options.wf_start_week,
         calibration="auto",
         random_seed=walk_forward.DEFAULT_RANDOM_SEED,
-        include_postseason=include_postseason,
-        exclude_incomplete_seasons=exclude_incomplete_seasons,
-        recency_half_life_seasons=recency_half_life_seasons,
+        include_postseason=options.include_postseason,
+        exclude_incomplete_seasons=options.exclude_incomplete_seasons,
+        recency_half_life_seasons=options.recency_half_life_seasons,
         include_market=include_market,
-        market_transform=market_transform,
+        market_transform=options.market_transform,
         market_anchor=market_anchor,
-        include_quantiles=include_quantiles,
-        max_cardinality_ratio=max_cardinality_ratio,
+        include_quantiles=options.include_quantiles,
+        max_cardinality_ratio=options.max_cardinality_ratio,
         feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
         feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
-        xgb_params_overrides=xgb_params_overrides,
+        xgb_params_overrides=options.xgb_params_overrides,
     )
 
 
 def evaluate_production(
-    df: pd.DataFrame,
-    *,
-    run_dir: Path,
-    resume: bool,
-    dataset_fingerprint: dict[str, Any],
-    wf_run_fingerprint: str,
-    checkpoint_per_fold: bool,
-    eval_last_n_seasons: int,
-    wf_start_week: int,
-    include_postseason: bool,
-    exclude_incomplete_seasons: bool,
-    recency_half_life_seasons: float | None,
-    market_mode: str,
-    xgb_params_overrides: dict[str, Any],
-    include_quantiles: bool,
-    market_transform: bool | None = None,
-    max_cardinality_ratio: float = 0.5,
-    floor_sigma_history: floor_sigma.ErrorPool | None = None,
+    df: pd.DataFrame, options: ProductionOptions, run: Stage1Run
 ) -> dict[str, Any]:
     """Walk the production configuration forward and return its summary row.
 
-    ``market_transform`` and ``max_cardinality_ratio`` are the final fit's own options, so
-    the walk-forward scores the configuration the week's picks come from.
-
-    The walk-forward saves every finished week under ``wf_compare/wf_folds/``; with ``resume``
-    an identical rerun restores those weeks instead of training them again.
-
-    ``floor_sigma_history`` (the reference runs' errors) joins the walk-forward's own earlier
-    weeks in each week's floor sigma. The squared margin errors of every predicted game are
-    written to ``wf_margin_errors.csv``.
+    The squared margin errors of every predicted game are written to ``wf_margin_errors.csv``.
     """
+    run_dir = run.run_dir
     wf_dir = _wf_compare_dir(run_dir)
     wf_dir.mkdir(parents=True, exist_ok=True)
     candidate_key = wf_compare_utils.build_candidate_key(
-        model_kind="margin_total",
-        feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
-        feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
-        market_mode=market_mode,
-        include_quantiles=include_quantiles,
-        xgb_params_overrides=xgb_params_overrides,
+        wf_compare_utils.CandidateSpec(
+            model_kind="margin_total",
+            feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
+            feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+            market_mode=options.market_mode,
+            include_quantiles=options.include_quantiles,
+            xgb_params_overrides=options.xgb_params_overrides,
+        )
     )
-    cfg = production_walk_forward_config(
-        eval_last_n_seasons=eval_last_n_seasons,
-        wf_start_week=wf_start_week,
-        include_postseason=include_postseason,
-        exclude_incomplete_seasons=exclude_incomplete_seasons,
-        recency_half_life_seasons=recency_half_life_seasons,
-        market_mode=market_mode,
-        xgb_params_overrides=xgb_params_overrides,
-        include_quantiles=include_quantiles,
-        market_transform=market_transform,
-        max_cardinality_ratio=max_cardinality_ratio,
-    )
+    cfg = production_walk_forward_config(options)
 
     fold_callback: Callable[[dict[str, Any], walk_forward.WalkForwardFold], None] | None = None
-    if checkpoint_per_fold:
+    if run.checkpoint_per_fold:
         progress_path = wf_dir / "wf_fold_progress.jsonl"
 
         def fold_progress_callback(
@@ -295,27 +288,19 @@ def evaluate_production(
         df,
         cfg,
         fold_callback=fold_callback,
-        checkpoint_dir=wf_dir / "wf_folds",
-        resume=resume,
-        floor_sigma_history=floor_sigma_history,
+        checkpoints=walk_forward.FoldCheckpoints(wf_dir / "wf_folds", resume=run.resume),
+        floor_sigma_history=run.floor_sigma_history,
     )
     write_margin_errors(run_dir, floor_sigma.margin_errors(out["predictions"]))
     duration = time.monotonic() - start
-    summary_row = _build_summary_row(
-        candidate_key,
-        market_mode,
-        out,
-        dataset_sha256=str(dataset_fingerprint.get("sha256")),
-        wf_run_fingerprint=wf_run_fingerprint,
-        duration_seconds=duration,
-    )
+    summary_row = _build_summary_row(candidate_key, options.market_mode, out, run, duration)
     _atomic_write_json(
         _candidate_artifact_path(run_dir, candidate_key),
         {
             "candidate_key": candidate_key,
             "config": cfg.to_dict(),
-            "dataset_fingerprint": dataset_fingerprint,
-            "wf_run_fingerprint": wf_run_fingerprint,
+            "dataset_fingerprint": run.dataset_fingerprint,
+            "wf_run_fingerprint": run.wf_run_fingerprint,
             "metrics": {
                 "per_week": out.get("per_week"),
                 "per_season": out.get("per_season"),

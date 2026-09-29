@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import csv
 import re
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 _WEEK_FILE_RE = re.compile(r"week_(\d+)_games_to_predict", re.IGNORECASE)
 
 
-def _default_power_rankings_through_week(season: int | None, week: int | None) -> int | None:
+def default_power_rankings_through_week(season: int | None, week: int | None) -> int | None:
     """Derive the default power-rankings through-week for a prediction week.
 
     The rankings read a strength snapshot for ``through_week + 1``, and the ETL writes
@@ -81,16 +84,18 @@ def _predict_file_sort_key(path: Path) -> tuple[int, int, str]:
     return season, resolved_week, path.name
 
 
-def _resolve_predict_path(predict_path: Path | None, data_dir: Path) -> Path:
+def resolve_predict_path(predict_path: Path | None, data_dir: Path) -> Path:
     """Resolve the default prediction file path when not provided."""
     if predict_path is not None:
         if not predict_path.exists():
-            raise FileNotFoundError(f"Missing predict dataset: {predict_path}")
+            msg = f"Missing predict dataset: {predict_path}"
+            raise FileNotFoundError(msg)
         return predict_path
 
     predict_dir = data_dir / "predict"
     if not predict_dir.exists():
-        raise FileNotFoundError(f"Missing predict directory: {predict_dir}")
+        msg = f"Missing predict directory: {predict_dir}"
+        raise FileNotFoundError(msg)
 
     candidates: list[tuple[tuple[int, int, str], Path]] = []
     for candidate in predict_dir.glob("week_*_games_to_predict.csv"):
@@ -98,13 +103,14 @@ def _resolve_predict_path(predict_path: Path | None, data_dir: Path) -> Path:
         if week is not None:
             candidates.append((_predict_file_sort_key(candidate), candidate))
     if not candidates:
-        raise FileNotFoundError(f"No week_XX_games_to_predict.csv files found in {predict_dir}")
+        msg = f"No week_XX_games_to_predict.csv files found in {predict_dir}"
+        raise FileNotFoundError(msg)
 
     candidates.sort(key=lambda item: item[0])
     return candidates[-1][1]
 
 
-def _infer_season_week(df: pd.DataFrame) -> tuple[int | None, int | None]:
+def infer_season_week(df: pd.DataFrame) -> tuple[int | None, int | None]:
     """Infer a single season/week from a prediction frame."""
     season = None
     week = None
@@ -119,7 +125,7 @@ def _infer_season_week(df: pd.DataFrame) -> tuple[int | None, int | None]:
     return season, week
 
 
-def _resolve_output_paths(
+def resolve_output_paths(
     output_dir: Path,
     season: int | None,
     week: int | None,

@@ -5,23 +5,26 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## Update (2026-09-28 evening, branch `fix/weekly-dry-run`)
+## Update (2026-09-29, branch `fix/weekly-dry-run`)
 
-- `fix/weekly-dry-run` (off `main`) carries `0.35.2`: `nfl-predictor weekly --dry-run` skips the
-  data refresh (reviewed; `scripts/gate.sh` exit `0`, 1196 passed). Not merged to `main`
-  (must-ask).
-- Task 56.7(b) measured: `models/step3_market_transform/` (market transform off against on,
-  2007-2025 from week 1, two GPU seeds, code `368570c`); `HYPOTHESIS.md`, `REVIEW.md` by a
-  separate reviewer. R-mt is a tie; the question "keep `market_transform: auto`?" (recommended:
-  keep, close 56.7(b); `wf_eval_last_n_seasons` is settled by the code, it never reaches the
-  submitted probabilities) is with the user. Nothing from it is in `benchmarks.md` or
-  `CHANGELOG.md` yet. Note for `benchmarks.md`: the reference re-runs `r_seed42`/`r_seed7` have
-  the GPU reference's margins bit for bit, but the reference's recorded Brier and log loss used
-  the fixed sigma; the re-runs are its current-code (pooled sigma) equivalent.
-- Web live checks: `web/dist` rebuilt; `nfl-predictor web` (no `--reload`) started from
-  `models/m60_web_live_checks/serve.sh`. Creating a temporary admin to submit jobs was denied by
-  the permission classifier; the user is choosing between allowing it, launching the templates
-  themself, or CLI-only ETL checks. The user allowed `etl_full` and `lines_refresh` today.
+- `fix/weekly-dry-run` (off `main`, not merged: must-ask) carries `0.35.2` (`weekly --dry-run`
+  skips the data refresh) and `0.35.3` (`leakage-audit` creates its report directory; `validate`
+  infers `all_data.csv`'s types from every row; local markdownlint skips `models/`). Each fix was
+  reviewed by a separate reviewer; `scripts/gate.sh` exit `0` (1199 passed).
+- Task 56.7 closed (user, 2026-09-28): `market_transform` stays `auto` after a two-seed tie
+  (`.agents/benchmarks.md`, "Market transform on against off"). Still to move to `ARCHIVE.md` at
+  the step-3 close-out, with the dry-run item.
+- Web live checks (`models/m60_web_live_checks/`, the job logs and `job.py`, the API submitter):
+  the server runs from `serve.sh` without `--reload`, `web/dist` rebuilt; a temporary admin
+  `agent_check` (user-approved) submits jobs and is deleted when the checks end. Passed:
+  `etl_full` (rewrote `data/`, user-approved; Week 3 complete, `week_04_games_to_predict.csv` has
+  16 games), `train` (`models/train_20260929_061431/`), `weekly_run` (dry run),
+  `walk_forward_backtest` (two seasons, progress per fold), and after `0.35.3` `leakage_audit`,
+  `validate_offline`, `validate_live`. Only walk-forward jobs report progress. Open: `predict`,
+  `power_rankings`, `shap_analysis` and the `lines_refresh`/`predict_week` chains write into the
+  active run (`weekly_2026_week_04_step3_test`); pinning the throwaway train run was denied by
+  the permission classifier, so the user decides (pin it, write into the merge-test run, or wait
+  for the real Week 4 run). `reports/` (the leakage report) is untracked, not gitignored.
 
 ## State (written 2026-09-28, after the 0.35.1 merge)
 

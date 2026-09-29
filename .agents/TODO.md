@@ -442,7 +442,7 @@ Formerly Milestone 41.
       - Keep refreshes manual copies, like `data/qb_elos.csv` from `../nfeloqb`; an automated
         fetch from GitHub would be a new network dependency (must-ask).
 
-- [ ] 56.7 (step 3, with 56.5) One production configuration, every setting decided once. Found
+- [x] 56.7 (step 3, with 56.5) One production configuration, every setting decided once. Found
       2026-09-24: no weekly run reads `config/weekly_run.yaml` (it needs `--config`, and no
       launcher passes it), so production runs on the code defaults. The YAML's non-default values
       date from its first version (January 2026, commit `83ba2a7`, reformatted in `67d13e2`) and
@@ -482,6 +482,14 @@ Formerly Milestone 41.
       defaults; the user stressed that its settings are still to be optimized, which is part (b)
       here and task 55.4, not something the rewrite settles. How many seasons stage 1 scores is
       settled here too (with (c)), not by widening the window now.
+      Done 2026-09-28, (b): `wf_eval_last_n_seasons` never reaches the submitted probabilities
+      (the final fit takes its tree settings from the config, and the reference runs cover every
+      season before the current one in the sigma pool, so stage 1 only fills the current
+      season's weeks; `weekly_run/pipeline.py`, `_production_floor_sigma`), so it stays `3`.
+      `market_transform` `auto` and `true` are the same run whenever lines exist; on against off
+      was measured on two seeds (`.agents/benchmarks.md`, "Market transform on against off"), a
+      tie, and the user kept `auto`. The settings-versus-production section is in every backtest
+      report.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.

@@ -82,6 +82,7 @@ def main() -> int:
     )
 
     report = leakage_audit.run_leakage_audit(df, config)
+    args.out_json.parent.mkdir(parents=True, exist_ok=True)
     leakage_audit.write_report(report, args.out_json)
 
     return 0 if report.get("ok") else 1

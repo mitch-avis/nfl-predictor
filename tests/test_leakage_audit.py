@@ -111,3 +111,31 @@ def test_write_report_writes_sorted_json(tmp_path) -> None:
 
     assert json.loads(out_path.read_text(encoding="utf-8")) == report
     assert out_path.read_text(encoding="utf-8").splitlines()[1].strip().startswith('"a"')
+
+
+def test_cli_main_creates_missing_report_directory(tmp_path, monkeypatch) -> None:
+    """The CLI writes its report even when the output directory does not exist yet."""
+    from nfl_predictor.cli import leakage_audit as leakage_audit_cli
+
+    data_path = tmp_path / "games.csv"
+    _tiny_df().to_csv(data_path, index=False)
+    out_path = tmp_path / "missing" / "nested" / "leakage_audit.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "leakage-audit",
+            "--data-path",
+            str(data_path),
+            "--out-json",
+            str(out_path),
+            "--feature-start",
+            "feat1",
+            "--feature-end",
+            "home_moneyline",
+        ],
+    )
+
+    exit_code = leakage_audit_cli.main()
+
+    assert exit_code == 0
+    assert json.loads(out_path.read_text())["ok"] is True

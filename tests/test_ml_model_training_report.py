@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
 import pytest
 import xgboost as xgb
-from sklearn.compose import ColumnTransformer
+from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import FeatureSpec, MarginTotalModel, OptunaConfig
-from tests.weekly_fixture import build_fixture
+
+if TYPE_CHECKING:
+    from sklearn.compose import ColumnTransformer
+
+    from nfl_predictor.ml.ml_model_training import TrainingOptions
 
 xgb.set_config(verbosity=0)
 
@@ -52,11 +56,11 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         }
     )
 
-    margin_sentinel = cast(xgb.XGBRegressor, object())
-    total_sentinel = cast(xgb.XGBRegressor, object())
+    margin_sentinel = cast("xgb.XGBRegressor", object())
+    total_sentinel = cast("xgb.XGBRegressor", object())
 
     model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
+        preprocessor=cast("ColumnTransformer", _DummyPreprocessor()),
         feature_spec=_feature_spec(),
         margin_model=margin_sentinel,
         total_model=total_sentinel,
@@ -70,7 +74,7 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         tuned_cv_summary={"cv_splits": 2},
     )
 
-    def fake_train_margin_total_model(**_kwargs: object) -> MarginTotalModel:
+    def fake_train_margin_total_model(options: TrainingOptions) -> MarginTotalModel:
         """Return a prebuilt model without training."""
         return model
 
@@ -87,29 +91,31 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         "train_margin_total_model",
         fake_train_margin_total_model,
     )
-    monkeypatch.setattr(ml_model_training, "_predict_xgb", fake_predict_xgb)
+    monkeypatch.setattr(ml_model_training, "predict_xgb", fake_predict_xgb)
 
     result = ml_model_training.train_margin_total_model_with_report(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=1,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        optuna_config=OptunaConfig(
-            enabled=False,
-            timeout_seconds=1,
-            n_trials=None,
-            cv_splits=2,
-            objective="combined_mae",
-            early_stopping_rounds=10,
-            tree_method="auto",
-            device="cpu",
-            storage=None,
-            study_name=None,
-            best_params_out=None,
-            xgb_n_jobs=1,
-        ),
-        market_transform=False,
-        market_anchor=False,
+        ml_model_training.TrainingOptions(
+            data_path=Path("dummy.csv"),
+            holdout_seasons=1,
+            include_market=True,
+            max_cardinality_ratio=0.5,
+            optuna_config=OptunaConfig(
+                enabled=False,
+                timeout_seconds=1,
+                n_trials=None,
+                cv_splits=2,
+                objective="combined_mae",
+                early_stopping_rounds=10,
+                tree_method="auto",
+                device="cpu",
+                storage=None,
+                study_name=None,
+                best_params_out=None,
+                xgb_n_jobs=1,
+            ),
+            market_transform=False,
+            market_anchor=False,
+        )
     )
 
     metrics = result.metrics_report["metrics"]["holdout"]
@@ -140,10 +146,10 @@ def test_train_margin_total_model_with_report_explains_every_training_row(
         }
     )
     model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
+        preprocessor=cast("ColumnTransformer", _DummyPreprocessor()),
         feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
+        margin_model=cast("xgb.XGBRegressor", object()),
+        total_model=cast("xgb.XGBRegressor", object()),
         target_columns=("away_score", "home_score"),
         margin_quantile_models=None,
         total_quantile_models=None,
@@ -154,7 +160,7 @@ def test_train_margin_total_model_with_report_explains_every_training_row(
         tuned_cv_summary=None,
     )
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(ml_model_training, "train_margin_total_model", lambda **_kwargs: model)
+    monkeypatch.setattr(ml_model_training, "train_margin_total_model", lambda _options: model)
     explained: list[pd.DataFrame] = []
 
     def fake_report(_model: object, shap_rows: pd.DataFrame | None = None) -> dict[str, Any]:
@@ -168,13 +174,28 @@ def test_train_margin_total_model_with_report_explains_every_training_row(
     )
 
     result = ml_model_training.train_margin_total_model_with_report(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=0,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        optuna_config=None,
-        market_transform=False,
-        market_anchor=False,
+        ml_model_training.TrainingOptions(
+            data_path=Path("dummy.csv"),
+            holdout_seasons=0,
+            include_market=True,
+            max_cardinality_ratio=0.5,
+            optuna_config=OptunaConfig(
+                enabled=False,
+                timeout_seconds=1,
+                n_trials=None,
+                cv_splits=2,
+                objective="combined_mae",
+                early_stopping_rounds=10,
+                tree_method="auto",
+                device="cpu",
+                storage=None,
+                study_name=None,
+                best_params_out=None,
+                xgb_n_jobs=1,
+            ),
+            market_transform=False,
+            market_anchor=False,
+        )
     )
 
     assert result.splits == {"train_seasons": [2020, 2021], "holdout_seasons": []}
@@ -191,26 +212,28 @@ def test_trained_report_ranks_base_features_by_shap_over_the_training_rows(
     games = pd.read_csv(completed)
 
     result = ml_model_training.train_margin_total_model_with_report(
-        data_path=completed,
-        holdout_seasons=0,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        optuna_config=OptunaConfig(
-            enabled=False,
-            timeout_seconds=0,
-            n_trials=None,
-            cv_splits=2,
-            objective="mae",
-            early_stopping_rounds=50,
-            tree_method=None,
-            device="cpu",
-            storage=None,
-            study_name=None,
-            best_params_out=None,
-            xgb_n_jobs=1,
-        ),
-        market_transform=True,
-        market_anchor=True,
+        ml_model_training.TrainingOptions(
+            data_path=completed,
+            holdout_seasons=0,
+            include_market=True,
+            max_cardinality_ratio=0.5,
+            optuna_config=OptunaConfig(
+                enabled=False,
+                timeout_seconds=0,
+                n_trials=None,
+                cv_splits=2,
+                objective="mae",
+                early_stopping_rounds=50,
+                tree_method=None,
+                device="cpu",
+                storage=None,
+                study_name=None,
+                best_params_out=None,
+                xgb_n_jobs=1,
+            ),
+            market_transform=True,
+            market_anchor=True,
+        )
     )
 
     report = result.feature_importance

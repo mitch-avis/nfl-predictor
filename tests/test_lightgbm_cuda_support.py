@@ -135,7 +135,7 @@ def test_install_reports_a_failed_build(tmp_path: Path, monkeypatch: pytest.Monk
     ],
 )
 def test_nccl_matches_toolkit(
-    tmp_path: Path, nccl: str | None, has_dpkg: bool, expected: bool
+    tmp_path: Path, nccl: str | None, *, has_dpkg: bool, expected: bool
 ) -> None:
     """NCCL matches when its package names the toolkit's CUDA major version."""
     runtime = _runtime(tmp_path, nccl_package_version=nccl, has_dpkg=has_dpkg)

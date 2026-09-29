@@ -15,12 +15,12 @@ from pathlib import Path
 
 import joblib
 import pytest
+from tests import snapshots
+from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.cli import explain
 from nfl_predictor.ml import ml_model_core, ml_model_training
 from nfl_predictor.ml.ml_model_core import OptunaConfig
-from tests import snapshots
-from tests.weekly_fixture import build_fixture
 
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "shap_analysis_characterization"
 OPTUNA_OFF = OptunaConfig(
@@ -45,13 +45,15 @@ def trained(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     root = tmp_path_factory.mktemp("shap_fixture")
     completed = build_fixture(root)["completed"]
     margin_total = ml_model_training.train_margin_total_model(
-        data_path=completed,
-        holdout_seasons=0,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        optuna_config=OPTUNA_OFF,
-        market_transform=True,
-        market_anchor=True,
+        ml_model_training.TrainingOptions(
+            data_path=completed,
+            holdout_seasons=0,
+            include_market=True,
+            max_cardinality_ratio=0.5,
+            optuna_config=OPTUNA_OFF,
+            market_transform=True,
+            market_anchor=True,
+        )
     )
     assert isinstance(margin_total, ml_model_core.MarginTotalModel)
     paths = {"data": completed, "margin_total": root / "margin_total" / "model.joblib"}
@@ -67,11 +69,10 @@ def _run_shap(argv: list[str], monkeypatch: pytest.MonkeyPatch) -> int:
 
 
 @pytest.mark.parametrize(
-    ("kind", "extra_args", "snapshot_name"),
+    ("extra_args", "snapshot_name"),
     [
-        ("margin_total", ["--target", "margin"], "margin_total_margin.json"),
+        (["--target", "margin"], "margin_total_margin.json"),
         (
-            "margin_total",
             ["--target", "total", "--sample-size", "100", "--random-seed", "3"],
             "margin_total_total_sampled.json",
         ),
@@ -81,7 +82,6 @@ def test_shap_report_matches_snapshot(
     trained: dict[str, Path],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    kind: str,
     extra_args: list[str],
     snapshot_name: str,
 ) -> None:
@@ -90,7 +90,7 @@ def test_shap_report_matches_snapshot(
     code = _run_shap(
         [
             "--model-path",
-            str(trained[kind]),
+            str(trained["margin_total"]),
             "--data-path",
             str(trained["data"]),
             "--output-path",

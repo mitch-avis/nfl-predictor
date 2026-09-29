@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_core, ml_model_predict
 from nfl_predictor.ml.ml_model_core import (
     FeatureSpec,
     MarginTotalModel,
 )
+
+if TYPE_CHECKING:
+    from sklearn.compose import ColumnTransformer
 
 xgb.set_config(verbosity=0)
 
@@ -51,17 +53,17 @@ def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch)
     """Core margin/total prediction helper preserves market-anchor post-processing."""
     games_df = pd.DataFrame({"feat1": [1.0, 2.0]})
     preprocessor = _DummyPreprocessor()
-    margin_model = cast(xgb.XGBRegressor, object())
-    total_model = cast(xgb.XGBRegressor, object())
+    margin_model = cast("xgb.XGBRegressor", object())
+    total_model = cast("xgb.XGBRegressor", object())
     predictions = {
         margin_model: np.array([3.0, 5.0]),
         total_model: np.array([40.0, 42.0]),
     }
 
-    monkeypatch.setattr(ml_model_core, "_apply_feature_spec", lambda df, spec: df)
+    monkeypatch.setattr(ml_model_core, "apply_feature_spec", lambda df, spec: df)
     monkeypatch.setattr(
         ml_model_core,
-        "_predict_xgb",
+        "predict_xgb",
         lambda model, _features: predictions[model],
     )
     monkeypatch.setattr(
@@ -71,7 +73,7 @@ def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch)
     )
 
     model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, preprocessor),
+        preprocessor=cast("ColumnTransformer", preprocessor),
         feature_spec=_feature_spec(),
         margin_model=margin_model,
         total_model=total_model,
@@ -99,10 +101,10 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
     """Core quantile prediction helper preserves market-anchor post-processing."""
     games_df = pd.DataFrame({"feat1": [1.0]})
     preprocessor = _DummyPreprocessor()
-    margin_low = cast(xgb.XGBRegressor, object())
-    margin_high = cast(xgb.XGBRegressor, object())
-    total_low = cast(xgb.XGBRegressor, object())
-    total_high = cast(xgb.XGBRegressor, object())
+    margin_low = cast("xgb.XGBRegressor", object())
+    margin_high = cast("xgb.XGBRegressor", object())
+    total_low = cast("xgb.XGBRegressor", object())
+    total_high = cast("xgb.XGBRegressor", object())
     predictions = {
         margin_low: np.array([1.0]),
         margin_high: np.array([5.0]),
@@ -110,10 +112,10 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
         total_high: np.array([48.0]),
     }
 
-    monkeypatch.setattr(ml_model_core, "_apply_feature_spec", lambda df, spec: df)
+    monkeypatch.setattr(ml_model_core, "apply_feature_spec", lambda df, spec: df)
     monkeypatch.setattr(
         ml_model_core,
-        "_predict_xgb",
+        "predict_xgb",
         lambda model, _features: predictions[model],
     )
     monkeypatch.setattr(
@@ -123,10 +125,10 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
     )
 
     model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, preprocessor),
+        preprocessor=cast("ColumnTransformer", preprocessor),
         feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
+        margin_model=cast("xgb.XGBRegressor", object()),
+        total_model=cast("xgb.XGBRegressor", object()),
         target_columns=("away_score", "home_score"),
         margin_quantile_models={0.1: margin_low, 0.9: margin_high},
         total_quantile_models={0.1: total_low, 0.9: total_high},
@@ -182,15 +184,15 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
     )
     monkeypatch.setattr(
         ml_model_predict,
-        "_margin_to_home_win_prob",
+        "margin_to_home_win_prob",
         lambda _m, _sigma: np.array([0.6]),
     )
 
     model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
+        preprocessor=cast("ColumnTransformer", _DummyPreprocessor()),
         feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
+        margin_model=cast("xgb.XGBRegressor", object()),
+        total_model=cast("xgb.XGBRegressor", object()),
         target_columns=("away_score", "home_score"),
         margin_quantile_models=None,
         total_quantile_models=None,
@@ -250,7 +252,7 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         ml_model_predict,
-        "_margin_to_home_win_prob",
+        "margin_to_home_win_prob",
         lambda _m, _sigma: np.array([0.55]),
     )
 
@@ -262,10 +264,10 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     )
 
     model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
+        preprocessor=cast("ColumnTransformer", _DummyPreprocessor()),
         feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, object()),
-        total_model=cast(xgb.XGBRegressor, object()),
+        margin_model=cast("xgb.XGBRegressor", object()),
+        total_model=cast("xgb.XGBRegressor", object()),
         target_columns=("away_score", "home_score"),
         margin_quantile_models=None,
         total_quantile_models=None,

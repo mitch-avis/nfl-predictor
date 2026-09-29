@@ -21,7 +21,8 @@ def compute_postseason_sample_weight(
     Returns None when weights are unnecessary (all ones).
     """
     if postseason_weight <= 0:
-        raise ValueError("postseason_weight must be positive.")
+        msg = "postseason_weight must be positive."
+        raise ValueError(msg)
 
     if not include_postseason:
         return None
@@ -53,15 +54,18 @@ def compute_recency_sample_weight(
     if half_life_seasons is None:
         return None
     if half_life_seasons <= 0:
-        raise ValueError("half_life_seasons must be positive.")
+        msg = "half_life_seasons must be positive."
+        raise ValueError(msg)
     if df.empty:
         return None
 
     if "season" not in df.columns:
-        raise ValueError("season column required for recency weighting.")
+        msg = "season column required for recency weighting."
+        raise ValueError(msg)
     season_series = pd.to_numeric(df["season"], errors="coerce")
     if season_series.isna().any():
-        raise ValueError("season column contains non-numeric values.")
+        msg = "season column contains non-numeric values."
+        raise ValueError(msg)
     season_int = season_series.astype(int)
 
     age = season_int.max() - season_int

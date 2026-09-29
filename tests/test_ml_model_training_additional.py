@@ -6,12 +6,11 @@ These tests target deterministic orchestration branches that do not require real
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import (
@@ -19,6 +18,9 @@ from nfl_predictor.ml.ml_model_core import (
     MarginTotalModel,
     OptunaConfig,
 )
+
+if TYPE_CHECKING:
+    from sklearn.compose import ColumnTransformer
 
 xgb.set_config(verbosity=0)
 
@@ -122,10 +124,10 @@ def test_early_stopping_info_records_last_round_without_xgb_best_iteration() -> 
             return _DummyBooster()
 
     model = MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, _DummyPreprocessor()),
+        preprocessor=cast("ColumnTransformer", _DummyPreprocessor()),
         feature_spec=_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, _DummyModel()),
-        total_model=cast(xgb.XGBRegressor, _DummyModel()),
+        margin_model=cast("xgb.XGBRegressor", _DummyModel()),
+        total_model=cast("xgb.XGBRegressor", _DummyModel()),
         target_columns=("away_score", "home_score"),
         margin_quantile_models=None,
         total_quantile_models=None,
@@ -156,27 +158,27 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
     monkeypatch.setattr(
         ml_model_training,
-        "_build_feature_spec",
+        "build_feature_spec",
         lambda *_args, **_kwargs: _feature_spec(),
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_apply_feature_spec",
+        "apply_feature_spec",
         lambda frame, _spec: frame[["feat1"]],
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_build_preprocessor",
+        "build_preprocessor",
         lambda *_args, **_kwargs: _DummyPreprocessor(),
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_fit_transform_matrix",
+        "fit_transform_matrix",
         lambda _preprocessor, frame: np.zeros((len(frame), 1), dtype=float),
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_transform_matrix",
+        "transform_matrix",
         lambda _preprocessor, frame: np.zeros((len(frame), 1), dtype=float),
     )
     monkeypatch.setattr(
@@ -196,8 +198,8 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_prepare_margin_total_targets_with_anchor",
-        lambda frame, _targets, _anchor: (
+        "prepare_margin_total_targets_with_anchor",
+        lambda frame, _targets, *, market_anchor: (
             np.zeros(len(frame), dtype=float),
             np.full(len(frame), 40.0, dtype=float),
             np.zeros(len(frame), dtype=float),
@@ -206,25 +208,27 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_fit_margin_total_models",
+        "fit_margin_total_models",
         lambda *_args, **_kwargs: ("margin_model", "total_model"),
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_fit_quantile_models",
+        "fit_quantile_models",
         lambda *_args, **_kwargs: {0.1: "q10", 0.9: "q90"},
     )
-    monkeypatch.setattr(ml_model_training, "_validate_quantiles", lambda _q: (0.1, 0.9))
+    monkeypatch.setattr(ml_model_training, "validate_quantiles", lambda _q: (0.1, 0.9))
     assert not hasattr(ml_model_training, "_select_auto_calibration_method")
 
     model = ml_model_training.train_margin_total_model(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=0,
-        include_market=False,
-        max_cardinality_ratio=0.5,
-        optuna_config=_disabled_optuna(),
-        market_transform=False,
-        market_anchor=False,
+        ml_model_training.TrainingOptions(
+            data_path=Path("dummy.csv"),
+            holdout_seasons=0,
+            include_market=False,
+            max_cardinality_ratio=0.5,
+            optuna_config=_disabled_optuna(),
+            market_transform=False,
+            market_anchor=False,
+        )
     )
 
     assert not hasattr(model, "calibrator")

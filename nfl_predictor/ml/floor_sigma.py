@@ -26,10 +26,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import joblib
 import numpy as np
@@ -37,6 +36,9 @@ import pandas as pd
 from scipy.stats import norm
 
 from nfl_predictor import constants
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 ERROR_COLUMNS = ("game_id", "season", "week", "squared_error")
 _WEEK_KEY = ["season", "week"]
@@ -74,7 +76,7 @@ class ErrorPool:
         return digest.hexdigest()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class FloorSigma:
     """The sigma used for one week, and what it was estimated from."""
 
@@ -122,7 +124,8 @@ def home_win_prob(margin: np.ndarray, sigma: float) -> np.ndarray:
 
     """
     if not sigma > 0:
-        raise ValueError(f"The floor's sigma must be positive, got {sigma!r}.")
+        msg = f"The floor's sigma must be positive, got {sigma!r}."
+        raise ValueError(msg)
     return norm.cdf(margin / float(sigma))
 
 
@@ -215,16 +218,18 @@ def _checkpoint_dir(run_path: Path) -> Path:
 
     """
     if not run_path.exists():
-        raise FileNotFoundError(
+        msg = (
             f"Floor sigma reference run {run_path} does not exist. Name existing walk-forward "
             "runs, or give an empty list to use only the run's own folds."
         )
+        raise FileNotFoundError(msg)
     metadata_path = run_path / "metadata.json"
     if metadata_path.is_file():
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         checkpoint = (metadata.get("config") or {}).get("checkpoint") or {}
         if not checkpoint.get("dir"):
-            raise FileNotFoundError(f"{metadata_path} names no walk-forward checkpoint directory")
+            msg = f"{metadata_path} names no walk-forward checkpoint directory"
+            raise FileNotFoundError(msg)
         return Path(checkpoint["dir"])
     return run_path
 
@@ -240,13 +245,16 @@ def _read_run(run_path: Path) -> pd.DataFrame:
     checkpoint_dir = _checkpoint_dir(run_path)
     files = sorted(checkpoint_dir.glob("fold_*.joblib"))
     if not files:
-        raise FileNotFoundError(f"No fold checkpoints in {checkpoint_dir} (run {run_path}).")
+        msg = f"No fold checkpoints in {checkpoint_dir} (run {run_path})."
+        raise FileNotFoundError(msg)
     predictions = pd.concat([joblib.load(path)["predictions"] for path in files], ignore_index=True)
     missing = [column for column in _PREDICTION_COLUMNS if column not in predictions.columns]
     if missing:
-        raise ValueError(f"Fold checkpoints of {run_path} lack {missing}.")
+        msg = f"Fold checkpoints of {run_path} lack {missing}."
+        raise ValueError(msg)
     if predictions["game_id"].duplicated().any():
-        raise ValueError(f"Fold checkpoints of {run_path} repeat a game.")
+        msg = f"Fold checkpoints of {run_path} repeat a game."
+        raise ValueError(msg)
     return margin_errors(predictions)
 
 
@@ -271,7 +279,7 @@ def weekly_home_win_prob(
     return probs
 
 
-def model_record(model: Any) -> dict[str, Any] | None:
+def model_record(model: object) -> dict[str, Any] | None:
     """Return a model's recorded floor sigma for its metadata, or None when it has none."""
     record = getattr(model, "floor_sigma", None)
     return None if record is None else record.to_dict()

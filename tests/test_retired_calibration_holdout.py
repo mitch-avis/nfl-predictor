@@ -10,18 +10,20 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
+from tests.api import factories
+from tests.test_walk_forward import _base_config, _fixture_df
 
 from nfl_predictor.api.readers import model as model_reader
 from nfl_predictor.api.runs.files import resolve_run_files
 from nfl_predictor.cli import backtest, train
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.weekly_run import config as run_config
-from tests.api import factories
-from tests.test_walk_forward import _base_config, _fixture_df
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 RETIRED_WEEKLY_KEYS = [
     "wf_calibration_weeks",
@@ -80,8 +82,8 @@ def test_the_walk_forward_config_records_no_calibration_weeks() -> None:
 def test_walk_forward_folds_hand_xgboost_no_eval_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every fold fits its heads without an eval frame, as the final fit does."""
     calls: list[dict[str, Any]] = []
-    fit_heads = walk_forward.ml_model._fit_margin_total_models
-    fit_quantiles = walk_forward.ml_model._fit_quantile_models
+    fit_heads = walk_forward.ml_model.fit_margin_total_models
+    fit_quantiles = walk_forward.ml_model.fit_quantile_models
 
     def spy_heads(*args: Any, **kwargs: Any) -> Any:
         calls.append(kwargs)
@@ -91,8 +93,8 @@ def test_walk_forward_folds_hand_xgboost_no_eval_set(monkeypatch: pytest.MonkeyP
         calls.append(kwargs)
         return fit_quantiles(*args, **kwargs)
 
-    monkeypatch.setattr(walk_forward.ml_model, "_fit_margin_total_models", spy_heads)
-    monkeypatch.setattr(walk_forward.ml_model, "_fit_quantile_models", spy_quantiles)
+    monkeypatch.setattr(walk_forward.ml_model, "fit_margin_total_models", spy_heads)
+    monkeypatch.setattr(walk_forward.ml_model, "fit_quantile_models", spy_quantiles)
 
     walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
 

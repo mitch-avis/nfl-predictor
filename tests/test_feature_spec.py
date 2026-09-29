@@ -55,7 +55,7 @@ def test_add_market_transforms_derives_missing_columns_without_overwriting_exist
             "away_moneyline": [130],
         }
     )
-    transformed_home = feature_spec._add_market_transforms(home_spread_df)
+    transformed_home = feature_spec.add_market_transforms(home_spread_df)
 
     assert transformed_home["market_home_margin"].iloc[0] == pytest.approx(3.5)
     assert transformed_home["market_total_line"].iloc[0] == pytest.approx(46.5)
@@ -68,7 +68,7 @@ def test_add_market_transforms_derives_missing_columns_without_overwriting_exist
             "market_home_margin": [9.0],
         }
     )
-    transformed_away = feature_spec._add_market_transforms(away_spread_df)
+    transformed_away = feature_spec.add_market_transforms(away_spread_df)
 
     assert transformed_away["market_home_margin"].iloc[0] == pytest.approx(9.0)
 
@@ -174,13 +174,15 @@ def test_build_feature_spec_handles_market_transform_pruning_and_drop_categories
         }
     )
 
-    spec = feature_spec._build_feature_spec(
+    spec = feature_spec.build_feature_spec(
         df,
-        include_market=False,
-        max_cardinality_ratio=0.5,
-        feature_start="feat_pruned",
-        feature_end="away_moneyline",
-        market_transform=True,
+        feature_spec.FeatureSelection(
+            include_market=False,
+            max_cardinality_ratio=0.5,
+            feature_start="feat_pruned",
+            feature_end="away_moneyline",
+            market_transform=True,
+        ),
     )
 
     assert spec.feature_columns == ["feat_keep"]
@@ -217,15 +219,17 @@ def test_build_feature_spec_disable_pruning_keeps_pruned_features(
         }
     )
 
-    def _spec(disable_pruning: bool) -> feature_spec.FeatureSpec:
+    def _spec(*, disable_pruning: bool) -> feature_spec.FeatureSpec:
         """Build the spec over the three feature columns."""
-        return feature_spec._build_feature_spec(
+        return feature_spec.build_feature_spec(
             df,
-            include_market=True,
-            max_cardinality_ratio=0.9,
-            feature_start="feat_pruned",
-            feature_end="home_spread",
-            disable_pruning=disable_pruning,
+            feature_spec.FeatureSelection(
+                include_market=True,
+                max_cardinality_ratio=0.9,
+                feature_start="feat_pruned",
+                feature_end="home_spread",
+                disable_pruning=disable_pruning,
+            ),
         )
 
     assert _spec(disable_pruning=False).feature_columns == ["feat_kept", "home_spread"]
@@ -257,7 +261,7 @@ def test_apply_feature_spec_adds_market_transforms_and_reindexes_missing_columns
     )
     df = pd.DataFrame({"away_spread": [2.5]})
 
-    applied = feature_spec._apply_feature_spec(df, spec)
+    applied = feature_spec.apply_feature_spec(df, spec)
 
     assert list(applied.columns) == ["market_home_margin", "missing_feature"]
     assert applied["market_home_margin"].iloc[0] == pytest.approx(2.5)
@@ -283,11 +287,11 @@ def test_build_preprocessor_supports_tree_dense_and_empty_specs(
         market_columns=[],
     )
 
-    tree_preprocessor = feature_spec._build_preprocessor(spec, for_tree=True)
+    tree_preprocessor = feature_spec.build_preprocessor(spec, for_tree=True)
     assert isinstance(tree_preprocessor, ColumnTransformer)
     assert tree_preprocessor.sparse_threshold == 1.0
 
-    dense_preprocessor = feature_spec._build_preprocessor(spec, for_tree=False)
+    dense_preprocessor = feature_spec.build_preprocessor(spec, for_tree=False)
     numeric_pipeline = next(
         transformer for name, transformer, _cols in dense_preprocessor.transformers if name == "num"
     )
@@ -299,12 +303,12 @@ def test_build_preprocessor_supports_tree_dense_and_empty_specs(
         """Test double that records the legacy sparse kwarg."""
 
         def __init__(self, **kwargs: object) -> None:
-            """Store the kwargs passed by _build_preprocessor."""
+            """Store the kwargs passed by build_preprocessor."""
             self.kwargs = kwargs
 
     monkeypatch.setattr(feature_spec.inspect, "signature", lambda _obj: legacy_signature)
     monkeypatch.setattr(feature_spec, "OneHotEncoder", _LegacyOneHot)
-    legacy_preprocessor = feature_spec._build_preprocessor(spec, for_tree=False)
+    legacy_preprocessor = feature_spec.build_preprocessor(spec, for_tree=False)
     legacy_categorical_pipeline = next(
         transformer
         for name, transformer, _cols in legacy_preprocessor.transformers
@@ -327,4 +331,23 @@ def test_build_preprocessor_supports_tree_dense_and_empty_specs(
         market_columns=[],
     )
     with pytest.raises(ValueError, match="No feature columns available"):
-        feature_spec._build_preprocessor(empty_spec)
+        feature_spec.build_preprocessor(empty_spec)
+
+
+def test_constant_columns_ignore_missing_values() -> None:
+    """A column is constant when its non-missing values agree, and an all-missing one too."""
+    frame = pd.DataFrame(
+        {
+            "one_value_and_gaps": [np.nan, 1.0, 1.0],
+            "all_missing": [np.nan, np.nan, np.nan],
+            "one_string": ["a", "a", None],
+            "int_and_float": [1, 1.0, 1],
+            "varies": [1.0, np.nan, 2.0],
+            "strings_vary": ["a", "b", "a"],
+        }
+    )
+
+    kept, constant_columns = feature_spec._drop_constant_columns(frame)
+
+    assert constant_columns == ["one_value_and_gaps", "all_missing", "one_string", "int_and_float"]
+    assert list(kept.columns) == ["varies", "strings_vary"]

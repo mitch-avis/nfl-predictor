@@ -20,7 +20,9 @@ import xgboost as xgb
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_XGB_PARAMS,
+    FeatureSelection,
     FeatureSpec,
+    FitData,
     MarginTotalModel,
     OptunaConfig,
 )
@@ -92,12 +94,12 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
     """Replace every fit with a stub and record the frames production hands to it."""
     recorded: dict[str, Any] = {"fit_kwargs": [], "fit_params": [], "target_frames": []}
 
-    def record_spec(frame: pd.DataFrame, **_kwargs: Any) -> FeatureSpec:
+    def record_spec(frame: pd.DataFrame, _selection: FeatureSelection) -> FeatureSpec:
         recorded["train"] = frame.copy()
         return _feature_spec()
 
     def record_targets(
-        frame: pd.DataFrame, _targets: tuple[str, str], _anchor: bool
+        frame: pd.DataFrame, _targets: tuple[str, str], *, market_anchor: bool
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         recorded["target_frames"].append(frame.copy())
         rows = len(frame)
@@ -108,9 +110,9 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
             np.zeros(rows, dtype=float),
         )
 
-    def record_heads(*args: Any, **kwargs: Any) -> tuple[str, str]:
+    def record_heads(_train: FitData, params: dict[str, Any], **kwargs: Any) -> tuple[str, str]:
         recorded["fit_kwargs"].append(kwargs)
-        recorded["fit_params"].append(args[3])
+        recorded["fit_params"].append(params)
         return "margin_model", "total_model"
 
     def record_quantiles(*args: Any, **kwargs: Any) -> dict[float, Any]:
@@ -119,31 +121,33 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
         return {}
 
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(ml_model_training, "_build_feature_spec", record_spec)
-    monkeypatch.setattr(ml_model_training, "_apply_feature_spec", lambda frame, _spec: frame)
+    monkeypatch.setattr(ml_model_training, "build_feature_spec", record_spec)
+    monkeypatch.setattr(ml_model_training, "apply_feature_spec", lambda frame, _spec: frame)
     monkeypatch.setattr(
-        ml_model_training, "_build_preprocessor", lambda *_a, **_k: _ZeroPreprocessor()
+        ml_model_training, "build_preprocessor", lambda *_a, **_k: _ZeroPreprocessor()
     )
     monkeypatch.setattr(
-        ml_model_training, "_prepare_margin_total_targets_with_anchor", record_targets
+        ml_model_training, "prepare_margin_total_targets_with_anchor", record_targets
     )
-    monkeypatch.setattr(ml_model_training, "_fit_margin_total_models", record_heads)
-    monkeypatch.setattr(ml_model_training, "_fit_quantile_models", record_quantiles)
+    monkeypatch.setattr(ml_model_training, "fit_margin_total_models", record_heads)
+    monkeypatch.setattr(ml_model_training, "fit_quantile_models", record_quantiles)
     monkeypatch.setattr(
-        ml_model_training, "_predict_xgb", lambda _model, x: np.zeros(x.shape[0], dtype=float)
+        ml_model_training, "predict_xgb", lambda _model, x: np.zeros(x.shape[0], dtype=float)
     )
     return recorded
 
 
 def _train(holdout_seasons: int = 0) -> MarginTotalModel:
     return ml_model_training.train_margin_total_model(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=holdout_seasons,
-        include_market=False,
-        max_cardinality_ratio=0.5,
-        optuna_config=_disabled_optuna(),
-        market_transform=False,
-        market_anchor=False,
+        ml_model_training.TrainingOptions(
+            data_path=Path("dummy.csv"),
+            holdout_seasons=holdout_seasons,
+            include_market=False,
+            max_cardinality_ratio=0.5,
+            optuna_config=_disabled_optuna(),
+            market_transform=False,
+            market_anchor=False,
+        )
     )
 
 
@@ -168,7 +172,7 @@ def test_final_fit_hands_xgboost_no_eval_set(monkeypatch: pytest.MonkeyPatch) ->
 
     assert len(recorded["fit_kwargs"]) == 3
     for kwargs in recorded["fit_kwargs"]:
-        assert kwargs.get("x_eval") is None
+        assert kwargs.get("eval_data") is None
 
 
 def test_final_fit_leaves_only_the_evaluation_holdout_out(
@@ -203,14 +207,16 @@ def test_final_fit_trains_with_the_given_xgboost_overrides(
     overrides = {"n_estimators": 7, "max_depth": 2, "learning_rate": 0.3}
 
     model = ml_model_training.train_margin_total_model(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=0,
-        include_market=False,
-        max_cardinality_ratio=0.5,
-        optuna_config=_disabled_optuna(),
-        market_transform=False,
-        market_anchor=False,
-        xgb_params_overrides=overrides,
+        ml_model_training.TrainingOptions(
+            data_path=Path("dummy.csv"),
+            holdout_seasons=0,
+            include_market=False,
+            max_cardinality_ratio=0.5,
+            optuna_config=_disabled_optuna(),
+            market_transform=False,
+            market_anchor=False,
+            xgb_params_overrides=overrides,
+        )
     )
 
     assert model.xgb_params is not None
@@ -234,14 +240,16 @@ def test_tuned_params_take_precedence_over_the_given_overrides(
     )
 
     model = ml_model_training.train_margin_total_model(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=0,
-        include_market=False,
-        max_cardinality_ratio=0.5,
-        optuna_config=dataclasses.replace(_disabled_optuna(), enabled=True),
-        market_transform=False,
-        market_anchor=False,
-        xgb_params_overrides={"n_estimators": 7, "max_depth": 2},
+        ml_model_training.TrainingOptions(
+            data_path=Path("dummy.csv"),
+            holdout_seasons=0,
+            include_market=False,
+            max_cardinality_ratio=0.5,
+            optuna_config=dataclasses.replace(_disabled_optuna(), enabled=True),
+            market_transform=False,
+            market_anchor=False,
+            xgb_params_overrides={"n_estimators": 7, "max_depth": 2},
+        )
     )
 
     assert model.xgb_params is not None

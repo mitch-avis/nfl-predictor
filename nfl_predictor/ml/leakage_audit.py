@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -20,6 +21,11 @@ import pandas as pd
 
 from nfl_predictor import ml_model
 from nfl_predictor.utils.logger import log
+
+# Fewer finite pairs than this give no correlation.
+MIN_PAIRS_FOR_CORRELATION = 3
+# A feature equal to a score column in at least this share of rows is the score itself.
+NEAR_IDENTICAL_SHARE = 0.999999
 
 
 @dataclass(frozen=True)
@@ -39,7 +45,7 @@ class LeakageAuditConfig:
 
 def _safe_corr(x: np.ndarray, y: np.ndarray) -> float | None:
     mask = np.isfinite(x) & np.isfinite(y)
-    if int(mask.sum()) < 3:
+    if int(mask.sum()) < MIN_PAIRS_FOR_CORRELATION:
         return None
     x_m = x[mask]
     y_m = y[mask]
@@ -58,18 +64,88 @@ def _equality_rate(x: np.ndarray, y: np.ndarray) -> float | None:
     return float(np.mean(np.isclose(x[mask], y[mask], atol=1e-9, rtol=0.0)))
 
 
+@dataclass(frozen=True)
+class _ScoreTargets:
+    """The label-space targets a feature must not reproduce."""
+
+    away: np.ndarray
+    home: np.ndarray
+    margin: np.ndarray
+    total: np.ndarray
+
+    @classmethod
+    def from_frame(cls, df: pd.DataFrame, target_away: str, target_home: str) -> _ScoreTargets:
+        """Read the away and home scores and derive the margin and total."""
+        away = pd.to_numeric(df[target_away], errors="coerce").to_numpy(dtype=float)
+        home = pd.to_numeric(df[target_home], errors="coerce").to_numpy(dtype=float)
+        return cls(away=away, home=home, margin=home - away, total=home + away)
+
+
+def _at_least(value: float | None, threshold: float) -> bool:
+    """Return whether a measured value exists and reaches the threshold."""
+    return value is not None and value >= threshold
+
+
+def _audit_column(
+    column: pd.Series, name: str, targets: _ScoreTargets, config: LeakageAuditConfig
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Check one feature against the targets: a warning flag, if any, and its hard failures."""
+    x = pd.to_numeric(column, errors="coerce").to_numpy(dtype=float)
+    corr_margin = _safe_corr(x, targets.margin)
+    corr_total = _safe_corr(x, targets.total)
+    eq_home = _equality_rate(x, targets.home)
+    eq_away = _equality_rate(x, targets.away)
+    abs_margin = None if corr_margin is None else abs(corr_margin)
+    abs_total = None if corr_total is None else abs(corr_total)
+
+    reasons = [
+        reason
+        for reason, flagged in (
+            ("high_corr_margin", _at_least(abs_margin, config.suspicious_corr_threshold)),
+            ("high_corr_total", _at_least(abs_total, config.suspicious_corr_threshold)),
+            ("matches_home_score", _at_least(eq_home, config.equality_rate_threshold)),
+            ("matches_away_score", _at_least(eq_away, config.equality_rate_threshold)),
+        )
+        if flagged
+    ]
+    flag = (
+        {
+            "column": name,
+            "reason": ",".join(reasons),
+            "corr_margin": corr_margin,
+            "corr_total": corr_total,
+            "matches_home_score_rate": eq_home,
+            "matches_away_score_rate": eq_away,
+        }
+        if reasons
+        else None
+    )
+
+    # Hard fail only for near-perfect correlation or near-perfect equality.
+    failures: list[str] = []
+    if _at_least(abs_margin, config.fail_corr_threshold) or _at_least(
+        abs_total, config.fail_corr_threshold
+    ):
+        failures.append(f"Near-perfect correlation detected for feature '{name}'.")
+    if _at_least(eq_home, NEAR_IDENTICAL_SHARE) or _at_least(eq_away, NEAR_IDENTICAL_SHARE):
+        failures.append(f"Feature '{name}' nearly equals a target score column.")
+    return flag, failures
+
+
 def run_leakage_audit(df: pd.DataFrame, config: LeakageAuditConfig) -> dict[str, Any]:
     """Run a leakage audit on a dataset and return a JSON-serializable report."""
     target_away, target_home = ml_model.get_target_columns(df)
     target_cols = (target_away, target_home)
 
-    spec = ml_model._build_feature_spec(
+    spec = ml_model.build_feature_spec(
         df,
-        include_market=config.include_market,
-        max_cardinality_ratio=config.max_cardinality_ratio,
-        feature_start=config.feature_start,
-        feature_end=config.feature_end,
-        market_transform=config.market_transform,
+        ml_model.FeatureSelection(
+            include_market=config.include_market,
+            max_cardinality_ratio=config.max_cardinality_ratio,
+            feature_start=config.feature_start,
+            feature_end=config.feature_end,
+            market_transform=config.market_transform,
+        ),
     )
 
     feature_cols = list(spec.feature_columns)
@@ -89,63 +165,22 @@ def run_leakage_audit(df: pd.DataFrame, config: LeakageAuditConfig) -> dict[str,
             flagged_columns.append({"column": col, "reason": "suspicious_name"})
 
     # Correlation / equality checks vs label-space targets.
-    away_score = pd.to_numeric(df[target_away], errors="coerce").to_numpy(dtype=float)
-    home_score = pd.to_numeric(df[target_home], errors="coerce").to_numpy(dtype=float)
-    actual_margin = home_score - away_score
-    actual_total = home_score + away_score
-
+    targets = _ScoreTargets.from_frame(df, target_away, target_home)
     for col in feature_cols:
         if col in target_cols:
             continue
-
-        x = pd.to_numeric(df[col], errors="coerce").to_numpy(dtype=float)
-        corr_margin = _safe_corr(x, actual_margin)
-        corr_total = _safe_corr(x, actual_total)
-        eq_home = _equality_rate(x, home_score)
-        eq_away = _equality_rate(x, away_score)
-
-        reasons: list[str] = []
-        if corr_margin is not None and abs(corr_margin) >= config.suspicious_corr_threshold:
-            reasons.append("high_corr_margin")
-        if corr_total is not None and abs(corr_total) >= config.suspicious_corr_threshold:
-            reasons.append("high_corr_total")
-        if eq_home is not None and eq_home >= config.equality_rate_threshold:
-            reasons.append("matches_home_score")
-        if eq_away is not None and eq_away >= config.equality_rate_threshold:
-            reasons.append("matches_away_score")
-
-        if reasons:
-            flagged_columns.append(
-                {
-                    "column": col,
-                    "reason": ",".join(reasons),
-                    "corr_margin": corr_margin,
-                    "corr_total": corr_total,
-                    "matches_home_score_rate": eq_home,
-                    "matches_away_score_rate": eq_away,
-                }
-            )
-
-        # Hard fail only for near-perfect correlation or near-perfect equality.
-        if (
-            corr_margin is not None
-            and abs(corr_margin) >= config.fail_corr_threshold
-            or corr_total is not None
-            and abs(corr_total) >= config.fail_corr_threshold
-        ):
-            failures.append(f"Near-perfect correlation detected for feature '{col}'.")
-        if (eq_home is not None and eq_home >= 0.999999) or (
-            eq_away is not None and eq_away >= 0.999999
-        ):
-            failures.append(f"Feature '{col}' nearly equals a target score column.")
+        flag, column_failures = _audit_column(df[col], col, targets, config)
+        if flag is not None:
+            flagged_columns.append(flag)
+        failures.extend(column_failures)
 
     ok = not failures
     report: dict[str, Any] = {
         "ok": ok,
         "failures": failures,
         "warnings": warnings,
-        "row_count": int(len(df)),
-        "feature_count": int(len(feature_cols)),
+        "row_count": len(df),
+        "feature_count": len(feature_cols),
         "target_columns": list(target_cols),
         "config": {
             "feature_start": config.feature_start,
@@ -172,9 +207,8 @@ def run_leakage_audit(df: pd.DataFrame, config: LeakageAuditConfig) -> dict[str,
     return report
 
 
-def write_report(report: dict[str, Any], out_path) -> None:
+def write_report(report: dict[str, Any], out_path: Path | str) -> None:
     """Write a leakage audit report to disk."""
-    out_path = str(out_path)
-    with open(out_path, "w", encoding="utf-8") as f:
+    with Path(out_path).open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, sort_keys=True)
     log.info("Wrote leakage audit report to %s", out_path)

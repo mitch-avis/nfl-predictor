@@ -2,37 +2,46 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from nfl_predictor.ml import wf_compare_utils
 from nfl_predictor.utils import fingerprints
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_candidate_key_stability() -> None:
     """Candidate keys should be stable for identical inputs."""
     key_a = wf_compare_utils.build_candidate_key(
-        model_kind="margin_total",
-        feature_start="away_rest",
-        feature_end="home_moneyline",
-        market_mode="features",
-        include_quantiles=False,
-        xgb_params_overrides={"n_estimators": 50},
+        wf_compare_utils.CandidateSpec(
+            model_kind="margin_total",
+            feature_start="away_rest",
+            feature_end="home_moneyline",
+            market_mode="features",
+            include_quantiles=False,
+            xgb_params_overrides={"n_estimators": 50},
+        )
     )
     key_b = wf_compare_utils.build_candidate_key(
-        model_kind="margin_total",
-        feature_start="away_rest",
-        feature_end="home_moneyline",
-        market_mode="features",
-        include_quantiles=False,
-        xgb_params_overrides={"n_estimators": 50},
+        wf_compare_utils.CandidateSpec(
+            model_kind="margin_total",
+            feature_start="away_rest",
+            feature_end="home_moneyline",
+            market_mode="features",
+            include_quantiles=False,
+            xgb_params_overrides={"n_estimators": 50},
+        )
     )
     key_c = wf_compare_utils.build_candidate_key(
-        model_kind="margin_total",
-        feature_start="away_rest",
-        feature_end="home_moneyline",
-        market_mode="anchor",
-        include_quantiles=False,
-        xgb_params_overrides={"n_estimators": 50},
+        wf_compare_utils.CandidateSpec(
+            model_kind="margin_total",
+            feature_start="away_rest",
+            feature_end="home_moneyline",
+            market_mode="anchor",
+            include_quantiles=False,
+            xgb_params_overrides={"n_estimators": 50},
+        )
     )
 
     assert key_a == key_b
@@ -50,12 +59,10 @@ def test_candidate_key_uses_default_xgb_tag_for_missing_or_unmapped_overrides() 
     }
 
     key_none = wf_compare_utils.build_candidate_key(
-        **base_kwargs,
-        xgb_params_overrides=None,
+        wf_compare_utils.CandidateSpec(**base_kwargs, xgb_params_overrides=None)
     )
     key_unmapped = wf_compare_utils.build_candidate_key(
-        **base_kwargs,
-        xgb_params_overrides={"gamma": 1.0},
+        wf_compare_utils.CandidateSpec(**base_kwargs, xgb_params_overrides={"gamma": 1.0})
     )
 
     assert "_xgb-default_" in key_none
@@ -65,12 +72,14 @@ def test_candidate_key_uses_default_xgb_tag_for_missing_or_unmapped_overrides() 
 def test_candidate_key_formats_float_and_string_xgb_overrides() -> None:
     """Recognized float and string XGBoost overrides should be encoded in the key."""
     key = wf_compare_utils.build_candidate_key(
-        model_kind="margin_total",
-        feature_start="away_rest",
-        feature_end="home_moneyline",
-        market_mode="features",
-        include_quantiles=False,
-        xgb_params_overrides={"learning_rate": 0.125, "device": "cuda"},
+        wf_compare_utils.CandidateSpec(
+            model_kind="margin_total",
+            feature_start="away_rest",
+            feature_end="home_moneyline",
+            market_mode="features",
+            include_quantiles=False,
+            xgb_params_overrides={"learning_rate": 0.125, "device": "cuda"},
+        )
     )
 
     assert "_xgb-lr0.125-devcuda_" in key

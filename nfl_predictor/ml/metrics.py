@@ -9,11 +9,15 @@ This module centralizes evaluation metrics used by the walk-forward backtest:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.metrics import brier_score_loss, log_loss, mean_absolute_error
+
+from nfl_predictor import constants
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 PROB_EPSILON = 1e-15
 # Confidence |p - 0.5| is rounded to this many decimals before games are ranked. Probabilities
@@ -128,7 +132,7 @@ def picks_home(home_win_prob: np.ndarray) -> np.ndarray:
 
     Every pick uses the unrounded probability; published 4-decimal values never decide a side.
     """
-    return np.asarray(home_win_prob, dtype=float) >= 0.5
+    return np.asarray(home_win_prob, dtype=float) >= constants.EVEN_ODDS_PROBABILITY
 
 
 def confidence_strength(home_win_prob: np.ndarray) -> np.ndarray:
@@ -202,7 +206,7 @@ def confidence_pool_summary(confidence_cols: dict[str, np.ndarray]) -> dict[str,
         "expected_points": float(confidence_cols["expected_points"].sum()),
         "actual_points": float(confidence_cols["actual_points"].sum()),
         "picks_correct": int(confidence_cols["pick_correct"].sum()),
-        "games": int(len(confidence_cols["confidence_rank"])),
+        "games": len(confidence_cols["confidence_rank"]),
     }
 
 

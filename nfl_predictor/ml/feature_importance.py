@@ -3,20 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 import xgboost as xgb
-from scipy.sparse import spmatrix
-from sklearn.compose import ColumnTransformer
 
-from nfl_predictor.ml.feature_spec import _apply_feature_spec
+from nfl_predictor.ml.feature_spec import apply_feature_spec
 from nfl_predictor.ml.ml_model_core import (
     MarginTotalModel,
 )
-from nfl_predictor.ml.ml_model_xgb_utils import _transform_matrix
+from nfl_predictor.ml.ml_model_xgb_utils import transform_matrix
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    import pandas as pd
+    from scipy.sparse import spmatrix
+    from sklearn.compose import ColumnTransformer
 
 xgb.set_config(verbosity=0)
 
@@ -74,9 +76,11 @@ def resolve_feature_names(
     """Resolve output feature names for a fitted preprocessor/model pair."""
     names: list[str] | None = None
     if hasattr(preprocessor, "get_feature_names_out"):
+        # sklearn raises NotFittedError (a ValueError) before fitting and AttributeError when a
+        # transformer cannot name its outputs.
         try:
             names = [str(name) for name in preprocessor.get_feature_names_out()]
-        except Exception:
+        except AttributeError, ValueError:
             names = None
 
     n_features = getattr(model, "n_features_in_", None)
@@ -102,7 +106,7 @@ def shap_values(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return one head's SHAP values per row and encoded column, and each row's base value.
 
-    Uses XGBoost's exact TreeSHAP (``pred_contribs``) over the trees ``_predict_xgb`` uses, so
+    Uses XGBoost's exact TreeSHAP (``pred_contribs``) over the trees ``predict_xgb`` uses, so
     each row's values plus its base value reproduce the head's prediction.
     """
     best_iteration = getattr(model, "best_iteration", None)
@@ -136,7 +140,7 @@ def mean_abs_shap_by_base(
 
 
 def build_feature_importance_report(
-    model: Any,
+    model: object,
     shap_rows: pd.DataFrame | None = None,
 ) -> dict[str, Any] | None:
     """Build a feature-importance report for supported model types.
@@ -166,8 +170,8 @@ def _build_margin_total_report(
         shap_rows = None
     shap_data = None
     if shap_rows is not None:
-        shap_data = _transform_matrix(
-            model.preprocessor, _apply_feature_spec(shap_rows, model.feature_spec)
+        shap_data = transform_matrix(
+            model.preprocessor, apply_feature_spec(shap_rows, model.feature_spec)
         )
     report = _build_report_from_models(
         model.preprocessor,
@@ -332,49 +336,51 @@ def _aggregate_by_base(
     return aggregated
 
 
+def _output_names(preprocessor: ColumnTransformer) -> list[str] | None:
+    """Return a fitted preprocessor's output feature names, or None when it cannot name them."""
+    if not hasattr(preprocessor, "transformers_"):
+        return None
+    if not hasattr(preprocessor, "get_feature_names_out"):
+        return None
+    try:
+        return [str(name) for name in preprocessor.get_feature_names_out()]
+    except AttributeError, ValueError:
+        return None
+
+
+def _transformer_base_columns(transformer: object, columns: list[str]) -> dict[str, str]:
+    """Map one transformer's output columns to its input columns.
+
+    A one-hot step names each category's column ``<column>_<category>``; every other
+    transformer keeps its input column names.
+    """
+    if transformer != "passthrough":
+        onehot = getattr(transformer, "named_steps", {}).get("onehot")
+        if onehot is not None and getattr(onehot, "categories_", None) is not None:
+            return {
+                f"{col}_{category}": col
+                for col, categories in zip(columns, onehot.categories_, strict=False)
+                for category in categories
+            }
+    return {col: col for col in columns}
+
+
 def _build_base_feature_map(
     preprocessor: ColumnTransformer,
     feature_names: Sequence[str],
 ) -> dict[str, str] | None:
     """Map transformed feature names to their base column names."""
-    if not hasattr(preprocessor, "transformers_"):
-        return None
-    if not hasattr(preprocessor, "get_feature_names_out"):
-        return None
-
-    try:
-        output_names = [str(name) for name in preprocessor.get_feature_names_out()]
-    except Exception:
-        return None
-
-    if list(feature_names) != output_names:
+    output_names = _output_names(preprocessor)
+    if output_names is None or list(feature_names) != output_names:
         return None
 
     mapping: dict[str, str] = {}
-    for name, transformer, cols in preprocessor.transformers_:
-        if name == "remainder" and transformer == "drop":
-            continue
+    for _name, transformer, cols in preprocessor.transformers_:
         if transformer == "drop":
             continue
-
         cols_list = _normalize_cols(cols, preprocessor)
-        if not cols_list:
-            continue
-
-        if transformer == "passthrough":
-            for col in cols_list:
-                mapping[col] = col
-            continue
-
-        onehot = getattr(transformer, "named_steps", {}).get("onehot")
-        if onehot is not None and getattr(onehot, "categories_", None) is not None:
-            for col, categories in zip(cols_list, onehot.categories_, strict=False):
-                for category in categories:
-                    mapping[f"{col}_{category}"] = col
-            continue
-
-        for col in cols_list:
-            mapping[col] = col
+        if cols_list:
+            mapping.update(_transformer_base_columns(transformer, cols_list))
 
     base_map: dict[str, str] = {}
     for output_name in output_names:
@@ -384,7 +390,7 @@ def _build_base_feature_map(
 
 
 def _normalize_cols(
-    cols: Any,
+    cols: object,
     preprocessor: ColumnTransformer,
 ) -> list[str]:
     """Normalize column selectors to a list of string names."""

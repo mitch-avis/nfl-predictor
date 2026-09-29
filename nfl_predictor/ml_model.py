@@ -1,41 +1,80 @@
 """Compatibility facade for ML training, prediction, and CLI.
 
-Historically, `nfl_predictor.ml_model` was a single large module. It has been split into smaller
-modules under `nfl_predictor.ml` to keep files under the pylint `max-module-lines` limit while
-preserving the public API expected by scripts and unit tests.
+The implementation lives in the modules under `nfl_predictor.ml`; this module re-exports the
+names scripts and tests import from here and keeps the ``python -m nfl_predictor.ml_model``
+form of the training CLI.
 """
 
 from __future__ import annotations
 
 import importlib
-from typing import Any
 
-from nfl_predictor.ml import ml_model_core as _core
-from nfl_predictor.ml import ml_model_predict as _predict
-from nfl_predictor.ml import ml_model_training as _training
+from nfl_predictor.ml.ml_model_core import (
+    CALIBRATION_FLOOR,
+    DEFAULT_FEATURE_END_COLUMN,
+    DEFAULT_FEATURE_START_COLUMN,
+    DEFAULT_QUANTILES,
+    DEFAULT_XGB_PARAMS,
+    FeatureSelection,
+    FeatureSpec,
+    FitData,
+    OptunaConfig,
+    apply_feature_spec,
+    build_feature_spec,
+    build_prediction_output,
+    build_preprocessor,
+    derive_scores_from_margin_total,
+    fit_margin_total_models,
+    fit_quantile_models,
+    get_market_baseline,
+    get_target_columns,
+    margin_to_home_win_prob,
+    normalize_no_vig,
+    predict_xgb,
+    prepare_margin_total_targets_with_anchor,
+    resolve_calibration,
+    resolve_xgb_params,
+    validate_quantiles,
+)
+from nfl_predictor.ml.ml_model_training import (
+    train_margin_total_model_with_report,
+)
+
+__all__ = [
+    "CALIBRATION_FLOOR",
+    "DEFAULT_FEATURE_END_COLUMN",
+    "DEFAULT_FEATURE_START_COLUMN",
+    "DEFAULT_QUANTILES",
+    "DEFAULT_XGB_PARAMS",
+    "FeatureSelection",
+    "FeatureSpec",
+    "FitData",
+    "OptunaConfig",
+    "apply_feature_spec",
+    "build_feature_spec",
+    "build_prediction_output",
+    "build_preprocessor",
+    "derive_scores_from_margin_total",
+    "fit_margin_total_models",
+    "fit_quantile_models",
+    "get_market_baseline",
+    "get_target_columns",
+    "main",
+    "margin_to_home_win_prob",
+    "normalize_no_vig",
+    "predict_xgb",
+    "prepare_margin_total_targets_with_anchor",
+    "resolve_calibration",
+    "resolve_xgb_params",
+    "train_margin_total_model_with_report",
+    "validate_quantiles",
+]
 
 
 def main() -> None:
     """CLI entrypoint wrapper for the legacy `nfl_predictor.ml_model` path."""
     _module = importlib.import_module("nfl_predictor.cli.train")
     _module.main()
-
-
-def __getattr__(name: str) -> Any:
-    """Forward attribute access to the split implementation modules."""
-    for module in (_core, _training, _predict):
-        try:
-            return getattr(module, name)
-        except AttributeError:
-            continue
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-def __dir__() -> list[str]:
-    names: set[str] = set(globals().keys())
-    for module in (_core, _training, _predict):
-        names.update(dir(module))
-    return sorted(names)
 
 
 if __name__ == "__main__":

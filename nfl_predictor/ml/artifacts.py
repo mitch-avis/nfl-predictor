@@ -10,6 +10,7 @@ The goal is to make training/backtest outputs self-describing and comparable.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import subprocess
@@ -51,59 +52,51 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def stable_short_hash(payload: Any) -> str:
+type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
+
+
+def stable_short_hash(payload: object) -> str:
     """Return a stable short hash for a JSON-serializable payload."""
-    encoded = json.dumps(_to_jsonable(payload), sort_keys=True).encode("utf-8")
+    encoded = json.dumps(to_jsonable(payload), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:8]
 
 
-def _to_jsonable(value: Any) -> Any:
+def to_jsonable(value: object) -> JsonValue:
     """Convert a nested payload into JSON-serializable Python primitives.
 
     This avoids brittle failures when payloads contain NumPy/Polars/Pandas scalar types
     (e.g., numpy.int64) or other objects that the stdlib JSON encoder can't handle.
     """
-    if value is None or isinstance(value, (str, int, float, bool)):
+    if value is None or isinstance(value, str | int | float | bool):
         return value
-
-    if isinstance(value, Path):
+    # A class object, a dataclass included, is recorded by name; asdict() needs an instance.
+    if isinstance(value, Path | type):
         return str(value)
-
-    if is_dataclass(value):
-        # dataclasses.is_dataclass() returns True for both instances and classes.
-        # dataclasses.asdict() only accepts instances.
-        if isinstance(value, type):
-            return str(value)
-        return _to_jsonable(asdict(value))
-
+    if is_dataclass(value) and not isinstance(value, type):
+        return to_jsonable(asdict(value))
     if isinstance(value, dict):
-        return {str(k): _to_jsonable(v) for k, v in value.items()}
+        return {str(k): to_jsonable(v) for k, v in value.items()}
+    if isinstance(value, list | tuple | set):
+        return [to_jsonable(v) for v in value]
+    return _convert_by_protocol(value)
 
-    if isinstance(value, (list, tuple, set)):
-        return [_to_jsonable(v) for v in value]
 
-    # NumPy / Polars scalars typically implement .item(); ndarrays often implement .tolist().
-    item = getattr(value, "item", None)
-    if callable(item):
-        try:
-            return _to_jsonable(item())
-        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
-            pass
+def _convert_by_protocol(value: object) -> JsonValue:
+    """Convert a value through the first of its ``item``/``tolist``/``isoformat`` that works.
 
-    tolist = getattr(value, "tolist", None)
-    if callable(tolist):
-        try:
-            return _to_jsonable(tolist())
-        except Exception:  # noqa: S110 (silent fallback to next method is intentional)
-            pass
-
+    NumPy, pandas and Polars scalars implement ``item()``; arrays and series raise
+    ``ValueError`` from it when they hold more than one element and fall through to
+    ``tolist()``. Dates and timestamps implement ``isoformat()``. Anything else is its ``str``.
+    """
+    for method_name in ("item", "tolist"):
+        method = getattr(value, method_name, None)
+        if callable(method):
+            with contextlib.suppress(ValueError):
+                return to_jsonable(method())
     isoformat = getattr(value, "isoformat", None)
     if callable(isoformat):
-        try:
+        with contextlib.suppress(ValueError):
             return str(isoformat())
-        except Exception:  # noqa: S110 (silent fallback to str() is intentional)
-            pass
-
     return str(value)
 
 
@@ -114,23 +107,22 @@ def generate_run_id(prefix: str, dataset_hash: str, config: dict[str, Any]) -> s
     return f"{prefix}_{created}_{short_hash}"
 
 
-def resolve_run_paths(
-    run_id: str,
-    run_dir: Path | None = None,
-    model_filename: str = "model.joblib",
-    metadata_filename: str = "metadata.json",
-    metrics_filename: str = "metrics_report.json",
-    feature_importance_filename: str = "feature_importance.json",
-) -> RunPaths:
-    """Resolve default artifact paths for a given run id."""
+MODEL_FILENAME = "model.joblib"
+METADATA_FILENAME = "metadata.json"
+METRICS_FILENAME = "metrics_report.json"
+FEATURE_IMPORTANCE_FILENAME = "feature_importance.json"
+
+
+def resolve_run_paths(run_id: str, run_dir: Path | None = None) -> RunPaths:
+    """Resolve the artifact paths of a run, under ``models/<run_id>`` unless ``run_dir``."""
     base = run_dir if run_dir is not None else (Path(constants.ROOT_DIR) / "models" / run_id)
     return RunPaths(
         run_id=run_id,
         run_dir=base,
-        model_path=base / model_filename,
-        metadata_path=base / metadata_filename,
-        metrics_path=base / metrics_filename,
-        feature_importance_path=base / feature_importance_filename,
+        model_path=base / MODEL_FILENAME,
+        metadata_path=base / METADATA_FILENAME,
+        metrics_path=base / METRICS_FILENAME,
+        feature_importance_path=base / FEATURE_IMPORTANCE_FILENAME,
     )
 
 
@@ -138,7 +130,7 @@ def git_commit_hash() -> str | None:
     """Return current git commit hash if available."""
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],  # noqa: S607 (git is fixed, not user-controlled)
+            ["git", "rev-parse", "HEAD"],
             cwd=str(constants.ROOT_DIR),
             check=False,
             capture_output=True,
@@ -176,22 +168,9 @@ def library_versions() -> dict[str, str | None]:
     }
 
 
-def build_metadata(
-    *,
-    created_at: str,
-    run_id: str,
-    dataset_hash: str,
-    config: dict[str, Any],
-    feature_list: list[str] | None = None,
-    splits: dict[str, Any] | None = None,
-    params: dict[str, Any] | None = None,
-    tuned_params: dict[str, Any] | None = None,
-    early_stopping: dict[str, Any] | None = None,
-    optuna_summary: dict[str, Any] | None = None,
-    xgb_device: str | None = None,
-    floor_sigma: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build a metadata payload meeting the repo's artifact contract.
+@dataclass(frozen=True, kw_only=True)
+class TrainedModelDetails:
+    """What a fitted model records in its metadata beyond the run's identity.
 
     ``xgb_device`` is the concrete XGBoost device the model's heads trained on (``cpu`` or
     ``cuda``), or ``mixed`` when a head fell back to another device. ``floor_sigma`` is the
@@ -199,34 +178,57 @@ def build_metadata(
     week it was estimated for, its pool's size and seasons, whether it fell back to the
     constant, and the reference runs it came from.
     """
-    payload: dict[str, Any] = {
+
+    feature_list: list[str] | None = None
+    splits: dict[str, Any] | None = None
+    params: dict[str, Any] | None = None
+    tuned_params: dict[str, Any] | None = None
+    early_stopping: dict[str, Any] | None = None
+    optuna_summary: dict[str, Any] | None = None
+    xgb_device: str | None = None
+    floor_sigma: dict[str, Any] | None = None
+
+
+def build_metadata(
+    *,
+    created_at: str,
+    run_id: str,
+    dataset_hash: str,
+    config: dict[str, Any],
+    details: TrainedModelDetails | None = None,
+) -> dict[str, Any]:
+    """Build a metadata payload meeting the repo's artifact contract.
+
+    Without ``details`` (no fitted model), every model field is recorded as ``None``.
+    """
+    details = details or TrainedModelDetails()
+    return {
         "created_at": created_at,
         "run_id": run_id,
         "git_commit_hash": git_commit_hash(),
         "dataset_hash": dataset_hash,
         "library_versions": library_versions(),
         "config": config,
-        "feature_list": feature_list,
-        "splits": splits,
-        "params": params,
-        "tuned_params": tuned_params,
-        "early_stopping": early_stopping,
-        "optuna_summary": optuna_summary,
-        "xgb_device": xgb_device,
-        "floor_sigma": floor_sigma,
+        "feature_list": details.feature_list,
+        "splits": details.splits,
+        "params": details.params,
+        "tuned_params": details.tuned_params,
+        "early_stopping": details.early_stopping,
+        "optuna_summary": details.optuna_summary,
+        "xgb_device": details.xgb_device,
+        "floor_sigma": details.floor_sigma,
     }
-    return payload
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     """Write JSON to disk with stable formatting."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    safe_payload = _to_jsonable(payload)
+    safe_payload = to_jsonable(payload)
     path.write_text(json.dumps(safe_payload, indent=2, sort_keys=True), encoding="utf-8")
     log.info("Wrote %s", path)
 
 
-def save_model(path: Path, model: Any) -> None:
+def save_model(path: Path, model: object) -> None:
     """Persist a model artifact via joblib."""
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)

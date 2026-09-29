@@ -38,7 +38,7 @@ def _synthetic_margin_total(
 
 def _params() -> dict[str, Any]:
     """Return small, deterministic XGBoost params resolved the way training resolves them."""
-    return xgb_utils._resolve_xgb_params(
+    return xgb_utils.resolve_xgb_params(
         {
             "n_estimators": 400,
             "max_depth": 3,
@@ -58,14 +58,10 @@ def test_total_head_stops_on_its_own_validation_curve() -> None:
     split = 2400
     x_train, x_eval = x[:split], x[split:]
 
-    _margin_model, total_model = core._fit_margin_total_models(
-        x_train,
-        margin[:split],
-        total[:split],
+    _margin_model, total_model = core.fit_margin_total_models(
+        core.FitData(x_train, margin[:split], total[:split]),
         _params(),
-        x_eval=x_eval,
-        y_margin_eval=margin[split:],
-        y_total_eval=total[split:],
+        eval_data=core.FitData(x_eval, margin[split:], total[split:]),
         early_stopping_rounds=_EARLY_STOPPING_ROUNDS,
     )
 
@@ -80,4 +76,4 @@ def test_total_head_stops_on_its_own_validation_curve() -> None:
     paired_rounds = total_model.get_booster().num_boosted_rounds()
     assert paired_rounds > 1
     assert paired_rounds == solo_total.get_booster().num_boosted_rounds()
-    assert float(np.std(xgb_utils._predict_xgb(total_model, x_eval))) > 1.0
+    assert float(np.std(xgb_utils.predict_xgb(total_model, x_eval))) > 1.0

@@ -5,7 +5,7 @@ These tests cover leakage-sensitive split helpers and missing-data summaries.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,9 @@ import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.ml import ml_model_core as core
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_get_target_columns_returns_away_home_scores() -> None:

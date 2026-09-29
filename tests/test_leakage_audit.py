@@ -91,7 +91,7 @@ def test_leakage_audit_flags_suspicious_names_and_near_perfect_correlation(
     )
     monkeypatch.setattr(
         leakage_audit.ml_model,
-        "_build_feature_spec",
+        "build_feature_spec",
         lambda *_args, **_kwargs: SimpleNamespace(feature_columns=["winner_hint", "total_copy"]),
     )
 

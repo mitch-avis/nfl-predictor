@@ -6,10 +6,9 @@ This module hosts the prediction entrypoints that were historically defined in
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 
 from nfl_predictor.ml import ml_utils
 from nfl_predictor.ml.ml_model_core import (
@@ -17,18 +16,24 @@ from nfl_predictor.ml.ml_model_core import (
     _build_prediction_output,
     _derive_scores_from_margin_total,
     _load_games,
-    _margin_to_home_win_prob,
     _predict_margin_total_from_model,
     _predict_margin_total_quantiles_from_model,
+    margin_to_home_win_prob,
     model_floor_sigma,
 )
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import pandas as pd
 
 
 def predict_week_margin_total(
     model: MarginTotalModel,
     games_path: Path,
     output_path: Path | None = None,
+    *,
     pretty_output: bool = True,
     score_rounding: str = "none",
 ) -> pd.DataFrame:
@@ -45,7 +50,7 @@ def predict_week_margin_total(
     pred_away, pred_home = _derive_scores_from_margin_total(pred_margin, pred_total)
     sigma, fallback = model_floor_sigma(model)
     _log_floor_sigma(model, games_df, sigma)
-    home_win_prob = _margin_to_home_win_prob(pred_margin, sigma)
+    home_win_prob = margin_to_home_win_prob(pred_margin, sigma)
     output_df = _build_prediction_output(
         games_df,
         pred_away,
@@ -55,9 +60,9 @@ def predict_week_margin_total(
     )
 
     for q in sorted(margin_quantiles.keys()):
-        output_df[f"predicted_margin_p{int(round(q * 100)):02d}"] = np.round(margin_quantiles[q], 1)
+        output_df[f"predicted_margin_p{round(q * 100):02d}"] = np.round(margin_quantiles[q], 1)
     for q in sorted(total_quantiles.keys()):
-        output_df[f"predicted_total_p{int(round(q * 100)):02d}"] = np.round(total_quantiles[q], 1)
+        output_df[f"predicted_total_p{round(q * 100):02d}"] = np.round(total_quantiles[q], 1)
     output_df["floor_sigma"] = sigma
     output_df["floor_sigma_fallback"] = fallback
 

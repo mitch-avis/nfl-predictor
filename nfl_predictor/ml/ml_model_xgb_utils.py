@@ -14,14 +14,17 @@ import re
 import warnings
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xgboost as xgb
 from scipy.sparse import spmatrix
-from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    import pandas as pd
+    from sklearn.compose import ColumnTransformer
 
 xgb.set_config(verbosity=0)
 
@@ -46,9 +49,8 @@ def normalize_xgb_device(value: str | None) -> str:
     if choice == "gpu":
         choice = "cuda"
     if not _XGB_DEVICE_PATTERN.fullmatch(choice):
-        raise ValueError(
-            f"Unknown XGBoost device {value!r}; use auto, cpu, cuda or cuda:N (gpu means cuda)."
-        )
+        msg = f"Unknown XGBoost device {value!r}; use auto, cpu, cuda or cuda:N (gpu means cuda)."
+        raise ValueError(msg)
     return choice
 
 
@@ -73,7 +75,7 @@ class _RuntimeState:
 _RUNTIME_STATE = _RuntimeState()
 
 
-def _predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
+def predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
     """Predict using an XGBoost sklearn model via Booster.predict.
 
     Uses `best_iteration` when present (early stopping) to match sklearn wrapper behavior
@@ -90,30 +92,26 @@ def _predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.nda
     return booster.predict(dmatrix)
 
 
-def _fit_transform_matrix(
-    preprocessor: ColumnTransformer,
-    x: Any,
-) -> np.ndarray | spmatrix:
-    """Fit-transform ``x`` and narrow the sklearn output type for static analysis.
+def _as_matrix(result: object) -> np.ndarray | spmatrix:
+    """Narrow a ``ColumnTransformer`` output to the dense array or sparse matrix it is.
 
-    ``ColumnTransformer.fit_transform()`` is inferred by pyright with a broad union
-    type that does not directly satisfy ``np.ndarray | spmatrix``. This wrapper
-    narrows the result so downstream functions receive the expected type.
+    sklearn types the output as a broad union; the preprocessor this project builds returns
+    one of these two, and anything else is a bug worth failing on.
     """
-    return preprocessor.fit_transform(x)  # type: ignore[return-value]
+    if isinstance(result, np.ndarray | spmatrix):
+        return result
+    msg = f"Expected an array or sparse matrix from the preprocessor, got {type(result).__name__}"
+    raise TypeError(msg)
 
 
-def _transform_matrix(
-    preprocessor: ColumnTransformer,
-    x: Any,
-) -> np.ndarray | spmatrix:
-    """Transform ``x`` and narrow the sklearn output type for static analysis.
+def fit_transform_matrix(preprocessor: ColumnTransformer, x: pd.DataFrame) -> np.ndarray | spmatrix:
+    """Fit-transform ``x`` and return the matrix the model trains on."""
+    return _as_matrix(preprocessor.fit_transform(x))
 
-    ``ColumnTransformer.transform()`` is inferred by pyright with a broad union type
-    that does not directly satisfy ``np.ndarray | spmatrix``. This wrapper narrows
-    the result so downstream functions receive the expected type.
-    """
-    return preprocessor.transform(x)  # type: ignore[return-value]
+
+def transform_matrix(preprocessor: ColumnTransformer, x: pd.DataFrame) -> np.ndarray | spmatrix:
+    """Transform ``x`` into the matrix the model predicts from."""
+    return _as_matrix(preprocessor.transform(x))
 
 
 def _xgb_fit_supports(param: str) -> bool:
@@ -209,7 +207,39 @@ def resolve_xgb_device(requested: str | None) -> str:
     return choice
 
 
-def _resolve_xgb_params(
+def _requested_device(device: str | None, *, gpu_tree_method: bool) -> str | None:
+    """Return the device a caller named, or ``cuda`` for a legacy GPU tree method."""
+    requested = device if device and device != XGB_DEVICE_AUTO else None
+    if requested is None and gpu_tree_method:
+        return "cuda"
+    return requested
+
+
+def _apply_tree_method(
+    params: dict[str, Any], tree_method: str, *, supports_device: bool, supports_predictor: bool
+) -> None:
+    """Set the tree method, mapping a GPU one to ``hist`` where XGBoost takes a device."""
+    resolved_tree_method = tree_method
+    if "gpu" in tree_method and (supports_device or _RUNTIME_STATE.gpu_tree_method_disabled):
+        resolved_tree_method = "hist"
+    params["tree_method"] = resolved_tree_method
+    if "gpu" in resolved_tree_method and supports_predictor:
+        params["predictor"] = "gpu_predictor"
+
+
+def _finalize_device(params: dict[str, Any]) -> None:
+    """Map a GPU tree method in the final params to ``hist`` on CUDA and resolve the device."""
+    if "gpu" in str(params.get("tree_method", "")):
+        params["tree_method"] = "hist"
+        params.pop("predictor", None)
+        if normalize_xgb_device(params.get("device")) == XGB_DEVICE_AUTO:
+            params["device"] = "cuda"
+    params["device"] = resolve_xgb_device(params.get("device"))
+    if params["device"].startswith("cuda"):
+        params.setdefault("tree_method", "hist")
+
+
+def resolve_xgb_params(
     base_params: dict[str, Any],
     overrides: dict[str, Any] | None = None,
     tree_method: str | None = None,
@@ -226,34 +256,25 @@ def _resolve_xgb_params(
     supports_device = _xgb_param_supported("device")
     supports_predictor = _xgb_param_supported("predictor")
 
-    requested_device = device if device and device != XGB_DEVICE_AUTO else None
-    gpu_tree_method = bool(tree_method) and "gpu" in str(tree_method)
     if supports_device:
-        if requested_device is None and gpu_tree_method:
-            requested_device = "cuda"
+        gpu_tree_method = bool(tree_method) and "gpu" in str(tree_method)
+        requested_device = _requested_device(device, gpu_tree_method=gpu_tree_method)
         if requested_device:
             params["device"] = requested_device
 
     if tree_method and tree_method != "auto":
-        resolved_tree_method = tree_method
-        if gpu_tree_method and (supports_device or _RUNTIME_STATE.gpu_tree_method_disabled):
-            resolved_tree_method = "hist"
-        params["tree_method"] = resolved_tree_method
-        if "gpu" in resolved_tree_method and supports_predictor:
-            params["predictor"] = "gpu_predictor"
+        _apply_tree_method(
+            params,
+            tree_method,
+            supports_device=supports_device,
+            supports_predictor=supports_predictor,
+        )
 
     if overrides:
         params.update(overrides)
 
     if supports_device:
-        if "gpu" in str(params.get("tree_method", "")):
-            params["tree_method"] = "hist"
-            params.pop("predictor", None)
-            if normalize_xgb_device(params.get("device")) == XGB_DEVICE_AUTO:
-                params["device"] = "cuda"
-        params["device"] = resolve_xgb_device(params.get("device"))
-        if params["device"].startswith("cuda"):
-            params.setdefault("tree_method", "hist")
+        _finalize_device(params)
 
     params.setdefault("eval_metric", "mae")
     return params
@@ -353,7 +374,7 @@ def _coerce_tree_method_on_error(
     return new_params
 
 
-def fitted_xgb_device(model: Any) -> str | None:
+def fitted_xgb_device(model: object) -> str | None:
     """Return the device a fitted model's XGBoost heads were trained on.
 
     Reads every head (margin, total and any quantile models) from the estimators themselves,
@@ -361,7 +382,10 @@ def fitted_xgb_device(model: Any) -> str | None:
     different devices are recorded as ``mixed``. Returns None when the model holds no XGBoost
     estimator.
     """
-    heads: list[Any] = [getattr(model, "margin_model", None), getattr(model, "total_model", None)]
+    heads: list[object] = [
+        getattr(model, "margin_model", None),
+        getattr(model, "total_model", None),
+    ]
     for attribute in ("margin_quantile_models", "total_quantile_models"):
         heads.extend((getattr(model, attribute, None) or {}).values())
     devices = {

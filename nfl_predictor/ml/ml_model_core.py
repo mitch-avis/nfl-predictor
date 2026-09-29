@@ -6,24 +6,20 @@ reports score-focused metrics, and can generate weekly predictions with confiden
 
 from __future__ import annotations
 
+import functools
 import heapq
 import json
 import os
 import time
 import warnings
-from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import joblib
 import numpy as np
 import optuna
 import pandas as pd
 import xgboost as xgb
-from scipy.sparse import spmatrix
-from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import Ridge
 from sklearn.metrics import (
     brier_score_loss,
     mean_absolute_error,
@@ -37,13 +33,21 @@ from nfl_predictor.ml.metrics import confidence_ranks, confidence_strength, pick
 from nfl_predictor.ml.ml_model_xgb_utils import (
     _build_xgb_fit_kwargs,
     _coerce_tree_method_on_error,
-    _fit_transform_matrix,
-    _predict_xgb,
-    _resolve_xgb_params,
-    _transform_matrix,
     _with_xgb_early_stopping_params,
+    fit_transform_matrix,
+    predict_xgb,
+    resolve_xgb_params,
+    transform_matrix,
 )
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Sequence
+    from pathlib import Path
+
+    from scipy.sparse import spmatrix
+    from sklearn.compose import ColumnTransformer
+    from sklearn.linear_model import Ridge
 
 xgb.set_config(verbosity=0)
 
@@ -67,10 +71,11 @@ DEFAULT_FEATURE_START_COLUMN = _feature_spec.DEFAULT_FEATURE_START_COLUMN
 DEFAULT_FEATURE_END_COLUMN = _feature_spec.DEFAULT_FEATURE_END_COLUMN
 MARKET_DERIVED_COLUMNS = _feature_spec.MARKET_DERIVED_COLUMNS
 FeatureSpec = _feature_spec.FeatureSpec
-_add_market_transforms = _feature_spec._add_market_transforms
-_apply_feature_spec = _feature_spec._apply_feature_spec
-_build_feature_spec = _feature_spec._build_feature_spec
-_build_preprocessor = _feature_spec._build_preprocessor
+FeatureSelection = _feature_spec.FeatureSelection
+add_market_transforms = _feature_spec.add_market_transforms
+apply_feature_spec = _feature_spec.apply_feature_spec
+build_feature_spec = _feature_spec.build_feature_spec
+build_preprocessor = _feature_spec.build_preprocessor
 get_market_baseline = _feature_spec.get_market_baseline
 
 DEFAULT_OPTUNA_TIMEOUT_SECONDS = 600
@@ -206,7 +211,8 @@ def _get_target_columns(df: pd.DataFrame) -> tuple[str, str]:
     away_col = next((col for col in score_columns if col.startswith("away_")), None)
     home_col = next((col for col in score_columns if col.startswith("home_")), None)
     if not away_col or not home_col:
-        raise ValueError("Expected away/home score columns in training data.")
+        msg = "Expected away/home score columns in training data."
+        raise ValueError(msg)
     return away_col, home_col
 
 
@@ -251,7 +257,7 @@ def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
         "motivation": list(constants.MOTIVATION_FEATURE_COLUMNS),
     }
     return {
-        "total_rows": int(len(df)),
+        "total_rows": len(df),
         "groups": {name: _group_summary(cols) for name, cols in groups.items()},
     }
 
@@ -284,12 +290,14 @@ def _split_by_season(
     df: pd.DataFrame, holdout_seasons: int
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[int]]:
     if "season" not in df.columns:
-        raise ValueError("Expected a season column for time-aware splits.")
+        msg = "Expected a season column for time-aware splits."
+        raise ValueError(msg)
     seasons = sorted(df["season"].dropna().unique())
     if holdout_seasons <= 0:
         return df.copy(), df.iloc[0:0].copy(), []
     if len(seasons) <= holdout_seasons:
-        raise ValueError("Not enough seasons to create a holdout split.")
+        msg = "Not enough seasons to create a holdout split."
+        raise ValueError(msg)
     holdout = seasons[-holdout_seasons:]
     train_df = df[~df["season"].isin(holdout)].copy()
     holdout_df = df[df["season"].isin(holdout)].copy()
@@ -304,9 +312,11 @@ def _build_time_series_folds(
 ) -> list[tuple[list[int], list[int]]]:
     seasons = sorted(seasons)
     if n_splits <= 0:
-        raise ValueError("n_splits must be positive.")
+        msg = "n_splits must be positive."
+        raise ValueError(msg)
     if len(seasons) < (min_train_seasons + n_splits * val_window):
-        raise ValueError("Not enough seasons to create requested CV folds.")
+        msg = "Not enough seasons to create requested CV folds."
+        raise ValueError(msg)
 
     folds: list[tuple[list[int], list[int]]] = []
     for split_idx in range(n_splits):
@@ -318,18 +328,19 @@ def _build_time_series_folds(
             continue
         folds.append((train_seasons, val_seasons))
     if not folds:
-        raise ValueError("Unable to create valid CV folds with the provided settings.")
+        msg = "Unable to create valid CV folds with the provided settings."
+        raise ValueError(msg)
     return folds
 
 
 def _build_season_week_timepoints(df: pd.DataFrame) -> list[int]:
     if "season" not in df.columns or "week" not in df.columns:
-        raise ValueError("Expected 'season' and 'week' columns for time-series CV.")
+        msg = "Expected 'season' and 'week' columns for time-series CV."
+        raise ValueError(msg)
     season = pd.to_numeric(df["season"], errors="coerce").astype("Int64")
     week = pd.to_numeric(df["week"], errors="coerce").astype("Int64")
     timepoint = (season * 100 + week).dropna().astype(int)
-    unique = sorted(timepoint.unique().tolist())
-    return unique
+    return sorted(timepoint.unique().tolist())
 
 
 def _build_blocked_timepoint_folds(
@@ -345,9 +356,11 @@ def _build_blocked_timepoint_folds(
     """
     points = list(timepoints)
     if n_splits <= 0:
-        raise ValueError("n_splits must be positive.")
+        msg = "n_splits must be positive."
+        raise ValueError(msg)
     if len(points) < (min_train_timepoints + n_splits):
-        raise ValueError("Not enough timepoints to create requested CV folds.")
+        msg = "Not enough timepoints to create requested CV folds."
+        raise ValueError(msg)
 
     test_size = max(1, len(points) // (n_splits + 1))
     folds: list[tuple[list[int], list[int]]] = []
@@ -362,7 +375,8 @@ def _build_blocked_timepoint_folds(
         folds.append((train_pts, val_pts))
 
     if not folds:
-        raise ValueError("Unable to create valid time-series CV folds with the provided settings.")
+        msg = "Unable to create valid time-series CV folds with the provided settings."
+        raise ValueError(msg)
     return folds
 
 
@@ -375,11 +389,17 @@ def _prepare_margin_total_targets(
     return margin, total
 
 
-def _prepare_margin_total_targets_with_anchor(
+def prepare_margin_total_targets_with_anchor(
     df: pd.DataFrame,
     target_columns: tuple[str, str],
+    *,
     market_anchor: bool,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None]:
+    """Return the margin and total targets, as residuals against the market when anchored.
+
+    Also returns the market baselines the residuals subtract (``None`` without anchoring), so
+    predictions can add them back.
+    """
     margin, total = _prepare_margin_total_targets(df, target_columns)
     if not market_anchor:
         return margin, total, None, None
@@ -435,23 +455,34 @@ def _evaluate_margin_total_predictions(
     return metrics
 
 
-def _fit_margin_total_models(
-    x_train: np.ndarray | spmatrix,
-    y_margin: np.ndarray,
-    y_total: np.ndarray,
+@dataclass(frozen=True)
+class FitData:
+    """A design matrix with its margin and total targets, and optional per-row weights."""
+
+    x: np.ndarray | spmatrix
+    margin: np.ndarray
+    total: np.ndarray
+    sample_weight: np.ndarray | None = None
+
+
+def fit_margin_total_models(
+    train: FitData,
     params: dict[str, Any],
-    x_eval: np.ndarray | spmatrix | None = None,
-    y_margin_eval: np.ndarray | None = None,
-    y_total_eval: np.ndarray | None = None,
+    *,
+    eval_data: FitData | None = None,
     early_stopping_rounds: int | None = None,
-    sample_weight: np.ndarray | None = None,
 ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
+    """Fit the margin and total XGBoost heads.
+
+    Early stopping applies only when ``early_stopping_rounds`` and ``eval_data`` are given. A
+    fit that XGBoost rejects for its tree method is retried once with a compatible one.
+    """
+
     def _train_with_params(
         active_params: dict[str, Any],
     ) -> tuple[xgb.XGBRegressor, xgb.XGBRegressor]:
-        resolved_early_stopping = early_stopping_rounds
-        if x_eval is None or y_margin_eval is None or y_total_eval is None:
-            resolved_early_stopping = None
+        resolved_early_stopping = None if eval_data is None else early_stopping_rounds
+        x_eval = None if eval_data is None else eval_data.x
 
         active_params = _with_xgb_early_stopping_params(active_params, resolved_early_stopping)
         margin_model = xgb.XGBRegressor(**active_params)
@@ -459,17 +490,17 @@ def _fit_margin_total_models(
 
         fit_kwargs = _build_xgb_fit_kwargs(
             x_eval,
-            y_margin_eval,
+            None if eval_data is None else eval_data.margin,
             resolved_early_stopping,
         )
-        margin_model.fit(x_train, y_margin, sample_weight=sample_weight, **fit_kwargs)
+        margin_model.fit(train.x, train.margin, sample_weight=train.sample_weight, **fit_kwargs)
 
         fit_kwargs = _build_xgb_fit_kwargs(
             x_eval,
-            y_total_eval,
+            None if eval_data is None else eval_data.total,
             resolved_early_stopping,
         )
-        total_model.fit(x_train, y_total, sample_weight=sample_weight, **fit_kwargs)
+        total_model.fit(train.x, train.total, sample_weight=train.sample_weight, **fit_kwargs)
 
         return margin_model, total_model
 
@@ -482,36 +513,33 @@ def _fit_margin_total_models(
         return _train_with_params(fallback_params)
 
 
-def _validate_quantiles(quantiles: Sequence[float]) -> tuple[float, ...]:
+def validate_quantiles(quantiles: Sequence[float]) -> tuple[float, ...]:
+    """Return the quantiles as floats, refusing an empty list or any outside (0, 1)."""
     if not quantiles:
-        raise ValueError("Quantiles must be non-empty.")
+        msg = "Quantiles must be non-empty."
+        raise ValueError(msg)
     normalized = tuple(float(q) for q in quantiles)
     for q in normalized:
         if not 0.0 < q < 1.0:
-            raise ValueError(f"Quantile must be in (0, 1): {q}")
+            msg = f"Quantile must be in (0, 1): {q}"
+            raise ValueError(msg)
     return normalized
 
 
-def _fit_quantile_models(
+def fit_quantile_models(
     x_train: np.ndarray | spmatrix,
     y_train: np.ndarray,
     params: dict[str, Any],
     quantiles: Sequence[float],
-    x_eval: np.ndarray | spmatrix | None = None,
-    y_eval: np.ndarray | None = None,
-    early_stopping_rounds: int | None = None,
+    *,
     sample_weight: np.ndarray | None = None,
 ) -> dict[float, xgb.XGBRegressor]:
-    """Fit one XGBoost quantile regressor per requested quantile.
+    """Fit one XGBoost quantile regressor per requested quantile, on its full tree budget.
 
     Uses `objective='reg:quantileerror'` and passes `quantile_alpha` via model params.
     """
-    resolved = _validate_quantiles(quantiles)
+    resolved = validate_quantiles(quantiles)
     models: dict[float, xgb.XGBRegressor] = {}
-
-    resolved_early_stopping = early_stopping_rounds
-    if x_eval is None or y_eval is None:
-        resolved_early_stopping = None
 
     def _train_with_params(
         active_params: dict[str, Any],
@@ -521,13 +549,9 @@ def _fit_quantile_models(
             q_params = active_params.copy()
             q_params["objective"] = "reg:quantileerror"
             q_params["quantile_alpha"] = quantile
-            q_params = _with_xgb_early_stopping_params(q_params, resolved_early_stopping)
+            q_params = _with_xgb_early_stopping_params(q_params, None)
             model = xgb.XGBRegressor(**q_params)
-            fit_kwargs = _build_xgb_fit_kwargs(
-                x_eval,
-                y_eval,
-                resolved_early_stopping,
-            )
+            fit_kwargs = _build_xgb_fit_kwargs(None, None, None)
             model.fit(x_train, y_train, sample_weight=sample_weight, **fit_kwargs)
             fitted[quantile] = model
         return fitted
@@ -554,14 +578,16 @@ def resolve_calibration(method: str) -> str:
     if normalized in _CALIBRATION_ALIASES:
         return CALIBRATION_FLOOR
     if normalized in RETIRED_CALIBRATIONS:
-        raise ValueError(
+        msg = (
             f"Calibration {method!r} was retired: every run submits the deterministic floor "
             "(auto, also spelled none)."
         )
-    raise ValueError(f"Unknown win probability calibration method: {method!r}")
+        raise ValueError(msg)
+    msg = f"Unknown win probability calibration method: {method!r}"
+    raise ValueError(msg)
 
 
-def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarray:
+def normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarray:
     """Normalize raw implied probs so home+away sums to 1 (no-vig), for the market yardstick."""
     total = home_prob + away_prob
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -572,11 +598,11 @@ def _normalize_no_vig(home_prob: np.ndarray, away_prob: np.ndarray) -> np.ndarra
 def _predict_margin_total_from_model(
     model: MarginTotalModel, games_df: pd.DataFrame
 ) -> tuple[np.ndarray, np.ndarray]:
-    feature_df = _apply_feature_spec(games_df, model.feature_spec)
+    feature_df = apply_feature_spec(games_df, model.feature_spec)
     log.debug("Prediction feature matrix: %d rows x %d columns", *feature_df.shape)
-    x_games = _transform_matrix(model.preprocessor, feature_df)
-    pred_margin = _predict_xgb(model.margin_model, x_games)
-    pred_total = _predict_xgb(model.total_model, x_games)
+    x_games = transform_matrix(model.preprocessor, feature_df)
+    pred_margin = predict_xgb(model.margin_model, x_games)
+    pred_total = predict_xgb(model.total_model, x_games)
     if getattr(model, "market_anchor", False):
         baseline_margin, baseline_total = get_market_baseline(games_df)
         pred_margin = pred_margin + baseline_margin
@@ -593,14 +619,14 @@ def _predict_margin_total_quantiles_from_model(
     if not margin_models or not total_models:
         return {}, {}
 
-    feature_df = _apply_feature_spec(games_df, model.feature_spec)
-    x_games = _transform_matrix(model.preprocessor, feature_df)
+    feature_df = apply_feature_spec(games_df, model.feature_spec)
+    x_games = transform_matrix(model.preprocessor, feature_df)
 
     margin_preds: dict[float, np.ndarray] = {
-        q: _predict_xgb(q_model, x_games) for q, q_model in margin_models.items()
+        q: predict_xgb(q_model, x_games) for q, q_model in margin_models.items()
     }
     total_preds: dict[float, np.ndarray] = {
-        q: _predict_xgb(q_model, x_games) for q, q_model in total_models.items()
+        q: predict_xgb(q_model, x_games) for q, q_model in total_models.items()
     }
 
     if getattr(model, "market_anchor", False):
@@ -672,7 +698,7 @@ def _summarize_confidence_pool(
     }
 
 
-def _margin_to_home_win_prob(
+def margin_to_home_win_prob(
     margin: np.ndarray, sigma: float = constants.SCORE_DIFF_STD_DEV
 ) -> np.ndarray:
     """Return the deterministic floor, ``Phi(margin / sigma)``.
@@ -683,7 +709,7 @@ def _margin_to_home_win_prob(
     return home_win_prob(margin, sigma)
 
 
-def model_floor_sigma(model: Any) -> tuple[float, bool]:
+def model_floor_sigma(model: object) -> tuple[float, bool]:
     """Return the sigma a saved model predicts with, and whether it is the fallback constant.
 
     A model saved before the sigma was recorded has none and uses the constant.
@@ -694,82 +720,74 @@ def model_floor_sigma(model: Any) -> tuple[float, bool]:
     return float(record.sigma), bool(record.fallback)
 
 
-def _build_prediction_output(
-    games_df: pd.DataFrame,
-    pred_away: np.ndarray,
-    pred_home: np.ndarray,
-    home_win_prob: np.ndarray,
-    score_rounding: str = "none",
-) -> pd.DataFrame:
-    """Build a prediction output table with optional score post-processing.
+# Display-only score snapping: plausible NFL scores built from scoring plays, each play
+# carrying a rarity cost. A TD (7) and a FG (3) cost 0, a TD without the extra point (6) and a
+# TD with a two-point try (8) cost 1, and a safety (2) costs 2; every play also costs
+# SCORING_EVENT_PENALTY, so fewer events are preferred. A raw score snaps to the candidate that
+# minimizes |candidate - value| + SNAP_COST_WEIGHT * cost.
+MAX_DISPLAY_SCORE = 70
+SCORING_EVENT_PENALTY = 0.35
+SCORING_PLAY_COSTS = ((3, 0.0), (7, 0.0), (6, 1.0), (8, 1.0), (2, 2.0))
+SNAP_COST_WEIGHT = 1.0
 
-    Score post-processing is applied only to emitted score columns (and their derived
-    total/margin) and never affects training targets or the underlying model outputs.
-    """
 
-    def _apply_score_rounding(values: np.ndarray, mode: str) -> np.ndarray:
-        mode_norm = (mode or "none").strip().lower()
-        if mode_norm == "none":
-            return values
-        if mode_norm in {"int", "integer"}:
-            return np.round(values, 0)
-        if mode_norm in {"half", "0.5", "nearest_half"}:
-            return np.round(values * 2.0, 0) / 2.0
-        if mode_norm in {"nfl", "football"}:
-            # Snap to plausible NFL team scores (for display only).
-            #
-            # We model score plausibility with a lightweight cost function:
-            # - TD (7) and FG (3) have cost 0 (common)
-            # - TD-without-XP (6) and TD+2 (8) have cost 1
-            # - safety (2) has cost 2 (rarer)
-            #
-            # Then we choose the candidate with minimal:
-            #   abs(candidate - value) + penalty * cost
-            max_score = 70
-            # Penalize both rarity (2pt/safety) and also the number of scoring events.
-            event_penalty = 0.35
-            increments = [
-                (3, 0.0 + event_penalty),
-                (7, 0.0 + event_penalty),
-                (6, 1.0 + event_penalty),
-                (8, 1.0 + event_penalty),
-                (2, 2.0 + event_penalty),
-            ]
+@functools.cache
+def _nfl_score_costs() -> tuple[np.ndarray, np.ndarray]:
+    """Return the reachable scores and each one's minimal rarity cost (Dijkstra)."""
+    increments = [(points, cost + SCORING_EVENT_PENALTY) for points, cost in SCORING_PLAY_COSTS]
+    best_cost = np.full(MAX_DISPLAY_SCORE + 1, np.inf, dtype=float)
+    best_cost[0] = 0.0
+    heap: list[tuple[float, int]] = [(0.0, 0)]
+    while heap:
+        cost, score = heapq.heappop(heap)
+        if cost != best_cost[score]:
+            continue
+        for inc, inc_cost in increments:
+            nxt = score + inc
+            if nxt > MAX_DISPLAY_SCORE:
+                continue
+            new_cost = cost + inc_cost
+            if new_cost < best_cost[nxt]:
+                best_cost[nxt] = new_cost
+                heapq.heappush(heap, (new_cost, nxt))
+    candidates = np.where(np.isfinite(best_cost))[0]
+    return candidates, best_cost[candidates]
 
-            # Compute minimal "rarity" cost for each reachable score.
-            # Use Dijkstra to guarantee correctness regardless of increment/cost structure.
-            best_cost = np.full(max_score + 1, np.inf, dtype=float)
-            best_cost[0] = 0.0
-            heap: list[tuple[float, int]] = [(0.0, 0)]
-            while heap:
-                cost, score = heapq.heappop(heap)
-                if cost != best_cost[score]:
-                    continue
-                for inc, inc_cost in increments:
-                    nxt = score + inc
-                    if nxt > max_score:
-                        continue
-                    new_cost = cost + inc_cost
-                    if new_cost < best_cost[nxt]:
-                        best_cost[nxt] = new_cost
-                        heapq.heappush(heap, (new_cost, nxt))
 
-            candidates = np.where(np.isfinite(best_cost))[0]
-            penalty = 1.0
-            snapped: list[float] = []
-            for v in np.asarray(values, dtype=float):
-                if not np.isfinite(v):
-                    snapped.append(float(v))
-                    continue
-                v_clip = float(np.clip(v, 0.0, float(max_score)))
-                diffs = np.abs(candidates.astype(float) - v_clip)
-                scores = diffs + penalty * best_cost[candidates]
-                snapped.append(float(candidates[int(np.argmin(scores))]))
-            return np.asarray(snapped, dtype=float)
-        raise ValueError(f"Unknown score rounding mode: {mode}")
+def _snap_to_nfl_scores(values: np.ndarray) -> np.ndarray:
+    """Snap each raw score to a plausible NFL team score (for display only)."""
+    candidates, candidate_costs = _nfl_score_costs()
+    snapped: list[float] = []
+    for v in np.asarray(values, dtype=float):
+        if not np.isfinite(v):
+            snapped.append(float(v))
+            continue
+        v_clip = float(np.clip(v, 0.0, float(MAX_DISPLAY_SCORE)))
+        diffs = np.abs(candidates.astype(float) - v_clip)
+        scores = diffs + SNAP_COST_WEIGHT * candidate_costs
+        snapped.append(float(candidates[int(np.argmin(scores))]))
+    return np.asarray(snapped, dtype=float)
 
-    output_df = games_df.copy()
 
+def _apply_score_rounding(values: np.ndarray, mode: str) -> np.ndarray:
+    """Return scores rounded for display: none, whole points, half points, or NFL scores."""
+    mode_norm = (mode or "none").strip().lower()
+    if mode_norm == "none":
+        return values
+    if mode_norm in {"int", "integer"}:
+        return np.round(values, 0)
+    if mode_norm in {"half", "0.5", "nearest_half"}:
+        return np.round(values * 2.0, 0) / 2.0
+    if mode_norm in {"nfl", "football"}:
+        return _snap_to_nfl_scores(values)
+    msg = f"Unknown score rounding mode: {mode}"
+    raise ValueError(msg)
+
+
+def _add_score_columns(
+    output_df: pd.DataFrame, pred_away: np.ndarray, pred_home: np.ndarray, score_rounding: str
+) -> None:
+    """Add the raw scores and the display scores, each with its total and margin."""
     raw_away_scores = np.asarray(pred_away, dtype=float)
     raw_home_scores = np.asarray(pred_home, dtype=float)
     output_df["predicted_away_score_raw"] = np.round(raw_away_scores, 1)
@@ -785,6 +803,9 @@ def _build_prediction_output(
     output_df["predicted_total"] = np.round(display_away_scores + display_home_scores, 1)
     output_df["predicted_margin"] = np.round(display_home_scores - display_away_scores, 1)
 
+
+def _add_pick_columns(output_df: pd.DataFrame, home_win_prob: np.ndarray) -> None:
+    """Add the published probabilities, the predicted winner, and the confidence ranking."""
     # Round first (for stable output), then clip so values don't collapse to 0.0/1.0
     # at 4-decimal precision (which would make log loss unstable).
     home_win_prob_out = np.clip(np.round(home_win_prob, 4), 0.0001, 0.9999)
@@ -812,37 +833,66 @@ def _build_prediction_output(
     tiebreaker = output_df["game_id"].to_numpy() if "game_id" in output_df.columns else None
     output_df["confidence_rank"] = confidence_ranks(unrounded, tiebreaker)
 
+
+def _build_prediction_output(
+    games_df: pd.DataFrame,
+    pred_away: np.ndarray,
+    pred_home: np.ndarray,
+    home_win_prob: np.ndarray,
+    score_rounding: str = "none",
+) -> pd.DataFrame:
+    """Build a prediction output table with optional score post-processing.
+
+    Score post-processing is applied only to emitted score columns (and their derived
+    total/margin) and never affects training targets or the underlying model outputs.
+    """
+    output_df = games_df.copy()
+    _add_score_columns(output_df, pred_away, pred_home, score_rounding)
+    _add_pick_columns(output_df, home_win_prob)
     return output_df
 
 
-def _early_stopping_info(model: Any) -> dict[str, Any]:
-    info: dict[str, Any] = {}
+def _boosted_rounds(estimator: object) -> int | None:
+    """Return the number of boosting rounds a fitted booster ran, when it can say."""
+    get_booster = getattr(estimator, "get_booster", None)
+    if not callable(get_booster):
+        return None
+    num_boosted_rounds = getattr(get_booster(), "num_boosted_rounds", None)
+    rounds = num_boosted_rounds() if callable(num_boosted_rounds) else None
+    return int(rounds) if isinstance(rounds, int | np.integer) else None
 
-    def _capture(prefix: str, estimator: Any) -> None:
-        best_iteration_recorded = False
-        for key in ("best_iteration", "best_score", "best_ntree_limit"):
-            if hasattr(estimator, key):
-                info[f"{prefix}.{key}"] = getattr(estimator, key)
-                if key == "best_iteration":
-                    best_iteration_recorded = True
-        if not best_iteration_recorded and hasattr(estimator, "get_booster"):
-            booster = estimator.get_booster()
-            if hasattr(booster, "num_boosted_rounds"):
-                info[f"{prefix}.best_iteration"] = int(booster.num_boosted_rounds()) - 1
 
-    if isinstance(model, MarginTotalModel):
-        _capture("margin_model", model.margin_model)
-        _capture("total_model", model.total_model)
-        if model.margin_quantile_models:
-            for q, est in model.margin_quantile_models.items():
-                _capture(f"margin_q{q}", est)
-        if model.total_quantile_models:
-            for q, est in model.total_quantile_models.items():
-                _capture(f"total_q{q}", est)
+def _estimator_iteration_info(prefix: str, estimator: object) -> dict[str, Any]:
+    """Return a head's early-stopping attributes, its best iteration at the least."""
+    info = {
+        f"{prefix}.{key}": getattr(estimator, key)
+        for key in ("best_iteration", "best_score", "best_ntree_limit")
+        if hasattr(estimator, key)
+    }
+    if f"{prefix}.best_iteration" not in info:
+        rounds = _boosted_rounds(estimator)
+        if rounds is not None:
+            info[f"{prefix}.best_iteration"] = rounds - 1
     return info
 
 
-def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
+def _early_stopping_info(model: object) -> dict[str, Any]:
+    """Return every head's early-stopping details, keyed ``<head>.<attribute>``."""
+    if not isinstance(model, MarginTotalModel):
+        return {}
+    heads: dict[str, object] = {
+        "margin_model": model.margin_model,
+        "total_model": model.total_model,
+    }
+    heads.update({f"margin_q{q}": est for q, est in (model.margin_quantile_models or {}).items()})
+    heads.update({f"total_q{q}": est for q, est in (model.total_quantile_models or {}).items()})
+    info: dict[str, Any] = {}
+    for prefix, estimator in heads.items():
+        info.update(_estimator_iteration_info(prefix, estimator))
+    return info
+
+
+def _load_model_checkpoint(path: Path, model_kind: str) -> MarginTotalModel:
     for cls in (
         FeatureSpec,
         MarginTotalModel,
@@ -864,33 +914,21 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
         )
         model = joblib.load(path)
 
-    # If a sibling metadata.json exists, surface version mismatch in a targeted way.
-    try:
-        meta_path = path.with_name("metadata.json")
-        if meta_path.exists():
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            saved_xgb = (meta.get("library_versions") or {}).get("xgboost")
-            current_xgb = xgb.__version__
-            if saved_xgb and saved_xgb != current_xgb:
-                log.info(
-                    "Loaded checkpoint saved with xgboost=%s (current=%s). "
-                    "For maximum portability, prefer retraining in the current environment.",
-                    saved_xgb,
-                    current_xgb,
-                )
-    except Exception:  # noqa: S110 (silent exception on missing xgboost version is safe)
-        pass
+    _log_xgboost_version_change(path.with_name("metadata.json"))
 
     model = _ensure_backward_compatible_model(model)
     if model_kind != "margin_total":
-        raise ValueError(f"Unknown model kind: {model_kind}")
+        msg = f"Unknown model kind: {model_kind}"
+        raise ValueError(msg)
     if isinstance(model, BlendedMarginTotalModel):
-        raise ValueError(
+        msg = (
             f"{path} is a blend model: the blend model kind was retired; "
             "train a margin_total model instead."
         )
+        raise TypeError(msg)
     if not isinstance(model, MarginTotalModel):
-        raise ValueError("Model checkpoint type mismatch; expected MarginTotalModel.")
+        msg = "Model checkpoint type mismatch; expected MarginTotalModel."
+        raise TypeError(msg)
     _drop_retired_calibrator(model, path)
     _drop_retired_market_blend(model, path)
     _drop_retired_uncertainty(model, path)
@@ -898,7 +936,7 @@ def _load_model_checkpoint(path: Path, model_kind: str) -> Any:
     return model
 
 
-def _drop_retired_calibrator(model: Any, path: Path) -> None:
+def _drop_retired_calibrator(model: MarginTotalModel, path: Path) -> None:
     """Remove a saved fitted or Elo calibrator from a loaded model, saying what is ignored."""
     calibrator = model.__dict__.pop("calibrator", None)
     if calibrator is None:
@@ -911,7 +949,7 @@ def _drop_retired_calibrator(model: Any, path: Path) -> None:
     )
 
 
-def _drop_retired_market_blend(model: Any, path: Path) -> None:
+def _drop_retired_market_blend(model: MarginTotalModel, path: Path) -> None:
     """Remove a saved market blend or clamp from a loaded model, saying what is ignored."""
     config = model.__dict__.pop("market_prob_config", None)
     if config is None:
@@ -928,7 +966,7 @@ def _drop_retired_market_blend(model: Any, path: Path) -> None:
         )
 
 
-def _drop_retired_uncertainty(model: Any, path: Path) -> None:
+def _drop_retired_uncertainty(model: MarginTotalModel, path: Path) -> None:
     """Remove a saved quantile-spread probability flag from a loaded model, saying so."""
     if model.__dict__.pop("win_prob_use_uncertainty", False):
         log.warning(
@@ -938,16 +976,16 @@ def _drop_retired_uncertainty(model: Any, path: Path) -> None:
         )
 
 
-def _ensure_backward_compatible_model(model: Any) -> Any:
+def _ensure_backward_compatible_model[T](model: T) -> T:
     """Patch older pickled models missing newer fields."""
 
-    def _safe_set_attr(instance: Any, name: str, value: Any) -> None:
+    def _safe_set_attr(instance: MarginTotalModel, name: str, value: object) -> None:
         try:
             object.__setattr__(instance, name, value)
         except AttributeError:
             setattr(instance, name, value)
 
-    def _ensure_margin_total(instance: Any) -> None:
+    def _ensure_margin_total(instance: MarginTotalModel) -> None:
         if not hasattr(instance, "margin_quantile_models"):
             _safe_set_attr(instance, "margin_quantile_models", None)
         if not hasattr(instance, "total_quantile_models"):
@@ -964,7 +1002,32 @@ def _ensure_backward_compatible_model(model: Any) -> Any:
     return model
 
 
-def load_model_checkpoint(path: Path, model_kind: str) -> Any:
+def _saved_xgboost_version(meta_path: Path) -> str | None:
+    """Return the XGBoost version a sibling ``metadata.json`` records, if it is readable."""
+    if not meta_path.exists():
+        return None
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except OSError, ValueError:
+        return None
+    versions = meta.get("library_versions") if isinstance(meta, dict) else None
+    saved = versions.get("xgboost") if isinstance(versions, dict) else None
+    return str(saved) if saved else None
+
+
+def _log_xgboost_version_change(meta_path: Path) -> None:
+    """Say so when a checkpoint was saved under a different XGBoost version."""
+    saved_xgb = _saved_xgboost_version(meta_path)
+    if saved_xgb and saved_xgb != xgb.__version__:
+        log.info(
+            "Loaded checkpoint saved with xgboost=%s (current=%s). "
+            "For maximum portability, prefer retraining in the current environment.",
+            saved_xgb,
+            xgb.__version__,
+        )
+
+
+def load_model_checkpoint(path: Path, model_kind: str) -> MarginTotalModel:
     """Load a saved model checkpoint with type validation."""
     return _load_model_checkpoint(path, model_kind)
 
@@ -972,18 +1035,6 @@ def load_model_checkpoint(path: Path, model_kind: str) -> Any:
 def get_target_columns(df: pd.DataFrame) -> tuple[str, str]:
     """Return away/home score column names."""
     return _get_target_columns(df)
-
-
-def apply_feature_spec(df: pd.DataFrame, spec: FeatureSpec) -> pd.DataFrame:
-    """Apply a feature spec to an input DataFrame."""
-    return _apply_feature_spec(df, spec)
-
-
-def margin_to_home_win_prob(
-    margin: np.ndarray, sigma: float = constants.SCORE_DIFF_STD_DEV
-) -> np.ndarray:
-    """Convert predicted margin to home win probability through the deterministic floor."""
-    return _margin_to_home_win_prob(margin, sigma)
 
 
 def predict_margin_total_from_model(
@@ -998,11 +1049,6 @@ def derive_scores_from_margin_total(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Derive away/home scores from margin and total."""
     return _derive_scores_from_margin_total(pred_margin, pred_total)
-
-
-def predict_xgb(model: xgb.XGBRegressor, data: np.ndarray | spmatrix) -> np.ndarray:
-    """Predict using an XGBoost model with DMatrix inputs."""
-    return _predict_xgb(model, data)
 
 
 def build_prediction_output(
@@ -1045,262 +1091,176 @@ def _select_objective_score(
         return metrics.get("brier", float("inf"))
     if objective == "expected_points":
         return pool_summary.get("weekly_expected_points_avg", 0.0)
-    raise ValueError(f"Unknown objective metric: {objective}")
+    msg = f"Unknown objective metric: {objective}"
+    raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class FoldSetup:
+    """What every tuning fold shares: the targets, the feature selection, the market anchor."""
+
+    target_columns: tuple[str, str]
+    selection: FeatureSelection
+    market_anchor: bool = False
 
 
 def _score_margin_total_fold(
-    *,
     train_df: pd.DataFrame,
     val_df: pd.DataFrame,
-    target_columns: tuple[str, str],
-    include_market: bool,
-    max_cardinality_ratio: float,
-    feature_start: str,
-    feature_end: str,
+    setup: FoldSetup,
     params: dict[str, Any],
-    early_stopping_rounds: int,
-    objective: str,
-    market_transform: bool = False,
-    market_anchor: bool = False,
+    optuna_config: OptunaConfig,
 ) -> float:
-    feature_spec = _build_feature_spec(
-        train_df,
-        include_market=include_market,
-        max_cardinality_ratio=max_cardinality_ratio,
-        feature_start=feature_start,
-        feature_end=feature_end,
-        market_transform=market_transform,
+    """Fit on one fold's training rows, early-stopping on its validation rows, and score them."""
+    feature_spec = build_feature_spec(train_df, setup.selection)
+    preprocessor = build_preprocessor(feature_spec, for_tree=True)
+
+    x_train = fit_transform_matrix(preprocessor, apply_feature_spec(train_df, feature_spec))
+    x_val = transform_matrix(preprocessor, apply_feature_spec(val_df, feature_spec))
+
+    y_margin_train, y_total_train, _, _ = prepare_margin_total_targets_with_anchor(
+        train_df, setup.target_columns, market_anchor=setup.market_anchor
     )
-    preprocessor = _build_preprocessor(feature_spec, for_tree=True)
-
-    x_train = _fit_transform_matrix(preprocessor, _apply_feature_spec(train_df, feature_spec))
-    x_val = _transform_matrix(preprocessor, _apply_feature_spec(val_df, feature_spec))
-
-    (
-        y_margin_train,
-        y_total_train,
-        _,
-        _,
-    ) = _prepare_margin_total_targets_with_anchor(train_df, target_columns, market_anchor)
     (
         y_margin_val,
         y_total_val,
         baseline_margin_val,
         baseline_total_val,
-    ) = _prepare_margin_total_targets_with_anchor(val_df, target_columns, market_anchor)
-
-    margin_model, total_model = _fit_margin_total_models(
-        x_train,
-        y_margin_train,
-        y_total_train,
-        params,
-        x_eval=x_val,
-        y_margin_eval=y_margin_val,
-        y_total_eval=y_total_val,
-        early_stopping_rounds=early_stopping_rounds,
+    ) = prepare_margin_total_targets_with_anchor(
+        val_df, setup.target_columns, market_anchor=setup.market_anchor
     )
 
-    pred_margin = _predict_xgb(margin_model, x_val)
-    pred_total = _predict_xgb(total_model, x_val)
-    if market_anchor:
+    margin_model, total_model = fit_margin_total_models(
+        FitData(x_train, y_margin_train, y_total_train),
+        params,
+        eval_data=FitData(x_val, y_margin_val, y_total_val),
+        early_stopping_rounds=optuna_config.early_stopping_rounds,
+    )
+
+    pred_margin = predict_xgb(margin_model, x_val)
+    pred_total = predict_xgb(total_model, x_val)
+    if setup.market_anchor:
         pred_margin = pred_margin + baseline_margin_val
         pred_total = pred_total + baseline_total_val
-    home_win_prob = _margin_to_home_win_prob(pred_margin)
+    home_win_prob = margin_to_home_win_prob(pred_margin)
 
     metrics = _evaluate_margin_total_predictions(
-        val_df, pred_margin, pred_total, target_columns, home_win_prob
+        val_df, pred_margin, pred_total, setup.target_columns, home_win_prob
     )
-    pool_summary = _summarize_confidence_pool(val_df, home_win_prob, target_columns)
-    return _select_objective_score(metrics, pool_summary, objective)
+    pool_summary = _summarize_confidence_pool(val_df, home_win_prob, setup.target_columns)
+    return _select_objective_score(metrics, pool_summary, optuna_config.objective)
+
+
+def _cv_fold_scores(
+    df: pd.DataFrame, setup: FoldSetup, params: dict[str, Any], optuna_config: OptunaConfig
+) -> list[float]:
+    """Score ``params`` on each blocked, time-ordered season-week fold."""
+    timepoints = _build_season_week_timepoints(df)
+    folds = _build_blocked_timepoint_folds(timepoints, n_splits=optuna_config.cv_splits)
+    fold_scores: list[float] = []
+    for train_points, val_points in folds:
+        point_series = df["season"].astype(int) * 100 + df["week"].astype(int)
+        train_df = df[point_series.isin(train_points)].copy()
+        val_df = df[point_series.isin(val_points)].copy()
+        fold_scores.append(
+            float(_score_margin_total_fold(train_df, val_df, setup, params, optuna_config))
+        )
+    return fold_scores
 
 
 def _evaluate_margin_total_cv(
-    df: pd.DataFrame,
-    target_columns: tuple[str, str],
-    include_market: bool,
-    max_cardinality_ratio: float,
-    feature_start: str,
-    feature_end: str,
-    params: dict[str, Any],
-    cv_splits: int,
-    early_stopping_rounds: int,
-    objective: str,
-    market_transform: bool = False,
-    market_anchor: bool = False,
+    df: pd.DataFrame, setup: FoldSetup, params: dict[str, Any], optuna_config: OptunaConfig
 ) -> float:
-    timepoints = _build_season_week_timepoints(df)
-    folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
-    fold_scores: list[float] = []
-
-    for train_points, val_points in folds:
-        point_series = df["season"].astype(int) * 100 + df["week"].astype(int)
-        train_mask = point_series.isin(train_points)
-        val_mask = point_series.isin(val_points)
-        train_df = df[train_mask].copy()
-        val_df = df[val_mask].copy()
-
-        fold_scores.append(
-            float(
-                _score_margin_total_fold(
-                    train_df=train_df,
-                    val_df=val_df,
-                    target_columns=target_columns,
-                    include_market=include_market,
-                    max_cardinality_ratio=max_cardinality_ratio,
-                    feature_start=feature_start,
-                    feature_end=feature_end,
-                    params=params,
-                    early_stopping_rounds=early_stopping_rounds,
-                    objective=objective,
-                    market_transform=market_transform,
-                    market_anchor=market_anchor,
-                )
-            )
-        )
-
-    return float(np.mean(fold_scores))
+    """Return the mean fold score of ``params``."""
+    return float(np.mean(_cv_fold_scores(df, setup, params, optuna_config)))
 
 
 def _evaluate_margin_total_cv_summary(
-    df: pd.DataFrame,
-    target_columns: tuple[str, str],
-    include_market: bool,
-    max_cardinality_ratio: float,
-    feature_start: str,
-    feature_end: str,
-    params: dict[str, Any],
-    cv_splits: int,
-    early_stopping_rounds: int,
-    objective: str,
-    market_transform: bool = False,
-    market_anchor: bool = False,
+    df: pd.DataFrame, setup: FoldSetup, params: dict[str, Any], optuna_config: OptunaConfig
 ) -> dict[str, Any]:
-    timepoints = _build_season_week_timepoints(df)
-    folds = _build_blocked_timepoint_folds(timepoints, n_splits=cv_splits)
-    fold_scores: list[float] = []
-    for train_points, val_points in folds:
-        point_series = df["season"].astype(int) * 100 + df["week"].astype(int)
-        train_mask = point_series.isin(train_points)
-        val_mask = point_series.isin(val_points)
-        train_df = df[train_mask].copy()
-        val_df = df[val_mask].copy()
-        fold_scores.append(
-            float(
-                _score_margin_total_fold(
-                    train_df=train_df,
-                    val_df=val_df,
-                    target_columns=target_columns,
-                    include_market=include_market,
-                    max_cardinality_ratio=max_cardinality_ratio,
-                    feature_start=feature_start,
-                    feature_end=feature_end,
-                    params=params,
-                    early_stopping_rounds=early_stopping_rounds,
-                    objective=objective,
-                    market_transform=market_transform,
-                    market_anchor=market_anchor,
-                )
-            )
-        )
-
+    """Return every fold score of ``params`` with their mean and spread."""
+    fold_scores = _cv_fold_scores(df, setup, params, optuna_config)
     return {
-        "cv_splits": int(len(fold_scores)),
-        "objective": objective,
+        "cv_splits": len(fold_scores),
+        "objective": optuna_config.objective,
         "fold_scores": fold_scores,
         "mean": float(np.mean(fold_scores)) if fold_scores else None,
         "std": float(np.std(fold_scores)) if fold_scores else None,
     }
 
 
-def _run_optuna_search(
-    df: pd.DataFrame,
-    target_columns: tuple[str, str],
-    include_market: bool,
-    max_cardinality_ratio: float,
-    feature_start: str,
-    feature_end: str,
-    optuna_config: OptunaConfig,
-    market_transform: bool = False,
-    market_anchor: bool = False,
-    holdout_seasons: Sequence[int] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    if optuna is None:
-        raise ImportError("Optuna is required for hyperparameter tuning.")
-    optuna_module = optuna
-    # After the ImportError check above, this is guaranteed non-None, but Pylance may not track it.
-    # The assignment above establishes the variable in local scope for type narrowing.
-    if holdout_seasons:
-        if "season" not in df.columns:
-            raise ValueError("Optuna tuning requires a season column for holdout checks.")
-        if df["season"].isin(holdout_seasons).any():
-            raise ValueError("Optuna tuning data includes holdout seasons.")
+def _check_tuning_excludes_holdout(df: pd.DataFrame, holdout_seasons: Sequence[int] | None) -> None:
+    """Refuse tuning data that includes a holdout season."""
+    if not holdout_seasons:
+        return
+    if "season" not in df.columns:
+        msg = "Optuna tuning requires a season column for holdout checks."
+        raise ValueError(msg)
+    if df["season"].isin(holdout_seasons).any():
+        msg = "Optuna tuning data includes holdout seasons."
+        raise ValueError(msg)
 
-    sampler = optuna_module.samplers.TPESampler(seed=42)
+
+def _create_study(optuna_config: OptunaConfig) -> optuna.Study:
+    """Create (or, with a storage, resume) the seeded study for the configured objective."""
     study_kwargs: dict[str, Any] = {
         "direction": _optuna_direction(optuna_config.objective),
-        "sampler": sampler,
+        "sampler": optuna.samplers.TPESampler(seed=42),
     }
     if optuna_config.storage:
         study_kwargs["storage"] = optuna_config.storage
         study_kwargs["study_name"] = optuna_config.study_name
         study_kwargs["load_if_exists"] = True
-    study = optuna_module.create_study(**study_kwargs)
+    return optuna.create_study(**study_kwargs)
 
-    def objective_fn(trial: Any) -> float:
-        """Optuna objective function for margin/total model tuning."""
-        trial_params = {
-            "max_depth": trial.suggest_int("max_depth", 3, 8),
-            "min_child_weight": trial.suggest_float("min_child_weight", 1.0, 10.0),
-            "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
-            "reg_lambda": trial.suggest_float("reg_lambda", 0.0, 3.0),
-            "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 3.0),
-            "gamma": trial.suggest_float("gamma", 0.0, 5.0),
-            "n_estimators": trial.suggest_int("n_estimators", 200, 1200),
-        }
-        if optuna_config.xgb_n_jobs is not None:
-            trial_params["n_jobs"] = optuna_config.xgb_n_jobs
-        params = _resolve_xgb_params(
-            DEFAULT_XGB_PARAMS,
-            overrides=trial_params,
-            tree_method=optuna_config.tree_method,
-            device=optuna_config.device,
-        )
-        return _evaluate_margin_total_cv(
-            df,
-            target_columns=target_columns,
-            include_market=include_market,
-            max_cardinality_ratio=max_cardinality_ratio,
-            feature_start=feature_start,
-            feature_end=feature_end,
-            params=params,
-            cv_splits=optuna_config.cv_splits,
-            early_stopping_rounds=optuna_config.early_stopping_rounds,
-            objective=optuna_config.objective,
-            market_transform=market_transform,
-            market_anchor=market_anchor,
-        )
 
-    def _persist_best_params(study: Any, trial: Any) -> None:
-        if optuna_config.best_params_out is None:
-            return
-        if trial.state != optuna_module.trial.TrialState.COMPLETE:
-            return
-        best_params_out = optuna_config.best_params_out
-        if best_params_out is None:
-            return
-        best_params_out.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "objective": optuna_config.objective,
-            "best_value": study.best_value,
-            "best_params": study.best_params,
-            "best_trial": study.best_trial.number,
-        }
-        best_params_out.write_text(json.dumps(payload, indent=2, sort_keys=True))
+def _suggest_xgb_params(trial: optuna.Trial, optuna_config: OptunaConfig) -> dict[str, Any]:
+    """Return one trial's XGBoost parameters: the searched ones over the defaults."""
+    trial_params = {
+        "max_depth": trial.suggest_int("max_depth", 3, 8),
+        "min_child_weight": trial.suggest_float("min_child_weight", 1.0, 10.0),
+        "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+        "reg_lambda": trial.suggest_float("reg_lambda", 0.0, 3.0),
+        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 3.0),
+        "gamma": trial.suggest_float("gamma", 0.0, 5.0),
+        "n_estimators": trial.suggest_int("n_estimators", 200, 1200),
+    }
+    if optuna_config.xgb_n_jobs is not None:
+        trial_params["n_jobs"] = optuna_config.xgb_n_jobs
+    return resolve_xgb_params(
+        DEFAULT_XGB_PARAMS,
+        overrides=trial_params,
+        tree_method=optuna_config.tree_method,
+        device=optuna_config.device,
+    )
 
-    def _trial_logger(study: Any, trial: Any) -> None:
-        if trial.state != optuna_module.trial.TrialState.COMPLETE:
+
+def _persist_best_params(
+    optuna_config: OptunaConfig, study: optuna.Study, trial: optuna.trial.FrozenTrial
+) -> None:
+    """Write the best parameters so far to ``best_params_out`` after each completed trial."""
+    best_params_out = optuna_config.best_params_out
+    if best_params_out is None or trial.state != optuna.trial.TrialState.COMPLETE:
+        return
+    best_params_out.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "objective": optuna_config.objective,
+        "best_value": study.best_value,
+        "best_params": study.best_params,
+        "best_trial": study.best_trial.number,
+    }
+    best_params_out.write_text(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _trial_logger(
+    optuna_config: OptunaConfig,
+) -> Callable[[optuna.Study, optuna.trial.FrozenTrial], None]:
+    """Return the callback that logs each completed trial and persists the best parameters."""
+
+    def log_trial(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
+        if trial.state != optuna.trial.TrialState.COMPLETE:
             return
         log.info(
             "Optuna trial %d complete: value=%.4f | best=%.4f",
@@ -1308,63 +1268,70 @@ def _run_optuna_search(
             trial.value,
             study.best_value,
         )
-        _persist_best_params(study, trial)
+        _persist_best_params(optuna_config, study, trial)
+
+    return log_trial
+
+
+def _best_trial(study: optuna.Study) -> tuple[float | None, dict[str, Any], int | None]:
+    """Return the best value, raw parameters and trial number, or nothing without a success."""
+    try:
+        return (
+            float(study.best_value),
+            dict(study.best_params),
+            int(study.best_trial.number),
+        )
+    except AttributeError, ValueError, TypeError:
+        return None, {}, None
+
+
+def _run_optuna_search(
+    df: pd.DataFrame,
+    setup: FoldSetup,
+    optuna_config: OptunaConfig,
+    holdout_seasons: Sequence[int] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Tune the XGBoost parameters by time-ordered cross-validation on the training rows.
+
+    Returns the best parameters, their cross-validation summary, and the study summary.
+    """
+    _check_tuning_excludes_holdout(df, holdout_seasons)
+    study = _create_study(optuna_config)
+
+    def objective_fn(trial: optuna.Trial) -> float:
+        """Optuna objective function for margin/total model tuning."""
+        params = _suggest_xgb_params(trial, optuna_config)
+        return _evaluate_margin_total_cv(df, setup, params, optuna_config)
 
     start_time = time.monotonic()
     study.optimize(
         objective_fn,
         timeout=optuna_config.timeout_seconds,
         n_trials=optuna_config.n_trials,
-        callbacks=[_trial_logger],
+        callbacks=[_trial_logger(optuna_config)],
     )
     duration_seconds = time.monotonic() - start_time
 
-    best_value: float | None
-    best_params_raw: dict[str, Any]
-    best_trial_number: int | None
-    try:
-        best_value = float(study.best_value)
-        best_params_raw = dict(study.best_params)
-        best_trial_number = int(study.best_trial.number)
-    except AttributeError, ValueError, TypeError:
-        best_value = None
-        best_params_raw = {}
-        best_trial_number = None
-
+    best_value, best_params_raw, best_trial_number = _best_trial(study)
     if best_value is None:
         log.warning("Optuna completed without a successful trial.")
     else:
         log.info("Optuna best %s: %.4f", optuna_config.objective, best_value)
         log.info("Optuna best params: %s", best_params_raw)
 
-    best_params: dict[str, Any] = {}
-    items = best_params_raw.items()
-    for key, value in items:
-        key_str = key.decode("utf-8", errors="replace") if isinstance(key, bytes) else str(key)
-        best_params[key_str] = value
-
-    resolved_best = _resolve_xgb_params(
+    best_params = {
+        key.decode("utf-8", errors="replace") if isinstance(key, bytes) else str(key): value
+        for key, value in best_params_raw.items()
+    }
+    resolved_best = resolve_xgb_params(
         DEFAULT_XGB_PARAMS,
         overrides=best_params,
         tree_method=optuna_config.tree_method,
         device=optuna_config.device,
     )
-    cv_summary = _evaluate_margin_total_cv_summary(
-        df,
-        target_columns=target_columns,
-        include_market=include_market,
-        max_cardinality_ratio=max_cardinality_ratio,
-        feature_start=feature_start,
-        feature_end=feature_end,
-        params=resolved_best,
-        cv_splits=optuna_config.cv_splits,
-        early_stopping_rounds=optuna_config.early_stopping_rounds,
-        objective=optuna_config.objective,
-        market_transform=market_transform,
-        market_anchor=market_anchor,
-    )
+    cv_summary = _evaluate_margin_total_cv_summary(df, setup, resolved_best, optuna_config)
     complete_trials = sum(
-        1 for trial in study.trials if trial.state == optuna_module.trial.TrialState.COMPLETE
+        1 for trial in study.trials if trial.state == optuna.trial.TrialState.COMPLETE
     )
     optuna_summary = {
         "study_name": optuna_config.study_name,
@@ -1374,11 +1341,11 @@ def _run_optuna_search(
         "best_value": best_value,
         "best_trial": best_trial_number,
         "best_params": best_params_raw,
-        "n_trials": int(len(study.trials)),
+        "n_trials": len(study.trials),
         "n_complete_trials": int(complete_trials),
         "timeout_seconds": int(optuna_config.timeout_seconds),
         "cv_splits": int(optuna_config.cv_splits),
-        "sampler": type(sampler).__name__,
+        "sampler": type(study.sampler).__name__,
         "duration_seconds": float(duration_seconds),
     }
     return best_params, cv_summary, optuna_summary

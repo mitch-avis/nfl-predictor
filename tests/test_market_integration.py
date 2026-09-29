@@ -21,7 +21,7 @@ def test_market_anchor_targets_residualize_baseline() -> None:
     )
     target_cols = ("away_score", "home_score")
 
-    margin, total, base_margin, base_total = ml_model._prepare_margin_total_targets_with_anchor(
+    margin, total, base_margin, base_total = ml_model.prepare_margin_total_targets_with_anchor(
         df,
         target_cols,
         market_anchor=True,

@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 from nfl_predictor.ml import ml_utils
-from nfl_predictor.utils import ml_utils as compat_ml_utils
 
 
 def _capture_logs(messages: list[str]) -> Any:
@@ -110,22 +109,3 @@ def test_display_weekly_predictions_confidence_strength_and_explicit_winner(monk
     assert "70.0%" in messages[1]
     assert "#-- (Away B)" in messages[2]
     assert "65.0%" in messages[2]
-
-
-def test_flatten_and_nested_dict_to_df() -> None:
-    """Nested dicts are flattened and converted to DataFrame correctly."""
-    nested = {"alpha": {"x": 1, "y": 2}, "beta": {"z": 3}}
-    flat = ml_utils.flatten_dict(nested)
-
-    assert flat[("alpha", "x")] == 1
-    assert flat[("beta", "z")] == 3
-
-    df = ml_utils.nested_dict_to_df(nested)
-    assert set(df.columns) == {"x", "y", "z"}
-    assert df.loc["alpha", "x"] == 1
-
-
-def test_utils_ml_utils_facade() -> None:
-    """Compatibility ml_utils functions are correctly mapped."""
-    assert compat_ml_utils.flatten_dict is ml_utils.flatten_dict
-    assert "display_predictions" in dir(compat_ml_utils)

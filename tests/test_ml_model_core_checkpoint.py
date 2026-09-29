@@ -5,15 +5,18 @@ These tests avoid training by using minimal, picklable placeholder objects.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import joblib
 import pytest
-import xgboost as xgb
-from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_core as core
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import xgboost as xgb
+    from sklearn.compose import ColumnTransformer
 
 
 def _dummy_feature_spec() -> core.FeatureSpec:
@@ -41,10 +44,10 @@ def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
     meta_path = tmp_path / "metadata.json"
 
     model = core.MarginTotalModel(
-        preprocessor=cast(ColumnTransformer, None),
+        preprocessor=cast("ColumnTransformer", None),
         feature_spec=_dummy_feature_spec(),
-        margin_model=cast(xgb.XGBRegressor, None),
-        total_model=cast(xgb.XGBRegressor, None),
+        margin_model=cast("xgb.XGBRegressor", None),
+        total_model=cast("xgb.XGBRegressor", None),
         target_columns=("away_score", "home_score"),
         market_anchor=False,
         xgb_params={"n_estimators": 1},
@@ -61,20 +64,45 @@ def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
     assert isinstance(loaded, core.MarginTotalModel)
 
 
+@pytest.mark.parametrize(
+    "metadata_text",
+    ["not json", "[1, 2]", '{"library_versions": ["xgboost"]}'],
+)
+def test_load_model_checkpoint_ignores_unreadable_metadata(
+    tmp_path: Path, metadata_text: str
+) -> None:
+    """Metadata that is not the expected JSON object never blocks loading the model."""
+    model_path = tmp_path / "model.joblib"
+    model = core.MarginTotalModel(
+        preprocessor=cast("ColumnTransformer", None),
+        feature_spec=_dummy_feature_spec(),
+        margin_model=cast("xgb.XGBRegressor", None),
+        total_model=cast("xgb.XGBRegressor", None),
+        target_columns=("away_score", "home_score"),
+        market_anchor=False,
+        xgb_params={"n_estimators": 1},
+    )
+    joblib.dump(model, model_path)
+    (tmp_path / "metadata.json").write_text(metadata_text, encoding="utf-8")
+
+    loaded = core.load_model_checkpoint(model_path, "margin_total")
+    assert isinstance(loaded, core.MarginTotalModel)
+
+
 def test_a_saved_blend_model_is_refused_with_a_reason(tmp_path: Path) -> None:
     """A checkpoint of the retired blend kind fails to load and says why."""
     model_path = tmp_path / "model.joblib"
     joblib.dump(
         core.BlendedMarginTotalModel(
-            team_model=cast(core.MarginTotalModel, None),
-            blend_layer=cast(core.BlendLayer, None),
+            team_model=cast("core.MarginTotalModel", None),
+            blend_layer=cast("core.BlendLayer", None),
             calibrator=None,
             target_columns=("away_score", "home_score"),
         ),
         model_path,
     )
 
-    with pytest.raises(ValueError, match=r"blend model kind was retired"):
+    with pytest.raises(TypeError, match=r"blend model kind was retired"):
         core.load_model_checkpoint(model_path, "margin_total")
 
 

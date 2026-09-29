@@ -26,11 +26,14 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # Files a previous shim-based installer wrote into site-packages; removed on install.
 _LEGACY_FILES = (
@@ -106,9 +109,7 @@ def _run(
     command: list[str], *, capture: bool = True, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     """Run a local tool with fixed arguments and return the completed process."""
-    return subprocess.run(  # noqa: S603 - fixed tool names and repo-controlled arguments
-        command, check=False, capture_output=capture, text=True, env=env
-    )
+    return subprocess.run(command, check=False, capture_output=capture, text=True, env=env)
 
 
 def _cuda_version(nvcc: Path | None) -> str | None:
@@ -214,7 +215,8 @@ def _sync(runtime: Runtime, *, rebuild: bool) -> None:
     env = {**os.environ, "VIRTUAL_ENV": str(runtime.venv)}
     completed = _run(sync_command(runtime, rebuild=rebuild), capture=False, env=env)
     if completed.returncode != 0:
-        raise RuntimeError(f"uv sync with the LightGBM CUDA build failed ({completed.returncode}).")
+        msg = f"uv sync with the LightGBM CUDA build failed ({completed.returncode})."
+        raise RuntimeError(msg)
 
 
 def install(*, require_cuda: bool = False, runtime: Runtime | None = None) -> InstallResult:
@@ -263,7 +265,8 @@ def install(*, require_cuda: bool = False, runtime: Runtime | None = None) -> In
     _sync(runtime, rebuild=True)
     works, output = cuda_training_works(runtime)
     if not works:
-        raise RuntimeError(f"LightGBM was rebuilt but still cannot train on CUDA:\n{output}")
+        msg = f"LightGBM was rebuilt but still cannot train on CUDA:\n{output}"
+        raise RuntimeError(msg)
     log.info("LightGBM %s rebuilt with CUDA support.", runtime.lightgbm_version)
     return InstallResult(status="rebuilt", rebuilt=True)
 

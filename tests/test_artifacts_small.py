@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
+import numpy as np
 import pytest
 
 from nfl_predictor.ml import artifacts
@@ -40,7 +41,8 @@ class _FallbackToList:
 
     def item(self) -> object:
         """Raise to force the next fallback branch."""
-        raise RuntimeError("item failed")
+        msg = "item failed"
+        raise ValueError(msg)
 
     def tolist(self) -> list[int]:
         """Return a list payload."""
@@ -60,11 +62,13 @@ class _FallbackIsoformat:
 
     def item(self) -> object:
         """Raise to force the next fallback branch."""
-        raise RuntimeError("item failed")
+        msg = "item failed"
+        raise ValueError(msg)
 
     def tolist(self) -> list[int]:
         """Raise to force the next fallback branch."""
-        raise RuntimeError("tolist failed")
+        msg = "tolist failed"
+        raise ValueError(msg)
 
     def isoformat(self) -> str:
         """Return an ISO-8601 timestamp string."""
@@ -84,15 +88,18 @@ class _FallbackString:
 
     def item(self) -> object:
         """Raise to force the next fallback branch."""
-        raise RuntimeError("item failed")
+        msg = "item failed"
+        raise ValueError(msg)
 
     def tolist(self) -> list[int]:
         """Raise to force the next fallback branch."""
-        raise RuntimeError("tolist failed")
+        msg = "tolist failed"
+        raise ValueError(msg)
 
     def isoformat(self) -> str:
         """Raise to force the final ``str()`` fallback."""
-        raise RuntimeError("isoformat failed")
+        msg = "isoformat failed"
+        raise ValueError(msg)
 
     def __str__(self) -> str:
         """Return the string fallback representation."""
@@ -135,18 +142,18 @@ def test_stable_short_hash_is_order_invariant() -> None:
 
 
 def test_to_jsonable_handles_dataclasses_and_fallback_protocols() -> None:
-    """_to_jsonable should normalize dataclasses and protocol-like helper objects."""
+    """to_jsonable should normalize dataclasses and protocol-like helper objects."""
     dataclass_payload = _PayloadDataclass(path=Path("data.csv"), count=3)
 
-    assert artifacts._to_jsonable(dataclass_payload) == {"path": "data.csv", "count": 3}
-    assert artifacts._to_jsonable(_PayloadDataclass) == str(_PayloadDataclass)
-    assert artifacts._to_jsonable(_ItemValue(Path("nested.csv"))) == "nested.csv"
-    assert artifacts._to_jsonable(_FallbackToList()) == [1, 2, 3]
-    assert artifacts._to_jsonable(_OnlyToList()) == [4, 5, 6]
-    assert artifacts._to_jsonable(_FallbackIsoformat()) == "2026-06-12T18:00:00+00:00"
-    assert artifacts._to_jsonable(_OnlyIsoformat()) == "2026-06-12T19:00:00+00:00"
-    assert artifacts._to_jsonable(_FallbackString()) == "fallback-value"
-    assert artifacts._to_jsonable(_PlainStringValue()) == "plain-fallback"
+    assert artifacts.to_jsonable(dataclass_payload) == {"path": "data.csv", "count": 3}
+    assert artifacts.to_jsonable(_PayloadDataclass) == str(_PayloadDataclass)
+    assert artifacts.to_jsonable(_ItemValue(Path("nested.csv"))) == "nested.csv"
+    assert artifacts.to_jsonable(_FallbackToList()) == [1, 2, 3]
+    assert artifacts.to_jsonable(_OnlyToList()) == [4, 5, 6]
+    assert artifacts.to_jsonable(_FallbackIsoformat()) == "2026-06-12T18:00:00+00:00"
+    assert artifacts.to_jsonable(_OnlyIsoformat()) == "2026-06-12T19:00:00+00:00"
+    assert artifacts.to_jsonable(_FallbackString()) == "fallback-value"
+    assert artifacts.to_jsonable(_PlainStringValue()) == "plain-fallback"
 
 
 def test_generate_run_id_uses_frozen_timestamp_and_stable_hash(
@@ -217,7 +224,8 @@ def test_git_commit_hash_handles_success_failure_and_missing_git(
 
     def _raise_os_error(*_args: object, **_kwargs: object) -> SimpleNamespace:
         """Raise an OSError to emulate a missing git executable."""
-        raise OSError("git unavailable")
+        msg = "git unavailable"
+        raise OSError(msg)
 
     monkeypatch.setattr(artifacts.subprocess, "run", _raise_os_error)
     assert artifacts.git_commit_hash() is None
@@ -250,12 +258,14 @@ def test_module_version_library_versions_and_metadata_payload(
         run_id="weekly_20260612",
         dataset_hash="dataset123",
         config={"market_mode": "anchor"},
-        feature_list=["feature_a"],
-        splits={"holdout_seasons": [2025]},
-        params={"max_depth": 4},
-        tuned_params={"eta": 0.1},
-        early_stopping={"best_iteration": 12},
-        optuna_summary={"best_value": 0.2},
+        details=artifacts.TrainedModelDetails(
+            feature_list=["feature_a"],
+            splits={"holdout_seasons": [2025]},
+            params={"max_depth": 4},
+            tuned_params={"eta": 0.1},
+            early_stopping={"best_iteration": 12},
+            optuna_summary={"best_value": 0.2},
+        ),
     )
 
     assert metadata["git_commit_hash"] == "commit123"
@@ -271,7 +281,7 @@ def test_build_metadata_records_the_xgb_device() -> None:
         run_id="train_20260927",
         dataset_hash="dataset123",
         config={},
-        xgb_device="cuda",
+        details=artifacts.TrainedModelDetails(xgb_device="cuda"),
     )
 
     assert metadata["xgb_device"] == "cuda"
@@ -284,3 +294,24 @@ def test_write_json_serializes_paths(tmp_path: Path) -> None:
 
     loaded = json.loads(out.read_text(encoding="utf-8"))
     assert loaded["path"] == str(tmp_path)
+
+
+class _BrokenItem:
+    """Test helper whose ``item()`` fails with an unexpected error."""
+
+    def item(self) -> object:
+        """Raise an error the fallback chain must not hide."""
+        msg = "item broke"
+        raise RuntimeError(msg)
+
+
+def test_to_jsonable_converts_numpy_values() -> None:
+    """A NumPy scalar becomes its Python value and an array falls back to a list."""
+    assert artifacts.to_jsonable(np.int64(7)) == 7
+    assert artifacts.to_jsonable(np.array([1, 2])) == [1, 2]
+
+
+def test_to_jsonable_raises_unexpected_errors() -> None:
+    """Only the multi-element ``ValueError`` falls through; other errors surface."""
+    with pytest.raises(RuntimeError, match="item broke"):
+        artifacts.to_jsonable(_BrokenItem())

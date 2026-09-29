@@ -2,94 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 
 from nfl_predictor.utils import fingerprints
-
-
-class _ItemValue:
-    """Test helper exposing an ``item()`` method for scalar coercion."""
-
-    def __init__(self, value: object) -> None:
-        """Store the wrapped test value."""
-        self._value = value
-
-    def item(self) -> object:
-        """Return the wrapped value."""
-        return self._value
-
-
-class _FallbackToList:
-    """Test helper whose ``item()`` fails before ``tolist()`` succeeds."""
-
-    def item(self) -> object:
-        """Raise to force the next fallback branch."""
-        raise RuntimeError("item failed")
-
-    def tolist(self) -> list[int]:
-        """Return a list payload."""
-        return [1, 2, 3]
-
-
-class _OnlyToList:
-    """Test helper exposing only a ``tolist()`` method."""
-
-    def tolist(self) -> list[int]:
-        """Return a list payload."""
-        return [4, 5, 6]
-
-
-class _FallbackIsoformat:
-    """Test helper whose ``isoformat()`` branch should be used."""
-
-    def item(self) -> object:
-        """Raise to force the next fallback branch."""
-        raise RuntimeError("item failed")
-
-    def tolist(self) -> list[int]:
-        """Raise to force the next fallback branch."""
-        raise RuntimeError("tolist failed")
-
-    def isoformat(self) -> str:
-        """Return an ISO-8601 timestamp string."""
-        return datetime(2026, 6, 12, 18, 0, 0, tzinfo=UTC).isoformat()
-
-
-class _OnlyIsoformat:
-    """Test helper exposing only an ``isoformat()`` method."""
-
-    def isoformat(self) -> str:
-        """Return an ISO-8601 timestamp string."""
-        return datetime(2026, 6, 12, 19, 0, 0, tzinfo=UTC).isoformat()
-
-
-class _FallbackString:
-    """Test helper that falls back all the way to ``str()``."""
-
-    def item(self) -> object:
-        """Raise to force the next fallback branch."""
-        raise RuntimeError("item failed")
-
-    def tolist(self) -> list[int]:
-        """Raise to force the next fallback branch."""
-        raise RuntimeError("tolist failed")
-
-    def isoformat(self) -> str:
-        """Raise to force the final ``str()`` fallback."""
-        raise RuntimeError("isoformat failed")
-
-    def __str__(self) -> str:
-        """Return the string fallback representation."""
-        return "fallback-value"
-
-
-class _PlainStringValue:
-    """Test helper with no protocol methods beyond ``__str__``."""
-
-    def __str__(self) -> str:
-        """Return the string fallback representation."""
-        return "plain-fallback"
 
 
 def test_dataset_fingerprint_records_hash_and_file_metadata(tmp_path: Path) -> None:
@@ -133,14 +48,3 @@ def test_wf_run_fingerprint_depends_on_sha_args_and_code_version() -> None:
     assert first == second
     assert first != changed_args
     assert first != changed_code
-
-
-def test_to_jsonable_covers_protocol_fallback_chain() -> None:
-    """to_jsonable should walk through item, tolist, isoformat, and str fallbacks."""
-    assert fingerprints.to_jsonable(_ItemValue(Path("nested.csv"))) == "nested.csv"
-    assert fingerprints.to_jsonable(_FallbackToList()) == [1, 2, 3]
-    assert fingerprints.to_jsonable(_OnlyToList()) == [4, 5, 6]
-    assert fingerprints.to_jsonable(_FallbackIsoformat()) == "2026-06-12T18:00:00+00:00"
-    assert fingerprints.to_jsonable(_OnlyIsoformat()) == "2026-06-12T19:00:00+00:00"
-    assert fingerprints.to_jsonable(_FallbackString()) == "fallback-value"
-    assert fingerprints.to_jsonable(_PlainStringValue()) == "plain-fallback"

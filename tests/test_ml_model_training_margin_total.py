@@ -70,28 +70,28 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
     monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
     monkeypatch.setattr(
         ml_model_training,
-        "_build_feature_spec",
+        "build_feature_spec",
         lambda *_args, **_kwargs: _feature_spec(),
     )
     monkeypatch.setattr(
-        ml_model_training, "_apply_feature_spec", lambda frame, _spec: frame[["feat1"]]
+        ml_model_training, "apply_feature_spec", lambda frame, _spec: frame[["feat1"]]
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_build_preprocessor",
+        "build_preprocessor",
         lambda *_args, **_kwargs: _DummyPreprocessor(),
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_fit_margin_total_models",
+        "fit_margin_total_models",
         lambda *_args, **_kwargs: ("margin_model", "total_model"),
     )
     monkeypatch.setattr(
         ml_model_training,
-        "_fit_quantile_models",
+        "fit_quantile_models",
         lambda *_args, **_kwargs: {0.1: "q_model", 0.9: "q_model"},
     )
-    monkeypatch.setattr(ml_model_training, "_validate_quantiles", lambda _q: (0.1, 0.9))
+    monkeypatch.setattr(ml_model_training, "validate_quantiles", lambda _q: (0.1, 0.9))
     monkeypatch.setattr(
         ml_model_training,
         "_run_optuna_search",
@@ -108,7 +108,7 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
             return np.array([1.0] * len(x))
         return np.array([40.0] * len(x))
 
-    monkeypatch.setattr(ml_model_training, "_predict_xgb", fake_predict_xgb)
+    monkeypatch.setattr(ml_model_training, "predict_xgb", fake_predict_xgb)
 
     monkeypatch.setattr(
         ml_model_training,
@@ -132,13 +132,15 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
     )
 
     model = ml_model_training.train_margin_total_model(
-        data_path=Path("dummy.csv"),
-        holdout_seasons=1,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        optuna_config=optuna_config,
-        market_transform=True,
-        market_anchor=True,
+        ml_model_training.TrainingOptions(
+            data_path=Path("dummy.csv"),
+            holdout_seasons=1,
+            include_market=True,
+            max_cardinality_ratio=0.5,
+            optuna_config=optuna_config,
+            market_transform=True,
+            market_anchor=True,
+        )
     )
 
     assert model.margin_model == "margin_model"

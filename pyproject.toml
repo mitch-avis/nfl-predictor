@@ -27,6 +27,7 @@ dependencies = [
     "pydantic-settings>=2.15",
     "pyjwt>=2.15",
     "python-multipart>=0.0.32",
+    "pyyaml>=6.0",
     "requests>=2.34",
     "scikit-learn>=1.9",
     "scipy>=1.18",
@@ -109,6 +110,11 @@ known-first-party = ["nfl_predictor"]
 
 [tool.ruff.lint]
 select = ["ALL"]
+# The project logger, so rules that recognize logging calls (a blind `except` that logs the
+# traceback with `log.exception`, for example) see it as one.
+logger-objects = ["nfl_predictor.utils.logger.log"]
+# The Greek sigma in user-facing text names the standard deviation on purpose.
+allowed-confusables = ["σ"]
 ignore = [
     "D203", # Conflicts with D211 (no-blank-line-before-class)
     "D213",   # Conflicts with D212 (multi-line-summary-first-line)
@@ -119,6 +125,22 @@ ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+# FastAPI reads route signatures and pydantic reads model fields at runtime, so the types they
+# name must stay real imports rather than moving under TYPE_CHECKING.
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
+runtime-evaluated-decorators = [
+    "fastapi.APIRouter.delete",
+    "fastapi.APIRouter.get",
+    "fastapi.APIRouter.patch",
+    "fastapi.APIRouter.post",
+    "fastapi.APIRouter.put",
+]
+
+# `pl.lit(True)` builds a literal from a value; the boolean is data, not a behavior flag.
+[tool.ruff.lint.flake8-boolean-trap]
+extend-allowed-calls = ["polars.lit"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
@@ -139,6 +161,30 @@ convention = "google"
 "nfl_predictor/api/registry/*.py" = [
     "E501",
 ] # one column definition per line, descriptions included
+# Genuine false positives, each reviewed; the reason sits beside the rule.
+"nfl_predictor/api/jobs/runner.py" = [
+    "S603", # a job's argv is built from the vetted template catalog, never from raw input
+]
+"nfl_predictor/lightgbm_cuda.py" = [
+    "S603",   # fixed tool names with repo-controlled arguments
+    "TRY400", # an install failure is reported as a message; the traceback adds nothing
+]
+"nfl_predictor/ml/artifacts.py" = [
+    "S607", # `git` from PATH, the same git the checkout was made with
+]
+"nfl_predictor/ml/walk_forward.py" = [
+    "S607",   # `git` from PATH, the same git the checkout was made with
+    "NPY002", # the legacy global seed stays until a walk-forward shows nothing reads it
+]
+"nfl_predictor/cli/compare.py" = [
+    "TRY400", # a bad run argument is reported as a message with exit code 2, no traceback
+]
+"nfl_predictor/weekly_run/__main__.py" = [
+    "PLC0415", # the OpenMP wait policy must be set before the pipeline imports XGBoost
+]
+"nfl_predictor/api/auth/cli.py" = [
+    "S105", # PASSWORD_ENV holds the name of an environment variable, not a password
+]
 
 [tool.ty.environment]
 # Pin ty to the repo venv so local and CI checks resolve the same interpreter.

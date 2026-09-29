@@ -5,7 +5,32 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## Update (2026-09-29, branch `fix/weekly-dry-run`)
+## Update (2026-09-29, branch `refactor/ruff-all`)
+
+- `refactor/ruff-all` branches from `fix/weekly-dry-run` (at `afe926a`), so it carries `0.35.2`
+  and `0.35.3` too. Neither branch is merged into `main`, and merging is must-ask. The branch
+  holds `0.36.0`: the user set ruff `select = ["ALL"]`, and the code base now passes it with
+  no inline `noqa`. The seven commits run from `ca2e440` to the release commit. The working
+  tree is clean, and `scripts/gate.sh --web` exits `0` (1229 passed, coverage 92.69%).
+- The user's rules for lint work: fix the code rather than suppress. A genuine false positive
+  goes in `[tool.ruff.lint.per-file-ignores]` with its reason, never inline. Run
+  `.venv/bin/pre-commit run --all-files` yourself before ending a turn: the Stop hook runs it
+  and `ruff --fix` rewrites the tree if you have not.
+- Equivalence against `ca2e440` was checked by scripts under `/tmp/ruffall/`, which is scratch
+  and not a record. The checks covered leakage reports, predictions in all rounding modes, a
+  seeded Optuna search, a resumed real-data walk-forward, XGBoost parameter resolution, PBP box
+  scores, and a scratch 2019-2025 ETL rebuild. The rebuild matched to `2.2e-16`, never touching
+  `data/`. The old-code worktree used for the comparison has been removed.
+- Finding for roadmap step 4 (rebuild reproducibility): the ETL is not byte-deterministic even
+  on unchanged code. Two sources, shown by running the old code twice:
+  - `unique()` without `maintain_order` reorders rows within a date;
+  - parallel float sums differ at about `1e-16` in the `sos_*` columns.
+- Every walk-forward checkpoint fingerprint changes with `0.36.0`: the fingerprinted
+  `nfl_predictor/ml/*.py` files changed, so the next walk-forward retrains from scratch.
+- Open question for the user: whether to merge `fix/weekly-dry-run` and then `refactor/ruff-all`
+  into `main`.
+
+## Earlier update (2026-09-29, branch `fix/weekly-dry-run`)
 
 - `fix/weekly-dry-run` (off `main`, not merged: must-ask) carries `0.35.2` (`weekly --dry-run`
   skips the data refresh) and `0.35.3` (`leakage-audit` creates its report directory; `validate`

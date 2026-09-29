@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.35.3] - 2026-09-29
+
+### Changed
+
+- `scripts/gate.sh` and `.markdownlintignore` keep the gitignored `models/` run directories out of
+  the local markdownlint step, as `0.35.1` did for pyright; CI never sees them.
+
+### Fixed
+
+- `nfl-predictor leakage-audit` creates the `--out-json` report's parent directory before
+  writing, so the web job's default `reports/leakage_audit.json` no longer fails with
+  `FileNotFoundError` in a checkout without `reports/`.
+- `nfl-predictor validate` (offline and `--live`) infers `all_data.csv`'s column types from every
+  row; in season the newest-first file starts with over 100 unplayed games, which made the scores
+  load as text and both modes fail with `ComputeError: cannot compare string with numeric type`.
+
 ## [0.35.2] - 2026-09-28
 
 ### Fixed

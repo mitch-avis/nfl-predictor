@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.2] - 2026-09-28
+
+### Fixed
+
+- `nfl-predictor weekly --dry-run` no longer runs the data refresh (about ten minutes, rewriting
+  `data/`) before printing its plan; it logs the refresh as planned, as its help text promises.
+
 ## [0.35.1] - 2026-09-28
 
 ### Changed

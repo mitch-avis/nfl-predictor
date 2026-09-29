@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.36.0] - 2026-09-29
+
+### Changed
+
+- Ruff selects every rule (`select = ["ALL"]`), and the code base passes it with no inline `noqa`.
+  The config ignores only the two rules that conflict with the formatter (`COM812`, `ISC001`) and
+  `CPY001`, excludes `.agents/`, and keeps a short per-file ignore list with a stated reason for
+  each (subprocess calls with vetted or fixed arguments, `git` from `PATH`, the walk-forward's
+  legacy global seed, messages without tracebacks for user errors, the weekly entry point's
+  import after the OpenMP setting, and an environment variable's name mistaken for a password).
+- Long functions and parameter lists are split into focused helpers and keyword-only parameter
+  objects, with outputs pinned by characterization tests and checked against the previous commit:
+  training (`TrainingOptions`, `TrainingRecord`), fitting (`FitData`, `FoldSetup`), feature
+  selection (`FeatureSelection`), walk-forward (`FoldCheckpoints`, `Resampling`), the weekly
+  run's stage 1 (`ProductionOptions`, `Stage1Run`), power rankings (`RankingRequest`,
+  `RankingInputs`), and the ETL (`SeasonInputs` for `process_season`/`process_week`,
+  `TeamRankingsFrames`). A scratch ETL rebuild for 2019-2025 matches the previous code to
+  `2.2e-16`, the same as two runs of the previous code differ from each other.
+- `load_model_checkpoint` raises `TypeError` (was `ValueError`) for a blend or mismatched
+  checkpoint, and broad `except Exception` fallbacks catch only the errors they handle.
+- The season and week clock (`local_today`, `nfl_season`, `nfl_week`) lives in
+  `nfl_predictor/utils/clock.py`.
+- `nfl_predictor/ml_model.py` and `nfl_predictor/utils/polars_utils.py` re-export their names
+  explicitly with `__all__` instead of a module `__getattr__`.
+- Every walk-forward checkpoint fingerprint changes, because the fingerprinted model files
+  changed; a rerun retrains from scratch.
+- PyYAML is a declared dependency (the weekly run config already imported it).
+
+### Removed
+
+- The unused `nfl_predictor/utils/ml_utils.py` facade and the unused helpers `flatten_dict`,
+  `nested_dict_to_df`, `polars_to_pandas` and `pandas_to_polars`.
+
+### Fixed
+
+- The TeamRankings scraper logs its length-mismatch warning when a table's team and value columns
+  differ in length; before, the strict `zip` raised inside the generator, so the warning never fired.
+
 ## [0.35.3] - 2026-09-29
 
 ### Changed

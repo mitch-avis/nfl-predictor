@@ -338,7 +338,7 @@ Tasks:
       trial runs: (1) trials must fit exactly the way production fits. `0.12.3` removed in-season
       early stopping from production and walk-forward, but `_score_margin_total_fold` in
       `nfl_predictor/ml/ml_model_core.py` still passes `early_stopping_rounds` to
-      `_fit_margin_total_models`, so every trial is scored on a differently fitted model. (2) the
+      `fit_margin_total_models`, so every trial is scored on a differently fitted model. (2) the
       tuning objective must score what the walk-forward instrument scores: the deterministic
       `Phi(margin / SCORE_DIFF_STD_DEV)` Brier, with the market view alongside, not the
       configured-calibrator Brier. (3) plumbing so a tuned parameter set actually reaches the

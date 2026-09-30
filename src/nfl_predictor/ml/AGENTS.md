@@ -1,4 +1,4 @@
-# ML implementation standards (`nfl_predictor/ml/`)
+# ML implementation standards (`src/nfl_predictor/ml/`)
 
 Scoped instructions for the model code; project-wide rules are in the root `AGENTS.md`.
 

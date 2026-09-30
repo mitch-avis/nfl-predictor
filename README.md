@@ -156,7 +156,7 @@ nfl-predictor data
 
 The default season range is controlled by `constants.MIN_SEASON` (currently 1999).
 
-This writes datasets under `data/` (paths are defined in `nfl_predictor/constants.py`). Pass
+This writes datasets under `data/` (paths are defined in `src/nfl_predictor/constants.py`). Pass
 `--data-dir` to write them somewhere else; the upstream inputs and caches the ETL reads still come
 from `data/`.
 
@@ -349,10 +349,10 @@ home win probability through one curve, the deterministic floor: `Phi(margin / s
 normal CDF of the predicted margin over sigma, the spread of the model's own errors. For a game
 in season `s`, week `w`, sigma is the root-mean-square of (actual minus predicted margin) over
 every out-of-fold prediction strictly before `(s, w)`: earlier seasons, and season `s` weeks
-before `w` (`nfl_predictor/ml/floor_sigma.py`). It is one value per week, so it changes how
+before `w` (`src/nfl_predictor/ml/floor_sigma.py`). It is one value per week, so it changes how
 confident the probabilities are but never a pick or a confidence rank. Until that pool spans
 three earlier seasons, any weeks of them (`FLOOR_SIGMA_MIN_POOL_SEASONS`), sigma is the fixed
-`SCORE_DIFF_STD_DEV` (`14.21`, in `nfl_predictor/constants.py`), and the outputs say it fell back.
+`SCORE_DIFF_STD_DEV` (`14.21`, in `src/nfl_predictor/constants.py`), and the outputs say it fell back.
 Nothing is fitted on top of the floor and the market line never enters it; the pick and its
 confidence come from it.
 
@@ -737,8 +737,8 @@ commands by group, and `nfl-predictor <command> --help` shows a command's option
 | models by hand | `train`, `predict` (`--model-in`), `rankings` |
 | web | `web`, `users` |
 
-The code lives in the package: the weekly run in `nfl_predictor/weekly_run/`, the other
-commands in `nfl_predictor/cli/`. The per-module forms (`python -m nfl_predictor.data_collection`,
+The code lives in the package: the weekly run in `src/nfl_predictor/weekly_run/`, the other
+commands in `src/nfl_predictor/cli/`. The per-module forms (`python -m nfl_predictor.data_collection`,
 `python -m nfl_predictor.ml_model` and the others) keep working. The old `scripts/<name>.py`
 paths were removed in `0.27.0`; `scripts/gate.sh`, the check CI runs, is the one script left.
 
@@ -801,12 +801,12 @@ generalizes. Prefer holdout and walk-forward metrics.
 
 ## Web UI
 
-A FastAPI backend (`nfl_predictor/api/`) and a React single-page app (`web/`) browse the
+A FastAPI backend (`src/nfl_predictor/api/`) and a React single-page app (`web/`) browse the
 project's outputs and, for admins, run its jobs from a browser. The backend indexes
 `models/*/metadata.json`, lets an admin mark one run **active**, and serves that run's
 predictions, confidence picks, betting table (totals are never actionable), power rankings,
 model metrics and data status; the Jobs pages run the ETL, a lines-only refresh
-(`nfl_predictor/lines_refresh.py`), future-week inputs (`nfl_predictor/week_builder.py`),
+(`src/nfl_predictor/lines_refresh.py`), future-week inputs (`src/nfl_predictor/week_builder.py`),
 training, prediction, walk-forward and the reports as streamed background subprocesses.
 
 ```bash
@@ -932,13 +932,13 @@ Training/backtests can write a run directory containing reproducible artifacts.
 
 - Each week assigns unique confidence values `1..N` to each picked winner, least confident first.
   Confidence is `|p - 0.5|` rounded to 12 decimals (`CONFIDENCE_DECIMALS` in
-  `nfl_predictor/ml/metrics.py`), and equal rounded confidences are ordered by `game_id`. The
+  `src/nfl_predictor/ml/metrics.py`), and equal rounded confidences are ordered by `game_id`. The
   rounding makes mathematically equal confidences (a home favorite and a home underdog by the
   same spread) almost always tie instead of differing by floating-point noise. The weekly picks,
   walk-forward pool points, the prediction log and `nfl-predictor compare` all rank this way.
 - The pick is the home team when the unrounded home win probability is at least `0.5`
   (`p >= 0.5`, so an exact coin flip picks home), else the away team (`picks_home` in
-  `nfl_predictor/ml/metrics.py`); the walk-forward, the training pool summaries and the weekly
+  `src/nfl_predictor/ml/metrics.py`); the walk-forward, the training pool summaries and the weekly
   `predicted_winner` all use this rule.
 - The weekly picks and ranks use the unrounded probability, as the walk-forward does: the
   published `home_win_prob` and `away_win_prob` are rounded to 4 decimals, but a game published
@@ -960,13 +960,17 @@ Use `nfl` to snap to common NFL score patterns for reporting.
 
 ## Repository layout notes
 
+The package lives under `src/nfl_predictor/` and builds with the `uv_build` backend. `uv sync`
+installs it in editable mode, so the tests and every command import it from `src/`; the data,
+models and config directories stay at the repository root (`constants.ROOT_DIR`).
+
 Some modules are split to keep files under lint `max-module-lines` limits while preserving legacy
 import paths.
 
-- Polars ETL helpers live under `nfl_predictor/utils/polars/` with a compatibility facade at
-  `nfl_predictor/utils/polars_utils.py`.
-- ML implementation lives under `nfl_predictor/ml/` with a compatibility facade at
-  `nfl_predictor/ml_model.py`.
+- Polars ETL helpers live under `src/nfl_predictor/utils/polars/` with a compatibility facade at
+  `src/nfl_predictor/utils/polars_utils.py`.
+- ML implementation lives under `src/nfl_predictor/ml/` with a compatibility facade at
+  `src/nfl_predictor/ml_model.py`.
 
 ## Implemented feature areas
 
@@ -1007,7 +1011,7 @@ games.
   week 2, because a week-2 opponent's only prior game is the one against the subject.
 
 - Quarterback per-dropback production for the expected starter (`constants.QB_PBP_STATS`, in
-  `nfl_predictor/utils/polars/qb_stats.py`): for `away_qb` and `home_qb`, from that quarterback's
+  `src/nfl_predictor/utils/polars/qb_stats.py`): for `away_qb` and `home_qb`, from that quarterback's
   regular-season dropbacks in every earlier week across teams and seasons (never the game's own
   week). Career EPA per dropback (`qb_dropback_epa`), CPOE (2006+), sack rate and ANY/A are shrunk
   toward the league with `K = constants.QB_PRIOR_DROPBACKS` pseudo-dropbacks,

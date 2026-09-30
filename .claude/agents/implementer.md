@@ -21,7 +21,7 @@ user; you own the change.
 ## Before you edit
 
 - The root `AGENTS.md` is already in your context: follow it. Nested `AGENTS.md` files load when you
-  work under `web/`, `nfl_predictor/api/` or `nfl_predictor/ml/`.
+  work under `web/`, `src/nfl_predictor/api/` or `src/nfl_predictor/ml/`.
 - Read the task's full entry in `.agents/TODO.md` and every `.agents/` doc that it or `AGENTS.md`
   points to for that area (for example `.agents/modeling_spec.md` before prediction, calibration,
   market, pool, evaluation, artifact, leakage-audit or feature code).
@@ -55,7 +55,7 @@ Give your recommendation with each question (`AGENTS.md` rule 15), and stop for:
 - Commit on your worktree branch as `AGENTS.md` ("Changelog and Commit Workflow") and the
   committing-code skill describe.
 - Done means `VIRTUAL_ENV="$PWD/.venv" scripts/gate.sh` exits `0` on your final tree, with `--web`
-  added when `web/` or `nfl_predictor/api/` changed. `--quick` is for iteration only.
+  added when `web/` or `src/nfl_predictor/api/` changed. `--quick` is for iteration only.
 
 ## Report
 

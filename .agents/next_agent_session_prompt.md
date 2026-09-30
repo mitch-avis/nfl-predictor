@@ -7,61 +7,49 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 
 ## State (written 2026-09-29, late evening)
 
-- `main` is at `0.35.3`, local only: `fix/weekly-dry-run` merged with `--no-ff` (merge commit
-  `fc659d0`) with the user's approval on 2026-09-29. **Not pushed**; pushing is must-ask.
-  `origin/main` is still `0.35.1`.
-- `refactor/ruff-all` is at `0.37.0` and checked out in the main checkout. The working tree is
-  clean. It holds:
-  - `0.36.0`: ruff `select = ["ALL"]` with no inline `noqa`.
-  - `main` merged in (`e486088`).
-  - `0.37.0`: the package moved to `src/nfl_predictor/` and builds with `uv_build` (the user
-    chose the `src/` layout on 2026-09-29). Implemented on `build/uv-build-src`, reviewed by a
-    separate reviewer (one finding, the release workflow's import, fixed in `ec99df8`), and
-    merged with `--no-ff` (`20e9449`). A scratch ETL rebuild for 2019-2025 of the flat layout
-    (`a8e65b7`) against the `src/` layout (`dba5a57`) matches to `2.2e-16` on every output file
-    (`~/scratch/etl_src_check/`, `run.sh` and both logs), the ETL's own run-to-run noise.
-  - `scripts/gate.sh --web` exits `0` on the final tree (1234 passed, coverage 92.69%, 26
-    frontend tests).
-- **Merging `refactor/ruff-all` into `main` is must-ask** and was not asked yet. It carries
-  `0.36.0` and `0.37.0`. After the merge (or any checkout that switches between the flat and the
-  `src/` layout), run `uv sync` at once: the editable install points at the old location until
-  then, and `import nfl_predictor` fails. Delete any leftover untracked `nfl_predictor/` directory
-  of `__pycache__` files at the repository root.
-- Week 4 picks: `models/weekly_2026_week_04/` (run on `fix/weekly-dry-run`, `0.35.3`, through its
-  `launch.sh`), exit `0`. Checked: all 16 scheduled games present, `floor_sigma` `13.2467` with
-  `floor_sigma_fallback` false, confidence ranks 1..16. It is the active web run (no pin).
-- The Milestone 60 live web checks are done: all 12 templates succeeded on 2026-09-29 (logs in
-  `models/m60_web_live_checks/`). They went through the API (`job.py`), not the browser, so the
-  TODO item stays open with a `Narrowed:` note until the user says whether that counts. The
-  temporary `agent_check` account is deleted, the throwaway pin is cleared, and no web server is
-  running.
-- `lines_refresh` (week 4) changed one moneyline row in each of `data/all_data.csv`,
-  `data/all_data_ml.csv` and `data/predict/week_04_games_to_predict.csv`, after the picks were
-  made.
-- Task 56.7 and the dry-run item are archived. `wf_eval_last_n_seasons` was already decided on
-  2026-09-28 (it stays `3`; it never reaches the submitted probabilities), so step 3 has no
-  measurement left.
+- `main` is at `0.37.1` and pushed to `origin` with the user's approval on 2026-09-29. It is
+  checked out in the main checkout, `uv sync` has run, and the working tree is clean. Two
+  `--no-ff` merges landed that day:
+  - `fix/weekly-dry-run` (`fc659d0`, `0.35.2`-`0.35.3`): `weekly --dry-run` skips the data
+    refresh; `leakage-audit` creates its report directory; `validate` infers column types from
+    every row. Task 56.7 and the Milestone 60 leftovers are archived.
+  - `refactor/ruff-all` (`0.36.0`-`0.37.1`):
+    - ruff `select = ["ALL"]` with no inline `noqa`;
+    - the package in `src/nfl_predictor/`, built with `uv_build` (the user chose the `src/`
+      layout). It was reviewed by a separate reviewer, whose one finding (the release
+      workflow's import) was fixed in `ec99df8`;
+    - a scratch ETL rebuild for 2019-2025 of the flat layout (`a8e65b7`) against the `src/`
+      layout (`dba5a57`) matches to `2.2e-16` on every output file (`~/scratch/etl_src_check/`),
+      the ETL's own run-to-run noise;
+    - `license = "MIT"` (SPDX), and `reports/` gitignored.
+  - `scripts/gate.sh --web` exits `0` on `0.37.1` (1234 passed, coverage 92.69%, 26 frontend
+    tests).
+- After any checkout that switches between the flat and the `src/` layout, run `uv sync` at
+  once. Until then the editable install points at the old location and `import nfl_predictor`
+  fails. Delete any leftover untracked `nfl_predictor/` directory of `__pycache__` files at the
+  repository root.
+- All agent worktrees are removed. Their merged branches still exist locally and could be deleted
+  with the user's agreement: `fix/weekly-dry-run`, `fix/weekly-dry-run-impl`,
+  `build/uv-build-src`, `worktree-agent-*`, `refactor/ruff-all` and `feat/step3-parity`.
+- Week 4 picks are in `models/weekly_2026_week_04/`. The run used `fix/weekly-dry-run`
+  (`0.35.3`), launched through its `launch.sh`, and exited `0`. Checked: all 16 games are
+  present, `floor_sigma` is `13.2467` with `floor_sigma_fallback` false, and the confidence
+  ranks run 1..16. It is the active web run (no pin).
+- After the picks, the week-4 `lines_refresh` check changed one moneyline row in each of
+  `data/all_data.csv`, `data/all_data_ml.csv` and `data/predict/week_04_games_to_predict.csv`.
+- No web server is running. The temporary `agent_check` account is deleted.
 
 ## Open questions for the user
 
-1. Merge `refactor/ruff-all` (`0.36.0`, `0.37.0`) into `main`? Push `main`? Recommendation:
-   merge now, between game weeks. It changes no output (the ETL check above; the weekly run's
-   probabilities come from the same code). Push only if the user wants the remote current.
-2. Do the API-launched web checks meet "one live launch per template from the web UI"?
-   Recommendation: yes. The UI submits exactly the same `POST /api/jobs` request. If yes, archive
-   the item and close the step-3 remainder.
-3. `reports/`: gitignore it? Recommendation: yes. The leakage-audit job writes
-   `reports/leakage_audit.json` there by default, a generated output like `models/`.
-4. Remove the agent worktrees under `.claude/worktrees/`? All are merged:
-   `agent-a8257452d53054ed6` and `agent-aee722a24afa97ad6` (into `fix/weekly-dry-run`), and
-   `agent-a3df1bc6e41502179` (`build/uv-build-src`, into `refactor/ruff-all`).
-5. uv_build warns that the `License :: OSI Approved :: MIT License` classifier is deprecated
-   (PEP 639). Recommendation: a small change to `license = "MIT"`, with the classifier dropped.
-   It changes wheel metadata only.
+None pending.
 
 ## Next
 
-1. The questions above. Then roadmap step 4 on a new branch off `main`:
+1. The step-3 remainder, then its close-out (closing is must-ask):
+   - task 56.6, its open parts ((d) moved to step 4);
+   - the narrowed feature-importance item under "From the 2026-09-25 review".
+
+   Then roadmap step 4 on a new branch off `main`:
    - rebuild reproducibility first. The ETL is not byte-deterministic: `unique()` without
      `maintain_order` reorders rows within a date, and parallel float sums differ at about
      `1e-16` in the `sos_*` columns. The step-4 follow-up in `TODO.md` about Polars' 100-row type

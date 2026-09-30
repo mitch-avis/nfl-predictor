@@ -5,51 +5,158 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## Update (2026-09-29, branch `refactor/ruff-all`)
+## Plan for the next session (written 2026-09-29 evening)
 
-- `refactor/ruff-all` branches from `fix/weekly-dry-run` (at `afe926a`), so it carries `0.35.2`
-  and `0.35.3` too. Neither branch is merged into `main`, and merging is must-ask. The branch
-  holds `0.36.0`: the user set ruff `select = ["ALL"]`, and the code base now passes it with
-  no inline `noqa`. The seven commits run from `ca2e440` to the release commit. The working
-  tree is clean, and `scripts/gate.sh --web` exits `0` (1229 passed, coverage 92.69%).
-- The user's rules for lint work: fix the code rather than suppress. A genuine false positive
+The user wants one session to finish both open branches, in this order. Ask the open questions
+in step 1 at the start, then work through the rest.
+
+### Branch state
+
+- `main` is at `0.35.1` (pushed 2026-09-28).
+- `fix/weekly-dry-run` sits 13 commits ahead of `main`:
+  - `0.35.2`: `weekly --dry-run` skips the data refresh.
+  - `0.35.3`: `leakage-audit` creates its report directory; `validate` infers
+    `all_data.csv`'s column types from every row; local markdownlint skips `models/`.
+  - Task 56.7 closed by the user on 2026-09-28: `market_transform` stays `auto` after a
+    two-seed tie.
+  - Each fix was reviewed by a separate reviewer, and the gate passed (1199 passed).
+- `refactor/ruff-all` branches from `fix/weekly-dry-run` at `afe926a` and adds `0.36.0`:
+  - The user set ruff `select = ["ALL"]`, and the code base passes it with no inline `noqa`.
+  - Commits `ca2e440`..`242f6ca`. The working tree is clean.
+  - `scripts/gate.sh --web` exits `0` (1229 passed, coverage 92.69%).
+  - Neither branch is merged, and merging is must-ask.
+- Is `fix/weekly-dry-run` ready to merge? The code is: reviewed and gate-green. But the
+  branch's own work, the Milestone 60 live web checks, stopped on an unanswered question.
+  So finish or explicitly defer those checks first (step 3 below).
+
+### 1. Questions for the user at the start (none was answered before this handoff)
+
+Unanswered from the "week 4 picks and step 3 remainder" session's last message:
+
+- **Five web templates write into the active run:** `predict`, `power_rankings`,
+  `shap_analysis`, and the `lines_refresh` and `predict_week` chains. The active run is
+  `weekly_2026_week_04_step3_test`, the step-3 merge-test record, and nothing should
+  overwrite it.
+  - Option 1 (that session's recommendation): the user pins the throwaway
+    `models/train_20260929_061431/` in the web UI, or allows the agent to pin it. The
+    permission classifier denied the agent doing it unasked. The five run against it, and
+    then it is unpinned.
+  - Option 2: they write into the merge-test run.
+  - Option 3: they run against the real Week 4 weekly run.
+- **Merge:** whether to merge `fix/weekly-dry-run` into `main`.
+- **`reports/`:** gitignore it or not. The leakage-audit job creates it by default. It is
+  currently empty and untracked.
+
+New:
+
+- **Week 4 picks.** Thursday's game is 2026-10-01, and `models/` has no
+  `weekly_2026_week_04` run yet. `data/qb_elos.csv` is dated 2026-09-24, so the user's
+  `../nfeloqb` update is still pending. Ask:
+  - whether the user runs Week 4 themselves or wants the agent to;
+  - on which code. Recommendation: `fix/weekly-dry-run` (reviewed, `0.35.3`) or `main`, not
+    the refactor branch, until the refactor's merge is approved.
+  - The run launches through a `launch.sh` with `nohup setsid`. Check afterwards: every
+    Week 4 game is present, `floor_sigma` is near 13.25 with `floor_sigma_fallback` false,
+    and ranks run 1..N.
+- **`src/` layout.** See step 4.
+
+### 2. State on disk that the next session must know
+
+- No web server is running. The live-check server ran from
+  `models/m60_web_live_checks/serve.sh` without `--reload`, with `job.py` as the API
+  submitter. Restarting it for the remaining checks is must-ask (rule 5, the running web
+  API).
+- The temporary admin account `agent_check` still exists in `data/web/app.db` (user-approved
+  for the checks). Delete it when the checks end, or when the user defers them.
+- Two prunable agent worktrees are under `.claude/worktrees/`, both already merged into
+  `fix/weekly-dry-run`. Remove them with `git worktree remove` once the user agrees.
+- An untracked `src/nfl_predictor/` tree holds only stale `__pycache__` files from an older
+  layout (it even has `lightgbm_cuda_bootstrap`, which no longer exists). Delete it before
+  any `src/` move.
+
+### 3. Finish `fix/weekly-dry-run`, then merge (must-ask)
+
+- Run the five remaining web templates, per the user's step-1 answer.
+- Delete `agent_check`.
+- Step-3 close-out in `.agents/TODO.md`: move task 56.7 and the dry-run item to `ARCHIVE.md`.
+- Still open in step 3: 56.7(b)'s remaining setting, `wf_eval_last_n_seasons`. It needs a
+  written hypothesis and decision rule before any run, and a default change is must-ask.
+- Three reads of the data CSVs use Polars' default 100-row type guessing (found by
+  `0.35.3`'s implementer, not fixed):
+  - `reporting/power_rankings.py:905` is the one that could break. The `power_rankings`
+    template exercises it live.
+  - `week_builder.py:84` only tests the scores for null, so the reviewer judged it safe.
+  - `data_collection.load_dataframe` is only called from tests.
+  - A crash there is a fix under rule 2: failing test first, then the fix.
+- Then rebase or merge `refactor/ruff-all` onto the result. The refactor already contains
+  the whole branch.
+
+### 4. Finish `refactor/ruff-all`: switch the build backend to `uv_build`
+
+- `pyproject.toml` has a commented-out `[build-system]` for `uv-build>=0.12`. The user wants it
+  to replace hatchling.
+- The user believes `uv_build` needs the package under `src/`. It doesn't:
+  `[tool.uv.build-backend] module-root = ""` keeps the flat layout. Verify this against the
+  uv docs for the installed uv version before relying on it.
+- Ask the user: flat layout with `module-root = ""`, or move to `src/nfl_predictor/`?
+  - Recommendation: move to `src/`, since the user asked for it. It is uv's default and
+    removes `[tool.hatch.build.targets.wheel]`.
+  - Cost: every path in the config and docs changes, and one path computation breaks
+    silently (below).
+  - How sure: moderate. If the user only wanted `uv_build`, the flat layout is one config
+    line.
+- Facts for a `src/` move, checked 2026-09-29:
+  - **Silent breakage:** `nfl_predictor/constants.py:10` sets
+    `ROOT_DIR = Path(__file__).parent.parent`, and `DATA_PATH` and the models directory
+    derive from it. Under `src/`, it would point at `src/` instead of the repo root. Pin
+    `ROOT_DIR` (and `DATA_PATH`) with a characterization test before the move, then use
+    `parents[2]`.
+  - Grep `git grep -n "__file__"` for other repo-root computations. The tests use
+    `parents[1]` of `tests/`, which is unaffected.
+  - Walk-forward checkpoint fingerprints hash each modelling file's name and bytes, not its
+    path (`nfl_predictor/ml/walk_forward.py`, `fold_checkpoint_fingerprint`), so a pure
+    move keeps them. The reference-pool reader (`ml/floor_sigma.py`) reads checkpoints by
+    run path.
+  - Config to update in `pyproject.toml`:
+    - ruff: `src`, `known-first-party`, and every `per-file-ignores` key;
+    - `[tool.ty.src] include`;
+    - pytest `pythonpath = ["."]`: drop it so tests import the installed package;
+    - `--cov=nfl_predictor` and coverage `source`: check that they still resolve;
+    - `[tool.hatch...]`: remove.
+  - Other files: `scripts/gate.sh` (lines 82 and 108), `.pre-commit-config.yaml`, the
+    `.github/workflows/*.yml` files, and `.markdownlintignore` and `.gitignore`, if they
+    name paths.
+  - The nested `nfl_predictor/api/AGENTS.md` and `nfl_predictor/ml/AGENTS.md` move with the
+    package. Check that Claude Code and Copilot still load them.
+  - About 29 tracked files mention `nfl_predictor/` as a path: `AGENTS.md`, `README.md`,
+    the module READMEs, and `.agents/*.md`. Update the living docs only. Frozen records
+    (`.agents/ARCHIVE.md`, past `CHANGELOG.md` entries, `.agents/m60/`, run directories)
+    stay as written. Generate the list with a script (rule 10), not by hand.
+  - After the move: run `uv lock` and `uv sync`, check that `nfl-predictor --help` and
+    `python -m nfl_predictor` work, and run the gate with `--web`.
+  - Then do an ETL check into a scratch directory, never `data/`: a copy of the repo with
+    `data/` inputs rebuilds 2019-2025, and `DATA_PATH` must resolve to the copy's `data/`.
+    Compare against the previous commit with a key-sorted numeric diff, to about `1e-15`,
+    because of the ETL's own non-determinism (below).
+- Bump the version (probably `0.37.0`: build backend and layout), write the changelog entry,
+  and run `uv lock` and `uv sync`. Rewrite this file.
+
+### 5. Carried from the ruff work
+
+- The user's rule for lint work: fix the code rather than suppress. A genuine false positive
   goes in `[tool.ruff.lint.per-file-ignores]` with its reason, never inline. Run
-  `.venv/bin/pre-commit run --all-files` yourself before ending a turn: the Stop hook runs it
-  and `ruff --fix` rewrites the tree if you have not.
-- Equivalence against `ca2e440` was checked by scripts under `/tmp/ruffall/`, which is scratch
-  and not a record. The checks covered leakage reports, predictions in all rounding modes, a
-  seeded Optuna search, a resumed real-data walk-forward, XGBoost parameter resolution, PBP box
-  scores, and a scratch 2019-2025 ETL rebuild. The rebuild matched to `2.2e-16`, never touching
-  `data/`. The old-code worktree used for the comparison has been removed.
+  `.venv/bin/pre-commit run --all-files` yourself before ending a turn: the Stop hook runs it,
+  and its `ruff --fix` rewrites the tree if you haven't.
+- The commit hook stashes unstaged files and lints against the committed `pyproject.toml`. So
+  commit ruff config changes before the code that depends on them.
 - Finding for roadmap step 4 (rebuild reproducibility): the ETL is not byte-deterministic even
-  on unchanged code. Two sources, shown by running the old code twice:
+  on unchanged code. Two sources:
   - `unique()` without `maintain_order` reorders rows within a date;
   - parallel float sums differ at about `1e-16` in the `sos_*` columns.
-- Every walk-forward checkpoint fingerprint changes with `0.36.0`: the fingerprinted
-  `nfl_predictor/ml/*.py` files changed, so the next walk-forward retrains from scratch.
-- Open question for the user: whether to merge `fix/weekly-dry-run` and then `refactor/ruff-all`
-  into `main`.
-
-## Earlier update (2026-09-29, branch `fix/weekly-dry-run`)
-
-- `fix/weekly-dry-run` (off `main`, not merged: must-ask) carries `0.35.2` (`weekly --dry-run`
-  skips the data refresh) and `0.35.3` (`leakage-audit` creates its report directory; `validate`
-  infers `all_data.csv`'s types from every row; local markdownlint skips `models/`). Each fix was
-  reviewed by a separate reviewer; `scripts/gate.sh` exit `0` (1199 passed).
-- Task 56.7 closed (user, 2026-09-28): `market_transform` stays `auto` after a two-seed tie
-  (`.agents/benchmarks.md`, "Market transform on against off"). Still to move to `ARCHIVE.md` at
-  the step-3 close-out, with the dry-run item.
-- Web live checks (`models/m60_web_live_checks/`, the job logs and `job.py`, the API submitter):
-  the server runs from `serve.sh` without `--reload`, `web/dist` rebuilt; a temporary admin
-  `agent_check` (user-approved) submits jobs and is deleted when the checks end. Passed:
-  `etl_full` (rewrote `data/`, user-approved; Week 3 complete, `week_04_games_to_predict.csv` has
-  16 games), `train` (`models/train_20260929_061431/`), `weekly_run` (dry run),
-  `walk_forward_backtest` (two seasons, progress per fold), and after `0.35.3` `leakage_audit`,
-  `validate_offline`, `validate_live`. Only walk-forward jobs report progress. Open: `predict`,
-  `power_rankings`, `shap_analysis` and the `lines_refresh`/`predict_week` chains write into the
-  active run (`weekly_2026_week_04_step3_test`); pinning the throwaway train run was denied by
-  the permission classifier, so the user decides (pin it, write into the merge-test run, or wait
-  for the real Week 4 run). `reports/` (the leakage report) is untracked, not gitignored.
+- Every walk-forward checkpoint fingerprint changes with `0.36.0`, so the next walk-forward
+  retrains from scratch.
+- Stop at a natural point well before the context fills, and rewrite this file. The user
+  prefers a fresh session to a compacted one.
 
 ## State (written 2026-09-28, after the 0.35.1 merge)
 
@@ -91,7 +198,7 @@ detection correctly targeted Week 3 and predicted that one game. Stage 1 took 67
 floor sigma was `13.2512` from 4975 earlier games. The ETL refresh rewrote `data/` as part of the
 run.
 
-## Next
+## Next (after the plan above)
 
 1. **Week 4 picks (before Thursday's game).** After the Monday game and the user's
    `data/qb_elos.csv` update from `../nfeloqb`, the user (or you, if asked) runs
@@ -101,9 +208,8 @@ run.
    false, and ranks 1..N.
 2. **Step-3 remainder**, then the step-3 close-out in `.agents/TODO.md` (move closed items to
    `ARCHIVE.md`):
-   - the `--dry-run` defect ("From the step-3 merge test");
    - task 56.7(b), measurement part: the remaining output-changing settings
-     (`wf_eval_last_n_seasons`, `market_transform`), each with a written hypothesis and decision
+     (`wf_eval_last_n_seasons`; `market_transform` is closed), with a written hypothesis and decision
      rule first; default changes are must-ask;
    - the Milestone 60 per-template live web checks (must-ask launches, on a server without
      `--reload`).

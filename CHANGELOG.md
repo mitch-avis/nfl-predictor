@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.37.0] - 2026-09-29
+
+### Changed
+
+- The package lives in `src/nfl_predictor/` and builds with the `uv_build` backend instead of
+  hatchling; `uv sync` installs it in editable mode from `src/`. Run `uv sync` after pulling,
+  and delete any leftover `nfl_predictor/__pycache__` directories at the repository root. Module
+  names and commands are unchanged (`nfl-predictor`, `python -m nfl_predictor`). A scratch ETL
+  rebuild for 2019-2025 matches the flat layout within the ETL's own run-to-run noise.
+- Tests import the installed package (pytest no longer adds the repository root to
+  `sys.path`), and the ruff, ty and CLI-surface-test paths follow the `src/` layout. The sdist
+  holds only the package, `pyproject.toml` and the README.
+- Every walk-forward checkpoint fingerprint changes, because `constants.py` (`ROOT_DIR`) and two
+  `ml/` docstrings changed; a rerun retrains from scratch. The floor-sigma reference runs are
+  read by path and are unaffected.
+
+### Added
+
+- Characterization tests pin `ROOT_DIR`, `DATA_PATH`, the checkpoint directory and the
+  weekly-run config default to the repository root, and show that the walk-forward fingerprint
+  hashes source file names and bytes, not their location.
+
+### Fixed
+
+- The release workflow's release-notes step imports the changelog helper from `src/`
+  (`PYTHONPATH: src`), so it still runs without installing the package.
+
 ## [0.36.0] - 2026-09-29
 
 ### Changed

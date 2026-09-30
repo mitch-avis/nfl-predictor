@@ -277,6 +277,42 @@ def test_fold_checkpoint_fingerprint_tracks_data_and_config() -> None:
     )
 
 
+def test_fold_checkpoint_fingerprint_sources_are_the_package_modelling_files() -> None:
+    """The fingerprint reads the package's ``ml`` modules, ``constants`` and ``ml_model``."""
+    package_dir = Path(walk_forward.__file__).resolve().parents[1]
+    sources = walk_forward._modelling_source_files()
+
+    assert [path.name for path in sources] == [
+        *sorted(path.name for path in (package_dir / "ml").glob("*.py")),
+        "constants.py",
+        "ml_model.py",
+    ]
+    assert all(path.resolve().is_relative_to(package_dir) for path in sources)
+
+
+def test_fold_checkpoint_fingerprint_hashes_source_names_and_bytes_not_locations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Identical source files in another directory give the same fingerprint."""
+    df = _fixture_df()
+    config = _base_config()
+    baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
+    sources = walk_forward._modelling_source_files()
+    copies = []
+    for index, path in enumerate(sources):
+        target = tmp_path / "elsewhere" / str(index) / path.name
+        target.parent.mkdir(parents=True)
+        target.write_bytes(path.read_bytes())
+        copies.append(target)
+    monkeypatch.setattr(walk_forward, "_modelling_source_files", lambda: copies)
+
+    assert walk_forward.fold_checkpoint_fingerprint(df, config) == baseline
+
+    copies[0].write_bytes(copies[0].read_bytes() + b"\n")
+
+    assert walk_forward.fold_checkpoint_fingerprint(df, config) != baseline
+
+
 def _with_device(
     config: walk_forward.WalkForwardConfig, device: str | None
 ) -> walk_forward.WalkForwardConfig:

@@ -1,6 +1,6 @@
 # NFL Predictor web UI
 
-A React single-page app served by the FastAPI backend in `nfl_predictor/api/`. It shows the
+A React single-page app served by the FastAPI backend in `src/nfl_predictor/api/`. It shows the
 project's outputs (predictions, power rankings, betting edges, data and model status) and, for
 admins, runs the project's jobs.
 
@@ -44,7 +44,7 @@ over Tailscale. Set `NFLP_COOKIE_SECURE=1` when the app is behind HTTPS.
 
 ## Configuration
 
-Every setting is an `NFLP_`-prefixed environment variable (see `nfl_predictor/api/settings.py`):
+Every setting is an `NFLP_`-prefixed environment variable (see `src/nfl_predictor/api/settings.py`):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

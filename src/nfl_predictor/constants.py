@@ -7,7 +7,7 @@ modeling, and reporting code stay aligned.
 from pathlib import Path
 
 # Project directory configurations
-ROOT_DIR = Path(__file__).parent.parent
+ROOT_DIR = Path(__file__).parents[2]
 DATA_PATH = ROOT_DIR / "data"
 NFLREADPY_CACHE_DIR = DATA_PATH / "cache" / "nflreadpy"
 
@@ -43,7 +43,7 @@ SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for 
 
 # The spread (sigma) of the probability floor, Phi(predicted margin / sigma). For a game in
 # (season, week) it is the root-mean-square out-of-fold margin error of every prediction strictly
-# before that week (`nfl_predictor/ml/floor_sigma.py`). Until that pool spans this many earlier
+# before that week (`src/nfl_predictor/ml/floor_sigma.py`). Until that pool spans this many earlier
 # seasons (any weeks of them; the season's own earlier weeks do not count) the floor uses
 # SCORE_DIFF_STD_DEV instead, and records that it fell back.
 FLOOR_SIGMA_MIN_POOL_SEASONS = 3

@@ -1,6 +1,6 @@
 """Pure market-math helpers shared by the predictions and betting readers.
 
-These mirror the formulas in ``nfl_predictor/reporting/betting_report.py`` and the betting
+These mirror the formulas in ``src/nfl_predictor/reporting/betting_report.py`` and the betting
 workbook: American moneyline to implied probability, vig removal, and the action ladder.
 """
 

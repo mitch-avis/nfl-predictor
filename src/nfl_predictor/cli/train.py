@@ -2,7 +2,7 @@
 
 ``nfl-predictor train`` and ``nfl-predictor predict`` (which requires ``--model-in``) run this
 module's ``main``, as does ``python -m nfl_predictor.ml_model``. It lives outside
-``nfl_predictor/ml/`` so that editing the command line never changes a walk-forward
+``src/nfl_predictor/ml/`` so that editing the command line never changes a walk-forward
 checkpoint fingerprint.
 """
 

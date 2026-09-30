@@ -36,10 +36,10 @@ the session that delegated the review.
    behavior-preserving move has characterization tests. Judge this from the diff; when you cannot
    tell, report that as a finding instead of guessing.
 3. Re-run `VIRTUAL_ENV="$PWD/.venv" scripts/gate.sh` in the worktree, with `--web` when `web/` or
-   `nfl_predictor/api/` changed, and report its summary. Do not rely on the implementer's run.
+   `src/nfl_predictor/api/` changed, and report its summary. Do not rely on the implementer's run.
 4. Review the diff with the code-review skill: correctness first, then data leakage (`AGENTS.md`,
    "No data leakage"), tests, living docs, commit hygiene, and whether it touches a fingerprinted
-   file (`nfl_predictor/ml/*.py`, `constants.py`, `ml_model.py`), which invalidates every
+   file (`src/nfl_predictor/ml/*.py`, `constants.py`, `ml_model.py`), which invalidates every
    walk-forward checkpoint.
 
 ## Reviewing a walk-forward run

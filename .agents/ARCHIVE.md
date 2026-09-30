@@ -1346,8 +1346,8 @@ Acceptance:
 ## Milestone 56 (partial) - Weekly orchestration residuals
 
 Task 56.4 completed 2026-09-11 (version `0.6.1`); task 56.2 completed 2026-09-21 (version
-`0.13.0`); task 56.5 completed 2026-09-28 (version `0.32.0`); tasks 56.3, 56.6 and 56.7 stay in
-`TODO.md`.
+`0.13.0`); tasks 56.5 and 56.7 completed 2026-09-28 (versions `0.32.0` and `0.23.0`-`0.32.0`);
+tasks 56.3 and 56.6 stay in `TODO.md`.
 
 ### 56.5 - How production probabilities are formed (version `0.32.0`, closed 2026-09-28)
 
@@ -1360,6 +1360,34 @@ and uncertainty-aware probabilities are retired (`0.32.0`). The confirmation on 
 2007-2025, but the same blend built from the opening spread does not, so its gain rests on lines
 that do not exist at pick time. The user kept the floor; the question returns with task 56.6(d)
 (anchoring to pick-time lines, roadmap step 4).
+
+### 56.7 - One production configuration (versions `0.23.0`-`0.32.0`, closed 2026-09-28)
+
+Found 2026-09-24: no weekly run read `config/weekly_run.yaml`, so production ran on the code
+defaults, and the YAML's non-default values had no recorded measurement behind them.
+
+- (a) `0.23.0`, in the Milestone 60 front-door chunk: the weekly run reads the YAML without
+  `--config`, and the file holds today's code defaults (a bare `off` quoted as `"off"`), so
+  production output did not change. The user stressed that the settings are still to be
+  optimized.
+- (b) Done 2026-09-28. `wf_eval_last_n_seasons` never reaches the submitted probabilities: the
+  final fit takes its tree settings from the config, and the reference runs cover every season
+  before the current one in the sigma pool, so stage 1 only fills the current season's weeks
+  (`weekly_run/pipeline.py`, `_production_floor_sigma`). It stays `3`. `market_transform`
+  `auto` and `true` are the same run whenever lines exist; on against off was measured on two
+  seeds (`.agents/benchmarks.md`, "Market transform on against off"), a tie, and the user kept
+  `auto`. The calibration hold-out is retired (`0.33.0`). The settings-versus-production
+  section is in every backtest report.
+- (c) `0.32.0`: the weekly stage-1 re-selection is retired; the weekly run walks forward the
+  one production configuration, and `wf_market_prob_source` and
+  `wf_market_prob_blend_method` no longer exist.
+
+### Weekly `--dry-run` skips the data refresh (version `0.35.2`, 2026-09-28)
+
+Found in the step-3 merge test: `nfl-predictor weekly --dry-run` ran the whole ETL refresh
+(about 10 minutes, rewriting `data/`) before printing its plan, although its help says "Print
+planned outputs without running stages". The refresh is now skipped under `--dry-run` and logged
+as planned (`tests/test_weekly_run.py`); a dry run still creates the run and output directories.
 
 ### 56.2 - How postseason games enter evaluation, training and the rankings (version `0.13.0`)
 

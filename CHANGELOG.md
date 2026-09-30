@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.37.1] - 2026-09-29
+
+### Changed
+
+- The license is declared as the SPDX expression `license = "MIT"` (PEP 639), and the deprecated
+  license classifier is dropped, so `uv_build` no longer warns on every build. Only the wheel
+  metadata changes.
+- Git ignores `reports/`, where the leakage-audit job writes its report by default.
+
 ## [0.37.0] - 2026-09-29
 
 ### Changed

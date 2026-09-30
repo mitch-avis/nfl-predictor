@@ -91,7 +91,8 @@ def main(argv: list[str] | None = None) -> int:
         log.error("Missing data file: %s", data_path)
         return 2
 
-    df = pl.read_csv(data_path)
+    # Unplayed games come first and have empty scores, so infer types from every row.
+    df = pl.read_csv(data_path, infer_schema_length=None)
     if args.live:
         return _validate_live(df)
     return _validate_offline(df)

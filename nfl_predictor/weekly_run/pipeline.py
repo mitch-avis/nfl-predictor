@@ -269,7 +269,10 @@ def main() -> int:
     config.apply_run_defaults(args)
 
     if not args.skip_data_refresh:
-        _refresh_data(args.data_collection_args)
+        if args.dry_run:
+            log.info("Dry-run: would refresh data before running the stages")
+        else:
+            _refresh_data(args.data_collection_args)
 
     if not args.data_path.exists():
         raise FileNotFoundError(f"Missing dataset: {args.data_path}")

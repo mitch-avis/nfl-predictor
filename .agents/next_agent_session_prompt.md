@@ -5,6 +5,27 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
+## Update (2026-09-29, branch `fix/weekly-dry-run`)
+
+- `fix/weekly-dry-run` (off `main`, not merged: must-ask) carries `0.35.2` (`weekly --dry-run`
+  skips the data refresh) and `0.35.3` (`leakage-audit` creates its report directory; `validate`
+  infers `all_data.csv`'s types from every row; local markdownlint skips `models/`). Each fix was
+  reviewed by a separate reviewer; `scripts/gate.sh` exit `0` (1199 passed).
+- Task 56.7 closed (user, 2026-09-28): `market_transform` stays `auto` after a two-seed tie
+  (`.agents/benchmarks.md`, "Market transform on against off"). Still to move to `ARCHIVE.md` at
+  the step-3 close-out, with the dry-run item.
+- Web live checks (`models/m60_web_live_checks/`, the job logs and `job.py`, the API submitter):
+  the server runs from `serve.sh` without `--reload`, `web/dist` rebuilt; a temporary admin
+  `agent_check` (user-approved) submits jobs and is deleted when the checks end. Passed:
+  `etl_full` (rewrote `data/`, user-approved; Week 3 complete, `week_04_games_to_predict.csv` has
+  16 games), `train` (`models/train_20260929_061431/`), `weekly_run` (dry run),
+  `walk_forward_backtest` (two seasons, progress per fold), and after `0.35.3` `leakage_audit`,
+  `validate_offline`, `validate_live`. Only walk-forward jobs report progress. Open: `predict`,
+  `power_rankings`, `shap_analysis` and the `lines_refresh`/`predict_week` chains write into the
+  active run (`weekly_2026_week_04_step3_test`); pinning the throwaway train run was denied by
+  the permission classifier, so the user decides (pin it, write into the merge-test run, or wait
+  for the real Week 4 run). `reports/` (the leakage report) is untracked, not gitignored.
+
 ## State (written 2026-09-28, after the 0.35.1 merge)
 
 - `main` is at `0.35.1` and pushed to `origin` with the user's approval on 2026-09-28 (pushing

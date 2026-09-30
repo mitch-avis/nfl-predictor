@@ -491,3 +491,27 @@ reviewer); reproduce with `.venv/bin/python models/step3_sigma/independent_resco
 Adopted by the user on 2026-09-28 as `0.35.0`: the floor uses the `expanding` sigma
 (`nfl_predictor/ml/floor_sigma.py`); production pools the GPU reference runs with stage 1's weeks
 the reference lacks (2026 week 1 sigma `13.248`, both seeds averaged per game).
+
+## Market transform on against off (2026-09-28, task 56.7(b))
+
+`models/step3_market_transform/`: the GPU reference's command on code `368570c` (`0.35.1`),
+2007-2025 from week 1 (328 folds, 4943 games), seeds `42` and `7`, `--market-transform`
+(`r_seed42`, `r_seed7`) against `--no-market-transform` (`t_seed42`, `t_seed7`); every fold on
+the GPU, 200 trees in every head. Off minus on, all weeks, both seeds averaged per game:
+deterministic Brier `+0.00003` `[-0.00022, +0.00028]`, log loss `-0.00001`
+`[-0.00056, +0.00058]`, pick accuracy `-0.0019` `[-0.0043, +0.0005]`, pool points `-31.0`
+`[-85.5, +20.0]`, margin MAE `+0.0013` `[-0.0093, +0.0120]`, total MAE `+0.0024`
+`[-0.0087, +0.0135]`. No two-seed interval excludes zero in any window (all weeks, week 1,
+week 2, weeks 3-18); on ranks first on every all-weeks column but log loss (by `0.00001`). The
+Brier difference is about a seventeenth of the seed-7-minus-seed-42 move. Rules:
+`HYPOTHESIS.md` there; second key `REVIEW.md` there (a separate reviewer); reproduce with
+`.venv/bin/python models/step3_market_transform/independent_rescore.py`.
+
+Decided by the user on 2026-09-28: a tie, `market_transform` stays `auto` (on whenever lines
+exist).
+
+The reference re-runs `r_seed42`/`r_seed7` have the GPU reference's margins and totals bit for
+bit (`l1_seed42`/`l2_seed7`), which confirms that `0.34.1` left walk-forward predictions
+unchanged. Their probabilities differ (up to `0.017`) because the GPU reference's recorded
+Brier and log loss were scored at the fixed sigma, before `0.35.0`; `r_seed42`/`r_seed7` are the
+reference's current-code equivalent (the pooled sigma, checkpoints named in `REVIEW.md`).

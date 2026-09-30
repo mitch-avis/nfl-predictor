@@ -442,47 +442,6 @@ Formerly Milestone 41.
       - Keep refreshes manual copies, like `data/qb_elos.csv` from `../nfeloqb`; an automated
         fetch from GitHub would be a new network dependency (must-ask).
 
-- [ ] 56.7 (step 3, with 56.5) One production configuration, every setting decided once. Found
-      2026-09-24: no weekly run reads `config/weekly_run.yaml` (it needs `--config`, and no
-      launcher passes it), so production runs on the code defaults. The YAML's non-default values
-      date from its first version (January 2026, commit `83ba2a7`, reformatted in `67d13e2`) and
-      no measurement behind them is recorded. The settings fall into three groups:
-      - Change nothing a run produces: `wf_checkpoint_per_fold` (resumability only), the thread
-        counts, `tune_timeout` / `tune_cv_splits` (tuning is off), `postseason_weight`
-        (postseason training is off), `score_rounding` (display only; it never touches
-        probabilities or picks).
-      - Change numbers slightly, already decided: `xgb_device` / `xgb_tree_method` (the GPU for
-        everything, task 55.4). `train_early_stopping_rounds` is recorded only, because
-        in-season fits run the full tree budget.
-      - Change which probabilities are submitted, to be measured here: `wf_eval_last_n_seasons`
-        (how many seasons stage 1 scores; the count includes the unscorable current season, so
-        the default `3` scores two), the calibration hold-out (retired in `0.33.0`: the final
-        fit trains on every completed game, like the benchmark), `wf_market_prob_source`
-        (`raw` against `novig` moneylines) and
-        `wf_market_prob_blend_method` (`prob` against `logit`), plus `market_transform`
-        (`auto`, which is on whenever lines exist, against `true`).
-      Work: (a) as a Milestone 60 behavior-preserving move, make the weekly run read
-      `config/weekly_run.yaml` by default and rewrite the YAML to today's code defaults (so no
-      output changes), quoting `off` as `"off"`: YAML reads a bare `off` as the boolean
-      `false`, a latent bug in the current file; (b) here in step 3, decide the output-changing
-      group with the measures of success under "Roadmap Status", on six seasons and two seeds,
-      against the benchmark configuration, so that production and benchmark share every setting
-      (rule 11), and add a "settings versus production" section to the standard walk-forward
-      report (every setting where a run differs from the production weekly run; moved here from
-      task 55.6 by the user on 2026-09-27); (c) consider retiring the weekly stage-1
-      re-selection altogether. (Done in `0.32.0`: retired; the weekly run walks forward
-      the one production configuration. `wf_market_prob_source` and
-      `wf_market_prob_blend_method` no longer exist.) Once 56.5
-      fixes the probability path by evidence, re-choosing among near-identical candidates each
-      week only adds noise (Week 3's two runs chose `none`, then `elo`, a day apart) and costs
-      most of the run's time. Changing a default is must-ask.
-      Decided by the user 2026-09-24: (a) goes ahead as specified, in the 60.6 front-door chunk;
-      landed in `0.23.0` (the weekly run reads the YAML without `--config`, and the file holds the
-      code defaults, so production output is unchanged). The rewritten YAML only records today's
-      defaults; the user stressed that its settings are still to be optimized, which is part (b)
-      here and task 55.4, not something the rewrite settles. How many seasons stage 1 scores is
-      settled here too (with (c)), not by widening the window now.
-
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.
 
@@ -560,11 +519,15 @@ Each group names the archived milestone it came from; the milestone's full recor
 
 ### From the step-3 merge test (2026-09-28)
 
-- [ ] (step 3) `nfl-predictor weekly --dry-run` runs the whole ETL refresh (about 10 minutes,
-      rewriting `data/`) before printing its plan, although its help says "Print planned outputs
-      without running stages". Found when a dry run on `0.35.0` started collecting data. Either
-      skip the refresh under `--dry-run` or say in the help that the refresh runs; the help text is
-      the documented contract, so the likely fix is to skip it (with a test).
+- [ ] (step 4) Three reads of the data CSVs let Polars guess column types from the first 100
+      rows (found by the `0.35.3` implementer, not fixed): `reporting/power_rankings.py`
+      (`_predict_future_games`, `pl.read_csv(data_ml, columns=usecols)`), which could fail if a
+      selected column is null for the first 100 rows and typed later;
+      `week_builder.py` (reads only `season`, `week` and the scores, which it tests for null, so
+      judged safe); and `data_collection.load_dataframe` (called only from tests). The
+      `power_rankings` web template ran it live on 2026-09-29 without an error. A crash is a fix
+      under `AGENTS.md` rule 2 (failing test first); otherwise it belongs with step 4's rebuild
+      reproducibility work.
 
 ### From Milestone 60 (CLI and entrypoint consolidation, closed 2026-09-25)
 
@@ -578,6 +541,19 @@ Each group names the archived milestone it came from; the milestone's full recor
       `etl_full` and `lines_refresh` (rewrite `data/`), `predict`, `power_rankings` and
       `shap_analysis` (overwrite files in the active run directory), `weekly_run` and
       `walk_forward_backtest` (long runs). Step 3 runs a weekly run and walk-forwards anyway.
+      Narrowed (2026-09-29): all 12 templates were launched live against a server started with
+      `nfl-predictor web` without `--reload`, on `fix/weekly-dry-run` (`0.35.2`-`0.35.3`), and
+      every one succeeded with progress reported, the two chains (`predict_week` and
+      `lines_refresh`, each into `predict`) included. The jobs were submitted through the API the
+      UI calls (`POST /api/jobs`, `models/m60_web_live_checks/job.py`, as a temporary admin
+      account, since deleted), not by clicking in the browser; whether that meets "from the web
+      UI" is on the user's question list. `leakage_audit`, `validate_offline` and `validate_live`
+      failed on the first launch and passed after the `0.35.3` fixes. The five that write into the
+      active run (`predict`, `power_rankings`, `shap_analysis` and the two chains) ran with the
+      throwaway `models/train_20260929_061431/` pinned, then unpinned. Logs:
+      `models/m60_web_live_checks/*.log`; `lines_refresh` changed one moneyline row in each of
+      `data/all_data.csv`, `data/all_data_ml.csv` and `data/predict/week_04_games_to_predict.csv`.
+
 - [x] (step 3) Power rankings from a `blend` run have never worked. Resolved in `0.32.0`: the
       `blend` kind is retired (task 56.5), and a blend run is refused with the reason. A blend
       model (`train --model-kind blend`: the team model and the market line through a ridge

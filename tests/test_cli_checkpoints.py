@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from nfl_predictor.cli import checkpoints
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import pytest
 
 
 def _layout(tmp_path: Path) -> tuple[Path, Path]:

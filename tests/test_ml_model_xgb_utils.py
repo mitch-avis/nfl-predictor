@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
+import pandas as pd
 import pytest
 import xgboost as xgb
-from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from sklearn.compose import ColumnTransformer
 
 # The suite-wide fixture replaces the module attribute; keep the real cached probe for its test.
 real_xgb_cuda_usable = xgb_utils.xgb_cuda_usable
@@ -46,23 +50,29 @@ class _DummyMatrixPreprocessor:
 def test_fit_transform_matrix_delegates_to_preprocessor() -> None:
     """fit-transform wrapper preserves the preprocessor result and input."""
     preprocessor = _DummyMatrixPreprocessor()
-    payload = object()
+    payload = pd.DataFrame({"feat": [1.0, 2.0]})
 
-    result = xgb_utils._fit_transform_matrix(cast(ColumnTransformer, preprocessor), payload)
+    result = xgb_utils.fit_transform_matrix(cast("ColumnTransformer", preprocessor), payload)
 
     assert result.shape == (2, 1)
-    assert preprocessor.fit_inputs == [payload]
+    assert preprocessor.fit_inputs[0] is payload
 
 
 def test_transform_matrix_delegates_to_preprocessor() -> None:
     """Transform wrapper preserves the preprocessor result and input."""
     preprocessor = _DummyMatrixPreprocessor()
-    payload = object()
+    payload = pd.DataFrame({"feat": [1.0, 2.0, 3.0]})
 
-    result = xgb_utils._transform_matrix(cast(ColumnTransformer, preprocessor), payload)
+    result = xgb_utils.transform_matrix(cast("ColumnTransformer", preprocessor), payload)
 
     assert result.shape == (3, 1)
-    assert preprocessor.transform_inputs == [payload]
+    assert preprocessor.transform_inputs[0] is payload
+
+
+def test_a_preprocessor_output_that_is_not_a_matrix_is_refused() -> None:
+    """Anything but a dense array or a sparse matrix is a bug, not a matrix to train on."""
+    with pytest.raises(TypeError, match="got list"):
+        xgb_utils._as_matrix([[1.0]])
 
 
 def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
@@ -75,7 +85,7 @@ def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
     monkeypatch.setattr(xgb_utils, "_xgb_param_supported", fake_supported)
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
-    params = xgb_utils._resolve_xgb_params(
+    params = xgb_utils.resolve_xgb_params(
         {"max_depth": 3},
         tree_method="gpu",
         device="auto",
@@ -208,13 +218,13 @@ def test_predict_xgb_uses_best_iteration() -> None:
 
     data = np.zeros((2, 1))
     model = DummyModel(best_iteration=3)
-    preds = xgb_utils._predict_xgb(cast(xgb.XGBRegressor, model), data)
+    preds = xgb_utils.predict_xgb(cast("xgb.XGBRegressor", model), data)
 
     assert preds.shape == (2,)
     assert model.get_booster().calls == [(0, 4)]
 
     model = DummyModel(best_iteration=None)
-    preds = xgb_utils._predict_xgb(cast(xgb.XGBRegressor, model), data)
+    preds = xgb_utils.predict_xgb(cast("xgb.XGBRegressor", model), data)
     assert preds.shape == (2,)
     assert model.get_booster().calls == [None]
 
@@ -230,7 +240,7 @@ class _ProbeBooster:
         return json.dumps({"learner": {"generic_param": {"device": self.device}}})
 
 
-def _fake_build_info(use_cuda: bool) -> Callable[[], dict[str, Any]]:
+def _fake_build_info(*, use_cuda: bool) -> Callable[[], dict[str, Any]]:
     """Return a stand-in for ``xgb.build_info`` reporting whether the build has CUDA."""
     return lambda: {"USE_CUDA": use_cuda}
 
@@ -250,10 +260,11 @@ def test_detect_xgb_cuda_skips_the_probe_when_the_build_lacks_cuda(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A CPU-only XGBoost build reports no GPU without attempting a fit."""
-    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(False))
+    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=False))
 
     def _no_fit(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("the probe fit must not run on a CPU-only build")
+        msg = "the probe fit must not run on a CPU-only build"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(xgb_utils.xgb, "train", _no_fit)
 
@@ -262,10 +273,10 @@ def test_detect_xgb_cuda_skips_the_probe_when_the_build_lacks_cuda(
 
 @pytest.mark.parametrize(("probe_device", "expected"), [("cuda:0", True), ("cpu", False)])
 def test_detect_xgb_cuda_reads_the_device_the_probe_fit_used(
-    monkeypatch: pytest.MonkeyPatch, probe_device: str, expected: bool
+    monkeypatch: pytest.MonkeyPatch, probe_device: str, *, expected: bool
 ) -> None:
     """With no visible GPU, XGBoost moves a CUDA fit to the CPU instead of raising."""
-    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(True))
+    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=True))
     requested: list[dict[str, Any]] = []
 
     def _fake_train(params: dict[str, Any], *_args: object, **_kwargs: object) -> _ProbeBooster:
@@ -282,10 +293,11 @@ def test_detect_xgb_cuda_reports_no_gpu_when_the_probe_fit_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An XGBoost error from the probe fit means the GPU is not usable."""
-    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(True))
+    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=True))
 
     def _failing_train(*_args: object, **_kwargs: object) -> object:
-        raise xgb.core.XGBoostError("CUDA driver version is insufficient")
+        msg = "CUDA driver version is insufficient"
+        raise xgb.core.XGBoostError(msg)
 
     monkeypatch.setattr(xgb_utils.xgb, "train", _failing_train)
 
@@ -314,7 +326,7 @@ def test_xgb_cuda_usable_probes_once_per_process(monkeypatch: pytest.MonkeyPatch
 @pytest.mark.parametrize(("usable", "expected"), [(True, "cuda"), (False, "cpu")])
 @pytest.mark.parametrize("requested", ["auto", None])
 def test_resolve_xgb_device_auto_prefers_a_usable_gpu(
-    monkeypatch: pytest.MonkeyPatch, requested: str | None, usable: bool, expected: str
+    monkeypatch: pytest.MonkeyPatch, requested: str | None, *, usable: bool, expected: str
 ) -> None:
     """``auto`` (and no device at all) resolves to CUDA when a GPU is usable, else the CPU."""
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
@@ -328,7 +340,8 @@ def test_resolve_xgb_device_keeps_an_explicit_cpu_without_probing(
     """An explicit CPU request never looks for a GPU."""
 
     def _no_probe() -> bool:
-        raise AssertionError("an explicit cpu request must not probe for a GPU")
+        msg = "an explicit cpu request must not probe for a GPU"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", _no_probe)
 
@@ -358,12 +371,12 @@ def test_resolve_xgb_device_moves_an_explicit_cuda_to_the_cpu_with_a_warning(
 
 @pytest.mark.parametrize(("usable", "expected"), [(True, "cuda"), (False, "cpu")])
 def test_resolve_xgb_params_defaults_to_the_auto_device(
-    monkeypatch: pytest.MonkeyPatch, usable: bool, expected: str
+    monkeypatch: pytest.MonkeyPatch, *, usable: bool, expected: str
 ) -> None:
     """Params resolved without a device name the concrete device ``auto`` picked."""
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
 
-    params = xgb_utils._resolve_xgb_params({"max_depth": 3})
+    params = xgb_utils.resolve_xgb_params({"max_depth": 3})
 
     assert params["device"] == expected
     if usable:
@@ -376,7 +389,7 @@ def test_resolve_xgb_params_resolves_an_auto_device_override(
     """A device passed through the overrides is resolved like the device argument."""
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
-    params = xgb_utils._resolve_xgb_params({"max_depth": 3}, overrides={"device": "auto"})
+    params = xgb_utils.resolve_xgb_params({"max_depth": 3}, overrides={"device": "auto"})
 
     assert params["device"] == "cuda"
 
@@ -388,7 +401,7 @@ def test_resolve_xgb_params_gpu_tree_method_without_a_gpu_uses_the_cpu(
     _reset_runtime_state()
     monkeypatch.setattr(xgb_utils, "_xgb_param_supported", lambda p: p in {"device", "predictor"})
 
-    params = xgb_utils._resolve_xgb_params({"max_depth": 3}, tree_method="gpu", device="auto")
+    params = xgb_utils.resolve_xgb_params({"max_depth": 3}, tree_method="gpu", device="auto")
 
     assert params["device"] == "cpu"
     assert params["tree_method"] == "hist"
@@ -450,12 +463,12 @@ def test_coerce_tree_method_on_error_replaces_a_gpu_tree_method_on_cuda() -> Non
 
 @pytest.mark.parametrize(("usable", "expected"), [(True, "cuda"), (False, "cpu")])
 def test_resolve_xgb_params_maps_a_gpu_tree_method_override_to_hist(
-    monkeypatch: pytest.MonkeyPatch, usable: bool, expected: str
+    monkeypatch: pytest.MonkeyPatch, *, usable: bool, expected: str
 ) -> None:
     """A ``gpu_hist`` override asks for CUDA with ``hist``, like the ``tree_method`` argument."""
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
 
-    params = xgb_utils._resolve_xgb_params(
+    params = xgb_utils.resolve_xgb_params(
         {"max_depth": 3}, overrides={"tree_method": "gpu_hist", "device": "auto"}
     )
 
@@ -468,15 +481,15 @@ def test_a_gpu_hist_override_fits(monkeypatch: pytest.MonkeyPatch) -> None:
     from nfl_predictor.ml import ml_model_core
 
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
-    params = xgb_utils._resolve_xgb_params(
+    params = xgb_utils.resolve_xgb_params(
         {"n_estimators": 3, "max_depth": 2, "n_jobs": 1},
         overrides={"tree_method": "gpu_hist", "device": "auto"},
     )
     rng = np.random.default_rng(5)
     x = rng.normal(size=(40, 2))
 
-    margin_model, _total_model = ml_model_core._fit_margin_total_models(
-        x, x[:, 0], 40.0 + x[:, 1], params
+    margin_model, _total_model = ml_model_core.fit_margin_total_models(
+        ml_model_core.FitData(x, x[:, 0], 40.0 + x[:, 1]), params
     )
 
     assert margin_model.get_params()["tree_method"] == "hist"

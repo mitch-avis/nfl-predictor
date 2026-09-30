@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
-import pytest
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import polars_utils
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import pytest
 
 
 def _dropbacks(season: int, week: int, team: str, passer: str, count: int) -> list[dict[str, Any]]:
@@ -89,7 +92,7 @@ def test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Without an explicit path, the identity map comes from ``DATA_PATH/meta_data.csv``."""
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
     _identity_file(tmp_path)
     in_memory = pl.DataFrame(
@@ -121,7 +124,8 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
 
     def fail_load_pbp(*_args: Any, **_kwargs: Any) -> pl.DataFrame:
         """Fail if play-by-play is requested."""
-        raise AssertionError("load_pbp should not be called")
+        msg = "load_pbp should not be called"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(polars_utils, "load_pbp", fail_load_pbp)
     games = pl.DataFrame({"game_id": ["g1"], "season": [2001], "week": [1]})

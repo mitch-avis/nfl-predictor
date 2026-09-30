@@ -284,6 +284,20 @@ settled in task 56.5). Deleted at the close as spent (all in git history):
 proposal (its section 8 defines how success is measured from step 3 on), the scripts-coverage
 measurement and the two verification scripts.
 
+### Leftovers resolved (step 3, 2026-09-28 and 2026-09-29)
+
+- Every web job template launched live (accepted by the user 2026-09-29). All 12 templates ran
+  against a server started with `nfl-predictor web` without `--reload`, on `fix/weekly-dry-run`
+  (`0.35.2`-`0.35.3`), and each succeeded with progress reported, including both chains
+  (`predict_week` and `lines_refresh`, each into `predict`). The jobs were submitted through the
+  API the UI calls (`POST /api/jobs`, `models/m60_web_live_checks/job.py`) as a temporary admin
+  account, since deleted; the user accepted this as meeting "from the web UI". `leakage_audit`,
+  `validate_offline` and `validate_live` failed on the first launch and passed after the `0.35.3`
+  fixes. The five that write into the active run ran with the throwaway
+  `models/train_20260929_061431/` pinned. Logs: `models/m60_web_live_checks/*.log`.
+- Power rankings from a `blend` run: resolved in `0.32.0` by retiring the `blend` kind (task
+  56.5); a blend run is refused with the reason.
+
 ## Milestone 54 - PBP-first team-game skeleton and situational stats
 
 Formerly Milestone 48, widened on 2026-09-18 by the user's decision after the audit found that

@@ -41,10 +41,7 @@ def test_the_retired_blend_kind_is_rejected_with_a_reason(
     argv = ["--model-kind", given]
     monkeypatch.setattr(sys, "argv", ["prog", *argv])
     with pytest.raises(SystemExit):
-        if module is train:
-            train._parse_args()
-        else:
-            rankings._parse_args([*RANKINGS_ARGV, *argv])
+        _parse_args(module, argv)
     assert "retired" in capsys.readouterr().err
 
 
@@ -54,7 +51,12 @@ def test_an_unknown_model_kind_is_rejected(module: object, monkeypatch: pytest.M
     argv = ["--model-kind", "score"]
     monkeypatch.setattr(sys, "argv", ["prog", *argv])
     with pytest.raises(SystemExit):
-        if module is train:
-            train._parse_args()
-        else:
-            rankings._parse_args([*RANKINGS_ARGV, *argv])
+        _parse_args(module, argv)
+
+
+def _parse_args(module: object, argv: list[str]) -> None:
+    """Parse ``argv`` with the module's own parser (train reads it from ``sys.argv``)."""
+    if module is train:
+        train._parse_args()
+    else:
+        rankings._parse_args([*RANKINGS_ARGV, *argv])

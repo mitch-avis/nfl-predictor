@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
 
 from nfl_predictor import lines_refresh
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 DATASET_COLUMNS = [
     "game_id",

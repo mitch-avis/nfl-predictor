@@ -8,10 +8,12 @@ import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
 import xgboost as xgb
+from tests.api import factories
 
 from nfl_predictor import data_collection
 from nfl_predictor.api.readers import cache as api_cache
@@ -21,13 +23,16 @@ from nfl_predictor.ml import (
     artifacts,
     floor_sigma,
     ml_model_core,
+    ml_model_training,
     ml_model_xgb_utils,
     walk_forward,
 )
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import inputs, pipeline, stage1
-from tests.api import factories
+
+if TYPE_CHECKING:
+    from nfl_predictor.ml.ml_model_training import TrainingOptions
 
 
 @pytest.fixture(autouse=True)
@@ -53,16 +58,12 @@ def test_load_config_json(tmp_path: Path) -> None:
     assert payload["wf_eval_last_n_seasons"] == 4
 
 
-def test_load_config_yaml_optional(tmp_path: Path) -> None:
-    """YAML configs should parse when PyYAML is available or raise a clear error."""
+def test_load_config_parses_yaml(tmp_path: Path) -> None:
+    """YAML configs parse into a mapping."""
     config_path = tmp_path / "weekly.yaml"
     config_path.write_text("wf_eval_last_n_seasons: 3\n", encoding="utf-8")
-    try:
-        payload = run_config._load_config(config_path)
-    except RuntimeError as exc:
-        assert "PyYAML" in str(exc)
-    else:
-        assert payload["wf_eval_last_n_seasons"] == 3
+    payload = run_config._load_config(config_path)
+    assert payload["wf_eval_last_n_seasons"] == 3
 
 
 def test_shipped_weekly_run_config_matches_approved_defaults() -> None:
@@ -104,7 +105,7 @@ def test_resolve_predict_path_prefers_latest_week(tmp_path: Path) -> None:
     week_01.write_text("season,week\n2025,1\n", encoding="utf-8")
     week_10.write_text("season,week\n2025,10\n", encoding="utf-8")
 
-    resolved = inputs._resolve_predict_path(None, tmp_path)
+    resolved = inputs.resolve_predict_path(None, tmp_path)
     assert resolved == week_10
 
 
@@ -117,7 +118,7 @@ def test_resolve_predict_path_prefers_latest_season(tmp_path: Path) -> None:
     week_22.write_text("season,week\n2025,22\n", encoding="utf-8")
     week_01.write_text("season,week\n2026,1\n", encoding="utf-8")
 
-    resolved = inputs._resolve_predict_path(None, tmp_path)
+    resolved = inputs.resolve_predict_path(None, tmp_path)
     assert resolved == week_01
 
 
@@ -185,27 +186,32 @@ def test_stage1_walks_forward_once_on_the_production_configuration(
 
     summary = stage1.evaluate_production(
         pd.DataFrame(),
-        run_dir=run_dir,
-        resume=True,
-        dataset_fingerprint={"sha256": "fp"},
-        wf_run_fingerprint="wf123",
-        checkpoint_per_fold=False,
-        eval_last_n_seasons=3,
-        wf_start_week=3,
-        include_postseason=False,
-        exclude_incomplete_seasons=False,
-        recency_half_life_seasons=None,
-        market_mode="hybrid",
-        xgb_params_overrides={"n_estimators": 20},
-        include_quantiles=False,
+        stage1.ProductionOptions(
+            eval_last_n_seasons=3,
+            wf_start_week=3,
+            include_postseason=False,
+            exclude_incomplete_seasons=False,
+            recency_half_life_seasons=None,
+            market_mode="hybrid",
+            xgb_params_overrides={"n_estimators": 20},
+            include_quantiles=False,
+        ),
+        stage1.Stage1Run(
+            run_dir=run_dir,
+            resume=True,
+            dataset_fingerprint={"sha256": "fp"},
+            wf_run_fingerprint="wf123",
+            checkpoint_per_fold=False,
+        ),
     )
 
     assert len(seen) == 1
     config, kwargs = seen[0]
     assert config.calibration == "auto"
     assert (config.include_market, config.market_anchor) == (True, True)
-    assert kwargs["checkpoint_dir"] == run_dir / "wf_compare" / "wf_folds"
-    assert kwargs["resume"] is True
+    assert kwargs["checkpoints"] == walk_forward.FoldCheckpoints(
+        run_dir / "wf_compare" / "wf_folds", resume=True
+    )
     assert summary["market_mode"] == "hybrid"
     assert summary["brier"] == pytest.approx(0.21)
     for retired in ("calibration", "market_prob_weight", "market_prob_clamp"):
@@ -230,19 +236,23 @@ def test_the_model_page_reads_the_production_walk_forward_of_a_weekly_run(
     shutil.rmtree(run_dir / "wf_compare", ignore_errors=True)
     summary = stage1.evaluate_production(
         pd.DataFrame(),
-        run_dir=run_dir,
-        resume=True,
-        dataset_fingerprint={"sha256": "fp"},
-        wf_run_fingerprint="wf123",
-        checkpoint_per_fold=False,
-        eval_last_n_seasons=3,
-        wf_start_week=3,
-        include_postseason=False,
-        exclude_incomplete_seasons=False,
-        recency_half_life_seasons=None,
-        market_mode="hybrid",
-        xgb_params_overrides={},
-        include_quantiles=False,
+        stage1.ProductionOptions(
+            eval_last_n_seasons=3,
+            wf_start_week=3,
+            include_postseason=False,
+            exclude_incomplete_seasons=False,
+            recency_half_life_seasons=None,
+            market_mode="hybrid",
+            xgb_params_overrides={},
+            include_quantiles=False,
+        ),
+        stage1.Stage1Run(
+            run_dir=run_dir,
+            resume=True,
+            dataset_fingerprint={"sha256": "fp"},
+            wf_run_fingerprint="wf123",
+            checkpoint_per_fold=False,
+        ),
     )
     stage1.write_summary(run_dir, summary)
     api_cache.clear()
@@ -270,16 +280,18 @@ def test_the_final_fit_uses_the_configured_market_mode_and_the_floor(
     data_path = tmp_path / "completed_games_ml.csv"
     data_path.write_text("season,week,home_spread,total_line\n2025,1,-3.0,44.5\n", encoding="utf-8")
 
-    def _fake_train(**kwargs: object) -> None:
-        captured.update(kwargs)
-        raise _StopAtFinalFitError()
+    def _fake_train(options: TrainingOptions) -> None:
+        captured.update(vars(options))
+        raise _StopAtFinalFitError
 
     monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
     monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
     monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
     monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
-        stage1, "evaluate_production", lambda _df, **kwargs: {"market_mode": kwargs["market_mode"]}
+        stage1,
+        "evaluate_production",
+        lambda _df, options, _run: {"market_mode": options.market_mode},
     )
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
     monkeypatch.setattr(
@@ -337,6 +349,7 @@ def test_stage1_walks_forward_with_the_final_fits_market_transform_and_cardinali
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     extra_argv: list[str],
+    *,
     transform: bool | None,
     ratio: float,
 ) -> None:
@@ -353,7 +366,7 @@ def test_stage1_walks_forward_with_the_final_fits_market_transform_and_cardinali
         _df: pd.DataFrame, config: walk_forward.WalkForwardConfig, **_kwargs: object
     ) -> dict[str, object]:
         captured.append(config)
-        raise _StopAfterStage1Error()
+        raise _StopAfterStage1Error
 
     monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
@@ -466,7 +479,8 @@ def test_a_dry_run_does_not_refresh_the_data(
     """``--dry-run`` prints the plan without running any stage, the data refresh included."""
 
     def _fail_refresh(_spec: str | None) -> None:
-        raise AssertionError("a dry run must not refresh the data")
+        msg = "a dry run must not refresh the data"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(pipeline, "_refresh_data", _fail_refresh)
     monkeypatch.setattr(sys, "argv", _weekly_argv(tmp_path, "--dry-run"))
@@ -486,7 +500,7 @@ def test_a_run_without_dry_run_refreshes_the_data(
 
     def _record_refresh(spec: str | None) -> None:
         calls.append(spec)
-        raise _StopAfterRefreshError()
+        raise _StopAfterRefreshError
 
     monkeypatch.setattr(pipeline, "_refresh_data", _record_refresh)
     monkeypatch.setattr(sys, "argv", _weekly_argv(tmp_path))
@@ -523,12 +537,12 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
     data_path = tmp_path / "completed_games_ml.csv"
     data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
 
-    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> dict[str, object]:
+    def _fake_run_wf_compare(
+        _df: pd.DataFrame, options: stage1.ProductionOptions, _run: stage1.Stage1Run
+    ) -> dict[str, object]:
         """Capture the Stage 1 overrides and stop before later stages run."""
-        xgb_params_overrides = kwargs.get("xgb_params_overrides")
-        assert isinstance(xgb_params_overrides, dict)
-        captured.update(xgb_params_overrides)
-        raise _StopAfterStage1Error()
+        captured.update(options.xgb_params_overrides)
+        raise _StopAfterStage1Error
 
     monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
     monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
@@ -560,7 +574,7 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
     finally:
         sys.argv = old_argv
 
-    resolved = ml_model_core._resolve_xgb_params(
+    resolved = ml_model_core.resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides=captured,
     )
@@ -680,12 +694,12 @@ def test_one_thread_count_reaches_stage1_and_the_final_fit(
     data_path = tmp_path / "completed_games_ml.csv"
     data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
 
-    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> dict[str, object]:
+    def _fake_run_wf_compare(
+        _df: pd.DataFrame, options: stage1.ProductionOptions, _run: stage1.Stage1Run
+    ) -> dict[str, object]:
         """Capture stage 1's thread count and return one usable candidate row."""
-        overrides = kwargs.get("xgb_params_overrides")
-        assert isinstance(overrides, dict)
-        captured["stage1"] = overrides["n_jobs"]
-        raise _StopAfterTrainingConfigError()
+        captured["stage1"] = options.xgb_params_overrides["n_jobs"]
+        raise _StopAfterTrainingConfigError
 
     monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
     monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
@@ -727,6 +741,7 @@ def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     extra_argv: list[str],
+    *,
     usable: bool,
     expected: str,
 ) -> None:
@@ -740,19 +755,19 @@ def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
     data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
     best_row: dict[str, object] = {"market_mode": "hybrid"}
 
-    def _fake_run_wf_compare(_df: pd.DataFrame, **kwargs: object) -> dict[str, object]:
+    def _fake_run_wf_compare(
+        _df: pd.DataFrame, options: stage1.ProductionOptions, _run: stage1.Stage1Run
+    ) -> dict[str, object]:
         """Capture stage 1's device and return its summary row."""
-        overrides = kwargs.get("xgb_params_overrides")
-        assert isinstance(overrides, dict)
-        captured["stage1"] = overrides["device"]
+        captured["stage1"] = options.xgb_params_overrides["device"]
         return best_row
 
-    def _fake_train(**kwargs: object) -> None:
+    def _fake_train(options: TrainingOptions) -> None:
         """Capture the final fit's device and stop."""
-        optuna_config = kwargs["optuna_config"]
+        optuna_config = options.optuna_config
         assert isinstance(optuna_config, ml_model_core.OptunaConfig)
         captured["final_fit"] = optuna_config.device
-        raise _StopAtFinalFitError()
+        raise _StopAtFinalFitError
 
     def _fake_run_id(_prefix: str, _hash: str, config: dict[str, object]) -> str:
         """Capture the recorded run config."""
@@ -804,14 +819,22 @@ def test_training_artifacts_record_the_device_the_model_trained_on(tmp_path: Pat
         early_stopping={},
     )
 
-    paths = pipeline._write_training_artifacts(
-        result,
+    record = ml_model_training.TrainingRecord(
         run_id="weekly_test",
-        run_dir=tmp_path,
         created_at="2026-09-27T00:00:00+00:00",
         dataset_hash="hash",
         config_payload={"xgb_device": "cuda"},
     )
+    paths = ml_model_training.write_training_artifacts(result, record, tmp_path)
 
     metadata = json.loads(paths.metadata_path.read_text(encoding="utf-8"))
     assert metadata["xgb_device"] == "cpu"
+
+
+def test_the_weekly_parser_records_every_option_argparse_defines() -> None:
+    """The parser's own option list matches argparse's internal one, the help option included."""
+    parser = run_config._build_parser()
+
+    assert [action.dest for action in parser.defined_actions] == [
+        action.dest for action in parser._actions
+    ]

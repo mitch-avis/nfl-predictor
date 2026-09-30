@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
 from nfl_predictor import constants, data_collection
+from nfl_predictor.utils.polars import strength_snapshot
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # Six teams, so every current-season week after the first leaves two of them on a bye.
 _STRENGTH = {"AAA": 0.25, "BBB": 0.15, "CCC": 0.05, "DDD": -0.05, "EEE": -0.15, "FFF": -0.25}
@@ -100,11 +104,9 @@ def _run_week(week: int, team_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.Dat
         week,
         _schedule(),
         team_games,
-        min_season=2006,
-        elo_df=None,
-        tr_df=None,
-        prev_tr_df=None,
-        strength_snapshots=sink,
+        data_collection.SeasonInputs(
+            min_season=2006, elo_df=None, tr_df=None, prev_tr_df=None, strength_snapshots=sink
+        ),
     )
     assert len(sink) == 1, "each processed week records exactly one snapshot"
     return games, sink[0]
@@ -205,8 +207,7 @@ def test_process_season_records_every_week_plus_the_week_after_the_regular_seaso
         2007,
         _schedule(),
         _team_games(),
-        min_season=2006,
-        strength_snapshots=sink,
+        data_collection.SeasonInputs(min_season=2006, strength_snapshots=sink),
     )
 
     after_regular_season = constants.get_regular_season_weeks(2007) + 1
@@ -237,7 +238,10 @@ def test_process_season_does_not_duplicate_a_scheduled_postseason_week() -> None
     sink: list[pl.DataFrame] = []
 
     data_collection.process_season(
-        2007, schedule, _team_games(), min_season=2006, strength_snapshots=sink
+        2007,
+        schedule,
+        _team_games(),
+        data_collection.SeasonInputs(min_season=2006, strength_snapshots=sink),
     )
 
     weeks = [frame["week"].unique().item() for frame in sink]
@@ -247,9 +251,14 @@ def test_process_season_does_not_duplicate_a_scheduled_postseason_week() -> None
 def test_process_season_without_a_sink_records_nothing() -> None:
     """Callers that do not ask for snapshots get the unchanged game rows only."""
     with_sink = data_collection.process_season(
-        2007, _schedule(), _team_games(), min_season=2006, strength_snapshots=[]
+        2007,
+        _schedule(),
+        _team_games(),
+        data_collection.SeasonInputs(min_season=2006, strength_snapshots=[]),
     )
-    without_sink = data_collection.process_season(2007, _schedule(), _team_games(), min_season=2006)
+    without_sink = data_collection.process_season(
+        2007, _schedule(), _team_games(), data_collection.SeasonInputs(min_season=2006)
+    )
 
     _assert_same_values(with_sink, without_sink)
 
@@ -288,3 +297,36 @@ def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch)
 
     assert constants.STRENGTH_SNAPSHOTS_NAME in saved
     assert_frame_equal(saved[constants.STRENGTH_SNAPSHOTS_NAME], snapshot)
+
+
+def test_the_strength_prior_ablation_ignores_a_supplied_prior() -> None:
+    """With the prior blend off, a week's snapshot is the raw in-season solve."""
+    prior = pl.DataFrame(
+        {
+            "team_abbr": list(_STRENGTH),
+            **{column: [5.0] * len(_STRENGTH) for column in constants.STRENGTH_SNAPSHOT_STATS},
+        }
+    )
+
+    def week_two_snapshot(*, blend: bool) -> pl.DataFrame:
+        sink: list[pl.DataFrame] = []
+        data_collection.process_week(
+            2007,
+            2,
+            _schedule(),
+            _team_games(),
+            data_collection.SeasonInputs(
+                min_season=2006,
+                prior_strength_snapshot=prior,
+                blend_strength_prior=blend,
+                strength_snapshots=sink,
+            ),
+        )
+        return sink[0].select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS)
+
+    raw = strength_snapshot.build_strength_snapshot(
+        _team_games(), season=2007, week=2, teams=list(_STRENGTH)
+    )
+
+    _assert_same_values(week_two_snapshot(blend=False), raw)
+    assert not week_two_snapshot(blend=True).equals(raw)

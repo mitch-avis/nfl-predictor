@@ -3,25 +3,35 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+from tests.api.factories import RunSpec, make_run_dir
 
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import ConflictError, NotFoundError
 from nfl_predictor.api.runs import active
 from nfl_predictor.api.runs.files import resolve_run_files
 from nfl_predictor.api.runs.indexer import RunIndex, scan_runs, summarize_run
-from tests.api.factories import make_run_dir
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.api.db import Database
 
 
 def test_scan_classifies_and_orders_runs(project_root: Path) -> None:
     """Weekly, training, and walk-forward runs are recognized; junk is skipped."""
     models = project_root / "models"
-    make_run_dir(models, "weekly_old", created_at="2026-01-01T00:00:00+00:00", season=2025, week=22)
-    make_run_dir(models, "weekly_new", created_at="2026-09-09T00:00:00+00:00")
-    make_run_dir(models, "train_only", kind="training", created_at="2026-05-01T00:00:00+00:00")
-    make_run_dir(models, "wf_report", kind="walk_forward", created_at="2026-06-01T00:00:00+00:00")
+    make_run_dir(
+        models, "weekly_old", RunSpec(created_at="2026-01-01T00:00:00+00:00", season=2025, week=22)
+    )
+    make_run_dir(models, "weekly_new", RunSpec(created_at="2026-09-09T00:00:00+00:00"))
+    make_run_dir(
+        models, "train_only", RunSpec(kind="training", created_at="2026-05-01T00:00:00+00:00")
+    )
+    make_run_dir(
+        models, "wf_report", RunSpec(kind="walk_forward", created_at="2026-06-01T00:00:00+00:00")
+    )
     (models / "empty_dir").mkdir()
     (models / "stray.json").write_text("{}", encoding="utf-8")
     (models / "broken").mkdir()
@@ -52,7 +62,7 @@ def test_scan_missing_dir_and_partial_runs(project_root: Path) -> None:
     """A missing models dir yields nothing; incomplete runs report their stages."""
     assert scan_runs(project_root / "nope") == []
     models = project_root / "models"
-    run_dir = make_run_dir(models, "partial", complete=False, with_model=False)
+    run_dir = make_run_dir(models, "partial", RunSpec(complete=False, with_model=False))
     (run_dir / "metrics_report.json").write_text("{}", encoding="utf-8")
     summary = summarize_run(run_dir)
     assert summary is not None
@@ -71,7 +81,7 @@ def test_scan_missing_dir_and_partial_runs(project_root: Path) -> None:
 def test_season_week_from_config_without_files(project_root: Path) -> None:
     """A training run with no predict path has no season/week; odd configs are tolerated."""
     models = project_root / "models"
-    run_dir = make_run_dir(models, "bare", kind="training")
+    run_dir = make_run_dir(models, "bare", RunSpec(kind="training"))
     meta = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
     meta["config"] = "not a dict"
     (run_dir / "metadata.json").write_text(json.dumps(meta), encoding="utf-8")
@@ -89,14 +99,15 @@ def test_season_week_from_config_without_files(project_root: Path) -> None:
 
 def test_run_files_prefers_newest_week(project_root: Path) -> None:
     """When a run holds several weeks the newest is exposed."""
-    run_dir = make_run_dir(project_root / "models", "multi", season=2026, week=1)
+    run_dir = make_run_dir(project_root / "models", "multi", RunSpec(season=2026, week=1))
     (run_dir / "season_2026_week_03_predictions.csv").write_text("game_id\n", encoding="utf-8")
     (run_dir / "season_bad_predictions.csv").write_text("game_id\n", encoding="utf-8")
     files = resolve_run_files(run_dir)
     assert files.predictions is not None
     assert files.predictions.name == "season_2026_week_03_predictions.csv"
     assert (files.season, files.week) == (2026, 3)
-    assert files.picks is not None and files.picks.name.endswith("week_01_confidence_picks.csv")
+    assert files.picks is not None
+    assert files.picks.name.endswith("week_01_confidence_picks.csv")
 
 
 def test_index_caches_and_invalidates(project_root: Path) -> None:
@@ -105,7 +116,7 @@ def test_index_caches_and_invalidates(project_root: Path) -> None:
     make_run_dir(models, "first")
     index = RunIndex(models, ttl_seconds=3600)
     assert [r.run_id for r in index.runs()] == ["first"]
-    make_run_dir(models, "second", created_at="2026-09-10T00:00:00+00:00")
+    make_run_dir(models, "second", RunSpec(created_at="2026-09-10T00:00:00+00:00"))
     assert [r.run_id for r in index.runs()] == ["first"]
     index.invalidate()
     assert [r.run_id for r in index.runs()] == ["second", "first"]
@@ -113,7 +124,7 @@ def test_index_caches_and_invalidates(project_root: Path) -> None:
     assert index.get("missing") is None
     expired = RunIndex(models, ttl_seconds=0)
     expired.runs()
-    make_run_dir(models, "third", created_at="2026-09-11T00:00:00+00:00")
+    make_run_dir(models, "third", RunSpec(created_at="2026-09-11T00:00:00+00:00"))
     assert expired.get("third") is not None
 
 
@@ -122,22 +133,27 @@ def test_active_run_resolution(project_root: Path, db: Database) -> None:
     models = project_root / "models"
     index = RunIndex(models, ttl_seconds=0)
     assert active.resolve_active_run(db, index) is None
-    make_run_dir(models, "incomplete", complete=False, created_at="2026-09-12T00:00:00+00:00")
-    make_run_dir(models, "done", created_at="2026-09-10T00:00:00+00:00")
-    make_run_dir(models, "train", kind="training", created_at="2026-09-13T00:00:00+00:00")
-    make_run_dir(models, "wf", kind="walk_forward", created_at="2026-09-14T00:00:00+00:00")
+    make_run_dir(
+        models, "incomplete", RunSpec(complete=False, created_at="2026-09-12T00:00:00+00:00")
+    )
+    make_run_dir(models, "done", RunSpec(created_at="2026-09-10T00:00:00+00:00"))
+    make_run_dir(models, "train", RunSpec(kind="training", created_at="2026-09-13T00:00:00+00:00"))
+    make_run_dir(models, "wf", RunSpec(kind="walk_forward", created_at="2026-09-14T00:00:00+00:00"))
     resolved = active.resolve_active_run(db, index)
-    assert resolved is not None and resolved.run_id == "done"
+    assert resolved is not None
+    assert resolved.run_id == "done"
     active.set_active_run(db, index, "train")
     resolved = active.resolve_active_run(db, index)
-    assert resolved is not None and resolved.run_id == "train"
+    assert resolved is not None
+    assert resolved.run_id == "train"
     with pytest.raises(NotFoundError):
         active.set_active_run(db, index, "ghost")
     with pytest.raises(ConflictError):
         active.set_active_run(db, index, "wf")
     db.set_value(active.ACTIVE_RUN_KEY, "deleted")
     resolved = active.resolve_active_run(db, index)
-    assert resolved is not None and resolved.run_id == "done"
+    assert resolved is not None
+    assert resolved.run_id == "done"
     active.clear_active_run(db)
     assert active.pinned_run_id(db) is None
     assert active.require_run(db, index, None).run_id == "done"

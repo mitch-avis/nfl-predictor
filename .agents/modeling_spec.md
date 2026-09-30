@@ -26,7 +26,7 @@ Direct home/away score regressors are allowed only as secondary ensemble members
   blend or clamp.
 - Sigma for a game in season `s`, week `w` is the root-mean-square of (actual minus predicted
   margin) over every out-of-fold prediction strictly before `(s, w)`: earlier seasons, and season
-  `s` weeks before `w` (`nfl_predictor/ml/floor_sigma.py`, one implementation for every run
+  `s` weeks before `w` (`src/nfl_predictor/ml/floor_sigma.py`, one implementation for every run
   type). It is one value per week, so it never changes a pick or a confidence rank. Until the
   pool spans `FLOOR_SIGMA_MIN_POOL_SEASONS` (`3`) earlier seasons (any weeks), sigma is
   `SCORE_DIFF_STD_DEV` (`14.21`), recorded as the fallback.
@@ -100,15 +100,15 @@ If implementing score "realism":
 
 - Weekly outputs include a **1..N** unique confidence ranking across that week's games.
 - Predicted winner is derived from the deterministic win probability: home when the unrounded
-  `p >= 0.5` (an exact 0.5 picks home), else away (`picks_home` in `nfl_predictor/ml/metrics.py`,
+  `p >= 0.5` (an exact 0.5 picks home), else away (`picks_home` in `src/nfl_predictor/ml/metrics.py`,
   shared by the walk-forward, the training pool summaries and the weekly output).
 - Confidence strength is derived from the deterministic win probability (default:
-  `abs(p - 0.5)`), rounded to 12 decimals (`CONFIDENCE_DECIMALS` in `nfl_predictor/ml/metrics.py`)
+  `abs(p - 0.5)`), rounded to 12 decimals (`CONFIDENCE_DECIMALS` in `src/nfl_predictor/ml/metrics.py`)
   so that mathematically equal confidences (a home favorite and a home underdog by the same
   spread) almost always tie instead of differing by floating-point noise; a pair whose noise
   straddles a 12-decimal rounding boundary can still differ.
 - Ranks run from least confident (`1`) to most confident (`N`); equal rounded confidences are
-  ordered by `game_id`. One shared rule (`confidence_ranks` in `nfl_predictor/ml/metrics.py`)
+  ordered by `game_id`. One shared rule (`confidence_ranks` in `src/nfl_predictor/ml/metrics.py`)
   ranks the weekly picks, walk-forward pool points, training pool summaries and
   `nfl-predictor compare`.
 - Picks, ranks and the published confidence strength come from the unrounded probability; the
@@ -174,7 +174,7 @@ Required run artifacts:
 ## Leakage Audit (Required)
 
 Maintain a leakage audit tool/mode (`nfl-predictor leakage-audit`,
-`nfl_predictor/cli/leakage_audit.py`):
+`src/nfl_predictor/cli/leakage_audit.py`):
 
 - checks for target/label columns in features
 - flags suspiciously predictive columns (e.g., absurd correlations)

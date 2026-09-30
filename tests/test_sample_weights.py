@@ -51,6 +51,7 @@ def test_compute_postseason_sample_weight_rejects_non_positive_weight() -> None:
 )
 def test_compute_postseason_sample_weight_returns_none_when_not_applicable(
     df: pd.DataFrame,
+    *,
     include_postseason: bool,
 ) -> None:
     """Postseason weights are skipped when disabled or when game_type is unavailable."""

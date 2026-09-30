@@ -1,0 +1,1718 @@
+"""Walk-forward backtesting for margin/total models.
+
+Implements time-aware walk-forward training/evaluation:
+- trains only on games strictly before the evaluated (season, week)
+- maps every predicted margin to a win probability through the deterministic floor,
+  ``Phi(margin / sigma)``, where each week's sigma is the root-mean-square error of every
+  out-of-fold prediction before it (a supplied history plus the run's own earlier weeks; see
+  ``floor_sigma``)
+- produces metrics summaries plus a calibration reliability table
+
+This module is intentionally small and importable so tests can validate split correctness
+and determinism.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import importlib
+import json
+import subprocess
+import time
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
+from pathlib import Path
+from pickle import UnpicklingError
+from typing import TYPE_CHECKING, Any, NamedTuple
+
+import joblib
+import numpy as np
+import pandas as pd
+
+from nfl_predictor import constants, ml_model
+from nfl_predictor.ml import feature_spec as feature_spec_utils
+from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils
+from nfl_predictor.ml import metrics as metrics_utils
+from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
+from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    import xgboost as xgb
+    from sklearn.compose import ColumnTransformer
+
+DEFAULT_RANDOM_SEED = 42
+RELIABILITY_BINS = 10
+BOOTSTRAP_SAMPLES = 5000
+
+# Shared root for per-fold checkpoints. Each run writes into a subdirectory named for its
+# fingerprint, so any identical walk-forward (from any script) resumes where it stopped and
+# runs with different inputs never see each other's files.
+DEFAULT_CHECKPOINT_DIR = Path(constants.ROOT_DIR) / "models" / "wf_checkpoints"
+# Bump when the checkpoint payload layout changes, so older files are ignored, not misread.
+FOLD_CHECKPOINT_VERSION = 1
+
+SUMMARY_METRICS = (
+    "margin_mae",
+    "total_mae",
+    "brier",
+    "log_loss",
+    "deterministic_brier",
+    "deterministic_log_loss",
+    "market_brier",
+    "market_log_loss",
+    "deterministic_brier_vs_market",
+    "deterministic_log_loss_vs_market",
+    "reliability_ece",
+    "expected_points",
+    "actual_points",
+    "picks_correct",
+    "pick_accuracy",
+    "deterministic_pick_accuracy",
+    "market_pick_accuracy",
+    "market_margin_resid_mae",
+    "market_total_resid_mae",
+    "margin_p10_p90_coverage",
+    "total_p10_p90_coverage",
+)
+
+# Probability report windows: key, label, first week and last week (None leaves it open).
+REPORT_WINDOWS: tuple[tuple[str, str, int | None, int | None], ...] = (
+    ("week_1_only", "week 1 only", 1, 1),
+    ("week_2_only", "week 2 only", 2, 2),
+    ("weeks_3_18", "weeks 3-18", 3, None),
+    ("all_weeks", "all weeks", None, None),
+)
+# A head whose best iteration is below this stopped too early to trust; it is flagged.
+MIN_HEALTHY_BEST_ITERATION = 10
+
+
+def _scalar_to_int(value: object) -> int:
+    """Cast a pandas/numpy scalar to a Python int."""
+    return int(np.asarray(value).item())
+
+
+@dataclass(frozen=True)
+class WalkForwardConfig:
+    """Configuration for walk-forward evaluation."""
+
+    eval_seasons: Sequence[int] | None = None
+    eval_last_n_seasons: int = 3
+    wf_start_week: int = 3
+    calibration: str = ml_model.CALIBRATION_FLOOR
+    random_seed: int = DEFAULT_RANDOM_SEED
+    include_postseason: bool = False
+    exclude_incomplete_seasons: bool = False
+    include_market: bool = True
+    market_transform: bool | None = None
+    market_anchor: bool = True
+    include_quantiles: bool = True
+    max_cardinality_ratio: float = 0.5
+    feature_start: str = ml_model.DEFAULT_FEATURE_START_COLUMN
+    feature_end: str = ml_model.DEFAULT_FEATURE_END_COLUMN
+    recency_half_life_seasons: float | None = None
+    disable_pruning: bool = False
+    disabled_feature_groups: tuple[str, ...] = ()
+    xgb_params_overrides: dict[str, Any] | None = None
+
+    def __post_init__(self) -> None:
+        """Record either spelling of the deterministic floor as ``auto``; refuse retired ones."""
+        object.__setattr__(self, "calibration", ml_model.resolve_calibration(self.calibration))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable dict representation of the config."""
+        return {
+            "eval_seasons": list(self.eval_seasons) if self.eval_seasons else None,
+            "eval_last_n_seasons": self.eval_last_n_seasons,
+            "wf_start_week": self.wf_start_week,
+            "calibration": self.calibration,
+            "random_seed": self.random_seed,
+            "include_postseason": self.include_postseason,
+            "exclude_incomplete_seasons": self.exclude_incomplete_seasons,
+            "include_market": self.include_market,
+            "market_transform": self.market_transform,
+            "market_anchor": self.market_anchor,
+            "include_quantiles": self.include_quantiles,
+            "max_cardinality_ratio": self.max_cardinality_ratio,
+            "feature_start": self.feature_start,
+            "feature_end": self.feature_end,
+            "recency_half_life_seasons": self.recency_half_life_seasons,
+            "disable_pruning": self.disable_pruning,
+            "disabled_feature_groups": list(self.disabled_feature_groups),
+            "xgb_params_overrides": self.xgb_params_overrides,
+        }
+
+
+@dataclass(frozen=True)
+class WalkForwardFold:
+    """One walk-forward fold.
+
+    Train data is strictly before (season, week); eval data is at (season, week).
+    """
+
+    season: int
+    week: int
+    train_df: pd.DataFrame
+    eval_df: pd.DataFrame
+
+
+def load_games(data_path: Path) -> pd.DataFrame:
+    """Load a CSV dataset into a pandas DataFrame."""
+    df = pd.read_csv(data_path)
+    log.info("Loaded %d rows from %s", len(df), data_path)
+    return df
+
+
+def filter_regular_season(df: pd.DataFrame, *, include_postseason: bool = False) -> pd.DataFrame:
+    """Filter to regular season games when game_type exists."""
+    if include_postseason or "game_type" not in df.columns:
+        return df
+    filtered = df[df["game_type"].astype(str).str.upper() == "REG"].copy()
+    if len(filtered) != len(df):
+        log.info("Filtered to regular-season games: %d -> %d rows", len(df), len(filtered))
+    return filtered
+
+
+def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str]) -> list[str]:
+    """Resolve which columns belong to the given feature groups for ablation.
+
+    A column belongs to a group when any marker string configured for that group in
+    ``constants.FEATURE_GROUP_COLUMN_MARKERS`` is a *substring* of the column name (not a
+    prefix), so a single marker can match ``away_``/``home_``/``opponent_`` prefixed variants
+    and ``_diff`` suffixed variants of the same base name at once. A group whose marker tuple
+    is empty matches zero columns.
+
+    Raises:
+        ValueError: if any requested group name is not a key in
+            ``constants.FEATURE_GROUP_COLUMN_MARKERS``.
+
+    """
+    valid_groups = constants.FEATURE_GROUP_COLUMN_MARKERS
+    unknown = sorted({group for group in groups if group not in valid_groups})
+    if unknown:
+        msg = f"Unknown feature group(s): {unknown}. Valid groups: {sorted(valid_groups)}."
+        raise ValueError(msg)
+
+    matched: set[str] = set()
+    for group in groups:
+        markers = valid_groups[group]
+        if not markers:
+            continue
+        for column in columns:
+            if any(marker in column for marker in markers):
+                matched.add(column)
+
+    return sorted(matched)
+
+
+def resolve_eval_seasons(
+    df: pd.DataFrame, eval_seasons: Sequence[int] | None, eval_last_n: int
+) -> list[int]:
+    """Resolve which seasons to evaluate based on dataset contents and config."""
+    seasons = sorted(df["season"].dropna().unique())
+    if not seasons:
+        msg = "No seasons available in dataset."
+        raise ValueError(msg)
+
+    if eval_seasons:
+        requested = sorted({int(season) for season in eval_seasons})
+        available = [season for season in requested if season in seasons]
+        missing = [season for season in requested if season not in seasons]
+        if missing:
+            log.info("Dropping missing eval seasons: %s", missing)
+        if not available:
+            msg = "None of the requested eval seasons exist in the dataset."
+            raise ValueError(msg)
+        return sorted(available)
+
+    if eval_last_n <= 0:
+        msg = "eval_last_n_seasons must be positive."
+        raise ValueError(msg)
+    if len(seasons) <= eval_last_n:
+        return seasons
+    return seasons[-eval_last_n:]
+
+
+def filter_incomplete_eval_seasons(
+    df: pd.DataFrame, eval_seasons: Sequence[int]
+) -> tuple[list[int], list[int]]:
+    """Return (kept, dropped) seasons based on regular-season completeness."""
+    kept: list[int] = []
+    dropped: list[int] = []
+    for season in eval_seasons:
+        season_value = int(season)
+        season_df = df[df["season"] == season_value]
+        max_week = int(season_df["week"].max()) if not season_df.empty else None
+        regular_weeks = constants.get_regular_season_weeks(season_value)
+        if max_week is None or max_week < regular_weeks:
+            dropped.append(season_value)
+        else:
+            kept.append(season_value)
+    return kept, dropped
+
+
+def build_walk_forward_folds(
+    df: pd.DataFrame,
+    eval_seasons: Sequence[int],
+    start_week: int,
+    *,
+    include_postseason: bool = False,
+) -> list[WalkForwardFold]:
+    """Build time-aware walk-forward folds for each eval season and week."""
+    if "season" not in df.columns or "week" not in df.columns:
+        msg = "season and week columns are required for walk-forward splits."
+        raise ValueError(msg)
+
+    folds: list[WalkForwardFold] = []
+    for season in sorted(eval_seasons):
+        season_df = df[df["season"] == season]
+        if include_postseason and not season_df.empty:
+            max_week = int(season_df["week"].max())
+        else:
+            max_week = constants.get_regular_season_weeks(season)
+        for week in range(start_week, max_week + 1):
+            eval_df = df[(df["season"] == season) & (df["week"] == week)].copy()
+            if eval_df.empty:
+                continue
+            train_df = df[
+                (df["season"] < season) | ((df["season"] == season) & (df["week"] < week))
+            ].copy()
+            if train_df.empty:
+                log.info("Skipping season %s week %s: no training data.", season, week)
+                continue
+            folds.append(
+                WalkForwardFold(season=season, week=week, train_df=train_df, eval_df=eval_df)
+            )
+    return folds
+
+
+def summarize_eval_window(
+    df: pd.DataFrame,
+    eval_seasons: Sequence[int],
+    *,
+    start_week: int,
+    include_postseason: bool,
+) -> dict[str, Any]:
+    """Summarize the evaluation window for reporting/metadata."""
+    season_rows: dict[str, dict[str, Any]] = {}
+    incomplete_seasons: list[int] = []
+
+    for season in sorted(eval_seasons):
+        season_df = df[df["season"] == season]
+        max_week = int(season_df["week"].max()) if not season_df.empty else None
+        regular_weeks = constants.get_regular_season_weeks(int(season))
+        eval_end_week = max_week if include_postseason and max_week is not None else regular_weeks
+        incomplete_regular = max_week is not None and max_week < regular_weeks
+        if incomplete_regular:
+            incomplete_seasons.append(int(season))
+        season_rows[str(season)] = {
+            "regular_season_weeks": int(regular_weeks),
+            "max_week_in_data": max_week,
+            "eval_start_week": int(start_week),
+            "eval_end_week": int(eval_end_week) if eval_end_week is not None else None,
+            "incomplete_regular_season": bool(incomplete_regular),
+        }
+
+    return {
+        "include_postseason": bool(include_postseason),
+        "incomplete_seasons": incomplete_seasons,
+        "seasons": season_rows,
+    }
+
+
+def _has_market_lines(df: pd.DataFrame) -> bool:
+    return any(col in df.columns for col in constants.LINES_COLUMNS)
+
+
+def _can_market_anchor(df: pd.DataFrame) -> bool:
+    has_spread = any(
+        col in df.columns for col in ("home_spread", "away_spread", "market_home_margin")
+    )
+    has_total = "total_line" in df.columns or "market_total_line" in df.columns
+    return has_spread and has_total
+
+
+def resolve_market_settings(
+    df: pd.DataFrame,
+    *,
+    include_market: bool,
+    market_transform: bool | None,
+    market_anchor: bool,
+) -> tuple[bool, bool, bool]:
+    """Resolve market feature/transform/anchor settings based on columns present."""
+    has_market = _has_market_lines(df)
+    resolved_transform = market_transform if market_transform is not None else has_market
+    resolved_include = include_market and has_market
+    resolved_anchor = market_anchor
+
+    if market_anchor and not _can_market_anchor(df):
+        log.info("Market anchor requested but spread/total lines missing; disabling anchor.")
+        resolved_anchor = False
+
+    if include_market and not has_market:
+        log.info("Market columns missing; disabling market features.")
+        resolved_include = False
+        resolved_transform = False
+
+    return resolved_include, resolved_transform, resolved_anchor
+
+
+def _resolve_market_home_win_prob(frame: pd.DataFrame) -> np.ndarray:
+    """Return market home-win probabilities using no-vig moneylines or a spread fallback."""
+    market_frame = feature_spec_utils.add_market_transforms(frame)
+    market_prob = np.full(len(market_frame), np.nan, dtype=float)
+
+    if {"home_market_prob", "away_market_prob"}.issubset(market_frame.columns):
+        home_raw = pd.to_numeric(market_frame["home_market_prob"], errors="coerce").to_numpy(
+            dtype=float
+        )
+        away_raw = pd.to_numeric(market_frame["away_market_prob"], errors="coerce").to_numpy(
+            dtype=float
+        )
+        market_prob = ml_model.normalize_no_vig(home_raw, away_raw)
+
+    if "market_home_margin" in market_frame.columns:
+        spread_margin = pd.to_numeric(market_frame["market_home_margin"], errors="coerce").to_numpy(
+            dtype=float
+        )
+        spread_prob = ml_model.margin_to_home_win_prob(spread_margin)
+        missing = ~np.isfinite(market_prob)
+        market_prob[missing] = spread_prob[missing]
+
+    return metrics_utils.clip_probabilities(market_prob)
+
+
+def _probability_summary_for_column(
+    frame: pd.DataFrame,
+    *,
+    column: str,
+    prefix: str,
+) -> dict[str, float]:
+    """Compute prefixed probability metrics for one probability column when available."""
+    if column not in frame.columns:
+        return {}
+
+    probs = pd.to_numeric(frame[column], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(probs)
+    if not valid.any():
+        return {}
+
+    actual_home_win = pd.to_numeric(frame.loc[valid, "actual_home_win"], errors="coerce").to_numpy(
+        dtype=int
+    )
+    actual_margin = pd.to_numeric(frame.loc[valid, "actual_margin"], errors="coerce").to_numpy(
+        dtype=float
+    )
+    return metrics_utils.probability_summary(
+        actual_home_win,
+        actual_margin,
+        probs[valid],
+        prefix=prefix,
+    )
+
+
+def _paired_probability_differences(
+    frame: pd.DataFrame,
+    *,
+    model_column: str,
+    market_column: str,
+    prefix: str,
+) -> dict[str, float]:
+    """Compute paired probability metric deltas against the market on shared valid rows."""
+    if model_column not in frame.columns or market_column not in frame.columns:
+        return {}
+
+    model_prob = pd.to_numeric(frame[model_column], errors="coerce").to_numpy(dtype=float)
+    market_prob = pd.to_numeric(frame[market_column], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(model_prob) & np.isfinite(market_prob)
+    if not valid.any():
+        return {}
+
+    actual_home_win = pd.to_numeric(frame.loc[valid, "actual_home_win"], errors="coerce").to_numpy(
+        dtype=int
+    )
+    actual_margin = pd.to_numeric(frame.loc[valid, "actual_margin"], errors="coerce").to_numpy(
+        dtype=float
+    )
+    model_metrics = metrics_utils.probability_summary(
+        actual_home_win,
+        actual_margin,
+        model_prob[valid],
+    )
+    market_metrics = metrics_utils.probability_summary(
+        actual_home_win,
+        actual_margin,
+        market_prob[valid],
+    )
+    return {
+        f"{prefix}_brier_vs_market": model_metrics["brier"] - market_metrics["brier"],
+        f"{prefix}_log_loss_vs_market": model_metrics["log_loss"] - market_metrics["log_loss"],
+    }
+
+
+class Resampling(NamedTuple):
+    """How many bootstrap resamples to draw, and the seed that draws them."""
+
+    n_samples: int
+    seed: int
+
+
+def _bootstrap_probability_differences(
+    frame: pd.DataFrame,
+    *,
+    model_column: str,
+    market_column: str,
+    prefix: str,
+    resampling: Resampling,
+) -> dict[str, float]:
+    """Bootstrap paired probability metric deltas against the market."""
+    n_samples, seed = resampling
+    if n_samples <= 0 or model_column not in frame.columns or market_column not in frame.columns:
+        return {}
+
+    model_prob = pd.to_numeric(frame[model_column], errors="coerce").to_numpy(dtype=float)
+    market_prob = pd.to_numeric(frame[market_column], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(model_prob) & np.isfinite(market_prob)
+    if not valid.any():
+        return {}
+
+    actual_home_win = pd.to_numeric(frame.loc[valid, "actual_home_win"], errors="coerce").to_numpy(
+        dtype=int
+    )
+    # Each resample's metric is a mean of per-game terms, so the terms are computed once and
+    # each resample averages the rows it drew (the same draws, one per resample, as before).
+    model_squared, model_log_loss = metrics_utils.probability_losses_per_row(
+        actual_home_win, model_prob[valid]
+    )
+    market_squared, market_log_loss = metrics_utils.probability_losses_per_row(
+        actual_home_win, market_prob[valid]
+    )
+    n_rows = len(actual_home_win)
+    rng = np.random.default_rng(int(seed))
+
+    brier_diffs = np.empty(int(n_samples), dtype=float)
+    log_loss_diffs = np.empty(int(n_samples), dtype=float)
+
+    for sample_index in range(int(n_samples)):
+        indices = rng.integers(0, n_rows, size=n_rows)
+        brier_diffs[sample_index] = model_squared[indices].mean() - market_squared[indices].mean()
+        log_loss_diffs[sample_index] = (
+            model_log_loss[indices].mean() - market_log_loss[indices].mean()
+        )
+
+    return {
+        f"{prefix}_brier_vs_market_ci_low": float(np.nanpercentile(brier_diffs, 2.5)),
+        f"{prefix}_brier_vs_market_ci_high": float(np.nanpercentile(brier_diffs, 97.5)),
+        f"{prefix}_log_loss_vs_market_ci_low": float(np.nanpercentile(log_loss_diffs, 2.5)),
+        f"{prefix}_log_loss_vs_market_ci_high": float(np.nanpercentile(log_loss_diffs, 97.5)),
+    }
+
+
+def _probability_window_rows(
+    predictions: pd.DataFrame,
+    *,
+    seed: int,
+) -> list[dict[str, Any]]:
+    """Build deterministic versus market summaries for the standard report windows."""
+    if predictions.empty or "week" not in predictions.columns:
+        return []
+
+    weeks = predictions["week"]
+    rows: list[dict[str, Any]] = []
+    for window_key, label, first_week, last_week in REPORT_WINDOWS:
+        mask = pd.Series(data=True, index=predictions.index)
+        if first_week is not None:
+            mask &= weeks >= first_week
+        if last_week is not None:
+            mask &= weeks <= last_week
+        frame = predictions.loc[mask].copy()
+        if frame.empty:
+            continue
+        row = {
+            "window": window_key,
+            "label": label,
+            **_aggregate_metrics(
+                frame,
+                market_anchor=(
+                    "market_baseline_margin" in frame.columns
+                    and "market_baseline_total" in frame.columns
+                ),
+            ),
+        }
+        row.update(
+            _bootstrap_probability_differences(
+                frame,
+                model_column="deterministic_home_win_prob",
+                market_column="market_home_win_prob",
+                prefix="deterministic",
+                resampling=Resampling(BOOTSTRAP_SAMPLES, seed),
+            )
+        )
+        rows.append(row)
+    return rows
+
+
+def _estimator_best_iteration(estimator: object) -> int | None:
+    """Return the effective best iteration for an estimator, with a full-budget fallback."""
+    best_iteration = getattr(estimator, "best_iteration", None)
+    if best_iteration is not None:
+        return int(best_iteration)
+    get_booster = getattr(estimator, "get_booster", None)
+    if not callable(get_booster):
+        return None
+    num_boosted_rounds = getattr(get_booster(), "num_boosted_rounds", None)
+    rounds = num_boosted_rounds() if callable(num_boosted_rounds) else None
+    return int(rounds) - 1 if isinstance(rounds, int | np.integer) else None
+
+
+def _iteration_details(models: dict[str, Any]) -> dict[str, Any]:
+    """Return per-head iteration details and warning flags for a fold report.
+
+    `best_iteration` is always recorded. XGBoost only sets its own `best_iteration` when early
+    stopping ran, so `early_stopped` records whether it did; a head that used its whole tree
+    budget by configuration is not "at the cap" in any diagnostic sense and is not flagged.
+    The `at_cap` flag therefore means early stopping ran and never fired, and `below_10` means
+    a head has suspiciously few trees whichever way it was fit.
+    """
+    details: dict[str, Any] = {}
+    warnings: list[str] = []
+    for name, estimator in models.items():
+        best_iteration = _estimator_best_iteration(estimator)
+        if best_iteration is None:
+            continue
+        early_stopped = getattr(estimator, "best_iteration", None) is not None
+        details[f"{name}.best_iteration"] = best_iteration
+        details[f"{name}.early_stopped"] = early_stopped
+        at_cap = False
+        n_estimators = getattr(estimator, "n_estimators", None)
+        if early_stopped and n_estimators is not None:
+            at_cap = best_iteration >= int(n_estimators) - 1
+        if best_iteration < MIN_HEALTHY_BEST_ITERATION or at_cap:
+            warning = "below_10" if best_iteration < MIN_HEALTHY_BEST_ITERATION else "at_cap"
+            details[f"{name}.warning"] = warning
+            warnings.append(f"{name}:{warning}")
+    if warnings:
+        details["iteration_warnings"] = warnings
+    return details
+
+
+def with_resolved_xgb_device(config: WalkForwardConfig) -> WalkForwardConfig:
+    """Return ``config`` with its XGBoost device override set to the concrete device.
+
+    ``auto`` or no device becomes the device the run trains on, so the checkpoint
+    fingerprint, the run id and the recorded config never say ``auto``: a CPU run and a GPU
+    run never share checkpoints, and an ``auto`` run that resolved to ``cuda`` shares them
+    with an explicit ``cuda`` run.
+    """
+    overrides = dict(config.xgb_params_overrides or {})
+    overrides["device"] = ml_model_xgb_utils.resolve_xgb_device(overrides.get("device"))
+    return replace(config, xgb_params_overrides=overrides)
+
+
+def _fold_xgb_device(models: Sequence[Any], *, expected: str, fold: WalkForwardFold) -> str:
+    """Return the device a week's estimators trained on, or raise if it is not ``expected``.
+
+    A CUDA fit that fails is retried on the CPU. Saving that week would put CPU results under
+    the run's CUDA checkpoint fingerprint, so the run stops instead: nothing is saved for the
+    week, and rerunning on a working device resumes from the weeks already saved.
+    """
+    devices = {str(model.get_params().get("device")) for model in models}
+    if devices != {expected}:
+        msg = (
+            f"Walk-forward season {int(fold.season)} week {int(fold.week)} trained on "
+            f"{', '.join(sorted(devices))}, but the run is configured for {expected}: a fit "
+            "fell back to another device. The week was not checkpointed; rerun on a working "
+            "device (or pass --xgb-device cpu) to resume."
+        )
+        raise RuntimeError(msg)
+    return expected
+
+
+def xgb_params_for_config(config: WalkForwardConfig) -> dict[str, Any]:
+    """Return the XGBoost parameters a walk-forward config trains with (its seed included)."""
+    overrides: dict[str, Any] = {}
+    if config.xgb_params_overrides:
+        overrides.update(config.xgb_params_overrides)
+    overrides.setdefault("random_state", config.random_seed)
+    return ml_model.resolve_xgb_params(ml_model.DEFAULT_XGB_PARAMS, overrides=overrides)
+
+
+def _modelling_source_files() -> list[Path]:
+    """Return the source files whose contents can change a fold's result."""
+    ml_dir = Path(__file__).resolve().parent
+    package_dir = ml_dir.parent
+    files = sorted(ml_dir.glob("*.py"))
+    files.extend(package_dir / name for name in ("constants.py", "ml_model.py"))
+    return [path for path in files if path.exists()]
+
+
+def fold_checkpoint_fingerprint(
+    df: pd.DataFrame,
+    config: WalkForwardConfig,
+    floor_sigma_history: floor_sigma.ErrorPool | None = None,
+) -> str:
+    """Return the key that decides whether a saved fold may be reused.
+
+    It covers everything a fold's result depends on: the input rows and columns, the full
+    config with its XGBoost device resolved, the supplied floor-sigma history, the installed
+    library versions, and the source of the modelling code. A saved fold is reused only when
+    all of these are unchanged, so a resumed run reproduces an uninterrupted one instead of
+    mixing results computed from different inputs or on a different device.
+    """
+    config = with_resolved_xgb_device(config)
+    digest = hashlib.sha256()
+    digest.update(f"fold-checkpoint-v{FOLD_CHECKPOINT_VERSION}".encode())
+    if floor_sigma_history is not None:
+        digest.update(f"floor-sigma-history:{floor_sigma_history.digest()}".encode())
+    digest.update(json.dumps(config.to_dict(), sort_keys=True, default=str).encode())
+    digest.update(json.dumps([str(column) for column in df.columns]).encode())
+    digest.update(json.dumps([str(dtype) for dtype in df.dtypes]).encode())
+    digest.update(pd.util.hash_pandas_object(df, index=True).to_numpy().tobytes())
+    digest.update(json.dumps(_library_versions(), sort_keys=True).encode())
+    for path in _modelling_source_files():
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+class _RestoredFold(NamedTuple):
+    """A finished fold read back from its checkpoint."""
+
+    metrics: dict[str, Any]
+    predictions: pd.DataFrame
+    feature_columns: list[str]
+
+
+@dataclass(frozen=True)
+class _FoldCheckpointStore:
+    """Per-fold checkpoint files for one fingerprinted walk-forward run.
+
+    Files are written with `joblib`, like model checkpoints, because it round-trips pandas
+    dtypes and float64 values exactly. They are only ever read back from a directory this
+    module wrote, and only when the stored fingerprint matches the current run.
+    """
+
+    directory: Path
+    fingerprint: str
+
+    @classmethod
+    def create(
+        cls,
+        root: Path,
+        df: pd.DataFrame,
+        config: WalkForwardConfig,
+        floor_sigma_history: floor_sigma.ErrorPool | None = None,
+    ) -> _FoldCheckpointStore:
+        """Open (creating if needed) the checkpoint directory for this run's inputs."""
+        fingerprint = fold_checkpoint_fingerprint(df, config, floor_sigma_history)
+        directory = Path(root) / fingerprint[:20]
+        directory.mkdir(parents=True, exist_ok=True)
+        manifest_path = directory / "manifest.json"
+        if not manifest_path.exists():
+            manifest = {
+                "fingerprint": fingerprint,
+                "version": FOLD_CHECKPOINT_VERSION,
+                "created_at": datetime.now(UTC).isoformat(),
+                "rows": len(df),
+                "columns": len(df.columns),
+                "config": config.to_dict(),
+                "library_versions": _library_versions(),
+            }
+            temporary = manifest_path.with_name(f"{manifest_path.name}.tmp")
+            temporary.write_text(json.dumps(manifest, indent=2, sort_keys=True, default=str))
+            temporary.replace(manifest_path)
+        log.info("Walk-forward fold checkpoints: %s", directory)
+        return cls(directory=directory, fingerprint=fingerprint)
+
+    def _path(self, fold: WalkForwardFold) -> Path:
+        """Return the checkpoint file for one fold."""
+        return self.directory / f"fold_{int(fold.season)}_w{int(fold.week):02d}.joblib"
+
+    def load(self, fold: WalkForwardFold) -> _RestoredFold | None:
+        """Return the saved fold, or None when it is missing, unreadable, or foreign."""
+        path = self._path(fold)
+        if not path.exists():
+            return None
+        try:
+            payload = joblib.load(path)
+        except (
+            OSError,
+            EOFError,
+            ValueError,
+            TypeError,
+            AttributeError,
+            ImportError,
+            KeyError,
+            IndexError,
+            UnpicklingError,
+        ) as error:
+            log.warning("Ignoring unreadable checkpoint %s (%s); training again.", path, error)
+            return None
+        if not (
+            isinstance(payload, dict)
+            and payload.get("version") == FOLD_CHECKPOINT_VERSION
+            and payload.get("fingerprint") == self.fingerprint
+            and payload.get("season") == int(fold.season)
+            and payload.get("week") == int(fold.week)
+            and isinstance(payload.get("metrics"), dict)
+            and isinstance(payload.get("predictions"), pd.DataFrame)
+            and isinstance(payload.get("feature_columns"), list)
+        ):
+            log.warning("Ignoring checkpoint %s: it belongs to another run; training again.", path)
+            return None
+        return _RestoredFold(
+            metrics=payload["metrics"],
+            predictions=payload["predictions"],
+            feature_columns=list(payload["feature_columns"]),
+        )
+
+    def save(
+        self,
+        fold: WalkForwardFold,
+        metrics: dict[str, Any],
+        predictions: pd.DataFrame,
+        feature_columns: list[str],
+    ) -> None:
+        """Write one finished fold atomically, so a stop mid-write never leaves a bad file."""
+        path = self._path(fold)
+        temporary = path.with_name(f"{path.name}.tmp")
+        joblib.dump(
+            {
+                "version": FOLD_CHECKPOINT_VERSION,
+                "fingerprint": self.fingerprint,
+                "season": int(fold.season),
+                "week": int(fold.week),
+                "metrics": metrics,
+                "predictions": predictions,
+                "feature_columns": feature_columns,
+            },
+            temporary,
+        )
+        temporary.replace(path)
+
+
+@dataclass(frozen=True)
+class FoldCheckpoints:
+    """Where a walk-forward saves each finished week, and whether it restores matching ones.
+
+    With ``resume`` a week whose checkpoint matches is restored instead of trained; without it
+    every week is trained and its checkpoint overwritten.
+    """
+
+    directory: Path
+    resume: bool = True
+
+
+@dataclass(frozen=True)
+class _PreparedRun:
+    """A walk-forward's games, resolved settings, folds, and XGBoost parameters."""
+
+    df: pd.DataFrame
+    target_columns: tuple[str, str]
+    include_market: bool
+    market_transform: bool
+    market_anchor: bool
+    resolved_settings: dict[str, Any]
+    resolved_eval_seasons: list[int]
+    excluded_incomplete: list[int]
+    folds: list[WalkForwardFold]
+    params: dict[str, Any]
+
+
+def _prepare_run(df: pd.DataFrame, config: WalkForwardConfig) -> _PreparedRun:
+    """Drop disabled groups, filter the games, resolve the settings, and build the folds."""
+    if config.disabled_feature_groups:
+        group_columns = resolve_feature_group_columns(
+            list(df.columns), config.disabled_feature_groups
+        )
+        if group_columns:
+            log.info(
+                "Dropping %d columns for disabled feature groups: %s",
+                len(group_columns),
+                list(config.disabled_feature_groups),
+            )
+            df = df.drop(columns=group_columns)
+    df = filter_regular_season(df, include_postseason=config.include_postseason)
+    target_columns = ml_model.get_target_columns(df)
+    df = df.dropna(subset=list(target_columns)).copy()
+
+    include_market, market_transform, market_anchor = resolve_market_settings(
+        df,
+        include_market=config.include_market,
+        market_transform=config.market_transform,
+        market_anchor=config.market_anchor,
+    )
+    resolved_settings = {
+        "include_market": include_market,
+        "market_transform": market_transform,
+        "market_anchor": market_anchor,
+        "include_quantiles": config.include_quantiles,
+        "disable_pruning": config.disable_pruning,
+        "exclude_incomplete_seasons": config.exclude_incomplete_seasons,
+        # In-season fits run the full `n_estimators` budget, with no early stopping.
+        "in_season_early_stopping": False,
+        "xgb_device": (config.xgb_params_overrides or {})["device"],
+    }
+
+    eval_seasons = resolve_eval_seasons(df, config.eval_seasons, config.eval_last_n_seasons)
+    excluded_incomplete: list[int] = []
+    if config.exclude_incomplete_seasons:
+        eval_seasons, excluded_incomplete = filter_incomplete_eval_seasons(df, eval_seasons)
+        if excluded_incomplete:
+            log.info("Excluded incomplete seasons from eval window: %s", excluded_incomplete)
+        if not eval_seasons:
+            msg = "No complete seasons available after filtering eval seasons."
+            raise ValueError(msg)
+    folds = build_walk_forward_folds(
+        df,
+        eval_seasons,
+        config.wf_start_week,
+        include_postseason=config.include_postseason,
+    )
+    if not folds:
+        msg = "No walk-forward folds available with the provided settings."
+        raise ValueError(msg)
+    return _PreparedRun(
+        df=df,
+        target_columns=target_columns,
+        include_market=include_market,
+        market_transform=market_transform,
+        market_anchor=market_anchor,
+        resolved_settings=resolved_settings,
+        resolved_eval_seasons=[int(season) for season in eval_seasons],
+        excluded_incomplete=excluded_incomplete,
+        folds=folds,
+        params=xgb_params_for_config(config),
+    )
+
+
+@dataclass(frozen=True)
+class _FoldModels:
+    """One week's fitted preprocessor, feature spec, and margin, total and quantile heads."""
+
+    feature_spec: ml_model.FeatureSpec
+    preprocessor: ColumnTransformer
+    margin_model: xgb.XGBRegressor
+    total_model: xgb.XGBRegressor
+    margin_quantiles: dict[float, xgb.XGBRegressor]
+    total_quantiles: dict[float, xgb.XGBRegressor]
+
+    def heads(self) -> dict[str, xgb.XGBRegressor]:
+        """Return every head by name, quantile heads included."""
+        return {
+            "margin_model": self.margin_model,
+            "total_model": self.total_model,
+            **{f"margin_q{q}": model for q, model in self.margin_quantiles.items()},
+            **{f"total_q{q}": model for q, model in self.total_quantiles.items()},
+        }
+
+
+def _fit_fold(fold: WalkForwardFold, run: _PreparedRun, config: WalkForwardConfig) -> _FoldModels:
+    """Fit the week's heads on every earlier game, each on its full tree budget."""
+    feature_spec = ml_model.build_feature_spec(
+        fold.train_df,
+        ml_model.FeatureSelection(
+            include_market=run.include_market,
+            max_cardinality_ratio=config.max_cardinality_ratio,
+            feature_start=config.feature_start,
+            feature_end=config.feature_end,
+            market_transform=run.market_transform,
+            disable_pruning=config.disable_pruning,
+        ),
+    )
+    preprocessor = ml_model.build_preprocessor(feature_spec, for_tree=True)
+
+    x_train = ml_model_xgb_utils.fit_transform_matrix(
+        preprocessor, ml_model.apply_feature_spec(fold.train_df, feature_spec)
+    )
+    y_margin_train, y_total_train, _, _ = ml_model.prepare_margin_total_targets_with_anchor(
+        fold.train_df, run.target_columns, market_anchor=run.market_anchor
+    )
+    train_recency = compute_recency_sample_weight(
+        fold.train_df,
+        half_life_seasons=config.recency_half_life_seasons,
+    )
+    train_weight = combine_sample_weights(train_recency)
+
+    # Every head runs its full tree budget on every earlier game, with no eval frame.
+    margin_model, total_model = ml_model.fit_margin_total_models(
+        ml_model.FitData(x_train, y_margin_train, y_total_train, sample_weight=train_weight),
+        run.params,
+    )
+
+    margin_quantiles: dict[float, Any] = {}
+    total_quantiles: dict[float, Any] = {}
+    if config.include_quantiles:
+        quantiles = ml_model.validate_quantiles(ml_model.DEFAULT_QUANTILES)
+        margin_quantiles = ml_model.fit_quantile_models(
+            x_train,
+            y_margin_train,
+            run.params,
+            quantiles,
+            sample_weight=train_weight,
+        )
+        total_quantiles = ml_model.fit_quantile_models(
+            x_train,
+            y_total_train,
+            run.params,
+            quantiles,
+            sample_weight=train_weight,
+        )
+    return _FoldModels(
+        feature_spec=feature_spec,
+        preprocessor=preprocessor,
+        margin_model=margin_model,
+        total_model=total_model,
+        margin_quantiles=margin_quantiles,
+        total_quantiles=total_quantiles,
+    )
+
+
+@dataclass(frozen=True)
+class _FoldPredictions:
+    """One week's predicted margins and totals (market baseline added back when anchored)."""
+
+    margin: np.ndarray
+    total: np.ndarray
+    margin_quantiles: dict[float, np.ndarray]
+    total_quantiles: dict[float, np.ndarray]
+    baseline_margin: np.ndarray | None
+    baseline_total: np.ndarray | None
+
+
+def _predict_fold(
+    fold: WalkForwardFold, models: _FoldModels, *, market_anchor: bool
+) -> _FoldPredictions:
+    """Predict the week's games with every head."""
+    x_eval = ml_model_xgb_utils.transform_matrix(
+        models.preprocessor, ml_model.apply_feature_spec(fold.eval_df, models.feature_spec)
+    )
+    pred_margin = ml_model.predict_xgb(models.margin_model, x_eval)
+    pred_total = ml_model.predict_xgb(models.total_model, x_eval)
+    pred_margin_quantiles = {
+        q: ml_model.predict_xgb(q_model, x_eval) for q, q_model in models.margin_quantiles.items()
+    }
+    pred_total_quantiles = {
+        q: ml_model.predict_xgb(q_model, x_eval) for q, q_model in models.total_quantiles.items()
+    }
+    baseline_margin_eval = None
+    baseline_total_eval = None
+    if market_anchor:
+        baseline_margin_eval, baseline_total_eval = ml_model.get_market_baseline(fold.eval_df)
+        pred_margin = pred_margin + baseline_margin_eval
+        pred_total = pred_total + baseline_total_eval
+        for q in list(pred_margin_quantiles.keys()):
+            pred_margin_quantiles[q] = pred_margin_quantiles[q] + baseline_margin_eval
+        for q in list(pred_total_quantiles.keys()):
+            pred_total_quantiles[q] = pred_total_quantiles[q] + baseline_total_eval
+    return _FoldPredictions(
+        margin=pred_margin,
+        total=pred_total,
+        margin_quantiles=pred_margin_quantiles,
+        total_quantiles=pred_total_quantiles,
+        baseline_margin=baseline_margin_eval,
+        baseline_total=baseline_total_eval,
+    )
+
+
+# The submitted probability is the deterministic floor; the column keeps its name.
+_CALIBRATION_METHOD = "none"
+
+
+def _fold_prediction_frame(
+    fold: WalkForwardFold,
+    preds: _FoldPredictions,
+    target_columns: tuple[str, str],
+    week_sigma: floor_sigma.FloorSigma,
+) -> pd.DataFrame:
+    """Return the week's games with every prediction, probability, outcome and pool column."""
+    pred_away, pred_home = ml_model.derive_scores_from_margin_total(preds.margin, preds.total)
+    deterministic_home_win_prob = floor_sigma.home_win_prob(preds.margin, week_sigma.sigma)
+    # The submitted probability is the deterministic floor.
+    home_win_prob = metrics_utils.clip_probabilities(deterministic_home_win_prob)
+    market_home_win_prob = _resolve_market_home_win_prob(fold.eval_df)
+
+    away_col, home_col = target_columns
+    away_score = fold.eval_df[away_col].to_numpy(dtype=float)
+    home_score = fold.eval_df[home_col].to_numpy(dtype=float)
+
+    tiebreaker = fold.eval_df["game_id"].to_numpy() if "game_id" in fold.eval_df.columns else None
+    confidence_cols = metrics_utils.confidence_pool_columns(
+        home_win_prob, home_score, away_score, tiebreaker=tiebreaker
+    )
+
+    frame = fold.eval_df.copy()
+    frame["predicted_margin"] = preds.margin
+    frame["predicted_total"] = preds.total
+    for q in sorted(preds.margin_quantiles.keys()):
+        frame[f"predicted_margin_p{round(q * 100):02d}"] = preds.margin_quantiles[q]
+    for q in sorted(preds.total_quantiles.keys()):
+        frame[f"predicted_total_p{round(q * 100):02d}"] = preds.total_quantiles[q]
+    frame["predicted_home_score"] = pred_home
+    frame["predicted_away_score"] = pred_away
+    frame["home_win_prob"] = home_win_prob
+    frame["away_win_prob"] = 1 - home_win_prob
+    frame["deterministic_home_win_prob"] = deterministic_home_win_prob
+    frame["deterministic_away_win_prob"] = 1 - deterministic_home_win_prob
+    frame["market_home_win_prob"] = market_home_win_prob
+    frame["market_away_win_prob"] = 1 - market_home_win_prob
+    frame["actual_margin"] = home_score - away_score
+    frame["actual_total"] = home_score + away_score
+    frame["actual_home_win"] = (home_score > away_score).astype(int)
+    frame["confidence_rank"] = confidence_cols["confidence_rank"]
+    frame["expected_points"] = confidence_cols["expected_points"]
+    frame["actual_points"] = confidence_cols["actual_points"]
+    frame["pick_correct"] = confidence_cols["pick_correct"]
+    frame["calibration_method"] = _CALIBRATION_METHOD
+    frame["floor_sigma"] = week_sigma.sigma
+    frame["floor_sigma_fallback"] = week_sigma.fallback
+    if preds.baseline_margin is not None and preds.baseline_total is not None:
+        frame["market_baseline_margin"] = preds.baseline_margin
+        frame["market_baseline_total"] = preds.baseline_total
+    return frame
+
+
+def _fold_metrics(
+    fold: WalkForwardFold,
+    fold_predictions: pd.DataFrame,
+    models: _FoldModels,
+    run: _PreparedRun,
+    week_sigma: floor_sigma.FloorSigma,
+) -> dict[str, Any]:
+    """Return the week's metrics with its sigma, iteration details and training device."""
+    metrics = _aggregate_metrics(fold_predictions, market_anchor=run.market_anchor)
+    metrics["season"] = int(fold.season)
+    metrics["week"] = int(fold.week)
+    metrics["games"] = len(fold_predictions)
+    metrics["calibration_method"] = _CALIBRATION_METHOD
+    metrics["floor_sigma"] = week_sigma.sigma
+    metrics["floor_sigma_fallback"] = week_sigma.fallback
+    metrics["floor_sigma_pool_games"] = week_sigma.pool_games
+    metrics.update(_iteration_details(models.heads()))
+    # Before the save: a week that fell back to another device must not be checkpointed.
+    metrics["xgb_device"] = _fold_xgb_device(
+        list(models.heads().values()),
+        expected=str(run.params.get("device")),
+        fold=fold,
+    )
+    if metrics.get("iteration_warnings"):
+        log.warning(
+            "Walk-forward fold season %d week %d iteration warning(s): %s",
+            int(fold.season),
+            int(fold.week),
+            ", ".join(metrics["iteration_warnings"]),
+        )
+    return metrics
+
+
+def _week_sigma(
+    fold: WalkForwardFold, history: floor_sigma.ErrorPool, own_errors: list[pd.DataFrame]
+) -> floor_sigma.FloorSigma:
+    """Return the week's floor sigma from the history and this run's earlier weeks."""
+    # Every earlier week of this run is in `own_errors` by now, so its history rows drop.
+    own = pd.concat(own_errors, ignore_index=True) if own_errors else floor_sigma.empty_errors()
+    return floor_sigma.estimate(
+        floor_sigma.combine(history.errors, own), int(fold.season), int(fold.week)
+    )
+
+
+@dataclass
+class _FoldProgress:
+    """What the fold loop has gathered so far."""
+
+    per_week_metrics: list[dict[str, Any]] = field(default_factory=list)
+    prediction_frames: list[pd.DataFrame] = field(default_factory=list)
+    own_errors: list[pd.DataFrame] = field(default_factory=list)
+    feature_list: list[str] | None = None
+    restored_folds: int = 0
+    computed_folds: int = 0
+
+
+def _train_fold(
+    fold: WalkForwardFold,
+    run: _PreparedRun,
+    config: WalkForwardConfig,
+    history: floor_sigma.ErrorPool,
+    progress: _FoldProgress,
+) -> tuple[dict[str, Any], pd.DataFrame, list[str]]:
+    """Fit, predict and score one week; return its metrics, predictions and features."""
+    models = _fit_fold(fold, run, config)
+    preds = _predict_fold(fold, models, market_anchor=run.market_anchor)
+    week_sigma = _week_sigma(fold, history, progress.own_errors)
+    fold_predictions = _fold_prediction_frame(fold, preds, run.target_columns, week_sigma)
+    metrics = _fold_metrics(fold, fold_predictions, models, run, week_sigma)
+    return metrics, fold_predictions, list(models.feature_spec.feature_columns)
+
+
+def _summarize_run(
+    run: _PreparedRun, config: WalkForwardConfig, progress: _FoldProgress
+) -> dict[str, Any]:
+    """Return the per-season, overall, window, reliability and calibration results."""
+    predictions = pd.concat(progress.prediction_frames, ignore_index=True)
+    sort_cols = [col for col in ("season", "week", "game_id") if col in predictions.columns]
+    if sort_cols:
+        predictions = predictions.sort_values(sort_cols).reset_index(drop=True)
+
+    per_season_metrics = [
+        _aggregate_metrics(
+            predictions[predictions["season"] == season], market_anchor=run.market_anchor
+        )
+        for season in sorted(predictions["season"].dropna().unique())
+    ]
+    overall_metrics = _aggregate_metrics(predictions, market_anchor=run.market_anchor)
+    probability_windows = _probability_window_rows(predictions, seed=config.random_seed)
+    for row in probability_windows:
+        if row.get("window") == "all_weeks":
+            overall_metrics.update(
+                {key: value for key, value in row.items() if key.endswith(("_ci_low", "_ci_high"))}
+            )
+            break
+    reliability = metrics_utils.reliability_table(
+        predictions["home_win_prob"].to_numpy(),
+        predictions["actual_home_win"].to_numpy(),
+        bins=RELIABILITY_BINS,
+    )
+    return {
+        "per_week": progress.per_week_metrics,
+        "per_season": per_season_metrics,
+        "overall": overall_metrics,
+        "reliability": reliability,
+        "season_win_totals": _season_win_totals(predictions),
+        "calibration_drift": _calibration_drift(predictions),
+        "probability_windows": probability_windows,
+        "predictions": predictions,
+    }
+
+
+def run_walk_forward_backtest(
+    df: pd.DataFrame,
+    config: WalkForwardConfig,
+    *,
+    fold_callback: Callable[[dict[str, Any], WalkForwardFold], None] | None = None,
+    checkpoints: FoldCheckpoints | None = None,
+    floor_sigma_history: floor_sigma.ErrorPool | None = None,
+) -> dict[str, Any]:
+    """Run walk-forward training/evaluation and return metrics plus per-game predictions.
+
+    Any feature groups named in `config.disabled_feature_groups` are dropped here, so the
+    config alone determines the ablation. The CLI scripts also drop them before building the
+    config (to log and record exactly what went away); dropping again is a no-op.
+
+    With `checkpoints`, every finished week is saved under a subdirectory of its directory
+    named for `fold_checkpoint_fingerprint(df, config)`, and a matching week is restored
+    rather than trained when it resumes. Weeks are independent and seeded, so a resumed
+    run returns exactly what an uninterrupted one would. `fold_callback` fires only for
+    weeks that are trained, not for restored ones.
+
+    Each week's probabilities are the floor `Phi(margin / sigma)`, with sigma estimated by
+    `floor_sigma.estimate` from the out-of-fold errors strictly before that week: the
+    `floor_sigma_history` (for example a reference run's folds), minus any week this run
+    predicts itself, plus this run's own earlier weeks.
+    """
+    np.random.seed(config.random_seed)
+    config = with_resolved_xgb_device(config)
+    # Fingerprint the caller's frame before any column drops or row filters below.
+    store = (
+        _FoldCheckpointStore.create(checkpoints.directory, df, config, floor_sigma_history)
+        if checkpoints is not None
+        else None
+    )
+    resume = checkpoints is not None and checkpoints.resume
+    run = _prepare_run(df, config)
+    history = floor_sigma_history or floor_sigma.ErrorPool()
+    progress = _FoldProgress()
+
+    run_start = time.perf_counter()
+    for fold_index, fold in enumerate(run.folds, start=1):
+        restored = store.load(fold) if store is not None and resume else None
+        if restored is not None:
+            if progress.feature_list is None:
+                progress.feature_list = restored.feature_columns
+            progress.per_week_metrics.append(restored.metrics)
+            progress.prediction_frames.append(restored.predictions)
+            progress.own_errors.append(floor_sigma.margin_errors(restored.predictions))
+            progress.restored_folds += 1
+            log.info(
+                "Walk-forward fold %d/%d restored from checkpoint: season %d week %d",
+                fold_index,
+                len(run.folds),
+                int(fold.season),
+                int(fold.week),
+            )
+            continue
+
+        metrics, fold_predictions, fold_features = _train_fold(fold, run, config, history, progress)
+        if progress.feature_list is None:
+            progress.feature_list = fold_features
+        progress.prediction_frames.append(fold_predictions)
+        progress.own_errors.append(floor_sigma.margin_errors(fold_predictions))
+        # Saved before the callback, so a callback that stops the run keeps this week.
+        if store is not None:
+            store.save(fold, metrics, fold_predictions, fold_features)
+        progress.computed_folds += 1
+
+        if fold_callback is not None:
+            fold_callback(metrics, fold)
+
+        progress.per_week_metrics.append(metrics)
+
+        # Nothing else is logged between the first weeks and the final report, so this
+        # line is the only progress signal a long run gives. The remaining-time estimate
+        # assumes the average trained fold so far (restored folds cost nothing), which
+        # runs low late in a run as training sets grow.
+        elapsed = time.perf_counter() - run_start
+        log.info(
+            "Walk-forward fold %d/%d done: season %d week %d (%d games, Brier %.4f), "
+            "%.0fs elapsed, about %.0fs remaining",
+            fold_index,
+            len(run.folds),
+            int(fold.season),
+            int(fold.week),
+            len(fold_predictions),
+            float(metrics["brier"]),
+            elapsed,
+            elapsed / progress.computed_folds * (len(run.folds) - fold_index),
+        )
+
+    if store is not None:
+        log.info(
+            "Walk-forward checkpoints: %d weeks restored, %d trained (%s)",
+            progress.restored_folds,
+            progress.computed_folds,
+            store.directory,
+        )
+
+    return {
+        **_summarize_run(run, config, progress),
+        "resolved_settings": run.resolved_settings,
+        "resolved_eval_seasons": run.resolved_eval_seasons,
+        "feature_list": progress.feature_list,
+        "eval_window": summarize_eval_window(
+            run.df,
+            run.resolved_eval_seasons,
+            start_week=config.wf_start_week,
+            include_postseason=config.include_postseason,
+        ),
+        "excluded_incomplete_seasons": run.excluded_incomplete,
+        "floor_sigma": {
+            "min_pool_seasons": constants.FLOOR_SIGMA_MIN_POOL_SEASONS,
+            "fallback_sigma": constants.SCORE_DIFF_STD_DEV,
+            "history_sources": list(history.sources),
+            "history_games": len(history.errors),
+        },
+        "checkpoint": (
+            None
+            if store is None
+            else {
+                "dir": str(store.directory),
+                "restored_folds": progress.restored_folds,
+                "computed_folds": progress.computed_folds,
+            }
+        ),
+    }
+
+
+def build_metrics_report(
+    run_id: str,
+    created_at: str,
+    config_payload: dict[str, Any],
+    results: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the JSON-serializable metrics report payload."""
+    fold_summary = _summarize_fold_metrics(results["per_week"])
+    summary_table = _build_metrics_summary_table(
+        results["overall"],
+        fold_summary,
+        results.get("probability_windows") or [],
+    )
+    return {
+        "run_id": run_id,
+        "created_at": created_at,
+        "config": config_payload,
+        "metric_strategy": metrics_utils.METRIC_STRATEGY,
+        "metrics": {
+            "per_week": results["per_week"],
+            "per_season": results["per_season"],
+            "overall": results["overall"],
+            "fold_summary": fold_summary,
+            "windows": results.get("probability_windows") or [],
+            "summary_table": summary_table,
+        },
+        "floor_sigma": results.get("floor_sigma"),
+        "calibration": {
+            "bins": results["reliability"],
+            "bin_count": RELIABILITY_BINS,
+        },
+        "diagnostics": {
+            "season_win_totals": results.get("season_win_totals"),
+            "calibration_drift": results.get("calibration_drift"),
+        },
+        "splits": {
+            "eval_window": results.get("eval_window"),
+            "excluded_incomplete_seasons": results.get("excluded_incomplete_seasons", []),
+            "calibration_window": {
+                "method": config_payload.get("calibration"),
+            },
+        },
+    }
+
+
+def _summarize_fold_metrics(per_week: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize per-week metrics with mean/variance across folds."""
+    summary: dict[str, Any] = {"folds": len(per_week), "metrics": {}}
+    if not per_week:
+        for name in SUMMARY_METRICS:
+            summary["metrics"][name] = {"mean": None, "variance": None}
+        return summary
+
+    for name in SUMMARY_METRICS:
+        values = [row.get(name) for row in per_week if row.get(name) is not None]
+        if not values:
+            summary["metrics"][name] = {"mean": None, "variance": None}
+            continue
+        arr = np.asarray(values, dtype=float)
+        summary["metrics"][name] = {
+            "mean": float(np.mean(arr)),
+            "variance": float(np.var(arr)),
+        }
+    return summary
+
+
+def _aggregate_metrics(frame: pd.DataFrame, *, market_anchor: bool) -> dict[str, Any]:
+    actual_margin = frame["actual_margin"].to_numpy()
+    pred_margin = frame["predicted_margin"].to_numpy()
+    actual_total = frame["actual_total"].to_numpy()
+    pred_total = frame["predicted_total"].to_numpy()
+    actual_home_win = frame["actual_home_win"].to_numpy()
+    home_win_prob = frame["home_win_prob"].to_numpy()
+
+    season_value = None
+    seasons = frame["season"].unique() if "season" in frame.columns else ()
+    if len(seasons) == 1:
+        season_value = int(seasons[0])
+    weeks_count = int(frame["week"].nunique()) if "week" in frame.columns else None
+    games_count = len(frame)
+    expected_points_total = float(frame["expected_points"].sum())
+    actual_points_total = float(frame["actual_points"].sum())
+    picks_correct = int(frame["pick_correct"].sum())
+    metrics = {
+        "season": season_value,
+        "weeks": weeks_count,
+        "games": games_count,
+        **metrics_utils.margin_total_metrics(actual_margin, actual_total, pred_margin, pred_total),
+        **metrics_utils.probability_summary(actual_home_win, actual_margin, home_win_prob),
+        "expected_points": expected_points_total,
+        "actual_points": actual_points_total,
+        "picks_correct": picks_correct,
+    }
+    reliability_bins = metrics_utils.reliability_table(
+        home_win_prob,
+        actual_home_win,
+        bins=RELIABILITY_BINS,
+    )
+    metrics["reliability_ece"] = metrics_utils.reliability_ece(reliability_bins)
+    if weeks_count:
+        metrics["expected_points_avg"] = expected_points_total / weeks_count
+        metrics["actual_points_avg"] = actual_points_total / weeks_count
+
+    metrics.update(
+        _probability_summary_for_column(
+            frame,
+            column="deterministic_home_win_prob",
+            prefix="deterministic",
+        )
+    )
+    metrics.update(
+        _probability_summary_for_column(
+            frame,
+            column="market_home_win_prob",
+            prefix="market",
+        )
+    )
+    metrics.update(
+        _paired_probability_differences(
+            frame,
+            model_column="deterministic_home_win_prob",
+            market_column="market_home_win_prob",
+            prefix="deterministic",
+        )
+    )
+
+    if market_anchor and "market_baseline_margin" in frame.columns:
+        baseline_margin = frame["market_baseline_margin"].to_numpy()
+        baseline_total = frame["market_baseline_total"].to_numpy()
+        actual_margin_resid = actual_margin - baseline_margin
+        actual_total_resid = actual_total - baseline_total
+        pred_margin_resid = pred_margin - baseline_margin
+        pred_total_resid = pred_total - baseline_total
+        metrics["market_margin_resid_mae"] = float(
+            np.mean(np.abs(actual_margin_resid - pred_margin_resid))
+        )
+        metrics["market_total_resid_mae"] = float(
+            np.mean(np.abs(actual_total_resid - pred_total_resid))
+        )
+
+    # Optional diagnostics: interval coverage (P10-P90).
+    margin_p10 = "predicted_margin_p10"
+    margin_p90 = "predicted_margin_p90"
+    total_p10 = "predicted_total_p10"
+    total_p90 = "predicted_total_p90"
+    if margin_p10 in frame.columns and margin_p90 in frame.columns:
+        lo = frame[margin_p10].to_numpy(dtype=float)
+        hi = frame[margin_p90].to_numpy(dtype=float)
+        metrics["margin_p10_p90_coverage"] = float(
+            np.mean((actual_margin >= lo) & (actual_margin <= hi))
+        )
+    if total_p10 in frame.columns and total_p90 in frame.columns:
+        lo = frame[total_p10].to_numpy(dtype=float)
+        hi = frame[total_p90].to_numpy(dtype=float)
+        metrics["total_p10_p90_coverage"] = float(
+            np.mean((actual_total >= lo) & (actual_total <= hi))
+        )
+
+    return metrics
+
+
+def _resolve_team_columns(frame: pd.DataFrame) -> tuple[str, str] | None:
+    """Resolve team identifier columns for diagnostics."""
+    for candidates in (("away_abbr", "home_abbr"), ("away_name", "home_name")):
+        if all(col in frame.columns for col in candidates):
+            return candidates
+    return None
+
+
+def _season_win_totals(predictions: pd.DataFrame) -> dict[str, Any]:
+    """Compute per-team season win totals vs expected wins."""
+    if predictions.empty:
+        return {"per_team": [], "per_season": [], "overall": None}
+    team_cols = _resolve_team_columns(predictions)
+    required = {"season", "home_win_prob", "actual_margin"}
+    if team_cols is None or not required.issubset(predictions.columns):
+        return {"per_team": [], "per_season": [], "overall": None}
+
+    away_col, home_col = team_cols
+    home_win_prob = predictions["home_win_prob"].to_numpy(dtype=float)
+    actual_margin = predictions["actual_margin"].to_numpy(dtype=float)
+    actual_home_win = np.where(
+        actual_margin > 0,
+        1.0,
+        np.where(actual_margin < 0, 0.0, 0.5),
+    )
+
+    home_rows = pd.DataFrame(
+        {
+            "season": predictions["season"].to_numpy(),
+            "team": predictions[home_col].to_numpy(),
+            "expected_wins": home_win_prob,
+            "actual_wins": actual_home_win,
+        }
+    )
+    away_rows = pd.DataFrame(
+        {
+            "season": predictions["season"].to_numpy(),
+            "team": predictions[away_col].to_numpy(),
+            "expected_wins": 1.0 - home_win_prob,
+            "actual_wins": 1.0 - actual_home_win,
+        }
+    )
+    combined = pd.concat([home_rows, away_rows], ignore_index=True)
+    combined = combined.dropna(subset=["season", "team"])
+    if combined.empty:
+        return {"per_team": [], "per_season": [], "overall": None}
+
+    grouped = combined.groupby(["season", "team"], as_index=False).agg(
+        expected_wins=("expected_wins", "sum"),
+        actual_wins=("actual_wins", "sum"),
+        games=("expected_wins", "size"),
+    )
+    grouped["error"] = grouped["expected_wins"] - grouped["actual_wins"]
+    grouped["abs_error"] = grouped["error"].abs()
+
+    per_team = [
+        {
+            "season": _scalar_to_int(row["season"]),
+            "team": str(row["team"]),
+            "expected_wins": float(row["expected_wins"]),
+            "actual_wins": float(row["actual_wins"]),
+            "games": int(row["games"]),
+            "error": float(row["error"]),
+            "abs_error": float(row["abs_error"]),
+        }
+        for _, row in grouped.sort_values(["season", "team"]).iterrows()
+    ]
+
+    def _summarize_totals(frame: pd.DataFrame, season: int | None) -> dict[str, Any]:
+        errors = frame["error"].to_numpy(dtype=float)
+        abs_errors = frame["abs_error"].to_numpy(dtype=float)
+        rmse = float(np.sqrt(np.mean(errors**2))) if len(errors) else None
+        return {
+            "season": season,
+            "teams": int(frame["team"].nunique()),
+            "games": int(frame["games"].sum()),
+            "mean_abs_error": float(np.mean(abs_errors)) if len(abs_errors) else None,
+            "median_abs_error": float(np.median(abs_errors)) if len(abs_errors) else None,
+            "max_abs_error": float(np.max(abs_errors)) if len(abs_errors) else None,
+            "rmse": rmse,
+        }
+
+    per_season = [
+        _summarize_totals(season_df, _scalar_to_int(season))
+        for season, season_df in grouped.groupby("season")
+    ]
+    overall = _summarize_totals(grouped, None)
+
+    return {"per_team": per_team, "per_season": per_season, "overall": overall}
+
+
+def _calibration_drift(predictions: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    """Summarize calibration drift by season and week."""
+    required = {"season", "week", "home_win_prob", "actual_home_win"}
+    if predictions.empty or not required.issubset(predictions.columns):
+        return {"per_week": [], "per_season": []}
+
+    def _summarize(frame: pd.DataFrame) -> dict[str, Any]:
+        home_win_prob = frame["home_win_prob"].to_numpy(dtype=float)
+        actual_home_win = frame["actual_home_win"].to_numpy(dtype=float)
+        prob_metrics = metrics_utils.probability_metrics(actual_home_win, home_win_prob)
+        avg_pred = float(np.mean(home_win_prob)) if len(home_win_prob) else None
+        avg_actual = float(np.mean(actual_home_win)) if len(actual_home_win) else None
+        bias = avg_pred - avg_actual if avg_pred is not None and avg_actual is not None else None
+        return {
+            "games": len(frame),
+            "avg_pred": avg_pred,
+            "avg_actual": avg_actual,
+            "bias": bias,
+            "abs_bias": abs(bias) if bias is not None else None,
+            **prob_metrics,
+        }
+
+    per_week: list[dict[str, Any]] = []
+    for (season, week), frame in predictions.groupby(["season", "week"]):
+        row = _summarize(frame)
+        row["season"] = _scalar_to_int(season)
+        row["week"] = _scalar_to_int(week)
+        per_week.append(row)
+
+    per_season: list[dict[str, Any]] = []
+    for season, frame in predictions.groupby("season"):
+        row = _summarize(frame)
+        row["season"] = _scalar_to_int(season)
+        per_season.append(row)
+
+    per_week.sort(key=lambda item: (item["season"], item["week"]))
+    per_season.sort(key=lambda item: item["season"])
+
+    return {"per_week": per_week, "per_season": per_season}
+
+
+def _build_metrics_summary_table(
+    overall: dict[str, Any],
+    fold_summary: dict[str, Any],
+    probability_windows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build a summary table for first-class metrics."""
+    rows: list[dict[str, Any]] = []
+    fold_metrics = fold_summary.get("metrics", {}) if fold_summary else {}
+    for priority, specs in metrics_utils.METRIC_STRATEGY.items():
+        for spec in specs:
+            metric = spec["metric"]
+            stats = fold_metrics.get(metric, {})
+            rows.append(
+                {
+                    "metric": metric,
+                    "priority": priority,
+                    "direction": spec.get("direction"),
+                    "overall": overall.get(metric),
+                    "fold_mean": stats.get("mean"),
+                    "fold_variance": stats.get("variance"),
+                }
+            )
+    for window in probability_windows:
+        for metric in ("deterministic_brier_vs_market", "deterministic_log_loss_vs_market"):
+            if metric not in window:
+                continue
+            rows.append(
+                {
+                    "metric": metric,
+                    "priority": "primary",
+                    "direction": "lower",
+                    "window": window.get("window"),
+                    "window_label": window.get("label"),
+                    "overall": window.get(metric),
+                    "ci_low": window.get(f"{metric}_ci_low"),
+                    "ci_high": window.get(f"{metric}_ci_high"),
+                    "games": window.get("games"),
+                }
+            )
+    return rows
+
+
+def dataset_fingerprint(path: Path) -> str:
+    """Compute a SHA-256 fingerprint of the dataset file bytes."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def generate_run_id(dataset_hash: str, config: WalkForwardConfig) -> str:
+    """Generate a stable-ish run id from timestamp + config hash."""
+    created = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    payload = json.dumps(config.to_dict(), sort_keys=True)
+    short_hash = hashlib.sha256(f"{dataset_hash}:{payload}".encode()).hexdigest()[:8]
+    return f"wf_{created}_{short_hash}"
+
+
+def build_metadata(
+    created_at: str, dataset_hash: str, config_payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Build a metadata payload adjacent to the metrics report."""
+    return {
+        "created_at": created_at,
+        "run_id": config_payload.get("run_id"),
+        "git_commit_hash": _git_commit_hash(),
+        "dataset_hash": dataset_hash,
+        "library_versions": _library_versions(),
+        "config": config_payload,
+        "feature_list": config_payload.get("feature_list"),
+        "splits": config_payload.get("splits"),
+    }
+
+
+def _git_commit_hash() -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(constants.ROOT_DIR),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    return value or None
+
+
+def _library_versions() -> dict[str, str | None]:
+    versions: dict[str, str | None] = {}
+    for module_name in (
+        "numpy",
+        "pandas",
+        "polars",
+        "scipy",
+        "sklearn",
+        "xgboost",
+        "optuna",
+    ):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            versions[module_name] = None
+            continue
+        versions[module_name] = getattr(module, "__version__", None)
+    return versions

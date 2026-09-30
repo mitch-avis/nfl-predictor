@@ -2,32 +2,36 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-import polars
-from fastapi.testclient import TestClient
-
-from nfl_predictor.api.routers import resolve
+import polars as pl
 from tests.api import factories
 
+from nfl_predictor.api.routers import resolve
 
-def _seed(project_root: Path, app) -> None:  # noqa: ANN001
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+
+def _seed(project_root: Path, app) -> None:
     """Create a complete weekly run, a prior-week run, and an unattached prediction file."""
     models = project_root / "models"
     factories.make_run_dir(
         models,
         "weekly_w1",
-        season=2026,
-        week=1,
-        created_at="2026-09-09T00:00:00+00:00",
+        factories.RunSpec(season=2026, week=1, created_at="2026-09-09T00:00:00+00:00"),
     )
     factories.make_run_dir(
         models,
         "weekly_w0",
-        season=2026,
-        week=0,
-        created_at="2026-09-01T00:00:00+00:00",
-        power_order=["DEN", "KC", "GB", "BUF", "MIN"],
+        factories.RunSpec(
+            season=2026,
+            week=0,
+            created_at="2026-09-01T00:00:00+00:00",
+            power_order=["DEN", "KC", "GB", "BUF", "MIN"],
+        ),
     )
     factories.write_predictions_csv(
         project_root / "data" / "predict" / "week_03_predictions.csv", 2026, 3
@@ -42,12 +46,14 @@ def test_registry_route(viewer_client: TestClient) -> None:
     assert "Model" in payload["groups"]
 
 
-def test_predictions_routes(project_root: Path, viewer_client: TestClient, app) -> None:  # noqa: ANN001
+def test_predictions_routes(project_root: Path, viewer_client: TestClient, app) -> None:
     """The active run is the default; weeks list every source; explicit selections resolve."""
     _seed(project_root, app)
     payload = viewer_client.get("/api/predictions").json()
-    assert payload["run_id"] == "weekly_w1" and payload["source"] == "active"
-    assert payload["season"] == 2026 and payload["week"] == 1
+    assert payload["run_id"] == "weekly_w1"
+    assert payload["source"] == "active"
+    assert payload["season"] == 2026
+    assert payload["week"] == 1
     assert payload["summary"]["games"] == 4
     assert len(payload["table"]["rows"]) == 4
     labels = [w["label"] for w in payload["weeks"]]
@@ -56,9 +62,11 @@ def test_predictions_routes(project_root: Path, viewer_client: TestClient, app) 
     assert "Week 3 (data/predict)" in labels
 
     other = viewer_client.get("/api/predictions", params={"week": 0}).json()
-    assert other["run_id"] == "weekly_w0" and other["source"] == "run"
+    assert other["run_id"] == "weekly_w0"
+    assert other["source"] == "run"
     unattached = viewer_client.get("/api/predictions", params={"week": 3}).json()
-    assert unattached["run_id"] is None and unattached["source"] == "unattached"
+    assert unattached["run_id"] is None
+    assert unattached["source"] == "unattached"
     forced = viewer_client.get("/api/predictions", params={"source": "unattached"}).json()
     assert forced["week"] == 3
     explicit = viewer_client.get("/api/predictions", params={"run": "weekly_w0"}).json()
@@ -71,7 +79,8 @@ def test_predictions_routes(project_root: Path, viewer_client: TestClient, app) 
     picks = viewer_client.get("/api/predictions/picks").json()
     assert picks["table"]["rows"][0]["confidence_rank"] == 4
     derived = viewer_client.get("/api/predictions/picks", params={"week": 3}).json()
-    assert derived["run_id"] is None and len(derived["table"]["rows"]) == 4
+    assert derived["run_id"] is None
+    assert len(derived["table"]["rows"]) == 4
 
 
 def test_predictions_without_any_source(viewer_client: TestClient) -> None:
@@ -83,16 +92,16 @@ def test_predictions_without_any_source(viewer_client: TestClient) -> None:
 
 def test_training_run_without_predictions(
     project_root: Path, viewer_client: TestClient, app
-) -> None:  # noqa: ANN001
+) -> None:
     """An explicit training run has no predictions file."""
-    factories.make_run_dir(project_root / "models", "train", kind="training")
+    factories.make_run_dir(project_root / "models", "train", factories.RunSpec(kind="training"))
     app.state.run_index.invalidate()
     response = viewer_client.get("/api/predictions", params={"run": "train"})
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "no_predictions"
 
 
-def test_betting_routes(project_root: Path, viewer_client: TestClient, app) -> None:  # noqa: ANN001
+def test_betting_routes(project_root: Path, viewer_client: TestClient, app) -> None:
     """The betting table and ladder work for the active run; the workbook route is gone."""
     _seed(project_root, app)
     payload = viewer_client.get("/api/betting").json()
@@ -112,7 +121,7 @@ def test_betting_routes(project_root: Path, viewer_client: TestClient, app) -> N
     assert unattached["run_id"] is None
 
 
-def test_power_routes(project_root: Path, viewer_client: TestClient, app) -> None:  # noqa: ANN001
+def test_power_routes(project_root: Path, viewer_client: TestClient, app) -> None:
     """Rankings carry movement against the prior-week run and standings tabs are present."""
     _seed(project_root, app)
     payload = viewer_client.get("/api/power").json()
@@ -121,32 +130,37 @@ def test_power_routes(project_root: Path, viewer_client: TestClient, app) -> Non
     assert payload["previous_run_id"] is None  # week 0 has no week -1 predecessor
     rows = {row["team_abbr"]: row for row in payload["rankings"]["rows"]}
     assert rows["KC"]["rank"] == 1
-    assert payload["standings"] is not None and payload["division_standings"] is not None
+    assert payload["standings"] is not None
+    assert payload["division_standings"] is not None
 
     factories.make_run_dir(
         project_root / "models",
         "weekly_w2",
-        season=2026,
-        week=2,
-        created_at="2026-09-16T00:00:00+00:00",
-        power_order=["DEN", "KC", "BUF", "GB", "MIN"],
+        factories.RunSpec(
+            season=2026,
+            week=2,
+            created_at="2026-09-16T00:00:00+00:00",
+            power_order=["DEN", "KC", "BUF", "GB", "MIN"],
+        ),
     )
     app.state.run_index.invalidate()
     payload = viewer_client.get("/api/power", params={"run": "weekly_w2"}).json()
     assert payload["previous_run_id"] == "weekly_w1"
     rows = {row["team_abbr"]: row for row in payload["rankings"]["rows"]}
-    assert rows["DEN"]["rank_change"] == 1 and rows["KC"]["rank_change"] == -1
+    assert rows["DEN"]["rank_change"] == 1
+    assert rows["KC"]["rank_change"] == -1
 
-    factories.make_run_dir(project_root / "models", "train", kind="training")
+    factories.make_run_dir(project_root / "models", "train", factories.RunSpec(kind="training"))
     app.state.run_index.invalidate()
     assert viewer_client.get("/api/power", params={"run": "train"}).status_code == 404
 
 
-def test_model_routes(project_root: Path, viewer_client: TestClient, app) -> None:  # noqa: ANN001
+def test_model_routes(project_root: Path, viewer_client: TestClient, app) -> None:
     """The model payload is available for the active run and by run id."""
     _seed(project_root, app)
     payload = viewer_client.get("/api/model").json()
-    assert payload["run_id"] == "weekly_w1" and payload["kind"] == "weekly"
+    assert payload["run_id"] == "weekly_w1"
+    assert payload["kind"] == "weekly"
     assert payload["metrics"]["holdout"]["brier"] == 0.2192
     assert payload["wf_compare"]["rows"][0]["label"] == "base"
     assert payload["feature_importance"]["measure"] == "mean_abs_shap"
@@ -156,7 +170,7 @@ def test_model_routes(project_root: Path, viewer_client: TestClient, app) -> Non
     assert viewer_client.get("/api/runs/nope/model").status_code == 404
 
 
-def test_data_routes(project_root: Path, viewer_client: TestClient, app) -> None:  # noqa: ANN001
+def test_data_routes(project_root: Path, viewer_client: TestClient, app) -> None:
     """Data status reports files, cache coverage, and unattached outputs."""
     _seed(project_root, app)
     (project_root / "data" / "completed_games_ml.csv").write_text(
@@ -178,13 +192,13 @@ def test_data_routes(project_root: Path, viewer_client: TestClient, app) -> None
 def test_weeks_offer_unpredicted_weeks_of_the_current_season(
     project_root: Path,
     viewer_client: TestClient,
-    app,  # noqa: ANN001
-    monkeypatch,  # noqa: ANN001
+    app,
+    monkeypatch,
 ) -> None:
     """Unplayed weeks with no predictions are listed so the UI can offer to generate them."""
     _seed(project_root, app)
     monkeypatch.setattr(resolve, "current_season_week", lambda: (2026, 2))
-    polars.DataFrame(
+    pl.DataFrame(
         {
             "season": [2026, 2026, 2026],
             "week": [1, 2, 4],
@@ -204,7 +218,7 @@ def test_weeks_offer_unpredicted_weeks_of_the_current_season(
 def test_weeks_offer_nothing_when_the_dataset_is_missing(
     project_root: Path,
     viewer_client: TestClient,
-    app,  # noqa: ANN001
+    app,
 ) -> None:
     """Without an ML dataset there is nothing to generate from."""
     _seed(project_root, app)

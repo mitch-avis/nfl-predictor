@@ -14,11 +14,11 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
+from tests import snapshots
 
 from nfl_predictor.cli import compare as command
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.reporting import run_comparison
-from tests import snapshots
 
 # (game_id, season, week, p, actual margin); home wins when the margin is positive.
 GAMES = [

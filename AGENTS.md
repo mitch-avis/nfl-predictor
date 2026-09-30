@@ -55,7 +55,7 @@ Rules that are always enforced:
   `.agents/feature_crosswalk.md` section 3.1).
 - Validated baseline on 2026-09-25 (version `0.28.5`): `scripts/gate.sh --web` exits `0`
   (`1032 passed`, coverage `92.21%` against the enforced `90%` floor, 22 frontend tests). Run
-  `scripts/gate.sh --web` whenever `web/` or `nfl_predictor/api/` changes.
+  `scripts/gate.sh --web` whenever `web/` or `src/nfl_predictor/api/` changes.
   - Re-run a plain `uv sync` after every version bump (including after merging a branch that
     bumped the version), or `uv sync --check --active` fails on the stale installed package.
 - **Benchmarks and data state live in `.agents/benchmarks.md`.** Read it before any walk-forward
@@ -101,7 +101,7 @@ are not advisory.
    - Meaning is unchanged. Corrected task or acceptance text names the current equivalent of
      what was asked, keeps the same bar and every criterion, and no checkbox changes state. A
      code fix changes no output of a weekly run, walk-forward or ETL, and touches no
-     fingerprinted file (`nfl_predictor/ml/*.py`, `constants.py`, `ml_model.py`).
+     fingerprinted file (`src/nfl_predictor/ml/*.py`, `constants.py`, `ml_model.py`).
    - Nothing under rule 5 is involved, no measured number changes (rule 3), and records stay as
      written: `.agents/ARCHIVE.md`, past `CHANGELOG.md` entries, run directories, benchmark
      provenance.
@@ -133,7 +133,7 @@ are not advisory.
    the user counts as approval for every rung up to that cap; only a rung beyond the cap, or
    outside the ladder as written, needs a fresh ask.
    One walk-forward at a time; `uptime` and `pgrep -af walk_forward` first; OpenMP policy by
-   load. Any edit under `nfl_predictor/ml/` changes every checkpoint fingerprint, so a rerun
+   load. Any edit under `src/nfl_predictor/ml/` changes every checkpoint fingerprint, so a rerun
    after a code change retrains from scratch; plan runs after the code is stable.
 5. **Must ask first** (stop and wait; never assume):
    - rebuilding anything under `data/` (an ETL rerun), or deleting or overwriting any file under
@@ -341,19 +341,19 @@ gate" (add `--web` when `web/` changed, `--quick` to skip pytest while iterating
 
 ## Project Shape (Big Picture)
 
-- Compatibility facades: `nfl_predictor/utils/polars_utils.py` forwards imports to the split
-  Polars modules, and `nfl_predictor/ml_model.py` forwards to `nfl_predictor/ml/` and keeps the
-  `python -m nfl_predictor.ml_model` form of `nfl-predictor train`/`predict`
-  (`nfl_predictor/cli/train.py`, outside the checkpoint fingerprint). XGBoost version/build
-  compatibility helpers live in `nfl_predictor/ml/ml_model_xgb_utils.py`.
+- Compatibility facades: `src/nfl_predictor/utils/polars_utils.py` forwards imports to the split
+  Polars modules, and `src/nfl_predictor/ml_model.py` forwards to `src/nfl_predictor/ml/` and
+  keeps the `python -m nfl_predictor.ml_model` form of `nfl-predictor train`/`predict`
+  (`src/nfl_predictor/cli/train.py`, outside the checkpoint fingerprint). XGBoost version/build
+  compatibility helpers live in `src/nfl_predictor/ml/ml_model_xgb_utils.py`.
 
 ### Commands (operational entrypoints)
 
 `nfl-predictor --help` lists every command by group; `nfl-predictor <command> --help` shows its
 options. `scripts/` holds only `gate.sh`.
 
-- `nfl-predictor compare` (`nfl_predictor/cli/compare.py`, definitions in
-  `nfl_predictor/reporting/run_comparison.py`): paired comparison of walk-forward runs rescored
+- `nfl-predictor compare` (`src/nfl_predictor/cli/compare.py`, definitions in
+  `src/nfl_predictor/reporting/run_comparison.py`): paired comparison of walk-forward runs rescored
   from their fold checkpoints, per window, with bootstrap intervals and two seeds combined per
   game when given. It reproduces the task 55.8 independent rescore exactly
   (`.agents/m60/verify_compare.py`), so a reviewer can use it under rule 3(b) as long as the
@@ -363,8 +363,8 @@ options. `scripts/` holds only `gate.sh`.
 
 ### Web UI (FastAPI + React)
 
-- The backend is `nfl_predictor/api/` and the app is `web/`. Their layouts, the web gate and the
-  test locations are in `nfl_predictor/api/AGENTS.md` and `web/AGENTS.md`, which load when you
+- The backend is `src/nfl_predictor/api/` and the app is `web/`. Their layouts, the web gate and the
+  test locations are in `src/nfl_predictor/api/AGENTS.md` and `web/AGENTS.md`, which load when you
   work in those directories. Run `scripts/gate.sh --web` whenever either changes.
 - `nfl-predictor web` serves the built app from `web/dist/` on port 8000. `--reload` restarts the
   server on any Python file change in the checkout (so an agent's edits, checkouts and merges
@@ -381,7 +381,7 @@ options. `scripts/` holds only `gate.sh`.
 ## Data Inputs/Outputs (Repo Conventions)
 
 - **Data directory:** all datasets live under `data/` (see `constants.DATA_PATH` in
-  `nfl_predictor/constants.py`).
+  `src/nfl_predictor/constants.py`).
 - **Key output files (examples; do not hard-code filenames):**
   - `data/all_data_ml.csv` - master ML dataset (includes engineered features and targets where
     available)
@@ -393,7 +393,7 @@ options. `scripts/` holds only `gate.sh`.
 
 ### I/O rules
 
-- Prefer the project’s Polars-based load/save helpers in `nfl_predictor/data_collection.py`.
+- Prefer the project’s Polars-based load/save helpers in `src/nfl_predictor/data_collection.py`.
 - Any pandas-based CSV I/O utilities are legacy. Do not add new pandas-based I/O helpers; prefer the
   Polars ETL helpers when touching related code.
 
@@ -423,7 +423,7 @@ options. `scripts/` holds only `gate.sh`.
 
 ## Column & Schema Rules (Source of Truth)
 
-- Column names and schema lists are defined in `nfl_predictor/constants.py`.
+- Column names and schema lists are defined in `src/nfl_predictor/constants.py`.
 - Team identifiers are normalized using the canonical mapping in `constants.py`.
 - Do not hard-code column lists; use constants to prevent schema drift.
 - ETL does not silently drop columns.
@@ -456,7 +456,7 @@ must never be missed:
 - The model predicts `margin = home_score - away_score` and `total = home_score + away_score`,
   and scores derive from them. Win probability is the deterministic floor `Phi(margin / sigma)`
   in every run type, where sigma is the root-mean-square out-of-fold margin error strictly before
-  the predicted week (`nfl_predictor/ml/floor_sigma.py`; `SCORE_DIFF_STD_DEV` until that pool spans
+  the predicted week (`src/nfl_predictor/ml/floor_sigma.py`; `SCORE_DIFF_STD_DEV` until that pool spans
   three earlier seasons); the pick and its confidence come from the unrounded probability.
 - Confidence pools: unique `1..N` per week; a tie scores as incorrect for both sides; picks are
   single-shot before the week's first game (no in-week updates in backtests).
@@ -479,7 +479,7 @@ must never be missed:
 ## ML Implementation Standards
 
 The preprocessing, training and blending standards for the model code are in
-`nfl_predictor/ml/AGENTS.md`, which loads when you work under `nfl_predictor/ml/`.
+`src/nfl_predictor/ml/AGENTS.md`, which loads when you work under `src/nfl_predictor/ml/`.
 
 ## Dependency & Environment Hygiene
 
@@ -500,7 +500,7 @@ Some sources do not exist for all seasons.
 
 ## constants.py Hygiene
 
-`nfl_predictor/constants.py` remains the canonical reference for:
+`src/nfl_predictor/constants.py` remains the canonical reference for:
 
 - file paths
 - feature column names/lists
@@ -518,7 +518,7 @@ Unused constants are removed and the file remains organized into clear sections.
 ## Safety, Scope, and Prohibited Behaviors
 
 - Do not add unrelated features (new scrapers, unrelated pipelines). The web UI under
-  `nfl_predictor/api/` and `web/` is in scope; extend it by phase per `.agents/web_ui_plan.md`.
+  `src/nfl_predictor/api/` and `web/` is in scope; extend it by phase per `.agents/web_ui_plan.md`.
 - Do not remove/alter existing pipeline behavior without updating tests and documentation.
 - Avoid new external services or network dependencies beyond existing scraping utilities.
 - Do not claim betting profitability; report metrics and uncertainty honestly.

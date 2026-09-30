@@ -3,22 +3,27 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from fastapi.testclient import TestClient
+from tests.api.factories import RunSpec, make_run_dir
 
-from tests.api.factories import make_run_dir
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
 
 
 def test_list_detail_activate_and_download(
     project_root: Path,
     admin_client: TestClient,
-    app,  # noqa: ANN001
+    app,
 ) -> None:
     """The run list marks the active run, details expose config, activation pins."""
     models = project_root / "models"
-    make_run_dir(models, "weekly_a", created_at="2026-09-01T00:00:00+00:00")
-    make_run_dir(models, "train_b", kind="training", created_at="2026-09-05T00:00:00+00:00")
+    make_run_dir(models, "weekly_a", RunSpec(created_at="2026-09-01T00:00:00+00:00"))
+    make_run_dir(
+        models, "train_b", RunSpec(kind="training", created_at="2026-09-05T00:00:00+00:00")
+    )
     app.state.run_index.invalidate()
 
     listed = admin_client.get("/api/runs").json()
@@ -53,7 +58,7 @@ def test_list_detail_activate_and_download(
     assert admin_client.get("/api/runs/nope/files/metadata").status_code == 404
 
 
-def test_viewer_cannot_activate(project_root: Path, viewer_client: TestClient, app) -> None:  # noqa: ANN001
+def test_viewer_cannot_activate(project_root: Path, viewer_client: TestClient, app) -> None:
     """Activation is admin-only, but viewers can read runs."""
     make_run_dir(project_root / "models", "weekly_a")
     app.state.run_index.invalidate()

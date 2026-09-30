@@ -1,17 +1,15 @@
 """Tests for scraping utilities (HTML parsing and SurvivorGrid spreads)."""
 
-import builtins
 import datetime
 from datetime import date
 from pathlib import Path
-from typing import Self
 
 import polars as pl
 import pytest
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from nfl_predictor import constants
-from nfl_predictor.utils import scraping_utils
+from nfl_predictor.utils import clock, scraping_utils
 
 
 class DummyResponse:
@@ -24,7 +22,7 @@ class DummyResponse:
 
     def raise_for_status(self) -> None:
         """No-op for dummy response."""
-        return None
+        return
 
 
 def test_parse_tr_rating_table() -> None:
@@ -37,6 +35,7 @@ def test_parse_tr_rating_table() -> None:
     """
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
+    assert isinstance(table, Tag)
     teams, ratings = scraping_utils._parse_tr_rating_table(table)
 
     assert teams == ["BUF"]
@@ -53,6 +52,7 @@ def test_parse_tr_stat_table() -> None:
     """
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
+    assert isinstance(table, Tag)
     teams, stats = scraping_utils._parse_tr_stat_table(table)
 
     assert teams == ["KC"]
@@ -76,6 +76,8 @@ def test_parse_tr_tables_default_invalid_values_to_zero() -> None:
 
     rating_table = BeautifulSoup(rating_html, "html.parser").find("table")
     stat_table = BeautifulSoup(stat_html, "html.parser").find("table")
+    assert isinstance(rating_table, Tag)
+    assert isinstance(stat_table, Tag)
 
     assert scraping_utils._parse_tr_rating_table(rating_table)[1] == [0.0]
     assert scraping_utils._parse_tr_stat_table(stat_table)[1] == [0.0]
@@ -126,25 +128,15 @@ def test_get_season_start_and_week_date() -> None:
 def test_get_current_nfl_week_handles_preseason_and_clamp(monkeypatch) -> None:
     """Pre-kickoff dates resolve to week 1; late-February dates clamp to max week."""
 
-    class _PreseasonDate(datetime.date):
-        @classmethod
-        def today(cls) -> Self:
-            """Return an August preseason date before kickoff."""
-            return cls(2025, 8, 15)
-
-    monkeypatch.setattr(scraping_utils, "date", _PreseasonDate)
+    # Today is an August preseason date before kickoff.
+    monkeypatch.setattr(clock, "local_today", lambda: datetime.date(2025, 8, 15))
     preseason_season, preseason_week = scraping_utils.get_current_nfl_week()
 
     assert preseason_season == 2025
     assert preseason_week == 1
 
-    class _LateFebruaryDate(datetime.date):
-        @classmethod
-        def today(cls) -> Self:
-            """Return a date far enough after kickoff to require clamping."""
-            return cls(2026, 2, 28)
-
-    monkeypatch.setattr(scraping_utils, "date", _LateFebruaryDate)
+    # Today is a date far enough after kickoff to require clamping.
+    monkeypatch.setattr(clock, "local_today", lambda: datetime.date(2026, 2, 28))
     late_season, late_week = scraping_utils.get_current_nfl_week()
 
     assert late_season == 2025
@@ -182,7 +174,7 @@ def test_merge_tr_data_passthrough_cases() -> None:
 
 def test_save_and_update_team_rankings(tmp_path, monkeypatch) -> None:
     """TeamRankings weekly data is saved and season update combines correctly."""
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     df = pl.DataFrame({"team_abbr": ["AAA"], "week": [1], "predictive_rating": [1.0]})
 
     scraping_utils.save_team_rankings_week(df, season=2023, week=1)
@@ -251,7 +243,8 @@ def test_scrape_team_rankings_for_week_handles_request_errors(monkeypatch) -> No
 
     def fake_get(*_args, **_kwargs):
         """Raise a requests-layer failure for every scrape attempt."""
-        raise scraping_utils.requests.RequestException("boom")
+        msg = "boom"
+        raise scraping_utils.requests.RequestException(msg)
 
     monkeypatch.setattr(scraping_utils.requests, "get", fake_get)
     monkeypatch.setattr(scraping_utils, "sleep", lambda *_args, **_kwargs: None)
@@ -308,32 +301,29 @@ def test_scrape_team_rankings_for_week_handles_parse_errors(
 
 
 @pytest.mark.parametrize(
-    ("ratings_to_scrape", "stats_to_scrape"),
-    [({"rating": "predictive_rating"}, {}), ({}, {"stat": "third_down_pct"})],
+    ("ratings_to_scrape", "stats_to_scrape", "parser"),
+    [
+        ({"rating": "predictive_rating"}, {}, "_parse_tr_rating_table"),
+        ({}, {"stat": "third_down_pct"}, "_parse_tr_stat_table"),
+    ],
 )
-def test_scrape_team_rankings_for_week_uses_zip_truncation_fallback(
-    monkeypatch,
+def test_a_parse_length_mismatch_truncates_with_a_warning(
+    monkeypatch: pytest.MonkeyPatch,
     ratings_to_scrape: dict[str, str],
     stats_to_scrape: dict[str, str],
+    parser: str,
 ) -> None:
-    """Zip strictness mismatches fall back to truncation instead of aborting the scrape."""
-    html = """
-    <table>
-        <tr><th>Rank</th><th>Team</th><th>Value</th></tr>
-        <tr><td>1</td><td>Buffalo Bills</td><td>6.7</td></tr>
-    </table>
-    """
-
-    def fake_zip(*args, **kwargs):
-        """Raise only for strict zip calls so the truncation fallback executes."""
-        if kwargs.get("strict"):
-            raise ValueError("length mismatch")
-        return builtins.zip(*args, strict=bool(kwargs.get("strict", False)))
-
+    """More teams than values keeps the matched pairs and says so, not "failed to parse"."""
+    warnings: list[str] = []
     monkeypatch.setattr(
-        scraping_utils.requests, "get", lambda *_args, **_kwargs: DummyResponse(html)
+        scraping_utils.log, "warning", lambda message, *args: warnings.append(message % args)
     )
-    monkeypatch.setattr(scraping_utils, "zip", fake_zip, raising=False)
+    monkeypatch.setattr(
+        scraping_utils.requests,
+        "get",
+        lambda *_args, **_kwargs: DummyResponse("<table><tr><td>x</td></tr></table>"),
+    )
+    monkeypatch.setattr(scraping_utils, parser, lambda _table: (["BUF", "KC"], [6.7]))
     monkeypatch.setattr(scraping_utils, "sleep", lambda *_args, **_kwargs: None)
 
     df = scraping_utils.scrape_team_rankings_for_week(
@@ -343,7 +333,9 @@ def test_scrape_team_rankings_for_week_uses_zip_truncation_fallback(
         stats_to_scrape=stats_to_scrape,
     )
 
-    assert df.height == 1
+    assert df["team_abbr"].to_list() == ["BUF"]
+    assert any("length mismatch" in warning for warning in warnings)
+    assert not any("Failed to parse" in warning for warning in warnings)
 
 
 def test_scrape_team_rankings_for_week_handles_missing_tables(monkeypatch) -> None:
@@ -380,7 +372,7 @@ def test_merge_tr_data_without_week_column() -> None:
 
 def test_update_season_team_rankings_skips_empty_week_files(tmp_path, monkeypatch) -> None:
     """Empty week CSVs do not produce a consolidated season file."""
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     season_dir = Path(tmp_path) / "2023"
     season_dir.mkdir(parents=True, exist_ok=True)
     (season_dir / "2023_week_01_team_rankings.csv").write_text("team_abbr,week\n", encoding="utf-8")
@@ -395,7 +387,8 @@ def test_scrape_survivor_grid_spreads_handles_request_and_header_failures(monkey
 
     def failing_get(*_args, **_kwargs):
         """Raise a request-layer failure."""
-        raise scraping_utils.requests.RequestException("boom")
+        msg = "boom"
+        raise scraping_utils.requests.RequestException(msg)
 
     monkeypatch.setattr(scraping_utils.requests, "get", failing_get)
     assert scraping_utils.scrape_survivor_grid_spreads() == {}
@@ -480,7 +473,8 @@ def test_scrape_survivor_grid_spreads_handles_float_conversion_failure(monkeypat
 
     def fake_float(_text: str) -> float:
         """Force the spread parser down its ValueError handling branch."""
-        raise ValueError("bad float")
+        msg = "bad float"
+        raise ValueError(msg)
 
     monkeypatch.setattr(
         scraping_utils.requests, "get", lambda *_args, **_kwargs: DummyResponse(html)

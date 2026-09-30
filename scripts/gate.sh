@@ -105,7 +105,7 @@ web_step() {
 
 run_step "uv lock --check" uv lock --check
 # On a machine with a CUDA toolkit, LightGBM is a local CUDA build of the locked version (see
-# nfl_predictor/lightgbm_cuda.py); the sync check is told the same build flags, so it stays
+# src/nfl_predictor/lightgbm_cuda.py); the sync check is told the same build flags, so it stays
 # strict. The helper prints nothing on CPU-only machines and in CI.
 LIGHTGBM_CUDA_ARGS=()
 if [[ -x .venv/bin/nfl-lightgbm-cuda-install ]]; then

@@ -7,6 +7,7 @@ import pandas as pd
 from scipy import sparse
 
 from nfl_predictor import ml_model
+from nfl_predictor.ml.ml_model_xgb_utils import fit_transform_matrix
 
 
 def _make_feature_spec() -> ml_model.FeatureSpec:
@@ -32,7 +33,7 @@ def test_preprocessor_sparse_with_categorical() -> None:
     df = pd.DataFrame({"num_feature": [1.0, 2.0], "cat_feature": ["A", "B"]})
     spec = _make_feature_spec()
 
-    preprocessor = ml_model._build_preprocessor(spec, for_tree=True)
+    preprocessor = ml_model.build_preprocessor(spec, for_tree=True)
     features = preprocessor.fit_transform(df)
 
     assert sparse.issparse(features)
@@ -56,8 +57,8 @@ def test_preprocessor_handles_missing_numeric() -> None:
         market_columns=[],
     )
 
-    preprocessor = ml_model._build_preprocessor(spec, for_tree=True)
-    features = preprocessor.fit_transform(df)
+    preprocessor = ml_model.build_preprocessor(spec, for_tree=True)
+    features = fit_transform_matrix(preprocessor, df)
 
     if sparse.issparse(features):
         csr = sparse.csr_matrix(features)
@@ -66,7 +67,7 @@ def test_preprocessor_handles_missing_numeric() -> None:
     else:
         dense = np.asarray(features, dtype=float)
         assert not np.isnan(dense).any()
-    params = ml_model._resolve_xgb_params(
+    params = ml_model.resolve_xgb_params(
         ml_model.DEFAULT_XGB_PARAMS,
         overrides={
             "n_estimators": 5,
@@ -78,11 +79,8 @@ def test_preprocessor_handles_missing_numeric() -> None:
     )
     y_margin = np.array([1.0, -2.0, 0.5, 3.0])
     y_total = np.array([40.0, 38.0, 42.0, 44.0])
-    margin_model, total_model = ml_model._fit_margin_total_models(
-        features,
-        y_margin,
-        y_total,
-        params,
+    margin_model, total_model = ml_model.fit_margin_total_models(
+        ml_model.FitData(features, y_margin, y_total), params
     )
 
     assert hasattr(margin_model, "feature_importances_")

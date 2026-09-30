@@ -14,7 +14,7 @@ def test_moneyline_conversions() -> None:
     assert market.moneyline_to_prob(0) is None
     assert market.moneyline_to_prob(None) is None
     assert market.moneyline_to_prob(float("nan")) is None
-    assert market.moneyline_to_prob(True) is None
+    assert market.moneyline_to_prob(moneyline=True) is None
     assert market.prob_to_moneyline(0.6) == -150
     assert market.prob_to_moneyline(0.4) == 150
     assert market.prob_to_moneyline(1.5) is None
@@ -25,7 +25,9 @@ def test_novig_and_ev() -> None:
     """Vig removal normalizes to one and EV follows p * profit - (1 - p)."""
     home, away = market.novig_pair(0.55, 0.50)
     assert home == pytest.approx(0.55 / 1.05)
-    assert away is not None and home is not None and home + away == pytest.approx(1.0)
+    assert away is not None
+    assert home is not None
+    assert home + away == pytest.approx(1.0)
     assert market.novig_pair(None, 0.5) == (None, None)
     assert market.novig_pair(0.0, 0.0) == (None, None)
     assert market.expected_value(0.5, 100) == pytest.approx(0.0)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -11,22 +11,26 @@ from nfl_predictor.api import __main__ as entry
 from nfl_predictor.api.auth import cli
 from nfl_predictor.api.auth import users as user_store
 from nfl_predictor.api.db import Database
-from nfl_predictor.api.settings import Settings
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nfl_predictor.api.settings import Settings
 
 
-def test_main_runs_uvicorn(monkeypatch, tmp_path: Path) -> None:  # noqa: ANN001
+def test_main_runs_uvicorn(monkeypatch, tmp_path: Path) -> None:
     """The entrypoint passes host/port through and builds an app."""
     calls: list[tuple[object, dict[str, object]]] = []
     monkeypatch.setattr(entry.uvicorn, "run", lambda app, **kw: calls.append((app, kw)))
     monkeypatch.setenv("NFLP_ROOT_DIR", str(tmp_path))
-    entry.main(["--host", "0.0.0.0", "--port", "1234"])  # noqa: S104 - test value
-    assert calls[0][1] == {"host": "0.0.0.0", "port": 1234}  # noqa: S104
+    entry.main(["--host", "192.0.2.10", "--port", "1234"])
+    assert calls[0][1] == {"host": "192.0.2.10", "port": 1234}
     entry.main(["--reload"])
     assert calls[1][0] == "nfl_predictor.api:create_app"
     assert calls[1][1]["reload"] is True
 
 
-def test_cli_create_list_and_reset(settings: Settings, monkeypatch, caplog) -> None:  # noqa: ANN001
+def test_cli_create_list_and_reset(settings: Settings, monkeypatch, caplog) -> None:
     """The CLI creates users, lists them, and resets passwords via env or prompt."""
     caplog.set_level(logging.INFO)
     assert (

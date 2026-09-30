@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from nfl_predictor.utils.changelog import ReleaseNotes, extract_release_notes
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_changelog(tmp_path: Path, text: str) -> Path:

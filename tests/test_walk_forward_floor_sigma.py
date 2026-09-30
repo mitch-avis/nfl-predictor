@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,9 @@ from scipy.stats import norm
 
 from nfl_predictor import constants
 from nfl_predictor.ml import floor_sigma, walk_forward
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SEASONS = (2018, 2019, 2020, 2021, 2022, 2023)
 EVAL_SEASONS = SEASONS[1:]
@@ -224,10 +227,14 @@ def test_restored_weeks_feed_the_pool_like_trained_ones(tmp_path: Path) -> None:
     """A resumed run returns the sigmas of an uninterrupted one."""
     df = _fixture_df()
     config = replace(_config(), eval_seasons=list(EVAL_SEASONS[:4]))
-    first = walk_forward.run_walk_forward_backtest(df, config, checkpoint_dir=tmp_path)
+    first = walk_forward.run_walk_forward_backtest(
+        df, config, checkpoints=walk_forward.FoldCheckpoints(tmp_path)
+    )
     for path in sorted(tmp_path.rglob("fold_2021_*.joblib")):
         path.unlink()
 
-    resumed = walk_forward.run_walk_forward_backtest(df, config, checkpoint_dir=tmp_path)
+    resumed = walk_forward.run_walk_forward_backtest(
+        df, config, checkpoints=walk_forward.FoldCheckpoints(tmp_path)
+    )
 
     pdt.assert_frame_equal(first["predictions"], resumed["predictions"])

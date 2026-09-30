@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING
 
 import pytest
+from tests.api.jobs_support import fake_template, wait_for, wait_for_log, wait_for_status
 
-from nfl_predictor.api.db import Database
 from nfl_predictor.api.errors import ConflictError
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs import runner as runner_module
 from nfl_predictor.api.jobs.catalog import JobContext, JobTemplate
 from nfl_predictor.api.jobs.runner import JobRunner, Submission
-from nfl_predictor.api.settings import Settings
-from tests.api.jobs_support import fake_template, wait_for, wait_for_log, wait_for_status
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
+    from nfl_predictor.api.db import Database
+    from nfl_predictor.api.settings import Settings
 
 
 @pytest.fixture
@@ -112,7 +116,8 @@ def test_runner_marks_a_nonzero_exit_as_failed(
 
     finished = runner.store.require(record.id)
     assert finished.exit_code == 3
-    assert finished.error is not None and "3" in finished.error
+    assert finished.error is not None
+    assert "3" in finished.error
 
 
 def test_runner_reports_a_command_that_cannot_start(
@@ -203,7 +208,8 @@ def test_exclusive_group_jobs_never_overlap(
     wait_for_status(runner.store, second.id, "succeeded")
     first_finished = runner.store.require(first.id).finished_at
     second_started = runner.store.require(second.id).started_at
-    assert first_finished is not None and second_started is not None
+    assert first_finished is not None
+    assert second_started is not None
     assert first_finished <= second_started
 
 
@@ -311,7 +317,8 @@ def test_start_fails_jobs_left_behind_by_a_restart(
 
     recovered = runner.store.require(orphan.id)
     assert recovered.status == "failed"
-    assert recovered.error is not None and "restarted" in recovered.error
+    assert recovered.error is not None
+    assert "restarted" in recovered.error
     assert runner.busy_groups() == set()
 
 

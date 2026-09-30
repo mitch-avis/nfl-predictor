@@ -42,6 +42,9 @@ jobs:
       - name: Extract release notes from changelog
         id: notes
         env:
+          # The package is not installed in this job; its changelog helper needs only the
+          # standard library, so import it straight from the source tree.
+          PYTHONPATH: src
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
           python <<'PY'

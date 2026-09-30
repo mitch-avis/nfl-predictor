@@ -8,7 +8,11 @@ from typing import Any
 import pytest
 
 from nfl_predictor.cli import rankings
-from nfl_predictor.reporting.power_rankings import DEFAULT_STRENGTH_SNAPSHOTS
+from nfl_predictor.reporting.power_rankings import (
+    DEFAULT_STRENGTH_SNAPSHOTS,
+    RankingInputs,
+    RankingOptions,
+)
 
 
 def test_cli_exposes_the_method_and_snapshot_path() -> None:
@@ -61,15 +65,15 @@ def _base_args(tmp_path: Path) -> list[str]:
 
 def test_main_ranks_and_writes_the_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The command loads the model, ranks through the week, and writes the three tables."""
-    computed: list[tuple[object, dict[str, Any]]] = []
+    computed: list[tuple[object, RankingInputs, RankingOptions]] = []
     written: list[tuple[object, dict[str, Any]]] = []
     monkeypatch.setattr(
         rankings.ml_model_core, "load_model_checkpoint", lambda path, kind: ("model", path, kind)
     )
 
-    def fake_compute(model: object, **kwargs: Any) -> str:
+    def fake_compute(model: object, inputs: RankingInputs, options: RankingOptions) -> str:
         """Record the ranking request."""
-        computed.append((model, kwargs))
+        computed.append((model, inputs, options))
         return "result"
 
     def fake_write(result: object, **kwargs: Any) -> None:
@@ -81,11 +85,11 @@ def test_main_ranks_and_writes_the_outputs(tmp_path: Path, monkeypatch: pytest.M
 
     assert rankings.main(_base_args(tmp_path)) == 0
 
-    [(model, kwargs)] = computed
+    [(model, inputs, options)] = computed
     assert model == ("model", tmp_path / "model.joblib", "margin_total")
-    assert kwargs["season"] == 2024
-    assert kwargs["through_week"] == 3
-    assert kwargs["options"].method == "composite"
+    assert inputs.season == 2024
+    assert inputs.through_week == 3
+    assert options.method == "composite"
     assert written == [("result", {"out_dir": tmp_path / "out", "season": 2024, "through_week": 3})]
 
 

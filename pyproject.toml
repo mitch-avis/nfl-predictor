@@ -1,42 +1,42 @@
 [build-system]
-requires = ["hatchling>=1.32"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
 
 [project]
 name = "nfl-predictor"
-version = "0.35.3"
+version = "0.37.1"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
-readme = "README.md"
-requires-python = ">=3.14"
 keywords = ["stats", "sports", "football", "machine learning"]
+readme = "README.md"
 authors = [{ name = "Mitch Avis", email = "mitchavis@gmail.com" }]
-license = { text = "MIT" }
+requires-python = ">=3.14"
+license = "MIT"
 dependencies = [
-    "argon2-cffi",
-    "beautifulsoup4",
-    "coloredlogs",
-    "fastapi",
-    "joblib",
-    "lightgbm",
-    "lxml",
-    "nflreadpy",
-    "numpy",
-    "optuna",
-    "pandas",
-    "polars",
-    "pydantic-settings",
-    "pyjwt",
-    "python-multipart",
-    "requests",
-    "scikit-learn",
-    "scipy",
-    "sse-starlette",
-    "uvicorn[standard]",
-    "xgboost",
+    "argon2-cffi>=25.1",
+    "beautifulsoup4>=4.15",
+    "coloredlogs>=15.0",
+    "fastapi>=0.142",
+    "joblib>=1.6",
+    "lightgbm>=4.7",
+    "lxml>=6.1",
+    "nflreadpy>=0.1",
+    "numpy>=2.5",
+    "optuna>=5.0",
+    "pandas>=3.0",
+    "polars>=1.44",
+    "pydantic-settings>=2.15",
+    "pyjwt>=2.15",
+    "python-multipart>=0.0.32",
+    "pyyaml>=6.0",
+    "requests>=2.34",
+    "scikit-learn>=1.9",
+    "scipy>=1.18",
+    "sse-starlette>=3.5",
+    "uvicorn[standard]>=0.54",
+    "xgboost>=3.4",
 ]
 classifiers = [
     "Programming Language :: Python :: 3.14",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
 ]
 
@@ -49,24 +49,21 @@ Homepage = "https://github.com/mitch-avis/nfl-predictor"
 
 [dependency-groups]
 dev = [
-    "colorama",
-    "httpx2>=2.13.1",
-    "pandas-stubs",
-    "pre-commit",
-    "pyright",
-    "pytest",
-    "pytest-cov",
-    "pytest-html",
-    "pytest-metadata",
-    "pytest-sugar",
-    "pytest-xdist",
-    "ruff",
-    "scikit-build-core",
-    "ty",
+    "colorama>=0.4",
+    "httpx2>=2.13",
+    "pandas-stubs>=3.0",
+    "pre-commit>=4.6",
+    "pyright>=1.1",
+    "pytest>=9.1",
+    "pytest-cov>=7.1",
+    "pytest-html>=4.2",
+    "pytest-metadata>=3.1",
+    "pytest-sugar>=1.1",
+    "pytest-xdist>=3.8",
+    "ruff>=0.16",
+    "scikit-build-core>=1.1",
+    "ty>=0.0.84",
 ]
-
-[tool.hatch.build.targets.wheel]
-packages = ["nfl_predictor"]
 
 [tool.uv]
 default-groups = ["dev"]
@@ -76,10 +73,13 @@ no-build-isolation-package = ["lightgbm"]
 [tool.uv.extra-build-dependencies]
 lightgbm = ["scikit-build-core"]
 
+# --------------------------------------------------------------------------------------------
+# Ruff: format + lint (strict)
+# --------------------------------------------------------------------------------------------
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-src = ["."]
+src = ["src", "tests"]
 extend-exclude = [
     ".venv",
     ".git",
@@ -89,44 +89,94 @@ extend-exclude = [
     "build",
     "dist",
     "web",
+    # Audit scripts under .agents/ are frozen records whose output the docs quote, so they
+    # stay as they ran rather than being rewritten to the current lint rules.
+    ".agents",
 ]
 
-[tool.ruff.lint]
-select = [
-    "B",   # flake8-bugbear rules
-    "C4",  # flake8-comprehensions rules
-    "D",   # pydocstyle rules
-    "E",   # pycodestyle errors
-    "F",   # pyflakes rules
-    "I",   # isort rules
-    "N",   # pep8-naming rules
-    "S",   # bandit security rules
-    "SIM", # flake8-simplify rules
-    "UP",  # pyupgrade rules
-    "W",   # pycodestyle warnings
-    "NPY", # numpy docstring rules
-    "PGH", # pygrep-hooks rules
-]
-ignore = [
-    "D203", # Conflicts with D211 (no-blank-line-before-class)
-    "D213", # Conflicts with D212 (multi-line-summary-first-line)
-]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = [
-    "S101",
-    "S105",
-    "S106",
-] # asserts and fixture passwords are standard in pytest
-"nfl_predictor/api/registry/*.py" = [
-    "E501",
-] # one column definition per line, descriptions included
+[tool.ruff.format]
+docstring-code-format = true
 
 [tool.ruff.lint.isort]
 known-first-party = ["nfl_predictor"]
 
-[tool.ruff.format]
-docstring-code-format = true
+[tool.ruff.lint]
+select = ["ALL"]
+# The project logger, so rules that recognize logging calls (a blind `except` that logs the
+# traceback with `log.exception`, for example) see it as one.
+logger-objects = ["nfl_predictor.utils.logger.log"]
+# The Greek sigma in user-facing text names the standard deviation on purpose.
+allowed-confusables = ["σ"]
+ignore = [
+    "D203", # Conflicts with D211 (no-blank-line-before-class)
+    "D213",   # Conflicts with D212 (multi-line-summary-first-line)
+    "COM812", # Conflicts with `ruff format`, which owns trailing commas
+    "ISC001", # Conflicts with `ruff format`, which joins implicit concatenations
+    "CPY001", # The license is declared once in pyproject.toml, not per file
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# FastAPI reads route signatures and pydantic reads model fields at runtime, so the types they
+# name must stay real imports rather than moving under TYPE_CHECKING.
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
+runtime-evaluated-decorators = [
+    "fastapi.APIRouter.delete",
+    "fastapi.APIRouter.get",
+    "fastapi.APIRouter.patch",
+    "fastapi.APIRouter.post",
+    "fastapi.APIRouter.put",
+]
+
+# `pl.lit(True)` builds a literal from a value; the boolean is data, not a behavior flag.
+[tool.ruff.lint.flake8-boolean-trap]
+extend-allowed-calls = ["polars.lit"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",    # assert is the point of tests
+    "S105",    # ignore hardcoded passwords in strings in tests
+    "S106",    # ignore hardcoded passwords in function arguments in tests
+    "PLR2004", # magic numbers in expectations are fine
+    "D",       # test names document themselves
+    "ANN",     # fixtures/params don't need annotations everywhere
+    "SLF001",  # tests may poke private helpers
+    "INP001",
+    "ARG001",
+    "ARG002",
+    "ARG005",
+    "DTZ001",  # EXIF timestamps are naive by definition
+    "PLC0415",
+]
+"src/nfl_predictor/api/registry/*.py" = [
+    "E501",
+] # one column definition per line, descriptions included
+# Genuine false positives, each reviewed; the reason sits beside the rule.
+"src/nfl_predictor/api/jobs/runner.py" = [
+    "S603", # a job's argv is built from the vetted template catalog, never from raw input
+]
+"src/nfl_predictor/lightgbm_cuda.py" = [
+    "S603",   # fixed tool names with repo-controlled arguments
+    "TRY400", # an install failure is reported as a message; the traceback adds nothing
+]
+"src/nfl_predictor/ml/artifacts.py" = [
+    "S607", # `git` from PATH, the same git the checkout was made with
+]
+"src/nfl_predictor/ml/walk_forward.py" = [
+    "S607",   # `git` from PATH, the same git the checkout was made with
+    "NPY002", # the legacy global seed stays until a walk-forward shows nothing reads it
+]
+"src/nfl_predictor/cli/compare.py" = [
+    "TRY400", # a bad run argument is reported as a message with exit code 2, no traceback
+]
+"src/nfl_predictor/weekly_run/__main__.py" = [
+    "PLC0415", # the OpenMP wait policy must be set before the pipeline imports XGBoost
+]
+"src/nfl_predictor/api/auth/cli.py" = [
+    "S105", # PASSWORD_ENV holds the name of an environment variable, not a password
+]
 
 [tool.ty.environment]
 # Pin ty to the repo venv so local and CI checks resolve the same interpreter.
@@ -135,7 +185,7 @@ python-version = "3.14"
 
 [tool.ty.src]
 # Limit ty to the checked-in source roots we validate in CI.
-include = ["nfl_predictor", "scripts", "tests"]
+include = ["src", "scripts", "tests"]
 
 [tool.pyright]
 pythonVersion = "3.14"
@@ -152,10 +202,10 @@ exclude = [
     "**/.*",
     ".venv",
     "**/node_modules",
-# `nfl-sos-ratings` is a gitignored symlink to the read-only reference repo; it is not part
-# of this project's type-check surface. `models/` holds gitignored run directories whose review
-# scripts are frozen records of the code they ran against, so CI never sees them either. The
-# rest of the list restores pyright's defaults.
+    # `nfl-sos-ratings` is a gitignored symlink to the read-only reference repo; it is not part
+    # of this project's type-check surface. `models/` holds gitignored run directories whose review
+    # scripts are frozen records of the code they ran against, so CI never sees them either. The
+    # rest of the list restores pyright's defaults.
     "nfl-sos-ratings",
     "models",
     "web",
@@ -194,7 +244,6 @@ addopts = [
     "--cov-report=term-missing",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
-pythonpath = ["."]
 
 [tool.coverage.run]
 branch = true

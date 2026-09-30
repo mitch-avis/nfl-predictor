@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import polars as pl
+import pytest
 
 from nfl_predictor.utils import polars_utils
 
@@ -17,7 +18,8 @@ def _row_by_team(records_df: pl.DataFrame) -> dict[str, dict[str, int | float]]:
             if k == "team_abbr":
                 continue
             if v is None:
-                raise AssertionError(f"Unexpected null record value for {team}.{k}")
+                msg = f"Unexpected null record value for {team}.{k}"
+                raise AssertionError(msg)
             if isinstance(v, (int, bool)):
                 values[k] = int(v)
             else:
@@ -114,12 +116,8 @@ def test_compute_team_records_before_week_validates_schema() -> None:
     """Helper should raise a clear error if the schedule schema is incomplete."""
     bad_schedule_df = pl.DataFrame({"season": [2024], "week": [1]})
 
-    try:
+    with pytest.raises(ValueError, match="missing required columns"):
         polars_utils.compute_team_records_before_week(bad_schedule_df, season=2024, week=2)
-    except ValueError as exc:
-        assert "missing required columns" in str(exc)
-    else:
-        raise AssertionError("Expected ValueError for missing required columns")
 
 
 def test_compute_team_records_before_week_uses_historical_divisions_before_2002() -> None:

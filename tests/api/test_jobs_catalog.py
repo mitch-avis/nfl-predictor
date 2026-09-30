@@ -2,26 +2,32 @@
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+from tests.api import factories
+from tests.cli_parsing import parse_command
 
 from nfl_predictor.api.errors import ConflictError, UnprocessableEntityError
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs.catalog import JobContext
 from nfl_predictor.api.runs.indexer import RunSummary, summarize_run
-from nfl_predictor.api.settings import Settings
-from tests.api import factories
-from tests.cli_parsing import parse_command
+
+if TYPE_CHECKING:
+    import argparse
+
+    from nfl_predictor.api.settings import Settings
 
 
 @pytest.fixture
 def run(settings: Settings) -> RunSummary:
     """Return a summarized weekly run in the fake models directory."""
-    run_dir = factories.make_run_dir(settings.models_path, "weekly_2026_week_02", week=2)
+    run_dir = factories.make_run_dir(
+        settings.models_path, "weekly_2026_week_02", factories.RunSpec(week=2)
+    )
     summary = summarize_run(run_dir)
     assert summary is not None
     return summary
@@ -48,11 +54,14 @@ def test_every_template_is_describable_and_documented() -> None:
     ids = [template.id for template in catalog.TEMPLATES]
     assert len(ids) == len(set(ids))
     for template in catalog.TEMPLATES:
-        assert template.label and template.description and template.category
+        assert template.label
+        assert template.description
+        assert template.category
         described = catalog.describe(template)
         assert described.id == template.id
         for param in described.params:
-            assert param["label"] and param["kind"]
+            assert param["label"]
+            assert param["kind"]
 
 
 def test_every_command_starts_with_the_configured_interpreter(
@@ -99,6 +108,8 @@ def test_validate_params_rejects_unknown_missing_and_bad_values() -> None:
         catalog.validate_params(template, {"season": 2026, "week": 99})
     with pytest.raises(UnprocessableEntityError, match="integer"):
         catalog.validate_params(template, {"season": 2026, "week": "two"})
+    with pytest.raises(UnprocessableEntityError, match="integer"):
+        catalog.validate_params(template, {"season": 2026, "week": [2]})
     with pytest.raises(UnprocessableEntityError, match="one of"):
         catalog.validate_params(template, {"season": 2026, "week": 2, "score_rounding": "sideways"})
 

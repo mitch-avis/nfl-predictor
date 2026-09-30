@@ -294,7 +294,7 @@ def test_compare_latest_week_scores_load_failure(monkeypatch) -> None:
     monkeypatch.setattr(
         validation_utils.polars_utils,
         "load_schedule",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("fail")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("fail")),
     )
 
     mismatches = validation_utils.compare_latest_week_scores(df, None)
@@ -351,3 +351,25 @@ def test_compare_latest_week_scores_without_matching_game_join_returns_empty() -
     )
 
     assert validation_utils.compare_latest_week_scores(all_data, schedule).height == 0
+
+
+def test_compare_latest_week_scores_surfaces_unexpected_load_errors(monkeypatch) -> None:
+    """Only I/O and data errors from the schedule load degrade; a bug still surfaces."""
+    df = pl.DataFrame(
+        {
+            "season": [2024],
+            "week": [1],
+            "away_abbr": ["BUF"],
+            "home_abbr": ["KC"],
+            "away_score": [21],
+            "home_score": [17],
+        }
+    )
+    monkeypatch.setattr(
+        validation_utils.polars_utils,
+        "load_schedule",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bug")),
+    )
+
+    with pytest.raises(RuntimeError, match="bug"):
+        validation_utils.compare_latest_week_scores(df, None)

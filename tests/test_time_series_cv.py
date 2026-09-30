@@ -41,9 +41,9 @@ def test_build_time_series_folds_ordered_and_deterministic() -> None:
 def test_build_time_series_folds_invalid() -> None:
     """Invalid time-series fold parameters raise errors."""
     seasons = [2020, 2021]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="n_splits must be positive"):
         core._build_time_series_folds(seasons, n_splits=0)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Not enough seasons to create requested CV folds"):
         core._build_time_series_folds(seasons, n_splits=1, min_train_seasons=3)
 
 
@@ -91,7 +91,7 @@ def test_build_blocked_timepoint_folds_ordered_and_deterministic() -> None:
 
 def test_build_blocked_timepoint_folds_invalid() -> None:
     """Invalid blocked timepoint fold parameters raise errors."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="n_splits must be positive"):
         core._build_blocked_timepoint_folds([1, 2, 3], n_splits=0)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Not enough timepoints to create requested CV folds"):
         core._build_blocked_timepoint_folds([1, 2, 3], n_splits=2, min_train_timepoints=2)

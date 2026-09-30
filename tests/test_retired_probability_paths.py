@@ -13,20 +13,23 @@ from __future__ import annotations
 import copy
 import logging
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
 import pandas as pd
 import pytest
 from scipy.stats import norm
+from tests.weekly_fixture import build_fixture
 
 from nfl_predictor import constants
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.cli import backtest, train
 from nfl_predictor.ml import ml_model_core, ml_model_predict, ml_model_training, walk_forward
 from nfl_predictor.ml.ml_model_core import MarginTotalModel, OptunaConfig
-from tests.weekly_fixture import build_fixture
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 OPTUNA_OFF = OptunaConfig(
     enabled=False,
@@ -50,13 +53,15 @@ def trained(tmp_path_factory: pytest.TempPathFactory) -> tuple[MarginTotalModel,
     """Train a small market-anchored model on the fixture seasons."""
     paths = build_fixture(tmp_path_factory.mktemp("retired_paths"))
     model = ml_model_training.train_margin_total_model(
-        data_path=paths["completed"],
-        holdout_seasons=0,
-        include_market=True,
-        max_cardinality_ratio=0.5,
-        optuna_config=OPTUNA_OFF,
-        market_transform=True,
-        market_anchor=True,
+        ml_model_training.TrainingOptions(
+            data_path=paths["completed"],
+            holdout_seasons=0,
+            include_market=True,
+            max_cardinality_ratio=0.5,
+            optuna_config=OPTUNA_OFF,
+            market_transform=True,
+            market_anchor=True,
+        )
     )
     return model, paths
 
@@ -178,7 +183,9 @@ def test_a_saved_uncertainty_flag_is_ignored_and_the_floor_is_predicted(
 ) -> None:
     """A checkpoint saved with quantile-spread probabilities loads, says so, predicts the floor."""
     model, paths = trained
-    loaded = _load_legacy(model, "win_prob_use_uncertainty", True, tmp_path, caplog)
+    loaded = _load_legacy(
+        model, "win_prob_use_uncertainty", value=True, tmp_path=tmp_path, caplog=caplog
+    )
     predictions = ml_model_predict.predict_week_margin_total(
         loaded, paths["predict"], pretty_output=False
     )

@@ -14,8 +14,8 @@ import pandas as pd
 from nfl_predictor.ml import metrics, ml_utils
 from nfl_predictor.ml.ml_model_core import (
     _build_prediction_output,
-    _margin_to_home_win_prob,
     _summarize_confidence_pool,
+    margin_to_home_win_prob,
 )
 from nfl_predictor.reporting import run_comparison
 from nfl_predictor.weekly_run import pipeline
@@ -26,7 +26,7 @@ TIED_GAME_IDS = np.array(["2026_01_AAA_BBB", "2026_01_CCC_DDD"], dtype=object)
 
 
 def _tied_probs() -> np.ndarray:
-    probs = _margin_to_home_win_prob(TIED_MARGINS)
+    probs = margin_to_home_win_prob(TIED_MARGINS)
     raw = np.abs(probs - 0.5)
     # Precondition: float noise makes the second game look less confident than the first.
     assert raw[1] < raw[0]
@@ -81,7 +81,7 @@ def test_confidence_pool_columns_break_the_tie_by_game_id() -> None:
 def test_prediction_output_ranks_break_the_tie_by_game_id() -> None:
     """Production pick ranks (on the 4-decimal probabilities) follow game_id order."""
     # At 2 points the 4-decimal probabilities carry the float noise in the other direction.
-    probs = _margin_to_home_win_prob(np.array([2.0, -2.0]))
+    probs = margin_to_home_win_prob(np.array([2.0, -2.0]))
     rounded = np.round(probs, 4)
     assert abs(rounded[0] - 0.5) < abs(rounded[1] - 0.5)
     games = pd.DataFrame(

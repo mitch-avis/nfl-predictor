@@ -13,17 +13,17 @@ Verified baseline at time of writing: `412 passed`, coverage `90.03%`, working t
 
 | Layer | Owning module | Notes |
 | --- | --- | --- |
-| ETL orchestration | `nfl_predictor/data_collection.py` | `collect_all_data` -> `process_season` -> `process_week`; per-week joins |
-| Source loaders | `nfl_predictor/utils/polars/loaders.py` | schedule + team stats cached per season as Parquet under `data/cache/nflreadpy`; Elo from `data/qb_elos.csv` |
-| Season-to-date aggregation | `nfl_predictor/utils/polars/teamrankings.py` | `aggregate_team_stats_to_week` = mean of every numeric column for `week < target`; playoffs use the full regular season; `_compute_derived_metrics` adds ratios |
+| ETL orchestration | `src/nfl_predictor/data_collection.py` | `collect_all_data` -> `process_season` -> `process_week`; per-week joins |
+| Source loaders | `src/nfl_predictor/utils/polars/loaders.py` | schedule + team stats cached per season as Parquet under `data/cache/nflreadpy`; Elo from `data/qb_elos.csv` |
+| Season-to-date aggregation | `src/nfl_predictor/utils/polars/teamrankings.py` | `aggregate_team_stats_to_week` = mean of every numeric column for `week < target`; playoffs use the full regular season; `_compute_derived_metrics` adds ratios |
 | Week-1 fallback | `data_collection.process_week` | previous-season full mean regressed toward league mean by `WEEK1_REGRESSION_FACTOR` (1/3) |
 | Opponent mirror | `loaders.add_per_game_opponent_stats` | `opponent_<stat>` is the same-game opponent's stat, so its season-to-date mean is an **allowed** stat, not schedule strength |
-| Context features | `nfl_predictor/utils/polars/features.py` | records, divisional, lookahead, motivation, season phase, Elo/QB/stat 4-week trends, coach priors |
-| External ratings | `nfl_predictor/utils/polars/teamrankings.py` + `scraping_utils.py` | TeamRankings ratings (predictive, SOS, future SOS, last 5/10, luck) and situational stats; floor 2003 Week 2 |
-| Final schema | `nfl_predictor/utils/polars/finalize.py` | metadata, `away_*`, `away_opponent_*`, `home_*`, `home_opponent_*`, `*_diff` (away minus home), lines, results |
-| Modeling | `nfl_predictor/ml/` | XGBoost margin/total heads, feature range `away_rest`..`home_moneyline`, market transform/anchor, calibration, quantiles |
-| Evaluation | `nfl_predictor/ml/walk_forward.py`, `nfl_predictor/cli/backtest.py` | one fold per (season, week >= 3); train on everything strictly earlier across all seasons; win probability from the normal curve at the RMS of earlier out-of-fold errors, no fitted calibration |
-| Power rankings | `nfl_predictor/reporting/power_rankings.py`, `nfl_predictor/cli/rankings.py`, `nfl_predictor/weekly_run/` | Bradley-Terry fit; see section 2 |
+| Context features | `src/nfl_predictor/utils/polars/features.py` | records, divisional, lookahead, motivation, season phase, Elo/QB/stat 4-week trends, coach priors |
+| External ratings | `src/nfl_predictor/utils/polars/teamrankings.py` + `scraping_utils.py` | TeamRankings ratings (predictive, SOS, future SOS, last 5/10, luck) and situational stats; floor 2003 Week 2 |
+| Final schema | `src/nfl_predictor/utils/polars/finalize.py` | metadata, `away_*`, `away_opponent_*`, `home_*`, `home_opponent_*`, `*_diff` (away minus home), lines, results |
+| Modeling | `src/nfl_predictor/ml/` | XGBoost margin/total heads, feature range `away_rest`..`home_moneyline`, market transform/anchor, calibration, quantiles |
+| Evaluation | `src/nfl_predictor/ml/walk_forward.py`, `src/nfl_predictor/cli/backtest.py` | one fold per (season, week >= 3); train on everything strictly earlier across all seasons; win probability from the normal curve at the RMS of earlier out-of-fold errors, no fitted calibration |
+| Power rankings | `src/nfl_predictor/reporting/power_rankings.py`, `src/nfl_predictor/cli/rankings.py`, `src/nfl_predictor/weekly_run/` | Bradley-Terry fit; see section 2 |
 
 EPA footprint today: `passing_epa` and `passing_cpoe` per game (totals from
 `nflreadpy.load_team_stats`), their `opponent_` allowed mirrors, and the four diffs. That is 8 of
@@ -38,7 +38,7 @@ two-point, total plays) but are not called anywhere in the ETL path. They are a 
 a finished loader: no caching, no column selection, no current-season 404 handling.
 
 Status 2026-09-09: Milestone 45 landed (see `ARCHIVE.md`). The loader is now cached per season,
-`aggregate_pbp_stats` was replaced by `nfl_predictor/utils/polars/pbp.py`, and the 25 stats in
+`aggregate_pbp_stats` was replaced by `src/nfl_predictor/utils/polars/pbp.py`, and the 25 stats in
 `constants.PBP_STATS` are published for every matchup. The paragraph above describes the state
 this review started from.
 
@@ -49,7 +49,7 @@ landed on 2026-09-11 (Milestone 51, see `ARCHIVE.md`): the default ranking now r
 adjusted composite from `data/strength_snapshots.csv`. The behavior described below is reachable
 only through `--legacy-franchise-fit`.
 
-As found on 2026-09-09, `nfl_predictor/reporting/power_rankings.py::_build_games_for_ratings` fit
+As found on 2026-09-09, `src/nfl_predictor/reporting/power_rankings.py::_build_games_for_ratings` fit
 `fit_bradley_terry_ratings` on:
 
 - every completed game in `data/all_data.csv` from `ratings_min_season` onward, and the default is
@@ -58,7 +58,7 @@ As found on 2026-09-09, `nfl_predictor/reporting/power_rankings.py::_build_games
 - future current-season games mapped to the trained model's home win probability;
 - ridge alpha `1.0`, one shared home-field term.
 
-The weekly run (`nfl_predictor/weekly_run/`) uses `through_week = predicted_week - 1` and passes
+The weekly run (`src/nfl_predictor/weekly_run/`) uses `through_week = predicted_week - 1` and passes
 `ratings_min_season` through unchanged, so the default weekly run inherits the all-history fit. For
 a Week 10 ranking each team contributes roughly 9 current-season rows against roughly 450 historical
 rows. The user's skepticism is correct: this is a franchise-history rating with a small
@@ -178,7 +178,7 @@ implementation complexity, and owning layer.
   `aggregate_team_stats_to_week` filter (`week < target`).
 - Complexity: low-medium. Must mirror the current-season refresh and the non-fatal current-season
   404 behavior already used for team stats (pre-kickoff PBP does not exist yet).
-- Layer: ETL (`loaders.py`, `nfl_predictor/utils/polars/pbp.py`).
+- Layer: ETL (`loaders.py`, `src/nfl_predictor/utils/polars/pbp.py`).
 
 ### 4.2 Per-snap team EPA families
 
@@ -288,7 +288,7 @@ implementation complexity, and owning layer.
   teams (career-to-date window is safer than team-season).
 - Layer: ETL; treat the nfeloqb metadata file as a read-only input copied into `data/`, like
   `qb_elos.csv`.
-- Landed 2026-09-11 (version `0.7.0`, `nfl_predictor/utils/polars/qb_stats.py`) with these
+- Landed 2026-09-11 (version `0.7.0`, `src/nfl_predictor/utils/polars/qb_stats.py`) with these
   differences: the columns are named `qb_dropback_epa`, `qb_dropback_epa_recent`, `qb_cpoe`,
   `qb_sack_rate`, `qb_any_a`, `qb_any_a_recent` and `qb_history_dropbacks`, because a name
   containing `epa_per_dropback` would fall into the `pbp` ablation group; rates are career-to-date
@@ -334,8 +334,8 @@ implementation complexity, and owning layer.
 
 ## 6. Power rankings redesign recommendation
 
-1. Immediate low-risk defaults (small, tested change to `nfl_predictor/reporting/power_rankings.py`
-   and `nfl_predictor/weekly_run/`): default the fit window to the current season plus the previous
+1. Immediate low-risk defaults (small, tested change to `src/nfl_predictor/reporting/power_rankings.py`
+   and `src/nfl_predictor/weekly_run/`): default the fit window to the current season plus the previous
    season, weight previous-season rows down (about 0.25), use margin-based targets via
    `margin_to_home_win_prob` instead of `0.97 / 0.03`, and exclude future model-probability rows
    from the strength fit. Keep `--ratings-min-season` and a `--legacy-franchise-fit` flag for the

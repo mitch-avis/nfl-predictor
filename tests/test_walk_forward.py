@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -19,23 +20,20 @@ from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
 
 def _fixture_df() -> pd.DataFrame:
     """Create a tiny deterministic dataset spanning multiple seasons/weeks."""
-    rows = []
-    for season in (2022, 2023):
-        for week in (1, 2, 3):
-            for game_idx in (0, 1):
-                rows.append(
-                    {
-                        "season": season,
-                        "week": week,
-                        "game_type": "REG",
-                        "game_id": f"{season}_{week}_{game_idx}",
-                        "feat1": float(season % 2000) + week + game_idx,
-                        "feat2": float(season % 2000) - week + game_idx,
-                        "away_score": 17 + week + (game_idx * 3),
-                        "home_score": 24 + week - (game_idx * 5),
-                        "home_moneyline": -110,
-                    }
-                )
+    rows = [
+        {
+            "season": season,
+            "week": week,
+            "game_type": "REG",
+            "game_id": f"{season}_{week}_{game_idx}",
+            "feat1": float(season % 2000) + week + game_idx,
+            "feat2": float(season % 2000) - week + game_idx,
+            "away_score": 17 + week + (game_idx * 3),
+            "home_score": 24 + week - (game_idx * 5),
+            "home_moneyline": -110,
+        }
+        for season, week, game_idx in itertools.product((2022, 2023), (1, 2, 3), (0, 1))
+    ]
     df = pd.DataFrame(rows)
     return df[
         [
@@ -154,7 +152,14 @@ def _run_recording_folds(
         computed.append((fold.season, fold.week))
 
     result = walk_forward.run_walk_forward_backtest(
-        df, config, fold_callback=_record, checkpoint_dir=checkpoint_dir, resume=resume
+        df,
+        config,
+        fold_callback=_record,
+        checkpoints=(
+            None
+            if checkpoint_dir is None
+            else walk_forward.FoldCheckpoints(checkpoint_dir, resume=resume)
+        ),
     )
     return result, computed
 
@@ -182,7 +187,7 @@ def test_resumed_run_matches_an_uninterrupted_run(tmp_path: Path) -> None:
 
     with pytest.raises(_RunStoppedError):
         walk_forward.run_walk_forward_backtest(
-            df, config, fold_callback=_stop, checkpoint_dir=tmp_path
+            df, config, fold_callback=_stop, checkpoints=walk_forward.FoldCheckpoints(tmp_path)
         )
 
     resumed, computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
@@ -272,6 +277,42 @@ def test_fold_checkpoint_fingerprint_tracks_data_and_config() -> None:
     )
 
 
+def test_fold_checkpoint_fingerprint_sources_are_the_package_modelling_files() -> None:
+    """The fingerprint reads the package's ``ml`` modules, ``constants`` and ``ml_model``."""
+    package_dir = Path(walk_forward.__file__).resolve().parents[1]
+    sources = walk_forward._modelling_source_files()
+
+    assert [path.name for path in sources] == [
+        *sorted(path.name for path in (package_dir / "ml").glob("*.py")),
+        "constants.py",
+        "ml_model.py",
+    ]
+    assert all(path.resolve().is_relative_to(package_dir) for path in sources)
+
+
+def test_fold_checkpoint_fingerprint_hashes_source_names_and_bytes_not_locations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Identical source files in another directory give the same fingerprint."""
+    df = _fixture_df()
+    config = _base_config()
+    baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
+    sources = walk_forward._modelling_source_files()
+    copies = []
+    for index, path in enumerate(sources):
+        target = tmp_path / "elsewhere" / str(index) / path.name
+        target.parent.mkdir(parents=True)
+        target.write_bytes(path.read_bytes())
+        copies.append(target)
+    monkeypatch.setattr(walk_forward, "_modelling_source_files", lambda: copies)
+
+    assert walk_forward.fold_checkpoint_fingerprint(df, config) == baseline
+
+    copies[0].write_bytes(copies[0].read_bytes() + b"\n")
+
+    assert walk_forward.fold_checkpoint_fingerprint(df, config) != baseline
+
+
 def _with_device(
     config: walk_forward.WalkForwardConfig, device: str | None
 ) -> walk_forward.WalkForwardConfig:
@@ -327,7 +368,9 @@ def test_run_records_the_resolved_xgb_device(tmp_path: Path) -> None:
     """The result and the checkpoint manifest name the concrete device, never ``auto``."""
     config = _with_device(_base_config(), "auto")
 
-    result = walk_forward.run_walk_forward_backtest(_fixture_df(), config, checkpoint_dir=tmp_path)
+    result = walk_forward.run_walk_forward_backtest(
+        _fixture_df(), config, checkpoints=walk_forward.FoldCheckpoints(tmp_path)
+    )
 
     assert result["resolved_settings"]["xgb_device"] == "cpu"
     (manifest_path,) = tmp_path.rglob("manifest.json")
@@ -646,9 +689,9 @@ def test_library_versions_handles_import_error(monkeypatch: pytest.MonkeyPatch) 
 
     def _fake_import(name: str):
         if name == "optuna":
-            raise ImportError("missing")
-        module = type("M", (), {"__version__": "1.0.0"})
-        return module
+            msg = "missing"
+            raise ImportError(msg)
+        return type("M", (), {"__version__": "1.0.0"})
 
     monkeypatch.setattr(walk_forward.importlib, "import_module", _fake_import)
     versions = walk_forward._library_versions()
@@ -764,7 +807,9 @@ def test_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None
     )
 
     no_market_df = pd.DataFrame({"season": [2024], "week": [1]})
-    assert walk_forward.resolve_market_settings(no_market_df, True, None, True) == (
+    assert walk_forward.resolve_market_settings(
+        no_market_df, include_market=True, market_transform=None, market_anchor=True
+    ) == (
         False,
         False,
         False,
@@ -773,7 +818,9 @@ def test_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None
     assert any("Market anchor requested" in message for message in messages)
 
     market_df = pd.DataFrame({"home_spread": [-3.0], "total_line": [44.5]})
-    assert walk_forward.resolve_market_settings(market_df, False, None, True) == (
+    assert walk_forward.resolve_market_settings(
+        market_df, include_market=False, market_transform=None, market_anchor=True
+    ) == (
         False,
         True,
         True,
@@ -782,13 +829,13 @@ def test_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         walk_forward.ml_model,
-        "_resolve_xgb_params",
+        "resolve_xgb_params",
         lambda _defaults, overrides: (
             captured.setdefault("overrides", dict(overrides)) or dict(overrides)
         ),
     )
     config = replace(_base_config(), xgb_params_overrides={"max_depth": 4}, random_seed=99)
-    walk_forward._resolve_xgb_params(config)
+    walk_forward.xgb_params_for_config(config)
     assert captured["overrides"] == {"max_depth": 4, "random_state": 99}
 
 
@@ -890,11 +937,11 @@ def test_walk_forward_disables_small_window_early_stopping(
 
     monkeypatch.setattr(
         walk_forward.ml_model,
-        "_fit_margin_total_models",
+        "fit_margin_total_models",
         fake_fit_margin_total_models,
     )
-    monkeypatch.setattr(walk_forward.ml_model, "_fit_quantile_models", fake_fit_quantile_models)
-    monkeypatch.setattr(walk_forward.ml_model, "_predict_xgb", fake_predict_xgb)
+    monkeypatch.setattr(walk_forward.ml_model, "fit_quantile_models", fake_fit_quantile_models)
+    monkeypatch.setattr(walk_forward.ml_model, "predict_xgb", fake_predict_xgb)
 
     result = walk_forward.run_walk_forward_backtest(
         _fixture_df(),
@@ -1047,9 +1094,10 @@ def test_run_walk_forward_backtest_drops_disabled_feature_groups(
 
     captured: dict[str, list[str]] = {}
 
-    def fake_filter(df: pd.DataFrame, include_postseason: bool = False) -> pd.DataFrame:
+    def fake_filter(df: pd.DataFrame, *, include_postseason: bool = False) -> pd.DataFrame:
         captured["columns"] = list(df.columns)
-        raise RuntimeError("stop after the drop")
+        msg = "stop after the drop"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(walk_forward, "filter_regular_season", fake_filter)
 

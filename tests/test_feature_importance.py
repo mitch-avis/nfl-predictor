@@ -3,25 +3,27 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
 import pytest
 import xgboost as xgb
-from sklearn.compose import ColumnTransformer
 
 from nfl_predictor.ml import feature_importance, ml_model_core
+
+if TYPE_CHECKING:
+    from sklearn.compose import ColumnTransformer
 
 
 def _as_preprocessor(value: object) -> ColumnTransformer:
     """Cast a test double to the preprocessor type expected by helper signatures."""
-    return cast(ColumnTransformer, value)
+    return cast("ColumnTransformer", value)
 
 
 def _as_regressor(value: object) -> xgb.XGBRegressor:
     """Cast a test double to the regressor type expected by helper signatures."""
-    return cast(xgb.XGBRegressor, value)
+    return cast("xgb.XGBRegressor", value)
 
 
 def test_coerce_score_value_sums_sequence_inputs() -> None:
@@ -52,11 +54,11 @@ def test_feature_importance_report_margin_total() -> None:
         post_feature_columns=[],
         market_columns=[],
     )
-    preprocessor = ml_model_core._build_preprocessor(spec, for_tree=True)
-    x_matrix = ml_model_core._fit_transform_matrix(preprocessor, df)
+    preprocessor = ml_model_core.build_preprocessor(spec, for_tree=True)
+    x_matrix = ml_model_core.fit_transform_matrix(preprocessor, df)
     y_margin = rng.normal(size=40)
     y_total = rng.normal(size=40)
-    params = ml_model_core._resolve_xgb_params(
+    params = ml_model_core.resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides={
             "n_estimators": 15,
@@ -66,11 +68,8 @@ def test_feature_importance_report_margin_total() -> None:
             "n_jobs": 1,
         },
     )
-    margin_model, total_model = ml_model_core._fit_margin_total_models(
-        x_matrix,
-        y_margin,
-        y_total,
-        params,
+    margin_model, total_model = ml_model_core.fit_margin_total_models(
+        ml_model_core.FitData(x_matrix, y_margin, y_total), params
     )
     model = ml_model_core.MarginTotalModel(
         preprocessor=preprocessor,
@@ -100,7 +99,8 @@ def test_resolve_feature_names_falls_back_on_errors_and_mismatches() -> None:
 
         def get_feature_names_out(self) -> list[str]:
             """Raise to exercise the fallback path."""
-            raise RuntimeError("boom")
+            msg = "boom"
+            raise AttributeError(msg)
 
     class _Model:
         """Minimal model exposing only n_features_in_."""
@@ -153,8 +153,6 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
     class DummyMargin:
         """Synthetic margin/total model class for dispatch testing."""
 
-        pass
-
     monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
 
     def fake_margin_report(model: object, _shap_rows: object = None) -> dict[str, object] | None:
@@ -166,8 +164,8 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
     monkeypatch.setattr(feature_importance, "_build_margin_total_report", fake_margin_report)
 
     blend = ml_model_core.BlendedMarginTotalModel(
-        team_model=cast(ml_model_core.MarginTotalModel, "team"),
-        blend_layer=cast(ml_model_core.BlendLayer, None),
+        team_model=cast("ml_model_core.MarginTotalModel", "team"),
+        blend_layer=cast("ml_model_core.BlendLayer", None),
         calibrator=None,
         target_columns=("away_score", "home_score"),
     )
@@ -187,15 +185,14 @@ def test_build_feature_importance_report_handles_attribute_errors(
     class DummyMargin:
         """Synthetic margin/total model class for error-path testing."""
 
-        pass
-
     monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
 
     def _raise_attribute_error(
         _model: object, _shap_rows: object = None
     ) -> dict[str, object] | None:
         """Raise an AttributeError to exercise the guarded path."""
-        raise AttributeError("missing booster")
+        msg = "missing booster"
+        raise AttributeError(msg)
 
     monkeypatch.setattr(feature_importance, "_build_margin_total_report", _raise_attribute_error)
     monkeypatch.setattr(feature_importance.log, "debug", lambda *_args, **_kwargs: None)
@@ -215,7 +212,7 @@ def test_build_report_from_models_handles_empty_unsupported_and_no_base_features
     assert (
         feature_importance._build_report_from_models(
             _as_preprocessor(SimpleNamespace()),
-            cast(dict[str, xgb.XGBRegressor], {"margin": object()}),
+            cast("dict[str, xgb.XGBRegressor]", {"margin": object()}),
         )
         is None
     )
@@ -227,7 +224,7 @@ def test_build_report_from_models_handles_empty_unsupported_and_no_base_features
 
     report = feature_importance._build_report_from_models(
         _as_preprocessor(preprocessor),
-        cast(dict[str, xgb.XGBRegressor], {"margin": model}),
+        cast("dict[str, xgb.XGBRegressor]", {"margin": model}),
     )
     assert report == {
         "schema_version": feature_importance.SCHEMA_VERSION,
@@ -299,7 +296,7 @@ def test_build_base_feature_map_handles_guard_paths_and_success() -> None:
 
     failing_preprocessor = SimpleNamespace(
         transformers_=[],
-        get_feature_names_out=lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        get_feature_names_out=lambda: (_ for _ in ()).throw(AttributeError("boom")),
     )
     assert (
         feature_importance._build_base_feature_map(
@@ -432,12 +429,12 @@ def _fit_rest_opp_model(rows: int = 120) -> tuple[ml_model_core.MarginTotalModel
         post_feature_columns=[],
         market_columns=[],
     )
-    preprocessor = ml_model_core._build_preprocessor(spec, for_tree=True)
-    x_matrix = ml_model_core._fit_transform_matrix(preprocessor, df)
+    preprocessor = ml_model_core.build_preprocessor(spec, for_tree=True)
+    x_matrix = ml_model_core.fit_transform_matrix(preprocessor, df)
     opp_effect = df["opp"].map({"A": 2.0, "B": -1.0, "C": 0.5, "D": -1.5}).to_numpy()
     y_margin = 3.0 * df["rest"].to_numpy() + opp_effect + rng.normal(scale=0.1, size=rows)
     y_total = df["rest"].to_numpy() - opp_effect + rng.normal(scale=0.1, size=rows)
-    params = ml_model_core._resolve_xgb_params(
+    params = ml_model_core.resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides={
             "n_estimators": 10,
@@ -447,8 +444,8 @@ def _fit_rest_opp_model(rows: int = 120) -> tuple[ml_model_core.MarginTotalModel
             "n_jobs": 1,
         },
     )
-    margin_model, total_model = ml_model_core._fit_margin_total_models(
-        x_matrix, y_margin, y_total, params
+    margin_model, total_model = ml_model_core.fit_margin_total_models(
+        ml_model_core.FitData(x_matrix, y_margin, y_total), params
     )
     model = ml_model_core.MarginTotalModel(
         preprocessor=preprocessor,
@@ -497,8 +494,8 @@ def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
 
 def _preprocessed(model: ml_model_core.MarginTotalModel, df: pd.DataFrame) -> Any:
     """Return ``df`` encoded by the model's own feature spec and preprocessor."""
-    return ml_model_core._transform_matrix(
-        model.preprocessor, ml_model_core._apply_feature_spec(df, model.feature_spec)
+    return ml_model_core.transform_matrix(
+        model.preprocessor, ml_model_core.apply_feature_spec(df, model.feature_spec)
     )
 
 
@@ -520,7 +517,7 @@ def _early_stopped_head(x_matrix: Any, rows: int) -> xgb.XGBRegressor:
 
 
 @pytest.mark.parametrize("early_stopped", [False, True])
-def test_shap_values_add_up_to_each_rows_prediction(early_stopped: bool) -> None:
+def test_shap_values_add_up_to_each_rows_prediction(*, early_stopped: bool) -> None:
     """Each row's SHAP values plus the base value reproduce the head's prediction.
 
     An early-stopped head is explained over the trees it predicts with, up to its best
@@ -540,7 +537,7 @@ def test_shap_values_add_up_to_each_rows_prediction(early_stopped: bool) -> None
         assert values.shape == (len(df), 5)
         np.testing.assert_allclose(
             values.sum(axis=1) + base_value,
-            ml_model_core._predict_xgb(head, x_matrix),
+            ml_model_core.predict_xgb(head, x_matrix),
             rtol=1e-5,
             atol=1e-5,
         )
@@ -613,3 +610,17 @@ def test_empty_shap_rows_leave_the_report_without_shap() -> None:
     assert "shap" not in report
     assert "mean_abs_shap" not in report["base_features"]["combined"]
     assert "total_gain" in report["base_features"]["combined"]
+
+
+def test_feature_name_resolution_surfaces_unexpected_errors() -> None:
+    """Only a missing or unfitted feature-name method falls back; other errors surface."""
+    broken = SimpleNamespace(
+        transformers_=[],
+        get_feature_names_out=lambda: (_ for _ in ()).throw(RuntimeError("broken")),
+    )
+    with pytest.raises(RuntimeError, match="broken"):
+        feature_importance.resolve_feature_names(
+            _as_preprocessor(broken), _as_regressor(SimpleNamespace(n_features_in_=1))
+        )
+    with pytest.raises(RuntimeError, match="broken"):
+        feature_importance._build_base_feature_map(_as_preprocessor(broken), ["feat"])

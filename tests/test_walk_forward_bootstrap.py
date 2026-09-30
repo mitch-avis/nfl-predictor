@@ -75,8 +75,7 @@ def test_bootstrap_matches_the_per_resample_metric_calls(n_rows: int, seed: int)
         model_column="model",
         market_column="market",
         prefix="deterministic",
-        n_samples=400,
-        seed=seed,
+        resampling=walk_forward.Resampling(400, seed),
     )
 
     expected = _reference_bootstrap(frame, prefix="deterministic", n_samples=400, seed=seed)
@@ -88,23 +87,24 @@ def test_bootstrap_matches_the_per_resample_metric_calls(n_rows: int, seed: int)
 def test_bootstrap_returns_nothing_without_samples_or_columns() -> None:
     """No resamples, a missing column or no valid row gives an empty result."""
     frame = _games(20, 1)
-    kwargs = {"prefix": "p", "seed": 0}
+    no_draws = walk_forward.Resampling(0, 0)
+    ten_draws = walk_forward.Resampling(10, 0)
     assert (
         walk_forward._bootstrap_probability_differences(
-            frame, model_column="model", market_column="market", n_samples=0, **kwargs
+            frame, model_column="model", market_column="market", prefix="p", resampling=no_draws
         )
         == {}
     )
     assert (
         walk_forward._bootstrap_probability_differences(
-            frame, model_column="model", market_column="absent", n_samples=10, **kwargs
+            frame, model_column="model", market_column="absent", prefix="p", resampling=ten_draws
         )
         == {}
     )
     frame["market"] = np.nan
     assert (
         walk_forward._bootstrap_probability_differences(
-            frame, model_column="model", market_column="market", n_samples=10, **kwargs
+            frame, model_column="model", market_column="market", prefix="p", resampling=ten_draws
         )
         == {}
     )

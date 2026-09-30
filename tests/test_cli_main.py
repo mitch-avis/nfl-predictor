@@ -74,7 +74,7 @@ def _fake_command(monkeypatch: pytest.MonkeyPatch, *, takes_argv: bool) -> Simpl
 
 @pytest.mark.parametrize("takes_argv", [True, False])
 def test_dispatch_passes_the_remaining_arguments(
-    monkeypatch: pytest.MonkeyPatch, takes_argv: bool
+    monkeypatch: pytest.MonkeyPatch, *, takes_argv: bool
 ) -> None:
     """Options after the command reach it unchanged, and its exit code is returned."""
     monkeypatch.setattr(sys, "argv", ["original"])
@@ -94,7 +94,8 @@ def test_sys_argv_is_restored_when_the_command_fails(monkeypatch: pytest.MonkeyP
 
     def boom() -> None:
         """Fail inside the command."""
-        raise RuntimeError("boom")
+        msg = "boom"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(front_door, "_resolve", lambda _command: boom)
 

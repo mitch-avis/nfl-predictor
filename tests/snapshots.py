@@ -13,11 +13,13 @@ import io
 import json
 import math
 import os
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 UPDATE_ENV = "NFLP_UPDATE_SNAPSHOTS"
 FLOAT_RTOL = 1e-6

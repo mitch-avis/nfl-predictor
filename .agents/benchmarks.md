@@ -489,7 +489,7 @@ falls from `13.93` (2010) to `13.27` (2025), the trailing one to `12.39`. Rules 
 reviewer); reproduce with `.venv/bin/python models/step3_sigma/independent_rescore.py`.
 
 Adopted by the user on 2026-09-28 as `0.35.0`: the floor uses the `expanding` sigma
-(`nfl_predictor/ml/floor_sigma.py`); production pools the GPU reference runs with stage 1's weeks
+(`src/nfl_predictor/ml/floor_sigma.py`); production pools the GPU reference runs with stage 1's weeks
 the reference lacks (2026 week 1 sigma `13.248`, both seeds averaged per game).
 
 ## Market transform on against off (2026-09-28, task 56.7(b))

@@ -227,6 +227,9 @@ models/
 *.parquet
 *.feather
 
+# Generated reports (the leakage audit writes here by default)
+reports/
+
 # Optuna database and other database files
 **/optuna.db
 *.db

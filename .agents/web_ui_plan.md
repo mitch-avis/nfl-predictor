@@ -23,20 +23,21 @@ Exploration findings that shape the design:
   column_metadata}` contract with a metric registry driving labels/tooltips/heatmaps. We port
   that contract and the table ideas (sticky identity columns, heatmap cells, compare workflow,
   glossary) onto shadcn primitives rather than forking its 923-line `App.tsx`.
-- There is no "latest model" concept. `nfl_predictor/ml/artifacts.py` only builds paths
+- There is no "latest model" concept. `src/nfl_predictor/ml/artifacts.py` only builds paths
   (`resolve_run_paths` L117). The weekly run writes a self-contained run dir
   (`models/weekly_2025_week_22/` is the canonical example) with stage markers
   `{wf_compare,train,predictions,reports}_state.json`; a run is complete iff
   `reports_state.json` exists. Power rankings in a run are stamped `week = predictions_week - 1`.
 - Scripts are subprocess-only: every `main()` except `data_collection.main(argv)` reads
   `sys.argv`, and the logger is a single stderr `StreamHandler` with `coloredlogs` ANSI
-  (`nfl_predictor/utils/logger.py`). Walk-forward logs `Walk-forward fold N/M done ... about Ns
-  remaining` (`nfl_predictor/ml/walk_forward.py` ~L911) and AGENTS.md forbids concurrent WF runs.
+  (`src/nfl_predictor/utils/logger.py`). Walk-forward logs `Walk-forward fold N/M done ... about Ns
+  remaining` (`src/nfl_predictor/ml/walk_forward.py` ~L911) and AGENTS.md forbids concurrent WF runs.
 - Market lines come from the nflverse schedule via `polars_utils.load_schedule(...,
-  force_refresh=True)` (`nfl_predictor/utils/polars/loaders.py` L288); `_prepare_schedule` derives
+  force_refresh=True)` (`src/nfl_predictor/utils/polars/loaders.py` L288); `_prepare_schedule` derives
   `away_spread`/`home_spread`, and `game_utils.fill_missing_moneylines` (L61) fills gaps.
   `data/nfl_lines.csv` is unused legacy. Market features feed the model
-  (`nfl_predictor/ml/feature_spec.py` L88-93), so a lines refresh must be followed by a predict job.
+  (`src/nfl_predictor/ml/feature_spec.py` L88-93), so a lines refresh must be followed by a
+  predict job.
 - `.agents/TODO.md` Milestone 50: the total/over-under head has no signal. `total_*` betting
   columns must never be presented as actionable.
 - Repo constraints: Python >= 3.14, `.venv/bin/` prefixes, ruff line-length 100, pyright + ty,
@@ -48,7 +49,7 @@ Exploration findings that shape the design:
 
 ## Decisions (made with the user)
 
-1. Code lives in this repo: `nfl_predictor/api/` (FastAPI) + `web/` (React). Each phase is
+1. Code lives in this repo: `src/nfl_predictor/api/` (FastAPI) + `web/` (React). Each phase is
    built on a feature branch off `main` and merged back when it lands.
 2. Frontend: Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui + TanStack Table + TanStack
    Query + react-router 7 + recharts.
@@ -58,7 +59,7 @@ Exploration findings that shape the design:
 4. Canonical data: index `models/*/metadata.json` (sorted by `created_at`), admin marks one run
    **active**; predictions/picks/betting/power all read from that run dir. `data/predict/` and
    `reports/` ad-hoc files are surfaced as "unattached".
-5. Market lines: a new lines-only ETL mode in a **new module** `nfl_predictor/lines_refresh.py`,
+5. Market lines: a new lines-only ETL mode in a **new module** `src/nfl_predictor/lines_refresh.py`,
    exposed as an on-demand job that chains a predict job on the active model.
 6. Jobs: subprocess runner over existing CLIs, SQLite job table, per-job persisted logs streamed
    over SSE, walk-forward jobs serialized.
@@ -70,7 +71,7 @@ Exploration findings that shape the design:
 
 ## Layout
 
-### Backend `nfl_predictor/api/`
+### Backend `src/nfl_predictor/api/`
 
 ```text
 api/
@@ -155,7 +156,7 @@ mutating routes require header `X-Requested-With: nflp`.
 | `GET /betting`, `GET /betting/xlsx` | 25-col betting CSV, or derived from predictions when the CSV is older than the predictions file; ladder thresholds 0.02/0.04/0.07/0.10; `total_*` columns `actionable=false` |
 | `GET /power` | rankings + movement vs the prior run's `through_week - 1` file + standings + division standings |
 | `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 base features by mean absolute SHAP in points (`base_features.combined.mean_abs_shap`, returned as `{measure, rows}` with per-head `margin_value`/`total_value`; runs without SHAP fall back to `combined.total_gain`, and runs written before total gain was recorded to `combined.gain`, labelled `summed_average_gain`), calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
-| `GET /data/status`, `GET /data/unattached` | current season/week via `data_collection._determine_nfl_week` (imported, not edited), file inventory with sizes/mtimes/row counts (`pl.scan_csv().select(pl.len())`), lazy cached sha256 via `fingerprints.dataset_fingerprint`, cache parquet coverage, latest leakage audit, last ETL job |
+| `GET /data/status`, `GET /data/unattached` | current season/week via `clock.nfl_season` and `clock.nfl_week` (the ETL's calendar rules), file inventory with sizes/mtimes/row counts (`pl.scan_csv().select(pl.len())`), lazy cached sha256 via `fingerprints.dataset_fingerprint`, cache parquet coverage, latest leakage audit, last ETL job |
 | `GET /jobs/catalog`, `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/logs?after=`, `GET /jobs/{id}/stream` (SSE), `POST /jobs/{id}/cancel` | 409 when an exclusive group is busy; 422 on bad params |
 | `GET /{path}` fallback | serves `web/dist/index.html` for paths outside `/api`; an unmatched `/api/...` path gets the JSON 404 (`not_found`) |
 
@@ -177,7 +178,7 @@ mutating routes require header `X-Requested-With: nflp`.
   `validate_offline` (`validate`), `validate_live` (`validate --live`), `walk_forward_backtest`
   (`backtest`), `shap_analysis` (`explain`).
 
-### `nfl_predictor/lines_refresh.py`
+### `src/nfl_predictor/lines_refresh.py`
 
 `refresh_lines(season, week, *, data_dir, cache_dir) -> LinesRefreshResult` and `main(argv)`:
 
@@ -246,7 +247,7 @@ every column and the xlsx download works.
 
 ### Phase 2: jobs
 
-`jobs/*`, `nfl_predictor/lines_refresh.py`, Jobs/JobDetail pages, LogConsole, admin buttons on
+`jobs/*`, `src/nfl_predictor/lines_refresh.py`, Jobs/JobDetail pages, LogConsole, admin buttons on
 Data and Betting pages.
 Tests: catalog (every template's argv starts with the venv python; param validation), runner
 against `tests/api/fake_script.py` (ANSI lines, a WF progress line, sleeps, honors SIGTERM; run
@@ -260,7 +261,7 @@ active model, and two WF jobs queue rather than overlap.
 
 Template `predict_week {season, week}`: build `data/predict/week_{WW}_games_to_predict.csv` from
 `all_data_ml.csv` when missing (replicating the feature-availability check in
-`nfl_predictor/reporting/power_rankings.py::_predict_future_games`), then predict into the active
+`src/nfl_predictor/reporting/power_rankings.py::_predict_future_games`), then predict into the active
 run. `GET /predictions?week=` resolves run-attached files first, then unattached. Week selector
 shows predicted / not-yet status with a Generate action for admins, and a caveat that future weeks
 lack current lines, QB, and rest updates until an ETL runs.
@@ -272,7 +273,7 @@ Done when: in week 1 the user selects week 3 and sees predictions from the activ
 - `GET /pool/tiebreakers?week=`: MNF and SNF games from `game_datetime` weekday and latest
   kickoff, with predicted scores and p10-p90 band; highest and lowest projected team score.
 - `POST /pool/survivor {season, start_week, used_teams, horizon_weeks, beam_width}`: pure module
-  `nfl_predictor/api/pool/survivor.py`, beam search over (used-set, log survival) states with a
+  `src/nfl_predictor/api/pool/survivor.py`, beam search over (used-set, log survival) states with a
   future-value lookahead penalty so strong teams are saved; returns ranked plans with weekly picks
   and cumulative survival probability. Depends on Phase 3 per-week files.
 - `/pool` page with Confidence / Tiebreakers / Survivor tabs.
@@ -317,10 +318,10 @@ Odds-provider adapter interface plus a `Live` blend
 
 ## Status
 
-- Phase 0 (2026-09-10): done. `nfl_predictor/api/` serves auth, users, runs, and the built SPA;
+- Phase 0 (2026-09-10): done. `src/nfl_predictor/api/` serves auth, users, runs, and the built SPA;
   `web/` is a Vite + React 19 + Tailwind v4 + shadcn app with the shell, login, overview, runs,
   and users pages. `tests/api/` covers the backend; `web/src/**/*.test.ts` the frontend.
-- Phase 1 (2026-09-10): done. Column registry (`nfl_predictor/api/registry/`), readers for
+- Phase 1 (2026-09-10): done. Column registry (`src/nfl_predictor/api/registry/`), readers for
   predictions, betting (derived from predictions with the workbook formulas), power rankings with
   week-over-week movement, model metadata/metrics/importance/calibration, and data status; routes
   under `/api/{registry,predictions,betting,power,model,data}`. Frontend pages Predictions (table
@@ -328,8 +329,8 @@ Odds-provider adapter interface plus a `Live` blend
   division standings), Betting (action ladder, totals hidden by default, workbook download), Data
   & ETL, Model (tiles, feature importance, reliability diagram, walk-forward candidates), and
   Glossary.
-- Phase 2 (2026-09-10): done. `nfl_predictor/api/jobs/` (catalog, SQLite store, subprocess runner,
-  SSE stream, routes) and `nfl_predictor/lines_refresh.py`; routes under `/api/jobs`; frontend
+- Phase 2 (2026-09-10): done. `src/nfl_predictor/api/jobs/` (catalog, SQLite store, subprocess runner,
+  SSE stream, routes) and `src/nfl_predictor/lines_refresh.py`; routes under `/api/jobs`; frontend
   `/jobs` and `/jobs/:jobId` with the generated form, streamed log console, progress bar and
   cancel, plus admin Run ETL / Refresh lines buttons on Data & ETL and Generate workbook on
   Betting. Verified live: `lines_refresh` chained into `predict` against copies of the real
@@ -338,7 +339,7 @@ Odds-provider adapter interface plus a `Live` blend
   Deviations from the plan above, all deliberate:
 
   - **Progress regex.** Walk-forwards log `Walk-forward fold N/M done`
-    (`nfl_predictor/ml/walk_forward.py`), the weekly run's stage 1 included; older weekly runs
+    (`src/nfl_predictor/ml/walk_forward.py`), the weekly run's stage 1 included; older weekly runs
     logged `WF candidate N/M`. The runner matches both (`(?:fold|candidate) N/M`).
   - **Queue vs 409.** Both behaviors are implemented: the runner gives each exclusive group a
     single worker, so queued jobs in a group never overlap (this is the path chained jobs take),
@@ -364,7 +365,7 @@ Odds-provider adapter interface plus a `Live` blend
   `.venv/bin/python` is a symlink to the base interpreter, jobs launched outside the virtual
   environment and failed on `import polars`. The path is now made absolute but never resolved.
 
-- Phase 3 (2026-09-10): done. `nfl_predictor/week_builder.py` extracts one week of upcoming games
+- Phase 3 (2026-09-10): done. `src/nfl_predictor/week_builder.py` extracts one week of upcoming games
   from `all_data_ml.csv` with the ETL's own `filter_upcoming_games` rule; the `predict_week`
   template runs it and chains `predict`, so a future week goes from nothing to predictions in one
   click. `GET /api/predictions/weeks` now also lists the current season's unplayed weeks with
@@ -374,7 +375,7 @@ Odds-provider adapter interface plus a `Live` blend
   run's model.
 
   Deviations: the availability check is the ETL's upcoming-game rule (season, week, and a missing
-  score) rather than a copy of `nfl_predictor/reporting/power_rankings.py::_predict_future_games`,
+  score) rather than a copy of `src/nfl_predictor/reporting/power_rankings.py::_predict_future_games`,
   whose feature check needs a loaded model; the week file is written with every column of
   `all_data_ml.csv`, which the prediction CLI narrows through the model's feature spec.
 

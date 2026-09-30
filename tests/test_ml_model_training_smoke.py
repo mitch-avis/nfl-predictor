@@ -17,7 +17,7 @@ def test_margin_total_early_stopping_wired() -> None:
     y_margin_eval = rng.normal(size=6)
     y_total_eval = rng.normal(size=6)
 
-    params = ml_model._resolve_xgb_params(
+    params = ml_model.resolve_xgb_params(
         ml_model.DEFAULT_XGB_PARAMS,
         overrides={
             "n_estimators": 25,
@@ -28,14 +28,10 @@ def test_margin_total_early_stopping_wired() -> None:
         },
     )
 
-    margin_model, total_model = ml_model._fit_margin_total_models(
-        x_train,
-        y_margin,
-        y_total,
+    margin_model, total_model = ml_model.fit_margin_total_models(
+        ml_model.FitData(x_train, y_margin, y_total),
         params,
-        x_eval=x_eval,
-        y_margin_eval=y_margin_eval,
-        y_total_eval=y_total_eval,
+        eval_data=ml_model.FitData(x_eval, y_margin_eval, y_total_eval),
         early_stopping_rounds=5,
     )
 

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
 
 from nfl_predictor.ml import artifacts
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_artifacts_write_and_load_roundtrip(tmp_path: Path) -> None:
@@ -23,11 +26,13 @@ def test_artifacts_write_and_load_roundtrip(tmp_path: Path) -> None:
         run_id=run_id,
         dataset_hash="abc123",
         config={"foo": "bar"},
-        feature_list=["feat1", "feat2"],
-        splits={"train_seasons": [2023], "holdout_seasons": [2024]},
-        params={"eval_metric": "mae"},
-        tuned_params=None,
-        early_stopping={"best_iteration": 7},
+        details=artifacts.TrainedModelDetails(
+            feature_list=["feat1", "feat2"],
+            splits={"train_seasons": [2023], "holdout_seasons": [2024]},
+            params={"eval_metric": "mae"},
+            tuned_params=None,
+            early_stopping={"best_iteration": 7},
+        ),
     )
     artifacts.write_json(paths.metadata_path, metadata)
 

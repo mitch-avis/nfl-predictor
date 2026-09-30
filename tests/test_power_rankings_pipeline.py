@@ -6,6 +6,7 @@ import logging
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,9 @@ from scipy.stats import norm
 
 from nfl_predictor import constants
 from nfl_predictor.reporting import power_rankings
+
+if TYPE_CHECKING:
+    from nfl_predictor.ml.ml_model_core import MarginTotalModel
 
 
 def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
@@ -106,43 +110,17 @@ def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
         ]
     ).to_csv(data_path, index=False)
 
-    model = SimpleNamespace(feature_spec=SimpleNamespace(feature_columns=["feat_required"]))
+    model = cast(
+        "MarginTotalModel",
+        SimpleNamespace(feature_spec=SimpleNamespace(feature_columns=["feat_required"])),
+    )
 
     with pytest.raises(ValueError, match="Missing required feature columns \\(1\\): feat_required"):
         power_rankings._predict_future_games(
             model,
-            model_kind="margin_total",
-            data_ml=data_path,
-            season=2025,
-            through_week=1,
-        )
-
-
-@pytest.mark.parametrize("model_kind", ["score", "blend"])
-def test_predict_future_games_rejects_an_unsupported_model_kind(tmp_path, model_kind) -> None:
-    """Only margin/total models can project the remaining games; the blend kind was retired."""
-    data_path = tmp_path / "ml.csv"
-    pd.DataFrame(
-        [
-            {
-                "season": 2025,
-                "week": 2,
-                "game_type": "REG",
-                "away_abbr": "AAA",
-                "home_abbr": "BBB",
-                "feat1": 1.0,
-            }
-        ]
-    ).to_csv(data_path, index=False)
-    model = SimpleNamespace(feature_spec=SimpleNamespace(feature_columns=["feat1"]))
-
-    with pytest.raises(ValueError, match="Unsupported model kind"):
-        power_rankings._predict_future_games(
-            model,
-            model_kind=model_kind,
-            data_ml=data_path,
-            season=2025,
-            through_week=1,
+            power_rankings.RankingInputs(
+                data_ml=data_path, data_schedule=data_path, season=2025, through_week=1
+            ),
         )
 
 
@@ -177,12 +155,15 @@ def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
 
     caplog.set_level(logging.INFO)
     power_rankings._build_games_for_ratings(
-        schedule_path=schedule_path,
-        season=2024,
-        through_week=1,
-        ratings_min_season=None,
-        future_games_with_probs=future_games,
-        include_postseason=False,
+        power_rankings.RankingInputs(
+            data_ml=schedule_path,
+            data_schedule=schedule_path,
+            season=2024,
+            through_week=1,
+            include_postseason=False,
+        ),
+        power_rankings.RankingOptions(ratings_min_season=None),
+        future_games,
     )
 
     messages = [record.message for record in caplog.records]
@@ -217,12 +198,15 @@ def test_build_games_for_ratings_includes_postseason(tmp_path) -> None:
     ).to_csv(schedule_path, index=False)
 
     games = power_rankings._build_games_for_ratings(
-        schedule_path=schedule_path,
-        season=2024,
-        through_week=19,
-        ratings_min_season=None,
-        future_games_with_probs=pd.DataFrame(),
-        include_postseason=True,
+        power_rankings.RankingInputs(
+            data_ml=schedule_path,
+            data_schedule=schedule_path,
+            season=2024,
+            through_week=19,
+            include_postseason=True,
+        ),
+        power_rankings.RankingOptions(ratings_min_season=None),
+        pd.DataFrame(),
     )
 
     assert len(games) == 2
@@ -249,22 +233,26 @@ def test_legacy_franchise_fit_restores_the_all_seasons_equal_weight_fit() -> Non
         schedule.write_csv(path)
 
         legacy = pr._build_games_for_ratings(
-            schedule_path=path,
-            season=2023,
-            through_week=18,
-            ratings_min_season=None,
-            future_games_with_probs=pd.DataFrame(),
-            include_postseason=False,
-            window_seasons=0,
-            prior_season_weight=1.0,
-            target="binary",
-            include_future=True,
+            pr.RankingInputs(
+                data_ml=path,
+                data_schedule=path,
+                season=2023,
+                through_week=18,
+                include_postseason=False,
+            ),
+            pr.RankingOptions(
+                window_seasons=0,
+                prior_season_weight=1.0,
+                target="binary",
+                include_future=True,
+                ratings_min_season=None,
+            ),
+            pd.DataFrame(),
         )
 
     # Every season is in the fit and every game weighs the same.
     assert sorted(legacy["season"].unique().tolist()) == [2022, 2023]
-    assert legacy["fit_weight"].nunique() == 1
-    assert float(legacy["fit_weight"].iloc[0]) == pytest.approx(1.0)
+    assert legacy["fit_weight"].to_numpy() == pytest.approx(1.0)
     # Binary targets take only two values regardless of margin.
     assert legacy["p_home"].nunique() <= 2
 
@@ -289,12 +277,15 @@ def test_default_ratings_fit_windows_seasons_and_downweights_the_past() -> None:
         schedule.write_csv(path)
 
         games = pr._build_games_for_ratings(
-            schedule_path=path,
-            season=2023,
-            through_week=18,
-            ratings_min_season=None,
-            future_games_with_probs=pd.DataFrame(),
-            include_postseason=False,
+            pr.RankingInputs(
+                data_ml=path,
+                data_schedule=path,
+                season=2023,
+                through_week=18,
+                include_postseason=False,
+            ),
+            pr.RankingOptions(ratings_min_season=None),
+            pd.DataFrame(),
         )
 
     # 2020 falls outside the default two-season window.
@@ -334,21 +325,26 @@ def test_future_games_stay_out_of_the_strength_fit_by_default() -> None:
         path = Path(tmp) / "schedule.csv"
         schedule.write_csv(path)
         default = pr._build_games_for_ratings(
-            schedule_path=path,
-            season=2023,
-            through_week=1,
-            ratings_min_season=None,
-            future_games_with_probs=future,
-            include_postseason=False,
+            pr.RankingInputs(
+                data_ml=path,
+                data_schedule=path,
+                season=2023,
+                through_week=1,
+                include_postseason=False,
+            ),
+            pr.RankingOptions(ratings_min_season=None),
+            future,
         )
         with_future = pr._build_games_for_ratings(
-            schedule_path=path,
-            season=2023,
-            through_week=1,
-            ratings_min_season=None,
-            future_games_with_probs=future,
-            include_postseason=False,
-            include_future=True,
+            pr.RankingInputs(
+                data_ml=path,
+                data_schedule=path,
+                season=2023,
+                through_week=1,
+                include_postseason=False,
+            ),
+            pr.RankingOptions(include_future=True, ratings_min_season=None),
+            future,
         )
 
     assert default["week"].tolist() == [1]
@@ -453,14 +449,15 @@ def _rank_fixture(
     monkeypatch.setattr(power_rankings, "_predict_future_games", _no_future_games)
     schedule = _write_fixture_schedule(tmp_path / "schedule.csv")
     result = power_rankings.compute_power_rankings(
-        None,
-        model_kind="margin_total",
-        data_ml=schedule,
-        data_schedule=schedule,
-        season=2024,
-        through_week=through_week,
-        include_postseason=False,
-        options=options,
+        cast("MarginTotalModel", None),
+        power_rankings.RankingInputs(
+            data_ml=schedule,
+            data_schedule=schedule,
+            season=2024,
+            through_week=through_week,
+            include_postseason=False,
+        ),
+        options,
     )
     return result.power_rankings
 
@@ -470,7 +467,7 @@ def test_bradley_terry_method_reproduces_the_current_season_fit(
 ) -> None:
     """Pinned from the ranking the script produced before the composite became the default."""
     options = power_rankings.resolve_ranking_options(
-        method="bradley_terry", legacy_franchise_fit=False
+        power_rankings.RankingRequest(method="bradley_terry", legacy_franchise_fit=False)
     )
 
     rankings = _rank_fixture(tmp_path, monkeypatch, options)
@@ -517,7 +514,9 @@ def test_composite_method_ranks_on_the_snapshot_for_the_next_week(
         },
     )
     options = power_rankings.resolve_ranking_options(
-        method=None, legacy_franchise_fit=False, strength_snapshots=snapshots
+        power_rankings.RankingRequest(
+            method=None, legacy_franchise_fit=False, strength_snapshots=snapshots
+        )
     )
 
     rankings = _rank_fixture(tmp_path, monkeypatch, options)
@@ -564,7 +563,9 @@ def test_a_duplicated_team_in_a_snapshot_week_is_rejected(tmp_path: Path) -> Non
 
 def test_ranking_options_default_to_the_composite() -> None:
     """With no method named, rankings read the adjusted composite."""
-    options = power_rankings.resolve_ranking_options(method=None, legacy_franchise_fit=False)
+    options = power_rankings.resolve_ranking_options(
+        power_rankings.RankingRequest(method=None, legacy_franchise_fit=False)
+    )
 
     assert options.method == "composite"
     assert options.strength_snapshots == power_rankings.DEFAULT_STRENGTH_SNAPSHOTS
@@ -573,13 +574,15 @@ def test_ranking_options_default_to_the_composite() -> None:
 def test_legacy_franchise_fit_selects_the_old_bradley_terry_settings() -> None:
     """The legacy flag implies Bradley-Terry with every historical setting restored."""
     options = power_rankings.resolve_ranking_options(
-        method=None,
-        legacy_franchise_fit=True,
-        window_seasons=5,
-        prior_season_weight=0.1,
-        target="margin",
-        include_future=False,
-        ratings_min_season=2010,
+        power_rankings.RankingRequest(
+            method=None,
+            legacy_franchise_fit=True,
+            window_seasons=5,
+            prior_season_weight=0.1,
+            target="margin",
+            include_future=False,
+            ratings_min_season=2010,
+        )
     )
 
     assert options.method == "bradley_terry"
@@ -593,13 +596,17 @@ def test_legacy_franchise_fit_selects_the_old_bradley_terry_settings() -> None:
 def test_legacy_franchise_fit_cannot_be_combined_with_the_composite() -> None:
     """Asking for both is contradictory, so it is refused rather than guessed."""
     with pytest.raises(ValueError, match="legacy"):
-        power_rankings.resolve_ranking_options(method="composite", legacy_franchise_fit=True)
+        power_rankings.resolve_ranking_options(
+            power_rankings.RankingRequest(method="composite", legacy_franchise_fit=True)
+        )
 
 
 def test_an_unknown_ranking_method_is_rejected() -> None:
     """Only the documented methods are accepted."""
     with pytest.raises(ValueError, match="method"):
-        power_rankings.resolve_ranking_options(method="elo", legacy_franchise_fit=False)
+        power_rankings.resolve_ranking_options(
+            power_rankings.RankingRequest(method="elo", legacy_franchise_fit=False)
+        )
 
 
 def test_predict_future_games_use_the_models_recorded_floor_sigma(
@@ -620,8 +627,11 @@ def test_predict_future_games_use_the_models_recorded_floor_sigma(
         ]
     ).to_csv(data_path, index=False)
     record = SimpleNamespace(sigma=10.0, fallback=False)
-    model = SimpleNamespace(
-        feature_spec=SimpleNamespace(feature_columns=["feat1"]), floor_sigma=record
+    model = cast(
+        "MarginTotalModel",
+        SimpleNamespace(
+            feature_spec=SimpleNamespace(feature_columns=["feat1"]), floor_sigma=record
+        ),
     )
     monkeypatch.setattr(
         power_rankings.ml_model_core,
@@ -630,7 +640,10 @@ def test_predict_future_games_use_the_models_recorded_floor_sigma(
     )
 
     out = power_rankings._predict_future_games(
-        model, model_kind="margin_total", data_ml=data_path, season=2025, through_week=1
+        model,
+        power_rankings.RankingInputs(
+            data_ml=data_path, data_schedule=data_path, season=2025, through_week=1
+        ),
     )
 
     assert out["home_win_prob"].tolist() == [norm.cdf(0.5)]

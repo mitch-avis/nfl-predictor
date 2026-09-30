@@ -6,29 +6,21 @@ from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
 
 import polars as pl
 import pytest
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.utils import polars_utils
+from nfl_predictor.utils import clock, polars_utils
 
 
 def test_current_nfl_season_and_default_max_season(monkeypatch: pytest.MonkeyPatch) -> None:
     """Season helpers should respect the offseason boundary and explicit dates."""
-    assert data_collection._current_nfl_season(date(2024, 9, 1)) == 2024
-    assert data_collection._current_nfl_season(date(2024, 2, 1)) == 2023
+    assert clock.nfl_season(date(2024, 9, 1)) == 2024
+    assert clock.nfl_season(date(2024, 2, 1)) == 2023
 
-    class _FrozenDate(date):
-        """Date test double with a stable today() implementation."""
-
-        @classmethod
-        def today(cls) -> _FrozenDate:
-            """Return a fixed offseason date."""
-            return cls(2025, 2, 1)
-
-    monkeypatch.setattr(data_collection, "date", _FrozenDate)
+    # Today is a fixed offseason date.
+    monkeypatch.setattr(clock, "local_today", lambda: date(2025, 2, 1))
 
     assert data_collection._default_max_season() == 2024
     assert data_collection._default_max_season(date(2025, 10, 1)) == 2025
@@ -41,16 +33,16 @@ def test_configure_logging_only_enables_debug_when_requested(
     handler_levels: list[int] = []
     debug_messages: list[str] = []
     logger = SimpleNamespace(
-        handlers=[SimpleNamespace(setLevel=lambda level: handler_levels.append(level))],
-        setLevel=lambda level: handler_levels.append(level),
-        debug=lambda message: debug_messages.append(message),
+        handlers=[SimpleNamespace(setLevel=handler_levels.append)],
+        setLevel=handler_levels.append,
+        debug=debug_messages.append,
     )
     monkeypatch.setattr(data_collection, "log", logger)
 
-    data_collection._configure_logging(False)
+    data_collection._configure_logging(enable_debug=False)
     assert handler_levels == []
 
-    data_collection._configure_logging(True)
+    data_collection._configure_logging(enable_debug=True)
     assert handler_levels == [10, 10]
     assert debug_messages == ["Debug logging enabled for data collection."]
 
@@ -162,7 +154,13 @@ def test_resolve_config_uses_defaults_or_parsed_args(monkeypatch: pytest.MonkeyP
         max_season=2026,
     )
 
-    sentinel = data_collection.DataCollectionConfig(True, False, True, 2020, 2021)
+    sentinel = data_collection.DataCollectionConfig(
+        enable_timing=True,
+        enable_debug=False,
+        force_refresh_nflreadpy=True,
+        min_season=2020,
+        max_season=2021,
+    )
     monkeypatch.setattr(data_collection, "_parse_args", lambda argv: sentinel)
     assert data_collection._resolve_config(["--min-season", "2020"]) is sentinel
 
@@ -194,11 +192,11 @@ def test_timed_step_logs_elapsed_only_when_enabled(monkeypatch: pytest.MonkeyPat
         lambda message, *args: info_messages.append(message % args if args else message),
     )
 
-    with data_collection._timed_step("disabled", False):
+    with data_collection._timed_step("disabled", enabled=False):
         pass
     assert info_messages == []
 
-    with data_collection._timed_step("enabled", True):
+    with data_collection._timed_step("enabled", enabled=True):
         pass
     assert info_messages == ["Timing: enabled took 2.50s"]
 
@@ -211,15 +209,15 @@ def test_timed_substep_accumulates_totals_only_when_enabled(
     monkeypatch.setattr(data_collection.time, "perf_counter", lambda: next(perf_values))
 
     totals: dict[str, float] = {"existing": 1.0}
-    with data_collection._timed_substep("load", False, totals):
+    with data_collection._timed_substep("load", enabled=False, totals=totals):
         pass
     assert totals == {"existing": 1.0}
 
-    with data_collection._timed_substep("load", True, totals):
+    with data_collection._timed_substep("load", enabled=True, totals=totals):
         pass
     assert totals["load"] == pytest.approx(2.25)
 
-    with data_collection._timed_substep("skip", True, None):
+    with data_collection._timed_substep("skip", enabled=True, totals=None):
         pass
 
 
@@ -233,10 +231,10 @@ def test_log_df_stats_respects_debug_flag(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
     df = pl.DataFrame({"a": [1], "b": [2]})
-    data_collection._log_df_stats("disabled", df, False)
+    data_collection._log_df_stats("disabled", df, enabled=False)
     assert messages == []
 
-    data_collection._log_df_stats("enabled", df, True)
+    data_collection._log_df_stats("enabled", df, enabled=True)
     assert messages == ["enabled: 1 rows, 2 cols"]
 
 
@@ -262,7 +260,7 @@ def test_main_orchestrates_collection_and_output_writes(
     info_messages: list[str] = []
 
     @contextmanager
-    def fake_timed_step(label: str, enabled: bool):
+    def fake_timed_step(label: str, *, enabled: bool):
         """Record timed-step usage and behave like a no-op context manager."""
         timed_labels.append((label, enabled))
         yield
@@ -271,9 +269,9 @@ def test_main_orchestrates_collection_and_output_writes(
     monkeypatch.setattr(
         data_collection,
         "_configure_logging",
-        lambda enabled: timed_labels.append(("debug", enabled)),
+        lambda *, enable_debug: timed_labels.append(("debug", enable_debug)),
     )
-    monkeypatch.setattr(data_collection, "_determine_nfl_week", lambda _today: 3)
+    monkeypatch.setattr(clock, "nfl_week", lambda _today: 3)
     monkeypatch.setattr(data_collection, "_resolve_seasons", lambda start, end: [start, end])
     monkeypatch.setattr(
         data_collection,
@@ -306,15 +304,8 @@ def test_main_orchestrates_collection_and_output_writes(
         lambda message, *args: info_messages.append(message % args if args else message),
     )
 
-    class _FrozenDate(date):
-        """Date test double with a stable today() implementation."""
-
-        @classmethod
-        def today(cls) -> _FrozenDate:
-            """Return a fixed in-season date."""
-            return cls(2024, 9, 18)
-
-    monkeypatch.setattr(data_collection, "date", _FrozenDate)
+    # Today is a fixed in-season date.
+    monkeypatch.setattr(clock, "local_today", lambda: date(2024, 9, 18))
 
     data_collection.main([])
 
@@ -343,13 +334,13 @@ def test_prefix_team_records_and_invalid_side() -> None:
     assert "away_abbr" in away.columns
     assert "away_wins" in away.columns
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="team_side must be 'away' or 'home'"):
         data_collection._prefix_team_records(records_df, "bad")
 
 
 def test_resolve_seasons_rejects_pre_nflreadpy() -> None:
     """min_season before nflreadpy availability raises a ValueError."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="min_season must be >="):
         data_collection._resolve_seasons(constants.NFLREADPY_MIN_SEASON - 1, 2000)
 
 
@@ -365,11 +356,7 @@ def test_merge_team_rankings_week_specific() -> None:
     )
 
     out = data_collection._merge_team_rankings(
-        merged,
-        season=2023,
-        week=3,
-        tr_df=tr_df,
-        prev_tr_df=None,
+        merged, 2023, 3, data_collection.TeamRankingsFrames(tr_df, None)
     )
 
     assert "away_predictive_rating" in out.columns
@@ -388,11 +375,7 @@ def test_merge_team_rankings_week1_prev() -> None:
     )
 
     out = data_collection._merge_team_rankings(
-        merged,
-        season=2023,
-        week=1,
-        tr_df=None,
-        prev_tr_df=prev_tr_df,
+        merged, 2023, 1, data_collection.TeamRankingsFrames(None, prev_tr_df)
     )
 
     assert out["away_predictive_rating"][0] == 3.0
@@ -401,7 +384,7 @@ def test_merge_team_rankings_week1_prev() -> None:
 
 def test_save_and_load_dataframe(tmp_path: Path, monkeypatch) -> None:
     """DataFrame is saved and loaded correctly."""
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
     df = pl.DataFrame({"a": [1], "b": [2]})
     data_collection.save_dataframe(df, "unit_test")
@@ -413,7 +396,7 @@ def test_save_and_load_dataframe(tmp_path: Path, monkeypatch) -> None:
 
 def test_save_and_load_dataframe_use_an_explicit_data_dir(tmp_path: Path, monkeypatch) -> None:
     """An explicit data directory wins over the packaged default path."""
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path / "unused"))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path / "unused")
     target = tmp_path / "configured"
 
     df = pl.DataFrame({"a": [1], "b": [2]})
@@ -428,15 +411,15 @@ def test_save_and_load_dataframe_use_an_explicit_data_dir(tmp_path: Path, monkey
 
 def test_load_dataframe_missing(tmp_path: Path, monkeypatch) -> None:
     """Loading missing DataFrame returns None."""
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     assert data_collection.load_dataframe("missing") is None
 
 
 def test_determine_nfl_week_branches() -> None:
     """NFL week is determined correctly for various dates."""
-    assert data_collection._determine_nfl_week(date(2024, 7, 1)) == 1
+    assert clock.nfl_week(date(2024, 7, 1)) == 1
 
-    week = data_collection._determine_nfl_week(date(2024, 2, 1))
+    week = clock.nfl_week(date(2024, 2, 1))
     assert 1 <= week <= 22
 
 
@@ -556,7 +539,7 @@ def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
     monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
     monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
     monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "load_raw_elo_data", lambda: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (season_two, 1))
     monkeypatch.setattr(polars_utils, "load_team_rankings", fake_load_team_rankings)
     monkeypatch.setattr(data_collection, "process_season", fake_process_season)
@@ -623,22 +606,20 @@ def test_process_week_fallback(monkeypatch) -> None:
 
     def raise_value_error(*_args, **_kwargs):
         """Raise ValueError for testing fallback."""
-        raise ValueError("incomplete schedule")
+        msg = "incomplete schedule"
+        raise ValueError(msg)
 
     monkeypatch.setattr(polars_utils, "add_lookahead_features", raise_value_error)
     monkeypatch.setattr(polars_utils, "add_motivation_features", raise_value_error)
-    monkeypatch.setattr(polars_utils, "get_stats_for_diff", lambda: [])
+    monkeypatch.setattr(polars_utils, "get_stats_for_diff", list)
     monkeypatch.setattr(polars_utils, "calculate_stat_differentials", lambda df, _stats: df)
 
     out = data_collection.process_week(
-        season=2023,
-        week=1,
-        schedule_df=schedule_df,
-        team_stats_df=team_stats_df,
-        min_season=2022,
-        elo_df=elo_df,
-        tr_df=tr_df,
-        prev_tr_df=None,
+        2023,
+        1,
+        schedule_df,
+        team_stats_df,
+        data_collection.SeasonInputs(min_season=2022, elo_df=elo_df, tr_df=tr_df, prev_tr_df=None),
     )
 
     assert "away_elo_pre" in out.columns
@@ -690,7 +671,7 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
     monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _add_scoring)
     monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
     monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "load_raw_elo_data", lambda: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
     monkeypatch.setattr(
         polars_utils,
         "load_team_rankings",
@@ -705,7 +686,13 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
 
     combined = data_collection.collect_all_data(
         [season],
-        config=data_collection.DataCollectionConfig(False, False, False, season, season),
+        config=data_collection.DataCollectionConfig(
+            enable_timing=False,
+            enable_debug=False,
+            force_refresh_nflreadpy=False,
+            min_season=season,
+            max_season=season,
+        ),
     )
 
     assert combined.height == 0
@@ -742,7 +729,7 @@ def test_collect_all_data_dedupes_without_date_or_game_id(monkeypatch: pytest.Mo
     monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
     monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
     monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "load_raw_elo_data", lambda: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
     monkeypatch.setattr(
         polars_utils, "load_team_rankings", lambda *_args, **_kwargs: pl.DataFrame()
     )
@@ -754,7 +741,13 @@ def test_collect_all_data_dedupes_without_date_or_game_id(monkeypatch: pytest.Mo
 
     combined = data_collection.collect_all_data(
         [season],
-        config=data_collection.DataCollectionConfig(False, False, False, season, season),
+        config=data_collection.DataCollectionConfig(
+            enable_timing=False,
+            enable_debug=False,
+            force_refresh_nflreadpy=False,
+            min_season=season,
+            max_season=season,
+        ),
     )
 
     assert combined.height == 1
@@ -785,7 +778,7 @@ def test_process_season_handles_empty_schedule_and_timing_summary(
         2024,
         pl.DataFrame({"season": [2023], "week": [1]}),
         pl.DataFrame(),
-        min_season=2023,
+        data_collection.SeasonInputs(min_season=2023),
     )
     assert empty.height == 0
     assert warnings == ["No schedule data for season 2024"]
@@ -808,17 +801,15 @@ def test_process_season_handles_empty_schedule_and_timing_summary(
         week: int,
         _schedule_df: pl.DataFrame,
         _team_stats_df: pl.DataFrame,
-        **kwargs: object,
+        inputs: data_collection.SeasonInputs,
     ) -> pl.DataFrame:
         """Record timing usage and return one row per week."""
-        timing_totals = kwargs.get("timing_totals")
-        if isinstance(timing_totals, dict):
-            typed_totals = cast(dict[str, float], timing_totals)
-            typed_totals["merge"] = typed_totals.get("merge", 0.0) + 1.0
-        assert kwargs["team_elo_trends"] is trend_df
-        assert kwargs["qb_trends"] is qb_df
-        assert kwargs["team_stat_trends"] is trend_df
-        assert kwargs["coach_features"] is coach_df
+        if inputs.timing_totals is not None:
+            inputs.timing_totals["merge"] = inputs.timing_totals.get("merge", 0.0) + 1.0
+        assert inputs.team_elo_trends is trend_df
+        assert inputs.qb_trends is qb_df
+        assert inputs.team_stat_trends is trend_df
+        assert inputs.coach_features is coach_df
         seen.append((season, week))
         return pl.DataFrame({"season": [season], "week": [week]})
 
@@ -828,9 +819,11 @@ def test_process_season_handles_empty_schedule_and_timing_summary(
         2024,
         schedule_df,
         pl.DataFrame({"season": [2024], "week": [1]}),
-        min_season=2023,
-        timing_enabled=True,
-        elo_df=pl.DataFrame({"season": [2024], "week": [1]}),
+        data_collection.SeasonInputs(
+            min_season=2023,
+            timing_enabled=True,
+            elo_df=pl.DataFrame({"season": [2024], "week": [1]}),
+        ),
     )
 
     assert seen == [(2024, 2), (2024, 3)]
@@ -863,22 +856,14 @@ def test_process_week_early_exit_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert (
         data_collection.process_week(
-            2023,
-            1,
-            schedule_df,
-            pl.DataFrame(),
-            min_season=2023,
+            2023, 1, schedule_df, pl.DataFrame(), data_collection.SeasonInputs(min_season=2023)
         ).height
         == 0
     )
     assert any("Skipping season 2023 week 1" in message for message in info_messages)
 
     no_week = data_collection.process_week(
-        2024,
-        2,
-        schedule_df,
-        pl.DataFrame(),
-        min_season=2023,
+        2024, 2, schedule_df, pl.DataFrame(), data_collection.SeasonInputs(min_season=2023)
     )
     assert no_week.height == 0
 
@@ -900,7 +885,7 @@ def test_process_week_early_exit_paths(monkeypatch: pytest.MonkeyPatch) -> None:
         2,
         no_stats_schedule,
         pl.DataFrame({"season": [2024], "week": [1], "team_abbr": ["AAA"]}),
-        min_season=2023,
+        data_collection.SeasonInputs(min_season=2023),
     )
     assert no_stats.height == 0
     assert any("No aggregated stats available" in message for message in debug_messages)
@@ -979,10 +964,9 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
     )
     playoff_out = data_collection._merge_team_rankings(
         merged.select(["away_abbr", "home_abbr"]),
-        season=2024,
-        week=20,
-        tr_df=playoff_tr,
-        prev_tr_df=None,
+        2024,
+        20,
+        data_collection.TeamRankingsFrames(playoff_tr, None),
     )
     assert "away_predictive_rating" in playoff_out.columns
 
@@ -995,10 +979,9 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
     no_expected_cols = pl.DataFrame({"team_abbr": ["AAA"], "week": [2], "other": [1.0]})
     unchanged = data_collection._merge_team_rankings(
         merged.select(["away_abbr", "home_abbr"]),
-        season=2024,
-        week=2,
-        tr_df=no_expected_cols,
-        prev_tr_df=None,
+        2024,
+        2,
+        data_collection.TeamRankingsFrames(no_expected_cols, None),
     )
     assert unchanged.columns == ["away_abbr", "home_abbr"]
     assert any("TR data has no expected columns" in warning for warning in warnings)
@@ -1159,12 +1142,7 @@ def test_merge_team_rankings_skips_scraped_situational_columns_when_pbp_is_selec
     )
 
     out = data_collection._merge_team_rankings(
-        merged,
-        season=2024,
-        week=2,
-        tr_df=tr_df,
-        prev_tr_df=None,
-        tr_stats_source="pbp",
+        merged, 2024, 2, data_collection.TeamRankingsFrames(tr_df, None), tr_stats_source="pbp"
     )
 
     assert out["away_predictive_rating"][0] == pytest.approx(1.2)

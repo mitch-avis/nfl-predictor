@@ -83,7 +83,7 @@ def test_build_refuses_a_week_with_no_upcoming_games(data_dir: Path) -> None:
 
 def test_build_reports_a_missing_dataset(tmp_path: Path) -> None:
     """Without the ML dataset there is nothing to build from."""
-    with pytest.raises(FileNotFoundError, match="all_data_ml.csv"):
+    with pytest.raises(FileNotFoundError, match=r"all_data_ml\.csv"):
         week_builder.build_week_file(2026, 3, data_dir=tmp_path)
 
 

@@ -217,7 +217,7 @@ def test_get_tr_columns() -> None:
     assert constants.TR_STATS[0] in cols
 
 
-def test_helper_accessors_and_dataframe_converters(monkeypatch) -> None:
+def test_helper_accessors() -> None:
     """Column accessors and simple dataframe conversion helpers behave as expected."""
     assert teamrankings.get_stat_columns() == constants.NFLREADPY_STATS
     assert teamrankings.get_elo_columns() == constants.ELO_COLUMNS
@@ -225,17 +225,6 @@ def test_helper_accessors_and_dataframe_converters(monkeypatch) -> None:
     with_diffs = pl.DataFrame({"team_abbr": ["AAA"], "rating_diff": [1.0], "rating": [2.0]})
     without_diffs = teamrankings.remove_diff_columns(with_diffs)
     assert without_diffs.columns == ["team_abbr", "rating"]
-
-    monkeypatch.setattr(
-        pl.DataFrame,
-        "to_pandas",
-        lambda self: {"team_abbr": self["team_abbr"].to_list(), "rating": self["rating"].to_list()},
-    )
-    monkeypatch.setattr(teamrankings.pl, "from_pandas", lambda df: pl.DataFrame(df))
-
-    pandas_df = teamrankings.polars_to_pandas(without_diffs)
-    round_trip = teamrankings.pandas_to_polars(pandas_df)
-    assert round_trip.to_dicts() == without_diffs.to_dicts()
 
 
 def test_calculate_game_result_and_schedule_filters() -> None:
@@ -333,7 +322,7 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
     )
     week3_cached.write_csv(season_dir / f"{season}_week_03_team_rankings.csv")
 
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 3)
     monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
 
@@ -386,7 +375,7 @@ def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> 
     season_dir = tmp_path / str(season)
     season_dir.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 3)
     monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
     monkeypatch.setattr(teamrankings, "update_season_team_rankings", lambda _season: None)
@@ -421,7 +410,7 @@ def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> 
 
 def test_load_team_rankings_skips_pre_min_season(tmp_path, monkeypatch) -> None:
     """Seasons before TR availability return empty data."""
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
     season = constants.TEAMRANKINGS_MIN_SEASON - 1
     combined = teamrankings.load_team_rankings(
@@ -435,7 +424,7 @@ def test_load_team_rankings_skips_pre_min_season(tmp_path, monkeypatch) -> None:
 
 def test_load_team_rankings_returns_empty_for_future_season(tmp_path, monkeypatch) -> None:
     """Future seasons short-circuit because there is no cached or scrapeable data yet."""
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
     combined = teamrankings.load_team_rankings(2027, current_season=2026, current_week=2)
 
@@ -448,7 +437,7 @@ def test_load_team_rankings_uses_cached_fallback_when_refresh_fails(tmp_path, mo
     season_dir = tmp_path / str(season)
     season_dir.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 3)
     monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
     monkeypatch.setattr(teamrankings, "_validate_tr_dataframe", lambda _df: (True, []))
@@ -488,7 +477,7 @@ def test_load_team_rankings_keeps_existing_partial_week_when_scrape_fails(
     season_dir = tmp_path / str(season)
     season_dir.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(constants, "DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 1)
     monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
     monkeypatch.setattr(

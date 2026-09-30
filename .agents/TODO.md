@@ -120,7 +120,7 @@ Why this order (the ordering principles, agreed with the user):
    tuning measurements.
 3. **Features before tuning.** Anything that changes feature values lands before the Optuna
    re-tune, or the tune is fitted to a feature set that no longer exists.
-4. **Batch what invalidates checkpoints.** Edits under `nfl_predictor/ml/` and device changes
+4. **Batch what invalidates checkpoints.** Edits under `src/nfl_predictor/ml/` and device changes
    invalidate every walk-forward checkpoint, so they are grouped and pay for one new reference.
 5. **The weekly run comes first.** Production-changing steps land between game weeks; heavy
    compute runs overnight; never two walk-forwards at once.
@@ -337,7 +337,7 @@ Tasks:
       machine for hours, so it runs overnight. Prerequisites, each its own tested chunk before any
       trial runs: (1) trials must fit exactly the way production fits. `0.12.3` removed in-season
       early stopping from production and walk-forward, but `_score_margin_total_fold` in
-      `nfl_predictor/ml/ml_model_core.py` still passes `early_stopping_rounds` to
+      `src/nfl_predictor/ml/ml_model_core.py` still passes `early_stopping_rounds` to
       `fit_margin_total_models`, so every trial is scored on a differently fitted model. (2) the
       tuning objective must score what the walk-forward instrument scores: the deterministic
       `Phi(margin / SCORE_DIFF_STD_DEV)` Brier, with the market view alongside, not the
@@ -558,7 +558,7 @@ Each group names the archived milestone it came from; the milestone's full recor
       `blend` kind is retired (task 56.5), and a blend run is refused with the reason. A blend
       model (`train --model-kind blend`: the team model and the market line through a ridge
       layer; the weekly run never trains one) keeps its `feature_spec` on `team_model`, and
-      `_predict_future_games` in `nfl_predictor/reporting/power_rankings.py` reads
+      `_predict_future_games` in `src/nfl_predictor/reporting/power_rankings.py` reads
       `model.feature_spec` before its blend branch, so it fails with "Model is missing
       feature_spec" (pinned by `tests/test_blended_model_paths.py`). The model only feeds the
       projected standings; the ranking itself comes from the strength snapshot. Recommendation:
@@ -581,7 +581,7 @@ are diagnostics of saved artifacts, not walk-forward results, and have no second
       410th and 414th of 462 (`importance_aggregation.py`). Aggregate total gain (average gain
       times splits) per base feature, say which measure the chart shows, and consider SHAP
       (`nfl-predictor explain`) as the headline measure. The fix touches
-      `nfl_predictor/ml/feature_importance.py` (a checkpoint-fingerprint change, so it belongs with
+      `src/nfl_predictor/ml/feature_importance.py` (a checkpoint-fingerprint change, so it belongs with
       step 3's other `ml/` edits), the API reader and the web chart.
       Narrowed (`0.29.0`, 2026-09-27): total gain per base feature and per head is the ranking
       measure and the chart names it (older run directories fall back, labelled). SHAP as the

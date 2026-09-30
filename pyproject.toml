@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling>=1.32"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
 
 [project]
 name = "nfl-predictor"
@@ -48,10 +48,6 @@ nfl-predictor = "nfl_predictor.cli.main:main"
 [project.urls]
 Homepage = "https://github.com/mitch-avis/nfl-predictor"
 
-# [build-system]
-# requires = ["uv-build>=0.12"]
-# build-backend = "uv_build"
-
 [dependency-groups]
 dev = [
     "colorama>=0.4",
@@ -70,9 +66,6 @@ dev = [
     "ty>=0.0.84",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["nfl_predictor"]
-
 [tool.uv]
 default-groups = ["dev"]
 required-version = ">=0.11.21"
@@ -87,7 +80,7 @@ lightgbm = ["scikit-build-core"]
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-src = ["nfl_predictor", "tests"]
+src = ["src", "tests"]
 extend-exclude = [
     ".venv",
     ".git",
@@ -158,31 +151,31 @@ extend-allowed-calls = ["polars.lit"]
     "DTZ001",  # EXIF timestamps are naive by definition
     "PLC0415",
 ]
-"nfl_predictor/api/registry/*.py" = [
+"src/nfl_predictor/api/registry/*.py" = [
     "E501",
 ] # one column definition per line, descriptions included
 # Genuine false positives, each reviewed; the reason sits beside the rule.
-"nfl_predictor/api/jobs/runner.py" = [
+"src/nfl_predictor/api/jobs/runner.py" = [
     "S603", # a job's argv is built from the vetted template catalog, never from raw input
 ]
-"nfl_predictor/lightgbm_cuda.py" = [
+"src/nfl_predictor/lightgbm_cuda.py" = [
     "S603",   # fixed tool names with repo-controlled arguments
     "TRY400", # an install failure is reported as a message; the traceback adds nothing
 ]
-"nfl_predictor/ml/artifacts.py" = [
+"src/nfl_predictor/ml/artifacts.py" = [
     "S607", # `git` from PATH, the same git the checkout was made with
 ]
-"nfl_predictor/ml/walk_forward.py" = [
+"src/nfl_predictor/ml/walk_forward.py" = [
     "S607",   # `git` from PATH, the same git the checkout was made with
     "NPY002", # the legacy global seed stays until a walk-forward shows nothing reads it
 ]
-"nfl_predictor/cli/compare.py" = [
+"src/nfl_predictor/cli/compare.py" = [
     "TRY400", # a bad run argument is reported as a message with exit code 2, no traceback
 ]
-"nfl_predictor/weekly_run/__main__.py" = [
+"src/nfl_predictor/weekly_run/__main__.py" = [
     "PLC0415", # the OpenMP wait policy must be set before the pipeline imports XGBoost
 ]
-"nfl_predictor/api/auth/cli.py" = [
+"src/nfl_predictor/api/auth/cli.py" = [
     "S105", # PASSWORD_ENV holds the name of an environment variable, not a password
 ]
 
@@ -193,7 +186,7 @@ python-version = "3.14"
 
 [tool.ty.src]
 # Limit ty to the checked-in source roots we validate in CI.
-include = ["nfl_predictor", "scripts", "tests"]
+include = ["src", "scripts", "tests"]
 
 [tool.pyright]
 pythonVersion = "3.14"
@@ -252,7 +245,6 @@ addopts = [
     "--cov-report=term-missing",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
-pythonpath = ["."]
 
 [tool.coverage.run]
 branch = true

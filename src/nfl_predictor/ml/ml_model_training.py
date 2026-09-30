@@ -1,7 +1,7 @@
 """Training routines for NFL models.
 
 This module hosts the training entrypoints that were historically defined in
-`nfl_predictor/ml_model.py`.
+`src/nfl_predictor/ml_model.py`.
 """
 
 from __future__ import annotations

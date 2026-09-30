@@ -25,6 +25,8 @@ import pytest
 from nfl_predictor import constants
 
 ROOT = Path(constants.ROOT_DIR)
+# The directory the package imports from, so a file path maps to its module name.
+SOURCE_ROOT = ROOT / "src"
 SNAPSHOT = Path(__file__).parent / "fixtures" / "cli_surface.json"
 UPDATE_ENV = "NFLP_UPDATE_SNAPSHOTS"
 
@@ -40,7 +42,7 @@ class _ParserCapturedError(Exception):
 
 def _entrypoint_modules() -> list[tuple[str, str]]:
     """Return ``(module, parse function)`` for every module that builds a parser."""
-    candidates = sorted((ROOT / "nfl_predictor").rglob("*.py"))
+    candidates = sorted((SOURCE_ROOT / "nfl_predictor").rglob("*.py"))
     found: list[tuple[str, str]] = []
     for path in candidates:
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -63,7 +65,7 @@ def _entrypoint_modules() -> list[tuple[str, str]]:
             continue
         functions = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
         parse_function = "_build_parser" if "_build_parser" in functions else "_parse_args"
-        module = ".".join(path.relative_to(ROOT).with_suffix("").parts)
+        module = ".".join(path.relative_to(SOURCE_ROOT).with_suffix("").parts)
         found.append((module, parse_function))
     return found
 

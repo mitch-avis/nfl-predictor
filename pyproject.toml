@@ -10,7 +10,7 @@ keywords = ["stats", "sports", "football", "machine learning"]
 readme = "README.md"
 authors = [{ name = "Mitch Avis", email = "mitchavis@gmail.com" }]
 requires-python = ">=3.14"
-license = { text = "MIT" }
+license = "MIT"
 dependencies = [
     "argon2-cffi>=25.1",
     "beautifulsoup4>=4.15",
@@ -37,7 +37,6 @@ dependencies = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3.14",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
 ]
 

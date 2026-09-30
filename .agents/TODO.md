@@ -139,7 +139,8 @@ Steps:
    decided and executed here, because retiring unused code is part of the same cleanup. Absorbs
    the follow-ups marked "(step 2)" below. Done 2026-09-25 as `0.18.1`-`0.28.1` on
    `feat/m60-cli-consolidation` and merged into `main` with the user's approval; archived as
-   Milestone 60 in `ARCHIVE.md`, with its two leftovers under "From Milestone 60" below.
+   Milestone 60 in `ARCHIVE.md`; its two leftovers were resolved in step 3 (same
+   section, "Leftovers resolved").
 3. **Tasks 55.4 + 56.5 + 56.6 + the out-of-fold calibration pool** (new branch). Close the
    production/benchmark parity gaps together, because each changes what production outputs and
    they can share one new reference: the GPU as the default device for every run (55.4, decided
@@ -528,43 +529,6 @@ Each group names the archived milestone it came from; the milestone's full recor
       `power_rankings` web template ran it live on 2026-09-29 without an error. A crash is a fix
       under `AGENTS.md` rule 2 (failing test first); otherwise it belongs with step 4's rebuild
       reproducibility work.
-
-### From Milestone 60 (CLI and entrypoint consolidation, closed 2026-09-25)
-
-- [ ] (step 3) Narrowed acceptance item: "every web job template launches and reports progress
-      (tests plus one live check per template)". The tests landed (`0.27.0`: every template's
-      command parses with its target's own parser) and task 58.5's catch-all fix was checked
-      against the running server, but no template was launched live. On 2026-09-25 the user asked
-      to test the weekly-run and walk-forward jobs later ("hold off for now"). Remainder: one live
-      launch per template (12) from the web UI, on a server started with `nfl-predictor web`
-      without `--reload` (a reload restart marks running jobs failed). Must-ask before launching:
-      `etl_full` and `lines_refresh` (rewrite `data/`), `predict`, `power_rankings` and
-      `shap_analysis` (overwrite files in the active run directory), `weekly_run` and
-      `walk_forward_backtest` (long runs). Step 3 runs a weekly run and walk-forwards anyway.
-      Narrowed (2026-09-29): all 12 templates were launched live against a server started with
-      `nfl-predictor web` without `--reload`, on `fix/weekly-dry-run` (`0.35.2`-`0.35.3`), and
-      every one succeeded with progress reported, the two chains (`predict_week` and
-      `lines_refresh`, each into `predict`) included. The jobs were submitted through the API the
-      UI calls (`POST /api/jobs`, `models/m60_web_live_checks/job.py`, as a temporary admin
-      account, since deleted), not by clicking in the browser; whether that meets "from the web
-      UI" is on the user's question list. `leakage_audit`, `validate_offline` and `validate_live`
-      failed on the first launch and passed after the `0.35.3` fixes. The five that write into the
-      active run (`predict`, `power_rankings`, `shap_analysis` and the two chains) ran with the
-      throwaway `models/train_20260929_061431/` pinned, then unpinned. Logs:
-      `models/m60_web_live_checks/*.log`; `lines_refresh` changed one moneyline row in each of
-      `data/all_data.csv`, `data/all_data_ml.csv` and `data/predict/week_04_games_to_predict.csv`.
-
-- [x] (step 3) Power rankings from a `blend` run have never worked. Resolved in `0.32.0`: the
-      `blend` kind is retired (task 56.5), and a blend run is refused with the reason. A blend
-      model (`train --model-kind blend`: the team model and the market line through a ridge
-      layer; the weekly run never trains one) keeps its `feature_spec` on `team_model`, and
-      `_predict_future_games` in `src/nfl_predictor/reporting/power_rankings.py` reads
-      `model.feature_spec` before its blend branch, so it fails with "Model is missing
-      feature_spec" (pinned by `tests/test_blended_model_paths.py`). The model only feeds the
-      projected standings; the ranking itself comes from the strength snapshot. Recommendation:
-      settle it in task 56.5, which decides which probability paths survive: if the `blend` kind
-      stays, resolve the spec from `team_model` (the blend branch below it is already written);
-      if it is retired, this goes with it.
 
 ### From the 2026-09-25 review of the Week 3 outputs
 

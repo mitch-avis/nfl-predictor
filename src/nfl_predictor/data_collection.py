@@ -464,7 +464,11 @@ def _attach_qb_features(
     if not {"season", "week", "away_qb", "home_qb"}.issubset(games.columns):
         log.warning("Game rows have no away_qb/home_qb; skipping quarterback features")
         return games
-    loaded = set(pbp_df.get_column("season").unique().to_list()) if "season" in pbp_df else set()
+    loaded = (
+        set(pbp_df.get_column("season").unique(maintain_order=True).to_list())
+        if "season" in pbp_df
+        else set()
+    )
     missing = [
         season
         for season in range(constants.NFLREADPY_MIN_SEASON, max_season + 1)
@@ -499,7 +503,7 @@ def _log_pbp_null_rates(team_stats_df: pl.DataFrame, *, enable_debug: bool) -> N
         return
 
     per_season = (
-        team_stats_df.group_by("season")
+        team_stats_df.group_by("season", maintain_order=True)
         .agg(pl.col("offensive_snaps").is_null().mean().alias("null_rate"))
         .sort("season")
     )
@@ -559,7 +563,7 @@ def _join_pbp_team_game_stats(
 
     # A duplicate team-week key would multiply team-stat rows and silently corrupt every
     # downstream season-to-date mean, so collapse duplicates and say so loudly.
-    deduped = lookup.unique(subset=join_keys, keep="first")
+    deduped = lookup.unique(subset=join_keys, keep="first", maintain_order=True)
     if deduped.height != lookup.height:
         log.warning(
             "Play-by-play produced %d duplicate team-week keys; keeping the first of each.",
@@ -810,18 +814,30 @@ class _TeamRankingsLoader:
         return tr_df
 
 
+def _sort_newest_first(games: pl.DataFrame) -> pl.DataFrame:
+    """Sort games by date, newest first, breaking same-date ties by game id.
+
+    Several games share each kickoff date, so a date-only sort would leave their order to
+    whatever order the rows arrived in; the game-id tie-break makes the published row order
+    a fixed function of the games. Without a date column the frame is returned unchanged.
+    """
+    if "date" not in games.columns:
+        return games
+    if "game_id" not in games.columns:
+        return games.sort("date", descending=True, maintain_order=True)
+    return games.sort(["date", "game_id"], descending=[True, False])
+
+
 def _combine_seasons(frames: list[pl.DataFrame]) -> pl.DataFrame:
     """Stack the seasons newest first and drop any duplicate game (defensive cleanup)."""
-    combined_df = pl.concat(frames, how="diagonal")
-    # Sort by date, newest first
-    if "date" in combined_df.columns:
-        combined_df = combined_df.sort("date", descending=True)
+    combined_df = _sort_newest_first(pl.concat(frames, how="diagonal"))
     # Remove exact duplicate games if any exist (defensive cleanup)
     if "game_id" in combined_df.columns:
-        return combined_df.unique(subset=["game_id"], keep="first")
+        return combined_df.unique(subset=["game_id"], keep="first", maintain_order=True)
     return combined_df.unique(
         subset=["season", "week", "away_abbr", "home_abbr"],
         keep="first",
+        maintain_order=True,
     )
 
 
@@ -846,9 +862,7 @@ def _finish_games(
     # Select final columns in correct order
     combined_df = polars_utils.select_final_columns(combined_df)
     # Ensure final ordering by date after any dedupe/transforms
-    if "date" in combined_df.columns:
-        combined_df = combined_df.sort("date", descending=True)
-    return combined_df
+    return _sort_newest_first(combined_df)
 
 
 def collect_all_data(
@@ -1223,7 +1237,7 @@ def _merge_strength_features(
     with a warning rather than joined.
     """
     if features.height > 0:
-        deduped = features.unique(subset=["team_abbr"], keep="first")
+        deduped = features.unique(subset=["team_abbr"], keep="first", maintain_order=True)
         if deduped.height != features.height:
             log.warning(
                 "Strength features produced %d duplicate team keys; keeping the first of each.",
@@ -1377,7 +1391,7 @@ def process_season(
     inputs = replace(inputs, timing_totals={} if inputs.timing_enabled else None)
 
     # Get unique weeks in the schedule
-    weeks = sorted(season_schedule.select("week").unique().to_series().to_list())
+    weeks = sorted(season_schedule.select("week").unique(maintain_order=True).to_series().to_list())
 
     # Process each week
     weekly_data = []

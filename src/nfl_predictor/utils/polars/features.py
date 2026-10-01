@@ -202,7 +202,7 @@ def compute_team_records_before_week(
         ]
     )
 
-    aggregated = team_games.group_by("team_abbr").agg(
+    aggregated = team_games.group_by("team_abbr", maintain_order=True).agg(
         [
             pl.col("win").sum().cast(pl.Int32).alias("wins"),
             pl.col("loss").sum().cast(pl.Int32).alias("losses"),
@@ -493,7 +493,9 @@ def _with_next_opponent_win_pct(team_context: pl.DataFrame, games_df: pl.DataFra
         return team_context.with_columns(
             pl.lit(None, dtype=pl.Float32).alias("next_opponent_win_pct")
         )
-    team_win_pct = pl.concat(win_pct_rows, how="vertical").unique(subset=["team_abbr"])
+    team_win_pct = pl.concat(win_pct_rows, how="vertical").unique(
+        subset=["team_abbr"], keep="first", maintain_order=True
+    )
     return team_context.join(
         team_win_pct.rename(
             {"team_abbr": "next_opponent_abbr", "win_pct": "next_opponent_win_pct"}
@@ -596,7 +598,7 @@ def compute_team_standings_before_week(
         ],
         how="vertical",
     )
-    scheduled_games = scheduled.group_by("team_abbr").agg(
+    scheduled_games = scheduled.group_by("team_abbr", maintain_order=True).agg(
         pl.len().cast(pl.Int32).alias("season_games_scheduled")
     )
 
@@ -634,7 +636,7 @@ def compute_team_standings_before_week(
     # Division games behind: (leader_w - team_w + team_l - leader_l) / 2
     division_leaders = (
         records.sort(["division", "win_pct", "wins"], descending=[False, True, True])
-        .group_by("division")
+        .group_by("division", maintain_order=True)
         .agg(
             [
                 pl.col("wins").first().alias("division_leader_wins"),
@@ -675,7 +677,7 @@ def compute_team_standings_before_week(
 
     # Division clinch proxy: clinched when the current division leader has more *current* wins
     # than any other team can possibly reach.
-    top2 = records.group_by("division").agg(
+    top2 = records.group_by("division", maintain_order=True).agg(
         pl.col("max_wins").sort(descending=True).head(2).alias("division_top2_max_wins")
     )
     records = records.join(top2, on="division", how="left").with_columns(
@@ -1210,7 +1212,7 @@ def build_coach_features(
         return pl.DataFrame(schema=schema)
 
     coach_weekly = (
-        long_df.group_by(["coach_name", "season", "week"])
+        long_df.group_by(["coach_name", "season", "week"], maintain_order=True)
         .agg(
             [
                 pl.col("win").sum().cast(pl.Int32).alias("wins"),
@@ -1253,7 +1255,7 @@ def build_coach_features(
     )
 
     team_weekly = (
-        long_df.group_by(["coach_name", "team_abbr", "season", "week"])
+        long_df.group_by(["coach_name", "team_abbr", "season", "week"], maintain_order=True)
         .agg(
             [
                 pl.col("win").sum().cast(pl.Int32).alias("wins"),

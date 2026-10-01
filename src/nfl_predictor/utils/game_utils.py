@@ -177,7 +177,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
     all_qbs = all_qbs.sort("date", descending=True)
 
     # Get most recent QB per team
-    return all_qbs.group_by("team_abbr").agg(
+    return all_qbs.group_by("team_abbr", maintain_order=True).agg(
         [
             pl.col("qb_name").first(),
             pl.col("qb_value_pre").first(),

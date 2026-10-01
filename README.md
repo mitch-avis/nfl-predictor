@@ -174,6 +174,10 @@ Typical outputs:
 Note: the `data/` directory is gitignored by default; generate it via the data collection step
 above. Note: `*_ml.csv` files include model-ready engineered features.
 
+Game rows are ordered newest first, with games on the same date ordered by `game_id`. Two runs
+with the same code, locked dependencies and inputs, on the same machine with the same Polars
+thread count (`POLARS_MAX_THREADS`), write byte-identical files.
+
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future
 seasons are always refreshed to keep upcoming games and lines current. Each team-stat and

@@ -32,6 +32,9 @@ pass ``numerator_col`` and ``denominator_col`` (for example ``epa_margin_sum`` a
 ``total_play_count``) and each opponent's margin becomes ``sum(numerator) /
 sum(denominator)``. Only when a caller has nothing but a pre-divided rate column does the
 function fall back to the plain mean of that rate over the opponent's games.
+
+Every sum and mean here adds its terms in ascending value order, so the results do not
+depend on the row order of the inputs and identical rebuilds are bit-identical.
 """
 
 from __future__ import annotations
@@ -113,6 +116,22 @@ def _schedule_to_team_games(schedule: pl.DataFrame, *, team_col: str) -> pl.Data
     return pl.concat([home_rows, away_rows], how="vertical")
 
 
+def _order_free_sum(column: str) -> pl.Expr:
+    """Sum ``column`` within a group in ascending value order.
+
+    A float sum depends on the order of its terms in the last bits, and the rows reaching
+    these group-bys come through dedupes and joins whose row order Polars does not fix.
+    Sorting each group's values first makes the result a function of the values alone, so
+    identical rebuilds write identical bits.
+    """
+    return pl.col(column).sort().sum()
+
+
+def _order_free_mean(column: str) -> pl.Expr:
+    """Average ``column`` within a group in ascending value order; see `_order_free_sum`."""
+    return pl.col(column).sort().mean()
+
+
 def _mean_opponent_rating(
     team_games: pl.DataFrame,
     rating_lookup: pl.DataFrame,
@@ -138,11 +157,11 @@ def _mean_opponent_rating(
         DataFrame with ``team_col`` and ``out_col`` (Float64), one row per team present.
 
     """
-    unique_pairs = team_games.select(team_col, _OPPONENT).unique()
+    unique_pairs = team_games.select(team_col, _OPPONENT).unique(maintain_order=True)
     return (
         unique_pairs.join(rating_lookup, on=_OPPONENT, how="left")
-        .group_by(team_col)
-        .agg(pl.col(_RATING).mean().cast(pl.Float64).alias(out_col))
+        .group_by(team_col, maintain_order=True)
+        .agg(_order_free_mean(_RATING).cast(pl.Float64).alias(out_col))
     )
 
 
@@ -233,7 +252,7 @@ def compute_schedule_strength_adjusted(
         return _empty_adjusted_frame(team_col)
 
     team_games = _schedule_to_team_games(season_schedule, team_col=team_col)
-    teams = team_games.select(team_col).unique()
+    teams = team_games.select(team_col).unique(maintain_order=True)
     rating_lookup = ratings.select(
         pl.col(team_col).alias(_OPPONENT),
         pl.col(rating_col).cast(pl.Float64).alias(_RATING),
@@ -282,15 +301,15 @@ def _opponent_margin_expr(
 
     """
     if numerator_col is not None and denominator_col is not None:
-        denominator = pl.col(denominator_col).sum()
+        denominator = _order_free_sum(denominator_col)
         return (
             pl.when(denominator > 0)
-            .then(pl.col(numerator_col).sum() / denominator)
+            .then(_order_free_sum(numerator_col) / denominator)
             .otherwise(None)
             .cast(pl.Float64)
             .alias(_OPPONENT_VALUE)
         )
-    return pl.col(margin_col).mean().cast(pl.Float64).alias(_OPPONENT_VALUE)
+    return _order_free_mean(margin_col).cast(pl.Float64).alias(_OPPONENT_VALUE)
 
 
 def compute_schedule_strength_raw(
@@ -369,13 +388,13 @@ def compute_schedule_strength_raw(
     if season_games.is_empty():
         return _empty_raw_frame(team_col)
 
-    teams = season_games.select(team_col).unique()
+    teams = season_games.select(team_col).unique(maintain_order=True)
     prior_games = season_games.filter(pl.col("week") < week)
 
     subject_pairs = prior_games.select(
         pl.col(team_col).alias(_SUBJECT),
         pl.col(opponent_col).alias(_OPPONENT),
-    ).unique()
+    ).unique(maintain_order=True)
     opponent_games = prior_games.select(
         pl.col(team_col).alias(_OPPONENT),
         pl.col(opponent_col).alias(_OPPONENT_FOE),
@@ -385,7 +404,7 @@ def compute_schedule_strength_raw(
     per_opponent = (
         subject_pairs.join(opponent_games, on=_OPPONENT, how="inner")
         .filter(pl.col(_OPPONENT_FOE) != pl.col(_SUBJECT))
-        .group_by(_SUBJECT, _OPPONENT)
+        .group_by(_SUBJECT, _OPPONENT, maintain_order=True)
         .agg(
             _opponent_margin_expr(
                 margin_col=margin_col,
@@ -394,8 +413,8 @@ def compute_schedule_strength_raw(
             )
         )
     )
-    subject_means = per_opponent.group_by(_SUBJECT).agg(
-        pl.col(_OPPONENT_VALUE).mean().cast(pl.Float64).alias(PLAYED_RAW_COLUMN)
+    subject_means = per_opponent.group_by(_SUBJECT, maintain_order=True).agg(
+        _order_free_mean(_OPPONENT_VALUE).cast(pl.Float64).alias(PLAYED_RAW_COLUMN)
     )
 
     return (

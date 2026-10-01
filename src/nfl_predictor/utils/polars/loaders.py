@@ -645,8 +645,12 @@ def _log_team_stats_coverage(team_stats_df: pl.DataFrame, skeleton: pl.DataFrame
 
     """
     group_keys = ["season", "team_abbr"]
-    scheduled = skeleton.group_by(group_keys).agg(pl.len().alias("scheduled_games"))
-    observed = team_stats_df.group_by(group_keys).agg(pl.len().alias("stat_rows"))
+    scheduled = skeleton.group_by(group_keys, maintain_order=True).agg(
+        pl.len().alias("scheduled_games")
+    )
+    observed = team_stats_df.group_by(group_keys, maintain_order=True).agg(
+        pl.len().alias("stat_rows")
+    )
     mismatched = (
         scheduled.join(observed, on=group_keys, how="full", coalesce=True)
         .with_columns(
@@ -771,7 +775,7 @@ def attach_team_stats_to_schedule(
         return team_stats_df
 
     skeleton = skeleton.cast({key: team_stats_df.schema[key] for key in keys})
-    covered_seasons = skeleton["season"].unique().to_list()
+    covered_seasons = skeleton["season"].unique(maintain_order=True).to_list()
     in_scope = team_stats_df.filter(pl.col("season").is_in(covered_seasons))
     out_of_scope = team_stats_df.filter(~pl.col("season").is_in(covered_seasons))
 
@@ -1228,7 +1232,7 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
     # Deduplicate any repeated games in the source ELO data
     subset_cols = [c for c in ["season", "week", "home_abbr", "away_abbr"] if c in elo_df.columns]
     if subset_cols:
-        elo_df = elo_df.unique(subset=subset_cols, keep="last")
+        elo_df = elo_df.unique(subset=subset_cols, keep="last", maintain_order=True)
 
     return elo_df
 
@@ -1259,7 +1263,7 @@ def load_raw_elo_data() -> pl.DataFrame:
 
     subset_cols = [c for c in ["season", "week", "team1", "team2"] if c in elo_df.columns]
     if subset_cols:
-        elo_df = elo_df.unique(subset=subset_cols, keep="last")
+        elo_df = elo_df.unique(subset=subset_cols, keep="last", maintain_order=True)
 
     return elo_df
 
@@ -1313,7 +1317,7 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
     all_team_elo = all_team_elo.sort("week", descending=True)
 
     # Group by team and take the first (most recent) row
-    return all_team_elo.group_by("team_abbr").agg(
+    return all_team_elo.group_by("team_abbr", maintain_order=True).agg(
         pl.col("elo_pre").first(),
         pl.col("qb_value_pre").first(),
         pl.col("qb_elo_pre").first(),

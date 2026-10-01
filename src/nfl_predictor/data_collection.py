@@ -97,7 +97,7 @@ class DataCollectionConfig:
     # 1999-2002, which the TeamRankings scrape (starts 2003) leaves null.
     tr_stats_source: str = "pbp"
     # Reuse finished seasons' builds from the season cache under `<data dir>/cache/` when
-    # their inputs, the code and the options are unchanged; the output is identical.
+    # their inputs, the code and the options are unchanged (see `utils.season_cache`).
     incremental: bool = False
 
 
@@ -233,8 +233,7 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         help=(
             "Reuse each finished season's build from <data dir>/cache/"
             f"{constants.ETL_SEASON_CACHE_DIRNAME}/ when its inputs, the ETL code and these "
-            "options are unchanged, and rebuild the rest; the output is identical to a full "
-            "rebuild. Off by default."
+            "options are unchanged, and rebuild the rest. Off by default."
         ),
     )
     args = parser.parse_args(argv)

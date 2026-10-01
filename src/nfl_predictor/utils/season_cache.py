@@ -1,10 +1,18 @@
 """Per-season cache of the ETL's season builds, for the incremental rebuild.
 
 A season's build is its game rows and its weekly strength snapshots, as
-``data_collection.process_season`` produces them. For a finished season those are a function
-of the code, the library environment, the run's options and the input rows from that season
-and earlier, so ``SeasonKeys`` hashes exactly those and the cache returns a stored build only
-when the key matches. Anything else, including a later season's rows, cannot change the key.
+``data_collection.process_season`` produces them. For a finished season those depend on the
+code, the library environment, the run's options and the values of the input rows from that
+season and earlier, so ``SeasonKeys`` hashes exactly those and the cache returns a stored build
+only when the key matches. Anything else, including a later season's rows, cannot change the
+key.
+
+One dependency is not covered: the league means behind the regressed previous-season prior
+are reduced over an eagerly filtered slice of the whole team-stat frame, whose chunk
+boundaries, and so the last bits of the means, move with the length of that whole frame. A
+reused build therefore matches a full rebuild of the same inputs exactly, but can differ from
+a later full rebuild in the last bits of the season-to-date EPA and CPOE columns once a later
+season's rows have changed.
 
 Every input frame is digested by value, not by memory layout: each season's rows are written
 as CSV (exact float text, nulls distinct from empty strings) and hashed with the frame's

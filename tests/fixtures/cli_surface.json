@@ -1802,6 +1802,21 @@
    "required": false,
    "subcommand": null,
    "type": null
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "incremental",
+   "help": "Reuse each finished season's build from <data dir>/cache/etl_seasons/ when its inputs, the ETL code and these options are unchanged, and rebuild the rest. Off by default.",
+   "nargs": 0,
+   "options": [
+    "--incremental",
+    "--no-incremental"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
   }
  ],
  "nfl_predictor.lines_refresh": [

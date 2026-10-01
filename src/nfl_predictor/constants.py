@@ -10,6 +10,9 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parents[2]
 DATA_PATH = ROOT_DIR / "data"
 NFLREADPY_CACHE_DIR = DATA_PATH / "cache" / "nflreadpy"
+# Finished seasons' ETL builds for `nfl-predictor data --incremental`, kept under the output
+# directory's `cache/`. Safe to delete: a missing entry is rebuilt.
+ETL_SEASON_CACHE_DIRNAME = "etl_seasons"
 
 # NFL season configurations
 SEASON_END_MONTH = 2  # NFL season typically ends in February

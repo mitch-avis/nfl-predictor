@@ -178,6 +178,32 @@ Game rows are ordered newest first, with games on the same date ordered by `game
 with the same code, locked dependencies and inputs, on the same machine with the same Polars
 thread count (`POLARS_MAX_THREADS`), write byte-identical files.
 
+Building each season's weekly feature rows is nearly all of the ETL's run time.
+`nfl-predictor data --incremental` keeps each finished season's rows and strength snapshots under
+`<data dir>/cache/etl_seasons/` and reuses them when nothing they are built from has changed; the
+season in progress is always rebuilt, and every input is still loaded. An entry is keyed on:
+
+- the source of the ETL modules (`data_collection.py`, `constants.py` and everything under
+  `src/nfl_predictor/utils/`), the Polars, Polars runtime and NumPy versions, the Python
+  version, the CPU architecture and the Polars thread count;
+- the options that change a season's rows (`--min-season`, the two prior-blend switches,
+  `--stat-prior-blend-games`, `--team-stats-source` and `--tr-stats-source`);
+- the loaded schedule, team stats and Elo rows from that season and every earlier one, and that
+  season's and the previous season's TeamRankings, compared by value.
+
+So a changed input row rebuilds its season and every later one, and an edit to the ETL code
+rebuilds everything. A stale, damaged or unreadable entry is rebuilt and rewritten, never an error,
+and the directory is safe to delete. An input with a column the by-value comparison cannot
+render (list, struct, array, duration, binary or object) leaves its seasons uncached. Without the
+flag the ETL rebuilds every season and neither reads nor writes the cache. The weekly run can pass
+it through `data_collection_args: "--incremental"` in `config/weekly_run.yaml`.
+
+A reused season equals a full rebuild only while no later season's rows have changed since the
+cache was filled. The league means behind the week-1 prior are reduced over a slice whose chunk
+boundaries move with how many rows the whole loaded team-stat frame holds, later seasons
+included, so once the season in progress gains rows a full rebuild can differ from the cached
+seasons in the last bits of the season-to-date EPA and CPOE columns.
+
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future
 seasons are always refreshed to keep upcoming games and lines current. Each team-stat and

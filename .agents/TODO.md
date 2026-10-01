@@ -560,6 +560,18 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       season plus what its week-1 priors need, reuse cached finished seasons keyed on code
       version and input hashes, and prove identical output with a characterization test) fits
       step 4 (rebuild reproducibility). The ETL is Polars on the CPU; the GPU does not help it.
+      Narrowed: `0.37.5` added `nfl-predictor data --incremental` (opt-in; `utils/season_cache.py`),
+      which reuses each finished season's build keyed on the ETL code, environment, options and
+      that season's input rows by value. A scratch 1999-2026 run took about 48 s warm against
+      about 640 s full (`~/scratch/etl_incremental/`; timings noisy, load 6-13), byte-identical to
+      the full build when no input changed. It is not identical in weekly use: once a later
+      season gains rows, `calculate_league_means` (`utils/polars/teamrankings.py`) reduces a slice
+      whose chunk boundaries move, so earlier seasons' week-1 prior means move in the last bits
+      (up to about `1.8e-15`) in a full rebuild but not in a reused season. Two strict-xfail tests
+      pin it. Remainder: the one-line `.rechunk()` (awaiting the user's approval; scratch shows it
+      makes cache-then-warm and full builds byte-identical across 28 seasons), with the xfails
+      removed and the caught digest `ComputeError` logged at WARNING; then whether the weekly run
+      passes `--incremental` (`data_collection_args`), a must-ask default change.
 - [ ] (step 4, with 56.6) **Betting report edges.** The largest moneyline "edges" in Week 3
       mostly reflect the gap between each game's spread and its moneyline (the market-anchored
       margin maps through the deterministic curve, while the edge compares with the no-vig

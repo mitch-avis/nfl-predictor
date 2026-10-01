@@ -218,13 +218,6 @@ def test_etl_group_by_and_unique_calls_keep_a_deterministic_order() -> None:
     assert violations == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "calculate_league_means reduces an eagerly filtered slice whose chunk boundaries move "
-        "with the whole frame's length, so later seasons' rows move the last bits"
-    ),
-)
 def test_league_means_do_not_depend_on_where_the_frame_splits_into_chunks() -> None:
     """Identical values laid out with different chunk splits give identical league means."""
     rng = np.random.default_rng(3)

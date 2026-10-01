@@ -5,39 +5,40 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-09-29, late evening)
+## State (written 2026-10-01)
 
-- `main` is at `0.37.1` and pushed to `origin` with the user's approval on 2026-09-29. It is
-  checked out in the main checkout, `uv sync` has run, and the working tree is clean. Two
-  `--no-ff` merges landed that day:
-  - `fix/weekly-dry-run` (`fc659d0`, `0.35.2`-`0.35.3`): `weekly --dry-run` skips the data
-    refresh; `leakage-audit` creates its report directory; `validate` infers column types from
-    every row. Task 56.7 and the Milestone 60 leftovers are archived.
+- `main` is at `0.37.1` plus the step-3 close-out and pushed to `origin` (the user approved the
+  merge and push on 2026-10-01). It is checked out in the main checkout, `uv sync` has run, and
+  the working tree is clean. `scripts/gate.sh --web` exits `0` on it (see the check-in of
+  2026-10-01: 1234 passed, coverage 92.69%, 26 frontend tests).
+- What landed on 2026-09-29 to 2026-10-01, all merged with `--no-ff`:
+  - `fix/weekly-dry-run` (`0.35.2`-`0.35.3`): `weekly --dry-run` skips the data refresh;
+    `leakage-audit` creates its report directory; `validate` infers column types from every row.
+    All 12 web job templates were launched live (accepted by the user).
   - `refactor/ruff-all` (`0.36.0`-`0.37.1`):
     - ruff `select = ["ALL"]` with no inline `noqa`;
-    - the package in `src/nfl_predictor/`, built with `uv_build` (the user chose the `src/`
-      layout). It was reviewed by a separate reviewer, whose one finding (the release
-      workflow's import) was fixed in `ec99df8`;
-    - a scratch ETL rebuild for 2019-2025 of the flat layout (`a8e65b7`) against the `src/`
-      layout (`dba5a57`) matches to `2.2e-16` on every output file (`~/scratch/etl_src_check/`),
-      the ETL's own run-to-run noise;
+    - the package in `src/nfl_predictor/`, built with `uv_build`; a scratch ETL rebuild matched
+      the flat layout to `2.2e-16`, the ETL's own noise (`~/scratch/etl_src_check/`);
     - `license = "MIT"` (SPDX), and `reports/` gitignored.
-  - `scripts/gate.sh --web` exits `0` on `0.37.1` (1234 passed, coverage 92.69%, 26 frontend
-    tests).
-- After any checkout that switches between the flat and the `src/` layout, run `uv sync` at
-  once. Until then the editable install points at the old location and `import nfl_predictor`
-  fails. Delete any leftover untracked `nfl_predictor/` directory of `__pycache__` files at the
-  repository root.
-- All agent worktrees are removed. Their merged branches still exist locally and could be deleted
-  with the user's agreement: `fix/weekly-dry-run`, `fix/weekly-dry-run-impl`,
-  `build/uv-build-src`, `worktree-agent-*`, `refactor/ruff-all` and `feat/step3-parity`.
-- Week 4 picks are in `models/weekly_2026_week_04/`. The run used `fix/weekly-dry-run`
-  (`0.35.3`), launched through its `launch.sh`, and exited `0`. Checked: all 16 games are
-  present, `floor_sigma` is `13.2467` with `floor_sigma_fallback` false, and the confidence
-  ranks run 1..16. It is the active web run (no pin).
-- After the picks, the week-4 `lines_refresh` check changed one moneyline row in each of
-  `data/all_data.csv`, `data/all_data_ml.csv` and `data/predict/week_04_games_to_predict.csv`.
-- No web server is running. The temporary `agent_check` account is deleted.
+  - `docs/step3-close-out`:
+    - roadmap step 3 closed by the user (`ARCHIVE.md`, "Roadmap step 3");
+    - task 56.6 rewritten as the step-4 pick-time line plan;
+    - the feature-importance toggle became task 58.6;
+    - the user's `uv.lock` refresh (charset-normalizer 3.5.2, fastapi 0.142.2).
+- Every walk-forward checkpoint fingerprint changed with `0.36.0` and `0.37.0`, so the next
+  walk-forward or weekly stage 1 retrains from scratch (about a minute on the GPU for stage 1).
+- After any checkout that switches between the flat and the `src/` layout (an old branch), run
+  `uv sync` at once and delete any leftover untracked `nfl_predictor/` directory of
+  `__pycache__` files at the repository root.
+- All agent worktrees are removed. These merged branches still exist locally and could be
+  deleted with the user's agreement:
+  - `fix/weekly-dry-run` and `fix/weekly-dry-run-impl`;
+  - `build/uv-build-src` and the `worktree-agent-*` branches;
+  - `refactor/ruff-all`, `docs/step3-close-out` and `feat/step3-parity`.
+- Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`; 16 games, `floor_sigma` `13.2467`
+  with no fallback, ranks 1..16). It is the active web run, with no pin. No web server is
+  running; if the user restarts `nfl-predictor web`, rebuild `web/dist` first (`npm run build`
+  in `web/`).
 
 ## Open questions for the user
 
@@ -45,18 +46,20 @@ None pending.
 
 ## Next
 
-1. The step-3 remainder, then its close-out (closing is must-ask):
-   - task 56.6, its open parts ((d) moved to step 4);
-   - the narrowed feature-importance item under "From the 2026-09-25 review".
-
-   Then roadmap step 4 on a new branch off `main`:
-   - rebuild reproducibility first. The ETL is not byte-deterministic: `unique()` without
-     `maintain_order` reorders rows within a date, and parallel float sums differ at about
-     `1e-16` in the `sos_*` columns. The step-4 follow-up in `TODO.md` about Polars' 100-row type
-     guessing belongs here.
-   - then the feature-value changes (55.3, 53.7, the step-4 follow-ups) and 56.6(d).
-   - Every model change in steps 4 and 5 is followed by a new two-seed GPU reference, which also
-     refreshes the floor's sigma pool (`floor_sigma_reference_runs`).
+1. Roadmap step 3 is closed (the user, 2026-10-01; `ARCHIVE.md`, "Roadmap step 3"). Step 4 on a
+   new branch off `main`:
+   - rebuild reproducibility first: the "4, first" row of the follow-up table under "Roadmap
+     Status" in `TODO.md` (bit-reproducible schedule-strength columns, a schema version in the
+     play-by-play cache key), plus the step-4 follow-up about Polars' 100-row type guessing and
+     the incremental-ETL item from the Week 3 run. Known cause of non-determinism: `unique()`
+     without `maintain_order` reorders rows within a date, and parallel float sums differ at
+     about `1e-16` in the `sos_*` columns. Code changes need no asking; every ETL rebuild into
+     `data/` is must-ask (scratch copies, as in `~/scratch/etl_src_check/run.sh`, are not).
+   - then the feature-value changes: 55.3, 53.7, 56.6 (the pick-time market line: the
+     `nfelomarket_data` getter, the per-game line order, the fitted spread-to-moneyline map; the
+     plan agreed with the user on 2026-10-01 is in the task text) and the step-4 follow-ups,
+     sharing one rebuild cycle and one new two-seed GPU reference, which also refreshes the
+     floor's sigma pool (`floor_sigma_reference_runs`).
 2. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
    `.venv/bin/nfl-predictor weekly --run-id weekly_2026_week_05`, through a `launch.sh` in the run
    directory with `nohup setsid`. Check the games, `floor_sigma` and the ranks as for Week 4.

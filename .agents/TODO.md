@@ -219,7 +219,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | --- | --- |
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
-| 4, first | The `qb_elos.csv` type guessing and the schedule cache (step-3 merge test); the incremental ETL (Week 3 run). The play-by-play cache key (Milestone 45) and bit-reproducible rebuilds (Milestone 46) were resolved in `0.37.2` and `0.37.3` |
+| 4, first | The schedule cache (step-3 merge test); the incremental ETL (Week 3 run). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46) and the CSV type guessing (step-3 merge test) were resolved in `0.37.2`-`0.37.4` |
 | 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
 
 Rules for every feature milestone:
@@ -498,23 +498,6 @@ Each group names the archived milestone it came from; the milestone's full recor
 
 ### From the step-3 merge test (2026-09-28)
 
-- [ ] (step 4) Three reads of the data CSVs let Polars guess column types from the first 100
-      rows (found by the `0.35.3` implementer, not fixed): `reporting/power_rankings.py`
-      (`_predict_future_games`, `pl.read_csv(data_ml, columns=usecols)`), which could fail if a
-      selected column is null for the first 100 rows and typed later;
-      `week_builder.py` (reads only `season`, `week` and the scores, which it tests for null, so
-      judged safe); and `data_collection.load_dataframe` (called only from tests). The
-      `power_rankings` web template ran it live on 2026-09-29 without an error. A crash is a fix
-      under `AGENTS.md` rule 2 (failing test first); otherwise it belongs with step 4's rebuild
-      reproducibility work.
-      Narrowed: `0.37.2` fixed the three named reads plus `power_rankings`'
-      `_load_current_records` and `_build_games_for_ratings` (outputs unchanged on the Week 4
-      run, checked by an independent reviewer). The two `qb_elos.csv` reads in
-      `utils/polars/loaders.py` (`load_elo_ratings`, `load_raw_elo_data`) keep the 100-row guess,
-      which types 18 columns as text: full-file inference makes `week` numeric and breaks the
-      `week != ""` filter, and `load_raw_elo_data` feeds `fill_future_qb_data`, so the fix is an
-      ETL change. It stays here for step 4: explicit types, a null check for the filter, and two
-      scratch builds showing identical feature columns before it lands.
 - [ ] (step 4, low priority) The schedule cache (`load_schedule`, `schedule_<season>.parquet`)
       has the same staleness gap the `0.37.2` column record closed for team stats and play-by-play.
       Its prepared columns are renamed and the kickoff times merged, so the requested list needs

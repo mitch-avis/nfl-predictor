@@ -86,6 +86,13 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   thread count (the season-to-date means moved in the last bits at `POLARS_MAX_THREADS=3`), so
   the artifact-contract line in `.agents/modeling_spec.md` says "same machine, same thread
   count"; values move against the old code by at most about `2e-16` of each column's scale.
+- Data-CSV reads let Polars guess column types from the first 100 rows (step-3 merge test).
+  `0.37.2` fixed the three named reads plus two more in `power_rankings` (Week 4 outputs
+  unchanged); `0.37.4` (2026-10-01) gave both `qb_elos.csv` loaders declared types and a null check
+  for blank weeks. Loader outputs on the real file were equal for every season and two 2019-2026
+  scratch builds were byte-identical (`~/scratch/qbelo_types/`), both rechecked by an
+  independent reviewer. A text token in a numeric column now fails the read (the real file has
+  none; `nfeloqb` writes blanks); whether to keep that is an open question to the user.
 
 ---
 

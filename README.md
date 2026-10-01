@@ -176,7 +176,13 @@ above. Note: `*_ml.csv` files include model-ready engineered features.
 
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future
-seasons are always refreshed to keep upcoming games and lines current. Use
+seasons are always refreshed to keep upcoming games and lines current. Each team-stat and
+play-by-play cache file records the columns the loader asked for when it was written; a file that
+lacks a column the code now asks for (a column added to `constants.PBP_COLUMNS` or to the team-stat
+mapping) is a cache miss and that season downloads again, while a column the source never
+published does not force a download on every run. Such a column is not checked again: if nflverse
+publishes it for that season later, rerun the ETL with `--refresh-nflreadpy` to rewrite the cache.
+Use
 `--min-season`/`--max-season` to override the default season window (defaults to
 `constants.MIN_SEASON` through the current NFL season).
 

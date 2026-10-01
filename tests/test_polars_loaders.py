@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -199,16 +200,33 @@ def test_load_team_stats_combines(monkeypatch, tmp_path: Path) -> None:
     assert "sack_fumbles" not in df.columns
 
 
-def test_load_team_stats_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
-    """Team stats loader prefers cache for historical seasons."""
-    cached = pl.DataFrame(
+def _raw_team_stats(*, season: int, team: str) -> pl.DataFrame:
+    """Build one raw nflreadpy team-stat row carrying every column the loader maps or reads.
+
+    Returns:
+        Raw team-stat frame for a single regular-season team-game
+
+    """
+    mapped = list(constants.NFLREADPY_TEAM_STATS_MAPPING)
+    targets = set(constants.NFLREADPY_TEAM_STATS_MAPPING.values())
+    summed = [part for _, group in loaders._SUMMED_STATS for part in group]
+    parts = [part for part in dict.fromkeys([*summed, "def_interceptions"]) if part not in targets]
+    return pl.DataFrame(
         {
-            "season": [2021],
+            "season": [season],
             "week": [1],
-            "team_abbr": ["AAA"],
-            "opponent_abbr": ["BBB"],
-            "fumbles": [1],
+            "season_type": ["REG"],
+            "team": [team],
+            "opponent_team": ["BBB"],
+            **{column: [1] for column in [*mapped, *parts]},
         }
+    )
+
+
+def test_load_team_stats_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
+    """A cache file with every column the loader produces is reused, even an older one."""
+    cached = loaders._prepare_team_stats(
+        _raw_team_stats(season=2021, team="AAA"), regular_season_only=True
     )
     cache_path = tmp_path / "team_stats_2021_reg.parquet"
     cached.write_parquet(cache_path)
@@ -330,6 +348,112 @@ def test_load_team_stats_reraises_historical_download_failures(monkeypatch, tmp_
         )
 
 
+def _fail_load_team_stats(*_args: object, **_kwargs: object) -> pl.DataFrame:
+    """Fail if nflreadpy is called."""
+    msg = "nflreadpy team stats load should not be called"
+    raise AssertionError(msg)
+
+
+def test_load_team_stats_refetches_a_cache_that_lacks_a_produced_column(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A historical cache missing a column the loader now produces is a cache miss."""
+    stale = pl.DataFrame(
+        {"season": [2021], "week": [1], "team_abbr": ["OLD"], "opponent_abbr": ["BBB"]}
+    )
+    stale.write_parquet(tmp_path / "team_stats_2021_reg.parquet")
+    monkeypatch.setattr(
+        loaders.nfl,
+        "load_team_stats",
+        lambda seasons: _raw_team_stats(season=seasons[0], team="NEW"),
+    )
+
+    df = loaders.load_team_stats(
+        [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
+
+    assert df["team_abbr"].to_list() == ["NEW"]
+    assert "pass_yards" in df.columns
+    assert pl.read_parquet(tmp_path / "team_stats_2021_reg.parquet").equals(df)
+
+
+@pytest.mark.parametrize("derived", ["total_yards", "turnover_margin"])
+def test_load_team_stats_refetches_a_cache_that_lacks_a_derived_column(
+    monkeypatch, tmp_path: Path, derived: str
+) -> None:
+    """A historical cache missing a column the stat combination derives is a cache miss."""
+    stale = loaders._prepare_team_stats(
+        _raw_team_stats(season=2021, team="OLD"), regular_season_only=True
+    ).drop(derived)
+    stale.write_parquet(tmp_path / "team_stats_2021_reg.parquet")
+    monkeypatch.setattr(
+        loaders.nfl,
+        "load_team_stats",
+        lambda seasons: _raw_team_stats(season=seasons[0], team="NEW"),
+    )
+
+    df = loaders.load_team_stats(
+        [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
+
+    assert df["team_abbr"].to_list() == ["NEW"]
+    assert derived in df.columns
+
+
+def test_load_team_stats_refetches_when_the_mapping_grows(monkeypatch, tmp_path: Path) -> None:
+    """Adding a renamed column to the team-stat mapping invalidates older cache files."""
+    monkeypatch.setattr(
+        loaders.nfl, "load_team_stats", lambda seasons: _raw_team_stats(season=seasons[0], team="A")
+    )
+    loaders.load_team_stats(
+        [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
+
+    grown = {**constants.NFLREADPY_TEAM_STATS_MAPPING, "penalty_yards": "penalty_yards_lost"}
+    monkeypatch.setattr(constants, "NFLREADPY_TEAM_STATS_MAPPING", grown)
+    monkeypatch.setattr(
+        loaders.nfl,
+        "load_team_stats",
+        lambda seasons: _raw_team_stats(season=seasons[0], team="B").with_columns(
+            penalty_yards=pl.lit(40)
+        ),
+    )
+
+    df = loaders.load_team_stats(
+        [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
+
+    assert df["team_abbr"].to_list() == ["B"]
+    assert df["penalty_yards_lost"].to_list() == [40]
+
+
+def test_load_team_stats_reuses_a_cache_whose_source_lacked_columns(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A column the source never published does not force a refetch on every run."""
+    sparse = pl.DataFrame(
+        {
+            "season": [2021],
+            "week": [1],
+            "season_type": ["REG"],
+            "team": ["AAA"],
+            "opponent_team": ["BBB"],
+            "passing_yards": [250],
+        }
+    )
+    monkeypatch.setattr(loaders.nfl, "load_team_stats", lambda **_kwargs: sparse)
+    first = loaders.load_team_stats(
+        [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
+    monkeypatch.setattr(loaders.nfl, "load_team_stats", _fail_load_team_stats)
+
+    second = loaders.load_team_stats(
+        [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
+    )
+
+    assert second.equals(first)
+
+
 def test_add_scoring_data_to_team_stats() -> None:
     """Schedule scores are joined into per-team stats."""
     team_stats = pl.DataFrame(
@@ -390,6 +514,22 @@ def test_combine_stats_turnovers_and_yards() -> None:
     assert "fumble_recoveries" in out.columns
     assert "turnover_margin" in out.columns
     assert "total_yards" in out.columns
+
+
+@pytest.mark.parametrize(
+    ("sack_yards", "expected"),
+    [({}, 300), ({"yards_lost_from_sacks": [15]}, 285)],
+    ids=["without-sack-yards", "with-sack-yards"],
+)
+def test_combine_stats_total_yards_subtracts_sack_yards_only_when_present(
+    sack_yards: dict[str, list[int]], expected: int
+) -> None:
+    """Total yards need only passing and rushing yards; sack yards are subtracted if given."""
+    df = pl.DataFrame({"pass_yards": [200], "rush_yards": [100], **sack_yards})
+
+    out = loaders.combine_stats(df)
+
+    assert out["total_yards"].to_list() == [expected]
 
 
 def test_add_per_game_opponent_stats() -> None:
@@ -505,10 +645,23 @@ def _pbp_payload(
     )
 
 
+def _complete_pbp_cache(*, season: int, posteam: str) -> pl.DataFrame:
+    """Build a one-play cached frame carrying every requested play-by-play column.
+
+    Returns:
+        Play-by-play frame shaped like a cache file written before the requested
+        columns were recorded
+
+    """
+    row = {**dict.fromkeys(constants.PBP_COLUMNS), "season": season, "week": 1, "posteam": posteam}
+    return pl.DataFrame([row], schema=loaders._PBP_COLUMN_DTYPES)
+
+
 def test_load_pbp_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
-    """Play-by-play loader prefers the cache for historical seasons."""
-    cached = pl.DataFrame({"season": [2020], "week": [1], "posteam": ["CACHED"]})
-    cached.write_parquet(tmp_path / "pbp_2020_reg.parquet")
+    """A cache file with every requested column is reused, even an older one."""
+    _complete_pbp_cache(season=2020, posteam="CACHED").write_parquet(
+        tmp_path / "pbp_2020_reg.parquet"
+    )
 
     def fail_load_pbp(*_args, **_kwargs) -> pl.DataFrame:
         """Fail if nflreadpy is called."""
@@ -553,6 +706,91 @@ def test_load_pbp_force_refresh_ignores_cache(monkeypatch, tmp_path: Path) -> No
     monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
 
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024, force_refresh=True)
+
+    assert df["posteam"].to_list() == ["FRESH"]
+
+
+def _fail_load_pbp(*_args: object, **_kwargs: object) -> pl.DataFrame:
+    """Fail if nflreadpy is called."""
+    msg = "nflreadpy play-by-play load should not be called"
+    raise AssertionError(msg)
+
+
+def test_load_pbp_refetches_a_cache_that_lacks_a_requested_column(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A historical cache missing a requested column is a cache miss and is rewritten."""
+    stale = pl.DataFrame({"season": [2020], "week": [1], "posteam": ["STALE"]})
+    stale.write_parquet(tmp_path / "pbp_2020_reg.parquet")
+    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="FRESH"))
+
+    df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert df["posteam"].to_list() == ["FRESH"]
+    assert pl.read_parquet(tmp_path / "pbp_2020_reg.parquet").equals(df)
+
+
+def test_load_pbp_refetches_when_the_requested_columns_grow(monkeypatch, tmp_path: Path) -> None:
+    """Growing the requested play-by-play columns invalidates older cache files."""
+    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="OLD"))
+    loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    monkeypatch.setattr(constants, "PBP_COLUMNS", [*constants.PBP_COLUMNS, "extra_unused_column"])
+    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="NEW"))
+
+    df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert df["posteam"].to_list() == ["NEW"]
+    assert df["extra_unused_column"].to_list() == [1]
+
+
+def test_load_pbp_reuses_a_cache_whose_source_lacked_columns(monkeypatch, tmp_path: Path) -> None:
+    """A column the source never published does not force a refetch on every run."""
+    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="ONCE"))
+    first = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+    monkeypatch.setattr(loaders.nfl, "load_pbp", _fail_load_pbp)
+
+    second = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert second.equals(first)
+
+
+def test_load_pbp_drops_cached_columns_no_longer_requested(monkeypatch, tmp_path: Path) -> None:
+    """A cache hit returns only the requested columns, as a fresh download would."""
+    grown = [*constants.PBP_COLUMNS, "extra_unused_column"]
+    with monkeypatch.context() as patch:
+        patch.setattr(constants, "PBP_COLUMNS", grown)
+        patch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload())
+        loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+    monkeypatch.setattr(loaders.nfl, "load_pbp", _fail_load_pbp)
+
+    df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert "extra_unused_column" not in df.columns
+    assert df["posteam"].to_list() == ["AAA"]
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        "not json",
+        json.dumps(dict.fromkeys(constants.PBP_COLUMNS, 1)),
+        json.dumps([*constants.PBP_COLUMNS, 1]),
+    ],
+    ids=["not-json", "object", "non-string-entry"],
+)
+def test_load_pbp_refetches_a_cache_with_an_unreadable_column_record(
+    monkeypatch, tmp_path: Path, record: str
+) -> None:
+    """A recorded request that is not a JSON list of column names makes the file unreadable."""
+    stale = pl.DataFrame({"season": [2020], "week": [1], "posteam": ["STALE"]})
+    stale.write_parquet(
+        tmp_path / "pbp_2020_reg.parquet",
+        metadata={loaders._REQUESTED_COLUMNS_METADATA_KEY: record},
+    )
+    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="FRESH"))
+
+    df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
     assert df["posteam"].to_list() == ["FRESH"]
 

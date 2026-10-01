@@ -198,11 +198,11 @@ render (list, struct, array, duration, binary or object) leaves its seasons unca
 flag the ETL rebuilds every season and neither reads nor writes the cache. The weekly run can pass
 it through `data_collection_args: "--incremental"` in `config/weekly_run.yaml`.
 
-A reused season equals a full rebuild only while no later season's rows have changed since the
-cache was filled. The league means behind the week-1 prior are reduced over a slice whose chunk
-boundaries move with how many rows the whole loaded team-stat frame holds, later seasons
-included, so once the season in progress gains rows a full rebuild can differ from the cached
-seasons in the last bits of the season-to-date EPA and CPOE columns.
+A reused season equals a full rebuild of the same inputs byte for byte, also after the season in
+progress (or any later season) gains rows: a season's build reads nothing from later seasons,
+not even through where Polars splits the loaded frames into chunks, which moves with their total
+length. For that reason the league means behind the week-1 prior rechunk their season's slice of
+the team-stat frame before reducing it.
 
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future

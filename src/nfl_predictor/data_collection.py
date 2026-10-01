@@ -26,7 +26,7 @@ Usage:
         python -m nfl_predictor.data_collection
 
     Optional flags (when run as a script):
-        --timing --debug-logs --refresh-nflreadpy --min-season --max-season
+        --timing --debug-logs --refresh-nflreadpy --min-season --max-season --incremental
 
     Or import and call programmatically:
         from nfl_predictor.data_collection import collect_all_data
@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, NamedTuple
 import polars as pl
 
 from nfl_predictor import constants
-from nfl_predictor.utils import clock, game_utils, polars_utils
+from nfl_predictor.utils import clock, game_utils, polars_utils, season_cache
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import pbp, qb_stats, schedule_strength, strength_snapshot
 
@@ -96,6 +96,9 @@ class DataCollectionConfig:
     # Default flipped to "pbp" on 2026-09-21 (see team_stats_source above); play-by-play fills
     # 1999-2002, which the TeamRankings scrape (starts 2003) leaves null.
     tr_stats_source: str = "pbp"
+    # Reuse finished seasons' builds from the season cache under `<data dir>/cache/` when
+    # their inputs, the code and the options are unchanged; the output is identical.
+    incremental: bool = False
 
 
 def _prefix_team_records(records_df: pl.DataFrame, team_side: str) -> pl.DataFrame:
@@ -223,6 +226,17 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
             "(default pbp since 2026-09-21)."
         ),
     )
+    parser.add_argument(
+        "--incremental",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Reuse each finished season's build from <data dir>/cache/"
+            f"{constants.ETL_SEASON_CACHE_DIRNAME}/ when its inputs, the ETL code and these "
+            "options are unchanged, and rebuild the rest; the output is identical to a full "
+            "rebuild. Off by default."
+        ),
+    )
     args = parser.parse_args(argv)
     if args.stat_prior_blend_games <= 0:
         parser.error("--stat-prior-blend-games must be positive.")
@@ -245,6 +259,7 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         data_dir=args.data_dir,
         team_stats_source=str(args.team_stats_source),
         tr_stats_source=str(args.tr_stats_source),
+        incremental=bool(args.incremental),
     )
 
 
@@ -865,6 +880,82 @@ def _finish_games(
     return _sort_newest_first(combined_df)
 
 
+@dataclass(frozen=True)
+class _SeasonCacheRun:
+    """The season cache, this run's cache keys, and the first season never cached."""
+
+    cache: season_cache.SeasonCache
+    keys: season_cache.SeasonKeys
+    current_season: int
+
+
+def _open_season_cache(
+    config: DataCollectionConfig, sources: _EtlSources, min_season: int
+) -> _SeasonCacheRun | None:
+    """Return the season cache of an incremental run, or None for a full rebuild.
+
+    A season's build reads the schedule, the team stats and the ELO ratings through that
+    season (the coach history reaches back to the run's first season), its own and the
+    previous season's TeamRankings, and the options below; the keys cover exactly those.
+    """
+    if not config.incremental:
+        return None
+    keys = season_cache.SeasonKeys(
+        {
+            "schedule": sources.schedule_df,
+            "team_stats": sources.team_stats_df,
+            "elo": sources.elo_df,
+        },
+        {
+            "min_season": min_season,
+            "blend_strength_prior": config.blend_strength_prior,
+            "blend_stat_prior": config.blend_stat_prior,
+            "stat_prior_blend_games": config.stat_prior_blend_games,
+            "team_stats_source": config.team_stats_source,
+            "tr_stats_source": config.tr_stats_source,
+        },
+    )
+    directory = _resolve_data_dir(config.data_dir) / "cache" / constants.ETL_SEASON_CACHE_DIRNAME
+    log.info("Incremental run: finished seasons are read from %s when unchanged", directory)
+    return _SeasonCacheRun(season_cache.SeasonCache(directory), keys, sources.current_season)
+
+
+def _build_season(
+    season: int, sources: _EtlSources, inputs: SeasonInputs, cache: _SeasonCacheRun | None
+) -> pl.DataFrame:
+    """Build one season's game rows, reusing a finished season's cached build when valid.
+
+    The season in progress is always rebuilt. A cached build carries the season's strength
+    snapshots too, so they reach ``inputs.strength_snapshots`` exactly as a rebuild's would.
+    """
+    key = (
+        None
+        if cache is None or season >= cache.current_season
+        else cache.keys.key(season, {"tr": inputs.tr_df, "prev_tr": inputs.prev_tr_df})
+    )
+    if cache is None or key is None:
+        return process_season(season, sources.schedule_df, sources.team_stats_df, inputs)
+    build = cache.cache.load(season, key)
+    if build is None:
+        recorded: list[pl.DataFrame] = []
+        games = process_season(
+            season,
+            sources.schedule_df,
+            sources.team_stats_df,
+            replace(inputs, strength_snapshots=recorded),
+        )
+        snapshots = (
+            pl.concat(recorded, how="vertical") if recorded else combine_strength_snapshots([])
+        )
+        build = season_cache.SeasonBuild(games=games, snapshots=snapshots)
+        cache.cache.store(season, key, build)
+    else:
+        log.info("Season %d reused from the season cache", season)
+    if inputs.strength_snapshots is not None and build.snapshots.height > 0:
+        inputs.strength_snapshots.append(build.snapshots)
+    return build.games
+
+
 def collect_all_data(
     seasons: list[int],
     *,
@@ -895,6 +986,7 @@ def collect_all_data(
     sources = _load_sources(seasons, config)
     min_season = min(seasons)
     rankings = _TeamRankingsLoader(min_season, sources, enable_timing=config.enable_timing)
+    cache = _open_season_cache(config, sources, min_season)
 
     all_seasons_data = []
     for season in seasons:
@@ -913,7 +1005,7 @@ def collect_all_data(
             timing_enabled=config.enable_timing,
         )
         with _timed_step(f"process_season_{season}", enabled=config.enable_timing):
-            season_data = process_season(season, sources.schedule_df, sources.team_stats_df, inputs)
+            season_data = _build_season(season, sources, inputs, cache)
         if season_data.height > 0:
             all_seasons_data.append(season_data)
 

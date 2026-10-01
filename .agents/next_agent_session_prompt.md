@@ -8,7 +8,7 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## State (written 2026-10-01, step 4 in progress)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.37.3`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
+  out in the main checkout at `0.37.4`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
   passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
 - Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
   - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
@@ -21,10 +21,10 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
     against the current `data/` build by at most about `2e-16` of scale, and same-date row order
     changes, so the next rebuild gets a new dataset fingerprint once; any step-4 build-to-build
     comparison rebuilds its reference with current code rather than comparing with `data/`.
-- In flight when this was written (implementer subagents in `.claude/worktrees/`):
-  - the `qb_elos.csv` reads (`loaders.load_elo_ratings`, `load_raw_elo_data`): explicit types,
-    a null check for the `week != ""` filter, proven value-neutral by two scratch builds
-    (`~/scratch/qbelo_types/`);
+  - `0.37.4`: both `qb_elos.csv` loaders read declared column types (outputs and two 2019-2026
+    scratch builds unchanged, `~/scratch/qbelo_types/`); a text token in a numeric column now
+    fails the read.
+- In flight when this was written (an implementer subagent in `.claude/worktrees/`):
   - an opt-in incremental ETL (`--incremental` or similar) that reuses finished seasons keyed on
     a code fingerprint and input hashes, proven byte-identical to the full build
     (`~/scratch/etl_incremental/`). Making it the default is a question for the user.
@@ -38,11 +38,15 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
    same bits at any thread count? Recommendation: enough; every step-4 build runs here at the
    default thread count. The alternative (sorted reductions in the season-to-date and play-by-play
    aggregations) moves those values in the last bits again and costs some speed.
+2. Should a text token such as `NA` in a numeric column of `qb_elos.csv` stop the ETL (since
+   `0.37.4`) or become null as before? Recommendation: stop; `nfeloqb` writes missing numbers as
+   blanks, so only a broken export trips it, and a silent null blanks that game's quarterback
+   features. Cost: a malformed copy blocks the weekly ETL until fixed.
 
 ## Next
 
-1. Review and merge the two in-flight chunks (independent reviewer each), each under its own patch
-   version, then the gate.
+1. Review and merge the in-flight chunk (independent reviewer) under its own patch version,
+   then the gate.
 2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
    55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
    step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);

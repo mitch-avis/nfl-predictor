@@ -29,21 +29,19 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
     reused season matches a full rebuild only until a later season gains rows, because
     `calculate_league_means` (`utils/polars/teamrankings.py`) reduces a slice whose chunk layout
     moves; two strict-xfail tests pin it. `constants.py` changed, so every checkpoint retrains.
-- No subagent is in flight.
+- In flight (implementer subagents in `.claude/worktrees/`, launched 2026-10-01): (A) the
+  `.rechunk()` fix with the two xfails removed, the digest `ComputeError` at WARNING, and
+  `--incremental` in `config/weekly_run.yaml`, proven by a cache-then-warm vs full scratch check
+  (`~/scratch/etl_rechunk/`); (B) the behavior-preserving split of `data_collection.py`
+  (`process_week` and its helpers into their own module), proven by two scratch builds
+  (`~/scratch/etl_split/`). Each needs an independent review before merge.
 - Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
 
 ## Open questions for the user
 
-1. Approve the one-line `.rechunk()` in `calculate_league_means` (moves features by up to about
-   `1.8e-15`; makes full and incremental builds byte-identical)? Recommendation: yes, as step-4
-   rebuild-reproducibility work, before the step-4 reference. Lands with a failing-test-first
-   change (remove the two strict xfails), the digest `ComputeError` logged at WARNING, and a
-   rerun of `~/scratch/etl_incremental/driver2.sh`-style cache-then-warm vs full check.
-2. Then: should the weekly run pass `--incremental` (`data_collection_args` in
-   `config/weekly_run.yaml`)? Recommendation: yes once (1) lands; dataset builds for benchmarks
-   keep full rebuilds.
-3. `data_collection.py` is 2112 lines; a behavior-preserving split (`process_week` and its
-   helpers into their own module) is proposed for later.
+None pending. Answered 2026-10-01 (later): approve the `.rechunk()` in `calculate_league_means`;
+the weekly run passes `--incremental` once it lands; split `data_collection.py`
+(behavior-preserving). The user runs the Week 4 refresh themselves.
 
 Answered 2026-10-01: same-machine byte-identity is enough (accepted); a text token in a numeric
 `qb_elos.csv` column stops the ETL (kept, tentatively; none in any of the 233 `nfeloqb` versions
@@ -51,16 +49,13 @@ since 2023-08-09).
 
 ## Next
 
-1. The open questions above, then the `.rechunk()` chunk if approved.
+1. Review and merge chunks (A) and (B), each under its own version, then the gate.
 2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
    55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
    step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);
    scratch copies are not.
-3. Week 4 refresh before the Thursday game (picks due about 17:00 MDT on 2026-10-01): staged in
-   `models/weekly_2026_week_04_refresh/launch.sh` (full weekly run with a fresh ETL). Run it from
-   `main`: `git checkout main && uv sync`, then `nohup setsid` the launch script, then return to
-   `feat/step4-feature-values` and `uv sync` once it exits. Ask the user first whether
-   `data/qb_elos.csv` has been updated. Check the games, `floor_sigma` and ranks as for Week 4.
+3. Week 4 refresh: the user runs it themselves on 2026-10-01 (staged in
+   `models/weekly_2026_week_04_refresh/launch.sh`, for `main`). Do not launch it.
 4. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
    `.venv/bin/nfl-predictor weekly --run-id weekly_2026_week_05`, through a `launch.sh` in the run
    directory with `nohup setsid`. The weekly run uses the code on the checked-out branch: run it

@@ -8,7 +8,7 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## State (written 2026-10-01, step 4 in progress)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.37.4`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
+  out in the main checkout at `0.37.5`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
   passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
 - Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
   - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
@@ -24,24 +24,34 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
   - `0.37.4`: both `qb_elos.csv` loaders read declared column types (outputs and two 2019-2026
     scratch builds unchanged, `~/scratch/qbelo_types/`); a text token in a numeric column now
     fails the read.
-- In flight when this was written (an implementer subagent in `.claude/worktrees/`):
-  - an opt-in incremental ETL (`--incremental` or similar) that reuses finished seasons keyed on
-    a code fingerprint and input hashes, proven byte-identical to the full build
-    (`~/scratch/etl_incremental/`). Making it the default is a question for the user.
-  If a session restarts, check `git worktree list` and the worktree branches' logs; an unfinished
-  worktree can be resumed or redone from the task text in `TODO.md`.
+  - `0.37.5`: opt-in `nfl-predictor data --incremental` (`utils/season_cache.py`), about 48 s warm
+    against about 640 s full in scratch (`~/scratch/etl_incremental/`). Narrowed in `TODO.md`: a
+    reused season matches a full rebuild only until a later season gains rows, because
+    `calculate_league_means` (`utils/polars/teamrankings.py`) reduces a slice whose chunk layout
+    moves; two strict-xfail tests pin it. `constants.py` changed, so every checkpoint retrains.
+- No subagent is in flight.
 - Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
 
 ## Open questions for the user
 
-None pending. Answered 2026-10-01: same-machine byte-identity is enough (accepted); a text token
-in a numeric `qb_elos.csv` column stops the ETL (kept, tentatively; none in any of the 233
-`nfeloqb` versions since 2023-08-09).
+1. Approve the one-line `.rechunk()` in `calculate_league_means` (moves features by up to about
+   `1.8e-15`; makes full and incremental builds byte-identical)? Recommendation: yes, as step-4
+   rebuild-reproducibility work, before the step-4 reference. Lands with a failing-test-first
+   change (remove the two strict xfails), the digest `ComputeError` logged at WARNING, and a
+   rerun of `~/scratch/etl_incremental/driver2.sh`-style cache-then-warm vs full check.
+2. Then: should the weekly run pass `--incremental` (`data_collection_args` in
+   `config/weekly_run.yaml`)? Recommendation: yes once (1) lands; dataset builds for benchmarks
+   keep full rebuilds.
+3. `data_collection.py` is 2112 lines; a behavior-preserving split (`process_week` and its
+   helpers into their own module) is proposed for later.
+
+Answered 2026-10-01: same-machine byte-identity is enough (accepted); a text token in a numeric
+`qb_elos.csv` column stops the ETL (kept, tentatively; none in any of the 233 `nfeloqb` versions
+since 2023-08-09).
 
 ## Next
 
-1. Review and merge the in-flight chunk (independent reviewer) under its own patch version,
-   then the gate.
+1. The open questions above, then the `.rechunk()` chunk if approved.
 2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
    55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
    step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);

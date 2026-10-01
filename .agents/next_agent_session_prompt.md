@@ -34,14 +34,9 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 
 ## Open questions for the user
 
-1. Is byte-identity on this machine (one Polars thread count) enough, or should the ETL give the
-   same bits at any thread count? Recommendation: enough; every step-4 build runs here at the
-   default thread count. The alternative (sorted reductions in the season-to-date and play-by-play
-   aggregations) moves those values in the last bits again and costs some speed.
-2. Should a text token such as `NA` in a numeric column of `qb_elos.csv` stop the ETL (since
-   `0.37.4`) or become null as before? Recommendation: stop; `nfeloqb` writes missing numbers as
-   blanks, so only a broken export trips it, and a silent null blanks that game's quarterback
-   features. Cost: a malformed copy blocks the weekly ETL until fixed.
+None pending. Answered 2026-10-01: same-machine byte-identity is enough (accepted); a text token
+in a numeric `qb_elos.csv` column stops the ETL (kept, tentatively; none in any of the 233
+`nfeloqb` versions since 2023-08-09).
 
 ## Next
 
@@ -51,7 +46,12 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
    55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
    step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);
    scratch copies are not.
-3. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
+3. Week 4 refresh before the Thursday game (picks due about 17:00 MDT on 2026-10-01): staged in
+   `models/weekly_2026_week_04_refresh/launch.sh` (full weekly run with a fresh ETL). Run it from
+   `main`: `git checkout main && uv sync`, then `nohup setsid` the launch script, then return to
+   `feat/step4-feature-values` and `uv sync` once it exits. Ask the user first whether
+   `data/qb_elos.csv` has been updated. Check the games, `floor_sigma` and ranks as for Week 4.
+4. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
    `.venv/bin/nfl-predictor weekly --run-id weekly_2026_week_05`, through a `launch.sh` in the run
    directory with `nohup setsid`. The weekly run uses the code on the checked-out branch: run it
    from `main` (or ask the user whether the step-4 branch is acceptable), and after switching

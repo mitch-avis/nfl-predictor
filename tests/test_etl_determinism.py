@@ -184,7 +184,7 @@ _ETL_PATHS = (
     *sorted((_PACKAGE / "utils" / "polars").glob("*.py")),
 )
 _ORDERED_CALLS = frozenset({"group_by", "unique"})
-_DETERMINISTIC_KEEP = frozenset({"first", "last"})
+_DETERMINISTIC_KEEP = frozenset({"first", "last", "none"})
 
 
 def _keyword(call: ast.Call, name: str) -> object:
@@ -207,7 +207,7 @@ def _order_violations(path: Path) -> list[str]:
             violations.append(f"{where} without maintain_order=True")
         has_subset = any(keyword.arg == "subset" for keyword in node.keywords)
         if has_subset and _keyword(node, "keep") not in _DETERMINISTIC_KEEP:
-            violations.append(f"{where} with a subset but no keep='first' or keep='last'")
+            violations.append(f"{where} with a subset but keep='any' or no keep")
     return violations
 
 

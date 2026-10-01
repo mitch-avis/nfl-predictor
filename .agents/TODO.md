@@ -219,7 +219,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | --- | --- |
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
-| 4, first | The schedule cache (step-3 merge test); the two `0.37.6` split-review follow-ups. The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test) and the incremental ETL (Week 3 run) were resolved in `0.37.2`-`0.38.0` |
+| 4, first | The schedule cache (step-3 merge test). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test), the incremental ETL (Week 3 run) and the split-review follow-ups were resolved in `0.37.2`-`0.38.1` |
 | 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
 
 Rules for every feature milestone:
@@ -559,12 +559,12 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       stage-1 re-selection is retired and the floor is submitted. Originally: this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
-- [ ] (step 4) Two follow-ups from the review of the `0.37.6` split of `data_collection.py`:
-      the fingerprint-coverage guard (`tests/test_etl_fingerprint_coverage.py`) follows only
-      absolute imports, so a relative `from . import x` in an ETL module would escape it (none
-      exist today); and `_stamp_strength_snapshot` is private but imported by `data_collection.py`
-      and `utils/polars/week_rows.py`, so it should become public. Both change the season-cache
-      fingerprint, not the walk-forward one.
+- [ ] Cross-module private imports left after `0.38.1` (an AST scan by the `0.38.1` implementer,
+      not checked in): `utils/polars/teamrankings.py` imports `_is_numeric_dtype` from
+      `utils/polars/loaders.py`; `ml/ml_model_core.py`, `ml/ml_model_predict.py` and
+      `ml/ml_model_training.py` import 17 private names from each other. Cosmetic: rename them
+      with the next change that already retrains every checkpoint (`AGENTS.md` rule 14), not on
+      their own.
 - [ ] (step 4, with 56.6) **Betting report edges.** The largest moneyline "edges" in Week 3
       mostly reflect the gap between each game's spread and its moneyline (the market-anchored
       margin maps through the deterministic curve, while the edge compares with the no-vig

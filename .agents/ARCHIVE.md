@@ -115,6 +115,9 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   re-hashed the outputs, re-ran the layout probe on the merged tree (no layout dependence) and
   sample-checked the audit of the other 33 reductions. The web UI's weekly job still runs a full
   rebuild (its own `--config`); left for Milestone 58 by recommendation.
+- Two follow-ups from the `0.37.6` split review, resolved in `0.38.1` (2026-10-01): the
+  fingerprint-coverage guard follows relative imports (four relative cases fail on the old walk),
+  and `stamp_strength_snapshot` is public. Independent review approved.
 
 ---
 

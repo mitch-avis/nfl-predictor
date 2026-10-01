@@ -283,7 +283,7 @@ def _games_played(prior_games: pl.DataFrame, teams: list[str]) -> pl.DataFrame:
     if _TEAM not in prior_games.columns:
         return base.with_columns(pl.lit(0.0, dtype=pl.Float64).alias("strength_games_played"))
     counts = (
-        prior_games.group_by(_TEAM)
+        prior_games.group_by(_TEAM, maintain_order=True)
         .agg(pl.len().cast(pl.Float64).alias("strength_games_played"))
         .cast({_TEAM: pl.String})
     )
@@ -315,7 +315,7 @@ def _blend_prior(
             (_numeric(column) * (1.0 - constants.WEEK1_REGRESSION_FACTOR)).alias(f"_prior_{column}")
             for column in available
         ],
-    ).unique(subset=[_TEAM], keep="first")
+    ).unique(subset=[_TEAM], keep="first", maintain_order=True)
 
     games = pl.col("strength_games_played")
     weight = games / (games + constants.PRIOR_BLEND_GAMES)

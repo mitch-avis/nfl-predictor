@@ -53,7 +53,11 @@ def _sorted_teams(team_games: pl.DataFrame, *columns: str) -> list[str]:
     for column in columns:
         if column in team_games.columns:
             labels.update(
-                team_games.get_column(column).drop_nulls().cast(pl.String).unique().to_list()
+                team_games.get_column(column)
+                .drop_nulls()
+                .cast(pl.String)
+                .unique(maintain_order=True)
+                .to_list()
             )
     return sorted(labels)
 

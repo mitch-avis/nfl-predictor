@@ -118,9 +118,14 @@ def build_qb_identity(meta_df: pl.DataFrame) -> pl.DataFrame:
         )
         .filter(pl.col("qb_name").is_not_null() & pl.col("qb_id").is_not_null())
         .filter((pl.col("qb_name") != "") & (pl.col("qb_id") != ""))
-        .unique()
+        .unique(maintain_order=True)
     )
-    ambiguous = frame.group_by("qb_name").len().filter(pl.col("len") > 1).select("qb_name")
+    ambiguous = (
+        frame.group_by("qb_name", maintain_order=True)
+        .len()
+        .filter(pl.col("len") > 1)
+        .select("qb_name")
+    )
     if ambiguous.height:
         log.info(
             "QB identity: dropped %d ambiguous names: %s",
@@ -205,7 +210,7 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     team_game = ["season", "week", "posteam"]
     primary = (
         drops.filter(pl.col("_passer").is_not_null())
-        .group_by([*team_game, "_passer"])
+        .group_by([*team_game, "_passer"], maintain_order=True)
         .len()
         .sort([*team_game, "len", "_passer"], descending=[False, False, False, True, False])
         .unique(subset=team_game, keep="first", maintain_order=True)
@@ -223,7 +228,7 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     has_cpoe = is_attempt & (pl.col("cpoe").is_not_null() if "cpoe" in columns else pl.lit(False))
     count, sum_when = pbp.count_where, pbp.sum_where
 
-    games = drops.group_by([*team_game, "qb_id"]).agg(
+    games = drops.group_by([*team_game, "qb_id"], maintain_order=True).agg(
         pl.col("defteam").first().alias("opponent_abbr"),
         pl.col("_passer_name").drop_nulls().first().alias("passer_name"),
         pl.len().cast(pl.Float64).alias("dropbacks"),
@@ -258,7 +263,7 @@ def _history_tables(qb_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame,
     """
     per_game = (
         _keyed(qb_games)
-        .group_by(["qb_id", _KEY])
+        .group_by(["qb_id", _KEY], maintain_order=True)
         .agg(pl.col(c).sum() for c in QB_GAME_SUM_COLUMNS)
         .sort(["qb_id", _KEY])
     )
@@ -279,7 +284,7 @@ def _history_tables(qb_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame,
         ],
     ).sort(_KEY)
     league = (
-        per_game.group_by(_KEY)
+        per_game.group_by(_KEY, maintain_order=True)
         .agg(pl.col(c).sum() for c in QB_GAME_SUM_COLUMNS)
         .sort(_KEY)
         .select(_KEY, *[pl.col(c).cum_sum().alias(f"l_{c}") for c in QB_GAME_SUM_COLUMNS])
@@ -297,8 +302,10 @@ def _abbreviated(name: pl.Expr) -> pl.Expr:
 
 def _passer_name_map(qb_games: pl.DataFrame) -> pl.DataFrame:
     """Return play-by-play passer names that belong to exactly one quarterback id."""
-    pairs = qb_games.select("passer_name", "qb_id").drop_nulls().unique()
-    unique_names = pairs.group_by("passer_name").len().filter(pl.col("len") == 1)
+    pairs = qb_games.select("passer_name", "qb_id").drop_nulls().unique(maintain_order=True)
+    unique_names = (
+        pairs.group_by("passer_name", maintain_order=True).len().filter(pl.col("len") == 1)
+    )
     return pairs.join(unique_names.select("passer_name"), on="passer_name", how="inner")
 
 

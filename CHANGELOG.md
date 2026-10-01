@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.39.1] - 2026-10-01
+
+### Changed
+
+- The locked dependencies are refreshed and the project requires uv `0.12` or newer.
+- `update_requirements.sh` repairs a damaged environment: when the venv's interpreter fails a
+  standard-library check, it reinstalls that uv-managed Python and recreates `.venv` with it,
+  falling back to a system Python only if that still fails; after the sync, the core packages
+  (numpy, pandas, polars, scipy, scikit-learn, xgboost) must import, or the script stops with the
+  cache repair (`uv cache clean && uv sync --active --reinstall`), because installed files are
+  hardlinks into uv's cache and a damaged cache entry survives a plain reinstall.
+
+### Fixed
+
+- Bare `pytest` collects every test again: the repository root is on pytest's path, so the
+  `tests.*` helper imports resolve as they do under the gate's `python -m pytest`.
+- `update_requirements.sh` rebuilds LightGBM with CUDA after the sync again (the step was lost
+  when the script was copied from `nfeloqb`).
+- The web dev server's Vite config resolves paths with `import.meta.dirname`.
+
 ## [0.39.0] - 2026-10-01
 
 ### Changed

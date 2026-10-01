@@ -119,10 +119,6 @@ def _rows_digest(frame: pl.DataFrame) -> str:
     return _sha256(f"{_schema_text(frame)}\n{text}".encode())
 
 
-def _has_nested_column(frame: pl.DataFrame) -> bool:
-    return any(dtype.is_nested() for dtype in frame.dtypes)
-
-
 def frame_digest(frame: pl.DataFrame | None) -> str:
     """Return the value digest of a whole frame, or a fixed marker for no frame."""
     return "none" if frame is None else _rows_digest(frame)
@@ -192,19 +188,23 @@ class SeasonKeys:
             season_frames: The frames that belong to this season alone, by name.
 
         Returns:
-            A SHA-256 hex digest, or None when an input has a nested (list or struct)
-            column, which the value digest does not cover; such a season is never cached.
+            A SHA-256 hex digest, or None when an input has a column the value digest cannot
+            render as CSV (a list, struct, array, duration, binary or object column); such a
+            season is never cached.
 
         """
-        inputs = [*(digests.frame for digests in self._frames.values()), *season_frames.values()]
-        if any(frame is not None and _has_nested_column(frame) for frame in inputs):
+        try:
+            payload = {
+                **self._context,
+                "season": season,
+                "frames": {name: digests.through(season) for name, digests in self._frames.items()},
+                "season_frames": {
+                    name: frame_digest(frame) for name, frame in season_frames.items()
+                },
+            }
+        except pl.exceptions.ComputeError as error:
+            log.info("Season cache: %d has an input with no value digest (%s)", season, error)
             return None
-        payload = {
-            **self._context,
-            "season": season,
-            "frames": {name: digests.through(season) for name, digests in self._frames.items()},
-            "season_frames": {name: frame_digest(frame) for name, frame in season_frames.items()},
-        }
         return _sha256(json.dumps(payload, sort_keys=True, default=str).encode())
 
 

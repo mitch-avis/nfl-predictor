@@ -281,10 +281,24 @@ def test_a_store_that_cannot_write_does_not_raise(tmp_path: Path) -> None:
     assert cache.load(2021, "key-a") is None
 
 
-def test_a_nested_column_leaves_the_season_without_a_key() -> None:
-    nested = _frame().with_columns(pl.concat_list("value", "value").alias("pair"))
-    tr_nested = pl.DataFrame({"team_abbr": ["AAA"], "ranks": [[1, 2]]})
+@pytest.mark.parametrize(
+    "column",
+    [
+        pl.concat_list("value", "value"),
+        pl.struct("value", "count"),
+        pl.concat_list("value", "value").list.to_array(2),
+        pl.duration(seconds="count"),
+        pl.col("team_abbr").cast(pl.Binary),
+        pl.col("value").map_elements(lambda value: (value,), return_dtype=pl.Object),
+    ],
+    ids=["list", "struct", "array", "duration", "binary", "object"],
+)
+def test_a_column_the_value_digest_cannot_render_leaves_the_season_without_a_key(
+    column: pl.Expr,
+) -> None:
+    unrenderable = _frame().with_columns(column.alias("extra"))
+    season_frame = unrenderable.filter(pl.col("season") == 2021)
 
-    assert _keys(nested).key(2021, {"tr": None}) is None
-    assert _keys(_frame()).key(2021, {"tr": tr_nested}) is None
+    assert _keys(unrenderable).key(2021, {"tr": None}) is None
+    assert _keys(_frame()).key(2021, {"tr": season_frame}) is None
     assert _keys(_frame()).key(2021, {"tr": None}) is not None

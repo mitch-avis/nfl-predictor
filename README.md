@@ -628,7 +628,8 @@ nfl-predictor weekly --help
 
 ### High-level stages
 
-1. (optional) refresh data (`nfl-predictor data`)
+1. (optional) refresh data (`nfl-predictor data --incremental` with the shipped config, which
+   reuses unchanged finished seasons)
 2. walk-forward of the production configuration over the recent seasons, so the run reports how
    production would have scored against the market (stage 1)
 3. train the production configuration, the model the week's picks come from (stage 2)
@@ -696,6 +697,9 @@ This is the current behavior, recorded for reference; none of it is a recommenda
    ```bash
    nfl-predictor data
    ```
+
+   The bare command rebuilds every season. `nfl-predictor weekly` runs this step itself with
+   `--incremental`, which writes the same files and reuses each unchanged finished season.
 
 2. Canonical evaluation + model selection (walk-forward)
 

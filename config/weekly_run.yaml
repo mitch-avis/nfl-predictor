@@ -1,10 +1,11 @@
 ## weekly_run.yaml - the weekly run's configuration (`nfl-predictor weekly`)
 #
 # The weekly run reads this file by default; `--config <path>` reads another one, and command-line
-# options override either. Every value below is the code default except data_collection_args (whose
-# --incremental refresh writes what a full rebuild writes), so this file documents what a weekly
-# run does rather than changing it. A key that is commented out uses its code default, which is
-# "automatic" or "none" for those keys. Changing a value changes what the weekly run produces;
+# options override either. Every value below is the code default except two that change nothing a
+# weekly run produces: data_collection_args (its --incremental refresh writes what a full rebuild
+# writes) and postseason_weight (1.3 against 1.0, inert while include_postseason is false). So this
+# file documents what a weekly run does rather than changing it. A key that is commented out uses
+# its code default, which is "automatic" or "none" for those keys. Changing a value changes what the weekly run produces;
 # decide such changes with a walk-forward measurement first.
 
 ## General run settings:

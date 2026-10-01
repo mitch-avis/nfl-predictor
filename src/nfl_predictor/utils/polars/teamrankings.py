@@ -446,10 +446,12 @@ def aggregate_team_stats_to_week(
     agg_exprs.append(pl.len().alias("games_played"))
 
     # Polars keeps each group's input row order, so sorting by week first makes every mean
-    # add its games chronologically: a float sum depends on its term order in the last bits,
-    # and this fixes it whatever order the stats arrive in.
+    # see its games chronologically whatever order the stats arrive in: a float sum depends
+    # on its term order in the last bits. Polars still splits large sums into per-thread
+    # partial sums, so the bits match only at the same Polars thread count
+    # (POLARS_MAX_THREADS).
     agg_df = (
-        prior_games.sort(["team_abbr", "week"])
+        prior_games.sort(["team_abbr", "week"], maintain_order=True)
         .group_by("team_abbr", maintain_order=True)
         .agg(agg_exprs)
     )

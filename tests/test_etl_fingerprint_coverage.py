@@ -2,9 +2,10 @@
 
 The incremental ETL reuses a cached season only while ``season_cache.etl_code_fingerprint``
 is unchanged, so an edit to any module the build runs has to change it. This test follows
-the imports of ``nfl_predictor.data_collection`` through the package (imports that only run
-for type checkers excluded), edits each module it reaches in a copy of the package, and
-checks that every edit moves the fingerprint.
+the imports of ``nfl_predictor.data_collection`` through the package (relative imports
+resolved against the importing module's package, imports that only run for type checkers
+excluded), edits each module it reaches in a copy of the package, and checks that every edit
+moves the fingerprint.
 """
 
 from __future__ import annotations
@@ -49,7 +50,20 @@ def _type_checking_only(tree: ast.Module) -> set[int]:
     return skipped
 
 
-def _imports(package: Path, path: Path) -> set[str]:
+def _imported_from(name: str, path: Path, node: ast.ImportFrom) -> str:
+    """Return the absolute name of the module a ``from ... import`` statement reads.
+
+    A relative import counts its dots from the importing module's package, which for a
+    package's ``__init__`` is the package itself.
+    """
+    if node.level == 0:
+        return node.module or ""
+    package = name if path.name == "__init__.py" else name.rpartition(".")[0]
+    base = package.rsplit(".", node.level - 1)[0]
+    return f"{base}.{node.module}" if node.module else base
+
+
+def _imports(package: Path, name: str, path: Path) -> set[str]:
     """Return the package modules a source file imports at run time."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     skipped = _type_checking_only(tree)
@@ -59,10 +73,11 @@ def _imports(package: Path, path: Path) -> set[str]:
             continue
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+        elif isinstance(node, ast.ImportFrom):
+            module = _imported_from(name, path, node)
             for alias in node.names:
-                submodule = f"{node.module}.{alias.name}"
-                names.add(submodule if _module_file(package, submodule) else node.module)
+                submodule = f"{module}.{alias.name}"
+                names.add(submodule if _module_file(package, submodule) else module)
     return {name for name in names if _module_file(package, name) is not None}
 
 
@@ -76,7 +91,7 @@ def _etl_modules(package: Path) -> dict[str, Path]:
         if name in reached or path is None:
             continue
         reached[name] = path
-        pending.extend(_imports(package, path))
+        pending.extend(_imports(package, name, path))
         # Importing a module first runs every package above it.
         pending.extend(name.rsplit(".", depth)[0] for depth in range(1, name.count(".") + 1))
     return reached
@@ -90,11 +105,33 @@ def _is_docstring_only(path: Path) -> bool:
     )
 
 
-@pytest.fixture(scope="module")
-def package_copy(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    copy = tmp_path_factory.mktemp("package") / _ROOT
+def _uncovered_modules(package: Path) -> list[str]:
+    """Return the ETL modules whose edit leaves the code fingerprint unchanged, by name."""
+    baseline = season_cache.etl_code_fingerprint(package)
+    uncovered: list[str] = []
+    for name, path in sorted(_etl_modules(package).items()):
+        if name == _ROOT:
+            continue  # holds no code; see test_the_root_package_runs_no_code
+        original = path.read_bytes()
+        path.write_bytes(original + b"\n# edited\n")
+        try:
+            if season_cache.etl_code_fingerprint(package) == baseline:
+                uncovered.append(name)
+        finally:
+            path.write_bytes(original)
+    assert season_cache.etl_code_fingerprint(package) == baseline
+    return uncovered
+
+
+def _copy_package(directory: Path) -> Path:
+    copy = directory / _ROOT
     shutil.copytree(_PACKAGE, copy, ignore=shutil.ignore_patterns("__pycache__"))
     return copy
+
+
+@pytest.fixture(scope="module")
+def package_copy(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return _copy_package(tmp_path_factory.mktemp("package"))
 
 
 def test_the_import_walk_reaches_the_etl_modules() -> None:
@@ -115,18 +152,27 @@ def test_the_root_package_runs_no_code() -> None:
 
 
 def test_every_module_the_etl_imports_is_in_the_code_fingerprint(package_copy: Path) -> None:
-    baseline = season_cache.etl_code_fingerprint(package_copy)
-    uncovered: list[str] = []
-    for name, path in sorted(_etl_modules(package_copy).items()):
-        if name == _ROOT:
-            continue  # holds no code; see test_the_root_package_runs_no_code
-        original = path.read_bytes()
-        path.write_bytes(original + b"\n# edited\n")
-        try:
-            if season_cache.etl_code_fingerprint(package_copy) == baseline:
-                uncovered.append(name)
-        finally:
-            path.write_bytes(original)
+    uncovered = _uncovered_modules(package_copy)
 
     assert uncovered == [], f"ETL modules outside the code fingerprint: {uncovered}"
-    assert season_cache.etl_code_fingerprint(package_copy) == baseline
+
+
+@pytest.mark.parametrize(
+    ("importer", "statement"),
+    [
+        ("data_collection.py", f"from {_ROOT} import stray"),
+        ("data_collection.py", "from . import stray"),
+        ("data_collection.py", "from .stray import VALUE"),
+        ("utils/polars/week_rows.py", "from ...stray import VALUE"),
+        ("utils/polars/__init__.py", "from ... import stray"),
+    ],
+)
+def test_a_relatively_imported_module_outside_the_fingerprint_is_flagged(
+    tmp_path: Path, importer: str, statement: str
+) -> None:
+    package = _copy_package(tmp_path)
+    (package / "stray.py").write_text('"""Outside the fingerprint."""\n\nVALUE = 1\n')
+    importing_file = package / importer
+    importing_file.write_text(importing_file.read_text(encoding="utf-8") + f"\n{statement}\n")
+
+    assert _uncovered_modules(package) == [f"{_ROOT}.stray"]

@@ -82,7 +82,9 @@ def available_weeks(season: int, *, data_dir: Path | None = None) -> list[int]:
     path = (data_dir or DEFAULT_DATA_DIR) / SOURCE_FILENAME
     if not path.is_file():
         return []
-    frame = pl.read_csv(path, columns=["season", "week", "away_score", "home_score"])
+    frame = pl.read_csv(
+        path, columns=["season", "week", "away_score", "home_score"], infer_schema_length=None
+    )
     candidates = sorted(
         {int(week) for week in frame.filter(pl.col("season") == season)["week"].to_list()}
     )

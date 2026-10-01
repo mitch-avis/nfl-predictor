@@ -409,6 +409,21 @@ def test_save_and_load_dataframe_use_an_explicit_data_dir(tmp_path: Path, monkey
     assert loaded.height == 1
 
 
+def test_load_dataframe_types_a_column_first_filled_after_a_hundred_rows(tmp_path: Path) -> None:
+    """A column that is empty for the first 150 rows still loads with its numeric type."""
+    rows = 160
+    pl.DataFrame(
+        {"season": [2020] * rows, "late": [None] * 150 + [1.5] * (rows - 150)},
+        schema={"season": pl.Int64, "late": pl.Float64},
+    ).write_csv(tmp_path / "unit_test.csv")
+
+    loaded = data_collection.load_dataframe("unit_test", tmp_path)
+
+    assert loaded is not None
+    assert loaded.schema["late"] == pl.Float64
+    assert loaded["late"].drop_nulls().to_list() == [1.5] * (rows - 150)
+
+
 def test_load_dataframe_missing(tmp_path: Path, monkeypatch) -> None:
     """Loading missing DataFrame returns None."""
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)

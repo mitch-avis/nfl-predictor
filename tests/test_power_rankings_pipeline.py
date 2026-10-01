@@ -124,6 +124,94 @@ def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
         )
 
 
+def test_predict_future_games_reads_a_feature_typed_after_a_hundred_rows(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A feature empty for the first 150 rows still reaches the model as a number."""
+    data_path = tmp_path / "ml.csv"
+    past = [
+        {"season": 2024, "week": 1, "game_type": "REG", "away_abbr": "AAA", "home_abbr": "BBB"}
+    ] * 150
+    future = [
+        {
+            "season": 2025,
+            "week": 2,
+            "game_type": "REG",
+            "away_abbr": "AAA",
+            "home_abbr": "BBB",
+            "late_feature": 1.5,
+        }
+    ]
+    pd.DataFrame(past + future).to_csv(data_path, index=False)
+    model = cast(
+        "MarginTotalModel",
+        SimpleNamespace(
+            feature_spec=SimpleNamespace(feature_columns=["late_feature"]),
+            floor_sigma=SimpleNamespace(sigma=10.0, fallback=False),
+        ),
+    )
+    seen: list[pd.DataFrame] = []
+
+    def capture(_model: object, games: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        seen.append(games)
+        return np.zeros(len(games)), np.zeros(len(games))
+
+    monkeypatch.setattr(power_rankings.ml_model_core, "predict_margin_total_from_model", capture)
+
+    power_rankings._predict_future_games(
+        model,
+        power_rankings.RankingInputs(
+            data_ml=data_path, data_schedule=data_path, season=2025, through_week=1
+        ),
+    )
+
+    assert pd.api.types.is_float_dtype(seen[0]["late_feature"])
+    assert seen[0]["late_feature"].tolist() == [1.5]
+
+
+def _schedule_with_a_late_decimal_line(path: Path) -> None:
+    """Write a schedule whose line is a whole number for 150 rows and a decimal after."""
+    played = {
+        "season": 2024,
+        "week": 1,
+        "game_type": "REG",
+        "away_abbr": "AAA",
+        "home_abbr": "BBB",
+        "away_score": 10,
+        "home_score": 20,
+        "total_line": "44",
+    }
+    rows = [played] * 150 + [{**played, "week": 2, "total_line": "44.5"}]
+    pd.DataFrame(rows).to_csv(path, index=False)
+
+
+def test_load_current_records_reads_a_schedule_typed_after_a_hundred_rows(tmp_path) -> None:
+    """A column whose type changes after the first 100 rows does not break the records."""
+    schedule_path = tmp_path / "schedule.csv"
+    _schedule_with_a_late_decimal_line(schedule_path)
+
+    records = power_rankings._load_current_records(schedule_path, season=2024, through_week=2)
+
+    assert records.set_index("team_abbr").loc["BBB", "wins"] == 151
+
+
+def test_build_games_for_ratings_reads_a_schedule_typed_after_a_hundred_rows(tmp_path) -> None:
+    """A column whose type changes after the first 100 rows does not break the ratings fit."""
+    schedule_path = tmp_path / "schedule.csv"
+    _schedule_with_a_late_decimal_line(schedule_path)
+    no_future = pd.DataFrame(columns=["season", "week", "away_abbr", "home_abbr", "home_win_prob"])
+
+    games = power_rankings._build_games_for_ratings(
+        power_rankings.RankingInputs(
+            data_ml=schedule_path, data_schedule=schedule_path, season=2024, through_week=2
+        ),
+        power_rankings.RankingOptions(ratings_min_season=None),
+        no_future,
+    )
+
+    assert len(games) == 151
+
+
 def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
     """Ratings diagnostics should log once per invocation."""
     schedule_path = tmp_path / "schedule.csv"

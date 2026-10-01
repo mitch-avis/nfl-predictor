@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.39.0] - 2026-10-01
+
+### Changed
+
+- The web UI's weekly job passes its form's values as options over the shipped
+  `config/weekly_run.yaml` instead of writing its own config file, so its data refresh keeps the
+  shipped `--incremental` (about 48 s against about 11 minutes, same output). Fields left blank
+  take the shipped config's value, which also brings `postseason_weight: 1.3`, inert while
+  postseason training is off; resuming a web run started before this change retrains its final
+  fit once, because that weight is part of the fit's config hash.
+
+### Added
+
+- `nfl-predictor weekly --no-dry-run` and `--no-skip-data-refresh`, so the command line can turn
+  off either switch when a config file turns it on.
+
+### Fixed
+
+- Web job forms pass free-text values (run id, report paths, ETL arguments) joined to their flag,
+  so a value starting with a dash is not read as an option, and an ETL-arguments string with an
+  unclosed quote is rejected at submit with a clear message.
+- The README's postseason notes said `power_rankings_include_postseason` ships on; the shipped
+  config and the code default both turn it off.
+
 ## [0.38.2] - 2026-10-01
 
 ### Fixed

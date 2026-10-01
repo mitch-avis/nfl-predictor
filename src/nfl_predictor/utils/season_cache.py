@@ -5,15 +5,11 @@ A season's build is its game rows and its weekly strength snapshots, as
 code, the library environment, the run's options and the values of the input rows from that
 season and earlier, so ``SeasonKeys`` hashes exactly those and the cache returns a stored build
 only when the key matches. Anything else, including a later season's rows, cannot change the
-key.
-
-One dependency is not covered, so a reused build equals a full rebuild only while no later
-season's rows have changed since the cache was filled. The league means behind the regressed
-previous-season prior are reduced over an eagerly filtered slice of the whole team-stat
-frame; that slice's chunk boundaries, and so the last bits of the means, move with how many
-rows the whole frame holds, later seasons included. Once a later season's rows change (the
-season in progress gains a week, for example), a full rebuild can differ from the reused
-build in the last bits of the season-to-date EPA and CPOE columns.
+key, and nothing else can change the build: a reused build equals a full rebuild's even after
+later seasons gain rows. That holds only while a season's build reads no later season, which
+includes where Polars splits the run-wide frames into chunks, since those boundaries move with
+the frames' total length. A reduction over an eagerly filtered slice sums chunk by chunk, so
+season-build code rechunks such a slice before reducing it (``calculate_league_means`` does).
 
 Every input frame is digested by value, not by memory layout: each season's rows are written
 as CSV (exact float text, nulls distinct from empty strings) and hashed with the frame's
@@ -212,7 +208,11 @@ class SeasonKeys:
                 },
             }
         except pl.exceptions.ComputeError as error:
-            log.info("Season cache: %d has an input with no value digest (%s)", season, error)
+            log.warning(
+                "Season cache: %d has an input with no value digest, so it is never reused (%s)",
+                season,
+                error,
+            )
             return None
         return _sha256(json.dumps(payload, sort_keys=True, default=str).encode())
 

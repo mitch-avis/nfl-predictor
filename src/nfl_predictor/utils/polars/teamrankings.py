@@ -862,7 +862,9 @@ def calculate_league_means(team_stats_df: pl.DataFrame, season: int) -> dict[str
         Dictionary mapping stat names to their league-wide mean values
 
     """
-    season_stats = team_stats_df.filter(pl.col("season") == season)
+    # A reduction over a filtered slice sums chunk by chunk, so the slice is rechunked to make
+    # its means independent of how many rows (and which chunk splits) the whole frame has.
+    season_stats = team_stats_df.filter(pl.col("season") == season).rechunk()
 
     if season_stats.height == 0:
         return {}

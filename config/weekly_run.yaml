@@ -1,17 +1,24 @@
 ## weekly_run.yaml - the weekly run's configuration (`nfl-predictor weekly`)
 #
 # The weekly run reads this file by default; `--config <path>` reads another one, and command-line
-# options override either. Every value below is the code default, so this file documents what a
-# weekly run does rather than changing it. A key that is commented out uses its code default,
-# which is "automatic" or "none" for those keys. Changing a value changes what the weekly run
-# produces; decide such changes with a walk-forward measurement first.
+# options override either. Every value below is the code default except two that change nothing a
+# weekly run produces: data_collection_args (its --incremental refresh writes what a full rebuild
+# writes) and postseason_weight (1.3 against 1.0, inert while include_postseason is false). So this
+# file documents what a weekly run does rather than changing it. A key that is commented out uses
+# its code default, which is "automatic" or "none" for those keys. Changing a value changes what the weekly run produces;
+# decide such changes with a walk-forward measurement first.
 
 ## General run settings:
 # run_id omitted so weekly_run generates a fresh artifact-friendly id by default.
 # whether to skip data collection stage (default: false)
 skip_data_refresh: false
-# extra arguments for the data collection refresh, as one shell-quoted string (default: none)
-# data_collection_args: "--min-season 2010 --stat-prior-blend-games 4"
+# extra arguments for the data collection refresh, as one shell-quoted string (default: none).
+# The weekly run sets --incremental, which reuses each finished season's cached build when nothing
+# it reads has changed; the output is the same as a full rebuild's. A --data-collection-args value
+# on the command line replaces this string rather than adding to it, so keep --incremental in it to
+# keep the reuse (for example "--incremental --min-season 2010"); a file read with --config sets
+# its own value or none, and none is a full rebuild.
+data_collection_args: "--incremental"
 # resume from previous run or start fresh (default: true)
 resume: true
 # write a progress line after every walk-forward week of stage 1 (default: false)

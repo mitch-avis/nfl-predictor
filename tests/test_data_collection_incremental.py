@@ -397,14 +397,6 @@ def test_a_changed_value_in_the_current_season_keeps_finished_seasons_cached(
     assert warm.built == [_CURRENT_SEASON]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the week-1 prior's league means reduce an eagerly filtered slice whose chunk "
-        "boundaries move with the whole team-stat frame's length, so a later season's new "
-        "rows move the last bits of a full rebuild's earlier seasons"
-    ),
-)
 def test_a_new_week_in_the_current_season_keeps_finished_seasons_equal_to_a_full_rebuild(
     etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:

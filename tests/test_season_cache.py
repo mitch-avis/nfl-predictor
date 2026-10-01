@@ -8,6 +8,7 @@ read as a miss, never as an error.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date
 from importlib import metadata
 from typing import TYPE_CHECKING
@@ -314,3 +315,16 @@ def test_a_column_the_value_digest_cannot_render_leaves_the_season_without_a_key
     assert _keys(unrenderable).key(2021, {"tr": None}) is None
     assert _keys(_frame()).key(2021, {"tr": season_frame}) is None
     assert _keys(_frame()).key(2021, {"tr": None}) is not None
+
+
+def test_a_season_left_without_a_key_is_logged_as_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A season that can never be reused is reported at WARNING, not only at INFO."""
+    unrenderable = _frame().with_columns(pl.struct("value", "count").alias("extra"))
+    caplog.set_level(logging.INFO)
+
+    assert _keys(unrenderable).key(2021, {"tr": None}) is None
+
+    records = [record for record in caplog.records if "no value digest" in record.getMessage()]
+    assert [record.levelno for record in records] == [logging.WARNING]

@@ -212,7 +212,11 @@ class SeasonKeys:
                 },
             }
         except pl.exceptions.ComputeError as error:
-            log.info("Season cache: %d has an input with no value digest (%s)", season, error)
+            log.warning(
+                "Season cache: %d has an input with no value digest, so it is never reused (%s)",
+                season,
+                error,
+            )
             return None
         return _sha256(json.dumps(payload, sort_keys=True, default=str).encode())
 

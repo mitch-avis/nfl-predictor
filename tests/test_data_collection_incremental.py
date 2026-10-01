@@ -10,6 +10,8 @@ was damaged.
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
 import shutil
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -610,3 +612,104 @@ def test_a_season_without_a_key_is_rebuilt_and_not_cached(
     _assert_identical(warm, baseline.full)
     assert warm.built == list(_SEASONS)
     assert _stamps(_cache_dir(warm_dir)) == stamps
+
+
+# Everything a season build reads, and how the cache key covers it. A new parameter or field
+# fails the guards below until it is keyed or shown to leave a season's rows unchanged.
+_PROCESS_SEASON_PARAMETERS = {
+    "season": "keyed: the key is per season",
+    "schedule_df": "keyed: the schedule's rows through the season",
+    "team_stats_df": "keyed: the team stats' rows through the season",
+    "inputs": "covered field by field in _SEASON_INPUT_FIELDS",
+}
+_KEYED_OPTIONS = (
+    "min_season",
+    "blend_strength_prior",
+    "blend_stat_prior",
+    "stat_prior_blend_games",
+    "team_stats_source",
+    "tr_stats_source",
+)
+_DERIVED_SEASON_INPUTS = (
+    "team_elo_trends",
+    "qb_trends",
+    "team_stat_trends",
+    "coach_features",
+    "prior_strength_snapshot",
+    "prior_season_stats",
+)
+_SEASON_INPUT_FIELDS = {
+    **dict.fromkeys(set(_KEYED_OPTIONS) - {"team_stats_source"}, "keyed: a run option"),
+    "elo_df": "keyed: the Elo rows through the season",
+    "tr_df": "keyed: the season's TeamRankings",
+    "prev_tr_df": "keyed: the previous season's TeamRankings",
+    "strength_snapshots": "output-neutral: the sink a build appends its snapshots to",
+    "timing_enabled": "output-neutral: timing logs only",
+    "timing_totals": "output-neutral: timing logs only",
+    **dict.fromkeys(_DERIVED_SEASON_INPUTS, "recomputed by process_season from keyed inputs"),
+}
+_CONFIG_FIELDS = {
+    **dict.fromkeys(_KEYED_OPTIONS, "keyed: a run option"),
+    "enable_timing": "output-neutral: logging only",
+    "enable_debug": "output-neutral: logging only",
+    "force_refresh_nflreadpy": "output-neutral: changes only the loaded rows, keyed by value",
+    "max_season": "output-neutral: adds later seasons, which no earlier key reads",
+    "data_dir": "output-neutral: where the files and the cache are written",
+    "incremental": "output-neutral: whether the cache is used",
+}
+
+
+def test_every_process_season_parameter_is_keyed() -> None:
+    parameters = inspect.signature(data_collection.process_season).parameters
+
+    assert set(parameters) == set(_PROCESS_SEASON_PARAMETERS)
+
+
+def test_every_season_input_is_keyed_or_output_neutral() -> None:
+    fields = {field.name for field in dataclasses.fields(data_collection.SeasonInputs)}
+
+    assert fields == set(_SEASON_INPUT_FIELDS)
+
+
+def test_every_config_field_is_keyed_or_output_neutral_and_the_key_holds_the_keyed_ones() -> None:
+    fields = {field.name for field in dataclasses.fields(data_collection.DataCollectionConfig)}
+    world = _world()
+    sources = data_collection._EtlSources(
+        current_season=_CURRENT_SEASON,
+        current_week=_CURRENT_WEEK,
+        schedule_df=world.schedule,
+        team_stats_df=world.team_stats,
+        pbp_df=pl.DataFrame(),
+        elo_df=world.elo,
+        raw_elo_df=world.elo,
+    )
+
+    cache = data_collection._open_season_cache(_incremental_config(), sources, _SEASONS[0])
+
+    assert fields == set(_CONFIG_FIELDS)
+    assert cache is not None
+    options = cache.keys._context["options"]
+    assert isinstance(options, dict)
+    assert set(options) == set(_KEYED_OPTIONS)
+    assert set(cache.keys._frames) == {"schedule", "team_stats", "elo"}
+
+
+def test_process_season_recomputes_every_derived_season_input() -> None:
+    world = _world()
+    sentinel = pl.DataFrame({"sentinel": [1]})
+    supplied = data_collection.SeasonInputs(
+        min_season=_SEASONS[0],
+        elo_df=world.elo,
+        team_elo_trends=sentinel,
+        qb_trends=sentinel,
+        team_stat_trends=sentinel,
+        coach_features=sentinel,
+        prior_strength_snapshot=sentinel,
+        prior_season_stats=sentinel,
+    )
+
+    derived = data_collection._with_season_features(
+        _SEASONS[1], world.schedule, world.team_stats, supplied
+    )
+
+    assert all(getattr(derived, name) is not sentinel for name in _DERIVED_SEASON_INPUTS)

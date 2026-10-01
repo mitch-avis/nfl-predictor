@@ -64,6 +64,21 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Roadmap step 4 (in progress) - Resolved follow-ups
+
+Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as they land.
+
+- The play-by-play cache key had no schema version (Milestone 45), nor did the team-stat cache.
+  Resolved in `0.37.2` (2026-10-01) without a key change: each cache file records the columns it
+  was requested with in its Parquet metadata, and a historical season whose file lacks a column
+  now requested (including a column the stat combination derives) is refetched; a column the
+  source never published does not force a refetch, and `--refresh-nflreadpy` picks it up later.
+  All 56 existing cache files passed the check, so nothing was refetched. Independent review
+  rechecked the no-refetch claim and the unchanged Week 4 outputs read-only, and caught a
+  `total_yards` regression in the first fix round before the merge.
+
+---
+
 ## Roadmap step 3 - Production and benchmark parity (closed 2026-10-01)
 
 Versions `0.29.0`-`0.35.3` (`feat/step3-parity`, merged 2026-09-28; `fix/weekly-dry-run`, merged

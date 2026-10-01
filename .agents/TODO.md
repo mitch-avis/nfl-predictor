@@ -219,7 +219,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | --- | --- |
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
-| 4, first | Schedule-strength columns not bit-reproducible across identical rebuilds (Milestone 46); no schema version in the play-by-play cache key (Milestone 45) |
+| 4, first | Schedule-strength columns not bit-reproducible across identical rebuilds (Milestone 46); the `qb_elos.csv` type guessing and the schedule cache (step-3 merge test); the incremental ETL (Week 3 run). The play-by-play cache key (Milestone 45) was resolved in `0.37.2` |
 | 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
 
 Rules for every feature milestone:
@@ -507,6 +507,19 @@ Each group names the archived milestone it came from; the milestone's full recor
       `power_rankings` web template ran it live on 2026-09-29 without an error. A crash is a fix
       under `AGENTS.md` rule 2 (failing test first); otherwise it belongs with step 4's rebuild
       reproducibility work.
+      Narrowed: `0.37.2` fixed the three named reads plus `power_rankings`'
+      `_load_current_records` and `_build_games_for_ratings` (outputs unchanged on the Week 4
+      run, checked by an independent reviewer). The two `qb_elos.csv` reads in
+      `utils/polars/loaders.py` (`load_elo_ratings`, `load_raw_elo_data`) keep the 100-row guess,
+      which types 18 columns as text: full-file inference makes `week` numeric and breaks the
+      `week != ""` filter, and `load_raw_elo_data` feeds `fill_future_qb_data`, so the fix is an
+      ETL change. It stays here for step 4: explicit types, a null check for the filter, and two
+      scratch builds showing identical feature columns before it lands.
+- [ ] (step 4, low priority) The schedule cache (`load_schedule`, `schedule_<season>.parquet`)
+      has the same staleness gap the `0.37.2` column record closed for team stats and play-by-play.
+      Its prepared columns are renamed and the kickoff times merged, so the requested list needs
+      deriving; and a schedule refetch can pull revised lines and change feature values. Before
+      enabling it, check read-only which existing schedule files would refetch.
 
 ### From the 2026-09-25 review of the Week 3 outputs
 
@@ -602,8 +615,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       rates from some of them (`red_zone_td_pct`, `two_point_conversion_pct`, and the third/fourth
       down percentages) via `--tr-stats-source pbp`; the raw counts themselves remain unpublished
       intermediates. Publish the raw counts or stop carrying the ones no rate reads.
-- [ ] The play-by-play cache key has no schema version, so growing `constants.PBP_COLUMNS` will not
-      invalidate existing per-season caches. Same latent issue as `load_team_stats`.
 
 ### From Milestone 46 (schedule-adjusted strength)
 

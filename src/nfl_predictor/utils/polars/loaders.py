@@ -1178,7 +1178,7 @@ def _read_qb_elos(elo_path: Path) -> pl.DataFrame:
     fails the read with a `ComputeError` that names the column, so a malformed copy of
     the file stops the ETL instead of silently blanking quarterback features.
     """
-    header = pl.read_csv(elo_path, n_rows=0).columns
+    header = pl.scan_csv(elo_path).collect_schema().names()
     column_types = {name: dtype for name, dtype in _QB_ELO_COLUMN_TYPES.items() if name in header}
     return pl.read_csv(elo_path, columns=list(column_types), schema_overrides=column_types)
 

@@ -41,22 +41,21 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 
 ## Open questions for the user
 
-None pending.
+- Merge `docs/step3-close-out` (the step-3 close-out, docs only) into `main` and push?
 
 ## Next
 
-1. The step-3 remainder, then its close-out (closing is must-ask):
-   - task 56.6, its open parts ((d) moved to step 4);
-   - the narrowed feature-importance item under "From the 2026-09-25 review".
-
-   Then roadmap step 4 on a new branch off `main`:
+1. Roadmap step 3 is closed (the user, 2026-10-01; `ARCHIVE.md`, "Roadmap step 3"). Step 4 on a
+   new branch off `main`:
    - rebuild reproducibility first. The ETL is not byte-deterministic: `unique()` without
      `maintain_order` reorders rows within a date, and parallel float sums differ at about
      `1e-16` in the `sos_*` columns. The step-4 follow-up in `TODO.md` about Polars' 100-row type
      guessing belongs here.
-   - then the feature-value changes (55.3, 53.7, the step-4 follow-ups) and 56.6(d).
-   - Every model change in steps 4 and 5 is followed by a new two-seed GPU reference, which also
-     refreshes the floor's sigma pool (`floor_sigma_reference_runs`).
+   - then the feature-value changes: 55.3, 53.7, 56.6 (the pick-time market line: the
+     `nfelomarket_data` getter, the per-game line order, the fitted spread-to-moneyline map; the
+     plan agreed with the user on 2026-10-01 is in the task text) and the step-4 follow-ups,
+     sharing one rebuild cycle and one new two-seed GPU reference, which also refreshes the
+     floor's sigma pool (`floor_sigma_reference_runs`).
 2. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
    `.venv/bin/nfl-predictor weekly --run-id weekly_2026_week_05`, through a `launch.sh` in the run
    directory with `nohup setsid`. Check the games, `floor_sigma` and the ranks as for Week 4.

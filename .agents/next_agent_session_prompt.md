@@ -30,11 +30,8 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 - After any checkout that switches between the flat and the `src/` layout (an old branch), run
   `uv sync` at once and delete any leftover untracked `nfl_predictor/` directory of
   `__pycache__` files at the repository root.
-- All agent worktrees are removed. These merged branches still exist locally and could be
-  deleted with the user's agreement:
-  - `fix/weekly-dry-run` and `fix/weekly-dry-run-impl`;
-  - `build/uv-build-src` and the `worktree-agent-*` branches;
-  - `refactor/ruff-all`, `docs/step3-close-out` and `feat/step3-parity`.
+- All agent worktrees and every merged branch are removed (2026-10-01). The only branches left
+  are `main` and `feat/web-ui` (local and on `origin`), which the user keeps on purpose.
 - Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`; 16 games, `floor_sigma` `13.2467`
   with no fallback, ranks 1..16). It is the active web run, with no pin. No web server is
   running; if the user restarts `nfl-predictor web`, rebuild `web/dist` first (`npm run build`

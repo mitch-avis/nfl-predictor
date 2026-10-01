@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.37.4] - 2026-10-01
+
+### Fixed
+
+- `data/qb_elos.csv` is read with declared column types instead of types Polars guessed from the
+  first 100 rows, which made 18 columns (`week` included) text. Rows without a week are dropped
+  by a null check. A text token in a numeric column (for example `NA`) now fails the read with an
+  error naming the column, where the quarterback value columns used to turn it into a silent null;
+  blanks still read as null. On the current file the loader outputs and two 2019-2026 scratch ETL
+  builds are unchanged.
+- `load_raw_elo_data` returns only the 13 columns the quarterback lookups read.
+
 ## [0.37.3] - 2026-10-01
 
 ### Fixed

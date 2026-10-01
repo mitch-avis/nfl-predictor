@@ -9,7 +9,7 @@ the same schema.
 
 from __future__ import annotations
 
-import json
+import shlex
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -44,6 +44,7 @@ class ParamSpec:
         choices: Allowed values when ``kind`` is ``choice``.
         minimum: Inclusive lower bound for numeric kinds.
         maximum: Inclusive upper bound for numeric kinds.
+        shell_quoted: Whether a ``str`` value is a shell-quoted argument list, checked at submit.
 
     """
 
@@ -56,6 +57,7 @@ class ParamSpec:
     choices: tuple[str, ...] = ()
     minimum: float | None = None
     maximum: float | None = None
+    shell_quoted: bool = False
 
 
 @dataclass(frozen=True)
@@ -94,12 +96,6 @@ class JobContext:
                 code="no_active_run",
             )
         return self.run
-
-    def config_path(self) -> Path:
-        """Return the per-job config file path, creating its directory."""
-        directory = self.settings.state_path / "job_configs"
-        directory.mkdir(parents=True, exist_ok=True)
-        return directory / f"{self.job_id}.json"
 
 
 @dataclass(frozen=True)
@@ -140,6 +136,16 @@ def _flag(argv: list[str], flag: str, value: object) -> None:
         argv.append(flag if value else f"--no-{flag[2:]}")
         return
     argv.extend([flag, str(value)])
+
+
+def _text_flag(argv: list[str], flag: str, value: object) -> None:
+    """Append ``flag=value`` when ``value`` is set.
+
+    A free-text value is joined to its flag so one that starts with a dash (``-x`` or
+    ``--incremental``) is read as the option's value rather than as another option.
+    """
+    if value is not None:
+        argv.append(f"{flag}={value}")
 
 
 def _data_dir(ctx: JobContext) -> str:
@@ -189,16 +195,29 @@ def _build_lines_refresh(ctx: JobContext) -> list[str]:
 
 
 def _build_weekly_run(ctx: JobContext) -> list[str]:
-    """Write the weekly-run config file and build the command that reads it."""
-    config = {key: value for key, value in ctx.params.items() if value is not None}
-    config.setdefault("output_dir", str(ctx.settings.models_path))
-    config.setdefault("data_path", ctx.data_file("completed_games_ml.csv"))
-    week = config.pop("week", None)
-    if week is not None:
-        config["predict_path"] = _week_predict_path(ctx, int(week))
-    path = ctx.config_path()
-    path.write_text(json.dumps(config, indent=2, sort_keys=True), encoding="utf-8")
-    return [*ctx.command("weekly"), "--config", str(path)]
+    """Build the weekly-run command from the form's options alone.
+
+    Without ``--config`` the command reads the shipped ``config/weekly_run.yaml``, so passing
+    options instead of a config file keeps that file's value for every field the form leaves
+    blank, and a value the form sets overrides it.
+    """
+    params = ctx.params
+    argv = [
+        *ctx.command("weekly"),
+        "--output-dir",
+        str(ctx.settings.models_path),
+        "--data-path",
+        ctx.data_file("completed_games_ml.csv"),
+    ]
+    if params.get("week") is not None:
+        argv.extend(["--predict-path", _week_predict_path(ctx, int(params["week"]))])
+    _text_flag(argv, "--run-id", params.get("run_id"))
+    _flag(argv, "--resume", params.get("resume"))
+    _flag(argv, "--dry-run", params.get("dry_run"))
+    _flag(argv, "--skip-data-refresh", params.get("skip_data_refresh"))
+    _text_flag(argv, "--data-collection-args", params.get("data_collection_args"))
+    _flag(argv, "--wf-eval-last-n-seasons", params.get("wf_eval_last_n_seasons"))
+    return argv
 
 
 def _build_train(ctx: JobContext) -> list[str]:
@@ -287,8 +306,7 @@ def _build_leakage_audit(ctx: JobContext) -> list[str]:
         *ctx.command("leakage-audit"),
         "--data-path",
         ctx.data_file("completed_games_ml.csv"),
-        "--out-json",
-        str(out_json),
+        f"--out-json={out_json}",
     ]
 
 
@@ -307,7 +325,7 @@ def _build_walk_forward(ctx: JobContext) -> list[str]:
     argv = [*ctx.command("backtest"), "--data-path", ctx.data_file("completed_games_ml.csv")]
     _flag(argv, "--wf-eval-last-n-seasons", ctx.params.get("eval_last_n_seasons"))
     _flag(argv, "--wf-start-week", ctx.params.get("wf_start_week"))
-    _flag(argv, "--out-json", ctx.params.get("out_json"))
+    _text_flag(argv, "--out-json", ctx.params.get("out_json"))
     return argv
 
 
@@ -420,13 +438,19 @@ TEMPLATES: tuple[JobTemplate, ...] = (
                 "data_collection_args",
                 "ETL arguments",
                 "str",
-                "Extra arguments for the data refresh, as one shell-quoted string.",
+                (
+                    "Extra arguments for the data refresh, as one shell-quoted string. Blank "
+                    "keeps config/weekly_run.yaml's --incremental, which reuses each unchanged "
+                    "finished season; a value replaces it, so include --incremental to keep "
+                    "that reuse."
+                ),
+                shell_quoted=True,
             ),
             ParamSpec(
                 "wf_eval_last_n_seasons",
                 "Walk-forward seasons",
                 "int",
-                "Seasons the production walk-forward scores.",
+                "Seasons the production walk-forward scores. Blank keeps config/weekly_run.yaml's.",
             ),
         ),
         exclusive_group=WALK_FORWARD_GROUP,
@@ -631,6 +655,12 @@ def _coerce(spec: ParamSpec, value: object) -> bool | int | float | str:
     if spec.kind in {"int", "float"}:
         return _coerce_number(spec, value)
     text = str(value)
+    if spec.shell_quoted:
+        try:
+            shlex.split(text)
+        except ValueError as exc:
+            msg = f"{spec.label} must be a valid shell-quoted string: {exc}"
+            raise UnprocessableEntityError(msg, code="invalid_param") from exc
     if spec.kind == "choice" and text not in spec.choices:
         msg = f"{spec.label} must be one of: {', '.join(spec.choices)}"
         raise UnprocessableEntityError(msg, code="invalid_param")

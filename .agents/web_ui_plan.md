@@ -171,12 +171,13 @@ mutating routes require header `X-Requested-With: nflp`.
   `failed (server restarted)`. Cancel sends SIGTERM to the group, SIGKILL after 10s.
 - SSE polls the store every 300ms for new `seq`, replays from `after`, ends on terminal status.
 - Templates (since `0.27.0` every one runs `<python> -m nfl_predictor <command>`): `etl_full`
-  (`data`), `lines_refresh` (`lines`, chains `predict`), `weekly_run` (`weekly`; writes params
-  JSON to `data/web/job_configs/{job_id}.json` and runs `weekly --config`, reusing the command's
-  own key validation), `train` (`train`), `predict` (`predict`), `predict_week` (`build-week`,
-  chains `predict`), `power_rankings` (`rankings`), `leakage_audit` (`leakage-audit`),
-  `validate_offline` (`validate`), `validate_live` (`validate --live`), `walk_forward_backtest`
-  (`backtest`), `shap_analysis` (`explain`).
+  (`data`), `lines_refresh` (`lines`, chains `predict`), `weekly_run` (`weekly`; passes the form's
+  values as options and no `--config`, so the shipped `config/weekly_run.yaml` supplies every
+  field left blank, `data_collection_args: "--incremental"` included), `train` (`train`),
+  `predict` (`predict`), `predict_week` (`build-week`, chains `predict`), `power_rankings`
+  (`rankings`), `leakage_audit` (`leakage-audit`), `validate_offline` (`validate`),
+  `validate_live` (`validate --live`), `walk_forward_backtest` (`backtest`), `shap_analysis`
+  (`explain`).
 
 ### `src/nfl_predictor/lines_refresh.py`
 

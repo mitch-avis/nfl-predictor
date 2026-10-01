@@ -674,7 +674,8 @@ Notes:
   `--incremental` in it to keep the reuse
   (`--data-collection-args "--incremental --min-season 2010"`). A file read with `--config`
   replaces the shipped one, so it runs a full rebuild unless it sets `data_collection_args`
-  itself; the web UI's weekly job writes such a file.
+  itself. The web UI's weekly job passes its form's values as options over the shipped file, so
+  its refresh is incremental unless its "ETL arguments" field replaces the string.
 
 ### How postseason games enter today
 

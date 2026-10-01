@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.38.1] - 2026-10-01
+
+### Changed
+
+- `stamp_strength_snapshot` (`nfl_predictor/utils/polars/strength_table.py`) is public, since
+  `data_collection.py` and `week_rows.py` both import it. Behavior is unchanged; the season-cache
+  code fingerprint changes, so the next `--incremental` run rebuilds every season.
+
+### Fixed
+
+- The ETL fingerprint-coverage test follows relative imports (`from . import x`,
+  `from .x import y`, including from a package's `__init__`), so a module reached that way can no
+  longer escape the season-cache code fingerprint unnoticed.
+
 ## [0.38.0] - 2026-10-01
 
 ### Changed

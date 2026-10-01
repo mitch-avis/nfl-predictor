@@ -101,6 +101,20 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   (1194 lines remain). All 72 top-level definitions unchanged by AST, a season-build
   characterization test committed first, and two 2019-2026 scratch builds byte-identical
   (`~/scratch/etl_split/`), all rechecked by an independent reviewer.
+- The ETL rebuilt all 28 seasons every run (Week 3 run, about 9.5 minutes). `0.37.5` added the
+  opt-in `nfl-predictor data --incremental` (`utils/season_cache.py`: each finished season's build
+  keyed on the ETL code, environment, options and that season's input rows by value); `0.38.0`
+  (2026-10-01, both parts approved by the user) rechunked the season slice in
+  `calculate_league_means`, whose last bits had depended on how many later-season rows were
+  loaded (features moved once by up to about `1.8e-15`), and made the weekly run refresh with
+  `--incremental`. Scratch proof (`~/scratch/etl_rechunk/driver.log`, built from `253a69b`): a
+  full 1999-2026 build (655 s) and a cache filled through 2025 followed by two warm 1999-2026
+  runs (about 48 s each, 27 seasons reused) were byte-identical on all five CSVs and the Week 4
+  predict file. The pre-fix evidence is `probe_C.log` (layout dependence at `d6f0609`) and the
+  two former strict-xfail tests, which fail again with the fix reverted. An independent reviewer
+  re-hashed the outputs, re-ran the layout probe on the merged tree (no layout dependence) and
+  sample-checked the audit of the other 33 reductions. The web UI's weekly job still runs a full
+  rebuild (its own `--config`); left for Milestone 58 by recommendation.
 
 ---
 

@@ -219,7 +219,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | --- | --- |
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
-| 4, first | The schedule cache (step-3 merge test); the incremental ETL (Week 3 run). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46) and the CSV type guessing (step-3 merge test) were resolved in `0.37.2`-`0.37.4` |
+| 4, first | The schedule cache (step-3 merge test); the two `0.37.6` split-review follow-ups. The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test) and the incremental ETL (Week 3 run) were resolved in `0.37.2`-`0.38.0` |
 | 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
 
 Rules for every feature milestone:
@@ -475,6 +475,11 @@ happens on a fresh branch off `main` and merges back after each phase.
 - [ ] 58.3 Phase 6 (design only): live betting and live odds.
 - [ ] 58.6 A margin-only toggle on the Model page's feature importance (SHAP headline, total gain
       secondary, both heads combined by default; decided by the user on 2026-09-27).
+- [ ] 58.7 The web weekly job refreshes data with a full rebuild: `_build_weekly_run`
+      (`api/jobs/catalog.py`) writes its own `--config`, which replaces `config/weekly_run.yaml`
+      and so drops its `--incremental` (since `0.38.0`). Output is identical either way; only
+      run time differs (about 48 s against about 11 minutes). Default the job's "ETL arguments"
+      to `--incremental`, or have the job start from the shipped config.
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
       2026-09-21 (`0.12.12`, narrowed and accepted by the user's decision): the `web` extra is
       dropped, and `etl_full`/`validate_offline`/`validate_live` now take `--data-dir` with the
@@ -554,24 +559,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       stage-1 re-selection is retired and the floor is submitted. Originally: this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
-- [ ] **ETL rebuilds all 28 seasons every run** (about 9.5 minutes on 2026-09-24: about 19 s
-      per season in `collect_all_data`, then QB features). Only the raw downloads are cached;
-      every feature row from 1999 on is recomputed. An incremental mode (reprocess the current
-      season plus what its week-1 priors need, reuse cached finished seasons keyed on code
-      version and input hashes, and prove identical output with a characterization test) fits
-      step 4 (rebuild reproducibility). The ETL is Polars on the CPU; the GPU does not help it.
-      Narrowed: `0.37.5` added `nfl-predictor data --incremental` (opt-in; `utils/season_cache.py`),
-      which reuses each finished season's build keyed on the ETL code, environment, options and
-      that season's input rows by value. A scratch 1999-2026 run took about 48 s warm against
-      about 640 s full (`~/scratch/etl_incremental/`; timings noisy, load 6-13), byte-identical to
-      the full build when no input changed. It is not identical in weekly use: once a later
-      season gains rows, `calculate_league_means` (`utils/polars/teamrankings.py`) reduces a slice
-      whose chunk boundaries move, so earlier seasons' week-1 prior means move in the last bits
-      (up to about `1.8e-15`) in a full rebuild but not in a reused season. Two strict-xfail tests
-      pin it. Remainder: the one-line `.rechunk()` (awaiting the user's approval; scratch shows it
-      makes cache-then-warm and full builds byte-identical across 28 seasons), with the xfails
-      removed and the caught digest `ComputeError` logged at WARNING; then whether the weekly run
-      passes `--incremental` (`data_collection_args`), a must-ask default change.
 - [ ] (step 4) Two follow-ups from the review of the `0.37.6` split of `data_collection.py`:
       the fingerprint-coverage guard (`tests/test_etl_fingerprint_coverage.py`) follows only
       absolute imports, so a relative `from . import x` in an ETL module would escape it (none

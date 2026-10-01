@@ -195,8 +195,10 @@ So a changed input row rebuilds its season and every later one, and an edit to t
 rebuilds everything. A stale, damaged or unreadable entry is rebuilt and rewritten, never an error,
 and the directory is safe to delete. An input with a column the by-value comparison cannot
 render (list, struct, array, duration, binary or object) leaves its seasons uncached. Without the
-flag the ETL rebuilds every season and neither reads nor writes the cache. The weekly run can pass
-it through `data_collection_args: "--incremental"` in `config/weekly_run.yaml`.
+flag, which is `nfl-predictor data`'s default, the ETL rebuilds every season and neither reads
+nor writes the cache. The weekly run's refresh passes it (`data_collection_args: "--incremental"`
+in `config/weekly_run.yaml`; "Weekly workflow (canonical)" below says how your own arguments
+combine with it).
 
 A reused season equals a full rebuild of the same inputs byte for byte, also after the season in
 progress (or any later season) gains rows: a season's build reads nothing from later seasons,
@@ -662,8 +664,15 @@ Notes:
   shell-quoted string, for example
   `--data-collection-args "--min-season 2010 --stat-prior-blend-games 4"`. It is split
   shell-style and handed to the data refresh (`nfl-predictor data`) as its argument list; when it is
-  unset the refresh runs exactly as before. The same value is a config key
-  (`data_collection_args` in `config/weekly_run.yaml`).
+  unset the refresh runs with that command's own defaults, a full rebuild. The same value is a
+  config key (`data_collection_args`), and the shipped `config/weekly_run.yaml` sets it to
+  `--incremental`, so the weekly refresh reuses each unchanged finished season (see "Data
+  collection (Polars + nflreadpy)" above) and writes the same files a full rebuild writes. A
+  value given on the command line replaces the configured string rather than adding to it: keep
+  `--incremental` in it to keep the reuse
+  (`--data-collection-args "--incremental --min-season 2010"`). A file read with `--config`
+  replaces the shipped one, so it runs a full rebuild unless it sets `data_collection_args`
+  itself; the web UI's weekly job writes such a file.
 
 ### How postseason games enter today
 

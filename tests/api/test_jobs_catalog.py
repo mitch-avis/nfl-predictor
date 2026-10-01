@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import json
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,9 +13,11 @@ from nfl_predictor.api.errors import ConflictError, UnprocessableEntityError
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs.catalog import JobContext
 from nfl_predictor.api.runs.indexer import RunSummary, summarize_run
+from nfl_predictor.weekly_run import config as run_config
 
 if TYPE_CHECKING:
     import argparse
+    from pathlib import Path
 
     from nfl_predictor.api.settings import Settings
 
@@ -164,29 +164,61 @@ def test_templates_without_a_chain_carry_no_chained_params() -> None:
     assert catalog.chained_params(catalog.get_template("predict"), {"season": 2026}) == {}
 
 
-def test_weekly_run_writes_a_config_file(settings: Settings) -> None:
-    """The weekly run is launched from a JSON config so the command validates its own keys."""
+def test_weekly_run_layers_the_form_over_the_shipped_config(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The job passes options, so the shipped config still supplies every default it omits."""
     argv = build("weekly_run", settings, {"week": 2, "run_id": "weekly_2026_week_02"})
 
-    assert argv[1:5] == ["-m", "nfl_predictor", "weekly", "--config"]
-    config = json.loads(Path(argv[5]).read_text(encoding="utf-8"))
-    assert config["run_id"] == "weekly_2026_week_02"
-    assert config["predict_path"].endswith("week_02_games_to_predict.csv")
-    assert config["output_dir"] == str(settings.models_path)
-    assert config["data_path"] == str(settings.data_path / "completed_games_ml.csv")
-    assert "week" not in config
+    assert "--config" not in argv
+    _name, args = parse_built(argv, settings, monkeypatch)
+    assert args.config == run_config.DEFAULT_CONFIG_PATH
+    assert args.data_collection_args == "--incremental"
+    assert args.run_id == "weekly_2026_week_02"
+    assert args.predict_path == settings.data_path / "predict" / "week_02_games_to_predict.csv"
+    assert args.output_dir == settings.models_path
+    assert args.data_path == settings.data_path / "completed_games_ml.csv"
+    assert args.skip_data_refresh is True
+    assert args.resume is False
+    assert args.dry_run is False
 
 
-def test_weekly_run_forwards_data_collection_arguments(settings: Settings) -> None:
-    """The ETL pass-through string reaches the weekly-run config file unchanged."""
-    argv = build(
-        "weekly_run",
-        settings,
-        {"week": 2, "data_collection_args": "--min-season 2010"},
+def test_weekly_run_form_values_override_the_shipped_config(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A value the form sets wins over the shipped config, switches turned off included."""
+    shipped = tmp_path / "weekly_run.yaml"
+    shipped.write_text(
+        "skip_data_refresh: true\ndry_run: true\nresume: true\nwf_eval_last_n_seasons: 7\n",
+        encoding="utf-8",
     )
+    monkeypatch.setattr(run_config, "DEFAULT_CONFIG_PATH", shipped)
+    params: dict[str, object] = {
+        "week": 2,
+        "skip_data_refresh": False,
+        "dry_run": False,
+        "resume": False,
+        "wf_eval_last_n_seasons": 4,
+    }
 
-    config = json.loads(Path(argv[5]).read_text(encoding="utf-8"))
-    assert config["data_collection_args"] == "--min-season 2010"
+    _name, args = parse_built(build("weekly_run", settings, params), settings, monkeypatch)
+
+    assert args.config == shipped
+    assert args.skip_data_refresh is False
+    assert args.dry_run is False
+    assert args.resume is False
+    assert args.wf_eval_last_n_seasons == 4
+
+
+@pytest.mark.parametrize("value", ["--min-season 2010", "--incremental", "--no-incremental"])
+def test_weekly_run_forwards_data_collection_arguments(
+    value: str, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ETL pass-through string replaces the shipped one unchanged, even as a single flag."""
+    argv = build("weekly_run", settings, {"week": 2, "data_collection_args": value})
+
+    _name, args = parse_built(argv, settings, monkeypatch)
+    assert args.data_collection_args == value
 
 
 def test_predict_uses_the_active_run_model(settings: Settings, run: RunSummary) -> None:

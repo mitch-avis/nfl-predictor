@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.37.3] - 2026-10-01
+
+### Fixed
+
+- Identical `nfl-predictor data` runs on the same machine with the same Polars thread count
+  (`POLARS_MAX_THREADS`) write byte-identical CSVs, so an identical rebuild keeps the dataset
+  fingerprint. Schedule-strength means and sums add their terms in sorted order, season-to-date
+  means add each team's games in week order, every ETL `group_by` and `unique` keeps row order,
+  and games on the same date are ordered by `game_id`. Feature values move only in the last bits
+  (float summation order), and the row order of the game CSVs changes within each date, so the
+  next rebuild gets a new fingerprint once.
+
+### Added
+
+- `tests/test_etl_determinism.py` feeds row-shuffled inputs to the schedule-strength,
+  season-to-date and season-combining steps and requires exactly equal output, and fails on any
+  ETL `group_by` or `unique` that does not keep row order.
+
 ## [0.37.2] - 2026-10-01
 
 ### Fixed

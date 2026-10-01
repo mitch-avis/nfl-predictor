@@ -99,27 +99,54 @@ def test_load_schedule_transforms(monkeypatch, tmp_path: Path) -> None:
     assert "game_datetime" in df.columns
 
 
+_SCHEDULE_ALTERNATE_TIME_COLUMNS = ("game_time", "kickoff_time", "start_time")
+
+_RAW_SCHEDULE_VALUES: dict[str, object] = {
+    "season": 2020,
+    "game_type": "REG",
+    "week": 1,
+    "gameday": "2020-09-13",
+    "gametime": "13:00",
+    "stadium_id": "DEN00",
+    "roof": "outdoors",
+    "surface": "grass",
+    "away_team": "AAA",
+    "home_team": "BBB",
+    "location": "Home",
+    "spread_line": -3.0,
+}
+
+
+def _raw_schedule(*, game_id: str, season: int = 2020) -> pl.DataFrame:
+    """Build one raw nflreadpy schedule row carrying every column the loader selects.
+
+    The alternate kickoff-time columns are left out, as nflverse publishes only `gametime`.
+
+    Returns:
+        Raw schedule frame for a single game
+
+    """
+    columns = [
+        column
+        for column in constants.NFLREADPY_SCHEDULE_COLUMNS
+        if column not in _SCHEDULE_ALTERNATE_TIME_COLUMNS
+    ]
+    values = {**dict.fromkeys(columns, 1), **_RAW_SCHEDULE_VALUES}
+    row = {column: [values[column]] for column in columns}
+    return pl.DataFrame({**row, "game_id": [game_id], "season": [season]})
+
+
+def _fail_load_schedules(*_args: object, **_kwargs: object) -> pl.DataFrame:
+    """Fail if nflreadpy is called."""
+    msg = "nflreadpy schedule load should not be called"
+    raise AssertionError(msg)
+
+
 def test_load_schedule_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
-    """Schedule loader prefers cache for historical seasons."""
-    cached = pl.DataFrame(
-        {
-            "game_id": ["cached_game"],
-            "season": [2020],
-            "game_type": ["REG"],
-            "week": [1],
-            "away_abbr": ["AAA"],
-            "home_abbr": ["BBB"],
-        }
-    )
-    cache_path = tmp_path / "schedule_2020.parquet"
-    cached.write_parquet(cache_path)
-
-    def fail_load_schedules(*_args, **_kwargs):
-        """Fail if nflreadpy is called."""
-        msg = "nflreadpy schedule load should not be called"
-        raise AssertionError(msg)
-
-    monkeypatch.setattr(loaders.nfl, "load_schedules", fail_load_schedules)
+    """A cache file with every column the loader produces is reused, even an older one."""
+    cached = loaders._prepare_schedule(_raw_schedule(game_id="cached_game"))
+    cached.write_parquet(tmp_path / "schedule_2020.parquet")
+    monkeypatch.setattr(loaders.nfl, "load_schedules", _fail_load_schedules)
 
     df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
@@ -166,6 +193,103 @@ def test_load_schedule_refreshes_current_season(monkeypatch, tmp_path: Path) -> 
     assert df["game_id"][0] == "fresh_game"
     refreshed = pl.read_parquet(cache_path)
     assert refreshed["game_id"][0] == "fresh_game"
+
+
+def test_schedule_requested_columns_follow_the_preparation() -> None:
+    """The requested schedule columns are the prepared names, not the raw nflreadpy names."""
+    requested = loaders._schedule_requested_columns()
+
+    prepared = loaders._prepare_schedule(_raw_schedule(game_id="g"))
+    assert requested == tuple(prepared.columns)
+    renamed = constants.NFLREADPY_SCHEDULE_RENAME
+    assert set(renamed.values()) <= set(requested)
+    assert not set(renamed) & set(requested)
+    assert not set(_SCHEDULE_ALTERNATE_TIME_COLUMNS) & set(requested)
+    assert {"gametime", "home_spread", "game_datetime", "stadium_elevation"} <= set(requested)
+
+
+def test_load_schedule_refetches_a_cache_that_lacks_a_requested_column(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A historical cache missing a column the loader now produces is a cache miss."""
+    stale = loaders._prepare_schedule(_raw_schedule(game_id="stale_game")).drop("home_spread")
+    stale.write_parquet(tmp_path / "schedule_2020.parquet")
+    monkeypatch.setattr(
+        loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="fresh_game")
+    )
+
+    df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert df["game_id"].to_list() == ["fresh_game"]
+    assert df["home_spread"].to_list() == [3.0]
+    assert pl.read_parquet(tmp_path / "schedule_2020.parquet").equals(df)
+
+
+def test_load_schedule_records_the_requested_columns(monkeypatch, tmp_path: Path) -> None:
+    """A schedule cache file records the columns the loader requested when writing it."""
+    monkeypatch.setattr(loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="g"))
+
+    loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+
+    recorded = loaders._recorded_requested_columns(tmp_path / "schedule_2020.parquet")
+    assert recorded == frozenset(loaders._schedule_requested_columns())
+
+
+def test_load_schedule_refetches_when_the_selected_columns_grow(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Selecting another nflreadpy schedule column invalidates older cache files."""
+    monkeypatch.setattr(
+        loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="old_game")
+    )
+    loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+
+    grown = [*constants.NFLREADPY_SCHEDULE_COLUMNS, "referee"]
+    monkeypatch.setattr(constants, "NFLREADPY_SCHEDULE_COLUMNS", grown)
+    monkeypatch.setattr(
+        loaders.nfl,
+        "load_schedules",
+        lambda seasons: _raw_schedule(game_id="new_game").with_columns(referee=pl.lit("Ref")),
+    )
+
+    df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert df["game_id"].to_list() == ["new_game"]
+    assert df["referee"].to_list() == ["Ref"]
+
+
+def test_load_schedule_refetches_when_a_rename_changes(monkeypatch, tmp_path: Path) -> None:
+    """Renaming a selected schedule column invalidates older cache files."""
+    monkeypatch.setattr(
+        loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="old_game")
+    )
+    loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+
+    renamed = {**constants.NFLREADPY_SCHEDULE_RENAME, "home_coach": "home_head_coach"}
+    monkeypatch.setattr(constants, "NFLREADPY_SCHEDULE_RENAME", renamed)
+    monkeypatch.setattr(
+        loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="new_game")
+    )
+
+    df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert df["game_id"].to_list() == ["new_game"]
+    assert "home_head_coach" in df.columns
+
+
+def test_load_schedule_reuses_a_cache_whose_source_lacked_columns(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A column the source never published does not force a refetch on every run."""
+    sparse = _raw_schedule(game_id="sparse_game").drop("spread_line", "away_coach")
+    monkeypatch.setattr(loaders.nfl, "load_schedules", lambda seasons: sparse)
+    first = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+    monkeypatch.setattr(loaders.nfl, "load_schedules", _fail_load_schedules)
+
+    second = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
+
+    assert second.equals(first)
+    assert "home_spread" not in second.columns
 
 
 def test_load_team_stats_combines(monkeypatch, tmp_path: Path) -> None:

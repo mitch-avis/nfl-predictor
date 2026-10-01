@@ -142,6 +142,7 @@ extend-allowed-calls = ["polars.lit"]
     "S101",    # assert is the point of tests
     "S105",    # ignore hardcoded passwords in strings in tests
     "S106",    # ignore hardcoded passwords in function arguments in tests
+    "S603",    # runs the repository's own update_requirements.sh functions under bash with stubbed tools
     "PLR2004", # magic numbers in expectations are fine
     "D",       # test names document themselves
     "ANN",     # fixtures/params don't need annotations everywhere

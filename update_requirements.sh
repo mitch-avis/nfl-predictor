@@ -23,7 +23,7 @@ If compatibility requirements files are present, they are refreshed from uv.lock
 
 Examples:
 	./update_requirements.sh
-	./update_requirements.sh --python 3.13
+	./update_requirements.sh --python 3.14
 
 When no --python argument is provided, uv chooses the newest compatible Python
 according to the project's configuration and local uv installation.
@@ -43,6 +43,15 @@ canonical_path() {
 	cd "$1" >/dev/null 2>&1 && pwd -P
 }
 
+venv_python() {
+	echo "$VENV_PATH/bin/python"
+}
+
+python_stdlib_smoke_test() {
+	local python_bin="$1"
+	"$python_bin" -c "import dis; import json" >/dev/null 2>&1
+}
+
 confirm() {
 	local prompt="$1"
 	local reply
@@ -53,22 +62,22 @@ confirm() {
 parse_args() {
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-			-p|--python)
-				[[ $# -ge 2 ]] || die "Missing value for $1."
-				PYTHON_REQUEST="$2"
-				shift 2
-				;;
-			-h|--help)
-				usage
-				exit 0
-				;;
-			--)
-				shift
-				break
-				;;
-			*)
-				die "Unknown option: $1"
-				;;
+		-p | --python)
+			[[ $# -ge 2 ]] || die "Missing value for $1."
+			PYTHON_REQUEST="$2"
+			shift 2
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		--)
+			shift
+			break
+			;;
+		*)
+			die "Unknown option: $1"
+			;;
 		esac
 	done
 
@@ -95,6 +104,70 @@ create_venv() {
 	"${command[@]}"
 }
 
+# The installed project and its dependencies are hardlinks into uv's cache, so a damaged cache
+# entry survives a plain reinstall; this import catches it before the tools fail one by one.
+PACKAGE_SMOKE_IMPORTS="import numpy, pandas, polars, scipy, sklearn, xgboost"
+
+venv_python_request() {
+	if [[ -n "$PYTHON_REQUEST" ]]; then
+		echo "$PYTHON_REQUEST"
+	elif [[ -f "$VENV_PATH/pyvenv.cfg" ]]; then
+		sed -n 's/^version_info = //p' "$VENV_PATH/pyvenv.cfg"
+	fi
+}
+
+repair_venv_python() {
+	local version
+	local -a python_args=()
+
+	version="$(venv_python_request)"
+	if [[ -n "$version" ]]; then
+		python_args=(--python "$version")
+	fi
+
+	info "Reinstalling the uv-managed Python ${version} and recreating .venv with it"
+	uv python install --reinstall ${version:+"$version"}
+	uv venv .venv --clear --managed-python "${python_args[@]}"
+	if python_stdlib_smoke_test "$(venv_python)"; then
+		return
+	fi
+
+	info "The reinstalled managed Python still fails; recreating .venv with a system Python"
+	uv venv .venv --clear --no-managed-python "${python_args[@]}"
+	if ! python_stdlib_smoke_test "$(venv_python)"; then
+		die "The recreated .venv still failed stdlib imports. Repair or replace your local Python install, then rerun this script."
+	fi
+}
+
+ensure_venv_python_is_healthy() {
+	local python_bin
+
+	python_bin="$(venv_python)"
+	if python_stdlib_smoke_test "$python_bin"; then
+		return
+	fi
+
+	info "The current .venv interpreter failed a stdlib smoke test"
+	echo "Its standard library is damaged, for example rewritten in place by a tool run outside a repo." >&2
+	if ! confirm "Reinstall its uv-managed Python and recreate .venv?"; then
+		die "Reinstall with 'uv python install --reinstall', recreate .venv with 'uv venv .venv --clear', and rerun this script."
+	fi
+
+	repair_venv_python
+}
+
+ensure_venv_packages_import() {
+	if "$(venv_python)" -c "$PACKAGE_SMOKE_IMPORTS" >/dev/null 2>&1; then
+		return
+	fi
+
+	echo "Error: the synced .venv cannot import its core packages (${PACKAGE_SMOKE_IMPORTS#import })." >&2
+	echo "Installed files are hardlinks into uv's cache, so a damaged cache entry survives a" >&2
+	echo "plain reinstall. Repair with:" >&2
+	echo "  uv cache clean && uv sync --active --reinstall" >&2
+	exit 1
+}
+
 ensure_venv_exists() {
 	local create_command="uv venv .venv"
 
@@ -112,6 +185,7 @@ ensure_venv_exists() {
 	fi
 
 	create_venv
+	ensure_venv_python_is_healthy
 	info "Created .venv. Activate it with: source .venv/bin/activate"
 	info "Then rerun ./update_requirements.sh"
 	exit 0
@@ -188,6 +262,7 @@ main() {
 	ensure_pyproject_exists
 	ensure_venv_exists
 	ensure_venv_is_active
+	ensure_venv_python_is_healthy
 
 	# If supported, keep uv itself up to date (no-op on older uv builds).
 	uv self update >/dev/null 2>&1 || true
@@ -208,9 +283,15 @@ main() {
 	info "Making LightGBM a CUDA build if this machine can build one (no-op when it already is)"
 	.venv/bin/nfl-lightgbm-cuda-install install
 
+	info "Checking that the core packages import"
+	ensure_venv_packages_import
+
 	refresh_compatibility_requirements
 
 	info "Done."
 }
 
-main "$@"
+# Sourcing the script (as the tests do) defines its functions without running it.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
+fi

@@ -1149,6 +1149,35 @@ def load_pbp(
     return pl.concat(pbp_frames, how="diagonal")
 
 
+# Types of the `qb_elos.csv` columns this package reads. The file is the 538-style schema
+# produced by `nfeloqb` (`team1` is the home team). Its rows start in 1920, decades before
+# it carries quarterback ratings or weeks, so letting Polars guess from the first rows
+# reads those columns as text. `week` is published as a float ("1.0") and blank where the
+# source has no week; `date` stays ISO text, which sorts in date order.
+_QB_ELO_COLUMN_TYPES: dict[str, type[pl.DataType]] = {
+    "date": pl.String,
+    "season": pl.Int64,
+    "week": pl.Float64,
+    "team1": pl.String,
+    "team2": pl.String,
+    "elo1_pre": pl.Float64,
+    "elo2_pre": pl.Float64,
+    "qb1": pl.String,
+    "qb2": pl.String,
+    "qb1_value_pre": pl.Float64,
+    "qb2_value_pre": pl.Float64,
+    "qbelo1_pre": pl.Float64,
+    "qbelo2_pre": pl.Float64,
+}
+
+
+def _read_qb_elos(elo_path: Path) -> pl.DataFrame:
+    """Read the `qb_elos.csv` columns this package uses, with their declared types."""
+    header = pl.read_csv(elo_path, n_rows=0).columns
+    column_types = {name: dtype for name, dtype in _QB_ELO_COLUMN_TYPES.items() if name in header}
+    return pl.read_csv(elo_path, columns=list(column_types), schema_overrides=column_types)
+
+
 def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
     """Load ELO ratings from qb_elos.csv file.
 
@@ -1166,17 +1195,16 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
         return pl.DataFrame()
 
     log.info("Loading ELO ratings from %s", elo_path)
-    elo_df = pl.read_csv(elo_path)
+    elo_df = _read_qb_elos(elo_path)
 
     # Filter to requested seasons
     if "season" in elo_df.columns:
         elo_df = elo_df.filter(pl.col("season").is_in(seasons))
 
-    # Cast week to integer and filter out nulls
+    # Drop rows without a week (blank in the file) and store the published "19.0" as 19
     if "week" in elo_df.columns:
-        elo_df = elo_df.filter(pl.col("week").is_not_null() & (pl.col("week") != ""))
-        # Week may be like "19.0" so cast to float first, then int
-        elo_df = elo_df.with_columns(pl.col("week").cast(pl.Float64).cast(pl.Int64))
+        elo_df = elo_df.filter(pl.col("week").is_not_null())
+        elo_df = elo_df.with_columns(pl.col("week").cast(pl.Int64))
 
     # Normalize team abbreviations
     if "team1" in elo_df.columns:
@@ -1207,12 +1235,6 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
     available = [c for c in cols_to_keep if c in elo_df.columns]
     elo_df = elo_df.select(available)
 
-    # Cast numeric string columns to floats
-    numeric_cols = ["qb1_value_pre", "qb2_value_pre", "qbelo1_pre", "qbelo2_pre"]
-    for col in numeric_cols:
-        if col in elo_df.columns:
-            elo_df = elo_df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
-
     # Rename to away/home format (team1=home, team2=away in ELO data)
     rename_map = {
         "team1": "home_abbr",
@@ -1238,13 +1260,14 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
 
 
 def load_raw_elo_data() -> pl.DataFrame:
-    """Load raw ELO data from qb_elos.csv file without transformations.
+    """Load the qb_elos.csv rows under their published column names.
 
     This is used for QB-specific lookups where we need the original
-    column names (qb1, qb2, qb1_value_pre, etc.).
+    column names (qb1, qb2, qb1_value_pre, etc.). Only the columns in
+    `_QB_ELO_COLUMN_TYPES` are read, with those types.
 
     Returns:
-        Raw Polars DataFrame with ELO data
+        Raw Polars DataFrame with ELO data, deduplicated per game
 
     """
     elo_path = constants.DATA_PATH / "qb_elos.csv"
@@ -1253,13 +1276,7 @@ def load_raw_elo_data() -> pl.DataFrame:
         log.warning("ELO file not found: %s", elo_path)
         return pl.DataFrame()
 
-    elo_df = pl.read_csv(elo_path)
-
-    # Cast numeric columns that may be strings
-    numeric_cols = ["qb1_value_pre", "qb2_value_pre", "qbelo1_pre", "qbelo2_pre"]
-    for col in numeric_cols:
-        if col in elo_df.columns:
-            elo_df = elo_df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
+    elo_df = _read_qb_elos(elo_path)
 
     subset_cols = [c for c in ["season", "week", "team1", "team2"] if c in elo_df.columns]
     if subset_cols:

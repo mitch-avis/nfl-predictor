@@ -1005,6 +1005,10 @@ import paths.
 
 - Polars ETL helpers live under `src/nfl_predictor/utils/polars/` with a compatibility facade at
   `src/nfl_predictor/utils/polars_utils.py`.
+- `src/nfl_predictor/data_collection.py` runs `nfl-predictor data`: the options, the source
+  loading, the season loop (`process_season`) and the written files. Each week's game rows come
+  from `process_week` in `utils/polars/week_rows.py`, and each week's schedule-adjusted strength
+  table from `utils/polars/strength_table.py`.
 - ML implementation lives under `src/nfl_predictor/ml/` with a compatibility facade at
   `src/nfl_predictor/ml_model.py`.
 

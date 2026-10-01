@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import shutil
@@ -32,6 +33,8 @@ from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import inputs, pipeline, stage1
 
 if TYPE_CHECKING:
+    import argparse
+
     from nfl_predictor.ml.ml_model_training import TrainingOptions
 
 
@@ -508,7 +511,7 @@ def test_a_run_without_dry_run_refreshes_the_data(
     with pytest.raises(_StopAfterRefreshError):
         pipeline.main()
 
-    assert calls == [None]
+    assert calls == ["--incremental"]
 
 
 def test_data_collection_args_is_a_valid_config_key() -> None:
@@ -521,6 +524,30 @@ def test_data_collection_args_is_a_valid_config_key() -> None:
 def test_data_collection_args_parses_from_the_command_line() -> None:
     """The command-line flag stores the raw pass-through string."""
     args = run_config._build_parser().parse_args(["--data-collection-args", "--min-season 2010"])
+
+    assert args.data_collection_args == "--min-season 2010"
+
+
+def _shipped_weekly_args(argv: list[str]) -> argparse.Namespace:
+    """Parse ``argv`` over the shipped ``config/weekly_run.yaml``."""
+    config_path = Path(__file__).resolve().parents[1] / "config" / "weekly_run.yaml"
+    config = run_config._load_config(config_path)
+    return run_config._build_parser(run_config._normalize_config_defaults(config)).parse_args(argv)
+
+
+def test_the_shipped_weekly_run_refreshes_data_incrementally() -> None:
+    """The shipped refresh reuses finished seasons and otherwise runs the ETL's own defaults."""
+    argv = pipeline._data_collection_argv(_shipped_weekly_args([]).data_collection_args)
+
+    refresh = data_collection._resolve_config(argv)
+
+    assert refresh.incremental is True
+    assert dataclasses.replace(refresh, incremental=False) == data_collection._resolve_config(None)
+
+
+def test_command_line_data_collection_args_replace_the_shipped_string() -> None:
+    """A command-line string replaces the configured one rather than adding to it."""
+    args = _shipped_weekly_args(["--data-collection-args", "--min-season 2010"])
 
     assert args.data_collection_args == "--min-season 2010"
 
@@ -627,14 +654,16 @@ def test_weekly_tuning_options_accept_both_spellings(
 def test_the_shipped_config_is_read_by_default_and_matches_the_code_defaults() -> None:
     """Without --config the shipped YAML is read, and it changes nothing a run produces.
 
-    The only differences from the bare code defaults are the recorded config path and
-    ``postseason_weight``, which applies only when postseason games are in training (off).
+    The only differences from the bare code defaults are the recorded config path,
+    ``postseason_weight``, which applies only when postseason games are in training (off), and
+    ``data_collection_args``, whose ``--incremental`` refresh writes what a full rebuild writes.
     """
     loaded = vars(run_config._parse_args([]))
     bare = vars(run_config._build_parser().parse_args([]))
 
     differences = {key for key in bare if loaded[key] != bare[key]}
-    assert differences == {"config", "postseason_weight"}
+    assert differences == {"config", "postseason_weight", "data_collection_args"}
+    assert loaded["data_collection_args"] == "--incremental"
     assert loaded["config"] == run_config.DEFAULT_CONFIG_PATH
     assert loaded["include_postseason"] is False
 

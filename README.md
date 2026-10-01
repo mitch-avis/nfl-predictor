@@ -208,10 +208,11 @@ the team-stat frame before reducing it.
 
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future
-seasons are always refreshed to keep upcoming games and lines current. Each team-stat and
+seasons are always refreshed to keep upcoming games and lines current. Each schedule, team-stat and
 play-by-play cache file records the columns the loader asked for when it was written; a file that
-lacks a column the code now asks for (a column added to `constants.PBP_COLUMNS` or to the team-stat
-mapping) is a cache miss and that season downloads again, while a column the source never
+lacks a column the code now asks for (a column added to `constants.PBP_COLUMNS`, to the team-stat
+mapping, or to the schedule selection or renames) is a cache miss and that season downloads again,
+so a historical schedule refetch can pull revised lines; a column the source never
 published does not force a download on every run. Such a column is not checked again: if nflverse
 publishes it for that season later, rerun the ETL with `--refresh-nflreadpy` to rewrite the cache.
 Use

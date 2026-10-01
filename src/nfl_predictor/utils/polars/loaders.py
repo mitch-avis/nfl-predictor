@@ -340,6 +340,25 @@ def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
     return schedule_df
 
 
+def _schedule_requested_columns() -> tuple[str, ...]:
+    """Return the columns a prepared schedule frame holds when nflreadpy publishes them all.
+
+    The list comes from running `_prepare_schedule` on an empty frame that carries every
+    column of `constants.NFLREADPY_SCHEDULE_COLUMNS`, so it holds the renamed names of
+    `constants.NFLREADPY_SCHEDULE_RENAME`, the single merged kickoff time and the derived
+    and stadium columns. A change to the selection, the renames or the derived columns
+    therefore invalidates the cache files written before it. The raw columns are strings
+    except the spread, which the preparation negates.
+
+    Returns:
+        Requested schedule column names in the order the preparation produces them
+
+    """
+    raw_columns = dict.fromkeys(constants.NFLREADPY_SCHEDULE_COLUMNS, pl.Utf8())
+    raw = pl.DataFrame(schema={**raw_columns, "spread_line": pl.Float64()})
+    return tuple(_prepare_schedule(raw).columns)
+
+
 def _prepare_team_stats(team_stats_df: pl.DataFrame, *, regular_season_only: bool) -> pl.DataFrame:
     """Normalize raw nflreadpy team stats to the project schema."""
     # Filter to regular season only (exclude preseason and postseason)
@@ -413,8 +432,12 @@ def load_schedule(
 ) -> pl.DataFrame:
     """Load NFL schedule data for specified seasons using nflreadpy.
 
-    Cached schedules are used for historical seasons when available. Current and future
-    seasons are always refreshed to keep upcoming games up to date.
+    Cached schedules are used for historical seasons when available and current: a cache
+    file that lacks a column the loader now produces (see `_schedule_requested_columns`),
+    and did not request when it was written, is downloaded again; a requested column the
+    source did not publish then is not checked again, so `force_refresh` is what picks it up
+    if nflverse publishes it later. Current and future seasons are always refreshed to keep
+    upcoming games up to date.
 
     Args:
         seasons: List of season years to load
@@ -434,11 +457,12 @@ def load_schedule(
 
     log.info("Loading schedule for seasons: %s", seasons)
 
+    requested_columns = _schedule_requested_columns()
     schedule_frames: list[pl.DataFrame] = []
     for season in seasons:
         cache_path = _schedule_cache_path(resolved_cache_dir, season)
         use_cache = (season < resolved_current_season) and not force_refresh
-        cached = _read_cached_frame(cache_path) if use_cache else None
+        cached = _read_cached_frame(cache_path, requested_columns) if use_cache else None
         if cached is not None:
             log.info(
                 "Using cached nflreadpy schedule for season %d from %s",
@@ -455,7 +479,7 @@ def load_schedule(
 
         season_df = nfl.load_schedules(seasons=[season])
         season_df = _prepare_schedule(season_df)
-        _write_cached_frame(season_df, cache_path)
+        _write_cached_frame(season_df, cache_path, requested_columns)
         schedule_frames.append(season_df)
 
     return pl.concat(schedule_frames, how="diagonal")

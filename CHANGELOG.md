@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.38.0] - 2026-10-01
+
+### Changed
+
+- The weekly run's data refresh passes `--incremental` (`data_collection_args` in
+  `config/weekly_run.yaml`): it reuses unchanged finished seasons and writes the same files as a
+  full rebuild. `nfl-predictor data` still rebuilds every season by default, and a `--config`
+  file or a command-line `--data-collection-args` without the flag (the web UI's weekly job
+  included) runs a full rebuild. The first incremental run after `0.37.6` rebuilds every season.
+- The `config/weekly_run.yaml` header names both values that differ from the code defaults
+  (`data_collection_args` and `postseason_weight`).
+
+### Fixed
+
+- `calculate_league_means` reduces a rechunked season slice, so the week-1 prior's league means
+  no longer depend on how many later-season rows are loaded, and a season reused by
+  `--incremental` equals a full rebuild even after later seasons gain rows. Feature values move
+  once, by up to about `1.8e-15`.
+- A season whose inputs cannot be digested (so it is never cached) is logged at WARNING instead
+  of INFO.
+
 ## [0.37.6] - 2026-10-01
 
 ### Changed

@@ -702,6 +702,22 @@ def test_an_explicit_config_replaces_the_shipped_one(tmp_path: Path) -> None:
     assert args.postseason_weight == 1.0
 
 
+@pytest.mark.parametrize("option", ["skip_data_refresh", "dry_run"])
+def test_a_command_line_switch_turns_off_what_the_config_turns_on(
+    tmp_path: Path, option: str
+) -> None:
+    """``--no-<switch>`` overrides a config that sets the switch, as for every other option."""
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text(json.dumps({option: True}), encoding="utf-8")
+    flag = option.replace("_", "-")
+
+    configured = run_config._parse_args(["--config", str(config_path)])
+    overridden = run_config._parse_args(["--config", str(config_path), f"--no-{flag}"])
+
+    assert getattr(configured, option) is True
+    assert getattr(overridden, option) is False
+
+
 def test_xgb_n_jobs_defaults_to_every_cpu_core() -> None:
     """One thread option sets XGBoost's CPU threads, and it defaults to every core."""
     args = run_config._build_parser().parse_args([])

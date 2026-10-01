@@ -240,6 +240,9 @@ reportUnknownLambdaType = "none"
 [tool.pytest.ini_options]
 minversion = "9.0"
 testpaths = ["tests"]
+# Tests import shared helpers as `tests.*`; the package itself is imported from src/ via the
+# editable install, so bare `pytest` and `python -m pytest` resolve the same modules.
+pythonpath = ["."]
 addopts = [
     "-ra",                       # show extra summary for (s)kipped, (x)failed
     "--strict-markers",

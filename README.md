@@ -175,7 +175,8 @@ Note: the `data/` directory is gitignored by default; generate it via the data c
 above. Note: `*_ml.csv` files include model-ready engineered features.
 
 Game rows are ordered newest first, with games on the same date ordered by `game_id`. Two runs
-with the same code, locked dependencies and inputs write byte-identical files.
+with the same code, locked dependencies and inputs, on the same machine with the same Polars
+thread count (`POLARS_MAX_THREADS`), write byte-identical files.
 
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future

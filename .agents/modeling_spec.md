@@ -187,10 +187,15 @@ Every saved model must include adjacent metadata JSON with:
 - created timestamp
 - git commit hash (if available)
 - dataset fingerprint (hash of training CSV and/or stable row ids). Two `nfl-predictor data`
-  runs with the same code, locked dependencies and inputs write byte-identical CSVs, so an
-  identical rebuild keeps the fingerprint. The ETL keeps this by fixing every row order (each
-  `group_by` and `unique` keeps input order, enforced by `tests/test_etl_determinism.py`) and by
-  adding the terms of every float sum in a fixed order.
+  runs with the same code, locked dependencies and inputs, on the same machine with the same
+  Polars thread count (`POLARS_MAX_THREADS`), write byte-identical CSVs, so an identical rebuild
+  keeps the fingerprint. A different thread count can move the season-to-date EPA and CPOE
+  means in the last bits, because Polars splits large sums into per-thread partial sums. The ETL
+  keeps a rebuild identical in three ways: every `group_by` and `unique` keeps input order and
+  every subset dedupe names the row it keeps (enforced by `tests/test_etl_determinism.py`); the
+  schedule-strength means and sums add each group's values in sorted order, and season-to-date
+  means add each team's games in week order; and the published game rows are sorted by date,
+  then `game_id`. Joins and sorts with tied keys are not covered by that test.
 - library versions (xgboost, sklearn, numpy, pandas, polars, scipy)
 - training config (CLI args / config object)
 - the XGBoost device the model trained on (`xgb_device`: `cpu` or `cuda`, never `auto`)

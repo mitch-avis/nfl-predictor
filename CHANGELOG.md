@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.38.2] - 2026-10-01
+
+### Fixed
+
+- The schedule cache (`schedule_<season>.parquet`) records the columns the loader asked for, like
+  the team-stat and play-by-play caches, with the list derived from the schedule preparation. A
+  historical file that lacks a column the code now produces (a new selected column, a changed
+  rename or a new derived column) is downloaded again instead of being silently reused; such a
+  refetch can pull revised lines. All 32 existing schedule files hold every requested column, so
+  none is refetched, and a 2019-2026 rebuild is byte-identical.
+
 ## [0.38.1] - 2026-10-01
 
 ### Changed

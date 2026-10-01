@@ -148,7 +148,7 @@ def build_strength_features(
     ).select("team_abbr", *constants.ADJUSTED_STRENGTH_STATS)
 
 
-def _stamp_strength_snapshot(table: pl.DataFrame, *, season: int, week: int) -> pl.DataFrame:
+def stamp_strength_snapshot(table: pl.DataFrame, *, season: int, week: int) -> pl.DataFrame:
     """Key one week's strength table by season and week, in the published file layout."""
     return table.with_columns(
         pl.lit(season).alias("season"),

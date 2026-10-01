@@ -783,7 +783,7 @@ def _load_current_records(
 ) -> pd.DataFrame:
     """Load current records through the specified week."""
     df = (
-        pl.read_csv(schedule_path, schema_overrides=_SCORE_DTYPES)
+        pl.read_csv(schedule_path, schema_overrides=_SCORE_DTYPES, infer_schema_length=None)
         .select(
             [
                 "season",
@@ -925,7 +925,9 @@ def _predict_future_games(
     feature_cols = [c for c in list(getattr(spec, "feature_columns", [])) if c in available_cols]
     usecols = sorted(set(base_cols + feature_cols))
 
-    games = pl.read_csv(inputs.data_ml, columns=usecols).filter(pl.col("season") == inputs.season)
+    games = pl.read_csv(inputs.data_ml, columns=usecols, infer_schema_length=None).filter(
+        pl.col("season") == inputs.season
+    )
     games = _filter_by_game_type(games, include_postseason=inputs.include_postseason)
     games = games.filter(pl.col("week") > inputs.through_week)
 
@@ -977,7 +979,9 @@ def _build_games_for_ratings(
     prior_season_weight = options.prior_season_weight
     target = options.target
     include_future = options.include_future
-    sched = pl.read_csv(inputs.data_schedule, schema_overrides=_SCORE_DTYPES).select(
+    sched = pl.read_csv(
+        inputs.data_schedule, schema_overrides=_SCORE_DTYPES, infer_schema_length=None
+    ).select(
         [
             "season",
             "week",

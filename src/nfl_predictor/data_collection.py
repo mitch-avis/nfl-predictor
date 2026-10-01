@@ -1997,7 +1997,7 @@ def load_dataframe(name: str, data_dir: Path | str | None = None) -> pl.DataFram
         log.warning("File not found: %s", file_path)
         return None
 
-    return pl.read_csv(file_path)
+    return pl.read_csv(file_path, infer_schema_length=None)
 
 
 if __name__ == "__main__":

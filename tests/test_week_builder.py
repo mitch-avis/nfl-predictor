@@ -95,6 +95,23 @@ def test_available_weeks_lists_the_seasons_unplayed_weeks(data_dir: Path) -> Non
     assert week_builder.available_weeks(2026, data_dir=Path("/nonexistent")) == []
 
 
+def test_available_weeks_reads_a_score_column_typed_after_a_hundred_rows(tmp_path: Path) -> None:
+    """Scores written as whole numbers for 150 rows and as decimals later still load."""
+    played = [{"season": 2025, "week": 1, "away_score": "17", "home_score": "24"}] * 150
+    later = [
+        {"season": 2026, "week": 1, "away_score": "20.5", "home_score": "21.0"},
+        {"season": 2026, "week": 2, "away_score": "", "home_score": ""},
+    ]
+    header = "season,week,away_score,home_score"
+    lines = [
+        header,
+        *(",".join(str(row[key]) for key in header.split(",")) for row in played + later),
+    ]
+    (tmp_path / "all_data_ml.csv").write_text("\n".join(lines) + "\n")
+
+    assert week_builder.available_weeks(2026, data_dir=tmp_path) == [2]
+
+
 def test_main_builds_the_requested_week(data_dir: Path) -> None:
     """The CLI writes the file and reports success."""
     exit_code = week_builder.main(["--season", "2026", "--week", "3", "--data-dir", str(data_dir)])

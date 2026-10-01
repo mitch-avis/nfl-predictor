@@ -7,12 +7,13 @@ season and earlier, so ``SeasonKeys`` hashes exactly those and the cache returns
 only when the key matches. Anything else, including a later season's rows, cannot change the
 key.
 
-One dependency is not covered: the league means behind the regressed previous-season prior
-are reduced over an eagerly filtered slice of the whole team-stat frame, whose chunk
-boundaries, and so the last bits of the means, move with the length of that whole frame. A
-reused build therefore matches a full rebuild of the same inputs exactly, but can differ from
-a later full rebuild in the last bits of the season-to-date EPA and CPOE columns once a later
-season's rows have changed.
+One dependency is not covered, so a reused build equals a full rebuild only while no later
+season's rows have changed since the cache was filled. The league means behind the regressed
+previous-season prior are reduced over an eagerly filtered slice of the whole team-stat
+frame; that slice's chunk boundaries, and so the last bits of the means, move with how many
+rows the whole frame holds, later seasons included. Once a later season's rows change (the
+season in progress gains a week, for example), a full rebuild can differ from the reused
+build in the last bits of the season-to-date EPA and CPOE columns.
 
 Every input frame is digested by value, not by memory layout: each season's rows are written
 as CSV (exact float text, nulls distinct from empty strings) and hashed with the frame's

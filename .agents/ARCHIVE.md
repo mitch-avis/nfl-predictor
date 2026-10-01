@@ -95,6 +95,12 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   independent reviewer. A text token in a numeric column now fails the read (the real file has
   none, nor did any of the 233 versions in `../nfeloqb`'s history since 2023-08-09; `nfeloqb`
   writes blanks). The user kept the hard failure, tentatively, on 2026-10-01.
+- `data_collection.py` passed the ~2000-line threshold with the incremental ETL (`0.37.5`). Split
+  in `0.37.6` (2026-10-01, approved by the user): the week builder to `utils/polars/week_rows.py`
+  and, to avoid an import cycle, the per-week strength table to `utils/polars/strength_table.py`
+  (1194 lines remain). All 72 top-level definitions unchanged by AST, a season-build
+  characterization test committed first, and two 2019-2026 scratch builds byte-identical
+  (`~/scratch/etl_split/`), all rechecked by an independent reviewer.
 
 ---
 

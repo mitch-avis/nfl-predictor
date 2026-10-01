@@ -572,6 +572,12 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       makes cache-then-warm and full builds byte-identical across 28 seasons), with the xfails
       removed and the caught digest `ComputeError` logged at WARNING; then whether the weekly run
       passes `--incremental` (`data_collection_args`), a must-ask default change.
+- [ ] (step 4) Two follow-ups from the review of the `0.37.6` split of `data_collection.py`:
+      the fingerprint-coverage guard (`tests/test_etl_fingerprint_coverage.py`) follows only
+      absolute imports, so a relative `from . import x` in an ETL module would escape it (none
+      exist today); and `_stamp_strength_snapshot` is private but imported by `data_collection.py`
+      and `utils/polars/week_rows.py`, so it should become public. Both change the season-cache
+      fingerprint, not the walk-forward one.
 - [ ] (step 4, with 56.6) **Betting report edges.** The largest moneyline "edges" in Week 3
       mostly reflect the gap between each game's spread and its moneyline (the market-anchored
       margin maps through the deterministic curve, while the edge compares with the no-vig

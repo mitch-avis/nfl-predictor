@@ -3,8 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import type { JobLogLine } from '@/api/types'
+import { filterLines } from '@/components/jobs/logConsoleUtils'
 
-import { LogConsole, filterLines } from './LogConsole'
+import { LogConsole } from './LogConsole'
 import { JobStatusBadge } from './JobStatusBadge'
 
 const lines: JobLogLine[] = [

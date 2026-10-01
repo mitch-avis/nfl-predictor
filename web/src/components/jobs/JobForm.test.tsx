@@ -3,8 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { JobTemplate, ParamSpec } from '@/api/types'
+import { initialValues, submittableValues } from '@/components/jobs/jobFormValues'
 
-import { JobForm, initialValues, submittableValues } from './JobForm'
+import { JobForm } from './JobForm'
 
 function spec(overrides: Partial<ParamSpec> & { name: string }): ParamSpec {
   return {

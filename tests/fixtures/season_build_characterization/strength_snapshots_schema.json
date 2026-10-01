@@ -1,0 +1,17 @@
+{
+  "adj_def_pass_epa_snap": "Float64",
+  "adj_def_rush_epa_snap": "Float64",
+  "adj_hfa": "Float64",
+  "adj_off_pass_epa_snap": "Float64",
+  "adj_off_rush_epa_snap": "Float64",
+  "adj_srs": "Float64",
+  "adj_strength_composite": "Float64",
+  "season": "Int64",
+  "sos_played_adj": "Float64",
+  "sos_played_raw": "Float64",
+  "sos_remaining_adj": "Float64",
+  "st_rating": "Float64",
+  "strength_games_played": "Float64",
+  "team_abbr": "String",
+  "week": "Int64"
+}

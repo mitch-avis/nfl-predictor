@@ -118,6 +118,12 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
 - Two follow-ups from the `0.37.6` split review, resolved in `0.38.1` (2026-10-01): the
   fingerprint-coverage guard follows relative imports (four relative cases fail on the old walk),
   and `stamp_strength_snapshot` is public. Independent review approved.
+- The schedule cache had the staleness gap `0.37.2` closed for team stats and play-by-play.
+  Resolved in `0.38.2` (2026-10-01): requested columns derived from `_prepare_schedule` and
+  recorded in the Parquet metadata. All 32 existing schedule files (1995-2026) passed, so none
+  refetched; two 2019-2026 scratch builds were byte-identical (`~/scratch/schedule_cache/`), both
+  rechecked by an independent reviewer. A later change to the schedule columns now refetches
+  every historical schedule, which can pull revised lines (a rule-5 change).
 
 ---
 

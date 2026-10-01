@@ -41,6 +41,10 @@ under `ml/` change every checkpoint fingerprint).
    spread-to-moneyline map, and an ETL option choosing the line source (`stored` today,
    `pick_time` the candidate), so both builds come from one code version. The largest chunk.
 
+Any chunk that changes `NFLREADPY_SCHEDULE_COLUMNS`, `NFLREADPY_SCHEDULE_RENAME` or a derived
+schedule column refetches every historical schedule file since `0.38.2`, which can pull revised
+lines; such a change is asked about first (rule 5), and its scratch builds say so.
+
 ## Phase B: builds and runs
 
 - Builds: six cold ETL builds (`R0`, `S2`, `S8`, `T2`, `PT`, then `F`), each about 11 minutes, made

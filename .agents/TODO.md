@@ -219,7 +219,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | --- | --- |
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
-| 4, first | The schedule cache (step-3 merge test). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test), the incremental ETL (Week 3 run) and the split-review follow-ups were resolved in `0.37.2`-`0.38.1` |
+| 4, first | Done, apart from the low-priority schedule fallback (step-3 merge test group). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test), the incremental ETL (Week 3 run), the split-review follow-ups and the schedule cache were resolved in `0.37.2`-`0.38.2` |
 | 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
 
 Rules for every feature milestone:
@@ -503,18 +503,11 @@ Each group names the archived milestone it came from; the milestone's full recor
 
 ### From the step-3 merge test (2026-09-28)
 
-- [ ] (step 4, low priority) The schedule cache (`load_schedule`, `schedule_<season>.parquet`)
-      has the same staleness gap the `0.37.2` column record closed for team stats and play-by-play.
-      Its prepared columns are renamed and the kickoff times merged, so the requested list needs
-      deriving; and a schedule refetch can pull revised lines and change feature values. Before
-      enabling it, check read-only which existing schedule files would refetch.
-
-### From the 2026-09-25 review of the Week 3 outputs
-
-The user's questions on the Week 3 power rankings and the Model page. Evidence scripts and outputs
-in `.agents/findings_2026_09_25/` (written by the session that closed Milestone 60; the numbers
-are diagnostics of saved artifacts, not walk-forward results, and have no second key yet).
-
+- [ ] (low priority) `load_schedule` has no current-season fallback: unlike team stats and
+      play-by-play, a failed refetch of the current season's schedule (a network error or an
+      nflverse outage) fails the whole ETL. Found by the `0.38.2` review; pre-existing. If it is
+      fixed, the fallback to the cached current-season schedule must log a loud warning, because
+      that copy can hold stale lines and miss games scheduled since.
 - [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping

@@ -186,7 +186,11 @@ Every saved model must include adjacent metadata JSON with:
 
 - created timestamp
 - git commit hash (if available)
-- dataset fingerprint (hash of training CSV and/or stable row ids)
+- dataset fingerprint (hash of training CSV and/or stable row ids). Two `nfl-predictor data`
+  runs with the same code, locked dependencies and inputs write byte-identical CSVs, so an
+  identical rebuild keeps the fingerprint. The ETL keeps this by fixing every row order (each
+  `group_by` and `unique` keeps input order, enforced by `tests/test_etl_determinism.py`) and by
+  adding the terms of every float sum in a fixed order.
 - library versions (xgboost, sklearn, numpy, pandas, polars, scipy)
 - training config (CLI args / config object)
 - the XGBoost device the model trained on (`xgb_device`: `cpu` or `cuda`, never `auto`)

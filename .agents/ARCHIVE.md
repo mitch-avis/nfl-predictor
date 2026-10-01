@@ -76,6 +76,16 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   All 56 existing cache files passed the check, so nothing was refetched. Independent review
   rechecked the no-refetch claim and the unchanged Week 4 outputs read-only, and caught a
   `total_yards` regression in the first fix round before the merge.
+- Schedule-strength columns were not bit-reproducible across identical rebuilds (Milestone 46).
+  Resolved in `0.37.3` (2026-10-01): the `sos_*` reductions add values in sorted order,
+  season-to-date means add games in week order, every ETL `group_by` and `unique` keeps row
+  order (an AST guard in `tests/test_etl_determinism.py`), and same-date games sort by
+  `game_id`. Two identical scratch rebuilds (2019-2025, and 2019-2026 with the Week 4 predict
+  file) were byte-identical, where the old code differed on every CSV
+  (`~/scratch/etl_repro/`). The independent review found the identity holds only at one Polars
+  thread count (the season-to-date means moved in the last bits at `POLARS_MAX_THREADS=3`), so
+  the artifact-contract line in `.agents/modeling_spec.md` says "same machine, same thread
+  count"; values move against the old code by at most about `2e-16` of each column's scale.
 
 ---
 

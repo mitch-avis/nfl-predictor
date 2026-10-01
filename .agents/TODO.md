@@ -219,7 +219,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | --- | --- |
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
-| 4, first | Schedule-strength columns not bit-reproducible across identical rebuilds (Milestone 46); the `qb_elos.csv` type guessing and the schedule cache (step-3 merge test); the incremental ETL (Week 3 run). The play-by-play cache key (Milestone 45) was resolved in `0.37.2` |
+| 4, first | The `qb_elos.csv` type guessing and the schedule cache (step-3 merge test); the incremental ETL (Week 3 run). The play-by-play cache key (Milestone 45) and bit-reproducible rebuilds (Milestone 46) were resolved in `0.37.2` and `0.37.3` |
 | 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
 
 Rules for every feature milestone:
@@ -630,11 +630,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       week-2 opponent's only prior game is the one against the subject. That is the method being
       correct, but a documented fallback (prior-season profile, or the adjusted lens) would make
       the column usable in the two weeks where schedule strength is least knowable.
-- [ ] Schedule-strength columns are not bit-reproducible across identical rebuilds: Polars parallel
-      `group_by` summation order moves the last 1-2 ULP. The ridge and SRS columns are exactly
-      stable. This is pre-existing (`aggregate_team_stats_to_week` has the same property) but it
-      does mean the dataset fingerprint in the model artifact contract changes across identical
-      runs. Worth a line in the artifact contract docs.
 
 ### From Milestone 49 (continuous early-season shrinkage)
 

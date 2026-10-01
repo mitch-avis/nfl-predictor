@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.37.6] - 2026-10-01
+
+### Changed
+
+- `data_collection.py`, past the ~2000-line split threshold, is split without changing behavior:
+  `process_week` and its join helpers move to `nfl_predictor/utils/polars/week_rows.py`, and the
+  per-week strength table to `nfl_predictor/utils/polars/strength_table.py`. Every moved
+  definition is unchanged, and a 2019-2026 scratch rebuild before and after is byte-identical.
+  The season-cache code fingerprint changes, so the first `--incremental` run afterwards rebuilds
+  every season; walk-forward checkpoints are unaffected.
+
+### Added
+
+- A characterization test pins a season build's game rows and strength snapshots
+  (`tests/test_season_build_characterization.py`), and a guard requires every module the ETL
+  imports to be covered by the season-cache code fingerprint
+  (`tests/test_etl_fingerprint_coverage.py`).
+
 ## [0.37.5] - 2026-10-01
 
 ### Changed

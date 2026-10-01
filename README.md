@@ -686,7 +686,8 @@ This is the current behavior, recorded for reference; none of it is a recommenda
 - The shipped `config/weekly_run.yaml` now keeps those regular-season defaults for the weekly run:
   `wf_include_postseason: false` and `include_postseason: false`. It still ships
   `postseason_weight: 1.3`, but that weight is inert unless postseason training is explicitly
-  enabled, and `power_rankings_include_postseason: true` remains on for the rankings step.
+  enabled, and `power_rankings_include_postseason: false` (the code default too) keeps postseason
+  games out of the rankings step.
 - The schedule-adjusted strength composite built in ETL never includes postseason games.
 - The power rankings default through-week is the week before the prediction week, clamped to the
   last regular-season week when the prediction week is postseason, because strength snapshots stop

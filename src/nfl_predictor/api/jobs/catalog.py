@@ -9,6 +9,7 @@ the same schema.
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -43,6 +44,7 @@ class ParamSpec:
         choices: Allowed values when ``kind`` is ``choice``.
         minimum: Inclusive lower bound for numeric kinds.
         maximum: Inclusive upper bound for numeric kinds.
+        shell_quoted: Whether a ``str`` value is a shell-quoted argument list, checked at submit.
 
     """
 
@@ -55,6 +57,7 @@ class ParamSpec:
     choices: tuple[str, ...] = ()
     minimum: float | None = None
     maximum: float | None = None
+    shell_quoted: bool = False
 
 
 @dataclass(frozen=True)
@@ -135,6 +138,16 @@ def _flag(argv: list[str], flag: str, value: object) -> None:
     argv.extend([flag, str(value)])
 
 
+def _text_flag(argv: list[str], flag: str, value: object) -> None:
+    """Append ``flag=value`` when ``value`` is set.
+
+    A free-text value is joined to its flag so one that starts with a dash (``-x`` or
+    ``--incremental``) is read as the option's value rather than as another option.
+    """
+    if value is not None:
+        argv.append(f"{flag}={value}")
+
+
 def _data_dir(ctx: JobContext) -> str:
     """Return the configured data directory the launched CLI should read and write."""
     return str(ctx.settings.data_path)
@@ -198,13 +211,11 @@ def _build_weekly_run(ctx: JobContext) -> list[str]:
     ]
     if params.get("week") is not None:
         argv.extend(["--predict-path", _week_predict_path(ctx, int(params["week"]))])
-    _flag(argv, "--run-id", params.get("run_id"))
+    _text_flag(argv, "--run-id", params.get("run_id"))
     _flag(argv, "--resume", params.get("resume"))
     _flag(argv, "--dry-run", params.get("dry_run"))
     _flag(argv, "--skip-data-refresh", params.get("skip_data_refresh"))
-    # Joined with "=" so a value that is one flag ("--incremental") is not parsed as an option.
-    if params.get("data_collection_args") is not None:
-        argv.append(f"--data-collection-args={params['data_collection_args']}")
+    _text_flag(argv, "--data-collection-args", params.get("data_collection_args"))
     _flag(argv, "--wf-eval-last-n-seasons", params.get("wf_eval_last_n_seasons"))
     return argv
 
@@ -295,8 +306,7 @@ def _build_leakage_audit(ctx: JobContext) -> list[str]:
         *ctx.command("leakage-audit"),
         "--data-path",
         ctx.data_file("completed_games_ml.csv"),
-        "--out-json",
-        str(out_json),
+        f"--out-json={out_json}",
     ]
 
 
@@ -315,7 +325,7 @@ def _build_walk_forward(ctx: JobContext) -> list[str]:
     argv = [*ctx.command("backtest"), "--data-path", ctx.data_file("completed_games_ml.csv")]
     _flag(argv, "--wf-eval-last-n-seasons", ctx.params.get("eval_last_n_seasons"))
     _flag(argv, "--wf-start-week", ctx.params.get("wf_start_week"))
-    _flag(argv, "--out-json", ctx.params.get("out_json"))
+    _text_flag(argv, "--out-json", ctx.params.get("out_json"))
     return argv
 
 
@@ -434,6 +444,7 @@ TEMPLATES: tuple[JobTemplate, ...] = (
                     "finished season; a value replaces it, so include --incremental to keep "
                     "that reuse."
                 ),
+                shell_quoted=True,
             ),
             ParamSpec(
                 "wf_eval_last_n_seasons",
@@ -644,6 +655,12 @@ def _coerce(spec: ParamSpec, value: object) -> bool | int | float | str:
     if spec.kind in {"int", "float"}:
         return _coerce_number(spec, value)
     text = str(value)
+    if spec.shell_quoted:
+        try:
+            shlex.split(text)
+        except ValueError as exc:
+            msg = f"{spec.label} must be a valid shell-quoted string: {exc}"
+            raise UnprocessableEntityError(msg, code="invalid_param") from exc
     if spec.kind == "choice" and text not in spec.choices:
         msg = f"{spec.label} must be one of: {', '.join(spec.choices)}"
         raise UnprocessableEntityError(msg, code="invalid_param")

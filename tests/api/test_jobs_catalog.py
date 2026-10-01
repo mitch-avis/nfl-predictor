@@ -271,10 +271,10 @@ def test_read_only_templates_take_no_parameters(settings: Settings) -> None:
 def test_leakage_audit_defaults_its_report_path(settings: Settings) -> None:
     """The audit writes into the reports directory unless a path is given."""
     argv = build("leakage_audit", settings, {})
-    assert argv[argv.index("--out-json") + 1] == str(settings.reports_path / "leakage_audit.json")
+    assert f"--out-json={settings.reports_path / 'leakage_audit.json'}" in argv
     chosen = str(settings.state_path / "audit.json")
     argv = build("leakage_audit", settings, {"out_json": chosen})
-    assert argv[argv.index("--out-json") + 1] == chosen
+    assert f"--out-json={chosen}" in argv
 
 
 def test_only_dataset_and_walk_forward_jobs_are_exclusive() -> None:
@@ -346,6 +346,42 @@ def test_every_template_builds_a_command_its_target_parses(
     """Each job launches the front door, and the command's own parser accepts every option."""
     argv = build(template_id, settings, params, run)
     parse_built(argv, settings, monkeypatch)
+
+
+def _text_param_cases() -> list[tuple[str, str]]:
+    """Return ``(template id, parameter)`` for every free-text parameter in the catalog."""
+    return [
+        (template.id, spec.name)
+        for template in catalog.TEMPLATES
+        for spec in template.params
+        if spec.kind == "str"
+    ]
+
+
+@pytest.mark.parametrize(("template_id", "name"), _text_param_cases())
+def test_a_text_value_that_starts_with_a_dash_reaches_the_command_unchanged(
+    template_id: str,
+    name: str,
+    settings: Settings,
+    run: RunSummary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A free-text value such as ``-x`` is passed as that option's value, never as an option."""
+    template = catalog.get_template(template_id)
+    params = {spec.name: SAMPLE_PARAMS[spec.name] for spec in template.params if spec.required}
+
+    argv = build(template_id, settings, {**params, name: "-x"}, run)
+
+    _name, args = parse_built(argv, settings, monkeypatch)
+    assert str(getattr(args, name)) == "-x"
+
+
+def test_etl_arguments_with_an_unclosed_quote_are_rejected_at_submit() -> None:
+    """A string the data refresh could not split fails validation, not the queued job."""
+    template = catalog.get_template("weekly_run")
+    with pytest.raises(UnprocessableEntityError, match="ETL arguments") as raised:
+        catalog.validate_params(template, {"week": 2, "data_collection_args": "--min-season '20"})
+    assert raised.value.code == "invalid_param"
 
 
 def test_the_train_form_offers_no_model_kind_choice() -> None:

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.37.2] - 2026-10-01
+
+### Fixed
+
+- The team-stat and play-by-play nflreadpy caches record the columns they were built with. A
+  cached season that lacks a column the code now requests (a new `constants.PBP_COLUMNS` entry, a
+  new team-stat mapping, or a new column the stat combination derives) is downloaded again. A
+  column the source never published does not force a download on every run, and
+  `--refresh-nflreadpy` picks it up if nflverse publishes it later. Every existing cache file is
+  compatible, so the first run after this change downloads nothing.
+- The power-ranking, `week_builder` and `data_collection.load_dataframe` reads of the data CSVs
+  infer column types from the whole file instead of the first 100 rows. Before, a column empty
+  for its first 100 rows (the scores and the quarterback 4-week trends in `all_data_ml.csv`) came
+  back as text, and a column whose type changed later failed the read. The Week 4 predictions and
+  power rankings are unchanged.
+
 ## [0.37.1] - 2026-09-29
 
 ### Changed

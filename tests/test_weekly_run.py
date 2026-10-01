@@ -552,6 +552,28 @@ def test_command_line_data_collection_args_replace_the_shipped_string() -> None:
     assert args.data_collection_args == "--min-season 2010"
 
 
+def test_a_config_file_without_data_collection_args_refreshes_with_a_full_rebuild(
+    tmp_path: Path,
+) -> None:
+    """A ``--config`` file replaces the shipped one, so leaving the key out drops --incremental."""
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text('{"wf_eval_last_n_seasons": 5}', encoding="utf-8")
+
+    args = run_config._parse_args(["--config", str(config_path)])
+
+    assert args.data_collection_args is None
+    assert pipeline._data_collection_argv(args.data_collection_args) is None
+    assert data_collection._resolve_config(None).incremental is False
+
+
+def test_an_empty_command_line_string_refreshes_with_a_full_rebuild() -> None:
+    """``--data-collection-args ""`` replaces the shipped string with nothing: a full rebuild."""
+    args = _shipped_weekly_args(["--data-collection-args", ""])
+
+    assert args.data_collection_args == ""
+    assert pipeline._data_collection_argv(args.data_collection_args) is None
+
+
 def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

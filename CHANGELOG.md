@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.37.5] - 2026-10-01
+
+### Changed
+
+- Every walk-forward checkpoint fingerprint changes, because `constants.py` gained the season
+  cache directory name; a rerun retrains from scratch.
+
+### Added
+
+- `nfl-predictor data --incremental` reuses each finished season's build from
+  `<data dir>/cache/etl_seasons/` when the ETL source, the Polars, NumPy and Python versions, the
+  Polars runtime package and thread count, the output options and that season's input rows
+  (through the season, compared by value) are unchanged, and rebuilds the rest; the season in
+  progress is always rebuilt. Off by default. A stale, damaged or unhashable entry is rebuilt,
+  never an error. A reused season matches a full rebuild only until a later season gains rows:
+  the league means behind the week-1 prior still move in the last bits with the number of
+  loaded rows.
+
 ## [0.37.4] - 2026-10-01
 
 ### Fixed

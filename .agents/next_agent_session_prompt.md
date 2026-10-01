@@ -8,7 +8,7 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## State (written 2026-10-01, step 4 in progress)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.37.6`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
+  out in the main checkout at `0.38.0`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
   passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
 - Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
   - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
@@ -32,25 +32,27 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
   - `0.37.6`: `data_collection.py` split (week builder to `utils/polars/week_rows.py`, strength
     table to `utils/polars/strength_table.py`), byte-identical; the first `--incremental` run
     afterwards rebuilds every season (code fingerprint changed).
-- In flight (an implementer subagent in `.claude/worktrees/`, launched 2026-10-01): the
-  `.rechunk()` fix with the two xfails removed, the digest `ComputeError` at WARNING, and
-  `--incremental` in `config/weekly_run.yaml`, proven by a cache-then-warm vs full scratch check
-  (`~/scratch/etl_rechunk/`). It needs an independent review before merge.
+  - `0.38.0`: `calculate_league_means` rechunks its season slice (features moved once by up to
+    about `1.8e-15`), so `--incremental` equals a full rebuild after later seasons gain rows
+    (`~/scratch/etl_rechunk/`); the weekly run refreshes with `--incremental`
+    (`config/weekly_run.yaml`). The first incremental run rebuilds every season (code fingerprint
+    changed in `0.37.6`/`0.38.0`), then about 48 s.
+- The "4, first" reproducibility work is done apart from the low-priority schedule cache and two
+  small `0.37.6` review follow-ups (`TODO.md`). No subagent is in flight.
 - Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
 
 ## Open questions for the user
 
-None pending. Answered 2026-10-01 (later): approve the `.rechunk()` in `calculate_league_means`;
-the weekly run passes `--incremental` once it lands; split `data_collection.py`
-(behavior-preserving). The user runs the Week 4 refresh themselves.
-
-Answered 2026-10-01: same-machine byte-identity is enough (accepted); a text token in a numeric
-`qb_elos.csv` column stops the ETL (kept, tentatively; none in any of the 233 `nfeloqb` versions
-since 2023-08-09).
+None pending. Decided 2026-10-01: same-machine byte-identity is enough; a text token in a
+numeric `qb_elos.csv` column stops the ETL (tentatively; none ever seen in 233 `nfeloqb`
+versions); `.rechunk()` approved; the weekly run passes `--incremental`; `data_collection.py`
+split (with the extra `strength_table.py` module, recommended). The web weekly job's full
+rebuild is task 58.7. The user runs the Week 4 refresh themselves.
 
 ## Next
 
-1. Review and merge the `.rechunk()` chunk under its own version, then the gate.
+1. Optional small chunks: the two `0.37.6` split-review follow-ups and the schedule cache
+   (`TODO.md`, "4, first" row).
 2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
    55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
    step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);

@@ -64,6 +64,112 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Roadmap step 3 - Production and benchmark parity (closed 2026-10-01)
+
+Versions `0.29.0`-`0.35.3` (`feat/step3-parity`, merged 2026-09-28; `fix/weekly-dry-run`, merged
+2026-09-29). Closed by the user on 2026-10-01. Tasks 55.4, 55.6, 56.5 and 56.7 are archived under
+their milestones; the Milestone 60 leftovers under "Milestone 60", "Leftovers resolved".
+Dispositions at the close:
+
+- 56.6: parts (a)-(c) and (e) done (below); part (d), anchoring to the pick-time line, stays in
+  `TODO.md` under step 4 with the plan agreed on 2026-10-01. Of the two optional notes, nfelo's
+  pre-game probability as a yardstick was dropped by the user (it is built from Elo and the market
+  lines, both already in the model), and the fitted spread-to-probability map moved into 56.6(d).
+- The Model page's feature importance: SHAP is the headline measure (`0.31.0`) and total gain the
+  secondary (`0.29.0`); the margin-only toggle moved to Milestone 58 (task 58.6).
+- "Stage 1 got slower" (from the Week 3 run): resolved by the GPU default (`0.30.0`); stage 1 takes
+  about a minute.
+- "Betting report edges": moved to step 4 with 56.6.
+
+### 56.6 (a)-(c), (e) - Lines at pick time, as found
+
+Measure the model against the lines available at pick time, not
+only the stored ones. Picks are submitted before the Thursday game, and lines move between
+then and Sunday, sometimes a lot. The ETL's lines come from nflverse schedules
+(`spread_line`, `total_line`, the moneylines), probably closing lines. Backtests both
+**anchor** the model to them and **score** the market against them, while production
+anchors to whatever lines exist at the mid-week refresh. So backtests probably overstate
+production accuracy, and the market yardstick is harder than the one the user actually
+faces (an `AGENTS.md` rule 11 gap).
+Found 2026-09-24: `data/nfl_lines.csv` (7,231 games, 1999-2025, not in git, read by no code;
+`web_ui_plan.md` calls it unused legacy) carries opening and last spreads, moneylines and
+totals, each with a source and timestamp columns:
+
+- 1999-2006: opening spread equals last spread in every game (no real openers).
+- 2007-2021 and 2023: real openers, source `legacy`, no timestamps; mean absolute
+  open-to-last move `1.0`-`1.6` points.
+- 2022: `59%` of openers equal the last line (partly real).
+- 2024-2025: DraftKings or consensus openers with timestamps (2025 has 240 games so far).
+- Opening moneylines only from 2024.
+Work: (a) confirm the file's provenance (likely nfelo) and whether it can be refreshed through
+an existing source (nflverse or nfelo, no new external service); (b) confirm what the
+nflverse schedule lines are (closing, or a snapshot) against this file's `last` columns;
+(c) on 2007-2025, score the model against the opening line as a second market yardstick
+beside the stored one, since pick-time lines sit between open and close; (2026-09-27: scored
+on 2020-2025 first; the user asked for the full 2007-2025 window, which the GPU reference
+covers; done 2026-09-28 on the GPU reference, `.agents/benchmarks.md`, "GPU reference");
+(d) measure how
+much anchoring on opening instead of stored lines changes backtest accuracy, a
+feature-value change measured with two builds and two seeds (moved to roadmap step 4 by
+the user on 2026-09-27, to share its rebuild cycle); (e) record the coverage limits
+(no openers before 2007, uncertain in 2022, undated `legacy` openers) wherever a number
+depends on them. The outcome feeds 56.5: a market blend judged against closing lines
+overstates what it can do at pick time.
+Update 2026-09-24:
+- Provenance. The user confirmed the source as nfelo's `nfelomarket_data` repo
+  (`Data/lines.csv`, updated daily) and refreshed `data/nfl_lines.csv` from it (now through
+  2026 week 3, 7,324 rows). The user also saved nfelo's
+  `output_data/historic_projected_spreads.csv` as `data/historic_odds.csv` (1,463 games,
+  2021 to 2026 week 3): opening and closing spreads plus nfelo's own projected spread and
+  home win probability.
+- Checks on the refreshed files:
+  (i) The two files agree on openers only from 2023 (`93%`-`100%`); in 2021-2022 they agree
+  on `35%` of openers, and `historic_odds.csv` has an opener different from its close in
+  only `19%`-`22%` of those games, so 2021-2022 openers are doubtful in both.
+  (ii) The closes agree from 2025 (`97%`+) but only `26%`-`44%` in 2021-2024 (different
+  snapshots).
+  (iii) The nflverse spread in our data matches `nfl_lines.csv`'s last line in `64%`-`79%`
+  of games from 2010 on (mean gap about `0.2` points), so it is a late snapshot, not the same
+  feed.
+- Opening moneylines: the user proposed inferring them from opening spreads, and that is
+  sound for this yardstick, done symmetrically. Convert open **and** close spreads to
+  probabilities through the same mapping, so an open-versus-close difference measures line
+  movement and not the conversion. Fit the mapping from spreads to the market's own no-vig
+  moneyline probabilities where both exist; it uses prices, not results, so it cannot leak
+  outcomes. Compare the fitted map with the fixed `spread_to_moneyline` conversion the ETL
+  already uses to fill missing moneylines. Anchoring (part d) needs only spreads.
+- Candidate extra yardstick (2021 on): nfelo's pre-game `home_probability_nfelo`, a strong
+  public model. Confirm it is pre-game before using it.
+- Keep refreshes manual copies, like `data/qb_elos.csv` from `../nfeloqb`; an automated
+  fetch from GitHub would be a new network dependency (must-ask).
+
+### The Model page's feature importance, as found
+
+The Model page's feature importance is misleading. It shows
+`base_features.combined.gain` from `feature_importance.json`: XGBoost's
+`importance_type="gain"` (average gain per split) summed over every one-hot column of a base
+feature and over both heads, so a feature with many categories collects many averages. On
+`models/weekly_2026_week_03_full/` this puts `away_next_opponent_abbr`,
+`home_next_opponent_abbr` and `stadium_surface` first, while by total gain they rank 334th,
+410th and 414th of 462 (`importance_aggregation.py`). Aggregate total gain (average gain
+times splits) per base feature, say which measure the chart shows, and consider SHAP
+(`nfl-predictor explain`) as the headline measure. The fix touches
+`src/nfl_predictor/ml/feature_importance.py` (a checkpoint-fingerprint change, so it belongs with
+step 3's other `ml/` edits), the API reader and the web chart.
+Narrowed (`0.29.0`, 2026-09-27): total gain per base feature and per head is the ranking
+measure and the chart names it (older run directories fall back, labelled). SHAP as the
+headline measure was considered and not built. The user decided on 2026-09-27: SHAP
+becomes the headline measure, computed on every run despite the extra pass, total gain
+stays as the secondary measure, and the combined (both heads) ranking stays, with a
+margin-only toggle added in the web phases. SHAP landed in `0.31.0`; the margin-only toggle
+is the remainder, for the web phases (Milestone 58).
+
+### Stage 1 got slower, as found
+
+**Stage 1 got slower.** Candidates now fit the shared 200-tree default at learning
+rate `0.0165` (last week's candidate keys show 120 trees at `0.070`). Expected, but it
+makes the GPU default matter more.
+
 ## Milestone 60 - CLI and entrypoint consolidation
 
 Closed 2026-09-25 (version `0.28.1`) by the user's decision, and `feat/m60-cli-consolidation`

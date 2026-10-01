@@ -18,9 +18,9 @@ from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars.strength_table import (
-    _stamp_strength_snapshot,
     build_prior_strength_snapshot,
     build_strength_table,
+    stamp_strength_snapshot,
 )
 
 if TYPE_CHECKING:
@@ -407,7 +407,7 @@ def _add_strength_features(merged: pl.DataFrame, week: _Week) -> pl.DataFrame:
         if inputs.strength_snapshots is not None:
             # Recorded before the join below keeps only the teams playing this week.
             inputs.strength_snapshots.append(
-                _stamp_strength_snapshot(strength_table, season=week.season, week=week.week)
+                stamp_strength_snapshot(strength_table, season=week.season, week=week.week)
             )
         return _merge_strength_features(
             merged, strength_table.select("team_abbr", *constants.ADJUSTED_STRENGTH_STATS)

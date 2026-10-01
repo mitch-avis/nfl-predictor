@@ -8,7 +8,7 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## State (written 2026-10-01, step 4 in progress)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.37.5`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
+  out in the main checkout at `0.37.6`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
   passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
 - Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
   - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
@@ -29,12 +29,13 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
     reused season matches a full rebuild only until a later season gains rows, because
     `calculate_league_means` (`utils/polars/teamrankings.py`) reduces a slice whose chunk layout
     moves; two strict-xfail tests pin it. `constants.py` changed, so every checkpoint retrains.
-- In flight (implementer subagents in `.claude/worktrees/`, launched 2026-10-01): (A) the
+  - `0.37.6`: `data_collection.py` split (week builder to `utils/polars/week_rows.py`, strength
+    table to `utils/polars/strength_table.py`), byte-identical; the first `--incremental` run
+    afterwards rebuilds every season (code fingerprint changed).
+- In flight (an implementer subagent in `.claude/worktrees/`, launched 2026-10-01): the
   `.rechunk()` fix with the two xfails removed, the digest `ComputeError` at WARNING, and
   `--incremental` in `config/weekly_run.yaml`, proven by a cache-then-warm vs full scratch check
-  (`~/scratch/etl_rechunk/`); (B) the behavior-preserving split of `data_collection.py`
-  (`process_week` and its helpers into their own module), proven by two scratch builds
-  (`~/scratch/etl_split/`). Each needs an independent review before merge.
+  (`~/scratch/etl_rechunk/`). It needs an independent review before merge.
 - Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
 
 ## Open questions for the user
@@ -49,7 +50,7 @@ since 2023-08-09).
 
 ## Next
 
-1. Review and merge chunks (A) and (B), each under its own version, then the gate.
+1. Review and merge the `.rechunk()` chunk under its own version, then the gate.
 2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
    55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
    step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);

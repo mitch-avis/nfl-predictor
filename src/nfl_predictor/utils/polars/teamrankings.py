@@ -136,7 +136,7 @@ def load_team_rankings(
     existing_data = [df.cast({"week": pl.Int64}) for df in plan.existing]
     combined = pl.concat(existing_data, how="diagonal")
     # Remove duplicates by keeping latest data for each team/week
-    combined = combined.unique(subset=["team_abbr", "week"], keep="last")
+    combined = combined.unique(subset=["team_abbr", "week"], keep="last", maintain_order=True)
     return combined.sort(["week", "team_abbr"])
 
 
@@ -385,7 +385,7 @@ def get_latest_team_rankings(tr_df: pl.DataFrame) -> pl.DataFrame:
 
     # Group by team and take first (most recent) value for each column
     agg_exprs = [pl.col(c).first() for c in non_key_cols]
-    return tr_sorted.group_by("team_abbr").agg(agg_exprs)
+    return tr_sorted.group_by("team_abbr", maintain_order=True).agg(agg_exprs)
 
 
 def aggregate_team_stats_to_week(
@@ -445,7 +445,14 @@ def aggregate_team_stats_to_week(
     agg_exprs = [pl.col(c).mean().alias(c) for c in numeric_cols]
     agg_exprs.append(pl.len().alias("games_played"))
 
-    agg_df = prior_games.group_by("team_abbr").agg(agg_exprs)
+    # Polars keeps each group's input row order, so sorting by week first makes every mean
+    # add its games chronologically: a float sum depends on its term order in the last bits,
+    # and this fixes it whatever order the stats arrive in.
+    agg_df = (
+        prior_games.sort(["team_abbr", "week"])
+        .group_by("team_abbr", maintain_order=True)
+        .agg(agg_exprs)
+    )
 
     # Compute derived ratio metrics from the aggregated averages
     return _compute_derived_metrics(agg_df)

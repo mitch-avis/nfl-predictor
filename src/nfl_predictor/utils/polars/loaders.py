@@ -1172,7 +1172,12 @@ _QB_ELO_COLUMN_TYPES: dict[str, type[pl.DataType]] = {
 
 
 def _read_qb_elos(elo_path: Path) -> pl.DataFrame:
-    """Read the `qb_elos.csv` columns this package uses, with their declared types."""
+    """Read the `qb_elos.csv` columns this package uses, with their declared types.
+
+    A blank value reads as null. A text token in a numeric column (for example `NA`)
+    fails the read with a `ComputeError` that names the column, so a malformed copy of
+    the file stops the ETL instead of silently blanking quarterback features.
+    """
     header = pl.read_csv(elo_path, n_rows=0).columns
     column_types = {name: dtype for name, dtype in _QB_ELO_COLUMN_TYPES.items() if name in header}
     return pl.read_csv(elo_path, columns=list(column_types), schema_overrides=column_types)

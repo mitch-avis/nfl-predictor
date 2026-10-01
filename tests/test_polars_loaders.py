@@ -749,6 +749,37 @@ def test_load_elo_ratings_drops_rows_with_a_blank_week(
     assert elo.select("week", "home_abbr").rows() == [(1, "AAA"), (2, "BBB")]
 
 
+def test_load_raw_elo_data_rejects_text_in_a_numeric_column(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A text token in a numeric column fails the read and names the column."""
+    lines = [
+        _QB_ELO_HEADER,
+        _qb_elo_line("2023-09-10", ("AAA", "BBB"), week="1.0", qb1_value_pre="NA"),
+    ]
+    (tmp_path / "qb_elos.csv").write_text("\n".join(lines) + "\n")
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+
+    with pytest.raises(pl.exceptions.ComputeError, match="qb1_value_pre"):
+        loaders.load_raw_elo_data()
+
+
+def test_load_raw_elo_data_reads_a_blank_numeric_value_as_null(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A blank numeric value reads as null rather than failing the read."""
+    lines = [
+        _QB_ELO_HEADER,
+        _qb_elo_line("2023-09-10", ("AAA", "BBB"), week="1.0", qb2_value_pre="0.5"),
+    ]
+    (tmp_path / "qb_elos.csv").write_text("\n".join(lines) + "\n")
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+
+    raw = loaders.load_raw_elo_data()
+
+    assert raw.select("qb1_value_pre", "qb2_value_pre").rows() == [(None, 0.5)]
+
+
 def _pbp_payload(
     *,
     season: int = 2020,

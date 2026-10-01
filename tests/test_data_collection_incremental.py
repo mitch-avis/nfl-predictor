@@ -411,7 +411,9 @@ def test_the_full_rebuild_neither_reads_nor_writes_the_cache(baseline: _Baseline
     assert baseline.stamps_after_full == baseline.stamps_before_full
 
 
-def _season_keys(world: _World, config: data_collection.DataCollectionConfig) -> dict[int, str]:
+def _season_keys(
+    world: _World, config: data_collection.DataCollectionConfig
+) -> dict[int, str | None]:
     """Return the cache key of each finished season, as an incremental run would build it."""
     sources = data_collection._EtlSources(
         current_season=_CURRENT_SEASON,

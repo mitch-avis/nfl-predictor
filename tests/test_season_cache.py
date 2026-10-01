@@ -39,7 +39,7 @@ def _keys(frame: pl.DataFrame, **context: object) -> season_cache.SeasonKeys:
     return season_cache.SeasonKeys({"team_stats": frame}, {"min_season": 2020, **context})
 
 
-def _key(frame: pl.DataFrame, season: int, **context: object) -> str:
+def _key(frame: pl.DataFrame, season: int, **context: object) -> str | None:
     return _keys(frame, **context).key(season, {"tr": None})
 
 

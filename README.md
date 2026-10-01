@@ -178,12 +178,10 @@ Game rows are ordered newest first, with games on the same date ordered by `game
 with the same code, locked dependencies and inputs, on the same machine with the same Polars
 thread count (`POLARS_MAX_THREADS`), write byte-identical files.
 
-Building each season's weekly feature rows is nearly all of the ETL's run time, and a finished
-season's rows do not change from one run to the next. `nfl-predictor data --incremental` keeps each
-finished season's rows and strength snapshots under `<data dir>/cache/etl_seasons/` and reuses
-them when nothing they are built from has changed; the season in progress is always rebuilt, and
-every input is still loaded, so the written files are byte-identical to a full rebuild's. An entry
-is keyed on:
+Building each season's weekly feature rows is nearly all of the ETL's run time.
+`nfl-predictor data --incremental` keeps each finished season's rows and strength snapshots under
+`<data dir>/cache/etl_seasons/` and reuses them when nothing they are built from has changed; the
+season in progress is always rebuilt, and every input is still loaded. An entry is keyed on:
 
 - the source of the ETL modules (`data_collection.py`, `constants.py` and everything under
   `src/nfl_predictor/utils/`), the Polars and NumPy versions, the Python version, the CPU
@@ -199,6 +197,12 @@ and the directory is safe to delete. An input with a list or struct column, whic
 comparison does not cover, leaves the seasons that read it uncached. Without the flag the ETL
 rebuilds every season and neither reads nor writes the cache. The weekly run passes it through
 `data_collection_args: "--incremental"` in `config/weekly_run.yaml`.
+
+An incremental run writes the same files as a full rebuild of the same inputs, byte for byte. It
+can differ from a later full rebuild in the last bits of the season-to-date EPA and CPOE columns
+of the cached seasons once a later season's rows have changed, because the full rebuild's
+week-1 prior is not yet independent of later seasons: its league means are reduced over a slice
+whose chunk boundaries move with the length of the whole loaded team-stat frame.
 
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future

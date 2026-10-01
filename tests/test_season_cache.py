@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from importlib import metadata
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -162,6 +163,17 @@ def test_the_environment_fingerprint_names_the_libraries_and_the_thread_count() 
     assert environment["polars"] == pl.__version__
     assert environment["polars_threads"] == str(pl.thread_pool_size())
     assert {"python", "numpy", "machine"} <= set(environment)
+
+
+def test_the_environment_fingerprint_names_the_polars_runtime_package() -> None:
+    runtimes = [
+        f"{distribution.metadata['Name']}=={distribution.version}"
+        for distribution in metadata.distributions()
+        if distribution.metadata["Name"].lower().startswith("polars-runtime")
+    ]
+
+    assert runtimes, "Polars installs its compiled runtime as a polars-runtime-* package"
+    assert season_cache.environment_fingerprint()["polars_runtime"] == ",".join(sorted(runtimes))
 
 
 def _build() -> season_cache.SeasonBuild:

@@ -97,6 +97,14 @@ def environment_fingerprint() -> dict[str, str]:
     the result, as are the library versions, the Python version and the CPU architecture.
     """
     environment = {name: metadata.version(name) for name in _LIBRARIES}
+    # Polars ships its compiled engine as a separate polars-runtime-* package.
+    environment["polars_runtime"] = ",".join(
+        sorted(
+            f"{distribution.metadata['Name']}=={distribution.version}"
+            for distribution in metadata.distributions()
+            if distribution.metadata["Name"].lower().startswith("polars-runtime")
+        )
+    )
     environment["python"] = sys.version
     environment["machine"] = platform.machine()
     environment["polars_threads"] = str(pl.thread_pool_size())

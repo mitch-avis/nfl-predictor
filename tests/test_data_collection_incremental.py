@@ -44,8 +44,8 @@ def _slate(season: int, week: int) -> list[tuple[str, str]]:
     return pairs if week % 2 else [(home, away) for away, home in pairs]
 
 
-def _played(season: int, week: int) -> bool:
-    return season < _CURRENT_SEASON or week < _CURRENT_WEEK
+def _played(season: int, week: int, played_through: int) -> bool:
+    return season < _CURRENT_SEASON or week <= played_through
 
 
 @dataclass
@@ -58,15 +58,17 @@ class _World:
     rankings: dict[int, pl.DataFrame] = field(default_factory=dict)
 
 
-def _world(seed: int = 7) -> _World:
+def _world(seed: int = 7, *, played_through: int = _CURRENT_WEEK - 1) -> _World:
+    """Build the world; ``played_through`` is the current season's last played week."""
     rng = np.random.default_rng(seed)
+    ranking_rng = np.random.default_rng(seed + 1)
     games: list[dict[str, object]] = []
     team_games: list[dict[str, object]] = []
     elo_rows: list[dict[str, object]] = []
     for season in (_PRIOR_SEASON, *_SEASONS):
         for week in range(1, _WEEKS + 1):
             for index, (away, home) in enumerate(_slate(season, week)):
-                played = _played(season, week)
+                played = _played(season, week, played_through)
                 away_points = int(rng.integers(3, 38))
                 home_points = int(rng.integers(3, 38))
                 game_id = f"{season}_{week:02d}_{away}_{home}"
@@ -140,7 +142,10 @@ def _world(seed: int = 7) -> _World:
                 {
                     "team_abbr": team,
                     "week": week,
-                    **{column: float(rng.normal(0.0, 5.0)) for column in constants.TR_RATINGS},
+                    **{
+                        column: float(ranking_rng.normal(0.0, 5.0))
+                        for column in constants.TR_RATINGS
+                    },
                 }
                 for week in range(1, _WEEKS + 1)
                 for team in _TEAMS
@@ -166,6 +171,16 @@ class _Run:
     snapshots: pl.DataFrame | None = None
 
 
+def _split_in_two(frame: pl.DataFrame) -> pl.DataFrame:
+    """Hold the frame as two chunks split at its midpoint, as a large loaded frame can be.
+
+    The split point moves with the frame's length, which is what lets later seasons' rows
+    reach the last bits of an eager reduction over an earlier season's slice.
+    """
+    middle = frame.height // 2
+    return pl.concat([frame.slice(0, middle), frame.slice(middle)], rechunk=False)
+
+
 def _install(monkeypatch: pytest.MonkeyPatch, run: _Run) -> None:
     """Replace the loaders and the network steps, and record what each run builds."""
 
@@ -175,7 +190,7 @@ def _install(monkeypatch: pytest.MonkeyPatch, run: _Run) -> None:
             current_season=_CURRENT_SEASON,
             current_week=_CURRENT_WEEK,
             schedule_df=world.schedule,
-            team_stats_df=world.team_stats,
+            team_stats_df=_split_in_two(world.team_stats),
             pbp_df=pl.DataFrame(),
             elo_df=world.elo,
             raw_elo_df=world.elo,
@@ -361,9 +376,10 @@ def test_a_changed_input_in_a_cached_season_rebuilds_from_that_season_on(
     assert warm.built == [2020, 2021]
 
 
-def test_a_change_in_the_current_season_keeps_finished_seasons_cached(
+def test_a_changed_value_in_the_current_season_keeps_finished_seasons_cached(
     baseline: _Baseline, etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
+    """Values change but the row count does not, so every frame keeps its chunk layout."""
     etl.world.team_stats = etl.world.team_stats.with_columns(
         pl.when(pl.col("season") == _CURRENT_SEASON)
         .then(pl.col("rush_epa_sum") - 2.0)
@@ -377,6 +393,26 @@ def test_a_change_in_the_current_season_keeps_finished_seasons_cached(
     assert full.files["all_data_ml.csv"] != baseline.full.files["all_data_ml.csv"]
     _assert_identical(warm, full)
     assert warm.built == [_CURRENT_SEASON]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the week-1 prior's league means reduce an eagerly filtered slice whose chunk "
+        "boundaries move with the whole team-stat frame's length, so a later season's new "
+        "rows move the last bits of a full rebuild's earlier seasons"
+    ),
+)
+def test_a_new_week_in_the_current_season_keeps_finished_seasons_equal_to_a_full_rebuild(
+    etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    etl.world = _world(played_through=_CURRENT_WEEK)
+    full = _main(etl, tmp_path_factory.mktemp("full"))
+
+    warm = _main(etl, warm_dir, "--incremental")
+
+    assert warm.built == [_CURRENT_SEASON]
+    _assert_identical(warm, full)
 
 
 def test_a_code_fingerprint_change_rebuilds_every_season(

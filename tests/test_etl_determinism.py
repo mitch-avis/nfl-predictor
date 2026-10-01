@@ -216,3 +216,31 @@ def test_etl_group_by_and_unique_calls_keep_a_deterministic_order() -> None:
     assert all(path.is_file() for path in _ETL_PATHS)
     violations = [violation for path in _ETL_PATHS for violation in _order_violations(path)]
     assert violations == []
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "calculate_league_means reduces an eagerly filtered slice whose chunk boundaries move "
+        "with the whole frame's length, so later seasons' rows move the last bits"
+    ),
+)
+def test_league_means_do_not_depend_on_where_the_frame_splits_into_chunks() -> None:
+    """Identical values laid out with different chunk splits give identical league means."""
+    rng = np.random.default_rng(3)
+    frame = pl.DataFrame(
+        {
+            "season": [2019] * 40 + [2020] * 400 + [2021] * 60,
+            "week": rng.integers(1, 18, 500),
+            "team_abbr": [f"T{index % 32:02d}" for index in range(500)],
+            "passing_epa": rng.normal(0.0, 7.0, 500),
+            "rushing_epa": rng.normal(0.0, 4.0, 500),
+        }
+    )
+
+    def split_at(row: int) -> pl.DataFrame:
+        return pl.concat([frame.slice(0, row), frame.slice(row)], rechunk=False)
+
+    expected = teamrankings.calculate_league_means(frame, 2020)
+    for row in (97, 211, 333):
+        assert teamrankings.calculate_league_means(split_at(row), 2020) == expected

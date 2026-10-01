@@ -114,7 +114,7 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   two former strict-xfail tests, which fail again with the fix reverted. An independent reviewer
   re-hashed the outputs, re-ran the layout probe on the merged tree (no layout dependence) and
   sample-checked the audit of the other 33 reductions. The web UI's weekly job still runs a full
-  rebuild (its own `--config`); left for Milestone 58 by recommendation.
+  rebuild (its own `--config`); the user chose to change that (task 58.7, below).
 - Two follow-ups from the `0.37.6` split review, resolved in `0.38.1` (2026-10-01): the
   fingerprint-coverage guard follows relative imports (four relative cases fail on the old walk),
   and `stamp_strength_snapshot` is public. Independent review approved.
@@ -124,6 +124,14 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   refetched; two 2019-2026 scratch builds were byte-identical (`~/scratch/schedule_cache/`), both
   rechecked by an independent reviewer. A later change to the schedule columns now refetches
   every historical schedule, which can pull revised lines (a rule-5 change).
+- Task 58.7 (Milestone 58), decided by the user on 2026-10-01 against my recommendation to wait:
+  the web weekly job wrote its own `--config` and so dropped the shipped `--incremental`.
+  Resolved in `0.39.0`: the job layers its form over `config/weekly_run.yaml` (no `--config`),
+  `nfl-predictor weekly` gained `--no-dry-run` and `--no-skip-data-refresh`, free-text values are
+  joined to their flags, and ETL quoting is checked at submit. An independent reviewer compared
+  old and new resolution for 12 form cases: only `data_collection_args` and the inert
+  `postseason_weight` (1.3) differ. The standalone `etl_full` job stays a full rebuild (open
+  question to the user).
 
 ---
 

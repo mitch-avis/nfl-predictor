@@ -475,11 +475,6 @@ happens on a fresh branch off `main` and merges back after each phase.
 - [ ] 58.3 Phase 6 (design only): live betting and live odds.
 - [ ] 58.6 A margin-only toggle on the Model page's feature importance (SHAP headline, total gain
       secondary, both heads combined by default; decided by the user on 2026-09-27).
-- [ ] 58.7 The web weekly job refreshes data with a full rebuild: `_build_weekly_run`
-      (`api/jobs/catalog.py`) writes its own `--config`, which replaces `config/weekly_run.yaml`
-      and so drops its `--incremental` (since `0.38.0`). Output is identical either way; only
-      run time differs (about 48 s against about 11 minutes). Default the job's "ETL arguments"
-      to `--incremental`, or have the job start from the shipped config.
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
       2026-09-21 (`0.12.12`, narrowed and accepted by the user's decision): the `web` extra is
       dropped, and `etl_full`/`validate_offline`/`validate_live` now take `--data-dir` with the

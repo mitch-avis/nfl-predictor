@@ -8,7 +8,7 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## State (written 2026-10-01, step 4 in progress)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.38.0`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
+  out in the main checkout at `0.39.0`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
   passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
 - Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
   - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
@@ -37,22 +37,34 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
     (`~/scratch/etl_rechunk/`); the weekly run refreshes with `--incremental`
     (`config/weekly_run.yaml`). The first incremental run rebuilds every season (code fingerprint
     changed in `0.37.6`/`0.38.0`), then about 48 s.
-- The "4, first" reproducibility work is done apart from the low-priority schedule cache and two
-  small `0.37.6` review follow-ups (`TODO.md`). No subagent is in flight.
+  - `0.38.1`-`0.39.0`: the fingerprint guard follows relative imports and
+    `stamp_strength_snapshot` is public; the schedule cache records its requested columns; the web
+    weekly job layers its form over `config/weekly_run.yaml`, so it refreshes with `--incremental`
+    (task 58.7).
+- The "4, first" reproducibility work is done (one low-priority follow-up: no current-season
+  schedule fallback). No subagent is in flight.
 - Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
 
 ## Open questions for the user
 
-None pending. Decided 2026-10-01: same-machine byte-identity is enough; a text token in a
-numeric `qb_elos.csv` column stops the ETL (tentatively; none ever seen in 233 `nfeloqb`
-versions); `.rechunk()` approved; the weekly run passes `--incremental`; `data_collection.py`
-split (with the extra `strength_table.py` module, recommended). The web weekly job's full
-rebuild is task 58.7. The user runs the Week 4 refresh themselves.
+1. The step-4 feature-value plan, `.agents/step4_plan.md` (drafted 2026-10-01): accept the ladder
+   (8 arms, 16 runs, 6 scratch builds, the decision rules there)? Keep run inputs under
+   `models/step4/inputs/` and `data/` untouched until adoption? Defer the remaining follow-ups
+   to a second ladder? Recommendation: yes to all three. Nothing in Phase A starts before the
+   answer.
+2. Should the web UI's standalone "Full ETL rebuild" job (`etl_full`) get an incremental option?
+   Recommendation: no; it is the one place to force a full rebuild, and the weekly job already
+   refreshes incrementally. If wanted, a checkbox defaulting off.
+
+Decided 2026-10-01: same-machine byte-identity; `qb_elos.csv` text tokens stop the ETL
+(tentative); `.rechunk()`; the weekly run passes `--incremental`; the `data_collection.py` split
+with `strength_table.py`; the web weekly job refreshes incrementally (58.7, done); the layout probe
+stays in scratch. The user runs the Week 4 refresh themselves.
 
 ## Next
 
-1. Optional small chunks: the two `0.37.6` split-review follow-ups and the schedule cache
-   (`TODO.md`, "4, first" row).
+1. On the user's answer to question 1: Phase A of `.agents/step4_plan.md` (code first, one
+   implementer and one reviewer per chunk), then the builds and the overnight driver.
 2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
    55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
    step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);

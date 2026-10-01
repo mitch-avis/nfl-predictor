@@ -586,25 +586,7 @@ def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
         "2023,1.0,AAA,BBB,1500,1450,QB1,QB2,1.5,1.0,1400,1350\n"
         "2023,2.0,AAA,BBB,1510,1440,QB1,QB2,1.6,0.9,1405,1345\n"
     )
-
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
-    elo_df = pl.DataFrame(
-        {
-            "season": [2023, 2023],
-            "week": ["1", "2"],
-            "team1": ["AAA", "AAA"],
-            "team2": ["BBB", "BBB"],
-            "elo1_pre": [1500, 1510],
-            "elo2_pre": [1450, 1440],
-            "qb1": ["QB1", "QB1"],
-            "qb2": ["QB2", "QB2"],
-            "qb1_value_pre": ["1.5", "1.6"],
-            "qb2_value_pre": ["1.0", "0.9"],
-            "qbelo1_pre": ["1400", "1405"],
-            "qbelo2_pre": ["1350", "1345"],
-        }
-    )
-    monkeypatch.setattr(loaders.pl, "read_csv", lambda _path: elo_df)
 
     elo = loaders.load_elo_ratings([2023])
 
@@ -617,6 +599,154 @@ def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
 
     latest = loaders.get_latest_elo_by_team(elo, season=2023)
     assert latest.height == 2
+
+
+_QB_ELO_HEADER = (
+    "date,season,neutral,team1,team2,elo1_pre,elo2_pre,qbelo1_pre,qbelo2_pre,qb1,qb2,"
+    "qb1_value_pre,qb2_value_pre,qb1_adj,game_id,week"
+)
+
+
+def _qb_elo_line(date: str, teams: tuple[str, str], **fields: str) -> str:
+    """Write one qb_elos.csv row; columns not given are blank, the file's missing value."""
+    row = {
+        "date": date,
+        "season": date[:4],
+        "neutral": "0",
+        "team1": teams[0],
+        "team2": teams[1],
+        "elo1_pre": "1500.0",
+        "elo2_pre": "1450.0",
+    } | fields
+    if row.get("week"):
+        row.setdefault("game_id", f"{row['season']}_{row['week']}_{teams[1]}_{teams[0]}")
+    return ",".join(row.get(name, "") for name in _QB_ELO_HEADER.split(","))
+
+
+def _write_qb_elos_with_blank_history(tmp_path: Path, *, blank_rows: int = 150) -> Path:
+    """Write a qb_elos.csv whose early rows leave the QB, week and Elo columns blank.
+
+    The real file starts in 1920, decades before it carries quarterback ratings or weeks,
+    so a reader that guesses types from its first rows sees only blanks there.
+    """
+    lines = [_QB_ELO_HEADER]
+    lines.extend(
+        _qb_elo_line("1990-09-09", ("AAA", "BBB"), elo1_pre="", elo2_pre="")
+        for _ in range(blank_rows)
+    )
+    lines.append(
+        _qb_elo_line(
+            "2023-09-10",
+            ("AAA", "BBB"),
+            week="1.0",
+            elo1_pre="1510.5",
+            elo2_pre="1440.25",
+            qb1="QB One",
+            qb2="QB Two",
+            qbelo1_pre="1400.5",
+            qbelo2_pre="1350.25",
+            qb1_value_pre="1.5",
+            qb2_value_pre="-0.75",
+            qb1_adj="1.5",
+        )
+    )
+    lines.append(
+        _qb_elo_line(
+            "2023-09-17",
+            ("BBB", "AAA"),
+            week="2.0",
+            elo1_pre="1445.0",
+            elo2_pre="1505.0",
+            qb1="QB Two",
+            qb2="QB One",
+            qbelo1_pre="1352.0",
+            qbelo2_pre="1401.0",
+            qb1_value_pre="-0.5",
+            qb2_value_pre="1.25",
+            qb1_adj="-0.5",
+        )
+    )
+    path = tmp_path / "qb_elos.csv"
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+def test_load_elo_ratings_types_columns_blank_for_the_first_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Numeric columns stay numeric when the first hundred-plus rows leave them blank."""
+    _write_qb_elos_with_blank_history(tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+
+    elo = loaders.load_elo_ratings([2023])
+
+    assert elo.schema == pl.Schema(
+        {
+            "season": pl.Int64,
+            "week": pl.Int64,
+            "home_abbr": pl.String,
+            "away_abbr": pl.String,
+            "home_elo_pre": pl.Float64,
+            "away_elo_pre": pl.Float64,
+            "home_qb": pl.String,
+            "away_qb": pl.String,
+            "home_qb_value_pre": pl.Float64,
+            "away_qb_value_pre": pl.Float64,
+            "home_qb_elo_pre": pl.Float64,
+            "away_qb_elo_pre": pl.Float64,
+        }
+    )
+    assert elo["week"].to_list() == [1, 2]
+    assert elo["home_elo_pre"].to_list() == [1510.5, 1445.0]
+    assert elo["away_qb_value_pre"].to_list() == [-0.75, 1.25]
+
+
+def test_load_raw_elo_data_types_columns_blank_for_the_first_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The raw rows carry numeric weeks and ratings even when early rows are blank."""
+    _write_qb_elos_with_blank_history(tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+
+    raw = loaders.load_raw_elo_data()
+
+    expected = {
+        "date": pl.String,
+        "season": pl.Int64,
+        "team1": pl.String,
+        "team2": pl.String,
+        "elo1_pre": pl.Float64,
+        "elo2_pre": pl.Float64,
+        "qbelo1_pre": pl.Float64,
+        "qbelo2_pre": pl.Float64,
+        "qb1": pl.String,
+        "qb2": pl.String,
+        "qb1_value_pre": pl.Float64,
+        "qb2_value_pre": pl.Float64,
+        "week": pl.Float64,
+    }
+    assert {name: raw.schema[name] for name in expected} == expected
+    dated = raw.filter(pl.col("week").is_not_null())
+    assert dated["week"].to_list() == [1.0, 2.0]
+    assert dated["qbelo2_pre"].to_list() == [1350.25, 1401.0]
+
+
+def test_load_elo_ratings_drops_rows_with_a_blank_week(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rows without a week are dropped whether or not the first rows carry weeks."""
+    lines = [
+        _QB_ELO_HEADER,
+        _qb_elo_line("2023-09-10", ("AAA", "BBB"), week="1.0"),
+        _qb_elo_line("2023-09-12", ("CCC", "DDD")),
+        _qb_elo_line("2023-09-17", ("BBB", "AAA"), week="2.0"),
+    ]
+    (tmp_path / "qb_elos.csv").write_text("\n".join(lines) + "\n")
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+
+    elo = loaders.load_elo_ratings([2023])
+
+    assert elo.select("week", "home_abbr").rows() == [(1, "AAA"), (2, "BBB")]
 
 
 def _pbp_payload(

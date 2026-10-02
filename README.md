@@ -188,7 +188,7 @@ season in progress is always rebuilt, and every input is still loaded. An entry 
   `src/nfl_predictor/utils/`), the Polars, Polars runtime and NumPy versions, the Python
   version, the CPU architecture and the Polars thread count;
 - the options that change a season's rows (`--min-season`, the two prior-blend switches,
-  `--stat-prior-blend-games`, `--team-stats-source` and `--tr-stats-source`);
+  `--stat-prior-blend-games`, `--team-stats-source`, `--tr-stats-source` and `--line-source`);
 - the loaded schedule, team stats and Elo rows from that season and every earlier one, and that
   season's and the previous season's TeamRankings, compared by value.
 
@@ -277,6 +277,40 @@ means instead; both change feature values, so compare them with two dataset buil
 `--disable-feature-groups`. The first season in a run has no prior and uses in-season means, and the
 schedule-adjusted strength family carries its own blend (`--no-strength-prior-blend`).
 
+Market lines: `--line-source` chooses which line each game's five line columns (`total_line`, the
+spreads and the moneylines) carry. Those columns are the market features and the anchor of both
+heads, in training and in production alike.
+
+- `stored` (the default): the nflverse schedule lines, one late, probably closing, snapshot.
+  Missing moneylines are derived from the spread with the fixed conversion
+  (`game_utils.spread_to_moneyline`: a normal curve at `SCORE_DIFF_STD_DEV` with a flat 5% vig),
+  and future games without a line take SurvivorGrid's spread.
+- `pick_time`: the line known when picks are made, from nfelo's market-lines file
+  (`greerreNFL/nfelomarket_data`, `Data/lines.csv`), joined on season, week and the canonical
+  team codes. A completed game takes nfelo's opening spread where the opener is real (2007-2021
+  and 2023 on, when present; about 5% of 2024 has none), its opening moneylines when nfelo has
+  both (2024 on), otherwise moneylines derived from the opening spread, and its opening total,
+  or the stored total before nfelo published one. Every other completed game (1999-2006, 2022, a
+  missing opener) keeps its stored line and is counted as a fallback row. An upcoming game takes
+  nfelo's latest line, then nflverse's, then SurvivorGrid's. A game with no line at all still
+  stops the model run, as with `stored`. The closing line is never a feature under this source.
+  Derived moneylines come from a spread-to-moneyline map fitted to the market's own prices
+  (`utils/polars/moneyline_map.py`): for each half-point spread, the mean implied probability of
+  the favorite's and the underdog's moneylines over games with a real spread and both real
+  moneylines, kept monotone, so the key numbers 3 and 7 keep the market's jumps. Each season's map
+  is fitted on earlier seasons only (prices, never scores), from the cached schedules back to
+  1999; a season with fewer than `constants.MONEYLINE_MAP_MIN_GAMES` earlier priced games (2006
+  and before) keeps the fixed conversion.
+
+  The file is rewritten several times a day. Each run downloads it, keeps the last good copy in
+  `data/cache/nfelo/lines.csv` and every copy a run used in `data/cache/nfelo/snapshots/`, named
+  by its SHA-256, and falls back to the cached copy (or, with none, to the stored lines) instead of
+  failing. The run writes `market_lines_metadata.json` beside the datasets: the snapshot's URL,
+  origin and hash, per-season game, match, opener and fallback-row counts, how many moneylines
+  each season derived and how, and every season's map. A `stored` build fetches nothing new and
+  writes no such file. The option changes feature values, so compare the two sources with two
+  dataset builds, not with `--disable-feature-groups`.
+
 ## Data sources + missing data
 
 This project is designed to keep an invariant output schema across seasons, even when some sources
@@ -285,6 +319,7 @@ are missing historically.
 Primary sources:
 
 - `nflreadpy` (NFLverse): schedules, results, team-level stats, and play-by-play.
+- nfelo's market-lines file (`greerreNFL/nfelomarket_data`), only with `--line-source pick_time`.
 - Local cached CSVs under `data/` for Elo/market data when present.
 - `data/meta_data.csv` (copied from `../nfeloqb`) for the quarterback name-to-id bridge. A name
   missing from it falls back to the play-by-play passer name (`F.Last`) when that is unique; a

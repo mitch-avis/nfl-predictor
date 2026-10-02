@@ -8,8 +8,8 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## State (written 2026-10-01, step 4 in progress)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.39.2`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
-  passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
+  out in the main checkout at `0.42.0`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
+  passed, coverage 92.75%). `main` is at `0.39.3` (merged 2026-10-01 with the user's approval; not pushed yet, a question).
 - Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
   - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
     Parquet metadata and refetch when stale (all 56 existing files pass, nothing refetched);
@@ -47,22 +47,29 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
     managed Python, and checks that the core packages import. Background: at about 16:43 a
     formatter run from the home folder rewrote the uv cache and the managed Pythons; the user
     cleared the cache and reinstalled them.
-- The "4, first" reproducibility work is done (one low-priority follow-up: no current-season
-  schedule fallback). Phase A of `.agents/step4_plan.md` (accepted by the user 2026-10-01, all
-  three parts) is in flight: implementer subagents for the 53.7 quarterback rate group, the
-  `--strength-prior-blend-games` option, the next-opponent identity switch, and 56.6.
-- The Week 4 refresh ran from a `main` worktree (`~/scratch/wk4_main`, `data/` and `models/`
-  symlinked; delete it once the user's picks are in): `models/weekly_2026_week_04_refresh/`.
+- Phase A of `.agents/step4_plan.md` is done (all reviewed, gate green on `0.42.0`):
+  `0.39.3` the `next_opponent_identity` group; `0.40.0` the `qb_def_adj` group (on by default once
+  built; production has no group switch, so the branch must not reach `main` with it unless it is
+  adopted); `0.40.1` `--strength-prior-blend-games`; `0.41.0` the QB defense term in per-dropback
+  units; `0.42.0` `--line-source {stored,pick_time}` (stored builds byte-identical across the
+  merge, `~/scratch/step4_merge_check/`). Each arm's feature-group switches are in the plan.
+- Next is Phase B (builds and the overnight driver), after the user answers the open questions.
 - Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
 
 ## Open questions for the user
 
-None blocking. Pending recommendation: leave `AGENTS.md`'s plain post-bump `uv sync` (it reverts
-a CUDA LightGBM build; harmless while LightGBM is parked). Decided: `etl_full` gets no incremental
-option (the user left it to the agent on 2026-10-01; it stays the explicit full rebuild).
-Decided 2026-10-01: the step-4 plan (8 arms, 16 runs, 6 scratch builds, `data/` untouched until
-adoption, follow-ups deferred to a second ladder), plus the earlier decisions recorded in
-`ARCHIVE.md`.
+1. 56.6 map window: keep the per-season fit on earlier seasons only (recorded as `Narrowed:` in
+   `TODO.md`)? Recommendation: yes.
+2. PT's closing-line yardstick: add a `compare` option that takes the market from another run
+   (R0) by `game_id` (reporting only, no fingerprint change)? Recommendation: yes; it can land
+   before the Phase B review.
+3. Push `main` (`0.39.3`) to `origin`? Recommendation: yes.
+4. Delete the copied `data/` trees inside the old scratch directories (about 15 GB), keeping
+   scripts and logs? Recommendation: yes.
+
+Decided 2026-10-01: the plan, the per-dropback QB units, the partial merge to `main`, no
+incremental option on `etl_full`; earlier decisions are in `ARCHIVE.md`. The user handles weekly
+runs and picks; do not raise Week 5 for several days.
 
 ## Next
 

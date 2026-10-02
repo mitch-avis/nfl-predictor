@@ -578,6 +578,14 @@ def dropback_condition(columns: list[str]) -> pl.Expr:
     return _play_conditions(columns)["dropback"]
 
 
+def scrimmage_condition(columns: list[str]) -> pl.Expr:
+    """Return the offensive-snap definition behind ``offensive_snaps``.
+
+    Formula: ``(qb_dropback + rush + qb_kneel + qb_spike) > 0`` with nulls filled to 0.
+    """
+    return _scrimmage_snap_expr(columns)
+
+
 def aggregate_pbp_team_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     """Aggregate play-by-play rows into one team-game row of counts and sums.
 

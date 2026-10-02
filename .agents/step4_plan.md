@@ -1,8 +1,9 @@
 # Roadmap step 4, feature values: plan and ladder
 
-Status: draft for the user's approval (written 2026-10-01). Nothing here runs until the user
-accepts it. Once accepted, it is the ladder under `AGENTS.md` rule 4: every rung up to the cap is
-approved, and anything beyond the cap or outside this text is a fresh question.
+Status: accepted by the user on 2026-10-01 (all three questions at the end answered yes). It is
+the ladder under `AGENTS.md` rule 4: every rung up to the cap is approved, and anything beyond the
+cap or outside this text is a fresh question. Phase A (code) is in progress on
+`feat/step4-feature-values`.
 
 ## What is measured
 

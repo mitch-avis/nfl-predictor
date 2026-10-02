@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.41.0] - 2026-10-02
+
+### Changed
+
+- The defense-adjusted quarterback rate (`qb_def_adj` group) converts the faced defense's
+  `adj_def_pass_epa_snap`, which is pass EPA per offensive snap, to EPA per dropback: it multiplies
+  by the league's offensive snaps per dropback over that season's games before the game's week
+  (the previous regular season in week 1). Only the six `qb_def_adj` columns change; every other
+  ETL column is byte-identical on a 2019-2026 scratch build.
+- `qb_stats.attach_qb_features` and `attach_defense_expectation` take `defense=DefenseInputs(...)`
+  instead of `defense_snapshots=`.
+
+### Added
+
+- `qb_stats.aggregate_league_snaps`, `qb_stats.snaps_per_dropback` and `pbp.scrimmage_condition`,
+  which count snaps and dropbacks with the team families' own definitions.
+
 ## [0.40.1] - 2026-10-01
 
 ### Changed

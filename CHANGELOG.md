@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.42.0] - 2026-10-02
+
+### Changed
+
+- Every ETL build writes `market_lines_metadata.json` beside its data; a stored build records
+  `{"line_source": "stored"}`, so a pick-time record never outlives its data.
+- `fill_future_game_lines` accepts an optional moneyline filler (default unchanged).
+
+### Added
+
+- `nfl-predictor data --line-source {stored,pick_time}`. `stored` (the default) keeps the nflverse
+  lines byte for byte. `pick_time` anchors each game to the line known at pick time: nfelo's real
+  opener for completed games (the stored line as a counted fallback in 1999-2006, 2022 and for
+  missing openers), and for upcoming games nfelo's latest line, then nflverse, then SurvivorGrid.
+  The option is part of the season-cache key.
+- A cached getter for nfelo's `nfelomarket_data` `Data/lines.csv` (the last good copy and
+  SHA-256-named snapshots under `data/cache/nfelo/`; it falls back to the cache without failing),
+  with team codes normalized to the canonical abbreviations.
+- A spread-to-moneyline map fitted per season on earlier seasons' prices, keeping the key numbers
+  3 and 7; under `pick_time` it replaces the fixed conversion for derived moneylines.
+- The pick-time record holds the snapshot hash, per-season match, fallback and derived-moneyline
+  counts, the maps, and diagnostic counts of opener and upcoming-line sign flips against the
+  stored line (nothing is filtered).
+
 ## [0.41.0] - 2026-10-02
 
 ### Changed

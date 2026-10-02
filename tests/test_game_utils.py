@@ -284,3 +284,30 @@ def test_fill_future_game_lines_uses_away_perspective_when_home_spread_missing(m
     row = filled.row(0, named=True)
     assert row["home_spread"] == pytest.approx(-2.5)
     assert row["away_spread"] == pytest.approx(2.5)
+
+
+def test_fill_future_game_lines_derives_moneylines_with_the_given_filler(monkeypatch) -> None:
+    """A caller-supplied filler, not the fixed conversion, prices the SurvivorGrid spreads."""
+    df = pl.DataFrame(
+        {
+            "game_id": ["game1"],
+            "week": [16],
+            "away_abbr": ["BUF"],
+            "home_abbr": ["KC"],
+            "away_score": [None],
+            "home_spread": [None],
+            "away_spread": [None],
+            "total_line": [None],
+        }
+    )
+    monkeypatch.setattr(game_utils, "scrape_survivor_grid_spreads", lambda: {"KC": {16: -3.5}})
+
+    def filler(frame: pl.DataFrame) -> pl.DataFrame:
+        return frame.with_columns(
+            pl.lit(-999).alias("home_moneyline"), pl.lit(999).alias("away_moneyline")
+        )
+
+    filled = game_utils.fill_future_game_lines(df, fill_moneylines=filler)
+
+    row = filled.row(0, named=True)
+    assert (row["home_moneyline"], row["away_moneyline"]) == (-999, 999)

@@ -8,13 +8,16 @@ This module provides functions for handling game-specific data:
 """
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.scraping_utils import scrape_survivor_grid_spreads
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def spread_to_moneyline(spread: float, vig: float = 0.05) -> int:
@@ -318,7 +321,11 @@ def _fill_side_qb(
     return df.with_columns(new_cols)
 
 
-def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
+def fill_future_game_lines(
+    df: pl.DataFrame,
+    *,
+    fill_moneylines: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
+) -> pl.DataFrame:
     """Fill in lines (spreads, moneylines, totals) for future games using SurvivorGrid data.
 
     Scrapes current spreads from SurvivorGrid.com and applies them to future games
@@ -327,6 +334,8 @@ def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
 
     Args:
         df: DataFrame with games, some of which may be missing lines data
+        fill_moneylines: Derives the missing moneylines from the new spreads; defaults to
+            ``fill_missing_moneylines`` (the fixed conversion).
 
     Returns:
         DataFrame with lines filled in for future games
@@ -367,7 +376,7 @@ def fill_future_game_lines(df: pl.DataFrame) -> pl.DataFrame:
     df = _apply_line_updates(df, pl.DataFrame(updates))
 
     # Now calculate moneylines from the new spreads
-    return fill_missing_moneylines(df)
+    return (fill_moneylines or fill_missing_moneylines)(df)
 
 
 def _home_spread(

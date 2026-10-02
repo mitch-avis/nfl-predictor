@@ -255,6 +255,7 @@ def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
         "records": list(constants.RECORD_FEATURE_COLUMNS),
         "lookahead": list(constants.LOOKAHEAD_FEATURE_COLUMNS),
         "motivation": list(constants.MOTIVATION_FEATURE_COLUMNS),
+        "qb_def_adj": list(constants.QB_DEF_ADJ_FEATURE_COLUMNS),
     }
     return {
         "total_rows": len(df),

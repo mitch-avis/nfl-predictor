@@ -127,7 +127,7 @@ def build_strength_features(
     *,
     season: int,
     week: int,
-    prior_snapshot: pl.DataFrame | None = None,
+    prior: strength_snapshot.StrengthPrior | None = None,
 ) -> pl.DataFrame:
     """Build the per-team strength columns published on game rows for one season week.
 
@@ -144,7 +144,7 @@ def build_strength_features(
         schedule_df,
         season=season,
         week=week,
-        prior_snapshot=prior_snapshot,
+        prior=prior,
     ).select("team_abbr", *constants.ADJUSTED_STRENGTH_STATS)
 
 
@@ -175,7 +175,7 @@ def build_strength_table(
     *,
     season: int,
     week: int,
-    prior_snapshot: pl.DataFrame | None = None,
+    prior: strength_snapshot.StrengthPrior | None = None,
 ) -> pl.DataFrame:
     """Build every schedule-adjusted strength value for one season week, per team.
 
@@ -196,8 +196,8 @@ def build_strength_table(
         schedule_df: The season's schedule, used for the games-remaining lens.
         season: Season being processed.
         week: Week being processed; every value is solved from earlier games only.
-        prior_snapshot: Previous season's final snapshot for the early-season blend;
-            ``None`` (the ablation) publishes the raw in-season solve.
+        prior: The early-season prior, the previous season's final snapshot; ``None``
+            (the ablation) publishes the raw in-season solve.
 
     Returns:
         One row per team on the season's schedule, teams on a bye included, with
@@ -209,7 +209,7 @@ def build_strength_table(
         team_stats_df,
         season=season,
         week=week,
-        prior_snapshot=prior_snapshot,
+        prior=prior,
         teams=_schedule_teams(schedule_df, season),
     )
     if snapshot.height == 0:

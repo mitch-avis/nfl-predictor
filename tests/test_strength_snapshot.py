@@ -211,7 +211,7 @@ def test_week_one_falls_back_to_the_regressed_prior_snapshot() -> None:
     games = _round_robin(2024, (1, 2), ("AAA", "BBB"), offense={"AAA": 0.2})
 
     snapshot = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=1, prior_snapshot=prior
+        games, season=2024, week=1, prior=strength_snapshot.StrengthPrior(prior)
     )
 
     expected = 0.30 * (1.0 - constants.WEEK1_REGRESSION_FACTOR)
@@ -230,12 +230,40 @@ def test_prior_blend_weight_follows_the_documented_games_formula() -> None:
     games = _round_robin(2024, (1, 2), _TEAMS, offense=_OFFENSE)
 
     blended = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=3, prior_snapshot=prior
+        games, season=2024, week=3, prior=strength_snapshot.StrengthPrior(prior)
     )
     in_season_only = strength_snapshot.build_strength_snapshot(games, season=2024, week=3)
 
     played = blended.filter(pl.col("team_abbr") == "AAA")["strength_games_played"].item()
     weight = played / (played + constants.PRIOR_BLEND_GAMES)
+    regressed_prior = 1.0 * (1.0 - constants.WEEK1_REGRESSION_FACTOR)
+    solved = in_season_only.filter(pl.col("team_abbr") == "AAA")["adj_off_pass_epa_snap"].item()
+    expected = weight * solved + (1.0 - weight) * regressed_prior
+
+    got = blended.filter(pl.col("team_abbr") == "AAA")["adj_off_pass_epa_snap"].item()
+    assert got == pytest.approx(expected)
+
+
+def test_prior_blend_games_sets_the_in_season_weight() -> None:
+    """A smaller K gives the in-season solve more weight: games / (games + K)."""
+    prior = pl.DataFrame(
+        {
+            "team_abbr": list(_TEAMS),
+            **{column: [1.0] * len(_TEAMS) for column in constants.STRENGTH_SNAPSHOT_STATS},
+        }
+    )
+    games = _round_robin(2024, (1, 2), _TEAMS, offense=_OFFENSE)
+
+    blended = strength_snapshot.build_strength_snapshot(
+        games,
+        season=2024,
+        week=3,
+        prior=strength_snapshot.StrengthPrior(prior, blend_games=2.0),
+    )
+    in_season_only = strength_snapshot.build_strength_snapshot(games, season=2024, week=3)
+
+    played = blended.filter(pl.col("team_abbr") == "AAA")["strength_games_played"].item()
+    weight = played / (played + 2.0)
     regressed_prior = 1.0 * (1.0 - constants.WEEK1_REGRESSION_FACTOR)
     solved = in_season_only.filter(pl.col("team_abbr") == "AAA")["adj_off_pass_epa_snap"].item()
     expected = weight * solved + (1.0 - weight) * regressed_prior

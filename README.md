@@ -188,7 +188,8 @@ season in progress is always rebuilt, and every input is still loaded. An entry 
   `src/nfl_predictor/utils/`), the Polars, Polars runtime and NumPy versions, the Python
   version, the CPU architecture and the Polars thread count;
 - the options that change a season's rows (`--min-season`, the two prior-blend switches,
-  `--stat-prior-blend-games`, `--team-stats-source` and `--tr-stats-source`);
+  `--strength-prior-blend-games`, `--stat-prior-blend-games`, `--team-stats-source` and
+  `--tr-stats-source`);
 - the loaded schedule, team stats and Elo rows from that season and every earlier one, and that
   season's and the previous season's TeamRankings, compared by value.
 
@@ -275,7 +276,9 @@ four games 50%, twelve games 75%. Rates are recomputed from the blended sums. Us
 `--stat-prior-blend-games` to change `K` and `--no-stat-prior-blend` to publish plain in-season
 means instead; both change feature values, so compare them with two dataset builds, not with
 `--disable-feature-groups`. The first season in a run has no prior and uses in-season means, and the
-schedule-adjusted strength family carries its own blend (`--no-strength-prior-blend`).
+schedule-adjusted strength family carries its own blend of the same form, with its own `K`
+(`--strength-prior-blend-games`, default `constants.PRIOR_BLEND_GAMES`) and its own ablation
+(`--no-strength-prior-blend`).
 
 ## Data sources + missing data
 
@@ -1089,13 +1092,18 @@ games.
   game that season nor a previous-season value, which means every team in week 1 of the first
   season built, teams that have not played yet in 1999 weeks 2-3, Houston in 2002 week 1 (the
   expansion season), and every season's week 1 under `--no-strength-prior-blend`. Unlike the
-  rest of the quarterback family these two columns therefore depend on the run's first season;
-  the ETL logs how many quarterback games count a defense as average, and training reports the
-  group's null cells and rows like the other groups.
+  rest of the quarterback family these two columns therefore depend on the run's first season,
+  and they move with `--strength-prior-blend-games`, because the `adj_def_pass_epa_snap` they read
+  is blended with that `K`; the ETL logs how many quarterback games count a defense as average,
+  and training reports the group's null cells and rows like the other groups.
 
 The strength family is ablatable as the `strength` feature group
-(`--disable-feature-groups strength`), and the early-season prior blend can be ablated
-independently at ETL time with `--no-strength-prior-blend`. The quarterback family is the `qb`
+(`--disable-feature-groups strength`). Its early-season prior blend weights the in-season solve
+`games / (games + K)` against the previous season's final snapshot regressed by
+`constants.WEEK1_REGRESSION_FACTOR`; at ETL time `--strength-prior-blend-games` sets `K` (default
+`constants.PRIOR_BLEND_GAMES`, `4`) and `--no-strength-prior-blend` ablates the blend. Both change
+feature values and the strength snapshot file behind the default power rankings, so compare them
+with two dataset builds. The quarterback family is the `qb`
 group (`--disable-feature-groups qb`), and the defense-adjusted quarterback rate is the
 `qb_def_adj` group (`--disable-feature-groups qb_def_adj`); with it disabled the model trains on
 exactly the feature matrix of a dataset without those columns. The rare-event noise family is

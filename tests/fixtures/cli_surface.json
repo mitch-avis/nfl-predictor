@@ -1741,6 +1741,20 @@
    "type": null
   },
   {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 4.0,
+   "dest": "strength_prior_blend_games",
+   "help": "K for the adjusted-strength prior blend, which weights the in-season solve games / (games + K): the game count at which the in-season solve and the prior are weighted equally (default 4).",
+   "nargs": null,
+   "options": [
+    "--strength-prior-blend-games"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
    "action": "BooleanOptionalAction",
    "choices": null,
    "default": true,

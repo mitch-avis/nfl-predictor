@@ -441,6 +441,46 @@ def test_the_full_rebuild_neither_reads_nor_writes_the_cache(baseline: _Baseline
     assert baseline.stamps_after_full == baseline.stamps_before_full
 
 
+def _is_strength_column(column: str) -> bool:
+    return any(stat in column for stat in constants.ADJUSTED_STRENGTH_STATS)
+
+
+def test_the_default_strength_blend_games_given_explicitly_writes_the_same_files(
+    baseline: _Baseline, etl: _Run, tmp_path: Path
+) -> None:
+    explicit = _main(etl, tmp_path, "--strength-prior-blend-games", "4")
+
+    _assert_identical(explicit, baseline.full)
+
+
+def test_a_smaller_strength_blend_games_moves_only_the_strength_family(
+    baseline: _Baseline, etl: _Run, tmp_path: Path
+) -> None:
+    tuned = _main(etl, tmp_path, "--strength-prior-blend-games", "2")
+
+    assert tuned.games.columns == baseline.full.games.columns
+    changed = {
+        column
+        for column in baseline.full.games.columns
+        if not tuned.games.get_column(column).equals(baseline.full.games.get_column(column))
+    }
+    assert "away_adj_strength_composite" in changed
+    assert all(_is_strength_column(column) for column in changed), changed
+    assert not tuned.snapshots.equals(baseline.full.snapshots)
+    assert tuned.files["strength_snapshots.csv"] != baseline.full.files["strength_snapshots.csv"]
+
+
+def test_a_changed_strength_blend_games_rebuilds_every_cached_season(
+    etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    full = _main(etl, tmp_path_factory.mktemp("full"), "--strength-prior-blend-games", "2")
+
+    warm = _main(etl, warm_dir, "--incremental", "--strength-prior-blend-games", "2")
+
+    _assert_identical(warm, full)
+    assert warm.built == list(_SEASONS)
+
+
 def _season_keys(
     world: _World, config: data_collection.DataCollectionConfig
 ) -> dict[int, str | None]:
@@ -533,6 +573,7 @@ def test_a_changed_prior_season_team_stat_changes_every_finished_season_key() ->
         {"blend_strength_prior": False},
         {"blend_stat_prior": False},
         {"stat_prior_blend_games": 6.0},
+        {"strength_prior_blend_games": 2.0},
         {"team_stats_source": "nflverse"},
         {"tr_stats_source": "scrape"},
     ],
@@ -619,6 +660,7 @@ _KEYED_OPTIONS = (
     "blend_strength_prior",
     "blend_stat_prior",
     "stat_prior_blend_games",
+    "strength_prior_blend_games",
     "team_stats_source",
     "tr_stats_source",
 )

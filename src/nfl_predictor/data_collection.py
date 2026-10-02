@@ -35,6 +35,7 @@ Usage:
 
 import argparse
 import logging
+import math
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -47,6 +48,7 @@ from nfl_predictor import constants
 from nfl_predictor.utils import clock, game_utils, polars_utils, season_cache
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import pbp, qb_stats
+from nfl_predictor.utils.polars.strength_snapshot import StrengthPrior
 from nfl_predictor.utils.polars.strength_table import (
     build_prior_strength_snapshot,
     build_strength_table,
@@ -88,6 +90,8 @@ class DataCollectionConfig:
     # Set to False to ablate the early-season strength prior and publish the raw
     # in-season solve, so the blend can be measured on its own.
     blend_strength_prior: bool = True
+    # K in the strength prior blend's in-season weight games / (games + K).
+    strength_prior_blend_games: float = constants.PRIOR_BLEND_GAMES
     # Set to False to ablate the early-season blend of season-to-date stats toward the
     # regressed previous season, restoring the plain in-season mean from week 2 on.
     blend_stat_prior: bool = True
@@ -170,6 +174,16 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         ),
     )
     parser.add_argument(
+        "--strength-prior-blend-games",
+        type=float,
+        default=constants.PRIOR_BLEND_GAMES,
+        help=(
+            "K for the adjusted-strength prior blend, which weights the in-season solve "
+            "games / (games + K): the game count at which the in-season solve and the prior "
+            f"are weighted equally (default {constants.PRIOR_BLEND_GAMES:g})."
+        ),
+    )
+    parser.add_argument(
         "--stat-prior-blend",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -217,8 +231,12 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         ),
     )
     args = parser.parse_args(argv)
-    if args.stat_prior_blend_games <= 0:
-        parser.error("--stat-prior-blend-games must be positive.")
+    for option, value in (
+        ("--strength-prior-blend-games", args.strength_prior_blend_games),
+        ("--stat-prior-blend-games", args.stat_prior_blend_games),
+    ):
+        if not (math.isfinite(value) and value > 0):
+            parser.error(f"{option} must be a finite positive number.")
     default_min = DEFAULT_MIN_SEASON
     default_max = _default_max_season()
     min_season = default_min if args.min_season is None else args.min_season
@@ -233,6 +251,7 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         min_season=int(min_season),
         max_season=int(max_season),
         blend_strength_prior=bool(args.strength_prior_blend),
+        strength_prior_blend_games=float(args.strength_prior_blend_games),
         blend_stat_prior=bool(args.stat_prior_blend),
         stat_prior_blend_games=float(args.stat_prior_blend_games),
         data_dir=args.data_dir,
@@ -418,7 +437,9 @@ class QbFamilyInputs:
             neither an earlier game that season nor a previous-season value (every team in
             week 1 of the first season built, teams yet to play in 1999 weeks 2-3, Houston in
             2002 week 1, and every season's week 1 without the strength prior blend). Those
-            columns, unlike the rest of the family, therefore depend on the run's first season.
+            columns, unlike the rest of the family, therefore depend on the run's first season,
+            and they move with the strength blend's ``K`` (``--strength-prior-blend-games``),
+            because the snapshots' ``adj_def_pass_epa_snap`` is blended with it.
 
     """
 
@@ -902,6 +923,7 @@ def _open_season_cache(
         {
             "min_season": min_season,
             "blend_strength_prior": config.blend_strength_prior,
+            "strength_prior_blend_games": config.strength_prior_blend_games,
             "blend_stat_prior": config.blend_stat_prior,
             "stat_prior_blend_games": config.stat_prior_blend_games,
             "team_stats_source": config.team_stats_source,
@@ -995,6 +1017,7 @@ def collect_all_data(
             prev_tr_df=rankings.load(season - 1) if season > min_season else None,
             tr_stats_source=config.tr_stats_source,
             blend_strength_prior=config.blend_strength_prior,
+            strength_prior_blend_games=config.strength_prior_blend_games,
             blend_stat_prior=config.blend_stat_prior,
             stat_prior_blend_games=config.stat_prior_blend_games,
             strength_snapshots=strength_snapshots,
@@ -1027,6 +1050,7 @@ class SeasonInputs:
         prev_tr_df: TeamRankings rows for the previous season (for week 1).
         tr_stats_source: Source for the legacy TeamRankings stat columns.
         blend_strength_prior: Set to False to ablate the strength prior blend.
+        strength_prior_blend_games: K in the strength blend weight ``games / (games + K)``.
         blend_stat_prior: Set to False to ablate the season-to-date stat prior blend.
         stat_prior_blend_games: K in the stat blend weight ``games / (games + K)``.
         strength_snapshots: Optional list that receives each processed week's per-team
@@ -1051,6 +1075,7 @@ class SeasonInputs:
     prev_tr_df: pl.DataFrame | None = None
     tr_stats_source: str = "scrape"
     blend_strength_prior: bool = True
+    strength_prior_blend_games: float = constants.PRIOR_BLEND_GAMES
     blend_stat_prior: bool = True
     stat_prior_blend_games: float = constants.PRIOR_BLEND_GAMES
     strength_snapshots: list[pl.DataFrame] | None = None
@@ -1159,7 +1184,13 @@ def process_season(
             season_schedule,
             season=season,
             week=after_regular_season,
-            prior_snapshot=inputs.prior_strength_snapshot,
+            prior=(
+                None
+                if inputs.prior_strength_snapshot is None
+                else StrengthPrior(
+                    inputs.prior_strength_snapshot, inputs.strength_prior_blend_games
+                )
+            ),
         )
         inputs.strength_snapshots.append(
             stamp_strength_snapshot(full_season, season=season, week=after_regular_season)

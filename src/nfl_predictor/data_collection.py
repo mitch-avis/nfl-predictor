@@ -47,6 +47,7 @@ from nfl_predictor import constants
 from nfl_predictor.utils import clock, game_utils, polars_utils, season_cache
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import pbp, qb_stats
+from nfl_predictor.utils.polars.strength_snapshot import StrengthPrior
 from nfl_predictor.utils.polars.strength_table import (
     build_prior_strength_snapshot,
     build_strength_table,
@@ -1121,7 +1122,11 @@ def process_season(
             season_schedule,
             season=season,
             week=after_regular_season,
-            prior_snapshot=inputs.prior_strength_snapshot,
+            prior=(
+                None
+                if inputs.prior_strength_snapshot is None
+                else StrengthPrior(inputs.prior_strength_snapshot)
+            ),
         )
         inputs.strength_snapshots.append(
             stamp_strength_snapshot(full_season, season=season, week=after_regular_season)

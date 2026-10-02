@@ -436,7 +436,11 @@ def test_a_breakout_team_ranks_first_late_in_the_season() -> None:
 
     def rank_of_breakout(week: int) -> tuple[str, int]:
         snapshot = strength_snapshot.build_strength_snapshot(
-            games, season=2024, week=week, prior_snapshot=prior, teams=sorted(this_year)
+            games,
+            season=2024,
+            week=week,
+            prior=strength_snapshot.StrengthPrior(prior),
+            teams=sorted(this_year),
         )
         rankings = _composite_rankings(pd.DataFrame(snapshot.to_dicts()))
         leader = str(rankings.iloc[0]["team_abbr"])

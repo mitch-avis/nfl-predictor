@@ -55,7 +55,7 @@ opponent's per-snap output. The display composite adds the defensive components
 with positive weights for the same reason.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 import polars as pl
@@ -65,6 +65,18 @@ from nfl_predictor.utils.polars.adjusted_strength import GameColumns, solve_srs,
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+
+class StrengthPrior(NamedTuple):
+    """The early-season prior a snapshot is blended toward.
+
+    Attributes:
+        snapshot: The previous season's final snapshot, keyed by team.
+
+    """
+
+    snapshot: pl.DataFrame
+
 
 # Ridge penalty, frozen for reproducibility instead of tuned per solve.
 #
@@ -294,7 +306,7 @@ def _games_played(prior_games: pl.DataFrame, teams: list[str]) -> pl.DataFrame:
 
 def _blend_prior(
     solved: pl.DataFrame,
-    prior_snapshot: pl.DataFrame,
+    prior: StrengthPrior,
 ) -> pl.DataFrame:
     """Blend the in-season solve with the regressed previous-season snapshot.
 
@@ -308,8 +320,8 @@ def _blend_prior(
     used unchanged, which is what makes a Week-1 row equal the regressed prior and a
     team with no prior season equal its raw in-season solve.
     """
-    available = [column for column in _BLENDED_COLUMNS if column in prior_snapshot.columns]
-    prior = prior_snapshot.select(
+    available = [column for column in _BLENDED_COLUMNS if column in prior.snapshot.columns]
+    regressed = prior.snapshot.select(
         pl.col(_TEAM).cast(pl.String),
         *[
             (_numeric(column) * (1.0 - constants.WEEK1_REGRESSION_FACTOR)).alias(f"_prior_{column}")
@@ -319,7 +331,7 @@ def _blend_prior(
 
     games = pl.col("strength_games_played")
     weight = games / (games + constants.PRIOR_BLEND_GAMES)
-    return solved.join(prior, on=_TEAM, how="left").with_columns(
+    return solved.join(regressed, on=_TEAM, how="left").with_columns(
         *[
             pl.when(pl.col(column).is_null())
             .then(pl.col(f"_prior_{column}"))
@@ -374,7 +386,7 @@ def build_strength_snapshot(
     *,
     season: int,
     week: int,
-    prior_snapshot: pl.DataFrame | None = None,
+    prior: StrengthPrior | None = None,
     teams: Sequence[str] | None = None,
 ) -> pl.DataFrame:
     """Build the pre-week schedule-adjusted strength snapshot for one season week.
@@ -388,9 +400,9 @@ def build_strength_snapshot(
         season: Season the snapshot is for.
         week: Week the snapshot is for. Values are solved from games strictly before
             it, or from the whole regular season for a playoff week.
-        prior_snapshot: The previous season's final snapshot, keyed by team. Supplies
-            the early-season prior; ``None`` (the ablation) publishes the raw in-season
-            solve, so a team with no in-season games gets nulls.
+        prior: The early-season prior, the previous season's final snapshot; ``None``
+            (the ablation) publishes the raw in-season solve, so a team with no in-season
+            games gets nulls.
         teams: The season's full team list, normally taken from the schedule. Supply it
             so that a team yet to play still gets a row carrying the prior; without it
             the universe is drawn from played games only, which is empty before a season
@@ -420,8 +432,8 @@ def build_strength_snapshot(
     solved, _ = _solve_components(prior_games, season_teams)
     solved = solved.join(_games_played(prior_games, season_teams), on=_TEAM, how="left")
 
-    if prior_snapshot is not None and not prior_snapshot.is_empty():
-        solved = _blend_prior(solved, prior_snapshot)
+    if prior is not None and not prior.snapshot.is_empty():
+        solved = _blend_prior(solved, prior)
 
     solved = _with_composite(solved)
     return solved.select(

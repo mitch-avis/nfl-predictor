@@ -17,6 +17,7 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.polars.strength_snapshot import StrengthPrior
 from nfl_predictor.utils.polars.strength_table import (
     build_prior_strength_snapshot,
     build_strength_table,
@@ -402,7 +403,11 @@ def _add_strength_features(merged: pl.DataFrame, week: _Week) -> pl.DataFrame:
             week.schedule_df,
             season=week.season,
             week=week.week,
-            prior_snapshot=prior_strength_snapshot if inputs.blend_strength_prior else None,
+            prior=(
+                StrengthPrior(prior_strength_snapshot)
+                if inputs.blend_strength_prior and prior_strength_snapshot is not None
+                else None
+            ),
         )
         if inputs.strength_snapshots is not None:
             # Recorded before the join below keeps only the teams playing this week.

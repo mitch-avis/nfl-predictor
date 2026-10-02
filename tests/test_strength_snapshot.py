@@ -211,7 +211,7 @@ def test_week_one_falls_back_to_the_regressed_prior_snapshot() -> None:
     games = _round_robin(2024, (1, 2), ("AAA", "BBB"), offense={"AAA": 0.2})
 
     snapshot = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=1, prior_snapshot=prior
+        games, season=2024, week=1, prior=strength_snapshot.StrengthPrior(prior)
     )
 
     expected = 0.30 * (1.0 - constants.WEEK1_REGRESSION_FACTOR)
@@ -230,7 +230,7 @@ def test_prior_blend_weight_follows_the_documented_games_formula() -> None:
     games = _round_robin(2024, (1, 2), _TEAMS, offense=_OFFENSE)
 
     blended = strength_snapshot.build_strength_snapshot(
-        games, season=2024, week=3, prior_snapshot=prior
+        games, season=2024, week=3, prior=strength_snapshot.StrengthPrior(prior)
     )
     in_season_only = strength_snapshot.build_strength_snapshot(games, season=2024, week=3)
 

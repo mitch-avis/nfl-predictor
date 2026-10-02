@@ -42,6 +42,13 @@ under `ml/` change every checkpoint fingerprint).
    spread-to-moneyline map, and an ETL option choosing the line source (`stored` today,
    `pick_time` the candidate), so both builds come from one code version. The largest chunk.
 
+5. Accepted by the user on 2026-10-02: an `nfl-predictor compare` option that scores a run against
+   another run's market by `game_id` (reporting only, outside the checkpoint fingerprint), so the
+   `PT` report gives the closing-line yardstick from `R0`'s rows. It may land while Phase B runs,
+   but before the Phase B review.
+
+Phase A status: chunks 1-4 landed as `0.39.3`-`0.42.0`; chunk 5 is open.
+
 Any chunk that changes `NFLREADPY_SCHEDULE_COLUMNS`, `NFLREADPY_SCHEDULE_RENAME` or a derived
 schedule column refetches every historical schedule file since `0.38.2`, which can pull revised
 lines; such a change is asked about first (rule 5), and its scratch builds say so.

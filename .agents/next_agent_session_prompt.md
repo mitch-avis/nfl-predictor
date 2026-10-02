@@ -8,7 +8,7 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## State (written 2026-10-01, step 4 in progress)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.39.0`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
+  out in the main checkout at `0.39.2`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
   passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
 - Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
   - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
@@ -41,37 +41,37 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
     `stamp_strength_snapshot` is public; the schedule cache records its requested columns; the web
     weekly job layers its form over `config/weekly_run.yaml`, so it refreshes with `--incremental`
     (task 58.7).
+  - `0.39.1`-`0.39.2` (2026-10-01 evening): the user's dependency refresh (uv `>=0.12`);
+    `pythonpath = ["."]` so bare `pytest` works; `update_requirements.sh` restores the LightGBM
+    CUDA step (non-fatal since `0.39.2`), repairs a damaged interpreter by reinstalling the
+    managed Python, and checks that the core packages import. Background: at about 16:43 a
+    formatter run from the home folder rewrote the uv cache and the managed Pythons; the user
+    cleared the cache and reinstalled them.
 - The "4, first" reproducibility work is done (one low-priority follow-up: no current-season
-  schedule fallback). No subagent is in flight.
+  schedule fallback). Phase A of `.agents/step4_plan.md` (accepted by the user 2026-10-01, all
+  three parts) is in flight: implementer subagents for the 53.7 quarterback rate group, the
+  `--strength-prior-blend-games` option, the next-opponent identity switch, and 56.6.
+- The Week 4 refresh ran from a `main` worktree (`~/scratch/wk4_main`, `data/` and `models/`
+  symlinked; delete it once the user's picks are in): `models/weekly_2026_week_04_refresh/`.
 - Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
 
 ## Open questions for the user
 
-1. The step-4 feature-value plan, `.agents/step4_plan.md` (drafted 2026-10-01): accept the ladder
-   (8 arms, 16 runs, 6 scratch builds, the decision rules there)? Keep run inputs under
-   `models/step4/inputs/` and `data/` untouched until adoption? Defer the remaining follow-ups
-   to a second ladder? Recommendation: yes to all three. Nothing in Phase A starts before the
-   answer.
-2. Should the web UI's standalone "Full ETL rebuild" job (`etl_full`) get an incremental option?
-   Recommendation: no; it is the one place to force a full rebuild, and the weekly job already
-   refreshes incrementally. If wanted, a checkbox defaulting off.
-
-Decided 2026-10-01: same-machine byte-identity; `qb_elos.csv` text tokens stop the ETL
-(tentative); `.rechunk()`; the weekly run passes `--incremental`; the `data_collection.py` split
-with `strength_table.py`; the web weekly job refreshes incrementally (58.7, done); the layout probe
-stays in scratch. The user runs the Week 4 refresh themselves.
+None blocking. Pending recommendations: leave `AGENTS.md`'s plain post-bump `uv sync` (it reverts
+a CUDA LightGBM build; harmless while LightGBM is parked); no incremental option on `etl_full`.
+Decided 2026-10-01: the step-4 plan (8 arms, 16 runs, 6 scratch builds, `data/` untouched until
+adoption, follow-ups deferred to a second ladder), plus the earlier decisions recorded in
+`ARCHIVE.md`.
 
 ## Next
 
-1. On the user's answer to question 1: Phase A of `.agents/step4_plan.md` (code first, one
-   implementer and one reviewer per chunk), then the builds and the overnight driver.
+1. Review and merge the Phase A chunks of `.agents/step4_plan.md`, then Phase B (scratch builds
+   and the overnight driver, under the plan's cap and decision rules).
 2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
    55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
    step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);
    scratch copies are not.
-3. Week 4 refresh: the user runs it themselves on 2026-10-01 (staged in
-   `models/weekly_2026_week_04_refresh/launch.sh`, for `main`). Do not launch it.
-4. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
+3. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
    `.venv/bin/nfl-predictor weekly --run-id weekly_2026_week_05`, through a `launch.sh` in the run
    directory with `nohup setsid`. The weekly run uses the code on the checked-out branch: run it
    from `main` (or ask the user whether the step-4 branch is acceptable), and after switching

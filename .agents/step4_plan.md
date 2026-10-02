@@ -10,7 +10,7 @@ approved, and anything beyond the cap or outside this text is a fresh question.
 | --- | --- | --- | --- |
 | R0 | none (the reference) | current code, a fresh build | - |
 | QB | defense-adjusted quarterback rate | new columns, switchable group, same build as R0 | 53.7 |
-| NO | drop the `*_next_opponent_abbr` identity pair | a feature switch on R0's build | 2026-09-25 review |
+| NO | drop the `*_next_opponent_abbr` identity pair | `--disable-feature-groups next_opponent_identity` on R0's build | 2026-09-25 review |
 | S2 | season-to-date stat blend `K = 2` (today `4`) | its own build (`--stat-prior-blend-games 2`) | 55.3 |
 | S8 | season-to-date stat blend `K = 8` | its own build | 55.3 |
 | T2 | strength-snapshot blend `K = 2` (today the same constant `4`) | its own build, new ETL option | 55.3 with the 2026-09-25 review |

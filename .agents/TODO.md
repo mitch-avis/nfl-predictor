@@ -422,6 +422,11 @@ Formerly Milestone 41.
         hypothesis and decision rule written first. Reported accuracy is expected to get honestly
         worse; the question is whether picks at pick time improve. Adopting it is a default change
         (must-ask); a training start in 2007 is tested only if the fallback seasons look harmful.
+      - Before any adoption of `pick_time`: `nfl-predictor lines` (`lines_refresh.py`, also a web
+        job) rewrites upcoming games' line columns from nflverse with the fixed conversion, so on
+        a pick-time `data/` it silently reverts them to stored lines; give it the line source too
+        (found by the 56.6 review, 2026-10-01). Phase B builds run from scratch tree copies,
+        because the nfelo cache follows `DATA_PATH`, not `--data-dir`.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.

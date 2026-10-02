@@ -1092,8 +1092,9 @@ games.
   game that season nor a previous-season value, which means every team in week 1 of the first
   season built, teams that have not played yet in 1999 weeks 2-3, Houston in 2002 week 1 (the
   expansion season), and every season's week 1 under `--no-strength-prior-blend`. Unlike the
-  rest of the quarterback family these two columns therefore depend on the run's first season;
-  the ETL logs how many quarterback games count a defense as average, and training reports the
+  rest of the quarterback family these two columns therefore depend on the run's first season,
+  and they move with `--strength-prior-blend-games`, because the `adj_def_pass_epa_snap` they read
+  is blended with that `K`; the ETL logs how many quarterback games count a defense as average, and training reports the
   group's null cells and rows like the other groups.
 
 The strength family is ablatable as the `strength` feature group

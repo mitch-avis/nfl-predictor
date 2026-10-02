@@ -434,7 +434,9 @@ class QbFamilyInputs:
             neither an earlier game that season nor a previous-season value (every team in
             week 1 of the first season built, teams yet to play in 1999 weeks 2-3, Houston in
             2002 week 1, and every season's week 1 without the strength prior blend). Those
-            columns, unlike the rest of the family, therefore depend on the run's first season.
+            columns, unlike the rest of the family, therefore depend on the run's first season,
+            and they move with the strength blend's ``K`` (``--strength-prior-blend-games``),
+            because the snapshots' ``adj_def_pass_epa_snap`` is blended with it.
 
     """
 

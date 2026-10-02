@@ -1082,12 +1082,15 @@ games.
   play-by-play cache keeps the passer id but not the rusher id.
 - Defense-adjusted quarterback EPA per dropback (`constants.QB_DEF_ADJ_STATS`, same module):
   each earlier game of the expected starter is credited with
-  `qb_epa_sum + dropbacks * adj_def_pass_epa_snap`, the faced defense's pre-week strength value
-  for that game's week (solved from games strictly before it), so EPA earned against a strong
-  defense counts for more. The career (`qb_def_adj_epa`) and last-`QB_RECENT_GAMES`
-  (`qb_def_adj_epa_recent`) rates use the same `K` shrinkage and windows as `qb_dropback_epa`.
-  The coefficient is pass EPA per offensive snap and is applied per dropback as it stands, not
-  rescaled by the pass share of snaps. A defense with no pre-week value counts as average: a
+  `qb_epa_sum + dropbacks * adj_def_pass_epa_snap * snaps_per_dropback`, the faced defense's
+  pre-week strength value for that game's week (solved from games strictly before it) converted
+  to EPA per dropback, so EPA earned against a strong defense counts for more. The coefficient
+  is pass EPA per offensive snap (the ridge response is dropback EPA over every scrimmage snap);
+  `snaps_per_dropback` is the league's offensive snaps over dropbacks in that season's games
+  before the game's week, or over the whole previous regular season in week 1, so the
+  conversion never sees the game's own week either. The career (`qb_def_adj_epa`) and
+  last-`QB_RECENT_GAMES` (`qb_def_adj_epa_recent`) rates use the same `K` shrinkage and windows
+  as `qb_dropback_epa`. A defense with no pre-week value counts as average: a
   season the run did not build (before its `--min-season`), and any team with neither an earlier
   game that season nor a previous-season value, which means every team in week 1 of the first
   season built, teams that have not played yet in 1999 weeks 2-3, Houston in 2002 week 1 (the

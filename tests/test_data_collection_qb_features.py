@@ -14,7 +14,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _dropbacks(season: int, week: int, team: str, passer: str, count: int) -> list[dict[str, Any]]:
+def _dropbacks(
+    season: int, week: int, team: str, passer: str | None, count: int
+) -> list[dict[str, Any]]:
     """Return ``count`` completed-pass dropbacks by ``passer`` for ``team``."""
     return [
         {
@@ -143,8 +145,18 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
 def test_attach_qb_features_adjusts_for_the_defense_snapshots(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The faced defense's pre-game snapshot reaches the defense-adjusted rate."""
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
+    """The faced defense's pre-game snapshot reaches the defense-adjusted rate per dropback.
+
+    The previous season's play-by-play, loaded as history, supplies the league's snaps per
+    dropback that convert the week-1 snapshot: 20 snaps over 10 dropbacks, so 2.
+    """
+    rushes = pl.DataFrame(_dropbacks(2000, 9, "XXX", None, 10)).with_columns(
+        pl.lit(0, dtype=pl.Int64).alias("qb_dropback"), pl.lit(1, dtype=pl.Int64).alias("rush")
+    )
+    history = pl.concat(
+        [pl.DataFrame(_dropbacks(2000, 9, "XXX", None, 10)), rushes], how="diagonal"
+    )
+    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: history)
     in_memory = pl.DataFrame(
         _dropbacks(2001, 1, "NE", "TB", 20) + _dropbacks(2001, 1, "BUF", "JA", 12)
     )
@@ -157,7 +169,7 @@ def test_attach_qb_features_adjusts_for_the_defense_snapshots(
             "home_qb": ["Josh Allen"],
         }
     )
-    # Every week-1 dropback is worth 0.2 EPA against a defense 0.1 better than average.
+    # Every week-1 dropback is worth 0.2 EPA against a defense 0.1 per snap better than average.
     snapshots = pl.DataFrame(
         {
             "season": [2001],
@@ -179,8 +191,8 @@ def test_attach_qb_features_adjusts_for_the_defense_snapshots(
 
     row = out.row(0, named=True)
     assert row["away_qb_dropback_epa"] == pytest.approx(0.2)
-    assert row["away_qb_def_adj_epa"] == pytest.approx(0.3)
-    assert row["home_qb_def_adj_epa_recent"] == pytest.approx(0.3)
+    assert row["away_qb_def_adj_epa"] == pytest.approx(0.2 + 0.1 * 2.0)
+    assert row["home_qb_def_adj_epa_recent"] == pytest.approx(0.2 + 0.1 * 2.0)
 
 
 def test_collect_all_data_hands_the_strength_snapshots_to_the_qb_family(

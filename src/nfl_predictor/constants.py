@@ -1068,10 +1068,13 @@ QB_PRIOR_DROPBACKS = 300
 QB_RECENT_GAMES = 8
 
 # Defense-adjusted quarterback EPA per dropback for the expected starter. Each earlier
-# quarterback game is credited with `qb_epa_sum + dropbacks * adj_def_pass_epa_snap`, where the
-# defense value is the faced defense's pre-game strength snapshot for that game's week (solved
-# from games strictly before it), then aggregated with the same QB_PRIOR_DROPBACKS shrinkage and
-# windows as `qb_dropback_epa`. Its own ablation group, disjoint from `qb`, `pbp` and `strength`.
+# quarterback game is credited with
+# `qb_epa_sum + dropbacks * adj_def_pass_epa_snap * snaps_per_dropback`, where the defense value
+# is the faced defense's pre-game strength snapshot for that game's week (solved from games
+# strictly before it), per offensive snap, and `snaps_per_dropback` is the league's offensive
+# snaps per dropback before that week (the previous season's in week 1), which makes it per
+# dropback. Then aggregated with the same QB_PRIOR_DROPBACKS shrinkage and windows as
+# `qb_dropback_epa`. Its own ablation group, disjoint from `qb`, `pbp` and `strength`.
 QB_DEF_ADJ_STATS = [
     # Career defense-adjusted EPA per dropback, shrunk toward the league's adjusted rate.
     "qb_def_adj_epa",
@@ -1087,8 +1090,9 @@ QB_DEF_ADJ_FEATURE_COLUMNS = [
     *[f"{stat}_diff" for stat in QB_DEF_ADJ_STATS],
 ]
 
-# The strength-snapshot column that gives each faced defense's pre-game expectation. A higher
-# value is a better defense, so a dropback against it is credited with the value.
+# The strength-snapshot column that gives each faced defense's pre-game expectation, in pass EPA
+# per offensive snap. A higher value is a better defense, so a dropback against it is credited
+# with the value converted to EPA per dropback.
 QB_DEF_ADJ_SOURCE_STAT = "adj_def_pass_epa_snap"
 
 # Base name under DATA_PATH of the quarterback identity file, a read-only copy of

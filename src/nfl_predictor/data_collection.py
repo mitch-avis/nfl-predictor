@@ -431,15 +431,17 @@ class QbFamilyInputs:
         identity_path: Quarterback identity file; ``None`` reads
             ``DATA_PATH/<QB_META_DATA_NAME>.csv``.
         defense_snapshots: The run's pre-week strength snapshots, which give each faced
-            defense's expectation for the defense-adjusted rate; ``None`` leaves those
-            columns to the final schema's nulls. A defense with no pre-week value counts as
-            average: every game of a season the run does not build, and any team with
-            neither an earlier game that season nor a previous-season value (every team in
-            week 1 of the first season built, teams yet to play in 1999 weeks 2-3, Houston in
-            2002 week 1, and every season's week 1 without the strength prior blend). Those
-            columns, unlike the rest of the family, therefore depend on the run's first season,
-            and they move with the strength blend's ``K`` (``--strength-prior-blend-games``),
-            because the snapshots' ``adj_def_pass_epa_snap`` is blended with it.
+            defense's expectation for the defense-adjusted rate, converted to EPA per dropback
+            with the league's snaps per dropback counted from the same play-by-play the
+            quarterback games come from; ``None`` leaves those columns to the final schema's
+            nulls. A defense with no pre-week value counts as average: every game of a season
+            the run does not build, and any team with neither an earlier game that season nor
+            a previous-season value (every team in week 1 of the first season built, teams yet
+            to play in 1999 weeks 2-3, Houston in 2002 week 1, and every season's week 1
+            without the strength prior blend). Those columns, unlike the rest of the family,
+            therefore depend on the run's first season, and they move with the strength
+            blend's ``K`` (``--strength-prior-blend-games``), because the snapshots'
+            ``adj_def_pass_epa_snap`` is blended with it.
 
     """
 
@@ -471,7 +473,9 @@ def _attach_qb_features(
         pbp_df: Play-by-play already loaded for the team-stat seasons.
         max_season: Last season being processed.
         current_season: Passed to ``load_pbp`` for its cache decisions.
-        family: The identity file and the defense snapshots; see ``QbFamilyInputs``.
+        family: The identity file and the defense snapshots; see ``QbFamilyInputs``. With
+            snapshots, the league's weekly snap totals are counted from ``pbp_df`` and the
+            loaded history seasons.
 
     Returns:
         ``games`` with the quarterback columns from ``qb_stats.attach_qb_features``.
@@ -490,12 +494,21 @@ def _attach_qb_features(
         for season in range(constants.NFLREADPY_MIN_SEASON, max_season + 1)
         if season not in loaded
     ]
-    parts = [qb_stats.aggregate_qb_game_stats(pbp_df)]
+    plays = [pbp_df]
     if missing:
-        history = polars_utils.load_pbp(missing, force_refresh=False, current_season=current_season)
-        parts.append(qb_stats.aggregate_qb_game_stats(history))
-    qb_games = pl.concat(parts, how="vertical")
+        plays.append(
+            polars_utils.load_pbp(missing, force_refresh=False, current_season=current_season)
+        )
+    qb_games = pl.concat([qb_stats.aggregate_qb_game_stats(part) for part in plays])
     family = family or QbFamilyInputs()
+    defense = (
+        None
+        if family.defense_snapshots is None
+        else qb_stats.DefenseInputs(
+            snapshots=family.defense_snapshots,
+            league_snaps=pl.concat([qb_stats.aggregate_league_snaps(part) for part in plays]),
+        )
+    )
     path = family.identity_path or constants.DATA_PATH / f"{constants.QB_META_DATA_NAME}.csv"
     identity = qb_stats.load_qb_identity(path)
     log.info(
@@ -503,9 +516,7 @@ def _attach_qb_features(
         qb_games.height,
         identity.height,
     )
-    return qb_stats.attach_qb_features(
-        games, qb_games, identity, defense_snapshots=family.defense_snapshots
-    )
+    return qb_stats.attach_qb_features(games, qb_games, identity, defense=defense)
 
 
 def _log_pbp_null_rates(team_stats_df: pl.DataFrame, *, enable_debug: bool) -> None:

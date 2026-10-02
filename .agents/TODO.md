@@ -511,6 +511,11 @@ Each group names the archived milestone it came from; the milestone's full recor
 
 ### From the step-3 merge test (2026-09-28)
 
+- [ ] (low priority) `reporting/power_rankings.py` `_load_current_records` groups with `group_by`
+      without `maintain_order`, so its row order changes between runs (content and rankings are
+      identical; found by the `0.37.2` review). The `0.37.3` determinism guard covers only the ETL
+      modules. Add `maintain_order=True` (or sort) so "identical output" checks on rankings are
+      not noisy.
 - [ ] (low priority) `load_schedule` has no current-season fallback: unlike team stats and
       play-by-play, a failed refetch of the current season's schedule (a network error or an
       nflverse outage) fails the whole ETL. Found by the `0.38.2` review; pre-existing. If it is

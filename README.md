@@ -1082,11 +1082,16 @@ games.
   `qb_epa_sum + dropbacks * adj_def_pass_epa_snap`, the faced defense's pre-week strength value
   for that game's week (solved from games strictly before it), so EPA earned against a strong
   defense counts for more. The career (`qb_def_adj_epa`) and last-`QB_RECENT_GAMES`
-  (`qb_def_adj_epa_recent`) rates use the same `K` shrinkage and windows as `qb_dropback_epa`. A
-  defense with no snapshot (the first week of the first season built, or a season before the
-  run's `--min-season`) counts as average, so unlike the rest of the quarterback family these two
-  columns depend on the run's first season; the ETL logs how many quarterback games that
-  affects, and training reports the group's null cells and rows like the other groups.
+  (`qb_def_adj_epa_recent`) rates use the same `K` shrinkage and windows as `qb_dropback_epa`.
+  The coefficient is pass EPA per offensive snap and is applied per dropback as it stands, not
+  rescaled by the pass share of snaps. A defense with no pre-week value counts as average: a
+  season the run did not build (before its `--min-season`), and any team with neither an earlier
+  game that season nor a previous-season value, which means every team in week 1 of the first
+  season built, teams that have not played yet in 1999 weeks 2-3, Houston in 2002 week 1 (the
+  expansion season), and every season's week 1 under `--no-strength-prior-blend`. Unlike the
+  rest of the quarterback family these two columns therefore depend on the run's first season;
+  the ETL logs how many quarterback games count a defense as average, and training reports the
+  group's null cells and rows like the other groups.
 
 The strength family is ablatable as the `strength` feature group
 (`--disable-feature-groups strength`), and the early-season prior blend can be ablated

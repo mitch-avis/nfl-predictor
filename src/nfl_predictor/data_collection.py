@@ -420,13 +420,35 @@ def main(argv: list[str] | None = None) -> None:
     log.info("Data collection complete.")
 
 
+@dataclass(frozen=True)
+class QbFamilyInputs:
+    """What the quarterback family reads besides the game rows and the play-by-play.
+
+    Attributes:
+        identity_path: Quarterback identity file; ``None`` reads
+            ``DATA_PATH/<QB_META_DATA_NAME>.csv``.
+        defense_snapshots: The run's pre-week strength snapshots, which give each faced
+            defense's expectation for the defense-adjusted rate; ``None`` leaves those
+            columns to the final schema's nulls. A defense with no pre-week value counts as
+            average: every game of a season the run does not build, and any team with
+            neither an earlier game that season nor a previous-season value (every team in
+            week 1 of the first season built, teams yet to play in 1999 weeks 2-3, Houston in
+            2002 week 1, and every season's week 1 without the strength prior blend). Those
+            columns, unlike the rest of the family, therefore depend on the run's first season.
+
+    """
+
+    identity_path: Path | None = None
+    defense_snapshots: pl.DataFrame | None = None
+
+
 def _attach_qb_features(
     games: pl.DataFrame,
     pbp_df: pl.DataFrame,
     *,
     max_season: int,
     current_season: int,
-    identity_path: Path | None = None,
+    family: QbFamilyInputs | None = None,
 ) -> pl.DataFrame:
     """Attach the quarterback per-dropback family to the combined game rows.
 
@@ -444,8 +466,7 @@ def _attach_qb_features(
         pbp_df: Play-by-play already loaded for the team-stat seasons.
         max_season: Last season being processed.
         current_season: Passed to ``load_pbp`` for its cache decisions.
-        identity_path: Quarterback identity file; defaults to
-            ``DATA_PATH/<QB_META_DATA_NAME>.csv``.
+        family: The identity file and the defense snapshots; see ``QbFamilyInputs``.
 
     Returns:
         ``games`` with the quarterback columns from ``qb_stats.attach_qb_features``.
@@ -469,14 +490,17 @@ def _attach_qb_features(
         history = polars_utils.load_pbp(missing, force_refresh=False, current_season=current_season)
         parts.append(qb_stats.aggregate_qb_game_stats(history))
     qb_games = pl.concat(parts, how="vertical")
-    path = identity_path or constants.DATA_PATH / f"{constants.QB_META_DATA_NAME}.csv"
+    family = family or QbFamilyInputs()
+    path = family.identity_path or constants.DATA_PATH / f"{constants.QB_META_DATA_NAME}.csv"
     identity = qb_stats.load_qb_identity(path)
     log.info(
         "QB features: %d quarterback games from play-by-play, %d identity names",
         qb_games.height,
         identity.height,
     )
-    return qb_stats.attach_qb_features(games, qb_games, identity)
+    return qb_stats.attach_qb_features(
+        games, qb_games, identity, defense_snapshots=family.defense_snapshots
+    )
 
 
 def _log_pbp_null_rates(team_stats_df: pl.DataFrame, *, enable_debug: bool) -> None:
@@ -832,9 +856,18 @@ def _combine_seasons(frames: list[pl.DataFrame]) -> pl.DataFrame:
 
 
 def _finish_games(
-    combined_df: pl.DataFrame, sources: _EtlSources, max_season: int, *, enable_timing: bool
+    combined_df: pl.DataFrame,
+    sources: _EtlSources,
+    max_season: int,
+    *,
+    strength_snapshots: pl.DataFrame,
+    enable_timing: bool,
 ) -> pl.DataFrame:
-    """Fill future games' quarterbacks and lines, add QB features, and order the columns."""
+    """Fill future games' quarterbacks and lines, add QB features, and order the columns.
+
+    ``strength_snapshots`` are the run's pre-week snapshots, the faced defenses' expectations
+    for the defense-adjusted quarterback rate.
+    """
     # Fill in QB data for future games using most recent starters
     combined_df = game_utils.fill_future_qb_data(combined_df, sources.raw_elo_df)
     # Quarterback features key on the final starter assignment, future weeks included.
@@ -844,6 +877,7 @@ def _finish_games(
             sources.pbp_df,
             max_season=max_season,
             current_season=sources.current_season,
+            family=QbFamilyInputs(defense_snapshots=strength_snapshots),
         )
     # Fill in lines for future games from SurvivorGrid
     combined_df = game_utils.fill_future_game_lines(combined_df)
@@ -944,7 +978,8 @@ def collect_all_data(
         seasons: List of season years to process
         config: Optional runtime config for logging/timing and cache refresh
         strength_snapshots: Optional list that receives each processed week's per-team
-            strength snapshot; see `combine_strength_snapshots`
+            strength snapshot; see `combine_strength_snapshots`. The snapshots are recorded
+            either way, because the defense-adjusted quarterback rate reads them.
 
     Returns:
         Combined DataFrame with all game data and features
@@ -952,6 +987,8 @@ def collect_all_data(
     """
     if config is None:
         config = _default_config(seasons)
+    if strength_snapshots is None:
+        strength_snapshots = []
 
     log.info(
         "Collecting data for %d seasons: %s - %s",
@@ -992,6 +1029,7 @@ def collect_all_data(
         _combine_seasons(all_seasons_data),
         sources,
         max(seasons),
+        strength_snapshots=combine_strength_snapshots(strength_snapshots),
         enable_timing=config.enable_timing,
     )
 

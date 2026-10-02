@@ -46,7 +46,9 @@ Rules that are always enforced:
   (5) the Optuna re-tune with wiring into production (55.9 with 56.3);
   (6) the web UI, Milestone 58 phases 4-6.
   Tasks 55.1 and 55.2 are retired. The reasoning and the follow-up assignments are under "Roadmap
-  Status" in `.agents/TODO.md`. Step 3 closed on 2026-10-01; step 4 is next.
+  Status" in `.agents/TODO.md`. Step 3 closed on 2026-10-01. Step 4 is in progress on
+  `feat/step4-feature-values` under the plan in `.agents/step4_plan.md` (accepted 2026-10-01); its
+  reproducibility work was merged into `main` as `0.39.3` the same day.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that

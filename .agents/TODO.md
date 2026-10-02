@@ -274,6 +274,10 @@ follow-ups below.
       `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`). Ceiling to keep in mind:
       the team-level `adj_off_pass_epa` is already opponent-adjusted, so the gain is confined to
       where the quarterback's history diverges from the team's (new and traded starters).
+      Progress: the first step is built (`0.40.0`, the `qb_def_adj` group, reviewed) and is
+      measured as arm QB of `.agents/step4_plan.md`. If it is not adopted, turn the group off by
+      default or remove it before `feat/step4-feature-values` merges to `main`: production has no
+      feature-group switch, so the weekly run would otherwise train on it.
 
 2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`--run-id
 weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too late (~18:04 MDT)

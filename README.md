@@ -658,9 +658,12 @@ By default each run's market Brier and its det - market interval use that run's 
 it from another run instead, matched on `game_id`, for every compared run: a run anchored to the
 pick-time line is then also measured against the closing line from a stored-line run on the same
 games (run it once without the option for the pick-time yardstick). The model columns do not
-change. It stops with exit code 2 when the market run lacks a compared game, repeats one or has
-no market value for one. The report says which market it used (JSON key `market_source`, with
-the market run's provenance); without the option the output is unchanged.
+change, and each run's market Brier is still scored on the run's own results. It stops with exit
+code 2 when the option is repeated, or when the market run lacks a compared game, repeats one or
+has no market value for one. The report says which market it used (JSON key `market_source`,
+with the market run's provenance) and counts the compared games whose result differs in the
+market run (`outcome_mismatches`, a printed warning when nonzero: separate builds can carry a
+revised score); without the option the output is unchanged.
 A last "Settings versus production" section gives each run's differences from today's production
 weekly run, as the walk-forward report does (JSON key `settings_versus_production`, by run),
 rebuilt from the run's `metadata.json` and its dataset's columns. Nothing is inferred from

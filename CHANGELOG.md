@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.39.2] - 2026-10-01
+
+### Changed
+
+- `update_requirements.sh` treats the LightGBM CUDA build as optional: when
+  `nfl-lightgbm-cuda-install install` fails, it warns, keeps the CPU build and still runs the
+  core-package import check and the requirements export.
+
 ## [0.39.1] - 2026-10-01
 
 ### Changed

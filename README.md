@@ -93,7 +93,8 @@ build needs NVIDIA's NCCL for the toolkit's CUDA major version (`libnccl2` and `
 tagged `+cuda13.x` for CUDA 13, from `developer.download.nvidia.com/compute/cuda/repos`); with
 Ubuntu's own NCCL, which is built for CUDA 12, the flags are withheld and LightGBM stays
 CPU-only. `nfl-lightgbm-cuda-install status` reports which build is installed. On this
-repo's data, LightGBM trains faster on the CPU than with CUDA, so the CUDA build is optional.
+repo's data, LightGBM trains faster on the CPU than with CUDA, so the CUDA build is optional:
+when it fails, the helper prints a warning, keeps the CPU build and finishes the refresh.
 
 For a manual upgrade without the helper script:
 
@@ -174,9 +175,48 @@ Typical outputs:
 Note: the `data/` directory is gitignored by default; generate it via the data collection step
 above. Note: `*_ml.csv` files include model-ready engineered features.
 
+Game rows are ordered newest first, with games on the same date ordered by `game_id`. Two runs
+with the same code, locked dependencies and inputs, on the same machine with the same Polars
+thread count (`POLARS_MAX_THREADS`), write byte-identical files.
+
+Building each season's weekly feature rows is nearly all of the ETL's run time.
+`nfl-predictor data --incremental` keeps each finished season's rows and strength snapshots under
+`<data dir>/cache/etl_seasons/` and reuses them when nothing they are built from has changed; the
+season in progress is always rebuilt, and every input is still loaded. An entry is keyed on:
+
+- the source of the ETL modules (`data_collection.py`, `constants.py` and everything under
+  `src/nfl_predictor/utils/`), the Polars, Polars runtime and NumPy versions, the Python
+  version, the CPU architecture and the Polars thread count;
+- the options that change a season's rows (`--min-season`, the two prior-blend switches,
+  `--stat-prior-blend-games`, `--team-stats-source` and `--tr-stats-source`);
+- the loaded schedule, team stats and Elo rows from that season and every earlier one, and that
+  season's and the previous season's TeamRankings, compared by value.
+
+So a changed input row rebuilds its season and every later one, and an edit to the ETL code
+rebuilds everything. A stale, damaged or unreadable entry is rebuilt and rewritten, never an error,
+and the directory is safe to delete. An input with a column the by-value comparison cannot
+render (list, struct, array, duration, binary or object) leaves its seasons uncached. Without the
+flag, which is `nfl-predictor data`'s default, the ETL rebuilds every season and neither reads
+nor writes the cache. The weekly run's refresh passes it (`data_collection_args: "--incremental"`
+in `config/weekly_run.yaml`; "Weekly workflow (canonical)" below says how your own arguments
+combine with it).
+
+A reused season equals a full rebuild of the same inputs byte for byte, also after the season in
+progress (or any later season) gains rows: a season's build reads nothing from later seasons,
+not even through where Polars splits the loaded frames into chunks, which moves with their total
+length. For that reason the league means behind the week-1 prior rechunk their season's slice of
+the team-stat frame before reducing it.
+
 Historical seasons load from cached artifacts where available. nflreadpy outputs are cached per
 season under `data/cache/nflreadpy` (schedule, team stats, and play-by-play). Current/future
-seasons are always refreshed to keep upcoming games and lines current. Use
+seasons are always refreshed to keep upcoming games and lines current. Each schedule, team-stat and
+play-by-play cache file records the columns the loader asked for when it was written; a file that
+lacks a column the code now asks for (a column added to `constants.PBP_COLUMNS`, to the team-stat
+mapping, or to the schedule selection or renames) is a cache miss and that season downloads again,
+so a historical schedule refetch can pull revised lines; a column the source never
+published does not force a download on every run. Such a column is not checked again: if nflverse
+publishes it for that season later, rerun the ETL with `--refresh-nflreadpy` to rewrite the cache.
+Use
 `--min-season`/`--max-season` to override the default season window (defaults to
 `constants.MIN_SEASON` through the current NFL season).
 
@@ -590,7 +630,8 @@ nfl-predictor weekly --help
 
 ### High-level stages
 
-1. (optional) refresh data (`nfl-predictor data`)
+1. (optional) refresh data (`nfl-predictor data --incremental` with the shipped config, which
+   reuses unchanged finished seasons)
 2. walk-forward of the production configuration over the recent seasons, so the run reports how
    production would have scored against the market (stage 1)
 3. train the production configuration, the model the week's picks come from (stage 2)
@@ -626,8 +667,16 @@ Notes:
   shell-quoted string, for example
   `--data-collection-args "--min-season 2010 --stat-prior-blend-games 4"`. It is split
   shell-style and handed to the data refresh (`nfl-predictor data`) as its argument list; when it is
-  unset the refresh runs exactly as before. The same value is a config key
-  (`data_collection_args` in `config/weekly_run.yaml`).
+  unset the refresh runs with that command's own defaults, a full rebuild. The same value is a
+  config key (`data_collection_args`), and the shipped `config/weekly_run.yaml` sets it to
+  `--incremental`, so the weekly refresh reuses each unchanged finished season (see "Data
+  collection (Polars + nflreadpy)" above) and writes the same files a full rebuild writes. A
+  value given on the command line replaces the configured string rather than adding to it: keep
+  `--incremental` in it to keep the reuse
+  (`--data-collection-args "--incremental --min-season 2010"`). A file read with `--config`
+  replaces the shipped one, so it runs a full rebuild unless it sets `data_collection_args`
+  itself. The web UI's weekly job passes its form's values as options over the shipped file, so
+  its refresh is incremental unless its "ETL arguments" field replaces the string.
 
 ### How postseason games enter today
 
@@ -638,7 +687,8 @@ This is the current behavior, recorded for reference; none of it is a recommenda
 - The shipped `config/weekly_run.yaml` now keeps those regular-season defaults for the weekly run:
   `wf_include_postseason: false` and `include_postseason: false`. It still ships
   `postseason_weight: 1.3`, but that weight is inert unless postseason training is explicitly
-  enabled, and `power_rankings_include_postseason: true` remains on for the rankings step.
+  enabled, and `power_rankings_include_postseason: false` (the code default too) keeps postseason
+  games out of the rankings step.
 - The schedule-adjusted strength composite built in ETL never includes postseason games.
 - The power rankings default through-week is the week before the prediction week, clamped to the
   last regular-season week when the prediction week is postseason, because strength snapshots stop
@@ -651,6 +701,9 @@ This is the current behavior, recorded for reference; none of it is a recommenda
    ```bash
    nfl-predictor data
    ```
+
+   The bare command rebuilds every season. `nfl-predictor weekly` runs this step itself with
+   `--incremental`, which writes the same files and reuses each unchanged finished season.
 
 2. Canonical evaluation + model selection (walk-forward)
 
@@ -969,6 +1022,10 @@ import paths.
 
 - Polars ETL helpers live under `src/nfl_predictor/utils/polars/` with a compatibility facade at
   `src/nfl_predictor/utils/polars_utils.py`.
+- `src/nfl_predictor/data_collection.py` runs `nfl-predictor data`: the options, the source
+  loading, the season loop (`process_season`) and the written files. Each week's game rows come
+  from `process_week` in `utils/polars/week_rows.py`, and each week's schedule-adjusted strength
+  table from `utils/polars/strength_table.py`.
 - ML implementation lives under `src/nfl_predictor/ml/` with a compatibility facade at
   `src/nfl_predictor/ml_model.py`.
 
@@ -1026,7 +1083,10 @@ The strength family is ablatable as the `strength` feature group
 independently at ETL time with `--no-strength-prior-blend`. The quarterback family is the `qb`
 group (`--disable-feature-groups qb`). The rare-event noise family is the `rare_events` group
 (`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`, `2pt_conversions`, `def_safeties`,
-`def_tds`). No group overlaps another.
+`def_tds`). The `next_opponent_identity` group drops only the `away_next_opponent_abbr` and
+`home_next_opponent_abbr` pair, which the model sees as one one-hot column per team on each side,
+and keeps the rest of the lookahead family, `*_next_opponent_win_pct` included. No group overlaps
+another.
 
 ## Open work
 

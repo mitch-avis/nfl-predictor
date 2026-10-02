@@ -42,6 +42,14 @@ type SidebarContextProps = {
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null)
 
+function skeletonWidth(seed: string): string {
+  let hash = 0
+  for (const char of seed) {
+    hash = (hash * 33 + char.charCodeAt(0)) % 41
+  }
+  return `${hash + 50}%`
+}
+
 function useSidebar() {
   const context = React.useContext(SidebarContext)
   if (!context) {
@@ -604,10 +612,7 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Random width between 50 to 90%.
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  const width = skeletonWidth(React.useId())
 
   return (
     <div

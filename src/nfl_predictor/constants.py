@@ -10,6 +10,9 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parents[2]
 DATA_PATH = ROOT_DIR / "data"
 NFLREADPY_CACHE_DIR = DATA_PATH / "cache" / "nflreadpy"
+# Finished seasons' ETL builds for `nfl-predictor data --incremental`, kept under the output
+# directory's `cache/`. Safe to delete: a missing entry is rebuilt.
+ETL_SEASON_CACHE_DIRNAME = "etl_seasons"
 
 # NFL season configurations
 SEASON_END_MONTH = 2  # NFL season typically ends in February
@@ -865,6 +868,9 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     # Every published play-by-play stat name is its own marker, so the group tracks
     # PBP_STATS automatically and stays disjoint from the older stat families.
     "pbp": (),  # populated below, once PBP_STATS is defined
+    # The next opponent's team identity, one-hot encoded per side. The next opponent's
+    # strength stays in the model through `*_next_opponent_win_pct`.
+    "next_opponent_identity": ("next_opponent_abbr",),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
         "special_teams_tds",

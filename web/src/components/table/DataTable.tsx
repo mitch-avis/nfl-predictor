@@ -87,6 +87,8 @@ export function DataTable({
     [keys, table.column_metadata, renderers],
   )
 
+  // TanStack Table exposes imperative handlers by design; this component keeps them local.
+  // oxlint-disable-next-line react/incompatible-library
   const instance = useReactTable({
     data: table.rows,
     columns: columnDefs,

@@ -2,8 +2,9 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { WeekRef } from '@/api/types'
+import { weekKey } from '@/components/common/weekKey'
 
-import { WeekSelector, weekKey } from './WeekSelector'
+import { WeekSelector } from './WeekSelector'
 
 const weeks: WeekRef[] = [
   { season: 2026, week: 1, source: 'active', run_id: 'weekly_a', label: 'Week 1 (active run)' },

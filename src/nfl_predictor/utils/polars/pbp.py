@@ -459,7 +459,7 @@ def _aggregate_offense(plays: pl.DataFrame) -> pl.DataFrame:
     play = _play_conditions(columns)
     epa = play["epa"]
     return (
-        plays.group_by(["season", "week", "posteam", "defteam"])
+        plays.group_by(["season", "week", "posteam", "defteam"], maintain_order=True)
         .agg(
             count_where(play["scrimmage"], "offensive_snaps"),
             count_where(play["dropback"], "dropbacks"),
@@ -515,7 +515,7 @@ def _aggregate_allowed(plays: pl.DataFrame) -> pl.DataFrame:
     play = _play_conditions(columns)
     epa = play["epa"]
     return (
-        plays.group_by(["season", "week", "defteam", "posteam"])
+        plays.group_by(["season", "week", "defteam", "posteam"], maintain_order=True)
         .agg(
             count_where(play["scrimmage"], "defensive_snaps"),
             count_where(play["dropback"], "dropbacks_allowed"),
@@ -737,7 +737,7 @@ def aggregate_pbp_team_box_score_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     masks = _PlayMasks.from_columns(plays.columns)
     offense_aggs = [*_attempt_aggs(masks), *_outcome_aggs(masks)]
     offense = (
-        plays.group_by(["season", "week", "posteam", "defteam"])
+        plays.group_by(["season", "week", "posteam", "defteam"], maintain_order=True)
         .agg(offense_aggs)
         .rename({"posteam": "team_abbr", "defteam": "opponent_abbr"})
         if offense_aggs
@@ -883,7 +883,7 @@ def _defense_frame(plays: pl.DataFrame, m: _PlayMasks) -> pl.DataFrame:
     if not defense_aggs:
         return empty_team_box_score_frame()
     return (
-        plays.group_by(["season", "week", "defteam", "posteam"])
+        plays.group_by(["season", "week", "defteam", "posteam"], maintain_order=True)
         .agg(defense_aggs)
         .rename({"defteam": "team_abbr", "posteam": "opponent_abbr"})
     )
@@ -915,7 +915,9 @@ def _penalty_frame(plays: pl.DataFrame) -> pl.DataFrame:
             .sum()
             .alias("penalty_yards")
         )
-    return penalty_rows.group_by(["season", "week", "team_abbr", "opponent_abbr"]).agg(penalty_aggs)
+    return penalty_rows.group_by(
+        ["season", "week", "team_abbr", "opponent_abbr"], maintain_order=True
+    ).agg(penalty_aggs)
 
 
 _TEAM_GAME_KEYS = ["season", "week", "team_abbr", "opponent_abbr"]

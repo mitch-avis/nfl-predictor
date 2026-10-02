@@ -7,8 +7,9 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.data_collection import process_week
 from nfl_predictor.utils import polars_utils
+from nfl_predictor.utils.polars import week_rows
+from nfl_predictor.utils.polars.week_rows import process_week
 
 # Prior-season (2006) game, one per team. League means: pass_yards 250, pass_epa_sum 7.5,
 # dropbacks 30, so the regressed BUF prior (factor 1/3) is pass_yards 283.33,
@@ -174,7 +175,7 @@ def test_first_season_in_the_run_ignores_earlier_seasons() -> None:
 
 def test_supplied_prior_season_stats_match_the_computed_fallback() -> None:
     """Passing the precomputed prior gives the same rows as computing it inside."""
-    prior = data_collection.build_prior_season_stats(_team_stats(), 2007, min_season=2006)
+    prior = week_rows.build_prior_season_stats(_team_stats(), 2007, min_season=2006)
 
     assert prior is not None
     assert_frame_equal(_run_week(2, prior_season_stats=prior), _run_week(2), check_exact=True)
@@ -183,9 +184,9 @@ def test_supplied_prior_season_stats_match_the_computed_fallback() -> None:
 
 def test_prior_season_stats_are_unavailable_for_the_first_season() -> None:
     """No prior is built for the first season in the run or when the data is absent."""
-    assert data_collection.build_prior_season_stats(_team_stats(), 2006, min_season=2006) is None
-    assert data_collection.build_prior_season_stats(_team_stats(), 2009, min_season=2006) is None
-    assert data_collection.build_prior_season_stats(pl.DataFrame(), 2007, min_season=2006) is None
+    assert week_rows.build_prior_season_stats(_team_stats(), 2006, min_season=2006) is None
+    assert week_rows.build_prior_season_stats(_team_stats(), 2009, min_season=2006) is None
+    assert week_rows.build_prior_season_stats(pl.DataFrame(), 2007, min_season=2006) is None
 
 
 def test_blend_fills_a_missing_in_season_value_from_the_prior() -> None:

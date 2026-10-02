@@ -6,9 +6,9 @@ import polars as pl
 import pytest
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.data_collection import _merge_team_rankings, process_week
 from nfl_predictor.utils import polars_utils
-from nfl_predictor.utils.polars import schedule_strength
+from nfl_predictor.utils.polars import schedule_strength, strength_table, week_rows
+from nfl_predictor.utils.polars.week_rows import _merge_team_rankings, process_week
 
 
 def test_process_week_uses_fallback_stats_for_week1() -> None:
@@ -60,9 +60,7 @@ def test_merge_team_rankings_week1_uses_prev() -> None:
         }
     )
 
-    result = _merge_team_rankings(
-        merged, 2007, 1, data_collection.TeamRankingsFrames(None, prev_tr_df)
-    )
+    result = _merge_team_rankings(merged, 2007, 1, week_rows.TeamRankingsFrames(None, prev_tr_df))
 
     row = result.row(0, named=True)
     assert row["away_predictive_rating"] == pytest.approx(5.0)
@@ -499,7 +497,7 @@ def test_strength_feature_join_collapses_duplicate_team_keys() -> None:
         }
     )
 
-    result = data_collection._merge_strength_features(merged, features)
+    result = week_rows._merge_strength_features(merged, features)
 
     assert result.height == 1
     assert result.row(0, named=True)["away_adj_srs"] == pytest.approx(1.0)
@@ -515,7 +513,7 @@ def test_strength_features_are_added_even_when_no_team_matches() -> None:
         }
     )
 
-    result = data_collection._merge_strength_features(merged, empty)
+    result = week_rows._merge_strength_features(merged, empty)
 
     assert result.height == 1
     for side in ("away", "home"):
@@ -543,7 +541,7 @@ def test_strength_features_degrade_when_the_schedule_is_incomplete() -> None:
     )
     incomplete_schedule = pl.DataFrame({"season": [2007], "week": [3]})
 
-    features = data_collection.build_strength_features(
+    features = strength_table.build_strength_features(
         team_games, incomplete_schedule, season=2007, week=3
     )
 
@@ -584,7 +582,7 @@ def test_remaining_schedule_strength_ignores_the_postseason_bracket() -> None:
 
     def remaining(playoff_opponent: str) -> float | None:
         adjusted = schedule_strength.compute_schedule_strength_adjusted(
-            data_collection._regular_season_schedule(_bracket_schedule(playoff_opponent), 2007),
+            strength_table._regular_season_schedule(_bracket_schedule(playoff_opponent), 2007),
             ratings,
             season=2007,
             week=2,
@@ -618,10 +616,10 @@ def test_week_one_publishes_strength_before_any_game_is_played() -> None:
     new_season_schedule = pl.DataFrame(
         {"season": [2007], "week": [1], "away_abbr": ["AAA"], "home_abbr": ["BBB"]}
     )
-    prior = data_collection.build_prior_strength_snapshot(played, 2007, min_season=2006)
+    prior = strength_table.build_prior_strength_snapshot(played, 2007, min_season=2006)
     assert prior is not None, "the prior season should produce a snapshot"
 
-    features = data_collection.build_strength_features(
+    features = strength_table.build_strength_features(
         played,
         new_season_schedule,
         season=2007,

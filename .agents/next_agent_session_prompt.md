@@ -5,83 +5,100 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-01)
+## State (written 2026-10-01, step 4 in progress)
 
-- `main` is at `0.37.1` plus the step-3 close-out and pushed to `origin` (the user approved the
-  merge and push on 2026-10-01). It is checked out in the main checkout, `uv sync` has run, and
-  the working tree is clean. `scripts/gate.sh --web` exits `0` on it (see the check-in of
-  2026-10-01: 1234 passed, coverage 92.69%, 26 frontend tests).
-- What landed on 2026-09-29 to 2026-10-01, all merged with `--no-ff`:
-  - `fix/weekly-dry-run` (`0.35.2`-`0.35.3`): `weekly --dry-run` skips the data refresh;
-    `leakage-audit` creates its report directory; `validate` infers column types from every row.
-    All 12 web job templates were launched live (accepted by the user).
-  - `refactor/ruff-all` (`0.36.0`-`0.37.1`):
-    - ruff `select = ["ALL"]` with no inline `noqa`;
-    - the package in `src/nfl_predictor/`, built with `uv_build`; a scratch ETL rebuild matched
-      the flat layout to `2.2e-16`, the ETL's own noise (`~/scratch/etl_src_check/`);
-    - `license = "MIT"` (SPDX), and `reports/` gitignored.
-  - `docs/step3-close-out`:
-    - roadmap step 3 closed by the user (`ARCHIVE.md`, "Roadmap step 3");
-    - task 56.6 rewritten as the step-4 pick-time line plan;
-    - the feature-importance toggle became task 58.6;
-    - the user's `uv.lock` refresh (charset-normalizer 3.5.2, fastapi 0.142.2).
-- Every walk-forward checkpoint fingerprint changed with `0.36.0` and `0.37.0`, so the next
-  walk-forward or weekly stage 1 retrains from scratch (about a minute on the GPU for stage 1).
-- After any checkout that switches between the flat and the `src/` layout (an old branch), run
-  `uv sync` at once and delete any leftover untracked `nfl_predictor/` directory of
-  `__pycache__` files at the repository root.
-- All agent worktrees and every merged branch are removed (2026-10-01). The only branches left
-  are `main` and `feat/web-ui` (local and on `origin`), which the user keeps on purpose.
-- Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`; 16 games, `floor_sigma` `13.2467`
-  with no fallback, ranks 1..16). It is the active web run, with no pin. No web server is
-  running; if the user restarts `nfl-predictor web`, rebuild `web/dist` first (`npm run build`
-  in `web/`).
+- Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
+  out in the main checkout at `0.39.2`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
+  passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
+- Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
+  - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
+    Parquet metadata and refetch when stale (all 56 existing files pass, nothing refetched);
+    five data-CSV reads infer types from the whole file (Week 4 outputs unchanged).
+  - `0.37.3`: byte-identical ETL rebuilds on one machine at one Polars thread count (sorted
+    `sos_*` reductions, week-ordered season-to-date means, `maintain_order=True` on every ETL
+    `group_by`/`unique` with an AST guard test, same-date games sorted by `game_id`). Scratch
+    evidence in `~/scratch/etl_repro/` (4.6 GB, deletable once no longer needed). Values move
+    against the current `data/` build by at most about `2e-16` of scale, and same-date row order
+    changes, so the next rebuild gets a new dataset fingerprint once; any step-4 build-to-build
+    comparison rebuilds its reference with current code rather than comparing with `data/`.
+  - `0.37.4`: both `qb_elos.csv` loaders read declared column types (outputs and two 2019-2026
+    scratch builds unchanged, `~/scratch/qbelo_types/`); a text token in a numeric column now
+    fails the read.
+  - `0.37.5`: opt-in `nfl-predictor data --incremental` (`utils/season_cache.py`), about 48 s warm
+    against about 640 s full in scratch (`~/scratch/etl_incremental/`). Narrowed in `TODO.md`: a
+    reused season matches a full rebuild only until a later season gains rows, because
+    `calculate_league_means` (`utils/polars/teamrankings.py`) reduces a slice whose chunk layout
+    moves; two strict-xfail tests pin it. `constants.py` changed, so every checkpoint retrains.
+  - `0.37.6`: `data_collection.py` split (week builder to `utils/polars/week_rows.py`, strength
+    table to `utils/polars/strength_table.py`), byte-identical; the first `--incremental` run
+    afterwards rebuilds every season (code fingerprint changed).
+  - `0.38.0`: `calculate_league_means` rechunks its season slice (features moved once by up to
+    about `1.8e-15`), so `--incremental` equals a full rebuild after later seasons gain rows
+    (`~/scratch/etl_rechunk/`); the weekly run refreshes with `--incremental`
+    (`config/weekly_run.yaml`). The first incremental run rebuilds every season (code fingerprint
+    changed in `0.37.6`/`0.38.0`), then about 48 s.
+  - `0.38.1`-`0.39.0`: the fingerprint guard follows relative imports and
+    `stamp_strength_snapshot` is public; the schedule cache records its requested columns; the web
+    weekly job layers its form over `config/weekly_run.yaml`, so it refreshes with `--incremental`
+    (task 58.7).
+  - `0.39.1`-`0.39.2` (2026-10-01 evening): the user's dependency refresh (uv `>=0.12`);
+    `pythonpath = ["."]` so bare `pytest` works; `update_requirements.sh` restores the LightGBM
+    CUDA step (non-fatal since `0.39.2`), repairs a damaged interpreter by reinstalling the
+    managed Python, and checks that the core packages import. Background: at about 16:43 a
+    formatter run from the home folder rewrote the uv cache and the managed Pythons; the user
+    cleared the cache and reinstalled them.
+- The "4, first" reproducibility work is done (one low-priority follow-up: no current-season
+  schedule fallback). Phase A of `.agents/step4_plan.md` (accepted by the user 2026-10-01, all
+  three parts) is in flight: implementer subagents for the 53.7 quarterback rate group, the
+  `--strength-prior-blend-games` option, the next-opponent identity switch, and 56.6.
+- The Week 4 refresh ran from a `main` worktree (`~/scratch/wk4_main`, `data/` and `models/`
+  symlinked; delete it once the user's picks are in): `models/weekly_2026_week_04_refresh/`.
+- Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
 
 ## Open questions for the user
 
-None pending.
+None blocking. Pending recommendations: leave `AGENTS.md`'s plain post-bump `uv sync` (it reverts
+a CUDA LightGBM build; harmless while LightGBM is parked); no incremental option on `etl_full`.
+Decided 2026-10-01: the step-4 plan (8 arms, 16 runs, 6 scratch builds, `data/` untouched until
+adoption, follow-ups deferred to a second ladder), plus the earlier decisions recorded in
+`ARCHIVE.md`.
 
 ## Next
 
-1. Roadmap step 3 is closed (the user, 2026-10-01; `ARCHIVE.md`, "Roadmap step 3"). Step 4 on a
-   new branch off `main`:
-   - rebuild reproducibility first: the "4, first" row of the follow-up table under "Roadmap
-     Status" in `TODO.md` (bit-reproducible schedule-strength columns, a schema version in the
-     play-by-play cache key), plus the step-4 follow-up about Polars' 100-row type guessing and
-     the incremental-ETL item from the Week 3 run. Known cause of non-determinism: `unique()`
-     without `maintain_order` reorders rows within a date, and parallel float sums differ at
-     about `1e-16` in the `sos_*` columns. Code changes need no asking; every ETL rebuild into
-     `data/` is must-ask (scratch copies, as in `~/scratch/etl_src_check/run.sh`, are not).
-   - then the feature-value changes: 55.3, 53.7, 56.6 (the pick-time market line: the
-     `nfelomarket_data` getter, the per-game line order, the fitted spread-to-moneyline map; the
-     plan agreed with the user on 2026-10-01 is in the task text) and the step-4 follow-ups,
-     sharing one rebuild cycle and one new two-seed GPU reference, which also refreshes the
-     floor's sigma pool (`floor_sigma_reference_runs`).
-2. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
+1. Review and merge the Phase A chunks of `.agents/step4_plan.md`, then Phase B (scratch builds
+   and the overnight driver, under the plan's cap and decision rules).
+2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
+   55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
+   step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);
+   scratch copies are not.
+3. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
    `.venv/bin/nfl-predictor weekly --run-id weekly_2026_week_05`, through a `launch.sh` in the run
-   directory with `nohup setsid`. Check the games, `floor_sigma` and the ranks as for Week 4.
-   Every checkpoint fingerprint changed with `0.36.0` and `0.37.0`, so stage 1 retrains, which
-   is about a minute on the GPU.
+   directory with `nohup setsid`. The weekly run uses the code on the checked-out branch: run it
+   from `main` (or ask the user whether the step-4 branch is acceptable), and after switching
+   branches run `uv sync`. Every checkpoint fingerprint changed with `0.36.0` and `0.37.0`, so
+   stage 1 retrains (about a minute on the GPU).
 
 ## How the last sessions worked (keep doing this)
 
 - Each code chunk: an `implementer` subagent in its own worktree, a separate `reviewer`, fixes
-  back to the implementer, and a `--no-ff` merge into the feature branch. The delegating session
-  writes:
+  back to the implementer, and a `--no-ff` merge into the feature branch (the commit hook needs a
+  Conventional Commits subject on merge commits too). The delegating session writes:
   - `CHANGELOG.md` and the version (`pyproject.toml`, `uv lock`, `uv sync`);
-  - `TODO.md`, `ARCHIVE.md`, `AGENTS.md`, `.agents/benchmarks.md` and this file.
+  - `TODO.md`, `ARCHIVE.md` (step-4 resolved items under "Roadmap step 4 (in progress)"),
+    `AGENTS.md`, `.agents/benchmarks.md` and this file.
 
   It lints the Markdown it edits with `markdownlint-cli2` before committing.
+- Small review-fix deltas (docs, a flag) may be verified by the delegating session from the diff;
+  anything with logic goes back to the reviewer (a second-round reviewer caught a `total_yards`
+  regression in `0.37.2`).
 - Every measured number goes through an independent reviewer's rescore before it enters the docs
   (rule 3). Decision rules are written into the run directory before scoring.
-- Run the gate in a separate worktree, because the `--web` gate rebuilds `web/dist`. Watch long
-  runs by polling a PID (`while kill -0 <pid>`), never with `pgrep -f` on a pattern that matches
-  the watcher's own command line.
+- Run the gate in a separate worktree (`git worktree add --detach ~/scratch/gate_step4 HEAD`,
+  `uv sync`, `VIRTUAL_ENV=<it>/.venv scripts/gate.sh`). Watch long runs by polling a PID, never
+  with `pgrep -f` on a pattern that matches the watcher's own command line.
 - Lint work: fix the code rather than suppress. Run `.venv/bin/pre-commit run --all-files`
-  yourself before ending a turn (the Stop hook runs it). The commit hook lints against the
-  committed `pyproject.toml`, so commit ruff config changes before the code that depends on them.
-- Stop at a natural point well before the context fills, and rewrite this file. The user prefers
-  a fresh session to a compacted one.
+  yourself before ending a turn (the Stop hook runs it).
+- Stop at a natural point well before the context fills, and rewrite this file.
 
 ## Notes
 

@@ -13,10 +13,10 @@ Verified baseline at time of writing: `412 passed`, coverage `90.03%`, working t
 
 | Layer | Owning module | Notes |
 | --- | --- | --- |
-| ETL orchestration | `src/nfl_predictor/data_collection.py` | `collect_all_data` -> `process_season` -> `process_week`; per-week joins |
+| ETL orchestration | `src/nfl_predictor/data_collection.py`, `src/nfl_predictor/utils/polars/week_rows.py` | `collect_all_data` -> `process_season` (`data_collection.py`) -> `process_week` (`week_rows.py`); per-week joins; per-week strength table in `utils/polars/strength_table.py` |
 | Source loaders | `src/nfl_predictor/utils/polars/loaders.py` | schedule + team stats cached per season as Parquet under `data/cache/nflreadpy`; Elo from `data/qb_elos.csv` |
 | Season-to-date aggregation | `src/nfl_predictor/utils/polars/teamrankings.py` | `aggregate_team_stats_to_week` = mean of every numeric column for `week < target`; playoffs use the full regular season; `_compute_derived_metrics` adds ratios |
-| Week-1 fallback | `data_collection.process_week` | previous-season full mean regressed toward league mean by `WEEK1_REGRESSION_FACTOR` (1/3) |
+| Week-1 fallback | `week_rows.process_week` | previous-season full mean regressed toward league mean by `WEEK1_REGRESSION_FACTOR` (1/3) |
 | Opponent mirror | `loaders.add_per_game_opponent_stats` | `opponent_<stat>` is the same-game opponent's stat, so its season-to-date mean is an **allowed** stat, not schedule strength |
 | Context features | `src/nfl_predictor/utils/polars/features.py` | records, divisional, lookahead, motivation, season phase, Elo/QB/stat 4-week trends, coach priors |
 | External ratings | `src/nfl_predictor/utils/polars/teamrankings.py` + `scraping_utils.py` | TeamRankings ratings (predictive, SOS, future SOS, last 5/10, luck) and situational stats; floor 2003 Week 2 |

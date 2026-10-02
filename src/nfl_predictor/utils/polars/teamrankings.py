@@ -136,7 +136,7 @@ def load_team_rankings(
     existing_data = [df.cast({"week": pl.Int64}) for df in plan.existing]
     combined = pl.concat(existing_data, how="diagonal")
     # Remove duplicates by keeping latest data for each team/week
-    combined = combined.unique(subset=["team_abbr", "week"], keep="last")
+    combined = combined.unique(subset=["team_abbr", "week"], keep="last", maintain_order=True)
     return combined.sort(["week", "team_abbr"])
 
 
@@ -385,7 +385,7 @@ def get_latest_team_rankings(tr_df: pl.DataFrame) -> pl.DataFrame:
 
     # Group by team and take first (most recent) value for each column
     agg_exprs = [pl.col(c).first() for c in non_key_cols]
-    return tr_sorted.group_by("team_abbr").agg(agg_exprs)
+    return tr_sorted.group_by("team_abbr", maintain_order=True).agg(agg_exprs)
 
 
 def aggregate_team_stats_to_week(
@@ -445,7 +445,16 @@ def aggregate_team_stats_to_week(
     agg_exprs = [pl.col(c).mean().alias(c) for c in numeric_cols]
     agg_exprs.append(pl.len().alias("games_played"))
 
-    agg_df = prior_games.group_by("team_abbr").agg(agg_exprs)
+    # Polars keeps each group's input row order, so sorting by week first makes every mean
+    # see its games chronologically whatever order the stats arrive in: a float sum depends
+    # on its term order in the last bits. Polars still splits large sums into per-thread
+    # partial sums, so the bits match only at the same Polars thread count
+    # (POLARS_MAX_THREADS).
+    agg_df = (
+        prior_games.sort(["team_abbr", "week"], maintain_order=True)
+        .group_by("team_abbr", maintain_order=True)
+        .agg(agg_exprs)
+    )
 
     # Compute derived ratio metrics from the aggregated averages
     return _compute_derived_metrics(agg_df)
@@ -853,7 +862,9 @@ def calculate_league_means(team_stats_df: pl.DataFrame, season: int) -> dict[str
         Dictionary mapping stat names to their league-wide mean values
 
     """
-    season_stats = team_stats_df.filter(pl.col("season") == season)
+    # A reduction over a filtered slice sums chunk by chunk, so the slice is rechunked to make
+    # its means independent of how many rows (and which chunk splits) the whole frame has.
+    season_stats = team_stats_df.filter(pl.col("season") == season).rechunk()
 
     if season_stats.height == 0:
         return {}

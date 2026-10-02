@@ -12,6 +12,7 @@ import pytest
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import clock, polars_utils
+from nfl_predictor.utils.polars import week_rows
 
 
 def test_current_nfl_season_and_default_max_season(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,18 +207,18 @@ def test_timed_substep_accumulates_totals_only_when_enabled(
 ) -> None:
     """Timed substeps should accumulate elapsed time into the provided totals mapping."""
     perf_values = iter([10.0, 12.25, 20.0, 21.0])
-    monkeypatch.setattr(data_collection.time, "perf_counter", lambda: next(perf_values))
+    monkeypatch.setattr(week_rows.time, "perf_counter", lambda: next(perf_values))
 
     totals: dict[str, float] = {"existing": 1.0}
-    with data_collection._timed_substep("load", enabled=False, totals=totals):
+    with week_rows._timed_substep("load", enabled=False, totals=totals):
         pass
     assert totals == {"existing": 1.0}
 
-    with data_collection._timed_substep("load", enabled=True, totals=totals):
+    with week_rows._timed_substep("load", enabled=True, totals=totals):
         pass
     assert totals["load"] == pytest.approx(2.25)
 
-    with data_collection._timed_substep("skip", enabled=True, totals=None):
+    with week_rows._timed_substep("skip", enabled=True, totals=None):
         pass
 
 
@@ -330,12 +331,12 @@ def test_prefix_team_records_and_invalid_side() -> None:
     ]
     records_df = pl.DataFrame({"team_abbr": ["AAA"], **{col: [1] for col in base_cols}})
 
-    away = data_collection._prefix_team_records(records_df, "away")
+    away = week_rows._prefix_team_records(records_df, "away")
     assert "away_abbr" in away.columns
     assert "away_wins" in away.columns
 
     with pytest.raises(ValueError, match="team_side must be 'away' or 'home'"):
-        data_collection._prefix_team_records(records_df, "bad")
+        week_rows._prefix_team_records(records_df, "bad")
 
 
 def test_resolve_seasons_rejects_pre_nflreadpy() -> None:
@@ -355,9 +356,7 @@ def test_merge_team_rankings_week_specific() -> None:
         }
     )
 
-    out = data_collection._merge_team_rankings(
-        merged, 2023, 3, data_collection.TeamRankingsFrames(tr_df, None)
-    )
+    out = week_rows._merge_team_rankings(merged, 2023, 3, week_rows.TeamRankingsFrames(tr_df, None))
 
     assert "away_predictive_rating" in out.columns
     assert "home_predictive_rating" in out.columns
@@ -374,8 +373,8 @@ def test_merge_team_rankings_week1_prev() -> None:
         }
     )
 
-    out = data_collection._merge_team_rankings(
-        merged, 2023, 1, data_collection.TeamRankingsFrames(None, prev_tr_df)
+    out = week_rows._merge_team_rankings(
+        merged, 2023, 1, week_rows.TeamRankingsFrames(None, prev_tr_df)
     )
 
     assert out["away_predictive_rating"][0] == 3.0
@@ -407,6 +406,21 @@ def test_save_and_load_dataframe_use_an_explicit_data_dir(tmp_path: Path, monkey
     loaded = data_collection.load_dataframe("unit_test", target)
     assert loaded is not None
     assert loaded.height == 1
+
+
+def test_load_dataframe_types_a_column_first_filled_after_a_hundred_rows(tmp_path: Path) -> None:
+    """A column that is empty for the first 150 rows still loads with its numeric type."""
+    rows = 160
+    pl.DataFrame(
+        {"season": [2020] * rows, "late": [None] * 150 + [1.5] * (rows - 150)},
+        schema={"season": pl.Int64, "late": pl.Float64},
+    ).write_csv(tmp_path / "unit_test.csv")
+
+    loaded = data_collection.load_dataframe("unit_test", tmp_path)
+
+    assert loaded is not None
+    assert loaded.schema["late"] == pl.Float64
+    assert loaded["late"].drop_nulls().to_list() == [1.5] * (rows - 150)
 
 
 def test_load_dataframe_missing(tmp_path: Path, monkeypatch) -> None:
@@ -614,7 +628,7 @@ def test_process_week_fallback(monkeypatch) -> None:
     monkeypatch.setattr(polars_utils, "get_stats_for_diff", list)
     monkeypatch.setattr(polars_utils, "calculate_stat_differentials", lambda df, _stats: df)
 
-    out = data_collection.process_week(
+    out = week_rows.process_week(
         2023,
         1,
         schedule_df,
@@ -855,14 +869,14 @@ def test_process_week_early_exit_paths(monkeypatch: pytest.MonkeyPatch) -> None:
         }
     )
     assert (
-        data_collection.process_week(
+        week_rows.process_week(
             2023, 1, schedule_df, pl.DataFrame(), data_collection.SeasonInputs(min_season=2023)
         ).height
         == 0
     )
     assert any("Skipping season 2023 week 1" in message for message in info_messages)
 
-    no_week = data_collection.process_week(
+    no_week = week_rows.process_week(
         2024, 2, schedule_df, pl.DataFrame(), data_collection.SeasonInputs(min_season=2023)
     )
     assert no_week.height == 0
@@ -880,7 +894,7 @@ def test_process_week_early_exit_paths(monkeypatch: pytest.MonkeyPatch) -> None:
             "home_abbr": ["BBB"],
         }
     )
-    no_stats = data_collection.process_week(
+    no_stats = week_rows.process_week(
         2024,
         2,
         no_stats_schedule,
@@ -904,11 +918,9 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
         }
     )
 
-    assert data_collection._merge_team_trends(merged, None).equals(merged)
-    assert data_collection._merge_team_trends(merged, pl.DataFrame()).equals(merged)
-    assert data_collection._merge_team_trends(merged, pl.DataFrame({"season": [2024]})).equals(
-        merged
-    )
+    assert week_rows._merge_team_trends(merged, None).equals(merged)
+    assert week_rows._merge_team_trends(merged, pl.DataFrame()).equals(merged)
+    assert week_rows._merge_team_trends(merged, pl.DataFrame({"season": [2024]})).equals(merged)
 
     team_trends = pl.DataFrame(
         {
@@ -918,13 +930,13 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
             "elo_trend": [1.0, 2.0],
         }
     )
-    team_out = data_collection._merge_team_trends(merged, team_trends)
+    team_out = week_rows._merge_team_trends(merged, team_trends)
     assert team_out["away_elo_trend"][0] == 1.0
     assert team_out["home_elo_trend"][0] == 2.0
 
-    assert data_collection._merge_qb_trends(
-        merged.drop(["away_qb", "home_qb"]), team_trends
-    ).equals(merged.drop(["away_qb", "home_qb"]))
+    assert week_rows._merge_qb_trends(merged.drop(["away_qb", "home_qb"]), team_trends).equals(
+        merged.drop(["away_qb", "home_qb"])
+    )
     qb_trends = pl.DataFrame(
         {
             "season": [2024, 2024],
@@ -933,7 +945,7 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
             "qb_form": [0.1, 0.2],
         }
     )
-    qb_out = data_collection._merge_qb_trends(merged, qb_trends)
+    qb_out = week_rows._merge_qb_trends(merged, qb_trends)
     assert qb_out["away_qb_form"][0] == pytest.approx(0.1)
     assert qb_out["home_qb_form"][0] == pytest.approx(0.2)
 
@@ -946,7 +958,7 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
             "coach_games_prior": [3, 4],
         }
     )
-    coach_out = data_collection._merge_coach_features(merged, coach_df)
+    coach_out = week_rows._merge_coach_features(merged, coach_df)
     assert coach_out["away_coach_games_prior"][0] == 3
     assert coach_out["home_coach_games_prior"][0] == 4
 
@@ -962,11 +974,11 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
             "predictive_rating": [1.2, 2.4],
         }
     )
-    playoff_out = data_collection._merge_team_rankings(
+    playoff_out = week_rows._merge_team_rankings(
         merged.select(["away_abbr", "home_abbr"]),
         2024,
         20,
-        data_collection.TeamRankingsFrames(playoff_tr, None),
+        week_rows.TeamRankingsFrames(playoff_tr, None),
     )
     assert "away_predictive_rating" in playoff_out.columns
 
@@ -977,11 +989,11 @@ def test_merge_helpers_and_team_rankings_fallbacks(monkeypatch: pytest.MonkeyPat
         lambda message, *args: warnings.append(message % args if args else message),
     )
     no_expected_cols = pl.DataFrame({"team_abbr": ["AAA"], "week": [2], "other": [1.0]})
-    unchanged = data_collection._merge_team_rankings(
+    unchanged = week_rows._merge_team_rankings(
         merged.select(["away_abbr", "home_abbr"]),
         2024,
         2,
-        data_collection.TeamRankingsFrames(no_expected_cols, None),
+        week_rows.TeamRankingsFrames(no_expected_cols, None),
     )
     assert unchanged.columns == ["away_abbr", "home_abbr"]
     assert any("TR data has no expected columns" in warning for warning in warnings)
@@ -1141,8 +1153,8 @@ def test_merge_team_rankings_skips_scraped_situational_columns_when_pbp_is_selec
         }
     )
 
-    out = data_collection._merge_team_rankings(
-        merged, 2024, 2, data_collection.TeamRankingsFrames(tr_df, None), tr_stats_source="pbp"
+    out = week_rows._merge_team_rankings(
+        merged, 2024, 2, week_rows.TeamRankingsFrames(tr_df, None), tr_stats_source="pbp"
     )
 
     assert out["away_predictive_rating"][0] == pytest.approx(1.2)

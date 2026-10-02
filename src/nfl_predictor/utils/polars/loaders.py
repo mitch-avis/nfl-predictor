@@ -5,6 +5,7 @@ Implementation was split out of `nfl_predictor.utils.polars_utils`.
 """
 
 import functools
+import json
 import operator
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -21,6 +22,7 @@ from nfl_predictor.utils.scraping_utils import (
 
 if TYPE_CHECKING:
     import os
+    from collections.abc import Sequence
 
     from polars.datatypes import DataType
 
@@ -77,6 +79,10 @@ _PBP_COLUMN_DTYPES: dict[str, DataType] = {
     for column in constants.PBP_COLUMNS
 }
 
+
+# Parquet key-value metadata entry that records, in each nflreadpy cache file, the columns
+# the loader requested when it wrote the file (a JSON list).
+_REQUESTED_COLUMNS_METADATA_KEY = "nfl_predictor.requested_columns"
 
 # Identity of a team-game everywhere in the per-team frames.
 _TEAM_GAME_KEYS: tuple[str, str, str] = ("season", "week", "team_abbr")
@@ -135,22 +141,74 @@ def _pbp_cache_path(cache_dir: Path, season: int, *, regular_season_only: bool) 
     return cache_dir / f"pbp_{season}_{suffix}.parquet"
 
 
-def _read_cached_frame(path: Path) -> pl.DataFrame | None:
-    """Read a cached parquet file if it exists."""
+def _recorded_requested_columns(path: Path) -> frozenset[str]:
+    """Return the columns requested when a cache file was written, or none if not recorded.
+
+    Raises:
+        ValueError: If the record is not a JSON list of column names.
+
+    """
+    recorded = pl.read_parquet_metadata(path).get(_REQUESTED_COLUMNS_METADATA_KEY)
+    if recorded is None:
+        return frozenset()
+    columns = json.loads(recorded)
+    if not isinstance(columns, list) or not all(isinstance(c, str) for c in columns):
+        msg = f"recorded requested columns are not a list of names: {recorded[:80]}"
+        raise ValueError(msg)
+    return frozenset(columns)
+
+
+def _read_cached_frame(path: Path, requested_columns: Sequence[str] = ()) -> pl.DataFrame | None:
+    """Read a cached parquet file, or return None when it is missing, unreadable or stale.
+
+    A file is stale when it lacks a requested column that was not requested when it was
+    written: the code now asks for more than the file was built to hold. A requested column
+    that was also requested at write time and is still absent is one the source never
+    published, so it does not make the file stale. Such a column is never checked again: if
+    nflverse later publishes it for that season, only a forced refresh (`force_refresh` on
+    the loaders, `--refresh-nflreadpy` on the ETL) rewrites the file. A file written before
+    the requested columns were recorded is current when it holds every requested column.
+
+    Args:
+        path: Cache file to read
+        requested_columns: Columns the caller needs; empty skips the staleness check
+
+    Returns:
+        The cached frame, or None on a missing, unreadable or stale file
+
+    """
     if not path.exists():
         return None
     try:
+        schema = pl.read_parquet_schema(path)
+        missing = {column for column in requested_columns if column not in schema}
+        stale = sorted(missing - _recorded_requested_columns(path)) if missing else []
+        if stale:
+            log.info("Cache file %s predates the requested columns %s.", path, stale)
+            return None
         return pl.read_parquet(path)
-    except (OSError, pl.exceptions.ComputeError, pl.exceptions.NoDataError) as exc:
+    except (
+        OSError,
+        ValueError,
+        pl.exceptions.ComputeError,
+        pl.exceptions.NoDataError,
+    ) as exc:
         log.warning("Failed to read nflreadpy cache file %s: %s", path, exc)
         return None
 
 
-def _write_cached_frame(df: pl.DataFrame, path: Path) -> None:
-    """Write a cached parquet file, logging any failures."""
+def _write_cached_frame(
+    df: pl.DataFrame, path: Path, requested_columns: Sequence[str] = ()
+) -> None:
+    """Write a cached parquet file, recording the requested columns, logging any failures."""
+    metadata = (
+        {_REQUESTED_COLUMNS_METADATA_KEY: json.dumps(list(requested_columns))}
+        if requested_columns
+        else None
+    )
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        df.write_parquet(path)
+        df.write_parquet(path, metadata=metadata)
     except (OSError, pl.exceptions.ComputeError) as exc:
         log.warning("Failed to write nflreadpy cache file %s: %s", path, exc)
 
@@ -282,6 +340,25 @@ def _prepare_schedule(schedule_df: pl.DataFrame) -> pl.DataFrame:
     return schedule_df
 
 
+def _schedule_requested_columns() -> tuple[str, ...]:
+    """Return the columns a prepared schedule frame holds when nflreadpy publishes them all.
+
+    The list comes from running `_prepare_schedule` on an empty frame that carries every
+    column of `constants.NFLREADPY_SCHEDULE_COLUMNS`, so it holds the renamed names of
+    `constants.NFLREADPY_SCHEDULE_RENAME`, the single merged kickoff time and the derived
+    and stadium columns. A change to the selection, the renames or the derived columns
+    therefore invalidates the cache files written before it. The raw columns are strings
+    except the spread, which the preparation negates.
+
+    Returns:
+        Requested schedule column names in the order the preparation produces them
+
+    """
+    raw_columns = dict.fromkeys(constants.NFLREADPY_SCHEDULE_COLUMNS, pl.Utf8())
+    raw = pl.DataFrame(schema={**raw_columns, "spread_line": pl.Float64()})
+    return tuple(_prepare_schedule(raw).columns)
+
+
 def _prepare_team_stats(team_stats_df: pl.DataFrame, *, regular_season_only: bool) -> pl.DataFrame:
     """Normalize raw nflreadpy team stats to the project schema."""
     # Filter to regular season only (exclude preseason and postseason)
@@ -309,6 +386,43 @@ def _prepare_team_stats(team_stats_df: pl.DataFrame, *, regular_season_only: boo
     return combine_stats(team_stats_df)
 
 
+def _team_stats_requested_columns() -> tuple[str, ...]:
+    """Return the columns a prepared team-stat frame holds when nflreadpy publishes them all.
+
+    The list comes from running `_prepare_team_stats` on an empty frame that carries every
+    raw column the preparation reads: the keys of `constants.NFLREADPY_TEAM_STATS_MAPPING`
+    and the inputs `combine_stats` sums or derives from. A change to the mapping, to the
+    summed stats or to the derived columns therefore invalidates the cache files written
+    before it.
+
+    Returns:
+        Requested team-stat column names in the order the preparation produces them
+
+    """
+    mapping = constants.NFLREADPY_TEAM_STATS_MAPPING
+    renamed = set(mapping.values())
+    combine_inputs = [
+        *(part for _, parts in _SUMMED_STATS for part in parts),
+        *_TURNOVER_MARGIN_INPUTS,
+        *_TOTAL_YARDS_INPUTS,
+        _TOTAL_YARDS_SACK_INPUT,
+    ]
+    raw_columns = dict.fromkeys(
+        [
+            "season",
+            "week",
+            "season_type",
+            "team",
+            "opponent_team",
+            *mapping,
+            *(column for column in combine_inputs if column not in renamed),
+        ]
+    )
+    raw = pl.DataFrame(schema=dict.fromkeys(raw_columns, pl.Int64()))
+    raw = raw.with_columns(pl.col("season_type", "team", "opponent_team").cast(pl.Utf8))
+    return tuple(_prepare_team_stats(raw, regular_season_only=False).columns)
+
+
 def load_schedule(
     seasons: list[int],
     *,
@@ -318,8 +432,12 @@ def load_schedule(
 ) -> pl.DataFrame:
     """Load NFL schedule data for specified seasons using nflreadpy.
 
-    Cached schedules are used for historical seasons when available. Current and future
-    seasons are always refreshed to keep upcoming games up to date.
+    Cached schedules are used for historical seasons when available and current: a cache
+    file that lacks a column the loader now produces (see `_schedule_requested_columns`),
+    and did not request when it was written, is downloaded again; a requested column the
+    source did not publish then is not checked again, so `force_refresh` is what picks it up
+    if nflverse publishes it later. Current and future seasons are always refreshed to keep
+    upcoming games up to date.
 
     Args:
         seasons: List of season years to load
@@ -339,11 +457,12 @@ def load_schedule(
 
     log.info("Loading schedule for seasons: %s", seasons)
 
+    requested_columns = _schedule_requested_columns()
     schedule_frames: list[pl.DataFrame] = []
     for season in seasons:
         cache_path = _schedule_cache_path(resolved_cache_dir, season)
         use_cache = (season < resolved_current_season) and not force_refresh
-        cached = _read_cached_frame(cache_path) if use_cache else None
+        cached = _read_cached_frame(cache_path, requested_columns) if use_cache else None
         if cached is not None:
             log.info(
                 "Using cached nflreadpy schedule for season %d from %s",
@@ -360,7 +479,7 @@ def load_schedule(
 
         season_df = nfl.load_schedules(seasons=[season])
         season_df = _prepare_schedule(season_df)
-        _write_cached_frame(season_df, cache_path)
+        _write_cached_frame(season_df, cache_path, requested_columns)
         schedule_frames.append(season_df)
 
     return pl.concat(schedule_frames, how="diagonal")
@@ -408,8 +527,13 @@ def load_team_stats(
 ) -> pl.DataFrame:
     """Load team statistics for specified seasons using nflreadpy.
 
-    Cached stats are used for historical seasons when available. Current and future
-    seasons are always refreshed to keep upcoming games up to date.
+    Cached stats are used for historical seasons when available and current: a cache file
+    that lacks a column the loader now produces (see `_team_stats_requested_columns`), and
+    did not request when it was written, is downloaded again; a requested column the source
+    did not publish then is not checked again, so `force_refresh` is what picks it up if
+    nflverse publishes it later. Current and future seasons are always refreshed to keep
+    upcoming games up to date; when that refresh fails, the cached file is used as it is,
+    or the season is skipped.
 
     Args:
         seasons: List of season years to load
@@ -430,13 +554,14 @@ def load_team_stats(
 
     log.info("Loading team stats for seasons: %s", seasons)
 
+    requested_columns = _team_stats_requested_columns()
     team_frames: list[pl.DataFrame] = []
     for season in seasons:
         cache_path = _team_stats_cache_path(
             resolved_cache_dir, season, regular_season_only=regular_season_only
         )
         use_cache = (season < resolved_current_season) and not force_refresh
-        cached = _read_cached_frame(cache_path) if use_cache else None
+        cached = _read_cached_frame(cache_path, requested_columns) if use_cache else None
         if cached is not None:
             log.info(
                 "Using cached nflreadpy team stats for season %d from %s",
@@ -477,7 +602,7 @@ def load_team_stats(
             continue
 
         season_df = _prepare_team_stats(season_df, regular_season_only=regular_season_only)
-        _write_cached_frame(season_df, cache_path)
+        _write_cached_frame(season_df, cache_path, requested_columns)
         team_frames.append(season_df)
 
     if not team_frames:
@@ -544,8 +669,12 @@ def _log_team_stats_coverage(team_stats_df: pl.DataFrame, skeleton: pl.DataFrame
 
     """
     group_keys = ["season", "team_abbr"]
-    scheduled = skeleton.group_by(group_keys).agg(pl.len().alias("scheduled_games"))
-    observed = team_stats_df.group_by(group_keys).agg(pl.len().alias("stat_rows"))
+    scheduled = skeleton.group_by(group_keys, maintain_order=True).agg(
+        pl.len().alias("scheduled_games")
+    )
+    observed = team_stats_df.group_by(group_keys, maintain_order=True).agg(
+        pl.len().alias("stat_rows")
+    )
     mismatched = (
         scheduled.join(observed, on=group_keys, how="full", coalesce=True)
         .with_columns(
@@ -670,7 +799,7 @@ def attach_team_stats_to_schedule(
         return team_stats_df
 
     skeleton = skeleton.cast({key: team_stats_df.schema[key] for key in keys})
-    covered_seasons = skeleton["season"].unique().to_list()
+    covered_seasons = skeleton["season"].unique(maintain_order=True).to_list()
     in_scope = team_stats_df.filter(pl.col("season").is_in(covered_seasons))
     out_of_scope = team_stats_df.filter(~pl.col("season").is_in(covered_seasons))
 
@@ -789,8 +918,7 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
     # lost, where turnovers gained are def_interceptions plus fumble_recovery_opp and
     # turnovers lost are interceptions_thrown plus fumbles_lost.
     # Note: passing_interceptions is renamed to interceptions_thrown before this function
-    turnover_cols = ["def_interceptions", "fumble_recovery_opp", "interceptions_thrown"]
-    if "fumbles_lost" in df.columns and all(c in df.columns for c in turnover_cols):
+    if "fumbles_lost" in df.columns and all(c in df.columns for c in _TURNOVER_MARGIN_INPUTS):
         df = df.with_columns(
             (
                 (pl.col("def_interceptions") + pl.col("fumble_recovery_opp"))
@@ -799,12 +927,11 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
         )
 
     # Compute total yards (passing + rushing - sack yards lost)
-    yards_cols = ["pass_yards", "rush_yards"]
-    if all(c in df.columns for c in yards_cols):
+    if all(c in df.columns for c in _TOTAL_YARDS_INPUTS):
         total_yards_expr = pl.col("pass_yards") + pl.col("rush_yards")
         # Subtract sack yards lost if available
-        if "yards_lost_from_sacks" in df.columns:
-            total_yards_expr = total_yards_expr - pl.col("yards_lost_from_sacks")
+        if _TOTAL_YARDS_SACK_INPUT in df.columns:
+            total_yards_expr = total_yards_expr - pl.col(_TOTAL_YARDS_SACK_INPUT)
         df = df.with_columns(total_yards_expr.alias("total_yards"))
 
     # Drop original columns that were combined
@@ -814,6 +941,17 @@ def combine_stats(df: pl.DataFrame) -> pl.DataFrame:
 
     return df
 
+
+# Columns `combine_stats` reads, besides the summed parts, to derive turnover margin and
+# total yards (`fumbles_lost` is itself a summed stat). Total yards need passing and
+# rushing yards; sack yards lost are subtracted only when present.
+_TURNOVER_MARGIN_INPUTS: tuple[str, ...] = (
+    "def_interceptions",
+    "fumble_recovery_opp",
+    "interceptions_thrown",
+)
+_TOTAL_YARDS_INPUTS: tuple[str, ...] = ("pass_yards", "rush_yards")
+_TOTAL_YARDS_SACK_INPUT = "yards_lost_from_sacks"
 
 # The stats `combine_stats` sums from their parts.
 _SUMMED_STATS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -885,6 +1023,12 @@ def _empty_pbp_frame() -> pl.DataFrame:
     return pl.DataFrame(schema=_PBP_COLUMN_DTYPES)
 
 
+def _select_pbp_columns(frame: pl.DataFrame) -> pl.DataFrame:
+    """Keep the columns of `constants.PBP_COLUMNS` that the frame has, in that order."""
+    available_cols = set(frame.columns)
+    return frame.select([c for c in constants.PBP_COLUMNS if c in available_cols])
+
+
 def _prepare_pbp(season_df: pl.DataFrame, *, regular_season_only: bool) -> pl.DataFrame:
     """Reduce raw nflreadpy play-by-play data to the cached project schema.
 
@@ -900,9 +1044,7 @@ def _prepare_pbp(season_df: pl.DataFrame, *, regular_season_only: bool) -> pl.Da
         Prepared play-by-play DataFrame ready to cache
 
     """
-    available_cols = set(season_df.columns)
-    cols_to_select = [c for c in constants.PBP_COLUMNS if c in available_cols]
-    prepared = season_df.select(cols_to_select)
+    prepared = _select_pbp_columns(season_df)
 
     if regular_season_only and "season_type" in prepared.columns:
         prepared = prepared.filter(pl.col("season_type") == "REG")
@@ -932,7 +1074,13 @@ def load_pbp(
         - Prepared frames are cached as `pbp_<season>_<reg|all>.parquet` in the resolved
           cache directory.
         - Historical seasons (`season < current_season`) read from that cache whenever it
-          exists and `force_refresh` is False.
+          exists, is current and `force_refresh` is False. Each file records the columns
+          requested when it was written; a file that lacks a column of
+          `constants.PBP_COLUMNS` that was not requested then predates the current list and
+          is downloaded again (see `_read_cached_frame`). A requested column the source did
+          not publish when the file was written is not checked again; `force_refresh`
+          picks it up if nflverse publishes it later. A cache hit keeps only the columns of
+          `constants.PBP_COLUMNS`, as a download would.
         - The current and any future season is always refreshed, and `force_refresh` bypasses
           the cache for every season.
 
@@ -940,10 +1088,11 @@ def load_pbp(
         - A failure for a historical season is re-raised, because historical data is expected
           to be available.
         - A failure for the current or a future season is logged as a warning and the cached
-          frame is used when one exists; otherwise that season is skipped. Both a
-          `ConnectionError` and a `ValueError` count as a failure here: before kickoff the
-          current season has no play-by-play published at all, and nflreadpy reports that by
-          raising `ValueError` for an out-of-range season rather than by failing to connect.
+          frame is used when one exists, even one that predates the requested columns;
+          otherwise that season is skipped. Both a `ConnectionError` and a `ValueError`
+          count as a failure here: before kickoff the current season has no play-by-play
+          published at all, and nflreadpy reports that by raising `ValueError` for an
+          out-of-range season rather than by failing to connect.
         - When no season yields data, an empty frame carrying the full expected schema is
           returned (see `_PBP_COLUMN_DTYPES`) so callers always see stable columns and dtypes.
 
@@ -966,20 +1115,21 @@ def load_pbp(
 
     log.info("Loading play-by-play for seasons: %s", seasons)
 
+    requested_columns = tuple(constants.PBP_COLUMNS)
     pbp_frames: list[pl.DataFrame] = []
     for season in seasons:
         cache_path = _pbp_cache_path(
             resolved_cache_dir, season, regular_season_only=regular_season_only
         )
         use_cache = (season < resolved_current_season) and not force_refresh
-        cached = _read_cached_frame(cache_path) if use_cache else None
+        cached = _read_cached_frame(cache_path, requested_columns) if use_cache else None
         if cached is not None:
             log.info(
                 "Using cached nflreadpy play-by-play for season %d from %s",
                 season,
                 cache_path,
             )
-            pbp_frames.append(cached)
+            pbp_frames.append(_select_pbp_columns(cached))
             continue
 
         if season < resolved_current_season and not force_refresh:
@@ -1002,7 +1152,7 @@ def load_pbp(
                     cache_path,
                     exc,
                 )
-                pbp_frames.append(fallback_cached)
+                pbp_frames.append(_select_pbp_columns(fallback_cached))
             else:
                 log.warning(
                     "Current-season play-by-play not published yet for season %d; "
@@ -1013,7 +1163,7 @@ def load_pbp(
             continue
 
         season_df = _prepare_pbp(season_df, regular_season_only=regular_season_only)
-        _write_cached_frame(season_df, cache_path)
+        _write_cached_frame(season_df, cache_path, requested_columns)
         pbp_frames.append(season_df)
 
     if not pbp_frames:
@@ -1021,6 +1171,40 @@ def load_pbp(
         return _empty_pbp_frame()
 
     return pl.concat(pbp_frames, how="diagonal")
+
+
+# Types of the `qb_elos.csv` columns this package reads. The file is the 538-style schema
+# produced by `nfeloqb` (`team1` is the home team). Its rows start in 1920, decades before
+# it carries quarterback ratings or weeks, so letting Polars guess from the first rows
+# reads those columns as text. `week` is published as a float ("1.0") and blank where the
+# source has no week; `date` stays ISO text, which sorts in date order.
+_QB_ELO_COLUMN_TYPES: dict[str, type[pl.DataType]] = {
+    "date": pl.String,
+    "season": pl.Int64,
+    "week": pl.Float64,
+    "team1": pl.String,
+    "team2": pl.String,
+    "elo1_pre": pl.Float64,
+    "elo2_pre": pl.Float64,
+    "qb1": pl.String,
+    "qb2": pl.String,
+    "qb1_value_pre": pl.Float64,
+    "qb2_value_pre": pl.Float64,
+    "qbelo1_pre": pl.Float64,
+    "qbelo2_pre": pl.Float64,
+}
+
+
+def _read_qb_elos(elo_path: Path) -> pl.DataFrame:
+    """Read the `qb_elos.csv` columns this package uses, with their declared types.
+
+    A blank value reads as null. A text token in a numeric column (for example `NA`)
+    fails the read with a `ComputeError` that names the column, so a malformed copy of
+    the file stops the ETL instead of silently blanking quarterback features.
+    """
+    header = pl.scan_csv(elo_path).collect_schema().names()
+    column_types = {name: dtype for name, dtype in _QB_ELO_COLUMN_TYPES.items() if name in header}
+    return pl.read_csv(elo_path, columns=list(column_types), schema_overrides=column_types)
 
 
 def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
@@ -1040,17 +1224,16 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
         return pl.DataFrame()
 
     log.info("Loading ELO ratings from %s", elo_path)
-    elo_df = pl.read_csv(elo_path)
+    elo_df = _read_qb_elos(elo_path)
 
     # Filter to requested seasons
     if "season" in elo_df.columns:
         elo_df = elo_df.filter(pl.col("season").is_in(seasons))
 
-    # Cast week to integer and filter out nulls
+    # Drop rows without a week (blank in the file) and store the published "19.0" as 19
     if "week" in elo_df.columns:
-        elo_df = elo_df.filter(pl.col("week").is_not_null() & (pl.col("week") != ""))
-        # Week may be like "19.0" so cast to float first, then int
-        elo_df = elo_df.with_columns(pl.col("week").cast(pl.Float64).cast(pl.Int64))
+        elo_df = elo_df.filter(pl.col("week").is_not_null())
+        elo_df = elo_df.with_columns(pl.col("week").cast(pl.Int64))
 
     # Normalize team abbreviations
     if "team1" in elo_df.columns:
@@ -1081,12 +1264,6 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
     available = [c for c in cols_to_keep if c in elo_df.columns]
     elo_df = elo_df.select(available)
 
-    # Cast numeric string columns to floats
-    numeric_cols = ["qb1_value_pre", "qb2_value_pre", "qbelo1_pre", "qbelo2_pre"]
-    for col in numeric_cols:
-        if col in elo_df.columns:
-            elo_df = elo_df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
-
     # Rename to away/home format (team1=home, team2=away in ELO data)
     rename_map = {
         "team1": "home_abbr",
@@ -1106,19 +1283,20 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
     # Deduplicate any repeated games in the source ELO data
     subset_cols = [c for c in ["season", "week", "home_abbr", "away_abbr"] if c in elo_df.columns]
     if subset_cols:
-        elo_df = elo_df.unique(subset=subset_cols, keep="last")
+        elo_df = elo_df.unique(subset=subset_cols, keep="last", maintain_order=True)
 
     return elo_df
 
 
 def load_raw_elo_data() -> pl.DataFrame:
-    """Load raw ELO data from qb_elos.csv file without transformations.
+    """Load the qb_elos.csv rows under their published column names.
 
     This is used for QB-specific lookups where we need the original
-    column names (qb1, qb2, qb1_value_pre, etc.).
+    column names (qb1, qb2, qb1_value_pre, etc.). Only the columns in
+    `_QB_ELO_COLUMN_TYPES` are read, with those types.
 
     Returns:
-        Raw Polars DataFrame with ELO data
+        Raw Polars DataFrame with ELO data, deduplicated per game
 
     """
     elo_path = constants.DATA_PATH / "qb_elos.csv"
@@ -1127,17 +1305,11 @@ def load_raw_elo_data() -> pl.DataFrame:
         log.warning("ELO file not found: %s", elo_path)
         return pl.DataFrame()
 
-    elo_df = pl.read_csv(elo_path)
-
-    # Cast numeric columns that may be strings
-    numeric_cols = ["qb1_value_pre", "qb2_value_pre", "qbelo1_pre", "qbelo2_pre"]
-    for col in numeric_cols:
-        if col in elo_df.columns:
-            elo_df = elo_df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
+    elo_df = _read_qb_elos(elo_path)
 
     subset_cols = [c for c in ["season", "week", "team1", "team2"] if c in elo_df.columns]
     if subset_cols:
-        elo_df = elo_df.unique(subset=subset_cols, keep="last")
+        elo_df = elo_df.unique(subset=subset_cols, keep="last", maintain_order=True)
 
     return elo_df
 
@@ -1191,7 +1363,7 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
     all_team_elo = all_team_elo.sort("week", descending=True)
 
     # Group by team and take the first (most recent) row
-    return all_team_elo.group_by("team_abbr").agg(
+    return all_team_elo.group_by("team_abbr", maintain_order=True).agg(
         pl.col("elo_pre").first(),
         pl.col("qb_value_pre").first(),
         pl.col("qb_elo_pre").first(),

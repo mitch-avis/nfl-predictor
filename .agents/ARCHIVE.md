@@ -64,6 +64,77 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Roadmap step 4 (in progress) - Resolved follow-ups
+
+Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as they land.
+
+- The play-by-play cache key had no schema version (Milestone 45), nor did the team-stat cache.
+  Resolved in `0.37.2` (2026-10-01) without a key change: each cache file records the columns it
+  was requested with in its Parquet metadata, and a historical season whose file lacks a column
+  now requested (including a column the stat combination derives) is refetched; a column the
+  source never published does not force a refetch, and `--refresh-nflreadpy` picks it up later.
+  All 56 existing cache files passed the check, so nothing was refetched. Independent review
+  rechecked the no-refetch claim and the unchanged Week 4 outputs read-only, and caught a
+  `total_yards` regression in the first fix round before the merge.
+- Schedule-strength columns were not bit-reproducible across identical rebuilds (Milestone 46).
+  Resolved in `0.37.3` (2026-10-01): the `sos_*` reductions add values in sorted order,
+  season-to-date means add games in week order, every ETL `group_by` and `unique` keeps row
+  order (an AST guard in `tests/test_etl_determinism.py`), and same-date games sort by
+  `game_id`. Two identical scratch rebuilds (2019-2025, and 2019-2026 with the Week 4 predict
+  file) were byte-identical, where the old code differed on every CSV
+  (`~/scratch/etl_repro/`). The independent review found the identity holds only at one Polars
+  thread count (the season-to-date means moved in the last bits at `POLARS_MAX_THREADS=3`), so
+  the artifact-contract line in `.agents/modeling_spec.md` says "same machine, same thread
+  count"; values move against the old code by at most about `2e-16` of each column's scale.
+  The user accepted same-machine identity on 2026-10-01 (every step-4 build runs here).
+- Data-CSV reads let Polars guess column types from the first 100 rows (step-3 merge test).
+  `0.37.2` fixed the three named reads plus two more in `power_rankings` (Week 4 outputs
+  unchanged); `0.37.4` (2026-10-01) gave both `qb_elos.csv` loaders declared types and a null check
+  for blank weeks. Loader outputs on the real file were equal for every season and two 2019-2026
+  scratch builds were byte-identical (`~/scratch/qbelo_types/`), both rechecked by an
+  independent reviewer. A text token in a numeric column now fails the read (the real file has
+  none, nor did any of the 233 versions in `../nfeloqb`'s history since 2023-08-09; `nfeloqb`
+  writes blanks). The user kept the hard failure, tentatively, on 2026-10-01.
+- `data_collection.py` passed the ~2000-line threshold with the incremental ETL (`0.37.5`). Split
+  in `0.37.6` (2026-10-01, approved by the user): the week builder to `utils/polars/week_rows.py`
+  and, to avoid an import cycle, the per-week strength table to `utils/polars/strength_table.py`
+  (1194 lines remain). All 72 top-level definitions unchanged by AST, a season-build
+  characterization test committed first, and two 2019-2026 scratch builds byte-identical
+  (`~/scratch/etl_split/`), all rechecked by an independent reviewer.
+- The ETL rebuilt all 28 seasons every run (Week 3 run, about 9.5 minutes). `0.37.5` added the
+  opt-in `nfl-predictor data --incremental` (`utils/season_cache.py`: each finished season's build
+  keyed on the ETL code, environment, options and that season's input rows by value); `0.38.0`
+  (2026-10-01, both parts approved by the user) rechunked the season slice in
+  `calculate_league_means`, whose last bits had depended on how many later-season rows were
+  loaded (features moved once by up to about `1.8e-15`), and made the weekly run refresh with
+  `--incremental`. Scratch proof (`~/scratch/etl_rechunk/driver.log`, built from `253a69b`): a
+  full 1999-2026 build (655 s) and a cache filled through 2025 followed by two warm 1999-2026
+  runs (about 48 s each, 27 seasons reused) were byte-identical on all five CSVs and the Week 4
+  predict file. The pre-fix evidence is `probe_C.log` (layout dependence at `d6f0609`) and the
+  two former strict-xfail tests, which fail again with the fix reverted. An independent reviewer
+  re-hashed the outputs, re-ran the layout probe on the merged tree (no layout dependence) and
+  sample-checked the audit of the other 33 reductions. The web UI's weekly job still runs a full
+  rebuild (its own `--config`); the user chose to change that (task 58.7, below).
+- Two follow-ups from the `0.37.6` split review, resolved in `0.38.1` (2026-10-01): the
+  fingerprint-coverage guard follows relative imports (four relative cases fail on the old walk),
+  and `stamp_strength_snapshot` is public. Independent review approved.
+- The schedule cache had the staleness gap `0.37.2` closed for team stats and play-by-play.
+  Resolved in `0.38.2` (2026-10-01): requested columns derived from `_prepare_schedule` and
+  recorded in the Parquet metadata. All 32 existing schedule files (1995-2026) passed, so none
+  refetched; two 2019-2026 scratch builds were byte-identical (`~/scratch/schedule_cache/`), both
+  rechecked by an independent reviewer. A later change to the schedule columns now refetches
+  every historical schedule, which can pull revised lines (a rule-5 change).
+- Task 58.7 (Milestone 58), decided by the user on 2026-10-01 against my recommendation to wait:
+  the web weekly job wrote its own `--config` and so dropped the shipped `--incremental`.
+  Resolved in `0.39.0`: the job layers its form over `config/weekly_run.yaml` (no `--config`),
+  `nfl-predictor weekly` gained `--no-dry-run` and `--no-skip-data-refresh`, free-text values are
+  joined to their flags, and ETL quoting is checked at submit. An independent reviewer compared
+  old and new resolution for 12 form cases: only `data_collection_args` and the inert
+  `postseason_weight` (1.3) differ. The standalone `etl_full` job stays a full rebuild (open
+  question to the user).
+
+---
+
 ## Roadmap step 3 - Production and benchmark parity (closed 2026-10-01)
 
 Versions `0.29.0`-`0.35.3` (`feat/step3-parity`, merged 2026-09-28; `fix/weekly-dry-run`, merged

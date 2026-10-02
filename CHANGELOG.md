@@ -1,5 +1,194 @@
 # Changelog
 
+## [0.39.3] - 2026-10-01
+
+### Added
+
+- The `next_opponent_identity` feature group: `nfl-predictor backtest --disable-feature-groups
+  next_opponent_identity` drops only the `away_next_opponent_abbr`/`home_next_opponent_abbr`
+  pair and its one-hot columns and keeps `*_next_opponent_win_pct`. Off unless named, so default
+  features are unchanged; `constants.py` changed, so every walk-forward checkpoint retrains.
+
+## [0.39.2] - 2026-10-01
+
+### Changed
+
+- `update_requirements.sh` treats the LightGBM CUDA build as optional: when
+  `nfl-lightgbm-cuda-install install` fails, it warns, keeps the CPU build and still runs the
+  core-package import check and the requirements export.
+
+## [0.39.1] - 2026-10-01
+
+### Changed
+
+- The locked dependencies are refreshed and the project requires uv `0.12` or newer.
+- `update_requirements.sh` repairs a damaged environment: when the venv's interpreter fails a
+  standard-library check, it reinstalls that uv-managed Python and recreates `.venv` with it,
+  falling back to a system Python only if that still fails; after the sync, the core packages
+  (numpy, pandas, polars, scipy, scikit-learn, xgboost) must import, or the script stops with the
+  cache repair (`uv cache clean && uv sync --active --reinstall`), because installed files are
+  hardlinks into uv's cache and a damaged cache entry survives a plain reinstall.
+
+### Fixed
+
+- Bare `pytest` collects every test again: the repository root is on pytest's path, so the
+  `tests.*` helper imports resolve as they do under the gate's `python -m pytest`.
+- `update_requirements.sh` rebuilds LightGBM with CUDA after the sync again (the step was lost
+  when the script was copied from `nfeloqb`).
+- The web dev server's Vite config resolves paths with `import.meta.dirname`.
+
+## [0.39.0] - 2026-10-01
+
+### Changed
+
+- The web UI's weekly job passes its form's values as options over the shipped
+  `config/weekly_run.yaml` instead of writing its own config file, so its data refresh keeps the
+  shipped `--incremental` (about 48 s against about 11 minutes, same output). Fields left blank
+  take the shipped config's value, which also brings `postseason_weight: 1.3`, inert while
+  postseason training is off; resuming a web run started before this change retrains its final
+  fit once, because that weight is part of the fit's config hash.
+
+### Added
+
+- `nfl-predictor weekly --no-dry-run` and `--no-skip-data-refresh`, so the command line can turn
+  off either switch when a config file turns it on.
+
+### Fixed
+
+- Web job forms pass free-text values (run id, report paths, ETL arguments) joined to their flag,
+  so a value starting with a dash is not read as an option, and an ETL-arguments string with an
+  unclosed quote is rejected at submit with a clear message.
+- The README's postseason notes said `power_rankings_include_postseason` ships on; the shipped
+  config and the code default both turn it off.
+
+## [0.38.2] - 2026-10-01
+
+### Fixed
+
+- The schedule cache (`schedule_<season>.parquet`) records the columns the loader asked for, like
+  the team-stat and play-by-play caches, with the list derived from the schedule preparation. A
+  historical file that lacks a column the code now produces (a new selected column, a changed
+  rename or a new derived column) is downloaded again instead of being silently reused; such a
+  refetch can pull revised lines. All 32 existing schedule files hold every requested column, so
+  none is refetched, and a 2019-2026 rebuild is byte-identical.
+
+## [0.38.1] - 2026-10-01
+
+### Changed
+
+- `stamp_strength_snapshot` (`nfl_predictor/utils/polars/strength_table.py`) is public, since
+  `data_collection.py` and `week_rows.py` both import it. Behavior is unchanged; the season-cache
+  code fingerprint changes, so the next `--incremental` run rebuilds every season.
+
+### Fixed
+
+- The ETL fingerprint-coverage test follows relative imports (`from . import x`,
+  `from .x import y`, including from a package's `__init__`), so a module reached that way can no
+  longer escape the season-cache code fingerprint unnoticed.
+
+## [0.38.0] - 2026-10-01
+
+### Changed
+
+- The weekly run's data refresh passes `--incremental` (`data_collection_args` in
+  `config/weekly_run.yaml`): it reuses unchanged finished seasons and writes the same files as a
+  full rebuild. `nfl-predictor data` still rebuilds every season by default, and a `--config`
+  file or a command-line `--data-collection-args` without the flag (the web UI's weekly job
+  included) runs a full rebuild. The first incremental run after `0.37.6` rebuilds every season.
+- The `config/weekly_run.yaml` header names both values that differ from the code defaults
+  (`data_collection_args` and `postseason_weight`).
+
+### Fixed
+
+- `calculate_league_means` reduces a rechunked season slice, so the week-1 prior's league means
+  no longer depend on how many later-season rows are loaded, and a season reused by
+  `--incremental` equals a full rebuild even after later seasons gain rows. Feature values move
+  once, by up to about `1.8e-15`.
+- A season whose inputs cannot be digested (so it is never cached) is logged at WARNING instead
+  of INFO.
+
+## [0.37.6] - 2026-10-01
+
+### Changed
+
+- `data_collection.py`, past the ~2000-line split threshold, is split without changing behavior:
+  `process_week` and its join helpers move to `nfl_predictor/utils/polars/week_rows.py`, and the
+  per-week strength table to `nfl_predictor/utils/polars/strength_table.py`. Every moved
+  definition is unchanged, and a 2019-2026 scratch rebuild before and after is byte-identical.
+  The season-cache code fingerprint changes, so the first `--incremental` run afterwards rebuilds
+  every season; walk-forward checkpoints are unaffected.
+
+### Added
+
+- A characterization test pins a season build's game rows and strength snapshots
+  (`tests/test_season_build_characterization.py`), and a guard requires every module the ETL
+  imports to be covered by the season-cache code fingerprint
+  (`tests/test_etl_fingerprint_coverage.py`).
+
+## [0.37.5] - 2026-10-01
+
+### Changed
+
+- Every walk-forward checkpoint fingerprint changes, because `constants.py` gained the season
+  cache directory name; a rerun retrains from scratch.
+
+### Added
+
+- `nfl-predictor data --incremental` reuses each finished season's build from
+  `<data dir>/cache/etl_seasons/` when the ETL source, the Polars, NumPy and Python versions, the
+  Polars runtime package and thread count, the output options and that season's input rows
+  (through the season, compared by value) are unchanged, and rebuilds the rest; the season in
+  progress is always rebuilt. Off by default. A stale, damaged or unhashable entry is rebuilt,
+  never an error. A reused season matches a full rebuild only until a later season gains rows:
+  the league means behind the week-1 prior still move in the last bits with the number of
+  loaded rows.
+
+## [0.37.4] - 2026-10-01
+
+### Fixed
+
+- `data/qb_elos.csv` is read with declared column types instead of types Polars guessed from the
+  first 100 rows, which made 18 columns (`week` included) text. Rows without a week are dropped
+  by a null check. A text token in a numeric column (for example `NA`) now fails the read with an
+  error naming the column, where the quarterback value columns used to turn it into a silent null;
+  blanks still read as null. On the current file the loader outputs and two 2019-2026 scratch ETL
+  builds are unchanged.
+- `load_raw_elo_data` returns only the 13 columns the quarterback lookups read.
+
+## [0.37.3] - 2026-10-01
+
+### Fixed
+
+- Identical `nfl-predictor data` runs on the same machine with the same Polars thread count
+  (`POLARS_MAX_THREADS`) write byte-identical CSVs, so an identical rebuild keeps the dataset
+  fingerprint. Schedule-strength means and sums add their terms in sorted order, season-to-date
+  means add each team's games in week order, every ETL `group_by` and `unique` keeps row order,
+  and games on the same date are ordered by `game_id`. Feature values move only in the last bits
+  (float summation order), and the row order of the game CSVs changes within each date, so the
+  next rebuild gets a new fingerprint once.
+
+### Added
+
+- `tests/test_etl_determinism.py` feeds row-shuffled inputs to the schedule-strength,
+  season-to-date and season-combining steps and requires exactly equal output, and fails on any
+  ETL `group_by` or `unique` that does not keep row order.
+
+## [0.37.2] - 2026-10-01
+
+### Fixed
+
+- The team-stat and play-by-play nflreadpy caches record the columns they were built with. A
+  cached season that lacks a column the code now requests (a new `constants.PBP_COLUMNS` entry, a
+  new team-stat mapping, or a new column the stat combination derives) is downloaded again. A
+  column the source never published does not force a download on every run, and
+  `--refresh-nflreadpy` picks it up if nflverse publishes it later. Every existing cache file is
+  compatible, so the first run after this change downloads nothing.
+- The power-ranking, `week_builder` and `data_collection.load_dataframe` reads of the data CSVs
+  infer column types from the whole file instead of the first 100 rows. Before, a column empty
+  for its first 100 rows (the scores and the quarterback 4-week trends in `all_data_ml.csv`) came
+  back as text, and a column whose type changed later failed the read. The Week 4 predictions and
+  power rankings are unchanged.
+
 ## [0.37.1] - 2026-09-29
 
 ### Changed

@@ -219,7 +219,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | --- | --- |
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
-| 4, first | Schedule-strength columns not bit-reproducible across identical rebuilds (Milestone 46); no schema version in the play-by-play cache key (Milestone 45) |
+| 4, first | Done, apart from the low-priority schedule fallback (step-3 merge test group). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test), the incremental ETL (Week 3 run), the split-review follow-ups and the schedule cache were resolved in `0.37.2`-`0.38.2` |
 | 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
 
 Rules for every feature milestone:
@@ -443,6 +443,15 @@ CUDA 13.3 replaced Ubuntu's CUDA 12 build (the mismatch behind the `cudaGetDevic
 load failure), and `nfl-lightgbm-cuda-install` keeps a CUDA build of the locked version,
 rebuilding only when needed (README, "Recommended: uv project workflow").
 
+- [ ] Before reopening: on 2026-10-01 (CUDA 13.4, uv 0.12.21) the CUDA build twice ended up as
+      the PyPI CPU wheel. Twice in `update_requirements.sh` (17:46 and 17:49; the dist-info shows
+      `manylinux_2_27`, `scikit-build-core 1.0.3`) and once after a version-bump sync that passed
+      the flags. Two clean scratch builds (`~/scratch/lgb_diag/`) passed `-DUSE_CUDA=ON` and
+      trained on the GPU, and the flip did not reproduce there, so the cause is unknown. Known:
+      a `uv sync` without `nfl-lightgbm-cuda-install uv-args` (the "plain `uv sync`" after a
+      version bump in `AGENTS.md`) swaps the CUDA build for the CPU wheel by design. Since
+      `0.39.2` a failed CUDA build only warns in `update_requirements.sh`.
+
 Device check, 2026-09-24 (`.agents/m57/lightgbm_device_check.py`, output beside it in
 `lightgbm_device_check.txt`; informal: one split, train 1999-2024, predict 2025, 491 numeric
 features, the shared 200-tree settings, idle machine):
@@ -498,22 +507,11 @@ Each group names the archived milestone it came from; the milestone's full recor
 
 ### From the step-3 merge test (2026-09-28)
 
-- [ ] (step 4) Three reads of the data CSVs let Polars guess column types from the first 100
-      rows (found by the `0.35.3` implementer, not fixed): `reporting/power_rankings.py`
-      (`_predict_future_games`, `pl.read_csv(data_ml, columns=usecols)`), which could fail if a
-      selected column is null for the first 100 rows and typed later;
-      `week_builder.py` (reads only `season`, `week` and the scores, which it tests for null, so
-      judged safe); and `data_collection.load_dataframe` (called only from tests). The
-      `power_rankings` web template ran it live on 2026-09-29 without an error. A crash is a fix
-      under `AGENTS.md` rule 2 (failing test first); otherwise it belongs with step 4's rebuild
-      reproducibility work.
-
-### From the 2026-09-25 review of the Week 3 outputs
-
-The user's questions on the Week 3 power rankings and the Model page. Evidence scripts and outputs
-in `.agents/findings_2026_09_25/` (written by the session that closed Milestone 60; the numbers
-are diagnostics of saved artifacts, not walk-forward results, and have no second key yet).
-
+- [ ] (low priority) `load_schedule` has no current-season fallback: unlike team stats and
+      play-by-play, a failed refetch of the current season's schedule (a network error or an
+      nflverse outage) fails the whole ETL. Found by the `0.38.2` review; pre-existing. If it is
+      fixed, the fallback to the cached current-season schedule must log a loud warning, because
+      that copy can hold stale lines and miss games scheduled since.
 - [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping
@@ -558,12 +556,12 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       stage-1 re-selection is retired and the floor is submitted. Originally: this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
-- [ ] **ETL rebuilds all 28 seasons every run** (about 9.5 minutes on 2026-09-24: about 19 s
-      per season in `collect_all_data`, then QB features). Only the raw downloads are cached;
-      every feature row from 1999 on is recomputed. An incremental mode (reprocess the current
-      season plus what its week-1 priors need, reuse cached finished seasons keyed on code
-      version and input hashes, and prove identical output with a characterization test) fits
-      step 4 (rebuild reproducibility). The ETL is Polars on the CPU; the GPU does not help it.
+- [ ] Cross-module private imports left after `0.38.1` (an AST scan by the `0.38.1` implementer,
+      not checked in): `utils/polars/teamrankings.py` imports `_is_numeric_dtype` from
+      `utils/polars/loaders.py`; `ml/ml_model_core.py`, `ml/ml_model_predict.py` and
+      `ml/ml_model_training.py` import 17 private names from each other. Cosmetic: rename them
+      with the next change that already retrains every checkpoint (`AGENTS.md` rule 14), not on
+      their own.
 - [ ] (step 4, with 56.6) **Betting report edges.** The largest moneyline "edges" in Week 3
       mostly reflect the gap between each game's spread and its moneyline (the market-anchored
       margin maps through the deterministic curve, while the edge compares with the no-vig
@@ -602,8 +600,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       rates from some of them (`red_zone_td_pct`, `two_point_conversion_pct`, and the third/fourth
       down percentages) via `--tr-stats-source pbp`; the raw counts themselves remain unpublished
       intermediates. Publish the raw counts or stop carrying the ones no rate reads.
-- [ ] The play-by-play cache key has no schema version, so growing `constants.PBP_COLUMNS` will not
-      invalidate existing per-season caches. Same latent issue as `load_team_stats`.
 
 ### From Milestone 46 (schedule-adjusted strength)
 
@@ -619,11 +615,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       week-2 opponent's only prior game is the one against the subject. That is the method being
       correct, but a documented fallback (prior-season profile, or the adjusted lens) would make
       the column usable in the two weeks where schedule strength is least knowable.
-- [ ] Schedule-strength columns are not bit-reproducible across identical rebuilds: Polars parallel
-      `group_by` summation order moves the last 1-2 ULP. The ridge and SRS columns are exactly
-      stable. This is pre-existing (`aggregate_team_stats_to_week` has the same property) but it
-      does mean the dataset fingerprint in the model artifact contract changes across identical
-      runs. Worth a line in the artifact contract docs.
 
 ### From Milestone 49 (continuous early-season shrinkage)
 

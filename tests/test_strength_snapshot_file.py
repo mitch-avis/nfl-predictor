@@ -9,7 +9,7 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.utils.polars import strength_snapshot
+from nfl_predictor.utils.polars import strength_snapshot, strength_table, week_rows
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -99,7 +99,7 @@ def _assert_same_values(left: pl.DataFrame, right: pl.DataFrame) -> None:
 def _run_week(week: int, team_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Run one 2007 week and return its game rows and the snapshot it recorded."""
     sink: list[pl.DataFrame] = []
-    games = data_collection.process_week(
+    games = week_rows.process_week(
         2007,
         week,
         _schedule(),
@@ -172,7 +172,7 @@ def test_the_home_field_term_is_one_league_wide_value_per_week() -> None:
 
 def test_combining_no_snapshots_keeps_the_published_schema() -> None:
     """A run that solved nothing still writes a file with the documented columns."""
-    combined = data_collection.combine_strength_snapshots([])
+    combined = strength_table.combine_strength_snapshots([])
 
     assert combined.height == 0
     assert combined.columns == constants.STRENGTH_SNAPSHOT_FILE_COLUMNS
@@ -187,7 +187,7 @@ def test_combined_snapshots_are_sorted_and_typed() -> None:
     _, week_three = _run_week(3, _team_games())
     _, week_two = _run_week(2, _team_games())
 
-    combined = data_collection.combine_strength_snapshots([week_three, week_two])
+    combined = strength_table.combine_strength_snapshots([week_three, week_two])
 
     assert combined.height == 12
     assert combined["week"].to_list() == [2] * 6 + [3] * 6
@@ -265,7 +265,7 @@ def test_process_season_without_a_sink_records_nothing() -> None:
 
 def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch) -> None:
     """The ETL entry point saves the collected snapshots next to the game datasets."""
-    snapshot = data_collection.combine_strength_snapshots([_run_week(2, _team_games())[1]])
+    snapshot = strength_table.combine_strength_snapshots([_run_week(2, _team_games())[1]])
     saved: dict[str, pl.DataFrame] = {}
 
     def fake_collect(
@@ -310,7 +310,7 @@ def test_the_strength_prior_ablation_ignores_a_supplied_prior() -> None:
 
     def week_two_snapshot(*, blend: bool) -> pl.DataFrame:
         sink: list[pl.DataFrame] = []
-        data_collection.process_week(
+        week_rows.process_week(
             2007,
             2,
             _schedule(),

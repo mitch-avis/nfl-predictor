@@ -228,13 +228,13 @@ def _add_run_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> None:
     )
     parser.add_argument(
         "--dry-run",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=defaults.get("dry_run", False),
         help="Print planned outputs without running stages.",
     )
     parser.add_argument(
         "--skip-data-refresh",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=defaults.get("skip_data_refresh", False),
         help="Skip the data collection refresh step.",
     )

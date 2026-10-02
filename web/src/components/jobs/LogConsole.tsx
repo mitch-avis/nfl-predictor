@@ -1,28 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { JobLogLine } from '@/api/types'
+import { LEVELS, MAX_RENDERED, type Level, filterLines } from '@/components/jobs/logConsoleUtils'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/utils/cn'
 
-/** Levels in severity order; picking one shows it and everything above it. */
-export const LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR'] as const
-export type Level = (typeof LEVELS)[number]
-
-const RANK: Record<string, number> = { DEBUG: 0, INFO: 1, WARNING: 2, ERROR: 3, CRITICAL: 4 }
 const LINE_STYLE: Record<string, string> = {
   DEBUG: 'text-muted-foreground',
   INFO: 'text-foreground',
   WARNING: 'text-warning',
   ERROR: 'text-destructive',
   CRITICAL: 'text-destructive font-semibold',
-}
-/** Rendering every line of a long walk-forward run would stall the page; keep the newest ones. */
-export const MAX_RENDERED = 2000
-
-/** Filter log lines to those at or above `level`. */
-export function filterLines(lines: JobLogLine[], level: Level): JobLogLine[] {
-  const floor = RANK[level]
-  return lines.filter((line) => (RANK[line.level] ?? RANK.INFO) >= floor)
 }
 
 /** Scrolling console with a level filter and follow-the-tail behavior. */

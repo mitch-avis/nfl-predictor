@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "nfl-predictor"
-version = "0.37.1"
+version = "0.39.3"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 keywords = ["stats", "sports", "football", "machine learning"]
 readme = "README.md"
@@ -67,7 +67,7 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
-required-version = ">=0.11.21"
+required-version = ">=0.12"
 no-build-isolation-package = ["lightgbm"]
 
 [tool.uv.extra-build-dependencies]
@@ -108,7 +108,7 @@ logger-objects = ["nfl_predictor.utils.logger.log"]
 # The Greek sigma in user-facing text names the standard deviation on purpose.
 allowed-confusables = ["σ"]
 ignore = [
-    "D203", # Conflicts with D211 (no-blank-line-before-class)
+    "D203",   # Conflicts with D211 (no-blank-line-before-class)
     "D213",   # Conflicts with D212 (multi-line-summary-first-line)
     "COM812", # Conflicts with `ruff format`, which owns trailing commas
     "ISC001", # Conflicts with `ruff format`, which joins implicit concatenations
@@ -121,7 +121,10 @@ convention = "google"
 # FastAPI reads route signatures and pydantic reads model fields at runtime, so the types they
 # name must stay real imports rather than moving under TYPE_CHECKING.
 [tool.ruff.lint.flake8-type-checking]
-runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic_settings.BaseSettings",
+]
 runtime-evaluated-decorators = [
     "fastapi.APIRouter.delete",
     "fastapi.APIRouter.get",
@@ -139,6 +142,7 @@ extend-allowed-calls = ["polars.lit"]
     "S101",    # assert is the point of tests
     "S105",    # ignore hardcoded passwords in strings in tests
     "S106",    # ignore hardcoded passwords in function arguments in tests
+    "S603",    # runs the repository's own update_requirements.sh functions under bash with stubbed tools
     "PLR2004", # magic numbers in expectations are fine
     "D",       # test names document themselves
     "ANN",     # fixtures/params don't need annotations everywhere
@@ -150,10 +154,10 @@ extend-allowed-calls = ["polars.lit"]
     "DTZ001",  # EXIF timestamps are naive by definition
     "PLC0415",
 ]
-"src/nfl_predictor/api/registry/*.py" = [
-    "E501",
-] # one column definition per line, descriptions included
 # Genuine false positives, each reviewed; the reason sits beside the rule.
+"src/nfl_predictor/api/registry/*.py" = [
+    "E501", # one column definition per line, descriptions included
+]
 "src/nfl_predictor/api/jobs/runner.py" = [
     "S603", # a job's argv is built from the vetted template catalog, never from raw input
 ]
@@ -237,6 +241,9 @@ reportUnknownLambdaType = "none"
 [tool.pytest.ini_options]
 minversion = "9.0"
 testpaths = ["tests"]
+# Tests import shared helpers as `tests.*`; the package itself is imported from src/ via the
+# editable install, so bare `pytest` and `python -m pytest` resolve the same modules.
+pythonpath = ["."]
 addopts = [
     "-ra",                       # show extra summary for (s)kipped, (x)failed
     "--strict-markers",

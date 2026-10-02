@@ -1802,6 +1802,21 @@
    "required": false,
    "subcommand": null,
    "type": null
+  },
+  {
+   "action": "BooleanOptionalAction",
+   "choices": null,
+   "default": false,
+   "dest": "incremental",
+   "help": "Reuse each finished season's build from <data dir>/cache/etl_seasons/ when its inputs, the ETL code and these options are unchanged, and rebuild the rest. Off by default.",
+   "nargs": 0,
+   "options": [
+    "--incremental",
+    "--no-incremental"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
   }
  ],
  "nfl_predictor.lines_refresh": [
@@ -2021,28 +2036,30 @@
    "type": null
   },
   {
-   "action": "_StoreTrueAction",
+   "action": "BooleanOptionalAction",
    "choices": null,
    "default": false,
    "dest": "dry_run",
    "help": "Print planned outputs without running stages.",
    "nargs": 0,
    "options": [
-    "--dry-run"
+    "--dry-run",
+    "--no-dry-run"
    ],
    "required": false,
    "subcommand": null,
    "type": null
   },
   {
-   "action": "_StoreTrueAction",
+   "action": "BooleanOptionalAction",
    "choices": null,
    "default": false,
    "dest": "skip_data_refresh",
    "help": "Skip the data collection refresh step.",
    "nargs": 0,
    "options": [
-    "--skip-data-refresh"
+    "--skip-data-refresh",
+    "--no-skip-data-refresh"
    ],
    "required": false,
    "subcommand": null,

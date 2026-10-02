@@ -15,6 +15,15 @@ def test_spread_to_moneyline_signs() -> None:
     assert game_utils.spread_to_moneyline(0.0) > 0
 
 
+def test_spread_to_moneyline_pins_the_fixed_conversion() -> None:
+    """The fixed normal-curve conversion with a flat 5% vig gives these exact moneylines."""
+    spreads = (-14.0, -7.0, -3.5, -3.0, 0.0, 3.0, 3.5, 7.0, 14.0)
+
+    moneylines = [game_utils.spread_to_moneyline(spread) for spread in spreads]
+
+    assert moneylines == [-730, -261, -168, -158, 90, 129, 136, 206, 487]
+
+
 def test_fill_missing_moneylines() -> None:
     """Missing moneylines are filled from spreads."""
     df = pl.DataFrame(

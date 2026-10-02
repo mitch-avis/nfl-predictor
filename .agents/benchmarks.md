@@ -515,3 +515,45 @@ bit (`l1_seed42`/`l2_seed7`), which confirms that `0.34.1` left walk-forward pre
 unchanged. Their probabilities differ (up to `0.017`) because the GPU reference's recorded
 Brier and log loss were scored at the fixed sigma, before `0.35.0`; `r_seed42`/`r_seed7` are the
 reference's current-code equivalent (the pooled sigma, checkpoints named in `REVIEW.md`).
+
+## Step 4, Phase B feature-value arms (2026-10-02, `models/step4/`)
+
+Seven arms on code `c4dd24a` (`0.42.1`), each the GPU reference's command (2007-2025 from week 1,
+328 folds, 4943 games, the floor with each run's own sigma pool, market anchor and transform on,
+200 trees, unweighted, every fold `cuda`), seeds `42` and `7`, on five cold full-history builds
+(`models/step4/inputs/<arm>.csv`, through-2025 cuts with `.sha256`; leakage audits all ok):
+R0 `1fe38b9f...` (also QB and NO), S2 `fd82ddfa...`, S8 `4a41eac2...`, T2 `59720451...`, PT
+`b24dde79...`. Every arm except QB passes `--disable-feature-groups qb_def_adj`. Rules:
+`HYPOTHESIS.md` there (from `.agents/step4_plan.md`); second key `REVIEW.md` there (a separate
+reviewer, recomputed from the fold checkpoints, `compare` matched exactly); reproduce with the
+commands in `REVIEW.md` (`review/compare_<arm>.json`).
+
+All weeks, two seeds averaged per game, candidate minus R0 [95%]: deterministic Brier / log loss /
+pick accuracy / pool points / margin MAE.
+
+- QB `-0.00001` `[-0.00051, +0.00048]` / `-0.00019` `[-0.00134, +0.00095]` / `-0.0020`
+  `[-0.0053, +0.0014]` / `+23.5` `[-55.0, +100.5]` / `-0.0025` `[-0.0228, +0.0181]`: a tie.
+- NO `+0.00002` `[-0.00051, +0.00054]` / `-0.00008` `[-0.00128, +0.00109]` / `+0.0001`
+  `[-0.0034, +0.0036]` / `+35.5` `[-50.5, +122.0]` / `+0.0008` `[-0.0210, +0.0223]`: a tie.
+- S2 `+0.00003` `[-0.00056, +0.00059]` / `-0.00009` `[-0.00144, +0.00120]` / `+0.0007`
+  `[-0.0029, +0.0044]` / `+21.0` `[-76.5, +119.0]` / `-0.0027` `[-0.0279, +0.0199]`: a tie.
+- S8 `+0.00033` `[-0.00030, +0.00098]` / `+0.00064` `[-0.00080, +0.00215]` / `-0.0025`
+  `[-0.0062, +0.0011]` / `-20.5` `[-119.5, +77.0]` / `+0.0053` `[-0.0206, +0.0320]`: a tie.
+- T2 `+0.00020` `[-0.00018, +0.00059]` / `+0.00030` `[-0.00057, +0.00119]` / `-0.0017`
+  `[-0.0048, +0.0014]` / `-38.5` `[-104.0, +28.0]` / `+0.0091` `[-0.0066, +0.0254]`: a tie.
+- PT `+0.00276` `[+0.00152, +0.00402]` / `+0.00623` `[+0.00346, +0.00902]` / `-0.0097`
+  `[-0.0168, -0.0028]` / `-343.5` `[-525.0, -169.0]` / `+0.0861` `[+0.0367, +0.1339]`, worse on
+  every column, as expected for the pick-time line. Against its own market PT is `+0.00073`
+  `[-0.00050, +0.00193]` (R0 against the close `+0.00104` `[-0.00017, +0.00221]`); against the
+  close (`compare --market-from` R0) `+0.00380` `[+0.00211, +0.00552]`, where the pick-time line
+  itself trails the close by `+0.00307` `[+0.00173, +0.00449]`. No season's gap to its own
+  market excludes zero. Stored-line fallback in the evaluation window: 2022 (all 284) and 13
+  games of 2024.
+
+Other intervals excluding zero (weeks 1, 2, 3-18, all weeks): T2 week-1 pool points `-17.5`
+`[-34.5, -2.0]` (only under the week-block bootstrap; game-level `[-48, +13.5]`) and PT week-1
+total MAE `-0.0641` `[-0.1198, -0.0087]` (PT better). Week-2 total MAE for the `K` arms includes
+zero everywhere. All-weeks ranks (best first): Brier QB, R0, NO, S2, T2, S8, PT; log loss QB, S2,
+NO, R0, T2, S8, PT; margin MAE S2, QB, R0, NO, S8, T2, PT; pool NO, QB, S2, R0, S8, T2, PT; pick
+accuracy S2, NO, R0, T2, QB, S8, PT. The T2 build also moves the `qb_def_adj` values (they read
+the strength snapshot), so a QB-plus-new-`K` combination would differ from what QB measured.

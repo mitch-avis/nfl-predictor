@@ -26,22 +26,20 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
   market by `game_id`, warns on result mismatches; two review rounds, the two optional P3s left:
   the "any compared run" mismatch case is untested, and both-NaN results would count as a
   mismatch, which walk-forward checkpoints cannot hold).
-- Phase B was launched on 2026-10-02 at about 03:45 as one detached job,
-  `models/step4/phase_b.sh <commit>` (log `models/step4/phase_b.log`, PID in
-  `models/step4/phase_b.pid`, commit in `models/step4/launch_record.txt`): `build.sh` makes the
-  five cold full-history builds R0, S2, S8, T2, PT in `~/scratch/step4_builds/<arm>/` (logs
-  there), cuts each to `models/step4/inputs/<arm>.csv` (+ `.sha256`) and runs the leakage audit
-  (`models/step4/audit/<arm>.json`); it stops if a build fails or an audit is not ok. Then
-  `driver.sh` runs the 14 walk-forwards (`models/step4/<arm>_seed{42,7}/`, order R0 QB NO S2 S8
-  T2 PT, seed 42 then 7 per arm), checking before each run that `src/`, `pyproject.toml` and
-  `uv.lock` are unchanged from the commit, the GPU answers, and nothing else runs. Expected end
-  about 12:30. Rules: `models/step4/HYPOTHESIS.md` (restates the plan's decision rules).
-  **Do not edit `src/`, `pyproject.toml` or `uv.lock`, and do not commit, while it runs** (the
-  driver stops on a code change; a commit changes the recorded git commit between arms).
+- Phase B finished 2026-10-02 11:58: 5 builds, 14 runs, 0 failures (`models/step4/`, driver log
+  `phase_b.log`). An independent reviewer rescored it (`models/step4/REVIEW.md`, provenance clean,
+  `compare` matched its own rescore exactly); the numbers are in `.agents/benchmarks.md`, "Step 4,
+  Phase B feature-value arms". Under the written rules QB, NO, S2, S8 and T2 tie R0; PT is worse on
+  every column (expected) but not worse than its own pick-time market. The handoff commit
+  `c4dd24a` is the run commit; code may change again now.
 
 ## Open questions for the user
 
-None pending.
+Asked 2026-10-02 after Phase B (recommendations in the check-in): (1) QB tie, drop `qb_def_adj`
+from the default features (the rule's simpler setting; 53.7's joint ridge is the next step); (2)
+NO tie, drop the `*_next_opponent_abbr` pair; (3) S2/S8/T2 ties, keep `K = 4` for both blends (the
+rule gives no recommendation; one shared value is fewer knobs); (4) PT, adopt the pick-time line
+for parity (a default change; `nfl-predictor lines` needs the line source first). Then `F`.
 
 Decided 2026-10-02: the 56.6 map stays the per-season expanding fit; the `compare` market-from
 option (landed as `0.42.1`); push `main` (done); the old scratch `data/` copies deleted (venvs and
@@ -51,13 +49,7 @@ weekly runs and picks; do not raise Week 5 for several days.
 
 ## Next
 
-1. Watch Phase B (`tail models/step4/phase_b.log`; `kill -0 $(cat models/step4/phase_b.pid)`).
-   If it stopped, read the log; the driver can be relaunched with the same commit and resumes
-   from the fold checkpoints. After it ends: confirm every fold ran on `cuda`, then an
-   independent `reviewer` rescores from the fold checkpoints and writes
-   `models/step4/REVIEW.md` (rule 3), with `nfl-predictor compare` per arm against R0 (two seeds)
-   and, for PT, a second compare with `--market-from` R0. Then the check-in with each arm's
-   governing numbers, every interval that excludes zero, and the ranks (rule 9).
+1. Wait for the user's answers to the four questions above; nothing runs until then.
 2. After Phase B: the user's adoption decisions, then `F` (the adopted build, two seeds; the new
    GPU reference and the floor's sigma pool), one backed-up rebuild into `data/` (must-ask), and
    before any merge to `main` either adopt `qb_def_adj` or turn it off/remove it.

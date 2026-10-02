@@ -61,6 +61,32 @@ FLOOR_SIGMA_REFERENCE_RUNS = (
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"
 DEFAULT_TOTAL_LINE = 45.6  # Average total score across 20+ seasons
 
+# Where the ETL's market lines come from (`nfl-predictor data --line-source`). "stored" keeps the
+# nflverse schedule lines, a late, probably closing, snapshot. "pick_time" uses the line known when
+# picks are made: nfelo's opening line for completed games and its latest line for upcoming ones,
+# with the stored line where nfelo has no real opener.
+LINE_SOURCE_STORED = "stored"
+LINE_SOURCE_PICK_TIME = "pick_time"
+LINE_SOURCES = (LINE_SOURCE_STORED, LINE_SOURCE_PICK_TIME)
+# nfelo's market-lines file (`greerreNFL/nfelomarket_data`), rewritten several times a day. The
+# latest good download is cached under NFELO_CACHE_DIR, and every copy a run used is kept there
+# under `snapshots/`, named by its SHA-256.
+NFELO_LINES_URL = (
+    "https://raw.githubusercontent.com/greerreNFL/nfelomarket_data/main/Data/lines.csv"
+)
+NFELO_CACHE_DIR = DATA_PATH / "cache" / "nfelo"
+# nfelo's openers are real from 2007 on; before 2007 every opener equals the last line, and in
+# 2022 many do (59%), so 2022's openers are not trusted either.
+NFELO_FIRST_REAL_OPENER_SEASON = 2007
+NFELO_UNRELIABLE_OPENER_SEASONS = frozenset({2022})
+# The fitted spread-to-moneyline map for a season is fitted on every earlier season's games with
+# a real spread and both real moneylines; with fewer such games than this, that season keeps the
+# fixed conversion (`game_utils.spread_to_moneyline`).
+MONEYLINE_MAP_MIN_GAMES = 200
+# Written beside the datasets by a pick-time build: the nfelo snapshot, match rates, fallback
+# rows and the moneyline maps the run used.
+MARKET_LINES_METADATA_NAME = "market_lines_metadata"
+
 # Minimum season for data collection (default)
 MIN_SEASON = 1999
 # NFLverse (nflreadpy) schedule data availability begins in 1999.

@@ -321,7 +321,7 @@ def test_main_orchestrates_collection_and_output_writes(
     monkeypatch.setattr(
         data_collection,
         "collect_all_data",
-        lambda seasons, config, strength_snapshots: all_data,
+        lambda seasons, config, strength_snapshots, market_lines_metadata: all_data,
     )
     monkeypatch.setattr(data_collection, "_log_df_stats", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(data_collection, "_timed_step", fake_timed_step)

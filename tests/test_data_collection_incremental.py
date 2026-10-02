@@ -215,8 +215,14 @@ def _install(monkeypatch: pytest.MonkeyPatch, run: _Run) -> None:
         *,
         config: data_collection.DataCollectionConfig,
         strength_snapshots: list[pl.DataFrame],
+        market_lines_metadata: dict[str, object],
     ) -> pl.DataFrame:
-        run.games = collect_all_data(seasons, config=config, strength_snapshots=strength_snapshots)
+        run.games = collect_all_data(
+            seasons,
+            config=config,
+            strength_snapshots=strength_snapshots,
+            market_lines_metadata=market_lines_metadata,
+        )
         run.snapshots = data_collection.combine_strength_snapshots(strength_snapshots)
         return run.games
 
@@ -663,6 +669,7 @@ _KEYED_OPTIONS = (
     "strength_prior_blend_games",
     "team_stats_source",
     "tr_stats_source",
+    "line_source",
 )
 _DERIVED_SEASON_INPUTS = (
     "team_elo_trends",
@@ -673,7 +680,9 @@ _DERIVED_SEASON_INPUTS = (
     "prior_season_stats",
 )
 _SEASON_INPUT_FIELDS = {
-    **dict.fromkeys(set(_KEYED_OPTIONS) - {"team_stats_source"}, "keyed: a run option"),
+    **dict.fromkeys(
+        set(_KEYED_OPTIONS) - {"team_stats_source", "line_source"}, "keyed: a run option"
+    ),
     "elo_df": "keyed: the Elo rows through the season",
     "tr_df": "keyed: the season's TeamRankings",
     "prev_tr_df": "keyed: the previous season's TeamRankings",

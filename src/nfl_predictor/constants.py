@@ -73,8 +73,9 @@ TEAMRANKINGS_MIN_WEEK = 2
 WEEK1_REGRESSION_FACTOR = 1 / 3
 
 # Games at which an early-season in-season sample and the regressed previous season are
-# weighted equally. Shared by the adjusted-strength snapshot and the season-to-date stat
-# blend.
+# weighted equally. The default of both the adjusted-strength snapshot's blend and the
+# season-to-date stat blend; `nfl-predictor data` sets each on its own
+# (`--strength-prior-blend-games`, `--stat-prior-blend-games`).
 #
 # The in-season weight is `games / (games + PRIOR_BLEND_GAMES)`, so with K = 4 a team
 # reaches parity after four games (about week 5), three-quarters in-season after twelve,

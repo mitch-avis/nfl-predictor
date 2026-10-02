@@ -89,6 +89,8 @@ class DataCollectionConfig:
     # Set to False to ablate the early-season strength prior and publish the raw
     # in-season solve, so the blend can be measured on its own.
     blend_strength_prior: bool = True
+    # K in the strength prior blend's in-season weight games / (games + K).
+    strength_prior_blend_games: float = constants.PRIOR_BLEND_GAMES
     # Set to False to ablate the early-season blend of season-to-date stats toward the
     # regressed previous season, restoring the plain in-season mean from week 2 on.
     blend_stat_prior: bool = True
@@ -171,6 +173,16 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         ),
     )
     parser.add_argument(
+        "--strength-prior-blend-games",
+        type=float,
+        default=constants.PRIOR_BLEND_GAMES,
+        help=(
+            "K for the adjusted-strength prior blend, which weights the in-season solve "
+            "games / (games + K): the game count at which the in-season solve and the prior "
+            f"are weighted equally (default {constants.PRIOR_BLEND_GAMES:g})."
+        ),
+    )
+    parser.add_argument(
         "--stat-prior-blend",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -218,6 +230,8 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         ),
     )
     args = parser.parse_args(argv)
+    if args.strength_prior_blend_games <= 0:
+        parser.error("--strength-prior-blend-games must be positive.")
     if args.stat_prior_blend_games <= 0:
         parser.error("--stat-prior-blend-games must be positive.")
     default_min = DEFAULT_MIN_SEASON
@@ -234,6 +248,7 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         min_season=int(min_season),
         max_season=int(max_season),
         blend_strength_prior=bool(args.strength_prior_blend),
+        strength_prior_blend_games=float(args.strength_prior_blend_games),
         blend_stat_prior=bool(args.stat_prior_blend),
         stat_prior_blend_games=float(args.stat_prior_blend_games),
         data_dir=args.data_dir,
@@ -869,6 +884,7 @@ def _open_season_cache(
         {
             "min_season": min_season,
             "blend_strength_prior": config.blend_strength_prior,
+            "strength_prior_blend_games": config.strength_prior_blend_games,
             "blend_stat_prior": config.blend_stat_prior,
             "stat_prior_blend_games": config.stat_prior_blend_games,
             "team_stats_source": config.team_stats_source,
@@ -959,6 +975,7 @@ def collect_all_data(
             prev_tr_df=rankings.load(season - 1) if season > min_season else None,
             tr_stats_source=config.tr_stats_source,
             blend_strength_prior=config.blend_strength_prior,
+            strength_prior_blend_games=config.strength_prior_blend_games,
             blend_stat_prior=config.blend_stat_prior,
             stat_prior_blend_games=config.stat_prior_blend_games,
             strength_snapshots=strength_snapshots,
@@ -990,6 +1007,7 @@ class SeasonInputs:
         prev_tr_df: TeamRankings rows for the previous season (for week 1).
         tr_stats_source: Source for the legacy TeamRankings stat columns.
         blend_strength_prior: Set to False to ablate the strength prior blend.
+        strength_prior_blend_games: K in the strength blend weight ``games / (games + K)``.
         blend_stat_prior: Set to False to ablate the season-to-date stat prior blend.
         stat_prior_blend_games: K in the stat blend weight ``games / (games + K)``.
         strength_snapshots: Optional list that receives each processed week's per-team
@@ -1014,6 +1032,7 @@ class SeasonInputs:
     prev_tr_df: pl.DataFrame | None = None
     tr_stats_source: str = "scrape"
     blend_strength_prior: bool = True
+    strength_prior_blend_games: float = constants.PRIOR_BLEND_GAMES
     blend_stat_prior: bool = True
     stat_prior_blend_games: float = constants.PRIOR_BLEND_GAMES
     strength_snapshots: list[pl.DataFrame] | None = None
@@ -1125,7 +1144,9 @@ def process_season(
             prior=(
                 None
                 if inputs.prior_strength_snapshot is None
-                else StrengthPrior(inputs.prior_strength_snapshot)
+                else StrengthPrior(
+                    inputs.prior_strength_snapshot, inputs.strength_prior_blend_games
+                )
             ),
         )
         inputs.strength_snapshots.append(

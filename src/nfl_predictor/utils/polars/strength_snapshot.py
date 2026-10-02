@@ -72,10 +72,14 @@ class StrengthPrior(NamedTuple):
 
     Attributes:
         snapshot: The previous season's final snapshot, keyed by team.
+        blend_games: ``K`` in the in-season weight ``games / (games + K)``: the game count
+            at which the in-season solve and the regressed prior are weighted equally.
+            Must be positive.
 
     """
 
     snapshot: pl.DataFrame
+    blend_games: float = constants.PRIOR_BLEND_GAMES
 
 
 # Ridge penalty, frozen for reproducibility instead of tuned per solve.
@@ -312,7 +316,7 @@ def _blend_prior(
 
     Formulas:
         ``regressed_prior = prior * (1 - WEEK1_REGRESSION_FACTOR)``
-        ``weight = games / (games + PRIOR_BLEND_GAMES)``
+        ``weight = games / (games + prior.blend_games)``
         ``blended = weight * in_season + (1 - weight) * regressed_prior``
 
     Ratings are centered on zero by construction, so regressing toward the league
@@ -330,7 +334,7 @@ def _blend_prior(
     ).unique(subset=[_TEAM], keep="first", maintain_order=True)
 
     games = pl.col("strength_games_played")
-    weight = games / (games + constants.PRIOR_BLEND_GAMES)
+    weight = games / (games + prior.blend_games)
     return solved.join(regressed, on=_TEAM, how="left").with_columns(
         *[
             pl.when(pl.col(column).is_null())

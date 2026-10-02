@@ -138,6 +138,36 @@ def test_parse_args_rejects_a_non_positive_stat_prior_blend_games() -> None:
         data_collection._parse_args(["--stat-prior-blend-games", "0"])
 
 
+def test_parse_args_reads_the_strength_prior_blend_games(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The strength blend's K defaults to the shared constant and is set on its own."""
+    monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
+
+    default_config = data_collection._parse_args([])
+    assert default_config.strength_prior_blend_games == constants.PRIOR_BLEND_GAMES
+    assert (
+        data_collection._resolve_config(None).strength_prior_blend_games
+        == constants.PRIOR_BLEND_GAMES
+    )
+
+    tuned = data_collection._parse_args(["--strength-prior-blend-games", "2"])
+    assert tuned.strength_prior_blend_games == pytest.approx(2.0)
+    assert tuned.stat_prior_blend_games == constants.PRIOR_BLEND_GAMES
+    assert tuned.blend_strength_prior is True
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_parse_args_rejects_a_non_positive_strength_prior_blend_games(
+    value: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A zero or negative K would divide by zero for a team with no games, so it is refused."""
+    with pytest.raises(SystemExit):
+        data_collection._parse_args([f"--strength-prior-blend-games={value}"])
+
+    assert "--strength-prior-blend-games must be positive" in capsys.readouterr().err
+
+
 def test_resolve_config_uses_defaults_or_parsed_args(monkeypatch: pytest.MonkeyPatch) -> None:
     """Config resolution should either materialize defaults or delegate to _parse_args."""
     monkeypatch.setattr(data_collection, "ENABLE_DATA_COLLECTION_TIMING", False)

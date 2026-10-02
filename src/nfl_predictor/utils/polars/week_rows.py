@@ -404,7 +404,7 @@ def _add_strength_features(merged: pl.DataFrame, week: _Week) -> pl.DataFrame:
             season=week.season,
             week=week.week,
             prior=(
-                StrengthPrior(prior_strength_snapshot)
+                StrengthPrior(prior_strength_snapshot, inputs.strength_prior_blend_games)
                 if inputs.blend_strength_prior and prior_strength_snapshot is not None
                 else None
             ),

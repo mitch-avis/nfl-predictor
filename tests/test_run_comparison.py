@@ -748,3 +748,14 @@ def test_the_command_exits_two_when_the_market_run_lacks_a_game(tmp_path: Path) 
     code, _, _ = _command_outputs(tmp_path, "--market-from", str(market_dir))
 
     assert code == 2
+
+
+def test_the_command_rejects_a_repeated_market_run(tmp_path: Path) -> None:
+    """The market comes from one run: a second ``--market-from`` is a usage error."""
+    first = _write_run(tmp_path / "a", "close", _market_predictions(), 42)
+    second = _write_run(tmp_path / "b", "close7", _market_predictions(), 7)
+
+    with pytest.raises(SystemExit) as raised:
+        _command_outputs(tmp_path, "--market-from", str(first), "--market-from", str(second))
+
+    assert raised.value.code == 2

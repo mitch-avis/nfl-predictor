@@ -496,3 +496,57 @@ def test_the_stability_table_formats_one_row_per_season() -> None:
     assert lines[week1 + 4].startswith("| all seasons | 5 | ")
     assert lines[week1 + 5].startswith("| 2023 | 3 | 0.25083 | ")
     assert lines[week1 + 6].startswith("| 2024 | 2 | ")
+
+
+def _command_outputs(tmp_path: Path, *extra: str) -> tuple[int, list[str], dict[str, Any]]:
+    """Run ``compare`` on the two-season fixture's run directories; return its written reports.
+
+    The candidate shifts every probability by 0.05; both runs carry a 0.55 market. ``extra``
+    adds options. The Markdown lines and the JSON have the temporary directory replaced.
+    """
+    candidate = _write_run(tmp_path, "cand", _season_predictions(shift=0.05, market=0.55), 42)
+    reference = _write_run(tmp_path, "ref", _season_predictions(market=0.55), 42)
+    out_json = tmp_path / "out" / "compare.json"
+    out_md = tmp_path / "out" / "compare.md"
+    code = command.main(
+        [
+            "--candidate",
+            str(candidate),
+            "--reference",
+            str(reference),
+            "--resamples",
+            "200",
+            "--out-json",
+            str(out_json),
+            "--out-md",
+            str(out_md),
+            *extra,
+        ]
+    )
+    if code != 0:
+        return code, [], {}
+    lines = _without_tmp(out_md.read_text(encoding="utf-8"), tmp_path).splitlines()
+    payload = json.loads(_without_tmp(out_json.read_text(encoding="utf-8"), tmp_path))
+    return code, lines, payload
+
+
+def test_the_command_output_without_a_market_run_is_unchanged(tmp_path: Path) -> None:
+    """Without ``--market-from`` the written Markdown and JSON stay exactly as before.
+
+    The snapshot holds the command's complete output from before the option existed: every
+    Markdown line byte for byte, and the JSON with exactly the same keys (floats to the
+    snapshot tolerance), so no key is added when each run's own market rows are used.
+    """
+    code, lines, payload = _command_outputs(tmp_path)
+    markdown_snapshot = SNAPSHOT_DIR / "compare_command.txt"
+    json_snapshot = SNAPSHOT_DIR / "compare_command.json"
+    if snapshots.updating():
+        markdown_snapshot.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        json_snapshot.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
+        return
+
+    assert code == 0
+    assert lines == markdown_snapshot.read_text(encoding="utf-8").splitlines()
+    snapshots.assert_json_match(
+        "report", payload, json.loads(json_snapshot.read_text(encoding="utf-8"))
+    )

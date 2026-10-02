@@ -24,6 +24,7 @@ against ``actual_home_win`` (ties are coded 0 and scored that way):
   ``actual_home_win`` still scores it). A run anchored to an earlier line (the pick-time line)
   is then measured against another build's market (the stored, near-closing line) on the same
   games. Only the market Brier and the det - market interval change; every model column stays.
+  Games whose result differs in the market run are counted and flagged, not rejected.
 
 Paired differences are candidate minus reference. Loss columns are bootstrapped over games (5,000
 resamples by default, numpy ``default_rng(0)``, 2.5 and 97.5 percentiles of the resampled mean);
@@ -410,8 +411,8 @@ def config_differences(
     return differences
 
 
-def market_by_game(market: LoadedRun, game_ids: pd.Series) -> np.ndarray:
-    """Return the market run's ``market_home_win_prob`` for ``game_ids``, in their order.
+def market_by_game(market: LoadedRun, game_ids: pd.Series) -> pd.DataFrame:
+    """Return the market run's ``market_prob`` and ``home_win`` for ``game_ids``, in their order.
 
     Raises:
         ValueError: If the market run repeats a game, lacks one of ``game_ids``, or has no
@@ -423,17 +424,17 @@ def market_by_game(market: LoadedRun, game_ids: pd.Series) -> np.ndarray:
     if games["game_id"].duplicated().any():
         msg = f"{label}: the market run repeats a game"
         raise ValueError(msg)
-    by_game = games.set_index("game_id")["market_prob"]
+    by_game = games.set_index("game_id")[["market_prob", "home_win"]]
     missing = sorted(set(game_ids) - set(by_game.index))
     if missing:
         msg = f"{label}: the market run lacks {len(missing)} compared game(s): {missing[:5]}"
         raise ValueError(msg)
-    values = by_game.reindex(game_ids).to_numpy(float)
-    null = sorted(game_ids[np.isnan(values)].tolist())
+    rows = by_game.reindex(game_ids)
+    null = sorted(game_ids[rows["market_prob"].isna().to_numpy()].tolist())
     if null:
         msg = f"{label}: the market run has no market value for {len(null)} game(s): {null[:5]}"
         raise ValueError(msg)
-    return values
+    return rows
 
 
 def with_market(run: LoadedRun, market_prob: np.ndarray) -> LoadedRun:
@@ -455,7 +456,10 @@ def compare_runs(
     """Compare candidate runs with reference runs, pairing them in order.
 
     Given ``market``, every run's market view is that run's market, matched on ``game_id``
-    (``market_by_game``), and the report records it under ``market_source``.
+    (``market_by_game``) and scored on the run's own result. The report records the market run
+    under ``market_source``, with ``outcome_mismatches``: how many compared games have a result
+    in the market run that differs from a compared run's (another build may carry a revised
+    score).
 
     Raises:
         ValueError: If the counts differ, no run is given, the runs cover different games, or
@@ -474,8 +478,19 @@ def compare_runs(
                 "a paired comparison needs the same games"
             )
             raise ValueError(msg)
+    market_source: dict[str, Any] | None = None
     if market is not None:
-        market_prob = market_by_game(market, base["game_id"])
+        market_rows = market_by_game(market, base["game_id"])
+        market_prob = market_rows["market_prob"].to_numpy(float)
+        market_home_win = market_rows["home_win"].to_numpy(float)
+        revised = np.any(
+            [run.games["home_win"].to_numpy(float) != market_home_win for run in runs], axis=0
+        )
+        market_source = {
+            "run": market.run.label,
+            "provenance": market.provenance,
+            "outcome_mismatches": int(revised.sum()),
+        }
         candidates = [with_market(run, market_prob) for run in candidates]
         references = [with_market(run, market_prob) for run in references]
         runs = [*candidates, *references]
@@ -522,8 +537,8 @@ def compare_runs(
         },
         "market_view_identical": market_view_identical,
     }
-    if market is not None:
-        report["market_source"] = {"run": market.run.label, "provenance": market.provenance}
+    if market_source is not None:
+        report["market_source"] = market_source
     report["windows"] = windows
     return report
 
@@ -643,13 +658,16 @@ def format_report(report: dict[str, Any]) -> list[str]:
         lines.append("- warning: the market view differs between runs on the same games")
     source = report.get("market_source")
     if source is not None:
-        provenance = source["provenance"]
         lines.append(
             f"- market: every run's market Brier and det - market Brier use "
-            f"market_home_win_prob from {source['run']}'s rows, matched on game_id "
-            f"(dataset_hash {provenance.get('dataset_hash')}, "
-            f"git_commit {provenance.get('git_commit')})"
+            f"market_home_win_prob from {source['run']}'s rows, matched on game_id: "
+            f"{json.dumps(source['provenance'], default=str)}"
         )
+        if source["outcome_mismatches"]:
+            lines.append(
+                f"- warning: the market run's result differs on {source['outcome_mismatches']} "
+                "compared game(s); each run's market Brier uses the run's own result"
+            )
     for label, window in report["windows"].items():
         lines += [
             "",

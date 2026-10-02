@@ -554,6 +554,20 @@
   {
    "action": "_StoreAction",
    "choices": null,
+   "default": null,
+   "dest": "market_from",
+   "help": "Score every run's market Brier and det - market Brier against this run's market_home_win_prob, matched on game_id (a run or checkpoint directory; it must cover every compared game). Default: each run's own rows.",
+   "nargs": null,
+   "options": [
+    "--market-from"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
    "default": 5000,
    "dest": "resamples",
    "help": "Bootstrap resamples (default: %(default)s).",

@@ -93,7 +93,8 @@ build needs NVIDIA's NCCL for the toolkit's CUDA major version (`libnccl2` and `
 tagged `+cuda13.x` for CUDA 13, from `developer.download.nvidia.com/compute/cuda/repos`); with
 Ubuntu's own NCCL, which is built for CUDA 12, the flags are withheld and LightGBM stays
 CPU-only. `nfl-lightgbm-cuda-install status` reports which build is installed. On this
-repo's data, LightGBM trains faster on the CPU than with CUDA, so the CUDA build is optional.
+repo's data, LightGBM trains faster on the CPU than with CUDA, so the CUDA build is optional:
+when it fails, the helper prints a warning, keeps the CPU build and finishes the refresh.
 
 For a manual upgrade without the helper script:
 

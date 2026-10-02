@@ -52,6 +52,7 @@ def _run(
     stdlib: str = "ok",
     packages: str = "ok",
     heal_on_reinstall: bool = False,
+    cuda_install_exit: int = 0,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     venv_bin = tmp_path / ".venv" / "bin"
     venv_bin.mkdir(parents=True)
@@ -59,6 +60,9 @@ def _run(
     python = venv_bin / "python"
     python.write_text(FAKE_PYTHON.format(work=tmp_path), encoding="utf-8")
     python.chmod(0o755)
+    installer = venv_bin / "nfl-lightgbm-cuda-install"
+    installer.write_text(f"#!/usr/bin/env bash\nexit {cuda_install_exit}\n", encoding="utf-8")
+    installer.chmod(0o755)
     (tmp_path / "stdlib").write_text(stdlib, encoding="utf-8")
     (tmp_path / "packages").write_text(packages, encoding="utf-8")
     env = {
@@ -118,6 +122,19 @@ def test_packages_that_fail_to_import_stop_with_the_cache_fix(tmp_path: Path) ->
     assert result.returncode == 1
     assert "uv cache clean" in result.stderr
     assert "uv sync --active --reinstall" in result.stderr
+
+
+def test_a_cuda_build_that_installs_passes_quietly(tmp_path: Path) -> None:
+    result, _ = _run(tmp_path, "install_lightgbm_cuda_build")
+    assert result.returncode == 0, result.stderr
+    assert "Warning" not in result.stderr
+
+
+def test_a_failed_cuda_build_warns_and_continues(tmp_path: Path) -> None:
+    result, _ = _run(tmp_path, "install_lightgbm_cuda_build", cuda_install_exit=1)
+    assert result.returncode == 0, result.stderr
+    assert "Warning" in result.stderr
+    assert "CPU build" in result.stderr
 
 
 def test_the_package_check_runs_after_the_sync() -> None:

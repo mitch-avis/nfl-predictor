@@ -15,7 +15,8 @@ usage() {
 Usage: ./update_requirements.sh [--python <version-request>]
 
 Updates the project's uv lockfile and syncs the active .venv.
-With a local CUDA toolkit, it then rebuilds LightGBM with CUDA if the synced build lacks it.
+With a local CUDA toolkit, it then tries to rebuild LightGBM with CUDA if the synced build lacks
+it; a failed CUDA build only warns and keeps the CPU build.
 
 If compatibility requirements files are present, they are refreshed from uv.lock:
 - requirements.txt -> runtime dependencies only
@@ -168,6 +169,17 @@ ensure_venv_packages_import() {
 	exit 1
 }
 
+# The CUDA build of LightGBM is best effort: a failed build leaves the CPU build in place, so the
+# rest of the refresh (the import check, the requirements export) still runs.
+install_lightgbm_cuda_build() {
+	if .venv/bin/nfl-lightgbm-cuda-install install; then
+		return
+	fi
+
+	echo "Warning: LightGBM could not be made a CUDA build; the CPU build stays installed." >&2
+	echo "Check it later with: .venv/bin/nfl-lightgbm-cuda-install status" >&2
+}
+
 ensure_venv_exists() {
 	local create_command="uv venv .venv"
 
@@ -281,7 +293,7 @@ main() {
 	uv sync --active "${lightgbm_cuda_args[@]}"
 
 	info "Making LightGBM a CUDA build if this machine can build one (no-op when it already is)"
-	.venv/bin/nfl-lightgbm-cuda-install install
+	install_lightgbm_cuda_build
 
 	info "Checking that the core packages import"
 	ensure_venv_packages_import

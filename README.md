@@ -653,6 +653,14 @@ has no interval (`[n/a]`). Everything before that section is byte-identical to t
 `compare` wrote before the section existed, and the JSON is a strict superset of it (each window
 gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the same order,
 to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
+By default each run's market Brier and its det - market interval use that run's own
+`market_home_win_prob`. `--market-from <run>` (a run or checkpoint directory, given once) takes
+it from another run instead, matched on `game_id`, for every compared run: a run anchored to the
+pick-time line is then also measured against the closing line from a stored-line run on the same
+games (run it once without the option for the pick-time yardstick). The model columns do not
+change. It stops with exit code 2 when the market run lacks a compared game, repeats one or has
+no market value for one. The report says which market it used (JSON key `market_source`, with
+the market run's provenance); without the option the output is unchanged.
 A last "Settings versus production" section gives each run's differences from today's production
 weekly run, as the walk-forward report does (JSON key `settings_versus_production`, by run),
 rebuilt from the run's `metadata.json` and its dataset's columns. Nothing is inferred from

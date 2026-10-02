@@ -357,9 +357,11 @@ options. `scripts/` holds only `gate.sh`.
 - `nfl-predictor compare` (`src/nfl_predictor/cli/compare.py`, definitions in
   `src/nfl_predictor/reporting/run_comparison.py`): paired comparison of walk-forward runs rescored
   from their fold checkpoints, per window, with bootstrap intervals and two seeds combined per
-  game when given. It reproduces the task 55.8 independent rescore exactly
-  (`.agents/m60/verify_compare.py`), so a reviewer can use it under rule 3(b) as long as the
-  review also checks provenance and the reviewer did not produce the run.
+  game when given; `--market-from <run>` scores the market view against another run's market
+  by `game_id` (the closing-line yardstick for a pick-time run). It reproduces the task 55.8
+  independent rescore exactly (`.agents/m60/verify_compare.py`), so a reviewer can use it under
+  rule 3(b) as long as the review also checks provenance and the reviewer did not produce the
+  run.
 - Training/prediction entrypoints may be updated/replaced, but must remain runnable and
   documented.
 

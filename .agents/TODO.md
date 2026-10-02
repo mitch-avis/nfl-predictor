@@ -430,7 +430,7 @@ Formerly Milestone 41.
       applies only under `pick_time`, because `stored` must stay byte-identical. The user
       accepted both on 2026-10-02 (production is identical either way; the expanding fit keeps
       the backtest to information available before each season). The closing-line yardstick for
-      a pick-time run is a `compare` option (plan, Phase A chunk 5).
+      a pick-time run is `nfl-predictor compare --market-from` (`0.42.1`).
       - Before any adoption of `pick_time`: `nfl-predictor lines` (`lines_refresh.py`, also a web
         job) rewrites upcoming games' line columns from nflverse with the fixed conversion, so on
         a pick-time `data/` it silently reverts them to stored lines; give it the line source too

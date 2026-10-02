@@ -47,7 +47,8 @@ under `ml/` change every checkpoint fingerprint).
    `PT` report gives the closing-line yardstick from `R0`'s rows. It may land while Phase B runs,
    but before the Phase B review.
 
-Phase A status: done; chunks 1-5 landed as `0.39.3`-`0.42.1`.
+Phase A status: done; chunks 1-5 landed as `0.39.3`-`0.42.1`. Phase B launched 2026-10-02 on
+`0.42.1` (run directory `models/step4/`).
 
 Any chunk that changes `NFLREADPY_SCHEDULE_COLUMNS`, `NFLREADPY_SCHEDULE_RENAME` or a derived
 schedule column refetches every historical schedule file since `0.38.2`, which can pull revised

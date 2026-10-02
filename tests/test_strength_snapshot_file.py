@@ -273,9 +273,10 @@ def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch)
         *,
         config: data_collection.DataCollectionConfig,
         strength_snapshots: list[pl.DataFrame] | None = None,
+        market_lines_metadata: dict[str, object] | None = None,
     ) -> pl.DataFrame:
         """Record one weekly snapshot and return a tiny game frame."""
-        del config
+        del config, market_lines_metadata
         assert strength_snapshots is not None
         strength_snapshots.append(snapshot)
         return pl.DataFrame({"season": [2007], "week": [2]})

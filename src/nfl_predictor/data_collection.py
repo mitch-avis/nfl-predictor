@@ -34,6 +34,7 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import time
 from contextlib import contextmanager
@@ -46,7 +47,7 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.utils import clock, game_utils, polars_utils, season_cache
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars import pbp, qb_stats
+from nfl_predictor.utils.polars import nfelo_lines, pbp, pick_time_lines, qb_stats
 from nfl_predictor.utils.polars.strength_table import (
     build_prior_strength_snapshot,
     build_strength_table,
@@ -106,6 +107,9 @@ class DataCollectionConfig:
     # Reuse finished seasons' builds from the season cache under `<data dir>/cache/` when
     # their inputs, the code and the options are unchanged (see `utils.season_cache`).
     incremental: bool = False
+    # Which market line each game carries: the stored nflverse line ("stored") or the line
+    # known at pick time ("pick_time", see `utils.polars.pick_time_lines`).
+    line_source: str = constants.LINE_SOURCE_STORED
 
 
 def _configure_logging(*, enable_debug: bool) -> None:
@@ -207,6 +211,16 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         ),
     )
     parser.add_argument(
+        "--line-source",
+        choices=constants.LINE_SOURCES,
+        default=constants.LINE_SOURCE_STORED,
+        help=(
+            "Market line each game carries: the stored nflverse line (default) or the line "
+            "known at pick time (nfelo's opener for completed games, its latest line for "
+            "upcoming ones, the stored line where nfelo has no real opener)."
+        ),
+    )
+    parser.add_argument(
         "--incremental",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -239,6 +253,7 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         team_stats_source=str(args.team_stats_source),
         tr_stats_source=str(args.tr_stats_source),
         incremental=bool(args.incremental),
+        line_source=str(args.line_source),
     )
 
 
@@ -366,9 +381,13 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     strength_snapshots: list[pl.DataFrame] = []
+    market_lines_metadata: dict[str, object] = {}
     with _timed_step("collect_all_data", enabled=config.enable_timing):
         all_data_df = collect_all_data(
-            seasons_to_process, config=config, strength_snapshots=strength_snapshots
+            seasons_to_process,
+            config=config,
+            strength_snapshots=strength_snapshots,
+            market_lines_metadata=market_lines_metadata,
         )
 
     _log_df_stats("all_data", all_data_df, enabled=config.enable_debug)
@@ -401,7 +420,18 @@ def main(argv: list[str] | None = None) -> None:
         upcoming_df, f"predict/week_{current_week:>02}_games_to_predict", config.data_dir
     )
 
+    if market_lines_metadata:
+        _save_market_lines_metadata(market_lines_metadata, config.data_dir)
+
     log.info("Data collection complete.")
+
+
+def _save_market_lines_metadata(metadata: dict[str, object], data_dir: Path | None) -> None:
+    """Write a pick-time build's line record beside the datasets."""
+    path = _resolve_data_dir(data_dir) / f"{constants.MARKET_LINES_METADATA_NAME}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    log.info("Saved the market-line record to %s", path)
 
 
 def _attach_qb_features(
@@ -606,6 +636,8 @@ class _EtlSources:
     pbp_df: pl.DataFrame
     elo_df: pl.DataFrame
     raw_elo_df: pl.DataFrame
+    # Set for a pick-time build: the nfelo snapshot, the line order's report and the maps.
+    pick_time: pick_time_lines.PickTimeLines | None = None
 
 
 def _stats_window(
@@ -829,10 +861,18 @@ def _finish_games(
             max_season=max_season,
             current_season=sources.current_season,
         )
-    # Fill in lines for future games from SurvivorGrid
-    combined_df = game_utils.fill_future_game_lines(combined_df)
-    # Fill missing moneylines by calculating from spreads
-    combined_df = game_utils.fill_missing_moneylines(combined_df)
+    if sources.pick_time is None:
+        # Fill in lines for future games from SurvivorGrid
+        combined_df = game_utils.fill_future_game_lines(combined_df)
+        # Fill missing moneylines by calculating from spreads
+        combined_df = game_utils.fill_missing_moneylines(combined_df)
+    else:
+        # The same fills, pricing every derived moneyline with its season's fitted map.
+        fill_moneylines = sources.pick_time.fill_moneylines
+        combined_df = game_utils.fill_future_game_lines(
+            combined_df, fill_moneylines=fill_moneylines
+        )
+        combined_df = fill_moneylines(combined_df)
     # Select final columns in correct order
     combined_df = polars_utils.select_final_columns(combined_df)
     # Ensure final ordering by date after any dedupe/transforms
@@ -872,6 +912,7 @@ def _open_season_cache(
             "stat_prior_blend_games": config.stat_prior_blend_games,
             "team_stats_source": config.team_stats_source,
             "tr_stats_source": config.tr_stats_source,
+            "line_source": config.line_source,
         },
     )
     directory = _resolve_data_dir(config.data_dir) / "cache" / constants.ETL_SEASON_CACHE_DIRNAME
@@ -920,6 +961,7 @@ def collect_all_data(
     *,
     config: DataCollectionConfig | None = None,
     strength_snapshots: list[pl.DataFrame] | None = None,
+    market_lines_metadata: dict[str, object] | None = None,
 ) -> pl.DataFrame:
     """Collect and combine all data for specified seasons.
 
@@ -928,6 +970,9 @@ def collect_all_data(
         config: Optional runtime config for logging/timing and cache refresh
         strength_snapshots: Optional list that receives each processed week's per-team
             strength snapshot; see `combine_strength_snapshots`
+        market_lines_metadata: Optional dict that receives a pick-time build's line record
+            (the nfelo snapshot and its hash, per-season counts, the moneyline maps); a
+            stored-line build leaves it empty
 
     Returns:
         Combined DataFrame with all game data and features
@@ -943,6 +988,8 @@ def collect_all_data(
         max(seasons),
     )
     sources = _load_sources(seasons, config)
+    if config.line_source == constants.LINE_SOURCE_PICK_TIME:
+        sources = _with_pick_time_lines(sources, seasons, enable_timing=config.enable_timing)
     min_season = min(seasons)
     rankings = _TeamRankingsLoader(min_season, sources, enable_timing=config.enable_timing)
     cache = _open_season_cache(config, sources, min_season)
@@ -970,12 +1017,57 @@ def collect_all_data(
 
     if not all_seasons_data:
         return pl.DataFrame()
-    return _finish_games(
+    games = _finish_games(
         _combine_seasons(all_seasons_data),
         sources,
         max(seasons),
         enable_timing=config.enable_timing,
     )
+    if sources.pick_time is not None and market_lines_metadata is not None:
+        market_lines_metadata.update(sources.pick_time.metadata())
+    return games
+
+
+def _with_pick_time_lines(
+    sources: _EtlSources, seasons: list[int], *, enable_timing: bool
+) -> _EtlSources:
+    """Replace the schedule's lines with the lines known at pick time.
+
+    Reads nfelo's lines (cached, never failing the run) and, for the moneyline maps, the
+    schedules of every earlier season the run does not build, from the per-season cache.
+    """
+    with _timed_step("load_nfelo_lines", enabled=enable_timing):
+        snapshot = nfelo_lines.load_nfelo_lines()
+    built = set(seasons)
+    history_seasons = [
+        season
+        for season in range(constants.NFLREADPY_MIN_SEASON, max(seasons))
+        if season not in built
+    ]
+    history = (
+        polars_utils.load_schedule(
+            history_seasons, force_refresh=False, current_season=sources.current_season
+        )
+        if history_seasons
+        else pl.DataFrame()
+    )
+    schedule_df, pick_time = pick_time_lines.prepare_pick_time_lines(
+        sources.schedule_df, history=history, snapshot=snapshot
+    )
+    for row in pick_time.report.iter_rows(named=True):
+        log.info(
+            "Pick-time lines, season %d: %d games, %d in nfelo, %d openers, %d stored "
+            "fallback rows, upcoming %d nfelo / %d nflverse / %d without a line",
+            row["season"],
+            row["games"],
+            row["matched"],
+            row["opener"],
+            row["stored_fallback"],
+            row["upcoming_nfelo"],
+            row["upcoming_nflverse"],
+            row["upcoming_without_line"],
+        )
+    return replace(sources, schedule_df=schedule_df, pick_time=pick_time)
 
 
 @dataclass(frozen=True, kw_only=True)

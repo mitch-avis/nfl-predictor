@@ -439,14 +439,16 @@ def main(argv: list[str] | None = None) -> None:
         upcoming_df, f"predict/week_{current_week:>02}_games_to_predict", config.data_dir
     )
 
-    if market_lines_metadata:
-        _save_market_lines_metadata(market_lines_metadata, config.data_dir)
+    # Written for every build, so a record left by an earlier build never outlives its data.
+    _save_market_lines_metadata(
+        market_lines_metadata or {"line_source": config.line_source}, config.data_dir
+    )
 
     log.info("Data collection complete.")
 
 
 def _save_market_lines_metadata(metadata: dict[str, object], data_dir: Path | None) -> None:
-    """Write a pick-time build's line record beside the datasets."""
+    """Write the build's line record beside the datasets (a stored build names its source)."""
     path = _resolve_data_dir(data_dir) / f"{constants.MARKET_LINES_METADATA_NAME}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")

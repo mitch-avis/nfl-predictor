@@ -198,10 +198,10 @@ def test_the_pick_time_source_anchors_to_the_opener_and_records_the_run(
     assert seasons[str(_SEASON)]["moneylines_from_map"] == 1
 
 
-def test_main_writes_the_line_record_only_for_a_pick_time_build(
+def test_main_writes_the_line_record_for_every_build_so_none_goes_stale(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A pick-time build leaves its record beside the datasets; a stored build writes none."""
+    """Every build writes its record, so a stored build replaces an earlier pick-time record."""
     monkeypatch.setattr(clock, "local_today", lambda: date(2026, 9, 30))
     monkeypatch.setattr(data_collection, "save_dataframe", lambda *_a, **_k: None)
     monkeypatch.setattr(polars_utils, "filter_completed_games", lambda df: df)
@@ -225,7 +225,10 @@ def test_main_writes_the_line_record_only_for_a_pick_time_build(
     base = ["--min-season", "2026", "--max-season", "2026", "--data-dir", str(tmp_path)]
 
     data_collection.main(base)
-    assert not path.exists()
+    assert json.loads(path.read_text(encoding="utf-8")) == {"line_source": "stored"}
 
     data_collection.main([*base, "--line-source", "pick_time"])
     assert json.loads(path.read_text(encoding="utf-8")) == record
+
+    data_collection.main(base)
+    assert json.loads(path.read_text(encoding="utf-8")) == {"line_source": "stored"}

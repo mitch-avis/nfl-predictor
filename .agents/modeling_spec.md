@@ -221,7 +221,8 @@ Feature areas tracked in `.agents/TODO.md` include (examples):
 - PBP-derived per-snap EPA, success, explosive, and special-teams families
 - weekly schedule-adjusted (ridge) offense/defense strength and EPA-based schedule strength, in
   both the ridge form and the one-hop head-to-head-excluded form
-- QB per-dropback EPA families for the expected starter
+- QB per-dropback EPA families for the expected starter, and a defense-adjusted rate that credits
+  each earlier dropback with the faced defense's pre-week strength value
 
 Rules for stat-style features:
 

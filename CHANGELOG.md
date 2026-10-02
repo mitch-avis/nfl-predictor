@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.39.3] - 2026-10-01
+
+### Added
+
+- The `next_opponent_identity` feature group: `nfl-predictor backtest --disable-feature-groups
+  next_opponent_identity` drops only the `away_next_opponent_abbr`/`home_next_opponent_abbr`
+  pair and its one-hot columns and keeps `*_next_opponent_win_pct`. Off unless named, so default
+  features are unchanged; `constants.py` changed, so every walk-forward checkpoint retrains.
+
 ## [0.39.2] - 2026-10-01
 
 ### Changed

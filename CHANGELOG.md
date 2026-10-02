@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.42.1] - 2026-10-02
+
+### Added
+
+- `nfl-predictor compare --market-from <run>` scores every compared run's market Brier and
+  det - market Brier against another run's `market_home_win_prob`, matched on `game_id`, so a run
+  anchored to the pick-time line also gets the closing-line yardstick from a stored-line run on
+  the same games. Each run is still scored on its own results; compared games whose result
+  differs in the market run are counted (`market_source.outcome_mismatches`) and flagged with a
+  warning. The report records the market run and its full provenance under `market_source`. It
+  exits 2 when the market run lacks, repeats or has no market value for a compared game, or when
+  the option is given twice. Without the option the output is unchanged.
+
 ## [0.42.0] - 2026-10-02
 
 ### Changed

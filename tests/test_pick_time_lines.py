@@ -309,6 +309,8 @@ def test_prepare_fits_the_maps_on_earlier_seasons_and_records_the_run(tmp_path: 
             "upcoming_nfelo": 0,
             "upcoming_nflverse": 0,
             "upcoming_without_line": 0,
+            "opener_sign_flips": 0,
+            "upcoming_nfelo_sign_flips": 0,
             "moneylines_from_map": 1,
             "moneylines_from_fixed_conversion": 0,
         }
@@ -350,3 +352,63 @@ def test_prepare_uses_the_run_s_own_seasons_for_earlier_season_maps(tmp_path: Pa
     assert prepared.maps[2014] is None
     assert prepared.maps[2015] is not None
     assert prepared.maps[2015].seasons == (2014,)
+
+
+def test_the_report_counts_opener_sign_flips_against_the_stored_line() -> None:
+    """An opener of at least 3 points on the other side of a stored line of 3+ is counted."""
+    _lines, report = _apply(
+        [
+            _game("1", 2015, home_spread=-3.5, away_spread=3.5),
+            _game("2", 2015, home_spread=-3.5, away_spread=3.5),
+            _game("3", 2015, home_spread=-2.5, away_spread=2.5),
+        ],
+        [
+            _line("1", 2015, home_spread_open=4.0),
+            _line("2", 2015, home_spread_open=-6.0),
+            _line("3", 2015, home_spread_open=4.0),
+        ],
+    )
+
+    assert report.row(0, named=True)["opener_sign_flips"] == 1
+
+
+def test_the_report_counts_upcoming_nfelo_sign_flips_against_nflverse() -> None:
+    """An upcoming game whose nfelo line and nflverse line of 3+ disagree in sign is counted."""
+    _lines, report = _apply(
+        [
+            _game("1", 2026, played=False, home_spread=-7.0, away_spread=7.0),
+            _game("2", 2026, played=False, home_spread=-7.0, away_spread=7.0),
+        ],
+        [_line("1", 2026, home_spread_last=7.0), _line("2", 2026)],
+    )
+
+    row = report.row(0, named=True)
+    assert row["upcoming_nfelo_sign_flips"] == 1
+    assert row["opener_sign_flips"] == 0
+
+
+def test_filling_twice_counts_each_derived_game_once(tmp_path: Path) -> None:
+    """A game whose away side stays missing is not counted again by a second fill."""
+    schedule = pl.DataFrame([_game("1", 2005)], schema=_SCHEDULE_SCHEMA)
+    snapshot = nfelo_lines.NfeloLinesSnapshot(
+        frame=pl.DataFrame(schema=_NFELO_SCHEMA),
+        url="u",
+        origin="unavailable",
+        sha256=None,
+        snapshot_path=tmp_path / "none.csv",
+    )
+    _lines, prepared = pick_time_lines.prepare_pick_time_lines(
+        schedule, history=pl.DataFrame(), snapshot=snapshot
+    )
+    games = schedule.with_columns(
+        pl.lit(None, dtype=pl.Float64).alias("away_spread"),
+        pl.lit(None, dtype=pl.Int32).alias("home_moneyline"),
+        pl.lit(None, dtype=pl.Int32).alias("away_moneyline"),
+    )
+
+    prepared.fill_moneylines(prepared.fill_moneylines(games))
+
+    assert prepared.derived[2005] == {
+        "moneylines_from_map": 0,
+        "moneylines_from_fixed_conversion": 1,
+    }

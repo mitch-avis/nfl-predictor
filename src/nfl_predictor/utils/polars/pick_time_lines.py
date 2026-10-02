@@ -42,6 +42,11 @@ _STORED = "stored_fallback"
 _UPCOMING_NFELO = "upcoming_nfelo"
 _UPCOMING_NFLVERSE = "upcoming_nflverse"
 _UPCOMING_NONE = "upcoming_without_line"
+# Diagnostics only, never used to filter: a game whose pick-time spread and stored spread are
+# both at least this many points and on opposite sides (a genuine flip or a data error).
+_SIGN_FLIP_MIN_POINTS = 3.0
+_OPENER_FLIPS = "opener_sign_flips"
+_UPCOMING_FLIPS = "upcoming_nfelo_sign_flips"
 _REPORT_COUNTS: tuple[str, ...] = (
     "games",
     "matched",
@@ -51,6 +56,8 @@ _REPORT_COUNTS: tuple[str, ...] = (
     _UPCOMING_NFELO,
     _UPCOMING_NFLVERSE,
     _UPCOMING_NONE,
+    _OPENER_FLIPS,
+    _UPCOMING_FLIPS,
 )
 _FROM_MAP = "moneylines_from_map"
 _FROM_FIXED = "moneylines_from_fixed_conversion"
@@ -63,6 +70,19 @@ def _pair(home: str, away: str) -> tuple[pl.Expr, pl.Expr]:
         pl.when(both).then(pl.col(home)).otherwise(None),
         pl.when(both).then(pl.col(away)).otherwise(None),
     )
+
+
+def _sign_flip(pick_time_spread: pl.Expr) -> pl.Expr:
+    """Return whether a pick-time spread and the stored spread sit on opposite sides.
+
+    Both must be at least ``_SIGN_FLIP_MIN_POINTS`` points; a null on either side is no flip.
+    """
+    stored = pl.col("home_spread")
+    return (
+        (pick_time_spread.abs() >= _SIGN_FLIP_MIN_POINTS)
+        & (stored.abs() >= _SIGN_FLIP_MIN_POINTS)
+        & (pick_time_spread * stored < 0)
+    ).fill_null(value=False)
 
 
 def apply_pick_time_lines(
@@ -106,7 +126,12 @@ def apply_pick_time_lines(
         .then(pl.lit(_UPCOMING_NFLVERSE))
         .otherwise(pl.lit(_UPCOMING_NONE))
     )
-    joined = joined.with_columns(source.alias(_SOURCE))
+    joined = joined.with_columns(source.alias(_SOURCE)).with_columns(
+        ((pl.col(_SOURCE) == _OPENER) & _sign_flip(pl.col("home_spread_open"))).alias(
+            _OPENER_FLIPS
+        ),
+        ((pl.col(_SOURCE) == _UPCOMING_NFELO) & _sign_flip(latest_spread)).alias(_UPCOMING_FLIPS),
+    )
 
     is_opener = pl.col(_SOURCE) == _OPENER
     is_latest = pl.col(_SOURCE) == _UPCOMING_NFELO
@@ -154,7 +179,12 @@ def apply_pick_time_lines(
             ((pl.col(_SOURCE) == _OPENER) & pl.col("total_line_open").is_null())
             .sum()
             .alias("opener_with_stored_total"),
-            *((pl.col(_SOURCE) == name).sum().alias(name) for name in _REPORT_COUNTS[4:]),
+            *(
+                (pl.col(_SOURCE) == name).sum().alias(name)
+                for name in (_STORED, _UPCOMING_NFELO, _UPCOMING_NFLVERSE, _UPCOMING_NONE)
+            ),
+            pl.col(_OPENER_FLIPS).sum(),
+            pl.col(_UPCOMING_FLIPS).sum(),
         )
         .sort("season")
         .with_columns(pl.col(name).cast(pl.Int64) for name in _REPORT_COUNTS)
@@ -180,22 +210,29 @@ class PickTimeLines:
     derived: dict[int, dict[str, int]] = field(default_factory=dict)
 
     def fill_moneylines(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Fill missing moneylines with each season's map, recording how many it derived."""
-        if {"season", "home_spread"}.issubset(df.columns):
-            missing = pl.lit(value=False)
-            for column in ("home_moneyline", "away_moneyline"):
-                if column in df.columns:
-                    missing = missing | pl.col(column).is_null()
-                else:
-                    missing = pl.lit(value=True)
-            needed = df.filter(pl.col("home_spread").is_not_null() & missing)
-            for season, games in (
-                needed.group_by("season", maintain_order=True).agg(pl.len()).iter_rows()
-            ):
-                kind = _FROM_FIXED if self.maps.get(int(season)) is None else _FROM_MAP
-                counts = self.derived.setdefault(int(season), {_FROM_MAP: 0, _FROM_FIXED: 0})
-                counts[kind] += int(games)
-        return moneyline_map.fill_moneylines_from_maps(df, self.maps)
+        """Fill missing moneylines with each season's map, recording how many it derived.
+
+        A game counts once, in the call that fills at least one of its moneylines, so a side
+        that stays missing (no away spread on the fixed path) is not counted again by a later
+        call.
+        """
+        filled = moneyline_map.fill_moneylines_from_maps(df, self.maps)
+        if "season" not in filled.columns or "home_spread" not in df.columns:
+            return filled
+        gained = pl.lit(value=False)
+        for column in ("home_moneyline", "away_moneyline"):
+            was_missing = (
+                pl.lit(df.get_column(column).is_null()) if column in df.columns else pl.lit(True)
+            )
+            gained = gained | (was_missing & pl.col(column).is_not_null())
+        derived = filled.filter(gained)
+        for season, games in (
+            derived.group_by("season", maintain_order=True).agg(pl.len()).iter_rows()
+        ):
+            kind = _FROM_FIXED if self.maps.get(int(season)) is None else _FROM_MAP
+            counts = self.derived.setdefault(int(season), {_FROM_MAP: 0, _FROM_FIXED: 0})
+            counts[kind] += int(games)
+        return filled
 
     def metadata(self) -> dict[str, object]:
         """Return the run-metadata record of the pick-time build."""

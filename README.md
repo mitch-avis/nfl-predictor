@@ -310,9 +310,13 @@ heads, in training and in production alike.
   by its SHA-256, and falls back to the cached copy (or, with none, to the stored lines) instead of
   failing. The run writes `market_lines_metadata.json` beside the datasets: the snapshot's URL,
   origin and hash, per-season game, match, opener and fallback-row counts, how many moneylines
-  each season derived and how, and every season's map. A `stored` build fetches nothing new and
-  writes no such file. The option changes feature values, so compare the two sources with two
-  dataset builds, not with `--disable-feature-groups`.
+  each season derived and how, and every season's map. Two diagnostic counts per season flag
+  possible data errors without filtering anything: openers and upcoming nfelo lines on the other
+  side of the stored line, both at least 3 points (`opener_sign_flips`,
+  `upcoming_nfelo_sign_flips`). A `stored` build fetches nothing new and writes
+  `{"line_source": "stored"}` to the same file, so a record never outlives the build it
+  describes. The option changes feature values, so compare the two sources with two dataset
+  builds, not with `--disable-feature-groups`.
 
 ## Data sources + missing data
 

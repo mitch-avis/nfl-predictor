@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.40.1] - 2026-10-01
+
+### Changed
+
+- The strength snapshot and table builders take the early-season prior as one `StrengthPrior`
+  value (`prior=`) instead of a bare frame (`prior_snapshot=`).
+
+### Added
+
+- `nfl-predictor data --strength-prior-blend-games` sets `K` in the adjusted-strength snapshot's
+  early-season prior blend, `games / (games + K)`, apart from the stat blend's
+  `--stat-prior-blend-games`. The default is `constants.PRIOR_BLEND_GAMES` (4), so a default build
+  is byte-identical; the value is part of the season-cache key. A non-default `K` moves the nine
+  adjusted-strength stats and, through `adj_def_pass_epa_snap`, the `qb_def_adj` columns.
+
+### Fixed
+
+- `nfl-predictor data` refuses a NaN or infinite `--strength-prior-blend-games` or
+  `--stat-prior-blend-games`; both must be finite and positive.
+
+## [0.40.0] - 2026-10-01
+
+### Changed
+
+- The ETL always records the weekly strength snapshots and passes them to the quarterback family.
+  Pre-existing columns are byte-identical on a 2019-2026 scratch build. `constants.py` and
+  `ml/ml_model_core.py` changed, so every walk-forward checkpoint retrains.
+
+### Added
+
+- The defense-adjusted quarterback EPA rate (`qb_def_adj_epa`, `qb_def_adj_epa_recent`, per side
+  and diff): each earlier dropback is credited with the faced defense's pre-week
+  `adj_def_pass_epa_snap`, with the `K = 300` shrinkage and career/last-8 windows of
+  `qb_dropback_epa`. It is the feature group `qb_def_adj` (`--disable-feature-groups qb_def_adj`)
+  and on by default once a build contains it; training's missing-data summary reports it. It
+  needs a full-history build: seasons before `--min-season` count as average defenses.
+
+## [0.39.3] - 2026-10-01
+
+### Added
+
+- The `next_opponent_identity` feature group: `nfl-predictor backtest --disable-feature-groups
+  next_opponent_identity` drops only the `away_next_opponent_abbr`/`home_next_opponent_abbr`
+  pair and its one-hot columns and keeps `*_next_opponent_win_pct`. Off unless named, so default
+  features are unchanged; `constants.py` changed, so every walk-forward checkpoint retrains.
+
 ## [0.39.2] - 2026-10-01
 
 ### Changed

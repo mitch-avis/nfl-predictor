@@ -99,8 +99,9 @@ TEAMRANKINGS_MIN_WEEK = 2
 WEEK1_REGRESSION_FACTOR = 1 / 3
 
 # Games at which an early-season in-season sample and the regressed previous season are
-# weighted equally. Shared by the adjusted-strength snapshot and the season-to-date stat
-# blend.
+# weighted equally. The default of both the adjusted-strength snapshot's blend and the
+# season-to-date stat blend; `nfl-predictor data` sets each on its own
+# (`--strength-prior-blend-games`, `--stat-prior-blend-games`).
 #
 # The in-season weight is `games / (games + PRIOR_BLEND_GAMES)`, so with K = 4 a team
 # reaches parity after four games (about week 5), three-quarters in-season after twelve,
@@ -894,6 +895,9 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     # Every published play-by-play stat name is its own marker, so the group tracks
     # PBP_STATS automatically and stays disjoint from the older stat families.
     "pbp": (),  # populated below, once PBP_STATS is defined
+    # The next opponent's team identity, one-hot encoded per side. The next opponent's
+    # strength stays in the model through `*_next_opponent_win_pct`.
+    "next_opponent_identity": ("next_opponent_abbr",),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
         "special_teams_tds",
@@ -1088,6 +1092,30 @@ QB_PRIOR_DROPBACKS = 300
 
 # Quarterback games in the recent window (any teams, any seasons).
 QB_RECENT_GAMES = 8
+
+# Defense-adjusted quarterback EPA per dropback for the expected starter. Each earlier
+# quarterback game is credited with `qb_epa_sum + dropbacks * adj_def_pass_epa_snap`, where the
+# defense value is the faced defense's pre-game strength snapshot for that game's week (solved
+# from games strictly before it), then aggregated with the same QB_PRIOR_DROPBACKS shrinkage and
+# windows as `qb_dropback_epa`. Its own ablation group, disjoint from `qb`, `pbp` and `strength`.
+QB_DEF_ADJ_STATS = [
+    # Career defense-adjusted EPA per dropback, shrunk toward the league's adjusted rate.
+    "qb_def_adj_epa",
+    # The same over the last QB_RECENT_GAMES games, shrunk toward the career adjusted rate.
+    "qb_def_adj_epa_recent",
+]
+
+FEATURE_GROUP_COLUMN_MARKERS["qb_def_adj"] = tuple(QB_DEF_ADJ_STATS)
+
+# Every published column of the defense-adjusted group: per side, then the away-minus-home diff.
+QB_DEF_ADJ_FEATURE_COLUMNS = [
+    *[f"{side}_{stat}" for stat in QB_DEF_ADJ_STATS for side in ("away", "home")],
+    *[f"{stat}_diff" for stat in QB_DEF_ADJ_STATS],
+]
+
+# The strength-snapshot column that gives each faced defense's pre-game expectation. A higher
+# value is a better defense, so a dropback against it is credited with the value.
+QB_DEF_ADJ_SOURCE_STAT = "adj_def_pass_epa_snap"
 
 # Base name under DATA_PATH of the quarterback identity file, a read-only copy of
 # `../nfeloqb/Other Data/meta_data.csv` (`name_id` -> `gsis_id`, the play-by-play passer id).

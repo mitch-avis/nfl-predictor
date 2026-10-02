@@ -331,3 +331,113 @@ def test_the_strength_prior_ablation_ignores_a_supplied_prior() -> None:
 
     _assert_same_values(week_two_snapshot(blend=False), raw)
     assert not week_two_snapshot(blend=True).equals(raw)
+
+
+def _prior_snapshot() -> pl.DataFrame:
+    """Return a previous-season snapshot far from the in-season solve, so K shows."""
+    return pl.DataFrame(
+        {
+            "team_abbr": list(_STRENGTH),
+            **{column: [5.0] * len(_STRENGTH) for column in constants.STRENGTH_SNAPSHOT_STATS},
+        }
+    )
+
+
+def _week_with_blend_games(week: int, blend_games: float) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Run one 2007 week at a strength blend K; return its game rows and its snapshot."""
+    sink: list[pl.DataFrame] = []
+    games = week_rows.process_week(
+        2007,
+        week,
+        _schedule(),
+        _team_games(),
+        data_collection.SeasonInputs(
+            min_season=2006,
+            prior_strength_snapshot=_prior_snapshot(),
+            strength_prior_blend_games=blend_games,
+            strength_snapshots=sink,
+        ),
+    )
+    return games, sink[0]
+
+
+def test_the_strength_prior_blend_games_reach_the_week_snapshot() -> None:
+    """A week's recorded snapshot is the strength table solved at the chosen K."""
+    _, snapshot = _week_with_blend_games(3, 2.0)
+
+    expected = strength_table.build_strength_table(
+        _team_games(),
+        _schedule(),
+        season=2007,
+        week=3,
+        prior=strength_snapshot.StrengthPrior(_prior_snapshot(), blend_games=2.0),
+    )
+    default = strength_table.build_strength_table(
+        _team_games(),
+        _schedule(),
+        season=2007,
+        week=3,
+        prior=strength_snapshot.StrengthPrior(_prior_snapshot()),
+    )
+
+    _assert_same_values(
+        snapshot.select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS),
+        expected.select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS),
+    )
+    assert not snapshot.select(constants.STRENGTH_SNAPSHOT_STATS).equals(
+        default.select(constants.STRENGTH_SNAPSHOT_STATS)
+    )
+
+
+def test_the_strength_prior_blend_games_move_only_the_strength_columns_of_game_rows() -> None:
+    """K moves the blended strength values on game rows and nothing outside that family."""
+    tuned, _ = _week_with_blend_games(3, 2.0)
+    default, _ = _week_with_blend_games(3, constants.PRIOR_BLEND_GAMES)
+
+    changed = {
+        column
+        for column in default.columns
+        if not tuned.get_column(column).equals(default.get_column(column))
+    }
+    assert "away_adj_off_pass_epa_snap" in changed
+    assert all(
+        any(stat in column for stat in constants.ADJUSTED_STRENGTH_STATS) for column in changed
+    ), changed
+    # The count behind the solve is not blended, so K never touches it.
+    assert not any("strength_games_played" in column for column in changed)
+
+
+def test_process_season_blends_the_week_after_the_regular_season_at_the_chosen_games() -> None:
+    """The full-season snapshot added after the regular season uses the same K."""
+
+    def final_snapshot(blend_games: float) -> pl.DataFrame:
+        sink: list[pl.DataFrame] = []
+        data_collection.process_season(
+            2007,
+            _schedule(),
+            _team_games(),
+            data_collection.SeasonInputs(
+                min_season=2006,
+                strength_prior_blend_games=blend_games,
+                strength_snapshots=sink,
+            ),
+        )
+        return sink[-1]
+
+    after_regular_season = constants.get_regular_season_weeks(2007) + 1
+    prior = strength_table.build_prior_strength_snapshot(_team_games(), 2007, min_season=2006)
+    assert prior is not None
+    expected = strength_table.build_strength_table(
+        _team_games(),
+        _schedule(),
+        season=2007,
+        week=after_regular_season,
+        prior=strength_snapshot.StrengthPrior(prior, blend_games=2.0),
+    )
+
+    tuned = final_snapshot(2.0)
+    _assert_same_values(
+        tuned.select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS),
+        expected.select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS),
+    )
+    assert not tuned.equals(final_snapshot(constants.PRIOR_BLEND_GAMES))

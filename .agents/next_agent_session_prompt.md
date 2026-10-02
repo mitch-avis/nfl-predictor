@@ -57,8 +57,9 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 
 ## Open questions for the user
 
-None blocking. Pending recommendations: leave `AGENTS.md`'s plain post-bump `uv sync` (it reverts
-a CUDA LightGBM build; harmless while LightGBM is parked); no incremental option on `etl_full`.
+None blocking. Pending recommendation: leave `AGENTS.md`'s plain post-bump `uv sync` (it reverts
+a CUDA LightGBM build; harmless while LightGBM is parked). Decided: `etl_full` gets no incremental
+option (the user left it to the agent on 2026-10-01; it stays the explicit full rebuild).
 Decided 2026-10-01: the step-4 plan (8 arms, 16 runs, 6 scratch builds, `data/` untouched until
 adoption, follow-ups deferred to a second ladder), plus the earlier decisions recorded in
 `ARCHIVE.md`.

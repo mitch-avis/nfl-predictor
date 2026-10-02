@@ -7,7 +7,12 @@ import pytest
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import polars_utils
-from nfl_predictor.utils.polars import schedule_strength, strength_table, week_rows
+from nfl_predictor.utils.polars import (
+    schedule_strength,
+    strength_snapshot,
+    strength_table,
+    week_rows,
+)
 from nfl_predictor.utils.polars.week_rows import _merge_team_rankings, process_week
 
 
@@ -624,7 +629,7 @@ def test_week_one_publishes_strength_before_any_game_is_played() -> None:
         new_season_schedule,
         season=2007,
         week=1,
-        prior_snapshot=prior,
+        prior=strength_snapshot.StrengthPrior(prior),
     )
 
     assert sorted(features["team_abbr"].to_list()) == ["AAA", "BBB"]

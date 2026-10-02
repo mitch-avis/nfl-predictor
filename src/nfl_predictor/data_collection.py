@@ -35,6 +35,7 @@ Usage:
 
 import argparse
 import logging
+import math
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -230,10 +231,12 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
         ),
     )
     args = parser.parse_args(argv)
-    if args.strength_prior_blend_games <= 0:
-        parser.error("--strength-prior-blend-games must be positive.")
-    if args.stat_prior_blend_games <= 0:
-        parser.error("--stat-prior-blend-games must be positive.")
+    for option, value in (
+        ("--strength-prior-blend-games", args.strength_prior_blend_games),
+        ("--stat-prior-blend-games", args.stat_prior_blend_games),
+    ):
+        if not (math.isfinite(value) and value > 0):
+            parser.error(f"{option} must be a finite positive number.")
     default_min = DEFAULT_MIN_SEASON
     default_max = _default_max_season()
     min_season = default_min if args.min_season is None else args.min_season

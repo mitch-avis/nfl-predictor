@@ -165,7 +165,21 @@ def test_parse_args_rejects_a_non_positive_strength_prior_blend_games(
     with pytest.raises(SystemExit):
         data_collection._parse_args([f"--strength-prior-blend-games={value}"])
 
-    assert "--strength-prior-blend-games must be positive" in capsys.readouterr().err
+    assert (
+        "--strength-prior-blend-games must be a finite positive number" in capsys.readouterr().err
+    )
+
+
+@pytest.mark.parametrize("option", ["--strength-prior-blend-games", "--stat-prior-blend-games"])
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
+def test_parse_args_rejects_a_non_finite_prior_blend_games(
+    option: str, value: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A NaN or infinite K would turn every blended value into NaN or the bare prior."""
+    with pytest.raises(SystemExit):
+        data_collection._parse_args([f"{option}={value}"])
+
+    assert f"{option} must be a finite positive number" in capsys.readouterr().err
 
 
 def test_resolve_config_uses_defaults_or_parsed_args(monkeypatch: pytest.MonkeyPatch) -> None:

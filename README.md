@@ -1095,7 +1095,10 @@ group (`--disable-feature-groups qb`), and the defense-adjusted quarterback rate
 `qb_def_adj` group (`--disable-feature-groups qb_def_adj`); with it disabled the model trains on
 exactly the feature matrix of a dataset without those columns. The rare-event noise family is
 the `rare_events` group (`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`,
-`2pt_conversions`, `def_safeties`, `def_tds`). No group overlaps another.
+`2pt_conversions`, `def_safeties`, `def_tds`). The `next_opponent_identity` group drops only the
+`away_next_opponent_abbr` and `home_next_opponent_abbr` pair, which the model sees as one one-hot
+column per team on each side, and keeps the rest of the lookahead family,
+`*_next_opponent_win_pct` included. No group overlaps another.
 
 ## Open work
 

@@ -10,7 +10,7 @@ approved, and anything beyond the cap or outside this text is a fresh question.
 | --- | --- | --- | --- |
 | R0 | none (the reference) | current code, a fresh build | - |
 | QB | defense-adjusted quarterback rate | new columns, switchable group, same build as R0 | 53.7 |
-| NO | drop the `*_next_opponent_abbr` identity pair | a feature switch on R0's build | 2026-09-25 review |
+| NO | drop the `*_next_opponent_abbr` identity pair | `--disable-feature-groups next_opponent_identity` on R0's build | 2026-09-25 review |
 | S2 | season-to-date stat blend `K = 2` (today `4`) | its own build (`--stat-prior-blend-games 2`) | 55.3 |
 | S8 | season-to-date stat blend `K = 8` | its own build | 55.3 |
 | T2 | strength-snapshot blend `K = 2` (today the same constant `4`) | its own build, new ETL option | 55.3 with the 2026-09-25 review |
@@ -62,6 +62,18 @@ lines; such a change is asked about first (rule 5), and its scratch builds say s
   F is the new GPU reference and the floor's new sigma pool.
 - Cap: 16 walk-forward runs (8 arms by 2 seeds) and 6 builds. Stopping rule: none early; every
   arm runs once on both seeds, and `F` runs only after the user's adoption decision.
+
+Feature-group switches per arm. The QB columns (`qb_def_adj`) are in every build and are on
+by default, so every arm except QB passes `--disable-feature-groups qb_def_adj` (NO passes
+`qb_def_adj,next_opponent_identity`); QB is the only arm that trains on them. The QB columns
+need a full-history build (the default `--min-season 1999`): a `--min-season` build counts the
+defenses of earlier seasons as average.
+
+Recorded before the runs: the QB adjustment is small next to the rate it adjusts (the adjusted
+and raw career rates correlate about 0.9995 on the 2019-2026 scratch build, because
+`adj_def_pass_epa_snap` is a shrunk per-snap coefficient applied per dropback). A QB tie
+therefore says this attenuated form adds nothing, not that opponent adjustment of quarterbacks
+has no signal; the next step after a tie is 53.7's joint ridge, not closing the task.
 
 ## Decision rules (written before any run)
 

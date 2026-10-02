@@ -33,16 +33,10 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 
 ## Open questions for the user
 
-1. 56.6 map window (blocks the PT build): keep the per-season fit on earlier seasons only, or one
-   pooled 2007-2025 fit? The agent's in-depth answer on 2026-10-02 recommended the expanding fit:
-   production is identical either way (2026 fits on all of 2006-2025); the map only fills derived
-   moneylines (features and the market yardstick), not the submitted floor probability; the
-   largest gap (0.022) is at extreme spreads, and near pick'em both maps sit at about 50%; the
-   pooled fit would price 2007 with 2015-2025 conventions, against `AGENTS.md`'s
-   information-available-before rule. The user leaned toward pooling ("more data, no outcomes")
-   and asked for that take; wait for the decision. Testing both would be a run beyond the cap.
+None pending.
 
-Decided 2026-10-02: the `compare` market-from option (yes); push `main` (done); the old scratch
+Decided 2026-10-02: the 56.6 map stays the per-season expanding fit (the user agreed after the
+agent's in-depth answer); the `compare` market-from option (yes); push `main` (done); the old scratch
 `data/` copies deleted (venvs and logs kept). Decided 2026-10-01: the plan, the per-dropback QB
 units, the partial merge to `main`, no incremental option on `etl_full`; earlier decisions are in
 `ARCHIVE.md`. The user handles weekly runs and picks; do not raise Week 5 for several days.
@@ -51,7 +45,7 @@ units, the partial merge to `main`, no incremental option on `etl_full`; earlier
 
 1. Phase A chunk 5 (`.agents/step4_plan.md`): the `compare` market-from option, one implementer
    and one reviewer, its own patch version.
-2. Phase B after the map-window answer: the six scratch builds (from scratch tree copies, full
+2. Phase B: the six scratch builds (from scratch tree copies, full
    history 1999+, each arm's feature-group switches as the plan lists), the leakage audit per
    build, then one driver for the 14 runs with a PID watcher; a check-in after an independent
    rescore.

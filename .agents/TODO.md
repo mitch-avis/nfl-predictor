@@ -427,8 +427,10 @@ Formerly Milestone 41.
       the map is fitted per season on strictly earlier seasons' prices instead of once on
       2007-2025 (no later market conventions in earlier features; prices move by at most 0.022
       probability, mostly under 0.01; seasons up to 2006 keep the fixed conversion), and it
-      applies only under `pick_time`, because `stored` must stay byte-identical. Both are
-      questions to the user, with the closing-line yardstick for a pick-time run.
+      applies only under `pick_time`, because `stored` must stay byte-identical. The user
+      accepted both on 2026-10-02 (production is identical either way; the expanding fit keeps
+      the backtest to information available before each season). The closing-line yardstick for
+      a pick-time run is a `compare` option (plan, Phase A chunk 5).
       - Before any adoption of `pick_time`: `nfl-predictor lines` (`lines_refresh.py`, also a web
         job) rewrites upcoming games' line columns from nflverse with the fixed conversion, so on
         a pick-time `data/` it silently reverts them to stored lines; give it the line source too

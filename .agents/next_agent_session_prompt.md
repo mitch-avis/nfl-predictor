@@ -8,8 +8,9 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## State (written 2026-10-01, step 4 in progress)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.42.0`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
-  passed, coverage 92.75%). `main` is at `0.39.3` (merged 2026-10-01 with the user's approval; not pushed yet, a question).
+  out in the main checkout at `0.42.0`; `uv sync` has run. `scripts/gate.sh` exits `0` on it
+  (coverage 93.22%). `main` is at `0.39.3` (merged 2026-10-01 with the user's approval; not
+  pushed yet, a question).
 - Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
   - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
     Parquet metadata and refetch when stale (all 56 existing files pass, nothing refetched);

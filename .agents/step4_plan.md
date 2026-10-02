@@ -63,6 +63,18 @@ lines; such a change is asked about first (rule 5), and its scratch builds say s
 - Cap: 16 walk-forward runs (8 arms by 2 seeds) and 6 builds. Stopping rule: none early; every
   arm runs once on both seeds, and `F` runs only after the user's adoption decision.
 
+Feature-group switches per arm. The QB columns (`qb_def_adj`) are in every build and are on
+by default, so every arm except QB passes `--disable-feature-groups qb_def_adj` (NO passes
+`qb_def_adj,next_opponent_identity`); QB is the only arm that trains on them. The QB columns
+need a full-history build (the default `--min-season 1999`): a `--min-season` build counts the
+defenses of earlier seasons as average.
+
+Recorded before the runs: the QB adjustment is small next to the rate it adjusts (the adjusted
+and raw career rates correlate about 0.9995 on the 2019-2026 scratch build, because
+`adj_def_pass_epa_snap` is a shrunk per-snap coefficient applied per dropback). A QB tie
+therefore says this attenuated form adds nothing, not that opponent adjustment of quarterbacks
+has no signal; the next step after a tie is 53.7's joint ridge, not closing the task.
+
 ## Decision rules (written before any run)
 
 For `QB`, `NO`, `S2`, `S8`, `T2`, each against `R0` on the same code: the candidate-minus-reference

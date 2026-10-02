@@ -328,7 +328,7 @@ def aggregate_league_snaps(pbp_df: pl.DataFrame) -> pl.DataFrame:
     plays = pbp.regular_season_plays(pbp_df)
     columns = plays.columns
     return (
-        plays.group_by(["season", "week"])
+        plays.group_by(["season", "week"], maintain_order=True)
         .agg(
             pbp.count_where(pbp.scrimmage_condition(columns), "offensive_snaps"),
             pbp.count_where(pbp.dropback_condition(columns), "dropbacks"),
@@ -356,7 +356,7 @@ def snaps_per_dropback(league_snaps: pl.DataFrame, keys: pl.DataFrame) -> pl.Dat
     sums = ["offensive_snaps", "dropbacks"]
     weekly = (
         league_snaps.select(pl.col(name).cast(dtype) for name, dtype in LEAGUE_SNAP_SCHEMA.items())
-        .group_by(["season", "week"])
+        .group_by(["season", "week"], maintain_order=True)
         .agg(pl.col(c).sum() for c in sums)
     )
     to_date = (
@@ -368,8 +368,11 @@ def snaps_per_dropback(league_snaps: pl.DataFrame, keys: pl.DataFrame) -> pl.Dat
             *[pl.col(c).cum_sum().over("season").alias(f"_in_{c}") for c in sums],
         )
     )
-    previous = weekly.group_by("season").agg(pl.col(c).sum().alias(f"_prev_{c}") for c in sums)
-    previous = previous.with_columns(pl.col("season") + 1)
+    previous = (
+        weekly.group_by("season", maintain_order=True)
+        .agg(pl.col(c).sum().alias(f"_prev_{c}") for c in sums)
+        .with_columns(pl.col("season") + 1)
+    )
     keyed = _keyed(keys.select("season", "week").with_row_index(_ROW))
     # Strictly before: the key's own week never matches (``allow_exact_matches=False``).
     # Both frames are sorted by the key, which also orders it within each season.

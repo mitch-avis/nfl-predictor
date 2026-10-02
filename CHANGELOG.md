@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.40.0] - 2026-10-01
+
+### Changed
+
+- The ETL always records the weekly strength snapshots and passes them to the quarterback family.
+  Pre-existing columns are byte-identical on a 2019-2026 scratch build. `constants.py` and
+  `ml/ml_model_core.py` changed, so every walk-forward checkpoint retrains.
+
+### Added
+
+- The defense-adjusted quarterback EPA rate (`qb_def_adj_epa`, `qb_def_adj_epa_recent`, per side
+  and diff): each earlier dropback is credited with the faced defense's pre-week
+  `adj_def_pass_epa_snap`, with the `K = 300` shrinkage and career/last-8 windows of
+  `qb_dropback_epa`. It is the feature group `qb_def_adj` (`--disable-feature-groups qb_def_adj`)
+  and on by default once a build contains it; training's missing-data summary reports it. It
+  needs a full-history build: seasons before `--min-season` count as average defenses.
+
 ## [0.39.3] - 2026-10-01
 
 ### Added

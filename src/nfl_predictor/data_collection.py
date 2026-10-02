@@ -413,9 +413,12 @@ class QbFamilyInputs:
             ``DATA_PATH/<QB_META_DATA_NAME>.csv``.
         defense_snapshots: The run's pre-week strength snapshots, which give each faced
             defense's expectation for the defense-adjusted rate; ``None`` leaves those
-            columns to the final schema's nulls. They exist only for the seasons the run
-            builds, so history games from earlier seasons count their defense as average, and
-            those columns, unlike the rest of the family, depend on the run's first season.
+            columns to the final schema's nulls. A defense with no pre-week value counts as
+            average: every game of a season the run does not build, and any team with
+            neither an earlier game that season nor a previous-season value (every team in
+            week 1 of the first season built, teams yet to play in 1999 weeks 2-3, Houston in
+            2002 week 1, and every season's week 1 without the strength prior blend). Those
+            columns, unlike the rest of the family, therefore depend on the run's first season.
 
     """
 

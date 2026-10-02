@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.40.1] - 2026-10-01
+
+### Changed
+
+- The strength snapshot and table builders take the early-season prior as one `StrengthPrior`
+  value (`prior=`) instead of a bare frame (`prior_snapshot=`).
+
+### Added
+
+- `nfl-predictor data --strength-prior-blend-games` sets `K` in the adjusted-strength snapshot's
+  early-season prior blend, `games / (games + K)`, apart from the stat blend's
+  `--stat-prior-blend-games`. The default is `constants.PRIOR_BLEND_GAMES` (4), so a default build
+  is byte-identical; the value is part of the season-cache key. A non-default `K` moves the nine
+  adjusted-strength stats and, through `adj_def_pass_epa_snap`, the `qb_def_adj` columns.
+
+### Fixed
+
+- `nfl-predictor data` refuses a NaN or infinite `--strength-prior-blend-games` or
+  `--stat-prior-blend-games`; both must be finite and positive.
+
 ## [0.40.0] - 2026-10-01
 
 ### Changed

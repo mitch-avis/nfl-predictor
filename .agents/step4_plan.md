@@ -70,11 +70,13 @@ by default, so every arm except QB passes `--disable-feature-groups qb_def_adj` 
 need a full-history build (the default `--min-season 1999`): a `--min-season` build counts the
 defenses of earlier seasons as average.
 
-Recorded before the runs: the QB adjustment is small next to the rate it adjusts (the adjusted
-and raw career rates correlate about 0.9995 on the 2019-2026 scratch build, because
-`adj_def_pass_epa_snap` is a shrunk per-snap coefficient applied per dropback). A QB tie
-therefore says this attenuated form adds nothing, not that opponent adjustment of quarterbacks
-has no signal; the next step after a tie is 53.7's joint ridge, not closing the task.
+Recorded before the runs: the QB adjustment is small next to the rate it adjusts. Since `0.41.0`
+the faced defense's per-snap pass coefficient is converted to EPA per dropback (about 1.7 snaps
+per dropback), but it is still a ridge coefficient shrunk to roughly 30-50% of the true effect, so
+the adjusted and raw career rates stay very close (correlation about 0.999 on the 2019-2026
+scratch build, `~/scratch/step4_qb_units/diagnostics.py`). A QB tie therefore says this form adds
+nothing, not that opponent adjustment of quarterbacks has no signal; the next step after a tie is
+53.7's joint ridge, not closing the task.
 
 ## Decision rules (written before any run)
 

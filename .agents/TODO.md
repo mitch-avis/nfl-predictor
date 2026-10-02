@@ -443,6 +443,15 @@ CUDA 13.3 replaced Ubuntu's CUDA 12 build (the mismatch behind the `cudaGetDevic
 load failure), and `nfl-lightgbm-cuda-install` keeps a CUDA build of the locked version,
 rebuilding only when needed (README, "Recommended: uv project workflow").
 
+- [ ] Before reopening: on 2026-10-01 (CUDA 13.4, uv 0.12.21) the CUDA build twice ended up as
+      the PyPI CPU wheel. Twice in `update_requirements.sh` (17:46 and 17:49; the dist-info shows
+      `manylinux_2_27`, `scikit-build-core 1.0.3`) and once after a version-bump sync that passed
+      the flags. Two clean scratch builds (`~/scratch/lgb_diag/`) passed `-DUSE_CUDA=ON` and
+      trained on the GPU, and the flip did not reproduce there, so the cause is unknown. Known:
+      a `uv sync` without `nfl-lightgbm-cuda-install uv-args` (the "plain `uv sync`" after a
+      version bump in `AGENTS.md`) swaps the CUDA build for the CPU wheel by design. Since
+      `0.39.2` a failed CUDA build only warns in `update_requirements.sh`.
+
 Device check, 2026-09-24 (`.agents/m57/lightgbm_device_check.py`, output beside it in
 `lightgbm_device_check.txt`; informal: one split, train 1999-2024, predict 2025, 491 numeric
 features, the shared 200-tree settings, idle machine):

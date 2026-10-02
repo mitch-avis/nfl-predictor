@@ -238,14 +238,14 @@ def prepare_pick_time_lines(
     """
     pairs = [moneyline_map.price_pairs(schedule).with_columns(pl.col("season").cast(pl.Int64))]
     if history.height > 0:
-        own_seasons = schedule.get_column("season").unique().to_list()
+        own_seasons = schedule.get_column("season").unique(maintain_order=True).to_list()
         pairs.insert(
             0,
             moneyline_map.price_pairs(
                 history.filter(~pl.col("season").is_in(own_seasons))
             ).with_columns(pl.col("season").cast(pl.Int64)),
         )
-    seasons = schedule.get_column("season").unique().to_list()
+    seasons = schedule.get_column("season").unique(maintain_order=True).to_list()
     maps = moneyline_map.fit_season_maps(pl.concat(pairs, how="vertical_relaxed"), seasons)
     lines, report = apply_pick_time_lines(schedule, snapshot.frame)
     return lines, PickTimeLines(snapshot=snapshot, report=report, maps=maps)

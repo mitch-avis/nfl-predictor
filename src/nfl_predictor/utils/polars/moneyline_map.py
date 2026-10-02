@@ -179,7 +179,7 @@ def fit_spread_moneyline_map(
             .otherwise(even)
             .alias("underdog"),
         )
-        .group_by("distance")
+        .group_by("distance", maintain_order=True)
         .agg(pl.len().alias("games"), pl.col("favorite").mean(), pl.col("underdog").mean())
         .sort("distance")
     )

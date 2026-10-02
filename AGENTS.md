@@ -437,7 +437,8 @@ options. `scripts/` holds only `gate.sh`.
   `constants.WEEK1_REGRESSION_FACTOR`. From week 2 on, season-to-date stats blend toward that same
   prior with in-season weight `games / (games + constants.PRIOR_BLEND_GAMES)`, and rates are
   recomputed from the blended sums (`polars_utils.blend_with_prior_stats`). The adjusted-strength
-  family blends its own previous-season snapshot the same way. New season-to-date families inherit
+  family blends its own previous-season snapshot the same way, with its own `K` option
+  (`--strength-prior-blend-games`, same default). New season-to-date families inherit
   the stat blend automatically if they flow through `team_stats_df`.
 - Future games have missing outcomes; the pipeline still outputs a structurally complete row
   suitable for prediction.

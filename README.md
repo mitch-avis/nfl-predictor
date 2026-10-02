@@ -188,7 +188,8 @@ season in progress is always rebuilt, and every input is still loaded. An entry 
   `src/nfl_predictor/utils/`), the Polars, Polars runtime and NumPy versions, the Python
   version, the CPU architecture and the Polars thread count;
 - the options that change a season's rows (`--min-season`, the two prior-blend switches,
-  `--stat-prior-blend-games`, `--team-stats-source` and `--tr-stats-source`);
+  `--strength-prior-blend-games`, `--stat-prior-blend-games`, `--team-stats-source` and
+  `--tr-stats-source`);
 - the loaded schedule, team stats and Elo rows from that season and every earlier one, and that
   season's and the previous season's TeamRankings, compared by value.
 
@@ -275,7 +276,9 @@ four games 50%, twelve games 75%. Rates are recomputed from the blended sums. Us
 `--stat-prior-blend-games` to change `K` and `--no-stat-prior-blend` to publish plain in-season
 means instead; both change feature values, so compare them with two dataset builds, not with
 `--disable-feature-groups`. The first season in a run has no prior and uses in-season means, and the
-schedule-adjusted strength family carries its own blend (`--no-strength-prior-blend`).
+schedule-adjusted strength family carries its own blend of the same form, with its own `K`
+(`--strength-prior-blend-games`, default `constants.PRIOR_BLEND_GAMES`) and its own ablation
+(`--no-strength-prior-blend`).
 
 ## Data sources + missing data
 
@@ -1079,9 +1082,13 @@ games.
   play-by-play cache keeps the passer id but not the rusher id.
 
 The strength family is ablatable as the `strength` feature group
-(`--disable-feature-groups strength`), and the early-season prior blend can be ablated
-independently at ETL time with `--no-strength-prior-blend`. The quarterback family is the `qb`
-group (`--disable-feature-groups qb`). The rare-event noise family is the `rare_events` group
+(`--disable-feature-groups strength`). Its early-season prior blend weights the in-season solve
+`games / (games + K)` against the previous season's final snapshot regressed by
+`constants.WEEK1_REGRESSION_FACTOR`; at ETL time `--strength-prior-blend-games` sets `K` (default
+`constants.PRIOR_BLEND_GAMES`, `4`) and `--no-strength-prior-blend` ablates the blend. Both change
+feature values and the strength snapshot file behind the default power rankings, so compare them
+with two dataset builds. The quarterback family is the `qb` group
+(`--disable-feature-groups qb`). The rare-event noise family is the `rare_events` group
 (`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`, `2pt_conversions`, `def_safeties`,
 `def_tds`). No group overlaps another.
 

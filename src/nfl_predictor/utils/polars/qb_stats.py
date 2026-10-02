@@ -49,8 +49,10 @@ when the caller supplies the pre-week strength snapshots:
   documented previous-season prior early in a season), so the game never informs its own
   expectation. A higher ``adj_def_pass_epa_snap`` is a better defense, so each dropback
   against it is credited with the value. A defense with no snapshot row or a null value
-  (the first week of the first season built, or a season the run did not build) counts as
-  average: the game enters with its raw EPA.
+  counts as average, and the game enters with its raw EPA: every game of a season the run did
+  not build, and any team with neither an earlier game that season nor a previous-season
+  value (every team in week 1 of the first season built, teams yet to play in 1999 weeks 2-3,
+  Houston in 2002 week 1, and every season's week 1 without the strength prior blend).
 - ``qb_def_adj_epa``: ``(career_adjusted_sum + K * league_adjusted_rate) / (career_dropbacks
   + K)``, the league rate being the adjusted sum over dropbacks of every quarterback game
   strictly before the row's week; ``qb_def_adj_epa_recent``: the last

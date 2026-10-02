@@ -1077,13 +1077,25 @@ games.
   toward the career rate the same way; `qb_history_dropbacks` tells the model how much evidence
   stands behind them. Scrambles are credited to the team-game's primary passer, because the
   play-by-play cache keeps the passer id but not the rusher id.
+- Defense-adjusted quarterback EPA per dropback (`constants.QB_DEF_ADJ_STATS`, same module):
+  each earlier game of the expected starter is credited with
+  `qb_epa_sum + dropbacks * adj_def_pass_epa_snap`, the faced defense's pre-week strength value
+  for that game's week (solved from games strictly before it), so EPA earned against a strong
+  defense counts for more. The career (`qb_def_adj_epa`) and last-`QB_RECENT_GAMES`
+  (`qb_def_adj_epa_recent`) rates use the same `K` shrinkage and windows as `qb_dropback_epa`. A
+  defense with no snapshot (the first week of the first season built, or a season before the
+  run's `--min-season`) counts as average, so unlike the rest of the quarterback family these two
+  columns depend on the run's first season; the ETL logs how many quarterback games that
+  affects, and training reports the group's null cells and rows like the other groups.
 
 The strength family is ablatable as the `strength` feature group
 (`--disable-feature-groups strength`), and the early-season prior blend can be ablated
 independently at ETL time with `--no-strength-prior-blend`. The quarterback family is the `qb`
-group (`--disable-feature-groups qb`). The rare-event noise family is the `rare_events` group
-(`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`, `2pt_conversions`, `def_safeties`,
-`def_tds`). No group overlaps another.
+group (`--disable-feature-groups qb`), and the defense-adjusted quarterback rate is the
+`qb_def_adj` group (`--disable-feature-groups qb_def_adj`); with it disabled the model trains on
+exactly the feature matrix of a dataset without those columns. The rare-event noise family is
+the `rare_events` group (`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`,
+`2pt_conversions`, `def_safeties`, `def_tds`). No group overlaps another.
 
 ## Open work
 

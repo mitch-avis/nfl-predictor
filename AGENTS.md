@@ -295,7 +295,7 @@ Use these forms **at all times**:
 - uv:
   - `uv`
 - pytest:
-  - `.venv/bin/python -m pytest` **or** `.venv/bin/pytest` **or** `uv run pytest`
+  - `.venv/bin/python -m pytest` **or** `.venv/bin/pytest`
 - ruff:
   - `.venv/bin/ruff`
 - pyright:
@@ -308,6 +308,8 @@ Use these forms **at all times**:
 ### Explicitly forbidden
 
 - `python`, `pip`, `pytest`, `ruff`, `pyright`, or `ty` **without a `.venv/` prefix**
+- `uv run <tool>`: it syncs the venv to the lockfile before every call, which can replace
+  packages installed outside the lockfile and hides which interpreter ran
 - assuming an activated shell or implicit virtualenv
 - using system Python, Conda, pyenv, or global tools
 

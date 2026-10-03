@@ -30,36 +30,19 @@ Rules that are always enforced:
 
 ## Current Focus (2026 season start)
 
-- The active workstream is feature engineering for true team strength. What has landed, version
-  by version, with the user's decisions and the verification arms, is under "Workstream history"
-  in `.agents/benchmarks.md`; completed milestones are in `.agents/ARCHIVE.md`.
-- The order agreed with the user on 2026-09-24, each step on its own branch and merged before
-  the next, with no deadline:
-  (1) close 55.8 (done, `0.18.0`);
-  (2) Milestone 60, CLI and entrypoint consolidation widened to every file under `scripts/`,
-  behavior-preserving, with task 55.5 (done: closed and merged into `main` on 2026-09-25 as
-  `0.28.1`, record in `.agents/ARCHIVE.md`, Milestone 60);
-  (3) production/benchmark parity: GPU as the default device (55.4), how production
-  probabilities are formed (56.5), pick-time lines (56.6), and the out-of-fold calibration pool;
-  (4) rebuild reproducibility, then every feature-value change (55.3, 53.7 and the feature
-  follow-ups);
-  (5) the Optuna re-tune with wiring into production (55.9 with 56.3);
-  (6) the web UI, Milestone 58 phases 4-6.
-  Tasks 55.1 and 55.2 are retired. The reasoning and the follow-up assignments are under "Roadmap
-  Status" in `.agents/TODO.md`. Step 3 closed on 2026-10-01. Step 4 is in progress on
-  `feat/step4-feature-values` under the plan in `.agents/step4_plan.md` (accepted 2026-10-01); its
-  reproducibility work was merged into `main` as `0.39.3` the same day.
+- The current workstream, the agreed step order (each step on its own branch off `main`, merged
+  before the next) and the active step's branch and plan are under "Roadmap Status" in
+  `.agents/TODO.md`; what has landed is under "Workstream history" in `.agents/benchmarks.md` and
+  in `.agents/ARCHIVE.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-25 (version `0.28.5`): `scripts/gate.sh --web` exits `0`
-  (`1032 passed`, coverage `92.21%` against the enforced `90%` floor, 22 frontend tests). Run
-  `scripts/gate.sh --web` whenever `web/` or `src/nfl_predictor/api/` changes.
-  - Re-run a plain `uv sync` after every version bump (including after merging a branch that
-    bumped the version), or `uv sync --check --active` fails on the stale installed package.
+- Run `scripts/gate.sh --web` whenever `web/` or `src/nfl_predictor/api/` changes.
+- Re-run a plain `uv sync` after every version bump (including after merging a branch that
+  bumped the version), or `uv sync --check --active` fails on the stale installed package.
 - **Benchmarks and data state live in `.agents/benchmarks.md`.** Read it before any walk-forward
   run, comparison or decision: it holds the current benchmark table, the reference arm for each
   dataset build (a new arm compares against the reference on its own build and code version),
@@ -250,7 +233,7 @@ are not advisory.
 - Do not reference temporary planning artifacts in code: do not mention roadmap items, milestone
   numbers, or TODO goal labels in any code, comments, docstrings, or test descriptions.
 - Load and apply relevant skills before acting. Default to `python` for Python work; add
-  `test-driven-development`, `clean-code`, `systematic-debugging`, `code-review`, `observability`,
+  `test-driven-development`, `systematic-debugging`, `code-review`, `observability`,
   `task-orchestrator`, and the `python-*` skills when their domains apply. Skills carry general
   defaults; where one disagrees with this file, the nested `AGENTS.md` files or the `.agents/` docs
   they point to, this repo's rule wins (for example the `.venv/bin/` command forms,
@@ -343,25 +326,11 @@ gate" (add `--web` when `web/` changed, `--quick` to skip pytest while iterating
 
 ## Project Shape (Big Picture)
 
-- Compatibility facades: `src/nfl_predictor/utils/polars_utils.py` forwards imports to the split
-  Polars modules, and `src/nfl_predictor/ml_model.py` forwards to `src/nfl_predictor/ml/` and
-  keeps the `python -m nfl_predictor.ml_model` form of `nfl-predictor train`/`predict`
-  (`src/nfl_predictor/cli/train.py`, outside the checkpoint fingerprint). XGBoost version/build
-  compatibility helpers live in `src/nfl_predictor/ml/ml_model_xgb_utils.py`.
-
 ### Commands (operational entrypoints)
 
-`nfl-predictor --help` lists every command by group; `nfl-predictor <command> --help` shows its
-options. `scripts/` holds only `gate.sh`.
-
-- `nfl-predictor compare` (`src/nfl_predictor/cli/compare.py`, definitions in
-  `src/nfl_predictor/reporting/run_comparison.py`): paired comparison of walk-forward runs rescored
-  from their fold checkpoints, per window, with bootstrap intervals and two seeds combined per
-  game when given; `--market-from <run>` scores the market view against another run's market
-  by `game_id` (the closing-line yardstick for a pick-time run). It reproduces the task 55.8
-  independent rescore exactly (`.agents/m60/verify_compare.py`), so a reviewer can use it under
-  rule 3(b) as long as the review also checks provenance and the reviewer did not produce the
-  run.
+- `nfl-predictor compare` reproduces the task 55.8 independent rescore exactly
+  (`.agents/m60/verify_compare.py`), so a reviewer can use it under rule 3(b) as long as the
+  review also checks provenance and the reviewer did not produce the run.
 - Training/prediction entrypoints may be updated/replaced, but must remain runnable and
   documented.
 
@@ -386,14 +355,6 @@ options. `scripts/` holds only `gate.sh`.
 
 - **Data directory:** all datasets live under `data/` (see `constants.DATA_PATH` in
   `src/nfl_predictor/constants.py`).
-- **Key output files (examples; do not hard-code filenames):**
-  - `data/all_data_ml.csv` - master ML dataset (includes engineered features and targets where
-    available)
-  - `data/all_data.csv` - combined dataset without ML-only targets
-  - `data/completed_games_ml.csv` and `data/completed_games.csv` - completed games subsets
-  - `data/predict/week_XX_games_to_predict.csv` - upcoming week games with engineered features
-  - `data/strength_snapshots.csv` - pre-week adjusted strength per `(season, week, team)` for
-    every scheduled team, bye teams included; the source of the default power rankings
 
 ### I/O rules
 

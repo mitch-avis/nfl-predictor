@@ -15,8 +15,9 @@ if TYPE_CHECKING:
 
 MISSING_BUILD_HTML = """<!doctype html><title>nfl-predictor</title>
 <h1>Frontend not built</h1>
-<p>The API is running, but <code>web/dist</code> does not exist. Run <code>npm run build</code>
-inside <code>web/</code> (or <code>npm run dev</code> for the dev server).</p>
+<p>The API is running, but <code>web/dist</code> does not exist. Run <code>pnpm install</code> and
+<code>pnpm run build</code> inside <code>web/</code> (or <code>pnpm run dev</code> for the dev
+server).</p>
 """
 
 

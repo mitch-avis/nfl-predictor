@@ -920,8 +920,9 @@ nfl-predictor users create-user <name> --role admin   # once
 nfl-predictor web                                     # http://127.0.0.1:8000
 ```
 
-The frontend needs Node 26 (`source ~/.nvm/nvm.sh`); `cd web && npm ci && npm run build` writes
-`web/dist/`, which the backend serves. Configuration is by `NFLP_*` environment variables
+The frontend needs Node 26 (`source ~/.nvm/nvm.sh`) and pnpm;
+`cd web && pnpm install --frozen-lockfile && pnpm run build` writes `web/dist/`, which the backend
+serves. Configuration is by `NFLP_*` environment variables
 (`NFLP_DATA_DIR`, `NFLP_MODELS_DIR`, `NFLP_STATE_DIR`, `NFLP_PORT`, ...). Launch jobs from a
 server started without `--reload`: a reload restart marks running jobs failed. Details (including
 when to use `--reload` and the Vite dev server), the check commands and the layout are in

@@ -21,21 +21,21 @@ admins, runs the project's jobs.
 
 # 3. Frontend
 cd web
-npm ci
-npm run dev      # Vite dev server on http://localhost:5173, proxies /api to :8000
-npm run build    # writes web/dist, which the backend serves
+pnpm install --frozen-lockfile
+pnpm run dev     # Vite dev server on http://localhost:5173, proxies /api to :8000
+pnpm run build   # writes web/dist, which the backend serves
 ```
 
 Which mode to use:
 
 - `nfl-predictor web` serves the API and the built app from `web/dist/` on port 8000. The app is
-  whatever the last `npm run build` produced (`scripts/gate.sh --web` rebuilds it). Use this mode
+  whatever the last `pnpm run build` produced (`scripts/gate.sh --web` rebuilds it). Use this mode
   day to day, and always when launching jobs.
 - `--reload` restarts the backend whenever a Python file in the repository changes (an edit, a
   `git checkout`, a merge). A restart marks every running job failed, and the job's process
   carries on unwatched. Its file watcher also takes about half a core, which slows walk-forwards.
   Use it only while changing the API.
-- `npm run dev` serves `web/src` with hot reload on port 5173 and sends `/api` to the backend on
+- `pnpm run dev` serves `web/src` with hot reload on port 5173 and sends `/api` to the backend on
   port 8000, so the backend must be running too. Use it only while changing the frontend; it binds
   `0.0.0.0`, so other devices on the network can reach it.
 
@@ -60,10 +60,10 @@ Every setting is an `NFLP_`-prefixed environment variable (see `src/nfl_predicto
 ## Checks
 
 ```bash
-npm run lint        # oxlint
-npm run typecheck   # tsc -b
-npx vitest run      # unit tests
-npm run build
+pnpm run lint         # oxlint
+pnpm run typecheck    # tsc -b
+pnpm exec vitest run  # unit tests
+pnpm run build
 ```
 
 ## Layout
@@ -77,6 +77,5 @@ web/src/
   utils/        cn() and formatting helpers  (not src/lib: that path is gitignored)
 ```
 
-Add shadcn components with `NPM_CONFIG_USERCONFIG=/dev/null npx shadcn@latest add <name>` (the
-user-level npmrc sets `allow-scripts`, which npm 12 rejects inside project installs), then fix the
-generated `from "cn"` imports to `from "@/utils/cn"`.
+Add shadcn components with `pnpm dlx shadcn@latest add <name>`, then fix the generated
+`from "cn"` imports to `from "@/utils/cn"`.

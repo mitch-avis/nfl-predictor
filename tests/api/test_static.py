@@ -54,7 +54,7 @@ def test_missing_build_returns_503(tmp_path: Path) -> None:
 
     # Assert
     assert response.status_code == 503
-    assert "npm run build" in response.text
+    assert "pnpm run build" in response.text
 
 
 def test_frontend_can_be_disabled(settings: Settings) -> None:

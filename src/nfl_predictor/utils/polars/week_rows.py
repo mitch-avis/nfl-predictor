@@ -25,7 +25,7 @@ from nfl_predictor.utils.polars.strength_table import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
 
     from nfl_predictor.data_collection import SeasonInputs
 
@@ -36,7 +36,7 @@ def _timed_substep(
     *,
     enabled: bool,
     totals: dict[str, float] | None,
-) -> Iterator[None]:
+) -> Generator[None]:
     """Accumulate timing for sub-steps without per-call logging."""
     if not enabled:
         yield

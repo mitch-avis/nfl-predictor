@@ -249,7 +249,7 @@ class SeasonCache:
                 if _sha256(data) != manifest["files"][name]:
                     log.warning("Season cache: %s for %d fails its checksum", name, season)
                     return None
-                frames[name] = pl.read_ipc(data, memory_map=False)
+                frames[name] = pl.read_ipc(data)
         except FileNotFoundError:
             log.info("Season cache: no entry for %d", season)
             return None

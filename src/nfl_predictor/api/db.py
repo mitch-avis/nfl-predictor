@@ -13,7 +13,7 @@ from contextlib import closing, contextmanager
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from pathlib import Path
 
 SCHEMA = """
@@ -74,7 +74,7 @@ class Database:
             self._initialized = True
 
     @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
+    def connect(self) -> Generator[sqlite3.Connection]:
         """Yield a connection with ``Row`` access; commits on success, rolls back on error."""
         self.initialize()
         with self._lock:

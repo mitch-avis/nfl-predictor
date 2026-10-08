@@ -15,7 +15,7 @@ dependencies = [
     "argon2-cffi>=25.1",
     "beautifulsoup4>=4.15",
     "coloredlogs>=15.0",
-    "fastapi>=0.142",
+    "fastapi>=0.143",
     "joblib>=1.6",
     "lightgbm>=4.7",
     "lxml>=6.1",
@@ -23,7 +23,7 @@ dependencies = [
     "numpy>=2.5",
     "optuna>=5.0",
     "pandas>=3.0",
-    "polars>=1.44",
+    "polars>=2.0",
     "pydantic-settings>=2.15",
     "pyjwt>=2.15",
     "python-multipart>=0.0.32",
@@ -62,7 +62,7 @@ dev = [
     "pytest-xdist>=3.8",
     "ruff>=0.16",
     "scikit-build-core>=1.1",
-    "ty>=0.0.84",
+    "ty>=0.0.85",
 ]
 
 [tool.uv]

@@ -59,7 +59,7 @@ from nfl_predictor.utils.polars.strength_table import (
 from nfl_predictor.utils.polars.week_rows import build_prior_season_stats, process_week
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from datetime import date
 
 
@@ -350,7 +350,7 @@ def _resolve_seasons(min_season: int, max_season: int) -> list[int]:
 
 
 @contextmanager
-def _timed_step(label: str, *, enabled: bool) -> Iterator[None]:
+def _timed_step(label: str, *, enabled: bool) -> Generator[None]:
     """Time a step and log duration when enabled."""
     if not enabled:
         yield

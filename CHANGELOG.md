@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.43.0] - 2026-10-08
+
+### Changed
+
+- Every `nfl-predictor` command (and `python -m nfl_predictor.weekly_run`) runs Polars on one
+  thread unless the environment sets `POLARS_MAX_THREADS`. The ETL builds thousands of small
+  frames, where a pool sized to every core spent its time waking threads: a full
+  `nfl-predictor data --max-season 2025 --no-incremental` build took 540 s with 24 Polars threads
+  and 119 s with one (system time 1470 s against 16 s), and every output file was byte-identical.
+  XGBoost and BLAS keep their own thread settings.
+- `pytest` spreads the suite over one worker per core by default (`-n=auto`, pytest-xdist);
+  `-n 0` runs it in one process.
+- `AGENTS.md`, `README.md` and the task docs sync after a version bump with
+  `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`; the plain `uv sync` they named
+  replaced the local CUDA build of LightGBM with the CPU wheel.
+
+- Dependencies updated; the floor is now Polars 2.0 (`polars>=2.0`), with FastAPI 0.143 and ty
+  0.0.85. Context managers are annotated as `Generator`/`AsyncGenerator` rather than the
+  `Iterator` form ty now reports as deprecated.
+- The frontend uses pnpm instead of npm: `web/pnpm-lock.yaml` replaces `web/package-lock.json`,
+  and `scripts/gate.sh --web`, the CI `web` job (`pnpm/action-setup`, pnpm store cache), the
+  missing-build page and the docs run `pnpm install --frozen-lockfile`, `pnpm run <script>` and
+  `pnpm exec vitest run`.
+- The test suite runs Polars, OpenMP and BLAS on one thread each unless the environment sets
+  `POLARS_MAX_THREADS`, `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS` or `MKL_NUM_THREADS`: pools
+  sized to every core spent the run waking and spinning threads (about 174 s before, 42 s after,
+  on 24 cores).
+
+### Fixed
+
+- The season cache reads its entries again under Polars 2.0, which dropped `read_ipc`'s
+  `memory_map` option: every lookup failed, was logged as an unreadable entry and rebuilt the
+  season.
+- The web Weekly Run job no longer passes `--output-dir models/`. Its predictions, confidence
+  picks, betting report and power rankings now land in the run directory, the only place the run
+  index looks, so a finished web run shows its week instead of nothing.
+
 ## [0.42.1] - 2026-10-02
 
 ### Added

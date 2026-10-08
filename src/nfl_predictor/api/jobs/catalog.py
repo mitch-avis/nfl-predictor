@@ -199,13 +199,12 @@ def _build_weekly_run(ctx: JobContext) -> list[str]:
 
     Without ``--config`` the command reads the shipped ``config/weekly_run.yaml``, so passing
     options instead of a config file keeps that file's value for every field the form leaves
-    blank, and a value the form sets overrides it.
+    blank, and a value the form sets overrides it. There is no ``--output-dir`` either: the
+    predictions and reports stay in the run directory, the only place the run index looks.
     """
     params = ctx.params
     argv = [
         *ctx.command("weekly"),
-        "--output-dir",
-        str(ctx.settings.models_path),
         "--data-path",
         ctx.data_file("completed_games_ml.csv"),
     ]

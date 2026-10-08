@@ -254,11 +254,28 @@ def test_weekly_run_layers_the_form_over_the_shipped_config(
     assert args.data_collection_args == "--incremental"
     assert args.run_id == "weekly_2026_week_02"
     assert args.predict_path == settings.data_path / "predict" / "week_02_games_to_predict.csv"
-    assert args.output_dir == settings.models_path
     assert args.data_path == settings.data_path / "completed_games_ml.csv"
     assert args.skip_data_refresh is True
     assert args.resume is False
     assert args.dry_run is False
+
+
+def test_weekly_run_writes_its_outputs_into_its_own_run_directory(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The job sets no output directory, so predictions and reports land in ``models/<run_id>/``.
+
+    The run index looks for a run's predictions, picks, and reports only inside its directory, so
+    outputs written anywhere else leave the finished run with nothing to show.
+    """
+    # Arrange
+    params: dict[str, object] = {"week": 2}
+
+    # Act
+    _name, args = parse_built(build("weekly_run", settings, params), settings, monkeypatch)
+
+    # Assert
+    assert args.output_dir is None
 
 
 def test_weekly_run_form_values_override_the_shipped_config(

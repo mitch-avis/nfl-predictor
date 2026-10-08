@@ -247,6 +247,7 @@ pythonpath = ["."]
 addopts = [
     "-ra",                       # show extra summary for (s)kipped, (x)failed
     "--strict-markers",
+    "-n=auto",                   # pytest-xdist: one worker per core; `-n 0` runs in-process
     "--cov=nfl_predictor",
     "--cov-report=term-missing",
 ]

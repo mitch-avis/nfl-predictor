@@ -129,6 +129,14 @@ for a quick local run:
 python -m pytest --no-cov
 ```
 
+`tests/conftest.py` runs Polars, OpenMP (XGBoost) and BLAS on one thread each unless
+`POLARS_MAX_THREADS`, `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS` or `MKL_NUM_THREADS` is already
+set. The suite builds thousands of tiny frames and models, where pools sized to every core spend
+their time waking and spinning threads: on a 24-core machine it took about 174 s with the library
+defaults and about 42 s with one thread each. `pytest-xdist` then spreads the suite across one
+worker per core by default (`-n=auto` in `pyproject.toml`; about 15 s on the same machine). Pass
+`-n 0` to run in a single process, for example to use `pdb` or to run one test quickly.
+
 To run explicitly with coverage (same behavior as the default config):
 
 ```bash

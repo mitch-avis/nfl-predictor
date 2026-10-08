@@ -87,7 +87,11 @@ weekly runs and picks; do not raise Week 5 for several days.
 - A backtest that judges probabilities must run from 2007 week 1 or pass
   `--floor-sigma-reference-runs` with the GPU reference, and must pass `--wf-start-week 1`
   (rule 11).
-- Re-run a plain `uv sync` after every version bump and after every merge or checkout that
-  changes the version or the layout.
+- Read `.agents/branch_changes_2026-10-08.md` first: a maintenance session changed tooling on
+  this branch (version `0.43.0`, Polars 2.0, one Polars thread per command, parallel pytest,
+  pnpm) without touching any fingerprinted file.
+- Re-run `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` after every version bump and
+  after every merge or checkout that changes the version or the layout; a plain `uv sync`
+  replaces the local CUDA build of LightGBM with the CPU wheel.
 - The user runs `nfl-predictor web` from this checkout. Never stop or restart it yourself
   (rule 5).

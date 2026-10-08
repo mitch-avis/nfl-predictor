@@ -1004,7 +1004,9 @@ Update `CHANGELOG.md` as work lands, one entry per fix, feature group, or change
 under its own incremented `## [VERSION] - YYYY-MM-DD` heading at the top of the file. There is no
 `[Unreleased]` section: bump the patch version for fixes and small additions and the minor version
 for new feature families, changed defaults, or schema changes, and set `pyproject.toml` to the same
-version in the same change (then `uv lock` and `uv sync`). Keep the change groups in this order:
+version in the same change, then run `uv lock` and
+`uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` (which keeps a local CUDA build of
+LightGBM). Keep the change groups in this order:
 
 - `Changed`
 - `Added`

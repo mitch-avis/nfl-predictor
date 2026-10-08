@@ -35,7 +35,8 @@ For each task:
    are for iteration only.
 6. **Update docs** where behavior changes (README/AGENTS), and update TODO/ARCHIVE. Add a
    `CHANGELOG.md` entry as each task or sizable chunk lands, under a new incremented version
-   (never `[Unreleased]`), set `pyproject.toml` to that version, and run `uv lock` and `uv sync`.
+   (never `[Unreleased]`), set `pyproject.toml` to that version, and run `uv lock` and
+   `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`.
    Never create a git tag or GitHub release (see `AGENTS.md`).
 7. **Commit** (when asked) with Conventional Commits subjects, `type(scope): summary`, per
    `AGENTS.md`.
@@ -466,8 +467,8 @@ rebuilding only when needed (README, "Recommended: uv project workflow").
       `manylinux_2_27`, `scikit-build-core 1.0.3`) and once after a version-bump sync that passed
       the flags. Two clean scratch builds (`~/scratch/lgb_diag/`) passed `-DUSE_CUDA=ON` and
       trained on the GPU, and the flip did not reproduce there, so the cause is unknown. Known:
-      a `uv sync` without `nfl-lightgbm-cuda-install uv-args` (the "plain `uv sync`" after a
-      version bump in `AGENTS.md`) swaps the CUDA build for the CPU wheel by design. Since
+      a `uv sync` without `nfl-lightgbm-cuda-install uv-args` swaps the CUDA build for the CPU
+      wheel by design. Since
       `0.39.2` a failed CUDA build only warns in `update_requirements.sh`.
 
 Device check, 2026-09-24 (`.agents/m57/lightgbm_device_check.py`, output beside it in

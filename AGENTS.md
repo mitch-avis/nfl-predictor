@@ -41,8 +41,11 @@ Rules that are always enforced:
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
 - Run `scripts/gate.sh --web` whenever `web/` or `src/nfl_predictor/api/` changes.
-- Re-run a plain `uv sync` after every version bump (including after merging a branch that
-  bumped the version), or `uv sync --check --active` fails on the stale installed package.
+- Re-run `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` after every version bump
+  (including after merging a branch that bumped the version), or `uv sync --check --active` fails
+  on the stale installed package. The helper prints the flags that keep the local CUDA build of
+  LightGBM (nothing on a CPU-only machine); a plain `uv sync` replaces that build with the CPU
+  wheel, and `.venv/bin/nfl-lightgbm-cuda-install install` then has to rebuild it from source.
 - **Benchmarks and data state live in `.agents/benchmarks.md`.** Read it before any walk-forward
   run, comparison or decision: it holds the current benchmark table, the reference arm for each
   dataset build (a new arm compares against the reference on its own build and code version),

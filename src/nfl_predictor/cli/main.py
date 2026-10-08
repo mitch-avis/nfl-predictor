@@ -3,8 +3,9 @@
 ``nfl-predictor <command> [options]`` runs the command with its own options, exactly as its
 module would; ``nfl-predictor <command> --help`` shows them. ``python -m nfl_predictor`` is the
 same front door, and the per-module forms (``python -m nfl_predictor.data_collection`` and the
-others) keep working. Commands are imported only when they run, so ``--help`` stays fast, and
-the walk-forward commands get OpenMP's passive wait policy before XGBoost loads (see
+others) keep working. Commands are imported only when they run, so ``--help`` stays fast, every
+command gets one Polars thread before Polars loads (see ``nfl_predictor.cli.threads``), and the
+walk-forward commands get OpenMP's passive wait policy before XGBoost loads (see
 ``nfl_predictor.cli.openmp``).
 """
 
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from nfl_predictor.cli.openmp import prefer_passive_wait_policy
+from nfl_predictor.cli.threads import prefer_one_polars_thread
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -208,6 +210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if _missing_requirement(command, args):
         parser.error(f"{command.name} needs {command.requires}")
 
+    prefer_one_polars_thread()
     if command.walk_forward:
         prefer_passive_wait_policy()
     entry = _resolve(command)

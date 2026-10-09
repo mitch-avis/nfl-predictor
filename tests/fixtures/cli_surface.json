@@ -294,6 +294,20 @@
    "type": null
   },
   {
+   "action": "_StoreFalseAction",
+   "choices": null,
+   "default": true,
+   "dest": "include_market",
+   "help": "Train with no market feature column (no spread, total or moneyline, raw or transformed). With --no-market-anchor and --no-market-transform the run is market-free; the market-implied probability is still scored as the yardstick.",
+   "nargs": 0,
+   "options": [
+    "--exclude-market"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
    "action": "_StoreTrueAction",
    "choices": null,
    "default": false,
@@ -2235,11 +2249,12 @@
    "choices": [
     "features",
     "anchor",
-    "hybrid"
+    "hybrid",
+    "none"
    ],
    "default": "hybrid",
    "dest": "wf_market_mode",
-   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, or both (hybrid).",
+   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (no market feature and no anchor; pair it with --no-market-transform).",
    "nargs": null,
    "options": [
     "--wf-market-mode"

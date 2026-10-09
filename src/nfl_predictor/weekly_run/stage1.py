@@ -44,7 +44,10 @@ _MARKET_MODE_FLAGS = {
     "features": (True, False),
     "anchor": (False, True),
     "hybrid": (True, True),
+    "none": (False, False),
 }
+# The market modes, in the order the weekly options list them.
+MARKET_MODES = tuple(_MARKET_MODE_FLAGS)
 
 
 def market_mode_flags(mode: str) -> tuple[bool, bool]:

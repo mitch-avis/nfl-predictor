@@ -301,11 +301,12 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
     )
     parser.add_argument(
         "--wf-market-mode",
-        choices=["features", "anchor", "hybrid"],
+        choices=list(stage1.MARKET_MODES),
         default=defaults.get("wf_market_mode", "hybrid"),
         help=(
             "Market mode of the walk-forward and the final fit: market lines as features, "
-            "the model anchored to them, or both (hybrid)."
+            "the model anchored to them, both (hybrid, the default), or none (no market "
+            "feature and no anchor; pair it with --no-market-transform)."
         ),
     )
     parser.add_argument(

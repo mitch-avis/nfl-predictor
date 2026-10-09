@@ -292,8 +292,14 @@ def test_process_season_without_a_sink_records_nothing() -> None:
     _assert_same_values(with_sink, without_sink)
 
 
-def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The ETL entry point saves the collected snapshots next to the game datasets."""
+def test_main_writes_the_strength_snapshot_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The ETL entry point saves the collected snapshots next to the game datasets.
+
+    The run writes into ``tmp_path``, so the line record it saves beside the datasets never
+    lands in the real data directory.
+    """
     # Arrange
     snapshot = strength_table.combine_strength_snapshots([_run_week(2, _team_games())[1]])
     saved: dict[str, pl.DataFrame] = {}
@@ -325,11 +331,14 @@ def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch)
     )
 
     # Act
-    data_collection.main(["--min-season", "2006", "--max-season", "2007"])
+    data_collection.main(
+        ["--min-season", "2006", "--max-season", "2007", "--data-dir", str(tmp_path)]
+    )
 
     # Assert
     assert constants.STRENGTH_SNAPSHOTS_NAME in saved
     assert_frame_equal(saved[constants.STRENGTH_SNAPSHOTS_NAME], snapshot)
+    assert (tmp_path / f"{constants.MARKET_LINES_METADATA_NAME}.json").is_file()
 
 
 def test_the_strength_prior_ablation_ignores_a_supplied_prior() -> None:

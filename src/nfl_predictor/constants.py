@@ -741,6 +741,11 @@ PRUNED_FEATURE_COLUMNS = [
     "home_conference_clinched_proxy",
     "away_conference_eliminated_proxy",
     "home_conference_eliminated_proxy",
+    # The next opponent's team identity, one-hot encoded per side (32 columns each): the trees
+    # split on it rarely, and `*_next_opponent_win_pct` carries the next opponent's strength.
+    # The ETL still publishes the pair.
+    "away_next_opponent_abbr",
+    "home_next_opponent_abbr",
 ]
 
 # Metadata columns - includes game info, teams, venue, and conditions

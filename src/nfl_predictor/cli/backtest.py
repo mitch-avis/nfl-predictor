@@ -120,7 +120,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--disable-pruning",
         action="store_true",
-        help="Disable the feature pruning list.",
+        help=(
+            "Keep the columns on the feature pruning list (constants.PRUNED_FEATURE_COLUMNS, "
+            "the next opponent's identity among them), which every run leaves out by default."
+        ),
     )
     parser.add_argument(
         "--disable-trend-features",

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.45.0] - 2026-10-09
+
+### Changed
+
+- The weekly run and `nfl-predictor train` pool the out-of-fold errors of the adopted-settings
+  reference walk-forward (`models/step4_reference/adopted_seed42` and `adopted_seed7`: pick-time
+  lines, 2007-2025, both seeds, reviewed) for the probability floor's sigma, instead of the
+  stored-line GPU reference of 2026-09-28 (`constants.FLOOR_SIGMA_REFERENCE_RUNS` and
+  `config/weekly_run.yaml`). A model anchored to the pick-time line makes slightly larger errors,
+  so weekly probabilities move a little toward 0.5.
+
 ## [0.44.1] - 2026-10-09
 
 ### Changed

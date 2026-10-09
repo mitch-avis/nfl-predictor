@@ -212,6 +212,13 @@ are not advisory.
     recommend, say so and name what would settle it. A recommendation is advice, never consent:
     the agent still waits for the answer on everything under rule 5, and it never bends a
     written decision rule toward its own preference (rules 9 and 12).
+16. **Name things in plain words.** Anything written for the user (check-ins, questions,
+    summaries, plans and docs) calls an arm, build, run, setting or step by a descriptive name
+    that says what it is, for example "the current-settings baseline" or "the adopted-settings
+    reference build", never by a bare code such as `R0`, `F`, `PT` or `S2`. A short code may stay
+    as a directory or file name; give it once in parentheses after the descriptive name, so the
+    user can find the files, then keep using the descriptive name. Task and milestone numbers
+    likewise carry a few words saying what the task is.
 
 ## Source of truth for work
 

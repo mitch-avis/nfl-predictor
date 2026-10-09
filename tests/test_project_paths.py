@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from nfl_predictor import constants
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.weekly_run import config as weekly_config
@@ -26,6 +28,7 @@ def test_root_dir_is_the_repository_root() -> None:
     assert (root / "pyproject.toml").is_file()
 
 
+@pytest.mark.usefixtures("packaged_data_paths")
 def test_data_paths_sit_under_the_repository_root() -> None:
     """The data directory and the nflreadpy cache resolve under the repository root."""
     # Act

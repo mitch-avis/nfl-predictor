@@ -13,7 +13,7 @@ import pytest
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import clock, polars_utils
-from nfl_predictor.utils.polars import week_rows
+from nfl_predictor.utils.polars import loaders, week_rows
 
 
 @pytest.mark.parametrize(("today", "season"), [(date(2024, 9, 1), 2024), (date(2024, 2, 1), 2023)])
@@ -700,6 +700,13 @@ def test_determine_nfl_week_in_the_offseason_stays_in_range() -> None:
     assert 1 <= week <= 22
 
 
+def _no_play_by_play(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Serve an empty play-by-play frame, so a collection test never downloads or caches one."""
+    monkeypatch.setattr(
+        polars_utils, "load_pbp", lambda *_args, **_kwargs: loaders._empty_pbp_frame()
+    )
+
+
 def _stored_lines_config(seasons: list[int]) -> data_collection.DataCollectionConfig:
     """Return the default collection config over ``seasons`` with the stored lines.
 
@@ -714,6 +721,7 @@ def _stored_lines_config(seasons: list[int]) -> data_collection.DataCollectionCo
 def test_collect_all_data_minimal(monkeypatch) -> None:
     """Data collection works end-to-end for minimal data."""
     # Arrange
+    _no_play_by_play(monkeypatch)
     season = constants.MIN_SEASON + 1
     schedule_df = pl.DataFrame(
         {
@@ -773,6 +781,7 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
 def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
     """TeamRankings loads once per season within a collection run."""
     # Arrange
+    _no_play_by_play(monkeypatch)
     season_one = constants.MIN_SEASON + 1
     season_two = season_one + 1
     schedule_df = pl.DataFrame(
@@ -934,6 +943,7 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
 ) -> None:
     """Collect-all-data should skip prior-season loading when already at the nflreadpy floor."""
     # Arrange
+    _no_play_by_play(monkeypatch)
     season = constants.NFLREADPY_MIN_SEASON
     schedule_df = pl.DataFrame(
         {
@@ -1001,12 +1011,16 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
     # Assert
     assert combined.height == 0
     assert scoring_inputs == [schedule_df]
-    assert warnings == ["No ELO ratings loaded"]
+    assert warnings == [
+        "No play-by-play team-game rows available; emitting null count columns.",
+        "No ELO ratings loaded",
+    ]
 
 
 def test_collect_all_data_dedupes_without_date_or_game_id(monkeypatch: pytest.MonkeyPatch) -> None:
     """Collect-all-data should fall back to matchup-based deduping when date/game_id are absent."""
     # Arrange
+    _no_play_by_play(monkeypatch)
     season = constants.NFLREADPY_MIN_SEASON
     schedule_df = pl.DataFrame(
         {

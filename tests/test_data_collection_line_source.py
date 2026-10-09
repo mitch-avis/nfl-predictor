@@ -11,7 +11,7 @@ import pytest
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import clock, polars_utils
-from nfl_predictor.utils.polars import moneyline_map, nfelo_lines
+from nfl_predictor.utils.polars import loaders, moneyline_map, nfelo_lines
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -88,6 +88,7 @@ def _patch_sources(monkeypatch: pytest.MonkeyPatch, schedule_calls: list[list[in
     )
     monkeypatch.setattr(polars_utils, "load_schedule", fake_load_schedule)
     monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: team_stats)
+    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_a, **_k: loaders._empty_pbp_frame())
     monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _s: df)
     monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
     monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())

@@ -49,7 +49,12 @@ under `ml/` change every checkpoint fingerprint).
 
 Phase A status: done; chunks 1-5 landed as `0.39.3`-`0.42.1`. Phase B ran 2026-10-02 on
 `0.42.1` (`models/step4/`, reviewed in `REVIEW.md` there; numbers in `.agents/benchmarks.md`):
-QB, NO, S2, S8 and T2 tie R0; PT is worse, as expected. The adoption questions are open.
+QB, NO, S2, S8 and T2 tie R0; PT is worse, as expected. Decided by the user on 2026-10-02 and
+2026-10-08: drop the defense-adjusted quarterback rate, drop the next-opponent identity pair,
+adopt pick-time lines, keep the stat blend at `K = 4`; the strength-blend `K` is superseded by
+the preseason prior ported from `nfl-sos-ratings` (roadmap step 6). `F` (the adopted-settings
+reference build) runs on the decisions chunk's code, together with the market-free baseline
+(roadmap step 5).
 
 Any chunk that changes `NFLREADPY_SCHEDULE_COLUMNS`, `NFLREADPY_SCHEDULE_RENAME` or a derived
 schedule column refetches every historical schedule file since `0.38.2`, which can pull revised

@@ -5,58 +5,54 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-02 03:40, step 4 Phase B running)
+## State (written 2026-10-08, finishing step 4)
 
 - Roadmap step 4 runs on `feat/step4-feature-values` (local only, not pushed), checked out in the
-  main checkout at `0.42.1`; `uv sync` has run and the tree is clean. `scripts/gate.sh` exits `0`
-  on `091d7c0` (1472 passed, coverage 93.25%). `main` is at `0.39.3` (merged 2026-10-01, pushed
-  2026-10-02, both approved by the user). No agent worktrees remain except the gate worktree
-  `~/scratch/gate_step4`.
-- On `main` (reviewed, each with a `CHANGELOG.md` entry; details in `ARCHIVE.md`, "Roadmap step
-  4 (in progress) - Resolved follow-ups"): `0.37.2`-`0.38.2` rebuild reproducibility, `0.39.0` the
-  web weekly job over `config/weekly_run.yaml`, `0.39.1`-`0.39.2` the dependency refresh and
-  `update_requirements.sh` repairs, `0.39.3` the `next_opponent_identity` group. Since `0.37.3` a
-  step-4 build compares against a reference rebuilt with current code, not against today's
-  `data/`.
-- Only on the branch, Phase A of `.agents/step4_plan.md` (done, every chunk reviewed): `0.40.0` the
-  `qb_def_adj` group (on by default once built; production has no group switch, so it must not
-  reach `main` unless adopted); `0.40.1` `--strength-prior-blend-games`; `0.41.0` the QB defense
-  term in per-dropback units; `0.42.0` `--line-source {stored,pick_time}`; `0.42.1`
-  `nfl-predictor compare --market-from <run>` (scores every compared run against another run's
-  market by `game_id`, warns on result mismatches; two review rounds, the two optional P3s left:
-  the "any compared run" mismatch case is untested, and both-NaN results would count as a
-  mismatch, which walk-forward checkpoints cannot hold).
-- Phase B finished 2026-10-02 11:58: 5 builds, 14 runs, 0 failures (`models/step4/`, driver log
-  `phase_b.log`). An independent reviewer rescored it (`models/step4/REVIEW.md`, provenance clean,
-  `compare` matched its own rescore exactly); the numbers are in `.agents/benchmarks.md`, "Step 4,
-  Phase B feature-value arms". Under the written rules QB, NO, S2, S8 and T2 tie R0; PT is worse on
-  every column (expected) but not worse than its own pick-time market. The handoff commit
-  `c4dd24a` is the run commit; code may change again now.
+  main checkout at `0.43.0` (the maintenance session's tooling changes are committed; read
+  `.agents/branch_changes_2026-10-08.md`). The environment was re-synced with the LightGBM CUDA
+  flags on 2026-10-08. `main` is at `0.39.3`. The user runs `nfl-predictor web --port 8001` from
+  this checkout (no `--reload`).
+- Only on the branch: the step-4 code (`0.40.0`-`0.42.1`: the defense-adjusted quarterback
+  rate, `--strength-prior-blend-games`, `--line-source`, `compare --market-from`) and the
+  measurement arms in `models/step4/` (reviewed in `REVIEW.md` there; numbers in
+  `.agents/benchmarks.md`, "Step 4, Phase B feature-value arms").
+- Names (guardrail 16): the current-settings baseline (`R0`), the defense-adjusted quarterback
+  test (`QB`), the next-opponent identity test (`NO`), the stat-blend tests (`S2`, `S8`), the
+  strength-blend test (`T2`), the pick-time lines test (`PT`), the adopted-settings reference
+  build (`F` in `.agents/step4_plan.md`). Never use the codes alone with the user.
 
-## Open questions for the user
+## Decisions
 
-Asked 2026-10-02 after Phase B (recommendations in the check-in): (1) QB tie, drop `qb_def_adj`
-from the default features (the rule's simpler setting; 53.7's joint ridge is the next step); (2)
-NO tie, drop the `*_next_opponent_abbr` pair; (3) S2/S8/T2 ties, keep `K = 4` for both blends (the
-rule gives no recommendation; one shared value is fewer knobs); (4) PT, adopt the pick-time line
-for parity (a default change; `nfl-predictor lines` needs the line source first). Then `F`.
-
-Decided 2026-10-02: the 56.6 map stays the per-season expanding fit; the `compare` market-from
-option (landed as `0.42.1`); push `main` (done); the old scratch `data/` copies deleted (venvs and
-logs kept). Decided 2026-10-01: the plan, the per-dropback QB units, the partial merge to `main`,
-no incremental option on `etl_full`; earlier decisions are in `ARCHIVE.md`. The user handles
-weekly runs and picks; do not raise Week 5 for several days.
+- 2026-10-02: drop the defense-adjusted quarterback rate; drop the next-opponent identity pair
+  from the model; adopt pick-time lines as the default.
+- 2026-10-08: the season-to-date stat blend keeps `K = 4`; the strength-blend `K` question is
+  superseded by the preseason prior that `nfl-sos-ratings` fits inside its ridge (ported in
+  step 6). The roadmap in `.agents/TODO.md` was extended: step 5 the market-free baseline, step 6
+  absorbing `nfl-sos-ratings` fully (it finishes its in-flight work, the port starts from a
+  frozen commit, then it becomes read-only), step 7 the Optuna re-tune. Power rankings combine
+  the ported ratings with the trained model (how: decided by measurement in step 6, phase 5).
+  The user approved finishing step 4 (including the merge into `main`) and running the
+  market-free baseline right after it. Feature ideas to evaluate after the port (referee,
+  weather, attendance, team health) are listed under step 6, not yet approved.
+- The `nfl-sos-ratings` session is `nfl-sos-ratings-dc`; it was told (2026-10-08) to message
+  this repo's session with the frozen commit when its fixes are done. Its repo stays read-only
+  from here.
 
 ## Next
 
-1. Wait for the user's answers to the four questions above; nothing runs until then.
-2. After Phase B: the user's adoption decisions, then `F` (the adopted build, two seeds; the new
-   GPU reference and the floor's sigma pool), one backed-up rebuild into `data/` (must-ask), and
-   before any merge to `main` either adopt `qb_def_adj` or turn it off/remove it.
-3. Weekly runs are the user's. If asked to run one, run it from `main` (the step-4 branch adds the
-   unmeasured `qb_def_adj` columns to production), never while Phase B runs; after switching
-   branches run `uv sync` with the LightGBM CUDA flags
-   (`uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`).
+1. The decisions chunk (`0.44.0`), delegated to an implementer on 2026-10-08: remove the
+   defense-adjusted quarterback rate, exclude the next-opponent identity pair from the model,
+   pick-time lines by default, `nfl-predictor lines` follows the line source, and a market-free
+   option on `nfl-predictor backtest` with a scripted inventory of market columns. Then a
+   reviewer, the changelog and version, the gate.
+2. The adopted-settings reference build (cold, full history, scratch tree, through-2025 cut under
+   `models/step4_reference/inputs/`, leakage audit) and one driver for four GPU walk-forwards on
+   it, all on one commit: the reference on seeds `42` and `7`, then the market-free baseline on
+   the same seeds. Hypotheses and rules written into the run directory first; a PID watcher.
+3. An independent rescore; the check-in; point `config/weekly_run.yaml`'s
+   `floor_sigma_reference_runs` at the new reference; close rule 11's line-timing gap in
+   `AGENTS.md`; merge into `main` (approved); ask before pushing and before any `data/` rebuild.
+4. Then step 6.
 
 ## How the last sessions worked (keep doing this)
 
@@ -87,9 +83,6 @@ weekly runs and picks; do not raise Week 5 for several days.
 - A backtest that judges probabilities must run from 2007 week 1 or pass
   `--floor-sigma-reference-runs` with the GPU reference, and must pass `--wf-start-week 1`
   (rule 11).
-- Read `.agents/branch_changes_2026-10-08.md` first: a maintenance session changed tooling on
-  this branch (version `0.43.0`, Polars 2.0, one Polars thread per command, parallel pytest,
-  pnpm) without touching any fingerprinted file.
 - Re-run `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` after every version bump and
   after every merge or checkout that changes the version or the layout; a plain `uv sync`
   replaces the local CUDA build of LightGBM with the CPU wheel.

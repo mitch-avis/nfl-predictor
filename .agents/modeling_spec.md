@@ -59,9 +59,10 @@ When market lines exist, the system produces market-derived features and support
 - Market anchoring trains residuals vs market baselines and adds the baseline back at prediction
   time.
 - Which line the market features and the anchor read is chosen at ETL time
-  (`nfl-predictor data --line-source`, README "Market lines"): `stored` (the default, the
-  nflverse near-closing snapshot) or `pick_time` (nfelo's real opener for completed games, its
-  latest line for upcoming ones, the stored line as a counted fallback). Under `pick_time` the
+  (`nfl-predictor data --line-source`, README "Market lines"): `pick_time` (the default since
+  `0.44.0`, `constants.DEFAULT_LINE_SOURCE`: nfelo's real opener for completed games, its latest
+  line for upcoming ones, the stored line as a counted fallback) or `stored` (the nflverse
+  near-closing snapshot). Under `pick_time` the
   closing line is never a feature, and neither is the open-to-close move; a missing moneyline is
   derived from the spread with a map fitted per season on earlier seasons' prices only
   (`src/nfl_predictor/utils/polars/moneyline_map.py`).
@@ -69,6 +70,13 @@ When market lines exist, the system produces market-derived features and support
   yardstick only: every walk-forward reports it beside the model, with the paired
   deterministic-minus-market intervals, and it never enters the submitted probability. There is no
   market probability blend or clamp.
+- A market-free run (`nfl-predictor backtest --exclude-market --no-market-anchor
+  --no-market-transform`, the weekly run's `--wf-market-mode none`) trains on no column derived
+  from betting lines: the nine are listed by the generated inventory in `.agents/market_free/`.
+  It still scores the market yardstick. The Elo columns from `data/qb_elos.csv` are not line
+  columns but carry market information: `../nfeloqb` pulls each preseason Elo toward a rating
+  built from betting win totals (2003-2023). A backtest with no market information at all adds
+  `--disable-feature-groups elo` (the 18 Elo columns; the weekly run has no group switch).
 
 Market anchoring details:
 
@@ -228,9 +236,7 @@ Feature areas tracked in `.agents/TODO.md` include (examples):
 - PBP-derived per-snap EPA, success, explosive, and special-teams families
 - weekly schedule-adjusted (ridge) offense/defense strength and EPA-based schedule strength, in
   both the ridge form and the one-hop head-to-head-excluded form
-- QB per-dropback EPA families for the expected starter, and a defense-adjusted rate that credits
-  each earlier dropback with the faced defense's pre-week strength value, converted from per
-  offensive snap to per dropback with the league's pre-week snaps per dropback
+- QB per-dropback EPA families for the expected starter
 
 Rules for stat-style features:
 

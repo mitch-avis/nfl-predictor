@@ -154,8 +154,8 @@ distinct work in a pre-game feature. How the idea lands in nfl-predictor, in ord
 - Milestone 47 (now 53) gave QBs the same two lenses in `0.9.0` and dropped them in `0.10.0`
   (task 53.6: no gain, and a schedule faced is an input to an adjusted rate, not a feature). The
   QB form of the method that remains open is the adjusted rate or ridge (task 53.7). Its first
-  step, the defense-adjusted rate (`qb_def_adj_epa`, `qb_def_adj_epa_recent`; feature group
-  `qb_def_adj`), is built in the ETL and not yet measured; the ridge waits on that measurement.
+  step, the defense-adjusted rate, tied the baseline in step 4 and was removed in `0.44.0`; the
+  ridge form arrives with the `nfl-sos-ratings` quarterback ratings (roadmap step 6).
 - Not ported: excluding an earlier head-to-head meeting from the two teams' own profiles on a
   rematch row. Pre-week profiles contain a head-to-head game only for divisional rematches, and
   for prediction the earlier meeting is evidence about both teams rather than contamination. This

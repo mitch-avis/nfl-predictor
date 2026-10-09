@@ -193,6 +193,15 @@ Steps:
    reference for the floor's sigma, and the merge into `main`. The strength-blend `K` question
    is superseded by the preseason prior of `nfl-sos-ratings` (step 6); the season-to-date stat
    blend keeps `K = 4` (no arm separated `2`, `4` and `8`).
+   Narrowed (`0.44.0`): the market-free option landed as flags (`backtest --exclude-market
+   --no-market-anchor --no-market-transform`, weekly `--wf-market-mode none`) instead of a
+   `market` feature group, because a disabled group's columns are dropped before the market
+   yardstick and the anchor read them, so a group would also remove the yardstick. Every
+   line-derived column still leaves the model (generated inventory in `.agents/market_free/`).
+   On the user's question list 2026-10-09. The user also chose (2026-10-09) to measure two
+   market-free variants: without betting-line columns, and without them and the Elo columns
+   (whose preseason values `../nfeloqb` pulls toward betting win totals), via a new `elo`
+   feature group.
 5. **Market-free baseline** (approved 2026-10-08; same code and build as the adopted-settings
    reference). Two GPU walk-forwards with no market column, no anchoring and no market
    transform, scored against the reference, the pick-time line, the closing line and QB Elo (a
@@ -322,11 +331,10 @@ follow-ups below.
       keep in mind: the team-level `adj_off_pass_epa` is already opponent-adjusted, so the gain
       is confined to where the quarterback's history diverges from the team's (new and traded
       starters).
-      Progress: the first step is built (`0.40.0`, the `qb_def_adj` group; per-dropback units
-      since `0.41.0`, both reviewed) and is
-      measured as arm QB of `.agents/step4_plan.md`. If it is not adopted, turn the group off by
-      default or remove it before `feat/step4-feature-values` merges to `main`: production has no
-      feature-group switch, so the weekly run would otherwise train on it.
+      Progress: the first step (`0.40.0`-`0.41.0`) tied the current-settings baseline in the
+      defense-adjusted quarterback test (`models/step4/REVIEW.md`); the user dropped it
+      (2026-10-02) and it was removed in `0.44.0`. The ridge form is no longer built here: it is
+      the `nfl-sos-ratings` quarterback rating, ported in roadmap step 6, phase 3.
 
 2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`--run-id
 weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too late (~18:04 MDT)
@@ -479,10 +487,10 @@ Formerly Milestone 41.
       accepted both on 2026-10-02 (production is identical either way; the expanding fit keeps
       the backtest to information available before each season). The closing-line yardstick for
       a pick-time run is `nfl-predictor compare --market-from` (`0.42.1`).
-      - Before any adoption of `pick_time`: `nfl-predictor lines` (`lines_refresh.py`, also a web
-        job) rewrites upcoming games' line columns from nflverse with the fixed conversion, so on
-        a pick-time `data/` it silently reverts them to stored lines; give it the line source too
-        (found by the 56.6 review, 2026-10-01). Phase B builds run from scratch tree copies,
+      - Done in `0.44.0`: `nfl-predictor lines` (`lines_refresh.py`, also a web job) follows the
+        line source the data was built with (`market_lines_metadata.json`); before, on a
+        pick-time `data/` it silently reverted upcoming games to stored lines (found by the 56.6
+        review, 2026-10-01). Phase B builds run from scratch tree copies,
         because the nfelo cache follows `DATA_PATH`, not `--data-dir`.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
@@ -583,10 +591,12 @@ Each group names the archived milestone it came from; the milestone's full recor
       nflverse outage) fails the whole ETL. Found by the `0.38.2` review; pre-existing. If it is
       fixed, the fallback to the cached current-season schedule must log a loud warning, because
       that copy can hold stale lines and miss games scheduled since.
-- [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
+- [x] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping
-      the identity pair (on/off, two seeds) with the other feature-value changes.
+      the identity pair (on/off, two seeds) with the other feature-value changes. Measured in the
+      next-opponent identity test (a tie, `models/step4/REVIEW.md`); dropped from the model by
+      the user (2026-10-02) and pruned by default in `0.44.0`. The ETL still writes the pair.
 - [ ] (step 4, with task 55.3) The early-season strength snapshot, which drives the default power
       rankings and the `adj_*` model features, is dominated by last season. At 2026 snapshot week
       3 (two games per team) the published composite correlates far more with the regressed 2025

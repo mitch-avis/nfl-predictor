@@ -2254,7 +2254,7 @@
    ],
    "default": "hybrid",
    "dest": "wf_market_mode",
-   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (no market feature and no anchor; pair it with --no-market-transform).",
+   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (market-free: no market feature, no anchor and no market transform).",
    "nargs": null,
    "options": [
     "--wf-market-mode"

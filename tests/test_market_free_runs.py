@@ -303,3 +303,67 @@ def test_train_exclude_market_builds_market_free_training_options(
         False,
         False,
     )
+
+
+def _weekly_args(tmp_path: Path, *extra: str) -> argparse.Namespace:
+    """Parse a weekly command line over an empty config file."""
+    empty_config = tmp_path / "weekly_run.yaml"
+    empty_config.write_text("{}\n", encoding="utf-8")
+    return weekly_config.parse_args(["--config", str(empty_config), *extra])
+
+
+def test_weekly_market_mode_none_runs_stage_one_without_the_transform() -> None:
+    """The market-free weekly walk-forward records the transform off, not resolved from lines."""
+    # Arrange
+    options = stage1.ProductionOptions(
+        eval_last_n_seasons=3,
+        wf_start_week=1,
+        include_postseason=False,
+        exclude_incomplete_seasons=False,
+        recency_half_life_seasons=None,
+        market_mode="none",
+        xgb_params_overrides={"device": "cpu"},
+        include_quantiles=False,
+    )
+
+    # Act
+    config = stage1.production_walk_forward_config(options)
+
+    # Assert
+    assert (config.include_market, config.market_anchor, config.market_transform) == (
+        False,
+        False,
+        False,
+    )
+
+
+def test_weekly_market_mode_none_trains_the_final_fit_without_the_transform(
+    tmp_path: Path,
+) -> None:
+    """The market-free weekly final fit records the transform off on a dataset with lines."""
+    # Arrange
+    args = _weekly_args(tmp_path, "--wf-market-mode", "none")
+    frame = _weekly_frame()
+
+    # Act
+    _optuna, train_config = weekly_config.final_fit_options(args, frame, run_dir=None)
+
+    # Assert
+    settings = (
+        train_config["include_market"],
+        train_config["market_anchor"],
+        train_config["market_transform"],
+    )
+    assert settings == (False, False, False)
+
+
+def test_weekly_market_mode_hybrid_keeps_the_transform_on(tmp_path: Path) -> None:
+    """The default mode still trains on the transformed market features."""
+    # Arrange
+    args = _weekly_args(tmp_path, "--wf-market-mode", "hybrid")
+
+    # Act
+    _optuna, train_config = weekly_config.final_fit_options(args, _weekly_frame(), run_dir=None)
+
+    # Assert
+    assert train_config["market_transform"] is True

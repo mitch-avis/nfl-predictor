@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import dataclasses
+import shlex
 from typing import TYPE_CHECKING
 
 import pytest
 from tests.api import factories
 from tests.cli_parsing import parse_command
 
+from nfl_predictor import constants
 from nfl_predictor.api.errors import ConflictError, UnprocessableEntityError
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs.catalog import JobContext
@@ -193,6 +195,31 @@ def test_etl_template_passes_the_options_given(settings: Settings) -> None:
 
     # Assert
     assert argv[-3:] == ["--min-season", "2015", "--refresh-nflreadpy"]
+
+
+def test_etl_template_builds_the_pick_time_lines(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ETL job passes no line source, so it builds nfl-predictor data's pick-time lines."""
+    # Act
+    _name, config = parse_built(build("etl_full", settings, {}), settings, monkeypatch)
+
+    # Assert
+    assert config.line_source == constants.LINE_SOURCE_PICK_TIME
+
+
+def test_weekly_run_refreshes_the_data_with_the_pick_time_lines(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The weekly job's data refresh keeps the shipped arguments, which build pick-time lines."""
+    # Arrange
+    _name, args = parse_built(build("weekly_run", settings, {"week": 2}), settings, monkeypatch)
+
+    # Act
+    refresh = parse_command("data", shlex.split(args.data_collection_args), monkeypatch)
+
+    # Assert
+    assert refresh.line_source == constants.LINE_SOURCE_PICK_TIME
 
 
 def test_lines_refresh_targets_the_configured_data_directory(settings: Settings) -> None:

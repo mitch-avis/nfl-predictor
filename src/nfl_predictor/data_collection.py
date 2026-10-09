@@ -111,9 +111,9 @@ class DataCollectionConfig:
     # Reuse finished seasons' builds from the season cache under `<data dir>/cache/` when
     # their inputs, the code and the options are unchanged (see `utils.season_cache`).
     incremental: bool = False
-    # Which market line each game carries: the stored nflverse line ("stored") or the line
-    # known at pick time ("pick_time", see `utils.polars.pick_time_lines`).
-    line_source: str = constants.LINE_SOURCE_STORED
+    # Which market line each game carries: the line known at pick time ("pick_time", the
+    # default, see `utils.polars.pick_time_lines`) or the stored nflverse line ("stored").
+    line_source: str = constants.DEFAULT_LINE_SOURCE
 
 
 def _configure_logging(*, enable_debug: bool) -> None:
@@ -227,11 +227,12 @@ def _parse_args(argv: list[str]) -> DataCollectionConfig:
     parser.add_argument(
         "--line-source",
         choices=constants.LINE_SOURCES,
-        default=constants.LINE_SOURCE_STORED,
+        default=constants.DEFAULT_LINE_SOURCE,
         help=(
-            "Market line each game carries: the stored nflverse line (default) or the line "
-            "known at pick time (nfelo's opener for completed games, its latest line for "
-            "upcoming ones, the stored line where nfelo has no real opener)."
+            "Market line each game carries: the line known at pick time (pick_time, the "
+            "default: nfelo's opener for completed games, its latest line for upcoming ones, "
+            "the stored line where nfelo has no real opener) or the stored nflverse line "
+            "(stored, a late, probably closing, snapshot)."
         ),
     )
     parser.add_argument(

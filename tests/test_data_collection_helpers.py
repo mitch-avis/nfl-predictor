@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
@@ -699,6 +700,17 @@ def test_determine_nfl_week_in_the_offseason_stays_in_range() -> None:
     assert 1 <= week <= 22
 
 
+def _stored_lines_config(seasons: list[int]) -> data_collection.DataCollectionConfig:
+    """Return the default collection config over ``seasons`` with the stored lines.
+
+    The collection tests stub the stored-line fills; the pick-time source would download
+    nfelo's lines and the earlier seasons' schedules.
+    """
+    return dataclasses.replace(
+        data_collection._default_config(seasons), line_source=constants.LINE_SOURCE_STORED
+    )
+
+
 def test_collect_all_data_minimal(monkeypatch) -> None:
     """Data collection works end-to-end for minimal data."""
     # Arrange
@@ -751,7 +763,7 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
     monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
 
     # Act
-    combined = data_collection.collect_all_data([season])
+    combined = data_collection.collect_all_data([season], config=_stored_lines_config([season]))
 
     # Assert
     assert combined.height == 1
@@ -830,7 +842,9 @@ def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
     monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
 
     # Act
-    combined = data_collection.collect_all_data([season_one, season_two])
+    combined = data_collection.collect_all_data(
+        [season_one, season_two], config=_stored_lines_config([season_one, season_two])
+    )
 
     # Assert
     assert combined.height == 2
@@ -980,6 +994,7 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
             force_refresh_nflreadpy=False,
             min_season=season,
             max_season=season,
+            line_source=constants.LINE_SOURCE_STORED,
         ),
     )
 
@@ -1038,6 +1053,7 @@ def test_collect_all_data_dedupes_without_date_or_game_id(monkeypatch: pytest.Mo
             force_refresh_nflreadpy=False,
             min_season=season,
             max_season=season,
+            line_source=constants.LINE_SOURCE_STORED,
         ),
     )
 

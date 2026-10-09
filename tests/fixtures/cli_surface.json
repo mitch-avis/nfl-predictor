@@ -1837,9 +1837,9 @@
     "stored",
     "pick_time"
    ],
-   "default": "stored",
+   "default": "pick_time",
    "dest": "line_source",
-   "help": "Market line each game carries: the stored nflverse line (default) or the line known at pick time (nfelo's opener for completed games, its latest line for upcoming ones, the stored line where nfelo has no real opener).",
+   "help": "Market line each game carries: the line known at pick time (pick_time, the default: nfelo's opener for completed games, its latest line for upcoming ones, the stored line where nfelo has no real opener) or the stored nflverse line (stored, a late, probably closing, snapshot).",
    "nargs": null,
    "options": [
     "--line-source"

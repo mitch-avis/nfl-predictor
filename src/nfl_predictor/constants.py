@@ -68,6 +68,9 @@ DEFAULT_TOTAL_LINE = 45.6  # Average total score across 20+ seasons
 LINE_SOURCE_STORED = "stored"
 LINE_SOURCE_PICK_TIME = "pick_time"
 LINE_SOURCES = (LINE_SOURCE_STORED, LINE_SOURCE_PICK_TIME)
+# The line source of every build that does not name one: `nfl-predictor data`, the weekly run's
+# data refresh and the web ETL and weekly jobs.
+DEFAULT_LINE_SOURCE = LINE_SOURCE_PICK_TIME
 # nfelo's market-lines file (`greerreNFL/nfelomarket_data`), rewritten several times a day. The
 # latest good download is cached under NFELO_CACHE_DIR, and every copy a run used is kept there
 # under `snapshots/`, named by its SHA-256.

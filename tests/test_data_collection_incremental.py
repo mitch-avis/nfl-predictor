@@ -240,7 +240,15 @@ def _install(monkeypatch: pytest.MonkeyPatch, run: _Run) -> None:
     monkeypatch.setattr(clock, "nfl_week", lambda _today: _CURRENT_WEEK)
 
 
-_ARGS = ("--min-season", str(_SEASONS[0]), "--max-season", str(_SEASONS[-1]))
+# The fixture stubs the stored-line fills; the pick-time source would download nfelo's lines.
+_ARGS = (
+    "--min-season",
+    str(_SEASONS[0]),
+    "--max-season",
+    str(_SEASONS[-1]),
+    "--line-source",
+    constants.LINE_SOURCE_STORED,
+)
 
 
 @dataclass(frozen=True)

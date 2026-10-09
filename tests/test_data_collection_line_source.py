@@ -112,8 +112,8 @@ def _config(line_source: str) -> data_collection.DataCollectionConfig:
     )
 
 
-def test_the_line_source_defaults_to_the_stored_lines(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without the option the ETL keeps today's stored lines."""
+def test_the_line_source_defaults_to_the_pick_time_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without the option nfl-predictor data builds the lines known at pick time."""
     # Arrange
     monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
 
@@ -121,13 +121,13 @@ def test_the_line_source_defaults_to_the_stored_lines(monkeypatch: pytest.Monkey
     parsed = data_collection._parse_args([])
 
     # Assert
-    assert parsed.line_source == constants.LINE_SOURCE_STORED
+    assert parsed.line_source == constants.LINE_SOURCE_PICK_TIME
 
 
-def test_the_resolved_default_config_keeps_the_stored_lines(
+def test_the_resolved_default_config_builds_the_pick_time_lines(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The config built without arguments (the weekly refresh) keeps the stored lines too."""
+    """The config built without arguments (the weekly run's refresh) uses pick-time lines too."""
     # Arrange
     monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
 
@@ -135,7 +135,28 @@ def test_the_resolved_default_config_keeps_the_stored_lines(
     resolved = data_collection._resolve_config(None)
 
     # Assert
-    assert resolved.line_source == constants.LINE_SOURCE_STORED
+    assert resolved.line_source == constants.LINE_SOURCE_PICK_TIME
+
+
+def test_collect_all_data_without_a_config_builds_the_pick_time_lines() -> None:
+    """The library default, a collection run given no config, uses pick-time lines too."""
+    # Act
+    config = data_collection._default_config([_SEASON])
+
+    # Assert
+    assert config.line_source == constants.LINE_SOURCE_PICK_TIME
+
+
+def test_the_stored_source_stays_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--line-source stored`` keeps the nflverse schedule lines."""
+    # Arrange
+    monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
+
+    # Act
+    chosen = data_collection._parse_args(["--line-source", "stored"])
+
+    # Assert
+    assert chosen.line_source == constants.LINE_SOURCE_STORED
 
 
 def test_the_line_source_option_accepts_pick_time(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -292,7 +313,7 @@ def test_main_writes_the_line_record_for_every_build_so_none_goes_stale(
     data_collection.main([*_main_args(tmp_path), "--line-source", "pick_time"])
 
     # Act
-    data_collection.main(_main_args(tmp_path))
+    data_collection.main([*_main_args(tmp_path), "--line-source", "stored"])
 
     # Assert
     assert _line_record(tmp_path) == {"line_source": "stored"}

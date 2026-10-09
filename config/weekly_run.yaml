@@ -54,7 +54,8 @@ wf_start_week: 1
 # whether to include postseason games in walk-forward evaluation (default: false)
 wf_include_postseason: false
 # market mode of the walk-forward and the final fit: market lines as features, the model
-# anchored to them, or both (options: features, anchor, hybrid, default: hybrid)
+# anchored to them, both, or neither, a market-free run (pair none with market_transform: false)
+# (options: features, anchor, hybrid, none, default: hybrid)
 wf_market_mode: hybrid
 # include quantile models in walk-forward training (default: false)
 wf_include_quantiles: false

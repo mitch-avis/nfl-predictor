@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.44.1] - 2026-10-09
+
+### Changed
+
+- The weekly run warns when `--wf-market-mode none` overrides a requested market transform
+  (`--market-transform` or `market_transform: true` in the config file).
+
+### Fixed
+
+- The test suite redirects `constants.DATA_PATH` and the nflreadpy and nfelo caches to a session
+  temporary directory before any test module imports the package, so import-time copies of those
+  paths start redirected too, and refuses every network connection and non-local host-name lookup
+  for the whole session, fixtures included. A scan test fails the suite if a module keeps a path
+  inside the checkout's `data/`. The README lists what the guard does not cover (`models/`,
+  `api.settings.Settings()` without a root, the relative defaults of `nfl-predictor rankings`).
+
 ## [0.44.0] - 2026-10-09
 
 ### Changed

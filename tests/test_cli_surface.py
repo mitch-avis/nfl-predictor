@@ -134,10 +134,13 @@ def _surface(parser: argparse.ArgumentParser, prefix: str = "") -> list[dict[str
 
 def test_every_entrypoint_parser_matches_the_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     """The flags, defaults and help of every entrypoint equal the committed snapshot."""
+    # Act
     surface = {
         module: _surface(_capture(module, function, monkeypatch))
         for module, function in _entrypoint_modules()
     }
+
+    # Assert
     assert surface, "no entrypoint parsers found"
 
     if os.environ.get(UPDATE_ENV) == "1":

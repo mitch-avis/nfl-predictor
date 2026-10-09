@@ -290,13 +290,10 @@ schedule-adjusted strength family carries its own blend of the same form, with i
 
 Market lines: `--line-source` chooses which line each game's five line columns (`total_line`, the
 spreads and the moneylines) carry. Those columns are the market features and the anchor of both
-heads, in training and in production alike.
+heads, in training and in production alike. The default (`constants.DEFAULT_LINE_SOURCE`) is
+`pick_time`, so the weekly run's data refresh and the web ETL and weekly jobs build it too.
 
-- `stored` (the default): the nflverse schedule lines, one late, probably closing, snapshot.
-  Missing moneylines are derived from the spread with the fixed conversion
-  (`game_utils.spread_to_moneyline`: a normal curve at `SCORE_DIFF_STD_DEV` with a flat 5% vig),
-  and future games without a line take SurvivorGrid's spread.
-- `pick_time`: the line known when picks are made, from nfelo's market-lines file
+- `pick_time` (the default): the line known when picks are made, from nfelo's market-lines file
   (`greerreNFL/nfelomarket_data`, `Data/lines.csv`), joined on season, week and the canonical
   team codes. A completed game takes nfelo's opening spread where the opener is real (2007-2021
   and 2023 on, when present; about 5% of 2024 has none), its opening moneylines when nfelo has
@@ -312,19 +309,34 @@ heads, in training and in production alike.
   is fitted on earlier seasons only (prices, never scores), from the cached schedules back to
   1999; a season with fewer than `constants.MONEYLINE_MAP_MIN_GAMES` earlier priced games (2006
   and before) keeps the fixed conversion.
+- `stored`: the nflverse schedule lines, one late, probably closing, snapshot. Missing
+  moneylines are derived from the spread with the fixed conversion
+  (`game_utils.spread_to_moneyline`: a normal curve at `SCORE_DIFF_STD_DEV` with a flat 5% vig),
+  and future games without a line take SurvivorGrid's spread.
 
-  The file is rewritten several times a day. Each run downloads it, keeps the last good copy in
-  `data/cache/nfelo/lines.csv` and every copy a run used in `data/cache/nfelo/snapshots/`, named
-  by its SHA-256, and falls back to the cached copy (or, with none, to the stored lines) instead of
-  failing. The run writes `market_lines_metadata.json` beside the datasets: the snapshot's URL,
-  origin and hash, per-season game, match, opener and fallback-row counts, how many moneylines
-  each season derived and how, and every season's map. Two diagnostic counts per season flag
-  possible data errors without filtering anything: openers and upcoming nfelo lines on the other
-  side of the stored line, both at least 3 points (`opener_sign_flips`,
-  `upcoming_nfelo_sign_flips`). A `stored` build fetches nothing new and writes
-  `{"line_source": "stored"}` to the same file, so a record never outlives the build it
-  describes. The option changes feature values, so compare the two sources with two dataset
-  builds, not with `--disable-feature-groups`.
+nfelo's file is rewritten several times a day. Each pick-time run downloads it, keeps the last
+good copy in `data/cache/nfelo/lines.csv` and every copy a run used in
+`data/cache/nfelo/snapshots/`, named by its SHA-256, and falls back to the cached copy (or, with
+none, to the stored lines) instead of failing. The run writes `market_lines_metadata.json` beside
+the datasets: the snapshot's URL, origin and hash, per-season game, match, opener and fallback-row
+counts, how many moneylines each season derived and how, and every season's map. Two diagnostic
+counts per season flag possible data errors without filtering anything: openers and upcoming nfelo
+lines on the other side of the stored line, both at least 3 points (`opener_sign_flips`,
+`upcoming_nfelo_sign_flips`). A `stored` build fetches nothing new and writes
+`{"line_source": "stored"}` to the same file, so a record never outlives the build it describes.
+The option changes feature values, so compare the two sources with two dataset builds, not with
+`--disable-feature-groups`.
+
+`nfl-predictor lines --season <season> --week <week>` (also the web "Refresh market lines" job)
+refreshes only the five line columns of one season in `all_data_ml.csv`, `all_data.csv` and the
+week's `predict/week_<NN>_games_to_predict.csv`, without rerunning the ETL, and follows the line
+source the data was built with, read from `market_lines_metadata.json`. On a pick-time build it
+writes what a rebuild would: the pick-time line order above, with missing moneylines priced by the
+season's map from the record. On a stored build it reads the nflverse schedule with the fixed
+conversion. A data directory without the record predates it and is refreshed as a stored build,
+with a warning; an unreadable record, an unknown line source, or a pick-time record without a map
+entry for the season stops the refresh before anything is written. Completed-game datasets are
+never touched. Re-predict the week after a refresh, because the lines feed the model.
 
 ## Data sources + missing data
 
@@ -334,7 +346,8 @@ are missing historically.
 Primary sources:
 
 - `nflreadpy` (NFLverse): schedules, results, team-level stats, and play-by-play.
-- nfelo's market-lines file (`greerreNFL/nfelomarket_data`), only with `--line-source pick_time`.
+- nfelo's market-lines file (`greerreNFL/nfelomarket_data`) for the default
+  `--line-source pick_time`.
 - Local cached CSVs under `data/` for Elo/market data when present.
 - `data/meta_data.csv` (copied from `../nfeloqb`) for the quarterback name-to-id bridge. A name
   missing from it falls back to the play-by-play passer name (`F.Last`) when that is unique; a

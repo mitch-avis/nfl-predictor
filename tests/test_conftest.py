@@ -2,15 +2,31 @@
 
 from __future__ import annotations
 
+import dataclasses
+import importlib
+import inspect
 import os
+import pkgutil
 import socket
+from pathlib import Path, PurePath
+from typing import TYPE_CHECKING
 
 import polars as pl
 import threadpoolctl
 import xgboost
+from tests import data_isolation
 from tests.conftest import THREAD_VARIABLES, DataIsolation, limit_threads
 
+import nfl_predictor
 from nfl_predictor import constants, lines_refresh, week_builder
+from nfl_predictor.reporting import power_rankings
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+# The checkout's data directory, worked out from this file rather than from the package, whose
+# paths the suite redirects.
+PACKAGED_DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 POOL_VARIABLES = {
     "openmp": "OMP_NUM_THREADS",
@@ -110,4 +126,119 @@ def test_a_network_connection_is_refused_and_recorded(isolated_data: DataIsolati
 
     # Assert
     assert "network access is blocked in tests" in message
-    assert attempts == ["('192.0.2.1', 80)"]
+    assert attempts == ["connect ('192.0.2.1', 80)"]
+
+
+def _refused_lookup(isolated_data: DataIsolation) -> tuple[str, list[str]]:
+    """Look a host name up and return the refusal and the recorded attempts."""
+    message = ""
+    try:
+        # .invalid is reserved, so no name server could ever answer for it.
+        socket.getaddrinfo("nfl-predictor-tests.invalid", 443)
+    except socket.gaierror as error:
+        message = str(error)
+    return message, isolated_data.take_network_attempts()
+
+
+def test_a_host_name_lookup_is_refused_and_recorded(isolated_data: DataIsolation) -> None:
+    # Act
+    message, attempts = _refused_lookup(isolated_data)
+
+    # Assert
+    assert "name resolution is blocked in tests" in message
+    assert attempts == ["resolve 'nfl-predictor-tests.invalid'"]
+
+
+def test_a_local_or_numeric_address_still_resolves() -> None:
+    # Act
+    resolved = [socket.getaddrinfo(host, 80) for host in ("localhost", "127.0.0.1", "192.0.2.1")]
+
+    # Assert
+    assert all(resolved)
+    assert data_isolation.NETWORK_ATTEMPTS == []
+
+
+def test_an_import_time_copy_of_a_data_path_starts_in_the_session_directory() -> None:
+    # Act
+    default = power_rankings.DEFAULT_STRENGTH_SNAPSHOTS
+
+    # Assert
+    assert default.is_relative_to(data_isolation.SESSION_DATA_DIR)
+
+
+def _package_modules() -> list[ModuleType]:
+    """Import and return every module of the package except the ``__main__`` entry points."""
+    names = sorted(
+        info.name
+        for info in pkgutil.walk_packages(nfl_predictor.__path__, "nfl_predictor.")
+        if not info.name.endswith("__main__")
+    )
+    return [importlib.import_module(name) for name in names]
+
+
+def _packaged_data_path(value: object) -> bool:
+    """Return whether a value is a path inside the checkout's data directory."""
+    if not isinstance(value, PurePath):
+        return False
+    path = Path(value)
+    if not path.is_absolute():
+        path = PACKAGED_DATA_DIR.parent / path
+    return path.resolve().is_relative_to(PACKAGED_DATA_DIR)
+
+
+def _function_defaults(label: str, function: object) -> list[tuple[str, object]]:
+    """Return a function's positional and keyword-only defaults, labelled."""
+    defaults = list(getattr(function, "__defaults__", None) or ())
+    keyword = getattr(function, "__kwdefaults__", None) or {}
+    return [(f"{label}()", value) for value in [*defaults, *keyword.values()]]
+
+
+def _class_defaults(label: str, cls: type) -> list[tuple[str, object]]:
+    """Return a class's attributes, method defaults and dataclass or pydantic field defaults."""
+    found: list[tuple[str, object]] = []
+    for name, member in vars(cls).items():
+        found.append((f"{label}.{name}", member))
+        if inspect.isfunction(member):
+            found.extend(_function_defaults(f"{label}.{name}", member))
+    if dataclasses.is_dataclass(cls):
+        found.extend((f"{label}.{field.name}", field.default) for field in dataclasses.fields(cls))
+    model_fields = getattr(cls, "model_fields", None)
+    if isinstance(model_fields, dict):
+        found.extend(
+            (f"{label}.{name}", getattr(info, "default", None))
+            for name, info in model_fields.items()
+        )
+    return found
+
+
+def _module_values(module: ModuleType) -> list[tuple[str, object]]:
+    """Return a module's globals and the defaults of the functions and classes it defines."""
+    found: list[tuple[str, object]] = []
+    for name, value in vars(module).items():
+        label = f"{module.__name__}.{name}"
+        found.append((label, value))
+        if getattr(value, "__module__", None) != module.__name__:
+            continue
+        if inspect.isfunction(value):
+            found.extend(_function_defaults(label, value))
+        elif inspect.isclass(value):
+            found.extend(_class_defaults(label, value))
+    return found
+
+
+def test_no_module_captures_a_path_inside_the_checkouts_data_directory() -> None:
+    # Arrange
+    modules = _package_modules()
+
+    # Act
+    captured = sorted(
+        {
+            f"{label} = {value}"
+            for module in modules
+            for label, value in _module_values(module)
+            if _packaged_data_path(value)
+        }
+    )
+
+    # Assert
+    assert captured == []

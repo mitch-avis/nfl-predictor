@@ -44,7 +44,21 @@ _MARKET_MODE_FLAGS = {
     "features": (True, False),
     "anchor": (False, True),
     "hybrid": (True, True),
+    "none": (False, False),
 }
+# The market modes, in the order the weekly options list them.
+MARKET_MODES = tuple(_MARKET_MODE_FLAGS)
+# The market-free mode: no market feature, no anchor and no transform.
+MARKET_MODE_NONE = "none"
+
+
+def market_mode_transform(mode: str, *, market_transform: bool | None) -> bool | None:
+    """Return the market transform a mode trains with: always off in the market-free mode.
+
+    The transform only reshapes market features, so a run without any records it off rather
+    than resolving it from the dataset's lines; every other mode keeps ``market_transform``.
+    """
+    return False if mode == MARKET_MODE_NONE else market_transform
 
 
 def market_mode_flags(mode: str) -> tuple[bool, bool]:
@@ -238,7 +252,9 @@ def production_walk_forward_config(options: ProductionOptions) -> walk_forward.W
         exclude_incomplete_seasons=options.exclude_incomplete_seasons,
         recency_half_life_seasons=options.recency_half_life_seasons,
         include_market=include_market,
-        market_transform=options.market_transform,
+        market_transform=market_mode_transform(
+            options.market_mode, market_transform=options.market_transform
+        ),
         market_anchor=market_anchor,
         include_quantiles=options.include_quantiles,
         max_cardinality_ratio=options.max_cardinality_ratio,

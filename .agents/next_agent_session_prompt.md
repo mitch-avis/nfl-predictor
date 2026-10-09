@@ -5,78 +5,71 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-01, step 4 in progress)
+## State (written 2026-10-09 01:05, step 4 close-out runs in progress)
 
-- Roadmap step 4 runs on `feat/step4-feature-values` (off `main` at `3bd457c`, not pushed), checked
-  out in the main checkout at `0.39.2`; `uv sync` has run. `scripts/gate.sh` exits `0` on it (1261
-  passed, coverage 92.75%). `main` is at `0.37.1` plus the step-3 close-out, pushed.
-- Landed on the branch, each reviewed by an independent reviewer and merged with `--no-ff`:
-  - `0.37.2`: the team-stat and play-by-play nflreadpy caches record their requested columns in
-    Parquet metadata and refetch when stale (all 56 existing files pass, nothing refetched);
-    five data-CSV reads infer types from the whole file (Week 4 outputs unchanged).
-  - `0.37.3`: byte-identical ETL rebuilds on one machine at one Polars thread count (sorted
-    `sos_*` reductions, week-ordered season-to-date means, `maintain_order=True` on every ETL
-    `group_by`/`unique` with an AST guard test, same-date games sorted by `game_id`). Scratch
-    evidence in `~/scratch/etl_repro/` (4.6 GB, deletable once no longer needed). Values move
-    against the current `data/` build by at most about `2e-16` of scale, and same-date row order
-    changes, so the next rebuild gets a new dataset fingerprint once; any step-4 build-to-build
-    comparison rebuilds its reference with current code rather than comparing with `data/`.
-  - `0.37.4`: both `qb_elos.csv` loaders read declared column types (outputs and two 2019-2026
-    scratch builds unchanged, `~/scratch/qbelo_types/`); a text token in a numeric column now
-    fails the read.
-  - `0.37.5`: opt-in `nfl-predictor data --incremental` (`utils/season_cache.py`), about 48 s warm
-    against about 640 s full in scratch (`~/scratch/etl_incremental/`). Narrowed in `TODO.md`: a
-    reused season matches a full rebuild only until a later season gains rows, because
-    `calculate_league_means` (`utils/polars/teamrankings.py`) reduces a slice whose chunk layout
-    moves; two strict-xfail tests pin it. `constants.py` changed, so every checkpoint retrains.
-  - `0.37.6`: `data_collection.py` split (week builder to `utils/polars/week_rows.py`, strength
-    table to `utils/polars/strength_table.py`), byte-identical; the first `--incremental` run
-    afterwards rebuilds every season (code fingerprint changed).
-  - `0.38.0`: `calculate_league_means` rechunks its season slice (features moved once by up to
-    about `1.8e-15`), so `--incremental` equals a full rebuild after later seasons gain rows
-    (`~/scratch/etl_rechunk/`); the weekly run refreshes with `--incremental`
-    (`config/weekly_run.yaml`). The first incremental run rebuilds every season (code fingerprint
-    changed in `0.37.6`/`0.38.0`), then about 48 s.
-  - `0.38.1`-`0.39.0`: the fingerprint guard follows relative imports and
-    `stamp_strength_snapshot` is public; the schedule cache records its requested columns; the web
-    weekly job layers its form over `config/weekly_run.yaml`, so it refreshes with `--incremental`
-    (task 58.7).
-  - `0.39.1`-`0.39.2` (2026-10-01 evening): the user's dependency refresh (uv `>=0.12`);
-    `pythonpath = ["."]` so bare `pytest` works; `update_requirements.sh` restores the LightGBM
-    CUDA step (non-fatal since `0.39.2`), repairs a damaged interpreter by reinstalling the
-    managed Python, and checks that the core packages import. Background: at about 16:43 a
-    formatter run from the home folder rewrote the uv cache and the managed Pythons; the user
-    cleared the cache and reinstalled them.
-- The "4, first" reproducibility work is done (one low-priority follow-up: no current-season
-  schedule fallback). Phase A of `.agents/step4_plan.md` (accepted by the user 2026-10-01, all
-  three parts) is in flight: implementer subagents for the 53.7 quarterback rate group, the
-  `--strength-prior-blend-games` option, the next-opponent identity switch, and 56.6.
-- The Week 4 refresh ran from a `main` worktree (`~/scratch/wk4_main`, `data/` and `models/`
-  symlinked; delete it once the user's picks are in): `models/weekly_2026_week_04_refresh/`.
-- Week 4 picks are in `models/weekly_2026_week_04/` (`0.35.3`). No web server is running.
+- `feat/step4-feature-values` (local only, not pushed) is checked out in the main checkout at
+  `0.44.0` (`2522cb6`): the decisions chunk merged (`2f90f6c`, two review rounds), with the
+  changelog and the docs pass. `scripts/gate.sh --web` exits `0` on `2522cb6` (1571 passed, 1
+  skipped, coverage 93.29%). `main` is at `0.39.3`. The user runs `nfl-predictor web --port 8001`
+  from this checkout (no `--reload`); it needs a restart to load `0.44.0`, which the user does.
+- Running since 2026-10-09 01:00 as one detached job: `models/step4_reference/phase.sh 2522cb6`
+  (log `phase.log`, PID in `phase.pid`, commit in `launch_record.txt`, rules in `HYPOTHESIS.md`).
+  `build.sh` backed up `data/` to `data/backup_pre_step4_adopted_20261009/` (761 MB), rebuilds
+  `data/` with the new defaults (the user approved the backed-up rebuild 2026-10-09), cuts
+  `inputs/adopted.csv` and runs the leakage audit; then `driver.sh` runs six GPU walk-forwards
+  on it: the adopted-settings reference (`adopted_seed42`, `adopted_seed7`), the market-free run
+  without betting-line columns (`marketfree_lines_seed*`) and the one without line or Elo columns
+  (`marketfree_all_seed*`). **Do not edit `src/`, `pyproject.toml` or `uv.lock`, and do not
+  commit, while it runs.** Expected end about 04:45.
+- The implementer is fixing the second review's test-isolation findings on its worktree branch
+  (`worktree-agent-aae52e93d671a8c39`, after `e75c2bd`): session-wide data and network
+  isolation in `tests/conftest.py`, a scan for captured data paths, the Elo real-build test
+  removed, an optional warning in `weekly_run/stage1.py`. It merges as `0.44.1` after the runs,
+  after a reviewer.
+- Names (guardrail 16): the current-settings baseline (`R0`), the defense-adjusted quarterback
+  test (`QB`), the next-opponent identity test (`NO`), the stat-blend tests (`S2`, `S8`), the
+  strength-blend test (`T2`), the pick-time lines test (`PT`), the adopted-settings reference
+  (`adopted_*`), the two market-free baselines (`marketfree_lines_*`, `marketfree_all_*`). Never
+  use the codes alone with the user.
 
-## Open questions for the user
+## Decisions
 
-None blocking. Pending recommendations: leave `AGENTS.md`'s plain post-bump `uv sync` (it reverts
-a CUDA LightGBM build; harmless while LightGBM is parked); no incremental option on `etl_full`.
-Decided 2026-10-01: the step-4 plan (8 arms, 16 runs, 6 scratch builds, `data/` untouched until
-adoption, follow-ups deferred to a second ladder), plus the earlier decisions recorded in
-`ARCHIVE.md`.
+- 2026-10-02: drop the defense-adjusted quarterback rate; drop the next-opponent identity pair
+  from the model; adopt pick-time lines as the default.
+- 2026-10-08: the season-to-date stat blend keeps `K = 4`; the strength-blend `K` question is
+  superseded by the preseason prior that `nfl-sos-ratings` fits inside its ridge (ported in
+  step 6). The roadmap in `.agents/TODO.md` was extended: step 5 the market-free baseline, step 6
+  absorbing `nfl-sos-ratings` fully (it finishes its in-flight work, the port starts from a
+  frozen commit, then it becomes read-only), step 7 the Optuna re-tune. Power rankings combine
+  the ported ratings with the trained model (how: decided by measurement in step 6, phase 5).
+  The user approved finishing step 4 (including the merge into `main`) and running the
+  market-free baseline right after it. Feature ideas to evaluate after the port (referee,
+  weather, attendance, team health) are listed under step 6, not yet approved.
+- The `nfl-sos-ratings` session is `nfl-sos-ratings-dc`; it was told (2026-10-08) to message
+  this repo's session with the frozen commit when its fixes are done. Its repo stays read-only
+  from here.
 
 ## Next
 
-1. Review and merge the Phase A chunks of `.agents/step4_plan.md`, then Phase B (scratch builds
-   and the overnight driver, under the plan's cap and decision rules).
-2. Then the feature-value changes, sharing one rebuild cycle and one new two-seed GPU reference:
-   55.3, 53.7, 56.6 (the pick-time market line; plan agreed 2026-10-01 in the task text) and the
-   step-4 follow-ups. Every ETL rebuild into `data/` is must-ask (back up `data/*.csv` first);
-   scratch copies are not.
-3. Week 5 picks after the Monday game and the user's `data/qb_elos.csv` update:
-   `.venv/bin/nfl-predictor weekly --run-id weekly_2026_week_05`, through a `launch.sh` in the run
-   directory with `nohup setsid`. The weekly run uses the code on the checked-out branch: run it
-   from `main` (or ask the user whether the step-4 branch is acceptable), and after switching
-   branches run `uv sync`. Every checkpoint fingerprint changed with `0.36.0` and `0.37.0`, so
-   stage 1 retrains (about a minute on the GPU).
+1. When `phase.sh` ends: confirm every fold ran on `cuda`, then an independent reviewer rescores
+   all six runs from the fold checkpoints against `models/step4_reference/HYPOTHESIS.md` and
+   writes `REVIEW.md` there (the reference against the pick-time lines test; the market-free
+   arms against the reference, against each other, against the pick-time and closing markets via
+   `compare --market-from models/step4/R0_seed42`, and against the Elo probabilities in
+   `data/qb_elos.csv`). Then the check-in with the numbers.
+2. If the reference passes its rule: point `config/weekly_run.yaml` `floor_sigma_reference_runs`
+   at `models/step4_reference/adopted_seed42` and `adopted_seed7`, close rule 11's line-timing
+   gap in `AGENTS.md`, regenerate `.agents/market_free/` on `inputs/adopted.csv` (the committed
+   inventory was made on the old build with the removed columns), record the numbers in
+   `.agents/benchmarks.md` (rule 3), merge the `0.44.1` test fixes, then merge into `main`
+   (approved by the user 2026-10-08). Ask before pushing.
+3. Then roadmap step 6 (absorb `nfl-sos-ratings` from `9081bce`, `.agents/sos_port_source.md`).
+4. Batch with step 6's first edit to `constants.py` (it changes every checkpoint fingerprint):
+   a `constants.MODELS_PATH` read at call time by the five places that build `ROOT_DIR /
+   "models"` (`walk_forward.DEFAULT_CHECKPOINT_DIR`, `cli/backtest.py`, `ml/artifacts.py`,
+   `weekly_run/pipeline.py`, `cli/checkpoints.py`) and the API settings, so the test guard can
+   cover `models/` too (today it covers `data/` only; the implementer's recommendation,
+   2026-10-09).
 
 ## How the last sessions worked (keep doing this)
 
@@ -107,7 +100,8 @@ adoption, follow-ups deferred to a second ladder), plus the earlier decisions re
 - A backtest that judges probabilities must run from 2007 week 1 or pass
   `--floor-sigma-reference-runs` with the GPU reference, and must pass `--wf-start-week 1`
   (rule 11).
-- Re-run a plain `uv sync` after every version bump and after every merge or checkout that
-  changes the version or the layout.
+- Re-run `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` after every version bump and
+  after every merge or checkout that changes the version or the layout; a plain `uv sync`
+  replaces the local CUDA build of LightGBM with the CPU wheel.
 - The user runs `nfl-predictor web` from this checkout. Never stop or restart it yourself
   (rule 5).

@@ -19,6 +19,7 @@ from nfl_predictor.ml.ml_model_xgb_utils import (
     xgb_device_arg,
 )
 from nfl_predictor.reporting import power_rankings
+from nfl_predictor.utils.logger import log
 from nfl_predictor.weekly_run import stage1
 
 if TYPE_CHECKING:
@@ -301,11 +302,12 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
     )
     parser.add_argument(
         "--wf-market-mode",
-        choices=["features", "anchor", "hybrid"],
+        choices=list(stage1.MARKET_MODES),
         default=defaults.get("wf_market_mode", "hybrid"),
         help=(
             "Market mode of the walk-forward and the final fit: market lines as features, "
-            "the model anchored to them, or both (hybrid)."
+            "the model anchored to them, both (hybrid, the default), or none (market-free: no "
+            "market feature, no anchor and no market transform)."
         ),
     )
     parser.add_argument(
@@ -645,7 +647,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         power_ranking_options(args)
     except ValueError as error:
         parser.error(str(error))
+    _warn_on_an_overridden_transform(args)
     return args
+
+
+def _warn_on_an_overridden_transform(args: argparse.Namespace) -> None:
+    """Warn when the market-free mode overrides a requested market transform."""
+    if args.wf_market_mode == stage1.MARKET_MODE_NONE and args.market_transform is True:
+        log.warning(
+            "--wf-market-mode none overrides --market-transform (or market_transform: true): "
+            "a market-free run trains with no market transform."
+        )
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -721,7 +733,9 @@ def final_fit_options(
     """
     market_mode = str(args.wf_market_mode)
     include_market, market_anchor = stage1.market_mode_flags(market_mode)
-    market_transform = args.market_transform
+    market_transform = stage1.market_mode_transform(
+        market_mode, market_transform=args.market_transform
+    )
     if market_transform is None and include_market:
         market_transform = True
     include_market, market_transform, market_anchor = walk_forward.resolve_market_settings(

@@ -180,14 +180,22 @@ class _MarketColumns:
 def _resolve_market_columns(
     df: pd.DataFrame, feature_range: list[str], selection: FeatureSelection
 ) -> _MarketColumns:
-    """Return the market columns: derived ones join the range under the transform."""
+    """Return the market columns: derived ones join the range under the transform.
+
+    Without market features every market column in the range is excluded, the raw lines and
+    any derived column a dataset already carries there alike, whatever the transform setting.
+    """
     derived = [col for col in MARKET_DERIVED_COLUMNS if col in df.columns]
     if selection.market_transform:
         feature_range = feature_range + [col for col in derived if col not in feature_range]
     raw = [col for col in feature_range if col in constants.LINES_COLUMNS]
     features = derived if selection.market_transform else raw
     dropped_raw = raw if selection.market_transform and raw else []
-    excluded = [] if selection.include_market else features
+    excluded = (
+        []
+        if selection.include_market
+        else [col for col in feature_range if col in raw or col in MARKET_DERIVED_COLUMNS]
+    )
     return _MarketColumns(feature_range, derived, features, excluded, dropped_raw)
 
 

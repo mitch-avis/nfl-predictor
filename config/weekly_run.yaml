@@ -17,7 +17,9 @@ skip_data_refresh: false
 # it reads has changed; the output is the same as a full rebuild's. A --data-collection-args value
 # on the command line replaces this string rather than adding to it, so keep --incremental in it to
 # keep the reuse (for example "--incremental --min-season 2010"); a file read with --config sets
-# its own value or none, and none is a full rebuild.
+# its own value or none, and none is a full rebuild. Every option the string leaves out takes the
+# data command's default, so the refresh builds the line known at pick time (--line-source
+# pick_time); add "--line-source stored" to build the stored nflverse lines instead.
 data_collection_args: "--incremental"
 # resume from previous run or start fresh (default: true)
 resume: true
@@ -38,8 +40,8 @@ wf_checkpoint_per_fold: false
 # they span three earlier seasons, any weeks of them (default: both seeds of the GPU reference
 # walk-forward)
 floor_sigma_reference_runs:
-  - models/step3_gpu_reference/l1_seed42
-  - models/step3_gpu_reference/l2_seed7
+  - models/step4_reference/adopted_seed42
+  - models/step4_reference/adopted_seed7
 # number of most recent seasons to include; the current season counts even before it has a
 # completed week, so 3 scores two seasons (default: 3)
 wf_eval_last_n_seasons: 3
@@ -52,7 +54,8 @@ wf_start_week: 1
 # whether to include postseason games in walk-forward evaluation (default: false)
 wf_include_postseason: false
 # market mode of the walk-forward and the final fit: market lines as features, the model
-# anchored to them, or both (options: features, anchor, hybrid, default: hybrid)
+# anchored to them, both, or none, a market-free run with no market feature, anchor or transform
+# (options: features, anchor, hybrid, none, default: hybrid)
 wf_market_mode: hybrid
 # include quantile models in walk-forward training (default: false)
 wf_include_quantiles: false

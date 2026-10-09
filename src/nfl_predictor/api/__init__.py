@@ -31,7 +31,7 @@ from nfl_predictor.api.runs.indexer import RunIndex
 from nfl_predictor.api.settings import CSRF_HEADER_NAME, CSRF_HEADER_VALUE, Settings
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable
+    from collections.abc import AsyncGenerator, Awaitable, Callable
 
 API_PREFIX = "/api"
 MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -61,7 +61,7 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     settings = settings or Settings()
 
     @asynccontextmanager
-    async def lifespan(running_app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(running_app: FastAPI) -> AsyncGenerator[None]:
         """Start the job runner with the server and stop it on shutdown."""
         runner: JobRunner = running_app.state.job_runner
         runner.start()

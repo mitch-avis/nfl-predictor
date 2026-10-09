@@ -129,6 +129,31 @@ for a quick local run:
 python -m pytest --no-cov
 ```
 
+`tests/conftest.py` runs Polars, OpenMP (XGBoost) and BLAS on one thread each unless
+`POLARS_MAX_THREADS`, `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS` or `MKL_NUM_THREADS` is already
+set. The suite builds thousands of tiny frames and models, where pools sized to every core spend
+their time waking and spinning threads: on a 24-core machine it took about 174 s with the library
+defaults and about 42 s with one thread each. `pytest-xdist` then spreads the suite across one
+worker per core by default (`-n=auto` in `pyproject.toml`; about 15 s on the same machine). Pass
+`-n 0` to run in a single process, for example to use `pdb` or to run one test quickly.
+
+The suite also stays out of the checkout's `data/` and off the network (`tests/data_isolation.py`,
+installed by `tests/conftest.py` before any test module imports the package). `constants.DATA_PATH`
+and the nflreadpy and nfelo caches point at a session temporary directory, so every path a module
+copies from them at import time starts out redirected (to that shared session directory), and
+each test gets a fresh directory on top. Every TCP connection and every lookup of a host name other
+than `localhost` is refused, as on an offline machine, for the whole session, fixtures included; a
+refusal fails the next test to finish, or the session. A test that checks the packaged paths
+themselves asks for the `packaged_data_paths` fixture, and a test in `tests/test_conftest.py` scans
+every module for a path still inside `data/`. Three things are not redirected, because none of them
+reads `constants.DATA_PATH`; tests that touch them pass their own paths:
+
+- the run directories under `models/`, built from `constants.ROOT_DIR` when used;
+- `api.settings.Settings()` built without a root, which fills its data, state and database paths
+  from `constants.ROOT_DIR` (the checkout's `data/web/app.db`, the running web app's database);
+- the relative `data/...` defaults of `nfl-predictor rankings` (`--data-ml`, `--data-schedule`,
+  `--out-dir`), resolved against the current directory.
+
 To run explicitly with coverage (same behavior as the default config):
 
 ```bash
@@ -188,7 +213,8 @@ season in progress is always rebuilt, and every input is still loaded. An entry 
   `src/nfl_predictor/utils/`), the Polars, Polars runtime and NumPy versions, the Python
   version, the CPU architecture and the Polars thread count;
 - the options that change a season's rows (`--min-season`, the two prior-blend switches,
-  `--stat-prior-blend-games`, `--team-stats-source` and `--tr-stats-source`);
+  `--strength-prior-blend-games`, `--stat-prior-blend-games`, `--team-stats-source`,
+  `--tr-stats-source` and `--line-source`);
 - the loaded schedule, team stats and Elo rows from that season and every earlier one, and that
   season's and the previous season's TeamRankings, compared by value.
 
@@ -275,7 +301,59 @@ four games 50%, twelve games 75%. Rates are recomputed from the blended sums. Us
 `--stat-prior-blend-games` to change `K` and `--no-stat-prior-blend` to publish plain in-season
 means instead; both change feature values, so compare them with two dataset builds, not with
 `--disable-feature-groups`. The first season in a run has no prior and uses in-season means, and the
-schedule-adjusted strength family carries its own blend (`--no-strength-prior-blend`).
+schedule-adjusted strength family carries its own blend of the same form, with its own `K`
+(`--strength-prior-blend-games`, default `constants.PRIOR_BLEND_GAMES`) and its own ablation
+(`--no-strength-prior-blend`).
+
+Market lines: `--line-source` chooses which line each game's five line columns (`total_line`, the
+spreads and the moneylines) carry. Those columns are the market features and the anchor of both
+heads, in training and in production alike. The default (`constants.DEFAULT_LINE_SOURCE`) is
+`pick_time`, so the weekly run's data refresh and the web ETL and weekly jobs build it too.
+
+- `pick_time` (the default): the line known when picks are made, from nfelo's market-lines file
+  (`greerreNFL/nfelomarket_data`, `Data/lines.csv`), joined on season, week and the canonical
+  team codes. A completed game takes nfelo's opening spread where the opener is real (2007-2021
+  and 2023 on, when present; about 5% of 2024 has none), its opening moneylines when nfelo has
+  both (2024 on), otherwise moneylines derived from the opening spread, and its opening total,
+  or the stored total before nfelo published one. Every other completed game (1999-2006, 2022, a
+  missing opener) keeps its stored line and is counted as a fallback row. An upcoming game takes
+  nfelo's latest line, then nflverse's, then SurvivorGrid's. A game with no line at all still
+  stops the model run, as with `stored`. The closing line is never a feature under this source.
+  Derived moneylines come from a spread-to-moneyline map fitted to the market's own prices
+  (`utils/polars/moneyline_map.py`): for each half-point spread, the mean implied probability of
+  the favorite's and the underdog's moneylines over games with a real spread and both real
+  moneylines, kept monotone, so the key numbers 3 and 7 keep the market's jumps. Each season's map
+  is fitted on earlier seasons only (prices, never scores), from the cached schedules back to
+  1999; a season with fewer than `constants.MONEYLINE_MAP_MIN_GAMES` earlier priced games (2006
+  and before) keeps the fixed conversion.
+- `stored`: the nflverse schedule lines, one late, probably closing, snapshot. Missing
+  moneylines are derived from the spread with the fixed conversion
+  (`game_utils.spread_to_moneyline`: a normal curve at `SCORE_DIFF_STD_DEV` with a flat 5% vig),
+  and future games without a line take SurvivorGrid's spread.
+
+nfelo's file is rewritten several times a day. Each pick-time run downloads it, keeps the last
+good copy in `data/cache/nfelo/lines.csv` and every copy a run used in
+`data/cache/nfelo/snapshots/`, named by its SHA-256, and falls back to the cached copy (or, with
+none, to the stored lines) instead of failing. The run writes `market_lines_metadata.json` beside
+the datasets: the snapshot's URL, origin and hash, per-season game, match, opener and fallback-row
+counts, how many moneylines each season derived and how, and every season's map. Two diagnostic
+counts per season flag possible data errors without filtering anything: openers and upcoming nfelo
+lines on the other side of the stored line, both at least 3 points (`opener_sign_flips`,
+`upcoming_nfelo_sign_flips`). A `stored` build fetches nothing new and writes
+`{"line_source": "stored"}` to the same file, so a record never outlives the build it describes.
+The option changes feature values, so compare the two sources with two dataset builds, not with
+`--disable-feature-groups`.
+
+`nfl-predictor lines --season <season> --week <week>` (also the web "Refresh market lines" job)
+refreshes only the five line columns of one season in `all_data_ml.csv`, `all_data.csv` and the
+week's `predict/week_<NN>_games_to_predict.csv`, without rerunning the ETL, and follows the line
+source the data was built with, read from `market_lines_metadata.json`. On a pick-time build it
+writes what a rebuild would: the pick-time line order above, with missing moneylines priced by the
+season's map from the record. On a stored build it reads the nflverse schedule with the fixed
+conversion. A data directory without the record predates it and is refreshed as a stored build,
+with a warning; an unreadable record, an unknown line source, or a pick-time record without a map
+entry for the season stops the refresh before anything is written. Completed-game datasets are
+never touched. Re-predict the week after a refresh, because the lines feed the model.
 
 ## Data sources + missing data
 
@@ -285,6 +363,8 @@ are missing historically.
 Primary sources:
 
 - `nflreadpy` (NFLverse): schedules, results, team-level stats, and play-by-play.
+- nfelo's market-lines file (`greerreNFL/nfelomarket_data`) for the default
+  `--line-source pick_time`.
 - Local cached CSVs under `data/` for Elo/market data when present.
 - `data/meta_data.csv` (copied from `../nfeloqb`) for the quarterback name-to-id bridge. A name
   missing from it falls back to the play-by-play passer name (`F.Last`) when that is unique; a
@@ -408,7 +488,7 @@ Where the pool comes from:
 - The production final fit (the weekly run, `nfl-predictor train`) pools the out-of-fold errors
   of the reference runs, `floor_sigma_reference_runs` in `config/weekly_run.yaml` and
   `--floor-sigma-reference-runs` for `train` (default: the two seeds of the GPU reference
-  walk-forward, `models/step3_gpu_reference/l1_seed42` and `l2_seed7`, whose fold checkpoints
+  walk-forward, `models/step4_reference/adopted_seed42` and `adopted_seed7`, whose fold checkpoints
   are only read), with, in the weekly run, stage 1's errors before the predicted week at every
   `(season, week)` the reference runs have no rows for: the seasons after the reference and the
   predicted season's earlier weeks (where both have a week, the reference's errors are used).
@@ -441,6 +521,27 @@ If spreads/totals/moneylines are present, you can:
 
 The market-implied home win probability (no-vig moneylines, else the spread) is scored beside the
 model in every walk-forward as the yardstick; it never enters the submitted probability.
+
+Market-free runs come in two variants:
+
+- No betting-line column:
+  `nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform`. No line
+  column (the spreads, the total and the moneylines) and no column computed from them
+  (`market_home_margin`, `market_total_line`, `home_market_prob`, `away_market_prob`) reaches the
+  feature matrix, and nothing is anchored to the lines. The Elo columns stay.
+- No market information at all: the same options plus `--disable-feature-groups elo`. The `elo`
+  group is every column built from `data/qb_elos.csv` (18: the team Elo, quarterback Elo and
+  quarterback value, each side and their difference, and their four-week trends). `../nfeloqb`
+  pulls each team's preseason Elo toward a rating built from betting win totals (2003-2023 in its
+  `wt_ratings.csv`), so those columns carry market information the first variant keeps.
+
+Either way the market-implied probability is still scored as the yardstick. The weekly run's
+`--wf-market-mode none` is the first variant for stage 1 and the final fit (no market feature,
+no anchor and no transform), and `nfl-predictor train --exclude-market` is too, since its anchor
+and transform are off by default. `.agents/market_free/MARKET_COLUMNS.md`, generated by the script
+beside it, lists every column derived from betting lines in a build and every market-informed Elo
+column, and checks that the first variant admits no line-derived column and the second no column
+of either kind.
 
 ## Backtesting
 
@@ -611,6 +712,17 @@ has no interval (`[n/a]`). Everything before that section is byte-identical to t
 `compare` wrote before the section existed, and the JSON is a strict superset of it (each window
 gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the same order,
 to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
+By default each run's market Brier and its det - market interval use that run's own
+`market_home_win_prob`. `--market-from <run>` (a run or checkpoint directory, given once) takes
+it from another run instead, matched on `game_id`, for every compared run: a run anchored to the
+pick-time line is then also measured against the closing line from a stored-line run on the same
+games (run it once without the option for the pick-time yardstick). The model columns do not
+change, and each run's market Brier is still scored on the run's own results. It stops with exit
+code 2 when the option is repeated, or when the market run lacks a compared game, repeats one or
+has no market value for one. The report says which market it used (JSON key `market_source`,
+with the market run's provenance) and counts the compared games whose result differs in the
+market run (`outcome_mismatches`, a printed warning when nonzero: separate builds can carry a
+revised score); without the option the output is unchanged.
 A last "Settings versus production" section gives each run's differences from today's production
 weekly run, as the walk-forward report does (JSON key `settings_versus_production`, by run),
 rebuilt from the run's `metadata.json` and its dataset's columns. Nothing is inferred from
@@ -642,7 +754,7 @@ probabilities it submits are the deterministic floor (`Phi(margin / sigma)`, wit
 estimated from the reference runs' and stage 1's earlier out-of-fold errors as in "Win
 probability" above, and no fitted calibrator or market blend), from a model trained with
 `--wf-market-mode` (`hybrid` by default: market lines as features and the model anchored to
-them).
+them; `features`, `anchor` and the market-free `none` are the others).
 
 Notes:
 
@@ -867,8 +979,9 @@ nfl-predictor users create-user <name> --role admin   # once
 nfl-predictor web                                     # http://127.0.0.1:8000
 ```
 
-The frontend needs Node 26 (`source ~/.nvm/nvm.sh`); `cd web && npm ci && npm run build` writes
-`web/dist/`, which the backend serves. Configuration is by `NFLP_*` environment variables
+The frontend needs Node 26 (`source ~/.nvm/nvm.sh`) and pnpm;
+`cd web && pnpm install --frozen-lockfile && pnpm run build` writes `web/dist/`, which the backend
+serves. Configuration is by `NFLP_*` environment variables
 (`NFLP_DATA_DIR`, `NFLP_MODELS_DIR`, `NFLP_STATE_DIR`, `NFLP_PORT`, ...). Launch jobs from a
 server started without `--reload`: a reload restart marks running jobs failed. Details (including
 when to use `--reload` and the Vite dev server), the check commands and the layout are in
@@ -942,7 +1055,9 @@ Update `CHANGELOG.md` as work lands, one entry per fix, feature group, or change
 under its own incremented `## [VERSION] - YYYY-MM-DD` heading at the top of the file. There is no
 `[Unreleased]` section: bump the patch version for fixes and small additions and the minor version
 for new feature families, changed defaults, or schema changes, and set `pyproject.toml` to the same
-version in the same change (then `uv lock` and `uv sync`). Keep the change groups in this order:
+version in the same change, then run `uv lock` and
+`uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` (which keeps a local CUDA build of
+LightGBM). Keep the change groups in this order:
 
 - `Changed`
 - `Added`
@@ -1079,14 +1194,25 @@ games.
   play-by-play cache keeps the passer id but not the rusher id.
 
 The strength family is ablatable as the `strength` feature group
-(`--disable-feature-groups strength`), and the early-season prior blend can be ablated
-independently at ETL time with `--no-strength-prior-blend`. The quarterback family is the `qb`
-group (`--disable-feature-groups qb`). The rare-event noise family is the `rare_events` group
-(`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`, `2pt_conversions`, `def_safeties`,
-`def_tds`). The `next_opponent_identity` group drops only the `away_next_opponent_abbr` and
-`home_next_opponent_abbr` pair, which the model sees as one one-hot column per team on each side,
-and keeps the rest of the lookahead family, `*_next_opponent_win_pct` included. No group overlaps
-another.
+(`--disable-feature-groups strength`). Its early-season prior blend weights the in-season solve
+`games / (games + K)` against the previous season's final snapshot regressed by
+`constants.WEEK1_REGRESSION_FACTOR`; at ETL time `--strength-prior-blend-games` sets `K` (default
+`constants.PRIOR_BLEND_GAMES`, `4`) and `--no-strength-prior-blend` ablates the blend. Both change
+feature values and the strength snapshot file behind the default power rankings, so compare them
+with two dataset builds. The quarterback family is the `qb` group (`--disable-feature-groups qb`),
+and the 18 Elo columns from `data/qb_elos.csv` are the `elo` group
+(`--disable-feature-groups elo`; market-informed, see "Market integration"). The rare-event noise
+family is the `rare_events` group (`special_teams_tds`, `def_fumbles`, `fumble_recovery_tds`,
+`2pt_conversions`, `def_safeties`, `def_tds`). The `next_opponent_identity` group drops only the
+`away_next_opponent_abbr` and `home_next_opponent_abbr` pair, which would reach the model as one
+one-hot column per team on each side, and keeps the rest of the lookahead family,
+`*_next_opponent_win_pct` included. No group overlaps another.
+
+The model leaves that pair out by default. It is on the pruning list
+(`constants.PRUNED_FEATURE_COLUMNS`, the known-weak columns every fit leaves out: `train`,
+`backtest` and the weekly run, and so the models `predict` loads), so a default run fits exactly
+the matrix that `--disable-feature-groups next_opponent_identity` gave before, and only the
+backtest's `--disable-pruning` brings the pair back. The ETL still writes both columns.
 
 ## Open work
 

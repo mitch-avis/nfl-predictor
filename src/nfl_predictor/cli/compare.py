@@ -14,6 +14,14 @@ Give ``--candidate`` and ``--reference`` once per seed, in the same seed order, 
 the per-game differences are averaged over the seed pairs before bootstrapping. The definitions
 are in ``nfl_predictor.reporting.run_comparison``.
 
+``--market-from <run>`` scores every run's market Brier and det - market Brier against another
+run's ``market_home_win_prob``, matched on ``game_id``: a run anchored to the pick-time line gets
+the closing-line yardstick from a stored-line run on the same games. It is given once. Each run's
+market Brier still uses the run's own result; compared games whose result differs in the market
+run are counted and flagged with a warning. The report records the market run under
+``market_source``; it gets no "Settings versus production" section. Without the option each
+run's own rows supply the market and the output is unchanged.
+
 Example:
     nfl-predictor compare \
       --candidate models/wf_m55_8_2020_2025_half_life16 \
@@ -55,6 +63,17 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Reference run directory or checkpoint directory; repeat once per seed, in order.",
     )
     parser.add_argument(
+        "--market-from",
+        type=Path,
+        action="append",
+        default=None,
+        help=(
+            "Score every run's market Brier and det - market Brier against this run's "
+            "market_home_win_prob, matched on game_id (a run or checkpoint directory, given "
+            "once; it must cover every compared game). Default: each run's own rows."
+        ),
+    )
+    parser.add_argument(
         "--resamples",
         type=int,
         default=run_comparison.DEFAULT_RESAMPLES,
@@ -78,7 +97,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=None,
         help="Also write the printed tables to this Markdown file.",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.market_from is not None and len(args.market_from) > 1:
+        parser.error("--market-from takes one run: every compared run is scored on one market")
+    return args
 
 
 def _format_sections(sections: dict[str, dict[str, Any]]) -> list[str]:
@@ -99,8 +121,17 @@ def main(argv: list[str] | None = None) -> int:
         references = [
             run_comparison.load_run(run_comparison.resolve_run(path)) for path in args.reference
         ]
+        market = (
+            None
+            if args.market_from is None
+            else run_comparison.load_run(run_comparison.resolve_run(args.market_from[0]))
+        )
         report = run_comparison.compare_runs(
-            candidates, references, resamples=args.resamples, seed=args.bootstrap_seed
+            candidates,
+            references,
+            resamples=args.resamples,
+            seed=args.bootstrap_seed,
+            market=market,
         )
     except ValueError as error:
         log.error("compare: %s", error)

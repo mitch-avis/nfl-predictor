@@ -118,9 +118,22 @@ def _parse_args() -> argparse.Namespace:
         help="Use transformed market features when odds columns exist.",
     )
     parser.add_argument(
+        "--exclude-market",
+        action="store_false",
+        dest="include_market",
+        help=(
+            "Train with no market feature column (no spread, total or moneyline, raw or "
+            "transformed). With --no-market-anchor and --no-market-transform the run is "
+            "market-free; the market-implied probability is still scored as the yardstick."
+        ),
+    )
+    parser.add_argument(
         "--disable-pruning",
         action="store_true",
-        help="Disable the feature pruning list.",
+        help=(
+            "Keep the columns on the feature pruning list (constants.PRUNED_FEATURE_COLUMNS, "
+            "the next opponent's identity among them), which every run leaves out by default."
+        ),
     )
     parser.add_argument(
         "--disable-trend-features",
@@ -264,6 +277,7 @@ def _walk_forward_config(
         include_postseason=args.include_postseason,
         exclude_incomplete_seasons=args.exclude_incomplete_seasons,
         recency_half_life_seasons=args.recency_half_life_seasons,
+        include_market=bool(args.include_market),
         market_anchor=args.market_anchor,
         market_transform=args.market_transform,
         disable_pruning=bool(args.disable_pruning),

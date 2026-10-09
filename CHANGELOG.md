@@ -1,5 +1,200 @@
 # Changelog
 
+## [0.45.0] - 2026-10-09
+
+### Changed
+
+- The weekly run and `nfl-predictor train` pool the out-of-fold errors of the adopted-settings
+  reference walk-forward (`models/step4_reference/adopted_seed42` and `adopted_seed7`: pick-time
+  lines, 2007-2025, both seeds, reviewed) for the probability floor's sigma, instead of the
+  stored-line GPU reference of 2026-09-28 (`constants.FLOOR_SIGMA_REFERENCE_RUNS` and
+  `config/weekly_run.yaml`). A model anchored to the pick-time line makes slightly larger errors,
+  so weekly probabilities move a little toward 0.5.
+
+## [0.44.1] - 2026-10-09
+
+### Changed
+
+- The weekly run warns when `--wf-market-mode none` overrides a requested market transform
+  (`--market-transform` or `market_transform: true` in the config file).
+
+### Fixed
+
+- The test suite redirects `constants.DATA_PATH` and the nflreadpy and nfelo caches to a session
+  temporary directory before any test module imports the package, so import-time copies of those
+  paths start redirected too, and refuses every network connection and non-local host-name lookup
+  for the whole session, fixtures included. A scan test fails the suite if a module keeps a path
+  inside the checkout's `data/`. The README lists what the guard does not cover (`models/`,
+  `api.settings.Settings()` without a root, the relative defaults of `nfl-predictor rankings`).
+
+## [0.44.0] - 2026-10-09
+
+### Changed
+
+- `nfl-predictor data` builds pick-time market lines by default (`constants.DEFAULT_LINE_SOURCE`),
+  and so do the weekly run's data refresh and the web ETL and weekly jobs; `--line-source stored`
+  keeps the nflverse near-closing lines. Rebuild `data/` before the next fit: an older build still
+  has stored lines and the removed quarterback columns.
+- The model leaves `away_/home_next_opponent_abbr` out of every fit by default (the pruning list);
+  the ETL still writes them, and the backtest's `--disable-pruning` brings them back with the
+  other pruned columns.
+- The weekly run's `--wf-market-mode none` trains with no betting-line column, no anchoring and
+  no market transform.
+
+### Added
+
+- `nfl-predictor backtest --exclude-market`: with `--no-market-anchor --no-market-transform` a
+  walk-forward trains on no column derived from betting lines and still scores the market
+  yardstick.
+- An `elo` feature group (`--disable-feature-groups elo`) covering the 18 columns built from
+  `qb_elos.csv`, whose preseason Elo `../nfeloqb` pulls toward betting win totals; with the
+  market-free options it gives a backtest with no market information.
+- A generated inventory of the columns derived from betting lines and of the market-informed Elo
+  columns (`.agents/market_free/`).
+
+### Removed
+
+- The defense-adjusted quarterback rate (the `qb_def_adj` group, its six columns and constants):
+  it tied the current-settings baseline in two-seed walk-forwards.
+
+### Fixed
+
+- `nfl-predictor lines` refreshes upcoming games in the line source the data was built with; on a
+  pick-time build it used to put the stored lines back. A season with no fitted map stops before
+  anything is downloaded or written.
+- With market features excluded, a market transform column already inside the feature range is
+  excluded too.
+- Tests no longer write into the checkout's `data/` or download play-by-play: every test runs
+  against a private data directory with network connections refused.
+
+## [0.43.0] - 2026-10-08
+
+### Changed
+
+- Every `nfl-predictor` command (and `python -m nfl_predictor.weekly_run`) runs Polars on one
+  thread unless the environment sets `POLARS_MAX_THREADS`. The ETL builds thousands of small
+  frames, where a pool sized to every core spent its time waking threads: a full
+  `nfl-predictor data --max-season 2025 --no-incremental` build took 540 s with 24 Polars threads
+  and 119 s with one (system time 1470 s against 16 s), and every output file was byte-identical.
+  XGBoost and BLAS keep their own thread settings.
+- `pytest` spreads the suite over one worker per core by default (`-n=auto`, pytest-xdist);
+  `-n 0` runs it in one process.
+- `AGENTS.md`, `README.md` and the task docs sync after a version bump with
+  `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`; the plain `uv sync` they named
+  replaced the local CUDA build of LightGBM with the CPU wheel.
+
+- Dependencies updated; the floor is now Polars 2.0 (`polars>=2.0`), with FastAPI 0.143 and ty
+  0.0.85. Context managers are annotated as `Generator`/`AsyncGenerator` rather than the
+  `Iterator` form ty now reports as deprecated.
+- The frontend uses pnpm instead of npm: `web/pnpm-lock.yaml` replaces `web/package-lock.json`,
+  and `scripts/gate.sh --web`, the CI `web` job (`pnpm/action-setup`, pnpm store cache), the
+  missing-build page and the docs run `pnpm install --frozen-lockfile`, `pnpm run <script>` and
+  `pnpm exec vitest run`.
+- The test suite runs Polars, OpenMP and BLAS on one thread each unless the environment sets
+  `POLARS_MAX_THREADS`, `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS` or `MKL_NUM_THREADS`: pools
+  sized to every core spent the run waking and spinning threads (about 174 s before, 42 s after,
+  on 24 cores).
+
+### Fixed
+
+- The season cache reads its entries again under Polars 2.0, which dropped `read_ipc`'s
+  `memory_map` option: every lookup failed, was logged as an unreadable entry and rebuilt the
+  season.
+- The web Weekly Run job no longer passes `--output-dir models/`. Its predictions, confidence
+  picks, betting report and power rankings now land in the run directory, the only place the run
+  index looks, so a finished web run shows its week instead of nothing.
+
+## [0.42.1] - 2026-10-02
+
+### Added
+
+- `nfl-predictor compare --market-from <run>` scores every compared run's market Brier and
+  det - market Brier against another run's `market_home_win_prob`, matched on `game_id`, so a run
+  anchored to the pick-time line also gets the closing-line yardstick from a stored-line run on
+  the same games. Each run is still scored on its own results; compared games whose result
+  differs in the market run are counted (`market_source.outcome_mismatches`) and flagged with a
+  warning. The report records the market run and its full provenance under `market_source`. It
+  exits 2 when the market run lacks, repeats or has no market value for a compared game, or when
+  the option is given twice. Without the option the output is unchanged.
+
+## [0.42.0] - 2026-10-02
+
+### Changed
+
+- Every ETL build writes `market_lines_metadata.json` beside its data; a stored build records
+  `{"line_source": "stored"}`, so a pick-time record never outlives its data.
+- `fill_future_game_lines` accepts an optional moneyline filler (default unchanged).
+
+### Added
+
+- `nfl-predictor data --line-source {stored,pick_time}`. `stored` (the default) keeps the nflverse
+  lines byte for byte. `pick_time` anchors each game to the line known at pick time: nfelo's real
+  opener for completed games (the stored line as a counted fallback in 1999-2006, 2022 and for
+  missing openers), and for upcoming games nfelo's latest line, then nflverse, then SurvivorGrid.
+  The option is part of the season-cache key.
+- A cached getter for nfelo's `nfelomarket_data` `Data/lines.csv` (the last good copy and
+  SHA-256-named snapshots under `data/cache/nfelo/`; it falls back to the cache without failing),
+  with team codes normalized to the canonical abbreviations.
+- A spread-to-moneyline map fitted per season on earlier seasons' prices, keeping the key numbers
+  3 and 7; under `pick_time` it replaces the fixed conversion for derived moneylines.
+- The pick-time record holds the snapshot hash, per-season match, fallback and derived-moneyline
+  counts, the maps, and diagnostic counts of opener and upcoming-line sign flips against the
+  stored line (nothing is filtered).
+
+## [0.41.0] - 2026-10-02
+
+### Changed
+
+- The defense-adjusted quarterback rate (`qb_def_adj` group) converts the faced defense's
+  `adj_def_pass_epa_snap`, which is pass EPA per offensive snap, to EPA per dropback: it multiplies
+  by the league's offensive snaps per dropback over that season's games before the game's week
+  (the previous regular season in week 1). Only the six `qb_def_adj` columns change; every other
+  ETL column is byte-identical on a 2019-2026 scratch build.
+- `qb_stats.attach_qb_features` and `attach_defense_expectation` take `defense=DefenseInputs(...)`
+  instead of `defense_snapshots=`.
+
+### Added
+
+- `qb_stats.aggregate_league_snaps`, `qb_stats.snaps_per_dropback` and `pbp.scrimmage_condition`,
+  which count snaps and dropbacks with the team families' own definitions.
+
+## [0.40.1] - 2026-10-01
+
+### Changed
+
+- The strength snapshot and table builders take the early-season prior as one `StrengthPrior`
+  value (`prior=`) instead of a bare frame (`prior_snapshot=`).
+
+### Added
+
+- `nfl-predictor data --strength-prior-blend-games` sets `K` in the adjusted-strength snapshot's
+  early-season prior blend, `games / (games + K)`, apart from the stat blend's
+  `--stat-prior-blend-games`. The default is `constants.PRIOR_BLEND_GAMES` (4), so a default build
+  is byte-identical; the value is part of the season-cache key. A non-default `K` moves the nine
+  adjusted-strength stats and, through `adj_def_pass_epa_snap`, the `qb_def_adj` columns.
+
+### Fixed
+
+- `nfl-predictor data` refuses a NaN or infinite `--strength-prior-blend-games` or
+  `--stat-prior-blend-games`; both must be finite and positive.
+
+## [0.40.0] - 2026-10-01
+
+### Changed
+
+- The ETL always records the weekly strength snapshots and passes them to the quarterback family.
+  Pre-existing columns are byte-identical on a 2019-2026 scratch build. `constants.py` and
+  `ml/ml_model_core.py` changed, so every walk-forward checkpoint retrains.
+
+### Added
+
+- The defense-adjusted quarterback EPA rate (`qb_def_adj_epa`, `qb_def_adj_epa_recent`, per side
+  and diff): each earlier dropback is credited with the faced defense's pre-week
+  `adj_def_pass_epa_snap`, with the `K = 300` shrinkage and career/last-8 windows of
+  `qb_dropback_epa`. It is the feature group `qb_def_adj` (`--disable-feature-groups qb_def_adj`)
+  and on by default once a build contains it; training's missing-data summary reports it. It
+  needs a full-history build: seasons before `--min-season` count as average defenses.
+
 ## [0.39.3] - 2026-10-01
 
 ### Added

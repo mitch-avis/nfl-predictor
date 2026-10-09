@@ -33,9 +33,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(uv\.lock|web/package-lock\.json)$
+        exclude: ^(uv\.lock|web/pnpm-lock\.yaml)$
       - id: end-of-file-fixer
-        exclude: ^(uv\.lock|web/package-lock\.json)$
+        exclude: ^(uv\.lock|web/pnpm-lock\.yaml)$
       - id: check-yaml
       - id: check-toml
       - id: check-json

@@ -258,6 +258,9 @@ def test_process_season_builds_the_prior_once_per_season(monkeypatch: pytest.Mon
     assert seen == [sentinel] * 3
 
 
-def test_prior_blend_games_is_shared_with_the_strength_snapshot() -> None:
-    """Both early-season blends read one named constant."""
+def test_prior_blend_games_is_the_default_of_both_early_season_blends() -> None:
+    """Both early-season blends default to one named constant and are set separately."""
     assert constants.PRIOR_BLEND_GAMES == 4.0
+    inputs = data_collection.SeasonInputs(min_season=2006)
+    assert inputs.stat_prior_blend_games == constants.PRIOR_BLEND_GAMES
+    assert inputs.strength_prior_blend_games == constants.PRIOR_BLEND_GAMES

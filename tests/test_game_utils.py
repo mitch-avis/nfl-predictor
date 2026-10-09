@@ -15,6 +15,15 @@ def test_spread_to_moneyline_signs() -> None:
     assert game_utils.spread_to_moneyline(0.0) > 0
 
 
+def test_spread_to_moneyline_pins_the_fixed_conversion() -> None:
+    """The fixed normal-curve conversion with a flat 5% vig gives these exact moneylines."""
+    spreads = (-14.0, -7.0, -3.5, -3.0, 0.0, 3.0, 3.5, 7.0, 14.0)
+
+    moneylines = [game_utils.spread_to_moneyline(spread) for spread in spreads]
+
+    assert moneylines == [-730, -261, -168, -158, 90, 129, 136, 206, 487]
+
+
 def test_fill_missing_moneylines() -> None:
     """Missing moneylines are filled from spreads."""
     df = pl.DataFrame(
@@ -275,3 +284,30 @@ def test_fill_future_game_lines_uses_away_perspective_when_home_spread_missing(m
     row = filled.row(0, named=True)
     assert row["home_spread"] == pytest.approx(-2.5)
     assert row["away_spread"] == pytest.approx(2.5)
+
+
+def test_fill_future_game_lines_derives_moneylines_with_the_given_filler(monkeypatch) -> None:
+    """A caller-supplied filler, not the fixed conversion, prices the SurvivorGrid spreads."""
+    df = pl.DataFrame(
+        {
+            "game_id": ["game1"],
+            "week": [16],
+            "away_abbr": ["BUF"],
+            "home_abbr": ["KC"],
+            "away_score": [None],
+            "home_spread": [None],
+            "away_spread": [None],
+            "total_line": [None],
+        }
+    )
+    monkeypatch.setattr(game_utils, "scrape_survivor_grid_spreads", lambda: {"KC": {16: -3.5}})
+
+    def filler(frame: pl.DataFrame) -> pl.DataFrame:
+        return frame.with_columns(
+            pl.lit(-999).alias("home_moneyline"), pl.lit(999).alias("away_moneyline")
+        )
+
+    filled = game_utils.fill_future_game_lines(df, fill_moneylines=filler)
+
+    row = filled.row(0, named=True)
+    assert (row["home_moneyline"], row["away_moneyline"]) == (-999, 999)

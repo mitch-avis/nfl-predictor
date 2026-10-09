@@ -1,8 +1,9 @@
 # Roadmap step 4, feature values: plan and ladder
 
-Status: draft for the user's approval (written 2026-10-01). Nothing here runs until the user
-accepts it. Once accepted, it is the ladder under `AGENTS.md` rule 4: every rung up to the cap is
-approved, and anything beyond the cap or outside this text is a fresh question.
+Status: accepted by the user on 2026-10-01 (all three questions at the end answered yes). It is
+the ladder under `AGENTS.md` rule 4: every rung up to the cap is approved, and anything beyond the
+cap or outside this text is a fresh question. Phase A (code) is in progress on
+`feat/step4-feature-values`.
 
 ## What is measured
 
@@ -41,6 +42,20 @@ under `ml/` change every checkpoint fingerprint).
    spread-to-moneyline map, and an ETL option choosing the line source (`stored` today,
    `pick_time` the candidate), so both builds come from one code version. The largest chunk.
 
+5. Accepted by the user on 2026-10-02: an `nfl-predictor compare` option that scores a run against
+   another run's market by `game_id` (reporting only, outside the checkpoint fingerprint), so the
+   `PT` report gives the closing-line yardstick from `R0`'s rows. It may land while Phase B runs,
+   but before the Phase B review.
+
+Phase A status: done; chunks 1-5 landed as `0.39.3`-`0.42.1`. Phase B ran 2026-10-02 on
+`0.42.1` (`models/step4/`, reviewed in `REVIEW.md` there; numbers in `.agents/benchmarks.md`):
+QB, NO, S2, S8 and T2 tie R0; PT is worse, as expected. Decided by the user on 2026-10-02 and
+2026-10-08: drop the defense-adjusted quarterback rate, drop the next-opponent identity pair,
+adopt pick-time lines, keep the stat blend at `K = 4`; the strength-blend `K` is superseded by
+the preseason prior ported from `nfl-sos-ratings` (roadmap step 6). `F` (the adopted-settings
+reference build) runs on the decisions chunk's code, together with the market-free baseline
+(roadmap step 5).
+
 Any chunk that changes `NFLREADPY_SCHEDULE_COLUMNS`, `NFLREADPY_SCHEDULE_RENAME` or a derived
 schedule column refetches every historical schedule file since `0.38.2`, which can pull revised
 lines; such a change is asked about first (rule 5), and its scratch builds say so.
@@ -62,6 +77,20 @@ lines; such a change is asked about first (rule 5), and its scratch builds say s
   F is the new GPU reference and the floor's new sigma pool.
 - Cap: 16 walk-forward runs (8 arms by 2 seeds) and 6 builds. Stopping rule: none early; every
   arm runs once on both seeds, and `F` runs only after the user's adoption decision.
+
+Feature-group switches per arm. The QB columns (`qb_def_adj`) are in every build and are on
+by default, so every arm except QB passes `--disable-feature-groups qb_def_adj` (NO passes
+`qb_def_adj,next_opponent_identity`); QB is the only arm that trains on them. The QB columns
+need a full-history build (the default `--min-season 1999`): a `--min-season` build counts the
+defenses of earlier seasons as average.
+
+Recorded before the runs: the QB adjustment is small next to the rate it adjusts. Since `0.41.0`
+the faced defense's per-snap pass coefficient is converted to EPA per dropback (about 1.7 snaps
+per dropback), but it is still a ridge coefficient shrunk to roughly 30-50% of the true effect, so
+the adjusted and raw career rates stay very close (correlation about 0.999 on the 2019-2026
+scratch build, `~/scratch/step4_qb_units/diagnostics.py`). A QB tie therefore says this form adds
+nothing, not that opponent adjustment of quarterbacks has no signal; the next step after a tie is
+53.7's joint ridge, not closing the task.
 
 ## Decision rules (written before any run)
 

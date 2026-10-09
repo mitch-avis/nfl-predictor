@@ -30,34 +30,22 @@ Rules that are always enforced:
 
 ## Current Focus (2026 season start)
 
-- The active workstream is feature engineering for true team strength. What has landed, version
-  by version, with the user's decisions and the verification arms, is under "Workstream history"
-  in `.agents/benchmarks.md`; completed milestones are in `.agents/ARCHIVE.md`.
-- The order agreed with the user on 2026-09-24, each step on its own branch and merged before
-  the next, with no deadline:
-  (1) close 55.8 (done, `0.18.0`);
-  (2) Milestone 60, CLI and entrypoint consolidation widened to every file under `scripts/`,
-  behavior-preserving, with task 55.5 (done: closed and merged into `main` on 2026-09-25 as
-  `0.28.1`, record in `.agents/ARCHIVE.md`, Milestone 60);
-  (3) production/benchmark parity: GPU as the default device (55.4), how production
-  probabilities are formed (56.5), pick-time lines (56.6), and the out-of-fold calibration pool;
-  (4) rebuild reproducibility, then every feature-value change (55.3, 53.7 and the feature
-  follow-ups);
-  (5) the Optuna re-tune with wiring into production (55.9 with 56.3);
-  (6) the web UI, Milestone 58 phases 4-6.
-  Tasks 55.1 and 55.2 are retired. The reasoning and the follow-up assignments are under "Roadmap
-  Status" in `.agents/TODO.md`. Step 3 closed on 2026-10-01; step 4 is next.
+- The current workstream, the agreed step order (each step on its own branch off `main`, merged
+  before the next) and the active step's branch and plan are under "Roadmap Status" in
+  `.agents/TODO.md`; what has landed is under "Workstream history" in `.agents/benchmarks.md` and
+  in `.agents/ARCHIVE.md`.
 - XGBoost margin/total stays the primary model and benchmark. Do not build alternative model
   families or run large tuning campaigns unless the user asks.
 - Borrow proven methodology from `../nfl-sos-ratings` before inventing new metrics; treat that
   repo as read-only reference material. The method being ported is its head-to-head-excluded
   opponent profiling and the simultaneous ridge that generalizes it (see
   `.agents/feature_crosswalk.md` section 3.1).
-- Validated baseline on 2026-09-25 (version `0.28.5`): `scripts/gate.sh --web` exits `0`
-  (`1032 passed`, coverage `92.21%` against the enforced `90%` floor, 22 frontend tests). Run
-  `scripts/gate.sh --web` whenever `web/` or `src/nfl_predictor/api/` changes.
-  - Re-run a plain `uv sync` after every version bump (including after merging a branch that
-    bumped the version), or `uv sync --check --active` fails on the stale installed package.
+- Run `scripts/gate.sh --web` whenever `web/` or `src/nfl_predictor/api/` changes.
+- Re-run `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` after every version bump
+  (including after merging a branch that bumped the version), or `uv sync --check --active` fails
+  on the stale installed package. The helper prints the flags that keep the local CUDA build of
+  LightGBM (nothing on a CPU-only machine); a plain `uv sync` replaces that build with the CPU
+  wheel, and `.venv/bin/nfl-lightgbm-cuda-install install` then has to rebuild it from source.
 - **Benchmarks and data state live in `.agents/benchmarks.md`.** Read it before any walk-forward
   run, comparison or decision: it holds the current benchmark table, the reference arm for each
   dataset build (a new arm compares against the reference on its own build and code version),
@@ -185,17 +173,18 @@ are not advisory.
     defect until the user approves it and it is recorded here. The season-weighting gap closed in
     `0.18.0` (both train unweighted, task 55.8), and the probability-path gap in `0.32.0` (every
     run type submits the deterministic floor, task 56.5), the device in 2026-09-28 (the two-seed
-    GPU reference, task 55.4), and the final fit's hold-out in
-    `0.33.0` (the final fit trains on every completed game, like each fold). Open gaps, all
-    scheduled:
+    GPU reference, task 55.4), the final fit's hold-out in
+    `0.33.0` (the final fit trains on every completed game, like each fold), and the line timing
+    in `0.44.0` (task 56.6: both anchor to and train on pick-time lines, and the adopted-settings
+    reference of 2026-10-09 is production's floor-sigma pool; the one approximation left is that a
+    completed game carries nfelo's opening line while production reads nfelo's latest line at run
+    time). Open gaps, all scheduled:
     - the floor's sigma and start week (approved by the user 2026-09-28): a default
       `nfl-predictor backtest` (three seasons from week 3, no `--floor-sigma-reference-runs`)
       scores every week at `SCORE_DIFF_STD_DEV`, while production pools the GPU reference and
       stage 1 walks forward from week 1. An arm that judges probabilities runs from 2007 week 1 or
       passes `--floor-sigma-reference-runs` with the GPU reference, and passes
-      `--wf-start-week 1`; arms compared only with each other may keep the default;
-    - line timing: backtests anchor to and score against the stored, probably closing, lines,
-      while production anchors to mid-week lines and picks are made before Thursday (task 56.6).
+      `--wf-start-week 1`; arms compared only with each other may keep the default.
 12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is
     applied as written. If the result falls between its branches, or its first condition fails
     and a fallback branch rescues the preferred outcome, the result goes to the user as a
@@ -224,6 +213,13 @@ are not advisory.
     recommend, say so and name what would settle it. A recommendation is advice, never consent:
     the agent still waits for the answer on everything under rule 5, and it never bends a
     written decision rule toward its own preference (rules 9 and 12).
+16. **Name things in plain words.** Anything written for the user (check-ins, questions,
+    summaries, plans and docs) calls an arm, build, run, setting or step by a descriptive name
+    that says what it is, for example "the current-settings baseline" or "the adopted-settings
+    reference build", never by a bare code such as `R0`, `F`, `PT` or `S2`. A short code may stay
+    as a directory or file name; give it once in parentheses after the descriptive name, so the
+    user can find the files, then keep using the descriptive name. Task and milestone numbers
+    likewise carry a few words saying what the task is.
 
 ## Source of truth for work
 
@@ -248,7 +244,7 @@ are not advisory.
 - Do not reference temporary planning artifacts in code: do not mention roadmap items, milestone
   numbers, or TODO goal labels in any code, comments, docstrings, or test descriptions.
 - Load and apply relevant skills before acting. Default to `python` for Python work; add
-  `test-driven-development`, `clean-code`, `systematic-debugging`, `code-review`, `observability`,
+  `test-driven-development`, `systematic-debugging`, `code-review`, `observability`,
   `task-orchestrator`, and the `python-*` skills when their domains apply. Skills carry general
   defaults; where one disagrees with this file, the nested `AGENTS.md` files or the `.agents/` docs
   they point to, this repo's rule wins (for example the `.venv/bin/` command forms,
@@ -310,7 +306,7 @@ Use these forms **at all times**:
 - uv:
   - `uv`
 - pytest:
-  - `.venv/bin/python -m pytest` **or** `.venv/bin/pytest` **or** `uv run pytest`
+  - `.venv/bin/python -m pytest` **or** `.venv/bin/pytest`
 - ruff:
   - `.venv/bin/ruff`
 - pyright:
@@ -323,6 +319,8 @@ Use these forms **at all times**:
 ### Explicitly forbidden
 
 - `python`, `pip`, `pytest`, `ruff`, `pyright`, or `ty` **without a `.venv/` prefix**
+- `uv run <tool>`: it syncs the venv to the lockfile before every call, which can replace
+  packages installed outside the lockfile and hides which interpreter ran
 - assuming an activated shell or implicit virtualenv
 - using system Python, Conda, pyenv, or global tools
 
@@ -341,21 +339,9 @@ gate" (add `--web` when `web/` changed, `--quick` to skip pytest while iterating
 
 ## Project Shape (Big Picture)
 
-- Compatibility facades: `src/nfl_predictor/utils/polars_utils.py` forwards imports to the split
-  Polars modules, and `src/nfl_predictor/ml_model.py` forwards to `src/nfl_predictor/ml/` and
-  keeps the `python -m nfl_predictor.ml_model` form of `nfl-predictor train`/`predict`
-  (`src/nfl_predictor/cli/train.py`, outside the checkpoint fingerprint). XGBoost version/build
-  compatibility helpers live in `src/nfl_predictor/ml/ml_model_xgb_utils.py`.
-
 ### Commands (operational entrypoints)
 
-`nfl-predictor --help` lists every command by group; `nfl-predictor <command> --help` shows its
-options. `scripts/` holds only `gate.sh`.
-
-- `nfl-predictor compare` (`src/nfl_predictor/cli/compare.py`, definitions in
-  `src/nfl_predictor/reporting/run_comparison.py`): paired comparison of walk-forward runs rescored
-  from their fold checkpoints, per window, with bootstrap intervals and two seeds combined per
-  game when given. It reproduces the task 55.8 independent rescore exactly
+- `nfl-predictor compare` reproduces the task 55.8 independent rescore exactly
   (`.agents/m60/verify_compare.py`), so a reviewer can use it under rule 3(b) as long as the
   review also checks provenance and the reviewer did not produce the run.
 - Training/prediction entrypoints may be updated/replaced, but must remain runnable and
@@ -382,14 +368,6 @@ options. `scripts/` holds only `gate.sh`.
 
 - **Data directory:** all datasets live under `data/` (see `constants.DATA_PATH` in
   `src/nfl_predictor/constants.py`).
-- **Key output files (examples; do not hard-code filenames):**
-  - `data/all_data_ml.csv` - master ML dataset (includes engineered features and targets where
-    available)
-  - `data/all_data.csv` - combined dataset without ML-only targets
-  - `data/completed_games_ml.csv` and `data/completed_games.csv` - completed games subsets
-  - `data/predict/week_XX_games_to_predict.csv` - upcoming week games with engineered features
-  - `data/strength_snapshots.csv` - pre-week adjusted strength per `(season, week, team)` for
-    every scheduled team, bye teams included; the source of the default power rankings
 
 ### I/O rules
 
@@ -404,17 +382,17 @@ options. `scripts/` holds only `gate.sh`.
   contract: do not propose schema changes there casually, and never edit `../nfeloqb` outputs from
   this repo. `../nfeloqb/Other Data/meta_data.csv` maps Elo QB names to GSIS ids and is the
   intended identity bridge for QB-level PBP features.
-- `../nfl-sos-ratings` is the reference implementation for the head-to-head-excluded
-  opponent-profiling method this repo is porting and for its simultaneous ridge
-  (`simultaneous_adjustment.py`), the method's all-hops generalization; how the method maps here is
-  in `.agents/feature_crosswalk.md` section 3.1. It is also the reference for PBP-derived per-snap
-  EPA, success and explosive rates, and special-teams EPA. Read its
-  `README.md`, `AGENTS.md`, and `docs/` (`methodology.md`, `validation-report.md`, both stats
-  catalogs) before designing any adjusted feature, and note that its own walk-forward puts the
-  within-season ridge at parity with SRS and raw EPA and behind prior-carrying Elo. Port ideas and
-  formulas into this repo's Polars ETL; do not import it as a dependency and do not modify it from
-  here. The repo-root symlink `nfl-sos-ratings -> ../nfl-sos-ratings/` is gitignored and exists
-  only for convenient reading; always state which repo you are inspecting.
+- `../nfl-sos-ratings` is being absorbed into this repo (roadmap step 6, approved 2026-10-08):
+  its team and quarterback ratings, data sources and web pages are ported here, starting from
+  the frozen commit recorded in `.agents/sos_port_source.md` with what was open there at that
+  commit. Read it at that commit, read-only: never modify it, and do not import it as a
+  dependency; the port copies its methods into this repo's Polars ETL with tests that match its
+  published outputs. Its fits live in `ridge.py` (the shared ridge solver), `team_rating.py`,
+  `qb_rating.py` and `team_prior.py`; its method is written up in `docs/methodology.md`, and
+  `docs/validation-report.md` compares its team rating with SRS, raw EPA and Elo on next-game
+  margins. How the method maps here today is in `.agents/feature_crosswalk.md` section 3.1. The
+  repo-root symlink `nfl-sos-ratings -> ../nfl-sos-ratings/` is gitignored and exists only for
+  convenient reading; always state which repo you are inspecting.
 - Leave untracked local files in neighboring repos alone (for example `../nfeloqb/.bash_history`).
 - Play-by-play comes from `nflreadpy.load_pbp`. nflreadpy caches only in memory, so cache selected
   columns per season as Parquet under `data/cache/nflreadpy/` with the same current-season refresh
@@ -437,7 +415,8 @@ options. `scripts/` holds only `gate.sh`.
   `constants.WEEK1_REGRESSION_FACTOR`. From week 2 on, season-to-date stats blend toward that same
   prior with in-season weight `games / (games + constants.PRIOR_BLEND_GAMES)`, and rates are
   recomputed from the blended sums (`polars_utils.blend_with_prior_stats`). The adjusted-strength
-  family blends its own previous-season snapshot the same way. New season-to-date families inherit
+  family blends its own previous-season snapshot the same way, with its own `K` option
+  (`--strength-prior-blend-games`, same default). New season-to-date families inherit
   the stat blend automatically if they flow through `team_stats_df`.
 - Future games have missing outcomes; the pipeline still outputs a structurally complete row
   suitable for prediction.

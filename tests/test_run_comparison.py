@@ -496,3 +496,266 @@ def test_the_stability_table_formats_one_row_per_season() -> None:
     assert lines[week1 + 4].startswith("| all seasons | 5 | ")
     assert lines[week1 + 5].startswith("| 2023 | 3 | 0.25083 | ")
     assert lines[week1 + 6].startswith("| 2024 | 2 | ")
+
+
+def _command_outputs(tmp_path: Path, *extra: str) -> tuple[int, list[str], dict[str, Any]]:
+    """Run ``compare`` on the two-season fixture's run directories; return its written reports.
+
+    The candidate shifts every probability by 0.05; both runs carry a 0.55 market. ``extra``
+    adds options. The Markdown lines and the JSON have the temporary directory replaced.
+    """
+    candidate = _write_run(tmp_path, "cand", _season_predictions(shift=0.05, market=0.55), 42)
+    reference = _write_run(tmp_path, "ref", _season_predictions(market=0.55), 42)
+    out_json = tmp_path / "out" / "compare.json"
+    out_md = tmp_path / "out" / "compare.md"
+    code = command.main(
+        [
+            "--candidate",
+            str(candidate),
+            "--reference",
+            str(reference),
+            "--resamples",
+            "200",
+            "--out-json",
+            str(out_json),
+            "--out-md",
+            str(out_md),
+            *extra,
+        ]
+    )
+    if code != 0:
+        return code, [], {}
+    lines = _without_tmp(out_md.read_text(encoding="utf-8"), tmp_path).splitlines()
+    payload = json.loads(_without_tmp(out_json.read_text(encoding="utf-8"), tmp_path))
+    return code, lines, payload
+
+
+def test_the_command_output_without_a_market_run_is_unchanged(tmp_path: Path) -> None:
+    """Without ``--market-from`` the written Markdown and JSON stay exactly as before.
+
+    The snapshot holds the command's complete output from before the option existed: every
+    Markdown line byte for byte, and the JSON with exactly the same keys (floats to the
+    snapshot tolerance), so no key is added when each run's own market rows are used.
+    """
+    code, lines, payload = _command_outputs(tmp_path)
+    markdown_snapshot = SNAPSHOT_DIR / "compare_command.txt"
+    json_snapshot = SNAPSHOT_DIR / "compare_command.json"
+    if snapshots.updating():
+        markdown_snapshot.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        json_snapshot.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
+        return
+
+    assert code == 0
+    assert lines == markdown_snapshot.read_text(encoding="utf-8").splitlines()
+    snapshots.assert_json_match(
+        "report", payload, json.loads(json_snapshot.read_text(encoding="utf-8"))
+    )
+
+
+# A market that differs game by game, so a value matched to the wrong game changes the result.
+MARKET_FROM = {game_id: 0.30 + 0.04 * index for index, (game_id, *_) in enumerate(SEASON_GAMES)}
+# Sorts before every compared game, so a market matched by position instead of game_id shifts.
+EXTRA_GAME = ("2023_00_x", 2023, 1, 0.50, 1)
+# The market run records this compared game's result the other way (a revised score in another
+# build); every run's market Brier must still use the run's own result.
+REVISED_GAME = "2023_01_a"
+
+
+def _market_predictions() -> pd.DataFrame:
+    """Return a market run's rows: its own market, one revised result, an extra game, shuffled."""
+    frame = _season_predictions()
+    frame["market_home_win_prob"] = frame["game_id"].map(MARKET_FROM)
+    revised = frame["game_id"] == REVISED_GAME
+    frame.loc[revised, "actual_home_win"] = 1 - frame.loc[revised, "actual_home_win"]
+    game_id, season, week, p, margin = EXTRA_GAME
+    extra = frame.iloc[[0]].assign(
+        game_id=game_id,
+        season=season,
+        week=week,
+        deterministic_home_win_prob=p,
+        market_home_win_prob=0.99,
+        actual_home_win=int(margin > 0),
+        actual_margin=float(margin),
+    )
+    combined = pd.concat([frame, extra], ignore_index=True)
+    return combined.sample(frac=1.0, random_state=3).reset_index(drop=True)
+
+
+def _market_comparison(tmp_path: Path, market: pd.DataFrame | None = None) -> dict[str, Any]:
+    """Compare the two-season runs, each with its own market, scored against a market run."""
+    candidate = _loaded(tmp_path, "cand", _season_predictions(shift=0.05, market=0.60))
+    reference = _loaded(tmp_path, "ref", _season_predictions(market=0.55))
+    market_run = _loaded(tmp_path, "close", _market_predictions() if market is None else market)
+    return run_comparison.compare_runs([candidate], [reference], resamples=50, market=market_run)
+
+
+def test_a_market_run_supplies_every_runs_market_by_game_id(tmp_path: Path) -> None:
+    """Each run's market Brier and det - market Brier use the market run's value per game.
+
+    The market is scored on each run's own result: the market run's revised result for one
+    week-1 game would change the week-1 market Brier.
+    """
+    report = _market_comparison(tmp_path)
+
+    outcome = _season_predictions().set_index("game_id")["actual_home_win"]
+    market_brier = {
+        game_id: (MARKET_FROM[game_id] - outcome[game_id]) ** 2 for game_id in outcome.index
+    }
+    week1 = [game_id for game_id, _, week, *_ in SEASON_GAMES if week == 1]
+    games_2024 = [game_id for game_id, season, *_ in SEASON_GAMES if season == 2024]
+    expected = float(np.mean([market_brier[game_id] for game_id in week1]))
+    for label in ("cand", "ref"):
+        row = report["windows"]["week 1"]["runs"][label]
+        assert row["market_brier"] == pytest.approx(expected)
+        assert row["det_minus_market_brier"][0] == pytest.approx(row["brier"] - expected)
+        season = report["windows"]["all weeks"]["seasons"]["2024"]["runs"][label]
+        assert season["market_brier"] == pytest.approx(
+            np.mean([market_brier[game_id] for game_id in games_2024])
+        )
+    assert report["market_view_identical"] is True
+
+
+def test_a_market_run_leaves_the_model_columns_alone(tmp_path: Path) -> None:
+    """Only the market view changes: the run metrics and paired contrasts stay as they were."""
+    with_market = _market_comparison(tmp_path / "with")
+    candidate = _loaded(tmp_path, "cand", _season_predictions(shift=0.05, market=0.60))
+    reference = _loaded(tmp_path, "ref", _season_predictions(market=0.55))
+    own = run_comparison.compare_runs([candidate], [reference], resamples=50)
+
+    assert own["market_view_identical"] is False
+    for label, window in own["windows"].items():
+        assert with_market["windows"][label]["contrast"] == window["contrast"]
+        for run_label, row in window["runs"].items():
+            changed = with_market["windows"][label]["runs"][run_label]
+            for column in (*run_comparison.LOSS_COLUMNS, "pool"):
+                assert changed[column] == row[column]
+
+
+def test_a_market_run_is_recorded_as_the_market_source(tmp_path: Path) -> None:
+    """The report names the market run and its provenance, and the Markdown says so."""
+    report = _market_comparison(tmp_path)
+
+    source = report["market_source"]
+    assert source["run"] == "close"
+    assert source["provenance"]["games"] == len(SEASON_GAMES) + 1
+    lines = run_comparison.format_report(report)
+    market_line = next(line for line in lines if line.startswith("- market:"))
+    assert "close" in market_line
+    assert "game_id" in market_line
+    assert market_line.endswith(json.dumps(source["provenance"], default=str))
+
+
+def test_a_market_run_with_revised_results_is_counted_and_flagged(tmp_path: Path) -> None:
+    """A compared game whose result differs in the market run is counted and warned about."""
+    report = _market_comparison(tmp_path)
+
+    assert report["market_source"]["outcome_mismatches"] == 1
+    lines = run_comparison.format_report(report)
+    warning = [line for line in lines if line.startswith("- warning:")]
+    assert len(warning) == 1
+    assert "result differs on 1 compared game" in warning[0]
+
+
+def test_a_market_run_with_the_same_results_has_no_outcome_warning(tmp_path: Path) -> None:
+    """With every result the same, the count is zero and no warning is printed."""
+    market = _market_predictions()
+    revised = market["game_id"] == REVISED_GAME
+    market.loc[revised, "actual_home_win"] = 1 - market.loc[revised, "actual_home_win"]
+
+    report = _market_comparison(tmp_path, market)
+
+    assert report["market_source"]["outcome_mismatches"] == 0
+    lines = run_comparison.format_report(report)
+    assert not [line for line in lines if line.startswith("- warning:")]
+
+
+def test_a_market_run_replaces_the_market_of_every_seed_pair(tmp_path: Path) -> None:
+    """With two seed pairs, both candidates and both references use the market run's value."""
+    candidates = [
+        _loaded(tmp_path, "cand", _season_predictions(shift=0.05, market=0.60)),
+        _loaded(tmp_path, "cand_seed7", _season_predictions(shift=0.04, market=0.65)),
+    ]
+    references = [
+        _loaded(tmp_path, "ref", _season_predictions(market=0.55)),
+        _loaded(tmp_path, "ref_seed7", _season_predictions(shift=0.01, market=0.45)),
+    ]
+    market_run = _loaded(tmp_path, "close", _market_predictions())
+
+    report = run_comparison.compare_runs(candidates, references, resamples=20, market=market_run)
+
+    outcome = _season_predictions().set_index("game_id")["actual_home_win"]
+    expected = float(np.mean([(MARKET_FROM[g] - outcome[g]) ** 2 for g in outcome.index]))
+    runs = report["windows"]["all weeks"]["runs"]
+    assert set(runs) == {"cand", "cand_seed7", "ref", "ref_seed7"}
+    for label, row in runs.items():
+        assert row["market_brier"] == pytest.approx(expected), label
+    assert report["market_view_identical"] is True
+
+
+def test_a_market_run_missing_a_compared_game_is_rejected(tmp_path: Path) -> None:
+    """Every compared game needs the market run's value."""
+    market = _market_predictions()
+    market = market[market["game_id"] != "2024_02_b"]
+
+    with pytest.raises(ValueError, match="2024_02_b"):
+        _market_comparison(tmp_path, market)
+
+
+def test_a_market_run_with_a_null_market_is_rejected(tmp_path: Path) -> None:
+    """A compared game whose market value is missing in the market run is an error."""
+    market = _market_predictions()
+    market.loc[market["game_id"] == "2023_03_a", "market_home_win_prob"] = np.nan
+
+    with pytest.raises(ValueError, match="2023_03_a"):
+        _market_comparison(tmp_path, market)
+
+
+def test_a_market_run_with_repeated_games_is_rejected(tmp_path: Path) -> None:
+    """A market run that repeats a game cannot say which market value to use."""
+    candidate = _loaded(tmp_path, "cand", _season_predictions(shift=0.05))
+    reference = _loaded(tmp_path, "ref", _season_predictions())
+    loaded = _loaded(tmp_path, "close", _market_predictions())
+    repeated = run_comparison.LoadedRun(
+        loaded.run, pd.concat([loaded.games, loaded.games.iloc[[2]]], ignore_index=True)
+    )
+
+    with pytest.raises(ValueError, match="repeat"):
+        run_comparison.compare_runs([candidate], [reference], resamples=10, market=repeated)
+
+
+def test_the_command_scores_against_the_market_run(tmp_path: Path) -> None:
+    """``--market-from`` records the source; the market run gets no production section."""
+    market = _write_run(tmp_path, "close", _market_predictions(), 42)
+
+    code, lines, payload = _command_outputs(tmp_path, "--market-from", str(market))
+
+    assert code == 0
+    assert payload["market_source"]["run"] == "close"
+    assert payload["market_source"]["provenance"]["dataset_hash"] == "abc"
+    assert payload["market_source"]["provenance"]["git_commit"] == "0123456"
+    assert payload["market_view_identical"] is True
+    assert set(payload["settings_versus_production"]) == {"cand", "ref"}
+    assert any(line.startswith("- market:") and "close" in line for line in lines)
+    assert "### close" not in lines
+
+
+def test_the_command_exits_two_when_the_market_run_lacks_a_game(tmp_path: Path) -> None:
+    """A market run that misses a compared game is reported and the exit code is 2."""
+    market = _market_predictions()
+    market = market[market["game_id"] != "2023_01_a"]
+    market_dir = _write_run(tmp_path, "close", market, 42)
+
+    code, _, _ = _command_outputs(tmp_path, "--market-from", str(market_dir))
+
+    assert code == 2
+
+
+def test_the_command_rejects_a_repeated_market_run(tmp_path: Path) -> None:
+    """The market comes from one run: a second ``--market-from`` is a usage error."""
+    first = _write_run(tmp_path / "a", "close", _market_predictions(), 42)
+    second = _write_run(tmp_path / "b", "close7", _market_predictions(), 7)
+
+    with pytest.raises(SystemExit) as raised:
+        _command_outputs(tmp_path, "--market-from", str(first), "--market-from", str(second))
+
+    assert raised.value.code == 2

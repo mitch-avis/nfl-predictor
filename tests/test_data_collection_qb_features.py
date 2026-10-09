@@ -5,17 +5,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
+import pytest
 
 from nfl_predictor import constants, data_collection
+from nfl_predictor.ml import walk_forward
 from nfl_predictor.utils import polars_utils
+from nfl_predictor.utils.polars.finalize import build_final_column_order
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
 
-
-def _dropbacks(season: int, week: int, team: str, passer: str, count: int) -> list[dict[str, Any]]:
+def _dropbacks(
+    season: int, week: int, team: str, passer: str | None, count: int
+) -> list[dict[str, Any]]:
     """Return ``count`` completed-pass dropbacks by ``passer`` for ``team``."""
     return [
         {
@@ -47,6 +50,7 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Seasons missing from memory are loaded so career rates span the whole history."""
+    # Arrange
     in_memory = pl.DataFrame(
         _dropbacks(2001, 1, "NE", "TB", 20) + _dropbacks(2001, 1, "BUF", "JA", 12)
     )
@@ -71,6 +75,7 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
         }
     )
 
+    # Act
     out = data_collection._attach_qb_features(
         games,
         in_memory,
@@ -79,6 +84,7 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
         identity_path=_identity_file(tmp_path),
     )
 
+    # Assert
     assert requested == [list(range(constants.NFLREADPY_MIN_SEASON, 2001))]
     assert refreshed == [False], "history seasons always come from the cache"
     row = out.row(0, named=True)
@@ -92,6 +98,7 @@ def test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Without an explicit path, the identity map comes from ``DATA_PATH/meta_data.csv``."""
+    # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
     _identity_file(tmp_path)
@@ -108,10 +115,12 @@ def test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default(
         }
     )
 
+    # Act
     out = data_collection._attach_qb_features(
         games, in_memory, max_season=2001, current_season=2026
     )
 
+    # Assert
     row = out.row(0, named=True)
     assert row["away_qb_history_dropbacks"] == 20
     assert row["home_qb_history_dropbacks"] == 12
@@ -122,6 +131,7 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
 ) -> None:
     """Rows without quarterback columns come back unchanged and trigger no loading."""
 
+    # Arrange
     def fail_load_pbp(*_args: Any, **_kwargs: Any) -> pl.DataFrame:
         """Fail if play-by-play is requested."""
         msg = "load_pbp should not be called"
@@ -130,6 +140,7 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
     monkeypatch.setattr(polars_utils, "load_pbp", fail_load_pbp)
     games = pl.DataFrame({"game_id": ["g1"], "season": [2001], "week": [1]})
 
+    # Act
     out = data_collection._attach_qb_features(
         games,
         pl.DataFrame(),
@@ -138,4 +149,25 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
         identity_path=tmp_path / "missing.csv",
     )
 
+    # Assert
     assert out.equals(games)
+
+
+def test_final_schema_carries_no_defense_adjusted_quarterback_columns() -> None:
+    """A build publishes the per-dropback quarterback family and no defense-adjusted rate."""
+    # Act
+    order = build_final_column_order()
+
+    # Assert
+    assert "away_qb_dropback_epa" in order
+    assert [column for column in order if "def_adj" in column] == []
+
+
+def test_defense_adjusted_quarterback_group_is_not_a_feature_group() -> None:
+    """The retired defense-adjusted quarterback rate is no longer an ablation group."""
+    # Arrange
+    order = build_final_column_order()
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="Unknown feature group"):
+        walk_forward.resolve_feature_group_columns(order, ["qb_def_adj"])

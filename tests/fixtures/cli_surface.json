@@ -294,11 +294,25 @@
    "type": null
   },
   {
+   "action": "_StoreFalseAction",
+   "choices": null,
+   "default": true,
+   "dest": "include_market",
+   "help": "Train with no market feature column (no spread, total or moneyline, raw or transformed). With --no-market-anchor and --no-market-transform the run is market-free; the market-implied probability is still scored as the yardstick.",
+   "nargs": 0,
+   "options": [
+    "--exclude-market"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
    "action": "_StoreTrueAction",
    "choices": null,
    "default": false,
    "dest": "disable_pruning",
-   "help": "Disable the feature pruning list.",
+   "help": "Keep the columns on the feature pruning list (constants.PRUNED_FEATURE_COLUMNS, the next opponent's identity among them), which every run leaves out by default.",
    "nargs": 0,
    "options": [
     "--disable-pruning"
@@ -548,6 +562,20 @@
     "--reference"
    ],
    "required": true,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_AppendAction",
+   "choices": null,
+   "default": null,
+   "dest": "market_from",
+   "help": "Score every run's market Brier and det - market Brier against this run's market_home_win_prob, matched on game_id (a run or checkpoint directory, given once; it must cover every compared game). Default: each run's own rows.",
+   "nargs": null,
+   "options": [
+    "--market-from"
+   ],
+   "required": false,
    "subcommand": null,
    "type": "Path"
   },
@@ -1297,8 +1325,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": [
-    "models/step3_gpu_reference/l1_seed42",
-    "models/step3_gpu_reference/l2_seed7"
+    "models/step4_reference/adopted_seed42",
+    "models/step4_reference/adopted_seed7"
    ],
    "dest": "floor_sigma_reference_runs",
    "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the floor's sigma, which the saved model records; their checkpoints are only read. A missing run is an error; give no paths to train without them (the constant, recorded as the fallback).",
@@ -1741,6 +1769,20 @@
    "type": null
   },
   {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 4.0,
+   "dest": "strength_prior_blend_games",
+   "help": "K for the adjusted-strength prior blend, which weights the in-season solve games / (games + K): the game count at which the in-season solve and the prior are weighted equally (default 4).",
+   "nargs": null,
+   "options": [
+    "--strength-prior-blend-games"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
+  },
+  {
    "action": "BooleanOptionalAction",
    "choices": null,
    "default": true,
@@ -1798,6 +1840,23 @@
    "nargs": null,
    "options": [
     "--tr-stats-source"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": [
+    "stored",
+    "pick_time"
+   ],
+   "default": "pick_time",
+   "dest": "line_source",
+   "help": "Market line each game carries: the line known at pick time (pick_time, the default: nfelo's opener for completed games, its latest line for upcoming ones, the stored line where nfelo has no real opener) or the stored nflverse line (stored, a late, probably closing, snapshot).",
+   "nargs": null,
+   "options": [
+    "--line-source"
    ],
    "required": false,
    "subcommand": null,
@@ -2190,11 +2249,12 @@
    "choices": [
     "features",
     "anchor",
-    "hybrid"
+    "hybrid",
+    "none"
    ],
    "default": "hybrid",
    "dest": "wf_market_mode",
-   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, or both (hybrid).",
+   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (market-free: no market feature, no anchor and no market transform).",
    "nargs": null,
    "options": [
     "--wf-market-mode"
@@ -2378,8 +2438,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": [
-    "models/step3_gpu_reference/l1_seed42",
-    "models/step3_gpu_reference/l2_seed7"
+    "models/step4_reference/adopted_seed42",
+    "models/step4_reference/adopted_seed7"
    ],
    "dest": "floor_sigma_reference_runs",
    "help": "Walk-forward runs (run directories or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the probability floor's sigma, with stage 1's own folds; their checkpoints are only read. Several runs are averaged per game. A missing run is an error; give no paths to use only stage 1's folds (the constant until they span three earlier seasons, any weeks).",

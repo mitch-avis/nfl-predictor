@@ -114,8 +114,10 @@ def _run_week(week: int, team_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.Dat
 
 def test_every_scheduled_team_gets_a_row_including_teams_on_a_bye() -> None:
     """A bye team has no game row that week, but it still has a snapshot row."""
+    # Act
     games, snapshot = _run_week(2, _team_games())
 
+    # Assert
     assert games.height == 2
     assert snapshot.columns == constants.STRENGTH_SNAPSHOT_FILE_COLUMNS
     assert sorted(snapshot["team_abbr"].to_list()) == sorted(_STRENGTH)
@@ -134,17 +136,25 @@ def test_a_week_snapshot_never_reads_that_week_or_later(week: int) -> None:
     Covers both teams on a bye and teams that play that week: all of them are solved
     from earlier games only.
     """
+    # Arrange
     _, baseline = _run_week(week, _team_games())
+
+    # Act
     _, rewritten = _run_week(week, _team_games(scale_from=(2007, week), scale=8.0))
 
+    # Assert
     _assert_same_values(baseline, rewritten)
 
 
 def test_a_week_snapshot_moves_with_earlier_results() -> None:
     """The leakage check above would pass on a constant, so prove earlier weeks count."""
+    # Arrange
     _, baseline = _run_week(3, _team_games())
+
+    # Act
     _, rewritten = _run_week(3, _team_games(scale_from=(2007, 2), scale=8.0))
 
+    # Assert
     baseline_ccc = baseline.filter(pl.col("team_abbr") == "CCC")["adj_off_pass_epa_snap"].item()
     rewritten_ccc = rewritten.filter(pl.col("team_abbr") == "CCC")["adj_off_pass_epa_snap"].item()
     assert baseline_ccc != pytest.approx(rewritten_ccc)
@@ -152,8 +162,10 @@ def test_a_week_snapshot_moves_with_earlier_results() -> None:
 
 def test_snapshot_rows_equal_the_strength_features_on_the_game_rows() -> None:
     """The file and the model's features come from one solve, so they agree exactly."""
+    # Act
     games, snapshot = _run_week(3, _team_games())
 
+    # Assert
     by_team = {row["team_abbr"]: row for row in snapshot.iter_rows(named=True)}
     assert games.height == 2
     for game in games.iter_rows(named=True):
@@ -165,15 +177,19 @@ def test_snapshot_rows_equal_the_strength_features_on_the_game_rows() -> None:
 
 def test_the_home_field_term_is_one_league_wide_value_per_week() -> None:
     """The snapshot keeps the shared home-field term the game schema leaves out."""
+    # Act
     _, snapshot = _run_week(3, _team_games())
 
+    # Assert
     assert snapshot["adj_hfa"].n_unique() == 1
 
 
 def test_combining_no_snapshots_keeps_the_published_schema() -> None:
     """A run that solved nothing still writes a file with the documented columns."""
+    # Act
     combined = strength_table.combine_strength_snapshots([])
 
+    # Assert
     assert combined.height == 0
     assert combined.columns == constants.STRENGTH_SNAPSHOT_FILE_COLUMNS
     assert combined.schema["season"] == pl.Int64
@@ -184,11 +200,14 @@ def test_combining_no_snapshots_keeps_the_published_schema() -> None:
 
 def test_combined_snapshots_are_sorted_and_typed() -> None:
     """Combining the weekly frames yields one frame ordered by season, week and team."""
+    # Arrange
     _, week_three = _run_week(3, _team_games())
     _, week_two = _run_week(2, _team_games())
 
+    # Act
     combined = strength_table.combine_strength_snapshots([week_three, week_two])
 
+    # Assert
     assert combined.height == 12
     assert combined["week"].to_list() == [2] * 6 + [3] * 6
     assert combined.filter(pl.col("week") == 2)["team_abbr"].to_list() == sorted(_STRENGTH)
@@ -201,8 +220,10 @@ def test_process_season_records_every_week_plus_the_week_after_the_regular_seaso
     That week has no games until the playoff schedule is published, so the season adds
     it explicitly rather than leaving the last regular-season week unrankable.
     """
+    # Arrange
     sink: list[pl.DataFrame] = []
 
+    # Act
     data_collection.process_season(
         2007,
         _schedule(),
@@ -210,6 +231,7 @@ def test_process_season_records_every_week_plus_the_week_after_the_regular_seaso
         data_collection.SeasonInputs(min_season=2006, strength_snapshots=sink),
     )
 
+    # Assert
     after_regular_season = constants.get_regular_season_weeks(2007) + 1
     weeks = [frame["week"].unique().item() for frame in sink]
     assert weeks == [1, 2, 3, after_regular_season]
@@ -221,6 +243,7 @@ def test_process_season_records_every_week_plus_the_week_after_the_regular_seaso
 
 def test_process_season_does_not_duplicate_a_scheduled_postseason_week() -> None:
     """When the playoff week is already scheduled, its snapshot is recorded once."""
+    # Arrange
     after_regular_season = constants.get_regular_season_weeks(2007) + 1
     schedule = pl.concat(
         [
@@ -237,6 +260,7 @@ def test_process_season_does_not_duplicate_a_scheduled_postseason_week() -> None
     )
     sink: list[pl.DataFrame] = []
 
+    # Act
     data_collection.process_season(
         2007,
         schedule,
@@ -244,27 +268,39 @@ def test_process_season_does_not_duplicate_a_scheduled_postseason_week() -> None
         data_collection.SeasonInputs(min_season=2006, strength_snapshots=sink),
     )
 
+    # Assert
     weeks = [frame["week"].unique().item() for frame in sink]
     assert weeks.count(after_regular_season) == 1
 
 
 def test_process_season_without_a_sink_records_nothing() -> None:
     """Callers that do not ask for snapshots get the unchanged game rows only."""
+    # Arrange
     with_sink = data_collection.process_season(
         2007,
         _schedule(),
         _team_games(),
         data_collection.SeasonInputs(min_season=2006, strength_snapshots=[]),
     )
+
+    # Act
     without_sink = data_collection.process_season(
         2007, _schedule(), _team_games(), data_collection.SeasonInputs(min_season=2006)
     )
 
+    # Assert
     _assert_same_values(with_sink, without_sink)
 
 
-def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The ETL entry point saves the collected snapshots next to the game datasets."""
+def test_main_writes_the_strength_snapshot_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The ETL entry point saves the collected snapshots next to the game datasets.
+
+    The run writes into ``tmp_path``, so the line record it saves beside the datasets never
+    lands in the real data directory.
+    """
+    # Arrange
     snapshot = strength_table.combine_strength_snapshots([_run_week(2, _team_games())[1]])
     saved: dict[str, pl.DataFrame] = {}
 
@@ -273,9 +309,10 @@ def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch)
         *,
         config: data_collection.DataCollectionConfig,
         strength_snapshots: list[pl.DataFrame] | None = None,
+        market_lines_metadata: dict[str, object] | None = None,
     ) -> pl.DataFrame:
         """Record one weekly snapshot and return a tiny game frame."""
-        del config
+        del config, market_lines_metadata
         assert strength_snapshots is not None
         strength_snapshots.append(snapshot)
         return pl.DataFrame({"season": [2007], "week": [2]})
@@ -293,14 +330,20 @@ def test_main_writes_the_strength_snapshot_file(monkeypatch: pytest.MonkeyPatch)
         data_collection.polars_utils, "filter_upcoming_games", lambda df, *_args: df
     )
 
-    data_collection.main(["--min-season", "2006", "--max-season", "2007"])
+    # Act
+    data_collection.main(
+        ["--min-season", "2006", "--max-season", "2007", "--data-dir", str(tmp_path)]
+    )
 
+    # Assert
     assert constants.STRENGTH_SNAPSHOTS_NAME in saved
     assert_frame_equal(saved[constants.STRENGTH_SNAPSHOTS_NAME], snapshot)
+    assert (tmp_path / f"{constants.MARKET_LINES_METADATA_NAME}.json").is_file()
 
 
 def test_the_strength_prior_ablation_ignores_a_supplied_prior() -> None:
     """With the prior blend off, a week's snapshot is the raw in-season solve."""
+    # Arrange
     prior = pl.DataFrame(
         {
             "team_abbr": list(_STRENGTH),
@@ -327,6 +370,133 @@ def test_the_strength_prior_ablation_ignores_a_supplied_prior() -> None:
     raw = strength_snapshot.build_strength_snapshot(
         _team_games(), season=2007, week=2, teams=list(_STRENGTH)
     )
+    blended = week_two_snapshot(blend=True)
 
-    _assert_same_values(week_two_snapshot(blend=False), raw)
-    assert not week_two_snapshot(blend=True).equals(raw)
+    # Act
+    ablated = week_two_snapshot(blend=False)
+
+    # Assert
+    _assert_same_values(ablated, raw)
+    assert not blended.equals(raw)
+
+
+def _prior_snapshot() -> pl.DataFrame:
+    """Return a previous-season snapshot far from the in-season solve, so K shows."""
+    return pl.DataFrame(
+        {
+            "team_abbr": list(_STRENGTH),
+            **{column: [5.0] * len(_STRENGTH) for column in constants.STRENGTH_SNAPSHOT_STATS},
+        }
+    )
+
+
+def _week_with_blend_games(week: int, blend_games: float) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Run one 2007 week at a strength blend K; return its game rows and its snapshot."""
+    sink: list[pl.DataFrame] = []
+    games = week_rows.process_week(
+        2007,
+        week,
+        _schedule(),
+        _team_games(),
+        data_collection.SeasonInputs(
+            min_season=2006,
+            prior_strength_snapshot=_prior_snapshot(),
+            strength_prior_blend_games=blend_games,
+            strength_snapshots=sink,
+        ),
+    )
+    return games, sink[0]
+
+
+def test_the_strength_prior_blend_games_reach_the_week_snapshot() -> None:
+    """A week's recorded snapshot is the strength table solved at the chosen K."""
+    # Arrange
+    expected = strength_table.build_strength_table(
+        _team_games(),
+        _schedule(),
+        season=2007,
+        week=3,
+        prior=strength_snapshot.StrengthPrior(_prior_snapshot(), blend_games=2.0),
+    )
+    default = strength_table.build_strength_table(
+        _team_games(),
+        _schedule(),
+        season=2007,
+        week=3,
+        prior=strength_snapshot.StrengthPrior(_prior_snapshot()),
+    )
+
+    # Act
+    _, snapshot = _week_with_blend_games(3, 2.0)
+
+    # Assert
+    _assert_same_values(
+        snapshot.select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS),
+        expected.select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS),
+    )
+    assert not snapshot.select(constants.STRENGTH_SNAPSHOT_STATS).equals(
+        default.select(constants.STRENGTH_SNAPSHOT_STATS)
+    )
+
+
+def test_the_strength_prior_blend_games_move_only_the_strength_columns_of_game_rows() -> None:
+    """K moves the blended strength values on game rows and nothing outside that family."""
+    # Arrange
+    default, _ = _week_with_blend_games(3, constants.PRIOR_BLEND_GAMES)
+
+    # Act
+    tuned, _ = _week_with_blend_games(3, 2.0)
+
+    # Assert
+    changed = {
+        column
+        for column in default.columns
+        if not tuned.get_column(column).equals(default.get_column(column))
+    }
+    assert "away_adj_off_pass_epa_snap" in changed
+    assert all(
+        any(stat in column for stat in constants.ADJUSTED_STRENGTH_STATS) for column in changed
+    ), changed
+    # The count behind the solve is not blended, so K never touches it.
+    assert not any("strength_games_played" in column for column in changed)
+
+
+def test_process_season_blends_the_week_after_the_regular_season_at_the_chosen_games() -> None:
+    """The full-season snapshot added after the regular season uses the same K."""
+
+    # Arrange
+    def final_snapshot(blend_games: float) -> pl.DataFrame:
+        sink: list[pl.DataFrame] = []
+        data_collection.process_season(
+            2007,
+            _schedule(),
+            _team_games(),
+            data_collection.SeasonInputs(
+                min_season=2006,
+                strength_prior_blend_games=blend_games,
+                strength_snapshots=sink,
+            ),
+        )
+        return sink[-1]
+
+    after_regular_season = constants.get_regular_season_weeks(2007) + 1
+    prior = strength_table.build_prior_strength_snapshot(_team_games(), 2007, min_season=2006)
+    assert prior is not None
+    expected = strength_table.build_strength_table(
+        _team_games(),
+        _schedule(),
+        season=2007,
+        week=after_regular_season,
+        prior=strength_snapshot.StrengthPrior(prior, blend_games=2.0),
+    )
+    default = final_snapshot(constants.PRIOR_BLEND_GAMES)
+
+    # Act
+    tuned = final_snapshot(2.0)
+
+    # Assert
+    _assert_same_values(
+        tuned.select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS),
+        expected.select("team_abbr", *constants.STRENGTH_SNAPSHOT_STATS),
+    )
+    assert not tuned.equals(default)

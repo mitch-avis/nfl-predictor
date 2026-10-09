@@ -136,8 +136,9 @@ web/  package.json  vite.config.ts (proxy /api -> 127.0.0.1:8000)  components.js
 - `.gitignore`: `web/node_modules/`, `web/dist/`, `web/coverage/`, `web/*.tsbuildinfo`,
   `data/web/`.
 - `.github/workflows/validation.yml`: `uv sync` in the Python job; new `web` job
-  (`actions/setup-node@v6`, node 26, npm cache on `web/package-lock.json`, `npm ci`, `npm run
-  lint`, `npm run typecheck`, `npm test -- --run`, `npm run build`).
+  (`pnpm/action-setup`, `actions/setup-node@v6`, node 26, pnpm cache on `web/pnpm-lock.yaml`,
+  `pnpm install --frozen-lockfile`, `pnpm run lint`, `pnpm run typecheck`, `pnpm exec vitest run`,
+  `pnpm run build`).
 - `web/README.md` documents `source ~/.nvm/nvm.sh`, dev/build commands, and the backend command.
 
 ## API surface
@@ -300,8 +301,8 @@ Odds-provider adapter interface plus a `Live` blend
   `.venv/bin/pyright .`, `.venv/bin/ty check .`, `.venv/bin/python -m pytest` (coverage >= 90),
   `markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#web/node_modules"`,
   `uv lock --check`, `uv sync --check --active`.
-- Frontend: `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build`; OpenAPI
-  type drift check (`npm run gen:api` regenerates `src/api/schema.d.ts`; CI diffs it).
+- Frontend: `pnpm run lint`, `pnpm run typecheck`, `pnpm exec vitest run`, `pnpm run build`;
+  OpenAPI type drift check (`pnpm run gen:api` regenerates `src/api/schema.d.ts`; CI diffs it).
 - End to end: build `web/`, start `.venv/bin/python -m nfl_predictor.api`, log in as the
   bootstrap admin, activate `models/weekly_2025_week_22`, and check every page on desktop and at
   400px width; run `validate_offline` and `lines_refresh` from the Jobs page and watch logs stream.

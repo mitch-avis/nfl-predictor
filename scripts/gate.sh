@@ -7,8 +7,9 @@
 # Usage:
 #   scripts/gate.sh          Python gate: lock, sync, ruff format, ruff, ty, pyright, pytest,
 #                            markdownlint, CLI help smoke checks.
-#   scripts/gate.sh --web    Also run the frontend gate in web/ (npm ci, lint, typecheck,
-#                            vitest, build); needs nvm and the Node version CI uses.
+#   scripts/gate.sh --web    Also run the frontend gate in web/ (pnpm install --frozen-lockfile,
+#                            lint, typecheck, vitest, build); needs nvm, the Node version CI
+#                            uses, and pnpm on PATH.
 #   scripts/gate.sh --quick  Skip pytest and the frontend gate (static checks only).
 #
 # Exit status is 0 only when every selected step passed. No chunk of work is "done" until this
@@ -26,7 +27,7 @@ for arg in "$@"; do
         --web) RUN_WEB=1 ;;
         --quick) RUN_TESTS=0 ;;
         -h | --help)
-            sed -n '2,15p' "$0"
+            sed -n '2,16p' "$0"
             exit 0
             ;;
         *)
@@ -93,13 +94,17 @@ print("\n".join(command.name for command in COMMANDS))')" || return 1
 web_step() {
     # shellcheck disable=SC1091
     [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
+    command -v pnpm >/dev/null || {
+        echo "gate: pnpm not found on PATH; the frontend uses pnpm (web/pnpm-lock.yaml)" >&2
+        return 1
+    }
     (
         cd web &&
-            npm ci --no-audit --no-fund &&
-            npm run lint &&
-            npm run typecheck &&
-            npx vitest run &&
-            npm run build
+            pnpm install --frozen-lockfile &&
+            pnpm run lint &&
+            pnpm run typecheck &&
+            pnpm exec vitest run &&
+            pnpm run build
     )
 }
 

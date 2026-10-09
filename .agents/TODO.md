@@ -35,7 +35,8 @@ For each task:
    are for iteration only.
 6. **Update docs** where behavior changes (README/AGENTS), and update TODO/ARCHIVE. Add a
    `CHANGELOG.md` entry as each task or sizable chunk lands, under a new incremented version
-   (never `[Unreleased]`), set `pyproject.toml` to that version, and run `uv lock` and `uv sync`.
+   (never `[Unreleased]`), set `pyproject.toml` to that version, and run `uv lock` and
+   `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`.
    Never create a git tag or GitHub release (see `AGENTS.md`).
 7. **Commit** (when asked) with Conventional Commits subjects, `type(scope): summary`, per
    `AGENTS.md`.
@@ -106,9 +107,11 @@ diagnostic-only), task 56.4 (calibration window across the season boundary), Mil
 2026-09-19 with two narrowed parts reopened under "From Milestone 59" below and task 55.7), and
 the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
-Order agreed with the user on 2026-09-24, replacing the 2026-09-21 and 2026-09-23 orders. There
-is no deadline: every step runs to satisfactory completion, including its reviews, before the
-next starts. Expect roughly two to three weeks, then the web UI (Milestone 58, phases 4-6).
+Order agreed with the user on 2026-09-24 and extended on 2026-10-08 (steps 5 and 6 added: the
+market-free baseline and absorbing `nfl-sos-ratings`; the Optuna re-tune moved to step 7, after
+the features settle; the web UI's remaining phases joined step 6). There is no deadline: every
+step runs to satisfactory completion, including its reviews, before the next starts. Step 6 is
+the largest workstream so far, several weeks of sessions.
 
 Why this order (the ordering principles, agreed with the user):
 
@@ -180,10 +183,66 @@ Steps:
    defense-adjusted quarterback rate (53.7), the pick-time market line (56.6, plan agreed
    2026-10-01), and the follow-ups marked "(step 4)". Each ETL rebuild
    is must-ask; each adoption decision uses two seeds. This is the largest step.
-5. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
+   Finishing it (approved by the user 2026-10-08, after the measurement arms in
+   `models/step4/`): one code chunk applies the decisions of 2026-10-02 (the defense-adjusted
+   quarterback columns and the next-opponent identity pair leave the model, pick-time lines
+   become the default line source, `nfl-predictor lines` follows the line source) and adds a
+   `market` feature group so a model can train without any market column; then the
+   adopted-settings reference build (cold, full history, scratch tree) and its two GPU
+   walk-forwards (seeds `42` and `7`), an independent review, the weekly run pointed at the new
+   reference for the floor's sigma, and the merge into `main`. The strength-blend `K` question
+   is superseded by the preseason prior of `nfl-sos-ratings` (step 6); the season-to-date stat
+   blend keeps `K = 4` (no arm separated `2`, `4` and `8`).
+   Narrowed (`0.44.0`): the market-free option landed as flags (`backtest --exclude-market
+   --no-market-anchor --no-market-transform`, weekly `--wf-market-mode none`) instead of a
+   `market` feature group, because a disabled group's columns are dropped before the market
+   yardstick and the anchor read them, so a group would also remove the yardstick. Every
+   line-derived column still leaves the model (generated inventory in `.agents/market_free/`).
+   On the user's question list 2026-10-09. The user also chose (2026-10-09) to measure two
+   market-free variants: without betting-line columns, and without them and the Elo columns
+   (whose preseason values `../nfeloqb` pulls toward betting win totals), via a new `elo`
+   feature group.
+5. **Market-free baseline** (approved 2026-10-08; same code and build as the adopted-settings
+   reference). GPU walk-forwards with no market column, no anchoring and no market transform,
+   scored against the reference, the pick-time line, the closing line and QB Elo (partly
+   market-informed: its preseason Elo is pulled toward betting win totals). It measures what the
+   data pipeline is worth without the betting line, and it is the test bench for the ported
+   ratings in step 6, whose value an anchored model hides. No default changes from it. Done
+   2026-10-09 in both variants the user chose (without betting-line columns; without them and the
+   Elo columns), two seeds each, reviewed (`models/step4_reference/REVIEW.md`; numbers in
+   `.agents/benchmarks.md`). Open with the user: which variant is step 6's test bench.
+6. **Absorb `nfl-sos-ratings` into this repo** (approved 2026-10-08: absorb fully; that repo
+   finishes its in-flight work, the port starts from a frozen commit of it, and it then becomes
+   read-only). The frozen commit is `9081bce` (2026-10-09); it, what changed there since this
+   plan, and what is still open or fragile there are in `.agents/sos_port_source.md`. Each phase
+   on its own branch, with an independent review:
+   1. a scripted inventory (rule 10) of its data sources, metric registry columns, ratings,
+      outputs and web pages against this repo's, plus a check that this repo's play-by-play
+      aggregates match its game logs for the same seasons;
+   2. the nflverse sources it uses and this repo lacks (weekly player stats, snap counts, players
+      and rosters for quarterback identity; ESPN QBR as a validation reference only), with the
+      cache-then-degrade pattern;
+   3. its team ratings (points per game against an average team, offense, defense and special
+      teams, the cross-validated ridge penalty, the preseason prior inside the fit, the
+      head-to-head-excluded `sos` refit), quarterback ratings, weekly histories and rank ranges,
+      with tests that match its published outputs; this replaces the current strength snapshot
+      and the defense-adjusted quarterback rate;
+   4. the ported ratings as model features, measured anchored and market-free against the
+      adopted-settings reference;
+   5. power rankings and projected standings on the ported ratings combined with the trained
+      model (the user's direction 2026-10-08; how to combine them is decided by measurement:
+      each candidate ranking predicts next week's margins, scored like the `nfl-sos-ratings`
+      validation);
+   6. its web pages (teams, quarterbacks, schedules, rank ranges, head-to-head) folded into this
+      app, together with Milestone 58 phases 4-6.
+   Feature ideas to evaluate after phase 4, each a measured arm (raised by the user 2026-10-08,
+   not yet approved): the referee crew (nflverse `referee` since 1999, full crews in
+   `load_officials`), game-day weather (temperature and wind for outdoor games), attendance, and
+   team health (nflverse injury reports since 2009). Each needs a pick-time check: what is known
+   before Thursday for an upcoming game.
+7. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
    three prerequisites first, then the study, a six-season confirmation on two seeds, and 56.3
    (wiring the chosen settings into the weekly run and the benchmark, one shared source).
-6. **Web UI, Milestone 58 phases 4-6**, on a base that Milestone 60 has already settled.
 
 Retired by the user on 2026-09-24: tasks 55.1 and 55.2 (a general configuration-sweep runner). A
 runner that tries many settings and keeps the best is the selection bias that broke the weekly
@@ -271,9 +330,14 @@ follow-ups below.
       last-8 windows) so it lands next to the existing rates and is measured the same way. The
       quarterback-game rows already carry `opponent_abbr` for this. Only if that shows signal,
       the ridge: dropback-weighted quarterback effects solved jointly with defenses (design in
-      `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`). Ceiling to keep in mind:
-      the team-level `adj_off_pass_epa` is already opponent-adjusted, so the gain is confined to
-      where the quarterback's history diverges from the team's (new and traded starters).
+      `nfl-sos-ratings` `qb_rating.fit_qb_ratings` on its shared `ridge.py` solver). Ceiling to
+      keep in mind: the team-level `adj_off_pass_epa` is already opponent-adjusted, so the gain
+      is confined to where the quarterback's history diverges from the team's (new and traded
+      starters).
+      Progress: the first step (`0.40.0`-`0.41.0`) tied the current-settings baseline in the
+      defense-adjusted quarterback test (`models/step4/REVIEW.md`); the user dropped it
+      (2026-10-02) and it was removed in `0.44.0`. The ridge form is no longer built here: it is
+      the `nfl-sos-ratings` quarterback rating, ported in roadmap step 6, phase 3.
 
 2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`--run-id
 weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too late (~18:04 MDT)
@@ -418,6 +482,19 @@ Formerly Milestone 41.
         hypothesis and decision rule written first. Reported accuracy is expected to get honestly
         worse; the question is whether picks at pick time improve. Adopting it is a default change
         (must-ask); a training start in 2007 is tested only if the fallback seasons look harmful.
+      Narrowed (`0.42.0`, the code half; the measurement is Phase B of `.agents/step4_plan.md`):
+      the map is fitted per season on strictly earlier seasons' prices instead of once on
+      2007-2025 (no later market conventions in earlier features; prices move by at most 0.022
+      probability, mostly under 0.01; seasons up to 2006 keep the fixed conversion), and it
+      applies only under `pick_time`, because `stored` must stay byte-identical. The user
+      accepted both on 2026-10-02 (production is identical either way; the expanding fit keeps
+      the backtest to information available before each season). The closing-line yardstick for
+      a pick-time run is `nfl-predictor compare --market-from` (`0.42.1`).
+      - Done in `0.44.0`: `nfl-predictor lines` (`lines_refresh.py`, also a web job) follows the
+        line source the data was built with (`market_lines_metadata.json`); before, on a
+        pick-time `data/` it silently reverted upcoming games to stored lines (found by the 56.6
+        review, 2026-10-01). Phase B builds run from scratch tree copies,
+        because the nfelo cache follows `DATA_PATH`, not `--data-dir`.
 
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.
@@ -448,8 +525,8 @@ rebuilding only when needed (README, "Recommended: uv project workflow").
       `manylinux_2_27`, `scikit-build-core 1.0.3`) and once after a version-bump sync that passed
       the flags. Two clean scratch builds (`~/scratch/lgb_diag/`) passed `-DUSE_CUDA=ON` and
       trained on the GPU, and the flip did not reproduce there, so the cause is unknown. Known:
-      a `uv sync` without `nfl-lightgbm-cuda-install uv-args` (the "plain `uv sync`" after a
-      version bump in `AGENTS.md`) swaps the CUDA build for the CPU wheel by design. Since
+      a `uv sync` without `nfl-lightgbm-cuda-install uv-args` swaps the CUDA build for the CPU
+      wheel by design. Since
       `0.39.2` a failed CUDA build only warns in `update_requirements.sh`.
 
 Device check, 2026-09-24 (`.agents/m57/lightgbm_device_check.py`, output beside it in
@@ -507,15 +584,22 @@ Each group names the archived milestone it came from; the milestone's full recor
 
 ### From the step-3 merge test (2026-09-28)
 
+- [ ] (low priority) `reporting/power_rankings.py` `_load_current_records` groups with `group_by`
+      without `maintain_order`, so its row order changes between runs (content and rankings are
+      identical; found by the `0.37.2` review). The `0.37.3` determinism guard covers only the ETL
+      modules. Add `maintain_order=True` (or sort) so "identical output" checks on rankings are
+      not noisy.
 - [ ] (low priority) `load_schedule` has no current-season fallback: unlike team stats and
       play-by-play, a failed refetch of the current season's schedule (a network error or an
       nflverse outage) fails the whole ETL. Found by the `0.38.2` review; pre-existing. If it is
       fixed, the fallback to the cached current-season schedule must log a loud warning, because
       that copy can hold stale lines and miss games scheduled since.
-- [ ] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
+- [x] (step 4) The `*_next_opponent_abbr` pair enters the model as 32 one-hot columns each (the
       lookahead family); the trees split on them rarely (`importance_aggregation.py`), and
       `*_next_opponent_win_pct` already carries the next opponent's strength. Measure dropping
-      the identity pair (on/off, two seeds) with the other feature-value changes.
+      the identity pair (on/off, two seeds) with the other feature-value changes. Measured in the
+      next-opponent identity test (a tie, `models/step4/REVIEW.md`); dropped from the model by
+      the user (2026-10-02) and pruned by default in `0.44.0`. The ETL still writes the pair.
 - [ ] (step 4, with task 55.3) The early-season strength snapshot, which drives the default power
       rankings and the `adj_*` model features, is dominated by last season. At 2026 snapshot week
       3 (two games per team) the published composite correlates far more with the regressed 2025

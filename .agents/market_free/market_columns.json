@@ -1,5 +1,5 @@
 {
-  "build_columns": 519,
+  "build_columns": 513,
   "checks": {
     "build_lines_are_the_five_line_columns": true,
     "build_market_named_columns_are_the_lines": true,
@@ -10,9 +10,9 @@
     "no_published_non_line_column_written_from_the_lines": true,
     "schema_market_named_columns_are_the_lines": true
   },
-  "completed_games": 7325,
-  "data_path": "/home/mitch/workspace/nfl-predictor/data/completed_games_ml.csv",
-  "data_sha256": "e43fa5c010cee71db5b92e135409821a0058f5c5dc024c85862b0fb2ffbbfecf",
+  "completed_games": 7261,
+  "data_path": "/home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted.csv",
+  "data_sha256": "855a908861e0fa7a5a76acf3c39acda16a31ab31984429a6a6fa8bf9612703de",
   "etl_call_sites": [
     {
       "function": "<module>",
@@ -689,7 +689,7 @@
   "exclusion": {
     "(default: market features, transformed)": {
       "disabled_feature_groups": [],
-      "feature_columns": 466,
+      "feature_columns": 460,
       "include_market": true,
       "inventory_columns_in_features": [
         "away_market_prob",
@@ -721,7 +721,7 @@
     },
     "--exclude-market": {
       "disabled_feature_groups": [],
-      "feature_columns": 462,
+      "feature_columns": 456,
       "include_market": false,
       "inventory_columns_in_features": [],
       "market_informed_columns_in_features": [
@@ -748,7 +748,7 @@
     },
     "--exclude-market --no-market-transform": {
       "disabled_feature_groups": [],
-      "feature_columns": 462,
+      "feature_columns": 456,
       "include_market": false,
       "inventory_columns_in_features": [],
       "market_informed_columns_in_features": [
@@ -777,7 +777,7 @@
       "disabled_feature_groups": [
         "elo"
       ],
-      "feature_columns": 444,
+      "feature_columns": 438,
       "include_market": false,
       "inventory_columns_in_features": [],
       "market_informed_columns_in_features": [],
@@ -785,7 +785,7 @@
     }
   },
   "feature_range": {
-    "columns": 501,
+    "columns": 495,
     "end": "home_moneyline",
     "start": "away_rest"
   },
@@ -980,79 +980,79 @@
   "published_non_line_columns_written_from_lines": [],
   "top_spread_correlations": [
     {
-      "abs_corr": 0.8758,
+      "abs_corr": 0.8885,
       "column": "qb_elo_pre_diff",
-      "games": 7325
+      "games": 7261
     },
     {
-      "abs_corr": 0.8547,
+      "abs_corr": 0.8707,
       "column": "elo_pre_diff",
-      "games": 7325
+      "games": 7261
     },
     {
-      "abs_corr": 0.8503,
+      "abs_corr": 0.8564,
       "column": "predictive_rating_diff",
-      "games": 6280
+      "games": 6216
     },
     {
-      "abs_corr": 0.8461,
+      "abs_corr": 0.8515,
       "column": "adj_strength_composite_diff",
-      "games": 7321
+      "games": 7257
     },
     {
-      "abs_corr": 0.8398,
+      "abs_corr": 0.8475,
       "column": "scoring_margin_diff",
-      "games": 7323
+      "games": 7259
     },
     {
-      "abs_corr": 0.8306,
+      "abs_corr": 0.8344,
       "column": "epa_margin_per_play_diff",
-      "games": 7321
+      "games": 7257
     },
     {
-      "abs_corr": 0.8111,
+      "abs_corr": 0.8181,
       "column": "adj_srs_diff",
-      "games": 7323
+      "games": 7259
     },
     {
-      "abs_corr": 0.7914,
+      "abs_corr": 0.7983,
       "column": "points_per_play_margin_diff",
-      "games": 7323
+      "games": 7259
     },
     {
-      "abs_corr": 0.7507,
+      "abs_corr": 0.7561,
       "column": "last_10_games_rating_diff",
-      "games": 6280
+      "games": 6216
     },
     {
-      "abs_corr": 0.7462,
+      "abs_corr": 0.7548,
       "column": "points_scored_diff",
-      "games": 7323
+      "games": 7259
     },
     {
-      "abs_corr": 0.7139,
-      "column": "last_5_games_rating_diff",
-      "games": 6280
-    },
-    {
-      "abs_corr": 0.7118,
+      "abs_corr": 0.7197,
       "column": "points_per_play_diff",
-      "games": 7323
+      "games": 7259
     },
     {
-      "abs_corr": 0.706,
+      "abs_corr": 0.7176,
       "column": "adj_off_pass_epa_snap_diff",
-      "games": 7321
+      "games": 7257
     },
     {
-      "abs_corr": 0.7016,
+      "abs_corr": 0.7158,
+      "column": "last_5_games_rating_diff",
+      "games": 6216
+    },
+    {
+      "abs_corr": 0.7116,
       "column": "off_pass_epa_per_snap_diff",
-      "games": 7321
+      "games": 7257
     },
     {
-      "abs_corr": 0.7003,
+      "abs_corr": 0.7101,
       "column": "epa_per_dropback_diff",
-      "games": 7321
+      "games": 7257
     }
   ],
   "training_time_transforms": [

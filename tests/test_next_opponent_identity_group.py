@@ -89,30 +89,45 @@ def _feature_matrix(frame: pd.DataFrame) -> pd.DataFrame:
 
 def test_group_resolves_to_exactly_the_next_opponent_pair() -> None:
     """The group names the two identity columns of the published schema and nothing else."""
+    # Arrange
     order = build_final_column_order()
 
-    assert walk_forward.resolve_feature_group_columns(order, [GROUP]) == PAIR
+    # Act
+    resolved = walk_forward.resolve_feature_group_columns(order, [GROUP])
+
+    # Assert
+    assert resolved == PAIR
     for column in ("away_next_opponent_win_pct", "home_next_opponent_win_pct"):
         assert column in order
 
 
 def test_group_is_disjoint_from_every_other_group() -> None:
     """No other ablation group drops either identity column."""
+    # Arrange
     order = build_final_column_order()
+    others = [group for group in constants.FEATURE_GROUP_COLUMN_MARKERS if group != GROUP]
 
-    for other in constants.FEATURE_GROUP_COLUMN_MARKERS:
-        if other != GROUP:
-            assert not set(walk_forward.resolve_feature_group_columns(order, [other])) & set(PAIR)
+    # Act
+    overlaps = {
+        other: set(walk_forward.resolve_feature_group_columns(order, [other])) & set(PAIR)
+        for other in others
+    }
+
+    # Assert
+    assert {other: overlap for other, overlap in overlaps.items() if overlap} == {}
 
 
 def test_feature_matrix_is_unchanged_when_the_group_is_not_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """With no group disabled, the run fits on exactly the matrix the full frame gives."""
+    # Arrange
     frame = _schema_frame()
 
+    # Act
     after = _frame_after_group_drop(monkeypatch, frame, ())
 
+    # Assert
     pd.testing.assert_frame_equal(after, frame)
     pd.testing.assert_frame_equal(_feature_matrix(after), _feature_matrix(frame))
 
@@ -121,12 +136,15 @@ def test_disabling_the_group_removes_only_the_pair_and_its_one_hot_columns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Disabled, the group takes out the pair's encoded columns and leaves the rest identical."""
+    # Arrange
     frame = _schema_frame()
     full = _feature_matrix(frame)
 
+    # Act
     after = _frame_after_group_drop(monkeypatch, frame, (GROUP,))
     ablated = _feature_matrix(after)
 
+    # Assert
     assert set(frame.columns) - set(after.columns) == set(PAIR)
     removed = [name for name in full.columns if name not in set(ablated.columns)]
     pair_encodings = [name for name in full.columns if any(f"__{c}_" in name for c in PAIR)]

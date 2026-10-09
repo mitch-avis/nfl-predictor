@@ -788,11 +788,16 @@ ELO_COLUMNS = [
     "qb_elo_pre",
 ]
 
-TREND_FEATURE_COLUMNS = [
-    "last_5_games_rating_trend",
+# Four-week trends of the ELO_COLUMNS values (per team, and per quarterback for the QB ones).
+ELO_TREND_COLUMNS = [
     "elo_4wk_trend",
     "qb_elo_4wk_trend",
     "qb_value_4wk_trend",
+]
+
+TREND_FEATURE_COLUMNS = [
+    "last_5_games_rating_trend",
+    *ELO_TREND_COLUMNS,
     "scoring_margin_4wk_trend",
     "turnover_margin_4wk_trend",
 ]
@@ -906,6 +911,11 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     # The next opponent's team identity, one-hot encoded per side. The next opponent's
     # strength stays in the model through `*_next_opponent_win_pct`.
     "next_opponent_identity": ("next_opponent_abbr",),
+    # Every column built from `data/qb_elos.csv` (the `../nfeloqb` Elo file): the Elo values
+    # and their four-week trends. That Elo pulls each preseason rating toward one built from
+    # betting win totals, so the group is market-informed; a run with no market information
+    # disables it along with the market features.
+    "elo": (*ELO_COLUMNS, *ELO_TREND_COLUMNS),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
         "special_teams_tds",

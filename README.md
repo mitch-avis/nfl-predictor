@@ -1151,9 +1151,15 @@ feature values and the strength snapshot file behind the default power rankings,
 with two dataset builds. The quarterback family is the `qb` group (`--disable-feature-groups qb`).
 The rare-event noise family is the `rare_events` group (`special_teams_tds`, `def_fumbles`,
 `fumble_recovery_tds`, `2pt_conversions`, `def_safeties`, `def_tds`). The `next_opponent_identity`
-group drops only the `away_next_opponent_abbr` and `home_next_opponent_abbr` pair, which the model
-sees as one one-hot column per team on each side, and keeps the rest of the lookahead family,
-`*_next_opponent_win_pct` included. No group overlaps another.
+group drops only the `away_next_opponent_abbr` and `home_next_opponent_abbr` pair, which would
+reach the model as one one-hot column per team on each side, and keeps the rest of the lookahead
+family, `*_next_opponent_win_pct` included. No group overlaps another.
+
+The model leaves that pair out by default. It is on the pruning list
+(`constants.PRUNED_FEATURE_COLUMNS`, the known-weak columns every fit leaves out: `train`,
+`backtest` and the weekly run, and so the models `predict` loads), so a default run fits exactly
+the matrix that `--disable-feature-groups next_opponent_identity` gave before, and only the
+backtest's `--disable-pruning` brings the pair back. The ETL still writes both columns.
 
 ## Open work
 

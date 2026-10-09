@@ -294,11 +294,25 @@
    "type": null
   },
   {
+   "action": "_StoreFalseAction",
+   "choices": null,
+   "default": true,
+   "dest": "include_market",
+   "help": "Train with no market feature column (no spread, total or moneyline, raw or transformed). With --no-market-anchor and --no-market-transform the run is market-free; the market-implied probability is still scored as the yardstick.",
+   "nargs": 0,
+   "options": [
+    "--exclude-market"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": null
+  },
+  {
    "action": "_StoreTrueAction",
    "choices": null,
    "default": false,
    "dest": "disable_pruning",
-   "help": "Disable the feature pruning list.",
+   "help": "Keep the columns on the feature pruning list (constants.PRUNED_FEATURE_COLUMNS, the next opponent's identity among them), which every run leaves out by default.",
    "nargs": 0,
    "options": [
     "--disable-pruning"
@@ -1837,9 +1851,9 @@
     "stored",
     "pick_time"
    ],
-   "default": "stored",
+   "default": "pick_time",
    "dest": "line_source",
-   "help": "Market line each game carries: the stored nflverse line (default) or the line known at pick time (nfelo's opener for completed games, its latest line for upcoming ones, the stored line where nfelo has no real opener).",
+   "help": "Market line each game carries: the line known at pick time (pick_time, the default: nfelo's opener for completed games, its latest line for upcoming ones, the stored line where nfelo has no real opener) or the stored nflverse line (stored, a late, probably closing, snapshot).",
    "nargs": null,
    "options": [
     "--line-source"
@@ -2235,11 +2249,12 @@
    "choices": [
     "features",
     "anchor",
-    "hybrid"
+    "hybrid",
+    "none"
    ],
    "default": "hybrid",
    "dest": "wf_market_mode",
-   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, or both (hybrid).",
+   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (market-free: no market feature, no anchor and no market transform).",
    "nargs": null,
    "options": [
     "--wf-market-mode"

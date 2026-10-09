@@ -388,8 +388,10 @@ TEMPLATES: tuple[JobTemplate, ...] = (
         id="lines_refresh",
         label="Refresh market lines",
         description=(
-            "Re-read the schedule and update only the spread, total, and moneyline columns, "
-            "then re-predict the week with the active model."
+            "Re-read the season's market lines the way the data was built (nfelo's latest "
+            "line, then nflverse's, then SurvivorGrid's for a pick-time build; the nflverse "
+            "schedule for a stored one) and update only the spread, total, and moneyline "
+            "columns, then re-predict the week with the active model."
         ),
         category="Data",
         build=_build_lines_refresh,

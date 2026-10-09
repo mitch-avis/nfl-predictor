@@ -1,0 +1,1064 @@
+{
+  "build_columns": 519,
+  "checks": {
+    "build_lines_are_the_five_line_columns": true,
+    "build_market_named_columns_are_the_lines": true,
+    "elo_group_drops_exactly_the_elo_family": true,
+    "market_excluded_specs_carry_no_inventory_column": true,
+    "no_market_information_spec_carries_no_market_column": true,
+    "no_non_line_column_near_a_copy_of_the_spread": true,
+    "no_published_non_line_column_written_from_the_lines": true,
+    "schema_market_named_columns_are_the_lines": true
+  },
+  "completed_games": 7325,
+  "data_path": "/home/mitch/workspace/nfl-predictor/data/completed_games_ml.csv",
+  "data_sha256": "e43fa5c010cee71db5b92e135409821a0058f5c5dc024c85862b0fb2ffbbfecf",
+  "etl_call_sites": [
+    {
+      "function": "<module>",
+      "line": 38,
+      "name": "total_line",
+      "path": "src/nfl_predictor/lines_refresh.py"
+    },
+    {
+      "function": "<module>",
+      "line": 39,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/lines_refresh.py"
+    },
+    {
+      "function": "<module>",
+      "line": 40,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/lines_refresh.py"
+    },
+    {
+      "function": "<module>",
+      "line": 41,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/lines_refresh.py"
+    },
+    {
+      "function": "<module>",
+      "line": 42,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/lines_refresh.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 78,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 82,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 83,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 84,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 85,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 89,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 89,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 92,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 92,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 109,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 109,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 111,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 116,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 117,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 118,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 118,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 120,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 125,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_missing_moneylines",
+      "line": 126,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_future_game_lines",
+      "line": 353,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "fill_future_game_lines",
+      "line": 354,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_future_line_updates",
+      "line": 411,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 436,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 436,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 437,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 440,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 440,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 441,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 444,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 444,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 447,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 447,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "_apply_line_updates",
+      "line": 448,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/game_utils.py"
+    },
+    {
+      "function": "build_final_column_order",
+      "line": 109,
+      "name": "LINES_COLUMNS",
+      "path": "src/nfl_predictor/utils/polars/finalize.py"
+    },
+    {
+      "function": "_prepare_schedule",
+      "line": 320,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/polars/loaders.py"
+    },
+    {
+      "function": "_prepare_schedule",
+      "line": 321,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/polars/loaders.py"
+    },
+    {
+      "function": "_prepare_schedule",
+      "line": 321,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/loaders.py"
+    },
+    {
+      "function": "_schedule_requested_columns",
+      "line": 358,
+      "name": "spread_line",
+      "path": "src/nfl_predictor/utils/polars/loaders.py"
+    },
+    {
+      "function": "<module>",
+      "line": 32,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "<module>",
+      "line": 32,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "<module>",
+      "line": 32,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fit_spread_moneyline_map",
+      "line": 204,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fit_spread_moneyline_map",
+      "line": 205,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fit_spread_moneyline_map",
+      "line": 208,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 304,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 306,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 306,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 306,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps.derive",
+      "line": 313,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps.derive",
+      "line": 314,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 326,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 327,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 333,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 335,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 337,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "fill_moneylines_from_maps",
+      "line": 339,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/polars/moneyline_map.py"
+    },
+    {
+      "function": "<module>",
+      "line": 38,
+      "name": "home_spread_open",
+      "path": "src/nfl_predictor/utils/polars/nfelo_lines.py"
+    },
+    {
+      "function": "<module>",
+      "line": 39,
+      "name": "home_spread_last",
+      "path": "src/nfl_predictor/utils/polars/nfelo_lines.py"
+    },
+    {
+      "function": "<module>",
+      "line": 40,
+      "name": "total_line_open",
+      "path": "src/nfl_predictor/utils/polars/nfelo_lines.py"
+    },
+    {
+      "function": "<module>",
+      "line": 41,
+      "name": "total_line_last",
+      "path": "src/nfl_predictor/utils/polars/nfelo_lines.py"
+    },
+    {
+      "function": "<module>",
+      "line": 44,
+      "name": "home_ml_open",
+      "path": "src/nfl_predictor/utils/polars/nfelo_lines.py"
+    },
+    {
+      "function": "<module>",
+      "line": 45,
+      "name": "away_ml_open",
+      "path": "src/nfl_predictor/utils/polars/nfelo_lines.py"
+    },
+    {
+      "function": "<module>",
+      "line": 46,
+      "name": "home_ml_last",
+      "path": "src/nfl_predictor/utils/polars/nfelo_lines.py"
+    },
+    {
+      "function": "<module>",
+      "line": 47,
+      "name": "away_ml_last",
+      "path": "src/nfl_predictor/utils/polars/nfelo_lines.py"
+    },
+    {
+      "function": "<module>",
+      "line": 37,
+      "name": "LINES_COLUMNS",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "_sign_flip",
+      "line": 80,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 115,
+      "name": "home_spread_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 117,
+      "name": "home_spread_last",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 117,
+      "name": "home_spread_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 125,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 130,
+      "name": "home_spread_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 140,
+      "name": "home_spread_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 143,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 145,
+      "name": "away_ml_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 145,
+      "name": "home_ml_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 146,
+      "name": "away_ml_last",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 146,
+      "name": "home_ml_last",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 148,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 151,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 152,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 157,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 158,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 163,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 164,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 166,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 166,
+      "name": "total_line_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 168,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 168,
+      "name": "total_line_last",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 168,
+      "name": "total_line_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 169,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 170,
+      "name": "total_line",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "apply_pick_time_lines",
+      "line": 179,
+      "name": "total_line_open",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "PickTimeLines.fill_moneylines",
+      "line": 220,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "PickTimeLines.fill_moneylines",
+      "line": 223,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "PickTimeLines.fill_moneylines",
+      "line": 223,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/utils/polars/pick_time_lines.py"
+    },
+    {
+      "function": "validate_dataframe",
+      "line": 138,
+      "name": "LINES_COLUMNS",
+      "path": "src/nfl_predictor/utils/validation_utils.py"
+    },
+    {
+      "function": "<module>",
+      "line": 27,
+      "name": "total_line",
+      "path": "src/nfl_predictor/week_builder.py"
+    },
+    {
+      "function": "<module>",
+      "line": 28,
+      "name": "away_spread",
+      "path": "src/nfl_predictor/week_builder.py"
+    },
+    {
+      "function": "<module>",
+      "line": 29,
+      "name": "home_spread",
+      "path": "src/nfl_predictor/week_builder.py"
+    },
+    {
+      "function": "<module>",
+      "line": 30,
+      "name": "away_moneyline",
+      "path": "src/nfl_predictor/week_builder.py"
+    },
+    {
+      "function": "<module>",
+      "line": 31,
+      "name": "home_moneyline",
+      "path": "src/nfl_predictor/week_builder.py"
+    }
+  ],
+  "etl_columns_written_from_lines": {
+    "src/nfl_predictor/utils/game_utils.py:_apply_line_updates": [
+      "away_spread",
+      "home_spread",
+      "total_line"
+    ],
+    "src/nfl_predictor/utils/game_utils.py:fill_missing_moneylines": [
+      "away_moneyline",
+      "home_moneyline"
+    ],
+    "src/nfl_predictor/utils/polars/loaders.py:_prepare_schedule": [
+      "home_spread"
+    ],
+    "src/nfl_predictor/utils/polars/moneyline_map.py:fill_moneylines_from_maps": [
+      "__derived_moneylines",
+      "away_moneyline",
+      "home_moneyline"
+    ],
+    "src/nfl_predictor/utils/polars/moneyline_map.py:fit_spread_moneyline_map": [
+      "distance",
+      "favorite",
+      "underdog"
+    ],
+    "src/nfl_predictor/utils/polars/pick_time_lines.py:apply_pick_time_lines": [
+      "<_OPENER_FLIPS>",
+      "<_SOURCE>",
+      "<_UPCOMING_FLIPS>",
+      "away_moneyline",
+      "away_spread",
+      "home_moneyline",
+      "home_spread",
+      "opener_with_stored_total",
+      "total_line"
+    ]
+  },
+  "exclusion": {
+    "(default: market features, transformed)": {
+      "disabled_feature_groups": [],
+      "feature_columns": 466,
+      "include_market": true,
+      "inventory_columns_in_features": [
+        "away_market_prob",
+        "home_market_prob",
+        "market_home_margin",
+        "market_total_line"
+      ],
+      "market_informed_columns_in_features": [
+        "away_elo_4wk_trend",
+        "away_elo_pre",
+        "away_qb_elo_4wk_trend",
+        "away_qb_elo_pre",
+        "away_qb_value_4wk_trend",
+        "away_qb_value_pre",
+        "elo_4wk_trend_diff",
+        "elo_pre_diff",
+        "home_elo_4wk_trend",
+        "home_elo_pre",
+        "home_qb_elo_4wk_trend",
+        "home_qb_elo_pre",
+        "home_qb_value_4wk_trend",
+        "home_qb_value_pre",
+        "qb_elo_4wk_trend_diff",
+        "qb_elo_pre_diff",
+        "qb_value_4wk_trend_diff",
+        "qb_value_pre_diff"
+      ],
+      "market_transform": true
+    },
+    "--exclude-market": {
+      "disabled_feature_groups": [],
+      "feature_columns": 462,
+      "include_market": false,
+      "inventory_columns_in_features": [],
+      "market_informed_columns_in_features": [
+        "away_elo_4wk_trend",
+        "away_elo_pre",
+        "away_qb_elo_4wk_trend",
+        "away_qb_elo_pre",
+        "away_qb_value_4wk_trend",
+        "away_qb_value_pre",
+        "elo_4wk_trend_diff",
+        "elo_pre_diff",
+        "home_elo_4wk_trend",
+        "home_elo_pre",
+        "home_qb_elo_4wk_trend",
+        "home_qb_elo_pre",
+        "home_qb_value_4wk_trend",
+        "home_qb_value_pre",
+        "qb_elo_4wk_trend_diff",
+        "qb_elo_pre_diff",
+        "qb_value_4wk_trend_diff",
+        "qb_value_pre_diff"
+      ],
+      "market_transform": true
+    },
+    "--exclude-market --no-market-transform": {
+      "disabled_feature_groups": [],
+      "feature_columns": 462,
+      "include_market": false,
+      "inventory_columns_in_features": [],
+      "market_informed_columns_in_features": [
+        "away_elo_4wk_trend",
+        "away_elo_pre",
+        "away_qb_elo_4wk_trend",
+        "away_qb_elo_pre",
+        "away_qb_value_4wk_trend",
+        "away_qb_value_pre",
+        "elo_4wk_trend_diff",
+        "elo_pre_diff",
+        "home_elo_4wk_trend",
+        "home_elo_pre",
+        "home_qb_elo_4wk_trend",
+        "home_qb_elo_pre",
+        "home_qb_value_4wk_trend",
+        "home_qb_value_pre",
+        "qb_elo_4wk_trend_diff",
+        "qb_elo_pre_diff",
+        "qb_value_4wk_trend_diff",
+        "qb_value_pre_diff"
+      ],
+      "market_transform": false
+    },
+    "--exclude-market --no-market-transform --disable-feature-groups elo": {
+      "disabled_feature_groups": [
+        "elo"
+      ],
+      "feature_columns": 444,
+      "include_market": false,
+      "inventory_columns_in_features": [],
+      "market_informed_columns_in_features": [],
+      "market_transform": false
+    }
+  },
+  "feature_range": {
+    "columns": 501,
+    "end": "home_moneyline",
+    "start": "away_rest"
+  },
+  "indirect_market_inputs": {
+    "elo_family_columns_in_build": [
+      "away_elo_4wk_trend",
+      "away_elo_pre",
+      "away_qb_elo_4wk_trend",
+      "away_qb_elo_pre",
+      "away_qb_value_4wk_trend",
+      "away_qb_value_pre",
+      "home_elo_4wk_trend",
+      "home_elo_pre",
+      "home_qb_elo_4wk_trend",
+      "home_qb_elo_pre",
+      "home_qb_value_4wk_trend",
+      "home_qb_value_pre",
+      "elo_4wk_trend_diff",
+      "elo_pre_diff",
+      "qb_elo_4wk_trend_diff",
+      "qb_elo_pre_diff",
+      "qb_value_4wk_trend_diff",
+      "qb_value_pre_diff"
+    ],
+    "elo_group_columns": [
+      "away_elo_4wk_trend",
+      "away_elo_pre",
+      "away_qb_elo_4wk_trend",
+      "away_qb_elo_pre",
+      "away_qb_value_4wk_trend",
+      "away_qb_value_pre",
+      "elo_4wk_trend_diff",
+      "elo_pre_diff",
+      "home_elo_4wk_trend",
+      "home_elo_pre",
+      "home_qb_elo_4wk_trend",
+      "home_qb_elo_pre",
+      "home_qb_value_4wk_trend",
+      "home_qb_value_pre",
+      "qb_elo_4wk_trend_diff",
+      "qb_elo_pre_diff",
+      "qb_value_4wk_trend_diff",
+      "qb_value_pre_diff"
+    ],
+    "market_informed_columns": [
+      {
+        "column": "away_elo_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_elo_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_qb_elo_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_qb_elo_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_qb_value_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_qb_value_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_elo_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_elo_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_qb_elo_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_qb_elo_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_qb_value_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_qb_value_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "elo_4wk_trend_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "elo_pre_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "qb_elo_4wk_trend_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "qb_elo_pre_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "qb_value_4wk_trend_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "qb_value_pre_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      }
+    ],
+    "nfeloqb": {
+      "elo_source": "/home/mitch/workspace/nfeloqb/nfeloqb/Resources/elo.py",
+      "lines": [
+        "25: reg_vegas=0.66,",
+        "35: self.wt_ratings = pd.read_csv(f\"{data_folder}/Manual Data/wt_ratings.csv\")",
+        "41: self.reg_vegas = reg_vegas",
+        "133: temp = self.wt_ratings[",
+        "134: (self.wt_ratings[\"team\"] == team)",
+        "135: & (self.wt_ratings[\"season\"] == self.current_season)",
+        "138: new_elo = (new_elo * (1 - self.reg_vegas)) + (",
+        "139: temp.iloc[0][\"wt_rating_elo\"] * self.reg_vegas"
+      ],
+      "repository": "/home/mitch/workspace/nfeloqb",
+      "status": "read",
+      "win_totals_columns": [
+        "season",
+        "team",
+        "wt_rating",
+        "wt_rating_elo",
+        "sos",
+        "line",
+        "over_odds",
+        "under_odds",
+        "line_adj",
+        "team_nick",
+        "team_color",
+        "team_color2",
+        "team_logo_espn",
+        "over_probability",
+        "under_probability",
+        "hold"
+      ],
+      "win_totals_file": "/home/mitch/workspace/nfeloqb/nfeloqb/Manual Data/wt_ratings.csv",
+      "win_totals_rows": 672,
+      "win_totals_seasons": [
+        2003,
+        2023
+      ]
+    }
+  },
+  "inventory": [
+    "away_market_prob",
+    "away_moneyline",
+    "away_spread",
+    "home_market_prob",
+    "home_moneyline",
+    "home_spread",
+    "market_home_margin",
+    "market_total_line",
+    "total_line"
+  ],
+  "line_columns_in_build": [
+    "total_line",
+    "away_spread",
+    "home_spread",
+    "away_moneyline",
+    "home_moneyline"
+  ],
+  "market_named_columns_in_build": [
+    "total_line",
+    "away_spread",
+    "home_spread",
+    "away_moneyline",
+    "home_moneyline"
+  ],
+  "market_named_columns_in_schema": [
+    "total_line",
+    "away_spread",
+    "home_spread",
+    "away_moneyline",
+    "home_moneyline"
+  ],
+  "near_copies_of_the_spread": [],
+  "published_non_line_columns_written_from_lines": [],
+  "top_spread_correlations": [
+    {
+      "abs_corr": 0.8758,
+      "column": "qb_elo_pre_diff",
+      "games": 7325
+    },
+    {
+      "abs_corr": 0.8547,
+      "column": "elo_pre_diff",
+      "games": 7325
+    },
+    {
+      "abs_corr": 0.8503,
+      "column": "predictive_rating_diff",
+      "games": 6280
+    },
+    {
+      "abs_corr": 0.8461,
+      "column": "adj_strength_composite_diff",
+      "games": 7321
+    },
+    {
+      "abs_corr": 0.8398,
+      "column": "scoring_margin_diff",
+      "games": 7323
+    },
+    {
+      "abs_corr": 0.8306,
+      "column": "epa_margin_per_play_diff",
+      "games": 7321
+    },
+    {
+      "abs_corr": 0.8111,
+      "column": "adj_srs_diff",
+      "games": 7323
+    },
+    {
+      "abs_corr": 0.7914,
+      "column": "points_per_play_margin_diff",
+      "games": 7323
+    },
+    {
+      "abs_corr": 0.7507,
+      "column": "last_10_games_rating_diff",
+      "games": 6280
+    },
+    {
+      "abs_corr": 0.7462,
+      "column": "points_scored_diff",
+      "games": 7323
+    },
+    {
+      "abs_corr": 0.7139,
+      "column": "last_5_games_rating_diff",
+      "games": 6280
+    },
+    {
+      "abs_corr": 0.7118,
+      "column": "points_per_play_diff",
+      "games": 7323
+    },
+    {
+      "abs_corr": 0.706,
+      "column": "adj_off_pass_epa_snap_diff",
+      "games": 7321
+    },
+    {
+      "abs_corr": 0.7016,
+      "column": "off_pass_epa_per_snap_diff",
+      "games": 7321
+    },
+    {
+      "abs_corr": 0.7003,
+      "column": "epa_per_dropback_diff",
+      "games": 7321
+    }
+  ],
+  "training_time_transforms": [
+    "market_home_margin",
+    "market_total_line",
+    "home_market_prob",
+    "away_market_prob"
+  ]
+}

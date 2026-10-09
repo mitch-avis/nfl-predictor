@@ -68,6 +68,9 @@ DEFAULT_TOTAL_LINE = 45.6  # Average total score across 20+ seasons
 LINE_SOURCE_STORED = "stored"
 LINE_SOURCE_PICK_TIME = "pick_time"
 LINE_SOURCES = (LINE_SOURCE_STORED, LINE_SOURCE_PICK_TIME)
+# The line source of every build that does not name one: `nfl-predictor data`, the weekly run's
+# data refresh and the web ETL and weekly jobs.
+DEFAULT_LINE_SOURCE = LINE_SOURCE_PICK_TIME
 # nfelo's market-lines file (`greerreNFL/nfelomarket_data`), rewritten several times a day. The
 # latest good download is cached under NFELO_CACHE_DIR, and every copy a run used is kept there
 # under `snapshots/`, named by its SHA-256.
@@ -741,6 +744,11 @@ PRUNED_FEATURE_COLUMNS = [
     "home_conference_clinched_proxy",
     "away_conference_eliminated_proxy",
     "home_conference_eliminated_proxy",
+    # The next opponent's team identity, one-hot encoded per side (32 columns each): the trees
+    # split on it rarely, and `*_next_opponent_win_pct` carries the next opponent's strength.
+    # The ETL still publishes the pair.
+    "away_next_opponent_abbr",
+    "home_next_opponent_abbr",
 ]
 
 # Metadata columns - includes game info, teams, venue, and conditions
@@ -780,11 +788,16 @@ ELO_COLUMNS = [
     "qb_elo_pre",
 ]
 
-TREND_FEATURE_COLUMNS = [
-    "last_5_games_rating_trend",
+# Four-week trends of the ELO_COLUMNS values (per team, and per quarterback for the QB ones).
+ELO_TREND_COLUMNS = [
     "elo_4wk_trend",
     "qb_elo_4wk_trend",
     "qb_value_4wk_trend",
+]
+
+TREND_FEATURE_COLUMNS = [
+    "last_5_games_rating_trend",
+    *ELO_TREND_COLUMNS,
     "scoring_margin_4wk_trend",
     "turnover_margin_4wk_trend",
 ]
@@ -898,6 +911,11 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     # The next opponent's team identity, one-hot encoded per side. The next opponent's
     # strength stays in the model through `*_next_opponent_win_pct`.
     "next_opponent_identity": ("next_opponent_abbr",),
+    # Every column built from `data/qb_elos.csv` (the `../nfeloqb` Elo file): the Elo values
+    # and their four-week trends. That Elo pulls each preseason rating toward one built from
+    # betting win totals, so the group is market-informed; a run with no market information
+    # disables it along with the market features.
+    "elo": (*ELO_COLUMNS, *ELO_TREND_COLUMNS),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
         "special_teams_tds",
@@ -1092,34 +1110,6 @@ QB_PRIOR_DROPBACKS = 300
 
 # Quarterback games in the recent window (any teams, any seasons).
 QB_RECENT_GAMES = 8
-
-# Defense-adjusted quarterback EPA per dropback for the expected starter. Each earlier
-# quarterback game is credited with
-# `qb_epa_sum + dropbacks * adj_def_pass_epa_snap * snaps_per_dropback`, where the defense value
-# is the faced defense's pre-game strength snapshot for that game's week (solved from games
-# strictly before it), per offensive snap, and `snaps_per_dropback` is the league's offensive
-# snaps per dropback before that week (the previous season's in week 1), which makes it per
-# dropback. Then aggregated with the same QB_PRIOR_DROPBACKS shrinkage and windows as
-# `qb_dropback_epa`. Its own ablation group, disjoint from `qb`, `pbp` and `strength`.
-QB_DEF_ADJ_STATS = [
-    # Career defense-adjusted EPA per dropback, shrunk toward the league's adjusted rate.
-    "qb_def_adj_epa",
-    # The same over the last QB_RECENT_GAMES games, shrunk toward the career adjusted rate.
-    "qb_def_adj_epa_recent",
-]
-
-FEATURE_GROUP_COLUMN_MARKERS["qb_def_adj"] = tuple(QB_DEF_ADJ_STATS)
-
-# Every published column of the defense-adjusted group: per side, then the away-minus-home diff.
-QB_DEF_ADJ_FEATURE_COLUMNS = [
-    *[f"{side}_{stat}" for stat in QB_DEF_ADJ_STATS for side in ("away", "home")],
-    *[f"{stat}_diff" for stat in QB_DEF_ADJ_STATS],
-]
-
-# The strength-snapshot column that gives each faced defense's pre-game expectation, in pass EPA
-# per offensive snap. A higher value is a better defense, so a dropback against it is credited
-# with the value converted to EPA per dropback.
-QB_DEF_ADJ_SOURCE_STAT = "adj_def_pass_epa_snap"
 
 # Base name under DATA_PATH of the quarterback identity file, a read-only copy of
 # `../nfeloqb/Other Data/meta_data.csv` (`name_id` -> `gsis_id`, the play-by-play passer id).

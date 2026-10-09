@@ -39,36 +39,6 @@ Formulas, with ``K = constants.QB_PRIOR_DROPBACKS``:
 - ``qb_history_dropbacks``: career dropbacks, so the model can see how much evidence stands
   behind the rates. Null when the quarterback cannot be identified.
 
-Defense-adjusted rate (``constants.QB_DEF_ADJ_STATS``, its own ablation group), built only
-when the caller supplies the pre-week strength snapshots and the league's weekly snap counts
-(``DefenseInputs``):
-
-- Per quarterback game, ``qb_epa_def_adj_sum = qb_epa_sum - dropbacks * expected``, where the
-  expectation is the faced defense's EPA allowed per dropback relative to an average defense,
-  ``expected = -adj_def_pass_epa_snap * snaps_per_dropback``, read from that defense's
-  snapshot for the game's own week. A snapshot for week ``w`` is solved from games strictly
-  before ``w`` (with the documented previous-season prior early in a season), so the game
-  never informs its own expectation. A higher ``adj_def_pass_epa_snap`` is a better defense,
-  so each dropback against it is credited with the value.
-- Units: the snapshot's coefficient comes from the ridge response ``pass_epa_sum /
-  offensive_snaps`` (EPA on dropbacks over every scrimmage snap), so it is pass EPA per
-  offensive snap. ``snaps_per_dropback`` converts it to EPA per dropback: the league's
-  ``offensive_snaps / dropbacks`` over the regular-season games of the season strictly before
-  the game's week, or over the whole previous regular season for a week with no earlier game
-  that season (week 1). The counts use the team families' snap and dropback definitions
-  (``aggregate_league_snaps``), so they are the sums of the team-game counts the ridge is
-  solved on, and like the snapshot they never include the game's own week.
-- A defense with no snapshot row, a null value, or no league snaps to convert it with counts as
-  average, and the game enters with its raw EPA: every game of a season the run did not
-  build, and any team with neither an earlier game that season nor a previous-season value
-  (every team in week 1 of the first season built, teams yet to play in 1999 weeks 2-3, Houston
-  in 2002 week 1, and every season's week 1 without the strength prior blend).
-- ``qb_def_adj_epa``: ``(career_adjusted_sum + K * league_adjusted_rate) / (career_dropbacks
-  + K)``, the league rate being the adjusted sum over dropbacks of every quarterback game
-  strictly before the row's week; ``qb_def_adj_epa_recent``: the last
-  ``constants.QB_RECENT_GAMES`` games shrunk toward that career rate. The same windows,
-  ``K`` and strictly-before rule as ``qb_dropback_epa``.
-
 Deviation from the ``nfl-sos-ratings`` reference (read-only): it credits scrambles through
 ``rusher_player_id``, which this repo's play-by-play cache does not select. Here a scramble
 (a dropback with no passer) is credited to the team-game's primary passer, the one with the
@@ -78,7 +48,6 @@ them belong to the starter.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -123,35 +92,6 @@ _SIDES = ("away", "home")
 # ANY/A bonus per passing touchdown and penalty per interception.
 _ANY_A_TD_BONUS = 20.0
 _ANY_A_INT_PENALTY = 45.0
-# Per quarterback-game sum of the defense-adjusted EPA, and the flag for a game whose faced
-# defense had no pre-game snapshot value (counted as an average defense).
-QB_DEF_ADJ_SUM = "qb_epa_def_adj_sum"
-DEFENSE_UNKNOWN_FLAG = "defense_unknown"
-# League regular-season offensive snaps and dropbacks per week, and the factor built from them
-# that converts a per-offensive-snap coefficient into one per dropback.
-LEAGUE_SNAP_SCHEMA: dict[str, type[pl.DataType]] = {
-    "season": pl.Int64,
-    "week": pl.Int64,
-    "offensive_snaps": pl.Float64,
-    "dropbacks": pl.Float64,
-}
-SNAPS_PER_DROPBACK = "snaps_per_dropback"
-
-
-@dataclass(frozen=True)
-class DefenseInputs:
-    """What the defense-adjusted rate reads besides the quarterback games.
-
-    Attributes:
-        snapshots: Pre-week strength snapshots keyed by ``season``, ``week`` and
-            ``team_abbr``, carrying ``constants.QB_DEF_ADJ_SOURCE_STAT``.
-        league_snaps: League weekly totals from ``aggregate_league_snaps``, which convert
-            that per-offensive-snap value to one per dropback (``snaps_per_dropback``).
-
-    """
-
-    snapshots: pl.DataFrame
-    league_snaps: pl.DataFrame
 
 
 def empty_qb_game_frame() -> pl.DataFrame:
@@ -310,139 +250,13 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def aggregate_league_snaps(pbp_df: pl.DataFrame) -> pl.DataFrame:
-    """Count the league's regular-season offensive snaps and dropbacks per week.
-
-    Definitions are the team families' (``pbp.scrimmage_condition`` and
-    ``pbp.dropback_condition`` over ``pbp.regular_season_plays``), so each week's totals are
-    the sums of the team-game ``offensive_snaps`` and ``dropbacks`` the strength ridge is
-    solved on.
-
-    Returns:
-        One row per ``(season, week)`` with the columns of ``LEAGUE_SNAP_SCHEMA``, sorted.
-        Empty play-by-play gives a typed empty frame.
-
-    """
-    if pbp_df.height == 0:
-        return pl.DataFrame(schema=LEAGUE_SNAP_SCHEMA)
-    plays = pbp.regular_season_plays(pbp_df)
-    columns = plays.columns
-    return (
-        plays.group_by(["season", "week"], maintain_order=True)
-        .agg(
-            pbp.count_where(pbp.scrimmage_condition(columns), "offensive_snaps"),
-            pbp.count_where(pbp.dropback_condition(columns), "dropbacks"),
-        )
-        .select(pl.col(name).cast(dtype) for name, dtype in LEAGUE_SNAP_SCHEMA.items())
-        .sort(["season", "week"])
-    )
-
-
-def snaps_per_dropback(league_snaps: pl.DataFrame, keys: pl.DataFrame) -> pl.DataFrame:
-    """Return the league's offensive snaps per dropback known before each ``(season, week)``.
-
-    Formula: ``sum(offensive_snaps) / sum(dropbacks)`` over the season's weeks strictly before
-    the key's week; for a week with no earlier game that season (week 1), over the whole
-    previous season instead. Null when neither has a dropback.
-
-    Args:
-        league_snaps: League weekly totals from ``aggregate_league_snaps``.
-        keys: Frame with ``season`` and ``week``.
-
-    Returns:
-        ``keys`` in its original order with ``SNAPS_PER_DROPBACK`` added.
-
-    """
-    sums = ["offensive_snaps", "dropbacks"]
-    weekly = (
-        league_snaps.select(pl.col(name).cast(dtype) for name, dtype in LEAGUE_SNAP_SCHEMA.items())
-        .group_by(["season", "week"], maintain_order=True)
-        .agg(pl.col(c).sum() for c in sums)
-    )
-    to_date = (
-        _keyed(weekly)
-        .sort(_KEY)
-        .select(
-            "season",
-            _KEY,
-            *[pl.col(c).cum_sum().over("season").alias(f"_in_{c}") for c in sums],
-        )
-    )
-    previous = (
-        weekly.group_by("season", maintain_order=True)
-        .agg(pl.col(c).sum().alias(f"_prev_{c}") for c in sums)
-        .with_columns(pl.col("season") + 1)
-    )
-    keyed = _keyed(keys.select("season", "week").with_row_index(_ROW))
-    # Strictly before: the key's own week never matches (``allow_exact_matches=False``).
-    # Both frames are sorted by the key, which also orders it within each season.
-    factors = (
-        keyed.sort(_KEY)
-        .join_asof(
-            to_date,
-            on=_KEY,
-            by="season",
-            strategy="backward",
-            allow_exact_matches=False,
-            check_sortedness=False,
-        )
-        .join(previous, on="season", how="left")
-        .select(
-            _ROW,
-            pl.coalesce(
-                _ratio(pl.col("_in_offensive_snaps"), pl.col("_in_dropbacks")),
-                _ratio(pl.col("_prev_offensive_snaps"), pl.col("_prev_dropbacks")),
-            ).alias(SNAPS_PER_DROPBACK),
-        )
-    )
-    return keys.with_row_index(_ROW).join(factors, on=_ROW, how="left").sort(_ROW).drop(_ROW)
-
-
-def attach_defense_expectation(qb_games: pl.DataFrame, defense: DefenseInputs) -> pl.DataFrame:
-    """Add each quarterback game's defense-adjusted EPA sum from the faced defense's snapshot.
-
-    Args:
-        qb_games: Quarterback-game sums from ``aggregate_qb_game_stats``.
-        defense: The pre-week snapshots and the league weekly snap totals.
-
-    Returns:
-        ``qb_games`` in its original order with ``QB_DEF_ADJ_SUM`` (``qb_epa_sum + dropbacks *
-        adj_def_pass_epa_snap * snaps_per_dropback``, the faced defense's value in the game's
-        week converted to EPA per dropback with the league's snaps per dropback before that
-        week, the adjustment taken as 0 when either is missing) and ``DEFENSE_UNKNOWN_FLAG``
-        (1 when it was missing, else 0).
-
-    """
-    source = constants.QB_DEF_ADJ_SOURCE_STAT
-    defenses = defense.snapshots.select(
-        pl.col("season").cast(pl.Int64),
-        pl.col("week").cast(pl.Int64),
-        pl.col("team_abbr").cast(pl.String).alias("opponent_abbr"),
-        pl.col(source).cast(pl.Float64).alias("_defense"),
-    ).unique(subset=["season", "week", "opponent_abbr"], keep="first", maintain_order=True)
-    weeks = qb_games.select("season", "week").unique(maintain_order=True)
-    factors = snaps_per_dropback(defense.league_snaps, weeks)
-    joined = qb_games.join(
-        defenses, on=["season", "week", "opponent_abbr"], how="left", maintain_order="left"
-    ).join(factors, on=["season", "week"], how="left", maintain_order="left")
-    per_dropback = pl.col("_defense") * pl.col(SNAPS_PER_DROPBACK)
-    return joined.with_columns(
-        (pl.col("qb_epa_sum") + pl.col("dropbacks") * per_dropback.fill_null(0.0)).alias(
-            QB_DEF_ADJ_SUM
-        ),
-        per_dropback.is_null().cast(pl.Float64).alias(DEFENSE_UNKNOWN_FLAG),
-    ).drop("_defense", SNAPS_PER_DROPBACK)
-
-
 def _keyed(frame: pl.DataFrame) -> pl.DataFrame:
     """Attach the ordering key ``season * 100 + week``."""
     return frame.with_columns((pl.col("season") * 100 + pl.col("week")).cast(pl.Int64).alias(_KEY))
 
 
-def _history_tables(
-    qb_games: pl.DataFrame, sum_columns: list[str]
-) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """Return career, recent-window and league running sums of ``sum_columns`` through each key.
+def _history_tables(qb_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """Return career, recent-window and league running sums, each through its key.
 
     Each table holds, at a key, the sums over games up to and including that key; the
     strictly-before rule is applied by the as-of join in ``attach_qb_features``.
@@ -450,13 +264,13 @@ def _history_tables(
     per_game = (
         _keyed(qb_games)
         .group_by(["qb_id", _KEY], maintain_order=True)
-        .agg(pl.col(c).sum() for c in sum_columns)
+        .agg(pl.col(c).sum() for c in QB_GAME_SUM_COLUMNS)
         .sort(["qb_id", _KEY])
     )
     career = per_game.select(
         "qb_id",
         _KEY,
-        *[pl.col(c).cum_sum().over("qb_id").alias(f"c_{c}") for c in sum_columns],
+        *[pl.col(c).cum_sum().over("qb_id").alias(f"c_{c}") for c in QB_GAME_SUM_COLUMNS],
     ).sort(_KEY)
     recent = per_game.select(
         "qb_id",
@@ -466,14 +280,14 @@ def _history_tables(
             .rolling_sum(window_size=constants.QB_RECENT_GAMES, min_samples=1)
             .over("qb_id")
             .alias(f"r_{c}")
-            for c in sum_columns
+            for c in QB_GAME_SUM_COLUMNS
         ],
     ).sort(_KEY)
     league = (
         per_game.group_by(_KEY, maintain_order=True)
-        .agg(pl.col(c).sum() for c in sum_columns)
+        .agg(pl.col(c).sum() for c in QB_GAME_SUM_COLUMNS)
         .sort(_KEY)
-        .select(_KEY, *[pl.col(c).cum_sum().alias(f"l_{c}") for c in sum_columns])
+        .select(_KEY, *[pl.col(c).cum_sum().alias(f"l_{c}") for c in QB_GAME_SUM_COLUMNS])
     )
     return career, recent, league
 
@@ -533,32 +347,14 @@ def _any_a_parts(prefix: str) -> tuple[pl.Expr, pl.Expr]:
     return numerator, pl.col(f"{prefix}attempts") + pl.col(f"{prefix}sacks")
 
 
-def _defense_adjusted_stats() -> dict[str, pl.Expr]:
-    """Return the defense-adjusted career and recent rates over the running sums."""
-    career = _shrink(
-        pl.col(f"c_{QB_DEF_ADJ_SUM}"),
-        pl.col("c_dropbacks"),
-        _ratio(pl.col(f"l_{QB_DEF_ADJ_SUM}"), pl.col("l_dropbacks")),
-    )
-    rate, recent_rate = constants.QB_DEF_ADJ_STATS
-    return {
-        rate: career,
-        recent_rate: _shrink(pl.col(f"r_{QB_DEF_ADJ_SUM}"), pl.col("r_dropbacks"), career),
-    }
-
-
 def _side_features(
     targets: pl.DataFrame,
-    history: tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame],
-    sum_columns: list[str],
+    career: pl.DataFrame,
+    recent: pl.DataFrame,
+    league: pl.DataFrame,
     side: str,
 ) -> pl.DataFrame:
-    """Compute one side's quarterback features for rows keyed by ``_ROW``, ``_KEY``, ``qb_id``.
-
-    ``history`` holds the career, recent and league tables of ``_history_tables``; the
-    defense-adjusted rates are added when ``sum_columns`` carries their sum.
-    """
-    career, recent, league = history
+    """Compute one side's quarterback features for rows keyed by ``_ROW``, ``_KEY``, ``qb_id``."""
     # Strictly before: the row's own week never matches (``allow_exact_matches=False``).
     # Every frame is sorted by the key just before joining, which also orders the key within
     # each quarterback, so the sortedness check Polars cannot run with `by` groups is moot.
@@ -586,7 +382,7 @@ def _side_features(
     frame = frame.with_columns(
         pl.when(known).then(pl.col(f"{p}{c}").fill_null(0.0)).otherwise(None).alias(f"{p}{c}")
         for p in ("c_", "r_")
-        for c in sum_columns
+        for c in QB_GAME_SUM_COLUMNS
     )
     league_any_a = _ratio(*_any_a_parts("l_"))
     career_epa = _shrink(
@@ -615,30 +411,13 @@ def _side_features(
         "qb_any_a_recent": _shrink(*_any_a_parts("r_"), pl.col("_any_a")),
         "qb_history_dropbacks": pl.col("c_dropbacks"),
     }
-    if QB_DEF_ADJ_SUM in sum_columns:
-        stats |= _defense_adjusted_stats()
     return frame.select(_ROW, *[expr.alias(f"{side}_{name}") for name, expr in stats.items()])
-
-
-def _log_unknown_defenses(qb_games: pl.DataFrame) -> None:
-    """Log how many quarterback games count their faced defense as average, and in which seasons."""
-    unknown = qb_games.filter(pl.col(DEFENSE_UNKNOWN_FLAG) > 0)
-    seasons = sorted(unknown.get_column("season").unique(maintain_order=True).to_list())
-    log.info(
-        "QB defense adjustment: %d of %d quarterback games faced a defense with no pre-game "
-        "value per dropback and count it as average; seasons: %s",
-        unknown.height,
-        qb_games.height,
-        seasons,
-    )
 
 
 def attach_qb_features(
     games: pl.DataFrame,
     qb_games: pl.DataFrame,
     identity: pl.DataFrame,
-    *,
-    defense: DefenseInputs | None = None,
 ) -> pl.DataFrame:
     """Add the quarterback family for ``away_qb`` and ``home_qb`` to every game row.
 
@@ -646,30 +425,20 @@ def attach_qb_features(
         games: Game rows with ``season``, ``week``, ``away_qb`` and ``home_qb``.
         qb_games: Quarterback-game sums from ``aggregate_qb_game_stats``.
         identity: Name-to-id map from ``build_qb_identity``.
-        defense: Pre-week strength snapshots and league weekly snap totals. When given, the
-            defense-adjusted rates in ``constants.QB_DEF_ADJ_STATS`` are added too; without
-            them they are not built, and the final schema publishes them as nulls.
 
     Returns:
         ``games`` in its original row order with ``away_<stat>``, ``home_<stat>`` and
-        ``<stat>_diff`` (away minus home) for every stat in ``constants.QB_PBP_STATS``, and
-        in ``constants.QB_DEF_ADJ_STATS`` when ``defense`` is given. Formulas are in the
-        module docstring.
+        ``<stat>_diff`` (away minus home) for every stat in ``constants.QB_PBP_STATS``.
+        Formulas are in the module docstring.
 
     """
     stats = list(constants.QB_PBP_STATS)
-    sum_columns = list(QB_GAME_SUM_COLUMNS)
-    if defense is not None:
-        qb_games = attach_defense_expectation(qb_games, defense)
-        _log_unknown_defenses(qb_games)
-        stats += constants.QB_DEF_ADJ_STATS
-        sum_columns.append(QB_DEF_ADJ_SUM)
     new_columns = [f"{prefix}{stat}" for stat in stats for prefix in ("away_", "home_")] + [
         f"{stat}_diff" for stat in stats
     ]
     base = games.drop([c for c in new_columns if c in games.columns])
     keyed = _keyed(base.with_row_index(_ROW))
-    history = _history_tables(qb_games, sum_columns)
+    career, recent, league = _history_tables(qb_games)
     passer_names = _passer_name_map(qb_games)
 
     out = keyed
@@ -693,7 +462,7 @@ def attach_qb_features(
                 100.0 * unmatched.height / named.height,
                 sorted(set(unmatched["qb_name"].to_list()))[:10],
             )
-        features = _side_features(resolved, history, sum_columns, side)
+        features = _side_features(resolved, career, recent, league, side)
         out = out.join(features, on=_ROW, how="left")
 
     out = calculate_stat_differentials(out, stats)

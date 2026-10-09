@@ -105,6 +105,50 @@ class SpreadMoneylineMap:
             "underdog_prob": list(self.underdog_prob),
         }
 
+    @classmethod
+    def from_dict(cls, record: Mapping[str, object]) -> SpreadMoneylineMap:
+        """Return the map a ``to_dict`` record describes, as a build's line record keeps it.
+
+        Raises:
+            ValueError: If the record lacks a field or holds a value of the wrong kind.
+
+        """
+        try:
+            return cls(
+                spreads=tuple(_number(value) for value in _items(record["spreads"])),
+                favorite_prob=tuple(_number(value) for value in _items(record["favorite_prob"])),
+                underdog_prob=tuple(_number(value) for value in _items(record["underdog_prob"])),
+                games=_whole(record["games"]),
+                seasons=tuple(_whole(value) for value in _items(record["seasons"])),
+            )
+        except (KeyError, TypeError) as exc:
+            msg = f"Not a spread-to-moneyline map record: {exc!r}"
+            raise ValueError(msg) from exc
+
+
+def _items(value: object) -> list[object]:
+    """Return a record's list field, refusing anything that is not a list."""
+    if not isinstance(value, list):
+        msg = f"expected a list, got {type(value).__name__}"
+        raise TypeError(msg)
+    return value
+
+
+def _number(value: object) -> float:
+    """Return a record's number as a float, refusing anything else (booleans included)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        msg = f"expected a number, got {value!r}"
+        raise TypeError(msg)
+    return float(value)
+
+
+def _whole(value: object) -> int:
+    """Return a record's whole number, refusing anything else (booleans included)."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        msg = f"expected a whole number, got {value!r}"
+        raise TypeError(msg)
+    return value
+
 
 def price_pairs(schedule: pl.DataFrame) -> pl.DataFrame:
     """Return the games with a real spread and both real moneylines, prices only.

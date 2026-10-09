@@ -240,7 +240,15 @@ def _install(monkeypatch: pytest.MonkeyPatch, run: _Run) -> None:
     monkeypatch.setattr(clock, "nfl_week", lambda _today: _CURRENT_WEEK)
 
 
-_ARGS = ("--min-season", str(_SEASONS[0]), "--max-season", str(_SEASONS[-1]))
+# The fixture stubs the stored-line fills; the pick-time source would download nfelo's lines.
+_ARGS = (
+    "--min-season",
+    str(_SEASONS[0]),
+    "--max-season",
+    str(_SEASONS[-1]),
+    "--line-source",
+    constants.LINE_SOURCE_STORED,
+)
 
 
 @dataclass(frozen=True)
@@ -328,8 +336,10 @@ def warm_dir(baseline: _Baseline, tmp_path: Path) -> Path:
 
 def test_the_world_exercises_every_season_feature_family(baseline: _Baseline) -> None:
     """Guard the fixture: the compared rows carry real values, not all-null columns."""
+    # Act
     finished = baseline.full.games.filter(pl.col("season") < _CURRENT_SEASON)
 
+    # Assert
     for column in (
         "away_adj_strength_composite",
         "home_sos_played_raw",
@@ -347,21 +357,29 @@ def test_the_world_exercises_every_season_feature_family(baseline: _Baseline) ->
 def test_a_cold_incremental_run_builds_every_season_and_equals_the_full_rebuild(
     baseline: _Baseline,
 ) -> None:
-    _assert_identical(baseline.cold, baseline.full)
-    assert baseline.cold.built == list(_SEASONS)
+    # Act
+    cold = baseline.cold
+
+    # Assert
+    _assert_identical(cold, baseline.full)
+    assert cold.built == list(_SEASONS)
 
 
 def test_a_cold_run_caches_only_the_finished_seasons(baseline: _Baseline) -> None:
+    # Act
     entries = sorted(path.name for path in _cache_dir(baseline.cold_dir).iterdir())
 
+    # Assert
     assert entries == [f"season_{season}" for season in _CACHED_SEASONS]
 
 
 def test_a_warm_incremental_run_reuses_finished_seasons_and_equals_the_full_rebuild(
     baseline: _Baseline, etl: _Run, warm_dir: Path
 ) -> None:
+    # Act
     warm = _main(etl, warm_dir, "--incremental")
 
+    # Assert
     _assert_identical(warm, baseline.full)
     assert warm.built == [_CURRENT_SEASON]
 
@@ -369,6 +387,7 @@ def test_a_warm_incremental_run_reuses_finished_seasons_and_equals_the_full_rebu
 def test_a_changed_input_in_a_cached_season_rebuilds_from_that_season_on(
     baseline: _Baseline, etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
+    # Arrange
     etl.world.team_stats = etl.world.team_stats.with_columns(
         pl.when((pl.col("season") == 2020) & (pl.col("week") == 2))
         .then(pl.col("pass_epa_sum") + 1.5)
@@ -377,8 +396,10 @@ def test_a_changed_input_in_a_cached_season_rebuilds_from_that_season_on(
     )
     full = _main(etl, tmp_path_factory.mktemp("full"))
 
+    # Act
     warm = _main(etl, warm_dir, "--incremental")
 
+    # Assert
     assert full.files["all_data_ml.csv"] != baseline.full.files["all_data_ml.csv"]
     _assert_identical(warm, full)
     assert warm.built == [2020, 2021]
@@ -388,6 +409,7 @@ def test_a_changed_value_in_the_current_season_keeps_finished_seasons_cached(
     baseline: _Baseline, etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
     """Values change but the row count does not, so every frame keeps its chunk layout."""
+    # Arrange
     etl.world.team_stats = etl.world.team_stats.with_columns(
         pl.when(pl.col("season") == _CURRENT_SEASON)
         .then(pl.col("rush_epa_sum") - 2.0)
@@ -396,8 +418,10 @@ def test_a_changed_value_in_the_current_season_keeps_finished_seasons_cached(
     )
     full = _main(etl, tmp_path_factory.mktemp("full"))
 
+    # Act
     warm = _main(etl, warm_dir, "--incremental")
 
+    # Assert
     assert full.files["all_data_ml.csv"] != baseline.full.files["all_data_ml.csv"]
     _assert_identical(warm, full)
     assert warm.built == [_CURRENT_SEASON]
@@ -406,11 +430,14 @@ def test_a_changed_value_in_the_current_season_keeps_finished_seasons_cached(
 def test_a_new_week_in_the_current_season_keeps_finished_seasons_equal_to_a_full_rebuild(
     etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
+    # Arrange
     etl.world = _world(played_through=_CURRENT_WEEK)
     full = _main(etl, tmp_path_factory.mktemp("full"))
 
+    # Act
     warm = _main(etl, warm_dir, "--incremental")
 
+    # Assert
     assert warm.built == [_CURRENT_SEASON]
     _assert_identical(warm, full)
 
@@ -418,10 +445,13 @@ def test_a_new_week_in_the_current_season_keeps_finished_seasons_equal_to_a_full
 def test_a_code_fingerprint_change_rebuilds_every_season(
     baseline: _Baseline, etl: _Run, warm_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     monkeypatch.setattr(season_cache, "etl_code_fingerprint", lambda: "edited code")
 
+    # Act
     warm = _main(etl, warm_dir, "--incremental")
 
+    # Assert
     _assert_identical(warm, baseline.full)
     assert warm.built == list(_SEASONS)
 
@@ -429,12 +459,15 @@ def test_a_code_fingerprint_change_rebuilds_every_season(
 def test_a_damaged_entry_is_rebuilt_and_rewritten_with_the_output_unchanged(
     baseline: _Baseline, etl: _Run, warm_dir: Path
 ) -> None:
+    # Arrange
     for path in sorted((_cache_dir(warm_dir) / "season_2020").iterdir()):
         path.write_bytes(b"\x00garbage")
 
+    # Act
     warm = _main(etl, warm_dir, "--incremental")
     rewarm = _main(etl, warm_dir, "--incremental")
 
+    # Assert
     _assert_identical(warm, baseline.full)
     assert warm.built == [2020, 2021]
     _assert_identical(rewarm, baseline.full)
@@ -442,7 +475,11 @@ def test_a_damaged_entry_is_rebuilt_and_rewritten_with_the_output_unchanged(
 
 
 def test_the_full_rebuild_neither_reads_nor_writes_the_cache(baseline: _Baseline) -> None:
-    assert baseline.full.built == list(_SEASONS)
+    # Act
+    full = baseline.full
+
+    # Assert
+    assert full.built == list(_SEASONS)
     assert baseline.stamps_before_full
     assert baseline.stamps_after_full == baseline.stamps_before_full
 
@@ -454,16 +491,20 @@ def _is_strength_column(column: str) -> bool:
 def test_the_default_strength_blend_games_given_explicitly_writes_the_same_files(
     baseline: _Baseline, etl: _Run, tmp_path: Path
 ) -> None:
+    # Act
     explicit = _main(etl, tmp_path, "--strength-prior-blend-games", "4")
 
+    # Assert
     _assert_identical(explicit, baseline.full)
 
 
 def test_a_smaller_strength_blend_games_moves_only_the_strength_family(
     baseline: _Baseline, etl: _Run, tmp_path: Path
 ) -> None:
+    # Act
     tuned = _main(etl, tmp_path, "--strength-prior-blend-games", "2")
 
+    # Assert
     assert tuned.games.columns == baseline.full.games.columns
     changed = {
         column
@@ -479,10 +520,13 @@ def test_a_smaller_strength_blend_games_moves_only_the_strength_family(
 def test_a_changed_strength_blend_games_rebuilds_every_cached_season(
     etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
+    # Arrange
     full = _main(etl, tmp_path_factory.mktemp("full"), "--strength-prior-blend-games", "2")
 
+    # Act
     warm = _main(etl, warm_dir, "--incremental", "--strength-prior-blend-games", "2")
 
+    # Assert
     _assert_identical(warm, full)
     assert warm.built == list(_SEASONS)
 
@@ -524,6 +568,7 @@ def _incremental_config(**changes: object) -> data_collection.DataCollectionConf
 @pytest.mark.parametrize("source", ["schedule", "team_stats", "elo", "rankings"])
 def test_a_changed_first_season_row_changes_every_finished_season_key(source: str) -> None:
     """The first season feeds the next one's coach history and week-1 priors and fallbacks."""
+    # Arrange
     world = _world()
     baseline = _season_keys(world, _incremental_config())
     first = pl.col("season") == _SEASONS[0]
@@ -553,12 +598,15 @@ def test_a_changed_first_season_row_changes_every_finished_season_key(source: st
             pl.col("predictive_rating") + 1.0
         )
 
+    # Act
     changed = _season_keys(world, _incremental_config())
 
+    # Assert
     assert all(changed[season] != baseline[season] for season in _CACHED_SEASONS)
 
 
 def test_a_changed_prior_season_team_stat_changes_every_finished_season_key() -> None:
+    # Arrange
     world = _world()
     baseline = _season_keys(world, _incremental_config())
     world.team_stats = world.team_stats.with_columns(
@@ -568,8 +616,10 @@ def test_a_changed_prior_season_team_stat_changes_every_finished_season_key() ->
         .alias("pass_yards")
     )
 
+    # Act
     changed = _season_keys(world, _incremental_config())
 
+    # Assert
     assert all(changed[season] != baseline[season] for season in _CACHED_SEASONS)
 
 
@@ -588,11 +638,14 @@ def test_a_changed_prior_season_team_stat_changes_every_finished_season_key() ->
 def test_every_option_that_changes_a_season_build_changes_its_key(
     change: dict[str, object],
 ) -> None:
+    # Arrange
     world = _world()
-
     baseline = _season_keys(world, _incremental_config())
+
+    # Act
     changed = _season_keys(world, _incremental_config(**change))
 
+    # Assert
     assert all(changed[season] != baseline[season] for season in _CACHED_SEASONS)
 
 
@@ -609,15 +662,19 @@ def test_every_option_that_changes_a_season_build_changes_its_key(
 def test_options_that_cannot_change_a_season_build_keep_its_key(
     change: dict[str, object], tmp_path: Path
 ) -> None:
+    # Arrange
     world = _world()
-
     baseline = _season_keys(world, _incremental_config())
+
+    # Act
     changed = _season_keys(world, _incremental_config(**change, data_dir=tmp_path))
 
+    # Assert
     assert changed == baseline
 
 
 def test_an_incremental_run_keeps_its_cache_under_its_data_directory(tmp_path: Path) -> None:
+    # Arrange
     sources = data_collection._EtlSources(
         current_season=_CURRENT_SEASON,
         current_week=_CURRENT_WEEK,
@@ -628,6 +685,7 @@ def test_an_incremental_run_keeps_its_cache_under_its_data_directory(tmp_path: P
         raw_elo_df=pl.DataFrame(),
     )
 
+    # Act
     cache = data_collection._open_season_cache(
         _incremental_config(data_dir=tmp_path), sources, _SEASONS[0]
     )
@@ -635,6 +693,7 @@ def test_an_incremental_run_keeps_its_cache_under_its_data_directory(tmp_path: P
         data_collection._default_config(list(_SEASONS)), sources, _SEASONS[0]
     )
 
+    # Assert
     assert cache is not None
     assert cache.cache.directory == _cache_dir(tmp_path)
     assert full is None
@@ -643,11 +702,14 @@ def test_an_incremental_run_keeps_its_cache_under_its_data_directory(tmp_path: P
 def test_a_season_without_a_key_is_rebuilt_and_not_cached(
     baseline: _Baseline, etl: _Run, warm_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     monkeypatch.setattr(season_cache.SeasonKeys, "key", lambda *_args: None)
     stamps = _stamps(_cache_dir(warm_dir))
 
+    # Act
     warm = _main(etl, warm_dir, "--incremental")
 
+    # Assert
     _assert_identical(warm, baseline.full)
     assert warm.built == list(_SEASONS)
     assert _stamps(_cache_dir(warm_dir)) == stamps
@@ -703,18 +765,23 @@ _CONFIG_FIELDS = {
 
 
 def test_every_process_season_parameter_is_keyed() -> None:
+    # Act
     parameters = inspect.signature(data_collection.process_season).parameters
 
+    # Assert
     assert set(parameters) == set(_PROCESS_SEASON_PARAMETERS)
 
 
 def test_every_season_input_is_keyed_or_output_neutral() -> None:
+    # Act
     fields = {field.name for field in dataclasses.fields(data_collection.SeasonInputs)}
 
+    # Assert
     assert fields == set(_SEASON_INPUT_FIELDS)
 
 
 def test_every_config_field_is_keyed_or_output_neutral_and_the_key_holds_the_keyed_ones() -> None:
+    # Arrange
     fields = {field.name for field in dataclasses.fields(data_collection.DataCollectionConfig)}
     world = _world()
     sources = data_collection._EtlSources(
@@ -727,8 +794,10 @@ def test_every_config_field_is_keyed_or_output_neutral_and_the_key_holds_the_key
         raw_elo_df=world.elo,
     )
 
+    # Act
     cache = data_collection._open_season_cache(_incremental_config(), sources, _SEASONS[0])
 
+    # Assert
     assert fields == set(_CONFIG_FIELDS)
     assert cache is not None
     options = cache.keys._context["options"]
@@ -738,6 +807,7 @@ def test_every_config_field_is_keyed_or_output_neutral_and_the_key_holds_the_key
 
 
 def test_process_season_recomputes_every_derived_season_input() -> None:
+    # Arrange
     world = _world()
     sentinel = pl.DataFrame({"sentinel": [1]})
     supplied = data_collection.SeasonInputs(
@@ -751,8 +821,10 @@ def test_process_season_recomputes_every_derived_season_input() -> None:
         prior_season_stats=sentinel,
     )
 
+    # Act
     derived = data_collection._with_season_features(
         _SEASONS[1], world.schedule, world.team_stats, supplied
     )
 
+    # Assert
     assert all(getattr(derived, name) is not sentinel for name in _DERIVED_SEASON_INPUTS)

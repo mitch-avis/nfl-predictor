@@ -137,12 +137,16 @@ defaults and about 42 s with one thread each. `pytest-xdist` then spreads the su
 worker per core by default (`-n=auto` in `pyproject.toml`; about 15 s on the same machine). Pass
 `-n 0` to run in a single process, for example to use `pdb` or to run one test quickly.
 
-Every test also runs against its own empty data directory: `tests/conftest.py` points every data
-path the package resolves at import time (`constants.DATA_PATH`, the nflreadpy and nfelo caches,
-the lines refresh's and the week builder's default data directory) at a temporary directory, and
-refuses every network connection, failing the test that tried. So the suite never reads the
-checkout's datasets, writes its caches or downloads anything; a test that checks the packaged
-paths themselves asks for the `packaged_data_paths` fixture.
+The suite also stays out of the checkout's `data/` and off the network (`tests/data_isolation.py`,
+installed by `tests/conftest.py` before any test module imports the package). `constants.DATA_PATH`
+and the nflreadpy and nfelo caches point at a session temporary directory, so every path a module
+copies from them at import time starts out redirected, and each test gets a fresh directory on top.
+Every TCP connection and every lookup of a host name other than `localhost` is refused, as on an
+offline machine, for the whole session, fixtures included; the refusal fails the test it happened
+in. A test that checks the packaged paths themselves asks for the `packaged_data_paths` fixture,
+and a test in `tests/test_conftest.py` scans every module for a path still inside `data/`. Run
+directories under `models/` are not redirected: they are built from `constants.ROOT_DIR` when used,
+so tests that write run artifacts pass their own directories.
 
 To run explicitly with coverage (same behavior as the default config):
 

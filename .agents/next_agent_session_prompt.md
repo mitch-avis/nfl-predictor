@@ -5,32 +5,30 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-15) as bindi
 `.agents/TODO.md` (above all "Roadmap Status", Milestones 55 and 56, and "Open follow-ups from
 completed milestones"), `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-09 01:05, step 4 close-out runs in progress)
+## State (written 2026-10-09 05:10, step 4 finished and merged)
 
-- `feat/step4-feature-values` (local only, not pushed) is checked out in the main checkout at
-  `0.44.0` (`2522cb6`): the decisions chunk merged (`2f90f6c`, two review rounds), with the
-  changelog and the docs pass. `scripts/gate.sh --web` exits `0` on `2522cb6` (1571 passed, 1
-  skipped, coverage 93.29%). `main` is at `0.39.3`. The user runs `nfl-predictor web --port 8001`
-  from this checkout (no `--reload`); it needs a restart to load `0.44.0`, which the user does.
-- Running since 2026-10-09 01:00 as one detached job: `models/step4_reference/phase.sh 2522cb6`
-  (log `phase.log`, PID in `phase.pid`, commit in `launch_record.txt`, rules in `HYPOTHESIS.md`).
-  `build.sh` backed up `data/` to `data/backup_pre_step4_adopted_20261009/` (761 MB), rebuilds
-  `data/` with the new defaults (the user approved the backed-up rebuild 2026-10-09), cuts
-  `inputs/adopted.csv` and runs the leakage audit; then `driver.sh` runs six GPU walk-forwards
-  on it: the adopted-settings reference (`adopted_seed42`, `adopted_seed7`), the market-free run
-  without betting-line columns (`marketfree_lines_seed*`) and the one without line or Elo columns
-  (`marketfree_all_seed*`). **Do not edit `src/`, `pyproject.toml` or `uv.lock`, and do not
-  commit, while it runs.** Expected end about 04:45.
-- The implementer is fixing the second review's test-isolation findings on its worktree branch
-  (`worktree-agent-aae52e93d671a8c39`, after `e75c2bd`): session-wide data and network
-  isolation in `tests/conftest.py`, a scan for captured data paths, the Elo real-build test
-  removed, an optional warning in `weekly_run/stage1.py`. It merges as `0.44.1` after the runs,
-  after a reviewer.
-- Names (guardrail 16): the current-settings baseline (`R0`), the defense-adjusted quarterback
-  test (`QB`), the next-opponent identity test (`NO`), the stat-blend tests (`S2`, `S8`), the
-  strength-blend test (`T2`), the pick-time lines test (`PT`), the adopted-settings reference
-  (`adopted_*`), the two market-free baselines (`marketfree_lines_*`, `marketfree_all_*`). Never
-  use the codes alone with the user.
+- `main` is at `0.45.0` (`db98665`, merged 2026-10-09 in a temporary worktree, not pushed; the
+  user approved the merge 2026-10-08, pushing is still must-ask). Its tree equals
+  `feat/step4-feature-values` (`66e4508`), which is still checked out in the main checkout.
+  `scripts/gate.sh --web` exits `0` on that tree (1580 passed, coverage 93.29%). The environment
+  is synced with the LightGBM CUDA flags. The user runs `nfl-predictor web --port 8001` from the
+  main checkout (no `--reload`); it needs a restart to load the new code.
+- Landed since `0.43.0`: `0.44.0` the decisions chunk (defense-adjusted quarterback rate removed,
+  next-opponent pair pruned, pick-time lines by default, `nfl-predictor lines` follows the line
+  source, market-free backtests via `--exclude-market` and the `elo` feature group); `0.44.1`
+  session-wide test data and network isolation; `0.45.0` production's floor-sigma pool switched
+  to the adopted-settings reference. All reviewed independently.
+- `data/` was rebuilt 2026-10-09 with the new defaults (backup in
+  `data/backup_pre_step4_adopted_20261009/`). The adopted-settings reference and both market-free
+  baselines are in `models/step4_reference/` (reviewed in `REVIEW.md`; numbers in
+  `.agents/benchmarks.md`). The reference tied the pick-time lines test, so it became the new
+  reference and production's floor-sigma pool.
+- `nfl-sos-ratings` is frozen at `9081bce` and its session archived; its full handoff is in
+  `.agents/sos_port_source.md`.
+- Names (guardrail 16): the current-settings baseline (`R0`), the pick-time lines test (`PT`),
+  the adopted-settings reference (`adopted_*`), the market-free run without betting-line columns
+  (`marketfree_lines_*`), the market-free run without betting-line or Elo columns
+  (`marketfree_all_*`). Never use the codes alone with the user.
 
 ## Decisions
 
@@ -51,25 +49,22 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 
 ## Next
 
-1. When `phase.sh` ends: confirm every fold ran on `cuda`, then an independent reviewer rescores
-   all six runs from the fold checkpoints against `models/step4_reference/HYPOTHESIS.md` and
-   writes `REVIEW.md` there (the reference against the pick-time lines test; the market-free
-   arms against the reference, against each other, against the pick-time and closing markets via
-   `compare --market-from models/step4/R0_seed42`, and against the Elo probabilities in
-   `data/qb_elos.csv`). Then the check-in with the numbers.
-2. If the reference passes its rule: point `config/weekly_run.yaml` `floor_sigma_reference_runs`
-   at `models/step4_reference/adopted_seed42` and `adopted_seed7`, close rule 11's line-timing
-   gap in `AGENTS.md`, regenerate `.agents/market_free/` on `inputs/adopted.csv` (the committed
-   inventory was made on the old build with the removed columns), record the numbers in
-   `.agents/benchmarks.md` (rule 3), merge the `0.44.1` test fixes, then merge into `main`
-   (approved by the user 2026-10-08). Ask before pushing.
-3. Then roadmap step 6 (absorb `nfl-sos-ratings` from `9081bce`, `.agents/sos_port_source.md`).
-4. Batch with step 6's first edit to `constants.py` (it changes every checkpoint fingerprint):
+1. Open questions for the user (asked 2026-10-09): which market-free variant is step 6's test
+   bench (recommended: without betting-line or Elo columns); close roadmap steps 4 and 5 into
+   `ARCHIVE.md` (must-ask; recommended yes); push `main` (must-ask); confirm the three decisions
+   the `nfl-sos-ratings` session reported (QB all-plays tie-break order, the botched-snap charge
+   rule, a pre-registered kneel and spike test).
+2. Then roadmap step 6, phase 1, on a new branch off `main`: the scripted inventory of
+   `nfl-sos-ratings` at `9081bce` against this repo, and the play-by-play parity check (with its
+   pre-2006 scramble rule).
+3. Batch with step 6's first edit to `constants.py` (it changes every checkpoint fingerprint):
    a `constants.MODELS_PATH` read at call time by the five places that build `ROOT_DIR /
    "models"` (`walk_forward.DEFAULT_CHECKPOINT_DIR`, `cli/backtest.py`, `ml/artifacts.py`,
    `weekly_run/pipeline.py`, `cli/checkpoints.py`) and the API settings, so the test guard can
-   cover `models/` too (today it covers `data/` only; the implementer's recommendation,
-   2026-10-09).
+   cover `models/` too.
+4. Small follow-ups from the 2026-10-09 review (`models/step4_reference/REVIEW.md`): `compare`
+   scores an exact 0.5 probability as a wrong pick while `ml/metrics.picks_home` picks home (only
+   market lines are affected); name the resampling unit wherever pool-point intervals are quoted.
 
 ## How the last sessions worked (keep doing this)
 

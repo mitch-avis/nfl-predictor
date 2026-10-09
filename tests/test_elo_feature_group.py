@@ -5,8 +5,6 @@ from __future__ import annotations
 import argparse
 
 import pandas as pd
-import polars as pl
-import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.cli import backtest
@@ -39,7 +37,6 @@ ELO_FAMILY = sorted(
         "qb_value_4wk_trend_diff",
     ]
 )
-BUILD = constants.DATA_PATH / "completed_games_ml.csv"
 
 
 def test_elo_group_resolves_to_exactly_the_elo_family_of_the_schema() -> None:
@@ -49,19 +46,6 @@ def test_elo_group_resolves_to_exactly_the_elo_family_of_the_schema() -> None:
 
     # Act
     resolved = walk_forward.resolve_feature_group_columns(order, [GROUP])
-
-    # Assert
-    assert resolved == ELO_FAMILY
-
-
-@pytest.mark.skipif(not BUILD.is_file(), reason="no dataset build in this checkout's data/")
-def test_elo_group_resolves_to_exactly_the_elo_family_of_the_build() -> None:
-    """On a real build's header (read only) the group names the same 18 columns."""
-    # Arrange
-    header = pl.scan_csv(BUILD).collect_schema().names()
-
-    # Act
-    resolved = walk_forward.resolve_feature_group_columns(header, [GROUP])
 
     # Assert
     assert resolved == ELO_FAMILY

@@ -19,6 +19,7 @@ from nfl_predictor.ml.ml_model_xgb_utils import (
     xgb_device_arg,
 )
 from nfl_predictor.reporting import power_rankings
+from nfl_predictor.utils.logger import log
 from nfl_predictor.weekly_run import stage1
 
 if TYPE_CHECKING:
@@ -646,7 +647,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         power_ranking_options(args)
     except ValueError as error:
         parser.error(str(error))
+    _warn_on_an_overridden_transform(args)
     return args
+
+
+def _warn_on_an_overridden_transform(args: argparse.Namespace) -> None:
+    """Warn when the market-free mode overrides a requested market transform."""
+    if args.wf_market_mode == stage1.MARKET_MODE_NONE and args.market_transform is True:
+        log.warning(
+            "--wf-market-mode none overrides --market-transform (or market_transform: true): "
+            "a market-free run trains with no market transform."
+        )
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:

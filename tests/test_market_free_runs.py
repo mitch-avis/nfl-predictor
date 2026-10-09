@@ -20,6 +20,7 @@ from nfl_predictor.ml.feature_spec import (
     build_feature_spec,
     build_preprocessor,
 )
+from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars.finalize import build_final_column_order
 from nfl_predictor.weekly_run import config as weekly_config
 from nfl_predictor.weekly_run import stage1
@@ -367,3 +368,39 @@ def test_weekly_market_mode_hybrid_keeps_the_transform_on(tmp_path: Path) -> Non
 
     # Assert
     assert train_config["market_transform"] is True
+
+
+def _recorded_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the project logger's warnings."""
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        log,
+        "warning",
+        lambda message, *args: warnings.append(message % args if args else message),
+    )
+    return warnings
+
+
+@pytest.mark.parametrize(
+    ("argv", "warned"),
+    [
+        (["--wf-market-mode", "none", "--market-transform"], True),
+        (["--wf-market-mode", "none"], False),
+        (["--wf-market-mode", "none", "--no-market-transform"], False),
+        (["--wf-market-mode", "hybrid", "--market-transform"], False),
+    ],
+    ids=["none-with-transform", "none", "none-without-transform", "hybrid-with-transform"],
+)
+def test_weekly_warns_only_when_the_market_free_mode_overrides_a_requested_transform(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str], *, warned: bool
+) -> None:
+    """Asking for the transform in the market-free mode is overridden, and the run says so."""
+    # Arrange
+    warnings = _recorded_warnings(monkeypatch)
+
+    # Act
+    _weekly_args(tmp_path, *argv)
+
+    # Assert
+    overrides = [message for message in warnings if "--market-transform" in message]
+    assert len(overrides) == (1 if warned else 0)

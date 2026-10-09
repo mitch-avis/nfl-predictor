@@ -12,7 +12,7 @@ number here.
   - other build columns named for the market: 0
   - training-time transforms of the lines: 4
 - ETL references to a line column name: 106
-- Indirect market inputs (Elo family columns, not computed from game lines): 18
+- Market-informed columns (the Elo family, not computed from game lines): 18
 
 ## Checks
 
@@ -24,6 +24,8 @@ number here.
 | no_published_non_line_column_written_from_the_lines | yes |
 | no_non_line_column_near_a_copy_of_the_spread | yes |
 | market_excluded_specs_carry_no_inventory_column | yes |
+| elo_group_drops_exactly_the_elo_family | yes |
+| no_market_information_spec_carries_no_market_column | yes |
 
 ## Inventory
 
@@ -39,13 +41,21 @@ number here.
 | `market_total_line` | computed at training time by `feature_spec.add_market_transforms` |
 | `total_line` | a published line column (`constants.LINES_COLUMNS`) |
 
+## Market-free command lines
+
+- No betting-line column (the Elo columns stay): `nfl-predictor backtest --exclude-market
+  --no-market-anchor --no-market-transform`
+- No market information at all: `nfl-predictor backtest --exclude-market --no-market-anchor
+  --no-market-transform --disable-feature-groups elo`
+
 ## Market selection and the feature spec on this build
 
-| Selection | Feature columns | Inventory columns among them |
-| --- | --- | --- |
-| `include_market=False,market_transform=False` | 462 | none |
-| `include_market=False,market_transform=True` | 462 | none |
-| `include_market=True,market_transform=True` | 466 | `away_market_prob`, `home_market_prob`, `market_home_margin`, `market_total_line` |
+| Backtest options | Features | Line-derived among them | Market-informed among them |
+| --- | --- | --- | --- |
+| `--exclude-market --no-market-transform` | 462 | none | 18 Elo columns |
+| `--exclude-market` | 462 | none | 18 Elo columns |
+| `--exclude-market --no-market-transform --disable-feature-groups elo` | 444 | none | none |
+| `(default: market features, transformed)` | 466 | `away_market_prob`, `home_market_prob`, `market_home_margin`, `market_total_line` | 18 Elo columns |
 
 ## Largest correlations of a non-line feature with the home spread
 
@@ -109,11 +119,30 @@ nothing in it from game lines. Its Elo code, read only:
   `line_adj`, `team_nick`, `team_color`, `team_color2`, `team_logo_espn`, `over_probability`,
   `under_probability`, `hold`
 
-Elo family columns in the build (18): `away_elo_4wk_trend`, `away_elo_pre`, `away_qb_elo_4wk_trend`,
-`away_qb_elo_pre`, `away_qb_value_4wk_trend`, `away_qb_value_pre`, `home_elo_4wk_trend`,
-`home_elo_pre`, `home_qb_elo_4wk_trend`, `home_qb_elo_pre`, `home_qb_value_4wk_trend`,
-`home_qb_value_pre`, `elo_4wk_trend_diff`, `elo_pre_diff`, `qb_elo_4wk_trend_diff`,
-`qb_elo_pre_diff`, `qb_value_4wk_trend_diff`, `qb_value_pre_diff`
+The `elo` feature group (`--disable-feature-groups elo`) drops 18 columns of the build; the Elo
+family found from the Elo stat names is 18 columns, and the check above says whether they are the
+same.
+
+| Column | How it carries the market |
+| --- | --- |
+| `away_elo_4wk_trend` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `away_elo_pre` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `away_qb_elo_4wk_trend` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `away_qb_elo_pre` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `away_qb_value_4wk_trend` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `away_qb_value_pre` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `home_elo_4wk_trend` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `home_elo_pre` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `home_qb_elo_4wk_trend` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `home_qb_elo_pre` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `home_qb_value_4wk_trend` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `home_qb_value_pre` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `elo_4wk_trend_diff` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `elo_pre_diff` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `qb_elo_4wk_trend_diff` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `qb_elo_pre_diff` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `qb_value_4wk_trend_diff` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
+| `qb_value_pre_diff` | market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py |
 
 ## ETL references to a line column name
 

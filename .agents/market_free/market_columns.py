@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 from nfl_predictor import constants
-from nfl_predictor.ml import feature_spec
+from nfl_predictor.ml import feature_spec, walk_forward
 from nfl_predictor.utils.polars.finalize import build_final_column_order
 
 HERE = Path(__file__).resolve().parent
@@ -93,6 +93,17 @@ ELO_STATS = (*constants.ELO_COLUMNS, "elo_4wk_trend", "qb_elo_4wk_trend", "qb_va
 NFELOQB_ELO = Path("nfeloqb/Resources/elo.py")
 NFELOQB_EVIDENCE = re.compile(r"reg_vegas|wt_ratings|wt_rating_elo")
 NFELOQB_WIN_TOTALS = Path("nfeloqb/Manual Data/wt_ratings.csv")
+# The feature group that drops the Elo family, and how each of its columns carries the market.
+ELO_GROUP = "elo"
+MARKET_INFORMED_SOURCE = (
+    "market-informed through the preseason Vegas win-total regression in ../nfeloqb "
+    "Resources/elo.py"
+)
+# The two market-free command lines a backtest takes.
+LINES_ONLY_COMMAND = (
+    "nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform"
+)
+NO_MARKET_COMMAND = f"{LINES_ONLY_COMMAND} --disable-feature-groups {ELO_GROUP}"
 
 
 class InventoryError(RuntimeError):
@@ -312,20 +323,42 @@ def _correlations(frame: pd.DataFrame, feature_columns: list[str]) -> list[dict[
     return rows
 
 
-def _exclusion(frame: pd.DataFrame, inventory: set[str]) -> dict[str, Any]:
-    """Return which inventory columns enter the feature spec under each market selection."""
+# The selections the exclusion check builds a feature spec for: a label (the backtest options
+# that give it), whether market features and the transform are on, and the groups disabled.
+SELECTIONS: tuple[tuple[str, bool, bool, tuple[str, ...]], ...] = (
+    ("--exclude-market --no-market-transform", False, False, ()),
+    ("--exclude-market", False, True, ()),
+    (
+        "--exclude-market --no-market-transform --disable-feature-groups elo",
+        False,
+        False,
+        (ELO_GROUP,),
+    ),
+    ("(default: market features, transformed)", True, True, ()),
+)
+
+
+def _exclusion(
+    frame: pd.DataFrame, inventory: set[str], market_informed: set[str]
+) -> dict[str, Any]:
+    """Return which inventory and market-informed columns enter the spec under each selection."""
     result: dict[str, Any] = {}
-    for include, transform in ((False, False), (False, True), (True, True)):
+    for label, include, transform, groups in SELECTIONS:
+        dropped = walk_forward.resolve_feature_group_columns(list(frame.columns), groups)
         spec = feature_spec.build_feature_spec(
-            frame,
+            frame.drop(columns=dropped),
             feature_spec.FeatureSelection(
                 include_market=include, max_cardinality_ratio=0.5, market_transform=transform
             ),
         )
-        key = f"include_market={include},market_transform={transform}"
-        result[key] = {
+        features = set(spec.feature_columns)
+        result[label] = {
+            "include_market": include,
+            "market_transform": transform,
+            "disabled_feature_groups": list(groups),
             "feature_columns": len(spec.feature_columns),
-            "inventory_columns_in_features": sorted(set(spec.feature_columns) & inventory),
+            "inventory_columns_in_features": sorted(features & inventory),
+            "market_informed_columns_in_features": sorted(features & market_informed),
         }
     return result
 
@@ -397,8 +430,10 @@ def build_inventory(data_path: Path, nfeloqb: Path) -> dict[str, Any]:
     completed = frame[frame["home_score"].notna()] if "home_score" in frame.columns else frame
     correlations = _correlations(completed, feature_range)
     near_copies = [row for row in correlations if row["abs_corr"] >= NEAR_COPY_CORRELATION]
-    exclusion = _exclusion(completed, set(inventory))
     elo_columns = _elo_columns(header)
+    elo_group = walk_forward.resolve_feature_group_columns(header, [ELO_GROUP])
+    exclusion = _exclusion(completed, set(inventory), set(elo_columns))
+    no_market_information = exclusion[SELECTIONS[2][0]]
 
     checks = {
         "build_lines_are_the_five_line_columns": sorted(lines_in_build)
@@ -411,8 +446,13 @@ def build_inventory(data_path: Path, nfeloqb: Path) -> dict[str, Any]:
         "no_non_line_column_near_a_copy_of_the_spread": not near_copies,
         "market_excluded_specs_carry_no_inventory_column": all(
             not entry["inventory_columns_in_features"]
-            for key, entry in exclusion.items()
-            if key.startswith("include_market=False")
+            for entry in exclusion.values()
+            if not entry["include_market"]
+        ),
+        "elo_group_drops_exactly_the_elo_family": sorted(elo_group) == sorted(elo_columns),
+        "no_market_information_spec_carries_no_market_column": not (
+            no_market_information["inventory_columns_in_features"]
+            or no_market_information["market_informed_columns_in_features"]
         ),
     }
     return {
@@ -438,6 +478,10 @@ def build_inventory(data_path: Path, nfeloqb: Path) -> dict[str, Any]:
         "exclusion": exclusion,
         "indirect_market_inputs": {
             "elo_family_columns_in_build": elo_columns,
+            "elo_group_columns": elo_group,
+            "market_informed_columns": [
+                {"column": column, "source": MARKET_INFORMED_SOURCE} for column in elo_columns
+            ],
             "nfeloqb": _nfeloqb_evidence(nfeloqb),
         },
         "checks": checks,
@@ -492,7 +536,7 @@ def _markdown(result: dict[str, Any]) -> str:
     add(f"  - training-time transforms of the lines: {len(result['training_time_transforms'])}")
     add(f"- ETL references to a line column name: {len(result['etl_call_sites'])}")
     add(
-        "- Indirect market inputs (Elo family columns, not computed from game lines): "
+        "- Market-informed columns (the Elo family, not computed from game lines): "
         f"{len(result['indirect_market_inputs']['elo_family_columns_in_build'])}"
     )
     add("")
@@ -517,13 +561,20 @@ def _markdown(result: dict[str, Any]) -> str:
         )
         add(f"| `{column}` | {source} |")
     add("")
+    add("## Market-free command lines")
+    add("")
+    add(f"- No betting-line column (the Elo columns stay): `{LINES_ONLY_COMMAND}`")
+    add(f"- No market information at all: `{NO_MARKET_COMMAND}`")
+    add("")
     add("## Market selection and the feature spec on this build")
     add("")
-    add("| Selection | Feature columns | Inventory columns among them |")
-    add("| --- | --- | --- |")
-    for key, entry in result["exclusion"].items():
-        found = ", ".join(f"`{c}`" for c in entry["inventory_columns_in_features"]) or "none"
-        add(f"| `{key}` | {entry['feature_columns']} | {found} |")
+    add("| Backtest options | Features | Line-derived among them | Market-informed among them |")
+    add("| --- | --- | --- | --- |")
+    for label, entry in result["exclusion"].items():
+        lines = ", ".join(f"`{c}`" for c in entry["inventory_columns_in_features"]) or "none"
+        informed = entry["market_informed_columns_in_features"]
+        informed_text = f"{len(informed)} Elo columns" if informed else "none"
+        add(f"| `{label}` | {entry['feature_columns']} | {lines} | {informed_text} |")
     add("")
     add("## Largest correlations of a non-line feature with the home spread")
     add("")
@@ -583,9 +634,16 @@ def _markdown(result: dict[str, Any]) -> str:
         )
     add("")
     add(
-        f"Elo family columns in the build ({len(indirect['elo_family_columns_in_build'])}): "
-        + ", ".join(f"`{c}`" for c in indirect["elo_family_columns_in_build"])
+        f"The `{ELO_GROUP}` feature group (`--disable-feature-groups {ELO_GROUP}`) drops "
+        f"{len(indirect['elo_group_columns'])} columns of the build; the Elo family found from "
+        f"the Elo stat names is {len(indirect['elo_family_columns_in_build'])} columns, and the "
+        "check above says whether they are the same."
     )
+    add("")
+    add("| Column | How it carries the market |")
+    add("| --- | --- |")
+    for entry in indirect["market_informed_columns"]:
+        add(f"| `{entry['column']}` | {entry['source']} |")
     add("")
     add("## ETL references to a line column name")
     add("")

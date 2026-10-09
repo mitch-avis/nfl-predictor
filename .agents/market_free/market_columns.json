@@ -3,7 +3,9 @@
   "checks": {
     "build_lines_are_the_five_line_columns": true,
     "build_market_named_columns_are_the_lines": true,
+    "elo_group_drops_exactly_the_elo_family": true,
     "market_excluded_specs_carry_no_inventory_column": true,
+    "no_market_information_spec_carries_no_market_column": true,
     "no_non_line_column_near_a_copy_of_the_spread": true,
     "no_published_non_line_column_written_from_the_lines": true,
     "schema_market_named_columns_are_the_lines": true
@@ -685,22 +687,101 @@
     ]
   },
   "exclusion": {
-    "include_market=False,market_transform=False": {
-      "feature_columns": 462,
-      "inventory_columns_in_features": []
-    },
-    "include_market=False,market_transform=True": {
-      "feature_columns": 462,
-      "inventory_columns_in_features": []
-    },
-    "include_market=True,market_transform=True": {
+    "(default: market features, transformed)": {
+      "disabled_feature_groups": [],
       "feature_columns": 466,
+      "include_market": true,
       "inventory_columns_in_features": [
         "away_market_prob",
         "home_market_prob",
         "market_home_margin",
         "market_total_line"
-      ]
+      ],
+      "market_informed_columns_in_features": [
+        "away_elo_4wk_trend",
+        "away_elo_pre",
+        "away_qb_elo_4wk_trend",
+        "away_qb_elo_pre",
+        "away_qb_value_4wk_trend",
+        "away_qb_value_pre",
+        "elo_4wk_trend_diff",
+        "elo_pre_diff",
+        "home_elo_4wk_trend",
+        "home_elo_pre",
+        "home_qb_elo_4wk_trend",
+        "home_qb_elo_pre",
+        "home_qb_value_4wk_trend",
+        "home_qb_value_pre",
+        "qb_elo_4wk_trend_diff",
+        "qb_elo_pre_diff",
+        "qb_value_4wk_trend_diff",
+        "qb_value_pre_diff"
+      ],
+      "market_transform": true
+    },
+    "--exclude-market": {
+      "disabled_feature_groups": [],
+      "feature_columns": 462,
+      "include_market": false,
+      "inventory_columns_in_features": [],
+      "market_informed_columns_in_features": [
+        "away_elo_4wk_trend",
+        "away_elo_pre",
+        "away_qb_elo_4wk_trend",
+        "away_qb_elo_pre",
+        "away_qb_value_4wk_trend",
+        "away_qb_value_pre",
+        "elo_4wk_trend_diff",
+        "elo_pre_diff",
+        "home_elo_4wk_trend",
+        "home_elo_pre",
+        "home_qb_elo_4wk_trend",
+        "home_qb_elo_pre",
+        "home_qb_value_4wk_trend",
+        "home_qb_value_pre",
+        "qb_elo_4wk_trend_diff",
+        "qb_elo_pre_diff",
+        "qb_value_4wk_trend_diff",
+        "qb_value_pre_diff"
+      ],
+      "market_transform": true
+    },
+    "--exclude-market --no-market-transform": {
+      "disabled_feature_groups": [],
+      "feature_columns": 462,
+      "include_market": false,
+      "inventory_columns_in_features": [],
+      "market_informed_columns_in_features": [
+        "away_elo_4wk_trend",
+        "away_elo_pre",
+        "away_qb_elo_4wk_trend",
+        "away_qb_elo_pre",
+        "away_qb_value_4wk_trend",
+        "away_qb_value_pre",
+        "elo_4wk_trend_diff",
+        "elo_pre_diff",
+        "home_elo_4wk_trend",
+        "home_elo_pre",
+        "home_qb_elo_4wk_trend",
+        "home_qb_elo_pre",
+        "home_qb_value_4wk_trend",
+        "home_qb_value_pre",
+        "qb_elo_4wk_trend_diff",
+        "qb_elo_pre_diff",
+        "qb_value_4wk_trend_diff",
+        "qb_value_pre_diff"
+      ],
+      "market_transform": false
+    },
+    "--exclude-market --no-market-transform --disable-feature-groups elo": {
+      "disabled_feature_groups": [
+        "elo"
+      ],
+      "feature_columns": 444,
+      "include_market": false,
+      "inventory_columns_in_features": [],
+      "market_informed_columns_in_features": [],
+      "market_transform": false
     }
   },
   "feature_range": {
@@ -728,6 +809,100 @@
       "qb_elo_pre_diff",
       "qb_value_4wk_trend_diff",
       "qb_value_pre_diff"
+    ],
+    "elo_group_columns": [
+      "away_elo_4wk_trend",
+      "away_elo_pre",
+      "away_qb_elo_4wk_trend",
+      "away_qb_elo_pre",
+      "away_qb_value_4wk_trend",
+      "away_qb_value_pre",
+      "elo_4wk_trend_diff",
+      "elo_pre_diff",
+      "home_elo_4wk_trend",
+      "home_elo_pre",
+      "home_qb_elo_4wk_trend",
+      "home_qb_elo_pre",
+      "home_qb_value_4wk_trend",
+      "home_qb_value_pre",
+      "qb_elo_4wk_trend_diff",
+      "qb_elo_pre_diff",
+      "qb_value_4wk_trend_diff",
+      "qb_value_pre_diff"
+    ],
+    "market_informed_columns": [
+      {
+        "column": "away_elo_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_elo_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_qb_elo_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_qb_elo_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_qb_value_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "away_qb_value_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_elo_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_elo_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_qb_elo_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_qb_elo_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_qb_value_4wk_trend",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "home_qb_value_pre",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "elo_4wk_trend_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "elo_pre_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "qb_elo_4wk_trend_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "qb_elo_pre_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "qb_value_4wk_trend_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      },
+      {
+        "column": "qb_value_pre_diff",
+        "source": "market-informed through the preseason Vegas win-total regression in ../nfeloqb Resources/elo.py"
+      }
     ],
     "nfeloqb": {
       "elo_source": "/home/mitch/workspace/nfeloqb/nfeloqb/Resources/elo.py",

@@ -114,21 +114,50 @@ def _config(line_source: str) -> data_collection.DataCollectionConfig:
 
 def test_the_line_source_defaults_to_the_stored_lines(monkeypatch: pytest.MonkeyPatch) -> None:
     """Without the option the ETL keeps today's stored lines."""
+    # Arrange
     monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
 
-    assert data_collection._parse_args([]).line_source == constants.LINE_SOURCE_STORED
-    assert data_collection._resolve_config(None).line_source == constants.LINE_SOURCE_STORED
+    # Act
+    parsed = data_collection._parse_args([])
+
+    # Assert
+    assert parsed.line_source == constants.LINE_SOURCE_STORED
 
 
-def test_the_line_source_option_accepts_pick_time_only_among_new_values(
+def test_the_resolved_default_config_keeps_the_stored_lines(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``--line-source pick_time`` selects the candidate; an unknown source is refused."""
+    """The config built without arguments (the weekly refresh) keeps the stored lines too."""
+    # Arrange
     monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
 
+    # Act
+    resolved = data_collection._resolve_config(None)
+
+    # Assert
+    assert resolved.line_source == constants.LINE_SOURCE_STORED
+
+
+def test_the_line_source_option_accepts_pick_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--line-source pick_time`` selects the candidate."""
+    # Arrange
+    monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
+
+    # Act
     chosen = data_collection._parse_args(["--line-source", "pick_time"])
 
+    # Assert
     assert chosen.line_source == constants.LINE_SOURCE_PICK_TIME
+
+
+def test_the_line_source_option_refuses_an_unknown_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unknown line source is refused."""
+    # Arrange
+    monkeypatch.setattr(data_collection, "_default_max_season", lambda: 2025)
+
+    # Act & Assert
     with pytest.raises(SystemExit):
         data_collection._parse_args(["--line-source", "closing"])
 
@@ -137,6 +166,7 @@ def test_the_stored_source_never_reads_nfelo_and_fills_as_before(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The default path fetches nothing new and calls the line fills exactly as today."""
+    # Arrange
     schedule_calls: list[list[int]] = []
     _patch_sources(monkeypatch, schedule_calls)
     fills: list[str] = []
@@ -158,10 +188,12 @@ def test_the_stored_source_never_reads_nfelo_and_fills_as_before(
     monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", moneyline_fill)
     metadata: dict[str, object] = {}
 
+    # Act
     games = data_collection.collect_all_data(
         [_SEASON], config=_config("stored"), market_lines_metadata=metadata
     )
 
+    # Assert
     assert fills == ["future", "moneyline"]
     assert games.select("home_spread", "home_moneyline").row(0) == (-3.0, -160)
     assert metadata == {}
@@ -172,18 +204,21 @@ def test_the_pick_time_source_anchors_to_the_opener_and_records_the_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Under pick_time the opener replaces the stored line, priced by the earlier seasons' map."""
+    # Arrange
     schedule_calls: list[list[int]] = []
     _patch_sources(monkeypatch, schedule_calls)
     monkeypatch.setattr(nfelo_lines, "load_nfelo_lines", lambda **_kwargs: _snapshot())
     monkeypatch.setattr(data_collection.game_utils, "scrape_survivor_grid_spreads", dict)
     metadata: dict[str, object] = {}
+    expected = moneyline_map.fit_spread_moneyline_map(_price_history())
+    assert expected is not None
 
+    # Act
     games = data_collection.collect_all_data(
         [_SEASON], config=_config("pick_time"), market_lines_metadata=metadata
     )
 
-    expected = moneyline_map.fit_spread_moneyline_map(_price_history())
-    assert expected is not None
+    # Assert
     row = games.row(0, named=True)
     assert (row["home_spread"], row["away_spread"]) == (-6.0, 6.0)
     assert (row["home_moneyline"], row["away_moneyline"]) == expected.moneylines(-6.0)
@@ -198,15 +233,15 @@ def test_the_pick_time_source_anchors_to_the_opener_and_records_the_run(
     assert seasons[str(_SEASON)]["moneylines_from_map"] == 1
 
 
-def test_main_writes_the_line_record_for_every_build_so_none_goes_stale(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Every build writes its record, so a stored build replaces an earlier pick-time record."""
+_PICK_TIME_RECORD = {"line_source": "pick_time", "nfelo": {"sha256": "abc"}}
+
+
+def _patch_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run main without writing datasets; a pick-time collection fills in its line record."""
     monkeypatch.setattr(clock, "local_today", lambda: date(2026, 9, 30))
     monkeypatch.setattr(data_collection, "save_dataframe", lambda *_a, **_k: None)
     monkeypatch.setattr(polars_utils, "filter_completed_games", lambda df: df)
     monkeypatch.setattr(polars_utils, "filter_upcoming_games", lambda df, _s, _w: df)
-    record = {"line_source": "pick_time", "nfelo": {"sha256": "abc"}}
 
     def fake_collect(
         _seasons: list[int],
@@ -217,18 +252,47 @@ def test_main_writes_the_line_record_for_every_build_so_none_goes_stale(
     ) -> pl.DataFrame:
         del strength_snapshots
         if config.line_source == "pick_time":
-            market_lines_metadata.update(record)
+            market_lines_metadata.update(_PICK_TIME_RECORD)
         return pl.DataFrame({"season": [2026], "week": [4], "away_score": [None]})
 
     monkeypatch.setattr(data_collection, "collect_all_data", fake_collect)
-    path = tmp_path / f"{constants.MARKET_LINES_METADATA_NAME}.json"
-    base = ["--min-season", "2026", "--max-season", "2026", "--data-dir", str(tmp_path)]
 
-    data_collection.main(base)
-    assert json.loads(path.read_text(encoding="utf-8")) == {"line_source": "stored"}
 
-    data_collection.main([*base, "--line-source", "pick_time"])
-    assert json.loads(path.read_text(encoding="utf-8")) == record
+def _main_args(data_dir: Path) -> list[str]:
+    """Return the arguments of a one-season build into ``data_dir``."""
+    return ["--min-season", "2026", "--max-season", "2026", "--data-dir", str(data_dir)]
 
-    data_collection.main(base)
-    assert json.loads(path.read_text(encoding="utf-8")) == {"line_source": "stored"}
+
+def _line_record(data_dir: Path) -> object:
+    """Return the line record written into ``data_dir``."""
+    path = data_dir / f"{constants.MARKET_LINES_METADATA_NAME}.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_main_writes_the_line_record_of_a_pick_time_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pick-time build writes its whole record beside the datasets."""
+    # Arrange
+    _patch_main(monkeypatch)
+
+    # Act
+    data_collection.main([*_main_args(tmp_path), "--line-source", "pick_time"])
+
+    # Assert
+    assert _line_record(tmp_path) == _PICK_TIME_RECORD
+
+
+def test_main_writes_the_line_record_for_every_build_so_none_goes_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every build writes its record, so a stored build replaces an earlier pick-time record."""
+    # Arrange
+    _patch_main(monkeypatch)
+    data_collection.main([*_main_args(tmp_path), "--line-source", "pick_time"])
+
+    # Act
+    data_collection.main(_main_args(tmp_path))
+
+    # Assert
+    assert _line_record(tmp_path) == {"line_source": "stored"}

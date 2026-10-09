@@ -173,17 +173,18 @@ are not advisory.
     defect until the user approves it and it is recorded here. The season-weighting gap closed in
     `0.18.0` (both train unweighted, task 55.8), and the probability-path gap in `0.32.0` (every
     run type submits the deterministic floor, task 56.5), the device in 2026-09-28 (the two-seed
-    GPU reference, task 55.4), and the final fit's hold-out in
-    `0.33.0` (the final fit trains on every completed game, like each fold). Open gaps, all
-    scheduled:
+    GPU reference, task 55.4), the final fit's hold-out in
+    `0.33.0` (the final fit trains on every completed game, like each fold), and the line timing
+    in `0.44.0` (task 56.6: both anchor to and train on pick-time lines, and the adopted-settings
+    reference of 2026-10-09 is production's floor-sigma pool; the one approximation left is that a
+    completed game carries nfelo's opening line while production reads nfelo's latest line at run
+    time). Open gaps, all scheduled:
     - the floor's sigma and start week (approved by the user 2026-09-28): a default
       `nfl-predictor backtest` (three seasons from week 3, no `--floor-sigma-reference-runs`)
       scores every week at `SCORE_DIFF_STD_DEV`, while production pools the GPU reference and
       stage 1 walks forward from week 1. An arm that judges probabilities runs from 2007 week 1 or
       passes `--floor-sigma-reference-runs` with the GPU reference, and passes
-      `--wf-start-week 1`; arms compared only with each other may keep the default;
-    - line timing: backtests anchor to and score against the stored, probably closing, lines,
-      while production anchors to mid-week lines and picks are made before Thursday (task 56.6).
+      `--wf-start-week 1`; arms compared only with each other may keep the default.
 12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is
     applied as written. If the result falls between its branches, or its first condition fails
     and a fallback branch rescues the preferred outcome, the result goes to the user as a

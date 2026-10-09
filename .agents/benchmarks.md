@@ -441,9 +441,10 @@ an independent reviewer's own rescore and `REVIEW.md` in the run directory named
   `[+0.00068, +0.00351]`; without 2022 `+0.00297` `[+0.00172, +0.00423]`. Weeks 1 and 2 alone
   (303 games each) include zero.
 
-## GPU reference (2026-09-28, rungs L1-L2, current)
+## GPU reference (2026-09-28, rungs L1-L2; superseded on 2026-10-09)
 
-The reference for every later arm: `models/step3_gpu_reference/l1_seed42/` and `l2_seed7/`
+The reference for every arm from 2026-09-28 to 2026-10-09, replaced by the adopted-settings
+reference (below): `models/step3_gpu_reference/l1_seed42/` and `l2_seed7/`
 (checkpoints named in each `metadata.json`), `nfl-predictor backtest` on
 `data/completed_games_ml.m54_flip_through_2025.csv` (`2d4111a6...`), seasons 2007-2025 from week
 1 (328 folds, 4943 games), the floor, `market_anchor` and `market_transform` on, 200 trees,
@@ -557,3 +558,55 @@ zero everywhere. All-weeks ranks (best first): Brier QB, R0, NO, S2, T2, S8, PT;
 NO, R0, T2, S8, PT; margin MAE S2, QB, R0, NO, S8, T2, PT; pool NO, QB, S2, R0, S8, T2, PT; pick
 accuracy S2, NO, R0, T2, QB, S8, PT. The T2 build also moves the `qb_def_adj` values (they read
 the strength snapshot), so a QB-plus-new-`K` combination would differ from what QB measured.
+
+## Adopted-settings reference and market-free baselines (2026-10-09, `models/step4_reference/`)
+
+The current GPU reference from 2026-10-09: `models/step4_reference/adopted_seed42/` and
+`adopted_seed7/`, on code `2522cb6` (`0.44.0`), input `inputs/adopted.csv` (`855a9088...`, the
+verbatim through-2025 cut of the rebuilt `data/`: pick-time lines, no defense-adjusted
+quarterback columns, the next-opponent identity pair pruned), the GPU reference's command
+(2007-2025 from week 1, 328 folds, 4943 games, the floor with each run's own error pool, market
+anchor and transform on, 200 trees, unweighted, every fold `cuda`). Rules: `HYPOTHESIS.md`
+there; second key: `REVIEW.md` there (a separate reviewer, recomputed from the fold checkpoints,
+`compare` matched exactly); reproduce with the commands at the top of `REVIEW.md`
+(`review/compare_*.json`). Two seeds averaged per game, candidate minus reference, 95% intervals.
+
+- The reference against the pick-time lines test (`models/step4/PT_seed*`, the same games and
+  inputs apart from the removed columns), all weeks: deterministic Brier `+0.00032`
+  `[-0.00021, +0.00085]` (the rule's tie, so it was adopted), log loss `+0.00080`
+  `[-0.00041, +0.00200]`, pick accuracy `+0.0029` `[-0.0007, +0.0066]`, pool points `+14.0`
+  `[-68.0, +95.0]`, margin MAE `+0.0094` `[-0.0118, +0.0301]`. Week 1 favors the pick-time lines
+  test (Brier `+0.00213` `[+0.00031, +0.00398]`, log loss `+0.00520` `[+0.00119, +0.00922]`),
+  about the size of that arm's own seed-7-minus-seed-42 week-1 move (`+0.00217`). The reference's
+  own seed-7-minus-seed-42 all-weeks Brier is `+0.00066` `[-0.00013, +0.00144]`.
+- The market yardstick, all weeks: the reference minus the pick-time line `+0.00105`
+  `[-0.00016, +0.00222]`, minus the closing line (`compare --market-from models/step4/R0_seed42`)
+  `+0.00412` `[+0.00246, +0.00586]`; the pick-time line itself trails the close by `+0.00307`
+  `[+0.00173, +0.00447]`.
+
+The market-free baselines, same build and code (`marketfree_lines_seed*`: no betting-line column,
+no anchor, no transform, 456 features; `marketfree_all_seed*`: also no Elo column, 438 features),
+all weeks: deterministic Brier / log loss / pick accuracy / pool points (week-block bootstrap) /
+margin MAE.
+
+- Without betting lines minus the reference: `+0.00311` `[+0.00137, +0.00479]` / `+0.00717`
+  `[+0.00335, +0.01090]` / `-0.0106` `[-0.0189, -0.0023]` / `-379.5` `[-636.5, -125.0]` /
+  `+0.0459` `[-0.0231, +0.1137]`. Against the pick-time line `+0.00415` `[+0.00205, +0.00627]`,
+  against the close `+0.00723` `[+0.00512, +0.00934]`.
+- Without betting lines or Elo minus the reference: `+0.00394` `[+0.00208, +0.00574]` /
+  `+0.00880` `[+0.00468, +0.01284]` / `-0.0110` `[-0.0195, -0.0024]` / `-524.0`
+  `[-788.0, -253.5]` / `+0.0796` `[+0.0056, +0.1507]`. Against the pick-time line `+0.00498`
+  `[+0.00276, +0.00719]`, against the close `+0.00806` `[+0.00584, +0.01032]`.
+- Without Elo minus with Elo (both without lines): `+0.00083` `[+0.00002, +0.00161]` / `+0.00163`
+  `[-0.00019, +0.00340]` / `-0.0004` `[-0.0053, +0.0048]` / `-144.5` `[-259.5, -30.0]` (by game
+  `[-336.0, +42.0]`) / `+0.0337` `[+0.0020, +0.0642]`.
+- Weeks 1 and 2: neither market-free run separates from the reference on any column except total
+  MAE for the one without Elo. By season, the run without lines trails in 14 of 19 seasons and
+  the one without lines or Elo in 15 (largest gaps 2013, 2007 and 2022; in 2022 every pick-time
+  line is the stored close).
+- The Elo probabilities in `data/qb_elos.csv` (partly market-informed: `../nfeloqb` pulls each
+  preseason Elo toward betting win totals, 2003-2023) on the same 4943 games: Brier QB Elo
+  `0.21620`, 538-style Elo `0.22001`, the pick-time line `0.21286`, the closing line `0.20979`,
+  the reference `0.21391`. The reference minus QB Elo `-0.00229` `[-0.00457, -0.00001]`; the run
+  without lines `+0.00081` `[-0.00131, +0.00295]` and the one without lines or Elo `+0.00164`
+  `[-0.00065, +0.00393]`, both ties with QB Elo.

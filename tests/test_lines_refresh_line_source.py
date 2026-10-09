@@ -352,15 +352,25 @@ def test_unknown_line_source_stops_the_refresh(data_dir: Path, nfelo_calls: list
 
 
 def test_pick_time_record_without_the_seasons_map_stops_the_refresh(
-    data_dir: Path, nfelo_calls: list[int]
+    data_dir: Path, nfelo_calls: list[int], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A pick-time build that fitted no map entry for the season cannot price its games."""
+    """A season without a map entry stops the refresh before any download or write."""
     # Arrange
     _write_record(data_dir, _pick_time_record(maps={"2025": SEASON_MAP.to_dict()}))
+    before = (data_dir / "all_data_ml.csv").read_bytes()
+    schedule_loads: list[int] = []
+
+    def load_schedule(*_args: object, **_kwargs: object) -> pl.DataFrame:
+        schedule_loads.append(1)
+        return pl.DataFrame(SCHEDULE, schema=_SCHEDULE_SCHEMA)
+
+    monkeypatch.setattr(lines_refresh.polars_utils, "load_schedule", load_schedule)
 
     # Act & Assert
     with pytest.raises(ValueError, match="2026"):
         lines_refresh.refresh_lines(SEASON, WEEK, data_dir=data_dir)
+    assert (schedule_loads, nfelo_calls) == ([], [])
+    assert (data_dir / "all_data_ml.csv").read_bytes() == before
 
 
 def test_pick_time_record_with_no_map_for_the_season_uses_the_fixed_conversion(

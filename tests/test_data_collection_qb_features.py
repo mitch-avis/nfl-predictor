@@ -48,6 +48,7 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Seasons missing from memory are loaded so career rates span the whole history."""
+    # Arrange
     in_memory = pl.DataFrame(
         _dropbacks(2001, 1, "NE", "TB", 20) + _dropbacks(2001, 1, "BUF", "JA", 12)
     )
@@ -72,6 +73,7 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
         }
     )
 
+    # Act
     out = data_collection._attach_qb_features(
         games,
         in_memory,
@@ -80,6 +82,7 @@ def test_attach_qb_features_loads_missing_history_and_joins_both_sides(
         family=data_collection.QbFamilyInputs(identity_path=_identity_file(tmp_path)),
     )
 
+    # Assert
     assert requested == [list(range(constants.NFLREADPY_MIN_SEASON, 2001))]
     assert refreshed == [False], "history seasons always come from the cache"
     row = out.row(0, named=True)
@@ -93,6 +96,7 @@ def test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Without an explicit path, the identity map comes from ``DATA_PATH/meta_data.csv``."""
+    # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
     monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
     _identity_file(tmp_path)
@@ -109,10 +113,12 @@ def test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default(
         }
     )
 
+    # Act
     out = data_collection._attach_qb_features(
         games, in_memory, max_season=2001, current_season=2026
     )
 
+    # Assert
     row = out.row(0, named=True)
     assert row["away_qb_history_dropbacks"] == 20
     assert row["home_qb_history_dropbacks"] == 12
@@ -123,6 +129,7 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
 ) -> None:
     """Rows without quarterback columns come back unchanged and trigger no loading."""
 
+    # Arrange
     def fail_load_pbp(*_args: Any, **_kwargs: Any) -> pl.DataFrame:
         """Fail if play-by-play is requested."""
         msg = "load_pbp should not be called"
@@ -131,6 +138,7 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
     monkeypatch.setattr(polars_utils, "load_pbp", fail_load_pbp)
     games = pl.DataFrame({"game_id": ["g1"], "season": [2001], "week": [1]})
 
+    # Act
     out = data_collection._attach_qb_features(
         games,
         pl.DataFrame(),
@@ -139,6 +147,7 @@ def test_attach_qb_features_leaves_rows_without_quarterbacks_alone(
         family=data_collection.QbFamilyInputs(identity_path=tmp_path / "missing.csv"),
     )
 
+    # Assert
     assert out.equals(games)
 
 
@@ -150,6 +159,7 @@ def test_attach_qb_features_adjusts_for_the_defense_snapshots(
     The previous season's play-by-play, loaded as history, supplies the league's snaps per
     dropback that convert the week-1 snapshot: 20 snaps over 10 dropbacks, so 2.
     """
+    # Arrange
     rushes = pl.DataFrame(_dropbacks(2000, 9, "XXX", None, 10)).with_columns(
         pl.lit(0, dtype=pl.Int64).alias("qb_dropback"), pl.lit(1, dtype=pl.Int64).alias("rush")
     )
@@ -179,6 +189,7 @@ def test_attach_qb_features_adjusts_for_the_defense_snapshots(
         }
     )
 
+    # Act
     out = data_collection._attach_qb_features(
         games,
         in_memory,
@@ -189,6 +200,7 @@ def test_attach_qb_features_adjusts_for_the_defense_snapshots(
         ),
     )
 
+    # Assert
     row = out.row(0, named=True)
     assert row["away_qb_dropback_epa"] == pytest.approx(0.2)
     assert row["away_qb_def_adj_epa"] == pytest.approx(0.2 + 0.1 * 2.0)
@@ -199,6 +211,7 @@ def test_collect_all_data_hands_the_strength_snapshots_to_the_qb_family(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Every processed week's snapshot reaches the quarterback family, without a caller's list."""
+    # Arrange
     season = 2001
     snapshot = pl.DataFrame(
         {
@@ -241,6 +254,8 @@ def test_collect_all_data_hands_the_strength_snapshots_to_the_qb_family(
     monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
     monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
 
+    # Act
     data_collection.collect_all_data([season])
 
+    # Assert
     assert received["family"].defense_snapshots.equals(snapshot)

@@ -53,8 +53,8 @@ FLOOR_SIGMA_MIN_POOL_SEASONS = 3
 # The walk-forward runs whose out-of-fold errors form the production pool (the weekly run and
 # `nfl-predictor train`), relative to the repository root; their fold checkpoints are only read.
 FLOOR_SIGMA_REFERENCE_RUNS = (
-    "models/step3_gpu_reference/l1_seed42",
-    "models/step3_gpu_reference/l2_seed7",
+    "models/step4_reference/adopted_seed42",
+    "models/step4_reference/adopted_seed7",
 )
 
 # URL for SurvivorGrid spreads (future games)

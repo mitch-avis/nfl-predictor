@@ -488,7 +488,7 @@ Where the pool comes from:
 - The production final fit (the weekly run, `nfl-predictor train`) pools the out-of-fold errors
   of the reference runs, `floor_sigma_reference_runs` in `config/weekly_run.yaml` and
   `--floor-sigma-reference-runs` for `train` (default: the two seeds of the GPU reference
-  walk-forward, `models/step3_gpu_reference/l1_seed42` and `l2_seed7`, whose fold checkpoints
+  walk-forward, `models/step4_reference/adopted_seed42` and `adopted_seed7`, whose fold checkpoints
   are only read), with, in the weekly run, stage 1's errors before the predicted week at every
   `(season, week)` the reference runs have no rows for: the seasons after the reference and the
   predicted season's earlier weeks (where both have a week, the reference's errors are used).

@@ -8,11 +8,14 @@ them before importing anything that loads one; the test modules import those onl
 
 Then ``tests.data_isolation.install`` points the package's data paths at a session directory and
 refuses the network for the whole session, before any test module imports the package (see that
-module). On top of it every test gets its own empty data directory, and a refused connection or
-lookup fails the test it happened in, or the session when no test was running. So no test reads
-the checkout's ``data/``, writes its caches or line record, or downloads anything; a test that
-checks the packaged paths themselves asks for ``packaged_data_paths``. Run directories under
-``models/`` are not redirected; tests that write run artifacts pass their own directories.
+module). On top of it every test gets its own empty data directory (paths a module copied at
+import time keep the shared session directory), and a refused connection or lookup fails the next
+test to finish, or the session when none does. So no test reads the checkout's data through
+``constants.DATA_PATH``, writes its caches or line record, or downloads anything; a test that
+checks the packaged paths themselves asks for ``packaged_data_paths``. Not redirected (see
+``tests/data_isolation.py``): run directories under ``models/``, ``api.settings.Settings()``
+built without a root (the checkout's ``data/web/app.db``), and the relative ``data/`` defaults of
+``cli/rankings.py``; tests that touch them pass their own paths.
 """
 
 from __future__ import annotations

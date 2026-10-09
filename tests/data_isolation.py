@@ -7,16 +7,24 @@ the package:
   directory for the whole session, so every path a module copies from them at import time (the
   lines refresh's and the week builder's data directory, the default strength-snapshot file and
   the dataclass defaults built from it) starts out redirected too. ``conftest.py`` points the
-  constants at a fresh directory for each test on top of that.
+  constants at a fresh directory for each test on top of that; the import-time copies keep the
+  shared session directory, not the per-test one.
 - It refuses every TCP connection and every lookup of a host name other than ``localhost``, for
   the whole session, module- and session-scoped fixtures included. A refusal raises ``OSError``
   (``socket.gaierror`` for a lookup), as on an offline machine, so code that degrades on a
   network failure still runs and an offline machine never waits on DNS; the attempt is recorded
   and fails the test (or the session) in ``conftest.py``.
 
-It covers ``data/`` only. The run directories under ``models/`` are built from
-``constants.ROOT_DIR`` when they are used, so they cannot be redirected without a package change;
-tests that write run artifacts pass their own directories.
+It covers the data paths built from ``constants.DATA_PATH`` only. Out of scope, because none of
+them reads that constant, so redirecting them would need a package change; tests that touch them
+pass their own paths:
+
+- the run directories under ``models/``, built from ``constants.ROOT_DIR`` when they are used;
+- ``api.settings.Settings()`` built without a root, which fills its data, state and database
+  paths from ``constants.ROOT_DIR`` in ``model_post_init`` (the checkout's ``data/web/app.db``,
+  the database the running web app uses);
+- the relative argparse defaults in ``cli/rankings.py`` (``Path("data/...")`` for
+  ``--data-ml``, ``--data-schedule`` and ``--out-dir``), resolved against the current directory.
 """
 
 from __future__ import annotations

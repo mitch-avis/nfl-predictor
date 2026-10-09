@@ -381,17 +381,17 @@ gate" (add `--web` when `web/` changed, `--quick` to skip pytest while iterating
   contract: do not propose schema changes there casually, and never edit `../nfeloqb` outputs from
   this repo. `../nfeloqb/Other Data/meta_data.csv` maps Elo QB names to GSIS ids and is the
   intended identity bridge for QB-level PBP features.
-- `../nfl-sos-ratings` is the reference implementation for the head-to-head-excluded
-  opponent-profiling method this repo is porting and for its simultaneous ridge
-  (`simultaneous_adjustment.py`), the method's all-hops generalization; how the method maps here is
-  in `.agents/feature_crosswalk.md` section 3.1. It is also the reference for PBP-derived per-snap
-  EPA, success and explosive rates, and special-teams EPA. Read its
-  `README.md`, `AGENTS.md`, and `docs/` (`methodology.md`, `validation-report.md`, both stats
-  catalogs) before designing any adjusted feature, and note that its own walk-forward puts the
-  within-season ridge at parity with SRS and raw EPA and behind prior-carrying Elo. Port ideas and
-  formulas into this repo's Polars ETL; do not import it as a dependency and do not modify it from
-  here. The repo-root symlink `nfl-sos-ratings -> ../nfl-sos-ratings/` is gitignored and exists
-  only for convenient reading; always state which repo you are inspecting.
+- `../nfl-sos-ratings` is being absorbed into this repo (roadmap step 6, approved 2026-10-08):
+  its team and quarterback ratings, data sources and web pages are ported here, starting from
+  the frozen commit recorded in `.agents/sos_port_source.md` with what was open there at that
+  commit. Read it at that commit, read-only: never modify it, and do not import it as a
+  dependency; the port copies its methods into this repo's Polars ETL with tests that match its
+  published outputs. Its fits live in `ridge.py` (the shared ridge solver), `team_rating.py`,
+  `qb_rating.py` and `team_prior.py`; its method is written up in `docs/methodology.md`, and
+  `docs/validation-report.md` compares its team rating with SRS, raw EPA and Elo on next-game
+  margins. How the method maps here today is in `.agents/feature_crosswalk.md` section 3.1. The
+  repo-root symlink `nfl-sos-ratings -> ../nfl-sos-ratings/` is gitignored and exists only for
+  convenient reading; always state which repo you are inspecting.
 - Leave untracked local files in neighboring repos alone (for example `../nfeloqb/.bash_history`).
 - Play-by-play comes from `nflreadpy.load_pbp`. nflreadpy caches only in memory, so cache selected
   columns per season as Parquet under `data/cache/nflreadpy/` with the same current-season refresh

@@ -201,7 +201,9 @@ Steps:
    default changes from it.
 6. **Absorb `nfl-sos-ratings` into this repo** (approved 2026-10-08: absorb fully; that repo
    finishes its in-flight work, the port starts from a frozen commit of it, and it then becomes
-   read-only). Each phase on its own branch, with an independent review:
+   read-only). The frozen commit is `9081bce` (2026-10-09); it, what changed there since this
+   plan, and what is still open or fragile there are in `.agents/sos_port_source.md`. Each phase
+   on its own branch, with an independent review:
    1. a scripted inventory (rule 10) of its data sources, metric registry columns, ratings,
       outputs and web pages against this repo's, plus a check that this repo's play-by-play
       aggregates match its game logs for the same seasons;
@@ -316,9 +318,10 @@ follow-ups below.
       last-8 windows) so it lands next to the existing rates and is measured the same way. The
       quarterback-game rows already carry `opponent_abbr` for this. Only if that shows signal,
       the ridge: dropback-weighted quarterback effects solved jointly with defenses (design in
-      `nfl-sos-ratings/simultaneous_adjustment.solve_qb_stat_ridge`). Ceiling to keep in mind:
-      the team-level `adj_off_pass_epa` is already opponent-adjusted, so the gain is confined to
-      where the quarterback's history diverges from the team's (new and traded starters).
+      `nfl-sos-ratings` `qb_rating.fit_qb_ratings` on its shared `ridge.py` solver). Ceiling to
+      keep in mind: the team-level `adj_off_pass_epa` is already opponent-adjusted, so the gain
+      is confined to where the quarterback's history diverges from the team's (new and traded
+      starters).
       Progress: the first step is built (`0.40.0`, the `qb_def_adj` group; per-dropback units
       since `0.41.0`, both reviewed) and is
       measured as arm QB of `.agents/step4_plan.md`. If it is not adopted, turn the group off by

@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.44.0] - 2026-10-09
+
+### Changed
+
+- `nfl-predictor data` builds pick-time market lines by default (`constants.DEFAULT_LINE_SOURCE`),
+  and so do the weekly run's data refresh and the web ETL and weekly jobs; `--line-source stored`
+  keeps the nflverse near-closing lines. Rebuild `data/` before the next fit: an older build still
+  has stored lines and the removed quarterback columns.
+- The model leaves `away_/home_next_opponent_abbr` out of every fit by default (the pruning list);
+  the ETL still writes them, and the backtest's `--disable-pruning` brings them back with the
+  other pruned columns.
+- The weekly run's `--wf-market-mode none` trains with no betting-line column, no anchoring and
+  no market transform.
+
+### Added
+
+- `nfl-predictor backtest --exclude-market`: with `--no-market-anchor --no-market-transform` a
+  walk-forward trains on no column derived from betting lines and still scores the market
+  yardstick.
+- An `elo` feature group (`--disable-feature-groups elo`) covering the 18 columns built from
+  `qb_elos.csv`, whose preseason Elo `../nfeloqb` pulls toward betting win totals; with the
+  market-free options it gives a backtest with no market information.
+- A generated inventory of the columns derived from betting lines and of the market-informed Elo
+  columns (`.agents/market_free/`).
+
+### Removed
+
+- The defense-adjusted quarterback rate (the `qb_def_adj` group, its six columns and constants):
+  it tied the current-settings baseline in two-seed walk-forwards.
+
+### Fixed
+
+- `nfl-predictor lines` refreshes upcoming games in the line source the data was built with; on a
+  pick-time build it used to put the stored lines back. A season with no fitted map stops before
+  anything is downloaded or written.
+- With market features excluded, a market transform column already inside the feature range is
+  excluded too.
+- Tests no longer write into the checkout's `data/` or download play-by-play: every test runs
+  against a private data directory with network connections refused.
+
 ## [0.43.0] - 2026-10-08
 
 ### Changed

@@ -989,6 +989,13 @@ def _build_season(
             sources.ratings.build(season)
         return games
     build = cache.cache.load(season, key)
+    if (
+        build is not None
+        and sources.ratings is not None
+        and not sources.ratings.can_reuse(build.ratings)
+    ):
+        log.warning("Season cache: %d holds no ratings; rebuilding it", season)
+        build = None
     if build is None:
         recorded: list[pl.DataFrame] = []
         games = process_season(

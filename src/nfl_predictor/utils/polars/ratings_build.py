@@ -97,6 +97,7 @@ IN_PROGRESS_KINDS = ("rating_ranges_by_week", "qb_rating_ranges_by_week")
 # The pre-week tables a season's build carries beside its published tables.
 PRE_WEEK_TEAMS = "pre_week_teams"
 PRE_WEEK_QUARTERBACKS = "pre_week_quarterbacks"
+_PRE_WEEK_TABLES = (PRE_WEEK_TEAMS, PRE_WEEK_QUARTERBACKS)
 
 # Pre-week columns and the feature names they publish as.
 _TEAM_FEATURES = {
@@ -445,6 +446,11 @@ class RatingsBuild:
         )
         return frames
 
+    @staticmethod
+    def can_reuse(frames: Mapping[str, pl.DataFrame]) -> bool:
+        """Return whether ``frames`` hold a season's pre-week tables, as a build records them."""
+        return all(name in frames for name in _PRE_WEEK_TABLES)
+
     def reuse(self, season: int, frames: Mapping[str, pl.DataFrame]) -> None:
         """Record a season's frames from a cached build instead of fitting them again.
 
@@ -452,7 +458,7 @@ class RatingsBuild:
             ValueError: If ``frames`` lacks a pre-week table, so it is not a ratings build.
 
         """
-        missing = [name for name in (PRE_WEEK_TEAMS, PRE_WEEK_QUARTERBACKS) if name not in frames]
+        missing = [name for name in _PRE_WEEK_TABLES if name not in frames]
         if missing:
             msg = f"season {season}'s cached ratings lack {', '.join(missing)}"
             raise ValueError(msg)

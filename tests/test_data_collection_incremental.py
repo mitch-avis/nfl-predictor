@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
+import json
 import shutil
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -635,6 +636,23 @@ def test_a_damaged_entry_is_rebuilt_and_rewritten_with_the_output_unchanged(
     assert warm.built == [2020, 2021]
     _assert_identical(rewarm, baseline.full)
     assert rewarm.built == [_CURRENT_SEASON]
+
+
+def test_an_entry_whose_manifest_lists_no_ratings_is_rebuilt_with_the_output_unchanged(
+    baseline: _Baseline, etl: _Run, warm_dir: Path
+) -> None:
+    # Arrange
+    manifest = _cache_dir(warm_dir) / "season_2020" / "manifest.json"
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["ratings"] = []
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    # Act
+    warm = _main(etl, warm_dir, "--incremental")
+
+    # Assert
+    _assert_identical(warm, baseline.full)
+    assert (warm.built, warm.rated) == ([2020, 2021], [2020, 2021])
 
 
 def test_the_full_rebuild_neither_reads_nor_writes_the_cache(baseline: _Baseline) -> None:

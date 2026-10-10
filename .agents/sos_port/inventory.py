@@ -1,0 +1,536 @@
+"""Generate the inventory of `nfl-sos-ratings` (at its frozen commit) against this repository.
+
+Run from the repository root:
+
+    .venv/bin/python .agents/sos_port/inventory.py
+
+It writes ``INVENTORY.md`` and ``inventory.json`` beside this file. Everything listed is found
+mechanically; only the classifications come from ``mapping.yaml``, and each is applied only where
+it resolves cleanly:
+
+- data sources: nflreadpy load calls, network fetches, web addresses and named data files, from
+  the abstract syntax tree of each repository's Python source (``inventory_scan.py``);
+- output columns: the schema of every ``{season}_{kind}.parquet`` it built for 1999-2025 (and the
+  two rank-range-by-week files it builds only for the season in progress), each column resolved
+  through its own metric registry, imported from the frozen commit;
+- the metric registry: every entry, read from the registry object itself;
+- ratings: its rating files' columns against this repository's strength snapshot and quarterback
+  columns (a subset of the column classification);
+- web: its API routes and pages, and this app's, from route decorators and the route tables.
+
+The run exits non-zero when a column, source or web item matches no rule or more than one, when a
+rule matches nothing, when a counterpart named for this repository does not exist, when a search
+that must find something finds nothing, or when an input is missing or not at its commit.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any
+
+import polars as pl
+import yaml
+from inventory_report import render
+from inventory_scan import (
+    Load,
+    Route,
+    components,
+    here_api_routes,
+    here_python_files,
+    page_routes,
+    scan_loads,
+    sos_api_routes,
+    sos_python_files,
+    tracked,
+)
+from port_audit import (
+    DATA,
+    HERE,
+    ROOT,
+    SEASONS,
+    SOS_DATA,
+    Audit,
+    SosCode,
+    check_sos_checkout,
+    portable,
+)
+from report_text import dump_json, season_ranges
+from sos_sources import classify_game_log_columns
+
+from nfl_predictor import constants
+from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.polars.pbp import PBP_TEAM_BOX_SCORE_COLUMNS, PBP_TEAM_GAME_COLUMNS
+from nfl_predictor.utils.polars.qb_stats import QB_GAME_SCHEMA
+
+MAPPING = HERE / "mapping.yaml"
+OUT_MD = HERE / "INVENTORY.md"
+OUT_JSON = HERE / "inventory.json"
+CLASSES = ("matched", "different", "missing")
+DATASET = DATA / "all_data_ml.csv"
+TEAM_STATS = DATA / "cache" / "nflreadpy" / f"team_stats_{SEASONS[-1]}_reg.parquet"
+FILE_NAME = re.compile(r"^(\d{4})_(.+)\.parquet$")
+SIDES = ("home_", "away_")
+
+
+@dataclass
+class Column:
+    """One output column of one file kind, resolved through its registry."""
+
+    kind: str
+    column: str
+    seasons: list[int]
+    base: str
+    prefix: str
+    suffix: str
+    registry_source: str
+    entity: str
+    code_source: str = ""
+    rule: str = ""
+    classification: str = ""
+    here: list[str] = field(default_factory=list)
+    phase: str = ""
+    note: str = ""
+
+
+# ---------------------------------------------------------------------------------------------
+# Inputs
+# ---------------------------------------------------------------------------------------------
+
+
+def output_columns(audit: Audit) -> tuple[dict[str, dict[str, list[int]]], dict[str, list[int]]]:
+    """Return each output kind's columns with the seasons that have them, and each kind's seasons.
+
+    A kind with a file in any of the completed seasons is read over those seasons only; a kind it
+    writes only for the season in progress (the rank ranges by week) is read where it exists.
+    """
+    files: dict[str, dict[int, Any]] = defaultdict(dict)
+    for path in sorted(SOS_DATA.glob("*.parquet")):
+        match = FILE_NAME.match(path.name)
+        if match is None:
+            audit.fail("output files", f"unexpected file name {path.name}")
+            continue
+        files[match.group(2)][int(match.group(1))] = path
+    if not files:
+        audit.fail("output files", f"no Parquet output under {portable(str(SOS_DATA))}")
+    columns: dict[str, dict[str, list[int]]] = {}
+    seasons_by_kind: dict[str, list[int]] = {}
+    for kind, by_season in sorted(files.items()):
+        completed = sorted(season for season in by_season if season in SEASONS)
+        chosen = completed or sorted(by_season)
+        seasons_by_kind[kind] = chosen
+        if completed and len(completed) != len(SEASONS):
+            missing = sorted(set(SEASONS) - set(completed))
+            audit.fail("output files", f"{kind} has no file for {missing}")
+        found: dict[str, list[int]] = defaultdict(list)
+        for season in chosen:
+            for name in pl.read_parquet_schema(audit.record(by_season[season])):
+                found[name].append(season)
+        columns[kind] = dict(found)
+    return columns, seasons_by_kind
+
+
+def load_registry(code: SosCode) -> Any:
+    """Import its metric registry from an extracted copy of the frozen commit."""
+    root = code.extract(
+        [
+            "nfl_sos_ratings/__init__.py",
+            "nfl_sos_ratings/metrics",
+            "nfl_sos_ratings/rating_ranges.py",
+        ]
+    )
+    sys.path.insert(0, str(root))
+    try:
+        from nfl_sos_ratings.metrics import get_registry  # noqa: PLC0415 - extracted at run time
+
+        return get_registry()
+    finally:
+        sys.path.remove(str(root))
+
+
+def affixes(registry: Any, column: str, base: str) -> tuple[str, str]:
+    """Return the prefix and suffix its registry resolves around ``base`` in ``column``."""
+    if column == base:
+        return "", ""
+    for rule in registry._prefix_rules:  # noqa: SLF001 - its own resolution order
+        if column.startswith(rule.prefix):
+            core = column[len(rule.prefix) :]
+            if registry._resolve_core(core) is not None:  # noqa: SLF001
+                return rule.prefix, core[len(base) :] if core.startswith(base) else ""
+    return "", column[len(base) :]
+
+
+def here_catalog(audit: Audit) -> dict[str, list[str]]:
+    """Return this repository's column and route sets a classification may name.
+
+    ``dataset`` is the per-team name of every published game-dataset column (the header of the
+    main checkout's ``all_data_ml.csv``, with the ``home_``/``away_`` side prefix removed).
+    """
+    header = audit.record(DATASET).open(encoding="utf-8").readline().strip().split(",")
+    team_level = sorted(
+        {name.removeprefix(side) for name in header for side in SIDES if name.startswith(side)}
+        | set(header)
+    )
+    catalog = {
+        "team_game": list(PBP_TEAM_GAME_COLUMNS),
+        "box_score": list(PBP_TEAM_BOX_SCORE_COLUMNS),
+        "team_stats": list(pl.read_parquet_schema(audit.record(TEAM_STATS))),
+        "qb_game": list(QB_GAME_SCHEMA),
+        "dataset": team_level,
+        "strength": list(constants.STRENGTH_SNAPSHOT_FILE_COLUMNS),
+    }
+    for name, values in catalog.items():
+        if not values:
+            audit.fail("catalog", f"this repository's {name} columns came back empty")
+    return catalog
+
+
+# ---------------------------------------------------------------------------------------------
+# Rules
+# ---------------------------------------------------------------------------------------------
+
+
+@dataclass
+class Rule:
+    """One classification rule from ``mapping.yaml``."""
+
+    id: str
+    spec: dict[str, Any]
+    hits: int = 0
+
+    def applies(self, kind: str) -> bool:
+        """Return whether the rule covers file kind ``kind``."""
+        kinds = self.spec.get("kinds", "*")
+        return kinds == "*" or kind in kinds
+
+    def matches(self, item: Column) -> bool:
+        """Return whether every matcher the rule gives holds for ``item``."""
+        spec = self.spec
+        if not self.applies(item.kind) or spec.get("rest"):
+            return False
+        checks = [
+            ("columns", lambda v: item.column in v),
+            ("match", lambda v: re.fullmatch(v, item.column) is not None),
+            ("base", lambda v: re.fullmatch(v, item.base) is not None),
+            ("prefix", lambda v: item.prefix == v),
+            ("suffix", lambda v: item.suffix == v),
+            ("source", lambda v: re.fullmatch(v, item.code_source or item.registry_source)),
+        ]
+        given = [(key, check) for key, check in checks if key in spec]
+        return bool(given) and all(check(spec[key]) for key, check in given)
+
+
+def counterparts(rule: Rule, item: Column) -> list[str]:
+    """Return the counterparts a rule names for ``item`` (templated with its names)."""
+    here_map = rule.spec.get("here_map", {})
+    raw = here_map.get(item.column, rule.spec.get("here", []))
+    names = [raw] if isinstance(raw, str) else list(raw)
+    core = item.column.removeprefix(item.prefix)
+    return [n.format(column=item.column, base=item.base, core=core) for n in names]
+
+
+def check_counterpart(ref: str, catalog: dict[str, list[str]]) -> bool:
+    """Return whether ``source:name`` names something that exists in this repository."""
+    source, _, name = ref.partition(":")
+    names = re.split(r"\s+[-+*/]\s+", name.strip())
+    return source in catalog and all(part in catalog[source] for part in names)
+
+
+def classify(
+    items: list[Column], rules: list[Rule], catalog: dict[str, list[str]], audit: Audit
+) -> None:
+    """Apply the rules: one explicit rule per column, else its kind's one rest rule."""
+    for item in items:
+        explicit = [rule for rule in rules if rule.matches(item)]
+        if len(explicit) > 1:
+            names = ", ".join(rule.id for rule in explicit)
+            audit.fail("column rules", f"{item.kind}.{item.column} matches {names}")
+            continue
+        chosen = explicit or [r for r in rules if r.spec.get("rest") and r.applies(item.kind)]
+        if len(chosen) != 1:
+            what = "no rule" if not chosen else "several rest rules"
+            audit.fail("column rules", f"{item.kind}.{item.column} matches {what}")
+            continue
+        rule = chosen[0]
+        rule.hits += 1
+        item.rule = rule.id
+        item.classification = rule.spec["class"]
+        item.here = counterparts(rule, item)
+        item.phase = str(rule.spec.get("phase", ""))
+        item.note = str(rule.spec.get("note", ""))
+        for ref in item.here:
+            if not check_counterpart(ref, catalog):
+                audit.fail("counterpart", f"{item.kind}.{item.column}: {ref} does not exist here")
+    for rule in rules:
+        if not rule.hits:
+            audit.fail("column rules", f"rule {rule.id} matches nothing")
+        elif rule.spec.get("rest") and rule.hits != rule.spec.get("expect"):
+            audit.fail(
+                "column rules",
+                f"rest rule {rule.id} takes {rule.hits} columns, not the "
+                f"{rule.spec.get('expect')} it expects",
+            )
+
+
+def validate_rules(specs: list[dict[str, Any]], audit: Audit, section: str) -> list[Rule]:
+    """Check each rule's class, counterpart and phase fields; return the rules."""
+    rules = []
+    seen: set[str] = set()
+    for spec in specs:
+        rule_id = spec.get("id", "?")
+        if rule_id in seen:
+            audit.fail(section, f"rule id {rule_id} is used twice")
+        seen.add(rule_id)
+        cls = spec.get("class")
+        if cls not in CLASSES:
+            audit.fail(section, f"{rule_id}: class {cls!r} is not one of {CLASSES}")
+        has_here = "here" in spec or "here_map" in spec
+        if cls in {"matched", "different"} and not has_here:
+            audit.fail(section, f"{rule_id}: a {cls} rule names no counterpart here")
+        if cls == "missing" and not spec.get("phase"):
+            audit.fail(section, f"{rule_id}: a missing rule names no phase")
+        if cls == "missing" and has_here:
+            audit.fail(section, f"{rule_id}: a missing rule names a counterpart")
+        if spec.get("rest") and not isinstance(spec.get("expect"), int):
+            audit.fail(section, f"{rule_id}: a rest rule must say how many columns it takes")
+        rules.append(Rule(rule_id, spec))
+    return rules
+
+
+def classify_simple(
+    entries: list[tuple[str, Any]],
+    specs: list[dict[str, Any]],
+    known: set[str],
+    audit: Audit,
+    section: str,
+) -> list[dict[str, Any]]:
+    """Classify keyed entries (sources, web items) with ``match`` rules over their keys."""
+    rules = validate_rules(specs, audit, section)
+    rows = []
+    for key, entry in entries:
+        hits = [rule for rule in rules if re.fullmatch(rule.spec["match"], key)]
+        if len(hits) != 1:
+            names = ", ".join(rule.id for rule in hits) or "no rule"
+            audit.fail(section, f"{key} matches {names}")
+            continue
+        rule = hits[0]
+        rule.hits += 1
+        here = rule.spec.get("here", [])
+        here = [here] if isinstance(here, str) else list(here)
+        for ref in here:
+            if ref not in known:
+                audit.fail(section, f"{key}: {ref} does not exist here")
+        rows.append(
+            {
+                "key": key,
+                "entry": entry,
+                "rule": rule.id,
+                "class": rule.spec["class"],
+                "here": here,
+                "phase": rule.spec.get("phase", ""),
+                "note": rule.spec.get("note", ""),
+            }
+        )
+    for rule in rules:
+        if not rule.hits:
+            audit.fail(section, f"rule {rule.id} matches nothing")
+    return rows
+
+
+# ---------------------------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------------------------
+
+
+def _load_rows(loads: list[Load]) -> dict[str, list[dict[str, Any]]]:
+    """Group load sites by source."""
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for load in loads:
+        grouped[load.source].append(
+            {"path": load.path, "line": load.line, "function": load.function}
+        )
+    return dict(sorted(grouped.items()))
+
+
+def _route_key(route: Route) -> str:
+    """Return a route's classification key: ``api GET /path``, ``page /path``, ``component X``."""
+    if route.kind == "api":
+        return f"api {route.method} {route.path}"
+    return f"{route.kind} {route.path}"
+
+
+def main() -> int:
+    """Generate the inventory files."""
+    audit = Audit()
+    code = SosCode()
+    mapping = yaml.safe_load(MAPPING.read_text(encoding="utf-8"))
+    checkout = check_sos_checkout(audit)
+
+    # Data sources.
+    sos_loads = scan_loads("sos", sos_python_files(code))
+    here_loads = scan_loads("here", here_python_files())
+    for repo, loads in (("nfl-sos-ratings", sos_loads), ("this repository", here_loads)):
+        if not any(load.source.startswith("nflreadpy.") for load in loads):
+            audit.fail("sources", f"found no nflreadpy load in {repo}")
+    sos_sources = _load_rows(sos_loads)
+    here_sources = _load_rows(here_loads)
+    source_rows = classify_simple(
+        list(sos_sources.items()),
+        mapping["sources"],
+        {f"load:{source}" for source in here_sources},
+        audit,
+        "source rules",
+    )
+
+    # Output columns and the registry.
+    columns, seasons_by_kind = output_columns(audit)
+    registry = load_registry(code)
+    game_log_names = list(columns.get("team_game_logs", {}))
+    if not game_log_names:
+        audit.fail("output files", "no team_game_logs columns found")
+    sources, source_facts = classify_game_log_columns(code, game_log_names, audit)
+    items: list[Column] = []
+    for kind, found in columns.items():
+        for name, seasons in found.items():
+            resolved = registry.resolve_column(name)
+            if resolved is None:
+                audit.fail("registry", f"{kind}.{name} does not resolve in its registry")
+                continue
+            prefix, suffix = affixes(registry, name, resolved.base.name)
+            items.append(
+                Column(
+                    kind=kind,
+                    column=name,
+                    seasons=seasons,
+                    base=resolved.base.name,
+                    prefix=prefix,
+                    suffix=suffix,
+                    registry_source=resolved.base.source,
+                    entity=resolved.base.entity,
+                    code_source=sources[name].source
+                    if kind == "team_game_logs" and name in sources
+                    else "",
+                )
+            )
+    catalog = here_catalog(audit)
+    rules = validate_rules(mapping["columns"], audit, "column rules")
+    classify(items, rules, catalog, audit)
+
+    # Web pages and API endpoints.
+    sos_web = [
+        *sos_api_routes(code),
+        *page_routes("sos", "web/src/router.tsx", code.show("web/src/router.tsx")),
+        *components("sos", code.glob(r"web/src/(pages|components/entity)/[^/]+\.tsx")),
+    ]
+    here_web = [
+        *here_api_routes(),
+        *page_routes("here", "web/src/router.tsx", (ROOT / "web/src/router.tsx").read_text()),
+        *components("here", tracked("web/src/pages/*.tsx")),
+    ]
+    for repo, routes in (("nfl-sos-ratings", sos_web), ("this app", here_web)):
+        for kind in ("api", "page", "component"):
+            if not any(route.kind == kind for route in routes):
+                audit.fail("web", f"found no {kind} in {repo}")
+    web_rows = classify_simple(
+        [(_route_key(route), route) for route in sos_web],
+        mapping["web"],
+        {_route_key(route) for route in here_web},
+        audit,
+        "web rules",
+    )
+
+    metrics = [
+        {
+            "name": metric.name,
+            "entity": metric.entity,
+            "category": metric.category,
+            "subcategory": metric.subcategory,
+            "shape": metric.shape,
+            "polarity": metric.polarity,
+            "source": metric.source,
+            "since": metric.since,
+            "denominator": metric.denominator,
+            "duplicate_of": metric.duplicate_of,
+            "contextual": metric.contextual,
+            "percent": metric.percent,
+            "output_columns": sum(1 for item in items if item.base == metric.name),
+        }
+        for metric in registry.metrics.values()
+    ]
+    payload = {
+        "generated_by": ".venv/bin/python .agents/sos_port/inventory.py",
+        "sos_checkout": checkout,
+        "sources": {
+            "sos": sos_sources,
+            "here": here_sources,
+            "classified": [{k: v for k, v in row.items() if k != "entry"} for row in source_rows],
+        },
+        "kinds": dict(sorted(seasons_by_kind.items())),
+        "columns": [item.__dict__ for item in items],
+        "rules": [{"id": rule.id, "hits": rule.hits, **rule.spec} for rule in rules],
+        "game_log_source_facts": source_facts,
+        "registry": {
+            "metrics": metrics,
+            "prefix_rules": [rule.prefix for rule in registry._prefix_rules],  # noqa: SLF001
+            "suffix_rules": [rule.suffix for rule in registry._suffix_rules],  # noqa: SLF001
+        },
+        "here_catalog": catalog,
+        "web": {
+            "sos": [route.__dict__ for route in sos_web],
+            "here": [route.__dict__ for route in here_web],
+            "classified": [{k: v for k, v in row.items() if k != "entry"} for row in web_rows],
+        },
+        "inputs": audit.files,
+        "failures": [{"what": f.what, "detail": f.detail} for f in audit.failures],
+    }
+    OUT_MD.write_text(portable(render(payload)), encoding="utf-8")
+    write_json(payload)
+    code.cleanup()
+    log.info("%d output columns, %d failures", len(items), len(audit.failures))
+    return 1 if audit.failures else 0
+
+
+COLUMN_FIELDS = [
+    "kind",
+    "column",
+    "seasons",
+    "base",
+    "prefix",
+    "suffix",
+    "rule",
+    "classification",
+    "here",
+]
+
+
+def write_json(payload: dict[str, Any]) -> None:
+    """Write ``inventory.json``, with the column table as rows of ``COLUMN_FIELDS``.
+
+    A column's phase and note are its rule's (``rules``), its source label and entity its base
+    metric's (``registry``), and a game-log column's code-derived source is in
+    ``game_log_sources``; its seasons are written as ranges.
+    """
+    rows = [
+        [
+            season_ranges(column["seasons"]) if field == "seasons" else column[field]
+            for field in COLUMN_FIELDS
+        ]
+        for column in payload["columns"]
+    ]
+    sources = {
+        column["column"]: column["code_source"]
+        for column in payload["columns"]
+        if column["kind"] == "team_game_logs"
+    }
+    body = {
+        **payload,
+        "game_log_sources": sources,
+        "columns": {"fields": COLUMN_FIELDS, "rows": rows},
+    }
+    OUT_JSON.write_text(portable(dump_json(body)) + "\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

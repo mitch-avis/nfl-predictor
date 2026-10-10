@@ -338,19 +338,24 @@ TeamRankings scrape; pass `scrape` to use the scrape. TeamRankings supplies its 
 The derived percentages use the scraped columns' 0-100 scale, and `red_zone_td_pct` divides
 touchdown drives by red-zone trips, which is what the scraped "red zone scoring %" measures -- not
 touchdowns per red-zone snap. A red-zone trip is a drive nflverse flags as getting inside the
-opponent's 20 (`drive_inside20` on any of its plays), the definition `nfl-sos-ratings` uses; with
-rare exceptions the flag leaves out the try after a touchdown, which is snapped inside the 20 by
-rule. `passing_epa` sums `qb_epa` (nflverse's own quarterback EPA attribution) rather than `epa`,
-and the box-score counts and yardage use nflverse's own `pass_attempt`/`rush_attempt` raw flags
-rather than `play_type`; both were verified against nflverse team stats at 99%+ agreement on the
-columns they touch (`models/pbp_vs_nflverse_m54_2/COMPARISON.md`). `fumbles`/`fumbles_lost` exclude
-special-teams plays to match nflverse's offense-only fumble stat, with a residual gap on
-aborted-snap fumbles; `2pt_conversions` still disagrees with nflverse on a meaningful share of
-team-games, but this is not a derivation defect: nflverse's own team-stats table has a confirmed,
-systematic bug that roughly doubles the count of successful two-point conversions on the games it
-gets wrong (see `models/pbp_vs_nflverse_m54_2/COMPARISON.md`), so the play-by-play value is the
-correct one where they differ. Both flags change feature values at ETL time, so compare them with
-two dataset builds rather than with `--disable-feature-groups`.
+opponent's 20 (`drive_inside20` on any of its plays) in which the team ran at least one offensive
+snap, a try not counting as one; with rare exceptions the flag leaves out the try after a touchdown,
+which is snapped inside the 20 by rule. The snap is a departure from `nfl-sos-ratings`, whose
+definition (every flagged drive) the ported season statistics keep for display: nflverse files a
+kickoff the kicking team recovers under the receiving team, with the kicking team's next drive and
+its flag, and the try after a return or defensive touchdown as a drive of the scorer's own, and
+neither is a trip here. `passing_epa` sums `qb_epa` (nflverse's own quarterback EPA attribution)
+rather than `epa`, and the box-score counts and yardage use nflverse's own
+`pass_attempt`/`rush_attempt` raw flags rather than `play_type`; both were verified against nflverse
+team stats at 99%+ agreement on the columns they touch
+(`models/pbp_vs_nflverse_m54_2/COMPARISON.md`). `fumbles`/`fumbles_lost` exclude special-teams plays
+to match nflverse's offense-only fumble stat, with a residual gap on aborted-snap fumbles;
+`2pt_conversions` still disagrees with nflverse on a meaningful share of team-games, but this is not
+a derivation defect: nflverse's own team-stats table has a confirmed, systematic bug that roughly
+doubles the count of successful two-point conversions on the games it gets wrong (see
+`models/pbp_vs_nflverse_m54_2/COMPARISON.md`), so the play-by-play value is the correct one where
+they differ. Both flags change feature values at ETL time, so compare them with two dataset builds
+rather than with `--disable-feature-groups`.
 
 Early-season handling: Week 1 has no in-season games, so every season-to-date team stat (the
 nflreadpy families and the play-by-play counts) falls back to the previous regular season regressed

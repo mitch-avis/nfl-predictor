@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.54.0] - 2026-10-10
+
+### Changed
+
+- Carries in the play-by-play features count designed runs as `nfl-sos-ratings` does (a rush
+  attempt that is not a scramble, kneel-down or two-point try): runs a penalty wiped out leave the
+  rushing sums but stay snaps, so penalty-wiped plays are in neither the dropback nor the carry
+  family.
+- Scrambles nflverse files as run plays count as dropbacks (most scrambles before 2006), a play
+  flagged both a dropback and a rush counts once, down and two-point flags are read on every play,
+  a down flagged both converted and failed counts once, and Jacksonville's 2001-2002 play-by-play
+  player teams are repaired from the season rosters.
+- Every quarterback feature keys on one starter (`qb_stats.expected_starter_ids`): a completed
+  game's play-by-play starter, else the projected starter; a starter's name is matched only
+  against passers of games before the row's week, and scrambles are credited to the scrambler.
+- The ETL loads the players file and weekly rosters once per run and requests the current
+  season's play-by-play once before kickoff.
+- `nfl-predictor data --incremental` keeps each finished season's ratings in the season cache
+  (format version 2, so the first run rebuilds every season once).
+
+### Added
+
+- The ETL fits the ported team and quarterback ratings on this repository's play-by-play, writes
+  their tables to `data/ratings/{season}_{kind}.parquet` (plus the current season's weekly rank
+  ranges) through files written whole, and adds a `ratings` feature group of pre-week ratings:
+  offense, defense, special-teams and team ratings, schedule strength, and the expected starter's
+  quarterback rating with his dropbacks before the week, each per side with a `_diff`. One BLAS
+  thread is pinned around the fits (`threadpoolctl`, now a direct dependency).
+- Both own Elo presets in every dataset (`own_elo`, `own_elo_wt`), with
+  `data/own_elo_metadata.json` recording the win-total file's origin and SHA-256; a build whose
+  win totals cover none of its seasons stops.
+- A warning when a run leaves the market columns out but keeps a market-informed feature group
+  (`elo`, `own_elo_wt`), naming the groups and how to leave them out.
+
+### Removed
+
+- `strength_games_played_diff` from the published schema, and nine play-by-play counts no rate
+  reads.
+
+### Fixed
+
+- A season whose qualified passers have no rating, or a team whose games lack a final score, no
+  longer stops the ratings build.
+
 ## [0.53.0] - 2026-10-10
 
 ### Changed

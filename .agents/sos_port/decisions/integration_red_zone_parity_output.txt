@@ -390,6 +390,16 @@ every group:
 │ 2025   ┆ 9    ┆ 2025_09_CHI_CIN ┆ CHI     ┆ 22.0        ┆ Touchdown         ┆ kickoff             │
 │ 2025   ┆ 16   ┆ 2025_16_GB_CHI  ┆ GB      ┆ 15.0        ┆ Touchdown         ┆ kickoff             │
 └────────┴──────┴─────────────────┴─────────┴─────────────┴───────────────────┴─────────────────────┘
+with a snap test that leaves out a scramble filed as a run play: 230 groups, the scramble being the only snap of these:
+┌────────┬──────┬─────────────────┬─────────┬─────────────┬───────────┬─────────────────────────────────┐
+│ season ┆ week ┆ game_id         ┆ posteam ┆ fixed_drive ┆ result    ┆ plays                           │
+│ ---    ┆ ---  ┆ ---             ┆ ---     ┆ ---         ┆ ---       ┆ ---                             │
+│ i32    ┆ i32  ┆ str             ┆ str     ┆ f64         ┆ str       ┆ str                             │
+╞════════╪══════╪═════════════════╪═════════╪═════════════╪═══════════╪═════════════════════════════════╡
+│ 2001   ┆ 7    ┆ 2001_07_BUF_SD  ┆ LAC     ┆ 21.0        ┆ Touchdown ┆ extra_point,kickoff,run         │
+│ 2003   ┆ 13   ┆ 2003_13_MIN_STL ┆ LAR     ┆ 15.0        ┆ Touchdown ┆ extra_point,run                 │
+│ 2004   ┆ 8    ┆ 2004_08_DET_DAL ┆ DAL     ┆ 11.0        ┆ Touchdown ┆ extra_point,kickoff,no_play,run │
+└────────┴──────┴─────────────────┴─────────┴─────────────┴───────────┴─────────────────────────────────┘
 
 ## drive_inside20 on the plays of a drive
 regular-season plays 1164547, of which drive_inside20 is null on 3999; plays without fixed_drive 0
@@ -413,13 +423,13 @@ flagged groups a rule reading only the group's first play would lose: 295
 ## The try under the replaced rule
 drives whose only plays at or inside the 20 belong to the try: 10305, of which nflverse flags 71
 by drive result:
-┌───────────────┬────────┬─────────┬─────────────┬──────────────┐
-│ result        ┆ drives ┆ flagged ┆ not_flagged ┆ only_the_try │
-│ ---           ┆ ---    ┆ ---     ┆ ---         ┆ ---          │
-│ str           ┆ u32    ┆ u32     ┆ u32         ┆ u32          │
-╞═══════════════╪════════╪═════════╪═════════════╪══════════════╡
-│ Touchdown     ┆ 7956   ┆ 4       ┆ 7952        ┆ 21           │
-│ Opp touchdown ┆ 2343   ┆ 67      ┆ 2276        ┆ 2316         │
-│ null          ┆ 5      ┆ 0       ┆ 5           ┆ 5            │
-│ Punt          ┆ 1      ┆ 0       ┆ 1           ┆ 0            │
-└───────────────┴────────┴─────────┴─────────────┴──────────────┘
+┌───────────────┬────────┬─────────┬────────────────────────┬─────────────┬──────────────┐
+│ result        ┆ drives ┆ flagged ┆ flagged_without_a_snap ┆ not_flagged ┆ only_the_try │
+│ ---           ┆ ---    ┆ ---     ┆ ---                    ┆ ---         ┆ ---          │
+│ str           ┆ u32    ┆ u32     ┆ u32                    ┆ u32         ┆ u32          │
+╞═══════════════╪════════╪═════════╪════════════════════════╪═════════════╪══════════════╡
+│ Touchdown     ┆ 7956   ┆ 4       ┆ 2                      ┆ 7952        ┆ 21           │
+│ Opp touchdown ┆ 2343   ┆ 67      ┆ 67                     ┆ 2276        ┆ 2316         │
+│ null          ┆ 5      ┆ 0       ┆ 0                      ┆ 5           ┆ 5            │
+│ Punt          ┆ 1      ┆ 0       ┆ 0                      ┆ 1           ┆ 0            │
+└───────────────┴────────┴─────────┴────────────────────────┴─────────────┴──────────────┘

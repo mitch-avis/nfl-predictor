@@ -16,7 +16,9 @@ A snap is an offensive scrimmage snap as ``offensive_snaps`` counts them, writte
 rather than imported: a play with ``qb_dropback``, ``rush``, ``qb_kneel`` or ``qb_spike`` set,
 or a scramble filed as a run play (``qb_scramble`` set on a ``run`` play), that is not a
 two-point try. The groups are counted on the measurement cache ``integration_cache.py`` writes,
-the plays the source's logs were built from.
+the plays the source's logs were built from. For comparison it also counts the groups a
+narrower test would leave without a snap, one that does not count a scramble filed as a run
+play, and lists the groups whose only snap is such a scramble.
 
 The touchdown drives are compared too, with the same attribution (a group without a snap whose
 drive ended in a touchdown). The source publishes a rate, not a count: its ``red_zone_td_pct``
@@ -41,7 +43,8 @@ of the measurement cache:
 - the trips whose drive has no recorded result, by season;
 - the drives whose only plays at or inside the 20 belong to the try, which the replaced rule
   (any play at ``yardline_100 <= 20``) counted as trips, by drive result, with how many of them
-  nflverse flags and how many hold nothing but the try. The try is ``integration_red_zone.py``'s:
+  nflverse flags, how many of those hold no snap, and how many hold nothing but the try. The try
+  is ``integration_red_zone.py``'s:
   an extra point, a two-point attempt, or a play a penalty wiped out in kick formation or on a
   two-point attempt.
 
@@ -167,12 +170,16 @@ def _set(name: str) -> pl.Expr:
     return pl.col(name).fill_null(0.0) > 0
 
 
-def _snap() -> pl.Expr:
-    """Return an offensive scrimmage snap as ``offensive_snaps`` counts it, not a two-point try."""
+def _snap(*, run_play_scrambles: bool = True) -> pl.Expr:
+    """Return an offensive scrimmage snap as ``offensive_snaps`` counts it, not a two-point try.
+
+    With ``run_play_scrambles`` false, a scramble filed as a run play without the rush or dropback
+    flag is no snap: the narrower test, printed for comparison only.
+    """
     run_play_scramble = _set("qb_scramble") & (pl.col("play_type") == "run").fill_null(value=False)
-    scrimmage = (
-        _set("qb_dropback") | run_play_scramble | _set("rush") | _set("qb_kneel") | _set("qb_spike")
-    )
+    scrimmage = _set("qb_dropback") | _set("rush") | _set("qb_kneel") | _set("qb_spike")
+    if run_play_scrambles:
+        scrimmage |= run_play_scramble
     return scrimmage & ~_set("two_point_attempt")
 
 
@@ -186,6 +193,7 @@ def _drives(plays: pl.DataFrame) -> pl.DataFrame:
         flag.all().alias("every_play"),
         pl.col("drive_inside20").is_null().all().alias("all_null"),
         _snap().any().alias("snap"),
+        _snap(run_play_scrambles=False).any().alias("snap_without_scrambles"),
         pl.col("fixed_drive_result").first().alias("result"),
         pl.col("fixed_drive_result").is_null().all().alias("no_result"),
         pl.col("play_type").drop_nulls().unique().sort().str.join(",").alias("plays"),
@@ -277,15 +285,18 @@ def _no_snap_facts(drives: pl.DataFrame) -> str:
         .sort(["groups", "result"], descending=[True, False], nulls_last=True)
     )
     by_season = groups.group_by("season").agg(pl.len().alias("groups")).sort("season")
-    listing = groups.select(
-        "season", "week", "game_id", "posteam", "fixed_drive", "result", "plays"
-    )
+    columns = ["season", "week", "game_id", "posteam", "fixed_drive", "result", "plays"]
+    order = ["season", "week", "game_id", "posteam", "fixed_drive"]
+    listing = groups.select(columns).sort(order)
+    narrower = drives.filter(pl.col("flagged") & ~pl.col("snap_without_scrambles"))
+    scramble_only = narrower.filter(pl.col("snap")).select(columns).sort(order)
     return (
         f"flagged groups without a snap: {groups.height} of {int(drives['flagged'].sum())}, "
         f"{groups.filter(touchdown).height} of them ending in a touchdown\n"
         f"by the play types they hold:\n{by_plays}\nby drive result:\n{by_result}\n"
-        f"by season:\n{by_season}\nevery group:\n"
-        f"{listing.sort('season', 'week', 'game_id', 'posteam', 'fixed_drive')}\n"
+        f"by season:\n{by_season}\nevery group:\n{listing}\n"
+        f"with a snap test that leaves out a scramble filed as a run play: {narrower.height} "
+        f"groups, the scramble being the only snap of these:\n{scramble_only}\n"
     )
 
 
@@ -305,6 +316,7 @@ def _try_facts(plays: pl.DataFrame) -> str:
         (in_zone & is_try).any().alias("try_in_zone"),
         (in_zone & ~is_try).any().alias("other_in_zone"),
         is_try.all().alias("only_the_try"),
+        _snap().any().alias("snap"),
     )
     try_only = drives.filter(pl.col("try_in_zone") & ~pl.col("other_in_zone"))
     table = (
@@ -312,6 +324,7 @@ def _try_facts(plays: pl.DataFrame) -> str:
         .agg(
             pl.len().alias("drives"),
             pl.col("flagged").sum().alias("flagged"),
+            (pl.col("flagged") & ~pl.col("snap")).sum().alias("flagged_without_a_snap"),
             (~pl.col("flagged")).sum().alias("not_flagged"),
             pl.col("only_the_try").sum().alias("only_the_try"),
         )

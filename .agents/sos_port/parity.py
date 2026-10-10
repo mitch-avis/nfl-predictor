@@ -6,7 +6,7 @@ Run from the repository root (``PYTHONDONTWRITEBYTECODE=1`` keeps the run from l
     PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py [--data-dir DIR]
 
 For every regular season 1999-2025 it reads this repository's cached play-by-play
-(``data/cache/nflreadpy/pbp_{season}_reg.parquet`` of ``--data-dir``, by default the main
+(``cache/nflreadpy/pbp_{season}_reg.parquet`` under ``--data-dir``, by default the main
 checkout's ``data/``) through its own loader, repairs it as the ETL does, aggregates it with
 ``aggregate_pbp_team_game_stats`` and ``aggregate_pbp_team_box_score_stats``, and compares every
 team-game with ``{season}_team_game_logs.parquet`` of `nfl-sos-ratings` at its frozen commit, on

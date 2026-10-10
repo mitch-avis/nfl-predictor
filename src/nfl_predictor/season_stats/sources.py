@@ -65,32 +65,9 @@ PBP_FIELD_GAPS: dict[str, range] = {
 }
 # Play-by-play columns that hold a team code. nflverse writes the Rams as LA in every one of them,
 # not only in posteam and defteam, so all are normalized before any code compares one team column
-# with another.
-PBP_TEAM_COLUMNS = (
-    "posteam",
-    "defteam",
-    "home_team",
-    "away_team",
-    "side_of_field",
-    "timeout_team",
-    "td_team",
-    "return_team",
-    "penalty_team",
-    "fumbled_1_team",
-    "fumbled_2_team",
-    "fumble_recovery_1_team",
-    "fumble_recovery_2_team",
-    "forced_fumble_player_1_team",
-    "forced_fumble_player_2_team",
-    "solo_tackle_1_team",
-    "solo_tackle_2_team",
-    "assist_tackle_1_team",
-    "assist_tackle_2_team",
-    "assist_tackle_3_team",
-    "assist_tackle_4_team",
-    "tackle_with_assist_1_team",
-    "tackle_with_assist_2_team",
-)
+# with another: the play-by-play cache's own list, which its loader normalizes too (without
+# turning an empty code into null).
+PBP_TEAM_COLUMNS = constants.PBP_TEAM_COLUMNS
 # Play-by-play yard lines, written "<team> <yards>" (LA 25), or 50 at midfield.
 PBP_YARD_LINE_COLUMNS = ("yrdln", "drive_start_yard_line", "drive_end_yard_line", "end_yard_line")
 # The play-by-play columns the builders read (team_stats, team_stats_expanded, qb_stats, wp_bins

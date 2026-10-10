@@ -6,10 +6,11 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 milestones"), `.agents/sos_port_source.md` (the source and open items of the port),
 `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-10, roadmap steps 4 and 5 closed, step 6 not started)
+## State (written 2026-10-10, roadmap steps 4 and 5 closed, step 6 phase 1 in progress)
 
-- The main checkout is on `main` at `0.45.0` (`f139c20`), pushed and clean. The only other branch
-  is `feat/web-ui`: leave it alone. No agent worktrees remain. `scripts/gate.sh --web` exits `0`
+- `main` is at `0.45.0` (`ad07198`), pushed. The main checkout is on `feat/sos-port-inventory`
+  (off `main`, the plan commit `cacd301` plus this file). The other branch is `feat/web-ui`:
+  leave it alone. `scripts/gate.sh --web` exits `0`
   on this tree (1580 passed, coverage 93.29%), and the environment is synced with the LightGBM
   CUDA flags.
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
@@ -58,12 +59,17 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
 
 ## Next
 
-1. Roadmap step 6, phase 1, on a new branch off `main` (for example `feat/sos-port-inventory`;
-   creating it needs no ask): a scripted inventory (rule 10) of `nfl-sos-ratings` at `9081bce`
-   against this repo (data sources, metric registry columns, ratings, outputs, web pages), and a
-   check that this repo's play-by-play aggregates match its game logs for the same seasons, with
-   its pre-2006 scramble rule and the nflverse quirks listed in `.agents/sos_port_source.md`.
-   Plan the phase with the user before code (what the inventory covers, how parity is judged).
+1. Roadmap step 6, phase 1 (the scripted inventory of `nfl-sos-ratings` and the play-by-play
+   parity check), on branch `feat/sos-port-inventory`. The user accepted the plan on 2026-10-10
+   (recorded under step 6, item 1 in `TODO.md`, commit `cacd301`): a full inventory with a
+   mapping file that fails on any unclassified column, exact-and-explained parity for 1999-2025
+   with each mismatch attributed by a counterfactual adjustment, and report only (no production
+   code or data changes; the proposed fixes batch with phase 3). An `implementer` subagent was
+   launched the same day in its own worktree to write `.agents/sos_port/` (`inventory.py`,
+   `parity.py`, their generated reports, `FINDINGS.md`, `README.md`). If this session ended
+   before it reported, check `git worktree list` and its branch for the state; then a separate
+   `reviewer` re-runs both scripts and checks provenance before the counts enter any doc, and
+   the delegating session writes `CHANGELOG.md` and the version (`0.45.1`).
 2. Batch with step 6's first edit to `constants.py` (it changes every checkpoint fingerprint):
    a `constants.MODELS_PATH` read at call time by the five places that build `ROOT_DIR /
    "models"` (`walk_forward.DEFAULT_CHECKPOINT_DIR`, `cli/backtest.py`, `ml/artifacts.py`,

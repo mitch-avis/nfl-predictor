@@ -478,6 +478,11 @@ NFLREADPY_SCHEDULE_RENAME = {
 # nflverse player sources: weekly player stats, snap counts, the players file, rosters, ESPN QBR
 # ============================================================================
 
+# The position a source lists a quarterback at. A player the players file or any regular-season
+# week of the season's weekly roster lists here is a quarterback that season, whatever else he
+# plays (`utils/polars/player_identity.py`).
+QB_POSITION = "QB"
+
 # Games with at least this many player team values that all name one team are credited wholly to
 # one team (`utils/polars/player_team_repair.py`): every real game credits plays to both teams,
 # but a short fixture or a partly published game may not.

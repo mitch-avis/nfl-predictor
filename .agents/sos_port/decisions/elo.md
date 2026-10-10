@@ -16,11 +16,18 @@ season, `../nfeloqb`'s from 2023).
 
 Every number below the rule is quoted from `ELO_EVAL.md` (or its JSON twin), generated at commit
 `e0c0663` from the main checkout's data, read-only (the numbers of entries 2-14 are unchanged
-since `ff14dec`). Reproduce it from the repository root with:
+since `ff14dec`); that report is in the history at `e0c0663`. It was reproduced from the
+repository root with:
 
 ```bash
 VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/elo_eval.py
 ```
+
+The evaluation was rerun under the same rule at `4268dca` on the integration's quarterback
+inputs: the shared play-by-play starter, every quarterback rush in VALUE, and the starter
+`qb_elos.csv` names for playoff games (`integration_pbp_elo.md`, section 3). It kept the same
+components, so the presets did not change; the current `ELO_EVAL.md` holds the rerun's numbers,
+and the entries below keep the numbers they were decided on.
 
 The fixture test that pins the framework runs with:
 

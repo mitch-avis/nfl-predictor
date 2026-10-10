@@ -2,77 +2,77 @@
   "against_references": [
     {
       "brier_ci": [
-        -0.004289671506127904,
-        -0.001517612874653351
+        -0.004349813512939261,
+        -0.0016490232532698052
       ],
-      "brier_diff": -0.0028946541281314846,
-      "candidate_brier": 0.2171184326919175,
-      "candidate_log_loss": 0.6226761739369582,
+      "brier_diff": -0.0030042996198321836,
+      "candidate_brier": 0.21700878720021677,
+      "candidate_log_loss": 0.622430873379629,
       "current_brier": 0.22001308682004897,
       "current_log_loss": 0.6297090608507653,
       "games": 4943,
       "log_loss_ci": [
-        -0.01025199688076636,
-        -0.003860402713931751
+        -0.010421999818964654,
+        -0.004145608400483754
       ],
-      "log_loss_diff": -0.007032886913807038,
+      "log_loss_diff": -0.00727818747113616,
       "own": "market-free: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
       "reference": "qb_elos.csv elo_prob1 (classic)"
     },
     {
       "brier_ci": [
-        -0.0006411466320647439,
-        0.0024613936670544213
+        -0.0007447561886429014,
+        0.0023296354537216788
       ],
-      "brier_diff": 0.0009147291240921751,
-      "candidate_brier": 0.2171184326919175,
-      "candidate_log_loss": 0.6226761739369582,
+      "brier_diff": 0.000805083632391476,
+      "candidate_brier": 0.21700878720021677,
+      "candidate_log_loss": 0.622430873379629,
       "current_brier": 0.2162037035678253,
       "current_log_loss": 0.6206309805804363,
       "games": 4943,
       "log_loss_ci": [
-        -0.0016096910001197427,
-        0.005605326960047762
+        -0.001851792963638601,
+        0.005305179355634002
       ],
-      "log_loss_diff": 0.0020451933565218184,
+      "log_loss_diff": 0.0017998927991926964,
       "own": "market-free: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
       "reference": "qb_elos.csv qbelo_prob1 (quarterback model)"
     },
     {
       "brier_ci": [
-        -0.005553773392038058,
-        -0.0021532368171739255
+        -0.00578385323469105,
+        -0.0024010537158341777
       ],
-      "brier_diff": -0.003850086308389801,
-      "candidate_brier": 0.21616300051165918,
-      "candidate_log_loss": 0.6203813559767889,
+      "brier_diff": -0.004070620504292206,
+      "candidate_brier": 0.21594246631575673,
+      "candidate_log_loss": 0.6199022998964231,
       "current_brier": 0.22001308682004897,
       "current_log_loss": 0.6297090608507653,
       "games": 4943,
       "log_loss_ci": [
-        -0.013194734090469442,
-        -0.005499735944270931
+        -0.013659253218721563,
+        -0.006041262664300659
       ],
-      "log_loss_diff": -0.009327704873976397,
+      "log_loss_diff": -0.009806760954342169,
       "own": "anchored: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull",
       "reference": "qb_elos.csv elo_prob1 (classic)"
     },
     {
       "brier_ci": [
-        -0.001472027444334248,
-        0.0013622791924325064
+        -0.0016427091103512923,
+        0.0011145074488693302
       ],
-      "brier_diff": -4.0703056166141426e-05,
-      "candidate_brier": 0.21616300051165918,
-      "candidate_log_loss": 0.6203813559767889,
+      "brier_diff": -0.00026123725206854637,
+      "candidate_brier": 0.21594246631575673,
+      "candidate_log_loss": 0.6199022998964231,
       "current_brier": 0.2162037035678253,
       "current_log_loss": 0.6206309805804363,
       "games": 4943,
       "log_loss_ci": [
-        -0.003576127244888773,
-        0.003078866622811077
+        -0.003963580707393674,
+        0.0025336768662629033
       ],
-      "log_loss_diff": -0.0002496246036475413,
+      "log_loss_diff": -0.0007286806840133137,
       "own": "anchored: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull",
       "reference": "qb_elos.csv qbelo_prob1 (quarterback model)"
     }
@@ -80,46 +80,46 @@
   "breakdowns": {
     "brier_by_season": {
       "anchored: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull": {
-        "2007": 0.21344163627864904,
-        "2008": 0.21468345967320157,
-        "2009": 0.2081241958105903,
-        "2010": 0.22793741932771702,
-        "2011": 0.20609154366609786,
-        "2012": 0.21423183614670382,
-        "2013": 0.20864986135265426,
-        "2014": 0.20935611031703244,
-        "2015": 0.22554164359744838,
-        "2016": 0.21327062994404183,
-        "2017": 0.2124674962841164,
-        "2018": 0.21703735777438937,
-        "2019": 0.21752691320096185,
-        "2020": 0.21325245225027872,
-        "2021": 0.2305337201491466,
-        "2022": 0.22366008606667684,
-        "2023": 0.22906098550334408,
-        "2024": 0.20787656933337786,
-        "2025": 0.21292951165143958
+        "2007": 0.21249411914820937,
+        "2008": 0.21495043138129236,
+        "2009": 0.20694232094820303,
+        "2010": 0.2271943628227027,
+        "2011": 0.20531957662649894,
+        "2012": 0.21414344724655027,
+        "2013": 0.20880795644600553,
+        "2014": 0.2100896752810362,
+        "2015": 0.22526648599522742,
+        "2016": 0.2128086272532057,
+        "2017": 0.21268026719050276,
+        "2018": 0.2174593991335394,
+        "2019": 0.21768366470053382,
+        "2020": 0.21283266338782697,
+        "2021": 0.23118664045915416,
+        "2022": 0.2226881516449754,
+        "2023": 0.22923413315949603,
+        "2024": 0.20736712511272112,
+        "2025": 0.2123401693836863
       },
       "market-free: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)": {
-        "2007": 0.2142617197623698,
-        "2008": 0.2124248303985351,
-        "2009": 0.2064932001069591,
-        "2010": 0.23046907197940825,
-        "2011": 0.20622918133370538,
-        "2012": 0.2157576614216778,
-        "2013": 0.21163237867903906,
-        "2014": 0.20740599824233139,
-        "2015": 0.2230373152736131,
-        "2016": 0.2172670832993786,
-        "2017": 0.21288652304686667,
-        "2018": 0.2206671666335244,
-        "2019": 0.218908762124076,
-        "2020": 0.2155599115542131,
-        "2021": 0.23029517995410057,
-        "2022": 0.22512437211016556,
-        "2023": 0.23085276533652976,
-        "2024": 0.20787816810253898,
-        "2025": 0.21656029163342852
+        "2007": 0.21372674985062123,
+        "2008": 0.2126653499487015,
+        "2009": 0.20533279052489128,
+        "2010": 0.23009241739012296,
+        "2011": 0.2054495710726344,
+        "2012": 0.216021758172945,
+        "2013": 0.21191780427826093,
+        "2014": 0.20818224438038674,
+        "2015": 0.22306047142685537,
+        "2016": 0.21678980398332232,
+        "2017": 0.21300361879619273,
+        "2018": 0.22152060327204143,
+        "2019": 0.21948970868686457,
+        "2020": 0.21501569601914539,
+        "2021": 0.23093069922539944,
+        "2022": 0.224254649834246,
+        "2023": 0.23112788524647213,
+        "2024": 0.2072586346694258,
+        "2025": 0.21583229022644723
       },
       "qb_elos.csv elo_prob1 (classic)": {
         "2007": 0.21284475208740067,
@@ -167,36 +167,36 @@
     "by_week_window": {
       "anchored: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull": {
         "week 1": {
-          "brier": 0.22129115104173835,
+          "brier": 0.22133471000132365,
           "games": 303,
-          "log_loss": 0.6334462488460437
+          "log_loss": 0.6335923355267097
         },
         "week 2": {
-          "brier": 0.2250107423824612,
+          "brier": 0.22459058473389207,
           "games": 303,
-          "log_loss": 0.6398443685220954
+          "log_loss": 0.6390307596824748
         },
         "weeks 3-18": {
-          "brier": 0.2151865893063405,
+          "brier": 0.21496155100161754,
           "games": 4337,
-          "log_loss": 0.6181088276529215
+          "log_loss": 0.6176094698039282
         }
       },
       "market-free: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)": {
         "week 1": {
-          "brier": 0.22057672713762722,
+          "brier": 0.22040705834912133,
           "games": 303,
-          "log_loss": 0.6309497093795295
+          "log_loss": 0.6307393433176607
         },
         "week 2": {
-          "brier": 0.22718545893291386,
+          "brier": 0.22664474834907422,
           "games": 303,
-          "log_loss": 0.6440073674028182
+          "log_loss": 0.6429355315678251
         },
         "weeks 3-18": {
-          "brier": 0.2161735002113844,
+          "brier": 0.21609816409986587,
           "games": 4337,
-          "log_loss": 0.6206078703032818
+          "log_loss": 0.6204178741123366
         }
       },
       "qb_elos.csv elo_prob1 (classic)": {
@@ -389,27 +389,27 @@
     ],
     "quarterback_adjustments": [
       {
-        "correlation": 0.8648909426128678,
-        "mean_abs_gap": 9.30064993708822,
-        "mean_own": -2.8373773072079143,
+        "correlation": 0.8972067850938992,
+        "mean_abs_gap": 8.219399101917272,
+        "mean_own": -2.4231071780068354,
         "mean_published": -2.585180994540279,
-        "own_mean_there": -111.23187024835192,
+        "own_mean_there": -112.59523464138296,
         "published_below_minus_100": 204,
         "published_mean_there": -132.01144157142676,
-        "sd_own": 31.03952994190085,
+        "sd_own": 30.44033535990397,
         "sd_published": 31.204716598843106,
         "seasons": "2007-2022, 538's",
         "team_games": 8254
       },
       {
-        "correlation": 0.8991714737203201,
-        "mean_abs_gap": 8.928000327930318,
-        "mean_own": -3.921754212162754,
+        "correlation": 0.9234981362003053,
+        "mean_abs_gap": 8.124702840061815,
+        "mean_own": -4.349539527826043,
         "mean_published": -4.712525391758916,
-        "own_mean_there": -115.79090504779536,
+        "own_mean_there": -116.63854131304248,
         "published_below_minus_100": 33,
         "published_mean_there": -119.18189846012734,
-        "sd_own": 31.156567369684883,
+        "sd_own": 30.526378779272637,
         "sd_published": 31.345383648184495,
         "seasons": "2023-2025, nfeloqb's",
         "team_games": 1632
@@ -452,91 +452,91 @@
     },
     "starters": {
       "1999-2025": {
-        "first_passer_agrees": 0.9981323180805977,
-        "most_dropbacks_agrees": 0.9665972272106889,
-        "team_games": 13921
+        "most_dropbacks_agrees": 0.9667265540783327,
+        "rule_starter_agrees": 0.9991376212720087,
+        "team_games": 13915
       },
       "2007-2025": {
-        "first_passer_agrees": 0.9978742787731552,
-        "most_dropbacks_agrees": 0.9699362283631947,
-        "team_games": 9879
+        "most_dropbacks_agrees": 0.9703291139240506,
+        "rule_starter_agrees": 0.9989873417721519,
+        "team_games": 9875
       },
-      "team_games_with_a_mapped_starter": 13921
+      "team_games_with_a_mapped_starter": 13915
     }
   },
   "playoff_games": {
     "base": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull",
     "with the boost": {
-      "brier": 0.2332816379390876,
+      "brier": 0.22668249218873018,
       "games": 221,
-      "log_loss": 0.6621158598557662
+      "log_loss": 0.6455888289657353
     },
     "without the boost": {
-      "brier": 0.2315781929130343,
+      "brier": 0.2258104893540645,
       "games": 221,
-      "log_loss": 0.6564283818413034
+      "log_loss": 0.6430085823818528
     }
   },
   "pre_kickoff_starters": {
     "presets": [
       {
         "actual_starter": {
-          "brier": 0.2171184326919175,
+          "brier": 0.21700878720021677,
           "games": 4943,
-          "log_loss": 0.6226761739369582
+          "log_loss": 0.622430873379629
         },
         "preset": "market-free: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
         "previous_minus_actual": {
           "brier_ci": [
-            -0.0002668379808028287,
-            0.002317574659367529
+            -0.0002260227583288948,
+            0.0023763538336426453
           ],
-          "brier_diff": 0.001012790812648317,
-          "candidate_brier": 0.21813122350456582,
-          "candidate_log_loss": 0.6259818785147145,
-          "current_brier": 0.2171184326919175,
-          "current_log_loss": 0.6226761739369582,
+          "brier_diff": 0.0010744854669076339,
+          "candidate_brier": 0.21808327266712443,
+          "candidate_log_loss": 0.6259618801270725,
+          "current_brier": 0.21700878720021677,
+          "current_log_loss": 0.622430873379629,
           "games": 4943,
           "log_loss_ci": [
-            0.0003548352683488445,
-            0.006305860464827182
+            0.0005850557324707452,
+            0.0065112674697190565
           ],
-          "log_loss_diff": 0.003305704577756338
+          "log_loss_diff": 0.0035310067474435074
         },
         "previous_starter": {
-          "brier": 0.21813122350456582,
+          "brier": 0.21808327266712443,
           "games": 4943,
-          "log_loss": 0.6259818785147145
+          "log_loss": 0.6259618801270725
         }
       },
       {
         "actual_starter": {
-          "brier": 0.21616300051165918,
+          "brier": 0.21594246631575673,
           "games": 4943,
-          "log_loss": 0.6203813559767889
+          "log_loss": 0.6199022998964231
         },
         "preset": "win-total: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull",
         "previous_minus_actual": {
           "brier_ci": [
-            -1.7825950089896435e-05,
-            0.0026069929645695152
+            9.623718209279223e-05,
+            0.002721482599373287
           ],
-          "brier_diff": 0.0012757743839136846,
-          "candidate_brier": 0.21743877489557287,
-          "candidate_log_loss": 0.6240279200894061,
-          "current_brier": 0.21616300051165918,
-          "current_log_loss": 0.6203813559767889,
+          "brier_diff": 0.0013990295191314587,
+          "candidate_brier": 0.2173414958348882,
+          "candidate_log_loss": 0.6238923231821781,
+          "current_brier": 0.21594246631575673,
+          "current_log_loss": 0.6199022998964231,
           "games": 4943,
           "log_loss_ci": [
-            0.0007682649353176468,
-            0.00665346251797686
+            0.0010293957840535716,
+            0.006958531757645831
           ],
-          "log_loss_diff": 0.0036465641126172403
+          "log_loss_diff": 0.003990023285755083
         },
         "previous_starter": {
-          "brier": 0.21743877489557287,
+          "brier": 0.2173414958348882,
           "games": 4943,
-          "log_loss": 0.6240279200894061
+          "log_loss": 0.6238923231821781
         }
       }
     ],
@@ -545,32 +545,32 @@
       "current": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field",
       "with_actual_starters": {
         "brier_ci": [
-          -0.003814072013564548,
-          -0.001187099658009511
+          -0.0038847817541807707,
+          -0.0013334529518201903
         ],
-        "brier_diff": -0.0024885809342521997,
+        "brier_diff": -0.0025982264259528987,
         "log_loss_ci": [
-          -0.009286976989573033,
-          -0.0032566279724975354
+          -0.009408462271585982,
+          -0.0035377132601282155
         ],
-        "log_loss_diff": -0.006205644515330827
+        "log_loss_diff": -0.006450945072659949
       },
       "with_previous_starters": {
         "brier_ci": [
-          -0.00294042951179495,
-          1.5064480113505068e-05
+          -0.002971275202524243,
+          -7.087665650643696e-05
         ],
-        "brier_diff": -0.0014757901216038828,
-        "candidate_brier": 0.21813122350456582,
-        "candidate_log_loss": 0.6259818785147145,
+        "brier_diff": -0.0015237409590452649,
+        "candidate_brier": 0.21808327266712443,
+        "candidate_log_loss": 0.6259618801270725,
         "current_brier": 0.2196070136261697,
         "current_log_loss": 0.6288818184522891,
         "games": 4943,
         "log_loss_ci": [
-          -0.006324855779346666,
-          0.00048543686943736483
+          -0.006303939693911441,
+          0.0004350630014126126
         ],
-        "log_loss_diff": -0.0028999399375744896
+        "log_loss_diff": -0.002919938325216443
       }
     }
   },
@@ -580,12 +580,14 @@
       "path": "/home/mitch/scratch/elo_research/nfl-elo-game/data/nfl_games.csv",
       "sha256": "af16cf3c5848393057fad07feea278f0a85ab7b57ddbfe42ed96b5c80e7d519d"
     },
-    "git_commit": "e0c0663a895b7c072b54a9e3a65ddb066eaede67",
+    "git_commit": "4268dcadbd894e5f1574a834ea8e802833574636",
+    "identity_files_sha256": "b62c46e51c2047b1e56f85478c892c126457b4e705b3542d4f47b910a37a6949",
     "meta_data": {
       "path": "/home/mitch/workspace/nfl-predictor/data/meta_data.csv",
       "sha256": "7cc566a5d76ebbd7e585134744115d3ad6dedcfb56157fd39889643e1daeeaa6"
     },
-    "play_by_play_files_sha256": "d62eae99d3c0240c226d8565ed678045303ccff4973281a387774de23869683a",
+    "nflreadpy_cache": "/tmp/step6_int/cache",
+    "play_by_play_files_sha256": "abd2f5c08c085a800cf60ae7d8c4eaf04f1f8451555d5a5f72b272e163395815",
     "play_rows": 1225182,
     "qb_elos": {
       "path": "/home/mitch/workspace/nfl-predictor/data/qb_elos.csv",
@@ -616,7 +618,7 @@
     "2013": 61.855689756487315,
     "2014": 60.89178888227718,
     "2015": 61.00983178277426,
-    "2016": 55.74867015839943,
+    "2016": 55.74867015839942,
     "2017": 60.10255201811491,
     "2018": 59.09314219991461,
     "2019": 58.47538151207545,
@@ -855,13 +857,13 @@
       },
       {
         "brier_ci": [
-          -0.003814072013564548,
-          -0.001187099658009511
+          -0.0038847817541807707,
+          -0.0013334529518201903
         ],
-        "brier_diff": -0.0024885809342521997,
+        "brier_diff": -0.0025982264259528987,
         "candidate": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
-        "candidate_brier": 0.2171184326919175,
-        "candidate_log_loss": 0.6226761739369582,
+        "candidate_brier": 0.21700878720021677,
+        "candidate_log_loss": 0.622430873379629,
         "candidate_settings": {
           "playoff_boost": false,
           "quarterback": true,
@@ -886,20 +888,20 @@
         "kept": true,
         "label": "quarterback adjustment (VALUE)",
         "log_loss_ci": [
-          -0.009286976989573033,
-          -0.0032566279724975354
+          -0.009408462271585982,
+          -0.0035377132601282155
         ],
-        "log_loss_diff": -0.006205644515330827
+        "log_loss_diff": -0.006450945072659949
       },
       {
         "brier_ci": [
-          -0.001854484481045778,
-          -7.385770082517673e-06
+          -0.0020024858856575274,
+          -8.81554696310718e-05
         ],
-        "brier_diff": -0.0009554321802583163,
+        "brier_diff": -0.0010663208844600225,
         "candidate": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull",
-        "candidate_brier": 0.21616300051165918,
-        "candidate_log_loss": 0.6203813559767889,
+        "candidate_brier": 0.21594246631575673,
+        "candidate_log_loss": 0.6199022998964231,
         "candidate_settings": {
           "playoff_boost": false,
           "quarterback": true,
@@ -910,8 +912,8 @@
         },
         "component": "win_totals",
         "current": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
-        "current_brier": 0.2171184326919175,
-        "current_log_loss": 0.6226761739369582,
+        "current_brier": 0.21700878720021677,
+        "current_log_loss": 0.622430873379629,
         "current_settings": {
           "playoff_boost": false,
           "quarterback": true,
@@ -924,10 +926,10 @@
         "kept": true,
         "label": "win-total pull",
         "log_loss_ci": [
-          -0.004349145911470569,
-          -0.00017075667825429029
+          -0.004658135182185706,
+          -0.00032483853035505516
         ],
-        "log_loss_diff": -0.00229481796016936
+        "log_loss_diff": -0.0025285734832060096
       }
     ]
   },
@@ -1010,22 +1012,22 @@
     },
     {
       "brier_ci": [
-        -0.0038442427315416223,
-        -0.0012097429746749607
+        -0.0038874896320518627,
+        -0.0013491136328911844
       ],
-      "brier_diff": -0.0025079321451947478,
-      "candidate_brier": 0.21779163683466554,
-      "candidate_log_loss": 0.6240277709668356,
+      "brier_diff": -0.002613184628975943,
+      "candidate_brier": 0.2176863843508844,
+      "candidate_log_loss": 0.6237915613650261,
       "component": "quarterback",
       "current_brier": 0.22029956897986033,
       "current_log_loss": 0.6303226744526967,
       "games": 4943,
       "label": "quarterback adjustment (VALUE)",
       "log_loss_ci": [
-        -0.009370219540858333,
-        -0.0033167555866242195
+        -0.009478743188155775,
+        -0.003589756208173028
       ],
-      "log_loss_diff": -0.0062949034858612056
+      "log_loss_diff": -0.006531113087670654
     },
     {
       "brier_ci": [
@@ -1049,14 +1051,14 @@
   ],
   "summaries": {
     "anchored: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull": {
-      "brier": 0.21616300051165918,
+      "brier": 0.21594246631575673,
       "games": 4943,
-      "log_loss": 0.6203813559767889
+      "log_loss": 0.6199022998964231
     },
     "market-free: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)": {
-      "brier": 0.2171184326919175,
+      "brier": 0.21700878720021677,
       "games": 4943,
-      "log_loss": 0.6226761739369582
+      "log_loss": 0.622430873379629
     },
     "qb_elos.csv elo_prob1 (classic)": {
       "brier": 0.22001308682004897,
@@ -1078,21 +1080,21 @@
     "2008": 0.9,
     "2009": 0.75,
     "2010": 0.6,
-    "2011": 0.7,
-    "2012": 0.65,
+    "2011": 0.75,
+    "2012": 0.7,
     "2013": 0.7,
     "2014": 0.75,
     "2015": 0.65,
-    "2016": 0.55,
-    "2017": 0.6,
-    "2018": 0.6,
-    "2019": 0.65,
-    "2020": 0.65,
+    "2016": 0.6,
+    "2017": 0.65,
+    "2018": 0.65,
+    "2019": 0.7,
+    "2020": 0.7,
     "2021": 0.7,
-    "2022": 0.65,
-    "2023": 0.65,
+    "2022": 0.7,
+    "2023": 0.7,
     "2024": 0.7,
-    "2025": 0.65
+    "2025": 0.7
   },
   "window": {
     "description": "completed regular-season games, 2007-2025",

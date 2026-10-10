@@ -14,7 +14,10 @@ games, their neutral-site flags and the ported ratings' pre-week feature values)
 ported ratings of teams on a bye). ``--run-dir`` is the anchored ported-ratings walk-forward on
 seed 42 (a run directory whose ``metadata.json`` names its fold checkpoints, or the checkpoint
 directory); without it the model rating and the blend are reported as pending and no decision is
-made. ``--ratings-from-snapshot`` is for development: it builds the ported ratings' weekly history
+made. Given again (seed 42 first, then seed 7), the report adds a supplement: the model rating fit
+to each game's predicted margin averaged over the runs, and the blend rebuilt on it, reported
+beside the seed-42 result, which alone is the rule's input. The report records whether the
+checkout had uncommitted changes to tracked files. ``--ratings-from-snapshot`` is for development: it builds the ported ratings' weekly history
 from the read-only nflreadpy cache snapshot (as ``adapter_parity.py`` loads it) in a temporary
 directory instead of reading ``--build-dir``'s. ``--out-dir`` (default: beside this script) is
 where ``RANKINGS_EVAL.md`` and ``RANKINGS_EVAL.json`` go; nothing else is written.
@@ -53,6 +56,8 @@ import argparse
 import datetime as dt
 import json
 import platform
+import shutil
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -89,6 +94,8 @@ SCORED_SEASONS = tuple(range(2008, 2026))
 RATED_SEASONS = (WARM_UP_SEASON, *SCORED_SEASONS)
 RESAMPLES = 10_000
 SEED = 42
+# The walk-forward seed whose predictions the rule reads (the first --run-dir).
+PREREGISTERED_SEED = 42
 HYPOTHESIS_SHA256 = "44e3a33c6d8a8fc37cf6237543eed830f8cd53459f3e24f0684dfdafe4a17f40"
 FIRST_PBP_SEASON = 1999
 # The candidates in the hypothesis's order, with their plain names; the first is the reference.
@@ -227,13 +234,10 @@ def load_composite(path: Path, files: dict[str, str]) -> pl.DataFrame:
     return evaluation.composite_ratings_by_week(snapshots)
 
 
-def load_model(
-    run_dir: Path, teams_by_season: dict[int, list[str]]
-) -> tuple[pl.DataFrame, dict[str, Any]]:
-    """Return the model rating of every week from 2 on, and the run's provenance."""
+def load_run(run_dir: Path) -> tuple[pl.DataFrame, dict[str, Any]]:
+    """Return a run's predictions in the rated seasons, and its provenance."""
     read = rating_sources.read_fold_predictions(run_dir)
     predictions = read.predictions.filter(pl.col("season").is_in(RATED_SEASONS))
-    ratings = rating_sources.model_ratings_by_week(predictions, teams_by_season=teams_by_season)
     config = read.metadata.get("config") or {}
     provenance = {
         "path": str(run_dir),
@@ -249,7 +253,23 @@ def load_model(
         "market_anchor": config.get("market_anchor"),
         "ridge_lambda": rating_sources.MODEL_RATING_RIDGE_LAMBDA,
     }
-    return ratings, provenance
+    return predictions, provenance
+
+
+def code_changes() -> list[str]:
+    """Return the tracked files of this checkout with uncommitted changes (read-only git)."""
+    git = shutil.which("git")
+    if git is None:
+        message = "git is not on PATH; it records whether the code had uncommitted changes"
+        raise SystemExit(message)
+    status = subprocess.run(
+        [git, "--no-optional-locks", "status", "--porcelain", "--untracked-files=no"],
+        cwd=repo_root(),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [line[3:] for line in status.stdout.splitlines() if line.strip()]
 
 
 def snapshot_team_games(files: dict[str, str]) -> dict[int, pl.DataFrame]:
@@ -519,6 +539,54 @@ def _decision_lines(outcome: dict[str, Any]) -> list[str]:
     return _wrap(text)
 
 
+def _window_table(window: dict[str, Any], names: list[str]) -> list[str]:
+    """Return one window's table: each candidate's error and its paired comparison."""
+    lines = [
+        (
+            "| candidate | games | MAE | minus the reference | 95% interval, games | "
+            "95% interval, seasons |"
+        ),
+        "| --- | ---: | ---: | ---: | --- | --- |",
+    ]
+    for name in names:
+        mae = window["mae"][name]
+        if name == REFERENCE:
+            lines.append(f"| {SHORT_NAMES[name]} | {window['games']:,} | {mae:.3f} | | | |")
+            continue
+        result = window["against_reference"][name]
+        lines.append(
+            f"| {SHORT_NAMES[name]} | {result['games']:,} | {mae:.3f} | "
+            f"{_signed(result['difference'])} | {_interval(result['game_interval'])} | "
+            f"{_interval(result['season_interval'])} |"
+        )
+    return lines
+
+
+def _supplement_lines(supplement: dict[str, Any], names: list[str]) -> list[str]:
+    """Return the supplement: the model rating on predictions averaged over several seeds."""
+    seeds = ", ".join(str(seed) for seed in supplement["seeds"])
+    overall = next(window for window in supplement["windows"] if window["last_week"] is None)
+    weights = ", ".join(
+        f"{season} {weight:.1f}" for season, weight in sorted(supplement["blend_weights"].items())
+    )
+    return [
+        "",
+        f"## Supplement: the model rating on seeds {seeds} (not the rule's input)",
+        "",
+        *_wrap(
+            "Reported beside the result above, which the rule reads: the model rating fit to "
+            "each game's predicted margin averaged over the walk-forward runs of these seeds "
+            "(in this order), and the blend rebuilt on it with its own weights; the ported "
+            "rating and the composite are unchanged. All scored weeks, "
+            f"{supplement['scored_games']:,} games."
+        ),
+        "",
+        *_window_table(overall, names),
+        "",
+        *_wrap(f"Blend weight on the ported rating by season: {weights}."),
+    ]
+
+
 def markdown(report: dict[str, Any]) -> str:
     """Return the Markdown report of ``report`` (the JSON record)."""
     names = report["candidates"]
@@ -534,7 +602,14 @@ def markdown(report: dict[str, Any]) -> str:
         *_wrap(
             "Design and rule: the main checkout's `models/step6/rankings/HYPOTHESIS.md`, "
             f"SHA-256 `{report['hypothesis']['sha256']}` (the recorded one). Code: this "
-            f"repository at `{report['code_commit']}`. Build: `{report['build_dir']}`"
+            f"repository at `{report['code_commit']}`"
+            + (
+                f" with uncommitted changes to {len(report['code_changes'])} tracked "
+                f"file{'s' if len(report['code_changes']) != 1 else ''}"
+                if report["code_dirty"]
+                else ", no uncommitted change to a tracked file"
+            )
+            + f". Build: `{report['build_dir']}`"
             + (
                 ", with the ported weekly history rebuilt from the nflreadpy cache snapshot "
                 "(development only)."
@@ -564,28 +639,12 @@ def markdown(report: dict[str, Any]) -> str:
     )
     lines += ["", "## Decision (governing window: all weeks)", ""]
     lines += _decision_lines(report["decision"])
+    if "note" in report["decision"]:
+        lines += ["", *_wrap(f"Note: {report['decision']['note']}.")]
     for window in report["windows"]:
-        lines += [
-            "",
-            f"## {window['window'].capitalize()}",
-            "",
-            (
-                "| candidate | games | MAE | minus the reference | 95% interval, games | "
-                "95% interval, seasons |"
-            ),
-            "| --- | ---: | ---: | ---: | --- | --- |",
-        ]
-        for name in names:
-            mae = window["mae"][name]
-            if name == REFERENCE:
-                lines.append(f"| {SHORT_NAMES[name]} | {window['games']:,} | {mae:.3f} | | | |")
-                continue
-            result = window["against_reference"][name]
-            lines.append(
-                f"| {SHORT_NAMES[name]} | {result['games']:,} | {mae:.3f} | "
-                f"{_signed(result['difference'])} | {_interval(result['game_interval'])} | "
-                f"{_interval(result['season_interval'])} |"
-            )
+        lines += ["", f"## {window['window'].capitalize()}", "", *_window_table(window, names)]
+    if report["supplement"] is not None:
+        lines += _supplement_lines(report["supplement"], names)
     lines += [
         "",
         "## Rank agreement with the reference (reported, never selected on)",
@@ -656,7 +715,17 @@ def main(argv: list[str] | None = None) -> None:
     """Score the candidates and write the reports."""
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--build-dir", type=Path, required=True)
-    parser.add_argument("--run-dir", type=Path)
+    parser.add_argument(
+        "--run-dir",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "A walk-forward run (or its checkpoint directory). The first is the rule's input; "
+            "with more, a supplement scores the model rating on each game's predicted margin "
+            "averaged over the runs, in the order given."
+        ),
+    )
     parser.add_argument("--ratings-from-snapshot", action="store_true")
     parser.add_argument(
         "--hypothesis",
@@ -683,18 +752,47 @@ def main(argv: list[str] | None = None) -> None:
         "ported": ported,
         "composite": load_composite(arguments.build_dir / "strength_snapshots.csv", files),
     }
-    run = None
-    if arguments.run_dir is not None:
-        ratings["model"], run = load_model(arguments.run_dir, teams)
+    runs = [load_run(path) for path in arguments.run_dir]
+    run = runs[0][1] if runs else None
+    if runs:
+        ratings["model"] = rating_sources.model_ratings_by_week(runs[0][0], teams_by_season=teams)
     inputs = Inputs(games, teams, ratings, ported_check, run, files)
 
     scored = score_candidates(inputs)
     windows = window_results(scored)
     outcome = decision(scored, windows)
+    if run is not None and run["random_seed"] != PREREGISTERED_SEED:
+        outcome["note"] = (
+            f"the rule's input is the run with seed {run['random_seed']}, not the pre-registered "
+            f"seed {PREREGISTERED_SEED}"
+        )
+    supplement = None
+    if len(runs) > 1:
+        averaged = rating_sources.average_predictions([predictions for predictions, _ in runs])
+        supplement_ratings = {
+            **ratings,
+            "model": rating_sources.model_ratings_by_week(averaged, teams_by_season=teams),
+        }
+        supplement_scored = score_candidates(
+            Inputs(games, teams, supplement_ratings, ported_check, run, files)
+        )
+        supplement = {
+            "seeds": [provenance["random_seed"] for _, provenance in runs],
+            "scored_games": supplement_scored.common.height,
+            "missing_games": {name: len(ids) for name, ids in supplement_scored.missing.items()},
+            "windows": window_results(supplement_scored),
+            "blend_weights": {
+                str(season): choice.weight
+                for season, choice in supplement_scored.blend_choices.items()
+            },
+        }
+    changes = code_changes()
     report = {
         "generated": dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M UTC"),
         "hypothesis": {"path": str(arguments.hypothesis), "sha256": hypothesis_sha256},
         "code_commit": source_head(repo_root()),
+        "code_dirty": bool(changes),
+        "code_changes": changes,
         "environment": {
             "python": platform.python_version(),
             "numpy": np.__version__,
@@ -704,6 +802,8 @@ def main(argv: list[str] | None = None) -> None:
         "build_dir": str(arguments.build_dir),
         "ratings_from_snapshot": arguments.ratings_from_snapshot,
         "run": run,
+        "runs": [provenance for _, provenance in runs],
+        "supplement": supplement,
         "parameters": {
             "warm_up_season": WARM_UP_SEASON,
             "scored_seasons": list(SCORED_SEASONS),

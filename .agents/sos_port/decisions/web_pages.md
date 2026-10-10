@@ -5,8 +5,9 @@ its `ui_api.py` and `ui_data.py` at `9081bce`) into this app as Milestone 58 tas
 implementer branch that fast-forwarded to `feat/step6-sos-port` and merged the season statistics
 branch. Each entry gives what differs, the options, the decision, the reasoning, any data, and how
 to reverse it. Commit hashes are on that branch. The delegating session reviewed the branch the
-same day: entries 17 to 21 and the corrections marked "Corrected in review" come from that round,
-after which the branch merged the reviewed step-6 branch (`25ca44a`).
+same day: entries 17 to 21 come from that round, and the earlier entries say where it corrected or
+extended them ("Corrected in review", "since review"). The branch then merged the reviewed step-6
+branch (`25ca44a`).
 
 Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` files of 1999-2026
 (534 files) copied read-only into a scratch folder with this repository's team codes (`WAS` to

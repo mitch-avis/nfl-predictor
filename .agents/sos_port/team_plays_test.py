@@ -30,7 +30,7 @@ import json
 import math
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -268,6 +268,52 @@ def play_flags(plays: pl.DataFrame) -> pl.DataFrame:
             "wiped_pass",
             *extra,
         )
+    )
+
+
+_SNAP_FLAGS = ("rush", "qb_kneel", "qb_spike", "qb_dropback")
+
+
+def wiped_play_summary(plays: pl.DataFrame) -> pl.DataFrame:
+    """Return the penalty-wiped plays' counts and EPA, by set, for one season's play-by-play.
+
+    The first sets take every regular-season ``no_play`` play, as the phase-1 parity check
+    counted them (both teams known or not); the rest take the plays with both teams known, as the
+    rating does: the wiped runs (``no_play`` plays today's snap rule counts) by each flag that
+    makes them a snap (a play can carry more than one), and the wiped passes.
+    """
+    regular = (
+        plays.filter(pl.col("season_type") == "REG") if "season_type" in plays.columns else plays
+    )
+    wiped = regular.filter((pl.col("play_type") == "no_play").fill_null(value=False))
+    flags = play_flags(wiped)
+    epa = pl.col("epa").fill_null(0.0)
+    sets: list[tuple[str, pl.DataFrame]] = [
+        ("every penalty-wiped play", wiped),
+        ("with the rush flag", wiped.filter(_flag("rush"))),
+        ("with the pass flag", wiped.filter(_flag("pass"))),
+        ("both teams known", flags),
+        ("wiped runs (today's snaps)", flags.filter(pl.col("wiped_run"))),
+    ]
+    known = wiped.filter(_known_team("posteam") & _known_team("defteam"))
+    sets.extend(
+        (
+            f"wiped runs (today's snaps), {flag} flag",
+            known.filter(_flag(flag)),
+        )
+        for flag in _SNAP_FLAGS
+    )
+    sets.append(("wiped passes", flags.filter(pl.col("wiped_pass"))))
+    return pl.DataFrame(
+        [
+            {
+                "set": name,
+                "plays": frame.height,
+                "epa": common.as_float(frame.select(epa.sum()).item()),
+            }
+            for name, frame in sets
+        ],
+        schema={"set": pl.String, "plays": pl.Int64, "epa": pl.Float64},
     )
 
 
@@ -515,10 +561,11 @@ def check_information_set(game_logs: pl.DataFrame, snapshot: Snapshot) -> int:
 
 @dataclass
 class TeamInputs:
-    """Every season's adapter team-game rows and its plays' flags."""
+    """Every season's adapter team-game rows, its plays' flags and its penalty-wiped plays."""
 
     team_games: dict[int, pl.DataFrame]
     flags: dict[int, pl.DataFrame]
+    wiped: dict[int, pl.DataFrame] = field(default_factory=dict)
 
 
 def load_team_inputs(
@@ -526,13 +573,25 @@ def load_team_inputs(
 ) -> TeamInputs:
     """Load each season's play-by-play and schedule and build its rows, downloads blocked."""
     common.block_downloads()
-    team_games: dict[int, pl.DataFrame] = {}
-    flags: dict[int, pl.DataFrame] = {}
+    inputs = TeamInputs(team_games={}, flags={})
     for season in seasons:
         plays, schedule = common.load_season_plays(cache_dir, season, ledger)
-        team_games[season] = team_games_from_pbp(plays, schedule)
-        flags[season] = play_flags(plays)
-    return TeamInputs(team_games, flags)
+        inputs.team_games[season] = team_games_from_pbp(plays, schedule)
+        inputs.flags[season] = play_flags(plays)
+        inputs.wiped[season] = wiped_play_summary(plays)
+    return inputs
+
+
+def wiped_totals(inputs: TeamInputs) -> list[dict[str, Any]]:
+    """Return the penalty-wiped plays' counts and EPA by set, summed over every season."""
+    if not inputs.wiped:
+        return []
+    return (
+        pl.concat(list(inputs.wiped.values()))
+        .group_by("set", maintain_order=True)
+        .agg(pl.col("plays").sum(), pl.col("epa").sum())
+        .to_dicts()
+    )
 
 
 def variant_rows(inputs: TeamInputs, variant: Variant) -> dict[int, pl.DataFrame]:
@@ -740,7 +799,7 @@ def _moved_sums(flags: pl.DataFrame, condition: pl.Expr) -> pl.DataFrame:
     """Return each team-game's count and EPA over the plays meeting ``condition``."""
     return (
         flags.filter(condition)
-        .group_by("season", "game_id", pl.col("posteam").alias("team"))
+        .group_by("season", "game_id", pl.col("posteam").alias("team"), maintain_order=True)
         .agg(pl.len().alias("_count"), pl.col("epa").fill_null(0.0).sum().alias("_epa"))
     )
 
@@ -1010,13 +1069,19 @@ def season_ranks(run: VariantRun, season: int) -> pl.DataFrame:
 
 
 def feature_impact(run: VariantRun, today: VariantRun) -> dict[str, dict[str, float]]:
-    """Return how far a variant moves each team's pre-week ratings from today's, all snapshots."""
+    """Return how far a variant moves each team's pre-week ratings from today's, all snapshots.
+
+    Week 1 has no earlier game, so its snapshot is the harness's zeros, with no rating columns to
+    compare; it is skipped.
+    """
     frames = [
         run.snapshots[key]
         .select("team", *TEAM_RATING_COLUMNS)
         .join(today.snapshots[key].select("team", *TEAM_RATING_COLUMNS), on="team", suffix="_today")
         for key in sorted(today.snapshots)
         if key in run.snapshots
+        and set(TEAM_RATING_COLUMNS) <= set(today.snapshots[key].columns)
+        and set(TEAM_RATING_COLUMNS) <= set(run.snapshots[key].columns)
     ]
     joined = pl.concat(frames)
     impact: dict[str, dict[str, float]] = {}
@@ -1193,6 +1258,19 @@ def _report_body(spec: TestSpec, parts: ReportParts) -> list[str]:
             *_table(rows, ("season", "removed", "removed_epa", "added", "added_epa")),
             "",
         ]
+    if extras["wiped_sets"]:
+        lines += [
+            (
+                "Penalty-wiped plays by set, 1999-2025, beside the phase-1 parity check's figures "
+                "(every `no_play` play, both teams known or not: 8,848 with the rush flag at "
+                "-5,660.46 EPA and 27,906 with the pass flag at +11,142.27). A wiped run is a "
+                "`no_play` play today's snap rule counts, whichever flag makes it one (a play can "
+                "carry several):"
+            ),
+            "",
+            *_table(extras["wiped_sets"], ("set", "plays", "epa")),
+            "",
+        ]
     if extras["sides"]:
         lines += [
             "Penalty-wiped plays by the penalized side, 1999-2025:",
@@ -1243,7 +1321,8 @@ def _report_body(spec: TestSpec, parts: ReportParts) -> list[str]:
 
 def _interval_text(interval: Interval) -> str:
     """Format a paired difference and its interval."""
-    return f"{interval.estimate:+.3f} ({interval.lower:+.3f} to {interval.upper:+.3f})"
+    lower, upper = common.bound_text(interval.lower), common.bound_text(interval.upper)
+    return f"{interval.estimate:+.3f} ({lower} to {upper})"
 
 
 def _label(name: str) -> str:
@@ -1292,10 +1371,10 @@ def _decision_lines(decision: Decision, spec: TestSpec, confidence: float) -> li
     else:
         outcome = (
             "no variant qualified, so the test cannot tell the variants from today's rating; the "
-            f"recommendation is **{_label(decision.recommended)}**, the first in the order of "
-            "simplicity ("
-            + ", ".join(_label(name) for name in spec.order)
-            + ") that is not significantly worse."
+            f"recommendation is **{_label(decision.recommended)}**, the first definition in the "
+            "order of simplicity that is not significantly worse. The order: "
+            + "; ".join(_label(name) for name in spec.order)
+            + "."
         )
     excluding = "; ".join(
         f"{_label(name)}, {band}: {direction}" for name, band, direction in decision.excluding_zero
@@ -1313,15 +1392,15 @@ def _decision_lines(decision: Decision, spec: TestSpec, confidence: float) -> li
 def _table(rows: Sequence[Mapping[str, Any]], columns: Sequence[str]) -> list[str]:
     """Return a Markdown table of ``rows`` over ``columns``, floats to three decimals."""
 
-    def cell(value: object) -> str:
+    def cell(value: object, column: str) -> str:
         if isinstance(value, float):
             return f"{value:,.3f}"
         if isinstance(value, int):
-            return f"{value:,}"
+            return str(value) if column == "season" else f"{value:,}"
         return str(value)
 
     lines = ["| " + " | ".join(columns) + " |", "|" + " --- |" * len(columns)]
-    lines.extend("| " + " | ".join(cell(row[c]) for c in columns) + " |" for row in rows)
+    lines.extend("| " + " | ".join(cell(row[c], c) for c in columns) + " |" for row in rows)
     return lines
 
 
@@ -1371,7 +1450,7 @@ def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> in
         }
     except IntegrityError as error:
         lines += [f"Integrity check failed, so no result is read: {error}", ""]
-        report.write_text("\n".join(lines))
+        report.write_text("\n".join(common.wrap_markdown(lines)).rstrip("\n") + "\n")
         sys.stderr.write(f"{error}\n")
         return 1
     draws = common.season_draws(len(seasons))
@@ -1399,6 +1478,7 @@ def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> in
     impact = {name: feature_impact(run, runs[TODAY]) for name, run in runs.items() if name != TODAY}
     ranks = {name: season_ranks(run, LAST_SEASON) for name, run in runs.items()}
     sides = moved_by_penalty_side(inputs) if test == "penalty-wiped" else []
+    wiped_sets = wiped_totals(inputs) if test == "penalty-wiped" else []
     lines += _report_body(
         spec,
         ReportParts(
@@ -1416,6 +1496,7 @@ def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> in
                 "impact": impact,
                 "ranks": ranks,
                 "sides": sides,
+                "wiped_sets": wiped_sets,
             },
         ),
     )
@@ -1439,7 +1520,7 @@ def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> in
         + ".",
         "",
     ]
-    report.write_text("\n".join(lines))
+    report.write_text("\n".join(common.wrap_markdown(lines)).rstrip("\n") + "\n")
     payload = {
         "test": test,
         "integrity": integrity,
@@ -1461,6 +1542,7 @@ def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> in
             "impact": impact,
             "ranks": {name: frame.to_dicts() for name, frame in ranks.items()},
             "sides": sides,
+            "wiped_sets": wiped_sets,
         },
         "provenance": provenance,
     }

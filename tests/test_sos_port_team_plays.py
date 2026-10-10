@@ -652,3 +652,37 @@ def test_moved_by_penalty_side_splits_by_the_penalized_team() -> None:
         {"kind": "wiped_run", "side": "defense", "plays": 1, "epa": pytest.approx(-0.7)},
         {"kind": "wiped_pass", "side": "defense", "plays": 1, "epa": pytest.approx(0.9)},
     ]
+
+
+def test_feature_impact_skips_week_one_zero_snapshots() -> None:
+    # Arrange
+    rows = _league()
+    today = _run("today", rows)
+    variant = _run(
+        "without_kneel_spike",
+        {
+            season: frame.with_columns(pl.col("offensive_epa") * 0.5)
+            for season, frame in rows.items()
+        },
+    )
+
+    # Act
+    impact = team.feature_impact(variant, today)
+
+    # Assert
+    assert impact["team_rating"]["rows"] == 16.0
+    assert impact["team_rating"]["rows_moved"] > 0
+
+
+def test_wiped_play_summary_counts_each_set_by_flag() -> None:
+    # Act
+    summary = team.wiped_play_summary(_plays())
+
+    # Assert
+    counts = {row["set"]: (row["plays"], row["epa"]) for row in summary.iter_rows(named=True)}
+    assert counts["every penalty-wiped play"] == (3, pytest.approx(-0.2))
+    assert counts["with the rush flag"] == (1, pytest.approx(-0.7))
+    assert counts["with the pass flag"] == (1, pytest.approx(0.9))
+    assert counts["wiped runs (today's snaps), rush flag"] == (1, pytest.approx(-0.7))
+    assert counts["wiped runs (today's snaps), qb_kneel flag"] == (0, 0.0)
+    assert counts["wiped passes"] == (1, pytest.approx(0.9))

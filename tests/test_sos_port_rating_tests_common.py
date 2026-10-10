@@ -136,3 +136,47 @@ def test_interval_flipped_negates_and_swaps_bounds() -> None:
 
     # Assert
     assert flipped == common.Interval(estimate=-0.5, lower=-1.5, upper=0.25)
+
+
+def test_wrap_markdown_fills_prose_and_bullets_to_the_width() -> None:
+    # Arrange
+    long = " ".join(["word"] * 40)
+    lines = ["# Heading", "", long, f"- {long}", f"12. {long}", "| a | b |", "```text", long, "```"]
+
+    # Act
+    wrapped = common.wrap_markdown(lines, width=60)
+
+    # Assert
+    code_line = wrapped.index("```text") + 1
+    assert all(
+        len(line) <= 60
+        for index, line in enumerate(wrapped)
+        if index != code_line and not line.startswith("|")
+    )
+    assert wrapped[0] == "# Heading"
+    assert wrapped[code_line] == long
+    assert any(line.startswith("  word") for line in wrapped)
+    assert any(line.startswith("    word") for line in wrapped)
+
+
+def test_wrap_markdown_keeps_hyphenated_spans_whole() -> None:
+    # Arrange
+    lines = ["seasons " * 9 + "1999-2025 and weeks 5-7"]
+
+    # Act
+    wrapped = common.wrap_markdown(lines, width=40)
+
+    # Assert
+    assert any("1999-2025" in line for line in wrapped)
+
+
+@pytest.mark.parametrize(
+    ("value", "text"),
+    [(0.00047, "+0.0005"), (-0.0004, "-0.0004"), (0.0123, "+0.012"), (-1.5, "-1.500")],
+)
+def test_bound_text_keeps_a_bound_near_zero_visible(value: float, text: str) -> None:
+    # Act
+    formatted = common.bound_text(value)
+
+    # Assert
+    assert formatted == text

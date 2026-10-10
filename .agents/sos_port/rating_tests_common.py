@@ -14,6 +14,8 @@ never refreshed, and :func:`block_downloads` makes a cache miss fail instead of 
 from __future__ import annotations
 
 import hashlib
+import re
+import textwrap
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -41,6 +43,11 @@ _RESAMPLE_CHUNK = 500
 # Every season of the inputs is historical to the loaders, so they read the cache and never
 # refresh it.
 CACHE_CURRENT_SEASON = 2027
+# The reports are Markdown the repository's linter checks at 100 columns.
+REPORT_WIDTH = 100
+# A bound smaller than this would print as zero at three decimals.
+_SMALLEST_SHOWN = 0.0005
+_LIST_ITEM = re.compile(r"^(\s*)(- |\d+\. )")
 _NFLREADPY_LOADERS = (
     "load_pbp",
     "load_player_stats",
@@ -183,6 +190,43 @@ def as_float(value: object) -> float:
         return float(value)
     msg = f"expected a number, got {value!r}"
     raise TypeError(msg)
+
+
+def bound_text(value: float) -> str:
+    """Format an interval bound to three decimals, or four when three would show it as zero."""
+    if value != 0.0 and abs(value) < _SMALLEST_SHOWN:
+        return f"{value:+.4f}"
+    return f"{value:+.3f}"
+
+
+def wrap_markdown(lines: Sequence[str], width: int = REPORT_WIDTH) -> list[str]:
+    """Return report lines with prose and list items filled to ``width``.
+
+    Headings, table rows, blank lines, code blocks and lines that already fit stay as they are;
+    a list item's continuation lines are indented under its text. Hyphenated spans such as
+    ``1999-2025`` are never split.
+    """
+    wrapped: list[str] = []
+    in_code = False
+    for line in lines:
+        if line.startswith("```"):
+            in_code = not in_code
+            wrapped.append(line)
+            continue
+        if in_code or len(line) <= width or line.startswith(("#", "|")):
+            wrapped.append(line)
+            continue
+        item = _LIST_ITEM.match(line)
+        wrapped.extend(
+            textwrap.wrap(
+                line,
+                width=width,
+                subsequent_indent=" " * len(item.group(0)) if item else "",
+                break_long_words=False,
+                break_on_hyphens=False,
+            )
+        )
+    return wrapped
 
 
 def comparison_confidence(comparisons: int, family: float = FAMILY_CONFIDENCE) -> float:

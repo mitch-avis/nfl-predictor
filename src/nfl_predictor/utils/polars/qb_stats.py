@@ -325,6 +325,47 @@ def _resolve_ids(
     return pl.concat([matched, fallback.select(matched.columns)]).sort(_ROW)
 
 
+def expected_starter_ids(
+    games: pl.DataFrame, qb_games: pl.DataFrame, identity: pl.DataFrame
+) -> pl.DataFrame:
+    """Return the GSIS id of each game row's expected starters, the one every QB feature reads.
+
+    A starter is the ``away_qb`` / ``home_qb`` name the ETL expects to start, mapped to an id
+    through ``identity`` and then through the play-by-play passer names (module docstring, step
+    1). This family and the ratings' quarterback features both read their starter from here.
+
+    Args:
+        games: Game rows; a frame without ``away_qb`` / ``home_qb`` has no known starters.
+        qb_games: Quarterback-game sums from ``aggregate_qb_game_stats``, for the passer names.
+        identity: Name-to-id map from ``build_qb_identity``.
+
+    Returns:
+        One row per game row, in its order: ``away_qb_id`` and ``home_qb_id``, null where the
+        name is missing or cannot be identified.
+
+    """
+    passer_names = _passer_name_map(qb_games)
+    rows = games.select(
+        pl.int_range(pl.len(), dtype=pl.UInt32).alias(_ROW),
+        *(
+            (
+                pl.col(f"{side}_qb").cast(pl.String)
+                if f"{side}_qb" in games.columns
+                else pl.lit(None, dtype=pl.String)
+            ).alias(f"{side}_qb")
+            for side in _SIDES
+        ),
+    )
+    starters = rows.select(_ROW)
+    for side in _SIDES:
+        targets = rows.select(_ROW, pl.col(f"{side}_qb").alias("qb_name"))
+        resolved = _resolve_ids(targets, identity, passer_names)
+        starters = starters.join(
+            resolved.select(_ROW, pl.col("qb_id").alias(f"{side}_qb_id")), on=_ROW, how="left"
+        )
+    return starters.sort(_ROW).drop(_ROW)
+
+
 def _shrink(numerator: pl.Expr, denominator: pl.Expr, prior: pl.Expr) -> pl.Expr:
     """Return ``(numerator + K * prior) / (denominator + K)`` with ``K = QB_PRIOR_DROPBACKS``."""
     k = float(constants.QB_PRIOR_DROPBACKS)
@@ -439,18 +480,21 @@ def attach_qb_features(
     base = games.drop([c for c in new_columns if c in games.columns])
     keyed = _keyed(base.with_row_index(_ROW))
     career, recent, league = _history_tables(qb_games)
-    passer_names = _passer_name_map(qb_games)
+    starters = expected_starter_ids(base, qb_games, identity).with_row_index(_ROW)
 
     out = keyed
     for side in _SIDES:
-        targets = keyed.select(
-            _ROW,
-            _KEY,
-            "season",
-            "week",
-            pl.col(f"{side}_qb").cast(pl.String).alias("qb_name"),
+        resolved = (
+            keyed.select(
+                _ROW,
+                _KEY,
+                "season",
+                "week",
+                pl.col(f"{side}_qb").cast(pl.String).alias("qb_name"),
+            )
+            .join(starters.select(_ROW, pl.col(f"{side}_qb_id").alias("qb_id")), on=_ROW)
+            .sort(_ROW)
         )
-        resolved = _resolve_ids(targets, identity, passer_names)
         named = resolved.filter(pl.col("qb_name").is_not_null())
         unmatched = named.filter(pl.col("qb_id").is_null())
         if named.height:

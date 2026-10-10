@@ -537,6 +537,21 @@ def _write_power_rankings(
     return _power_rankings_outputs(pr_out_dir, pr_season, pr_week)
 
 
+def _report_floor_sigma(predictions: pd.DataFrame) -> float | None:
+    """Return the production floor sigma behind the predictions' win probabilities, or None.
+
+    Every prediction row carries the sigma the final fit estimated for the week
+    (``floor_sigma``); the betting report needs it to split the moneyline edge at the spread.
+    None when the column is missing or does not hold exactly one positive value.
+    """
+    if "floor_sigma" not in predictions.columns:
+        return None
+    values = pd.to_numeric(predictions["floor_sigma"], errors="coerce").dropna().unique()
+    if len(values) != 1 or not values[0] > 0:
+        return None
+    return float(values[0])
+
+
 def _run_stage4(
     ctx: _RunContext, predictions_path: Path, model_hash: str, model_path: Path
 ) -> None:
@@ -570,7 +585,7 @@ def _run_stage4(
     betting_report_path = output_paths["betting_report"]
 
     try:
-        report_df = build_betting_report(predictions)
+        report_df = build_betting_report(predictions, floor_sigma=_report_floor_sigma(predictions))
     except ValueError as exc:
         log.info("Betting report skipped: %s", exc)
     else:

@@ -47,7 +47,9 @@ data are logged for review. Read as:
 | S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | merged, `0.47.0` |
 | S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | review fixes |
 | S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | merged, `0.48.0` |
-| S5a play-by-play cache columns, stadium table | 3-4 | none | implementer running |
+| S5a play-by-play cache columns, stadium table | 3-4 | none | in review |
+| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | implementer running (on S5a's branch) |
+| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | implementer running (on S4's and S5a's branches) |
 | S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | implementer running |
 | S5 ETL integration: play-by-play fixes, ratings inputs and outputs, pre-week features, follow-ups | 3-4 | S1, S2, S4 | after those merge |
 | S6 candidate build and measurement | 4 | S3, S5 | after S5 |
@@ -124,6 +126,12 @@ small and local.
   [+0.00035, +0.00631] for the market-free preset (`.agents/sos_port/ELO_EVAL.md`, "Starters
   known before kickoff"; second review pending), so training rows hold slightly better
   quarterback information than prediction rows. A question for the user, not a step-6 change.
+
+- nflverse lists the 2026 Melbourne, Munich and Paris venues as domes (none has a roof over the
+  field) and leaves Madrid blank; this feeds `stadium_type`. Recommendation: no override now,
+  because the current season's schedule is downloaded again on every ETL run; recheck before the
+  Paris game (2026-10-25) and add a roof override then if it is still wrong
+  (`.agents/sos_port/decisions/pbp_columns.md`).
 
 ## Snapshots and timings
 

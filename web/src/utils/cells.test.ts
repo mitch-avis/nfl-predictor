@@ -67,6 +67,21 @@ describe('cells', () => {
   })
 
   it.each([
+    ['the tougher end of a context column', meta({ heatmap: true, polarity: 'higher', contextual: true }), 3, '0.400'],
+    ['the easier end of a context column', meta({ heatmap: true, polarity: 'higher', contextual: true }), 1, '0.040'],
+    ['the tougher end of a lower-is-tougher context column', meta({ heatmap: true, polarity: 'lower', contextual: true }), 1, '0.400'],
+  ] as const)('shades %s in the muted context hue, not the grade colors', (_name, columnMeta, value, alpha) => {
+    // Arrange
+    const stats = columnStats(rows, ['a'])
+
+    // Act
+    const style = heatStyle(columnMeta, value, stats.a)
+
+    // Assert
+    expect(style?.backgroundColor).toBe(`oklch(0.6 0.04 262 / ${alpha})`)
+  })
+
+  it.each([
     ['a neutral column without a spread', meta({ heatmap: true, polarity: 'neutral' }), 4, { min: 0, max: 0, absMax: 0 }],
     ['a graded column without a spread', meta({ heatmap: true, polarity: 'higher' }), 4, { min: 4, max: 4, absMax: 4 }],
     ['a text value', meta({ heatmap: true, polarity: 'higher' }), 'x', { min: 1, max: 3, absMax: 3 }],

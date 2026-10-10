@@ -58,7 +58,9 @@ export function columnStats(rows: Row[], keys: string[]): Record<string, ColumnS
 
 /**
  * Background color for a heatmap cell. Polar columns fade from transparent (worst) to green (best);
- * neutral columns diverge around zero (blue for positive, orange for negative).
+ * neutral columns diverge around zero (blue for positive, orange for negative). Context columns
+ * (schedule strength, the opponents faced) describe the opposition rather than grade the row, so
+ * they shade in one muted slate hue, deeper toward the tougher end their polarity names.
  */
 export function heatStyle(meta: ColumnMeta, value: CellValue, stats: ColumnStats | undefined): React.CSSProperties | undefined {
   if (!meta.heatmap || typeof value !== 'number' || !stats) return undefined
@@ -72,6 +74,7 @@ export function heatStyle(meta: ColumnMeta, value: CellValue, stats: ColumnStats
   if (span === 0) return undefined
   let t = (value - stats.min) / span
   if (meta.polarity === 'lower') t = 1 - t
+  if (meta.contextual) return { backgroundColor: `oklch(0.6 0.04 262 / ${(0.04 + 0.36 * t).toFixed(3)})` }
   const alpha = (0.06 + 0.44 * t).toFixed(3)
   return { backgroundColor: `oklch(0.75 0.16 150 / ${alpha})` }
 }

@@ -59,6 +59,8 @@ export interface ColumnMeta {
   decimals: number | null
   actionable: boolean
   sticky: boolean
+  /** Context rather than a grade (schedule strength, the opponents faced); shaded in a muted hue. */
+  contextual?: boolean
 }
 
 export type Row = Record<string, string | number | boolean | null>

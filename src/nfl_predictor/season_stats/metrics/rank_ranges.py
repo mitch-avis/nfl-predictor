@@ -2,10 +2,11 @@
 
 The ratings' rank ranges redraw a season's games ``BOOTSTRAP_RESAMPLES`` times and publish each
 rating's and rank's quantiles at ``RANGE_QUANTILES`` as ``<column>_q025`` through
-``<column>_q975``. ``nfl-sos-ratings`` keeps these settings in its ``rating_ranges`` module beside
-the bootstrap itself; the registry needs only the three below, so they are restated here and the
-registry imports nothing from the ratings code (``tests/test_season_stats_registry.py`` pins the
-values).
+``<column>_q975``. The ratings package keeps these settings in ``ratings.rating_ranges`` beside the
+bootstrap itself, which loads numpy; the registry needs only the three below, so they are restated
+here and the registry, which the web API reads, imports nothing from the ratings code.
+``tests/test_season_stats_registry.py`` requires them to equal the ratings package's and the
+registry to import without numpy.
 """
 
 from __future__ import annotations

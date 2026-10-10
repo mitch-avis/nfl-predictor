@@ -315,6 +315,65 @@ def test_the_team_stats_file_is_downloaded_again_once_nflreadpy_forgets_it(
     assert official.height == 4
 
 
+_DOWNLOAD_FAILURES = [ConnectionError("offline"), ValueError("season not published yet")]
+
+
+def _failing_download(error: Exception, attempts: list[int]) -> Callable[..., pl.DataFrame]:
+    """Return a stand-in for ``nflreadpy.load_team_stats`` that fails as nflreadpy does.
+
+    Each call appends its season to ``attempts``.
+    """
+
+    def load_team_stats(seasons: list[int], **_kwargs: object) -> pl.DataFrame:
+        attempts.extend(seasons)
+        raise error
+
+    return load_team_stats
+
+
+@pytest.mark.parametrize("error", _DOWNLOAD_FAILURES, ids=["connection", "value"])
+def test_a_failed_current_season_download_falls_back_to_the_cached_official_team_stats(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    """The current season is fetched again on every run; when that fails, its cache stands."""
+    # Arrange
+    data = _league()
+    cached = _official(data).filter(pl.col("season") == _LAST)
+    source = season_stats_sources.OFFICIAL_TEAM_STATS
+    path = source.cache_path(constants.NFLREADPY_CACHE_DIR, _LAST, regular_season_only=True)
+    loaders._write_cached_frame(cached, path, source.columns)
+    attempts: list[int] = []
+    monkeypatch.setattr(nflreadpy, "load_team_stats", _failing_download(error, attempts))
+
+    # Act
+    sources = season_stats_build.load_season_stats_sources(
+        [_LAST], _loaded(data), current_season=_LAST, force_refresh=False
+    )
+
+    # Assert
+    assert attempts == [_LAST]
+    assert_frame_equal(sources.official_team_stats, cached)
+
+
+@pytest.mark.parametrize("error", _DOWNLOAD_FAILURES, ids=["connection", "value"])
+def test_a_failed_current_season_download_without_a_cache_leaves_no_official_team_stats(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    # Arrange
+    attempts: list[int] = []
+    monkeypatch.setattr(nflreadpy, "load_team_stats", _failing_download(error, attempts))
+
+    # Act
+    sources = season_stats_build.load_season_stats_sources(
+        [_LAST], _loaded(_league()), current_season=_LAST, force_refresh=False
+    )
+
+    # Assert
+    assert attempts == [_LAST]
+    assert sources.official_team_stats.is_empty()
+    assert sources.official_team_stats.schema == season_stats_sources.OFFICIAL_TEAM_STATS.schema
+
+
 def test_tables_of_a_played_season_hold_every_kind() -> None:
     # Act
     tables = _tables(_season_stats(), _SEASON)

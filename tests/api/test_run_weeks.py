@@ -11,8 +11,10 @@ import json
 import os
 from typing import TYPE_CHECKING
 
+import pytest
 from tests.api import factories
 
+from nfl_predictor.api.runs import active
 from nfl_predictor.api.runs.files import resolve_run_files
 
 if TYPE_CHECKING:
@@ -20,6 +22,8 @@ if TYPE_CHECKING:
 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
+
+    from nfl_predictor.api.db import Database
 
 OWN_WEEK = 5
 LATER_WEEK = 6
@@ -73,6 +77,47 @@ def test_run_files_without_a_marker_use_the_newest_week(tmp_path: Path) -> None:
     # Assert
     assert files.predictions == run_dir / "season_2026_week_06_predictions.csv"
     assert files.week == LATER_WEEK
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "not json",
+        '["season_2026_week_05_predictions.csv"]',
+        '{"outputs": "season_2026_week_05_predictions.csv"}',
+        '{"outputs": [7, "season_2026_week_09_predictions.csv"]}',
+    ],
+    ids=["not-json", "not-an-object", "outputs-not-a-list", "no-output-matches"],
+)
+def test_run_files_with_an_unusable_marker_use_the_newest_week(tmp_path: Path, marker: str) -> None:
+    """A marker that names no predictions file in the directory falls back to the newest week."""
+    # Arrange
+    run_dir = _weekly_run_with_a_later_week(tmp_path)
+    (run_dir / "predictions_state.json").write_text(marker, encoding="utf-8")
+
+    # Act
+    files = resolve_run_files(run_dir)
+
+    # Assert
+    assert files.week == LATER_WEEK
+
+
+def test_predictions_skip_a_pinned_run_without_predictions(
+    project_root: Path, viewer_client: TestClient, app: FastAPI, db: Database
+) -> None:
+    """A pinned training run predicts nothing, so a week resolves to the run that predicted it."""
+    # Arrange
+    models = project_root / "models"
+    _weekly_run_with_a_later_week(models)
+    factories.make_run_dir(models, "train", factories.RunSpec(kind="training"))
+    app.state.run_index.invalidate()
+    active.set_active_run(db, app.state.run_index, "train")
+
+    # Act
+    payload = viewer_client.get("/api/predictions", params={"season": 2026, "week": 5}).json()
+
+    # Assert
+    assert (payload["source"], payload["run_id"], payload["week"]) == ("run", "weekly_w5", 5)
 
 
 def test_predictions_default_to_the_active_runs_own_week(

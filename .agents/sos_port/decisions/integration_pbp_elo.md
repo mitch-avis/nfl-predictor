@@ -2,7 +2,8 @@
 
 Roadmap step 6's integration of this repository's own play-by-play feature family, its
 quarterback family and its own Elo, on branch `worktree-agent-ab77a9529b8ed64b8` (off `main`,
-fast-forwarded to `feat/step6-sos-port`). The scope was decided by the delegating session
+fast-forwarded to `feat/step6-sos-port`, with the reviewed step-6 branch merged at `a698aff` and
+the ratings integration at `0cb7c00`). The scope was decided by the delegating session
 (`.agents/step6_plan.md`, "Integration design"); each judgment call inside it is logged here
 with the parts `.agents/sos_port/DECISIONS.md` asks for. These changes alter feature values on
 purpose; the production rebuild stays held for the user.
@@ -27,7 +28,7 @@ output is kept as `<script>_output.txt` where the docs quote it.
   `integration_feature_diff.py` compares two runs column by column, by season. A commit before
   the current one runs from a `git archive` export with `PYTHONPATH`. Every comparison the
   entries quote is kept in `integration_feature_diffs/<before>_<after>.txt`, named by the two
-  commits, from `f601835` (the branch before the first correction) through `25cc5d0` (the last
+  commits, from `f601835` (the branch before the first correction) through `2c5d028` (the last
   code change); each run used `POLARS_MAX_THREADS=8`.
 - `integration_carry_parity.py` and `integration_starters.py` compare with `nfl-sos-ratings`'
   published files (`/home/mitch/workspace/nfl-sos-ratings/data/`, read-only).
@@ -183,6 +184,39 @@ Reproduce from the repository root (the cache once, then any script):
   nothing else.
 - **How to reverse it**: drop `requested_seasons` from `_quarterback_history`.
 
+### 1.7 Every quarterback feature reads one starter function
+
+- **What differs**: the ratings integration, merged at `0cb7c00`, routes every expected-starter
+  read through `qb_stats.expected_starter_ids` (the quarterback family and the ratings'
+  `ratings_qb`), which mapped the named starter only; this integration had applied the
+  play-by-play rule inside the quarterback family alone.
+- **Decision**: the rule lives in `expected_starter_ids`, which takes the run's play-by-play
+  starters (`2c5d028`): the quarterback family, `RatingsBuild.attach` (handed the run's starters
+  by `_finish_games`) and the own Elo's named starters all read their starter from it.
+- **Reasoning**: the plan asks for one starter definition; the delegating session asked for it
+  in the one function every reader goes through, so a later reader cannot miss it.
+- **Feature-value impact** (`25cc5d0_2c5d028.txt`, across the merge and this change): the 21
+  ratings columns are added and the other 468 published numeric columns are identical, the
+  quarterback family and the own Elo included. `ratings_qb` and `ratings_qb_dropbacks` follow
+  the play-by-play starter in the 12 team-games of entry 1.1 where it differs from the named
+  one; that is not measured here, because the measurement runs do not build the ratings (their
+  columns are null in both runs).
+- **How to reverse it**: call `expected_starter_ids` without `starters`.
+
+### 1.8 The ratings' play-by-play history asks for each season once
+
+- **What differs**: the ratings loader asked again for every season it found without plays, so
+  before kickoff the current season was requested twice, the defect entry 1.6 fixed for the
+  quarterback history.
+- **Options**: a `requested_seasons` argument, as the quarterback history takes, which would
+  take the loader past the argument limit and change the signature of a branch still in review;
+  or asking only for the seasons before the first one the ETL loaded.
+- **Decision**: the second (`ratings_build._with_earlier_seasons`, in the merge `0cb7c00`). The
+  ETL's play-by-play runs from its first season through the last built one, so a season after
+  the first that has no plays was asked for already.
+- **Feature-value impact**: none.
+- **How to reverse it**: ask for every season `_with_earlier_seasons` finds without rows.
+
 ## 2. Play-by-play corrections
 
 The plan adopted these from phase 1's differences (`.agents/step6_plan.md`, "Integration
@@ -247,13 +281,14 @@ weeks through the week-1 prior and the in-season blend.
   `causes.wiped_out_runs.wiped_out_plays`). Penalty-wiped passes were never dropbacks, so
   counting wiped runs as carries put their EPA into the rushing rates alone.
 - **Data**: the acceptance check, `integration_carry_parity.py` (output
-  `integration_carry_parity_output.txt`, on the counts of the run at `25cc5d0`, the last code
-  change; the run at `1a86e18` gave the same): over the 13,928 regular-season team-games of
-  1999-2025, this repository's carries and rush successes equal the source's `designed_carries`
-  and rush successes (`rush_success_rate * designed_carries`, rounded) in **every** team-game: 0
-  differences in each, so no cause had to be named. The source's files are its published
-  `{season}_team_game_logs.parquet` (`/home/mitch/workspace/nfl-sos-ratings/data/`, read-only;
-  one SHA-256 over the 27 files in the output). The plays that move, counted on the same cache:
+  `integration_carry_parity_output.txt`, on the counts of the run at `2c5d028`, the last code
+  change; the runs at `1a86e18` and `25cc5d0` gave the same): over the 13,928 regular-season
+  team-games of 1999-2025, this repository's carries and rush successes equal the source's
+  `designed_carries` and rush successes (`rush_success_rate * designed_carries`, rounded) in
+  **every** team-game: 0 differences in each, so no cause had to be named. The source's files are
+  its published `{season}_team_game_logs.parquet` (`/home/mitch/workspace/nfl-sos-ratings/data/`,
+  read-only; one SHA-256 over the 27 files in the output). The plays that move, counted on the
+  same cache:
   8,862 leave carries (8,841 penalty-wiped `no_play` runs, 20 `punt` plays and one `kickoff`
   flagged `rush` without `rush_attempt`; -5,687.69 EPA, 2,003 successes) and 54 join (53 run
   plays and one spike with `rush_attempt` but not `rush`; -78.72 EPA, 5 successes).
@@ -388,11 +423,11 @@ publishes it.
   as in the evaluation; rating every game from 1999 is what the seeding and the rolling home
   field need (`elo.md`); the lines are market information, so a probability built without them
   stays out of that block.
-- **Data**: the measurement runs at `ec315e6` and `25cc5d0` publish the eight columns on all
-  7,261 games with no null, and on the evaluation's window (4,943 games, 2,746 home wins) the two
-  probabilities score Brier 0.21701 and 0.21594, the evaluation's own numbers to five places
-  (`integration_own_elo_check.py`; output `integration_own_elo_check_output.txt`, from the run
-  at `25cc5d0`).
+- **Data**: the measurement runs at `ec315e6`, `25cc5d0` and `2c5d028` publish the eight columns
+  on all 7,261 games with no null, and on the evaluation's window (4,943 games, 2,746 home wins)
+  the two probabilities score Brier 0.21701 and 0.21594, the evaluation's own numbers to five
+  places (`integration_own_elo_check.py`; output `integration_own_elo_check_output.txt`, from the
+  run at `2c5d028`).
 - **Feature-value impact** (`aa520c0_ec315e6.txt`): the eight columns are added; the other 461
   published numeric columns are identical. They sit inside the feature range the model reads,
   so a backtest or weekly run on a rebuilt dataset trains on both presets unless
@@ -415,7 +450,7 @@ publishes it.
 - **Options**: a key in `market_lines_metadata.json` or a file of its own.
 - **Reasoning**: the line record is what `nfl-predictor lines` reads to pick its refresh path, so
   it stays the line source's alone; one writer serves both files.
-- **Data**: the record the run at `25cc5d0` wrote, as `integration_own_elo_check_output.txt`
+- **Data**: the record the run at `2c5d028` wrote, as `integration_own_elo_check_output.txt`
   prints it: the cached file (origin `cache`, 768 rows, SHA-256 `1e6fac80...`, the copy
   `ELO_EVAL.md` read) and weights of 0.0 for 2003 (no earlier season to fit on), 1.0 for
   2004-2006 and 0.6-0.95 from 2007.
@@ -423,6 +458,17 @@ publishes it.
   its pull stops instead.
 - **How to reverse it**: `own_elo_build.require_win_totals` and
   `data_collection._save_build_record`.
+
+### 3.4 The collection's records travel in one object
+
+- **What differs**: `collect_all_data` handed its records back through one argument each; this
+  integration added the own Elo's and the ratings integration the ratings tables, which took it
+  past the argument limit at the merge.
+- **Decision**: `data_collection.CollectionRecords` (the strength snapshots, the line record,
+  the own Elo's record and the ratings tables), filled in by the run and written by `main`, in
+  the merge `0cb7c00`.
+- **Feature-value impact**: none; every file `main` writes is unchanged.
+- **How to reverse it**: one argument per record again.
 
 ## 4. Columns no longer carried
 

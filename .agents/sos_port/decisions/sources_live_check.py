@@ -82,7 +82,9 @@ def main() -> None:
         )
 
         heading("Quarterback identity 2022: Taysom Hill, and the season's quarterbacks")
-        identity = nflverse_sources.load_qb_identity(2022, cache_dir=cache, current_season=CURRENT)
+        identity = nflverse_sources.load_season_qb_identity(
+            2022, cache_dir=cache, current_season=CURRENT
+        )
         print(identity.filter(pl.col("qb_id") == "00-0033357").rows())
         print("players:", identity.height)
         print("quarterbacks:", len(player_identity.season_quarterback_ids(identity)))

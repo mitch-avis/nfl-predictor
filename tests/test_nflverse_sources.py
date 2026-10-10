@@ -715,7 +715,9 @@ def test_the_qb_identity_counts_a_weekly_roster_listing_at_qb(
     )
 
     # Act
-    identity = nflverse_sources.load_qb_identity(2020, cache_dir=tmp_path, current_season=CURRENT)
+    identity = nflverse_sources.load_season_qb_identity(
+        2020, cache_dir=tmp_path, current_season=CURRENT
+    )
 
     # Assert
     assert identity.rows() == [("00-0033357", "HillTa00", "Taysom Hill", "QB")]
@@ -732,7 +734,9 @@ def test_the_qb_identity_before_weekly_rosters_reads_the_players_file_alone(
     )
 
     # Act
-    identity = nflverse_sources.load_qb_identity(2001, cache_dir=tmp_path, current_season=CURRENT)
+    identity = nflverse_sources.load_season_qb_identity(
+        2001, cache_dir=tmp_path, current_season=CURRENT
+    )
 
     # Assert
     assert calls == []
@@ -754,7 +758,7 @@ def test_the_current_season_qb_identity_reads_a_fresh_players_file(
     )
 
     # Act
-    identity = nflverse_sources.load_qb_identity(
+    identity = nflverse_sources.load_season_qb_identity(
         CURRENT, cache_dir=tmp_path, current_season=CURRENT
     )
 
@@ -775,7 +779,7 @@ def test_the_current_season_qb_identity_survives_a_players_file_outage(
     )
 
     # Act
-    identity = nflverse_sources.load_qb_identity(
+    identity = nflverse_sources.load_season_qb_identity(
         CURRENT, cache_dir=tmp_path, current_season=CURRENT
     )
 

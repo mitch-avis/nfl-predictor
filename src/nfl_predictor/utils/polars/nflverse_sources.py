@@ -593,7 +593,7 @@ def load_players(
     return players
 
 
-def load_qb_identity(
+def load_season_qb_identity(
     season: int,
     *,
     cache_dir: os.PathLike[str] | str | None = None,
@@ -601,6 +601,10 @@ def load_qb_identity(
     current_season: int | None = None,
 ) -> pl.DataFrame:
     """Load one season's quarterback identity (``player_identity.qb_identity_crosswalk``).
+
+    Every player id gets the season's position, ``QB`` for the season's quarterbacks, read from
+    the players file and every regular-season week of the season's roster. It is not
+    ``qb_stats.load_qb_identity``, which maps Elo quarterback names to ids.
 
     The current or a later season reads a fresh players file and survives its outage, as the
     per-season sources do; an earlier season reads the cached file. Before 2002 there is no

@@ -191,7 +191,7 @@ revises its files, so a later run can differ in the last rows.
   players file the weekly roster still marks the season's quarterbacks.
 - **Data**: none needed beyond the tests (`tests/test_nflverse_sources.py`).
 - **Feature-value impact**: none.
-- **How to reverse it**: the `load_players` arguments in `load_qb_identity`.
+- **How to reverse it**: the `load_players` arguments in `load_season_qb_identity`.
 
 ### ESPN QBR: validation only, one download split into per-season files
 

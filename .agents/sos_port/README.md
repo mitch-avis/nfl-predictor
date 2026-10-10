@@ -158,3 +158,48 @@ by row, when a `play_id` repeats within a game or rows equal on every cached col
 `qb_scramble`, when an evidence pattern in `parity.yaml` no longer holds, when a pair names a
 column that does not exist or a game-log column that does not come from play-by-play, or when a
 cause is described without an implementation or implemented without a description.
+
+## The rating-definition tests
+
+The rating questions `nfl-sos-ratings` left open at its freeze (`../sos_port_source.md`, "Handoff
+after the freeze") are answered by report-only measurements on the ported ratings. Each has a
+protocol in `protocols/`, committed before anything was scored, a script beside this file, and a
+generated report; the results and recommendations are logged in `decisions/open_rating_tests.md`.
+None changes a rating definition: adoption is the user's decision.
+
+| question | protocol | script | writes |
+| --- | --- | --- | --- |
+| the quarterback rating from all of a quarterback's plays | `protocols/qb_all_plays.md` | `qb_plays_test.py` | `QB_PLAYS_TEST.md`, `qb_plays_test.json` |
+| the botched-snap charge rule | `protocols/botched_snaps.md` | `botched_snaps.py` | `BOTCHED_SNAPS.md`, `botched_snaps.json` |
+| kneel-downs and spikes in the team rating | `protocols/kneel_spike.md` | `team_plays_test.py kneel-spike` | `KNEEL_SPIKE_TEST.md`, `kneel_spike_test.json` |
+| penalty-wiped plays in the team rating | `protocols/penalty_wiped.md` | `team_plays_test.py penalty-wiped` | `PENALTY_WIPED_TEST.md`, `penalty_wiped_test.json` |
+
+`rating_tests_common.py` holds what they share: the season-cluster bootstrap and its t-interval
+sensitivity, the single-game bootstrap, the cache-only loaders (every season treated as historical
+and nflreadpy's loaders replaced by ones that raise, so a cache miss cannot download), the ledger
+that hashes every input file, and the Markdown wrapping the linter needs. Their tests are
+`tests/test_sos_port_*.py`, which import the scripts through `tests/sos_port_scripts.py`.
+
+Run them from the repository root without `-I` (each imports `rating_tests_common` from this
+directory), with one BLAS thread set in the scripts:
+
+```bash
+cache=/home/mitch/scratch/step6/data/cache/nflreadpy
+ratings=/home/mitch/scratch/step6/data/ratings
+VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/team_plays_test.py \
+    kneel-spike --cache-dir "$cache" --ratings-dir "$ratings"
+VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/team_plays_test.py \
+    penalty-wiped --cache-dir "$cache" --ratings-dir "$ratings"
+VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/qb_plays_test.py \
+    --cache-dir "$cache" --ratings-dir "$ratings"
+VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/botched_snaps.py \
+    --cache-dir "$cache"
+```
+
+They read the candidate build's play-by-play and player-source cache and its published ratings
+tables (`~/scratch/step6/data/`); the quarterback test also reads the schedule file of the
+snapshot of the source's nflreadpy cache for the starter cross-check
+(`--schedules-file`, by default `~/scratch/nflreadpy_cache_snapshot_20261008/a7d0d7a2...parquet`).
+Each team test takes about three minutes; the quarterback test, whose power estimate runs the whole
+walk-forward on 100 synthetic windows, the longest. Every report records the SHA-256 of its code
+and of every input file, and two runs of the same code write the same numbers.

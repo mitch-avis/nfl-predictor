@@ -10,7 +10,9 @@ unfinished week.
 Each week's floor uses the sigma estimated from the reference runs' out-of-fold errors
 (``floor_sigma_history``) and stage 1's own earlier weeks.
 
-Outputs under ``<run_dir>/wf_compare/``: the fold checkpoints (``wf_folds/``), one evaluation
+Outputs under ``<run_dir>/wf_compare/``: the fold checkpoints (``wf_folds/``) and a
+``metadata.json`` naming their directory, so the power rankings' model rating can read the
+predictions as a walk-forward run's (``predictions_source``), one evaluation
 artifact (``wf_candidate_<key>.json``, with the per-week, per-season and overall metrics and the
 reliability table), the squared margin error of every game stage 1 predicted
 (``wf_margin_errors.csv``, which the final fit's sigma reads for the weeks the reference runs
@@ -80,6 +82,22 @@ def market_mode_flags(mode: str) -> tuple[bool, bool]:
 def _wf_compare_dir(run_dir: Path) -> Path:
     """Return the walk-forward evaluation artifact directory."""
     return run_dir / "wf_compare"
+
+
+def predictions_source(run_dir: Path) -> Path:
+    """Return stage 1's walk-forward as a source of its pre-game predictions.
+
+    ``wf_compare/metadata.json`` names the fold checkpoint directory, as a walk-forward run
+    directory's does (`reporting.run_comparison.resolve_run`).
+    """
+    return _wf_compare_dir(run_dir)
+
+
+def _write_predictions_source(run_dir: Path, checkpoint: object) -> None:
+    """Record the walk-forward's fold checkpoint directory for `predictions_source`."""
+    if isinstance(checkpoint, dict) and checkpoint.get("dir"):
+        pointer = {"config": {"checkpoint": {"dir": str(checkpoint["dir"])}}}
+        _atomic_write_json(predictions_source(run_dir) / "metadata.json", pointer)
 
 
 def _candidate_artifact_path(run_dir: Path, candidate_key: str) -> Path:
@@ -326,6 +344,7 @@ def evaluate_production(
         floor_sigma_history=run.floor_sigma_history,
     )
     write_margin_errors(run_dir, floor_sigma.margin_errors(out["predictions"]))
+    _write_predictions_source(run_dir, out.get("checkpoint"))
     duration = time.monotonic() - start
     summary_row = _build_summary_row(candidate_key, options.market_mode, out, run, duration)
     _atomic_write_json(

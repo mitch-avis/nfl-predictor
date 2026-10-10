@@ -5,11 +5,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import pandas as pd
 import pytest
+from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
+from nfl_predictor.ml import walk_forward
 from nfl_predictor.reporting import power_rankings, rating_sources
 from nfl_predictor.weekly_run import config as run_config
-from nfl_predictor.weekly_run import pipeline
+from nfl_predictor.weekly_run import pipeline, stage1
 
 
 def _args(argv: list[str]):
@@ -178,3 +181,47 @@ def test_weekly_rankings_skip_unreadable_model_predictions(
     # Assert
     assert written == []
     assert "no_such_run" in caplog.text
+
+
+def test_stage_one_records_its_fold_checkpoints_as_a_prediction_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    folds = write_fold_checkpoints(
+        tmp_path / "run" / "wf_compare" / "wf_folds" / "abc",
+        [fold_frame(2024, 1, [("BBB", "AAA", 3.0)])],
+    )
+    result = {
+        "overall": {"brier": 0.21, "deterministic_brier": 0.21, "games": 1, "weeks": 1},
+        "resolved_settings": {},
+        "predictions": pd.DataFrame(
+            columns=["game_id", "season", "week", "actual_margin", "predicted_margin"]
+        ),
+        "checkpoint": {"dir": str(folds), "restored_folds": 0, "computed_folds": 1},
+    }
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", lambda *_a, **_k: result)
+    options = stage1.ProductionOptions(
+        eval_last_n_seasons=1,
+        wf_start_week=1,
+        include_postseason=False,
+        exclude_incomplete_seasons=False,
+        recency_half_life_seasons=None,
+        market_mode="hybrid",
+        xgb_params_overrides={},
+        include_quantiles=False,
+    )
+    run = stage1.Stage1Run(
+        run_dir=tmp_path / "run",
+        resume=True,
+        dataset_fingerprint={"sha256": "fp"},
+        wf_run_fingerprint="wf123",
+        checkpoint_per_fold=False,
+    )
+
+    # Act
+    stage1.evaluate_production(pd.DataFrame(), options, run)
+
+    # Assert
+    read = rating_sources.read_fold_predictions(stage1.predictions_source(tmp_path / "run"))
+    assert read.checkpoint_dir == folds
+    assert read.predictions.get_column("game_id").to_list() == ["2024_01_BBB_AAA"]

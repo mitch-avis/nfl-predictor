@@ -55,7 +55,7 @@ Every setting is an `NFLP_`-prefixed environment variable (see `src/nfl_predicto
 | `NFLP_JWT_SECRET` | generated into the state dir | Session signing secret |
 | `NFLP_SESSION_HOURS` | `168` | Session lifetime |
 | `NFLP_WEB_DIST` | `web/dist/` | Built frontend |
-| `NFLP_PYTHON` | `.venv/bin/python` | Interpreter for jobs; each runs `<python> -m nfl_predictor <command>` |
+| `NFLP_PYTHON_EXECUTABLE` | `.venv/bin/python` | Interpreter for jobs; each runs `<python> -m nfl_predictor <command>` |
 
 ## Checks
 

@@ -1128,8 +1128,8 @@ Training/backtests can write a run directory containing reproducible artifacts.
   walk-forward pool points, the prediction log and `nfl-predictor compare` all rank this way.
 - The pick is the home team when the unrounded home win probability is at least `0.5`
   (`p >= 0.5`, so an exact coin flip picks home), else the away team (`picks_home` in
-  `src/nfl_predictor/ml/metrics.py`); the walk-forward, the training pool summaries and the weekly
-  `predicted_winner` all use this rule.
+  `src/nfl_predictor/ml/metrics.py`); the walk-forward, the training pool summaries, the weekly
+  `predicted_winner` and `nfl-predictor compare` all use this rule.
 - The weekly picks and ranks use the unrounded probability, as the walk-forward does: the
   published `home_win_prob` and `away_win_prob` are rounded to 4 decimals, but a game published
   at `0.5000` still picks the side its unrounded probability favors, two games that share a

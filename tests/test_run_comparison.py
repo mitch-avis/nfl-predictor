@@ -122,6 +122,22 @@ def test_per_game_scores_follow_the_documented_definitions() -> None:
     assert by_id.loc["g1", "log_loss"] == pytest.approx(-np.log(0.8))
 
 
+def test_an_exact_coin_flip_picks_home_as_the_weekly_picks_do() -> None:
+    """At exactly 0.5 the pick is home (``metrics.picks_home``): right only on a home win."""
+    # Arrange
+    predictions = _predictions({"g1": 0.5, "g2": 0.5, "g3": 0.5})
+
+    # Act
+    games = run_comparison.per_game_scores(predictions)
+
+    # Assert
+    by_id = games.set_index("game_id")
+    # Home won g1 by 7, lost g2 by 3, and g3 was a tie, which is wrong for either pick.
+    assert by_id.loc[["g1", "g2", "g3"], "correct"].tolist() == [1.0, 0.0, 0.0]
+    # Equal confidences rank by game_id (1, 2, 3); only g1's rank-1 pick scores.
+    assert by_id.loc[["g1", "g2", "g3"], "pool"].tolist() == [1.0, 0.0, 0.0]
+
+
 def test_identical_runs_compare_to_zero(tmp_path: Path) -> None:
     """A run against itself differs by exactly zero in every window and column."""
     # Arrange

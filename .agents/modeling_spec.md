@@ -116,7 +116,8 @@ If implementing score "realism":
 - Weekly outputs include a **1..N** unique confidence ranking across that week's games.
 - Predicted winner is derived from the deterministic win probability: home when the unrounded
   `p >= 0.5` (an exact 0.5 picks home), else away (`picks_home` in `src/nfl_predictor/ml/metrics.py`,
-  shared by the walk-forward, the training pool summaries and the weekly output).
+  shared by the walk-forward, the training pool summaries, the weekly output and
+  `nfl-predictor compare`).
 - Confidence strength is derived from the deterministic win probability (default:
   `abs(p - 0.5)`), rounded to 12 decimals (`CONFIDENCE_DECIMALS` in `src/nfl_predictor/ml/metrics.py`)
   so that mathematically equal confidences (a home favorite and a home underdog by the same

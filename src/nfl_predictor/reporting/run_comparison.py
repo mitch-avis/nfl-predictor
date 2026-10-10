@@ -9,8 +9,9 @@ Definitions, per game, on the deterministic probability ``p`` (``deterministic_h
 against ``actual_home_win`` (ties are coded 0 and scored that way):
 
 - Brier ``(p - y)^2``; log loss with ``p`` clipped to ``[1e-15, 1 - 1e-15]``.
-- Pick accuracy: home is picked when ``p > 0.5`` and away when ``p < 0.5``; a pick is correct only
-  when that side won outright, so ties are incorrect for both sides.
+- Pick accuracy: home is picked when ``p >= 0.5`` and away otherwise (``metrics.picks_home``, the
+  rule of the walk-forward, the training pool summaries and the weekly picks, so an exact 0.5 picks
+  home); a pick is correct only when that side won outright, so ties are incorrect for both sides.
 - Margin and total absolute error against ``actual_margin`` and ``actual_total``.
 - Confidence-pool points: within each (season, week), games are ranked ``1..N`` by ``|p - 0.5|``
   rounded to 12 decimals (``CONFIDENCE_DECIMALS`` in ``nfl_predictor.ml.metrics``), ascending,
@@ -54,8 +55,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from nfl_predictor import constants
-from nfl_predictor.ml.metrics import confidence_ranks
+from nfl_predictor.ml.metrics import confidence_ranks, picks_home
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -207,7 +207,7 @@ def per_game_scores(predictions: pd.DataFrame) -> pd.DataFrame:
     p = frame["deterministic_home_win_prob"].to_numpy(float)
     y = frame["actual_home_win"].to_numpy(float)
     margin = frame["actual_margin"].to_numpy(float)
-    even = constants.EVEN_ODDS_PROBABILITY
+    home = picks_home(p)
     clipped = np.clip(p, _PROB_CLIP, 1 - _PROB_CLIP)
     games = pd.DataFrame(
         {
@@ -221,7 +221,7 @@ def per_game_scores(predictions: pd.DataFrame) -> pd.DataFrame:
             "total_ae": np.abs(
                 frame["predicted_total"].to_numpy(float) - frame["actual_total"].to_numpy(float)
             ),
-            "correct": (((p > even) & (margin > 0)) | ((p < even) & (margin < 0))).astype(float),
+            "correct": ((home & (margin > 0)) | (~home & (margin < 0))).astype(float),
             "home_win": y,
             "market_prob": frame["market_home_win_prob"].to_numpy(float),
             "market_brier": (frame["market_home_win_prob"].to_numpy(float) - y) ** 2,

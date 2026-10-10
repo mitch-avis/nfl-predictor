@@ -12,13 +12,17 @@ metrics divide them.
 
 Definitions used throughout:
 
-- Scrimmage snap (the single definition of an offensive snap):
-  ``(qb_dropback + rush + qb_kneel + qb_spike) > 0`` with nulls filled to 0.
-- Dropback: a scrimmage snap with ``qb_dropback > 0`` that is neither a kneel
-  nor a spike.
-- Carry: a scrimmage snap with ``rush > 0`` that is neither a kneel nor a spike.
-  Kneels and spikes are therefore offensive snaps but are neither dropbacks nor
-  carries.
+- Scrimmage snap (the single definition of an offensive snap): a play with the
+  dropback flag or any of ``rush``, ``qb_kneel`` and ``qb_spike`` set, with nulls
+  read as 0. The dropback flag is ``qb_dropback > 0`` or a scramble filed as a run
+  play (``qb_scramble > 0`` with ``play_type == "run"``): nflverse leaves
+  ``qb_dropback`` at 0 on most scrambles before 2006 and gives a few scrambles the
+  ``rush`` flag. A scramble a penalty wiped out (``no_play``) is not one.
+- Dropback: a scrimmage snap with the dropback flag that is neither a kneel, a
+  spike nor a two-point try.
+- Carry: a scrimmage snap with ``rush > 0`` that is not a scramble filed as a run
+  play and is neither a kneel, a spike nor a two-point try. Kneels and spikes are
+  therefore offensive snaps but are neither dropbacks nor carries.
 - Offense perspective: the team is ``posteam`` on the play.
 - Allowed perspective: the team is ``defteam`` on the same play, so every
   ``*_allowed_*`` column of a team-game equals the matching offensive column of
@@ -232,18 +236,39 @@ def _possession_side_expr(columns: list[str], side: str) -> pl.Expr:
     return pl.col("posteam_type").cast(pl.Utf8, strict=False).str.to_lowercase().eq(side).max()
 
 
+def _run_play_scramble_expr(columns: list[str]) -> pl.Expr:
+    """Return whether a play is a scramble nflverse filed as a run play.
+
+    Formula: ``qb_scramble > 0`` and ``play_type == "run"``. nflverse codes a scramble as
+    a pass play (``rush`` is 0) and, from 2006 on, flags it with ``qb_dropback``; before
+    2006 it leaves ``qb_dropback`` at 0 on most scrambles, and a few scrambles carry the
+    ``rush`` flag. A scramble a penalty wiped out (``play_type == "no_play"``) is not one.
+    Without a ``play_type`` column no play is one.
+    """
+    if "play_type" not in columns:
+        return pl.lit(value=False)
+    is_run = (pl.col("play_type") == "run").fill_null(value=False)
+    return (flag_expr(columns, "qb_scramble") > 0) & is_run
+
+
+def _dropback_flag_expr(columns: list[str]) -> pl.Expr:
+    """Return the dropback flag: ``qb_dropback > 0``, or a scramble filed as a run play."""
+    return (flag_expr(columns, "qb_dropback") > 0) | _run_play_scramble_expr(columns)
+
+
 def _scrimmage_snap_expr(columns: list[str]) -> pl.Expr:
     """Return the single offensive-snap definition.
 
-    Formula: ``(qb_dropback + rush + qb_kneel + qb_spike) > 0`` with nulls filled
-    to 0, so a play counts as a scrimmage snap when any of those flags is set.
+    Formula: a play with the dropback flag (``_dropback_flag_expr``: ``qb_dropback`` or a
+    scramble filed as a run play) or any of ``rush``, ``qb_kneel`` and ``qb_spike`` set,
+    with nulls read as 0.
     """
     return (
-        flag_expr(columns, "qb_dropback")
-        + flag_expr(columns, "rush")
-        + flag_expr(columns, "qb_kneel")
-        + flag_expr(columns, "qb_spike")
-    ) > 0
+        _dropback_flag_expr(columns)
+        | (flag_expr(columns, "rush") > 0)
+        | (flag_expr(columns, "qb_kneel") > 0)
+        | (flag_expr(columns, "qb_spike") > 0)
+    )
 
 
 def count_where(condition: pl.Expr, name: str) -> pl.Expr:
@@ -298,13 +323,14 @@ def _play_conditions(columns: list[str]) -> dict[str, pl.Expr]:
     """Build the shared per-play condition and value expressions.
 
     Formulas:
-        - ``scrimmage``: ``(qb_dropback + rush + qb_kneel + qb_spike) > 0``.
-        - ``dropback``: scrimmage snap with ``qb_dropback > 0``, excluding kneels,
-          spikes, and two-point tries.
-        - ``rush``: scrimmage snap with ``rush > 0``, excluding kneels, spikes, and
-          two-point tries. Two-point tries are untimed conversion attempts rather than
-          scrimmage downs, so counting them would contaminate the per-attempt EPA and
-          success denominators.
+        - ``scrimmage``: the dropback flag or any of ``rush``, ``qb_kneel`` and ``qb_spike``
+          (``_scrimmage_snap_expr``).
+        - ``dropback``: scrimmage snap with the dropback flag (``qb_dropback > 0``, or a
+          scramble filed as a run play), excluding kneels, spikes, and two-point tries.
+        - ``rush``: scrimmage snap with ``rush > 0`` that is not a scramble filed as a run
+          play, excluding kneels, spikes, and two-point tries. Two-point tries are untimed
+          conversion attempts rather than scrimmage downs, so counting them would
+          contaminate the per-attempt EPA and success denominators.
         - ``success``: ``success > 0`` (missing column counts as no success).
         - ``early_down``: ``down <= EARLY_DOWN_MAX`` (missing/null down is not early).
         - ``special``: the special-teams flag column is set (missing column is never special).
@@ -312,10 +338,14 @@ def _play_conditions(columns: list[str]) -> dict[str, pl.Expr]:
     scrimmage = _scrimmage_snap_expr(columns)
     is_kneel_or_spike = (flag_expr(columns, "qb_kneel") + flag_expr(columns, "qb_spike")) > 0
     is_two_point = flag_expr(columns, "two_point_attempt") > 0
-    dropback = (
-        scrimmage & (flag_expr(columns, "qb_dropback") > 0) & ~is_kneel_or_spike & ~is_two_point
+    dropback = scrimmage & _dropback_flag_expr(columns) & ~is_kneel_or_spike & ~is_two_point
+    rush = (
+        scrimmage
+        & (flag_expr(columns, "rush") > 0)
+        & ~_run_play_scramble_expr(columns)
+        & ~is_kneel_or_spike
+        & ~is_two_point
     )
-    rush = scrimmage & (flag_expr(columns, "rush") > 0) & ~is_kneel_or_spike & ~is_two_point
     yards = value_expr(columns, "yards_gained")
     down = _nullable_expr(columns, "down", pl.Int64)
     st_flag = special_teams_flag_column(columns)
@@ -572,8 +602,9 @@ def regular_season_plays(pbp_df: pl.DataFrame) -> pl.DataFrame:
 def dropback_condition(columns: list[str]) -> pl.Expr:
     """Return the dropback definition shared by every play-by-play family.
 
-    Formula: a scrimmage snap with ``qb_dropback > 0`` that is not a kneel, a spike, or a
-    two-point try (see ``_play_conditions``).
+    Formula: a scrimmage snap with the dropback flag (``qb_dropback > 0``, or a scramble
+    filed as a run play) that is not a kneel, a spike, or a two-point try (see
+    ``_play_conditions``).
     """
     return _play_conditions(columns)["dropback"]
 

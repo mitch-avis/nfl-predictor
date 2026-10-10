@@ -697,6 +697,109 @@ def test_kneels_and_spikes_are_snaps_but_not_dropbacks_or_carries() -> None:
     assert row["total_plays"] == 2
 
 
+def test_a_run_play_scramble_without_the_dropback_flag_is_a_dropback() -> None:
+    """A scramble coded the pre-2006 way (a run play, no dropback flag) is a dropback snap."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                qb_scramble=1,
+                down=1,
+                yards_gained=9.0,
+                epa=0.7,
+                success=1,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    opponent_row = _row_for(result, "BUF")
+    assert (row["offensive_snaps"], row["dropbacks"], row["carries"]) == (1, 1, 0)
+    assert row["pass_epa_sum"] == pytest.approx(0.7)
+    assert row["rush_epa_sum"] == pytest.approx(0.0)
+    assert (row["pass_success_count"], row["early_down_passes"]) == (1, 1)
+    assert (opponent_row["defensive_snaps"], opponent_row["dropbacks_allowed"]) == (1, 1)
+    assert opponent_row["pass_epa_allowed_sum"] == pytest.approx(0.7)
+
+
+def test_a_scramble_coded_as_a_run_is_a_dropback_not_a_carry() -> None:
+    """A scramble that also carries the run flag counts once, as a dropback."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                qb_scramble=1,
+                rush=1,
+                down=2,
+                yards_gained=-2.0,
+                epa=-0.4,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["offensive_snaps"], row["dropbacks"], row["carries"]) == (1, 1, 0)
+    assert row["pass_epa_sum"] == pytest.approx(-0.4)
+    assert (row["stuffed_rush_count"], row["early_down_passes"]) == (0, 1)
+
+
+def test_a_penalty_wiped_scramble_is_not_a_dropback() -> None:
+    """The scramble rule reads run plays only: a scramble a penalty wiped out stays out."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="no_play",
+                qb_scramble=1,
+                down=1,
+                yards_gained=12.0,
+                epa=0.9,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["offensive_snaps"], row["dropbacks"], row["carries"]) == (0, 0, 0)
+
+
+def test_dropback_condition_includes_run_play_scrambles() -> None:
+    """The shared dropback definition, which the quarterback families read, has the rule too."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(posteam="KC", defteam="BUF", play_type="run", qb_scramble=1),
+            _play(posteam="KC", defteam="BUF", play_type="no_play", qb_scramble=1),
+            _play(posteam="KC", defteam="BUF", play_type="pass", qb_dropback=1),
+        ]
+    )
+
+    # Act
+    flags = plays.select(pbp.dropback_condition(plays.columns)).to_series().to_list()
+
+    # Assert
+    assert flags == [True, False, True]
+
+
 def test_special_teams_play_credits_both_teams() -> None:
     """A special-teams play credits the possessing team and charges the other team."""
     # Arrange

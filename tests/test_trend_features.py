@@ -70,34 +70,132 @@ def test_build_team_elo_trends_use_prior_games_only() -> None:
     assert aaa_week2["elo_4wk_trend"][0] == pytest.approx(10.0)
 
 
+def _team_stat_games(weeks: int) -> pl.DataFrame:
+    """Return AAA's first ``weeks`` games of 2023: four quiet games, then big margins."""
+    return pl.DataFrame(
+        {
+            "season": [2023] * weeks,
+            "week": list(range(1, weeks + 1)),
+            "team_abbr": ["AAA"] * weeks,
+            "scoring_margin": [1.0, 1.0, 1.0, 1.0, 10.0, 10.0, 10.0][:weeks],
+            "turnover_margin": [0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0][:weeks],
+        }
+    )
+
+
+def _schedule(weeks: list[int], game_type: str = "REG") -> pl.DataFrame:
+    """Return AAA's 2023 games against BBB in ``weeks``, played or not."""
+    return pl.DataFrame(
+        {
+            "season": [2023] * len(weeks),
+            "week": weeks,
+            "game_type": [game_type] * len(weeks),
+            "away_abbr": ["AAA"] * len(weeks),
+            "home_abbr": ["BBB"] * len(weeks),
+        }
+    )
+
+
+def _team_week(trends: pl.DataFrame, team: str, week: int) -> pl.DataFrame:
+    return trends.filter((pl.col("team_abbr") == team) & (pl.col("week") == week))
+
+
 def test_build_team_stat_trends_compare_recent_to_season_mean() -> None:
     """Performance trends compare recent mean to season-to-date mean."""
     # Arrange
-    stats = pl.DataFrame(
-        {
-            "season": [2023] * 6,
-            "week": [1, 2, 3, 4, 5, 6],
-            "team_abbr": ["AAA"] * 6,
-            "scoring_margin": [1.0, 1.0, 1.0, 1.0, 10.0, 10.0],
-            "turnover_margin": [0.0, 0.0, 0.0, 0.0, 2.0, 2.0],
-        }
-    )
+    stats = _team_stat_games(6)
 
     # Act
     trends = polars_utils.build_team_stat_trends(
         stats,
         season=2023,
         stats=["scoring_margin", "turnover_margin"],
+        schedule_df=_schedule(list(range(1, 7))),
         window=4,
     )
 
     # Assert
-    week6 = trends.filter((pl.col("team_abbr") == "AAA") & (pl.col("week") == 6))
+    week6 = _team_week(trends, "AAA", 6)
     assert week6.height == 1
     scoring_trend = cast("float", week6["scoring_margin_4wk_trend"][0])
     turnover_trend = cast("float", week6["turnover_margin_4wk_trend"][0])
     assert scoring_trend == pytest.approx(0.45, abs=1e-2)
     assert turnover_trend == pytest.approx(0.1, abs=1e-2)
+
+
+def test_build_team_stat_trends_gives_an_unplayed_week_the_trend_from_earlier_games() -> None:
+    """A scheduled week without a played game gets the trend from the team's earlier games."""
+    # Arrange
+    stats = _team_stat_games(6)
+
+    # Act
+    trends = polars_utils.build_team_stat_trends(
+        stats,
+        season=2023,
+        stats=["scoring_margin", "turnover_margin"],
+        schedule_df=_schedule(list(range(1, 8))),
+        window=4,
+    )
+
+    # Assert
+    week7 = _team_week(trends, "AAA", 7)
+    assert week7.height == 1
+    # Weeks 1-6: the last four games average 5.5 against a season mean of 4.0, and turnovers
+    # 1.0 against 4/6.
+    assert week7["scoring_margin_4wk_trend"][0] == pytest.approx(1.5)
+    assert week7["turnover_margin_4wk_trend"][0] == pytest.approx(1.0 - 4.0 / 6.0)
+
+
+def test_build_team_stat_trends_gives_a_playoff_week_the_full_regular_season_trend() -> None:
+    """A playoff week's trend comes from every regular-season game, the only games counted."""
+    # Arrange
+    stats = _team_stat_games(7)
+    playoff_week = constants.get_regular_season_weeks(2023) + 1
+    schedule = pl.concat([_schedule(list(range(1, 8))), _schedule([playoff_week], "WC")])
+
+    # Act
+    trends = polars_utils.build_team_stat_trends(
+        stats,
+        season=2023,
+        stats=["scoring_margin", "turnover_margin"],
+        schedule_df=schedule,
+        window=4,
+    )
+
+    # Assert
+    playoff = _team_week(trends, "AAA", playoff_week)
+    assert playoff.height == 1
+    # Weeks 1-7: the last four games average 7.75 against a season mean of 34/7, and
+    # turnovers 1.5 against 6/7.
+    assert playoff["scoring_margin_4wk_trend"][0] == pytest.approx(7.75 - 34.0 / 7.0)
+    assert playoff["turnover_margin_4wk_trend"][0] == pytest.approx(1.5 - 6.0 / 7.0)
+
+
+def test_build_team_stat_trends_is_zero_for_a_team_without_an_earlier_game() -> None:
+    """A team-week with no earlier game has no trend signal yet, published as 0.0."""
+    # Arrange
+    stats = _team_stat_games(6)
+
+    # Act
+    trends = polars_utils.build_team_stat_trends(
+        stats,
+        season=2023,
+        stats=["scoring_margin", "turnover_margin"],
+        schedule_df=_schedule(list(range(1, 8))),
+        window=4,
+    )
+
+    # Assert
+    aaa_week1 = _team_week(trends, "AAA", 1)
+    bbb_week7 = _team_week(trends, "BBB", 7)
+    assert aaa_week1.select("scoring_margin_4wk_trend", "turnover_margin_4wk_trend").row(0) == (
+        0.0,
+        0.0,
+    )
+    assert bbb_week7.select("scoring_margin_4wk_trend", "turnover_margin_4wk_trend").row(0) == (
+        0.0,
+        0.0,
+    )
 
 
 @pytest.mark.parametrize(

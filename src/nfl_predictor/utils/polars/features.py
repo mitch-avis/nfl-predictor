@@ -1045,22 +1045,41 @@ def build_qb_trends(
     )
 
 
+def _scheduled_team_weeks(schedule_df: pl.DataFrame, season: int) -> pl.DataFrame:
+    """Return each team-week the season's schedule lists, played or not, playoffs included."""
+    if not {"season", "week", "away_abbr", "home_abbr"}.issubset(schedule_df.columns):
+        return pl.DataFrame(schema={"season": pl.Int64, "week": pl.Int64, "team_abbr": pl.Utf8})
+    games = schedule_df.filter(pl.col("season") == season)
+    return pl.concat(
+        [
+            games.select("season", "week", pl.col(side).alias("team_abbr"))
+            for side in ("away_abbr", "home_abbr")
+        ]
+    ).unique(maintain_order=True)
+
+
 def build_team_stat_trends(
     team_stats_df: pl.DataFrame,
     season: int,
     *,
     stats: Sequence[str],
+    schedule_df: pl.DataFrame,
     window: int = 4,
 ) -> pl.DataFrame:
-    """Compute team-level performance trend features.
+    """Compute each scheduled team-week's performance trends from the team's earlier games.
 
-    Trend is defined as the prior `window`-game mean minus season-to-date mean
-    (both computed strictly before the current week).
+    A team's trend in week ``N`` is the mean of its last ``window`` games strictly before week
+    ``N`` minus its season-to-date mean over all of those games, and 0.0 before it has a game
+    with a value. Every team-week the season's schedule lists gets a row, played or not, so an
+    upcoming game's row carries the values its completed row will carry. Only the games in
+    ``team_stats_df`` count; in the ETL those are the completed regular-season games, so a
+    playoff week's trend covers the full regular season.
 
     Args:
         team_stats_df: Per-game team stats DataFrame.
         season: Season year to compute.
         stats: Stat column names to compute trends for.
+        schedule_df: Schedule whose games in ``season`` are the team-weeks to compute.
         window: Rolling window size in games.
 
     Returns:
@@ -1083,29 +1102,59 @@ def build_team_stat_trends(
         return pl.DataFrame(schema=schema)
 
     season_stats = team_stats_df.filter(pl.col("season") == season)
-    if season_stats.height == 0:
+    team_weeks = _scheduled_team_weeks(schedule_df, season)
+    if season_stats.height == 0 or team_weeks.height == 0:
         return pl.DataFrame(schema=schema)
 
-    season_stats = season_stats.select(["season", "week", "team_abbr", *available_stats]).sort(
-        ["team_abbr", "week"]
+    games = season_stats.select(["season", "week", "team_abbr", *available_stats]).sort(
+        ["team_abbr", "week"], maintain_order=True
+    )
+    trend_columns = [f"{stat}_4wk_trend" for stat in available_stats]
+    count_columns = [f"_{stat}_games" for stat in available_stats]
+
+    # Each team's trends after each of its games: the mean of its last `window` games through
+    # that game minus its season-to-date mean through it, with the count of games with a value.
+    after_game = []
+    for stat in available_stats:
+        recent_mean = pl.col(stat).rolling_mean(window_size=window, min_samples=1)
+        cum_count = pl.col(stat).cum_count()
+        season_mean = pl.when(cum_count > 0).then(pl.col(stat).cum_sum() / cum_count)
+        after_game.extend(
+            [
+                (recent_mean - season_mean).over("team_abbr").alias(f"{stat}_4wk_trend"),
+                cum_count.over("team_abbr").alias(f"_{stat}_games"),
+            ]
+        )
+    states = games.with_columns(after_game).select(
+        ["week", "team_abbr", *trend_columns, *count_columns]
     )
 
-    exprs = []
-    for stat in available_stats:
-        shifted = pl.col(stat).shift(1)
-        recent_mean = shifted.rolling_mean(window_size=window, min_samples=1).over("team_abbr")
-        cum_sum = shifted.cum_sum().over("team_abbr")
-        cum_count = shifted.cum_count().over("team_abbr")
-        season_mean = pl.when(cum_count > 0).then(cum_sum / cum_count)
-        exprs.append(
-            pl.when(cum_count == 0)
-            .then(pl.lit(0.0))
-            .otherwise(recent_mean - season_mean)
-            .alias(f"{stat}_4wk_trend")
+    # A week's trends are the ones after the team's last game strictly before that week (the
+    # week's own game never matches: `allow_exact_matches=False`). Both frames are sorted by
+    # week just before joining, which also orders the weeks within each team, so the
+    # sortedness check Polars cannot run with `by` groups is moot.
+    trends = (
+        team_weeks.cast({"season": games.schema["season"], "week": games.schema["week"]})
+        .sort("week", maintain_order=True)
+        .join_asof(
+            states.sort("week", maintain_order=True),
+            on="week",
+            by="team_abbr",
+            strategy="backward",
+            allow_exact_matches=False,
+            check_sortedness=False,
         )
-
-    return season_stats.with_columns(exprs).select(
-        ["season", "week", "team_abbr", *[f"{stat}_4wk_trend" for stat in available_stats]]
+    )
+    return (
+        trends.with_columns(
+            pl.when(pl.col(f"_{stat}_games").fill_null(0) == 0)
+            .then(pl.lit(0.0))
+            .otherwise(pl.col(f"{stat}_4wk_trend"))
+            .alias(f"{stat}_4wk_trend")
+            for stat in available_stats
+        )
+        .select(["season", "week", "team_abbr", *trend_columns])
+        .sort(["team_abbr", "week"], maintain_order=True)
     )
 
 

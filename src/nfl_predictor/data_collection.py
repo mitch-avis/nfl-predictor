@@ -1160,6 +1160,7 @@ def _with_season_features(
             team_stats_df,
             season,
             stats=["scoring_margin", "turnover_margin"],
+            schedule_df=schedule_df,
         )
     if schedule_df.height > 0:
         coach_features = polars_utils.build_coach_features(schedule_df, season=season)

@@ -12,7 +12,7 @@ import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.cli import backtest, train
-from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils, walk_forward
+from nfl_predictor.ml import feature_spec, floor_sigma, ml_model_xgb_utils, walk_forward
 from nfl_predictor.ml.feature_spec import (
     MARKET_DERIVED_COLUMNS,
     FeatureSelection,
@@ -404,3 +404,86 @@ def test_weekly_warns_only_when_the_market_free_mode_overrides_a_requested_trans
     # Assert
     overrides = [message for message in warnings if "--market-transform" in message]
     assert len(overrides) == (1 if warned else 0)
+
+
+def _spec_warnings(
+    monkeypatch: pytest.MonkeyPatch, frame: pd.DataFrame, *, include_market: bool, builds: int = 1
+) -> list[str]:
+    """Build the feature spec ``builds`` times and return the market-informed warnings."""
+    warnings = _recorded_warnings(monkeypatch)
+    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
+    selection = FeatureSelection(
+        include_market=include_market,
+        max_cardinality_ratio=walk_forward.WalkForwardConfig().max_cardinality_ratio,
+    )
+    for _ in range(builds):
+        build_feature_spec(frame, selection)
+    return [message for message in warnings if "market-informed" in message]
+
+
+def test_a_run_without_market_columns_names_the_market_informed_groups_it_keeps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+
+    # Act
+    warnings = _spec_warnings(monkeypatch, frame, include_market=False)
+
+    # Assert
+    assert len(warnings) == 1
+    assert "['elo', 'own_elo_wt']" in warnings[0]
+    assert "--disable-feature-groups elo,own_elo_wt" in warnings[0]
+    assert "disable_feature_groups" in warnings[0].replace("--disable-feature-groups", "")
+
+
+def test_a_run_without_market_columns_warns_once_for_every_fold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+
+    # Act
+    warnings = _spec_warnings(monkeypatch, frame, include_market=False, builds=3)
+
+    # Assert
+    assert len(warnings) == 1
+
+
+def test_a_run_that_leaves_one_group_out_names_only_the_other(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+    frame = frame.drop(
+        columns=walk_forward.resolve_feature_group_columns(list(frame.columns), ["elo"])
+    )
+
+    # Act
+    warnings = _spec_warnings(monkeypatch, frame, include_market=False)
+
+    # Assert
+    assert len(warnings) == 1
+    assert "['own_elo_wt']" in warnings[0]
+
+
+@pytest.mark.parametrize(
+    ("include_market", "dropped"),
+    [(True, ()), (False, ("elo", "own_elo_wt"))],
+    ids=["with-market", "groups-left-out"],
+)
+def test_no_warning_when_the_market_columns_stay_or_the_groups_are_left_out(
+    monkeypatch: pytest.MonkeyPatch, *, include_market: bool, dropped: tuple[str, ...]
+) -> None:
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+    if dropped:
+        frame = frame.drop(
+            columns=walk_forward.resolve_feature_group_columns(list(frame.columns), dropped)
+        )
+
+    # Act
+    warnings = _spec_warnings(monkeypatch, frame, include_market=include_market)
+
+    # Assert
+    assert warnings == []

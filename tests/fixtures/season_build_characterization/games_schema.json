@@ -285,7 +285,6 @@
   "spread_line": "Float64",
   "st_epa_margin_per_play_diff": "Float64",
   "st_rating_diff": "Float64",
-  "strength_games_played_diff": "Float64",
   "strength_of_schedule_rating_diff": "Float64",
   "stuffed_rush_rate_allowed_diff": "Float64",
   "stuffed_rush_rate_diff": "Float64",

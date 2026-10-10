@@ -210,6 +210,11 @@ def resolve_feature_group_columns(
     return sorted(matched)
 
 
+# The sets of market-informed groups this process has already warned about, each warned once:
+# every walk-forward fold builds its own spec.
+_WARNED_MARKET_INFORMED: set[tuple[str, ...]] = set()
+
+
 @dataclass(frozen=True, kw_only=True)
 class FeatureSelection:
     """How a feature spec chooses its columns from a dataset.
@@ -259,6 +264,34 @@ def _resolve_market_columns(
         else [col for col in feature_range if col in raw or col in MARKET_DERIVED_COLUMNS]
     )
     return _MarketColumns(feature_range, derived, features, excluded, dropped_raw)
+
+
+def _warn_kept_market_informed_groups(columns: Sequence[str], selection: FeatureSelection) -> None:
+    """Warn when the market columns are left out but a market-informed group stays in.
+
+    A run without the market columns (``include_market`` off) still trains on the groups of
+    ``constants.MARKET_INFORMED_FEATURE_GROUPS`` unless it leaves them out too. That is the
+    run's choice, so the warning only names the groups it keeps and how to leave them out, once
+    per set of groups in a process.
+    """
+    if selection.include_market:
+        return
+    kept = tuple(
+        group
+        for group in constants.MARKET_INFORMED_FEATURE_GROUPS
+        if resolve_feature_group_columns(columns, [group], warn_unmatched=False)
+    )
+    if not kept or kept in _WARNED_MARKET_INFORMED:
+        return
+    _WARNED_MARKET_INFORMED.add(kept)
+    log.warning(
+        "The market columns are left out, but the market-informed feature group(s) %s stay in "
+        "the features; to train with no market information at all, leave them out too with "
+        "--disable-feature-groups %s (backtest, train) or disable_feature_groups in the weekly "
+        "config.",
+        list(kept),
+        ",".join(kept),
+    )
 
 
 def _log_feature_spec(
@@ -336,6 +369,7 @@ def build_feature_spec(df: pd.DataFrame, selection: FeatureSelection) -> Feature
         if pruned_columns:
             drop_columns.update(pruned_columns)
             selected_columns = [col for col in selected_columns if col not in pruned_columns]
+    _warn_kept_market_informed_groups(selected_columns, selection)
 
     feature_df = df[selected_columns].copy()
 

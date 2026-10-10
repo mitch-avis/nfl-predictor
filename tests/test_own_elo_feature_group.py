@@ -45,12 +45,8 @@ QB_ELOS_FAMILY = sorted(
 
 
 def _both_families() -> list[str]:
-    """Return the published schema with both own Elo families added, as one build would carry."""
-    return [
-        *build_final_column_order(),
-        *constants.OWN_ELO_COLUMNS,
-        *constants.OWN_WT_ELO_COLUMNS,
-    ]
+    """Return the published schema, which carries both own Elo families."""
+    return build_final_column_order()
 
 
 def test_own_elo_columns_are_the_four_published_names() -> None:

@@ -1,0 +1,15 @@
+
+# team_games: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# box_scores: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# qb_games: 17332 rows before, 17332 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# published game columns: 7261 games before, 7261 after; 513 columns before, 521 after
+columns added: ['away_own_elo', 'away_own_wt_elo', 'home_own_elo', 'home_own_wt_elo', 'own_elo_diff', 'own_elo_home_win_prob', 'own_wt_elo_diff', 'own_wt_elo_home_win_prob']
+columns removed: []
+
+461 published numeric columns are identical before and after

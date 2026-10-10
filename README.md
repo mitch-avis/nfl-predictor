@@ -713,7 +713,8 @@ one function (`feature_spec.resolve_feature_group_columns`), so the same groups 
 columns everywhere, and each saved model's `metadata.json` names the groups it was trained without
 (`disabled_feature_groups`) and the columns they removed (`dropped_feature_group_columns`, the key
 the backtest records in its config). `train` and the weekly run check the group names before any
-data loads.
+data loads. A group that matches no column of the data drops nothing, and every run logs it as a
+warning, so a build without a group's columns does not quietly train differently from the arm.
 
 `--wf-n-estimators` overrides the XGBoost tree budget for the run (every in-season fit runs the full
 budget), which is how the budget itself is measured against the default. The six-season ladder

@@ -1,7 +1,7 @@
 """Builders for synthetic per-season ratings and statistics tables.
 
-The ETL writes each season's tables to ``data/ratings/{season}_{kind}.parquet`` with the kinds and
-columns of the ``nfl-sos-ratings`` files the ratings and season statistics packages were ported
+The pages read each season's tables from ``data/ratings/{season}_{kind}.parquet``, with the kinds
+and columns of the ``nfl-sos-ratings`` files the ratings and season statistics packages were ported
 from. ``data/`` is gitignored, so the route tests write small tables of their own: four teams and
 four quarterbacks, a subset of the real columns of each kind, and Washington as ``WSH``.
 """

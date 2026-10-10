@@ -2,7 +2,7 @@
 
 Every table is one season of one kind, ``{season}_{kind}.parquet`` in the ratings directory
 (``Settings.ratings_path``). Reads go through the API's file cache, so a table is parsed once until
-the ETL rewrites it.
+its file changes.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def read_table(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame:
 
     Raises:
         RatingsTableMissingError: If the file does not exist, including one removed between the
-            check and the read (an ETL rewriting the folder).
+            check and the read (the folder being rewritten).
         RatingsTableUnreadableError: If Polars cannot read the file (empty or cut short).
 
     """

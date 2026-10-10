@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     def ratings_path(self) -> Path:
         """Return the directory of the per-season ratings and statistics tables.
 
-        The ETL writes each season's tables there as ``{season}_{kind}.parquet``; it always sits
+        Each season's tables sit there as ``{season}_{kind}.parquet``. The folder always sits
         inside the data directory, so pointing ``data_dir`` at another tree moves it too.
         """
         return self.data_path / "ratings"

@@ -143,7 +143,7 @@ def test_current_season_with_games_left_is_in_progress(
 def test_a_season_without_tables_is_a_clear_404(
     ratings_dir: Path, viewer_client: TestClient
 ) -> None:
-    """Asking for a season the ETL never wrote names the missing file."""
+    """Asking for a season with no tables names the missing file."""
     # Act
     response = viewer_client.get("/api/ratings/2019/teams")
 

@@ -61,7 +61,7 @@ _LOCAL_COLUMNS = {
 def _ratings_by_season(ratings_dir: Path) -> dict[int, pl.DataFrame]:
     """Return every season's team ratings table in ``ratings_dir``.
 
-    A table removed between the folder scan and its read (an ETL rewriting the folder) is left out.
+    A table removed between the folder scan and its read (the folder being rewritten) is left out.
 
     Raises:
         RatingsTableUnreadableError: If a table exists but cannot be read.

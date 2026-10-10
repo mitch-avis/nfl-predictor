@@ -40,7 +40,7 @@ def test_available_seasons_lists_seasons_with_both_index_tables_newest_first(
 
 
 def test_available_seasons_is_empty_without_a_directory(tmp_path: Path) -> None:
-    """A data directory the ETL has not written ratings to yet has no seasons."""
+    """A data directory without a ratings folder has no seasons."""
     # Act
     seasons = files.available_seasons(tmp_path / "ratings")
 
@@ -76,7 +76,7 @@ def test_read_table_names_the_missing_file(tmp_path: Path) -> None:
 def test_read_table_reports_a_file_removed_after_the_check_as_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A table the ETL removes between the existence check and the read is missing, not a crash."""
+    """A table removed between the existence check and the read is missing, not a crash."""
     # Arrange
     factories.write_season(tmp_path, 2025, kinds=("ratings",))
 
@@ -94,7 +94,7 @@ def test_read_table_reports_a_file_removed_after_the_check_as_missing(
 def test_read_table_names_an_empty_or_truncated_file_as_unreadable(
     tmp_path: Path, cut: int
 ) -> None:
-    """A table the ETL left empty or cut short raises an error that names the file."""
+    """A table left empty or cut short raises an error that names the file."""
     # Arrange
     factories.write_season(tmp_path, 2025, kinds=("ratings",))
     path = files.table_path(tmp_path, 2025, "ratings")

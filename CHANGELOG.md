@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.47.0] - 2026-10-10
+
+### Added
+
+- This repository's own Elo (`utils/polars/elo_ratings.py`): FiveThirtyEight's public framework
+  (K 20, home field 65, a one-third offseason pull toward 1505, the margin-of-victory multiplier),
+  pinned by a test that reproduces 538's published 2017-2019 ratings and probabilities to
+  floating precision, with separate switches for rest and byes, travel, the playoff boost, a
+  rolling ten-season home field, 538's quarterback VALUE adjustment and a preseason pull toward
+  betting win totals (nfelosrs `wt_ratings.csv`, cached with the cache-then-degrade contract, its
+  weight fitted on earlier seasons only). Every pre-game value comes from earlier games; a
+  completed game uses its actual starting quarterback and an upcoming one the projected starter,
+  as the `qb_elos.csv` columns do.
+- Two evaluated presets as feature groups, disjoint from the `qb_elos.csv` Elo group: `own_elo`
+  (travel, rolling home field and the quarterback adjustment, no market information) and
+  `own_elo_wt` (the same plus the win-total pull), each with its own columns and ablation switch.
+  The ETL does not build them yet.
+- `.agents/sos_port/elo_eval.py`, which scores each Elo component on its own pre-game Brier score
+  and log loss over 2007-2025 under a rule written before scoring, and checks the engine against
+  538's published numbers.
+
 ## [0.46.0] - 2026-10-10
 
 ### Changed

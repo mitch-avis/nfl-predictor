@@ -1,10 +1,11 @@
-Output of pbp_column_facts.py, run 2026-10-10 at 04:13 MDT (10:13 UTC) on the code of commit
-d2212ab. Seasons 1999-2025 were downloaded fresh with nflreadpy 0.1.5 into memory; the size files
-went to a scratch directory outside every checkout, deleted afterwards.
+Output of pbp_column_facts.py, run 2026-10-10 at 04:51 MDT (10:51 UTC) on the code of commit
+fe8b553. Seasons 1999-2025 were downloaded fresh with nflreadpy 0.1.5 into memory; the size files
+went to a scratch directory outside every checkout, deleted afterwards. The sections it shared
+with the first run (04:13 MDT) came out identical.
 
 Command, from the worktree root:
 .venv/bin/python -I .agents/sos_port/decisions/pbp_column_facts.py \
-    --work-dir /tmp/pbp_facts_work.68UkYY
+    --work-dir /tmp/pbp_facts_work.wELt2L
 
 ## Raw columns whose dtype differs between seasons, 1999-2025
 
@@ -37,6 +38,95 @@ assist_tackle_3_team: 1 values, codes ['WAS'], unknown to the alias table []
 assist_tackle_4_team: 1 values, codes ['WAS'], unknown to the alias table []
 tackle_with_assist_1_team: 5065 values, codes ['LA', 'WAS'], unknown to the alias table []
 tackle_with_assist_2_team: 0 values, codes [], unknown to the alias table []
+
+## Team-code columns, regular season 1999-2025: empty strings
+
+posteam: 103
+defteam: 0
+home_team: 0
+away_team: 0
+side_of_field: 78
+td_team: 0
+penalty_team: 0
+timeout_team: 0
+return_team: 0
+fumbled_1_team: 0
+fumbled_2_team: 0
+fumble_recovery_1_team: 0
+fumble_recovery_2_team: 0
+forced_fumble_player_1_team: 0
+forced_fumble_player_2_team: 0
+solo_tackle_1_team: 0
+solo_tackle_2_team: 0
+assist_tackle_1_team: 0
+assist_tackle_2_team: 0
+assist_tackle_3_team: 0
+assist_tackle_4_team: 0
+tackle_with_assist_1_team: 0
+tackle_with_assist_2_team: 0
+
+## Fields nfl-sos-ratings blanks, regular season: the blanked seasons and the first season after them
+
+air_yards 1999 (blanked): 44164 plays, 0 with a value, 0 nonzero or nonempty
+air_yards 2000 (blanked): 43576 plays, 0 with a value, 0 nonzero or nonempty
+air_yards 2001 (blanked): 43074 plays, 0 with a value, 0 nonzero or nonempty
+air_yards 2002 (blanked): 45326 plays, 0 with a value, 0 nonzero or nonempty
+air_yards 2003 (blanked): 44850 plays, 0 with a value, 0 nonzero or nonempty
+air_yards 2004 (blanked): 44793 plays, 0 with a value, 0 nonzero or nonempty
+air_yards 2005 (blanked): 44973 plays, 0 with a value, 0 nonzero or nonempty
+air_yards 2006 (first season kept): 44321 plays, 16351 with a value, 14786 nonzero or nonempty
+air_epa 1999 (blanked): 44164 plays, 0 with a value, 0 nonzero or nonempty
+air_epa 2000 (blanked): 43576 plays, 0 with a value, 0 nonzero or nonempty
+air_epa 2001 (blanked): 43074 plays, 0 with a value, 0 nonzero or nonempty
+air_epa 2002 (blanked): 45326 plays, 0 with a value, 0 nonzero or nonempty
+air_epa 2003 (blanked): 44850 plays, 0 with a value, 0 nonzero or nonempty
+air_epa 2004 (blanked): 44793 plays, 0 with a value, 0 nonzero or nonempty
+air_epa 2005 (blanked): 44973 plays, 0 with a value, 0 nonzero or nonempty
+air_epa 2006 (first season kept): 44321 plays, 16252 with a value, 16252 nonzero or nonempty
+pass_length 1999 (blanked): 44164 plays, 344 with a value, 344 nonzero or nonempty
+pass_length 2000 (blanked): 43576 plays, 0 with a value, 0 nonzero or nonempty
+pass_length 2001 (blanked): 43074 plays, 0 with a value, 0 nonzero or nonempty
+pass_length 2002 (blanked): 45326 plays, 0 with a value, 0 nonzero or nonempty
+pass_length 2003 (blanked): 44850 plays, 0 with a value, 0 nonzero or nonempty
+pass_length 2004 (blanked): 44793 plays, 0 with a value, 0 nonzero or nonempty
+pass_length 2005 (blanked): 44973 plays, 0 with a value, 0 nonzero or nonempty
+pass_length 2006 (first season kept): 44321 plays, 15195 with a value, 15195 nonzero or nonempty
+yards_after_catch 1999 (blanked): 44164 plays, 337 with a value, 240 nonzero or nonempty
+yards_after_catch 2000 (blanked): 43576 plays, 0 with a value, 0 nonzero or nonempty
+yards_after_catch 2001 (blanked): 43074 plays, 0 with a value, 0 nonzero or nonempty
+yards_after_catch 2002 (blanked): 45326 plays, 0 with a value, 0 nonzero or nonempty
+yards_after_catch 2003 (blanked): 44850 plays, 0 with a value, 0 nonzero or nonempty
+yards_after_catch 2004 (blanked): 44793 plays, 0 with a value, 0 nonzero or nonempty
+yards_after_catch 2005 (blanked): 44973 plays, 0 with a value, 0 nonzero or nonempty
+yards_after_catch 2006 (first season kept): 44321 plays, 9775 with a value, 7426 nonzero or nonempty
+yac_epa 1999 (blanked): 44164 plays, 0 with a value, 0 nonzero or nonempty
+yac_epa 2000 (blanked): 43576 plays, 0 with a value, 0 nonzero or nonempty
+yac_epa 2001 (blanked): 43074 plays, 0 with a value, 0 nonzero or nonempty
+yac_epa 2002 (blanked): 45326 plays, 0 with a value, 0 nonzero or nonempty
+yac_epa 2003 (blanked): 44850 plays, 0 with a value, 0 nonzero or nonempty
+yac_epa 2004 (blanked): 44793 plays, 0 with a value, 0 nonzero or nonempty
+yac_epa 2005 (blanked): 44973 plays, 0 with a value, 0 nonzero or nonempty
+yac_epa 2006 (first season kept): 44321 plays, 16252 with a value, 13709 nonzero or nonempty
+xyac_mean_yardage 1999 (blanked): 44164 plays, 0 with a value, 0 nonzero or nonempty
+xyac_mean_yardage 2000 (blanked): 43576 plays, 0 with a value, 0 nonzero or nonempty
+xyac_mean_yardage 2001 (blanked): 43074 plays, 0 with a value, 0 nonzero or nonempty
+xyac_mean_yardage 2002 (blanked): 45326 plays, 0 with a value, 0 nonzero or nonempty
+xyac_mean_yardage 2003 (blanked): 44850 plays, 0 with a value, 0 nonzero or nonempty
+xyac_mean_yardage 2004 (blanked): 44793 plays, 0 with a value, 0 nonzero or nonempty
+xyac_mean_yardage 2005 (blanked): 44973 plays, 0 with a value, 0 nonzero or nonempty
+xyac_mean_yardage 2006 (first season kept): 44321 plays, 14132 with a value, 14132 nonzero or nonempty
+qb_hit 2003 (blanked): 44850 plays, 43456 with a value, 0 nonzero or nonempty
+qb_hit 2004 (blanked): 44793 plays, 43373 with a value, 0 nonzero or nonempty
+qb_hit 2005 (blanked): 44973 plays, 43562 with a value, 0 nonzero or nonempty
+qb_hit 2006 (first season kept): 44321 plays, 42942 with a value, 2058 nonzero or nonempty
+no_huddle 1999 (blanked): 44164 plays, 44164 with a value, 1 nonzero or nonempty
+no_huddle 2000 (blanked): 43576 plays, 43576 with a value, 0 nonzero or nonempty
+no_huddle 2001 (blanked): 43074 plays, 43074 with a value, 0 nonzero or nonempty
+no_huddle 2002 (blanked): 45326 plays, 45326 with a value, 23 nonzero or nonempty
+no_huddle 2003 (first season kept): 44850 plays, 44850 with a value, 307 nonzero or nonempty
+drive_yards_penalized 1999 (blanked): 44164 plays, 0 with a value, 0 nonzero or nonempty
+drive_yards_penalized 2000 (blanked): 43576 plays, 0 with a value, 0 nonzero or nonempty
+drive_yards_penalized 2001 (first season kept): 43074 plays, 42773 with a value, 16484 nonzero or nonempty
 
 ## Yard-line text, regular season 1999-2025: plays whose code would change
 

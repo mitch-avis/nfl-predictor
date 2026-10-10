@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.50.0] - 2026-10-10
+
+### Changed
+
+- The play-by-play cache holds 139 columns instead of 55: every column the code ported from
+  `nfl-sos-ratings` reads (the scramble and botched-snap flags, rusher, receiver, fumble and tackle
+  credits, game state, drive and series results, the play text). No feature reads them yet. Each
+  cached season downloads once more on the next ETL, which must run online (about 490 MB), and the
+  cache grows from about 39 MB to 104 MB.
+- Every play-by-play team-code column is normalized at load (`constants.PBP_TEAM_COLUMNS`), and
+  each cached column keeps one type across seasons (`goal_to_go` is stored as a float).
+- The 163 games played at the 14 venues the stadium table lacked (Mile High Stadium, the Pontiac
+  Silverdome and other 1999-2002 venues, and five 2026 international venues) get their real
+  elevation instead of 0 ft in `stadium_elevation`, and a city and state.
+
+### Added
+
+- The schedule loader warns when a venue has no stadium-table entry or a game has no venue id,
+  since those games fall back to an elevation of 0 ft.
+
+### Fixed
+
+- Cached schedules take the stadium city and state from the table on every load, so a venue the
+  table gains is located without refreshing the cache.
+
+## [0.49.0] - 2026-10-10
+
+### Added
+
+- `nfl_predictor.ratings`: the team and quarterback ratings of `nfl-sos-ratings` (frozen at
+  `9081bce`), ported: points per game against an average team for offense, defense and special
+  teams from a play-weighted ridge fit with the previous season's cross-validated penalty, the
+  preseason prior inside the fit (fading out by a team's ninth game), schedule strength from
+  refits without the evaluated team's games, quarterback EPA per dropback adjusted for the
+  defenses faced, weekly histories, and bootstrap rank ranges and head-to-head chances (1000
+  resamples). Rebuilt over 1999-2026, it reproduces every ratings file that repository published,
+  rank ranges included (`.agents/sos_port/RATINGS_PARITY.md`).
+- A leakage-safe pre-week entry point (`RatingsHistory.pre_week`): ratings for a week fitted only
+  on earlier games, with penalties chosen before the week. Nothing in the ETL or the model uses the
+  package yet.
+- Parity tests on fixtures cut from the published files (floats to 1e-12, so they hold on any
+  CPU's math kernel) and `.agents/sos_port/ratings_parity.py`, which rebuilds every season and
+  compares every cell.
+
 ## [0.48.0] - 2026-10-10
 
 ### Added

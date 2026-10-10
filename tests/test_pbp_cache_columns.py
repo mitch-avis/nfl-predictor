@@ -163,7 +163,9 @@ _ADDED_COLUMNS: dict[str, str | float] = {
     "tackle_with_assist_2_player_id": "00-0036014",
     "desc": "(1:35) (Shotgun) 17-J.Allen scrambles up the middle to KC 1 for 7 yards.",
 }
-# Columns that hold a team code, as nflverse names them, and an alias it writes in each.
+# Columns that hold a team code, as nflverse names them, each with a code normalization rewrites.
+# nflverse play-by-play writes only LA and WAS of these (LV, LAC and LA in every season); the
+# older codes (OAK, SD, STL) exercise the rest of the alias table.
 _TEAM_CODE_ALIASES: dict[str, str] = {
     "fumbled_1_team": "OAK",
     "fumbled_2_team": "SD",

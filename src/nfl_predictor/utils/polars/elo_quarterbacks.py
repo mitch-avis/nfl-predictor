@@ -334,14 +334,16 @@ def _box_lookup(box_scores: pl.DataFrame) -> _BoxLookup:
         .iter_rows()
     ):
         starts.setdefault((season, week, team), (qb_id, value))
-    team_games = box_scores.group_by("season", "week", "team_abbr").agg(pl.col("value").sum())
+    team_games = box_scores.group_by("season", "week", "team_abbr", maintain_order=True).agg(
+        pl.col("value").sum()
+    )
     team_values = {
         (season, week, team): value
         for season, week, team, value in team_games.select(
             "season", "week", "team_abbr", "value"
         ).iter_rows()
     }
-    weekly = team_games.group_by("season", "week").agg(pl.col("value").mean())
+    weekly = team_games.group_by("season", "week", maintain_order=True).agg(pl.col("value").mean())
     week_means = {
         (season, week): value
         for season, week, value in weekly.select("season", "week", "value").iter_rows()

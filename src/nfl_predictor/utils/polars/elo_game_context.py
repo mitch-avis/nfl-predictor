@@ -145,7 +145,7 @@ def home_stadiums(games: pl.DataFrame) -> pl.DataFrame:
 
     """
     home_games = games.filter(~_neutral() & pl.col("stadium_id").is_not_null())
-    counts = home_games.group_by("season", "home_abbr", "stadium_id").len()
+    counts = home_games.group_by("season", "home_abbr", "stadium_id", maintain_order=True).len()
     return (
         counts.sort(
             ["season", "home_abbr", "len", "stadium_id"],
@@ -243,12 +243,12 @@ def rolling_home_field(games: pl.DataFrame, *, travel: bool) -> pl.DataFrame:
         completed = completed.join(_travel_terms(games), on="game_id", how="left")
     else:
         completed = completed.with_columns(pl.lit(0.0).alias("travel_elo"))
-    weekly = completed.group_by("season", "week").agg(
+    weekly = completed.group_by("season", "week", maintain_order=True).agg(
         pl.len().alias("games"),
         (pl.col("home_score") - pl.col("away_score")).cast(pl.Float64).sum().alias("margin"),
         pl.col("travel_elo").sum().alias("travel"),
     )
-    targets = games.select("season", "week").unique().sort("season", "week")
+    targets = games.select("season", "week").unique(maintain_order=True).sort("season", "week")
     window = targets.join(
         weekly.rename({"season": "window_season", "week": "window_week"}), how="cross"
     )
@@ -261,7 +261,7 @@ def rolling_home_field(games: pl.DataFrame, *, travel: bool) -> pl.DataFrame:
     )
     sums = (
         window.filter(after_start & before_week)
-        .group_by("season", "week")
+        .group_by("season", "week", maintain_order=True)
         .agg(pl.col("games").sum(), pl.col("margin").sum(), pl.col("travel").sum())
     )
     first_season = games.get_column("season").min()

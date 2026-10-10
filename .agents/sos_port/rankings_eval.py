@@ -17,10 +17,11 @@ directory); without it the model rating and the blend are reported as pending an
 made. Given again (seed 42 first, then seed 7), the report adds a supplement: the model rating fit
 to each game's predicted margin averaged over the runs, and the blend rebuilt on it, reported
 beside the seed-42 result, which alone is the rule's input. The report records whether the
-checkout had uncommitted changes to tracked files. ``--ratings-from-snapshot`` is for development: it builds the ported ratings' weekly history
-from the read-only nflreadpy cache snapshot (as ``adapter_parity.py`` loads it) in a temporary
-directory instead of reading ``--build-dir``'s. ``--out-dir`` (default: beside this script) is
-where ``RANKINGS_EVAL.md`` and ``RANKINGS_EVAL.json`` go; nothing else is written.
+checkout had uncommitted changes to tracked files. ``--ratings-from-snapshot`` is for development:
+it builds the ported ratings' weekly history from the read-only nflreadpy cache snapshot (as
+``adapter_parity.py`` loads it) in a temporary directory instead of reading ``--build-dir``'s.
+``--out-dir`` (default: beside this script) is where ``RANKINGS_EVAL.md`` and
+``RANKINGS_EVAL.json`` go; nothing else is written.
 
 The candidates (``nfl_predictor.reporting.rating_sources`` and ``power_rankings``), each one number
 per team per week known before the week's games:

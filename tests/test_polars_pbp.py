@@ -2042,3 +2042,29 @@ def test_red_zone_trips_are_zero_without_the_drive_flag_column() -> None:
     # Assert
     kc = _row_for(result, "KC")
     assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (0, 0)
+
+
+def test_red_zone_touchdown_drives_are_zero_without_the_drive_result_column() -> None:
+    """Without ``fixed_drive_result`` a flagged drive is still a trip, but none converts."""
+    # Arrange
+    plays = pl.DataFrame(
+        {
+            "season": [2024],
+            "week": [1],
+            "posteam": ["KC"],
+            "defteam": ["BUF"],
+            "rush": [1],
+            "rush_attempt": [1],
+            "fixed_drive": [1],
+            "drive_inside20": [1.0],
+        }
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    kc = _row_for(result, "KC")
+    assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (1, 0)
+    buf = _row_for(result, "BUF")
+    assert (buf["red_zone_trips_allowed"], buf["red_zone_td_drives_allowed"]) == (1, 0)

@@ -18,7 +18,9 @@ and:
    ranges and pairs, and the weekly ranges of the season in progress), timing each season;
 2. compares each rebuilt table with the published file cell by cell: the same columns, types and
    row keys in the same order, integers, text and flags equal, and floats equal within
-   ``FLOAT_TOLERANCE``, counting the cells that are bit-identical;
+   ``FLOAT_TOLERANCE`` (``SRS``, rounded to six decimals, within ``ROUNDED_TOLERANCE``), counting
+   the cells that are bit-identical, which it reports but does not require: the exact bits
+   depend on the BLAS kernel and thread count and on the library versions;
 3. runs the pre-week entry point for every week of every season and compares its team ratings with
    the published history of the week before (required to match), and its quarterback ratings with
    the published quarterback history, which uses the season's own penalty (reported, since the
@@ -30,18 +32,30 @@ cell is outside the tolerance or any table differs in shape, type, or row keys.
 
 from __future__ import annotations
 
+import os
+
+# One BLAS and Polars thread unless the caller set the counts, as nfl-sos-ratings built its
+# files. Both libraries read these when they load, so they are set before anything imports them,
+# as tests/conftest.py does.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("POLARS_MAX_THREADS", "1")
+
 import argparse
 import datetime as dt
 import json
-import os
 import statistics
 import sys
 import textwrap
 import time
 from dataclasses import asdict, dataclass, field
+from importlib.metadata import version
 from pathlib import Path
+from typing import cast
 
 import polars as pl
+from threadpoolctl import threadpool_info
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -49,11 +63,11 @@ from ratings_source import (  # a sibling module, importable once its dir is on 
     SOURCE_COMMIT,
     check_source,
     default_source,
+    package_hashes,
     published_file,
     repo_root,
     sha256_file,
     source_head,
-    uncommitted_changes,
 )
 
 from nfl_predictor.ratings.pre_week import RatingsHistory
@@ -77,6 +91,10 @@ THREAD_VARIABLES = (
 FIRST_SEASON = 1999
 # Floats agree within this absolute difference; the report also counts bit-identical cells.
 FLOAT_TOLERANCE = 1e-12
+# Columns rounded to six decimals, which a last-bit change can move by one rounding step.
+ROUNDED_COLUMNS = frozenset({"SRS"})
+ROUNDED_TOLERANCE = 1.5e-6
+TEAMS_PER_GAME = 2
 MAX_LISTED_DIFFERENCES = 20
 
 # Each published table and its row keys. The two wide tables are compared on the columns the
@@ -175,6 +193,7 @@ class PreWeekSummary:
     qb_max_difference_at: str = ""
     qb_same_penalty_seasons: list[int] = field(default_factory=list)
     qb_other_penalty_seasons: list[int] = field(default_factory=list)
+    qb_passer_weeks_other_penalty: int = 0
     qb_mean_abs_difference_other_penalty: float = 0.0
     qb_penalties: dict[int, dict[str, float | None]] = field(default_factory=dict)
 
@@ -233,26 +252,15 @@ class Source:
         return qb_games_from_published(self.read(season, "qb_game_logs"))
 
 
-def _single_threaded() -> None:
-    """Re-run this script with one BLAS and Polars thread unless the caller set the counts.
-
-    ``nfl-sos-ratings`` builds its files single-threaded, and both libraries read the variables
-    when they load, so the script restarts itself rather than setting them late.
-    """
-    missing = {name: "1" for name in THREAD_VARIABLES if name not in os.environ}
-    if missing:
-        os.execve(  # noqa: S606  # restarts this same interpreter and script, no shell
-            sys.executable, [sys.executable, *sys.argv], {**os.environ, **missing}
-        )
-
-
-def _float_flags(ours: pl.Series, published: pl.Series) -> tuple[pl.Series, pl.Series, pl.Series]:
+def _float_flags(
+    ours: pl.Series, published: pl.Series, tolerance: float = FLOAT_TOLERANCE
+) -> tuple[pl.Series, pl.Series, pl.Series]:
     """Return per-cell flags (bit-identical, within tolerance) and the absolute differences."""
     both_null = ours.is_null() & published.is_null()
     both_nan = (ours.is_nan() & published.is_nan()).fill_null(value=False)
     identical = (ours == published).fill_null(value=False) | both_null | both_nan
     difference = (ours - published).abs()
-    within = (difference <= FLOAT_TOLERANCE).fill_null(value=False) & ~identical
+    within = (difference <= tolerance).fill_null(value=False) & ~identical
     return identical, within, difference.fill_null(0.0).fill_nan(0.0)
 
 
@@ -282,10 +290,16 @@ def _list_flags(ours: pl.Series, published: pl.Series) -> tuple[pl.Series, pl.Se
     return cell_identical, cell_within, cells.get_column("difference").fill_null(0.0)
 
 
-def _flags(ours: pl.Series, published: pl.Series) -> tuple[pl.Series, pl.Series, pl.Series]:
-    """Return one column's per-cell flags (bit-identical, within tolerance) and differences."""
+def _flags(
+    name: str, ours: pl.Series, published: pl.Series
+) -> tuple[pl.Series, pl.Series, pl.Series]:
+    """Return one column's per-cell flags (bit-identical, within tolerance) and differences.
+
+    A column rounded to six decimals (``ROUNDED_COLUMNS``) takes ``ROUNDED_TOLERANCE``.
+    """
     if ours.dtype.is_float():
-        return _float_flags(ours, published)
+        tolerance = ROUNDED_TOLERANCE if name in ROUNDED_COLUMNS else FLOAT_TOLERANCE
+        return _float_flags(ours, published, tolerance)
     if isinstance(ours.dtype, pl.List):
         return _list_flags(ours, published)
     identical = (ours == published).fill_null(value=False) | (ours.is_null() & published.is_null())
@@ -322,7 +336,7 @@ def compare_table(
     )
     for name in ours.columns:
         column, published_column = ours.get_column(name), published.get_column(name)
-        identical, within, difference = _flags(column, published_column)
+        identical, within, difference = _flags(name, column, published_column)
         outside = ~identical & ~within
         result.cells += column.len()
         result.identical += int(identical.sum())
@@ -382,7 +396,7 @@ def input_checks(source: Source, seasons: list[int]) -> InputChecks:
         ).height
         games = source.read(season, "team_game_logs").group_by("game_id").len()
         checks.team_games += games.height
-        checks.one_sided_games += games.filter(pl.col("len") != 2).height  # noqa: PLR2004  # a game's two teams
+        checks.one_sided_games += games.filter(pl.col("len") != TEAMS_PER_GAME).height
     return checks
 
 
@@ -536,6 +550,7 @@ def pre_week_pass(source: Source, seasons: list[int]) -> PreWeekSummary:
         sys.stdout.flush()
     summary.seconds = time.perf_counter() - start
     summary.qb_mean_abs_difference = statistics.fmean(gaps) if gaps else 0.0
+    summary.qb_passer_weeks_other_penalty = len(other_penalty_gaps)
     summary.qb_mean_abs_difference_other_penalty = (
         statistics.fmean(other_penalty_gaps) if other_penalty_gaps else 0.0
     )
@@ -544,7 +559,7 @@ def pre_week_pass(source: Source, seasons: list[int]) -> PreWeekSummary:
 
 def _season_span(seasons: list[int]) -> str:
     """Return ``1999-2026`` for consecutive seasons, else the seasons listed."""
-    if seasons == list(range(seasons[0], seasons[-1] + 1)):
+    if len(seasons) > 1 and seasons == list(range(seasons[0], seasons[-1] + 1)):
         return f"{seasons[0]}-{seasons[-1]}"
     return ", ".join(str(season) for season in seasons)
 
@@ -552,6 +567,17 @@ def _season_span(seasons: list[int]) -> str:
 def _thread_settings() -> str:
     """Return the thread counts this run used, as the environment set them."""
     return ", ".join(f"`{name}={os.environ.get(name)}`" for name in THREAD_VARIABLES)
+
+
+def _environment() -> str:
+    """Return the BLAS library and kernel and the numpy and Polars versions this run used."""
+    kernels = [
+        f"{info.get('internal_api')} {info.get('version')} on its {info.get('architecture')} kernel"
+        for info in threadpool_info()
+        if info.get("user_api") == "blas"
+    ]
+    blas = ", ".join(kernels) if kernels else "an unidentified BLAS"
+    return f"{blas}, numpy {version('numpy')}, and Polars {version('polars')}"
 
 
 def _wrap(text: str) -> list[str]:
@@ -590,7 +616,8 @@ class Report:
     source_path: str
     source_head: str
     port_head: str
-    port_uncommitted: list[str]
+    port_files: dict[str, str]
+    environment: str
     seasons: list[int]
     in_progress: int | None
     in_progress_through_week: int | None
@@ -664,11 +691,16 @@ class Report:
                 "head": self.source_head,
                 "frozen_commit": SOURCE_COMMIT,
             },
-            "port": {"head": self.port_head, "uncommitted": self.port_uncommitted},
+            "port": {"head": self.port_head, "python_files_sha256": self.port_files},
+            "environment": self.environment,
             "seasons": self.seasons,
             "season_in_progress": self.in_progress,
             "season_in_progress_through_week": self.in_progress_through_week,
             "float_tolerance": FLOAT_TOLERANCE,
+            "rounded_tolerance": {
+                "columns": sorted(ROUNDED_COLUMNS),
+                "tolerance": ROUNDED_TOLERANCE,
+            },
             "totals": self.totals(),
             "tables": self.table_rows(),
             "timings": self.timing_totals()
@@ -709,12 +741,6 @@ class Report:
     def _header_lines(self) -> list[str]:
         """Return the title, provenance, tolerance, and headline counts."""
         totals = self.totals()
-        uncommitted = (
-            ", with uncommitted changes to the package's Python files: "
-            f"{', '.join(f'`{line}`' for line in self.port_uncommitted)}."
-            if self.port_uncommitted
-            else ", with no uncommitted change to the package's Python files."
-        )
         return [
             "# Ratings parity with `nfl-sos-ratings`",
             "",
@@ -732,8 +758,10 @@ class Report:
                 "every output."
             ),
             *_item(
-                f"Port: `nfl_predictor.ratings` at this repository's commit `{self.port_head}`"
-                + uncommitted
+                "Port: `nfl_predictor.ratings` as checked out at this repository's commit "
+                f"`{self.port_head}`; the SHA-256 of each of its {len(self.port_files)} Python "
+                "files, as they were when the audit ran, are in `ratings_parity.json` "
+                "(`port.python_files_sha256`)."
             ),
             *_item(
                 f"Seasons: {_season_span(self.seasons)}; {self.in_progress} is the season in "
@@ -747,8 +775,11 @@ class Report:
             *_item(
                 "Tolerance: a table must have the published columns, types, and row keys in the "
                 "published order; integers, ranks, text, and flags must be equal; floats must "
-                f"agree within {FLOAT_TOLERANCE:g} absolute (lists element by element). The counts "
-                "below separate the bit-identical cells from those only within the tolerance. Any "
+                f"agree within {FLOAT_TOLERANCE:g} absolute (lists element by element), except "
+                f"`SRS`, rounded to six decimals, within {ROUNDED_TOLERANCE:g}, so the audit "
+                "passes on any BLAS kernel; rank and pair chances, multiples of a thousandth, can "
+                "only pass by being equal. The counts below separate the bit-identical cells from "
+                "those only within the tolerance (bit-identity is reported, not required). Any "
                 "cell outside it, or any structural difference, fails the run."
             ),
             "",
@@ -844,9 +875,8 @@ class Report:
             return [*lines, "None: every compared cell is bit-identical."]
         columns: set[str] = set()
         for row in rows:
-            names = row["columns_within_tolerance"]
-            assert isinstance(names, list)  # noqa: S101  # built by table_rows
-            columns.update(str(name) for name in names)
+            names = cast("list[str]", row["columns_within_tolerance"])
+            columns.update(names)
             lines.append(f"- `{row['table']}`: {', '.join(f'`{name}`' for name in names)}")
         lines.extend(
             [
@@ -866,10 +896,13 @@ class Report:
                 [
                     "",
                     *_wrap(
-                        f"This run used {_thread_settings()}. With more than one BLAS thread "
-                        "the matrix products of the larger fits (the quarterbacks') sum in "
-                        "another order, so fitted values can differ in their last bits too; "
-                        "that project built its files with one thread."
+                        f"This run used {_thread_settings()} with {self.environment}. The "
+                        "exact bits of a fit depend on the BLAS thread count, the BLAS kernel, "
+                        "and the library versions: more threads or another kernel than the one "
+                        "that reproduces the published files bit for bit (one thread, "
+                        "OpenBLAS's SkylakeX kernel, numpy 2.5.3, Polars 2.0.0) sum the "
+                        "matrix products in another order, so fitted values can differ in "
+                        "their last bits too, and `SRS`, rounded to six decimals, by one step."
                     ),
                 ]
             )
@@ -929,14 +962,15 @@ class Report:
                 f"dropbacks agree ({_fmt(summary.qb_set_mismatches)} passer mismatches, "
                 f"{_fmt(summary.qb_volume_mismatches)} volume mismatches in "
                 f"{_fmt(summary.qb_passer_weeks)} passer-weeks). The two penalties are equal in "
-                f"{len(same)} of {len(same) + len(other)} seasons, whose ratings are "
-                "bit-identical. In the other seasons "
-                f"({', '.join(str(season) for season in other)}) the absolute difference in "
-                "adjusted EPA per dropback averages "
-                f"{_fmt(summary.qb_mean_abs_difference_other_penalty)}; over every passer-week it "
-                f"averages {_fmt(summary.qb_mean_abs_difference)}, with "
+                f"{len(same)} of {len(same) + len(other)} seasons, whose pre-week ratings are "
+                "the published history's. In the other seasons "
+                f"({', '.join(str(season) for season in other)}; "
+                f"{_fmt(summary.qb_passer_weeks_other_penalty)} passer-weeks) the absolute "
+                "difference in adjusted EPA per dropback averages "
+                f"{summary.qb_mean_abs_difference_other_penalty:.4f}; over every passer-week it "
+                f"averages {summary.qb_mean_abs_difference:.4f}, with "
                 f"{_fmt(summary.qb_identical_passer_weeks)} passer-weeks bit-identical. The "
-                f"largest is {_fmt(summary.qb_max_abs_difference)} "
+                f"largest is {summary.qb_max_abs_difference:.4f} "
                 f"({summary.qb_max_difference_at})."
             ),
             *_item(
@@ -956,9 +990,10 @@ class Report:
             "## Timings",
             "",
             *_wrap(
-                f"Wall-clock seconds with {_thread_settings()}, on a machine shared with other "
-                f"work: load average {', '.join(f'{v:.2f}' for v in self.load_start)} at the "
-                f"start and {', '.join(f'{v:.2f}' for v in self.load_end)} at the end."
+                f"Wall-clock seconds with {_thread_settings()} and {self.environment}, on a "
+                "machine shared with other work: load average "
+                f"{', '.join(f'{v:.2f}' for v in self.load_start)} at the start and "
+                f"{', '.join(f'{v:.2f}' for v in self.load_end)} at the end."
             ),
             "",
             "| step | seconds |",
@@ -997,7 +1032,6 @@ class Report:
 
 def main(argv: list[str] | None = None) -> None:
     """Rebuild, compare, write the reports, and exit 1 on any difference."""
-    _single_threaded()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", type=Path, default=None, help="nfl-sos-ratings checkout")
     parser.add_argument(
@@ -1029,7 +1063,8 @@ def main(argv: list[str] | None = None) -> None:
         source_path=str(root),
         source_head=head,
         port_head=source_head(repo_root()),
-        port_uncommitted=uncommitted_changes(repo_root(), "src/nfl_predictor/ratings/*.py"),
+        port_files=package_hashes(repo_root(), "src/nfl_predictor/ratings"),
+        environment=_environment(),
         seasons=seasons,
         in_progress=in_progress,
         in_progress_through_week=(

@@ -471,10 +471,12 @@ def compute_team_schedule_strength(
         opponent_ratings = _ratings_without(game_logs, team, fit, prior).select(
             pl.col("team").alias("opponent_team"), pl.col("team_rating").alias("sos")
         )
+        # The mean adds the opponents in the ratings' order (by team), the order nfl-sos-ratings'
+        # unordered join produced, so every published ``sos`` bit is kept.
         rated = (
             game_logs.filter(pl.col("team") == team)
             .select("opponent_team")
-            .join(opponent_ratings, on="opponent_team", how="inner")
+            .join(opponent_ratings, on="opponent_team", how="inner", maintain_order="right")
         )
         values.append(float(np.mean(rated.get_column("sos").to_numpy())) if rated.height else None)
     return pl.DataFrame({"team": teams, "sos": values})

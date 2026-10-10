@@ -6,6 +6,7 @@ import numpy as np
 import polars as pl
 import pytest
 
+from nfl_predictor.ratings import team_rating
 from nfl_predictor.ratings.ridge import UnitPrior, fit_unit_ridge
 from nfl_predictor.ratings.team_rating import (
     TEAM_RATING_COLUMNS,
@@ -643,3 +644,26 @@ def test_fit_team_ratings_by_week_scales_each_week_by_its_own_plays_per_game() -
     first_week = history.filter(pl.col("week") == 1).select(week_one.ratings.columns)
     assert first_week.sort("team").equals(week_one.ratings.sort("team"))
     assert week_one.scrimmage_plays_per_game == pytest.approx(90.0)
+
+
+def test_compute_team_schedule_strength_sums_opponents_in_the_ratings_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The mean adds the opponents in the order of their ratings (by team), not of the games.
+
+    With these ratings the two orders give different floating-point sums: BBB, CCC, DDD gives
+    (1e16 - 1e16) + 1, while the game order DDD, BBB, CCC gives (1 + 1e16) - 1e16 = 0.
+    """
+    # Arrange
+    game_logs = _game_logs((("AAA", "DDD"), ("AAA", "BBB"), ("AAA", "CCC")))
+    fit = fit_team_ratings(game_logs, scrimmage_lambda=10.0, special_teams_lambda=10.0)
+    opponents = pl.DataFrame({"team": ["BBB", "CCC", "DDD"], "team_rating": [1e16, -1e16, 1.0]})
+    monkeypatch.setattr(team_rating, "_ratings_without", lambda *_args: opponents)
+    expected = float(np.mean(np.array([1e16, -1e16, 1.0])))
+
+    # Act
+    sos = compute_team_schedule_strength(game_logs, fit)
+
+    # Assert
+    assert _rating(sos, "AAA", "sos") == expected
+    assert expected != 0.0

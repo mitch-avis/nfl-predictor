@@ -9,6 +9,9 @@ commit ``9081bce`` so that this package reproduces that project's published rati
 - :mod:`.team_rating`: points-per-game team ratings (offense, defense, special teams), the
   head-to-head-excluded schedule strength ``sos``, and the week-by-week rating history.
 - :mod:`.team_prior`: the preseason prior inside the team fit, faded out over nine games.
+- :mod:`.qb_rating`: the quarterback rating (adjusted EPA per dropback), the
+  head-to-head-excluded faced pass defense, and each passer's season volume and ranking
+  qualifier.
 
 Nothing here reads files or the network: every function takes Polars frames and returns them.
 """

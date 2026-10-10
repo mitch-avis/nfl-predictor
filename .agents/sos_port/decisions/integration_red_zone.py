@@ -18,6 +18,11 @@ every drive the two definitions disagree on into a named cause:
 - ``other``: a live play inside the 20 that nflverse does not flag;
 - ``flag_without_snap``: nflverse flags the drive inside the 20 but no play of it is there.
 
+The try-only drives are then split in two: drives that scored a touchdown themselves
+(``fixed_drive_result`` "Touchdown"), and the rest, which the output breaks down by their play
+count and ``fixed_drive_result`` and checks against the play before each in the game: whether it
+is a touchdown by the try's team, and whether that team had the ball on it (``posteam``).
+
 Run from the repository root:
 
     .venv/bin/python -I .agents/sos_port/decisions/integration_red_zone.py \
@@ -65,6 +70,9 @@ def _drives(plays: pl.DataFrame) -> pl.DataFrame:
             before_try.any().alias("before_try"),
             inside.any().alias("inside"),
             (inside & ~wiped).any().alias("inside_live"),
+            pl.len().alias("plays"),
+            pl.col("play_id").min().alias("first_play_id"),
+            pl.col("fixed_drive_result").drop_nulls().first().alias("result"),
         )
         .with_columns(
             pl.when(here & ~there & ~pl.col("before_try"))
@@ -83,6 +91,75 @@ def _drives(plays: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def _try_only_split(plays: pl.DataFrame, drives: pl.DataFrame) -> str:
+    """Return the report on the try-only drives: touchdown drives and the rest."""
+    try_only = drives.filter(pl.col("cause") == "try_only")
+    scored = try_only.filter(pl.col("td"))
+    rest = try_only.filter(~pl.col("td"))
+    previous = (
+        plays.select(
+            "game_id", "play_id", "posteam", "play_type", "td_team", "touchdown", "fixed_drive"
+        )
+        .sort("game_id", "play_id")
+        .select(
+            "game_id",
+            pl.col("play_id").alias("first_play_id"),
+            pl.col("posteam").shift(1).over("game_id").alias("previous_posteam"),
+            pl.col("fixed_drive").shift(1).over("game_id").alias("previous_fixed_drive"),
+            pl.col("play_type").shift(1).over("game_id").alias("previous_play_type"),
+            pl.col("td_team").shift(1).over("game_id").alias("previous_td_team"),
+            (pl.col("touchdown").shift(1).over("game_id").fill_null(0) > 0).alias(
+                "previous_touchdown"
+            ),
+            pl.col("play_id").shift(1).over("game_id").is_not_null().alias("matched"),
+        )
+    )
+    checked = rest.join(previous, on=["game_id", "first_play_id"], how="left").with_columns(
+        pl.col("matched").fill_null(value=False),
+        (pl.col("previous_touchdown") & (pl.col("previous_td_team") == pl.col("posteam")))
+        .fill_null(value=False)
+        .alias("after_own_touchdown"),
+    )
+    after = checked.filter(pl.col("after_own_touchdown"))
+    without_ball = after.filter(pl.col("previous_posteam") != pl.col("posteam")).height
+    same_drive = after.filter(pl.col("previous_fixed_drive") == pl.col("fixed_drive")).height
+    results = (
+        rest.group_by(pl.col("result").fill_null("none"))
+        .agg(pl.len().alias("drives"))
+        .sort(["drives", "result"], descending=[True, False])
+    )
+    by_result = ", ".join(f"{row['result']} {row['drives']}" for row in results.iter_rows(named=True))
+    before_others = (
+        checked.filter(~pl.col("after_own_touchdown"))
+        .with_columns(
+            pl.when(~pl.col("matched"))
+            .then(pl.lit("no play before it"))
+            .when(pl.col("previous_touchdown"))
+            .then(pl.lit("a touchdown by the other team"))
+            .otherwise(pl.col("previous_play_type").fill_null("a row without a play type"))
+            .alias("before")
+        )
+        .group_by("before")
+        .agg(pl.len().alias("drives"))
+        .sort(["drives", "before"], descending=[True, False])
+    )
+    by_before = ", ".join(
+        f"{row['before']} {row['drives']}" for row in before_others.iter_rows(named=True)
+    )
+    return (
+        f"try-only drives: {try_only.height}\n"
+        f"  that scored a touchdown themselves (fixed_drive_result Touchdown): {scored.height}\n"
+        f"  the rest: {rest.height}, of which one play: "
+        f"{rest.filter(pl.col('plays') == 1).height}\n"
+        f"    by fixed_drive_result: {by_result}\n"
+        f"    with a play before them in the game: {checked['matched'].sum()}; "
+        f"after a touchdown by the try's team: {after.height}, of which that team did not have "
+        f"the ball on it: {without_ball}, and the touchdown play has the try's fixed_drive: "
+        f"{same_drive}\n"
+        f"    the other {before_others['drives'].sum()}, by the play before them: {by_before}\n"
+    )
+
+
 def main() -> None:
     """Print the counts, the comparison with the published logs and the causes."""
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
@@ -93,12 +170,15 @@ def main() -> None:
         "season",
         "week",
         "game_id",
+        "play_id",
         "season_type",
         "posteam",
         "defteam",
         "play_type",
         "yardline_100",
         "two_point_attempt",
+        "touchdown",
+        "td_team",
         "fixed_drive",
         "fixed_drive_result",
         "drive_inside20",
@@ -167,6 +247,7 @@ def main() -> None:
     with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=200):
         sys.stdout.write(f"\n## Drives the definitions disagree on, by cause\n{causes}\n")
         sys.stdout.write(f"\n## By season\n{by_season}\n")
+    sys.stdout.write(f"\n## The try-only drives\n{_try_only_split(plays, drives)}")
 
 
 if __name__ == "__main__":

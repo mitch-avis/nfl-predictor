@@ -54,3 +54,11 @@ shape: (27, 6)
 │ 2024   ┆ 342      ┆ 79        ┆ 0          ┆ 0     ┆ 3                 │
 │ 2025   ┆ 366      ┆ 63        ┆ 4          ┆ 0     ┆ 2                 │
 └────────┴──────────┴───────────┴────────────┴───────┴───────────────────┘
+
+## The try-only drives
+try-only drives: 10234
+  that scored a touchdown themselves (fixed_drive_result Touchdown): 7952
+  the rest: 2282, of which one play: 2230
+    by fixed_drive_result: Opp touchdown 2276, none 5, Punt 1
+    with a play before them in the game: 2279; after a touchdown by the try's team: 2259, of which that team did not have the ball on it: 2259, and the touchdown play has the try's fixed_drive: 2257
+    the other 23, by the play before them: field_goal 6, pass 5, a touchdown by the other team 3, no play before it 3, extra_point 2, qb_kneel 2, a row without a play type 1, no_play 1

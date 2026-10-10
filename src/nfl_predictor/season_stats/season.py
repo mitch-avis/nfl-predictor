@@ -121,6 +121,11 @@ class SeasonGames:
     qb_games: pl.DataFrame
     schedule: pl.DataFrame
 
+    @property
+    def played(self) -> bool:
+        """Whether any game has rows yet; the current season has none before kickoff."""
+        return not self.team_games.is_empty()
+
 
 def build_season_games(inputs: SeasonInputs) -> SeasonGames:
     """Return one season's team-game and passer-game rows and its played schedule."""
@@ -190,6 +195,9 @@ def build_season_tables(
 ) -> SeasonTables:
     """Return one season's statistics tables.
 
+    A season needs a game played (``SeasonGames.played``): before kickoff the current season has
+    its schedule but no game rows, and nothing to tabulate.
+
     Args:
         games: The season's game rows and played schedule (:func:`build_season_games`).
         pbp: The season's prepared play-by-play, binned by win probability.
@@ -200,9 +208,13 @@ def build_season_tables(
         The season's tables, each validated against the metric registry and in its row order
 
     Raises:
-        ValueError: If a ratings frame lacks a column the combined tables take.
+        ValueError: If ``games`` has no game played, or a ratings frame lacks a column the
+            combined tables take.
 
     """
+    if not games.played:
+        msg = "the season has no game played yet, so no season statistics to tabulate"
+        raise ValueError(msg)
     team_rating_columns = _rating_columns(team_ratings, TEAM_RATING_INPUT_COLUMNS, "Team ratings")
     qb_rating_columns = _rating_columns(qb_ratings, QB_RATING_INPUT_COLUMNS, "QB ratings")
     # The season rows and profiles sum each team's and passer's games in row order, and Polars

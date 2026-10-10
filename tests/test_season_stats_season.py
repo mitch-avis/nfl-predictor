@@ -437,3 +437,48 @@ def test_build_season_tables_sum_each_teams_games_in_one_order_whatever_the_inpu
     assert {
         name: frame.equals(expected.tables()[name]) for name, frame in tables.tables().items()
     } == (dict.fromkeys(expected.tables(), True))
+
+
+def _before_kickoff() -> SeasonInputs:
+    """Return a current season's inputs before kickoff: a schedule and nothing else."""
+    schedule = _schedule_df().with_columns(
+        pl.lit(None, dtype=pl.Int64).alias("home_score"),
+        pl.lit(None, dtype=pl.Int64).alias("away_score"),
+    )
+    return SeasonInputs(
+        season=2026,
+        pbp=pl.DataFrame(schema={"game_id": pl.String, "week": pl.Int64, "posteam": pl.String}),
+        player_stats=pl.DataFrame(),
+        schedule=schedule,
+        official_team_stats=pl.DataFrame(),
+        snap_counts=pl.DataFrame(),
+        qb_identity=pl.DataFrame(),
+    )
+
+
+def test_a_season_before_kickoff_has_no_game_played() -> None:
+    # Act
+    games = season_tables.build_season_games(_before_kickoff())
+
+    # Assert
+    assert games.played is False
+    assert games.schedule.is_empty()
+
+
+def test_a_season_with_game_rows_has_a_game_played() -> None:
+    # Act
+    played = _season_games().played
+
+    # Assert
+    assert played is True
+
+
+def test_build_season_tables_refuse_a_season_without_a_game_played() -> None:
+    # Arrange
+    games = season_tables.build_season_games(_before_kickoff())
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="no game played"):
+        season_tables.build_season_tables(
+            games, pl.DataFrame(), team_ratings=_team_ratings(), qb_ratings=_qb_ratings()
+        )

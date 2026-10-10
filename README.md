@@ -307,14 +307,16 @@ the ratings, every season from 1999 (so the first run that does downloads each s
 downloads the players file again whenever the run reaches the current season, falling back to its
 cached copy on an outage.
 
-Every quarterback feature keys on one starter (`utils/polars/qb_starters.py`, the
-`nfl-sos-ratings` rule). A completed game's starter comes from its play-by-play: the quarterback
-on the team's first first-quarter snap, by `play_id`, whose passer or rusher has a dropback for the
-team in that game and is a quarterback that season (or is listed by no identity source), the
-passer before the rusher on one play. A game the play-by-play names no starter for (an upcoming
-game, every postseason game, and the six 1999-2025 team-games without a first-quarter quarterback
-snap) takes the starter the ETL names (`away_qb`/`home_qb`: the projected starter of an upcoming
-game). nflverse's schedule columns `away_qb_id`/`home_qb_id` are not read. A named starter maps to
+Every quarterback feature keys on one starter: the quarterback family and the ratings'
+`ratings_qb` read it from `qb_stats.expected_starter_ids`, and the own Elo applies the same rule
+(the `nfl-sos-ratings` rule, `utils/polars/qb_starters.py`). A completed game's starter comes from
+its play-by-play: the quarterback on the team's first first-quarter snap, by `play_id`, whose
+passer or rusher has a dropback for the team in that game and is a quarterback that season (or is
+listed by no identity source), the passer before the rusher on one play. A game the play-by-play
+names no starter for (an upcoming game, every postseason game, a game without play-by-play, and
+the six 1999-2025 team-games without a first-quarter quarterback snap) takes the starter the ETL
+names (`away_qb`/`home_qb`: the projected starter of an upcoming game). nflverse's schedule
+columns `away_qb_id`/`home_qb_id` are not read. A named starter maps to
 a GSIS id through `data/meta_data.csv`, a read-only copy of `../nfeloqb/Other Data/meta_data.csv`
 made the same way as `data/qb_elos.csv`; without the file only the play-by-play starters and the
 abbreviated passer names identify quarterbacks, and the ETL logs a warning. Career rates need every
@@ -1306,8 +1308,8 @@ games.
   neutral field, from opponent-adjusted EPA) and `ratings_sos` (the mean team rating of the
   opponents played, each rated without the team's games), each fit only on the season's games
   before the row's week with the previous season's penalties and a preseason prior from earlier
-  seasons; and `ratings_qb` (the expected starter's adjusted EPA per dropback, the starter the
-  quarterback family reads) with `ratings_qb_dropbacks`, his dropbacks this season before the
+  seasons; and `ratings_qb` (the starter's adjusted EPA per dropback, the starter every
+  quarterback feature reads) with `ratings_qb_dropbacks`, his dropbacks this season before the
   week, the passers counted as the players file and the roster weeks before the week list them.
   Week 1 holds each team's preseason prior (from 2003; null before), no `ratings_sos`, and no
   quarterback rating with 0 dropbacks; `ratings_sos` is still null in week 2, when no opponent has

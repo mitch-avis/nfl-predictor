@@ -1075,7 +1075,9 @@ def _finish_games(
         )
     if sources.ratings is not None:
         with _timed_step("attach_rating_features", enabled=enable_timing):
-            combined_df = sources.ratings.attach(combined_df)
+            combined_df = sources.ratings.attach(
+                combined_df, starters=None if history is None else history.starters
+            )
     if sources.pick_time is None:
         # Fill in lines for future games from SurvivorGrid
         combined_df = game_utils.fill_future_game_lines(combined_df)

@@ -349,23 +349,61 @@ def _resolve_ids(
     return pl.concat([matched, fallback.select(matched.columns)]).sort(_ROW)
 
 
-def expected_starter_ids(
-    games: pl.DataFrame, qb_games: pl.DataFrame, identity: pl.DataFrame
+def _play_by_play_ids(
+    games: pl.DataFrame, starters: pl.DataFrame | None, side: str
 ) -> pl.DataFrame:
-    """Return the GSIS id of each game row's expected starters, the one every QB feature reads.
+    """Return each game row's play-by-play starter for ``side``, as ``_ROW`` and ``qb_id``.
 
-    A starter is the ``away_qb`` / ``home_qb`` name the ETL expects to start, mapped to an id
-    through ``identity`` and then through the play-by-play passer names (module docstring, step
-    1). This family and the ratings' quarterback features both read their starter from here.
+    ``qb_id`` is null where the game has none, and on every row without ``starters`` or without
+    the ``game_id`` and ``<side>_abbr`` columns to find them by.
+    """
+    team = f"{side}_abbr"
+    rows = games.select(pl.int_range(pl.len(), dtype=pl.UInt32).alias(_ROW))
+    if starters is None or not {"game_id", team} <= set(games.columns):
+        return rows.with_columns(pl.lit(None, dtype=pl.String).alias("qb_id"))
+    keys = games.select(
+        pl.col("game_id").cast(pl.String), pl.col(team).cast(pl.String).alias("team_abbr")
+    )
+    found = starters.select(
+        pl.col("game_id").cast(pl.String),
+        pl.col("team_abbr").cast(pl.String),
+        pl.col("qb_id").cast(pl.String),
+    ).unique(subset=["game_id", "team_abbr"], keep="first", maintain_order=True)
+    return (
+        rows.hstack(keys)
+        .join(found, on=["game_id", "team_abbr"], how="left", maintain_order="left")
+        .select(_ROW, "qb_id")
+    )
+
+
+def expected_starter_ids(
+    games: pl.DataFrame,
+    qb_games: pl.DataFrame,
+    identity: pl.DataFrame,
+    *,
+    starters: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    """Return the GSIS id of each game row's starters, the one every quarterback feature reads.
+
+    A side's starter is the game's play-by-play starter (``starters``, from
+    ``qb_starters.play_by_play_starters``: a completed regular-season game's) when it has one,
+    else the ``away_qb`` / ``home_qb`` name the ETL expects to start (the projected starter of an
+    upcoming game), mapped to an id through ``identity`` and then through the play-by-play
+    passer names (module docstring, step 1). This family, the ratings' quarterback features and
+    the own Elo's named starters all read their starter from here.
 
     Args:
-        games: Game rows; a frame without ``away_qb`` / ``home_qb`` has no known starters.
+        games: Game rows; a frame without ``away_qb`` / ``home_qb`` has no named starters, and
+            one without ``game_id`` and ``away_abbr`` / ``home_abbr`` takes no play-by-play
+            starter.
         qb_games: Quarterback-game sums from ``aggregate_qb_game_stats``, for the passer names.
         identity: Name-to-id map from ``build_qb_identity``.
+        starters: Play-by-play starters (``qb_starters.STARTERS_SCHEMA``); without them every
+            side takes its named starter.
 
     Returns:
-        One row per game row, in its order: ``away_qb_id`` and ``home_qb_id``, null where the
-        name is missing or cannot be identified.
+        One row per game row, in its order: ``away_qb_id`` and ``home_qb_id``, null where no
+        starter is known or the name cannot be identified.
 
     """
     passer_names = _passer_name_map(qb_games)
@@ -380,14 +418,19 @@ def expected_starter_ids(
             for side in _SIDES
         ),
     )
-    starters = rows.select(_ROW)
+    ids = rows.select(_ROW)
     for side in _SIDES:
         targets = rows.select(_ROW, pl.col(f"{side}_qb").alias("qb_name"))
-        resolved = _resolve_ids(targets, identity, passer_names)
-        starters = starters.join(
-            resolved.select(_ROW, pl.col("qb_id").alias(f"{side}_qb_id")), on=_ROW, how="left"
+        named = _resolve_ids(targets, identity, passer_names).select(_ROW, "qb_id")
+        found = _play_by_play_ids(games, starters, side).rename({"qb_id": "_starter"})
+        ids = ids.join(
+            found.join(named, on=_ROW, how="left").select(
+                _ROW, pl.coalesce("_starter", "qb_id").alias(f"{side}_qb_id")
+            ),
+            on=_ROW,
+            how="left",
         )
-    return starters.sort(_ROW).drop(_ROW)
+    return ids.sort(_ROW).drop(_ROW)
 
 
 def _shrink(numerator: pl.Expr, denominator: pl.Expr, prior: pl.Expr) -> pl.Expr:
@@ -479,43 +522,27 @@ def _side_features(
     return frame.select(_ROW, *[expr.alias(f"{side}_{name}") for name, expr in stats.items()])
 
 
-def _with_play_by_play_starters(
-    resolved: pl.DataFrame, keyed: pl.DataFrame, starters: pl.DataFrame | None, side: str
-) -> pl.DataFrame:
-    """Return ``resolved`` with each game's play-by-play starter in place of its named one.
-
-    ``_from_play_by_play`` marks the rows that took one. Without starters, or without the
-    ``game_id`` and team columns to find them by, every row keeps its named starter.
-    """
-    team = f"{side}_abbr"
-    if starters is None or not {"game_id", team} <= set(keyed.columns):
-        return resolved.with_columns(pl.lit(value=False).alias("_from_play_by_play"))
-    row_starters = keyed.select(
-        _ROW, pl.col("game_id").cast(pl.String), pl.col(team).cast(pl.String).alias("team_abbr")
-    ).join(
-        starters.select("game_id", "team_abbr", pl.col("qb_id").alias("_starter")),
-        on=["game_id", "team_abbr"],
-        how="left",
-    )
-    return (
-        resolved.join(row_starters.select(_ROW, "_starter"), on=_ROW, how="left")
+def _log_starters(
+    games: pl.DataFrame, ids: pl.DataFrame, starters: pl.DataFrame | None, side: str
+) -> None:
+    """Log how one side's starters were found and the named starters left unidentified."""
+    sources = (
+        games.select(pl.col(f"{side}_qb").cast(pl.String).alias("qb_name"))
+        .hstack(ids.select(pl.col(f"{side}_qb_id").alias("qb_id")))
         .with_columns(
-            pl.coalesce("_starter", "qb_id").alias("qb_id"),
-            pl.col("_starter").is_not_null().alias("_from_play_by_play"),
+            _play_by_play_ids(games, starters, side)
+            .get_column("qb_id")
+            .is_not_null()
+            .alias("from_play_by_play")
         )
-        .drop("_starter")
     )
-
-
-def _log_starters(resolved: pl.DataFrame, side: str) -> None:
-    """Log how one side's starters were found and the names left unmatched."""
-    named = resolved.filter(~pl.col("_from_play_by_play") & pl.col("qb_name").is_not_null())
+    named = sources.filter(~pl.col("from_play_by_play") & pl.col("qb_name").is_not_null())
     unmatched = named.filter(pl.col("qb_id").is_null())
     log.info(
         "QB features (%s): %d rows keyed on the play-by-play starter, %d on a named starter, "
         "%d named starters unmatched; names: %s",
         side,
-        int(resolved.get_column("_from_play_by_play").sum()),
+        int(sources.get_column("from_play_by_play").sum()),
         named.height,
         unmatched.height,
         sorted(set(unmatched["qb_name"].to_list()))[:10],
@@ -526,6 +553,9 @@ def named_starters(
     games: pl.DataFrame, identity: pl.DataFrame, qb_games: pl.DataFrame
 ) -> pl.DataFrame:
     """Return the starter the ETL names for each side of each game, as an id.
+
+    The names map to ids as every quarterback feature maps them (``expected_starter_ids``
+    without play-by-play starters).
 
     Args:
         games: Game rows with ``game_id``, ``season``, ``week``, ``away_abbr``,
@@ -538,19 +568,12 @@ def named_starters(
         ``game_id``, ``team_abbr`` and ``qb_id`` for every side whose name maps to an id.
 
     """
-    keyed = _keyed(games.with_row_index(_ROW))
-    passer_names = _passer_name_map(qb_games)
+    ids = expected_starter_ids(games, qb_games, identity)
     sides = [
-        _resolve_ids(
-            keyed.select(
-                _ROW,
-                pl.col("game_id").cast(pl.String),
-                pl.col(f"{side}_abbr").cast(pl.String).alias("team_abbr"),
-                pl.col(f"{side}_qb").cast(pl.String).alias("qb_name"),
-            ),
-            identity,
-            passer_names,
-        ).select("game_id", "team_abbr", "qb_id")
+        games.select(
+            pl.col("game_id").cast(pl.String),
+            pl.col(f"{side}_abbr").cast(pl.String).alias("team_abbr"),
+        ).hstack(ids.select(pl.col(f"{side}_qb_id").alias("qb_id")))
         for side in _SIDES
     ]
     return pl.concat(sides).drop_nulls("qb_id")
@@ -565,11 +588,11 @@ def attach_qb_features(
 ) -> pl.DataFrame:
     """Add the quarterback family for each side's starter to every game row.
 
-    A side's starter is the game's play-by-play starter (``starters``, from
-    ``qb_starters.play_by_play_starters``) when it has one, else the starter the ETL names for
-    it (``away_qb`` / ``home_qb``: the projected starter of an upcoming game, the recorded
-    starter of a completed game without play-by-play) mapped to an id through ``identity``,
-    then the abbreviated play-by-play passer name.
+    A side's starter is the one ``expected_starter_ids`` gives: the game's play-by-play starter
+    (``starters``, from ``qb_starters.play_by_play_starters``) when it has one, else the starter
+    the ETL names for it (``away_qb`` / ``home_qb``: the projected starter of an upcoming game,
+    the recorded starter of a completed game without play-by-play) mapped to an id through
+    ``identity``, then the abbreviated play-by-play passer name.
 
     Args:
         games: Game rows with ``season``, ``week``, ``away_qb`` and ``home_qb``, and
@@ -592,23 +615,17 @@ def attach_qb_features(
     base = games.drop([c for c in new_columns if c in games.columns])
     keyed = _keyed(base.with_row_index(_ROW))
     career, recent, league = _history_tables(qb_games)
-    named_ids = expected_starter_ids(base, qb_games, identity).with_row_index(_ROW)
+    ids = expected_starter_ids(base, qb_games, identity, starters=starters)
+    rows = ids.with_row_index(_ROW)
 
     out = keyed
     for side in _SIDES:
-        named = (
-            keyed.select(
-                _ROW,
-                _KEY,
-                "season",
-                "week",
-                pl.col(f"{side}_qb").cast(pl.String).alias("qb_name"),
-            )
-            .join(named_ids.select(_ROW, pl.col(f"{side}_qb_id").alias("qb_id")), on=_ROW)
+        _log_starters(base, ids, starters, side)
+        resolved = (
+            keyed.select(_ROW, _KEY, "season", "week")
+            .join(rows.select(_ROW, pl.col(f"{side}_qb_id").alias("qb_id")), on=_ROW)
             .sort(_ROW)
         )
-        resolved = _with_play_by_play_starters(named, keyed, starters, side)
-        _log_starters(resolved, side)
         features = _side_features(resolved, career, recent, league, side)
         out = out.join(features, on=_ROW, how="left")
 

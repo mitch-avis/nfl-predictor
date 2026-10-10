@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from nfl_predictor.utils.polars import qb_stats
+from nfl_predictor.utils.polars import qb_starters, qb_stats
 
 _IDENTITY = pl.DataFrame(
     {"qb_name": ["Name A", "Name B"], "qb_id": ["A", "B"]},
@@ -116,3 +116,55 @@ def test_expected_starter_ids_without_starter_columns_are_unknown() -> None:
 
     # Assert
     assert starters.rows() == [(None, None)]
+
+
+def _with_teams(games: pl.DataFrame) -> pl.DataFrame:
+    """Return ``games`` with NYJ visiting NE in every row."""
+    return games.with_columns(pl.lit("NYJ").alias("away_abbr"), pl.lit("NE").alias("home_abbr"))
+
+
+def _starters(rows: list[tuple[str, str, str]]) -> pl.DataFrame:
+    """Return play-by-play starters from ``(game_id, team_abbr, qb_id)`` rows."""
+    return pl.DataFrame(
+        [
+            {"game_id": game, "season": 2023, "week": 2, "team_abbr": team, "qb_id": qb_id}
+            for game, team, qb_id in rows
+        ],
+        schema=qb_starters.STARTERS_SCHEMA,
+    )
+
+
+def test_expected_starter_ids_take_the_play_by_play_starter_over_the_named_one() -> None:
+    # Arrange
+    games = _with_teams(_games([("Name A", "Name B"), ("Name A", "Name B")]))
+    starters = _starters([("g0", "NE", "PBP"), ("g1", "NYJ", "PBP")])
+
+    # Act
+    ids = qb_stats.expected_starter_ids(games, _qb_games([]), _IDENTITY, starters=starters)
+
+    # Assert
+    assert ids.rows() == [("A", "PBP"), ("PBP", "B")]
+
+
+def test_expected_starter_ids_name_every_side_without_a_play_by_play_starter() -> None:
+    # Arrange
+    games = _with_teams(_games([("Name A", "Name B")]))
+    starters = _starters([("an upcoming game", "NE", "PBP")])
+
+    # Act
+    ids = qb_stats.expected_starter_ids(games, _qb_games([]), _IDENTITY, starters=starters)
+
+    # Assert
+    assert ids.rows() == [("A", "B")]
+
+
+def test_expected_starter_ids_without_game_ids_or_teams_use_the_named_starters() -> None:
+    # Arrange
+    games = _games([("Name A", "Name B")]).drop("game_id")
+    starters = _starters([("g0", "NE", "PBP")])
+
+    # Act
+    ids = qb_stats.expected_starter_ids(games, _qb_games([]), _IDENTITY, starters=starters)
+
+    # Assert
+    assert ids.rows() == [("A", "B")]

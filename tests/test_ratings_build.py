@@ -27,7 +27,7 @@ from nfl_predictor import constants
 from nfl_predictor.ratings.pbp_inputs import quarterback_rows
 from nfl_predictor.ratings.pre_week import RatingsHistory
 from nfl_predictor.ratings.season import BootstrapSettings, TeamSeasonRatings
-from nfl_predictor.utils.polars import ratings_build
+from nfl_predictor.utils.polars import qb_starters, ratings_build
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -305,6 +305,38 @@ def test_attach_gives_a_starter_without_a_dropback_yet_no_rating_and_zero_dropba
 
     # Assert
     assert (row[f"{side}_ratings_qb"], row[f"{side}_ratings_qb_dropbacks"]) == (None, 0)
+
+
+def test_attach_rates_a_games_play_by_play_starter_over_the_named_one(
+    built: ratings_build.RatingsBuild,
+) -> None:
+    # Arrange
+    games = with_backup_starting(league().games)
+    game = _game(games, _LAST, BACKUP_FROM_WEEK, "AAA")
+    side = "away" if game["away_abbr"] == "AAA" else "home"
+    starters = pl.DataFrame(
+        [
+            {
+                "game_id": game["game_id"],
+                "season": _LAST,
+                "week": BACKUP_FROM_WEEK,
+                "team_abbr": "AAA",
+                "qb_id": starter_id("AAA"),
+            }
+        ],
+        schema=qb_starters.STARTERS_SCHEMA,
+    )
+    quarterbacks = built.build_frames(_LAST)[ratings_build.PRE_WEEK_QUARTERBACKS]
+    starter = quarterbacks.filter(
+        (pl.col("week") == BACKUP_FROM_WEEK) & (pl.col("qb_id") == starter_id("AAA"))
+    ).row(0, named=True)
+
+    # Act
+    row = _game(built.attach(games, starters=starters), _LAST, BACKUP_FROM_WEEK, "AAA")
+
+    # Assert
+    assert row[f"{side}_ratings_qb"] == starter["adj_qb_epa_per_dropback"]
+    assert row[f"{side}_ratings_qb_dropbacks"] == starter["qb_dropbacks"]
 
 
 def test_attach_rates_the_backup_from_his_own_dropbacks_once_he_has_some(

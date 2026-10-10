@@ -240,11 +240,14 @@ Feature areas tracked in `.agents/TODO.md` include (examples):
 - PBP-derived per-snap EPA, success, explosive, and special-teams families
 - weekly schedule-adjusted (ridge) offense/defense strength and EPA-based schedule strength, in
   both the ridge form and the one-hop head-to-head-excluded form
-- QB per-dropback EPA families for the expected starter
+- QB per-dropback EPA families for each side's starter: every quarterback feature reads it from
+  `qb_stats.expected_starter_ids`, a completed game's play-by-play starter (known only at
+  kickoff, the convention the `qb_elos.csv` columns share) and an upcoming game's projected
+  starter
 - the team and quarterback ratings ported from `nfl-sos-ratings` (the `ratings` group,
   `utils/polars/ratings_build.py`): offense, defense, special-teams and team ratings and the
-  head-to-head-excluded `sos`, and the expected starter's adjusted EPA per dropback, each fit only
-  on the games before the week
+  head-to-head-excluded `sos`, and the starter's adjusted EPA per dropback, each fit only on the
+  games before the week
 
 Rules for stat-style features:
 

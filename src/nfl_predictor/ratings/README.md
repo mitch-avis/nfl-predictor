@@ -125,12 +125,14 @@ it slightly in the seasons whose penalty changed.
   its first game, gets no quarterback tables. `nfl-predictor data` writes the tables to
   `data/ratings/{season}_{kind}.parquet`.
 - It attaches the `ratings` feature group (`constants.RATINGS_FEATURE_STATS`) to every game row:
-  both teams' pre-week ratings and `sos` for the row's week, and the expected starter's
-  `adj_qb_epa_per_dropback` and dropbacks before the week. The starter is the one the quarterback
-  family reads (`qb_stats.expected_starter_ids`), and the passers are counted as the identity knew
-  them before the week. What the early weeks hold: week 1 has each team's preseason prior (from
-  2003), no `sos`, and no quarterback rating with 0 dropbacks; `sos` is still null in week 2,
-  since no opponent has played anyone else yet; 1999 is null throughout.
+  both teams' pre-week ratings and `sos` for the row's week, and the starter's
+  `adj_qb_epa_per_dropback` and dropbacks before the week. The starter is the one every
+  quarterback feature reads (`qb_stats.expected_starter_ids`: a completed game's play-by-play
+  starter, else the starter the ETL names, the projected starter of an upcoming game), and the
+  passers are counted as the identity knew them before the week. What the early weeks hold: week
+  1 has each team's preseason prior (from 2003), no `sos`, and no quarterback rating with 0
+  dropbacks; `sos` is still null in week 2, since no opponent has played anyone else yet; 1999 is
+  null throughout.
 - The fits run with one BLAS thread (`threadpoolctl`), the rows reach them in a fixed order, and
   each season's slices are rechunked, so two runs on the same inputs write the same bytes. A
   season's outputs read only it and earlier seasons, so the incremental ETL keeps them in the

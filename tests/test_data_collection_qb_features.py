@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import polars as pl
 import pytest
@@ -15,6 +15,8 @@ from nfl_predictor.utils.polars.finalize import build_final_column_order
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from nfl_predictor.utils.polars import ratings_build
 
 
 def _dropbacks(
@@ -271,6 +273,55 @@ def test_attach_qb_features_without_a_history_or_quarterback_names_changes_nothi
 
     # Assert
     assert out.equals(games)
+
+
+class _RecordingRatings:
+    """A ratings build that records the play-by-play starters each attach is handed."""
+
+    def __init__(self) -> None:
+        self.starters: list[pl.DataFrame | None] = []
+
+    def attach(self, games: pl.DataFrame, *, starters: pl.DataFrame | None = None) -> Any:
+        self.starters.append(starters)
+        return games
+
+
+def test_finish_games_hands_the_ratings_the_runs_play_by_play_starters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    starters = pl.DataFrame(
+        [{"game_id": "g", "season": 2024, "week": 2, "team_abbr": "NE", "qb_id": "QB1"}],
+        schema=qb_starters.STARTERS_SCHEMA,
+    )
+    history = qb_starters.QuarterbackHistory(
+        pl.DataFrame(), pl.DataFrame(), qb_starters.season_positions({}), starters
+    )
+    monkeypatch.setattr(data_collection, "_quarterback_history", lambda *_a, **_k: history)
+    monkeypatch.setattr(data_collection, "_attach_qb_features", lambda games, *_a, **_k: games)
+    monkeypatch.setattr(data_collection, "_attach_own_elo", lambda games, *_a, **_k: games)
+    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
+    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
+    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
+    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+    ratings = _RecordingRatings()
+    sources = data_collection._EtlSources(
+        current_season=2025,
+        current_week=1,
+        schedule_df=pl.DataFrame(),
+        team_stats_df=pl.DataFrame(),
+        pbp_df=pl.DataFrame(),
+        elo_df=pl.DataFrame(),
+        raw_elo_df=pl.DataFrame(),
+        ratings=cast("ratings_build.RatingsBuild", ratings),
+    )
+    games = pl.DataFrame({"season": [2024], "week": [2], "away_qb": ["A"], "home_qb": ["B"]})
+
+    # Act
+    data_collection._finish_games(games, sources, 2024, enable_timing=False)
+
+    # Assert
+    assert ratings.starters == [starters]
 
 
 def test_final_schema_carries_no_defense_adjusted_quarterback_columns() -> None:

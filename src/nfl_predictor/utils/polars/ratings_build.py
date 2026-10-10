@@ -15,8 +15,9 @@ match its published files. For each season an ETL run builds:
 
 :meth:`RatingsBuild.attach` joins them onto the game rows as the ``ratings`` feature group
 (``constants.RATINGS_FEATURE_STATS``): both teams' offense, defense, special-teams and team
-ratings and ``sos`` for the row's week, and the expected starter's rating with his dropbacks; the
-starter is the one every quarterback feature reads (``qb_stats.expected_starter_ids``). Early on:
+ratings and ``sos`` for the row's week, and the starter's rating with his dropbacks; the starter
+is the one every quarterback feature reads (``qb_stats.expected_starter_ids``: a completed game's
+play-by-play starter, else the named one, the projected starter of an upcoming game). Early on:
 
 - week 1: every team at its preseason prior (from 2003, the first season with three earlier
   season pairs for the carryover slopes; null before), ``sos`` null, and no quarterback rating,
@@ -578,12 +579,16 @@ class RatingsBuild:
             *(pl.col(column).alias(name) for column, name in features.items()),
         )
 
-    def attach(self, games: pl.DataFrame) -> pl.DataFrame:
+    def attach(self, games: pl.DataFrame, *, starters: pl.DataFrame | None = None) -> pl.DataFrame:
         """Return ``games`` with the ``ratings`` feature group, in the same row order.
 
         Args:
-            games: Game rows with ``season``, ``week``, ``away_abbr`` and ``home_abbr``, and the
-                expected starters as ``away_qb`` / ``home_qb``.
+            games: Game rows with ``season``, ``week``, ``away_abbr`` and ``home_abbr``, the
+                expected starters as ``away_qb`` / ``home_qb``, and ``game_id`` to find the
+                play-by-play starters by.
+            starters: Play-by-play starters (``qb_starters.STARTERS_SCHEMA``), which a game's
+                side takes over its named starter (``qb_stats.expected_starter_ids``); without
+                them every side takes its named starter.
 
         Returns:
             ``games`` with ``away_<stat>``, ``home_<stat>`` and ``<stat>_diff`` (away minus
@@ -595,8 +600,8 @@ class RatingsBuild:
         new_columns = [f"{side}_{stat}" for stat in stats for side in _SIDES]
         new_columns += [f"{stat}_diff" for stat in stats]
         base = games.drop([column for column in new_columns if column in games.columns])
-        starters = qb_stats.expected_starter_ids(
-            base, self._inputs.starter_games, self._inputs.starter_identity
+        ids = qb_stats.expected_starter_ids(
+            base, self._inputs.starter_games, self._inputs.starter_identity, starters=starters
         )
         keys = (
             base.select(
@@ -604,7 +609,7 @@ class RatingsBuild:
                 pl.col("week").cast(pl.Int64),
                 *(pl.col(f"{side}_abbr").cast(pl.String) for side in _SIDES),
             )
-            .hstack(starters)
+            .hstack(ids)
             .with_row_index(_ROW)
         )
         teams = self._feature_table(PRE_WEEK_TEAMS, "team", _TEAM_FEATURES)

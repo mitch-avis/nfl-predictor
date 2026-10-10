@@ -140,6 +140,9 @@ def build_betting_report(
             is not positive.
 
     """
+    if floor_sigma is not None and not floor_sigma > 0:
+        msg = f"The floor's sigma must be positive, got {floor_sigma!r}."
+        raise ValueError(msg)
     required = {
         "away_abbr",
         "home_abbr",

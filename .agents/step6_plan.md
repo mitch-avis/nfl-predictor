@@ -42,19 +42,23 @@ data are logged for review. Read as:
 
 | stream | phase | depends on | branch / state |
 | --- | --- | --- | --- |
-| S1 inventory and parity scripts | 1 | none | merged (reports pinned to `main`'s code); refresh after integration |
+| S1 inventory and parity scripts | 1 | none | merged `0.50.1` (reports pinned to `main`'s code); refresh after integration |
 | S2 new nflverse sources, `MODELS_PATH`, `compare` tie fix | 2 | none | merged, `0.46.0` |
 | S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | merged, `0.47.0` |
-| S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | review fixes |
+| S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | merged, `0.49.0` |
 | S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | merged, `0.48.0` |
-| S5a play-by-play cache columns, stadium table | 3-4 | none | in review |
-| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | implementer running (on S5a's branch) |
-| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | implementer running (on S4's and S5a's branches) |
-| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | implementer running |
-| S5 ETL integration: play-by-play fixes, ratings inputs and outputs, pre-week features, follow-ups | 3-4 | S1, S2, S4 | after those merge |
-| S6 candidate build and measurement | 4 | S3, S5 | after S5 |
-| S7 power rankings and projected standings | 5 | S5, S6 | after S6 |
-| S8b web: team, quarterback, schedule, rank-range, head-to-head pages (58.2) | 6 | S5 output schema | after S5 |
+| S5a play-by-play cache columns, stadium table | 3-4 | none | merged, `0.50.0` |
+| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | implementer running |
+| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | implementer running |
+| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | in review (270 tables, 11,754,571 cells bit-identical) |
+| S8b web: teams, quarterbacks, schedules, rank ranges, head-to-head, glossary (58.2) | 6 | S4, S10 | implementer running (on S10's branch) |
+| S5d ETL step for the season statistics tables, ratings columns into `combined` | 6 | S5c, S10 | after those merge |
+| S6 candidate build and measurement (`models/step6/build.sh`, `driver.sh`) | 4 | S3, S5b, S5c | after S5b and S5c |
+| S7 power rankings and projected standings (`models/step6/rankings/HYPOTHESIS.md`) | 5 | S5c, S6 | after S6's first arm |
+
+Data contract for the pages (decided 2026-10-10): every per-season table, the ratings kinds and
+the season-statistics kinds alike, is written by the ETL to `data/ratings/{season}_{kind}.parquet`,
+kinds and columns named as in `nfl-sos-ratings`, plus the current season's `*_ranges_by_week`.
 
 ## Measurement ladder (phase 4)
 

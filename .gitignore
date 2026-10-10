@@ -225,6 +225,8 @@ models/
 *.joblib
 *.pkl
 *.parquet
+# Except the small ratings parity fixtures the tests read (see PROVENANCE.md there).
+!tests/fixtures/sos_ratings_parity/*.parquet
 *.feather
 
 # Generated reports (the leakage audit writes here by default)

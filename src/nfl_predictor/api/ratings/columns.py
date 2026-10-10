@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, TypedDict
 from nfl_predictor.api.registry.columns import jsonable
 from nfl_predictor.api.schemas.ratings import MetricColumnOut, MetricTableOut
 from nfl_predictor.season_stats.metrics import get_registry
+from nfl_predictor.utils.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -111,8 +112,8 @@ def metric_table(
     Args:
         frame: The season table.
         groups: The column groups in display order. A column appears once, in the first group that
-            names it; one missing from ``frame`` or unknown to the registry is left out, and every
-            declared group is kept, empty or not.
+            names it; one missing from ``frame`` is left out, one the registry cannot describe is
+            left out with a warning, and every declared group is kept, empty or not.
         overrides: Registry text to replace, by column.
         references: Groups that name columns already placed in ``groups`` (a quarterback's
             unadjusted rate beside his rating, for example) without moving them.
@@ -131,9 +132,13 @@ def metric_table(
             meta = local.get(column) or metric_column(
                 column, frame.schema[column], group, overrides.get(column)
             )
-            if meta is not None:
-                metadata[column] = meta
-                kept.append(column)
+            if meta is None:
+                log.warning(
+                    "Leaving out column %r: the metric registry does not describe it", column
+                )
+                continue
+            metadata[column] = meta
+            kept.append(column)
         column_groups[group] = kept
     for group, columns in (references or {}).items():
         column_groups[group] = [column for column in columns if column in metadata]

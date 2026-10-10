@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 
 import polars as pl
@@ -142,6 +143,23 @@ def test_metric_table_keeps_group_order_and_drops_unknown_columns() -> None:
         {"team": "KC", "team_rating": None, "points_for": None},
     ]
     assert set(table.column_metadata) == {"team", "team_rating", "points_for"}
+
+
+def test_metric_table_warns_when_it_leaves_out_a_column_the_registry_lacks(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A column dropped for want of registry metadata is logged, not lost silently."""
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    frame = pl.DataFrame({"team": ["BUF"], "not_a_metric": [1.0]})
+
+    # Act
+    metric_table(frame, {"identity": ["team"], "per_game_rates": ["not_a_metric"]})
+
+    # Assert
+    assert [message for message in caplog.messages if "not_a_metric" in message] == [
+        "Leaving out column 'not_a_metric': the metric registry does not describe it"
+    ]
 
 
 def test_metric_table_reference_groups_name_columns_without_moving_them() -> None:

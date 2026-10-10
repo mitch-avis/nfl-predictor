@@ -18,7 +18,7 @@ wins (a tie is not one). Intervals are 95% percentile intervals over
 
 | input | detail |
 | --- | --- |
-| code commit | `ff14dec20c49f0bb150aed00c43763e917c65d8e` |
+| code commit | `e0c0663a895b7c072b54a9e3a65ddb066eaede67` |
 | data directory | `/home/mitch/workspace/nfl-predictor/data` |
 | schedule cache files (1999-2025) SHA-256 | `05caf797be2c0d80f4d88ece1f58fc688a3f05b71fba37eb2bbd0ba1c07a1c3f` |
 | play-by-play cache files (1999-2025) SHA-256 | `d62eae99d3c0240c226d8565ed678045303ccff4973281a387774de23869683a` |
@@ -52,8 +52,8 @@ current, per game, on the window's games.
 | quarterback adjustment (VALUE) | 0.21712 | 0.21961 | -0.00249 | [-0.00381, -0.00119] | -0.00621 | [-0.00929, -0.00326] | yes |
 | win-total pull | 0.21616 | 0.21712 | -0.00096 | [-0.00185, -0.00001] | -0.00229 | [-0.00435, -0.00017] | yes |
 
-Market-free recommendation: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home
-field + quarterback adjustment (VALUE).
+Market-free recommendation: framework + travel (55-point base plus 4 per 1,000 miles) + rolling
+home field + quarterback adjustment (VALUE).
 
 Anchored recommendation: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home
 field + quarterback adjustment (VALUE) + win-total pull.
@@ -121,6 +121,27 @@ A diagnostic: the rule reads the forward selection above, not this table.
 | rolling home field | -0.00072 | [-0.00110, -0.00035] | -0.00150 | [-0.00236, -0.00066] |
 | quarterback adjustment (VALUE) | -0.00251 | [-0.00384, -0.00121] | -0.00629 | [-0.00937, -0.00332] |
 | win-total pull | -0.00140 | [-0.00252, -0.00023] | -0.00333 | [-0.00586, -0.00071] |
+
+## Starters known before kickoff
+
+A diagnostic: the rule reads the forward selection above, not this. A completed game's starter is
+the passer on its first dropback, known only at kickoff. Here every game is rated for the team's
+previous starter instead, as known before kickoff, while the ratings still roll in the actual
+starter's game. Difference is previous minus actual.
+
+| preset | actual-starter Brier | previous-starter Brier | Brier diff | 95% interval | log-loss diff | 95% interval |
+| --- | --- | --- | --- | --- | --- | --- |
+| market-free: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) | 0.21712 | 0.21813 | +0.00101 | [-0.00027, +0.00232] | +0.00331 | [+0.00035, +0.00631] |
+| win-total: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull | 0.21616 | 0.21744 | +0.00128 | [-0.00002, +0.00261] | +0.00365 | [+0.00077, +0.00665] |
+
+The quarterback step (framework + travel (55-point base plus 4 per 1,000 miles) + rolling home
+field + quarterback adjustment (VALUE) against framework + travel (55-point base plus 4 per 1,000
+miles) + rolling home field), candidate minus current:
+
+| starters | Brier diff | 95% interval | log-loss diff | 95% interval |
+| --- | --- | --- | --- | --- |
+| actual (the rule's step) | -0.00249 | [-0.00381, -0.00119] | -0.00621 | [-0.00929, -0.00326] |
+| previous | -0.00148 | [-0.00294, +0.00002] | -0.00290 | [-0.00632, +0.00049] |
 
 ## Playoff games, 2007-2025
 
@@ -228,10 +249,11 @@ The two sources record 30 games with home and away swapped: `1999_21_STL_TEN`, `
 `2007_21_NYG_NE`, `2008_08_SD_NO`, `2008_21_PIT_ARI`, `2009_07_NE_TB`, `2009_21_NO_IND`,
 `2010_08_DEN_SF`, `2010_14_NYG_MIN`, `2010_21_PIT_GB`, `2011_07_CHI_TB`, `2011_21_NYG_NE`,
 `2012_08_NE_STL`, `2012_21_BAL_SF`, `2013_04_PIT_MIN`, `2013_08_SF_JAX`, `2014_04_MIA_OAK`,
-`2014_08_DET_ATL`, `2014_10_DAL_JAX`, `2014_21_NE_SEA`. After those swaps 9 games carry a different
-neutral-site flag: `2005_04_BUF_NO`, `2005_06_ATL_NO`, `2005_16_DET_NO`, `2008_14_MIA_BUF`,
-`2013_13_ATL_BUF`, `2014_12_NYJ_BUF`, `2020_13_BUF_SF`, `2020_14_WAS_SF`, `2020_17_SEA_SF`. The same
-run with 538's home side and flag on every game 538 lists (5852 matched):
+`2014_08_DET_ATL`, `2014_10_DAL_JAX`, `2014_21_NE_SEA`. After those swaps 9 games carry a
+different neutral-site flag: `2005_04_BUF_NO`, `2005_06_ATL_NO`, `2005_16_DET_NO`,
+`2008_14_MIA_BUF`, `2013_13_ATL_BUF`, `2014_12_NYJ_BUF`, `2020_13_BUF_SF`, `2020_14_WAS_SF`,
+`2020_17_SEA_SF`. The same run with 538's home side and flag on every game 538 lists (5852
+matched):
 
 | period | games | max prob gap | median prob gap | max rating gap | gaps over 1e-4 |
 | --- | --- | --- | --- | --- | --- |

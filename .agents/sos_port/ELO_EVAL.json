@@ -477,13 +477,110 @@
       "log_loss": 0.6564283818413034
     }
   },
+  "pre_kickoff_starters": {
+    "presets": [
+      {
+        "actual_starter": {
+          "brier": 0.2171184326919175,
+          "games": 4943,
+          "log_loss": 0.6226761739369582
+        },
+        "preset": "market-free: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
+        "previous_minus_actual": {
+          "brier_ci": [
+            -0.0002668379808028287,
+            0.002317574659367529
+          ],
+          "brier_diff": 0.001012790812648317,
+          "candidate_brier": 0.21813122350456582,
+          "candidate_log_loss": 0.6259818785147145,
+          "current_brier": 0.2171184326919175,
+          "current_log_loss": 0.6226761739369582,
+          "games": 4943,
+          "log_loss_ci": [
+            0.0003548352683488445,
+            0.006305860464827182
+          ],
+          "log_loss_diff": 0.003305704577756338
+        },
+        "previous_starter": {
+          "brier": 0.21813122350456582,
+          "games": 4943,
+          "log_loss": 0.6259818785147145
+        }
+      },
+      {
+        "actual_starter": {
+          "brier": 0.21616300051165918,
+          "games": 4943,
+          "log_loss": 0.6203813559767889
+        },
+        "preset": "win-total: framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull",
+        "previous_minus_actual": {
+          "brier_ci": [
+            -1.7825950089896435e-05,
+            0.0026069929645695152
+          ],
+          "brier_diff": 0.0012757743839136846,
+          "candidate_brier": 0.21743877489557287,
+          "candidate_log_loss": 0.6240279200894061,
+          "current_brier": 0.21616300051165918,
+          "current_log_loss": 0.6203813559767889,
+          "games": 4943,
+          "log_loss_ci": [
+            0.0007682649353176468,
+            0.00665346251797686
+          ],
+          "log_loss_diff": 0.0036465641126172403
+        },
+        "previous_starter": {
+          "brier": 0.21743877489557287,
+          "games": 4943,
+          "log_loss": 0.6240279200894061
+        }
+      }
+    ],
+    "quarterback_step": {
+      "candidate": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
+      "current": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field",
+      "with_actual_starters": {
+        "brier_ci": [
+          -0.003814072013564548,
+          -0.001187099658009511
+        ],
+        "brier_diff": -0.0024885809342521997,
+        "log_loss_ci": [
+          -0.009286976989573033,
+          -0.0032566279724975354
+        ],
+        "log_loss_diff": -0.006205644515330827
+      },
+      "with_previous_starters": {
+        "brier_ci": [
+          -0.00294042951179495,
+          1.5064480113505068e-05
+        ],
+        "brier_diff": -0.0014757901216038828,
+        "candidate_brier": 0.21813122350456582,
+        "candidate_log_loss": 0.6259818785147145,
+        "current_brier": 0.2196070136261697,
+        "current_log_loss": 0.6288818184522891,
+        "games": 4943,
+        "log_loss_ci": [
+          -0.006324855779346666,
+          0.00048543686943736483
+        ],
+        "log_loss_diff": -0.0028999399375744896
+      }
+    }
+  },
   "provenance": {
     "data_dir": "/home/mitch/workspace/nfl-predictor/data",
     "fivethirtyeight_games": {
       "path": "/home/mitch/scratch/elo_research/nfl-elo-game/data/nfl_games.csv",
       "sha256": "af16cf3c5848393057fad07feea278f0a85ab7b57ddbfe42ed96b5c80e7d519d"
     },
-    "git_commit": "ff14dec20c49f0bb150aed00c43763e917c65d8e",
+    "git_commit": "e0c0663a895b7c072b54a9e3a65ddb066eaede67",
     "meta_data": {
       "path": "/home/mitch/workspace/nfl-predictor/data/meta_data.csv",
       "sha256": "7cc566a5d76ebbd7e585134744115d3ad6dedcfb56157fd39889643e1daeeaa6"
@@ -613,10 +710,26 @@
         "candidate": "framework + rest and bye",
         "candidate_brier": 0.22011225261560666,
         "candidate_log_loss": 0.6298139019148432,
+        "candidate_settings": {
+          "playoff_boost": false,
+          "quarterback": false,
+          "rest": true,
+          "rolling_home_field": false,
+          "travel": false,
+          "win_totals": false
+        },
         "component": "rest",
         "current": "framework",
         "current_brier": 0.22029956897986033,
         "current_log_loss": 0.6303226744526967,
+        "current_settings": {
+          "playoff_boost": false,
+          "quarterback": false,
+          "rest": false,
+          "rolling_home_field": false,
+          "travel": false,
+          "win_totals": false
+        },
         "games": 4943,
         "kept": false,
         "label": "rest and bye",
@@ -635,10 +748,26 @@
         "candidate": "framework + travel (55-point base plus 4 per 1,000 miles)",
         "candidate_brier": 0.21990419146772158,
         "candidate_log_loss": 0.6294519281660851,
+        "candidate_settings": {
+          "playoff_boost": false,
+          "quarterback": false,
+          "rest": false,
+          "rolling_home_field": false,
+          "travel": true,
+          "win_totals": false
+        },
         "component": "travel",
         "current": "framework",
         "current_brier": 0.22029956897986033,
         "current_log_loss": 0.6303226744526967,
+        "current_settings": {
+          "playoff_boost": false,
+          "quarterback": false,
+          "rest": false,
+          "rolling_home_field": false,
+          "travel": false,
+          "win_totals": false
+        },
         "games": 4943,
         "kept": true,
         "label": "travel (55-point base plus 4 per 1,000 miles)",
@@ -657,10 +786,26 @@
         "candidate": "framework + travel (55-point base plus 4 per 1,000 miles) + playoff boost",
         "candidate_brier": 0.21991009869516337,
         "candidate_log_loss": 0.6294550839551166,
+        "candidate_settings": {
+          "playoff_boost": true,
+          "quarterback": false,
+          "rest": false,
+          "rolling_home_field": false,
+          "travel": true,
+          "win_totals": false
+        },
         "component": "playoff_boost",
         "current": "framework + travel (55-point base plus 4 per 1,000 miles)",
         "current_brier": 0.21990419146772158,
         "current_log_loss": 0.6294519281660851,
+        "current_settings": {
+          "playoff_boost": false,
+          "quarterback": false,
+          "rest": false,
+          "rolling_home_field": false,
+          "travel": true,
+          "win_totals": false
+        },
         "games": 4943,
         "kept": false,
         "label": "playoff boost",
@@ -679,10 +824,26 @@
         "candidate": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field",
         "candidate_brier": 0.2196070136261697,
         "candidate_log_loss": 0.6288818184522891,
+        "candidate_settings": {
+          "playoff_boost": false,
+          "quarterback": false,
+          "rest": false,
+          "rolling_home_field": true,
+          "travel": true,
+          "win_totals": false
+        },
         "component": "rolling_home_field",
         "current": "framework + travel (55-point base plus 4 per 1,000 miles)",
         "current_brier": 0.21990419146772158,
         "current_log_loss": 0.6294519281660851,
+        "current_settings": {
+          "playoff_boost": false,
+          "quarterback": false,
+          "rest": false,
+          "rolling_home_field": false,
+          "travel": true,
+          "win_totals": false
+        },
         "games": 4943,
         "kept": true,
         "label": "rolling home field",
@@ -701,10 +862,26 @@
         "candidate": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
         "candidate_brier": 0.2171184326919175,
         "candidate_log_loss": 0.6226761739369582,
+        "candidate_settings": {
+          "playoff_boost": false,
+          "quarterback": true,
+          "rest": false,
+          "rolling_home_field": true,
+          "travel": true,
+          "win_totals": false
+        },
         "component": "quarterback",
         "current": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field",
         "current_brier": 0.2196070136261697,
         "current_log_loss": 0.6288818184522891,
+        "current_settings": {
+          "playoff_boost": false,
+          "quarterback": false,
+          "rest": false,
+          "rolling_home_field": true,
+          "travel": true,
+          "win_totals": false
+        },
         "games": 4943,
         "kept": true,
         "label": "quarterback adjustment (VALUE)",
@@ -723,10 +900,26 @@
         "candidate": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE) + win-total pull",
         "candidate_brier": 0.21616300051165918,
         "candidate_log_loss": 0.6203813559767889,
+        "candidate_settings": {
+          "playoff_boost": false,
+          "quarterback": true,
+          "rest": false,
+          "rolling_home_field": true,
+          "travel": true,
+          "win_totals": true
+        },
         "component": "win_totals",
         "current": "framework + travel (55-point base plus 4 per 1,000 miles) + rolling home field + quarterback adjustment (VALUE)",
         "current_brier": 0.2171184326919175,
         "current_log_loss": 0.6226761739369582,
+        "current_settings": {
+          "playoff_boost": false,
+          "quarterback": true,
+          "rest": false,
+          "rolling_home_field": true,
+          "travel": true,
+          "win_totals": false
+        },
         "games": 4943,
         "kept": true,
         "label": "win-total pull",

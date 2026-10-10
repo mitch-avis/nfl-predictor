@@ -69,13 +69,13 @@ def test_compute_qb_faced_pass_defense_weights_defenses_by_dropbacks() -> None:
     # Arrange
     qb_games = _qb_games(dropbacks={"CCC": 70})
     fit = fit_qb_ratings(qb_games, ridge_lambda=_TINY_LAMBDA)
+    # qb_AAA faces BBB, CCC, and DDD twice each; CCC games carry 70 dropbacks, the others 35.
+    expected = (35 * _DEFENSE["BBB"] + 70 * _DEFENSE["CCC"] + 35 * _DEFENSE["DDD"]) / 140
 
     # Act
     faced = compute_qb_faced_pass_defense(qb_games, fit)
 
     # Assert
-    # qb_AAA faces BBB, CCC, and DDD twice each; CCC games carry 70 dropbacks, the others 35.
-    expected = (35 * _DEFENSE["BBB"] + 70 * _DEFENSE["CCC"] + 35 * _DEFENSE["DDD"]) / 140
     assert _value(faced, "qb_AAA", "qb_faced_pass_defense") == pytest.approx(expected, abs=1e-6)
 
 
@@ -216,14 +216,14 @@ def test_qb_rating_rows_keep_only_rows_with_a_dropback() -> None:
 def test_qb_rating_rows_divide_the_dropback_epa_by_the_dropbacks() -> None:
     # Arrange
     qb_games = _qb_games(dropbacks={"CCC": 70})
+    expected = (
+        qb_games.get_column("qb_dropback_epa") / qb_games.get_column("qb_dropbacks")
+    ).to_list()
 
     # Act
     rows = qb_rating_rows(qb_games)
 
     # Assert
-    expected = (
-        qb_games.get_column("qb_dropback_epa") / qb_games.get_column("qb_dropbacks")
-    ).to_list()
     assert rows.get_column(QB_EPA_PER_DROPBACK_COLUMN).to_list() == expected
 
 

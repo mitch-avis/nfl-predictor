@@ -85,14 +85,15 @@ def test_summarize_rank_ranges_takes_rank_quantiles_from_drawn_ranks() -> None:
 
 
 def test_summarize_rank_ranges_has_every_quantile_column() -> None:
+    # Arrange
+    suffixes = [f"_q{round(level * 1000):03d}" for level in RANGE_QUANTILES]
+    expected = {f"{base}{suffix}" for base in ("rating", "rank") for suffix in suffixes}
+
     # Act
     summary = _summary(_FOUR_DRAWS)
 
     # Assert
-    suffixes = [f"_q{round(level * 1000):03d}" for level in RANGE_QUANTILES]
-    assert {f"{base}{suffix}" for base in ("rating", "rank") for suffix in suffixes} <= set(
-        summary.columns
-    )
+    assert expected <= set(summary.columns)
 
 
 def test_summarize_rank_ranges_ranks_only_eligible_units_and_counts_missing_draws() -> None:
@@ -116,11 +117,6 @@ def test_summarize_rank_ranges_publishes_columns_in_order(columns: RangeColumns)
     # Arrange
     draws = _draws(_FOUR_DRAWS).rename({"unit": columns.id, "rating": columns.rating})
     published = _PUBLISHED.rename({"unit": columns.id, "rating": columns.rating})
-
-    # Act
-    summary = summarize_rank_ranges(draws, published, columns)
-
-    # Assert
     quantiles = [
         name
         for level in RANGE_QUANTILES
@@ -129,7 +125,7 @@ def test_summarize_rank_ranges_publishes_columns_in_order(columns: RangeColumns)
             f"{columns.rank}{quantile_suffix(level)}",
         )
     ]
-    assert summary.columns == [
+    expected = [
         columns.id,
         columns.rank,
         *quantiles,
@@ -138,6 +134,12 @@ def test_summarize_rank_ranges_publishes_columns_in_order(columns: RangeColumns)
         f"{columns.rank}_top10_probability",
         f"{columns.rank}_probabilities",
     ]
+
+    # Act
+    summary = summarize_rank_ranges(draws, published, columns)
+
+    # Assert
+    assert summary.columns == expected
 
 
 # A synthetic league for the calibration check: true effects average to zero.
@@ -261,15 +263,15 @@ def test_summarize_rank_pairs_counts_a_tie_as_half() -> None:
 def test_summarize_rank_pairs_takes_gap_quantiles_from_the_drawn_differences() -> None:
     # Arrange
     differences = np.array([1.0, 1.0, -2.0, 2.0])
+    gap_columns = [f"gap{quantile_suffix(level)}" for level in PAIR_QUANTILES]
+    expected = np.quantile(differences, PAIR_QUANTILES).tolist()
 
     # Act
     pairs = _pairs(_FOUR_DRAWS)
 
     # Assert
     row = _pair(pairs, "A", "B")
-    assert [row[f"gap{quantile_suffix(level)}"] for level in PAIR_QUANTILES] == pytest.approx(
-        np.quantile(differences, PAIR_QUANTILES).tolist()
-    )
+    assert [row[column] for column in gap_columns] == pytest.approx(expected)
 
 
 def test_summarize_rank_pairs_uses_only_draws_with_both_units() -> None:
@@ -329,18 +331,19 @@ def test_summarize_rank_pairs_publishes_columns_in_order(columns: PairColumns) -
     # Arrange
     draws = _draws(_FOUR_DRAWS).rename({"unit": columns.id, "rating": columns.rating})
     published = _PUBLISHED.rename({"unit": columns.id, "rating": columns.rating})
-
-    # Act
-    pairs = summarize_rank_pairs(draws, published, columns)
-
-    # Assert
-    assert pairs.columns == [
+    expected = [
         columns.id,
         columns.other,
         columns.above,
         *(f"{columns.gap}{quantile_suffix(level)}" for level in PAIR_QUANTILES),
         columns.share,
     ]
+
+    # Act
+    pairs = summarize_rank_pairs(draws, published, columns)
+
+    # Assert
+    assert pairs.columns == expected
 
 
 def test_summarize_unit_rank_ranges_ranks_each_unit_rating_on_its_own() -> None:

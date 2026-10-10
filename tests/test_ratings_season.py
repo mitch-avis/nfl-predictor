@@ -164,11 +164,13 @@ def test_build_team_season_fits_with_the_prior_and_the_previous_penalties() -> N
 
 
 def test_build_team_season_first_season_cross_validates_its_own_penalties() -> None:
+    # Arrange
+    expected = fit_team_ratings(_team_games()).ratings
+
     # Act
     ratings = _team_season(1999).ratings
 
     # Assert
-    expected = fit_team_ratings(_team_games()).ratings
     assert_frame_equal(_sorted(ratings.select(expected.columns)), _sorted(expected))
 
 
@@ -246,11 +248,13 @@ def test_build_team_season_rank_ranges_follow_the_published_order() -> None:
 
 
 def test_build_team_season_pairs_cover_every_ordered_pair_in_order() -> None:
+    # Arrange
+    expected = [(team, other) for team in _TEAMS for other in _TEAMS if team != other]
+
     # Act
     pairs = _team_season().rating_pairs
 
     # Assert
-    expected = [(team, other) for team in _TEAMS for other in _TEAMS if team != other]
     assert pairs.select("team", "other_team").rows() == expected
 
 
@@ -299,11 +303,13 @@ def test_build_qb_season_keeps_every_passer_in_the_season_table() -> None:
 
 
 def test_build_qb_season_ranks_and_pairs_only_qualified_passers() -> None:
+    # Arrange
+    passers = {f"qb-{team}" for team in _TEAMS}
+
     # Act
     qb = build_qb_season(_qb_games(backup=True), _team_games(), bootstrap=_BOOTSTRAP)
 
     # Assert
-    passers = {f"qb-{team}" for team in _TEAMS}
     assert set(qb.qb_rating_ranges.get_column("qb_id").to_list()) == passers
     assert set(qb.qb_rating_pairs.get_column("qb_id").to_list()) == passers
     assert qb.qb_rating_pairs.height == len(passers) * (len(passers) - 1)
@@ -349,6 +355,7 @@ def test_weekly_qb_rank_ranges_start_when_a_qualified_passer_has_played() -> Non
     qb_games = _qb_games()
     qb_season = build_qb_season(qb_games, _team_games(), bootstrap=_BOOTSTRAP).qb_season
     only_ne = qb_season.with_columns((pl.col("team") == "NE").alias("qb_is_eligible"))
+    first_ne_week = min(week for week, _, home, away in _games() if "NE" in (home, away))
 
     # Act
     weekly = build_qb_rank_ranges_by_week(
@@ -356,7 +363,6 @@ def test_weekly_qb_rank_ranges_start_when_a_qualified_passer_has_played() -> Non
     )
 
     # Assert
-    first_ne_week = min(week for week, _, home, away in _games() if "NE" in (home, away))
     assert weekly.get_column("week").min() == first_ne_week
 
 

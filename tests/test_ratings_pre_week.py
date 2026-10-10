@@ -1,5 +1,7 @@
 """Tests for the leakage-safe pre-week ratings that feed model features."""
 
+from typing import TYPE_CHECKING, cast
+
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
@@ -25,6 +27,9 @@ from nfl_predictor.ratings.team_rating import (
     compute_team_schedule_strength,
     fit_team_ratings_with_previous_penalties,
 )
+
+if TYPE_CHECKING:
+    from nfl_predictor.ratings.team_prior import SeasonPrior
 
 _TEAMS: tuple[str, ...] = ("AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG", "HHH")
 _FIRST = 2000
@@ -239,17 +244,17 @@ def test_pre_week_week_one_rates_every_team_at_its_preseason_prior() -> None:
     # Arrange
     priors = PriorHistory(_team_games, first_season=_FIRST)
     scale = priors.penalties(_PRIOR_SEASON).scrimmage_plays_per_game
+    season_prior = cast("SeasonPrior", priors.season_prior(_PRIOR_SEASON))
+    means = prior_means(season_prior, dict.fromkeys(_TEAMS, 0), PRIOR_HORIZON_GAMES, _TEAMS)
+    expected_offense, expected_defense = means.offense["CCC"] * scale, means.defense["CCC"] * scale
 
     # Act
     teams = _history().pre_week(_PRIOR_SEASON, 1, _TEAMS).teams
 
     # Assert
-    season_prior = priors.season_prior(_PRIOR_SEASON)
-    assert season_prior is not None
-    means = prior_means(season_prior, dict.fromkeys(_TEAMS, 0), PRIOR_HORIZON_GAMES, _TEAMS)
     row = teams.filter(pl.col("team") == "CCC").row(0, named=True)
-    assert row["offense_rating"] == pytest.approx(means.offense["CCC"] * scale)
-    assert row["defense_rating"] == pytest.approx(means.defense["CCC"] * scale)
+    assert row["offense_rating"] == pytest.approx(expected_offense)
+    assert row["defense_rating"] == pytest.approx(expected_defense)
     assert (row["special_teams_rating"], row["games_played"], row["sos"]) == (0.0, 0, None)
     assert row["team_rating"] == pytest.approx(row["offense_rating"] + row["defense_rating"])
 

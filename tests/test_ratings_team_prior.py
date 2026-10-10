@@ -515,13 +515,14 @@ def test_snapshot_fit_returns_the_means_it_fit_with() -> None:
     season_prior = _season_prior({**flat, "AAA": 0.08}, flat, slope=0.5)
     penalties = fit_team_ratings(logs, scrimmage_lambda=200.0, special_teams_lambda=40.0)
     expected = prior_means(season_prior, games_played(logs, _TEAMS), 6.0, _TEAMS)
+    expected_ratings = snapshot_ratings(logs, _TEAMS, penalties, season_prior, 6.0)
 
     # Act
     ratings, means = snapshot_fit(logs, _TEAMS, penalties, season_prior, 6.0)
 
     # Assert
     assert means == expected
-    assert ratings.equals(snapshot_ratings(logs, _TEAMS, penalties, season_prior, 6.0))
+    assert ratings.equals(expected_ratings)
 
 
 def test_snapshot_fit_without_a_prior_has_no_means() -> None:

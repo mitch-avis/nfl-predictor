@@ -118,6 +118,7 @@ def test_fit_team_ratings_better_defense_has_positive_defense_rating() -> None:
 def test_fit_team_ratings_special_teams_rating_adds_both_special_teams_units() -> None:
     # Arrange
     game_logs = _game_logs()
+    expected = (0.20 + 0.05) * 12
 
     # Act
     ratings = fit_team_ratings(
@@ -125,7 +126,6 @@ def test_fit_team_ratings_special_teams_rating_adds_both_special_teams_units() -
     ).ratings
 
     # Assert
-    expected = (0.20 + 0.05) * 12
     assert _rating(ratings, "AAA", "special_teams_rating") == pytest.approx(expected, abs=1e-4)
 
 
@@ -149,13 +149,13 @@ def test_compute_team_schedule_strength_ignores_the_subject_teams_own_games() ->
     )
     baseline_fit = fit_team_ratings(game_logs, scrimmage_lambda=10.0, special_teams_lambda=10.0)
     blowout_fit = fit_team_ratings(blowouts, scrimmage_lambda=10.0, special_teams_lambda=10.0)
+    baseline = _rating(compute_team_schedule_strength(game_logs, baseline_fit), "AAA", "sos")
 
     # Act
-    baseline_sos = compute_team_schedule_strength(game_logs, baseline_fit)
     blowout_sos = compute_team_schedule_strength(blowouts, blowout_fit)
 
     # Assert
-    assert _rating(blowout_sos, "AAA", "sos") == pytest.approx(_rating(baseline_sos, "AAA", "sos"))
+    assert _rating(blowout_sos, "AAA", "sos") == pytest.approx(baseline)
 
 
 def test_compute_team_schedule_strength_other_teams_see_the_changed_games() -> None:
@@ -169,13 +169,13 @@ def test_compute_team_schedule_strength_other_teams_see_the_changed_games() -> N
     )
     baseline_fit = fit_team_ratings(game_logs, scrimmage_lambda=10.0, special_teams_lambda=10.0)
     blowout_fit = fit_team_ratings(blowouts, scrimmage_lambda=10.0, special_teams_lambda=10.0)
+    baseline = _rating(compute_team_schedule_strength(game_logs, baseline_fit), "BBB", "sos")
 
     # Act
-    baseline_sos = compute_team_schedule_strength(game_logs, baseline_fit)
     blowout_sos = compute_team_schedule_strength(blowouts, blowout_fit)
 
     # Assert
-    assert _rating(blowout_sos, "BBB", "sos") != pytest.approx(_rating(baseline_sos, "BBB", "sos"))
+    assert _rating(blowout_sos, "BBB", "sos") != pytest.approx(baseline)
 
 
 def test_fit_team_ratings_ignores_game_outcomes() -> None:
@@ -338,12 +338,13 @@ def test_fit_team_ratings_with_previous_penalties_reuses_the_previous_seasons_pe
 def test_fit_team_ratings_with_previous_penalties_without_one_cross_validates() -> None:
     # Arrange
     game_logs = _game_logs()
+    expected = fit_team_ratings(game_logs).ratings
 
     # Act
     fit = fit_team_ratings_with_previous_penalties(game_logs, None)
 
     # Assert
-    assert fit.ratings.equals(fit_team_ratings(game_logs).ratings)
+    assert fit.ratings.equals(expected)
 
 
 def _duplicated(game_logs: pl.DataFrame, game_ids: list[str], counts: np.ndarray) -> pl.DataFrame:

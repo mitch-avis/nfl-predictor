@@ -158,12 +158,13 @@ def test_fit_unit_ridge_cross_validation_folds_group_whole_games() -> None:
     # Arrange
     rows = _noisy_rows(seed=8)
     shuffled = rows.sample(fraction=1.0, shuffle=True, seed=3)
+    expected = fit_unit_ridge(rows, _COLUMNS).ridge_lambda
 
     # Act
     chosen = fit_unit_ridge(shuffled, _COLUMNS).ridge_lambda
 
     # Assert
-    assert chosen == fit_unit_ridge(rows, _COLUMNS).ridge_lambda
+    assert chosen == expected
 
 
 def test_fit_unit_ridge_empty_rows_raises_value_error() -> None:
@@ -237,12 +238,12 @@ def test_predict_unit_adds_intercept_offense_defense_and_home_field() -> None:
     # Arrange
     fit = fit_unit_ridge(_schedule_rows(rounds=2), _COLUMNS, ridge_lambda=1e-6)
     rows = pl.DataFrame({"team": ["AAA"], "opponent_team": ["BBB"], "is_home": [True]})
+    expected = _INTERCEPT + _OFFENSE["AAA"] - _DEFENSE["BBB"] + _HOME
 
     # Act
     predicted = predict_unit(fit, rows, _COLUMNS)
 
     # Assert
-    expected = _INTERCEPT + _OFFENSE["AAA"] - _DEFENSE["BBB"] + _HOME
     assert predicted.tolist() == pytest.approx([expected], abs=1e-6)
 
 
@@ -250,12 +251,12 @@ def test_predict_unit_treats_a_neutral_site_as_no_home_field() -> None:
     # Arrange
     fit = fit_unit_ridge(_schedule_rows(rounds=2), _COLUMNS, ridge_lambda=1e-6)
     rows = pl.DataFrame({"team": ["AAA"], "opponent_team": ["BBB"], "is_home": [None]})
+    expected = _INTERCEPT + _OFFENSE["AAA"] - _DEFENSE["BBB"]
 
     # Act
     predicted = predict_unit(fit, rows, _COLUMNS)
 
     # Assert
-    expected = _INTERCEPT + _OFFENSE["AAA"] - _DEFENSE["BBB"]
     assert predicted.tolist() == pytest.approx([expected], abs=1e-6)
 
 

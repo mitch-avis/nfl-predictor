@@ -159,6 +159,7 @@ def test_default_weekly_settings_and_hashes(
         "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
         "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
         "xgb_params_overrides": {"n_estimators": 200, "max_depth": 5, "learning_rate": 0.0165},
+        "disabled_feature_groups": (),
     }
     # Both markers cover the floor sigma's inputs (the reference errors and the final fit's
     # pool and week), so a run directory from before them retrains instead of resuming. The

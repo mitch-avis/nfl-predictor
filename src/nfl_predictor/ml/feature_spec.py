@@ -152,7 +152,11 @@ def _drop_high_cardinality_columns(
 
 
 def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str]) -> list[str]:
-    """Resolve which columns belong to the given feature groups for ablation.
+    """Resolve which columns belong to the given feature groups: what disabling them removes.
+
+    Every fit that leaves feature groups out drops exactly these columns: each walk-forward
+    fold (``WalkForwardConfig.disabled_feature_groups``) and the final fit
+    (``TrainingOptions.disabled_feature_groups``).
 
     A column belongs to a group when any marker string configured for that group in
     ``constants.FEATURE_GROUP_COLUMN_MARKERS`` is a *substring* of the column name (not a

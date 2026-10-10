@@ -176,7 +176,9 @@ class TrainedModelDetails:
     ``cuda``), or ``mixed`` when a head fell back to another device. ``floor_sigma`` is the
     model's recorded floor sigma (``FloorSigma.to_dict``): the value its probabilities use, the
     week it was estimated for, its pool's size and seasons, whether it fell back to the
-    constant, and the reference runs it came from.
+    constant, and the reference runs it came from. ``disabled_feature_groups`` are the feature
+    groups the model was trained without, and ``dropped_feature_group_columns`` the columns
+    they removed (the names a backtest records under the same keys in its config).
     """
 
     feature_list: list[str] | None = None
@@ -187,6 +189,8 @@ class TrainedModelDetails:
     optuna_summary: dict[str, Any] | None = None
     xgb_device: str | None = None
     floor_sigma: dict[str, Any] | None = None
+    disabled_feature_groups: list[str] | None = None
+    dropped_feature_group_columns: list[str] | None = None
 
 
 def build_metadata(
@@ -217,6 +221,8 @@ def build_metadata(
         "optuna_summary": details.optuna_summary,
         "xgb_device": details.xgb_device,
         "floor_sigma": details.floor_sigma,
+        "disabled_feature_groups": details.disabled_feature_groups,
+        "dropped_feature_group_columns": details.dropped_feature_group_columns,
     }
 
 

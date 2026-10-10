@@ -7,12 +7,13 @@ This module hosts the training entrypoints that were historically defined in
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import xgboost as xgb
 
 from nfl_predictor import constants
 from nfl_predictor.ml import artifacts, feature_importance, floor_sigma
+from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_END_COLUMN,
     DEFAULT_FEATURE_START_COLUMN,
@@ -125,6 +126,10 @@ class TrainingOptions:
     estimated from the pool strictly before that week, and predicts with it. Holdout games are
     scored with their own week's sigma from the same pool. Without a pool the model records
     none and predicts with the constant ``SCORE_DIFF_STD_DEV``.
+
+    ``disabled_feature_groups`` names feature groups (``constants.FEATURE_GROUP_COLUMN_MARKERS``)
+    whose columns the fit leaves out: they are dropped as the games load, the same columns a
+    walk-forward with the same groups drops, and an unknown name raises ``ValueError``.
     """
 
     data_path: Path
@@ -144,6 +149,15 @@ class TrainingOptions:
     xgb_params_overrides: dict[str, Any] | None = None
     floor_sigma_pool: floor_sigma.ErrorPool | None = None
     floor_sigma_week: tuple[int, int] | None = None
+    disabled_feature_groups: tuple[str, ...] = ()
+
+
+class _TrainingGames(NamedTuple):
+    """The completed games a fit reads, their target columns, and the group columns dropped."""
+
+    frame: pd.DataFrame
+    target_columns: tuple[str, str]
+    dropped_group_columns: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -159,14 +173,27 @@ class _TrainedHeads:
     quantiles: tuple[float, ...]
 
 
-def _load_training_games(options: TrainingOptions) -> tuple[pd.DataFrame, tuple[str, str]]:
-    """Load the completed games inside the season bounds, regular season unless asked."""
+def _load_training_games(options: TrainingOptions) -> _TrainingGames:
+    """Load the completed games inside the season bounds, regular season unless asked.
+
+    The disabled feature groups' columns are dropped first, before anything reads the columns,
+    as a walk-forward drops them before it builds its folds.
+    """
     df = _load_games(options.data_path)
+    dropped: list[str] = []
+    if options.disabled_feature_groups:
+        dropped = resolve_feature_group_columns(list(df.columns), options.disabled_feature_groups)
+        df = df.drop(columns=dropped)
+        log.info(
+            "Feature groups left out of training: %s (%d columns dropped).",
+            list(options.disabled_feature_groups),
+            len(dropped),
+        )
     target_columns = _get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
     df = _filter_season_bounds(df, options.min_season, options.max_season)
     df = _filter_to_regular_season_for_training(df, include_postseason=options.include_postseason)
-    return df, target_columns
+    return _TrainingGames(df, target_columns, tuple(dropped))
 
 
 def _resolve_training_params(
@@ -317,7 +344,7 @@ def _estimate_floor_sigma(
 
 def train_margin_total_model(options: TrainingOptions) -> MarginTotalModel:
     """Train margin/total models; win probabilities are the deterministic floor."""
-    df, target_columns = _load_training_games(options)
+    df, target_columns, _ = _load_training_games(options)
     train_df, holdout_df, splits = _split_train_holdout(df, options.holdout_seasons)
     holdout = splits["holdout_seasons"]
     log.info("Training seasons: %s", splits["train_seasons"])
@@ -389,7 +416,7 @@ def _holdout_home_win_prob(
 
 def train_margin_total_model_with_report(options: TrainingOptions) -> TrainingResult:
     """Train a margin/total model and return a structured metrics report payload."""
-    df, _target_columns = _load_training_games(options)
+    df, _target_columns, dropped_group_columns = _load_training_games(options)
     missing_data_summary = _summarize_missing_data(df)
     train_df, holdout_df, splits = _split_train_holdout(df, options.holdout_seasons)
 
@@ -439,6 +466,8 @@ def train_margin_total_model_with_report(options: TrainingOptions) -> TrainingRe
         feature_list=feature_list,
         early_stopping=_early_stopping_info(model),
         feature_importance=feature_importance_report,
+        disabled_feature_groups=tuple(options.disabled_feature_groups),
+        dropped_feature_group_columns=dropped_group_columns,
     )
 
 
@@ -480,6 +509,8 @@ def write_training_artifacts(
         optuna_summary=getattr(result.model, "optuna_summary", None),
         xgb_device=fitted_xgb_device(result.model),
         floor_sigma=floor_sigma.model_record(result.model),
+        disabled_feature_groups=list(result.disabled_feature_groups),
+        dropped_feature_group_columns=list(result.dropped_feature_group_columns),
     )
     metadata = artifacts.build_metadata(
         created_at=record.created_at,

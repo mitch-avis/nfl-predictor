@@ -422,3 +422,72 @@ def test_compute_elo_ratings_of_an_empty_schedule_is_an_empty_typed_frame() -> N
     # Assert
     assert rated.height == 0
     assert "home_win_prob" in rated.columns
+
+
+def _qb_adjustments(*rows: tuple[str, float, float]) -> pl.DataFrame:
+    """Return quarterback adjustments from (game id, home points, away points) tuples."""
+    return pl.DataFrame(
+        rows,
+        schema={"game_id": pl.String, "home_qb_adj": pl.Float64, "away_qb_adj": pl.Float64},
+        orient="row",
+    )
+
+
+def test_quarterback_switch_adds_each_sides_adjustment_to_its_rating() -> None:
+    """With the quarterback adjustment on, each side's adjustment joins its pre-game rating."""
+    # Arrange
+    games = _schedule(_game("g1", (2020, 1), ("AAA", "BBB")))
+    adjustments = _qb_adjustments(("g1", 30.0, -20.0))
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(
+        games, settings=elo_ratings.EloSettings(quarterback=True), qb_adjustments=adjustments
+    )
+
+    # Assert
+    row = rated.row(0, named=True)
+    assert row["elo_diff"] == 65.0 + 30.0 + 20.0
+    assert (row["home_qb_adj"], row["away_qb_adj"]) == (30.0, -20.0)
+    assert (row["home_rating"], row["away_rating"]) == (1505.0, 1505.0)
+
+
+def test_quarterback_adjusted_result_moves_only_the_base_ratings() -> None:
+    """The shift uses the adjusted difference but lands on the team ratings, not the adjustment."""
+    # Arrange
+    games = _schedule(
+        _game("g1", (2020, 1), ("AAA", "BBB"), (24, 21)),
+        _game("g2", (2020, 2), ("AAA", "BBB")),
+    )
+    adjustments = _qb_adjustments(("g1", 100.0, 0.0))
+    diff = 165.0
+    shift = 20.0 * math.log(4.0) * (2.2 / (diff * 0.001 + 2.2)) * (1.0 - _logistic(diff))
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(
+        games, settings=elo_ratings.EloSettings(quarterback=True), qb_adjustments=adjustments
+    )
+
+    # Assert
+    second = rated.filter(pl.col("game_id") == "g2").row(0, named=True)
+    assert second["home_rating"] == pytest.approx(1505.0 + shift, abs=1e-12)
+    assert second["home_qb_adj"] == 0.0
+
+
+def test_quarterback_switch_needs_the_adjustments() -> None:
+    """Switching the adjustment on without the adjustments fails rather than rating without it."""
+    # Arrange
+    games = _schedule(_game("g1", (2020, 1), ("AAA", "BBB")))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="qb_adjustments"):
+        elo_ratings.compute_elo_ratings(games, settings=elo_ratings.EloSettings(quarterback=True))
+
+
+def test_quarterback_adjustments_without_the_switch_are_refused() -> None:
+    """Adjustments passed with the switch off fail rather than being silently ignored."""
+    # Arrange
+    games = _schedule(_game("g1", (2020, 1), ("AAA", "BBB")))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="quarterback"):
+        elo_ratings.compute_elo_ratings(games, qb_adjustments=_qb_adjustments(("g1", 1.0, 1.0)))

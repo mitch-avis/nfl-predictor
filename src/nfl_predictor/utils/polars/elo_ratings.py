@@ -4,10 +4,13 @@ FiveThirtyEight (538) published its NFL Elo method in "How Our NFL Predictions W
 code behind its classic ratings in ``fivethirtyeight/nfl-elo-game`` (``forecast.py``, MIT
 License). This module reproduces that public framework exactly, and adds 538's later additions
 as separate switches of :class:`EloSettings`: the rest, travel and rolling home-field
-adjustments of ``elo_game_context``, and the playoff boost (538's 2019 version multiplies a
+adjustments of ``elo_game_context``, the playoff boost (538's 2019 version multiplies a
 playoff game's whole difference by 1.2 before the probability, because favorites outplay
-underdogs by more in the playoffs). With the boost on, the boosted difference is also the one
-the margin-of-victory multiplier damps.
+underdogs by more in the playoffs), and the quarterback adjustment (538's 2019 VALUE model,
+``elo_quarterbacks``, or any other source of per-game adjustments). With the boost on, the
+boosted difference is also the one the margin-of-victory multiplier damps. A quarterback
+adjustment joins its side's rating for the game only: the difference, and so the probability
+and the update, include it, but the update lands on the team's own rating.
 
 The framework
 -------------
@@ -81,6 +84,8 @@ _RESULT_SCHEMA: dict[str, pl.DataType] = {
     "away_abbr": pl.String(),
     "home_rating": pl.Float64(),
     "away_rating": pl.Float64(),
+    "home_qb_adj": pl.Float64(),
+    "away_qb_adj": pl.Float64(),
     "home_edge": pl.Float64(),
     "elo_diff": pl.Float64(),
     "home_win_prob": pl.Float64(),
@@ -103,6 +108,8 @@ class EloSettings:
         playoff_boost: Multiply a playoff game's whole difference by 1.2.
         rolling_home_field: Use the rolling ten-season home field as the base
             (``elo_game_context``).
+        quarterback: Add each side's quarterback adjustment (``elo_quarterbacks``) to its
+            rating for the game.
 
     """
 
@@ -110,6 +117,7 @@ class EloSettings:
     travel: bool = False
     playoff_boost: bool = False
     rolling_home_field: bool = False
+    quarterback: bool = False
 
 
 FRAMEWORK = EloSettings()
@@ -184,6 +192,31 @@ def _home_edges(games: pl.DataFrame, settings: EloSettings) -> list[float]:
     return edges.get_column("home_edge").to_list()
 
 
+def _quarterback_adjustments(
+    games: pl.DataFrame, settings: EloSettings, qb_adjustments: pl.DataFrame | None
+) -> tuple[list[float], list[float]]:
+    """Return each side's quarterback adjustment, 0 for a game the frame lacks or when off."""
+    if qb_adjustments is None:
+        if settings.quarterback:
+            msg = "the quarterback switch is on but no qb_adjustments were given"
+            raise ValueError(msg)
+        zeros = [0.0] * games.height
+        return zeros, list(zeros)
+    if not settings.quarterback:
+        msg = "qb_adjustments were given but the quarterback switch is off"
+        raise ValueError(msg)
+    joined = games.select("game_id").join(
+        qb_adjustments.select("game_id", "home_qb_adj", "away_qb_adj"),
+        on="game_id",
+        how="left",
+        maintain_order="left",
+    )
+    return (
+        joined.get_column("home_qb_adj").cast(pl.Float64).fill_null(0.0).to_list(),
+        joined.get_column("away_qb_adj").cast(pl.Float64).fill_null(0.0).to_list(),
+    )
+
+
 def _playoff_multipliers(games: pl.DataFrame, settings: EloSettings) -> list[float]:
     """Return 1.2 for a playoff game when the boost is on, else 1, in the order of ``games``."""
     if not settings.playoff_boost:
@@ -221,6 +254,7 @@ def compute_elo_ratings(
     *,
     settings: EloSettings = FRAMEWORK,
     initial_ratings: Mapping[str, float] | None = None,
+    qb_adjustments: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Rate every game in order and return the pre-game ratings and probabilities.
 
@@ -234,16 +268,21 @@ def compute_elo_ratings(
         settings: The components switched on; the framework alone by default.
         initial_ratings: A team's rating at its first game in the frame, by team code; a team
             without one starts at 1505 in the frame's first season and at 1300 later.
+        qb_adjustments: ``game_id``, ``home_qb_adj`` and ``away_qb_adj`` in Elo points, read
+            when the quarterback switch is on (and required then); a game missing from it has
+            no adjustment.
 
     Returns:
         One row per game in rating order: the ids and teams, each side's pre-game rating
-        (``home_rating``, ``away_rating``), the home side's edge in Elo points
+        (``home_rating``, ``away_rating``), each side's quarterback adjustment
+        (``home_qb_adj``, ``away_qb_adj``), the home side's edge in Elo points
         (``home_edge``), the pre-game difference (``elo_diff``), the home win probability
         (``home_win_prob``) and each side's rating after the game (``home_rating_post``,
         ``away_rating_post``, null for an unplayed game).
 
     Raises:
-        ValueError: When a required column is missing or a game id repeats.
+        ValueError: When a required column is missing, a game id repeats, or the
+            quarterback adjustments and the quarterback switch disagree.
 
     """
     _require_columns(games, settings)
@@ -257,6 +296,7 @@ def compute_elo_ratings(
     away_scores = ordered.get_column("away_score").cast(pl.Float64).to_list()
     edges = _home_edges(ordered, settings)
     multipliers = _playoff_multipliers(ordered, settings)
+    home_qbs, away_qbs = _quarterback_adjustments(ordered, settings, qb_adjustments)
     book = _RatingBook(min(seasons), initial_ratings or {}, {}, {})
 
     columns: dict[str, list[float | None]] = {
@@ -270,12 +310,21 @@ def compute_elo_ratings(
             "away_rating_post",
         )
     }
-    for season, home, away, home_score, away_score, edge, boost in zip(
-        seasons, homes, aways, home_scores, away_scores, edges, multipliers, strict=True
+    for season, home, away, home_score, away_score, edge, boost, home_qb, away_qb in zip(
+        seasons,
+        homes,
+        aways,
+        home_scores,
+        away_scores,
+        edges,
+        multipliers,
+        home_qbs,
+        away_qbs,
+        strict=True,
     ):
         home_rating = book.pre_game(home, season)
         away_rating = book.pre_game(away, season)
-        diff = (home_rating - away_rating + edge) * boost
+        diff = ((home_rating + home_qb) - (away_rating + away_qb) + edge) * boost
         p = win_probability(diff)
         home_post: float | None = None
         away_post: float | None = None
@@ -302,6 +351,8 @@ def compute_elo_ratings(
             "away_abbr": aways,
             "home_rating": columns["home_rating"],
             "away_rating": columns["away_rating"],
+            "home_qb_adj": home_qbs,
+            "away_qb_adj": away_qbs,
             "home_edge": edges,
             "elo_diff": columns["elo_diff"],
             "home_win_prob": columns["home_win_prob"],

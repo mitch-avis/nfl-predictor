@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.51.0] - 2026-10-10
+
+### Added
+
+- `nfl_predictor.season_stats`: the season statistics of `nfl-sos-ratings` (frozen at `9081bce`),
+  ported: team and quarterback game logs built from play-by-play, nflverse's official weekly team
+  and player stats and the schedules through this repository's loaders, season rows,
+  head-to-head-excluded opponent profiles, win-probability bins, the all-time schedule-strength
+  leaderboard, and the metric registry (labels, descriptions, polarity, column rules) with its
+  generated stats catalogs. Rebuilt over 1999-2026 from the play-by-play it used, it reproduces
+  every season table that repository published bit for bit
+  (`.agents/sos_port/SEASON_STATS_PARITY.md`). Nothing in the ETL, the model or the web API uses it
+  yet.
+- A cached source for nflverse's official weekly team stats, read by the season statistics.
+- Parity tests on fixtures cut from the published files, tests that pin the passer season summary
+  and the rank-range settings to the ratings package's, and
+  `.agents/sos_port/season_stats_parity.py`, which rebuilds every season and compares every cell.
+
 ## [0.50.1] - 2026-10-10
 
 ### Added

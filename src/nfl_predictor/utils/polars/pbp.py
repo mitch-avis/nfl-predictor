@@ -20,10 +20,16 @@ Definitions used throughout:
   ``rush`` flag. A scramble a penalty wiped out (``no_play``) is not one.
 - Dropback: a scrimmage snap with the dropback flag that is neither a kneel, a
   spike nor a two-point try.
-- Carry: a scrimmage snap with ``rush > 0`` and without the dropback flag that is
-  neither a kneel, a spike nor a two-point try, so a play flagged both counts once,
-  as a dropback. Kneels and spikes are therefore offensive snaps but are neither
-  dropbacks nor carries.
+- Carry: a designed run, the rule ``nfl-sos-ratings`` uses: a rush attempt
+  (``rush_attempt > 0``, whatever the ``rush`` flag) that is neither a scramble
+  (``qb_scramble``), a kneel-down nor a two-point try, and has no dropback flag, so
+  a play flagged both counts once, as a dropback. A run a penalty wiped out keeps
+  ``rush`` but loses ``rush_attempt``: it stays an offensive snap, as the source's
+  scrimmage snap keeps it, and is no carry, as a pass a penalty wiped out is no
+  dropback. A rush attempt nflverse files without ``rush`` is a carry but not an
+  offensive snap. Kneels are offensive snaps but neither dropbacks nor carries; a
+  spike is a snap and never a dropback, and a carry only when nflverse also files it
+  as a rush attempt (a spike overturned into a fumbled snap).
 - Offense perspective: the team is ``posteam`` on the play.
 - Allowed perspective: the team is ``defteam`` on the same play, so every
   ``*_allowed_*`` column of a team-game equals the matching offensive column of
@@ -328,11 +334,13 @@ def _play_conditions(columns: list[str]) -> dict[str, pl.Expr]:
           (``_scrimmage_snap_expr``).
         - ``dropback``: scrimmage snap with the dropback flag (``qb_dropback > 0``, or a
           scramble filed as a run play), excluding kneels, spikes, and two-point tries.
-        - ``rush``: scrimmage snap with ``rush > 0`` and without the dropback flag (so a
-          scramble filed as a run play, or a play flagged both, counts once, as a
-          dropback), excluding kneels, spikes, and two-point tries. Two-point tries are
-          untimed conversion attempts rather than scrimmage downs, so counting them would
-          contaminate the per-attempt EPA and success denominators.
+        - ``rush`` (a carry): a designed run, ``nfl-sos-ratings``' rule: a rush attempt
+          (``rush_attempt > 0``, whatever the ``rush`` flag) that is neither a scramble
+          (``qb_scramble``), a kneel-down nor a two-point try; and, so a play flagged
+          both counts once, as a dropback, one without the dropback flag (no 1999-2025
+          designed run has it). Two-point tries are untimed conversion attempts rather
+          than scrimmage downs, so counting them would contaminate the per-attempt EPA
+          and success denominators.
         - ``success``: ``success > 0`` (missing column counts as no success).
         - ``early_down``: ``down <= EARLY_DOWN_MAX`` (missing/null down is not early).
         - ``special``: the special-teams flag column is set (missing column is never special).
@@ -343,11 +351,11 @@ def _play_conditions(columns: list[str]) -> dict[str, pl.Expr]:
     dropback_flag = _dropback_flag_expr(columns)
     dropback = scrimmage & dropback_flag & ~is_kneel_or_spike & ~is_two_point
     rush = (
-        scrimmage
-        & (flag_expr(columns, "rush") > 0)
-        & ~dropback_flag
-        & ~is_kneel_or_spike
+        (flag_expr(columns, "rush_attempt") > 0)
+        & ~(flag_expr(columns, "qb_scramble") > 0)
+        & ~(flag_expr(columns, "qb_kneel") > 0)
         & ~is_two_point
+        & ~dropback_flag
     )
     yards = value_expr(columns, "yards_gained")
     down = _nullable_expr(columns, "down", pl.Int64)
@@ -477,12 +485,13 @@ def _aggregate_offense(plays: pl.DataFrame) -> pl.DataFrame:
 
     Formulas:
         - ``offensive_snaps``: scrimmage snaps taken by the team.
-        - ``dropbacks`` / ``carries``: dropback and rush snaps (kneels and spikes excluded).
-        - ``pass_epa_sum`` / ``rush_epa_sum``: sum of ``epa`` over dropbacks / rushes.
-        - ``pass_success_count`` / ``rush_success_count``: dropbacks / rushes with ``success > 0``.
+        - ``dropbacks`` / ``carries``: dropbacks and carries (``_play_conditions``).
+        - ``pass_epa_sum`` / ``rush_epa_sum``: sum of ``epa`` over dropbacks / carries.
+        - ``pass_success_count`` / ``rush_success_count``: dropbacks / carries with
+          ``success > 0``.
         - ``explosive_pass_count``: dropbacks gaining at least ``EXPLOSIVE_PASS_YARDS`` yards.
-        - ``explosive_rush_count``: rushes gaining at least ``EXPLOSIVE_RUSH_YARDS`` yards.
-        - ``stuffed_rush_count``: rushes gaining at most ``STUFFED_RUSH_YARDS`` yards.
+        - ``explosive_rush_count``: carries gaining at least ``EXPLOSIVE_RUSH_YARDS`` yards.
+        - ``stuffed_rush_count``: carries gaining at most ``STUFFED_RUSH_YARDS`` yards.
         - ``early_down_plays``: scrimmage snaps with ``down <= EARLY_DOWN_MAX``.
         - ``early_down_passes``: dropbacks with ``down <= EARLY_DOWN_MAX``.
         - ``st_epa_for``: sum of ``epa`` on special-teams plays where the team has possession.
@@ -530,13 +539,12 @@ def _aggregate_allowed(plays: pl.DataFrame) -> pl.DataFrame:
     over the plays where the team is defending, so a team's allowed column always
     equals its opponent's matching offensive column for that game:
         - ``defensive_snaps``: scrimmage snaps faced.
-        - ``dropbacks_allowed`` / ``carries_allowed``: dropback and rush snaps
-          faced (kneels and spikes excluded), the denominators for the
-          per-dropback and per-carry rates allowed.
+        - ``dropbacks_allowed`` / ``carries_allowed``: dropbacks and carries faced, the
+          denominators for the per-dropback and per-carry rates allowed.
         - ``pass_epa_allowed_sum`` / ``rush_epa_allowed_sum``: ``epa`` allowed on
-          dropbacks / rushes.
+          dropbacks / carries.
         - ``pass_success_allowed_count`` / ``rush_success_allowed_count``:
-          dropbacks / rushes faced with ``success > 0``.
+          dropbacks / carries faced with ``success > 0``.
         - ``explosive_pass_allowed_count`` / ``explosive_rush_allowed_count`` /
           ``stuffed_rush_allowed_count``: the explosive and stuffed thresholds
           applied to the plays faced.

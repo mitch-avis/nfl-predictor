@@ -22,6 +22,7 @@ _PLAY_DEFAULTS: dict[str, Any] = {
     "play_type": "no_play",
     "qb_dropback": 0,
     "rush": 0,
+    "rush_attempt": 0,
     "qb_kneel": 0,
     "qb_spike": 0,
     "down": None,
@@ -117,6 +118,7 @@ def _fixture_plays() -> pl.DataFrame:
                 defteam="BUF",
                 play_type="run",
                 rush=1,
+                rush_attempt=1,
                 down=2,
                 yards_gained=14.0,
                 epa=0.8,
@@ -142,6 +144,7 @@ def _fixture_plays() -> pl.DataFrame:
                 play_type="qb_kneel",
                 qb_kneel=1,
                 rush=1,
+                rush_attempt=1,
                 down=1,
                 yards_gained=-1.0,
                 epa=-0.3,
@@ -164,6 +167,7 @@ def _fixture_plays() -> pl.DataFrame:
                 defteam="KC",
                 play_type="run",
                 rush=1,
+                rush_attempt=1,
                 down=1,
                 yards_gained=3.0,
                 epa=-0.1,
@@ -185,6 +189,7 @@ def _fixture_plays() -> pl.DataFrame:
                 defteam="KC",
                 play_type="run",
                 rush=1,
+                rush_attempt=1,
                 down=1,
                 yards_gained=0.0,
                 epa=-0.5,
@@ -230,6 +235,7 @@ def _fixture_plays() -> pl.DataFrame:
                 defteam="DAL",
                 play_type="run",
                 rush=1,
+                rush_attempt=1,
                 down=1,
                 yards_gained=13.0,
                 epa=1.1,
@@ -241,6 +247,7 @@ def _fixture_plays() -> pl.DataFrame:
                 defteam="DAL",
                 play_type="run",
                 rush=1,
+                rush_attempt=1,
                 yards_gained=2.0,
                 epa=0.9,
                 success=1,
@@ -265,6 +272,7 @@ def _fixture_plays() -> pl.DataFrame:
                 defteam="SF",
                 play_type="run",
                 rush=1,
+                rush_attempt=1,
                 down=1,
                 yards_gained=-3.0,
                 epa=-1.0,
@@ -787,6 +795,106 @@ def test_a_play_flagged_dropback_and_rush_counts_once_as_a_dropback() -> None:
     assert (row["explosive_rush_count"], row["rush_success_count"]) == (0, 0)
 
 
+def test_a_run_a_penalty_wiped_out_is_a_snap_but_not_a_carry() -> None:
+    """A run without a rush attempt (a penalty wiped it out) is a snap and no carry."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="no_play",
+                rush=1,
+                down=1,
+                yards_gained=-4.0,
+                epa=-0.8,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["offensive_snaps"], row["dropbacks"], row["carries"]) == (1, 0, 0)
+    assert row["rush_epa_sum"] == pytest.approx(0.0)
+    assert row["stuffed_rush_count"] == 0
+    assert _row_for(result, "BUF")["carries_allowed"] == 0
+
+
+def test_a_rush_attempt_without_the_rush_flag_is_a_carry() -> None:
+    """A rush attempt nflverse files without the rush flag counts as a carry."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                rush_attempt=1,
+                down=2,
+                yards_gained=15.0,
+                epa=1.1,
+                success=1,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["carries"], row["rush_success_count"], row["explosive_rush_count"]) == (1, 1, 1)
+    assert row["rush_epa_sum"] == pytest.approx(1.1)
+    assert _row_for(result, "BUF")["rush_epa_allowed_sum"] == pytest.approx(1.1)
+
+
+def test_scrambles_and_kneel_downs_are_never_carries() -> None:
+    """A rush attempt that is a scramble or a kneel-down is not a carry."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(posteam="KC", defteam="BUF", play_type="run", rush_attempt=1, qb_scramble=1),
+            _play(posteam="KC", defteam="BUF", play_type="qb_kneel", rush_attempt=1, qb_kneel=1),
+            _play(posteam="KC", defteam="BUF", play_type=None, rush_attempt=1, qb_scramble=1),
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["offensive_snaps"], row["dropbacks"], row["carries"]) == (2, 1, 0)
+
+
+def test_a_spike_filed_as_a_rush_attempt_is_a_carry_and_no_dropback() -> None:
+    """A spike nflverse also files as a rush attempt (a fumbled snap) counts as a carry."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="qb_spike",
+                qb_spike=1,
+                rush_attempt=1,
+                epa=0.75,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["offensive_snaps"], row["dropbacks"], row["carries"]) == (1, 0, 1)
+    assert row["rush_epa_sum"] == pytest.approx(0.75)
+
+
 def test_a_penalty_wiped_scramble_is_not_a_dropback() -> None:
     """The scramble rule reads run plays only: a scramble a penalty wiped out stays out."""
     # Arrange
@@ -919,6 +1027,7 @@ def test_missing_optional_columns_use_documented_defaults() -> None:
             "defteam": ["BUF", "BUF"],
             "qb_dropback": [1, 0],
             "rush": [0, 1],
+            "rush_attempt": [0, 1],
         }
     )
 
@@ -1553,6 +1662,7 @@ def test_two_point_attempts_are_not_dropbacks_or_carries() -> None:
             "defteam": ["BBB"] * 4,
             "qb_dropback": [1, 1, 0, 0],
             "rush": [0, 0, 1, 1],
+            "rush_attempt": [0, 0, 1, 1],
             "qb_kneel": [0] * 4,
             "qb_spike": [0] * 4,
             "two_point_attempt": [0, 1, 0, 1],

@@ -456,6 +456,141 @@ def test_read_fold_predictions_repeated_game_raises(tmp_path: Path) -> None:
         rating_sources.read_fold_predictions(checkpoints)
 
 
+def _write_ratings_dir(directory: Path) -> Path:
+    """Write 2024's weekly history (weeks 1-2) and 2023's season ratings."""
+    directory.mkdir()
+    by_week = pl.DataFrame(
+        {
+            "week": [1, 1, 1, 1, 2, 2, 2, 2, 2],
+            "team": ["AAA", "BBB", "CCC", "DDD", "AAA", "BBB", "CCC", "DDD", "EEE"],
+            "games_played": [1, 1, 1, 1, 2, 2, 2, 2, 1],
+            "team_rating": [3.0, -3.0, 1.0, -1.0, 2.5, -2.0, 0.5, -1.5, 0.5],
+        }
+    )
+    by_week.write_parquet(directory / "2024_ratings_by_week.parquet")
+    season = pl.DataFrame({"team": ["AAA", "BBB", "CCC"], "team_rating": [6.0, -2.0, -4.0]})
+    season.write_parquet(directory / "2023_ratings.parquet")
+    return directory
+
+
+def _write_game_rows(path: Path) -> Path:
+    """Write ML game rows for 2024 weeks 1 and 3 with the pre-week team ratings."""
+    pl.DataFrame(
+        {
+            "season": [2024, 2024, 2024, 2024],
+            "week": [1, 1, 3, 3],
+            "away_abbr": ["BBB", "DDD", "BBB", "DDD"],
+            "home_abbr": ["AAA", "CCC", "AAA", "CCC"],
+            "away_ratings_team": [-1.2, 0.1, -2.0, -1.5],
+            "home_ratings_team": [2.4, -1.3, 2.5, 0.5],
+        }
+    ).write_csv(path)
+    return path
+
+
+def test_ported_ratings_for_week_fills_a_bye_from_the_weekly_history(tmp_path: Path) -> None:
+    # Arrange
+    ratings_dir = _write_ratings_dir(tmp_path / "ratings")
+    game_rows = _write_game_rows(tmp_path / "games.csv")
+
+    # Act
+    ratings = rating_sources.ported_ratings_for_week(ratings_dir, game_rows, season=2024, week=3)
+
+    # Assert
+    assert ratings == {"AAA": 2.5, "BBB": -2.0, "CCC": 0.5, "DDD": -1.5, "EEE": 0.5}
+
+
+def test_ported_ratings_for_week_one_reads_the_preseason_prior(tmp_path: Path) -> None:
+    # Arrange
+    ratings_dir = _write_ratings_dir(tmp_path / "ratings")
+    game_rows = _write_game_rows(tmp_path / "games.csv")
+
+    # Act
+    ratings = rating_sources.ported_ratings_for_week(ratings_dir, game_rows, season=2024, week=1)
+
+    # Assert
+    assert ratings == {"AAA": 2.4, "BBB": -1.2, "CCC": -1.3, "DDD": 0.1}
+
+
+def test_ported_ratings_for_a_week_past_the_history_takes_its_last_week(tmp_path: Path) -> None:
+    # Arrange
+    ratings_dir = _write_ratings_dir(tmp_path / "ratings")
+    game_rows = _write_game_rows(tmp_path / "games.csv")
+
+    # Act
+    ratings = rating_sources.ported_ratings_for_week(ratings_dir, game_rows, season=2024, week=20)
+
+    # Assert
+    assert ratings == {"AAA": 2.5, "BBB": -2.0, "CCC": 0.5, "DDD": -1.5, "EEE": 0.5}
+
+
+def test_ported_ratings_for_week_without_any_source_raises(tmp_path: Path) -> None:
+    # Arrange
+    ratings_dir = _write_ratings_dir(tmp_path / "ratings")
+    game_rows = _write_game_rows(tmp_path / "games.csv")
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="2025"):
+        rating_sources.ported_ratings_for_week(ratings_dir, game_rows, season=2025, week=3)
+
+
+def test_season_ported_ratings_reads_the_published_season_table(tmp_path: Path) -> None:
+    # Arrange
+    ratings_dir = _write_ratings_dir(tmp_path / "ratings")
+
+    # Act
+    ratings = rating_sources.season_ported_ratings(ratings_dir, 2023)
+
+    # Assert
+    assert ratings == {"AAA": 6.0, "BBB": -2.0, "CCC": -4.0}
+
+
+def test_read_predictions_joins_sources_and_refuses_a_repeated_game(tmp_path: Path) -> None:
+    # Arrange
+    first = _write_folds(tmp_path / "first", _fold_frames()[:1])
+    second = _write_folds(tmp_path / "second", _fold_frames())
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="2020_02_CCC_AAA"):
+        rating_sources.read_predictions([first, second])
+
+
+def test_model_ratings_for_week_one_carries_the_last_season_forward() -> None:
+    # Arrange
+    predictions = _season_predictions(2020, WEEK_GAMES)
+    final = rating_sources.fit_model_ratings(predictions, TEAMS)
+    expected = rating_sources.week_one_model_ratings(final.ratings, 0.5, TEAMS)
+
+    # Act
+    ratings = rating_sources.model_ratings_for_week(
+        predictions, season=2021, week=1, teams=TEAMS, carryover=0.5
+    )
+
+    # Assert
+    assert ratings == pytest.approx(expected)
+
+
+def test_model_ratings_for_a_later_week_fits_the_season_so_far() -> None:
+    # Arrange
+    predictions = _season_predictions(2020, WEEK_GAMES)
+    expected = rating_sources.fit_model_ratings(predictions.filter(pl.col("week") < 3), TEAMS)
+
+    # Act
+    ratings = rating_sources.model_ratings_for_week(predictions, season=2020, week=3, teams=TEAMS)
+
+    # Assert
+    assert ratings == pytest.approx(expected.ratings)
+
+
+def test_model_ratings_for_week_one_without_a_carryover_raises() -> None:
+    # Arrange
+    predictions = _season_predictions(2020, WEEK_GAMES)
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="carryover"):
+        rating_sources.model_ratings_for_week(predictions, season=2021, week=1, teams=TEAMS)
+
+
 def test_read_fold_predictions_missing_column_raises(tmp_path: Path) -> None:
     # Arrange
     frames = [frame.drop(columns="predicted_margin") for frame in _fold_frames()]

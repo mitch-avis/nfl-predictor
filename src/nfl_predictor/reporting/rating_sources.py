@@ -483,6 +483,151 @@ def _fold_predictions(path: Path) -> pl.DataFrame:
     )
 
 
+class RatingSourceUnavailableError(ValueError):
+    """The files a rating source reads are missing, or hold nothing for the week asked for."""
+
+
+def ported_ratings_for_week(
+    ratings_dir: Path, game_rows: Path, *, season: int, week: int
+) -> dict[str, float]:
+    """Return every team's ported rating before ``week``, as the ETL published it.
+
+    A team playing that week takes its game row's pre-week ``ratings`` feature (the preseason
+    prior in week 1); any other team takes the published weekly history's row for the last
+    week before (``{season}_ratings_by_week.parquet`` under ``ratings_dir``), which is the same
+    pre-week rating. A postseason week past the history takes its last week, the whole regular
+    season.
+
+    Args:
+        ratings_dir: The ETL's published ratings tables (``data/ratings``).
+        game_rows: A game-row CSV with the ``ratings`` feature group (``data/all_data_ml.csv``).
+        season: The season.
+        week: The week whose games the ratings come before.
+
+    Returns:
+        Each rated team's rating in points.
+
+    Raises:
+        RatingSourceUnavailableError: If neither file rates any team before the week.
+
+    """
+    from_games = pl.DataFrame(schema=RATING_SCHEMA)
+    features = [f"{side}_{PORTED_FEATURE}" for side in ("away", "home")]
+    if game_rows.exists() and set(features) <= set(pl.read_csv(game_rows, n_rows=0).columns):
+        rows = pl.read_csv(
+            game_rows,
+            columns=["season", "week", "away_abbr", "home_abbr", *features],
+            schema_overrides={
+                "season": pl.Int64,
+                "week": pl.Int64,
+                **dict.fromkeys(features, pl.Float64),
+            },
+            infer_schema_length=None,
+        ).filter((pl.col("season") == season) & (pl.col("week") == week))
+        from_games = ported_ratings_from_games(rows)
+    from_by_week = pl.DataFrame(schema=RATING_SCHEMA)
+    by_week_path = ratings_dir / f"{season}_ratings_by_week.parquet"
+    if by_week_path.exists():
+        earlier = pl.read_parquet(by_week_path).filter(pl.col("week") < week)
+        if not earlier.is_empty():
+            last = earlier.filter(pl.col("week") == earlier.get_column("week").max())
+            from_by_week = ported_ratings_from_by_week(last, season=season).with_columns(
+                pl.lit(week, dtype=pl.Int64).alias("week")
+            )
+    ratings = combine_ported_ratings(from_games, from_by_week).ratings
+    if ratings.is_empty():
+        msg = (
+            f"no ported team rating for {season} week {week} in {by_week_path} or {game_rows}; "
+            "rebuild the data with `nfl-predictor data`"
+        )
+        raise RatingSourceUnavailableError(msg)
+    return dict(zip(ratings.get_column("team"), ratings.get_column("rating"), strict=True))
+
+
+def season_ported_ratings(ratings_dir: Path, season: int) -> dict[str, float]:
+    """Return each team's published ported rating for the whole of ``season``.
+
+    Raises:
+        RatingSourceUnavailableError: If the season's ``ratings`` table is missing.
+
+    """
+    path = ratings_dir / f"{season}_ratings.parquet"
+    if not path.exists():
+        msg = f"missing {path}; rebuild the data with `nfl-predictor data`"
+        raise RatingSourceUnavailableError(msg)
+    table = pl.read_parquet(path, columns=["team", PORTED_RATING_COLUMN])
+    return dict(
+        zip(
+            table.get_column("team").cast(pl.String),
+            table.get_column(PORTED_RATING_COLUMN).cast(pl.Float64),
+            strict=True,
+        )
+    )
+
+
+def read_predictions(paths: Sequence[Path]) -> pl.DataFrame:
+    """Return the fold predictions of several walk-forward runs or checkpoint directories.
+
+    Raises:
+        ValueError: If a game is predicted in more than one of them, or as
+            :func:`read_fold_predictions` does.
+
+    """
+    frames = [read_fold_predictions(path).predictions for path in paths]
+    if not frames:
+        return pl.DataFrame(schema=_PREDICTION_SCHEMA)
+    predictions = pl.concat(frames).sort("season", "week", "game_id")
+    repeated = sorted(
+        set(predictions.filter(pl.col("game_id").is_duplicated()).get_column("game_id"))
+    )
+    if repeated:
+        msg = f"games predicted by more than one source: {', '.join(repeated[:5])}"
+        raise ValueError(msg)
+    return predictions
+
+
+def model_ratings_for_week(
+    predictions: pl.DataFrame,
+    *,
+    season: int,
+    week: int,
+    teams: Sequence[str],
+    carryover: float | None = None,
+) -> dict[str, float]:
+    """Return every team's model rating before ``week``.
+
+    From the second week, the fit on the season's predicted games before the week
+    (:func:`model_ratings_before_week`); in week 1, the fit on every predicted game of the
+    previous season carried forward by ``carryover`` (:func:`week_one_model_ratings`).
+
+    Args:
+        predictions: Pre-game predictions (:func:`read_predictions`).
+        season: The season.
+        week: The week whose games the ratings come before.
+        teams: The season's teams.
+        carryover: Week 1's factor (:func:`carryover_factor`).
+
+    Raises:
+        RatingSourceUnavailableError: If the predictions hold no game to fit, or week 1 has no
+            ``carryover``.
+
+    """
+    if week >= FIRST_FITTED_WEEK:
+        try:
+            fit = model_ratings_before_week(predictions, season=season, week=week, teams=teams)
+        except ValueError as error:
+            raise RatingSourceUnavailableError(str(error)) from error
+        return fit.ratings
+    if carryover is None:
+        msg = f"the week-1 model rating of {season} needs the ported prior's carryover factor"
+        raise RatingSourceUnavailableError(msg)
+    try:
+        final = fit_model_ratings(predictions.filter(pl.col("season") == season - 1), teams)
+    except ValueError as error:
+        raise RatingSourceUnavailableError(str(error)) from error
+    return week_one_model_ratings(final.ratings, carryover, teams)
+
+
 def _teams_of(games: pl.DataFrame) -> list[str]:
     """Return the teams on either side of ``games``, sorted."""
     teams = pl.concat([games.get_column("away_abbr"), games.get_column("home_abbr")])
@@ -513,14 +658,19 @@ __all__ = [
     "FoldPredictions",
     "ModelRatingFit",
     "PortedRatings",
+    "RatingSourceUnavailableError",
     "blend_ratings",
     "carryover_factor",
     "combine_ported_ratings",
     "fit_model_ratings",
     "model_ratings_before_week",
     "model_ratings_by_week",
+    "model_ratings_for_week",
+    "ported_ratings_for_week",
     "ported_ratings_from_by_week",
     "ported_ratings_from_games",
     "read_fold_predictions",
+    "read_predictions",
+    "season_ported_ratings",
     "week_one_model_ratings",
 ]

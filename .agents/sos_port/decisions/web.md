@@ -247,19 +247,22 @@ none of the pool modules or `margin_rows`.
   and a wrong first pick is the one mistake a survivor entry cannot take back.
 - **Data:** the review simulated 30 seasons of 32 teams over 14 weeks with persistent ratings
   drawn from `Normal(0, 6)`, home win probability `Phi((r_home - r_away + 1.5) / 13.5)`, four
-  byes a week in weeks 3 to 12 and seeds `default_rng(1000 + s)`: with 10 planned weeks and a
-  beam of 64, 18 of 30 seasons got a best plan below the exact optimum, up to 8.6% below; with a
-  beam of 16, the recommended first pick was wrong in 3 of 30. The kept script
+  byes a week in weeks 3 to 12 and seeds `default_rng(1000 + s)`. With 10 planned weeks and a
+  beam of 64, 18 of 30 seasons had at least one first pick whose plan fell below that pick's own
+  optimum, and the best plan was up to 8.6% below the exact optimum; with a beam of 16, the
+  recommended first pick was wrong in 3 of 30. The kept script
   `.agents/sos_port/survivor_beam_vs_exact.py` simulates the same description with its own
-  generator (so the counts differ) and a frozen copy of the beam: at 64, 9 of 30 below the
-  optimum (largest shortfall 13.8%) with the right first pick in all 30; at 16, 17 of 30 below
-  (largest 20.3%) and the first pick wrong in 4 of 30 (seasons 0, 5, 18, 25); the shipped exact
-  planner matches the optimum in all 30 (largest gap 7e-16) at about 2 ms a season. Run it with
+  generator (so the counts differ) and a frozen copy of the beam, and measures the best plan
+  against the exact optimum: at 64, 9 of 30 seasons below it (largest shortfall 13.8%) with the
+  right first pick in all 30; at 16, 17 of 30 below (largest 20.3%) and the first pick wrong in 4
+  of 30 (seasons 0, 5, 18, 25); the shipped exact planner matches the optimum in all 30 (largest
+  gap 7e-16) at about 2 ms a season. Run it with
   `.venv/bin/python .agents/sos_port/survivor_beam_vs_exact.py`. `tests/api/test_pool_survivor.py`
   checks full simulated seasons against one global assignment, including seasons 0, 6, 8, 13 and
   25 that the beam got wrong.
 - **How to reverse it:** revert `aa73764` and `fa2095a`.
-- **Review:** the review's numbers are its own; the script's numbers are not yet reviewed.
+- **Review:** the first review's numbers are its own; the second review reproduced the script's
+  numbers and verified the exact planner on 3,840 plans.
 
 ## 10. A sheet after the lock comes from the picks entered before it
 

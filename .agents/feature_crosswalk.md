@@ -296,9 +296,11 @@ implementation complexity, and owning layer.
   containing `epa_per_dropback` would fall into the `pbp` ablation group; rates are career-to-date
   plus the last 8 games (no season-to-date rate that resets in week 1); `qb_td_int_margin_rate`
   was left out; new starters get the league rate through shrinkage rather than a separate rookie
-  prior; scrambles are credited to the team-game's primary passer: nflverse leaves the passer id
-  empty on a scramble, and this family does not read the rusher id. The schedule lenses (task
-  53.6) were built, measured and dropped (`0.9.0` / `0.10.0`).
+  prior. The schedule lenses (task 53.6) were built, measured and dropped (`0.9.0` / `0.10.0`).
+  Since the step-6 integration a scramble is credited to the scrambler (nflverse leaves its
+  passer id empty, so the family reads the rusher id), and a completed game keys on its
+  play-by-play starter (`qb_starters`), an upcoming one on the projected `away_qb`/`home_qb`
+  (`.agents/sos_port/decisions/integration_pbp_elo.md`, section 1).
 
 ### 4.7 Special teams EPA margin
 

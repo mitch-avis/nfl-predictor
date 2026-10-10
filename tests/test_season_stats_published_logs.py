@@ -81,6 +81,22 @@ def test_team_games_from_published_keeps_the_published_rows_and_columns() -> Non
     assert games.select(_team_logs().columns).equals(_team_logs())
 
 
+def test_team_games_from_published_without_a_mirrored_rate_adds_only_own_parts() -> None:
+    # Arrange
+    logs = _team_logs().drop("completion_pct_allowed")
+
+    # Act
+    games = published_logs.team_games_from_published(logs)
+
+    # Assert
+    assert [column for column in games.columns if column not in logs.columns] == [
+        numerator_column("passing_yards_per_offensive_snap"),
+        denominator_column("passing_yards_per_offensive_snap"),
+        numerator_column("completion_pct"),
+        denominator_column("completion_pct"),
+    ]
+
+
 def test_a_season_row_from_published_logs_pools_a_recovered_rate() -> None:
     # Arrange
     games = published_logs.team_games_from_published(_team_logs())

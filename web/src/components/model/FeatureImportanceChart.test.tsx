@@ -12,8 +12,13 @@ const rows = [
 
 describe('FeatureImportanceChart', () => {
   it('says the bars show mean absolute SHAP in points for current runs', () => {
+    // Arrange
     const importance: FeatureImportance = { measure: 'mean_abs_shap', rows }
+
+    // Act
     render(<FeatureImportanceChart importance={importance} />)
+
+    // Assert
     expect(screen.getByText(/^Mean \|SHAP\|:/)).toBeInTheDocument()
     expect(screen.getByText(/in points/)).toBeInTheDocument()
     expect(screen.getByText(/adjustment to the market line/)).toBeInTheDocument()
@@ -21,21 +26,34 @@ describe('FeatureImportanceChart', () => {
   })
 
   it('labels runs without SHAP as total gain', () => {
+    // Arrange
     const importance: FeatureImportance = { measure: 'total_gain', rows }
+
+    // Act
     render(<FeatureImportanceChart importance={importance} />)
+
+    // Assert
     expect(screen.getByText(/^Total gain:/)).toBeInTheDocument()
     expect(screen.getByText(/did not record SHAP/i)).toBeInTheDocument()
   })
 
   it('labels older runs as average gain summed over columns', () => {
+    // Arrange
     const importance: FeatureImportance = { measure: 'summed_average_gain', rows }
+
+    // Act
     render(<FeatureImportanceChart importance={importance} />)
+
+    // Assert
     expect(screen.getByText(/average gain per split, summed over/i)).toBeInTheDocument()
     expect(screen.getByText(/older run/i)).toBeInTheDocument()
   })
 
   it('reports runs without importance', () => {
+    // Act
     render(<FeatureImportanceChart importance={{ measure: null, rows: [] }} />)
+
+    // Assert
     expect(screen.getByText('No feature importance recorded.')).toBeInTheDocument()
   })
 })

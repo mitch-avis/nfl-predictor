@@ -22,11 +22,20 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
 - Landed on `feat/step6-sos-port` (each reviewed independently, gate green on the merged tree):
   `0.46.0` the nflverse player sources, `constants.MODELS_PATH` and the `compare` tie rule;
   `0.47.0` this repo's own Elo (not yet in the ETL); `0.48.0` the Pool page, the margin-only
-  switch and the live-betting design (gate `--web`: 1945 passed, vitest 77). In review or fixes
-  at the time of writing: the phase-1 inventory and parity scripts (rerun on the snapshot of
-  `nfl-sos-ratings`' own play-by-play at `~/scratch/nflreadpy_cache_snapshot_20261008/`), the
-  ratings port (`src/nfl_predictor/ratings/`), and the play-by-play column extension. The stream
-  table and the integration design are in `.agents/step6_plan.md`.
+  switch and the live-betting design; `0.49.0` the ported ratings (`src/nfl_predictor/ratings/`);
+  `0.50.0` the play-by-play cache extension (139 columns) and the stadium table; `0.50.1` the
+  phase-1 inventory and parity scripts (reports pinned to `main`'s code; a refresh is due after
+  the integration lands). Gate on `0.50.1`: 2205 passed.
+- In review or fixes at 06:55 on 2026-10-10 (branches of implementer worktrees under
+  `.claude/worktrees/`): the ratings in the ETL (`worktree-agent-a0778ee61e6367a09`), the
+  play-by-play corrections, one starter and the own Elo in the ETL
+  (`worktree-agent-ab77a9529b8ed64b8`, which contains the former; merge the reviewed ratings
+  branch first), the season statistics port (`worktree-agent-a5d833400b788544f`), the
+  production feature-group setting (in progress), and the web pages for the ratings and season
+  statistics (in progress). The stream table, the integration design and the user's list are in
+  `.agents/step6_plan.md`; the phase-4 build and run scripts are `models/step6/build.sh` and
+  `driver.sh` (dry-run tested), with the pre-registered rules in `models/step6/HYPOTHESIS.md`
+  and `models/step6/rankings/HYPOTHESIS.md` (each with a `.sha256`).
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
   or restart it yourself (rule 5); it loads new code only when the user restarts it.
 - Roadmap step 4 (feature values, `0.37.2`-`0.45.0`) and step 5 (market-free baseline) are closed

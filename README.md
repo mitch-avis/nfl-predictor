@@ -1236,13 +1236,6 @@ import paths.
   loading, the season loop (`process_season`) and the written files. Each week's game rows come
   from `process_week` in `utils/polars/week_rows.py`, and each week's schedule-adjusted strength
   table from `utils/polars/strength_table.py`.
-- `src/nfl_predictor/season_stats/` holds the season statistics ported from the sibling
-  `nfl-sos-ratings` project (team and quarterback game logs, season rows, head-to-head-excluded
-  opponent profiles, win-probability bins) and its metric registry, with the stats catalogs
-  generated from it. Nothing in the ETL or the model uses it yet; the web app's team and
-  quarterback pages read its tables and registry.
-  [Its README](src/nfl_predictor/season_stats/README.md) covers the inputs, outputs, and parity
-  checks.
 - ML implementation lives under `src/nfl_predictor/ml/` with a compatibility facade at
   `src/nfl_predictor/ml_model.py`.
 - `src/nfl_predictor/ratings/` holds the team and quarterback ratings ported from the sibling
@@ -1251,6 +1244,14 @@ import paths.
   leakage-safe pre-week entry point for model features. Nothing in the ETL or the model uses it;
   the web app's team and quarterback pages read the tables it builds.
   [Its README](src/nfl_predictor/ratings/README.md) covers the methods, inputs, and parity checks.
+- `src/nfl_predictor/season_stats/` holds the season statistics ported from the sibling
+  `nfl-sos-ratings` project (team and quarterback game logs, season rows, head-to-head-excluded
+  opponent profiles, win-probability bins) and its metric registry, with the stats catalogs
+  generated from it. Its tables are whole-season display data, not values known before a week's
+  games. Nothing in the ETL or the model uses them yet; the web app's team and quarterback pages
+  read them and the registry.
+  [Its README](src/nfl_predictor/season_stats/README.md) covers the inputs, outputs, and parity
+  checks.
 
 ## Implemented feature areas
 

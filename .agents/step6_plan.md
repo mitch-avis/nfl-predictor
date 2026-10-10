@@ -42,19 +42,23 @@ data are logged for review. Read as:
 
 | stream | phase | depends on | branch / state |
 | --- | --- | --- | --- |
-| S1 inventory and parity scripts | 1 | none | merged (reports pinned to `main`'s code); refresh after integration |
+| S1 inventory and parity scripts | 1 | none | merged `0.50.1` (reports pinned to `main`'s code); refresh after integration |
 | S2 new nflverse sources, `MODELS_PATH`, `compare` tie fix | 2 | none | merged, `0.46.0` |
 | S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | merged, `0.47.0` |
-| S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | review fixes |
+| S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | merged, `0.49.0` |
 | S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | merged, `0.48.0` |
-| S5a play-by-play cache columns, stadium table | 3-4 | none | in review |
-| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | implementer running (on S5a's branch) |
-| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | implementer running (on S4's and S5a's branches) |
-| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | implementer running |
-| S5 ETL integration: play-by-play fixes, ratings inputs and outputs, pre-week features, follow-ups | 3-4 | S1, S2, S4 | after those merge |
-| S6 candidate build and measurement | 4 | S3, S5 | after S5 |
-| S7 power rankings and projected standings | 5 | S5, S6 | after S6 |
-| S8b web: team, quarterback, schedule, rank-range, head-to-head pages (58.2) | 6 | S5 output schema | after S5 |
+| S5a play-by-play cache columns, stadium table | 3-4 | none | merged, `0.50.0` |
+| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | in review; contains S5c, merges alone |
+| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | reviewed (merge after fixes); fixes go on S5b's branch |
+| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | in review (270 tables, 11,754,571 cells bit-identical) |
+| S8b web: teams, quarterbacks, schedules, rank ranges, head-to-head, glossary (58.2) | 6 | S4, S10 | implementer running (on S10's branch) |
+| S5d ETL step for the season statistics tables, ratings columns into `combined` | 6 | S5c, S10 | after those merge |
+| S6 candidate build and measurement (`models/step6/build.sh`, `driver.sh`) | 4 | S3, S5b, S5c | after S5b and S5c |
+| S7 power rankings and projected standings (`models/step6/rankings/HYPOTHESIS.md`) | 5 | S5c, S6 | after S6's first arm |
+
+Data contract for the pages (decided 2026-10-10): every per-season table, the ratings kinds and
+the season-statistics kinds alike, is written by the ETL to `data/ratings/{season}_{kind}.parquet`,
+kinds and columns named as in `nfl-sos-ratings`, plus the current season's `*_ranges_by_week`.
 
 ## Measurement ladder (phase 4)
 
@@ -107,6 +111,15 @@ small and local.
   the published files); a pre-registered test of the team rating's penalty-wiped plays (its
   scrimmage EPA keeps 8,848 penalty-wiped runs at -5,660 EPA and no penalty-wiped pass, +11,142
   EPA, 1999-2025), scored like the kneel-and-spike test on next-game margins.
+- **Adoption chunk (after measurement)**: today the model reads every column between `away_rest`
+  and `home_moneyline` (`ml/feature_spec.py`), and only backtests can disable a feature group. So
+  once the decision rules pick the arms, production must be made to match the adopted arm exactly
+  (rule 11): either the weekly run gains the same `disable_feature_groups` setting the backtest
+  uses (one shared source), or the ETL stops building the groups the decision drops. Until that
+  lands and the user approves, the weekly run's `data/` is not replaced.
+- **Follow-up**: the ratings add about 7.5 minutes to a full ETL rebuild (about 31 s to an
+  incremental run); refitting through numpy masks would remove most of it, as a
+  behavior-preserving change checked against the bit-exact parity reports.
 - **Carries (corrected 2026-10-10)**: the play-by-play corrections base carries on the source's
   designed-carry rule (`rush_attempt & ~two_point & ~qb_scramble & ~qb_kneel`), not the `rush`
   flag; acceptance check: equal to the source's `designed_carries` and `rush_success_count` in
@@ -138,6 +151,10 @@ small and local.
   known before kickoff"; second review pending), so training rows hold slightly better
   quarterback information than prediction rows. A question for the user, not a step-6 change.
 
+- Web pages for the ratings (in review): the sidebar is regrouped into sections and reordered
+  (Betting under "This week", Model above Data); the "Opponents faced" ledger is simpler than the
+  source's; season tables go out uncompressed (about 0.9 MB per team table). None was checked in a
+  browser (signing in needs a typed password); the user should look at the pages once.
 - nflverse lists the 2026 Melbourne, Munich and Paris venues as domes (none has a roof over the
   field) and leaves Madrid blank; this feeds `stadium_type`. Recommendation: no override now,
   because the current season's schedule is downloaded again on every ETL run; recheck before the

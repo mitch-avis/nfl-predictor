@@ -9,9 +9,11 @@ a minute a season):
 ``--source`` is the ``nfl-sos-ratings`` checkout (default: the one beside this repository's main
 checkout), whose published Parquet files are read in place and never written; ``--snapshot`` and
 ``--manifest`` are the copy of nflreadpy's disk cache that project's build read and its SHA-256
-manifest; ``--seasons`` limits the run to some seasons (default 1999-2025); ``--work-dir`` holds
-this repository's loader caches for the run (default: a new directory under ``~/scratch``, never a
-``data/`` directory); ``--out-dir`` writes the reports elsewhere (default: beside this script).
+manifest; ``--seasons`` limits the run to some seasons (default 1999-2026: every completed season
+and the one in progress at the frozen commit, published through the weeks played by then);
+``--work-dir`` holds this repository's loader caches for the run (default: a new directory under
+``~/scratch``, never a ``data/`` directory); ``--out-dir`` writes the reports elsewhere (default:
+beside this script).
 
 For each season the script:
 
@@ -32,6 +34,12 @@ For each season the script:
    differs is reported; its values are still compared, exactly when the published column holds
    whole numbers.
 
+After the seasons it ranks every published season's schedules (``schedule_ranks.rank_schedules``
+over each ``{season}_ratings.parquet``) and compares that leaderboard, as above, with what that
+project's own ``schedules.rank_schedules`` returns for the same files. That function is imported
+from the checkout, each module it loads first checked against its blob at the frozen commit and
+nothing compiled to disk; it reads the ratings files and nothing else.
+
 It writes ``SEASON_STATS_PARITY.md`` and ``season_stats_parity.json`` and exits 1 if any cell is
 outside the tolerance or any table differs in columns or rows.
 """
@@ -46,8 +54,10 @@ os.environ.setdefault("POLARS_MAX_THREADS", "1")
 import argparse
 import datetime as dt
 import hashlib
+import importlib
 import json
 import math
+import re
 import subprocess
 import sys
 import tempfile
@@ -56,22 +66,28 @@ import time
 from dataclasses import asdict, dataclass, field
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+from unittest.mock import patch
 
 import polars as pl
 from nflreadpy.downloader import NflverseDownloader
 
 from nfl_predictor import constants
-from nfl_predictor.season_stats import published_logs, sources
+from nfl_predictor.season_stats import published_logs, schedule_ranks, sources
 from nfl_predictor.season_stats import season as season_tables
 from nfl_predictor.season_stats.pooled_rates import rate_parts
 from nfl_predictor.season_stats.team_stats_expanded import TEAM_FORMULA_RATES
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 SOURCE_COMMIT = "9081bced89b0d51c99e28f80f8f62b9fcd0118e0"
 FIRST_SEASON = 1999
+# The last completed season, and the season in progress at the frozen commit.
 LAST_SEASON = 2025
+CURRENT_SEASON = LAST_SEASON + 1
 # Floats agree within this absolute difference; the report also counts bit-identical cells.
 FLOAT_TOLERANCE = 1e-9
 TEAM_CODE_COLUMNS = ("team", "opponent_team")
@@ -104,6 +120,16 @@ SUPPLIED_COLUMNS = {
     "qb_combined": season_tables.QB_RATING_INPUT_COLUMNS[1:],
 }
 MAX_LISTED_DIFFERENCES = 40
+# A download parameter, as nflreadpy's cache key reads it (``CacheManager._get_cache_key``).
+type DownloadParameter = str | int | float | bool
+# The modules of that project the leaderboard check imports, with their git blob ids at the
+# frozen commit (``git rev-parse 9081bce:<path>`` in that checkout).
+SOURCE_MODULE_BLOBS = {
+    "nfl_sos_ratings/__init__.py": "3191d6bbdeec9b2e66dd4b73d5ac69fcbaface91",
+    "nfl_sos_ratings/config.py": "46b752a589059b6b28b91c1695cf3354a2dbba63",
+    "nfl_sos_ratings/schedules.py": "aba86f7f1ac5ef3cbd23c47d3a22fd07e2f41b7c",
+}
+RATINGS_FILE = re.compile(r"(?P<season>\d{4})_ratings\.parquet")
 
 
 def default_source() -> Path:
@@ -174,13 +200,16 @@ class SnapshotDownloads:
         snapshot = self
 
         def download_file(
-            downloader: NflverseDownloader, url: str, **kwargs: object
+            downloader: NflverseDownloader, url: str, **kwargs: DownloadParameter
         ) -> pl.DataFrame:
             return snapshot.read(downloader, url, **kwargs)
 
-        NflverseDownloader._download_file = download_file  # type: ignore[method-assign]
+        # Patched for the rest of the process, as the run reads every season through it.
+        patch.object(NflverseDownloader, "_download_file", download_file).start()
 
-    def read(self, downloader: NflverseDownloader, url: str, **kwargs: object) -> pl.DataFrame:
+    def read(
+        self, downloader: NflverseDownloader, url: str, **kwargs: DownloadParameter
+    ) -> pl.DataFrame:
         """Return the snapshot file nflreadpy's cache would hold for ``url`` and ``kwargs``."""
         key = downloader.cache._get_cache_key(url, **kwargs)
         path = self.snapshot / f"{key}.parquet"
@@ -238,7 +267,7 @@ def relabel_washington(frame: pl.DataFrame) -> tuple[pl.DataFrame, int]:
 class TableComparison:
     """How one rebuilt table compares with its published file."""
 
-    season: int
+    season: int | None  # None for the schedule leaderboard, which spans every season
     kind: str
     rows: int = 0
     columns: int = 0
@@ -247,6 +276,7 @@ class TableComparison:
     within_tolerance: int = 0
     outside: int = 0
     supplied_cells: int = 0
+    supplied_identical: int = 0
     unchecked_cells: int = 0
     relabeled_cells: int = 0
     max_abs_difference: float = 0.0
@@ -275,7 +305,7 @@ def _is_float(dtype: pl.DataType) -> bool:
 
 
 def compare_tables(
-    season: int,
+    season: int | None,
     kind: str,
     published: pl.DataFrame,
     rebuilt: pl.DataFrame,
@@ -310,9 +340,11 @@ def compare_tables(
         if column in unchecked:
             result.unchecked_cells += published.height
             continue
+        identical_before = result.identical
+        _compare_column(result, column, theirs, mine, published)
         if column in supplied:
             result.supplied_cells += published.height
-        _compare_column(result, column, theirs, mine, published)
+            result.supplied_identical += result.identical - identical_before
     return result
 
 
@@ -339,9 +371,9 @@ def _compare_column(
         tolerance = 0.0 if exact else FLOAT_TOLERANCE
         close = ~null_a & ~null_b & ~nan_a & ~nan_b & (diff <= tolerance).fill_null(value=False)
         agrees = identical | close
-        finite = diff.filter(agrees & ~identical)
-        if finite.len():
-            result.max_abs_difference = max(result.max_abs_difference, float(finite.max()))
+        largest = diff.filter(agrees & ~identical).max()
+        if isinstance(largest, float):
+            result.max_abs_difference = max(result.max_abs_difference, largest)
         result.identical += int(identical.sum())
         result.within_tolerance += int((agrees & ~identical).sum())
     else:
@@ -383,17 +415,18 @@ class SeasonRun:
     compare_seconds: float
     comparisons: list[TableComparison]
     published_log_comparisons: list[TableComparison]
-    unrecovered_team_rates: list[str]
-    unrecovered_qb_rates: list[str]
+    team_rates_not_rebuilt: list[str]
+    qb_rates_not_rebuilt: list[str]
 
 
 def _unchecked_columns(
     kind: str, columns: list[str], team_rates: set[str], qb_rates: set[str]
 ) -> frozenset[str]:
-    """Return the columns of a table built from published logs that need unrecovered parts.
+    """Return the columns of a table built from published logs that need parts not rebuilt.
 
-    A team rate without its parts, a formula rate built from one, or either as an opponent
-    profile's ``opp_`` column; a quarterback rate without its parts, or its ``qopp_`` column.
+    A team rate whose parts the adapter does not rebuild, a formula rate built from one, or
+    either as an opponent profile's ``opp_`` column; a quarterback rate whose parts it does
+    not rebuild, or its ``qopp_`` column.
     """
     team = set(team_rates) | {
         rate
@@ -416,22 +449,22 @@ def compare_from_published_logs(
     games: season_tables.SeasonGames,
     ratings: tuple[pl.DataFrame, pl.DataFrame],
 ) -> tuple[list[TableComparison], list[str], list[str]]:
-    """Build the season tables from the published game logs and compare what they determine.
+    """Build the season tables from the published game logs; compare what the adapter rebuilds.
 
     The schedule is the loaders' played schedule, as the source's build read it (the logs lack the
     three games without play-by-play, whose teams still count as opponents). ``games`` (the
-    play-by-play build) says which rates carry hidden parts; the ones the adapter cannot rebuild
-    from the published columns are reported, and their columns are not compared.
+    play-by-play build) says which rates carry hidden parts; the ones the adapter does not
+    rebuild from the published columns are reported, and their columns are not compared.
     """
     team_logs, _ = relabel_washington(published["team_game_logs"])
     qb_logs, _ = relabel_washington(published["qb_game_logs"])
     from_logs = season_tables.SeasonGames(
-        team_games=published_logs.team_games_from_published(team_logs),
-        qb_games=published_logs.qb_games_from_published(qb_logs),
+        team_games=published_logs.team_stat_rows_from_published(team_logs),
+        qb_games=published_logs.qb_stat_rows_from_published(qb_logs),
         schedule=games.schedule,
     )
     team_rates = set(rate_parts(games.team_games.columns)) - set(
-        published_logs.recovered_team_rates(team_logs.columns)
+        published_logs.rebuilt_team_rates(team_logs.columns)
     )
     qb_rates = set(rate_parts(games.qb_games.columns))
     tables = season_tables.build_season_tables(
@@ -450,10 +483,67 @@ def compare_from_published_logs(
     return comparisons, sorted(team_rates), sorted(qb_rates)
 
 
+def git_blob_id(path: Path) -> str:
+    """Return the id git gives a file's content as a blob, as ``git hash-object`` prints it."""
+    content = path.read_bytes()
+    header = f"blob {len(content)}\0".encode()
+    return hashlib.sha1(header + content, usedforsecurity=False).hexdigest()
+
+
+def source_rank_schedules(source: Path) -> Callable[[Path], pl.DataFrame]:
+    """Return that project's ``schedules.rank_schedules``, imported from its checkout.
+
+    Every module the import loads must match its blob at the frozen commit
+    (``SOURCE_MODULE_BLOBS``), and nothing is compiled to disk.
+    """
+    root = source.resolve()
+    for name, blob in SOURCE_MODULE_BLOBS.items():
+        if git_blob_id(root / name) != blob:
+            msg = f"{root / name} differs from the frozen commit {SOURCE_COMMIT}"
+            raise SystemExit(msg)
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(root))
+    try:
+        module = importlib.import_module("nfl_sos_ratings.schedules")
+    finally:
+        sys.path.remove(str(root))
+    imported = {
+        Path(file).resolve().relative_to(root).as_posix()
+        for name, loaded in sys.modules.items()
+        if name.split(".")[0] == "nfl_sos_ratings" and (file := getattr(loaded, "__file__", None))
+    }
+    unchecked = sorted(imported - SOURCE_MODULE_BLOBS.keys())
+    if unchecked:
+        msg = f"the import loaded modules not checked against the frozen commit: {unchecked}"
+        raise SystemExit(msg)
+    return module.rank_schedules
+
+
+def compare_schedule_leaderboard(
+    source: Path, hashes: dict[str, str]
+) -> tuple[TableComparison, list[int]]:
+    """Rank every published season's schedules here and with that project's code, and compare.
+
+    Both rank the same published ratings files; this port reads them with Washington as ``WSH``.
+    Returns the comparison and the seasons this port ranked.
+    """
+    ratings_by_season: dict[int, pl.DataFrame] = {}
+    for path in sorted((source / "data").glob("*_ratings.parquet")):
+        match = RATINGS_FILE.fullmatch(path.name)
+        if match is None:
+            continue
+        hashes[path.name] = sha256_file(path)
+        ratings_by_season[int(match["season"])] = relabel_washington(pl.read_parquet(path))[0]
+    rebuilt = schedule_ranks.rank_schedules(ratings_by_season)
+    published = source_rank_schedules(source)(source / "data")
+    ranked = sorted(rebuilt.get_column("season").unique().to_list())
+    return compare_tables(None, "schedule_leaderboard", published, rebuilt), ranked
+
+
 def run_season(season: int, source: Path, cache_dir: Path, hashes: dict[str, str]) -> SeasonRun:
     """Build one season through the loaders and compare every table with its published file."""
     started = time.perf_counter()
-    inputs = sources.load_season_inputs(season, cache_dir=cache_dir, current_season=LAST_SEASON + 1)
+    inputs = sources.load_season_inputs(season, cache_dir=cache_dir, current_season=CURRENT_SEASON)
     loaded = time.perf_counter()
 
     def published(kind: str) -> pl.DataFrame:
@@ -496,8 +586,8 @@ def run_season(season: int, source: Path, cache_dir: Path, hashes: dict[str, str
         compare_seconds=compared - built,
         comparisons=comparisons,
         published_log_comparisons=from_logs,
-        unrecovered_team_rates=team_rates,
-        unrecovered_qb_rates=qb_rates,
+        team_rates_not_rebuilt=team_rates,
+        qb_rates_not_rebuilt=qb_rates,
     )
 
 
@@ -515,7 +605,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=Path.home() / "scratch" / "nflreadpy_cache_snapshot_20261008.sha256",
     )
     parser.add_argument(
-        "--seasons", type=int, nargs="+", default=list(range(FIRST_SEASON, LAST_SEASON + 1))
+        "--seasons", type=int, nargs="+", default=list(range(FIRST_SEASON, CURRENT_SEASON + 1))
     )
     parser.add_argument("--work-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=HERE)
@@ -534,6 +624,7 @@ def _summary(comparisons: list[TableComparison], kinds: tuple[str, ...]) -> dict
             "within_tolerance": sum(c.within_tolerance for c in rows),
             "outside": sum(c.outside for c in rows),
             "supplied_cells": sum(c.supplied_cells for c in rows),
+            "supplied_identical": sum(c.supplied_identical for c in rows),
             "unchecked_cells": sum(c.unchecked_cells for c in rows),
             "relabeled_cells": sum(c.relabeled_cells for c in rows),
             "max_abs_difference": max((c.max_abs_difference for c in rows), default=0.0),
@@ -547,6 +638,7 @@ def _summary(comparisons: list[TableComparison], kinds: tuple[str, ...]) -> dict
         "within_tolerance": sum(c.within_tolerance for c in comparisons),
         "outside": sum(c.outside for c in comparisons),
         "supplied_cells": sum(c.supplied_cells for c in comparisons),
+        "supplied_identical": sum(c.supplied_identical for c in comparisons),
         "unchecked_cells": sum(c.unchecked_cells for c in comparisons),
         "relabeled_cells": sum(c.relabeled_cells for c in comparisons),
         "tables_with_structure_differences": sum(1 for c in comparisons if c.structure),
@@ -579,8 +671,49 @@ def _season_list(seasons: list[int]) -> str:
     return ", ".join(str(run[0]) if len(run) == 1 else f"{run[0]}-{run[-1]}" for run in runs)
 
 
+def _leaderboard_lines(board: dict[str, Any]) -> list[str]:
+    """Return the report section on the schedule leaderboard."""
+    lines = [
+        "",
+        "## Schedule leaderboard",
+        "",
+        "Every published season's schedules ranked by `schedule_ranks.rank_schedules` from the",
+        "published ratings (`{season}_ratings.parquet`), compared as above with what",
+        "`nfl-sos-ratings`' own `schedules.rank_schedules` returns for the same files at the",
+        "frozen commit (imported from the checkout, each module checked against its blob",
+        "there). Both leave out a season still in progress. A column whose type differs is",
+        "listed; its values are compared all the same.",
+        "",
+        f"- Seasons ranked: {_season_list(board['seasons'])}",
+        (
+            f"- Team-seasons: {board['rows']:,}; cells compared: {board['cells']:,};"
+            f" bit-identical: {board['identical']:,}; within tolerance:"
+            f" {board['within_tolerance']:,}; outside: {board['outside']:,}"
+        ),
+        (
+            "- Column types that differ (rebuilt first): "
+            + (", ".join(f"`{d}`" for d in board["dtype_differences"]) or "none")
+        ),
+        f"- Published team codes read as `WSH` instead of `WAS`: {board['relabeled_cells']:,}",
+        f"- Column or row differences: {'; '.join(board['structure']) or 'none'}",
+    ]
+    lines += [
+        f"- Outside tolerance: `{d['column']}` ({d['row']}): published {d['published']!r},"
+        f" rebuilt {d['rebuilt']!r}"
+        for d in board["differences"]
+    ]
+    passed = board["outside"] == 0 and not board["structure"]
+    lines.append(f"- Result: **{'PASS' if passed else 'FAIL'}**")
+    return lines
+
+
 def _markdown(report: dict[str, Any]) -> str:
     summary = report["summary"]
+    seasons = report["seasons"]
+    computed = summary["cells"] - summary["supplied_cells"]
+    in_progress = (
+        f"; {CURRENT_SEASON} in progress at the frozen commit" if CURRENT_SEASON in seasons else ""
+    )
     lines = [
         "# Season statistics parity with nfl-sos-ratings",
         "",
@@ -600,7 +733,7 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         f"- Code: `{report['code_commit']}`",
         f"- Finished: {report['finished']}",
-        f"- Seasons: {report['seasons'][0]}-{report['seasons'][-1]} ({len(report['seasons'])})",
+        f"- Seasons: {seasons[0]}-{seasons[-1]} ({len(seasons)}{in_progress})",
         (
             f"- Polars {report['versions']['polars']}, nflreadpy {report['versions']['nflreadpy']},"
             f" `POLARS_MAX_THREADS={report['polars_threads']}`"
@@ -618,9 +751,20 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         "## Headline counts",
         "",
+        "The rating columns of `combined` and `qb_combined` are copied from the published ratings",
+        "(the ratings port reproduces those), so their cells are counted apart from the cells this",
+        "port computes.",
+        "",
         f"- Tables compared: {summary['tables']}",
-        f"- Cells compared: {summary['cells']:,}",
-        f"- Bit-identical: {summary['identical']:,}",
+        f"- Cells compared: {summary['cells']:,}; bit-identical {summary['identical']:,}",
+        (
+            f"- Of them, computed by the port: {computed:,}; bit-identical"
+            f" {summary['identical'] - summary['supplied_identical']:,}"
+        ),
+        (
+            "- Of them, rating columns copied from the published ratings:"
+            f" {summary['supplied_cells']:,}; bit-identical {summary['supplied_identical']:,}"
+        ),
         (
             f"- Within tolerance but not bit-identical: {summary['within_tolerance']:,}"
             f" (largest difference {summary['max_abs_difference']:.3g})"
@@ -628,10 +772,6 @@ def _markdown(report: dict[str, Any]) -> str:
         f"- Outside tolerance: {summary['outside']:,}",
         f"- Tables with column or row differences: {summary['tables_with_structure_differences']}",
         f"- Tables with a column type that differs: {summary['tables_with_dtype_differences']}",
-        (
-            f"- Cells taken from the published ratings (rating columns of `combined` and"
-            f" `qb_combined`): {summary['supplied_cells']:,}"
-        ),
         f"- Published team codes read as `WSH` instead of `WAS`: {summary['relabeled_cells']:,}",
         f"- Result: **{'PASS' if report['passed'] else 'FAIL'}**",
         "",
@@ -656,21 +796,25 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         "The same season tables built a second way, from the published team and quarterback game",
         "logs (`season_stats.published_logs`), independent of the play-by-play build. The logs",
-        "leave out each rate's hidden numerator and denominator; the adapter rebuilds those the",
-        "published columns determine, and a column that needs any other is counted, not",
-        "compared (its rates are listed below).",
+        "leave out each rate's hidden numerator and denominator; the adapter rebuilds those it",
+        "can read off the published columns, and a column that needs any other is counted as",
+        "not rebuilt, not compared (its rates are listed below).",
         "",
         f"- Tables compared: {logs['tables']}",
         (
             f"- Cells compared: {logs['cells']:,}; bit-identical {logs['identical']:,}; within"
             f" tolerance {logs['within_tolerance']:,}; outside {logs['outside']:,}"
         ),
-        f"- Cells not determined by the published logs (not compared): {logs['unchecked_cells']:,}",
+        (
+            f"- Of those, cells the port computed: {logs['cells'] - logs['supplied_cells']:,};"
+            f" taken from the published ratings: {logs['supplied_cells']:,}"
+        ),
+        f"- Cells not rebuilt by the adapter (not compared): {logs['unchecked_cells']:,}",
         f"- Tables with column or row differences: {logs['tables_with_structure_differences']}",
         "",
         (
             "| table | seasons | cells compared | bit-identical | within tolerance | outside |"
-            " not compared |"
+            " not rebuilt |"
         ),
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
@@ -681,14 +825,15 @@ def _markdown(report: dict[str, Any]) -> str:
         )
     lines += [
         "",
-        "Team rates whose parts the published logs do not determine, in every season:",
+        "Team rates whose parts the adapter does not rebuild, in any season:",
         "",
-        _code_list(report["unrecovered_rates"]["team"]),
+        _code_list(report["rates_not_rebuilt"]["team"]),
         "",
-        "Quarterback rates whose parts the published logs do not determine:",
+        "Quarterback rates whose parts the adapter does not rebuild, in any season:",
         "",
-        _code_list(report["unrecovered_rates"]["qb"]),
+        _code_list(report["rates_not_rebuilt"]["qb"]),
     ]
+    lines += _leaderboard_lines(report["schedule_leaderboard"])
     lines += [
         "",
         "## Timings",
@@ -793,13 +938,16 @@ def main(argv: list[str] | None = None) -> int:
             f" compare {run.compare_seconds:.1f}s, failed: {failed or 'none'}\n"
         )
         runs.append(run)
+    leaderboard, ranked_seasons = compare_schedule_leaderboard(args.source, hashes)
     total = time.perf_counter() - started
     summary = _summary([c for run in runs for c in run.comparisons], KINDS)
     log_summary = _summary(
         [c for run in runs for c in run.published_log_comparisons], PUBLISHED_LOG_KINDS
     )
     report = {
-        "command": " ".join(["python", ".agents/sos_port/season_stats_parity.py", *(argv or [])]),
+        "command": " ".join(
+            [".venv/bin/python", ".agents/sos_port/season_stats_parity.py", *(argv or [])]
+        ),
         "code_commit": code_commit(),
         "source": str(args.source),
         "source_commit": head,
@@ -825,11 +973,13 @@ def main(argv: list[str] | None = None) -> int:
         "published_files": dict(sorted(hashes.items())),
         "summary": summary,
         "published_log_summary": log_summary,
-        "unrecovered_rates": {
-            "team": sorted({rate for run in runs for rate in run.unrecovered_team_rates}),
-            "qb": sorted({rate for run in runs for rate in run.unrecovered_qb_rates}),
+        "schedule_leaderboard": {"seasons": ranked_seasons, **asdict(leaderboard)},
+        "rates_not_rebuilt": {
+            "team": sorted({rate for run in runs for rate in run.team_rates_not_rebuilt}),
+            "qb": sorted({rate for run in runs for rate in run.qb_rates_not_rebuilt}),
         },
-        "passed": all(
+        "passed": leaderboard.passed
+        and all(
             part["outside"] == 0 and part["tables_with_structure_differences"] == 0
             for part in (summary, log_summary)
         ),
@@ -841,8 +991,8 @@ def main(argv: list[str] | None = None) -> int:
                 "compare_seconds": r.compare_seconds,
                 "comparisons": [asdict(c) for c in r.comparisons],
                 "published_log_comparisons": [asdict(c) for c in r.published_log_comparisons],
-                "unrecovered_team_rates": r.unrecovered_team_rates,
-                "unrecovered_qb_rates": r.unrecovered_qb_rates,
+                "team_rates_not_rebuilt": r.team_rates_not_rebuilt,
+                "qb_rates_not_rebuilt": r.qb_rates_not_rebuilt,
             }
             for r in runs
         ],
@@ -856,9 +1006,14 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(
             f"{label}: {part['cells']:,} cells: {part['identical']:,} identical,"
             f" {part['within_tolerance']:,} within tolerance, {part['outside']:,} outside,"
-            f" {part['unchecked_cells']:,} not compared;"
+            f" {part['unchecked_cells']:,} not rebuilt (not compared);"
             f" {part['tables_with_structure_differences']} tables with structure differences\n"
         )
+    sys.stderr.write(
+        f"schedule leaderboard: {leaderboard.rows:,} team-seasons, {leaderboard.cells:,} cells:"
+        f" {leaderboard.identical:,} identical, {leaderboard.outside:,} outside;"
+        f" structure differences: {leaderboard.structure or 'none'}\n"
+    )
     return 0 if report["passed"] else 1
 
 

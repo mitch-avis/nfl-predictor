@@ -1,8 +1,9 @@
 """Shared Polars expressions used by the team and QB stat builders.
 
-These definitions are correctness invariants: the scrimmage-snap definition
-here is the single definition of an offensive snap for the whole project, and
-the passer-rating formula the single definition of passer rating.
+These are ``nfl-sos-ratings``' definitions, where they are the single definition of an offensive
+snap and of passer rating for that whole project. Here every season statistics builder shares
+them; this repository's play-by-play features (``utils/polars/pbp.py``) keep their own
+definitions, by decision.
 """
 
 import polars as pl

@@ -156,10 +156,10 @@ def _games_from_published_logs(season: int) -> season_tables.SeasonGames:
         _fixture(f"{season}_season_schedule.parquet"), ("home_team", "away_team")
     )
     return season_tables.SeasonGames(
-        team_games=published_logs.team_games_from_published(
+        team_games=published_logs.team_stat_rows_from_published(
             _as_here(_fixture(f"{season}_season_team_game_logs.parquet"))
         ),
-        qb_games=published_logs.qb_games_from_published(
+        qb_games=published_logs.qb_stat_rows_from_published(
             _as_here(_fixture(f"{season}_season_qb_game_logs.parquet"))
         ),
         schedule=season_tables.played_schedule(sources.prepare_schedule(schedule)),

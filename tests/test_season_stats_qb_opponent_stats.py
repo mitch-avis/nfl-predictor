@@ -505,7 +505,7 @@ def test_allowed_rate_exprs_skip_numerators_that_are_absent() -> None:
 
 @pytest.mark.parametrize("reverse", [False, True])
 def test_select_primary_qb_games_breaks_a_tie_the_same_way_in_any_row_order(
-    reverse: bool,  # noqa: FBT001 - pytest parameter
+    *, reverse: bool
 ) -> None:
     # Arrange
     tied = pl.DataFrame(

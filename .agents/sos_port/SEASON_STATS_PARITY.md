@@ -11,143 +11,150 @@ compared cell by cell with the published file of `nfl-sos-ratings` at
 Command, from the repository root:
 
 ```bash
-python .agents/sos_port/season_stats_parity.py
+.venv/bin/python .agents/sos_port/season_stats_parity.py
 ```
 
-- Code: `7e105e0ecf2de6c454c46a29a4bc6dadf726ad81`
-- Finished: 2026-10-10T11:44:28+00:00
-- Seasons: 1999-2025 (27)
+- Code: `0509b256a2e7e5c1611f13052e2e411f5d659182`
+- Finished: 2026-10-10T12:52:34+00:00
+- Seasons: 1999-2026 (28; 2026 in progress at the frozen commit)
 - Polars 2.0.0, nflreadpy 0.1.5, `POLARS_MAX_THREADS=1`
-- Snapshot files served: 123, every one matching the manifest
+- Snapshot files served: 128, every one matching the manifest
 - Float tolerance: 1e-09 absolute
-- Play-by-play columns read: 122; of them, missing from this code's `constants.PBP_COLUMNS`: 74
+- Play-by-play columns read: 122; of them, missing from this code's `constants.PBP_COLUMNS`: 0
 
 ## Headline counts
 
-- Tables compared: 270
-- Cells compared: 11,754,571
-- Bit-identical: 11,754,571
+The rating columns of `combined` and `qb_combined` are copied from the published ratings
+(the ratings port reproduces those), so their cells are counted apart from the cells this
+port computes.
+
+- Tables compared: 280
+- Cells compared: 11,895,632; bit-identical 11,895,632
+- Of them, computed by the port: 11,886,040; bit-identical 11,886,040
+- Of them, rating columns copied from the published ratings: 9,592; bit-identical 9,592
 - Within tolerance but not bit-identical: 0 (largest difference 0)
 - Outside tolerance: 0
 - Tables with column or row differences: 0
-- Tables with a column type that differs: 40
-- Cells taken from the published ratings (rating columns of `combined` and `qb_combined`): 9,294
-- Published team codes read as `WSH` instead of `WAS`: 36,060
+- Tables with a column type that differs: 42
+- Published team codes read as `WSH` instead of `WAS`: 36,432
 - Result: **PASS**
 
 ## By table
 
 | table | seasons | rows | cells | bit-identical | within tolerance | outside | largest difference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `team_game_logs` | 27 | 13,928 | 3,426,288 | 3,426,288 | 0 | 0 | 0 |
-| `qb_game_logs` | 27 | 16,655 | 899,370 | 899,370 | 0 | 0 | 0 |
-| `team_per_game_stats` | 27 | 861 | 211,806 | 211,806 | 0 | 0 | 0 |
-| `qb_per_game_stats` | 27 | 2,064 | 181,632 | 181,632 | 0 | 0 | 0 |
-| `qb_opponent_profiles` | 27 | 1,608 | 86,832 | 86,832 | 0 | 0 | 0 |
-| `opponent_profiles` | 27 | 861 | 207,501 | 207,501 | 0 | 0 | 0 |
-| `combined` | 27 | 861 | 423,612 | 423,612 | 0 | 0 | 0 |
-| `qb_combined` | 27 | 2,064 | 291,024 | 291,024 | 0 | 0 | 0 |
-| `team_wp_bins` | 27 | 537,518 | 4,300,144 | 4,300,144 | 0 | 0 | 0 |
-| `qb_wp_bins` | 27 | 287,727 | 1,726,362 | 1,726,362 | 0 | 0 | 0 |
+| `team_game_logs` | 28 | 14,056 | 3,457,776 | 3,457,776 | 0 | 0 | 0 |
+| `qb_game_logs` | 28 | 16,804 | 907,416 | 907,416 | 0 | 0 | 0 |
+| `team_per_game_stats` | 28 | 893 | 219,678 | 219,678 | 0 | 0 | 0 |
+| `qb_per_game_stats` | 28 | 2,117 | 186,296 | 186,296 | 0 | 0 | 0 |
+| `qb_opponent_profiles` | 28 | 1,649 | 89,046 | 89,046 | 0 | 0 | 0 |
+| `opponent_profiles` | 28 | 893 | 215,213 | 215,213 | 0 | 0 | 0 |
+| `combined` | 28 | 893 | 439,356 | 439,356 | 0 | 0 | 0 |
+| `qb_combined` | 28 | 2,117 | 298,497 | 298,497 | 0 | 0 | 0 |
+| `team_wp_bins` | 28 | 542,483 | 4,339,864 | 4,339,864 | 0 | 0 | 0 |
+| `qb_wp_bins` | 28 | 290,415 | 1,742,490 | 1,742,490 | 0 | 0 | 0 |
 
 ## Season tables from the published game logs
 
 The same season tables built a second way, from the published team and quarterback game
 logs (`season_stats.published_logs`), independent of the play-by-play build. The logs
-leave out each rate's hidden numerator and denominator; the adapter rebuilds those the
-published columns determine, and a column that needs any other is counted, not
-compared (its rates are listed below).
+leave out each rate's hidden numerator and denominator; the adapter rebuilds those it
+can read off the published columns, and a column that needs any other is counted as
+not rebuilt, not compared (its rates are listed below).
 
-- Tables compared: 162
-- Cells compared: 1,125,975; bit-identical 1,125,975; within tolerance 0; outside 0
-- Cells not determined by the published logs (not compared): 276,432
+- Tables compared: 168
+- Cells compared: 1,322,210; bit-identical 1,322,210; within tolerance 0; outside 0
+- Of those, cells the port computed: 1,312,618; taken from the published ratings: 9,592
+- Cells not rebuilt by the adapter (not compared): 125,876
 - Tables with column or row differences: 0
 
-| table | seasons | cells compared | bit-identical | within tolerance | outside | not compared |
+| table | seasons | cells compared | bit-identical | within tolerance | outside | not rebuilt |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `team_per_game_stats` | 27 | 144,648 | 144,648 | 0 | 0 | 67,158 |
-| `qb_per_game_stats` | 27 | 179,568 | 179,568 | 0 | 0 | 2,064 |
-| `qb_opponent_profiles` | 27 | 85,224 | 85,224 | 0 | 0 | 1,608 |
-| `opponent_profiles` | 27 | 140,343 | 140,343 | 0 | 0 | 67,158 |
-| `combined` | 27 | 289,296 | 289,296 | 0 | 0 | 134,316 |
-| `qb_combined` | 27 | 286,896 | 286,896 | 0 | 0 | 4,128 |
+| `team_per_game_stats` | 28 | 190,209 | 190,209 | 0 | 0 | 29,469 |
+| `qb_per_game_stats` | 28 | 184,179 | 184,179 | 0 | 0 | 2,117 |
+| `qb_opponent_profiles` | 28 | 87,397 | 87,397 | 0 | 0 | 1,649 |
+| `opponent_profiles` | 28 | 185,744 | 185,744 | 0 | 0 | 29,469 |
+| `combined` | 28 | 380,418 | 380,418 | 0 | 0 | 58,938 |
+| `qb_combined` | 28 | 294,263 | 294,263 | 0 | 0 | 4,234 |
 
-Team rates whose parts the published logs do not determine, in every season:
+Team rates whose parts the adapter does not rebuild, in any season:
 
 `adjusted_net_yards_per_attempt`, `any_a_allowed`, `avg_starting_field_position`,
-`avg_starting_field_position_allowed`, `deep_attempt_rate`, `deep_attempt_rate_faced`,
-`def_sack_rate_per_dropback`, `early_down_pass_rate`, `epa_per_carry`,
-`epa_per_defensive_snap_allowed`, `epa_per_dropback`, `epa_per_dropback_allowed`,
-`epa_per_offensive_snap`, `explosive_pass_rate`, `explosive_pass_rate_allowed`,
-`explosive_play_rate`, `explosive_play_rate_allowed`, `explosive_rush_rate`,
-`explosive_rush_rate_allowed`, `first_downs_per_drive`, `fourth_down_aggressiveness`,
-`fourth_down_go_rate`, `giveaway_rate_per_offensive_snap`, `goal_to_go_td_pct`,
-`goal_to_go_td_pct_allowed`, `havoc_rate`, `int_rate_per_attempt`, `int_rate_per_attempt_allowed`,
-`long_field_score_pct`, `net_yards_per_attempt`, `no_huddle_rate`, `pass_rate`,
-`pass_rate_over_expected`, `pass_success_rate`, `passing_cpoe`, `passing_cpoe_allowed`,
-`passing_td_rate_per_attempt`, `passing_td_rate_per_attempt_allowed`,
-`penalty_rate_per_offensive_snap`, `plays_per_drive`, `points_per_drive`,
-`points_per_drive_allowed`, `points_per_red_zone_trip`, `presnap_penalty_rate`,
-`punt_pct_per_drive`, `punts_forced_pct`, `qb_pressure_events_rate`, `red_zone_td_pct`,
-`red_zone_td_pct_allowed`, `rush_success_rate`, `rush_success_rate_allowed`,
-`sack_rate_per_dropback`, `score_pct_per_drive`, `score_pct_per_drive_allowed`,
-`series_conversion_rate`, `series_conversion_rate_allowed`, `shotgun_rate`, `stuff_rate`,
-`stuffed_run_rate`, `success_rate`, `success_rate_allowed`, `takeaway_rate_per_defensive_snap`,
+`avg_starting_field_position_allowed`, `early_down_pass_rate`, `epa_per_carry`, `epa_per_dropback`,
+`epa_per_dropback_allowed`, `fourth_down_aggressiveness`, `fourth_down_go_rate`,
+`goal_to_go_td_pct`, `goal_to_go_td_pct_allowed`, `long_field_score_pct`, `net_yards_per_attempt`,
+`no_huddle_rate`, `pass_rate_over_expected`, `passing_cpoe`, `passing_cpoe_allowed`,
+`punt_pct_per_drive`, `punts_forced_pct`, `red_zone_td_pct`, `red_zone_td_pct_allowed`,
+`score_pct_per_drive`, `score_pct_per_drive_allowed`, `stuff_rate`, `stuffed_run_rate`,
 `third_down_avg_distance`, `three_and_out_rate`, `three_and_outs_forced_rate`, `time_per_drive`,
-`turnover_pct_per_drive`, `xyac_per_completion`, `yac_over_expected_per_completion`,
-`yards_per_attempt`, `yards_per_attempt_allowed`, `yards_per_carry`, `yards_per_carry_allowed`,
-`yards_per_defensive_snap_allowed`, `yards_per_drive`, `yards_per_dropback`,
-`yards_per_offensive_snap`
+`turnover_pct_per_drive`, `xyac_per_completion`, `yac_over_expected_per_completion`
 
-Quarterback rates whose parts the published logs do not determine:
+Quarterback rates whose parts the adapter does not rebuild, in any season:
 
 `qb_completion_percentage_above_expectation`
 
+## Schedule leaderboard
+
+Every published season's schedules ranked by `schedule_ranks.rank_schedules` from the
+published ratings (`{season}_ratings.parquet`), compared as above with what
+`nfl-sos-ratings`' own `schedules.rank_schedules` returns for the same files at the
+frozen commit (imported from the checkout, each module checked against its blob
+there). Both leave out a season still in progress. A column whose type differs is
+listed; its values are compared all the same.
+
+- Seasons ranked: 1999-2025
+- Team-seasons: 861; cells compared: 4,305; bit-identical: 4,305; within tolerance: 0; outside: 0
+- Column types that differ (rebuilt first): `season: Int64, published Int32`
+- Published team codes read as `WSH` instead of `WAS`: 27
+- Column or row differences: none
+- Result: **PASS**
+
 ## Timings
 
-Full run: 45 s (load 8 s, build 15 s, compare 22 s).
+Full run: 62 s (load 12 s, build 18 s, compare 31 s).
 
 | season | load (s) | build (s) | compare (s) |
 | ---: | ---: | ---: | ---: |
-| 1999 | 0.3 | 0.5 | 0.7 |
-| 2000 | 0.2 | 0.5 | 0.7 |
-| 2001 | 0.3 | 0.5 | 0.7 |
-| 2002 | 0.3 | 0.5 | 0.7 |
+| 1999 | 0.5 | 0.6 | 1.7 |
+| 2000 | 0.5 | 0.8 | 1.7 |
+| 2001 | 0.7 | 0.8 | 1.4 |
+| 2002 | 0.4 | 0.6 | 0.8 |
 | 2003 | 0.3 | 0.5 | 0.7 |
 | 2004 | 0.3 | 0.5 | 0.7 |
-| 2005 | 0.3 | 0.5 | 0.7 |
+| 2005 | 0.3 | 0.8 | 1.2 |
 | 2006 | 0.3 | 0.5 | 0.7 |
-| 2007 | 0.3 | 0.5 | 0.7 |
-| 2008 | 0.3 | 0.5 | 0.7 |
-| 2009 | 0.3 | 0.5 | 0.7 |
-| 2010 | 0.3 | 0.5 | 0.7 |
-| 2011 | 0.3 | 0.5 | 0.7 |
-| 2012 | 0.3 | 0.5 | 0.7 |
-| 2013 | 0.3 | 0.5 | 0.7 |
+| 2007 | 0.3 | 0.5 | 0.8 |
+| 2008 | 0.3 | 0.6 | 0.7 |
+| 2009 | 0.4 | 0.5 | 1.1 |
+| 2010 | 1.5 | 0.8 | 1.0 |
+| 2011 | 0.8 | 1.3 | 1.9 |
+| 2012 | 0.7 | 0.8 | 1.8 |
+| 2013 | 0.6 | 0.8 | 0.9 |
 | 2014 | 0.3 | 0.5 | 0.7 |
-| 2015 | 0.3 | 0.5 | 0.7 |
-| 2016 | 0.3 | 0.5 | 0.7 |
-| 2017 | 0.3 | 0.5 | 0.7 |
-| 2018 | 0.3 | 0.6 | 1.0 |
-| 2019 | 0.4 | 0.7 | 1.0 |
-| 2020 | 0.4 | 0.7 | 1.1 |
-| 2021 | 0.4 | 0.6 | 1.0 |
+| 2015 | 0.3 | 0.5 | 0.8 |
+| 2016 | 0.3 | 0.6 | 1.2 |
+| 2017 | 0.3 | 0.5 | 0.8 |
+| 2018 | 0.3 | 0.5 | 1.0 |
+| 2019 | 0.4 | 0.6 | 1.1 |
+| 2020 | 0.4 | 0.7 | 1.0 |
+| 2021 | 0.4 | 0.7 | 1.0 |
 | 2022 | 0.4 | 0.7 | 1.1 |
-| 2023 | 0.4 | 0.7 | 1.1 |
-| 2024 | 0.4 | 0.7 | 1.0 |
-| 2025 | 0.4 | 0.7 | 1.0 |
+| 2023 | 0.4 | 0.6 | 1.1 |
+| 2024 | 0.4 | 0.7 | 1.2 |
+| 2025 | 0.4 | 0.7 | 1.2 |
+| 2026 | 0.1 | 0.4 | 1.4 |
 
 ## Column types that differ
 
 Rebuilt type first, published second; every value in these columns is compared.
 
-- `qb_game_logs` `week: Int64, published Int32` (2013-2025)
-- `team_game_logs` `def_fumbles_forced: Int64, published Int32` (1999-2025)
-- `team_game_logs` `def_interceptions: Int64, published Int32` (1999-2025)
-- `team_game_logs` `def_pass_defended: Int64, published Int32` (1999-2025)
-- `team_game_logs` `def_qb_hits: Int64, published Int32` (1999-2025)
-- `team_game_logs` `def_safeties: Int64, published Int32` (1999-2025)
-- `team_game_logs` `def_tackles_for_loss: Int64, published Int32` (1999-2025)
+- `qb_game_logs` `week: Int64, published Int32` (2013-2026)
+- `team_game_logs` `def_fumbles_forced: Int64, published Int32` (1999-2026)
+- `team_game_logs` `def_interceptions: Int64, published Int32` (1999-2026)
+- `team_game_logs` `def_pass_defended: Int64, published Int32` (1999-2026)
+- `team_game_logs` `def_qb_hits: Int64, published Int32` (1999-2026)
+- `team_game_logs` `def_safeties: Int64, published Int32` (1999-2026)
+- `team_game_logs` `def_tackles_for_loss: Int64, published Int32` (1999-2026)
 
 ## Column and row differences
 
@@ -163,21 +170,4 @@ The build read only `sources.SEASON_STATS_PBP_COLUMNS`. Missing from this code's
 `constants.PBP_COLUMNS` (the play-by-play cache's list; the run set it to the columns
 above):
 
-`air_epa`, `assist_tackle_1_player_id`, `assist_tackle_1_team`, `assist_tackle_2_player_id`,
-`assist_tackle_2_team`, `assist_tackle_3_player_id`, `assist_tackle_3_team`,
-`assist_tackle_4_player_id`, `assist_tackle_4_team`, `defensive_two_point_conv`, `desc`,
-`drive_first_downs`, `drive_inside20`, `drive_play_count`, `drive_time_of_possession`,
-`drive_yards_penalized`, `field_goal_attempt`, `first_down_penalty`,
-`forced_fumble_player_1_player_id`, `forced_fumble_player_1_team`,
-`forced_fumble_player_2_player_id`, `forced_fumble_player_2_team`, `fumble_forced`,
-`fumble_recovery_1_player_id`, `fumble_recovery_1_team`, `fumble_recovery_2_player_id`,
-`fumble_recovery_2_team`, `fumbled_1_player_id`, `fumbled_1_team`, `fumbled_2_player_id`,
-`fumbled_2_team`, `goal_to_go`, `incomplete_pass`, `no_huddle`, `pass_defense_1_player_id`,
-`pass_length`, `passing_yards`, `penalty_player_id`, `penalty_type`, `posteam_score`,
-`posteam_score_post`, `punt_attempt`, `qb_hit`, `qb_scramble`, `qtr`, `receiver_player_id`,
-`receiver_player_name`, `return_yards`, `rusher_player_id`, `rusher_player_name`, `rushing_yards`,
-`score_differential`, `score_differential_post`, `series`, `series_result`, `series_success`,
-`shotgun`, `solo_tackle_1_player_id`, `solo_tackle_1_team`, `solo_tackle_2_player_id`,
-`solo_tackle_2_team`, `tackle_with_assist_1_player_id`, `tackle_with_assist_1_team`,
-`tackle_with_assist_2_player_id`, `tackle_with_assist_2_team`, `tackled_for_loss`, `td_player_id`,
-`touchdown`, `wp`, `wpa`, `xyac_mean_yardage`, `yac_epa`, `yards_after_catch`, `ydsnet`
+None.

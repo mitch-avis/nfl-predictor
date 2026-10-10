@@ -13,8 +13,10 @@ Run `scripts/gate.sh --web` whenever this directory or `web/` changes.
   (`data/ratings/{season}_{kind}.parquet`, `Settings.ratings_path`) and describes every column
   from the ported metric registry (`nfl_predictor.season_stats.metrics`); `routers/ratings.py`
   serves them under `/api/ratings`, with the response models in `schemas/ratings.py`. A missing
-  table is a 404 (`no_ratings_table`), and one Polars cannot read is a 503
-  (`ratings_table_unreadable`, `errors.ServiceUnavailableError`).
+  table is a 404 (`no_ratings_table`), and one a route needs that cannot be read (a Polars error,
+  or an `OSError` on open) is a 503 (`ratings_table_unreadable`, `errors.ServiceUnavailableError`).
+  A table that only adds to a page is read with `_read_optional`, which treats an unreadable one
+  like a missing one and logs a warning.
 - `create_app` gzips every response of 500 bytes or more for clients that accept it
   (`GZipMiddleware`, at level 6); Starlette leaves `text/event-stream`, the job log stream,
   uncompressed.

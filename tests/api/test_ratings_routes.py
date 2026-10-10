@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -38,6 +39,13 @@ def _october_2026(monkeypatch: pytest.MonkeyPatch) -> None:
 def ratings_dir(project_root: Path) -> Path:
     """Return the data directory's ratings folder with the 2025 season written."""
     return factories.write_season(project_root / "data" / "ratings", SEASON)
+
+
+def _cut_short(ratings_dir: Path, season: int, kind: str) -> str:
+    """Truncate one season's table to 100 bytes, as a write cut short would, and name its file."""
+    table = ratings_dir / f"{season}_{kind}.parquet"
+    table.write_bytes(table.read_bytes()[:100])
+    return table.name
 
 
 @pytest.mark.parametrize(
@@ -234,6 +242,25 @@ def test_game_logs_without_a_ratings_table_still_load(
     assert payload["league_size"] is None
 
 
+def test_game_logs_load_without_opponent_ratings_when_that_table_is_unreadable(
+    ratings_dir: Path, viewer_client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A cut-short ratings table costs the opponents' ratings, not the readable game log."""
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    broken = _cut_short(ratings_dir, SEASON, "ratings")
+
+    # Act
+    response = viewer_client.get(f"/api/ratings/{SEASON}/teams/KC/game-logs")
+
+    # Assert
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["table"]["column_groups"]["opponent_ratings"] == []
+    assert payload["league_size"] is None
+    assert [message for message in caplog.messages if broken in message]
+
+
 def test_rating_history_lists_a_teams_weeks(ratings_dir: Path, viewer_client: TestClient) -> None:
     """A team's rating after each week of the season."""
     # Act
@@ -349,6 +376,27 @@ def test_qb_rank_history_uses_the_team_weeks_for_its_start(
     assert [row["week"] for row in payload["table"]["rows"]] == [3, 4, 5, 6]
 
 
+def test_rank_history_shows_every_week_when_the_team_history_is_unreadable(
+    project_root: Path, viewer_client: TestClient
+) -> None:
+    """Without a readable team history to find its first week, the rank history starts at 1."""
+    # Arrange
+    ratings_dir = factories.write_season(
+        project_root / "data" / "ratings",
+        2026,
+        games_played=6,
+        kinds=(*factories.ALL_KINDS, *factories.IN_PROGRESS_KINDS),
+    )
+    _cut_short(ratings_dir, 2026, "ratings_by_week")
+
+    # Act
+    response = viewer_client.get("/api/ratings/2026/teams/KC/rank-history")
+
+    # Assert
+    assert response.status_code == 200
+    assert [row["week"] for row in response.json()["table"]["rows"]] == [1, 2, 3, 4, 5, 6]
+
+
 def test_completed_seasons_have_no_rank_history(
     ratings_dir: Path, viewer_client: TestClient
 ) -> None:
@@ -393,17 +441,16 @@ def test_qb_head_to_head_lists_a_passers_chances(
     [
         ("rating_pairs", f"/api/ratings/{SEASON}/teams/BUF/head-to-head"),
         ("combined", f"/api/ratings/{SEASON}/teams"),
-        ("ratings", f"/api/ratings/{SEASON}/teams/BUF/game-logs"),
-        ("ratings", "/api/ratings/schedules"),
+        ("team_game_logs", f"/api/ratings/{SEASON}/teams/BUF/game-logs"),
+        ("rating_ranges", f"/api/ratings/{SEASON}/teams/rank-ranges"),
     ],
 )
-def test_a_broken_table_is_a_503_that_names_it(
+def test_a_broken_table_a_page_needs_is_a_503_that_names_it(
     ratings_dir: Path, viewer_client: TestClient, kind: str, path: str
 ) -> None:
-    """A table left empty or cut short says which file to rebuild instead of failing blindly."""
+    """A required table left empty or cut short says which file to rebuild instead of failing."""
     # Arrange
-    table = ratings_dir / f"{SEASON}_{kind}.parquet"
-    table.write_bytes(table.read_bytes()[:100])
+    broken = _cut_short(ratings_dir, SEASON, kind)
 
     # Act
     response = viewer_client.get(path)
@@ -412,7 +459,7 @@ def test_a_broken_table_is_a_503_that_names_it(
     assert response.status_code == 503
     error = response.json()["error"]
     assert error["code"] == "ratings_table_unreadable"
-    assert f"{SEASON}_{kind}.parquet" in error["message"]
+    assert broken in error["message"]
 
 
 def test_schedules_rank_every_completed_team_season(
@@ -435,6 +482,25 @@ def test_schedules_rank_every_completed_team_season(
         [2026],
     )
     assert payload["table"]["rows"][0]["softest_rank"] == 1
+
+
+def test_schedules_rank_the_readable_seasons_when_one_is_unreadable(
+    project_root: Path, viewer_client: TestClient
+) -> None:
+    """One cut-short season drops out of the leaderboard instead of failing it."""
+    # Arrange
+    ratings_dir = project_root / "data" / "ratings"
+    factories.write_season(ratings_dir, 2024)
+    factories.write_season(ratings_dir, 2025)
+    _cut_short(ratings_dir, 2024, "ratings")
+
+    # Act
+    response = viewer_client.get("/api/ratings/schedules")
+
+    # Assert
+    assert response.status_code == 200
+    payload = response.json()
+    assert (payload["count"], payload["seasons"], payload["skipped_seasons"]) == (4, [2025], [])
 
 
 def test_metrics_serve_the_glossary_registry(viewer_client: TestClient) -> None:

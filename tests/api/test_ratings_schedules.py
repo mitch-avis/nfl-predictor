@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -92,6 +93,25 @@ def test_schedule_ranks_skip_a_season_whose_table_vanished(
 
     # Assert
     assert (ranks.seasons, ranks.skipped_seasons, ranks.count) == ([2025], [], 2)
+
+
+def test_schedule_ranks_skip_a_season_whose_table_is_unreadable(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A cut-short season drops out of the ranking, with a warning that names its file."""
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    _write_ratings(tmp_path, 2024, {"BUF": -2.0, "WSH": 0.25}, games=17)
+    _write_ratings(tmp_path, 2025, {"BUF": 1.0, "KC": 0.0}, games=17)
+    broken = tmp_path / "2024_ratings.parquet"
+    broken.write_bytes(broken.read_bytes()[:100])
+
+    # Act
+    ranks = schedules.schedule_ranks(tmp_path)
+
+    # Assert
+    assert (ranks.seasons, ranks.skipped_seasons, ranks.count) == ([2025], [], 2)
+    assert [message for message in caplog.messages if broken.name in message]
 
 
 def test_schedule_ranks_ignore_other_kinds_and_names(tmp_path: Path) -> None:

@@ -3,8 +3,11 @@
 Every route reads the season tables in ``data/ratings/`` (``Settings.ratings_path``) and none
 writes anything. A missing season or table is a 404 with code ``no_ratings_table`` naming the
 file, and a team or quarterback without rows a 404 with code ``no_ratings_entity``, so a page can
-hide a section the season was built without. A table that exists but cannot be read (empty or
-cut short) is a 503 with code ``ratings_table_unreadable`` naming the file.
+hide a section the season was built without. A table a route needs that exists but cannot be read
+(empty, cut short or not open to the server) is a 503 with code ``ratings_table_unreadable``
+naming the file. A table that only adds to a page (the opponents' ratings beside a game log, the
+team history that starts a rank history) is left out with a warning when it cannot be read, as
+when it is missing, and the schedule leaderboard leaves out a season it cannot read.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from nfl_predictor.api.schemas.ratings import (
     SeasonTableOut,
 )
 from nfl_predictor.utils import clock
+from nfl_predictor.utils.logger import log
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -75,13 +79,18 @@ def _read(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame:
 
 
 def _read_optional(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame | None:
-    """Return one season's table when the season has it, else ``None``; a broken one is a 503."""
+    """Return a table that only adds to a page, or ``None`` when it is missing or unreadable.
+
+    An unreadable one is logged as a warning naming it, and the page is served without what it
+    would add, like a missing one.
+    """
     try:
         return files.read_table(ratings_dir, season, kind)
     except files.RatingsTableMissingError:
         return None
     except files.RatingsTableUnreadableError as exc:
-        raise _unreadable(exc) from exc
+        log.warning("%s Serving the page without it.", exc)
+        return None
 
 
 def _entity_rows(
@@ -120,10 +129,7 @@ def metrics(_user: CurrentUser) -> MetricRegistryOut:
 @router.get("/schedules", response_model=ScheduleRanksOut)
 def schedule_ranks(_user: CurrentUser, settings: SettingsDep) -> ScheduleRanksOut:
     """Rank every completed team-season on schedule strength, softest first."""
-    try:
-        return schedules.schedule_ranks(settings.ratings_path)
-    except files.RatingsTableUnreadableError as exc:
-        raise _unreadable(exc) from exc
+    return schedules.schedule_ranks(settings.ratings_path)
 
 
 @router.get("/{season}/{kind}", response_model=EntityTableOut)

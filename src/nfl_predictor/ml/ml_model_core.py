@@ -171,7 +171,11 @@ class MarketProbConfig:
 
 @dataclass(frozen=True)
 class TrainingResult:
-    """Training output bundle used for artifact writing."""
+    """Training output bundle used for artifact writing.
+
+    ``disabled_feature_groups`` are the feature groups the fit left out, and
+    ``dropped_feature_group_columns`` the columns they removed from its games.
+    """
 
     model: Any
     metrics_report: dict[str, Any]
@@ -181,6 +185,8 @@ class TrainingResult:
     feature_list: list[str]
     early_stopping: dict[str, Any]
     feature_importance: dict[str, Any] | None = None
+    disabled_feature_groups: tuple[str, ...] = ()
+    dropped_feature_group_columns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from nfl_predictor import constants
 from nfl_predictor.cli import options
-from nfl_predictor.ml import floor_sigma, walk_forward
+from nfl_predictor.ml import feature_spec, floor_sigma, walk_forward
 from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.reporting import production_settings, run_comparison
 from nfl_predictor.utils.logger import log
@@ -234,7 +234,7 @@ def _apply_ablations(df: pd.DataFrame, args: argparse.Namespace) -> tuple[pd.Dat
     disabled_groups = options.parse_feature_groups(args.disable_feature_groups)
     group_columns: list[str] = []
     if disabled_groups:
-        group_columns = walk_forward.resolve_feature_group_columns(
+        group_columns = feature_spec.resolve_feature_group_columns(
             list(df.columns), disabled_groups
         )
         if group_columns:

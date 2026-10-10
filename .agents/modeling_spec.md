@@ -70,16 +70,17 @@ When market lines exist, the system produces market-derived features and support
   yardstick only: every walk-forward reports it beside the model, with the paired
   deterministic-minus-market intervals, and it never enters the submitted probability. There is no
   market probability blend or clamp.
-- A market-free run (`nfl-predictor backtest --exclude-market --no-market-anchor
-  --no-market-transform`, the weekly run's `--wf-market-mode none`) trains on no column derived
-  from betting lines: the nine are listed by the generated inventory in `.agents/market_free/`.
-  It still scores the market yardstick. The Elo columns from `data/qb_elos.csv` are not line
-  columns but carry market information: `../nfeloqb` pulls each preseason Elo toward a rating
-  built from betting win totals (2003-2023). A backtest with no market information at all adds
-  `--disable-feature-groups elo` (the 18 Elo columns; the weekly run has no group switch). The
-  repository's own Elo (`utils/polars/elo_ratings.py`, not yet in the datasets) publishes its
-  win-total preset as the `own_elo_wt` group, market-informed in the same way: once a build
-  carries it, such a backtest disables `elo,own_elo_wt` and keeps the market-free `own_elo`.
+- A market-free run
+  (`nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform`, the weekly
+  run's `--wf-market-mode none`) trains on no column derived from betting lines: the nine are listed
+  by the generated inventory in `.agents/market_free/`. It still scores the market yardstick. The
+  Elo columns from `data/qb_elos.csv` are not line columns but carry market information:
+  `../nfeloqb` pulls each preseason Elo toward a rating built from betting win totals (2003-2023). A
+  run with no market information at all also leaves out the `elo` group (the 18 Elo columns):
+  `--disable-feature-groups elo` on `backtest` or `train`, `disable_feature_groups: [elo]` in the
+  weekly config. The repository's own Elo (`utils/polars/elo_ratings.py`, not yet in the datasets)
+  publishes its win-total preset as the `own_elo_wt` group, market-informed in the same way: once a
+  build carries it, such a run disables `elo,own_elo_wt` and keeps the market-free `own_elo`.
 
 Market anchoring details:
 
@@ -223,6 +224,9 @@ Every saved model must include adjacent metadata JSON with:
   the fallback constant, the week it was estimated for, its pool's game count and seasons, and
   the runs the pool came from
 - feature list used
+- the feature groups the model was trained without and the columns they removed
+  (`disabled_feature_groups`, `dropped_feature_group_columns`; empty lists when none). The
+  model's feature spec holds the columns it trained on, so prediction needs neither.
 - best params (if tuned) and early-stopping info
 
 Artifacts must be loadable without hidden external state.
@@ -260,3 +264,8 @@ Rules for stat-style features:
   with two dataset builds behind an ETL flag, back up `data/*.csv` before each rebuild, and keep
   both walk-forward reports under `models/`. Measure early-season changes with `--wf-start-week 1`
   and report weeks 1, 2, and 3-18 separately.
+- Every fit that leaves feature groups out (a backtest's folds, `nfl-predictor train`, the weekly
+  run's stage 1 and final fit) removes the columns `feature_spec.resolve_feature_group_columns`
+  names for them. An arm measured with `--disable-feature-groups` is adopted by listing the same
+  groups in `config/weekly_run.yaml` (`disable_feature_groups`, empty by default); that changes
+  what a weekly run produces, so it is the user's decision.

@@ -118,6 +118,7 @@ def _shrunk(numerator: float, denominator: float, prior: float) -> float:
 
 def test_build_qb_identity_drops_ambiguous_names_and_adds_aliases() -> None:
     """Keeps one id per unambiguous name, drops null ids, and maps the configured aliases."""
+    # Arrange
     meta = pl.DataFrame(
         {
             "name_id": ["Tom Brady", "Mark Miller", "Mark Miller", "No Id", "AJ McCarron"],
@@ -125,9 +126,11 @@ def test_build_qb_identity_drops_ambiguous_names_and_adds_aliases() -> None:
         }
     )
 
+    # Act
     identity = qb_stats.build_qb_identity(meta)
-    mapping = dict(zip(identity["qb_name"], identity["qb_id"], strict=True))
 
+    # Assert
+    mapping = dict(zip(identity["qb_name"], identity["qb_id"], strict=True))
     assert mapping["Tom Brady"] == "00-1"
     assert mapping["AJ McCarron"] == "00-2"
     assert mapping["A.J. McCarron"] == "00-2"
@@ -138,6 +141,7 @@ def test_build_qb_identity_drops_ambiguous_names_and_adds_aliases() -> None:
 
 def test_aggregate_qb_game_stats_counts_one_quarterback_game() -> None:
     """Sums a starter's and a backup's dropbacks, crediting scrambles to the starter."""
+    # Arrange
     plays = [
         _starter_pass(complete_pass=1, yards_gained=10.0, pass_touchdown=1, qb_epa=2.0, cpoe=20.0),
         _starter_pass(qb_epa=-0.5, cpoe=-10.0),
@@ -162,9 +166,13 @@ def test_aggregate_qb_game_stats_counts_one_quarterback_game() -> None:
         ),
     ]
 
-    games = qb_stats.aggregate_qb_game_stats(pl.DataFrame(plays, schema_overrides=_PLAY_DTYPES))
-    rows = {row["qb_id"]: row for row in games.iter_rows(named=True)}
+    frame = pl.DataFrame(plays, schema_overrides=_PLAY_DTYPES)
 
+    # Act
+    games = qb_stats.aggregate_qb_game_stats(frame)
+
+    # Assert
+    rows = {row["qb_id"]: row for row in games.iter_rows(named=True)}
     assert set(rows) == {"S", "B"}
     starter = rows["S"]
     assert (starter["season"], starter["week"], starter["team_abbr"]) == (2024, 1, "NE")
@@ -189,12 +197,15 @@ def test_aggregate_qb_game_stats_counts_one_quarterback_game() -> None:
 
 def test_attach_qb_features_uses_only_earlier_weeks_and_shrinks_to_the_league() -> None:
     """Career rates use games strictly before the row's week, shrunk toward the league."""
+    # Arrange
     qb_games = _qb_games([_A1, _A2, _B1])
     games = _games([(2023, 2, "Name A", "Name B"), (2023, 3, "Name A", "Name New")])
 
+    # Act
     out = qb_stats.attach_qb_features(games, qb_games, _IDENTITY)
-    week2, week3 = out.row(0, named=True), out.row(1, named=True)
 
+    # Assert
+    week2, week3 = out.row(0, named=True), out.row(1, named=True)
     league_epa_w2 = 9.5 / 65
     career_a_w2 = _shrunk(6.0, 30, league_epa_w2)
     assert week2["away_qb_dropback_epa"] == pytest.approx(career_a_w2)
@@ -219,12 +230,16 @@ def test_attach_qb_features_uses_only_earlier_weeks_and_shrinks_to_the_league() 
 
 def test_attach_qb_features_recent_window_shrinks_toward_career(monkeypatch) -> None:
     """The recent window keeps the last games only and is shrunk toward the career rate."""
+    # Arrange
     monkeypatch.setattr(constants, "QB_RECENT_GAMES", 1)
     qb_games = _qb_games([_A1, _A2, _B1])
     games = _games([(2023, 3, "Name A", "Name B")])
 
-    row = qb_stats.attach_qb_features(games, qb_games, _IDENTITY).row(0, named=True)
+    # Act
+    out = qb_stats.attach_qb_features(games, qb_games, _IDENTITY)
 
+    # Assert
+    row = out.row(0, named=True)
     career = _shrunk(2.0, 70, 5.5 / 105)
     assert row["away_qb_dropback_epa_recent"] == pytest.approx(_shrunk(-4.0, 40, career))
     career_any_a = _shrunk(378.0, 70, 583.0 / 105)
@@ -234,26 +249,33 @@ def test_attach_qb_features_recent_window_shrinks_toward_career(monkeypatch) -> 
 
 def test_attach_qb_features_ignores_the_game_week_and_later() -> None:
     """Games in the row's own week or later never change its features."""
+    # Arrange
     games = _games([(2023, 2, "Name A", "Name B")])
     base = qb_stats.attach_qb_features(games, _qb_games([_A1, _B1]), _IDENTITY)
-
     later = [
         _qb_game(2023, 2, "NE", "A", dropbacks=50, qb_epa_sum=40.0, attempts=50, pass_yards=900),
         _qb_game(2023, 2, "BUF", "B", dropbacks=10, qb_epa_sum=-9.0, attempts=10),
         _qb_game(2024, 1, "NE", "A", dropbacks=40, qb_epa_sum=-20.0, attempts=40),
     ]
+
+    # Act
     perturbed = qb_stats.attach_qb_features(games, _qb_games([_A1, _B1, *later]), _IDENTITY)
 
+    # Assert
     columns = [c for c in base.columns if "qb_" in c and c not in ("away_qb", "home_qb")]
     assert base.select(columns).equals(perturbed.select(columns))
 
 
 def test_attach_qb_features_leaves_the_first_week_without_a_prior() -> None:
     """With no earlier quarterback games at all there is no league prior, so rates are null."""
+    # Arrange
     games = _games([(2023, 1, "Name A", "Name B")])
 
-    row = qb_stats.attach_qb_features(games, _qb_games([_A1, _B1]), _IDENTITY).row(0, named=True)
+    # Act
+    out = qb_stats.attach_qb_features(games, _qb_games([_A1, _B1]), _IDENTITY)
 
+    # Assert
+    row = out.row(0, named=True)
     assert row["away_qb_history_dropbacks"] == 0
     assert row["away_qb_dropback_epa"] is None
     assert row["away_qb_cpoe"] is None
@@ -261,12 +283,15 @@ def test_attach_qb_features_leaves_the_first_week_without_a_prior() -> None:
 
 def test_attach_qb_features_matches_abbreviated_names_and_nulls_unknown_quarterbacks() -> None:
     """Unmapped names fall back to the play-by-play passer name; unknown ones stay null."""
+    # Arrange
     burrow = _qb_game(2023, 1, "CIN", "JB", dropbacks=40, qb_epa_sum=8.0, attempts=38)
     burrow["passer_name"] = "J.Burrow"
     games = _games([(2023, 2, "Joe Burrow", "Nobody Known"), (2023, 2, "Name A", "Name B")])
 
+    # Act
     out = qb_stats.attach_qb_features(games, _qb_games([_A1, _B1, burrow]), _IDENTITY)
 
+    # Assert
     assert out.height == 2
     assert out["game_id"].to_list() == ["g0", "g1"]
     first = out.row(0, named=True)
@@ -278,8 +303,10 @@ def test_attach_qb_features_matches_abbreviated_names_and_nulls_unknown_quarterb
 
 def test_qb_columns_join_the_final_schema_as_their_own_feature_group() -> None:
     """The final schema carries every quarterback stat per side and as a diff, in one group."""
+    # Act
     order = build_final_column_order()
 
+    # Assert
     def published(stats: list[str]) -> list[str]:
         """Return the per-side and diff columns of ``stats``, sorted."""
         return sorted(

@@ -35,9 +35,9 @@ The fixture test that pins the framework runs with:
 VIRTUAL_ENV="$PWD/.venv" .venv/bin/python -m pytest tests/test_elo_ratings.py -k fivethirtyeight -n 0
 ```
 
-No entry changes any feature value today: `build_own_elo_features` has no caller, so the ETL
-writes exactly what it wrote before. Each "Feature-value impact" therefore says what the decision
-does to the own Elo's columns once the integration stream wires them in.
+When these entries were decided, `build_own_elo_features` had no caller, so each "Feature-value
+impact" says what the decision does to the own Elo's columns once a build carries them. The
+integration now publishes both presets in every build (`integration_pbp_elo.md`, section 3).
 
 ## 1. The rule for keeping components
 

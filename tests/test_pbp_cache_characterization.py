@@ -38,7 +38,8 @@ if TYPE_CHECKING:
 
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "pbp_cache_characterization"
 
-# (season, week, away, home) as nflverse writes the codes in that season.
+# (season, week, away, home). nflverse play-by-play writes LV, LAC, LA and WAS in every season;
+# the older codes here (OAK, SD, STL) exercise the rest of the alias table too.
 _GAMES = (
     (2005, 1, "OAK", "SD"),
     (2005, 2, "STL", "WAS"),

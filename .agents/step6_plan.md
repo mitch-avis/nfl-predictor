@@ -43,25 +43,27 @@ data are logged for review. Read as:
 | stream | phase | depends on | branch / state |
 | --- | --- | --- | --- |
 | S1 inventory and parity scripts | 1 | none | implementer running (from `cacd301`) |
-| S2 new nflverse sources, `MODELS_PATH` | 2 | none | to launch |
-| S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | to launch |
-| S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | to launch |
-| S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | to launch |
+| S2 new nflverse sources, `MODELS_PATH`, `compare` tie fix | 2 | none | implementer running |
+| S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | implementer running |
+| S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | implementer running |
+| S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | implementer running |
 | S5 ETL integration: play-by-play fixes, ratings inputs and outputs, pre-week features, follow-ups | 3-4 | S1, S2, S4 | after those merge |
 | S6 candidate build and measurement | 4 | S3, S5 | after S5 |
 | S7 power rankings and projected standings | 5 | S5, S6 | after S6 |
 | S8b web: team, quarterback, schedule, rank-range, head-to-head pages (58.2) | 6 | S5 output schema | after S5 |
 
-## Measurement ladder (phase 4; written before any run, cap 8 runs plus one build)
+## Measurement ladder (phase 4)
 
-Arms on one candidate build, 2007-2025 from week 1, seeds 42 and 7, the reference's command
-otherwise (see `models/step4_reference/driver.sh`):
+Pre-registered on 2026-10-10 before any step-6 code merged: the main checkout's
+`models/step6/HYPOTHESIS.md` (arms, cap of 8 runs plus 2 conditional and one build, instrument,
+decision rules). Do not edit it after the launch record is written.
 
-1. Ported ratings anchored against the adopted-settings reference (`models/step4_reference/
-   adopted_seed*`).
-2. Ported ratings market-free (no betting-line, no Elo columns) against the test bench
-   (`models/step4_reference/marketfree_all_seed*`).
-3. Own Elo anchored (replacing the `qb_elos.csv` columns) against arm 1.
-4. Own Elo market-free (without win totals) against arm 2.
+## Snapshots and timings
 
-The decision rules are written into `models/step6/HYPOTHESIS.md` before launch.
+- Upstream inputs for the candidate build were copied into `~/scratch/step6/data/` on 2026-10-10
+  at about 02:30 (main checkout's `data/` without backups, old cuts, `predict/`, `web/`); manifest
+  `~/scratch/step6_data_snapshot_20261010.sha256` (715 files).
+- A full ETL took 153 s on 2026-10-09; a GPU walk-forward of 2007-2025 from week 1 about 34
+  minutes (`models/step4_reference/*/run.log`).
+- Output location for the ported ratings files, shared by the ETL integration and the web pages:
+  `data/ratings/{season}_{kind}.parquet`, the kinds named as in `nfl-sos-ratings`.

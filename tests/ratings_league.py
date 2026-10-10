@@ -11,6 +11,8 @@ backup from week 4 of the last season, the receiver at wide receiver through wee
 season and at quarterback from week 5, and the convert at wide receiver through the middle
 season and at quarterback through the last. Game rows carry the starters' names, which the
 identity file maps to their ids, as the ETL's game rows carry ``away_qb`` / ``home_qb``.
+``with_season_stats_columns`` shapes the league as the ETL holds it for the season statistics,
+and ``with_season_stats_play_columns`` does the same for any plays.
 """
 
 from __future__ import annotations
@@ -19,6 +21,9 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 import polars as pl
+
+from nfl_predictor.season_stats.sources import SEASON_STATS_PBP_COLUMNS
+from nfl_predictor.utils.polars import loaders, nflverse_sources
 
 TEAMS = ("AAA", "BBB", "CCC", "DDD")
 SEASONS = (1999, 2000, 2001)
@@ -489,6 +494,42 @@ def league(seed: int = 0) -> League:
     )
 
 
+def with_season_stats_play_columns(plays: pl.DataFrame, seed: int = 0) -> pl.DataFrame:
+    """Return the regular-season plays with every column the season statistics read.
+
+    The plays keep the regular season only, as the play-by-play loader does, and gain each column
+    of ``SEASON_STATS_PBP_COLUMNS`` they lack: null, with the play-by-play cache's type, apart
+    from a seeded win probability (``wp``) that spreads the plays over the win-probability bins.
+    """
+    rng = np.random.default_rng(seed)
+    regular = plays.filter(pl.col("season_type") == "REG")
+    missing = [column for column in SEASON_STATS_PBP_COLUMNS if column not in regular.columns]
+    return regular.with_columns(
+        pl.lit(None, dtype=loaders._PBP_COLUMN_DTYPES[column]).alias(column) for column in missing
+    ).with_columns(pl.Series("wp", rng.uniform(0.02, 0.98, regular.height)))
+
+
+def with_season_stats_columns(data: League, seed: int = 0) -> League:
+    """Return the league as the ETL holds it for the season statistics.
+
+    The plays are ``with_season_stats_play_columns``'. The player stats, snap counts, players
+    file and weekly rosters take their loaders' columns (``nflverse_sources``), as the ratings'
+    sources hold them.
+    """
+    return replace(
+        data,
+        plays=with_season_stats_play_columns(data.plays, seed),
+        player_stats=nflverse_sources.conform(
+            data.player_stats, nflverse_sources.PLAYER_STATS.schema
+        ),
+        snap_counts=nflverse_sources.conform(data.snap_counts, nflverse_sources.SNAP_COUNTS.schema),
+        players=nflverse_sources.conform(data.players, nflverse_sources._PLAYERS_SCHEMA),
+        weekly_rosters=nflverse_sources.conform(
+            data.weekly_rosters, nflverse_sources.WEEKLY_ROSTERS.schema
+        ),
+    )
+
+
 def with_backup_starting(games: pl.DataFrame) -> pl.DataFrame:
     """Return ``games`` with AAA's backup as its expected starter from the backup's first week."""
     takes_over = (pl.col("season") == SEASONS[-1]) & (pl.col("week") >= BACKUP_FROM_WEEK)
@@ -522,4 +563,6 @@ __all__ = [
     "starter_name",
     "with_backup_starting",
     "with_player_sources",
+    "with_season_stats_columns",
+    "with_season_stats_play_columns",
 ]

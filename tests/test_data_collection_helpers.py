@@ -1014,7 +1014,10 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
     assert warnings == [
         "No play-by-play team-game rows available; emitting null count columns.",
         "No ELO ratings loaded",
-        "No play-by-play for the ratings; their columns stay null",
+        (
+            "No play-by-play for the ratings; their columns stay null, and no ratings or season "
+            "statistics tables are built"
+        ),
     ]
 
 

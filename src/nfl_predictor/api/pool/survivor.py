@@ -35,7 +35,7 @@ MIN_PROBABILITY = 1e-9
 UNAVAILABLE_COST = 1e6
 """Assignment cost of a team that does not play that week (far above any ``-log p``)."""
 LOST_CAUSE_VALUE = 50.0
-"""Future value (in log survival) of a team without which the later weeks cannot be covered."""
+"""Future value (in log survival) of a team without which the weeks after this one go uncovered."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -78,7 +78,8 @@ class Plan:
 class SurvivorResult:
     """Ranked plans, one per first-week pick, and each available team's future value.
 
-    A team's future value is the share of the later weeks' survival chance lost by using it now.
+    A team's future value is the share of the survival chance in the weeks after this one lost by
+    using it now.
     """
 
     plans: list[Plan]

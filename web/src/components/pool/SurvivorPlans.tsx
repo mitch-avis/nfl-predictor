@@ -52,7 +52,7 @@ function PlanItem({ plan, plannedWeeks }: { plan: SurvivorPlan; plannedWeeks: nu
   )
 }
 
-/** Ranked survivor plans, one per pick this week, and the teams worth saving for later weeks. */
+/** Ranked survivor plans, one per pick this week, and the teams worth saving for the weeks after it. */
 export function SurvivorPlans({ result }: { result: SurvivorOut }) {
   const saving = result.future_values.filter((item) => item.value >= MIN_VALUE).slice(0, WORTH_SAVING)
   return (
@@ -83,7 +83,7 @@ export function SurvivorPlans({ result }: { result: SurvivorOut }) {
       {saving.length > 0 ? (
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Worth saving</h3>
-          <p className="text-xs text-muted-foreground">Share of the later weeks’ survival chance lost by using the team now.</p>
+          <p className="text-xs text-muted-foreground">Share of the survival chance in the weeks after this one lost by using the team now.</p>
           <ul aria-label="Teams worth saving" className="flex flex-wrap gap-1.5">
             {saving.map((item) => (
               <li key={item.team} className="inline-flex items-baseline gap-1 rounded-md border bg-card px-2 py-0.5 text-xs">

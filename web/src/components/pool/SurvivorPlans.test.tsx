@@ -58,13 +58,14 @@ describe('SurvivorPlans', () => {
     expect(screen.getByRole('link', { name: 'Predictions page' })).toHaveAttribute('href', '/predictions')
   })
 
-  it('lists the teams worth saving for later', () => {
+  it('lists the teams worth saving for the weeks after this one', () => {
     // Act
     renderWithProviders(<SurvivorPlans result={result} />)
 
     // Assert
     const saving = screen.getByRole('list', { name: 'Teams worth saving' })
     expect(within(saving).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['GB12%'])
+    expect(screen.getByText(/survival chance in the weeks after this one lost by using the team now/)).toBeInTheDocument()
   })
 
   it('explains an empty result', () => {

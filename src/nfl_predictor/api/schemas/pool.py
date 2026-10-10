@@ -153,7 +153,7 @@ class SurvivorPlanOut(BaseModel):
 
 
 class FutureValueOut(BaseModel):
-    """The share of the later weeks' survival chance lost by using ``team`` now."""
+    """The share of the survival chance in the weeks after this one lost by using ``team`` now."""
 
     team: str
     value: float

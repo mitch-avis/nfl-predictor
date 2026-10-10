@@ -3,25 +3,28 @@
 Run from the repository root (``PYTHONDONTWRITEBYTECODE=1`` keeps the run from leaving
 ``__pycache__`` beside the scripts):
 
-    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/inventory.py
+    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/inventory.py [--data-dir DIR]
 
-It writes ``INVENTORY.md`` and ``inventory.json`` beside this file. Everything listed is found
-mechanically; only the classifications come from ``mapping.yaml``, and each is applied only where
-it resolves cleanly:
+``--data-dir`` is this repository's data directory to read (default: the main checkout's
+``data/``). It writes ``INVENTORY.md`` and ``inventory.json`` beside this file. Everything listed
+is found mechanically; only the classifications come from ``mapping.yaml``, and each is applied
+only where it resolves cleanly:
 
 - data sources: nflreadpy load calls, network fetches, web addresses and named data files, from
   the abstract syntax tree of each repository's Python source (``inventory_scan.py``);
 - output columns: the schema of every ``{season}_{kind}.parquet`` it built for 1999-2025 (and the
   two rank-range-by-week files it builds only for the season in progress), each column resolved
-  through its own metric registry, imported from the frozen commit;
+  through its own metric registry, imported from the frozen commit, and checked against the
+  tables this repository's ETL writes to ``data/ratings/`` (``port_catalog``);
 - the metric registry: every entry, read from the registry object itself;
 - ratings: its rating files' columns against this repository's strength snapshot and quarterback
   columns (a subset of the column classification);
 - web: its API routes and pages, and this app's, from route decorators and the route tables.
 
 The run exits non-zero when a column, source or web item matches no rule or more than one, when a
-rule matches nothing, when a counterpart named for this repository does not exist, when a search
-that must find something finds nothing, or when an input is missing or not at its commit.
+rule matches nothing, when a counterpart named for this repository does not exist, when an item
+left missing has a counterpart here (the guards), when a search that must find something finds
+nothing, or when an input is missing or not at its commit.
 """
 
 from __future__ import annotations
@@ -30,7 +33,7 @@ import re
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import yaml
@@ -48,7 +51,6 @@ from inventory_scan import (
     tracked,
 )
 from port_audit import (
-    DATA,
     HERE,
     ROOT,
     SEASONS,
@@ -56,6 +58,7 @@ from port_audit import (
     Audit,
     SosCode,
     check_sos_checkout,
+    parse_args,
     portable,
 )
 from report_text import dump_json, season_ranges
@@ -65,19 +68,34 @@ from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars.pbp import PBP_TEAM_BOX_SCORE_COLUMNS, PBP_TEAM_GAME_COLUMNS
 from nfl_predictor.utils.polars.qb_stats import QB_GAME_SCHEMA
+from nfl_predictor.utils.polars.ratings_build import IN_PROGRESS_KINDS, PUBLISHED_KINDS
+from nfl_predictor.utils.polars.season_stats_schema import SEASON_STATS_SCHEMAS
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from pathlib import Path
 
 MAPPING = HERE / "mapping.yaml"
 OUT_MD = HERE / "INVENTORY.md"
 OUT_JSON = HERE / "inventory.json"
 CLASSES = ("matched", "different", "missing")
-DATASET = DATA / "all_data_ml.csv"
-TEAM_STATS = DATA / "cache" / "nflreadpy" / f"team_stats_{SEASONS[-1]}_reg.parquet"
+# The counterpart catalog of the tables this repository's ETL writes to
+# ``data/ratings/{season}_{kind}.parquet`` (the ported ratings and season statistics): a reference
+# ``ratings:<column>`` names a column of the table of the same kind as the column it describes.
+PORT = "ratings"
 FILE_NAME = re.compile(r"^(\d{4})_(.+)\.parquet$")
 SIDES = ("home_", "away_")
 # A column name inside a counterpart formula: letters, digits and underscores, not only digits.
 NAME = re.compile(r"[A-Za-z0-9_]*[A-Za-z_][A-Za-z0-9_]*")
 # File kinds whose columns describe the opponents a team or quarterback faced.
 PROFILE_KINDS = frozenset({"opponent_profiles", "qb_opponent_profiles"})
+# This app's views, against its pages and entity components: the page components, those of the
+# ratings pages, and the shared table they draw with.
+HERE_COMPONENTS = (
+    "web/src/pages/*.tsx",
+    "web/src/components/ratings/*.tsx",
+    "web/src/components/table/*.tsx",
+)
 SCAN_SCOPE = (
     "Its package `nfl_sos_ratings/` at the frozen commit, and this repository's tracked Python "
     "under `src/` and `scripts/`. Not covered: its `.agents/` analysis scripts (one reads ESPN's "
@@ -173,13 +191,16 @@ def affixes(registry: Any, column: str, base: str) -> tuple[str, str]:
     return "", column[len(base) :]
 
 
-def here_catalog(audit: Audit) -> dict[str, list[str]]:
+def here_catalog(data_dir: Path, audit: Audit) -> dict[str, list[str]]:
     """Return this repository's column and route sets a classification may name.
 
     ``dataset`` is the per-team name of every published game-dataset column (the header of the
-    main checkout's ``all_data_ml.csv``, with the ``home_``/``away_`` side prefix removed).
+    data directory's ``all_data_ml.csv``, with the ``home_``/``away_`` side prefix removed), and
+    ``team_stats`` the columns of its cached weekly team stats of the last completed season.
     """
-    header = audit.record(DATASET).open(encoding="utf-8").readline().strip().split(",")
+    dataset = data_dir / "all_data_ml.csv"
+    team_stats = data_dir / "cache" / "nflreadpy" / f"team_stats_{SEASONS[-1]}_reg.parquet"
+    header = audit.record(dataset).open(encoding="utf-8").readline().strip().split(",")
     team_level = sorted(
         {name.removeprefix(side) for name in header for side in SIDES if name.startswith(side)}
         | set(header)
@@ -187,7 +208,7 @@ def here_catalog(audit: Audit) -> dict[str, list[str]]:
     catalog = {
         "team_game": list(PBP_TEAM_GAME_COLUMNS),
         "box_score": list(PBP_TEAM_BOX_SCORE_COLUMNS),
-        "team_stats": list(pl.read_parquet_schema(audit.record(TEAM_STATS))),
+        "team_stats": list(pl.read_parquet_schema(audit.record(team_stats))),
         "qb_game": list(QB_GAME_SCHEMA),
         "dataset": team_level,
         "strength": list(constants.STRENGTH_SNAPSHOT_FILE_COLUMNS),
@@ -207,6 +228,27 @@ def here_catalog(audit: Audit) -> dict[str, list[str]]:
         if not values:
             audit.fail("catalog", f"this repository's {name} columns came back empty")
     return catalog
+
+
+def port_catalog(data_dir: Path, audit: Audit) -> dict[str, list[str]]:
+    """Return the columns of every table the ETL writes to ``data/ratings/``, by file kind.
+
+    The season-statistics kinds come from ``SEASON_STATS_SCHEMAS``, the schema the ETL conforms
+    each of their tables to. The ratings kinds have no such schema, so each is read from the data
+    directory's file of the last completed season (``ratings_build.PUBLISHED_KINDS``) or of the
+    season after it, the one in progress (``IN_PROGRESS_KINDS``); a missing file fails the run.
+    """
+    tables = {kind: list(schema) for kind, schema in SEASON_STATS_SCHEMAS.items()}
+    folder = data_dir / constants.RATINGS_DIRNAME
+    files = [(kind, SEASONS[-1]) for kind in PUBLISHED_KINDS]
+    files += [(kind, SEASONS[-1] + 1) for kind in IN_PROGRESS_KINDS]
+    for kind, season in files:
+        path = folder / f"{season}_{kind}.parquet"
+        if not path.is_file():
+            audit.fail("port catalog", f"{portable(str(path))} does not exist")
+            continue
+        tables[kind] = list(pl.read_parquet_schema(audit.record(path)))
+    return tables
 
 
 # ---------------------------------------------------------------------------------------------
@@ -253,11 +295,42 @@ def counterparts(rule: Rule, item: Column) -> list[str]:
     return [n.format(column=item.column, base=item.base, core=core) for n in names]
 
 
-def check_counterpart(ref: str, catalog: dict[str, list[str]]) -> bool:
-    """Return whether ``source:name`` names something that exists in this repository."""
+def check_counterpart(
+    ref: str, catalog: dict[str, list[str]], port: dict[str, list[str]], kind: str
+) -> bool:
+    """Return whether ``source:name`` names something that exists in this repository.
+
+    A ``ratings:`` reference names columns of the ported table of ``kind``, the file kind of the
+    column it describes.
+    """
     source, _, formula = ref.partition(":")
     names = NAME.findall(formula)
-    return source in catalog and bool(names) and all(part in catalog[source] for part in names)
+    known = port.get(kind) if source == PORT else catalog.get(source)
+    return known is not None and bool(names) and all(part in known for part in names)
+
+
+def port_reference(item: Column, port: dict[str, list[str]]) -> str | None:
+    """Return the ported table's counterpart of ``item``: its own name in its own kind, if any."""
+    return f"{PORT}:{item.column}" if item.column in port.get(item.kind, []) else None
+
+
+def guard_port(items: list[Column], port: dict[str, list[str]], audit: Audit) -> int:
+    """Fail every column left ``missing`` that the ported tables write under its kind and name.
+
+    Unlike the same-name guard, this one exempts nothing: a column of the same name in the same
+    kind is the same column. Returns the number of columns checked.
+    """
+    checked = 0
+    for item in items:
+        if item.classification != "missing":
+            continue
+        checked += 1
+        if port_reference(item, port):
+            audit.fail(
+                "port guard",
+                f"{item.kind}.{item.column} is missing, but {PORT}/{{season}}_{item.kind} has it",
+            )
+    return checked
 
 
 def guard_missing(items: list[Column], catalog: dict[str, list[str]], audit: Audit) -> int:
@@ -337,7 +410,8 @@ def resolve_mirrors(items: list[Column], mirrored: list[tuple[Column, Rule]], au
     """Copy each mirrored column's counterparts from the column its rule mirrors.
 
     The mirrored column must exist in the rule's ``mirror_kind``, be ``matched`` or ``different``
-    there, and not be a mirror itself; otherwise the run fails.
+    there, and not be a mirror itself; otherwise the run fails. The mirrored column's ported
+    table counterpart is not copied: the column takes its own (``add_port_counterparts``).
     """
     by_key = {(item.kind, item.column): item for item in items}
     mirrors = {(item.kind, item.column) for item, _ in mirrored}
@@ -345,12 +419,15 @@ def resolve_mirrors(items: list[Column], mirrored: list[tuple[Column, Rule]], au
         name = item.base if rule.spec.get("mirror_base") else item.column
         key = (rule.spec["mirror_kind"], name)
         source = by_key.get(key)
+        copied = [] if source is None else [r for r in source.here if not r.startswith(f"{PORT}:")]
         if source is None or source.classification not in {"matched", "different"}:
             problem = "which has no counterpart"
         elif key in mirrors:
             problem = "which is itself a mirror"
+        elif not copied:
+            problem = "which has no counterpart but the ported table"
         else:
-            item.here = list(source.here)
+            item.here = copied
             continue
         audit.fail(
             "column rules",
@@ -358,14 +435,27 @@ def resolve_mirrors(items: list[Column], mirrored: list[tuple[Column, Rule]], au
         )
 
 
+def add_port_counterparts(items: list[Column], port: dict[str, list[str]]) -> None:
+    """Name each matched or different column's ported table counterpart first, once."""
+    for item in items:
+        ref = port_reference(item, port)
+        if ref and item.classification in {"matched", "different"}:
+            item.here = [ref, *(other for other in item.here if other != ref)]
+
+
 def classify(
-    items: list[Column], rules: list[Rule], catalog: dict[str, list[str]], audit: Audit
+    items: list[Column],
+    rules: list[Rule],
+    catalog: dict[str, list[str]],
+    port: dict[str, list[str]],
+    audit: Audit,
 ) -> None:
     """Apply the rules: one explicit rule per column, else its kind's one rest rule.
 
     A rule with ``mirror_kind`` takes its counterparts from the same column's classification in
     that kind (with ``mirror_base``, from its base metric's column there), so a season value names
-    what its game-log column names; mirrors resolve after every other rule.
+    what its game-log column names; mirrors resolve after every other rule. Every matched or
+    different column the ported tables write (``port``) then names that table's column first.
     """
     mirrored: list[tuple[Column, Rule]] = []
     for item in items:
@@ -390,9 +480,10 @@ def classify(
             continue
         item.here = counterparts(rule, item)
         for ref in item.here:
-            if not check_counterpart(ref, catalog):
+            if not check_counterpart(ref, catalog, port, item.kind):
                 audit.fail("counterpart", f"{item.kind}.{item.column}: {ref} does not exist here")
     resolve_mirrors(items, mirrored, audit)
+    add_port_counterparts(items, port)
     for rule in rules:
         if not rule.hits:
             audit.fail("column rules", f"rule {rule.id} matches nothing")
@@ -436,7 +527,11 @@ def classify_simple(
     audit: Audit,
     section: str,
 ) -> list[dict[str, Any]]:
-    """Classify keyed entries (sources, web items) with ``match`` rules over their keys."""
+    """Classify keyed entries (sources, web items) with ``match`` rules over their keys.
+
+    ``known`` holds this repository's items as a counterpart names them; ``{key}`` in a rule's
+    counterpart is the entry's own key.
+    """
     rules = validate_rules(specs, audit, section)
     rows = []
     for key, entry in entries:
@@ -448,7 +543,7 @@ def classify_simple(
         rule = hits[0]
         rule.hits += 1
         here = rule.spec.get("here", [])
-        here = [here] if isinstance(here, str) else list(here)
+        here = [ref.replace("{key}", key) for ref in ([here] if isinstance(here, str) else here)]
         for ref in here:
             if ref not in known:
                 audit.fail(section, f"{key}: {ref} does not exist here")
@@ -467,6 +562,20 @@ def classify_simple(
         if not rule.hits:
             audit.fail(section, f"rule {rule.id} matches nothing")
     return rows
+
+
+def guard_simple(
+    rows: list[dict[str, Any]], known: set[str], audit: Audit, section: str, ref_prefix: str = ""
+) -> None:
+    """Fail an entry left ``missing`` that this repository has under its own key.
+
+    ``known`` holds this repository's items as a counterpart names them: ``ref_prefix`` and the
+    key. The same-name guard does the same for output columns.
+    """
+    for row in rows:
+        ref = f"{ref_prefix}{row['key']}"
+        if row["class"] == "missing" and ref in known:
+            audit.fail(section, f"{row['key']} is missing, but here has {ref}")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -491,17 +600,18 @@ def _route_key(route: Route) -> str:
     return f"{route.kind} {route.path}"
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Generate the inventory files, removing the extracted copy of its code whatever happens."""
+    args = parse_args((__doc__ or "").splitlines()[0], argv)
     code = SosCode()
     try:
-        return _run(code)
+        return _run(code, args.data_dir)
     finally:
         code.cleanup()
 
 
-def _run(code: SosCode) -> int:
-    """Generate the inventory files from ``code``, its frozen commit."""
+def _run(code: SosCode, data_dir: Path) -> int:
+    """Generate the inventory files from ``code``, its frozen commit, and ``data_dir``."""
     audit = Audit()
     mapping = yaml.safe_load(MAPPING.read_text(encoding="utf-8"))
     checkout = check_sos_checkout(audit)
@@ -514,13 +624,11 @@ def _run(code: SosCode) -> int:
             audit.fail("sources", f"found no nflreadpy load in {repo}")
     sos_sources = _load_rows(sos_loads)
     here_sources = _load_rows(here_loads)
+    here_loads_known = {f"load:{source}" for source in here_sources}
     source_rows = classify_simple(
-        list(sos_sources.items()),
-        mapping["sources"],
-        {f"load:{source}" for source in here_sources},
-        audit,
-        "source rules",
+        list(sos_sources.items()), mapping["sources"], here_loads_known, audit, "source rules"
     )
+    guard_simple(source_rows, here_loads_known, audit, "source rules", "load:")
 
     # Output columns and the registry.
     columns, seasons_by_kind = output_columns(audit)
@@ -552,10 +660,12 @@ def _run(code: SosCode) -> int:
                     else "",
                 )
             )
-    catalog = here_catalog(audit)
+    catalog = here_catalog(data_dir, audit)
+    port = port_catalog(data_dir, audit)
     rules = validate_rules(mapping["columns"], audit, "column rules")
-    classify(items, rules, catalog, audit)
+    classify(items, rules, catalog, port, audit)
     guarded = guard_missing(items, catalog, audit)
+    port_checked = guard_port(items, port, audit)
     exceptions = mapping.get("cross_kind_exceptions") or {}
     cross_checked = guard_cross_kind(items, exceptions, audit)
 
@@ -568,19 +678,25 @@ def _run(code: SosCode) -> int:
     here_web = [
         *here_api_routes(),
         *page_routes("here", "web/src/router.tsx", (ROOT / "web/src/router.tsx").read_text()),
-        *components("here", tracked("web/src/pages/*.tsx")),
+        *components("here", [path for spec in HERE_COMPONENTS for path in tracked(spec)]),
     ]
     for repo, routes in (("nfl-sos-ratings", sos_web), ("this app", here_web)):
         for kind in ("api", "page", "component"):
             if not any(route.kind == kind for route in routes):
                 audit.fail("web", f"found no {kind} in {repo}")
+    here_web_known = {_route_key(route) for route in here_web}
     web_rows = classify_simple(
         [(_route_key(route), route) for route in sos_web],
         mapping["web"],
-        {_route_key(route) for route in here_web},
+        here_web_known,
         audit,
         "web rules",
     )
+    guard_simple(web_rows, here_web_known, audit, "web rules")
+    ported = {
+        kind: sum(f"{PORT}:{item.column}" in item.here for item in items if item.kind == kind)
+        for kind in sorted({item.kind for item in items})
+    }
 
     metrics = [
         {
@@ -601,7 +717,11 @@ def _run(code: SosCode) -> int:
         for metric in registry.metrics.values()
     ]
     payload = {
-        "generated_by": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/inventory.py",
+        "generated_by": (
+            "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/inventory.py "
+            f"--data-dir {portable(str(data_dir))}"
+        ),
+        "data_dir": portable(str(data_dir)),
         "sos_checkout": checkout,
         "sources": {
             "sos": sos_sources,
@@ -614,6 +734,8 @@ def _run(code: SosCode) -> int:
             "exempt": [*sorted(PROFILE_KINDS), "columns with a registry prefix"],
         },
         "cross_kind_guard": {"columns_checked": cross_checked, "exceptions": exceptions},
+        "port_guard": {"columns_checked": port_checked},
+        "ported_columns": ported,
         "kinds": dict(sorted(seasons_by_kind.items())),
         "columns": [item.__dict__ for item in items],
         "rules": [{"id": rule.id, "hits": rule.hits, **rule.spec} for rule in rules],
@@ -624,6 +746,7 @@ def _run(code: SosCode) -> int:
             "suffix_rules": [rule.suffix for rule in registry._suffix_rules],  # noqa: SLF001
         },
         "here_catalog": catalog,
+        "port_catalog": port,
         "web": {
             "sos": [route.__dict__ for route in sos_web],
             "here": [route.__dict__ for route in here_web],
@@ -638,49 +761,55 @@ def _run(code: SosCode) -> int:
     return 1 if audit.failures else 0
 
 
-COLUMN_FIELDS = [
-    "kind",
-    "column",
-    "seasons",
-    "base",
-    "prefix",
-    "suffix",
-    "rule",
-    "classification",
-    "here",
-]
+COLUMN_FIELDS = ["column", "base", "prefix", "suffix", "rule", "classification", "here"]
+
+
+def json_body(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the payload as ``inventory.json`` stores it, compactly enough for the size limit.
+
+    The column table is a list of rows of ``COLUMN_FIELDS`` per file kind. A column's seasons are
+    its kind's (``kinds``) unless ``partial_seasons`` lists it; its phase and note are its rule's
+    (``rules``; a rule with ``mirror_kind`` copies its counterparts from the same column, or its
+    base metric's, in that kind), its source label and entity its base metric's (``registry``),
+    and a game-log column's code-derived source is in ``game_log_sources``. The registry's metrics
+    are rows of ``metric_fields``. Catalogs rebuilt from code or recorded inputs keep only their
+    sizes: the constants catalog (every module-level list, tuple or set of strings in
+    ``nfl_predictor.constants``) and the ported tables' columns.
+    """
+    columns: dict[str, list[list[Any]]] = defaultdict(list)
+    partial = {}
+    for column in payload["columns"]:
+        columns[column["kind"]].append([column[field] for field in COLUMN_FIELDS])
+        if column["seasons"] != payload["kinds"][column["kind"]]:
+            partial[f"{column['kind']}.{column['column']}"] = season_ranges(column["seasons"])
+    metrics = payload["registry"]["metrics"]
+    fields = list(metrics[0]) if metrics else []
+    catalog = payload["here_catalog"]
+    return {
+        **payload,
+        "here_catalog": {**catalog, "constants": f"{len(catalog['constants'])} names"},
+        "port_catalog": {
+            kind: f"{len(names)} columns" for kind, names in payload["port_catalog"].items()
+        },
+        "registry": {
+            **payload["registry"],
+            "metric_fields": fields,
+            "metrics": [[metric[field] for field in fields] for metric in metrics],
+        },
+        "game_log_sources": {
+            column["column"]: column["code_source"]
+            for column in payload["columns"]
+            if column["kind"] == "team_game_logs"
+        },
+        "column_fields": COLUMN_FIELDS,
+        "columns": dict(columns),
+        "partial_seasons": partial,
+    }
 
 
 def write_json(payload: dict[str, Any]) -> None:
-    """Write ``inventory.json``, with the column table as rows of ``COLUMN_FIELDS``.
-
-    A column's phase and note are its rule's (``rules``; a rule with ``mirror_kind`` copies its
-    counterparts from the same column, or its base metric's, in that kind), its source label and
-    entity its base metric's (``registry``), and a game-log column's code-derived source is in
-    ``game_log_sources``; its seasons are written as ranges.
-    """
-    rows = [
-        [
-            season_ranges(column["seasons"]) if field == "seasons" else column[field]
-            for field in COLUMN_FIELDS
-        ]
-        for column in payload["columns"]
-    ]
-    sources = {
-        column["column"]: column["code_source"]
-        for column in payload["columns"]
-        if column["kind"] == "team_game_logs"
-    }
-    catalog = payload["here_catalog"]
-    body = {
-        **payload,
-        # The constants catalog is every module-level list, tuple or set of strings in
-        # nfl_predictor.constants; its names are rebuilt from the code, so only the count is kept.
-        "here_catalog": {**catalog, "constants": f"{len(catalog['constants'])} names"},
-        "game_log_sources": sources,
-        "columns": {"fields": COLUMN_FIELDS, "rows": rows},
-    }
-    OUT_JSON.write_text(portable(dump_json(body)) + "\n", encoding="utf-8")
+    """Write ``inventory.json`` (``json_body``)."""
+    OUT_JSON.write_text(portable(dump_json(json_body(payload))) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

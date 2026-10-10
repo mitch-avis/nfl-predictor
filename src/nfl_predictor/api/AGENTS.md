@@ -16,6 +16,7 @@ Run `scripts/gate.sh --web` whenever this directory or `web/` changes.
   table is a 404 (`no_ratings_table`), and one Polars cannot read is a 503
   (`ratings_table_unreadable`, `errors.ServiceUnavailableError`).
 - `create_app` gzips every response of 500 bytes or more for clients that accept it
-  (`GZipMiddleware`); Starlette leaves `text/event-stream`, the job log stream, uncompressed.
+  (`GZipMiddleware`, at level 6); Starlette leaves `text/event-stream`, the job log stream,
+  uncompressed.
 - Tests for the backend live in `tests/api/`; the design, decisions and phase status live in
   `.agents/web_ui_plan.md`, and `web/README.md` documents the runtime configuration.

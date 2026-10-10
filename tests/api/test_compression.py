@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import zlib
 from typing import TYPE_CHECKING
 
 from nfl_predictor.api.jobs.store import JobStore, LogLine
@@ -11,6 +12,9 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 
 GZIP = {"Accept-Encoding": "gzip"}
+IDENTITY = {"Accept-Encoding": "identity"}
+GZIP_CONTAINER = 16 + zlib.MAX_WBITS
+"""The ``wbits`` value that wraps a deflate stream in a gzip header, as the middleware does."""
 
 
 def test_a_large_json_response_is_gzipped(viewer_client: TestClient) -> None:
@@ -29,10 +33,23 @@ def test_json_is_sent_plain_to_a_client_that_does_not_accept_gzip(
 ) -> None:
     """Compression follows the request's Accept-Encoding."""
     # Act
-    response = viewer_client.get("/api/ratings/metrics", headers={"Accept-Encoding": "identity"})
+    response = viewer_client.get("/api/ratings/metrics", headers=IDENTITY)
 
     # Assert
     assert "content-encoding" not in response.headers
+
+
+def test_json_is_compressed_at_gzip_level_6(viewer_client: TestClient) -> None:
+    """Gzip's default level: level 9 saves a few percent more bytes for noticeably more CPU."""
+    # Arrange
+    plain = viewer_client.get("/api/ratings/metrics", headers=IDENTITY).content
+
+    # Act
+    with viewer_client.stream("GET", "/api/ratings/metrics", headers=GZIP) as response:
+        sent = b"".join(response.iter_raw())
+
+    # Assert
+    assert sent == zlib.compress(plain, 6, wbits=GZIP_CONTAINER)
 
 
 def test_the_job_log_stream_is_not_compressed(admin_client: TestClient, app: FastAPI) -> None:

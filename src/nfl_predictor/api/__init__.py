@@ -88,9 +88,11 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     app.state.job_runner = JobRunner(app.state.db, settings, app.state.run_index)
     install_error_handlers(app)
     # Compress responses for clients that accept gzip: a completed season's team table is close
-    # to 1 MB of JSON and under a fifth of that gzipped. Starlette leaves text/event-stream alone
-    # by default, so the job log stream is sent as written.
-    app.add_middleware(GZipMiddleware)
+    # to 1 MB of JSON and under a fifth of that gzipped. Level 6, gzip's own default, rather than
+    # Starlette's 9: level 9 saves only a few percent more bytes for noticeably more CPU per
+    # response. Starlette leaves text/event-stream alone by default, so the job log stream is
+    # sent as written.
+    app.add_middleware(GZipMiddleware, compresslevel=6)
 
     @app.middleware("http")
     async def require_csrf_header(

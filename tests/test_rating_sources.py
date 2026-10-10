@@ -639,3 +639,46 @@ def test_model_ratings_for_a_week_without_earlier_games_raises() -> None:
     # Act & Assert
     with pytest.raises(rating_sources.RatingSourceUnavailableError, match="2021"):
         rating_sources.model_ratings_for_week(predictions, season=2021, week=4, teams=TEAMS)
+
+
+def _shifted(predictions: pl.DataFrame, shift: float) -> pl.DataFrame:
+    return predictions.with_columns(pl.col("predicted_margin") + shift)
+
+
+def test_average_predictions_averages_each_games_margin_over_the_runs() -> None:
+    # Arrange
+    first = _season_predictions(2020, WEEK_GAMES)
+    second = _shifted(first, 2.0).reverse()
+
+    # Act
+    averaged = rating_sources.average_predictions([first, second])
+
+    # Assert
+    assert averaged.get_column("game_id").to_list() == first.get_column("game_id").to_list()
+    expected = (first.get_column("predicted_margin") + 1.0).to_list()
+    assert averaged.get_column("predicted_margin").to_list() == pytest.approx(expected)
+
+
+def test_average_predictions_refuses_runs_of_different_games() -> None:
+    # Arrange
+    first = _season_predictions(2020, WEEK_GAMES)
+    second = first.head(first.height - 1)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="same games"):
+        rating_sources.average_predictions([first, second])
+
+
+def test_average_predictions_refuses_runs_that_disagree_on_a_games_teams() -> None:
+    # Arrange
+    first = _season_predictions(2020, WEEK_GAMES)
+    second = first.with_columns(
+        pl.when(pl.col("game_id") == first.get_column("game_id")[0])
+        .then(pl.lit("ZZZ"))
+        .otherwise(pl.col("home_abbr"))
+        .alias("home_abbr")
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="disagree"):
+        rating_sources.average_predictions([first, second])

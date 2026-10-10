@@ -587,6 +587,55 @@ def read_predictions(paths: Sequence[Path]) -> pl.DataFrame:
     return predictions
 
 
+def average_predictions(runs: Sequence[pl.DataFrame]) -> pl.DataFrame:
+    """Return each game's predicted margin averaged over several runs, in the first run's order.
+
+    The margins are summed in the order the runs are given (the same seed order every time
+    gives the same bits) and divided by their number.
+
+    Args:
+        runs: Each run's predictions (``PREDICTION_COLUMNS``), all of the same games.
+
+    Returns:
+        The first run's rows with ``predicted_margin`` the average over the runs.
+
+    Raises:
+        ValueError: If no run is given, the runs predict different games, or two runs disagree on
+            a game's season, week, teams or neutral site.
+
+    """
+    if not runs:
+        msg = "no runs to average"
+        raise ValueError(msg)
+    first = runs[0]
+    keys = list(PREDICTION_COLUMNS[1:-1])
+    games = set(first.get_column("game_id").to_list())
+    joined = first.select("game_id", *keys, pl.col("predicted_margin").alias("_margin_0"))
+    total = pl.col("_margin_0")
+    for index, run in enumerate(runs[1:], start=1):
+        if run.height != first.height or set(run.get_column("game_id").to_list()) != games:
+            msg = f"run {index + 1} does not predict the same games as run 1"
+            raise ValueError(msg)
+        other = run.select(
+            "game_id",
+            *(pl.col(key).alias(f"_{key}_{index}") for key in keys),
+            pl.col("predicted_margin").alias(f"_margin_{index}"),
+        )
+        joined = joined.join(other, on="game_id", how="left", maintain_order="left")
+        differs = pl.any_horizontal(
+            pl.col(key).ne_missing(pl.col(f"_{key}_{index}")) for key in keys
+        )
+        disagreeing = joined.filter(differs).get_column("game_id").to_list()
+        if disagreeing:
+            msg = f"runs 1 and {index + 1} disagree on games {', '.join(disagreeing[:5])}"
+            raise ValueError(msg)
+        joined = joined.drop([f"_{key}_{index}" for key in keys])
+        total = total + pl.col(f"_margin_{index}")
+    return joined.select("game_id", *keys, (total / len(runs)).alias("predicted_margin")).cast(
+        _PREDICTION_SCHEMA
+    )
+
+
 def model_ratings_for_week(
     predictions: pl.DataFrame,
     *,
@@ -665,6 +714,7 @@ __all__ = [
     "ModelRatingFit",
     "PortedRatings",
     "RatingSourceUnavailableError",
+    "average_predictions",
     "blend_ratings",
     "carryover_factor",
     "combine_ported_ratings",

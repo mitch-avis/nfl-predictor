@@ -227,6 +227,25 @@ def test_a_season_before_the_source_publishes_is_skipped_without_asking_nflreadp
     assert snaps.columns == constants.NFLREADPY_SNAP_COUNT_COLUMNS
 
 
+@pytest.mark.parametrize(
+    ("frame", "rows"),
+    [(pl.DataFrame(), 0), (pl.DataFrame({"other": [1, 2, 3]}), 3)],
+    ids=["no-columns", "only-other-columns"],
+)
+def test_conforming_a_frame_without_any_requested_column_keeps_its_rows(
+    frame: pl.DataFrame, rows: int
+) -> None:
+    # Arrange
+    schema = pl.Schema({"season": pl.Int64(), "team": pl.String()})
+
+    # Act
+    conformed = nflverse_sources.conform(frame, schema)
+
+    # Assert
+    assert conformed.schema == schema
+    assert conformed.height == rows
+
+
 def test_no_seasons_give_an_empty_frame_with_every_requested_column(tmp_path: Path) -> None:
     # Act
     rosters = nflverse_sources.load_rosters([], cache_dir=tmp_path, current_season=CURRENT)

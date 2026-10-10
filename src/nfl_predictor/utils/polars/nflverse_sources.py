@@ -64,14 +64,18 @@ _PLAYERS_CACHE_NAME = "players.parquet"
 def conform(frame: pl.DataFrame, schema: pl.Schema) -> pl.DataFrame:
     """Return ``frame`` with exactly the columns of ``schema``, in order and with its types.
 
-    A column ``frame`` lacks is added as nulls; a column ``schema`` does not name is dropped.
+    A column ``frame`` lacks is added as nulls; a column ``schema`` does not name is dropped. The
+    nulls are added before the selection so they take ``frame``'s height: a selection made of
+    literals alone would give one row, whatever the frame held.
     """
-    return frame.select(
-        pl.col(column).cast(dtype)
-        if column in frame.columns
-        else pl.lit(None, dtype=dtype).alias(column)
+    missing = [
+        pl.lit(None, dtype=dtype).alias(column)
         for column, dtype in schema.items()
-    )
+        if column not in frame.columns
+    ]
+    if missing:
+        frame = frame.with_columns(missing)
+    return frame.select(pl.col(column).cast(dtype) for column, dtype in schema.items())
 
 
 def source_schema(

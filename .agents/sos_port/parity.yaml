@@ -61,13 +61,13 @@ pairs:
     ours: carries
     theirs: designed_carries
     kind: count
-    causes: [wiped_out_runs, unflagged_rush_attempts, scrambles_coded_as_runs, dropback_and_carry, spike_rush_attempts]
+    causes: [wiped_out_runs, unflagged_rush_attempts, scrambles_coded_as_runs, spike_rush_attempts]
   - id: rush_success_count
     ours: rush_success_count
     theirs: rush_success_rate * designed_carries
     kind: count_from_rate
     null_as_zero: true
-    causes: [wiped_out_runs, unflagged_rush_attempts, scrambles_coded_as_runs, dropback_and_carry, spike_rush_attempts]
+    causes: [wiped_out_runs, unflagged_rush_attempts, scrambles_coded_as_runs, spike_rush_attempts]
   - id: early_down_pass_rate
     ours: early_down_passes / early_down_plays
     theirs: early_down_pass_rate
@@ -210,7 +210,10 @@ causes:
       - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'rush = scrimmage & \(flag_expr\(columns, "rush"\) > 0\) & ~is_kneel_or_spike & ~is_two_point'}
   dropback_and_carry:
     name: A play flagged both a dropback and a run
-    there: Scrimmage EPA counts every snap once; a scramble is not a designed run.
+    there: >-
+      Scrimmage EPA counts every snap once. Its designed-run rule does not exclude dropbacks, so
+      the cause is judged on scrimmage EPA only; the one such play in the cache (2004_05_BUF_NYJ)
+      is not a designed run there because it is also a flagged scramble.
     here: >-
       The dropback and carry conditions are independent, so a play with qb_dropback and rush both
       set is a dropback and a carry, its EPA in both pass_epa_sum and rush_epa_sum.
@@ -383,8 +386,11 @@ causes:
     here: This repository's cache was downloaded on its own schedule.
     adjustment: >-
       Shown play by play: each season's snapshot file (the play-by-play it read), prepared as this
-      repository prepares its cache, is compared with the cache row by row on every cached column,
-      with play_id telling the plays apart. Any difference fails the run; with none, no team-game
-      can owe a difference to the release.
+      repository prepares its cache (which keeps the rows in order), must equal the cache row by
+      row on all of its cached columns. Any difference fails the run; with none, no team-game can
+      owe a difference to the release. qb_scramble, play_id and the play text (desc) are then
+      attached by row position, which that equality makes sound; the run also fails when a play_id
+      repeats within a game, or when rows equal on every cached column (which the equality cannot
+      tell apart) differ in qb_scramble.
     evidence:
       - {repo: here, path: src/nfl_predictor/constants.py, pattern: '"play_id"', expect: absent}

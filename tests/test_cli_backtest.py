@@ -17,6 +17,7 @@ from nfl_predictor.reporting import run_comparison
 
 def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
     """Trend ablation drops trend and season-phase columns only."""
+    # Arrange
     df = pd.DataFrame(
         {
             "game_id": [1],
@@ -34,8 +35,10 @@ def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
         }
     )
 
+    # Act
     dropped = backtest._trend_feature_columns(df)
 
+    # Assert
     assert set(dropped) == {
         "week_in_season_norm",
         "season_phase_early",
@@ -51,17 +54,32 @@ def test_resume_is_on_by_default_and_uses_the_shared_checkpoint_dir(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Re-running an identical command picks up saved weeks unless told not to."""
+    # Arrange
     monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
+
+    # Act
     defaults = backtest._parse_args()
+
+    # Assert
     assert defaults.resume is True
     assert defaults.checkpoint_dir == walk_forward.DEFAULT_CHECKPOINT_DIR
 
+
+def test_no_resume_and_another_checkpoint_dir_can_be_asked_for(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--no-resume`` retrains every week and ``--checkpoint-dir`` moves the checkpoints."""
+    # Arrange
     monkeypatch.setattr(
         sys,
         "argv",
         ["walk_forward_backtest.py", "--no-resume", "--checkpoint-dir", "models/elsewhere"],
     )
+
+    # Act
     overridden = backtest._parse_args()
+
+    # Assert
     assert overridden.resume is False
     assert overridden.checkpoint_dir == Path("models/elsewhere")
 
@@ -71,6 +89,7 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The CLI hands its checkpoint settings to the engine and reports what was restored."""
+    # Arrange
     captured: dict[str, object] = {}
     checkpoint = {"dir": "somewhere", "restored_folds": 3, "computed_folds": 1}
 
@@ -112,8 +131,10 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
         ],
     )
 
+    # Act
     backtest.main()
 
+    # Assert
     assert captured == {
         "checkpoints": walk_forward.FoldCheckpoints(tmp_path / "checkpoints", resume=False),
         "floor_sigma_history": None,
@@ -123,15 +144,22 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
 
 def test_xgb_device_defaults_to_auto(monkeypatch: pytest.MonkeyPatch) -> None:
     """The walk-forward picks the GPU when one is usable unless told otherwise."""
+    # Arrange
     monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
 
-    assert backtest._parse_args().xgb_device == "auto"
+    # Act
+    args = backtest._parse_args()
+
+    # Assert
+    assert args.xgb_device == "auto"
 
 
 def test_xgb_device_typo_is_a_usage_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """A misspelled device stops at the parser instead of reaching XGBoost."""
+    # Arrange
     monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py", "--xgb-device", "cdua"])
 
+    # Act & Assert
     with pytest.raises(SystemExit):
         backtest._parse_args()
 
@@ -149,6 +177,7 @@ def test_main_runs_and_records_the_resolved_xgb_device(
     expected: str,
 ) -> None:
     """The engine gets the concrete device, and the run's metadata records it."""
+    # Arrange
     captured: list[walk_forward.WalkForwardConfig] = []
 
     def fake_run(
@@ -190,64 +219,69 @@ def test_main_runs_and_records_the_resolved_xgb_device(
         ],
     )
 
+    # Act
     backtest.main()
 
+    # Assert
     assert (captured[0].xgb_params_overrides or {})["device"] == expected
     metadata = json.loads((tmp_path / "metadata.json").read_text())
     assert metadata["config"]["xgb_device"] == expected
     assert metadata["config"]["xgb_params_overrides"]["device"] == expected
 
 
-def test_disable_feature_groups_arg_parses_comma_separated_list() -> None:
+def test_disable_feature_groups_arg_parses_comma_separated_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`--disable-feature-groups pbp,other` parses into the expected stripped tuple."""
-    old_argv = sys.argv
-    try:
-        sys.argv = [
-            "walk_forward_backtest.py",
-            "--disable-feature-groups",
-            "pbp,other",
-        ]
-        args = backtest._parse_args()
-    finally:
-        sys.argv = old_argv
-
-    assert args.disable_feature_groups == "pbp,other"
-    assert options.parse_feature_groups(args.disable_feature_groups) == (
-        "pbp",
-        "other",
+    # Arrange
+    monkeypatch.setattr(
+        sys, "argv", ["walk_forward_backtest.py", "--disable-feature-groups", "pbp,other"]
     )
 
+    # Act
+    args = backtest._parse_args()
 
-def test_parse_args_accepts_regularization_overrides() -> None:
+    # Assert
+    assert args.disable_feature_groups == "pbp,other"
+    assert options.parse_feature_groups(args.disable_feature_groups) == ("pbp", "other")
+
+
+def test_parse_args_accepts_regularization_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     """The CLI should expose the regularization knobs used by the noise-family arm."""
-    old_argv = sys.argv
-    try:
-        sys.argv = [
-            "walk_forward_backtest.py",
-            "--min-child-weight",
-            "4.5",
-            "--gamma",
-            "2.0",
-        ]
-        args = backtest._parse_args()
-    finally:
-        sys.argv = old_argv
+    # Arrange
+    monkeypatch.setattr(
+        sys, "argv", ["walk_forward_backtest.py", "--min-child-weight", "4.5", "--gamma", "2.0"]
+    )
 
+    # Act
+    args = backtest._parse_args()
+
+    # Assert
     assert args.min_child_weight == pytest.approx(4.5)
     assert args.gamma == pytest.approx(2.0)
 
 
-def test_parse_feature_groups_strips_whitespace_and_drops_empty_entries() -> None:
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(" pbp , other ,", ("pbp", "other")), (None, ()), ("", ())],
+    ids=["whitespace-and-empty-segment", "missing", "empty"],
+)
+def test_parse_feature_groups_strips_whitespace_and_drops_empty_entries(
+    value: str | None, expected: tuple[str, ...]
+) -> None:
     """Parsing tolerates surrounding whitespace, empty segments, and a missing/empty value."""
-    assert options.parse_feature_groups(" pbp , other ,") == ("pbp", "other")
-    assert options.parse_feature_groups(None) == ()
-    assert options.parse_feature_groups("") == ()
+    # Act
+    groups = options.parse_feature_groups(value)
+
+    # Assert
+    assert groups == expected
 
 
 def test_disable_feature_groups_drops_resolved_columns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The resolved feature-group columns are the ones dropped from the loaded dataframe."""
+    # Arrange
     monkeypatch.setattr(
         walk_forward.constants,
         "FEATURE_GROUP_COLUMN_MARKERS",
@@ -266,14 +300,16 @@ def test_disable_feature_groups_drops_resolved_columns(
     )
     groups = options.parse_feature_groups("pbp")
 
+    # Act
     dropped = walk_forward.resolve_feature_group_columns(list(df.columns), groups)
-    remaining = df.drop(columns=dropped)
 
+    # Assert
     assert dropped == [
         "away_epa_per_play",
         "epa_per_play_diff",
         "home_epa_per_play",
     ]
+    remaining = df.drop(columns=dropped)
     assert set(remaining.columns) == {"game_id", "season", "week", "away_total_yards"}
 
 
@@ -281,33 +317,45 @@ def test_disable_feature_groups_unknown_group_raises_from_cli_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An unknown feature group name raises a clear error, not an obscure library traceback."""
+    # Arrange
     monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
     groups = options.parse_feature_groups("not_a_real_group")
 
+    # Act & Assert
     with pytest.raises(ValueError, match="not_a_real_group"):
         walk_forward.resolve_feature_group_columns(["away_epa"], groups)
 
 
-def test_parse_args_accepts_n_estimators_override() -> None:
-    """`--n-estimators` parses as an integer and defaults to None when omitted."""
-    old_argv = sys.argv
-    try:
-        sys.argv = ["walk_forward_backtest.py", "--n-estimators", "900"]
-        args = backtest._parse_args()
-        sys.argv = ["walk_forward_backtest.py"]
-        defaults = backtest._parse_args()
-    finally:
-        sys.argv = old_argv
+def test_parse_args_accepts_n_estimators_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--n-estimators` parses as an integer."""
+    # Arrange
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py", "--n-estimators", "900"])
 
+    # Act
+    args = backtest._parse_args()
+
+    # Assert
     assert args.n_estimators == 900
+
+
+def test_parse_args_leaves_n_estimators_unset_when_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`--n-estimators` defaults to None when omitted."""
+    # Arrange
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
+
+    # Act
+    defaults = backtest._parse_args()
+
+    # Assert
     assert defaults.n_estimators is None
 
 
-def test_main_forwards_n_estimators_into_the_xgb_overrides(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The tree-budget flag reaches the engine config as an int, and is absent when omitted."""
+def _record_engine_configs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[list[walk_forward.WalkForwardConfig], list[str]]:
+    """Replace the engine with one that records its config; return the configs and base argv."""
     captured: list[walk_forward.WalkForwardConfig] = []
 
     def fake_run(
@@ -334,25 +382,48 @@ def test_main_forwards_n_estimators_into_the_xgb_overrides(
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
     monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
     monkeypatch.setattr(walk_forward, "build_metadata", fake_metadata)
-    out_json = tmp_path / "metrics_report.json"
     base_argv = [
         "walk_forward_backtest.py",
         "--checkpoint-dir",
         str(tmp_path / "checkpoints"),
         "--out-json",
-        str(out_json),
+        str(tmp_path / "metrics_report.json"),
     ]
+    return captured, base_argv
 
+
+def test_main_forwards_n_estimators_into_the_xgb_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The tree-budget flag reaches the engine config as an int."""
+    # Arrange
+    captured, base_argv = _record_engine_configs(monkeypatch, tmp_path)
     monkeypatch.setattr(sys, "argv", [*base_argv, "--n-estimators", "900"])
+
+    # Act
     backtest.main()
 
-    monkeypatch.setattr(sys, "argv", base_argv)
-    backtest.main()
-
+    # Assert
     overrides = captured[0].xgb_params_overrides or {}
     assert overrides["n_estimators"] == 900
     assert isinstance(overrides["n_estimators"], int)
-    assert "n_estimators" not in (captured[1].xgb_params_overrides or {})
+
+
+def test_main_leaves_n_estimators_out_of_the_xgb_overrides_when_omitted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without the tree-budget flag the engine config carries no tree budget override."""
+    # Arrange
+    captured, base_argv = _record_engine_configs(monkeypatch, tmp_path)
+    monkeypatch.setattr(sys, "argv", base_argv)
+
+    # Act
+    backtest.main()
+
+    # Assert
+    assert "n_estimators" not in (captured[0].xgb_params_overrides or {})
 
 
 def _prediction_rows() -> pd.DataFrame:
@@ -389,6 +460,7 @@ def test_main_adds_the_season_stability_view_to_the_report_and_the_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """The report carries the per-season view ``compare`` would compute, and the log prints it."""
+    # Arrange
     predictions = _prediction_rows()
 
     def fake_run(
@@ -422,8 +494,10 @@ def test_main_adds_the_season_stability_view_to_the_report_and_the_log(
     )
     caplog.set_level(logging.INFO)
 
+    # Act
     backtest.main()
 
+    # Assert
     stability = json.loads(out_json.read_text())["metrics"]["stability"]
     expected = json.loads(json.dumps(run_comparison.stability_report(predictions)))
     assert stability == expected
@@ -438,15 +512,21 @@ def test_a_standalone_backtest_supplies_no_floor_sigma_history(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """By default each week's sigma comes from the run's own earlier weeks only."""
+    # Arrange
     monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
 
-    assert backtest._parse_args().floor_sigma_reference_runs is None
+    # Act
+    args = backtest._parse_args()
+
+    # Assert
+    assert args.floor_sigma_reference_runs is None
 
 
 def test_named_reference_runs_become_the_walk_forwards_history(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Reference runs are read once, handed to the engine and named in the run's config."""
+    # Arrange
     captured: dict[str, object] = {}
     history = floor_sigma.ErrorPool(sources=("ref_a",))
     loaded: list[object] = []
@@ -484,8 +564,10 @@ def test_named_reference_runs_become_the_walk_forwards_history(
         ],
     )
 
+    # Act
     backtest.main()
 
+    # Assert
     assert loaded == [[Path("ref_a")]]
     assert captured["floor_sigma_history"] is history
     config = json.loads(out_json.read_text())["config"]

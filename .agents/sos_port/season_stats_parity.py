@@ -9,9 +9,11 @@ a minute a season):
 ``--source`` is the ``nfl-sos-ratings`` checkout (default: the one beside this repository's main
 checkout), whose published Parquet files are read in place and never written; ``--snapshot`` and
 ``--manifest`` are the copy of nflreadpy's disk cache that project's build read and its SHA-256
-manifest; ``--seasons`` limits the run to some seasons (default 1999-2025); ``--work-dir`` holds
-this repository's loader caches for the run (default: a new directory under ``~/scratch``, never a
-``data/`` directory); ``--out-dir`` writes the reports elsewhere (default: beside this script).
+manifest; ``--seasons`` limits the run to some seasons (default 1999-2026: every completed season
+and the one in progress at the frozen commit, published through the weeks played by then);
+``--work-dir`` holds this repository's loader caches for the run (default: a new directory under
+``~/scratch``, never a ``data/`` directory); ``--out-dir`` writes the reports elsewhere (default:
+beside this script).
 
 For each season the script:
 
@@ -72,7 +74,9 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 SOURCE_COMMIT = "9081bced89b0d51c99e28f80f8f62b9fcd0118e0"
 FIRST_SEASON = 1999
+# The last completed season, and the season in progress at the frozen commit.
 LAST_SEASON = 2025
+CURRENT_SEASON = LAST_SEASON + 1
 # Floats agree within this absolute difference; the report also counts bit-identical cells.
 FLOAT_TOLERANCE = 1e-9
 TEAM_CODE_COLUMNS = ("team", "opponent_team")
@@ -460,7 +464,7 @@ def compare_from_published_logs(
 def run_season(season: int, source: Path, cache_dir: Path, hashes: dict[str, str]) -> SeasonRun:
     """Build one season through the loaders and compare every table with its published file."""
     started = time.perf_counter()
-    inputs = sources.load_season_inputs(season, cache_dir=cache_dir, current_season=LAST_SEASON + 1)
+    inputs = sources.load_season_inputs(season, cache_dir=cache_dir, current_season=CURRENT_SEASON)
     loaded = time.perf_counter()
 
     def published(kind: str) -> pl.DataFrame:
@@ -522,7 +526,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=Path.home() / "scratch" / "nflreadpy_cache_snapshot_20261008.sha256",
     )
     parser.add_argument(
-        "--seasons", type=int, nargs="+", default=list(range(FIRST_SEASON, LAST_SEASON + 1))
+        "--seasons", type=int, nargs="+", default=list(range(FIRST_SEASON, CURRENT_SEASON + 1))
     )
     parser.add_argument("--work-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=HERE)
@@ -588,6 +592,10 @@ def _season_list(seasons: list[int]) -> str:
 
 def _markdown(report: dict[str, Any]) -> str:
     summary = report["summary"]
+    seasons = report["seasons"]
+    in_progress = (
+        f"; {CURRENT_SEASON} in progress at the frozen commit" if CURRENT_SEASON in seasons else ""
+    )
     lines = [
         "# Season statistics parity with nfl-sos-ratings",
         "",
@@ -607,7 +615,7 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         f"- Code: `{report['code_commit']}`",
         f"- Finished: {report['finished']}",
-        f"- Seasons: {report['seasons'][0]}-{report['seasons'][-1]} ({len(report['seasons'])})",
+        f"- Seasons: {seasons[0]}-{seasons[-1]} ({len(seasons)}{in_progress})",
         (
             f"- Polars {report['versions']['polars']}, nflreadpy {report['versions']['nflreadpy']},"
             f" `POLARS_MAX_THREADS={report['polars_threads']}`"

@@ -361,20 +361,16 @@ def test_blend_ratings_weight_outside_zero_to_one_raises(weight: float) -> None:
         rating_sources.blend_ratings(ratings, ratings, weight)
 
 
-_fold_frame = fold_frame
-_write_folds = write_fold_checkpoints
-
-
 def _fold_frames() -> list[pd.DataFrame]:
     return [
-        _fold_frame(2020, 2, [("CCC", "AAA", 9.0), ("DDD", "BBB", 3.0)]),
-        _fold_frame(2020, 1, [("BBB", "AAA", 6.0), ("DDD", "CCC", -1.0)]),
+        fold_frame(2020, 2, [("CCC", "AAA", 9.0), ("DDD", "BBB", 3.0)]),
+        fold_frame(2020, 1, [("BBB", "AAA", 6.0), ("DDD", "CCC", -1.0)]),
     ]
 
 
 def test_read_fold_predictions_from_a_run_directory_reads_every_fold(tmp_path: Path) -> None:
     # Arrange
-    checkpoints = _write_folds(tmp_path / "wf_checkpoints" / "abc", _fold_frames())
+    checkpoints = write_fold_checkpoints(tmp_path / "wf_checkpoints" / "abc", _fold_frames())
     run_dir = tmp_path / "ratings_anchored_seed42"
     run_dir.mkdir()
     metadata = {
@@ -403,7 +399,7 @@ def test_read_fold_predictions_from_a_run_directory_reads_every_fold(tmp_path: P
 
 def test_read_fold_predictions_from_a_checkpoint_directory(tmp_path: Path) -> None:
     # Arrange
-    checkpoints = _write_folds(tmp_path / "abc", _fold_frames())
+    checkpoints = write_fold_checkpoints(tmp_path / "abc", _fold_frames())
 
     # Act
     read = rating_sources.read_fold_predictions(checkpoints)
@@ -416,8 +412,8 @@ def test_read_fold_predictions_from_a_checkpoint_directory(tmp_path: Path) -> No
 def test_read_fold_predictions_repeated_game_raises(tmp_path: Path) -> None:
     # Arrange
     frames = _fold_frames()
-    frames.append(_fold_frame(2020, 3, [("CCC", "AAA", 1.0)]).assign(game_id="2020_01_BBB_AAA"))
-    checkpoints = _write_folds(tmp_path / "abc", frames)
+    frames.append(fold_frame(2020, 3, [("CCC", "AAA", 1.0)]).assign(game_id="2020_01_BBB_AAA"))
+    checkpoints = write_fold_checkpoints(tmp_path / "abc", frames)
 
     # Act & Assert
     with pytest.raises(ValueError, match="more than once"):
@@ -515,8 +511,8 @@ def test_season_ported_ratings_reads_the_published_season_table(tmp_path: Path) 
 
 def test_read_predictions_joins_sources_and_refuses_a_repeated_game(tmp_path: Path) -> None:
     # Arrange
-    first = _write_folds(tmp_path / "first", _fold_frames()[:1])
-    second = _write_folds(tmp_path / "second", _fold_frames())
+    first = write_fold_checkpoints(tmp_path / "first", _fold_frames()[:1])
+    second = write_fold_checkpoints(tmp_path / "second", _fold_frames())
 
     # Act & Assert
     with pytest.raises(ValueError, match="2020_02_CCC_AAA"):
@@ -562,7 +558,7 @@ def test_model_ratings_for_week_one_without_a_carryover_raises() -> None:
 def test_read_fold_predictions_missing_column_raises(tmp_path: Path) -> None:
     # Arrange
     frames = [frame.drop(columns="predicted_margin") for frame in _fold_frames()]
-    checkpoints = _write_folds(tmp_path / "abc", frames)
+    checkpoints = write_fold_checkpoints(tmp_path / "abc", frames)
 
     # Act & Assert
     with pytest.raises(ValueError, match="predicted_margin"):

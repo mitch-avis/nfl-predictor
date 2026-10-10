@@ -1008,14 +1008,25 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   carried forward by the factor the ported prior applies to a team rating). `blend` is
   `--blend-weight` times the ported rating plus the rest times the model rating. Each is mapped
   onto the scales like the composite and published with `team_rating`, `points_vs_average`,
-  `rating_week` and `rating_source`. The default stays the composite.
+  `rating_week` and `rating_source`. The rankings command's default stays the composite; the
+  weekly run's is the blend (below).
 - Projected standings are the same under every method: current record plus the model's win
   probabilities for the remaining games.
 - `nfl-predictor weekly` accepts the same options (`--power-rankings-method`,
   `--power-rankings-strength-snapshots`, `--power-rankings-ratings-dir`,
   `--power-rankings-model-predictions`, `--power-rankings-blend-weight`, `--ratings-*`,
-  `--legacy-franchise-fit`) and writes the same files. It skips the rankings with a warning when
-  the snapshot or rating source for the requested week is missing.
+  `--legacy-franchise-fit`) and writes the same files. It ranks on the even blend by default
+  (`power_rankings_method: blend`, `power_rankings_blend_weight: 0.5` in
+  `config/weekly_run.yaml`): the user chose it after the rankings measurement, and `0.5` is the
+  weight its pre-registered rule picks for 2026 (`.agents/sos_port/decisions/power_rankings.md`,
+  decision 12). Without `--power-rankings-model-predictions`, the model rating reads the ranked
+  season from the run's own stage-1 fold checkpoints (`wf_compare/`, whose `metadata.json` names
+  them) and earlier seasons, which week 1's carried-forward fit needs, from the
+  `floor_sigma_reference_runs`, averaged per game in the order listed as one source; explicit
+  paths replace both. `power_rankings_method: composite` restores the composite, and
+  `--legacy-franchise-fit` alone still implies Bradley-Terry. It skips the rankings with a warning
+  naming what is missing when the snapshot or a rating source for the requested week is missing
+  or does not cover the games.
 
 Model selection hierarchy (default):
 
@@ -1472,7 +1483,7 @@ The strength family is ablatable as the `strength` feature group
 `games / (games + K)` against the previous season's final snapshot regressed by
 `constants.WEEK1_REGRESSION_FACTOR`; at ETL time `--strength-prior-blend-games` sets `K` (default
 `constants.PRIOR_BLEND_GAMES`, `4`) and `--no-strength-prior-blend` ablates the blend. Both change
-feature values and the strength snapshot file behind the default power rankings, so compare them
+feature values and the strength snapshot file behind the composite power rankings, so compare them
 with two dataset builds. The quarterback family is the `qb` group (`--disable-feature-groups qb`),
 and the 18 Elo columns from `data/qb_elos.csv` are the `elo` group
 (`--disable-feature-groups elo`; market-informed, see "Market integration"). The own Elo's

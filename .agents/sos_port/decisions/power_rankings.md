@@ -6,8 +6,8 @@ candidate ratings (`src/nfl_predictor/reporting/rating_sources.py` and
 `power_rankings.composite_points_vs_average`), their score
 (`src/nfl_predictor/reporting/ranking_evaluation.py`, run by `.agents/sos_port/rankings_eval.py`)
 and the ranking methods behind a setting (`nfl-predictor rankings --method`, the weekly run's
-`power_rankings_method`). Each was decided before any candidate was scored. The default ranking
-stays the composite; switching it is the user's decision after the measurement.
+`power_rankings_method`). Each was decided before any candidate was scored, except decision 12,
+the user's switch of the weekly run's default to the blend after the measurement.
 
 No result of the measurement is quoted here: the numbers live in the generated
 `RANKINGS_EVAL.md` and wait for an independent review (`AGENTS.md` rule 3).
@@ -240,6 +240,39 @@ No result of the measurement is quoted here: the numbers live in the generated
   margins summed in the given order, runs of different games or of a game with other teams
   refused.
 - **How to reverse it**: give `--run-dir` once.
+
+## 12. The weekly run's default ranking
+
+- **What differs**: the weekly run ranked on the composite (decision 10 kept it the default), and
+  the model and blend methods read only explicit prediction paths, which a weekly run has no
+  setting to fill (decision 10, "Left open").
+- **Options**: (a) the blend at weight `0.5` as the weekly run's default, the model rating
+  reading the run's own stage-1 fold checkpoints for the ranked season and the floor-sigma
+  reference runs, averaged per game as one source (decision 11), for earlier seasons; (b) keep the
+  composite; (c) the ported rating alone.
+- **Decision**: the user chose the blend on 2026-10-10 after the measurement: (a), in
+  `config/weekly_run.yaml` and the weekly run's code defaults (`DEFAULT_POWER_RANKINGS_METHOD`,
+  `DEFAULT_POWER_RANKINGS_BLEND_WEIGHT` in `weekly_run/config.py`), which the shipped config must
+  equal. Explicit `--power-rankings-model-predictions` replace both default sources. Stage 1
+  writes `wf_compare/metadata.json` naming its fold checkpoint directory (a fingerprint
+  subdirectory of `wf_folds/`), so `wf_compare/` reads as a walk-forward run directory. A missing
+  or short source skips the rankings with a warning that names it, as before. The rankings
+  command's default stays the composite, and `--legacy-franchise-fit` alone still implies
+  Bradley-Terry in the weekly run. A fold without a `neutral` column now reads as null there,
+  which the fit already treats as a home game.
+- **Reasoning**: the pre-registered rule picked the blend over the ported rating, and the same
+  rule's weight for 2026 is `0.5`; stage 1 is production's own walk-forward of the ranked season
+  (`AGENTS.md` rule 11), and the reference runs are the two seeds production already pools for
+  the floor sigma, so no new run is needed.
+- **Data**: the main checkout's `models/step6/rankings/REVIEW.md` ("The rule's outcome" and
+  "Second round"); `tests/test_weekly_run_rating_sources.py`,
+  `tests/test_power_rankings_sources.py`
+  (`test_model_method_in_week_one_reads_last_season_from_the_averaged_reference`),
+  `tests/test_rating_sources.py` (`test_read_split_predictions_*`); the weekly-run
+  characterization snapshot changed only in `power_rankings.csv`.
+- **How to reverse it**: `power_rankings_method: composite` in `config/weekly_run.yaml` (and the
+  code default beside it).
+- **Review**: not yet reviewed.
 
 ## Review
 

@@ -161,7 +161,12 @@ def _with_earlier_seasons(
         else set()
     )
     missing = [season for season in seasons if season not in present]
-    parts = [loaded.filter(pl.col("season").is_in(seasons))] if present else []
+    wanted = set(seasons)
+    parts = (
+        [loaded if present <= wanted else loaded.filter(pl.col("season").is_in(seasons))]
+        if present
+        else []
+    )
     if missing:
         parts.append(load(missing))
     return pl.concat(parts, how="diagonal")

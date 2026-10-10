@@ -153,11 +153,20 @@ def _known_team(column: str) -> pl.Expr:
     return pl.col(column).is_not_null() & (pl.col(column) != "")
 
 
-def _regular_plays(plays: pl.DataFrame) -> pl.DataFrame:
-    """Return the regular-season plays of ``plays`` (all of them without a season type)."""
-    if "season_type" in plays.columns:
-        return plays.filter(pl.col("season_type") == _REGULAR_SEASON)
-    return plays
+def _regular_plays(plays: pl.DataFrame, columns: Iterable[str]) -> pl.DataFrame:
+    """Return the regular-season plays of ``plays`` (all without a season type), with ``columns``.
+
+    The columns are selected first: the play-by-play holds every season's plays with well over a
+    hundred columns, and a filter of all of them would copy the whole frame.
+    """
+    wanted = list(dict.fromkeys(column for column in columns if column in plays.columns))
+    if "season_type" not in plays.columns:
+        return plays.select(wanted)
+    return (
+        plays.select(*wanted, "season_type")
+        .filter(pl.col("season_type") == _REGULAR_SEASON)
+        .drop("season_type")
+    )
 
 
 def _special_teams_play(columns: Iterable[str]) -> pl.Expr:
@@ -222,8 +231,9 @@ def team_games_from_pbp(plays: pl.DataFrame, schedule: pl.DataFrame) -> pl.DataF
     epa = pl.col("epa").fill_null(0.0)
     snap = _scrimmage_snap()
     special = _special_teams_play(plays.columns)
+    columns = (*_TEAM_PLAY_COLUMNS, *constants.PBP_SPECIAL_TEAMS_FLAG_CANDIDATES)
     rows = (
-        _regular_plays(plays)
+        _regular_plays(plays, columns)
         .filter(_known_team("posteam") & _known_team("defteam"))
         .group_by(["season", "game_id", "week", "posteam", "defteam"], maintain_order=True)
         .agg(
@@ -428,7 +438,7 @@ def passer_games_from_pbp(sources: SeasonSources, team_games: pl.DataFrame) -> p
 
     """
     _require(sources.plays, _PASSER_PLAY_COLUMNS, "play-by-play rows")
-    plays = _regular_plays(sources.plays).filter(
+    plays = _regular_plays(sources.plays, _PASSER_PLAY_COLUMNS).filter(
         _known_team("posteam") & pl.col("passer_player_name").is_not_null()
     )
     identity = qb_identity_crosswalk(sources.players, sources.weekly_rosters)

@@ -54,6 +54,8 @@ class RunFiles:
     stage_markers: dict[str, Path] = field(default_factory=dict)
     week_predictions: dict[tuple[int, int], Path] = field(default_factory=dict)
     """Every predictions file in the directory by ``(season, week)``, the run's own included."""
+    predictions_marked: bool = False
+    """Whether ``predictions`` is the file the run's predictions stage wrote, not the newest."""
 
     @property
     def stages(self) -> dict[str, bool]:
@@ -159,7 +161,8 @@ def resolve_run_files(run_dir: Path) -> RunFiles:
     run_id = run_dir.name
     paths = resolve_run_paths(run_id, run_dir=run_dir)
     week_predictions = _week_files(run_dir, "predictions")
-    predictions = _marked_predictions(run_dir, week_predictions) or _newest(week_predictions)
+    marked = _marked_predictions(run_dir, week_predictions)
+    predictions = marked or _newest(week_predictions)
     picks = _newest_week_file(run_dir, "confidence_picks")
     betting = _newest_week_file(run_dir, "betting_report")
     power = _newest_power_file(run_dir, "power_rankings")
@@ -189,4 +192,5 @@ def resolve_run_files(run_dir: Path) -> RunFiles:
         power_week=power[2] if power else None,
         stage_markers={stage: run_dir / f"{stage}_state.json" for stage in STAGES},
         week_predictions=week_predictions,
+        predictions_marked=marked is not None,
     )

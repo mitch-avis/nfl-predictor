@@ -50,6 +50,78 @@ def _weekly_run_with_a_later_week(models: Path, *, marker: bool = True) -> Path:
     return run_dir
 
 
+def _newer_weekly_run(models: Path, *, marker: bool = True) -> Path:
+    """Create the week-6 weekly run, written after the week-5 run.
+
+    With ``marker`` its predictions stage names its week-6 file; without, week 6 is only its
+    newest predictions file.
+    """
+    run_dir = factories.make_run_dir(
+        models,
+        "weekly_w6",
+        factories.RunSpec(season=2026, week=LATER_WEEK, created_at="2026-10-14T00:00:00+00:00"),
+    )
+    if marker:
+        own = f"/elsewhere/models/weekly_w6/season_2026_week_{LATER_WEEK:02d}_predictions.csv"
+        (run_dir / "predictions_state.json").write_text(
+            json.dumps({"stage": "predictions", "outputs": [own]}), encoding="utf-8"
+        )
+    return run_dir
+
+
+def _pin_the_older_run(models: Path, app: FastAPI, db: Database, *, marker: bool = True) -> None:
+    """Create the week-5 run holding a week-6 file and the newer week-6 run; pin the older one."""
+    _weekly_run_with_a_later_week(models)
+    _newer_weekly_run(models, marker=marker)
+    app.state.run_index.invalidate()
+    active.set_active_run(db, app.state.run_index, "weekly_w5")
+
+
+def test_a_newer_runs_own_week_outranks_a_pinned_runs_file_for_it(
+    project_root: Path, viewer_client: TestClient, app: FastAPI, db: Database
+) -> None:
+    """A week a newer run predicted as its own wins over the pinned run's ahead-of-time file."""
+    # Arrange
+    _pin_the_older_run(project_root / "models", app, db)
+
+    # Act
+    payload = viewer_client.get("/api/predictions", params={"season": 2026, "week": 6}).json()
+
+    # Assert
+    assert (payload["source"], payload["run_id"], payload["week"]) == ("run", "weekly_w6", 6)
+
+
+def test_weeks_list_a_newer_runs_own_week_instead_of_a_pinned_runs_file(
+    project_root: Path, viewer_client: TestClient, app: FastAPI, db: Database
+) -> None:
+    """The selector offers the newer run's week 6, not the pinned run's ahead-of-time copy."""
+    # Arrange
+    _pin_the_older_run(project_root / "models", app, db)
+
+    # Act
+    weeks = viewer_client.get("/api/predictions/weeks").json()
+
+    # Assert
+    assert [(w["week"], w["source"], w["run_id"]) for w in weeks] == [
+        (OWN_WEEK, "active", "weekly_w5"),
+        (LATER_WEEK, "run", "weekly_w6"),
+    ]
+
+
+def test_an_unmarked_runs_newest_file_does_not_outrank_the_pinned_runs_file(
+    project_root: Path, viewer_client: TestClient, app: FastAPI, db: Database
+) -> None:
+    """Only a run whose predictions stage wrote the week outranks the pinned run's file."""
+    # Arrange
+    _pin_the_older_run(project_root / "models", app, db, marker=False)
+
+    # Act
+    payload = viewer_client.get("/api/predictions", params={"season": 2026, "week": 6}).json()
+
+    # Assert
+    assert (payload["source"], payload["run_id"], payload["week"]) == ("active", "weekly_w5", 6)
+
+
 def test_run_files_keep_the_week_the_run_predicted(tmp_path: Path) -> None:
     """The predictions stage marker names the run's own week, whatever was predicted later."""
     # Arrange

@@ -51,22 +51,37 @@ def get_index(request: Request) -> RunIndex:
     return index
 
 
+def _stage_weeks(index: RunIndex, active_run: RunSummary) -> set[tuple[int | None, int | None]]:
+    """Return the weeks other runs predicted as their own week, by their predictions stage."""
+    return {
+        (run.season, run.week)
+        for run in index.runs()
+        if run.run_id != active_run.run_id and run.run_files.predictions_marked
+    }
+
+
 def available_weeks(
     settings: Settings, index: RunIndex, active_run: RunSummary | None
 ) -> list[WeekRef]:
     """List the weeks a client can select.
 
-    Weeks that already have predictions come first: the active run's own week, the later weeks
-    predicted into it, other runs, and then unattached ``data/predict`` files. Weeks of the current
-    season that are still unplayed and have no predictions follow with source ``available``, so the
-    selector can offer to generate them.
+    Weeks that already have predictions come first: the active run's own week, the other weeks
+    predicted into it (unless another run predicted that week as its own, which then stands for
+    it), other runs, and then unattached ``data/predict`` files. Weeks of the current season that
+    are still unplayed and have no predictions follow with source ``available``, so the selector
+    can offer to generate them.
     """
     refs: list[WeekRef] = []
     seen: set[tuple[str, int | None, int | None]] = set()
     predicted: set[tuple[int | None, int | None]] = set()
     if active_run and active_run.run_files.predictions is not None:
         own = (active_run.season, active_run.week)
-        others = [key for key in active_run.run_files.week_predictions if key != own]
+        stage_weeks = _stage_weeks(index, active_run)
+        others = [
+            key
+            for key in active_run.run_files.week_predictions
+            if key != own and key not in stage_weeks
+        ]
         for season, week in [own, *others]:
             refs.append(
                 WeekRef(
@@ -147,15 +162,16 @@ def _explicit_run_source(db: Database, index: RunIndex, run_id: str) -> Predicti
     return PredictionSource(run.run_files.predictions, "run", run, run.season, run.week)
 
 
-def _active_source(current: RunSummary, query: WeekQuery) -> PredictionSource | None:
-    """Return the active run's file for the query: its own week, else a later week it holds."""
-    own = current.run_files.predictions
+def _own_source(run: RunSummary, source: str) -> PredictionSource | None:
+    """Return a run's own week's predictions as a source, or ``None`` when it has none."""
+    own = run.run_files.predictions
     if own is None:
         return None
-    if (query.season is None and query.week is None) or _matches(
-        query, current.season, current.week
-    ):
-        return PredictionSource(own, "active", current, current.season, current.week)
+    return PredictionSource(own, source, run, run.season, run.week)
+
+
+def _ahead_source(current: RunSummary, query: WeekQuery) -> PredictionSource | None:
+    """Return a week the active run holds besides its own (predicted ahead), if it fits."""
     for (season, week), path in current.run_files.week_predictions.items():
         if _matches(query, season, week):
             return PredictionSource(path, "active", current, season, week)
@@ -163,15 +179,34 @@ def _active_source(current: RunSummary, query: WeekQuery) -> PredictionSource | 
 
 
 def _run_source(db: Database, index: RunIndex, query: WeekQuery) -> PredictionSource | None:
-    """Return the active run's predictions when they fit the query, else any run's that do."""
+    """Return the run file that fits the query.
+
+    Precedence: the active run's own week (also when no week was asked for); else the newest
+    other run whose predictions stage wrote that week; else a week predicted ahead into the active
+    run; else the newest other run whose newest predictions file is for that week.
+    """
     current = active.resolve_active_run(db, index)
-    found = _active_source(current, query) if current else None
-    if found is not None:
-        return found
-    for run in index.runs():
-        if run.run_files.predictions is not None and _matches(query, run.season, run.week):
-            return PredictionSource(run.run_files.predictions, "run", run, run.season, run.week)
-    return None
+    wants_week = query.season is not None or query.week is not None
+    if (
+        current is not None
+        and current.run_files.predictions is not None
+        and (not wants_week or _matches(query, current.season, current.week))
+    ):
+        return _own_source(current, "active")
+    others = [
+        run
+        for run in index.runs()
+        if run.run_files.predictions is not None
+        and (current is None or run.run_id != current.run_id)
+        and _matches(query, run.season, run.week)
+    ]
+    for run in others:
+        if run.run_files.predictions_marked:
+            return _own_source(run, "run")
+    ahead = _ahead_source(current, query) if current is not None else None
+    if ahead is not None:
+        return ahead
+    return _own_source(others[0], "run") if others else None
 
 
 def _unattached_source(settings: Settings, query: WeekQuery) -> PredictionSource | None:

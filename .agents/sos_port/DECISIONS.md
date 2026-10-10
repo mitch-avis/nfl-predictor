@@ -60,7 +60,9 @@ pre-cutoff games moved).
   international and relocated games, and four Saints games of 2005).
 - **Quarterback adjustment from this repository's play-by-play**; 538's draft-based rookie
   ratings are replaced by the mean of earlier first starts (no draft data here); designed
-  quarterback runs are missing until the play-by-play cache carries the rusher's id.
+  quarterback runs were missing because the play-by-play cache lacked the rusher's id, which it
+  carries since `0.50.0`, so the integration adds them and reruns the evaluation under the same
+  rule.
 - **Starters**: a completed game uses its actual starter, an upcoming game the projected one, as
   the `qb_elos.csv` columns do; the diagnostic cost of knowing only the previous starter is in
   the evaluation report and on the user's list (`.agents/step6_plan.md`).
@@ -113,3 +115,23 @@ the reviewer reproduced the audit on three CPU math kernels and caught every pla
 - **Determinism**: the fits keep the caller's row order and `sos` sums opponents in a fixed order;
   the ETL must pin one math-library thread (an integration note).
 - **SRS** comes from this repository's existing solver (bit-identical to the source's).
+
+### The play-by-play columns and the stadium table (`0.50.0`)
+
+Full records: [decisions/pbp_columns.md](decisions/pbp_columns.md) (15 entries and a note on the
+first ETL after the merge). Review: one independent round plus a verified documentation round;
+the reviewer reproduced every number on real data for all 27 seasons and found no existing value,
+type or aggregation changed.
+
+- **One refresh for the whole port**: the cache takes every play-by-play column `nfl-sos-ratings`
+  reads (134, derived by script from its code; 84 added), plus the play text its repair parses.
+- **Release check**: a fresh nflverse download equals the cache the 2026-10-09 reference build
+  used, on every shared column, in 27 of 27 seasons, so the candidate build is not confounded by
+  a newer release.
+- **Team codes**: all 23 team-code columns are normalized at load; yard-line text stays as
+  published (normalizing it would change an already-cached column).
+- **Stadiums**: 14 venue ids the table lacked are added (9 used in 1999-2002, 5 in 2026), with
+  elevations measured from terrain models at each venue's coordinates; 163 games move from 0 ft.
+  Mile High Stadium gets its measured 5,210 ft while Empower Field keeps its nominal 5,280 ft.
+- **2026 roofs**: nflverse lists three 2026 international venues as domes; no override now (the
+  current season's schedule re-downloads every run); recheck before the Paris game on Oct 25.

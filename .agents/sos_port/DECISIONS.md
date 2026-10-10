@@ -66,3 +66,30 @@ pre-cutoff games moved).
   the evaluation report and on the user's list (`.agents/step6_plan.md`).
 - **Two groups**: `own_elo` (no market information) and `own_elo_wt` (with the win-total pull),
   named so the substring-based group switches stay disjoint.
+
+### The web app's Pool page and margin-only switch (`0.48.0`)
+
+Full records: [decisions/web.md](decisions/web.md) (15 entries). Review: three independent rounds;
+the last found every code fix correct (the exact survivor planner checked on 3,840 plans).
+
+- **For your approval (a substitute method)**: the survivor planner solves each plan exactly (an
+  assignment of weeks to teams, about 2 ms a season) instead of the plan's beam search. Both
+  reviews' simulations found the beam below the best achievable plan in many seasons (in the
+  kept script, 9 of 30 at width 64, up to 13.8% below; 17 of 30 at width 16, with a wrong first
+  pick in 4). Task 58.1 stays open until you accept it.
+- **The confidence sheet** reads the existing ranks and never re-ranks; after the lock it is
+  scored from the picks file written before the lock, with newer ranks as notes. Known limit: a
+  re-predict before the lock and another after it fall back to the weekly run's picks file.
+- **The margin-only ranking** is computed on the server over every feature (5 of the margin
+  head's top 25 were outside the combined top 40 on the latest weekly run).
+- **Run and week resolution**: a run keeps its own week when later weeks are predicted into it;
+  a newer run's own week outranks a file predicted ahead into an older run; the selector and the
+  routes agree on every week.
+- **Corrections without asking**: the week selector's one-update fix and the removal of the
+  frontend's plan labels (both a stated rule with one plausible fix).
+- **Tiebreakers**: whole-point entries; the week's highest and lowest team scores come from a
+  distribution and run about 2 points low on top score against 2015-2025 (calibrating it is on
+  your list).
+- **Live betting (design only)**: the in-game probability updates the pregame prediction with the
+  score and clock, the market is shown beside it and never blended, providers are off by
+  default, and odds poll on a monthly credit budget. Three provider choices are on your list.

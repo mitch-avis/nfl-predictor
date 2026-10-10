@@ -1209,8 +1209,10 @@ ablation is replaced with this ladder.
 
 Phases 0-3 completed 2026-09-10 (on `feat/web-ui`, worktree `../nfl-predictor-web`) and merged
 into `main` on 2026-09-11 as version `0.8.0`; task 58.4 completed 2026-09-21 (version `0.12.12`);
-task 58.5 completed 2026-09-25 (version `0.26.1`, in Milestone 60 task 60.7); phases 4-6 (tasks
-58.1-58.3) stay in `TODO.md`. The milestone number was assigned at merge time
+task 58.5 completed 2026-09-25 (version `0.26.1`, in Milestone 60 task 60.7); tasks 58.3 (the
+live-betting design) and 58.6 (the margin-only switch) completed 2026-10-10 (version `0.48.0`, on
+the step-6 integration branch); tasks 58.1 (pool helpers, delivered with a substitute method
+awaiting the user) and 58.2 stay in `TODO.md`. The milestone number was assigned at merge time
 (the plan had reserved 51, which the 2026-09-10 renumbering gave to the power rankings). The full
 design, the decisions made with the user, and the per-phase status with deviations live in
 `web_ui_plan.md`.
@@ -1283,6 +1285,25 @@ Closed 2026-09-21 by the user's decision: the `NFLP_DATA_DIR` setting stays, bec
 resolves its own paths through it and it lets the app run against a copied data tree, but the
 ETL's upstream inputs will not follow it. The `0.12.12` narrowing is the final shape of this
 task.
+
+### 58.3 Live betting and live odds (design only)
+
+Completed 2026-10-10 on the step-6 integration branch (`feat/step6-sos-port`, `0.48.0`), with an
+independent review in three rounds. The design is `.agents/web_ui_plan.md`, Phase 6: the in-game
+probability updates the published pregame prediction with the score and the clock (at kickoff it
+equals the published probability), the market is shown beside it and never blended in, score and
+odds providers are off by default, odds poll on a monthly credit budget, and nothing is shown
+before a check against past play-by-play. Nothing is built. Three choices wait for the user (the
+score source, the odds source, keeping odds snapshots under `data/live/`); see
+`.agents/sos_port/decisions/web.md`, entries 8 and 15.
+
+### 58.6 Margin-only switch on the feature importance
+
+Completed 2026-10-10 on the step-6 integration branch (`0.48.0`), reviewed independently. The
+Model page shows both heads added by default and offers a "Margin head only" switch when the run
+recorded per-head numbers; `GET /api/model` returns `feature_importance.margin_rows`, ranked on
+the server over every feature in the same measure (SHAP, else total gain), as the user decided
+on 2026-09-27. Record: `.agents/sos_port/decisions/web.md`, entry 1.
 
 ---
 

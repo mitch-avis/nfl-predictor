@@ -7,22 +7,26 @@ every difference between the two repositories to the delegating session (recorde
 `TODO.md`). Adopted changes are implemented on the step-6 integration branch; the production data
 rebuild and the merge stay held for the user's final approval. Each entry's "Recommended decision"
 is the implementer's; the delegating session records the decision taken in
-`.agents/sos_port/DECISIONS.md`.
+`.agents/sos_port/DECISIONS.md` (on the step-6 integration branch). Entries 4 and 5 also state the
+decision taken on the carry rule, because that rule depends on the scramble flag of entry 15.
 
 Every number is quoted from a generated report. Reproduce them with:
 
 ```bash
-.venv/bin/python .agents/sos_port/parity.py     # PARITY.md, parity.json, parity_attributions.parquet
-.venv/bin/python .agents/sos_port/inventory.py  # INVENTORY.md, inventory.json
+# PARITY.md, parity.json, parity_attributions.parquet
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py
+# INVENTORY.md, inventory.json
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/inventory.py
 ```
 
 Two kinds of count appear. **Explained** is the team-games a cause makes match, alone or with the
 fewest other causes (`parity.json`, `causes.<cause>.columns.<pair>`). **Effect** is the cause's
 own adjustment applied alone to every team-game, adjusted value minus unadjusted
 (`causes.<cause>.effect.<value>`), on this repository's side unless the entry says otherwise. The
-check reads `qb_scramble` and `play_id` from the snapshot of the play-by-play the other repository
-read, which equals this repository's cache row by row in all 27 seasons (`PARITY.md`, Summary), and
-it now explains every mismatching team-game (`parity.json`, `failures`: none).
+check reads `qb_scramble`, `play_id` and the play text from the snapshot of the play-by-play the
+other repository read, which equals this repository's cache row by row in all 27 seasons
+(`PARITY.md`, Summary), and it explains every mismatching team-game (`parity.json`, `failures`:
+none).
 
 ## 1. Pre-2006 scrambles are dropbacks there and in no snap or dropback count here
 
@@ -97,17 +101,27 @@ it now explains every mismatching team-game (`parity.json`, `failures`: none).
 
 ## 4. Runs a penalty wiped out count as carries here
 
-- **What differs.** There, designed carries and their rates start from `rush_attempt`, because
-  "nflverse keeps the scramble and run flags on plays a penalty wiped out". Here, carries use the
-  `rush` flag, so a run a penalty wiped out (`rush` 1, `rush_attempt` 0) is a carry, with its EPA,
-  success, explosive and stuffed flags. nflverse keeps one row per play, so that EPA (the penalty's
-  effect on the down) is in no other row: dropping the play from carries would drop its EPA from
-  every EPA sum here, while `offensive_snaps` still counts it (the `rush` flag is in both
-  repositories' snap definitions). Passes a penalty wiped out are different: nflverse leaves their
-  `pass` flag set but their `qb_dropback` at 0, so they are dropbacks in neither repository, and
-  their EPA is in no EPA sum here.
+- **What differs.** There, a designed carry is a rush attempt that is not a two-point try, a
+  flagged scramble or a kneel-down, `rush_attempt & ~two_point_attempt & ~qb_scramble & ~qb_kneel`
+  (`team_stats_expanded.py`, `is_carry` and `is_designed_run`), because "nflverse keeps the
+  scramble and run flags on plays a penalty wiped out". Here, a carry is a scrimmage snap with the
+  `rush` flag that is not a kneel-down, a spike or a two-point try (`_play_conditions`), so a run a
+  penalty wiped out (`rush` 1, `rush_attempt` 0) is a carry, with its EPA, success, explosive and
+  stuffed flags. nflverse keeps one row per play, so that EPA (the penalty's effect on the down) is
+  in no other row: dropping the play from carries drops its EPA from every EPA sum here, while
+  `offensive_snaps` still counts it (the `rush` flag is in both repositories' snap definitions).
+  Passes a penalty wiped out are different: nflverse leaves their `pass` flag set but their
+  `qb_dropback` at 0, so they are dropbacks and snaps in neither repository, and their EPA is in no
+  EPA sum here.
+- **The rule needs the scramble flag.** Its `~qb_scramble` term keeps scrambles out of carries, and
+  this repository's cache leaves `qb_scramble` out (entry 15). Built from `rush_attempt` without
+  that term, carries would gain 20,589 plays over 1999-2025: 20,535 flagged scrambles, 16,717 of
+  them dropbacks here, whose EPA would then land in both `pass_epa_sum` and `rush_epa_sum`, plus
+  entry 5's 53 rush attempts and entry 18's spike. With the term the rule adds only those 54, and
+  removes 8,867 carries: the 8,862 without `rush_attempt` and entry 16's five scrambles coded as
+  runs.
 - **Options.**
-  1. Base carries on rush attempts, as there: wiped-out runs leave carries and the EPA sums.
+  1. Base carries on the rule above, as there: wiped-out runs leave carries and the EPA sums.
   2. Keep the `rush` flag for carries (today).
   3. Keep the `rush` flag and also count passes a penalty wiped out (the `pass` flag) as dropbacks,
      so both kinds of penalty play count, as the usual nflverse `pass == 1 | rush == 1` analyses do.
@@ -116,27 +130,59 @@ it now explains every mismatching team-game (`parity.json`, `failures`: none).
   wiped-out passes' EPA (a net gain), so it understates rushing EPA against passing. Either option
   makes the two sides agree; option 2 keeps the asymmetry. The ported ratings keep the source's
   definitions internally either way.
+- **Decision taken.** The delegating session moved carries to the rule above (option 1). Order:
+  entry 15 first (cache `qb_scramble`), then the carry rule; the rule is never built without the
+  flag. Acceptance check: a parity re-run (the `parity.py` command above) on the changed code, in
+  which `designed_carries` and `rush_success_count` match in every team-game. `scrimmage_epa_sum`
+  will then differ wherever a wiped-out run carries EPA, because its `offensive_epa` keeps those
+  plays (consequence 2 below); `parity.yaml` needs that difference as a named cause before the
+  re-run passes, and any other pair the change moves must be explained the same way. Two
+  consequences come with the decision:
+  1. Snaps keep the runs that leave carries, as its snaps do (its `scrimmage_snap_expr` has the
+     `rush` flag too): the 8,862 carries without `rush_attempt`, about 0.64 a team-game over the
+     13,928 team-games compared. So the per-snap rates (`off_pass_epa_per_snap`,
+     `off_rush_epa_per_snap` and their allowed mirrors) keep those plays in the denominator while
+     their EPA leaves the rush sums.
+  2. The ported team rating's `offensive_epa` (EPA over every scrimmage snap, entry 3) keeps the
+     asymmetry: wiped-out runs are snaps there, so their -5,660.46 EPA stays in, and wiped-out
+     passes are not, so their +11,142.27 EPA stays out. That is a candidate for a later measured
+     test, like the kneel-and-spike one of entry 3.
 - **Data.** `parity.json`, `causes.wiped_out_runs`: explains 6,398 team-games, 1999-2025. Effect of
-  option 1: `designed_carries (here)` -8,862 carries; `rush_epa_sum` +5,687.69 (the dropped plays'
-  EPA is -5,687.69). Same key, `wiped_out_plays`: 65,122 plays a penalty wiped out; 8,848 keep the
-  `rush` flag (-5,660.46 EPA), 27,906 keep the `pass` flag (+11,142.27 EPA), 0 keep `qb_dropback`.
-- **Feature-value impact.** Options 1 and 3, every season: `epa_per_carry`, `rush_success_rate`,
-  `explosive_rush_rate`, `stuffed_rush_rate`, `success_rate`, `off_rush_epa_per_snap` (and with
-  option 3 the dropback-based features) with their allowed and opponent mirrors, and the strength
-  snapshot. Needs an ETL rebuild. Option 2: none.
-- **How to reverse it.** Restore the carry and dropback conditions and rebuild.
+  the cause alone (the rush flag cleared on carries without `rush_attempt`): `designed_carries
+  (here)` -8,862 carries; `rush_epa_sum` +5,687.69 (the dropped plays' EPA is -5,687.69). Same key:
+  `carries_without_rush_attempt`, the 8,862 by play type (8,841 `no_play`, 20 punts, 1 kickoff);
+  `carries_from_rush_attempts`, the counts in "The rule needs the scramble flag" (357,232 carries
+  today); `wiped_out_plays`, 65,122 plays recorded as `no_play`, of which 8,848 keep the `rush`
+  flag (-5,660.46 EPA), 27,906 the `pass` flag (+11,142.27 EPA) and 0 `qb_dropback`. Those 65,122
+  include 1,256 rows without the penalty flag (`unflagged_no_plays`, by their play text: 1,219
+  offsetting penalties, 30 declined penalties, 4 plays under review, 3 timeouts). Team-games
+  compared: `parity.json`, `pairs`, `compared`.
+- **Feature-value impact.** Yes, every season, with entry 15's cache extension and an ETL rebuild:
+  `epa_per_carry`, `rush_success_rate`, `explosive_rush_rate`, `stuffed_rush_rate`,
+  `success_rate`, `off_rush_epa_per_snap` (its EPA) with their allowed and opponent mirrors, and the
+  strength snapshot.
+- **How to reverse it.** Restore the `rush`-flag carry condition and rebuild; the cached
+  `qb_scramble` column can stay.
 
 ## 5. Rush attempts nflverse does not flag as runs
 
 - **What differs.** There, a rush attempt that is neither a scramble nor a kneel-down is a designed
-  run whatever its `rush` flag. Here, a carry needs `rush` 1, so a rush attempt nflverse codes with
-  `rush` 0 that is not a scramble is left out.
+  run whatever its `rush` flag (entry 4's rule). Here, a carry needs `rush` 1, so a rush attempt
+  nflverse codes with `rush` 0 that is not a scramble is left out.
+- **The rule needs the scramble flag.** These plays and the 20,535 flagged scrambles of entry 4 all
+  carry `rush_attempt` without counting as carries here; only `qb_scramble`, which the cache leaves
+  out (entry 15), tells them apart.
 - **Options.** Count them as carries with entry 4's option 1; or keep.
 - **Recommended decision: count them with entry 4's option 1** (one carry basis, the rush attempt,
   in both repositories). The aborted-snap rule there (its open question on botched snaps charged to
   linemen) should be decided with the quarterback rating in phase 3.
+- **Decision taken.** Counted, by entry 4's decision: entry 15 first, then entry 4's rule. Entry 4's
+  parity re-run is the acceptance check; in it, `unflagged_rush_attempts` explains no
+  `designed_carries` or `rush_success_count` team-game.
 - **Data.** `parity.json`, `causes.unflagged_rush_attempts`: explains 37 team-games, 2001-2025.
-  Effect: `designed_carries (here)` +53 carries in 53 team-games.
+  Effect: `designed_carries (here)` +53 carries in 53 team-games. With entry 18's spike they are
+  the 54 plays the rule adds (`causes.wiped_out_runs.carries_from_rush_attempts`,
+  `with_flag_added`).
 - **Feature-value impact.** Yes, with entry 4: a few carries a season.
 - **How to reverse it.** As entry 4.
 
@@ -279,16 +325,20 @@ it now explains every mismatching team-game (`parity.json`, `failures`: none).
 - **What differs.** There, the full play-by-play frame is read. Here, `constants.PBP_COLUMNS` caches
   a selection: it keeps `passer_player_id` and `passer_player_name` but leaves out `qb_scramble`,
   `play_id`, the play text, the other player ids and the player team columns (`fumbled_1_team` and
-  others), which entries 1, 5, 9 and 10 and the quarterback rating need.
+  others), which entries 1, 4, 5, 9, 10 and 16 and the quarterback rating need.
 - **Options.** Extend `constants.PBP_COLUMNS` and re-download the cache once; or read the missing
   columns from another source.
 - **Recommended decision: extend `constants.PBP_COLUMNS`**, which the port needs and which is being
-  done separately. For phase 1 the snapshot of the play-by-play the other repository read is the
-  source of `qb_scramble` and `play_id`: the parity check attaches them only after the snapshot
-  equals this repository's cache row by row. A re-download writes under `data/` and the change
-  touches `constants.py` (part of the walk-forward checkpoint fingerprint).
+  done separately; it comes before the rule changes of entries 1, 4, 5 and 16. For phase 1 the
+  snapshot of the play-by-play the other repository read is the source of `qb_scramble`, `play_id`
+  and the play text: the parity check attaches them by row position only after the snapshot equals
+  this repository's cache row by row, and fails when a `play_id` repeats within a game or when rows
+  equal on every cached column differ in `qb_scramble`. A re-download writes under `data/` and the
+  change touches `constants.py` (part of the walk-forward checkpoint fingerprint).
 - **Data.** `PARITY.md`, Summary (27 of 27 seasons equal row by row); `parity.json`, `snapshot`
-  and `causes.release_difference`; `inventory.json`, `sources.classified`, rule `pbp`.
+  and `causes.release_difference` (no game repeats a `play_id`; 26,100 rows equal another row on
+  every cached column, in 10,647 groups, none of them differing in `qb_scramble`);
+  `inventory.json`, `sources.classified`, rule `pbp`.
 - **Feature-value impact.** None by itself (columns are only added to the cache).
 - **How to reverse it.** Remove the columns from the list; the cache keeps working.
 
@@ -311,12 +361,14 @@ it now explains every mismatching team-game (`parity.json`, `failures`: none).
 - **What differs.** Here, the dropback and carry conditions are independent, so a play with
   `qb_dropback` and `rush` both set is a dropback and a carry, its EPA in both `pass_epa_sum` and
   `rush_epa_sum`; there, scrimmage EPA counts every snap once. One play in the cache is flagged both
-  ways (`2004_05_BUF_NYJ`, a scramble coded as a run).
+  ways (`2004_05_BUF_NYJ`, a scramble coded as a run). Its designed-run rule does not exclude
+  dropbacks (that play is not a designed run there only because it is also a flagged scramble,
+  entry 16), so the check judges this cause on scrimmage EPA only.
 - **Options.** Count such a play once, as a dropback; or keep.
 - **Recommended decision: count it once, as a dropback**, in phase 3's batch. Reasoning: a double
   count, not a definition.
-- **Data.** `parity.json`, `causes.dropback_and_carry`: explains 1 team-game (2004), where entry 16
-  matches too; effect `rush_epa_sum` -0.86 EPA.
+- **Data.** `parity.json`, `causes.dropback_and_carry`: explains 1 team-game (2004) on
+  `scrimmage_epa_sum`, where entry 16 matches too; effect `rush_epa_sum` -0.86 EPA.
 - **Feature-value impact.** Yes, one team-game in 2004.
 - **How to reverse it.** Restore the independent conditions and rebuild.
 

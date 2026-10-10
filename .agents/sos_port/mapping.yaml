@@ -12,7 +12,9 @@
 # (regular expression on the column), `base` (its registry's base metric), `prefix` and `suffix`
 # (its registry's affixes), `source` (the code-derived source for game logs, else its registry's
 # label). A `rest: true` rule takes every column of its kinds that no other rule matches, and must
-# say how many (`expect`), so a column the frozen commit does not have fails the run.
+# say how many (`expect`), so a column the frozen commit does not have fails the run; any other
+# rule may pin its count the same way. A column left `missing` fails the run when this repository
+# has a column of the same name (or, for a season total or per-game value, of its base metric).
 # Counterparts are `<catalog>:<column>`, where the catalogs are this repository's
 #   team_game  - aggregate_pbp_team_game_stats (play-by-play, per team-game)
 #   box_score  - aggregate_pbp_team_box_score_stats (play-by-play, per team-game; it overrides
@@ -215,9 +217,16 @@ columns:
     note: The schedule's final score (here the game row's home_score and away_score).
   - id: gl-result
     kinds: [team_game_logs]
-    columns: [point_margin, win_value]
-    class: missing
-    phase: none planned (computed from the score where needed; the margin is the model's target)
+    columns: [point_margin, win_value, points_per_offensive_snap, points_allowed_per_defensive_snap]
+    class: different
+    here_map:
+      point_margin: dataset:scoring_margin
+      win_value: dataset:win_pct
+      points_per_offensive_snap: dataset:points_per_play
+      points_allowed_per_defensive_snap: dataset:opponent_points_per_play
+    note: >-
+      Here only as season-to-date features (the per-game margin is the model's target, computed
+      from the game row's score).
   - id: gl-same-pbp
     kinds: [team_game_logs]
     columns: [attempts, completions, carries, st_epa, two_pt_conversions]
@@ -229,6 +238,36 @@ columns:
       st_epa: team_game:st_epa_for
       two_pt_conversions: box_score:2pt_conversions
     note: The same play-by-play definition; equal in every team-game of 1999-2025 (PARITY.md).
+  - id: gl-same-box-rates
+    kinds: [team_game_logs]
+    columns: [completion_pct, int_rate_per_attempt, passing_td_rate_per_attempt, offensive_tds, scrimmage_tds]
+    class: matched
+    here_map:
+      completion_pct: box_score:pass_completions / pass_attempts
+      int_rate_per_attempt: box_score:interceptions_thrown / pass_attempts
+      passing_td_rate_per_attempt: box_score:pass_touchdowns / pass_attempts
+      offensive_tds: box_score:pass_touchdowns + rush_touchdowns
+      scrimmage_tds: box_score:pass_touchdowns + rush_touchdowns
+    note: >-
+      The same play-by-play counts over the same attempts; equal in every team-game of 1999-2025
+      (PARITY.md, pairs pass_completions, pass_attempts, interceptions_from_rate,
+      pass_touchdowns_from_rate and offensive_tds).
+  - id: gl-sack-rate
+    kinds: [team_game_logs]
+    columns: [sack_rate_per_dropback]
+    class: different
+    here: [box_score:times_sacked, team_game:dropbacks]
+    note: >-
+      The same sacks (PARITY.md, pair sacks_from_rate) over different dropbacks: there two-point
+      passes and pre-2006 scrambles are dropbacks.
+  - id: gl-turnovers-on-downs
+    kinds: [team_game_logs]
+    columns: [turnovers_on_downs]
+    class: different
+    here: team_game:fourth_down_fails
+    note: >-
+      Fourth downs that failed; here only on run, pass, kneel and spike plays (PARITY.md, pair
+      turnovers_on_downs).
   - id: gl-snaps
     kinds: [team_game_logs]
     columns: [offensive_snaps, defensive_snaps]
@@ -252,7 +291,7 @@ columns:
     class: different
     here_map:
       offensive_epa: team_game:pass_epa_sum + rush_epa_sum
-      epa_per_offensive_snap: team_game:pass_epa_sum + rush_epa_sum / offensive_snaps
+      epa_per_offensive_snap: team_game:(pass_epa_sum + rush_epa_sum) / offensive_snaps
     phase: phase 3 (team ratings)
     note: >-
       There EPA over every scrimmage snap, the team rating's input; here dropback plus carry EPA,
@@ -289,7 +328,7 @@ columns:
     kinds: [team_game_logs]
     columns: [success_rate]
     class: different
-    here: team_game:pass_success_count + rush_success_count / dropbacks + carries
+    here: team_game:(pass_success_count + rush_success_count) / (dropbacks + carries)
     note: There over every scrimmage snap; here over dropbacks and carries.
   - id: gl-early-down
     kinds: [team_game_logs]
@@ -412,9 +451,9 @@ columns:
     class: different
     here_map:
       epa_per_dropback_allowed: team_game:pass_epa_allowed_sum / dropbacks_allowed
-      epa_per_defensive_snap_allowed: team_game:pass_epa_allowed_sum + rush_epa_allowed_sum / defensive_snaps
+      epa_per_defensive_snap_allowed: team_game:(pass_epa_allowed_sum + rush_epa_allowed_sum) / defensive_snaps
       rush_success_rate_allowed: team_game:rush_success_allowed_count / carries_allowed
-      success_rate_allowed: team_game:pass_success_allowed_count + rush_success_allowed_count / dropbacks_allowed + carries_allowed
+      success_rate_allowed: team_game:(pass_success_allowed_count + rush_success_allowed_count) / (dropbacks_allowed + carries_allowed)
       explosive_pass_rate_allowed: team_game:explosive_pass_allowed_count / dropbacks_allowed
       explosive_rush_rate_allowed: team_game:explosive_rush_allowed_count / carries_allowed
       stuff_rate: team_game:stuffed_rush_allowed_count / carries_allowed
@@ -515,7 +554,7 @@ columns:
   - id: gl-rest
     kinds: [team_game_logs]
     rest: true
-    expect: 120
+    expect: 111
     class: missing
     phase: phase 6 (web pages)
     note: Descriptive game-log stats its team pages show; none feeds its ratings.
@@ -568,8 +607,40 @@ columns:
       There the full season (counts per game, rates pooled over the games); here a season-to-date
       feature, with the per-game definitions of the game-log rules above. Third-down,
       fourth-down, red-zone and two-point rates here are on a 0-100 scale (proportions there).
+  - id: season-team-game-counts
+    kinds: [team_per_game_stats, combined]
+    prefix: ""
+    columns: [dropbacks, third_down_attempts, third_down_conversions, fourth_down_attempts, fourth_down_conversions, red_zone_trips, st_plays]
+    class: different
+    here: team_game:{column}
+    note: >-
+      Here a per-team-game count, summed to date inside the ETL and not published as a season
+      value, with the game-log definitions above.
+  - id: season-nflverse-here
+    kinds: [team_per_game_stats, combined]
+    prefix: ""
+    columns: [targets, receptions, receiving_yards, receiving_tds, receiving_air_yards, receiving_yards_after_catch, receiving_first_downs, passing_air_yards, passing_yards_after_catch, sack_yards_lost, def_sack_yards, def_interception_yards, fumble_recovery_opp, defensive_2pt_conversions]
+    class: different
+    here_map:
+      targets: team_stats:targets
+      receptions: team_stats:receptions
+      receiving_yards: team_stats:receiving_yards
+      receiving_tds: team_stats:receiving_touchdowns
+      receiving_air_yards: team_stats:receiving_air_yards
+      receiving_yards_after_catch: team_stats:receiving_yac
+      receiving_first_downs: team_stats:receiving_first_downs
+      passing_air_yards: team_stats:passing_air_yards
+      passing_yards_after_catch: team_stats:passing_yac
+      sack_yards_lost: team_stats:yards_lost_from_sacks
+      def_sack_yards: team_stats:def_sack_yards
+      def_interception_yards: team_stats:def_interception_yards
+      fumble_recovery_opp: team_stats:fumble_recoveries
+      defensive_2pt_conversions: team_stats:def_2pt_made
+    note: >-
+      Here nflverse's weekly team stats per team-game (not published as a season value); there
+      play-by-play, as in the game logs.
   - id: season-rest
-    expect: 330
+    expect: 288
     kinds: [team_per_game_stats, combined]
     rest: true
     class: missing
@@ -617,6 +688,7 @@ columns:
     phase: phase 6 (web pages)
     note: Its opponents-faced context for every stat.
   - id: opponent-prefix-rest
+    expect: 239
     kinds: [combined]
     prefix: opp_
     match: 'opp_(?!epa_margin_per_play$).*'
@@ -658,15 +730,21 @@ columns:
   - id: qb-game-context-derived
     kinds: [qb_game_logs]
     columns: [point_margin, win_value, turnover_margin]
-    class: missing
-    phase: none planned (the team-game's result and turnovers, joined where needed)
+    class: different
+    here_map:
+      point_margin: dataset:scoring_margin
+      win_value: dataset:win_pct
+      turnover_margin: team_stats:turnover_margin
+    note: >-
+      The team-game's result and turnovers: here the margin and record only as season-to-date
+      features, the turnover margin from nflverse's team stats (there from play-by-play).
   - id: qb-game-rates
     kinds: [qb_game_logs]
     columns: [qb_sack_rate, qb_any_a, qb_completion_pct, qb_pass_yards_per_dropback, qb_td_int_margin_rate]
     class: different
     here_map:
       qb_sack_rate: qb_game:sacks / dropbacks
-      qb_any_a: qb_game:pass_yards + pass_tds - interceptions - sack_yards / attempts + sacks
+      qb_any_a: qb_game:(pass_yards + 20 * pass_tds - 45 * interceptions - sack_yards) / (attempts + sacks)
       qb_completion_pct: qb_game:completions / attempts
       qb_pass_yards_per_dropback: qb_game:pass_yards / dropbacks
       qb_td_int_margin_rate: qb_game:pass_tds - interceptions / dropbacks
@@ -694,14 +772,21 @@ columns:
     note: >-
       There the season's raw rate (official totals); here the expected starter's career rate
       before the game, shrunk toward the league with 300 dropbacks of prior.
+  - id: qb-season-record
+    kinds: [qb_per_game_stats, qb_combined]
+    columns: [wins, losses, ties, win_pct]
+    class: different
+    here: dataset:{column}
+    note: The quarterback's team's record; here before each game, season to date.
   - id: qb-season-rest
-    expect: 160
+    expect: 152
     kinds: [qb_per_game_stats, qb_combined]
     rest: true
     class: missing
     phase: phase 6 (web pages)
     note: Quarterback season stats, totals and per-game values its pages show.
   - id: qb-opponents
+    expect: 102
     kinds: [qb_opponent_profiles, qb_combined]
     prefix: qopp_
     class: missing

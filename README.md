@@ -1255,7 +1255,17 @@ games.
   early-down pass rate, snap volume, and special-teams EPA margin per play. Defensive metrics are
   named explicitly (`def_*` / `*_allowed`) rather than relying on the generic `opponent_` mirror.
   Counts and sums are carried through season-to-date aggregation and every rate is computed
-  afterwards as a ratio of sums, never a mean of per-game rates.
+  afterwards as a ratio of sums, never a mean of per-game rates; a count no published rate reads
+  is not carried. The plays behind them (`utils/polars/pbp.py`, regular season only): a dropback
+  is a play flagged `qb_dropback`, or a run play flagged `qb_scramble` (nflverse left the dropback
+  flag off scrambles before 2006), never a kneel-down, spike or two-point try; a carry is a
+  designed run, the `nfl-sos-ratings` rule: a rush attempt (`rush_attempt`) that is not a
+  scramble, a kneel-down or a two-point try, and a play flagged as both a dropback and a rush
+  counts once, as a dropback. A scrimmage snap (`offensive_snaps`, the per-snap denominators) is a
+  dropback, a play flagged `rush`, a kneel-down or a spike. A run a penalty wiped out nearly
+  always keeps the `rush` flag but not `rush_attempt`, so it is a snap but not a carry, and its
+  EPA stays out of the rushing sums. Third-down, fourth-down and two-point counts read their flags
+  on every play, and a down flagged both converted and failed counts once, as a conversion.
 - Schedule-adjusted team strength (`constants.ADJUSTED_STRENGTH_STATS`): a pre-week snapshot
   solved for every `(season, week)` from a simultaneous ridge that estimates one offense and one
   defense coefficient per team plus a shared home-field term, on per-snap pass and rush EPA

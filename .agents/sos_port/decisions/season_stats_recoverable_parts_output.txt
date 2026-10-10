@@ -1,0 +1,315 @@
+rows: 13,928 team-games of 1999-2025
+adjusted_net_yards_per_attempt
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+any_a_allowed
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+avg_starting_field_position
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+avg_starting_field_position_allowed
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+deep_attempt_rate
+    denominator: attempts, opp__attempts_faced
+    numerator: none
+    numerator = round(rate x denominator) with: attempts, opp__attempts_faced
+deep_attempt_rate_faced
+    denominator: attempts_faced, opp__attempts
+    numerator: none
+    numerator = round(rate x denominator) with: attempts_faced, opp__attempts
+def_sack_rate_per_dropback
+    denominator: opp__dropbacks
+    numerator: opp__sacks_suffered
+    numerator = round(rate x denominator) with: opp__dropbacks
+early_down_pass_rate
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+epa_per_carry
+    denominator: carries, opp__carries_faced
+    numerator: none
+    numerator = round(rate x denominator) with: none
+epa_per_defensive_snap_allowed
+    denominator: defensive_snaps, opp__offensive_snaps
+    numerator: opp__offensive_epa
+    numerator = round(rate x denominator) with: none
+epa_per_dropback
+    denominator: dropbacks
+    numerator: none
+    numerator = round(rate x denominator) with: none
+epa_per_dropback_allowed
+    denominator: opp__dropbacks
+    numerator: none
+    numerator = round(rate x denominator) with: none
+epa_per_offensive_snap
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: offensive_epa
+    numerator = round(rate x denominator) with: none
+explosive_pass_rate
+    denominator: dropbacks
+    numerator: none
+    numerator = round(rate x denominator) with: dropbacks
+explosive_pass_rate_allowed
+    denominator: opp__dropbacks
+    numerator: none
+    numerator = round(rate x denominator) with: opp__dropbacks
+explosive_play_rate
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: offensive_snaps, opp__defensive_snaps
+explosive_play_rate_allowed
+    denominator: defensive_snaps, opp__offensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: defensive_snaps, opp__offensive_snaps
+explosive_rush_rate
+    denominator: carries, opp__carries_faced
+    numerator: none
+    numerator = round(rate x denominator) with: carries, opp__carries_faced
+explosive_rush_rate_allowed
+    denominator: carries_faced, opp__carries
+    numerator: none
+    numerator = round(rate x denominator) with: carries_faced, opp__carries
+first_downs_per_drive
+    denominator: drives
+    numerator: none
+    numerator = round(rate x denominator) with: drives
+fourth_down_aggressiveness
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+fourth_down_go_rate
+    denominator: none
+    numerator: fourth_down_attempts
+    numerator = round(rate x denominator) with: none
+giveaway_rate_per_offensive_snap
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: giveaways, opp__takeaways
+    numerator = round(rate x denominator) with: offensive_snaps, opp__defensive_snaps
+goal_to_go_td_pct
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+goal_to_go_td_pct_allowed
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+havoc_rate
+    denominator: defensive_snaps, opp__offensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: defensive_snaps, opp__offensive_snaps
+int_rate_per_attempt
+    denominator: attempts, opp__attempts_faced
+    numerator: passing_interceptions, opp__def_interceptions
+    numerator = round(rate x denominator) with: attempts, opp__attempts_faced
+int_rate_per_attempt_allowed
+    denominator: attempts_faced, opp__attempts
+    numerator: def_interceptions, opp__passing_interceptions
+    numerator = round(rate x denominator) with: none
+long_field_score_pct
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+net_yards_per_attempt
+    denominator: none
+    numerator: net_passing_yards, opp__net_passing_yards_allowed
+    numerator = round(rate x denominator) with: none
+no_huddle_rate
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+pass_rate
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: dropbacks
+    numerator = round(rate x denominator) with: offensive_snaps, opp__defensive_snaps
+pass_rate_over_expected
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+pass_success_rate
+    denominator: dropbacks
+    numerator: none
+    numerator = round(rate x denominator) with: dropbacks
+passing_cpoe
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+passing_cpoe_allowed
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+passing_td_rate_per_attempt
+    denominator: attempts, opp__attempts_faced
+    numerator: passing_tds, opp__passing_tds_allowed
+    numerator = round(rate x denominator) with: attempts, opp__attempts_faced
+passing_td_rate_per_attempt_allowed
+    denominator: attempts_faced, opp__attempts
+    numerator: passing_tds_allowed, opp__passing_tds
+    numerator = round(rate x denominator) with: none
+penalty_rate_per_offensive_snap
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: offensive_penalties
+    numerator = round(rate x denominator) with: offensive_snaps, opp__defensive_snaps
+plays_per_drive
+    denominator: drives
+    numerator: none
+    numerator = round(rate x denominator) with: drives
+points_per_drive
+    denominator: drives
+    numerator: none
+    numerator = round(rate x denominator) with: drives
+points_per_drive_allowed
+    denominator: opp__drives
+    numerator: none
+    numerator = round(rate x denominator) with: opp__drives
+points_per_red_zone_trip
+    denominator: red_zone_trips
+    numerator: none
+    numerator = round(rate x denominator) with: red_zone_trips
+presnap_penalty_rate
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: offensive_snaps, opp__defensive_snaps
+punt_pct_per_drive
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+punts_forced_pct
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+qb_pressure_events_rate
+    denominator: opp__dropbacks
+    numerator: none
+    numerator = round(rate x denominator) with: opp__dropbacks
+red_zone_td_pct
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+red_zone_td_pct_allowed
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+rush_success_rate
+    denominator: designed_carries
+    numerator: none
+    numerator = round(rate x denominator) with: designed_carries
+rush_success_rate_allowed
+    denominator: opp__designed_carries
+    numerator: none
+    numerator = round(rate x denominator) with: opp__designed_carries
+sack_rate_per_dropback
+    denominator: dropbacks
+    numerator: sacks_suffered
+    numerator = round(rate x denominator) with: dropbacks
+score_pct_per_drive
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+score_pct_per_drive_allowed
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+series_conversion_rate
+    denominator: series
+    numerator: none
+    numerator = round(rate x denominator) with: series
+series_conversion_rate_allowed
+    denominator: opp__series
+    numerator: none
+    numerator = round(rate x denominator) with: opp__series
+shotgun_rate
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: offensive_snaps, opp__defensive_snaps
+stuff_rate
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+stuffed_run_rate
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+success_rate
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: offensive_snaps, opp__defensive_snaps
+success_rate_allowed
+    denominator: defensive_snaps, opp__offensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: defensive_snaps, opp__offensive_snaps
+takeaway_rate_per_defensive_snap
+    denominator: defensive_snaps, opp__offensive_snaps
+    numerator: takeaways, opp__giveaways
+    numerator = round(rate x denominator) with: defensive_snaps, opp__offensive_snaps
+third_down_avg_distance
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+three_and_out_rate
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+three_and_outs_forced_rate
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+time_per_drive
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+turnover_pct_per_drive
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+xyac_per_completion
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+yac_over_expected_per_completion
+    denominator: none
+    numerator: none
+    numerator = round(rate x denominator) with: none
+yards_per_attempt
+    denominator: attempts, opp__attempts_faced
+    numerator: passing_yards, opp__passing_yards_allowed
+    numerator = round(rate x denominator) with: attempts, opp__attempts_faced
+yards_per_attempt_allowed
+    denominator: attempts_faced, opp__attempts
+    numerator: passing_yards_allowed, opp__passing_yards
+    numerator = round(rate x denominator) with: none
+yards_per_carry
+    denominator: carries, opp__carries_faced
+    numerator: none
+    numerator = round(rate x denominator) with: carries, opp__carries_faced
+yards_per_carry_allowed
+    denominator: carries_faced, opp__carries
+    numerator: none
+    numerator = round(rate x denominator) with: carries_faced, opp__carries
+yards_per_defensive_snap_allowed
+    denominator: defensive_snaps, opp__offensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: defensive_snaps, opp__offensive_snaps
+yards_per_drive
+    denominator: drives
+    numerator: none
+    numerator = round(rate x denominator) with: drives
+yards_per_dropback
+    denominator: dropbacks
+    numerator: passing_yards, opp__passing_yards_allowed
+    numerator = round(rate x denominator) with: dropbacks
+yards_per_offensive_snap
+    denominator: offensive_snaps, opp__defensive_snaps
+    numerator: none
+    numerator = round(rate x denominator) with: offensive_snaps, opp__defensive_snaps
+both published: 15
+    def_sack_rate_per_dropback, epa_per_defensive_snap_allowed, epa_per_offensive_snap, giveaway_rate_per_offensive_snap, int_rate_per_attempt, int_rate_per_attempt_allowed, pass_rate, passing_td_rate_per_attempt, passing_td_rate_per_attempt_allowed, penalty_rate_per_offensive_snap, sack_rate_per_dropback, takeaway_rate_per_defensive_snap, yards_per_attempt, yards_per_attempt_allowed, yards_per_dropback
+rounded: 29
+    deep_attempt_rate, deep_attempt_rate_faced, explosive_pass_rate, explosive_pass_rate_allowed, explosive_play_rate, explosive_play_rate_allowed, explosive_rush_rate, explosive_rush_rate_allowed, first_downs_per_drive, havoc_rate, pass_success_rate, plays_per_drive, points_per_drive, points_per_drive_allowed, points_per_red_zone_trip, presnap_penalty_rate, qb_pressure_events_rate, rush_success_rate, rush_success_rate_allowed, series_conversion_rate, series_conversion_rate_allowed, shotgun_rate, success_rate, success_rate_allowed, yards_per_carry, yards_per_carry_allowed, yards_per_defensive_snap_allowed, yards_per_drive, yards_per_offensive_snap
+neither: 33
+    adjusted_net_yards_per_attempt, any_a_allowed, avg_starting_field_position, avg_starting_field_position_allowed, early_down_pass_rate, epa_per_carry, epa_per_dropback, epa_per_dropback_allowed, fourth_down_aggressiveness, fourth_down_go_rate, goal_to_go_td_pct, goal_to_go_td_pct_allowed, long_field_score_pct, net_yards_per_attempt, no_huddle_rate, pass_rate_over_expected, passing_cpoe, passing_cpoe_allowed, punt_pct_per_drive, punts_forced_pct, red_zone_td_pct, red_zone_td_pct_allowed, score_pct_per_drive, score_pct_per_drive_allowed, stuff_rate, stuffed_run_rate, third_down_avg_distance, three_and_out_rate, three_and_outs_forced_rate, time_per_drive, turnover_pct_per_drive, xyac_per_completion, yac_over_expected_per_completion

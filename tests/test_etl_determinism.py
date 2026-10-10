@@ -72,19 +72,28 @@ def test_raw_schedule_strength_is_independent_of_input_row_order(
     margin: schedule_strength.MarginSource,
 ) -> None:
     """The one-hop schedule strength is bit-identical however the team-games are ordered."""
+    # Arrange
     team_games = _random_team_games()
     expected = schedule_strength.compute_schedule_strength_raw(
         team_games, season=_SEASON, week=15, margin=margin
     )
-    for seed in _SHUFFLE_SEEDS:
-        actual = schedule_strength.compute_schedule_strength_raw(
+
+    # Act
+    shuffled_runs = [
+        schedule_strength.compute_schedule_strength_raw(
             _shuffled(team_games, seed), season=_SEASON, week=15, margin=margin
         )
+        for seed in _SHUFFLE_SEEDS
+    ]
+
+    # Assert
+    for actual in shuffled_runs:
         assert_frame_equal(actual, expected, check_exact=True)
 
 
 def test_adjusted_schedule_strength_is_independent_of_input_row_order() -> None:
     """Both adjusted columns are bit-identical however the schedule is ordered."""
+    # Arrange
     team_games = _random_team_games()
     schedule = team_games.filter(pl.col("team_abbr") < pl.col("opponent_abbr")).select(
         "season",
@@ -97,15 +106,23 @@ def test_adjusted_schedule_strength_is_independent_of_input_row_order() -> None:
     expected = schedule_strength.compute_schedule_strength_adjusted(
         schedule, ratings, season=_SEASON, week=10
     )
-    for seed in _SHUFFLE_SEEDS:
-        actual = schedule_strength.compute_schedule_strength_adjusted(
+
+    # Act
+    shuffled_runs = [
+        schedule_strength.compute_schedule_strength_adjusted(
             _shuffled(schedule, seed), _shuffled(ratings, seed), season=_SEASON, week=10
         )
+        for seed in _SHUFFLE_SEEDS
+    ]
+
+    # Assert
+    for actual in shuffled_runs:
         assert_frame_equal(actual, expected, check_exact=True)
 
 
 def test_week_aggregation_is_independent_of_input_row_order() -> None:
     """Season-to-date means and their row order do not follow the input row order."""
+    # Arrange
     rng = np.random.default_rng(2)
     rows: list[dict[str, object]] = []
     for week in range(1, _WEEKS + 1):
@@ -120,10 +137,16 @@ def test_week_aggregation_is_independent_of_input_row_order() -> None:
             row.update({f"stat_{index}": float(rng.normal()) for index in range(8)})
             rows.append(row)
     team_stats = pl.DataFrame(rows)
-
     expected = teamrankings.aggregate_team_stats_to_week(team_stats, 15, _SEASON)
-    for seed in _SHUFFLE_SEEDS:
-        actual = teamrankings.aggregate_team_stats_to_week(_shuffled(team_stats, seed), 15, _SEASON)
+
+    # Act
+    shuffled_runs = [
+        teamrankings.aggregate_team_stats_to_week(_shuffled(team_stats, seed), 15, _SEASON)
+        for seed in _SHUFFLE_SEEDS
+    ]
+
+    # Assert
+    for actual in shuffled_runs:
         assert_frame_equal(actual, expected, check_exact=True)
     assert expected["team_abbr"].to_list() == sorted(_TEAMS)
 
@@ -142,36 +165,62 @@ def _games_on_shared_dates() -> pl.DataFrame:
 
 def test_combined_seasons_have_a_fixed_row_order_within_a_date() -> None:
     """Games sharing a date come out newest first, then by game id, from any input order."""
+    # Arrange
     games = _games_on_shared_dates()
     expected_ids = games.sort(["date", "game_id"], descending=[True, False])["game_id"]
-    for seed in _SHUFFLE_SEEDS:
+
+    def combined_ids(seed: int) -> list[str]:
         shuffled = _shuffled(games, seed)
         frames = [shuffled.filter(pl.col("season") == season) for season in (2024, 2023)]
-        combined = data_collection._combine_seasons(frames)
-        assert combined["game_id"].to_list() == expected_ids.to_list()
+        return data_collection._combine_seasons(frames)["game_id"].to_list()
+
+    # Act
+    shuffled_runs = [combined_ids(seed) for seed in _SHUFFLE_SEEDS]
+
+    # Assert
+    for actual in shuffled_runs:
+        assert actual == expected_ids.to_list()
 
 
 def test_newest_first_sort_breaks_date_ties_by_game_id() -> None:
     """The final published order is a total order: date descending, then game id."""
+    # Arrange
     games = _games_on_shared_dates()
     expected = games.sort(["date", "game_id"], descending=[True, False])
-    for seed in _SHUFFLE_SEEDS:
-        actual = data_collection._sort_newest_first(_shuffled(games, seed))
+
+    # Act
+    shuffled_runs = [
+        data_collection._sort_newest_first(_shuffled(games, seed)) for seed in _SHUFFLE_SEEDS
+    ]
+
+    # Assert
+    for actual in shuffled_runs:
         assert_frame_equal(actual, expected, check_exact=True)
 
 
 def test_newest_first_sort_without_game_ids_keeps_same_date_rows_in_input_order() -> None:
-    """Without a game id the sort is stable; without a date the frame is unchanged."""
+    """Without a game id the sort is stable."""
+    # Arrange
     games = pl.DataFrame(
         {"date": ["2024-09-08", "2024-09-15", "2024-09-08"], "home_abbr": ["NYJ", "MIA", "BUF"]}
     )
-    assert data_collection._sort_newest_first(games)["home_abbr"].to_list() == [
-        "MIA",
-        "NYJ",
-        "BUF",
-    ]
-    undated = games.drop("date")
-    assert_frame_equal(data_collection._sort_newest_first(undated), undated)
+
+    # Act
+    ordered = data_collection._sort_newest_first(games)
+
+    # Assert
+    assert ordered["home_abbr"].to_list() == ["MIA", "NYJ", "BUF"]
+
+
+def test_newest_first_sort_without_a_date_leaves_the_frame_unchanged() -> None:
+    # Arrange
+    undated = pl.DataFrame({"home_abbr": ["NYJ", "MIA", "BUF"]})
+
+    # Act
+    ordered = data_collection._sort_newest_first(undated)
+
+    # Assert
+    assert_frame_equal(ordered, undated)
 
 
 _PACKAGE = Path(nfl_predictor.__file__).parent
@@ -218,13 +267,17 @@ def _order_violations(path: Path) -> list[str]:
 
 def test_etl_group_by_and_unique_calls_keep_a_deterministic_order() -> None:
     """Every ETL group_by and unique keeps row order, and every subset dedupe names its row."""
-    assert all(path.is_file() for path in _ETL_PATHS)
+    # Act
     violations = [violation for path in _ETL_PATHS for violation in _order_violations(path)]
+
+    # Assert
+    assert all(path.is_file() for path in _ETL_PATHS)
     assert violations == []
 
 
 def test_league_means_do_not_depend_on_where_the_frame_splits_into_chunks() -> None:
     """Identical values laid out with different chunk splits give identical league means."""
+    # Arrange
     rng = np.random.default_rng(3)
     frame = pl.DataFrame(
         {
@@ -240,5 +293,12 @@ def test_league_means_do_not_depend_on_where_the_frame_splits_into_chunks() -> N
         return pl.concat([frame.slice(0, row), frame.slice(row)], rechunk=False)
 
     expected = teamrankings.calculate_league_means(frame, 2020)
-    for row in (97, 211, 333):
-        assert teamrankings.calculate_league_means(split_at(row), 2020) == expected
+
+    # Act
+    split_runs = [
+        teamrankings.calculate_league_means(split_at(row), 2020) for row in (97, 211, 333)
+    ]
+
+    # Assert
+    for actual in split_runs:
+        assert actual == expected

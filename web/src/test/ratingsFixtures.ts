@@ -1,5 +1,5 @@
 /** Small, real-shaped ratings payloads for the ratings page and component tests. */
-import type { EntityTable, MetricCategory, MetricColumnMeta, MetricTable, RankRangeTable, Row, SeasonTable } from '@/api/types'
+import type { EntityTable, GameLogsTable, MetricCategory, MetricColumnMeta, MetricTable, RankRangeTable, Row, SeasonTable } from '@/api/types'
 
 export function metricMeta(key: string, overrides: Partial<MetricColumnMeta> = {}): MetricColumnMeta {
   return {
@@ -191,17 +191,19 @@ const LOG_META: Record<string, MetricColumnMeta> = {
   passing_yards: metricMeta('passing_yards', { label: 'Pass Yds', kind: 'int', group: 'raw_totals' }),
   opp_defense_rating: metricMeta('opp_defense_rating', { label: 'Opp Def Rating', shape: 'score', contextual: true, category: 'Schedule-Adjusted Ratings', subcategory: null, group: 'opponent_ratings' }),
   opp_team_rating: metricMeta('opp_team_rating', { label: 'Opp Team Rating', shape: 'score', contextual: true, category: 'Schedule-Adjusted Ratings', subcategory: null, group: 'opponent_ratings' }),
+  opp_team_rank: metricMeta('opp_team_rank', { label: 'Opp Rank', kind: 'int', shape: 'score', polarity: 'lower', contextual: true, category: 'Schedule-Adjusted Ratings', subcategory: null, group: 'opponent_ratings' }),
 }
 
-export function teamGameLogs(team = 'BUF'): SeasonTable {
+/** One team's game log in a 32-team league: Kansas City ranks 3rd, Washington 30th. */
+export function teamGameLogs(team = 'BUF'): GameLogsTable {
   return {
     kind: 'teams',
     season: 2025,
     entity_id: team,
     table: {
       rows: [
-        { game_id: '2025_01_BUF_KC', week: 1, team, opponent_team: 'KC', points_for: 31, points_allowed: 24, win_value: 1, is_home: false, passing_yards: 280, opp_defense_rating: 1.5, opp_team_rating: 4 },
-        { game_id: '2025_02_WSH_BUF', week: 2, team, opponent_team: 'WSH', points_for: 17, points_allowed: 20, win_value: 0, is_home: true, passing_yards: 210, opp_defense_rating: -2, opp_team_rating: -8.5 },
+        { game_id: '2025_01_BUF_KC', week: 1, team, opponent_team: 'KC', points_for: 31, points_allowed: 24, win_value: 1, is_home: false, passing_yards: 280, opp_defense_rating: 1.5, opp_team_rating: 4, opp_team_rank: 3 },
+        { game_id: '2025_02_WSH_BUF', week: 2, team, opponent_team: 'WSH', points_for: 17, points_allowed: 20, win_value: 0, is_home: true, passing_yards: 210, opp_defense_rating: -2, opp_team_rating: -8.5, opp_team_rank: 30 },
       ],
       visible_columns: Object.keys(LOG_META),
       column_groups: {
@@ -209,10 +211,11 @@ export function teamGameLogs(team = 'BUF'): SeasonTable {
         results: ['points_for', 'points_allowed', 'win_value'],
         raw_totals: ['is_home', 'passing_yards'],
         per_snap_rates: [],
-        opponent_ratings: ['opp_defense_rating', 'opp_team_rating'],
+        opponent_ratings: ['opp_defense_rating', 'opp_team_rating', 'opp_team_rank'],
       },
       column_metadata: LOG_META,
     },
+    league_size: 32,
   }
 }
 

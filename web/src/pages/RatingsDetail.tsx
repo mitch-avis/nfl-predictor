@@ -1,7 +1,7 @@
 import { ArrowLeft, Swords } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { isMissing, useEntitySection, useEntityTable, useRankRanges } from '@/api/queries'
+import { isMissing, useEntitySection, useEntityTable, useGameLogs, useRankRanges } from '@/api/queries'
 import type { EntityKind, EntityTable, Row } from '@/api/types'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
@@ -64,13 +64,13 @@ function SeasonStats({ kind, data, entityId, state, onChange }: { kind: EntityKi
 }
 
 function GameByGame({ kind, season, entityId, state }: { kind: EntityKind; season: number; entityId: string; state: ViewState }) {
-  const query = useEntitySection('game-logs', kind, season, entityId)
+  const query = useGameLogs(kind, season, entityId)
   if (query.isLoading) return <Skeleton className="h-64 w-full" />
   if (query.isError) return isMissing(query.error) ? null : <ErrorState error={query.error} title="Could not load the game log" />
   if (!query.data) return null
   const logs = query.data.table
   const selection = gameLogColumns(kind, logs, state)
-  const ledger = opponentLedger(logs)
+  const ledger = opponentLedger(logs, query.data.league_size)
   return (
     <>
       <SectionCard

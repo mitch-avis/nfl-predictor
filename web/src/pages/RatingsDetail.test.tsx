@@ -64,6 +64,28 @@ describe('RatingsDetailPage', () => {
     expect(rows.map((row) => within(row).getAllByRole('cell')[0].textContent)).toEqual(['KC', 'WSH'])
   })
 
+  it('tiers each opponent faced by its league rank', async () => {
+    // Arrange
+    stubTeamSeason()
+
+    // Act
+    renderWithProviders(<RatingsDetailPage kind="teams" entityId="BUF" />, { route: '/teams/BUF?season=2025' })
+
+    // Assert
+    const opponents = await screen.findByRole('region', { name: 'Opponents faced' })
+    const tiers = within(opponents)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => {
+        const cells = within(row).getAllByRole('cell')
+        return [cells[0].textContent, cells.find((cell) => ['Tougher', 'Middle', 'Softer'].includes(cell.textContent ?? ''))?.textContent]
+      })
+    expect(tiers).toEqual([
+      ['KC', 'Tougher'],
+      ['WSH', 'Softer'],
+    ])
+  })
+
   it('shows the season stats of the view chosen, by category', async () => {
     // Arrange
     stubTeamSeason()

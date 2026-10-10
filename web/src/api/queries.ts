@@ -8,6 +8,7 @@ import type {
   DataStatusOut,
   EntityKind,
   EntityTable,
+  GameLogsTable,
   Job,
   JobCatalog,
   JobList,
@@ -270,7 +271,17 @@ export function useRankRanges(kind: EntityKind, season: number | null) {
   })
 }
 
-type EntitySection = 'game-logs' | 'rating-history' | 'rank-history' | 'head-to-head'
+/** One team's or quarterback's games, with the league size their opponents' ranks run to. */
+export function useGameLogs(kind: EntityKind, season: number | null, entityId: string | null) {
+  return useQuery({
+    queryKey: ['ratings-game-logs', kind, season, entityId],
+    queryFn: () => apiFetch<GameLogsTable>(ratingsPath(season ?? 0, kind, entityId ?? '', 'game-logs')),
+    enabled: season !== null && entityId !== null && entityId !== '',
+    retry: retryUnlessMissing,
+  })
+}
+
+type EntitySection = 'rating-history' | 'rank-history' | 'head-to-head'
 
 /** One team's or quarterback's section of a season; waits for a season and an id. */
 export function useEntitySection(section: EntitySection, kind: EntityKind, season: number | null, entityId: string | null) {

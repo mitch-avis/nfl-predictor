@@ -512,6 +512,11 @@ export interface SeasonTable {
   table: MetricTable
 }
 
+/** One team's or quarterback's games; `league_size` is how many teams the opponents' ranks run to. */
+export interface GameLogsTable extends SeasonTable {
+  league_size: number | null
+}
+
 /** A rank-range row: the scalar columns plus `<rank>_probabilities`, the chance of each rank. */
 export type RankRangeRow = Record<string, Row[string] | number[]>
 

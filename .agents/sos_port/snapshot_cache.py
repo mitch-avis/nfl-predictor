@@ -1,17 +1,19 @@
 """Turn the snapshot of ``nfl-sos-ratings``' nflreadpy cache into this repository's cache files.
 
-Shared by ``adapter_parity.py`` and ``ratings_etl_timing.py`` beside it. The snapshot
+Shared by ``adapter_parity.py``, ``ratings_etl_timing.py``, ``season_stats_etl_parity.py`` and
+``season_stats_etl_timing.py`` beside it. The snapshot
 (``~/scratch/nflreadpy_cache_snapshot_20261008/``, with a ``sha256sum`` manifest beside it) holds
 the raw nflverse files that project read on 2026-10-08, under nflreadpy's hashed names: one
 play-by-play, weekly player stats, weekly roster, snap counts and team stats file per season, the
 2001 and 2002 season rosters, the players file and the schedules of every season. Each file is
 recognized by its columns and its ``season`` values, checked against the manifest, prepared
 exactly as this repository's loaders prepare a download (``loaders._prepare_pbp`` and
-``_prepare_schedule``, ``nflverse_sources.SeasonSource.prepare``) and written where they cache it,
-with the requested columns they record. The real loaders then read those files as cache hits, so
-a check runs this repository's whole loading path on the snapshot's data. Nothing is written
-outside the cache directory given, and ``block_downloads`` makes any download attempt fail
-loudly instead of reaching the network.
+``_prepare_schedule``, ``nflverse_sources.SeasonSource.prepare``, the official weekly team stats'
+``season_stats.sources.OFFICIAL_TEAM_STATS.prepare``) and written where they cache it, with the
+requested columns they record. The real loaders then read those files as cache hits, so a check
+runs this repository's whole loading path on the snapshot's data. Nothing is written outside the
+cache directory given, and ``block_downloads`` makes any download attempt fail loudly instead of
+reaching the network.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ import nflreadpy as nfl
 import polars as pl
 
 from nfl_predictor import constants
+from nfl_predictor.season_stats.sources import OFFICIAL_TEAM_STATS
 from nfl_predictor.utils.polars import loaders, nflverse_sources
 
 SNAPSHOT = Path.home() / "scratch" / "nflreadpy_cache_snapshot_20261008"
@@ -32,6 +35,8 @@ SNAPSHOT_MANIFEST = SNAPSHOT.parent / f"{SNAPSHOT.name}.sha256"
 CURRENT_SEASON = 2027
 _PBP_MARKERS = frozenset({"play_id", "posteam", "epa"})
 _PLAYER_STATS_MARKERS = frozenset({"player_id", "passing_epa"})
+# Weekly team stats: a player stats file has these too, so player stats are recognized first.
+_TEAM_STATS_MARKERS = frozenset({"team", "opponent_team", "passing_first_downs"})
 _SNAP_COUNT_MARKERS = frozenset({"pfr_player_id", "offense_snaps"})
 _ROSTER_MARKERS = frozenset({"gsis_id", "full_name"})
 _PLAYERS_MARKERS = frozenset({"gsis_id", "display_name"})
@@ -79,6 +84,7 @@ class SnapshotFiles:
 
     pbp: dict[int, Path] = field(default_factory=dict)
     player_stats: dict[int, Path] = field(default_factory=dict)
+    team_stats: dict[int, Path] = field(default_factory=dict)
     snap_counts: dict[int, Path] = field(default_factory=dict)
     weekly_rosters: dict[int, Path] = field(default_factory=dict)
     season_rosters: dict[int, Path] = field(default_factory=dict)
@@ -113,6 +119,7 @@ def _kind(columns: set[str]) -> str | None:
         return "players"
     for kind, markers in (
         ("player_stats", _PLAYER_STATS_MARKERS),
+        ("team_stats", _TEAM_STATS_MARKERS),
         ("snap_counts", _SNAP_COUNT_MARKERS),
         ("rosters", _ROSTER_MARKERS),
     ):
@@ -172,6 +179,9 @@ def find_snapshot_files(snapshot: Path = SNAPSHOT) -> SnapshotFiles:
 def write_cache(files: SnapshotFiles, cache_dir: Path, seasons: list[int]) -> None:
     """Write this repository's cache files for ``seasons`` from the snapshot into ``cache_dir``.
 
+    A season's official weekly team stats are written from its team stats file when the snapshot
+    has one, for the season statistics (``season_stats.sources.load_official_team_stats``).
+
     Raises:
         SystemExit: If the snapshot lacks a season's play-by-play, player stats or schedule, or
             the players file.
@@ -209,6 +219,14 @@ def write_cache(files: SnapshotFiles, cache_dir: Path, seasons: list[int]) -> No
                 source.prepare(raw, regular_season_only=True),
                 source.cache_path(cache_dir, season, regular_season_only=True),
                 source.columns,
+            )
+        if season in files.team_stats:
+            loaders._write_cached_frame(
+                OFFICIAL_TEAM_STATS.prepare(
+                    pl.read_parquet(files.team_stats[season]), regular_season_only=True
+                ),
+                OFFICIAL_TEAM_STATS.cache_path(cache_dir, season, regular_season_only=True),
+                OFFICIAL_TEAM_STATS.columns,
             )
     for season, path in files.season_rosters.items():
         source = nflverse_sources.ROSTERS

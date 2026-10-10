@@ -695,3 +695,30 @@ def test_average_predictions_refuses_runs_that_disagree_on_a_games_teams() -> No
     # Act & Assert
     with pytest.raises(ValueError, match="disagree"):
         rating_sources.average_predictions([first, second])
+
+
+def test_read_split_predictions_takes_earlier_seasons_from_the_averaged_reference(
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    current = write_fold_checkpoints(
+        tmp_path / "stage1",
+        [
+            fold_frame(2023, 1, [("BBB", "AAA", 100.0)]),
+            fold_frame(2024, 1, [("DDD", "CCC", 3.0)]),
+        ],
+    )
+    seed_42 = write_fold_checkpoints(
+        tmp_path / "seed42", [fold_frame(2023, 1, [("BBB", "AAA", 4.0)])]
+    )
+    seed_7 = write_fold_checkpoints(
+        tmp_path / "seed7", [fold_frame(2023, 1, [("BBB", "AAA", 6.0)])]
+    )
+
+    # Act
+    predictions = rating_sources.read_split_predictions([current], [seed_42, seed_7], season=2024)
+
+    # Assert
+    assert predictions.columns == list(rating_sources.PREDICTION_COLUMNS)
+    assert predictions.get_column("game_id").to_list() == ["2023_01_BBB_AAA", "2024_01_DDD_CCC"]
+    assert predictions.get_column("predicted_margin").to_list() == [5.0, 3.0]

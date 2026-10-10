@@ -832,7 +832,10 @@ class RankingOptions:
 
     Each method reads only its own fields: the Bradley-Terry fields, the snapshot path
     (composite), the ratings directory (ported, and model and blend in week 1), the
-    walk-forward predictions (model and blend) and the blend weight.
+    walk-forward predictions (model and blend) and the blend weight. With
+    ``reference_predictions`` (seeds of one walk-forward, averaged into one source), the seasons
+    before the ranked one come from them and the ranked season from ``model_predictions``
+    (`rating_sources.read_split_predictions`).
     """
 
     method: str = RANKING_METHODS[0]
@@ -844,6 +847,7 @@ class RankingOptions:
     strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS
     ratings_dir: Path = DEFAULT_RATINGS_DIR
     model_predictions: tuple[Path, ...] = ()
+    reference_predictions: tuple[Path, ...] = ()
     blend_weight: float | None = None
 
 
@@ -1204,6 +1208,7 @@ class RankingRequest:
     strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS
     ratings_dir: Path = DEFAULT_RATINGS_DIR
     model_predictions: tuple[Path, ...] = ()
+    reference_predictions: tuple[Path, ...] = ()
     blend_weight: float | None = None
 
 
@@ -1247,6 +1252,7 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
     _check_points_method(request)
     ratings_dir = Path(request.ratings_dir)
     model_predictions = tuple(Path(path) for path in request.model_predictions)
+    reference_predictions = tuple(Path(path) for path in request.reference_predictions)
     if request.legacy_franchise_fit:
         if method is not None and method != "bradley_terry":
             msg = (
@@ -1265,6 +1271,7 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
             strength_snapshots=Path(request.strength_snapshots),
             ratings_dir=ratings_dir,
             model_predictions=model_predictions,
+            reference_predictions=reference_predictions,
             blend_weight=request.blend_weight,
         )
     return RankingOptions(
@@ -1277,6 +1284,7 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
         strength_snapshots=Path(request.strength_snapshots),
         ratings_dir=ratings_dir,
         model_predictions=model_predictions,
+        reference_predictions=reference_predictions,
         blend_weight=request.blend_weight,
     )
 
@@ -1343,7 +1351,8 @@ def load_team_ratings(inputs: RankingInputs, options: RankingOptions) -> TeamRat
     - ported: `rating_sources.ported_ratings_for_week` from ``options.ratings_dir`` and the game
       rows in ``inputs.data_ml``;
     - model: `rating_sources.model_ratings_for_week` from the walk-forward predictions in
-      ``options.model_predictions``, which must cover every completed regular-season game of
+      ``options.model_predictions`` (earlier seasons from ``options.reference_predictions``
+      when given), which must cover every completed regular-season game of
       the season before the week (of the previous season, for week 1, whose carryover factor
       comes from the ported ratings);
     - blend: ``blend_weight * ported + (1 - blend_weight) * model`` for the teams both rate.
@@ -1391,9 +1400,17 @@ def _model_week_ratings(
             the fit reads, or week 1 has no carryover factor; the message names the paths.
 
     """
-    sources = ", ".join(str(path) for path in options.model_predictions)
+    sources = ", ".join(
+        str(path) for path in (*options.model_predictions, *options.reference_predictions)
+    )
     try:
-        predictions = rating_sources.read_predictions(list(options.model_predictions))
+        predictions = (
+            rating_sources.read_split_predictions(
+                options.model_predictions, options.reference_predictions, season=inputs.season
+            )
+            if options.reference_predictions
+            else rating_sources.read_predictions(list(options.model_predictions))
+        )
     except rating_sources.UNREADABLE_PREDICTION_ERRORS as error:
         detail = str(error) or type(error).__name__
         msg = f"cannot read the walk-forward predictions in {sources}: {detail}"

@@ -1951,9 +1951,11 @@ IMPACT_CUT = 0.02
 
 
 def _interval_text(interval: Interval) -> str:
-    """Format a paired difference and its interval."""
-    lower, upper = common.bound_text(interval.lower), common.bound_text(interval.upper)
-    return f"{interval.estimate:+.4f} ({lower} to {upper})"
+    """Format a paired difference and its interval in scientific notation.
+
+    The differences in EPA per play are of order 1e-5, which fixed decimals would print as zero.
+    """
+    return f"{interval.estimate:+.2e} ({interval.lower:+.2e} to {interval.upper:+.2e})"
 
 
 def _pair_label(first: str, second: str) -> str:
@@ -1978,7 +1980,7 @@ def _score_table(scores: Mapping[str, Mapping[str, tuple[int, float, float]]]) -
     lines = ["| candidate | band | team-games | MAE | RMSE |", "| --- | --- | --- | --- | --- |"]
     for name, by_band in scores.items():
         lines.extend(
-            f"| {LABELS.get(name, name)} | {band} | {games:,} | {mae:.4f} | {rmse:.4f} |"
+            f"| {LABELS.get(name, name)} | {band} | {games:,} | {mae:.6f} | {rmse:.6f} |"
             for band, (games, mae, rmse) in by_band.items()
         )
     return lines
@@ -2018,7 +2020,7 @@ def _headline(results: Results) -> list[str]:
     lines = [
         f"- MAE of a team's offensive EPA per play over {overall['A'][0]:,} team-games "
         "(2007-2025, weeks 5 on): "
-        + "; ".join(f"{LABELS[name]} {overall[name][1]:.4f}" for name in CANDIDATES)
+        + "; ".join(f"{LABELS[name]} {overall[name][1]:.6f}" for name in CANDIDATES)
         + ".",
     ]
     lines.extend(
@@ -2134,7 +2136,7 @@ def _calibration_lines(extras: Mapping[str, Any]) -> list[str]:
         *_comparison_table(extras["one_term"]),
         "",
         (
-            f"Team-only baseline (`k2 * t + m`): MAE {team_only[1]:.4f} over {team_only[0]:,} "
+            f"Team-only baseline (`k2 * t + m`): MAE {team_only[1]:.6f} over {team_only[0]:,} "
             "team-games."
         ),
     ]
@@ -2180,7 +2182,7 @@ def _other_target_lines(extras: Mapping[str, Any]) -> list[str]:
         ("own_c", "per quarterback play, which favors every quarterback play"),
     ):
         cells = "; ".join(
-            f"{LABELS[name]} {by_band[OVERALL][1]:.4f}" for name, by_band in extras[target].items()
+            f"{LABELS[name]} {by_band[OVERALL][1]:.6f}" for name, by_band in extras[target].items()
         )
         lines.append(f"- {label}: {cells}.")
     return lines

@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
+from nfl_predictor import constants
 from nfl_predictor.reporting import run_comparison
 
 if TYPE_CHECKING:
@@ -597,8 +598,9 @@ def model_ratings_for_week(
     """Return every team's model rating before ``week``.
 
     From the second week, the fit on the season's predicted games before the week
-    (:func:`model_ratings_before_week`); in week 1, the fit on every predicted game of the
-    previous season carried forward by ``carryover`` (:func:`week_one_model_ratings`).
+    (:func:`model_ratings_before_week`); in week 1, the fit on every predicted regular-season game
+    of the previous season (its playoff weeks left out) carried forward by ``carryover``
+    (:func:`week_one_model_ratings`).
 
     Args:
         predictions: Pre-game predictions (:func:`read_predictions`).
@@ -621,8 +623,12 @@ def model_ratings_for_week(
     if carryover is None:
         msg = f"the week-1 model rating of {season} needs the ported prior's carryover factor"
         raise RatingSourceUnavailableError(msg)
+    previous_season = predictions.filter(
+        (pl.col("season") == season - 1)
+        & (pl.col("week") <= constants.get_regular_season_weeks(season - 1))
+    )
     try:
-        final = fit_model_ratings(predictions.filter(pl.col("season") == season - 1), teams)
+        final = fit_model_ratings(previous_season, teams)
     except ValueError as error:
         raise RatingSourceUnavailableError(str(error)) from error
     return week_one_model_ratings(final.ratings, carryover, teams)

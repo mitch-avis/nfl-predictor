@@ -534,6 +534,22 @@ def test_model_ratings_for_week_one_carries_the_last_season_forward() -> None:
     assert ratings == pytest.approx(expected)
 
 
+def test_model_ratings_for_week_one_leave_out_last_seasons_playoffs() -> None:
+    # Arrange
+    regular_season = _season_predictions(2020, WEEK_GAMES)
+    playoffs = _season_predictions(2020, {19: [("AAA", "DDD", 60.0), ("CCC", "BBB", -60.0)]})
+    final = rating_sources.fit_model_ratings(regular_season, TEAMS)
+    expected = rating_sources.week_one_model_ratings(final.ratings, 0.5, TEAMS)
+
+    # Act
+    ratings = rating_sources.model_ratings_for_week(
+        pl.concat([regular_season, playoffs]), season=2021, week=1, teams=TEAMS, carryover=0.5
+    )
+
+    # Assert
+    assert ratings == pytest.approx(expected)
+
+
 def test_model_ratings_for_a_later_week_fits_the_season_so_far() -> None:
     # Arrange
     predictions = _season_predictions(2020, WEEK_GAMES)

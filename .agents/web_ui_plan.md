@@ -565,18 +565,22 @@ validation; the adapters with fakes; the poller and `/api/live`; the live views.
   6), a table a route needs that cannot be read answers 503 while one that only adds to a page is
   left out with a warning, and each opponent faced carries a league tier.
 
-  The ETL writes the ratings tables to `data/ratings/` (`utils/polars/ratings_build.py`), but no
-  job writes the season-statistics tables the index and game-log pages need (`combined`,
-  `qb_combined`, the game logs) yet: that ETL step is planned separately, and until it lands those
-  pages show an empty state that names the folder and its files. The done-criterion above (the
-  current-season team page shows rating heatmaps and a team detail with game logs) therefore
-  waits on that step; so far it has been checked only against the copied tables.
+  The ETL writes every table these pages read to `data/ratings/`: the ratings tables
+  (`utils/polars/ratings_build.py`) and, built beside each season's ratings, the season-statistics
+  tables the index and game-log pages need (`combined`, `qb_combined`, the game logs;
+  `utils/polars/season_stats_build.py`). Built through the ETL's own path on the snapshot those
+  files came from, they equal the published files cell for cell
+  (`.agents/sos_port/SEASON_STATS_ETL_PARITY.md`), so they are the tables the pages were checked
+  against. While the folder holds none, the pages show an empty state that names the folder and
+  its files and says to run the ETL. The done-criterion above (the current-season team page shows
+  rating heatmaps and a team detail with game logs) now waits on an ETL run that writes
+  `data/ratings/` (held with step 6's approvals) and a look at the pages in a browser.
 
   Deviations from the Phase 5 text above, all deliberate:
 
   - **The data folder.** The tables come from `data/ratings/` under the configured data directory
-    (`Settings.ratings_path`), where the season-statistics ETL step is to write them, not from
-    `NFLP_SOS_DATA_DIR` in the sibling checkout; that setting is gone.
+    (`Settings.ratings_path`), where the ETL writes them, not from `NFLP_SOS_DATA_DIR` in the
+    sibling checkout; that setting is gone.
   - **Routes and modules.** The routes are under `/api/ratings/{season}/{kind}/...` (one handler for
     teams and quarterbacks) rather than `/sos/...`, and the readers are the `api/ratings/` package
     rather than one `readers/sos.py`, because they port every reader the pages need, not the

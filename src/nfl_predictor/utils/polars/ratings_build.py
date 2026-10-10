@@ -8,6 +8,10 @@ match its published files. For each season an ETL run builds:
 - the published tables, written by ``nfl-predictor data`` to
   ``data/ratings/{season}_{kind}.parquet`` with that project's kind names (``PUBLISHED_KINDS``),
   and for the current season each week's rank ranges as well (``IN_PROGRESS_KINDS``);
+- given the season statistics (``season_stats_build.SeasonStatsBuild``), that project's season
+  statistics tables, written beside them (``season_stats_build.SEASON_STATS_KINDS``), whose
+  ``combined`` and ``qb_combined`` take their rating columns from the season's fit: the team
+  ratings and every passer's rating and faced pass defense, as that project fed them;
 - the pre-week tables the features read: for every scheduled week, each team's ratings and each
   passer's rating fit only on the season's games before that week (with earlier seasons for the
   penalties and the preseason prior), the passers as the identity knew them before the week
@@ -33,7 +37,9 @@ The fits run with one BLAS thread (``threadpoolctl``): with more, the quarterbac
 in their last bits. Their rows come from the adapter in a fixed order, and each season's slices
 are rechunked, so two runs on the same inputs write the same bytes. A season's outputs read only
 that season and earlier ones, so the season cache (``utils.season_cache``) stores them with the
-season's build and an incremental run rebuilds only the seasons whose inputs changed.
+season's build and an incremental run rebuilds only the seasons whose inputs changed: the rows
+:meth:`RatingsBuild.key_frames` returns, through the season, and the season statistics' own
+frames of that season (:meth:`RatingsBuild.season_key_frames`).
 """
 
 from __future__ import annotations
@@ -76,11 +82,14 @@ from nfl_predictor.ratings.season import (
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import nflverse_sources, qb_stats
+from nfl_predictor.utils.polars.season_stats_build import SEASON_STATS_KINDS
 from nfl_predictor.utils.polars.teamrankings import calculate_stat_differentials
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
+
+    from nfl_predictor.utils.polars.season_stats_build import SeasonStatsBuild
 
 # The season tables nfl-sos-ratings publishes, by its file names, and the two it writes only for
 # the season in progress.
@@ -228,7 +237,10 @@ def load_ratings_sources(
         ),
     )
     if plays.is_empty():
-        log.warning("No play-by-play for the ratings; their columns stay null")
+        log.warning(
+            "No play-by-play for the ratings; their columns stay null, and no ratings or season "
+            "statistics tables are built"
+        )
         return None
 
     def published(first: int) -> list[int]:
@@ -276,10 +288,12 @@ def load_ratings_build(
     current_season: int,
     force_refresh: bool,
 ) -> RatingsBuild | None:
-    """Return the ratings build of an ETL run, or ``None`` when no season has a play.
+    """Return a ratings build over the sources an ETL run loads, or ``None`` with no play.
 
-    The arguments are those of :func:`load_ratings_sources`; ``current_season`` is also the
-    season the build gives weekly rank ranges.
+    The build has the ratings alone, without the season statistics: ``nfl-predictor data``
+    builds its own, with them (``data_collection._load_sources``). The arguments are those of
+    :func:`load_ratings_sources`; ``current_season`` is also the season the build gives weekly
+    rank ranges.
     """
     sources = load_ratings_sources(
         max_season,
@@ -372,6 +386,7 @@ class RatingsBuild:
         current_season: int,
         first_season: int = constants.NFLREADPY_MIN_SEASON,
         bootstrap: BootstrapSettings = PUBLISHED_BOOTSTRAP,
+        season_stats: SeasonStatsBuild | None = None,
     ) -> None:
         """Remember the inputs and the run's current season.
 
@@ -380,12 +395,15 @@ class RatingsBuild:
             current_season: The season in progress, the one that gets weekly rank ranges.
             first_season: The first season of rows, which has no earlier one for penalties.
             bootstrap: The game bootstrap behind the rank ranges (the published one).
+            season_stats: The season statistics, built beside each season's ratings from its fit;
+                without them a season has its ratings tables only.
 
         """
         self._inputs = inputs
         self._current_season = current_season
         self._first_season = first_season
         self._bootstrap = bootstrap
+        self._season_stats = season_stats
         self._team_rows = {
             int(key[0]): part.rechunk()
             for key, part in inputs.team_games.partition_by(
@@ -435,29 +453,44 @@ class RatingsBuild:
             "ratings_passer_games": self._inputs.passer_games,
         }
 
+    def season_key_frames(self, season: int) -> dict[str, pl.DataFrame]:
+        """Return the frames of ``season`` alone that its build reads, by name.
+
+        With the season statistics, those are the frames their tables are built from beside the
+        season's ratings (``SeasonStatsBuild.key_frames``), none of them from another season, so
+        they belong in the season's cache key as frames of that season; without, there are none.
+        """
+        return {} if self._season_stats is None else self._season_stats.key_frames(season)
+
     def build(self, season: int) -> dict[str, pl.DataFrame]:
         """Fit one season's tables and pre-week ratings, record them, and return them.
 
         Returns:
-            The season's published tables by kind (none for a season without games) and its
-            ``PRE_WEEK_TEAMS`` and ``PRE_WEEK_QUARTERBACKS`` tables.
+            The season's published tables by kind (none for a season without games), with the
+            season statistics' tables when the build has them, and its ``PRE_WEEK_TEAMS`` and
+            ``PRE_WEEK_QUARTERBACKS`` tables.
 
         """
         start = time.perf_counter()
         with threadpool_limits(limits=1, user_api="blas"):
+            tables, qb_season = self._tables(season)
             frames = {
-                **self._tables(season),
+                **tables,
                 PRE_WEEK_TEAMS: self._pre_week_teams(season),
                 PRE_WEEK_QUARTERBACKS: self._pre_week_quarterbacks(season),
             }
-        self._frames[season] = frames
         log.info(
             "Ratings for season %d: %d tables and %d weeks of pre-week ratings in %.1fs",
             season,
-            len(frames) - 2,
+            len(tables),
             frames[PRE_WEEK_TEAMS].get_column("week").n_unique(),
             time.perf_counter() - start,
         )
+        if self._season_stats is not None:
+            frames |= self._season_stats.tables(
+                season, team_ratings=tables.get("ratings"), qb_ratings=qb_season
+            )
+        self._frames[season] = frames
         return frames
 
     @staticmethod
@@ -468,6 +501,9 @@ class RatingsBuild:
     def reuse(self, season: int, frames: Mapping[str, pl.DataFrame]) -> None:
         """Record a season's frames from a cached build instead of fitting them again.
 
+        The game rows the season statistics built for the season's key are dropped: the cached
+        frames hold its tables already.
+
         Raises:
             ValueError: If ``frames`` lacks a pre-week table, so it is not a ratings build.
 
@@ -477,14 +513,19 @@ class RatingsBuild:
             msg = f"season {season}'s cached ratings lack {', '.join(missing)}"
             raise ValueError(msg)
         self._frames[season] = dict(frames)
+        if self._season_stats is not None:
+            self._season_stats.forget(season)
 
     def build_frames(self, season: int) -> dict[str, pl.DataFrame]:
         """Return the frames recorded for ``season`` by :meth:`build` or :meth:`reuse`."""
         return self._frames[season]
 
     def published_tables(self) -> dict[str, pl.DataFrame]:
-        """Return every recorded season's published tables, by file stem ``{season}_{kind}``."""
-        kinds = (*PUBLISHED_KINDS, *IN_PROGRESS_KINDS)
+        """Return every recorded season's published tables, by file stem ``{season}_{kind}``.
+
+        The season statistics' tables are among them when the build has them.
+        """
+        kinds = (*PUBLISHED_KINDS, *IN_PROGRESS_KINDS, *SEASON_STATS_KINDS)
         return {
             f"{season}_{kind}": frame
             for season in sorted(self._frames)
@@ -492,11 +533,16 @@ class RatingsBuild:
             if kind in kinds
         }
 
-    def _tables(self, season: int) -> dict[str, pl.DataFrame]:
-        """Return one season's published tables, or none for a season without games."""
+    def _tables(self, season: int) -> tuple[dict[str, pl.DataFrame], pl.DataFrame | None]:
+        """Return one season's published tables, and every passer's rating when it has them.
+
+        A season without games has neither. The passers' ratings are the quarterback fit's
+        ``qb_season`` (every passer's season, rating and faced pass defense), which only a
+        season with a qualified passer has, since only such a season gets quarterback tables.
+        """
         team_games = self._season_team_games(season)
         if team_games.is_empty():
-            return {}
+            return {}, None
         weekly = season == self._current_season
         team = build_team_season(
             season,
@@ -513,10 +559,12 @@ class RatingsBuild:
             "rating_pairs": team.rating_pairs,
         }
         quarterbacks = self._history.qb_games(season)
+        qb_season = None
         if _has_qualified_passer(quarterbacks, team_games):
             qb = build_qb_season(
                 quarterbacks, team_games, weekly_ranges=weekly, bootstrap=self._bootstrap
             )
+            qb_season = qb.qb_season
             tables |= {
                 "qb_ratings": qb.qb_ratings,
                 "qb_ratings_by_week": qb.qb_ratings_by_week,
@@ -527,7 +575,7 @@ class RatingsBuild:
                 tables["qb_rating_ranges_by_week"] = qb.qb_rating_ranges_by_week
         if team.rating_ranges_by_week is not None:
             tables["rating_ranges_by_week"] = team.rating_ranges_by_week
-        return tables
+        return tables, qb_season
 
     def _season_schedule(self, season: int) -> pl.DataFrame:
         return self._inputs.schedule.filter(pl.col("season") == season)
@@ -682,7 +730,7 @@ def write_published_tables(tables: Mapping[str, pl.DataFrame], directory: Path) 
     directory.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
         _write_parquet_atomic(table, directory / f"{name}.parquet")
-    log.info("Saved %d ratings tables to %s", len(tables), directory)
+    log.info("Saved %d ratings and season statistics tables to %s", len(tables), directory)
 
 
 def _write_parquet_atomic(frame: pl.DataFrame, path: Path) -> None:

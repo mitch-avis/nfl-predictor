@@ -212,8 +212,15 @@ Typical outputs:
   (`ratings`, `team_prior`, `ratings_by_week`, `rating_ranges`, `rating_pairs`, `qb_ratings`,
   `qb_ratings_by_week`, `qb_rating_ranges`, `qb_rating_pairs`), and for the current season each
   week's rank ranges (`rating_ranges_by_week`, `qb_rating_ranges_by_week`). A finished season's
-  weekly ranges stay as its last build as the current season wrote them.
-  [The ratings README](src/nfl_predictor/ratings/README.md) describes every table.
+  weekly ranges stay as its last build as the current season wrote them. Beside them, the season
+  statistics ported from the same project, under its names too: `team_game_logs`,
+  `qb_game_logs`, `team_per_game_stats`, `qb_per_game_stats`, `opponent_profiles`,
+  `qb_opponent_profiles`, `combined` and `qb_combined` (the season rows with the opponent profiles
+  and the season's ratings), `team_wp_bins` and `qb_wp_bins`; a season gets them once its first
+  game is played, and each has the same columns and types in every season, null where what fills
+  them is missing (a source nflverse has not published yet, an opponent profile too early in the
+  season). [The ratings README](src/nfl_predictor/ratings/README.md) and
+  [the season statistics README](src/nfl_predictor/season_stats/README.md) describe every table.
 
 Note: the `data/` directory is gitignored by default; generate it via the data collection step
 above. Note: `*_ml.csv` files include model-ready engineered features.
@@ -223,29 +230,35 @@ with the same code, locked dependencies and inputs, on the same machine with the
 thread count (`POLARS_MAX_THREADS`), write byte-identical files.
 
 Building each season's weekly feature rows is nearly all of the ETL's run time.
-`nfl-predictor data --incremental` keeps each finished season's rows, strength snapshots and
-ratings tables under `<data dir>/cache/etl_seasons/` and reuses them when nothing they are built
-from has changed; the season in progress is always rebuilt, and every input is still loaded. An
-entry is keyed on:
+`nfl-predictor data --incremental` keeps each finished season's rows, strength snapshots, ratings
+tables and season statistics tables under `<data dir>/cache/etl_seasons/` and reuses them when
+nothing they are built from has changed; the season in progress is always rebuilt, and every
+input is still loaded. An entry is keyed on:
 
 - the source of the ETL modules (`data_collection.py`, `constants.py` and everything under
-  `src/nfl_predictor/utils/` and `src/nfl_predictor/ratings/`), the Polars, Polars runtime and
-  NumPy versions, the Python version, the CPU architecture and the Polars thread count;
+  `src/nfl_predictor/utils/`, `src/nfl_predictor/ratings/` and `src/nfl_predictor/season_stats/`),
+  the Polars, Polars runtime and NumPy versions, the Python version, the CPU architecture and the
+  Polars thread count;
 - the options that change a season's rows (`--min-season`, the two prior-blend switches,
   `--strength-prior-blend-games`, `--stat-prior-blend-games`, `--team-stats-source`,
   `--tr-stats-source` and `--line-source`);
 - the loaded schedule, team stats and Elo rows and the ratings' team-game and passer-game rows
   from that season and every earlier one, and that season's and the previous season's
-  TeamRankings, compared by value.
+  TeamRankings, compared by value;
+- that season's own play-by-play, team-game and passer-game rows and played schedule as the
+  season statistics read them, compared by value. The season statistics' game rows are built
+  again on every incremental run for this: they read the nflverse players file, which a run in
+  season downloads again, so only a change to a player the season's sources name moves them.
 
-So a changed input row rebuilds its season and every later one, and an edit to the ETL code
-rebuilds everything. A stale, damaged or unreadable entry is rebuilt and rewritten, never an error,
-and the directory is safe to delete. An input with a column the by-value comparison cannot
-render (list, struct, array, duration, binary or object) leaves its seasons uncached. Without the
-flag, which is `nfl-predictor data`'s default, the ETL rebuilds every season and neither reads
-nor writes the cache. The weekly run's refresh passes it (`data_collection_args: "--incremental"`
-in `config/weekly_run.yaml`; "Weekly workflow (canonical)" below says how your own arguments
-combine with it).
+So a changed input row rebuilds its season and every later one (a row only the season statistics
+read rebuilds its season alone), and an edit to the ETL code rebuilds everything. A stale,
+damaged or unreadable entry is rebuilt and rewritten, never an error, and the directory is safe to
+delete. An input with a column the by-value comparison cannot render (list, struct, array,
+duration, binary or object) leaves its seasons uncached. Without the flag, which is
+`nfl-predictor data`'s default, the ETL rebuilds every season and neither reads nor writes the
+cache. The weekly run's refresh passes it (`data_collection_args: "--incremental"` in
+`config/weekly_run.yaml`; "Weekly workflow (canonical)" below says how your own arguments combine
+with it).
 
 A reused season equals a full rebuild of the same inputs byte for byte, also after the season in
 progress (or any later season) gains rows: a season's build reads nothing from later seasons,
@@ -1117,11 +1130,12 @@ predictions into pool entries and never changes a probability, pick or rank:
 The team and quarterback pages (`src/nfl_predictor/api/ratings/`, routes under `/api/ratings`)
 read each season's tables from `data/ratings/{season}_{kind}.parquet`, with the kinds and columns
 of the `nfl-sos-ratings` files that `src/nfl_predictor/ratings/` and
-`src/nfl_predictor/season_stats/` were ported from. No job in this app writes those tables yet, so
-until one does the pages show where they look for them. Every column's label, description and
-shading direction comes from the metric registry; green shades better or worse, slate shades
-context such as schedule strength, deeper for tougher. They only read, and a season built without
-a table hides that section.
+`src/nfl_predictor/season_stats/` were ported from. The ETL writes those tables
+(`nfl-predictor data`: the Jobs page's Full ETL rebuild, or the weekly run's refresh); while the
+folder holds none, the pages say where they look for them and to run the ETL. Every column's
+label, description and shading direction comes from the metric registry; green shades better or
+worse, slate shades context such as schedule strength, deeper for tougher. They only read, and a
+season built without a table hides that section.
 
 - **Teams** and **Quarterbacks**: a season's table by view (ratings, per game, per play, season
   totals, and the opponents faced per game and per play) and registry category, with a search, the
@@ -1325,8 +1339,9 @@ import paths.
   `nfl-sos-ratings` project (team and quarterback game logs, season rows, head-to-head-excluded
   opponent profiles, win-probability bins) and its metric registry, with the stats catalogs
   generated from it. Its tables are whole-season display data, not values known before a week's
-  games. Nothing in the ETL or the model uses them yet; the web app's team and quarterback pages
-  read them and the registry.
+  games. The ETL builds them beside the ratings (`utils/polars/season_stats_build.py`) and writes
+  them to `data/ratings/`, where the web app's team and quarterback pages read them with the
+  registry; the model does not use them.
   [Its README](src/nfl_predictor/season_stats/README.md) covers the inputs, outputs, and parity
   checks.
 

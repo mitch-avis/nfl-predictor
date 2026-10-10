@@ -126,6 +126,11 @@ it slightly in the seasons whose penalty changed.
   season). A season with no passer qualified for the rankings, such as a season in progress after
   its first game, gets no quarterback tables. `nfl-predictor data` writes the tables to
   `data/ratings/{season}_{kind}.parquet`.
+- Right after a season's fit it builds the season's season statistics tables
+  (`utils/polars/season_stats_build.py`, see the
+  [season statistics README](../season_stats/README.md)), whose `combined` and `qb_combined` take
+  their rating columns from that fit: the `ratings` table, and every passer's rating and faced pass
+  defense (`qb_season`). They are written beside the ratings tables and cached with them.
 - It attaches the `ratings` feature group (`constants.RATINGS_FEATURE_STATS`) to every game row:
   both teams' pre-week ratings and `sos` for the row's week, and the starter's
   `adj_qb_epa_per_dropback` and dropbacks before the week. The starter is the one every

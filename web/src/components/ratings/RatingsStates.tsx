@@ -14,7 +14,8 @@ export function RatingsSeasonState({ isLoading, error }: { isLoading: boolean; e
       description={
         <>
           These pages read each season’s tables from <code className={CODE}>data/ratings/</code>, starting with <code className={CODE}>{'{season}_combined.parquet'}</code> and{' '}
-          <code className={CODE}>{'{season}_qb_combined.parquet'}</code>, and that folder holds none yet. No job in this app writes them yet; once a season’s tables are there, reload.
+          <code className={CODE}>{'{season}_qb_combined.parquet'}</code>, and that folder holds no season with both yet. The ETL writes them (<code className={CODE}>nfl-predictor data</code>, or
+          the Full ETL rebuild on the Jobs page); run it, then reload.
         </>
       }
     />

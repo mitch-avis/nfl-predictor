@@ -57,6 +57,7 @@ from dataclasses import asdict, dataclass, field
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import polars as pl
 from nflreadpy.downloader import NflverseDownloader
@@ -104,6 +105,8 @@ SUPPLIED_COLUMNS = {
     "qb_combined": season_tables.QB_RATING_INPUT_COLUMNS[1:],
 }
 MAX_LISTED_DIFFERENCES = 40
+# A download parameter, as nflreadpy's cache key reads it (``CacheManager._get_cache_key``).
+type DownloadParameter = str | int | float | bool
 
 
 def default_source() -> Path:
@@ -174,13 +177,16 @@ class SnapshotDownloads:
         snapshot = self
 
         def download_file(
-            downloader: NflverseDownloader, url: str, **kwargs: object
+            downloader: NflverseDownloader, url: str, **kwargs: DownloadParameter
         ) -> pl.DataFrame:
             return snapshot.read(downloader, url, **kwargs)
 
-        NflverseDownloader._download_file = download_file  # type: ignore[method-assign]
+        # Patched for the rest of the process, as the run reads every season through it.
+        patch.object(NflverseDownloader, "_download_file", download_file).start()
 
-    def read(self, downloader: NflverseDownloader, url: str, **kwargs: object) -> pl.DataFrame:
+    def read(
+        self, downloader: NflverseDownloader, url: str, **kwargs: DownloadParameter
+    ) -> pl.DataFrame:
         """Return the snapshot file nflreadpy's cache would hold for ``url`` and ``kwargs``."""
         key = downloader.cache._get_cache_key(url, **kwargs)
         path = self.snapshot / f"{key}.parquet"
@@ -339,9 +345,9 @@ def _compare_column(
         tolerance = 0.0 if exact else FLOAT_TOLERANCE
         close = ~null_a & ~null_b & ~nan_a & ~nan_b & (diff <= tolerance).fill_null(value=False)
         agrees = identical | close
-        finite = diff.filter(agrees & ~identical)
-        if finite.len():
-            result.max_abs_difference = max(result.max_abs_difference, float(finite.max()))
+        largest = diff.filter(agrees & ~identical).max()
+        if isinstance(largest, float):
+            result.max_abs_difference = max(result.max_abs_difference, largest)
         result.identical += int(identical.sum())
         result.within_tolerance += int((agrees & ~identical).sum())
     else:

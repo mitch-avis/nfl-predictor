@@ -298,7 +298,7 @@
    "choices": null,
    "default": true,
    "dest": "include_market",
-   "help": "Train with no market feature column (no spread, total or moneyline, raw or transformed). With --no-market-anchor and --no-market-transform the run is market-free; the market-implied probability is still scored as the yardstick.",
+   "help": "Train with no game-line columns (no spread, total or moneyline, raw or transformed). With --no-market-anchor and --no-market-transform the run uses no game lines; the market-implied probability is still scored as the yardstick. The Elo groups' preseason win-total priors (elo, own_elo_wt) stay unless --disable-feature-groups leaves them out.",
    "nargs": 0,
    "options": [
     "--exclude-market"
@@ -788,7 +788,7 @@
    "choices": null,
    "default": true,
    "dest": "include_market",
-   "help": "Exclude market columns from the feature set.",
+   "help": "Audit a feature set with no game-line columns. The Elo groups' preseason win-total priors (elo, own_elo_wt) stay in it.",
    "nargs": 0,
    "options": [
     "--exclude-market"
@@ -1199,7 +1199,7 @@
    "choices": null,
    "default": false,
    "dest": "exclude_market",
-   "help": "Exclude market features like spreads/totals/moneylines.",
+   "help": "Train with no game-line columns (spreads, totals, moneylines). The Elo groups' preseason win-total priors (elo, own_elo_wt) stay unless --disable-feature-groups leaves them out.",
    "nargs": 0,
    "options": [
     "--exclude-market"
@@ -2313,7 +2313,7 @@
    ],
    "default": "hybrid",
    "dest": "wf_market_mode",
-   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (market-free: no market feature, no anchor and no market transform).",
+   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (no game lines: no game-line columns, no anchor and no market transform; the Elo groups' preseason win-total priors stay unless --disable-feature-groups leaves them out).",
    "nargs": null,
    "options": [
     "--wf-market-mode"

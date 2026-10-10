@@ -325,8 +325,9 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
         default=defaults.get("wf_market_mode", "hybrid"),
         help=(
             "Market mode of the walk-forward and the final fit: market lines as features, "
-            "the model anchored to them, both (hybrid, the default), or none (market-free: no "
-            "market feature, no anchor and no market transform)."
+            "the model anchored to them, both (hybrid, the default), or none (no game lines: no "
+            "game-line columns, no anchor and no market transform; the Elo groups' preseason "
+            "win-total priors stay unless --disable-feature-groups leaves them out)."
         ),
     )
     parser.add_argument(

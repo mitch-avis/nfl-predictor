@@ -325,6 +325,20 @@ def composite_points_scale(snapshot: pd.DataFrame) -> float:
     return slope if slope > 0.0 else float("nan")
 
 
+def composite_points_vs_average(snapshot: pd.DataFrame) -> np.ndarray:
+    """Return each snapshot team's composite in points against the average, unrounded.
+
+    ``beta * (composite - mean(composite))`` with ``beta`` from `composite_points_scale`, in the
+    snapshot's row order; all NaN when ``beta`` is unavailable. `rank_teams_on_composite`
+    publishes these values rounded.
+    """
+    composite = pd.to_numeric(snapshot[COMPOSITE_COLUMN], errors="coerce").to_numpy(dtype=float)
+    beta = composite_points_scale(snapshot)
+    if np.isnan(beta):
+        return np.full(len(composite), np.nan)
+    return beta * (composite - float(np.nanmean(composite)))
+
+
 def rank_teams_on_composite(snapshot: pd.DataFrame) -> pd.DataFrame:
     """Rate every team in one week's strength snapshot on the display scales.
 
@@ -360,12 +374,7 @@ def rank_teams_on_composite(snapshot: pd.DataFrame) -> pd.DataFrame:
         else:
             frame[column] = np.nan
 
-    beta = composite_points_scale(frame)
-    composite = frame[COMPOSITE_COLUMN].to_numpy(dtype=float)
-    if np.isnan(beta):
-        points = np.full(len(frame), np.nan)
-    else:
-        points = beta * (composite - float(np.nanmean(composite)))
+    points = composite_points_vs_average(frame)
     p_vs_average = np.asarray(margin_to_home_win_prob(points), dtype=float)
 
     frame.insert(2, "points_vs_average", np.round(points, 2))

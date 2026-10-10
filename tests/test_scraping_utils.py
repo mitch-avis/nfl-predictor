@@ -1,6 +1,6 @@
 """Tests for scraping utilities (HTML parsing and SurvivorGrid spreads)."""
 
-import datetime
+import datetime as dt
 from datetime import date
 from pathlib import Path
 
@@ -129,14 +129,14 @@ def test_get_current_nfl_week_handles_preseason_and_clamp(monkeypatch) -> None:
     """Pre-kickoff dates resolve to week 1; late-February dates clamp to max week."""
 
     # Today is an August preseason date before kickoff.
-    monkeypatch.setattr(clock, "local_today", lambda: datetime.date(2025, 8, 15))
+    monkeypatch.setattr(clock, "local_today", lambda: dt.date(2025, 8, 15))
     preseason_season, preseason_week = scraping_utils.get_current_nfl_week()
 
     assert preseason_season == 2025
     assert preseason_week == 1
 
     # Today is a date far enough after kickoff to require clamping.
-    monkeypatch.setattr(clock, "local_today", lambda: datetime.date(2026, 2, 28))
+    monkeypatch.setattr(clock, "local_today", lambda: dt.date(2026, 2, 28))
     late_season, late_week = scraping_utils.get_current_nfl_week()
 
     assert late_season == 2025

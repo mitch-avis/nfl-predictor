@@ -31,6 +31,9 @@ class _StopAtFinalFitError(Exception):
 # The floor sigma's pools, stubbed: their contents are tested in test_weekly_run_floor_sigma.py.
 REFERENCE_POOL = floor_sigma.ErrorPool()
 PRODUCTION_POOL = floor_sigma.ErrorPool(sources=("stage1",))
+# The shipped configuration's stage-1 and final-fit marker hashes, which a run directory
+# resumes from.
+DEFAULT_HASHES = ["ca6a81c8", "082f6915"]
 
 
 def _capture_weekly_settings(
@@ -129,6 +132,7 @@ def test_default_weekly_settings_and_hashes(
         "include_quantiles": False,
         "market_transform": None,
         "max_cardinality_ratio": 0.5,
+        "disabled_feature_groups": (),
     }
     optuna_config = captured["train"].pop("optuna_config")
     assert optuna_config == ml_model_core.OptunaConfig(
@@ -163,8 +167,26 @@ def test_default_weekly_settings_and_hashes(
     }
     # Both markers cover the floor sigma's inputs (the reference errors and the final fit's
     # pool and week), so a run directory from before them retrains instead of resuming. The
-    # stage-1 hash also covers the start week (now 1).
-    assert captured["hashes"] == ["ca6a81c8", "082f6915"]
+    # stage-1 hash also covers the start week (now 1). Leaving no feature group out keeps both
+    # hashes, so a run directory from before that setting still resumes.
+    assert captured["hashes"] == DEFAULT_HASHES
+
+
+def test_disabled_feature_groups_reach_both_stages_and_change_both_hashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stage 1 and the final fit leave the same groups out; a run without them retrains."""
+    # Act
+    captured = _capture_weekly_settings(
+        tmp_path, monkeypatch, ["--disable-feature-groups", "elo,own_elo_wt"]
+    )
+
+    # Assert
+    assert captured["stage1"]["disabled_feature_groups"] == ("elo", "own_elo_wt")
+    assert captured["train"]["disabled_feature_groups"] == ("elo", "own_elo_wt")
+    assert [
+        new != default for new, default in zip(captured["hashes"], DEFAULT_HASHES, strict=True)
+    ] == [True, True]
 
 
 def test_overridden_weekly_settings_and_hashes(

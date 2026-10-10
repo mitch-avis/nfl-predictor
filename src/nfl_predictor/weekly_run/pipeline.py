@@ -146,6 +146,18 @@ def _stage_marker_path(run_dir: Path, stage: str) -> Path:
     return run_dir / f"{stage}_state.json"
 
 
+def _marker_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    """Return a stage's settings as its reuse marker hashes them.
+
+    Leaving no feature group out is how every run trained before the setting existed, so an
+    empty ``disabled_feature_groups`` stays out of the hash and a run directory written then
+    still resumes; a non-empty one is hashed like any other setting.
+    """
+    if settings.get("disabled_feature_groups"):
+        return settings
+    return {key: value for key, value in settings.items() if key != "disabled_feature_groups"}
+
+
 def _stage_can_reuse(
     marker_path: Path,
     dataset_hash: str,
@@ -290,6 +302,7 @@ def _wf_run_fingerprint(
             "max_cardinality_ratio": float(args.max_cardinality_ratio),
             "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
             "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+            "disabled_feature_groups": list(options.disabled_feature_groups),
             "xgb_params_overrides": options.xgb_params_overrides,
             "floor_sigma_history": reference_pool.digest(),
         },
@@ -310,7 +323,7 @@ def _run_stage1(ctx: _RunContext, reference_pool: floor_sigma.ErrorPool) -> dict
     }
     wf_run_fingerprint = _wf_run_fingerprint(ctx, options, reference_pool)
 
-    wf_config_hash = artifacts.stable_short_hash(wf_config)
+    wf_config_hash = artifacts.stable_short_hash(_marker_settings(wf_config))
     wf_marker = _stage_marker_path(ctx.run_dir, "wf_compare")
 
     if args.resume and _stage_can_reuse(
@@ -357,7 +370,7 @@ def _run_stage2(
         "pool_digest": sigma_pool.digest(),
         "week": list(sigma_week),
     }
-    train_config_hash = artifacts.stable_short_hash(train_config)
+    train_config_hash = artifacts.stable_short_hash(_marker_settings(train_config))
     train_marker = _stage_marker_path(ctx.run_dir, "train")
     paths = artifacts.resolve_run_paths(ctx.run_id, run_dir=ctx.run_dir)
 
@@ -390,6 +403,7 @@ def _run_stage2(
             xgb_params_overrides=train_config["xgb_params_overrides"],
             floor_sigma_pool=sigma_pool,
             floor_sigma_week=sigma_week,
+            disabled_feature_groups=tuple(train_config["disabled_feature_groups"]),
         )
     )
     record = TrainingRecord(

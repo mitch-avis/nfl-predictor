@@ -206,8 +206,9 @@ def write_summary(run_dir: Path, summary: dict[str, Any]) -> None:
 class ProductionOptions:
     """The production configuration's walk-forward options, from the weekly run's settings.
 
-    ``market_transform`` and ``max_cardinality_ratio`` are the final fit's own options, so
-    the walk-forward scores the configuration the week's picks come from.
+    ``market_transform``, ``max_cardinality_ratio`` and ``disabled_feature_groups`` are the
+    final fit's own options, so the walk-forward scores the configuration the week's picks come
+    from.
     """
 
     eval_last_n_seasons: int
@@ -220,6 +221,7 @@ class ProductionOptions:
     include_quantiles: bool
     market_transform: bool | None = None
     max_cardinality_ratio: float = 0.5
+    disabled_feature_groups: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -260,6 +262,7 @@ def production_walk_forward_config(options: ProductionOptions) -> walk_forward.W
         max_cardinality_ratio=options.max_cardinality_ratio,
         feature_start=ml_model_core.DEFAULT_FEATURE_START_COLUMN,
         feature_end=ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+        disabled_feature_groups=options.disabled_feature_groups,
         xgb_params_overrides=options.xgb_params_overrides,
     )
 

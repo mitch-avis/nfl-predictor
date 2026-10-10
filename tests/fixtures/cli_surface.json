@@ -2278,6 +2278,20 @@
    "type": null
   },
   {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [],
+   "dest": "disable_feature_groups",
+   "help": "Stage 1 and the final fit: feature groups to leave out, every column of each, comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a list in the config file; default: none). An unknown group stops the run before the data refresh.",
+   "nargs": null,
+   "options": [
+    "--disable-feature-groups"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "parse_feature_groups"
+  },
+  {
    "action": "BooleanOptionalAction",
    "choices": null,
    "default": false,

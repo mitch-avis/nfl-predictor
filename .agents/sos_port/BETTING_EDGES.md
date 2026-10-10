@@ -10,7 +10,8 @@ Reproduce from the repository root (it reads the fold checkpoints and writes onl
 
 ```bash
 VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/betting_edges.py \
-    --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13
+    --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13 \
+    --market-lines-metadata /home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json
 ```
 
 ## Data
@@ -25,27 +26,34 @@ VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/betting_edges.py \
   (tolerance `1e-12`).
 - The Brier interval resamples games 5,000 times (numpy seed 0,
   95% percentile interval); a tie scores 0, as in every walk-forward Brier here.
+- Groups: the rule reads all scored games. The real-moneyline seasons are those whose
+  moneylines the market-lines metadata counts none of as derived from the spread (by the
+  fitted spread-to-moneyline map or the fixed conversion), read from
+  `/home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json`.
+  On a game with a derived moneyline the gap is a function of the spread and the sigma, not a
+  disagreement between the game's spread and its moneyline. Each group's top decile is its own.
+  These groups decide nothing.
 
 ## Numbers
 
-| Measure | Value |
-| --- | --- |
-| Scored games | 4943 |
-| Mean `\|edge\|` | 0.0384 |
-| Mean `\|gap\|` | 0.0263 |
-| Mean `\|beyond\|` | 0.0339 |
-| Top-decile games | 495 |
-| Top decile: share with `\|gap\| > \|beyond\|` | 0.1434 |
-| Top decile: share with `sign(gap) == sign(edge)` | 0.8222 |
-| Correlation of `edge` with `gap` | 0.4363 |
-| Correlation of `edge` with `beyond` | 0.7814 |
-| Brier of `p_ml` | 0.21286 |
-| Brier of `p_spread` | 0.21337 |
-| Brier of `p_spread` minus `p_ml` (95% interval) | +0.00051 (-0.00026 to +0.00126) |
+| Measure | All scored games | Real moneyline pairs (2022, 2024, 2025) | 2025 alone |
+| --- | --- | --- | --- |
+| Scored games | 4943 | 815 | 272 |
+| Mean `\|edge\|` | 0.0384 | 0.0333 | 0.0327 |
+| Mean `\|gap\|` | 0.0263 | 0.0223 | 0.0270 |
+| Mean `\|beyond\|` | 0.0339 | 0.0289 | 0.0293 |
+| Top-decile games | 495 | 82 | 28 |
+| Top decile: share with `\|gap\| > \|beyond\|` | 0.1434 | 0.1829 | 0.3214 |
+| Top decile: share with `sign(gap) == sign(edge)` | 0.8222 | 0.8415 | 0.8929 |
+| Correlation of `edge` with `gap` | 0.4363 | 0.4737 | 0.4913 |
+| Correlation of `edge` with `beyond` | 0.7814 | 0.7562 | 0.6578 |
+| Brier of `p_ml` | 0.21286 | 0.20929 | 0.21422 |
+| Brier of `p_spread` | 0.21337 | 0.21004 | 0.21440 |
+| Brier of `p_spread` minus `p_ml` (95% interval) | +0.00051 (-0.00026 to +0.00126) | +0.00075 (-0.00086 to +0.00237) | +0.00018 (-0.00321 to +0.00353) |
 
 ## The rule's outcome
 
-`|gap| > |beyond|` in 0.1434 of the top decile of `|edge|`; the rule's
-threshold is more than 0.5.
+`|gap| > |beyond|` in 0.1434 of the top decile of `|edge|` over all
+scored games; the rule's threshold is more than 0.5.
 
 Recommendation: keep the confidence and action labels on `edge`.

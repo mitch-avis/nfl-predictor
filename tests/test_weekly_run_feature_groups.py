@@ -79,6 +79,17 @@ def test_the_command_line_overrides_the_config_list(
     assert args.disable_feature_groups == expected
 
 
+def test_a_config_key_with_no_value_leaves_no_group_out(tmp_path: Path) -> None:
+    # Arrange
+    path = _write_config(tmp_path, {"disable_feature_groups": None})
+
+    # Act
+    args = _parse(["--config", str(path)])
+
+    # Assert
+    assert args.disable_feature_groups == ()
+
+
 def test_a_config_string_instead_of_a_list_is_refused(tmp_path: Path) -> None:
     # Arrange
     path = _write_config(tmp_path, {"disable_feature_groups": "elo"})

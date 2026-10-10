@@ -132,11 +132,16 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError(msg)
             normalized[key] = [Path(value) for value in normalized[key]]
     for key in _FEATURE_GROUP_LIST_KEYS:
-        if key in normalized and normalized[key] is not None:
-            if not isinstance(normalized[key], list):
-                msg = f"Config key {key} must be a list of feature group names."
-                raise ValueError(msg)
-            normalized[key] = tuple(str(name).strip() for name in normalized[key])
+        if key not in normalized:
+            continue
+        # A key with no value (YAML null) names no group; anything else must be a list.
+        groups = normalized[key]
+        if groups is None:
+            groups = []
+        elif not isinstance(groups, list):
+            msg = f"Config key {key} must be a list of feature group names."
+            raise ValueError(msg)
+        normalized[key] = tuple(str(name).strip() for name in groups)
     return normalized
 
 

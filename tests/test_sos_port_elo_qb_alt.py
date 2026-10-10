@@ -275,15 +275,17 @@ def test_adjustment_scale_multiplies_every_adjustment() -> None:
 
 def test_adjustment_ignores_ratings_of_later_weeks() -> None:
     # Arrange
-    baseline = _rolling_adjustments(_rolling_tables())
     tables = _rolling_tables(week_two_rating=9.9)
 
     # Act
     changed = _rolling_adjustments(tables)
 
     # Assert
-    assert changed.head(2).equals(baseline.head(2))
-    assert changed.row(2) != baseline.row(2)
+    assert changed["home_qb_rating"].to_list() == pytest.approx([0.1, 0.2, 9.9])
+    assert changed["home_team_rating"].to_list() == pytest.approx([0.1, 0.1, 0.105])
+    assert changed["home_qb_adj"].to_list()[:2] == pytest.approx(
+        [0.0, 0.1 * ROLLING_ELO_PER_RATING_POINT]
+    )
 
 
 def test_preseason_team_rating_blends_end_of_season_with_first_starter() -> None:
@@ -356,3 +358,88 @@ def test_verdict_applies_the_rule_to_both_intervals(
 
     # Assert
     assert outcome == expected
+
+
+def test_rating_without_dropback_this_season_reads_most_recent_rated_season() -> None:
+    # Arrange
+    ratings = elo_qb_alt.QuarterbackRatings(
+        {
+            2008: _table([(17, "A", 400, 0.1)]),
+            2009: _table([(17, "A", 300, 0.3)]),
+            2010: _table([(2, "A", 40, 0.9)]),
+        }
+    )
+
+    # Act
+    rating = ratings.rating("A", 2010, 2, playoff=False)
+
+    # Assert
+    assert rating == pytest.approx(0.3)
+
+
+def _playoff_adjustments() -> pl.DataFrame:
+    """Return X's games of weeks 1 and 3 around a playoff game, season-to-date from attached.
+
+    The attached map also holds a value for the playoff week, which the playoff game must not
+    read, and the starts hold a playoff start, which must not roll the team's baseline.
+    """
+    games = _games(
+        [
+            ("g1", 2002, 1, "REG", "X", "Y", "A", "B"),
+            ("g2", 2002, 19, "POST", "X", "Y", "A", "B"),
+            ("g3", 2002, 3, "REG", "X", "Y", "A", "B"),
+        ]
+    )
+    attached = {(2002, 1, "A"): None, (2002, 19, "A"): 0.9, (2002, 3, "A"): 0.25}
+    ratings = elo_qb_alt.QuarterbackRatings(_rolling_tables(), attached=attached)
+    starts = {(2002, week, "X"): "A" for week in (1, 19, 3)}
+    return elo_qb_alt.alternative_adjustments(games, starts, ratings, {2001: 10})
+
+
+def test_playoff_adjustment_reads_latest_regular_season_row() -> None:
+    # Act
+    adjustments = _playoff_adjustments()
+
+    # Assert
+    assert adjustments["home_qb_rating"].to_list() == pytest.approx([0.1, 0.4, 0.25])
+
+
+def test_playoff_adjustment_leaves_team_rating_unrolled() -> None:
+    # Act
+    adjustments = _playoff_adjustments()
+
+    # Assert
+    assert adjustments["home_team_rating"].to_list() == pytest.approx([0.1, 0.1, 0.1])
+
+
+def test_team_first_seen_without_starter_starts_at_replacement_level() -> None:
+    # Arrange
+    games = _games([("g1", 2003, 1, "REG", "X", "Y", None, None)])
+    ratings = elo_qb_alt.QuarterbackRatings(
+        {
+            2000: _table([(17, "V", 500, 0.4)]),
+            2001: _table([(17, "B", 300, 0.2)]),
+            2002: _table([(17, "C", 100, -0.1)]),
+        }
+    )
+
+    # Act
+    adjustments = elo_qb_alt.alternative_adjustments(
+        games, {}, ratings, {2000: 10, 2001: 10, 2002: 10}
+    )
+
+    # Assert
+    assert adjustments["home_team_rating"].to_list() == pytest.approx([0.05])
+
+
+def test_check_sides_drops_side_whose_starter_is_not_play_by_play_starter() -> None:
+    # Arrange
+    games = _games([("g1", 2010, 2, "REG", "X", "Y", "A", "B")])
+    starts = {(2010, 2, "X"): "Z", (2010, 2, "Y"): "B"}
+    dataset = pl.DataFrame({"game_id": ["g1"], "home_ratings_qb": [0.1], "away_ratings_qb": [0.2]})
+
+    # Act
+    sides = elo_qb_alt.check_sides(games, starts, dataset)
+
+    # Assert
+    assert sides.rows() == [(2010, 2, "B", 0.2)]

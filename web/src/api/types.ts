@@ -452,3 +452,113 @@ export interface JobLogs {
 }
 
 export type JobParams = Record<string, string | number | boolean>
+
+/** Which page family a ratings route serves: the team pages or the quarterback pages. */
+export type EntityKind = 'teams' | 'qbs'
+
+/** How a registry metric behaves across views: a summable count, a rate, a maximum, ... */
+export type MetricShape = 'count' | 'rate' | 'avg' | 'max' | 'flag' | 'id' | 'score'
+
+/** A ratings column: the app's column format plus what the metric registry says about it. */
+export interface MetricColumnMeta extends ColumnMeta {
+  full_name: string
+  category: string | null
+  subcategory: string | null
+  contextual: boolean
+  shape: MetricShape | null
+  /** A proportion (0.653) shown as a percentage (65.3%). */
+  percent: boolean
+}
+
+export interface MetricTable {
+  rows: Row[]
+  visible_columns: string[]
+  column_groups: Record<string, string[]>
+  column_metadata: Record<string, MetricColumnMeta>
+}
+
+/** A metric category of the team or quarterback pages, with its subcategories in display order. */
+export interface MetricCategory {
+  name: string
+  description: string
+  subcategories: string[]
+}
+
+export interface RatingsSeasons {
+  seasons: number[]
+  current_season: number
+}
+
+/**
+ * One season's team or quarterback table. `in_progress` holds only for the season under way while
+ * a team has games left; `games_played` is the most any team has played.
+ */
+export interface EntityTable {
+  kind: EntityKind
+  season: number
+  in_progress: boolean
+  games_played: number | null
+  games_per_team: number
+  table: MetricTable
+  categories: MetricCategory[]
+  team_names: Record<string, string>
+}
+
+/** A league-wide section (rank ranges) or one team's or quarterback's (game logs, histories, pairs). */
+export interface SeasonTable {
+  kind: EntityKind
+  season: number
+  entity_id: string | null
+  table: MetricTable
+}
+
+/** A rank-range row: the scalar columns plus `<rank>_probabilities`, the chance of each rank. */
+export type RankRangeRow = Record<string, Row[string] | number[]>
+
+export interface RankRangeTable extends Omit<SeasonTable, 'table'> {
+  table: Omit<MetricTable, 'rows'> & { rows: RankRangeRow[] }
+}
+
+/** Every completed team-season ranked on schedule strength, softest first. */
+export interface ScheduleRanks {
+  count: number
+  seasons: number[]
+  skipped_seasons: number[]
+  table: MetricTable
+}
+
+/** One metric of the registry, as the glossary shows it. */
+export interface RegistryMetric {
+  label: string
+  full_name: string
+  description: string
+  entity: 'team' | 'qb'
+  category: string
+  subcategory: string | null
+  shape: MetricShape
+  polarity: Polarity
+  source: string
+  denominator: string | null
+  since: number | null
+  duplicate_of: string | null
+  contextual: boolean
+  formula: string | null
+  note: string | null
+  percent: boolean
+}
+
+/** How a column prefix (`opp_`, `qopp_`, ...) changes a metric's name and meaning. */
+export interface PrefixRule {
+  prefix: string
+  label_template: string
+  full_name_template: string
+  description_note: string
+  contextual: boolean
+  invert_polarity_for_qb: boolean
+}
+
+export interface MetricRegistry {
+  entities: Record<'team' | 'qb', { categories: MetricCategory[] }>
+  metrics: Record<string, RegistryMetric>
+  prefix_rules: PrefixRule[]
+}

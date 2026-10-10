@@ -18,7 +18,7 @@ games. Intervals are 95% percentile intervals over 5000 resamples of the games (
 
 | input | detail |
 | --- | --- |
-| code commit | `3cb861832008190ad5deb3248f94ada7e3f230c2` |
+| code commit | `076cb0a205cfd5ea7f370596622a5452022c283d` |
 | data directory | `/home/mitch/workspace/nfl-predictor/data` |
 | nflreadpy cache | `/tmp/step6_int/cache` |
 | schedule cache files SHA-256 | `05caf797be2c0d80f4d88ece1f58fc688a3f05b71fba37eb2bbd0ba1c07a1c3f` |
@@ -34,8 +34,7 @@ games. Intervals are 95% percentile intervals over 5000 resamples of the games (
 
 Each completed regular-season game side whose starter is VALUE's (its play-by-play starter, the
 one the candidate dataset attaches its `ratings_qb` to), compared with the season-to-date rating
-each reading of the by-week table gives: a match is both null or within 1e-06 (the dataset rounds
-to six decimals).
+each reading of the by-week table gives: a match is both null or within 1e-06.
 
 | reading | matches | mismatches |
 | --- | --- | --- |
@@ -79,12 +78,17 @@ Every season either matches at every rated side or differs at every one: the pat
 documented difference between the two fits (`src/nfl_predictor/ratings/pre_week.py`), where the
 published history uses the season's own cross-validated quarterback penalty, chosen on the whole
 season, and the attached rating the previous season's, so a season differs when its two penalties
-do. The penalties are not on disk, so that last step is not checked. A penalty chosen on the whole
-season is later information, so the run reads the season-to-date rating from the attached
-`ratings_qb` (the fit on the season's games before the week, with the previous season's penalty),
-keyed by season, week and starter, and the by-week table only for its latest rows (earlier
-seasons, the replacement level, `D(s)` and playoff games). Of the 9886 window game sides, 4 have
-no attached rating (no play-by-play starter for VALUE to share) and read cases 2 and 3.
+do. `.agents/sos_port/RATINGS_PARITY.md` records the two penalties as equal in exactly the 7
+seasons that match here after 1999 (where both ratings are null), and the independent review of
+this run refit 2010 and 2013 with both penalties, with 2011 as the control, and confirmed the
+cause. A penalty chosen on the whole season is later information, so the run reads the
+season-to-date rating from the attached `ratings_qb` (the fit on the season's games before the
+week, with the previous season's penalty), keyed by season, week and starter, and the by-week
+table only for its latest rows (earlier seasons, the replacement level, `D(s)` and playoff games).
+Of the 9886 window game sides, 4 read cases 2 and 3 although the dataset attaches a rating to
+them: VALUE's starter there is not the game's play-by-play starter, so the check's sides, which
+key the attached ratings, leave them out: `2008_17_NE_BUF home`, `2015_12_MIN_ATL home`,
+`2016_05_TB_CAR home`, `2017_14_IND_BUF away`.
 
 ## Ported rating minus VALUE
 

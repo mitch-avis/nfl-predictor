@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.50.1] - 2026-10-10
+
+### Added
+
+- A scripted inventory of `nfl-sos-ratings` at its frozen commit against this repository
+  (`.agents/sos_port/inventory.py`, generating `INVENTORY.md` and `inventory.json` from
+  `mapping.yaml`): its data sources, every output column resolved through its metric registry and
+  classified as matched, different or missing here, its ratings, and its web pages and endpoints.
+  The run fails on an unclassified column, a same-name counterpart filed as missing, or a column
+  missing in one file kind but classified in another.
+- A play-by-play parity check against its game logs for 1999-2025 (`.agents/sos_port/parity.py`,
+  `PARITY.md`, `parity.json`, `parity_attributions.parquet`): every mismatching team-game is
+  explained by a named cause through a counterfactual re-aggregation, reading the scramble flag
+  from a snapshot of the play-by-play that repository used, which equals this repository's cache
+  row by row. The differences and the decision taken on each are in `.agents/sos_port/`
+  (`FINDINGS.md`, `DECISIONS.md`).
+
 ## [0.50.0] - 2026-10-10
 
 ### Changed

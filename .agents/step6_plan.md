@@ -63,8 +63,12 @@ kinds and columns named as in `nfl-sos-ratings`, plus the current season's `*_ra
 ## Measurement ladder (phase 4)
 
 Pre-registered on 2026-10-10 before any step-6 code merged: the main checkout's
-`models/step6/HYPOTHESIS.md` (arms, cap of 8 runs plus 2 conditional and one build, instrument,
-decision rules). Do not edit it after the launch record is written.
+`models/step6/HYPOTHESIS.md` (arms, instrument, decision rules). Amended at about 09:35 the same
+day, before the build and before any run: two diagnostic runs (a new-build reference: strength
+snapshot on, ratings and own Elo off, anchored) that report the corrections' and the ratings'
+shares and play no part in the rules; cap 10 runs plus the 2 conditional ones, and one build. The
+original checksum is in `HYPOTHESIS.original.sha256`. Do not edit it after the launch record is
+written.
 
 ## Integration design (decided 2026-10-10, before the integration streams start)
 

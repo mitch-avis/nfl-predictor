@@ -153,10 +153,11 @@ mutating routes require header `X-Requested-With: nflp`.
 | `GET /registry` | full ColumnMeta registry |
 | `GET /runs?kind=`, `GET /runs/{id}`, `POST /runs/{id}/activate`, `GET /runs/{id}/files/{name}` | RunSummary: run_id, created_at, kind (weekly/training/walk_forward), season, week, stages, complete, git_commit_hash, dataset_hash, model_kind, holdout metrics, file presence. Files endpoint is allow-listed. |
 | `GET /predictions?run=&week=` | ~40 projected columns (identity, model, market, edge, quantiles, context) + derived `market_home_prob_novig`, `market_home_margin`, `edge_home_prob`; summary block |
-| `GET /predictions/picks`, `GET /predictions/weeks` | picks CSV as-is; weeks lists run-attached + unattached files |
+| `GET /predictions/picks`, `GET /predictions/weeks` | picks: the run's picks file when it is for the week and no older than its predictions, else derived from the predictions; `format=csv` downloads them. Weeks: the active run's own week, the later weeks predicted into it, other runs, unattached files, then unplayed weeks |
+| `GET /pool/confidence`, `GET /pool/tiebreakers`, `POST /pool/survivor` | the Pool page (Phase 4 below): the confidence sheet, the tiebreaker card and ranked survivor plans; read-only |
 | `GET /betting`, `GET /betting/xlsx` | 25-col betting CSV, or derived from predictions when the CSV is older than the predictions file; ladder thresholds 0.02/0.04/0.07/0.10; `total_*` columns `actionable=false` |
 | `GET /power` | rankings + movement vs the prior run's `through_week - 1` file + standings + division standings |
-| `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 base features by mean absolute SHAP in points (`base_features.combined.mean_abs_shap`, returned as `{measure, rows}` with per-head `margin_value`/`total_value`; runs without SHAP fall back to `combined.total_gain`, and runs written before total gain was recorded to `combined.gain`, labelled `summed_average_gain`), calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
+| `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 base features by mean absolute SHAP in points (`base_features.combined.mean_abs_shap`, returned as `{measure, rows, margin_rows}` with per-head `margin_value`/`total_value`; `margin_rows` ranks every feature by the margin head alone; runs without SHAP fall back to `combined.total_gain`, and runs written before total gain was recorded to `combined.gain`, labelled `summed_average_gain`), calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
 | `GET /data/status`, `GET /data/unattached` | current season/week via `clock.nfl_season` and `clock.nfl_week` (the ETL's calendar rules), file inventory with sizes/mtimes/row counts (`pl.scan_csv().select(pl.len())`), lazy cached sha256 via `fingerprints.dataset_fingerprint`, cache parquet coverage, latest leakage audit, last ETL job |
 | `GET /jobs/catalog`, `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/logs?after=`, `GET /jobs/{id}/stream` (SSE), `POST /jobs/{id}/cancel` | 409 when an exclusive group is busy; 422 on bad params |
 | `GET /{path}` fallback | serves `web/dist/index.html` for paths outside `/api`; an unmatched `/api/...` path gets the JSON 404 (`not_found`) |
@@ -212,7 +213,8 @@ mutating routes require header `X-Requested-With: nflp`.
 - Data/ETL: stat tiles (season/week, rows, seasons, dataset hash, last ETL), file table, cache
   coverage strip, leakage audit badge, Run ETL / Refresh lines buttons (admin).
 - Model: metadata cards, holdout metric tiles with direction arrows from `metric_strategy`,
-  feature importance bar chart (says which measure it shows), calibration reliability chart,
+  feature importance bar chart (says which measure it shows; both heads added by default, a
+  "Margin head only" switch for the margin head's own ranking), calibration reliability chart,
   walk-forward evaluation table (`wf_compare`; one row for the production configuration, or an
   older run's candidates with the trained row highlighted), collapsible config JSON.
 - Jobs: catalog cards, auto-generated form from the params schema (react-hook-form + zod),
@@ -290,10 +292,88 @@ game logs. Pages `/teams`, `/teams/:id`, `/qbs`, `/qbs/:id` with the compare wor
 are tiny Parquet files written by Polars.
 Done when: the current-season team page shows rating heatmaps and a team detail with game logs.
 
-### Phase 6 (deferred, design only): live betting and live odds
+### Phase 6 (design only): live betting and live odds
 
-Odds-provider adapter interface plus a `Live` blend
-(`w_time = min(1, minutes_remaining / 60)`, sigma shrink) as an endpoint. No implementation now.
+Designed 2026-10-10; nothing is built. During a game, show each game's score and clock, an
+in-game win probability that starts from the model's pregame prediction, and the live market's
+price beside it as a diagnostic. It never changes a stored prediction, pick or confidence rank
+(pool picks lock before the week's first game), never feeds training, calibration or the
+walk-forward, and makes no profitability claim.
+
+**In-game probability** (a pure function, `src/nfl_predictor/api/live/probability.py`). Stern's
+random-walk model of the margin (Stern, "A Brownian Motion Model for the Progress of Sports
+Scores", 1994): the final home margin is the current lead plus the margin still to be scored,
+normal with mean `r * mu` and standard deviation `sigma * sqrt(r)`, where
+`r = min(1, max(0, minutes_remaining / 60))` is the share of regulation left (the `w_time` of the
+first sketch), `mu` is the unrounded pregame predicted margin and `sigma` the floor sigma recorded
+for that week (the "sigma shrink"):
+
+```text
+p_live = Phi((lead + r * mu) / (sigma * sqrt(r)))    for r > 0
+```
+
+- At kickoff (`r = 1`, `lead = 0`) this is `Phi(mu / sigma)`, the published pregame probability,
+  so the live number starts exactly where the prediction did.
+- At the end of regulation it is 1 or 0 by the lead. A tie goes to overtime with `r` for the
+  overtime period (10 of 60 minutes in the regular season, 15 in the playoffs), ignoring the
+  regular season's chance of a tie and the overtime possession rules.
+- It reads only the score and the clock: possession, field position, down and distance and
+  timeouts are ignored, so it is least accurate late in close games. Using them would need live
+  play-by-play and a model of its own (nflfastR's `wp` is one).
+- The market is never blended into it, the same rule as for the pregame probability.
+
+**Market side.** Moneylines (spread and total optional) from the odds adapter, made no-vig with
+`readers/market.py`, shown beside the live probability with the difference labelled a
+diagnostic. No action ladder for live markets: the live probability has not been measured against
+them.
+
+**Adapters** (`src/nfl_predictor/api/live/providers.py`): two `Protocol`s, so tests use fakes and
+providers can be swapped without touching the routes.
+
+- `GameStateProvider.fetch(season, week) -> list[GameState]`: game id, scores, quarter, clock,
+  minutes remaining, status (scheduled, live, final) and `fetched_at`.
+- `OddsProvider.fetch(season, week) -> list[LiveOdds]`: game id, bookmaker, moneylines, spread,
+  total and `quoted_at`.
+- A `none` provider for each is the default; the live view then says live data is off. Games
+  match on `(season, week, home, away)` after team normalization, like the lines refresh.
+
+**Polling and serving.** A background task in the app's lifespan, started only when a provider
+is configured, polls every `NFLP_LIVE_POLL_SECONDS` (default 60) inside the week's game windows
+only (30 minutes before the first kickoff to the last final), backs off on errors and on the
+provider's rate-limit headers, and keeps the latest snapshot in memory with its time.
+`GET /api/live?season=&week=` returns per game the state, the pregame and live probabilities,
+the live no-vig market probability, their difference and the age of each part (marked stale
+after three missed polls). The frontend refetches every 30 seconds while a game is live (a strip
+on the Predictions page during game windows, and a `/live` page).
+
+**Configuration.** `NFLP_LIVE_PROVIDER` and `NFLP_LIVE_ODDS_PROVIDER` (both `none` by default),
+`NFLP_LIVE_POLL_SECONDS`, and `NFLP_ODDS_API_KEY` read from the environment only, never logged or
+written to disk.
+
+**Validation before anything is shown** (no network needed). Score the in-game probability on
+past seasons' nflverse play-by-play: at every snap, the lead and `game_seconds_remaining`, `mu`
+from the adopted reference's walk-forward out-of-fold predictions (known before kickoff) and that
+week's sigma; Brier and log loss by time bucket (each quarter, the last five minutes), beside
+nflfastR's `wp` (no market) and `vegas_wp` (market-informed) on the same plays. The hypothesis and
+decision rule are written first and the numbers reviewed independently (`AGENTS.md` rules 3 and
+4). If the random walk is clearly worse than `wp` late in games, the live view stops at the end of
+the third quarter or moves to a play-by-play model.
+
+**Questions for the user before any build** (each adds an external service, which `AGENTS.md`
+asks about first):
+
+1. The live score source. Recommendation: ESPN's public scoreboard JSON behind the adapter (free,
+   no key, unofficial, so it can change without notice), because the feature is a display aid; a
+   paid official feed (SportsDataIO, Sportradar) only if it proves worth keeping.
+2. The odds source. Recommendation: none at first, showing the live probability alone; add The
+   Odds API (the-odds-api.com) only if the probability passes its validation. Its free plan was
+   500 credits a month at one credit per market and region per request (check before choosing),
+   which covers roughly one moneyline poll every five minutes through the Sunday games only.
+3. Whether to keep odds snapshots under `data/live/` for research, such as the pick-time line
+   yardstick (a write under `data/`).
+
+**Build order once approved:** the pure probability function with its tests and the historical
+validation; the adapters with fakes; the poller and `/api/live`; the live views.
 
 ## Verification
 
@@ -385,8 +465,51 @@ Odds-provider adapter interface plus a `Live` blend
   `main` (the calibration-window, total-head and quarterback work, `0.6.1`-`0.7.1`) into it;
   no conflicts. The web server libraries became core dependencies, and `README.md` /
   `AGENTS.md` now describe the app. Open phases continue as Milestone 58 in `.agents/TODO.md`.
-- Phase 4: not started. Scheduled 2026-09-24 as step 6 of the roadmap in `TODO.md`
-  ("Roadmap Status"): phases 4-6 build on the job runner's `nfl-predictor <command>` templates
-  ("Job runner" above).
+- Phase 4 (2026-10-10, branch of roadmap step 6, not merged): built. `src/nfl_predictor/api/pool/`
+  (`sheet.py`, `tiebreakers.py`, `survivor.py`, `results.py`, `kickoff.py`) and
+  `routers/pool.py` serve `GET /api/pool/confidence`, `GET /api/pool/tiebreakers` and
+  `POST /api/pool/survivor`; `GET /api/predictions/picks?format=csv` downloads the picks. The
+  `/pool` page has the Confidence sheet, Tiebreakers and Survivor tabs. Every helper reads the
+  predictions file the Predictions page shows for the week and changes no probability, pick or
+  rank. Checked end to end against a scratch copy of the latest weekly run, with weeks 6-8
+  generated by `build-week` and `predict` into the copy: the sheet, the tiebreaker card (Sunday
+  and Monday night games preselected) and survivor plans over weeks 5-8 came back; the page
+  itself was checked by its component tests, not in a browser. The judgment calls are logged in
+  `.agents/sos_port/decisions/web.md`.
+
+  Deviations from the Phase 4 text above, all deliberate:
+
+  - **A confidence sheet route.** The plan named the Confidence tab only; `GET
+    /api/pool/confidence` reads the week's existing ranks (reporting, not repairing, ranks that
+    are not the unique `1..N`), scores final games by the pool rules (a tie scores for neither
+    side; final scores from the predictions file or `all_data.csv`), names the lock (the first
+    kickoff) and flags predictions written after it.
+  - **Tiebreak games are chosen, not fixed.** Yahoo designates its two tiebreak games each week,
+    so the card lists every game with its entry and preselects the latest Sunday and Monday
+    kickoffs (filled with the latest other kickoffs in weeks without them). Entries round the
+    total and split it by the margin, so they keep the rounded total.
+  - **Highest and lowest team score.** The tiebreaker asks for the week's actual top and bottom
+    scores, which run well past the best and worst projections, so the card gives the median of
+    each extreme of normal team scores (spreads from the quantile bands) and names the projected
+    top and bottom teams beside it.
+  - **Survivor lookahead.** The beam search runs once per possible pick this week, so the plans
+    come back one per first pick. The future-value penalty is each team's marginal value in the
+    later weeks with predictions (what the best assignment of those weeks loses without it), and
+    each finished plan is completed by that exact assignment (`scipy`'s `linear_sum_assignment`),
+    so its later picks show. Weeks without predictions are listed rather than guessed. Games
+    already final are not offered. `horizon_weeks` is capped at 10 and `beam_width` at 256 (about
+    two seconds at the caps on a full season).
+
+  Fixed along the way: predicting a later week into the active run (Phase 3's Generate) moved the
+  run to that week and hid its own week (the selector dropped it and asking for it returned 404);
+  the picks route served the run's own week's picks file for any week; and the week selector set
+  its four URL parameters separately, so only the last took effect.
+- Margin-only feature importance (2026-10-10, task 58.6, not merged): `GET /model` adds
+  `feature_importance.margin_rows`, every feature ranked by the margin head alone in the run's
+  measure, and the Model page's chart gains a "Margin head only" switch (off by default, hidden
+  for runs without per-head numbers).
+- Phase 5: not started; it waits for the ported ratings' outputs (roadmap step 6, phase 3).
+- Phase 6: designed 2026-10-10 (section above); nothing built, and the build waits on the user's
+  answers to its three questions.
 - Fixed in `0.26.1` (task 58.5): an unknown `/api/...` GET now returns the JSON 404 instead of
   the frontend's `index.html`.

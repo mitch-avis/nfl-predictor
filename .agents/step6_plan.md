@@ -48,8 +48,8 @@ data are logged for review. Read as:
 | S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | merged, `0.49.0` |
 | S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | merged, `0.48.0` |
 | S5a play-by-play cache columns, stadium table | 3-4 | none | merged, `0.50.0` |
-| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | implementer running |
-| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | implementer running |
+| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | in review; contains S5c, merges alone |
+| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | reviewed (merge after fixes); fixes go on S5b's branch |
 | S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | in review (270 tables, 11,754,571 cells bit-identical) |
 | S8b web: teams, quarterbacks, schedules, rank ranges, head-to-head, glossary (58.2) | 6 | S4, S10 | implementer running (on S10's branch) |
 | S5d ETL step for the season statistics tables, ratings columns into `combined` | 6 | S5c, S10 | after those merge |
@@ -151,6 +151,10 @@ small and local.
   known before kickoff"; second review pending), so training rows hold slightly better
   quarterback information than prediction rows. A question for the user, not a step-6 change.
 
+- Web pages for the ratings (in review): the sidebar is regrouped into sections and reordered
+  (Betting under "This week", Model above Data); the "Opponents faced" ledger is simpler than the
+  source's; season tables go out uncompressed (about 0.9 MB per team table). None was checked in a
+  browser (signing in needs a typed password); the user should look at the pages once.
 - nflverse lists the 2026 Melbourne, Munich and Paris venues as domes (none has a roof over the
   field) and leaves Madrid blank; this feeds `stadium_type`. Recommendation: no override now,
   because the current season's schedule is downloaded again on every ETL run; recheck before the

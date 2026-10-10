@@ -279,6 +279,14 @@ none of the pool modules or `margin_rows`.
   picks file from before the lock, the sheet shows the newer ranks with the warning, as before.
 - **Reasoning:** confidence picks are single-shot before the week's first game, so the picks
   entered then are the ones the pool scores.
+- **Known limit:** only the weekly run writes a picks file, and each `predict` overwrites the
+  week's predictions file. If the week is predicted again before the lock (a Wednesday lines
+  refresh) and again after it (a Saturday one), the second prediction overwrites the Wednesday
+  file, so the sheet, the picks tab and the CSV download fall back to the weekly run's Tuesday
+  picks file, which may not hold the ranks the user entered on Wednesday. The sheet's note names
+  that picks file and the page header says when it was written ("picks file written ..."), so
+  the fallback is visible. Keeping every pre-lock prediction's picks would close the gap; it is
+  not built.
 - **Data:** `tests/api/test_pool_routes.py` (a week re-predicted after the fixture week's lock,
   with the picks file dated before and after it) and `tests/api/test_pool_sheet.py`.
 - **How to reverse it:** revert `f5d3087` and `cc15481`.

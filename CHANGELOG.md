@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.57.1] - 2026-10-10
+
+### Added
+
+- `.agents/sos_port/elo_qb_alt.py` scores the ported quarterback rating as the own Elo's
+  quarterback adjustment in place of 538's VALUE (report-only). Under its rule, written before any
+  score, VALUE stays: the ported rating's pre-game probabilities are worse on Brier score and log
+  loss over 2007-2025, at every scale tried (reviewed independently). The season-to-date rating
+  each game reads is the leakage-safe pre-week fit: the published quarterback week-by-week history
+  uses the penalty chosen on the whole season.
+
 ## [0.57.0] - 2026-10-10
 
 ### Added

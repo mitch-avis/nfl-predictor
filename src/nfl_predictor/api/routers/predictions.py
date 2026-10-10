@@ -8,7 +8,12 @@ from fastapi import APIRouter, Query, Request
 
 from nfl_predictor.api.deps import CurrentUser, DbDep, SettingsDep
 from nfl_predictor.api.readers import predictions as reader
-from nfl_predictor.api.routers.resolve import available_weeks, get_index, resolve_predictions
+from nfl_predictor.api.routers.resolve import (
+    available_weeks,
+    current_picks_file,
+    get_index,
+    resolve_predictions,
+)
 from nfl_predictor.api.runs import active
 from nfl_predictor.api.schemas.data import (
     PicksOut,
@@ -62,10 +67,10 @@ def picks(
 ) -> PicksOut:
     """Return the confidence picks, most confident first."""
     src = resolve_predictions(request, db, settings, query)
-    picks_path = src.run.run_files.picks if src.run else None
+    picks_path = current_picks_file(src)
     table = (
         reader.read_picks(picks_path)
-        if picks_path is not None and picks_path.is_file()
+        if picks_path is not None
         else reader.picks_from_predictions(src.path)
     )
     return PicksOut(run_id=src.run_id, season=src.season, week=src.week, table=table)

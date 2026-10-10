@@ -3,18 +3,20 @@
 The weekly run (``nfl-predictor weekly``) names its per-week outputs ``season_{S}_week_{WW}_*``
 and its power rankings ``*_season_{S}_week_{WW}.csv`` (stamped one week earlier than the
 predictions), so the file names are discovered by glob rather than assumed.
+
+A run directory can hold predictions for more than one week: the web app's ``predict`` job writes
+later weeks into the active run. The run's own week is the one its predictions stage wrote (named
+in ``predictions_state.json``), else its newest predictions file.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from nfl_predictor.ml.artifacts import resolve_run_paths
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 STAGES: tuple[str, ...] = ("wf_compare", "train", "predictions", "reports")
 WEEK_FILE_RE = re.compile(
@@ -50,6 +52,8 @@ class RunFiles:
     power_season: int | None = None
     power_week: int | None = None
     stage_markers: dict[str, Path] = field(default_factory=dict)
+    week_predictions: dict[tuple[int, int], Path] = field(default_factory=dict)
+    """Every predictions file in the directory by ``(season, week)``, the run's own included."""
 
     @property
     def stages(self) -> dict[str, bool]:
@@ -82,19 +86,57 @@ class RunFiles:
         return {name: path is not None and path.is_file() for name, path in candidates.items()}
 
 
+def week_of(path: Path) -> tuple[int, int] | None:
+    """Return the ``(season, week)`` in a ``season_*_week_*_{kind}.csv`` name, else ``None``."""
+    match = WEEK_FILE_RE.search(path.name)
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _week_files(run_dir: Path, kind: str) -> dict[tuple[int, int], Path]:
+    """Return every ``season_*_week_*_{kind}.csv`` in ``run_dir`` by ``(season, week)``, sorted."""
+    found: dict[tuple[int, int], Path] = {}
+    for path in run_dir.glob(f"season_*_week_*_{kind}.csv"):
+        key = week_of(path)
+        if key is not None:
+            found[key] = path
+    return dict(sorted(found.items()))
+
+
+def _newest(files: dict[tuple[int, int], Path]) -> tuple[Path, int, int] | None:
+    """Return the ``(path, season, week)`` of the latest week in ``files`` (ordered by week)."""
+    if not files:
+        return None
+    (season, week), path = next(reversed(files.items()))
+    return path, season, week
+
+
 def _newest_week_file(run_dir: Path, kind: str) -> tuple[Path, int, int] | None:
     """Return the ``(path, season, week)`` of the latest ``season_*_week_*_{kind}.csv``."""
-    best: tuple[int, int, Path] | None = None
-    for path in run_dir.glob(f"season_*_week_*_{kind}.csv"):
-        match = WEEK_FILE_RE.search(path.name)
-        if match is None:
-            continue
-        key = (int(match.group(1)), int(match.group(2)), path)
-        if best is None or key[:2] > best[:2]:
-            best = key
-    if best is None:
+    return _newest(_week_files(run_dir, kind))
+
+
+def _marked_predictions(
+    run_dir: Path, predictions: dict[tuple[int, int], Path]
+) -> tuple[Path, int, int] | None:
+    """Return the predictions file the run's predictions stage wrote, matched by file name.
+
+    ``predictions_state.json`` lists the stage's outputs by absolute path, which goes stale when
+    the run directory moves, so only the file name is compared.
+    """
+    marker = run_dir / "predictions_state.json"
+    try:
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+    except OSError, ValueError:
         return None
-    return best[2], best[0], best[1]
+    outputs = payload.get("outputs") if isinstance(payload, dict) else None
+    if not isinstance(outputs, list):
+        return None
+    by_name = {path.name: (path, season, week) for (season, week), path in predictions.items()}
+    for output in outputs:
+        hit = by_name.get(Path(output).name) if isinstance(output, str) else None
+        if hit is not None:
+            return hit
+    return None
 
 
 def _newest_power_file(run_dir: Path, kind: str) -> tuple[Path, int, int] | None:
@@ -116,7 +158,8 @@ def resolve_run_files(run_dir: Path) -> RunFiles:
     """Discover every artifact in ``run_dir``."""
     run_id = run_dir.name
     paths = resolve_run_paths(run_id, run_dir=run_dir)
-    predictions = _newest_week_file(run_dir, "predictions")
+    week_predictions = _week_files(run_dir, "predictions")
+    predictions = _marked_predictions(run_dir, week_predictions) or _newest(week_predictions)
     picks = _newest_week_file(run_dir, "confidence_picks")
     betting = _newest_week_file(run_dir, "betting_report")
     power = _newest_power_file(run_dir, "power_rankings")
@@ -145,4 +188,5 @@ def resolve_run_files(run_dir: Path) -> RunFiles:
         power_season=power[1] if power else None,
         power_week=power[2] if power else None,
         stage_markers={stage: run_dir / f"{stage}_state.json" for stage in STAGES},
+        week_predictions=week_predictions,
     )

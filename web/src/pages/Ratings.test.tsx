@@ -141,6 +141,22 @@ describe('RatingsIndexPage', () => {
     expect(screen.getByRole('checkbox', { name: 'Compare KC' })).toBeChecked()
   })
 
+  it('keeps the keyboard on a compare box after ticking it', async () => {
+    // Arrange
+    stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/teams': teamTable() })
+    const user = userEvent.setup()
+    renderWithProviders(<RatingsIndexPage kind="teams" />, { route: '/teams' })
+    ;(await screen.findByRole('checkbox', { name: 'Compare BUF' })).focus()
+
+    // Act
+    await user.keyboard(' ')
+
+    // Assert
+    const box = screen.getByRole('checkbox', { name: 'Compare BUF' })
+    expect(box).toBeChecked()
+    expect(box).toHaveFocus()
+  })
+
   it('compares the season totals the table shows in the totals view', async () => {
     // Arrange
     stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/teams': teamTable() })

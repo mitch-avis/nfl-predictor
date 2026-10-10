@@ -2,8 +2,12 @@ import {
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
+  type CellContext,
   type ColumnDef,
+  type HeaderContext,
+  type Row as TableRow,
   type SortingState,
+  type Table,
 } from '@tanstack/react-table'
 import { useReactTable } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
@@ -32,6 +36,50 @@ export interface DataTableProps {
 
 const STICKY_WIDTH = 88
 
+/** What the cells read on every render, passed through the table's `meta` option. */
+interface DataTableMeta {
+  columnMetadata: Record<string, ColumnMeta>
+  renderers?: Record<string, CellRenderer>
+}
+
+function tableMeta(table: Table<Row>): DataTableMeta {
+  return table.options.meta as DataTableMeta
+}
+
+/**
+ * A column's header: its label and description. The header and cell components live at module
+ * level and read the current metadata and renderers from the table, so their identity never
+ * changes and React updates cells in place instead of remounting them (which dropped focus).
+ */
+function HeaderLabel({ column, table }: HeaderContext<Row, unknown>) {
+  const meta = tableMeta(table).columnMetadata[column.id]
+  return (
+    <span className={cn('inline-flex items-center gap-1', isNumericKind(meta) && 'justify-end w-full')}>
+      <span>{meta?.label ?? column.id}</span>
+      {meta?.description ? <InfoTooltip content={meta.description} label={`About ${meta.label}`} /> : null}
+    </span>
+  )
+}
+
+/** A cell: the page's renderer for its column when there is one, else the formatted value. */
+function BodyCell({ column, row, table, getValue }: CellContext<Row, unknown>) {
+  const { columnMetadata, renderers } = tableMeta(table)
+  const meta = columnMetadata[column.id]
+  const value = getValue() as Row[string]
+  const custom = renderers?.[column.id]
+  return custom ? custom(value, row.original, meta) : formatCell(meta, value)
+}
+
+/** Sort numbers as numbers and anything else as text, missing values last. */
+function compareCells(left: TableRow<Row>, right: TableRow<Row>, columnId: string): number {
+  const av = left.original[columnId]
+  const bv = right.original[columnId]
+  if (av === null || av === undefined) return 1
+  if (bv === null || bv === undefined) return -1
+  if (typeof av === 'number' && typeof bv === 'number') return av - bv
+  return String(av).localeCompare(String(bv))
+}
+
 /** A sortable table driven entirely by the registry metadata in the payload. */
 export function DataTable({
   table,
@@ -57,35 +105,17 @@ export function DataTable({
 
   const columnDefs = useMemo<ColumnDef<Row>[]>(
     () =>
-      keys.map((key) => {
-        const meta = table.column_metadata[key]
-        return {
-          id: key,
-          accessorFn: (row) => row[key],
-          header: () => (
-            <span className={cn('inline-flex items-center gap-1', isNumericKind(meta) && 'justify-end w-full')}>
-              <span>{meta.label}</span>
-              {meta.description ? <InfoTooltip content={meta.description} label={`About ${meta.label}`} /> : null}
-            </span>
-          ),
-          cell: (ctx) => {
-            const value = ctx.getValue() as Row[string]
-            const custom = renderers?.[key]
-            return custom ? custom(value, ctx.row.original, meta) : formatCell(meta, value)
-          },
-          sortingFn: (a, b) => {
-            const av = a.original[key]
-            const bv = b.original[key]
-            if (av === null || av === undefined) return 1
-            if (bv === null || bv === undefined) return -1
-            if (typeof av === 'number' && typeof bv === 'number') return av - bv
-            return String(av).localeCompare(String(bv))
-          },
-          sortUndefined: 'last',
-        }
-      }),
-    [keys, table.column_metadata, renderers],
+      keys.map((key) => ({
+        id: key,
+        accessorFn: (row) => row[key],
+        header: HeaderLabel,
+        cell: BodyCell,
+        sortingFn: compareCells,
+        sortUndefined: 'last',
+      })),
+    [keys],
   )
+  const meta: DataTableMeta = { columnMetadata: table.column_metadata, renderers }
 
   // TanStack Table exposes imperative handlers by design; this component keeps them local.
   // oxlint-disable-next-line react/incompatible-library
@@ -96,6 +126,7 @@ export function DataTable({
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    meta,
   })
 
   if (table.rows.length === 0) {

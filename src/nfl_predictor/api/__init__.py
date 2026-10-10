@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from nfl_predictor.api.auth.ratelimit import LoginRateLimiter
@@ -86,6 +87,10 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     app.state.fingerprints = FingerprintCache(app.state.db)
     app.state.job_runner = JobRunner(app.state.db, settings, app.state.run_index)
     install_error_handlers(app)
+    # Compress responses for clients that accept gzip: a season's team table is about 0.96 MB of
+    # JSON and about 0.18 MB gzipped. Starlette leaves text/event-stream alone by default, so the
+    # job log stream still reaches the browser line by line.
+    app.add_middleware(GZipMiddleware)
 
     @app.middleware("http")
     async def require_csrf_header(

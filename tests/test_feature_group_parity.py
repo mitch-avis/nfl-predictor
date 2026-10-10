@@ -36,11 +36,22 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 TEST_BOOTSTRAP_SAMPLES = 50
-# Combinations of the groups the feature-group arms disable, each as the command line names it.
+# The four combinations of groups the feature-group walk-forward arms disable, in the order the
+# arms' launch commands name them.
 GROUP_SETS = pytest.mark.parametrize(
     "groups",
-    [("elo", "own_elo_wt"), ("strength", "elo", "own_elo")],
-    ids=["elo-and-win-total-elo", "strength-elo-and-own-elo"],
+    [
+        ("strength", "own_elo", "own_elo_wt"),
+        ("strength", "elo", "own_elo", "own_elo_wt"),
+        ("strength", "elo", "own_elo"),
+        ("strength", "elo", "own_elo_wt"),
+    ],
+    ids=[
+        "keeps-elo",
+        "keeps-no-elo",
+        "keeps-win-total-elo",
+        "keeps-market-free-own-elo",
+    ],
 )
 
 

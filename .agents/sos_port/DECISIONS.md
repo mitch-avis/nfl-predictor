@@ -273,3 +273,23 @@ Review: two independent rounds (verdict "merge as is"; every figure reproduced b
 - **Known leftover**: 44 trips without a recorded drive result, mostly the first half of a
   1999-2000 drive nflverse split at a timeout, stay in the rate's denominator; joining split
   pieces is a later fix (0.1% of trips).
+
+### The four-week trends of upcoming games (`0.55.1`)
+
+Full record: [decisions/trend_parity.md](decisions/trend_parity.md), with its scripts and outputs.
+Review: one independent round (merge after fixes; fixes checked); the reviewer recomputed every
+scheduled team-week by brute force.
+
+- **The defect** (found by a reviewer, predating step 6): an upcoming game's
+  `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` were filled with 0.0, and so was every
+  playoff game's, while completed rows carry the real pre-game trend. Not leakage: completed rows
+  use earlier games only, so no training row or walk-forward result changes (0 of 6,952 completed
+  regular-season rows move). Production predicted with zeros the model never trained on.
+- **The fix**: trends are keyed on the season's schedule, so each week takes the team's trend
+  after its last game before the week; playoff games take the full regular season's. Weekly
+  predictions change from week 6 on (held with step 6 for your approval).
+- **Also added**: a warning when `qb_elos.csv` lacks the week being predicted (a week-6 run with
+  today's copy would give every game a 0.0 Elo trend and no quarterback trends, values never seen
+  in training from week 6 on; refresh the file before each weekly run, as you do).
+- **Known leftover, unchanged**: 11 turnover-margin sides in 2000-2002 publish 0.0 after a game
+  nflverse has no team stats for; changing it would change completed training rows.

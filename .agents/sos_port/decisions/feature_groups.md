@@ -81,8 +81,8 @@ groups added inside the feature range.
 - **Decision**: (a).
 - **Reasoning**: an arm's option can be copied to `nfl-predictor train` or `nfl-predictor weekly`
   as it is, and the file reads like its other list setting. Refusing a string keeps one way to
-  write the file, as `floor_sigma_reference_runs` does. On the command line an empty value clears
-  the file's list.
+  write the file, as `floor_sigma_reference_runs` does; a key with no value (YAML null) reads as no
+  group. On the command line an empty value clears the file's list.
 - **Data**: `_normalize_config_defaults` in `src/nfl_predictor/weekly_run/config.py` refuses a
   string for both keys ("must be a list of paths", "must be a list of feature group names").
   `tests/test_weekly_run_feature_groups.py` covers the list, the comma-separated option, the

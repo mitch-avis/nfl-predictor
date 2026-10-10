@@ -287,3 +287,12 @@ def test_build_betting_report_non_positive_floor_sigma_without_spreads_raises() 
     # Act & Assert
     with pytest.raises(ValueError, match="sigma must be positive"):
         betting_report.build_betting_report(predictions, floor_sigma=-1.0)
+
+
+def test_build_betting_report_nan_floor_sigma_raises() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, 3.0]).drop(columns=["home_spread", "away_spread"])
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="sigma must be positive"):
+        betting_report.build_betting_report(predictions, floor_sigma=float("nan"))

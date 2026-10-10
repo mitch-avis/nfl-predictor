@@ -478,7 +478,7 @@ def _season_table(table: Sequence[Mapping[str, Any]]) -> list[str]:
     ]
     for row in table:
         cells = [
-            form.format(row[key]) if key in row and row[key] is not None else ""
+            form.format(row[key]) if key in row and row[key] is not None else "-"
             for _, key, form in columns
         ]
         lines.append("| " + " | ".join(cells) + " |")
@@ -492,7 +492,7 @@ def _plays_table(plays: pl.DataFrame) -> list[str]:
         "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in plays.iter_rows(named=True):
-        text = str(row["desc"]).replace("|", "/")
+        text = str(row["desc"]).replace("|", "/").strip()
         lines.append(
             f"| {row['season']} | {row['game_id']} | {int(row['play_id'])} | "
             f"{row['passer_player_id']} | {row['fumbled_1_player_id']} | {row['epa']:+.3f} | "
@@ -527,7 +527,8 @@ def build_report(
         "",
         (
             "Movement is measured with the approved change (2006-2025 plays only); 1999-2005 and "
-            "2026 are counted but not removed."
+            "2026 are counted but not removed. A dash marks a part the season's change does not "
+            "reach (no play removed that season, or no pre-week week measured)."
         ),
         "",
         *_season_table(table),

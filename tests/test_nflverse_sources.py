@@ -850,3 +850,36 @@ def test_the_current_season_qb_identity_survives_a_players_file_outage(
 
     # Assert
     assert identity.rows() == [("00-0033357", "HillTa00", "Taysom Hill", "QB")]
+
+
+def test_shared_identity_sources_give_each_season_the_loaders_identity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange
+    monkeypatch.setattr(nflverse_sources.nfl, "load_players", _players_loader("TE", []))
+    monkeypatch.setattr(
+        nflverse_sources.nfl,
+        "load_rosters_weekly",
+        _fake({2020: _weekly_roster(2020, "QB"), 2021: _weekly_roster(2021, "TE")}),
+    )
+    seasons = (2001, 2020, 2021)
+    loaded = {
+        season: nflverse_sources.load_season_qb_identity(
+            season, cache_dir=tmp_path, current_season=CURRENT
+        )
+        for season in seasons
+    }
+    shared = nflverse_sources.QbIdentitySources(
+        players=nflverse_sources.load_players(cache_dir=tmp_path),
+        weekly_rosters=nflverse_sources.load_weekly_rosters(
+            [2020, 2021], cache_dir=tmp_path, current_season=CURRENT
+        ),
+    )
+
+    # Act
+    identities = {season: shared.season_identity(season) for season in seasons}
+
+    # Assert
+    assert all(identities[season].equals(loaded[season]) for season in seasons)
+    assert identities[2020].get_column("qb_position").to_list() == ["QB"]
+    assert identities[2021].get_column("qb_position").to_list() == ["TE"]

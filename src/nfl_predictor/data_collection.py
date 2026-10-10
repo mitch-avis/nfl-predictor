@@ -504,6 +504,7 @@ def _quarterback_history(
     max_season: int,
     current_season: int,
     requested_seasons: tuple[int, ...] = (),
+    identity_sources: nflverse_sources.QbIdentitySources | None = None,
 ) -> qb_starters.QuarterbackHistory:
     """Return every regular season's quarterback games and play-by-play starters.
 
@@ -515,8 +516,9 @@ def _quarterback_history(
     season, which has no plays before kickoff, is requested once. Those history seasons are
     never force-refreshed: a refresh applies to the seasons being processed, which arrive in
     ``pbp_df``, and re-pulling every earlier season would turn a one-season refresh into a
-    full-history download. Each season's quarterback identity
-    (``nflverse_sources.load_season_qb_identity``) decides who can start (``qb_starters``).
+    full-history download. Each season's quarterback identity decides who can start
+    (``qb_starters``): read from ``identity_sources``, the players file and weekly rosters the
+    run already loaded, else loaded per season (``nflverse_sources.load_season_qb_identity``).
     """
     seasons = list(range(constants.NFLREADPY_MIN_SEASON, max_season + 1))
     loaded = (
@@ -533,7 +535,11 @@ def _quarterback_history(
         plays = pl.concat([pbp_df, history], how="diagonal_relaxed")
     positions = qb_starters.season_positions(
         {
-            season: nflverse_sources.load_season_qb_identity(season, current_season=current_season)
+            season: (
+                nflverse_sources.load_season_qb_identity(season, current_season=current_season)
+                if identity_sources is None
+                else identity_sources.season_identity(season)
+            )
             for season in seasons
         }
     )
@@ -729,6 +735,9 @@ class _EtlSources:
     pbp_seasons: tuple[int, ...] = ()
     # The ratings' inputs and per-season outputs; None leaves the ratings columns null.
     ratings: ratings_build.RatingsBuild | None = None
+    # The players file and weekly rosters the ratings loaded, which every season's quarterback
+    # identity reads instead of loading them again; None loads them per season.
+    qb_identity_sources: nflverse_sources.QbIdentitySources | None = None
 
 
 def _stats_window(
@@ -864,12 +873,19 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
     )
     elo_df, raw_elo_df = _load_elo(seasons, config)
     with _timed_step("load_ratings_sources", enabled=config.enable_timing):
-        ratings = ratings_build.load_ratings_build(
+        loaded = ratings_build.load_ratings_sources(
             max(seasons),
             pbp_df=pbp_df,
             schedule_df=stats_schedule_df,
             current_season=current_season,
             force_refresh=config.force_refresh_nflreadpy,
+        )
+        ratings = (
+            None
+            if loaded is None
+            else ratings_build.RatingsBuild(
+                ratings_build.ratings_inputs(loaded), current_season=current_season
+            )
         )
     return _EtlSources(
         current_season=current_season,
@@ -881,6 +897,11 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         raw_elo_df=raw_elo_df,
         pbp_seasons=tuple(stats_seasons),
         ratings=ratings,
+        qb_identity_sources=(
+            None
+            if loaded is None
+            else nflverse_sources.QbIdentitySources(loaded.players, loaded.weekly_rosters)
+        ),
     )
 
 
@@ -1064,6 +1085,7 @@ def _finish_games(
                 max_season=max_season,
                 current_season=sources.current_season,
                 requested_seasons=sources.pbp_seasons,
+                identity_sources=sources.qb_identity_sources,
             )
             if _QB_NAME_COLUMNS.issubset(combined_df.columns)
             else None

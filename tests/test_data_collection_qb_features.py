@@ -181,6 +181,95 @@ def test_quarterback_history_never_requests_a_season_the_run_already_requested(
     assert requested == [[1999]]
 
 
+def _identity_sources(season: int, gsis_id: str, position: str) -> Any:
+    """Return shared identity sources whose weekly roster lists ``gsis_id`` in ``season``."""
+    players = pl.DataFrame(schema=dict.fromkeys(constants.NFLREADPY_PLAYERS_COLUMNS, pl.String))
+    weekly_rosters = pl.DataFrame(
+        {
+            "season": [season],
+            "week": [1],
+            "game_type": ["REG"],
+            "team": ["NE"],
+            "position": [position],
+            "full_name": ["Tom Brady"],
+            "gsis_id": [gsis_id],
+            "pfr_id": [None],
+        },
+        schema={
+            "season": pl.Int32,
+            "week": pl.Int32,
+            "game_type": pl.String,
+            "team": pl.String,
+            "position": pl.String,
+            "full_name": pl.String,
+            "gsis_id": pl.String,
+            "pfr_id": pl.String,
+        },
+    )
+    return nflverse_sources.QbIdentitySources(players=players, weekly_rosters=weekly_rosters)
+
+
+def test_quarterback_history_reads_the_shared_identity_sources_without_loading_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The run's one load of the players file and weekly rosters gives every season's identity."""
+    # Arrange
+    monkeypatch.setattr(constants, "NFLREADPY_MIN_SEASON", 2001)
+    in_memory = pl.DataFrame(_dropbacks(2001, 1, "NE", "TB", 5))
+    monkeypatch.setattr(
+        nflverse_sources,
+        "load_season_qb_identity",
+        lambda *_a, **_k: pytest.fail("the identity was loaded again"),
+    )
+
+    # Act
+    history = data_collection._quarterback_history(
+        in_memory,
+        max_season=2001,
+        current_season=2026,
+        identity_sources=_identity_sources(2001, "TB", "WR"),
+    )
+
+    # Assert
+    assert history.positions.rows() == [(2001, "TB", "WR")]
+
+
+def test_finish_games_hands_the_quarterback_history_the_shared_identity_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    shared = _identity_sources(2001, "TB", "QB")
+    handed: list[Any] = []
+
+    def history(*_args: Any, **kwargs: Any) -> None:
+        handed.append(kwargs.get("identity_sources"))
+
+    monkeypatch.setattr(data_collection, "_quarterback_history", history)
+    monkeypatch.setattr(data_collection, "_attach_qb_features", lambda games, *_a, **_k: games)
+    monkeypatch.setattr(data_collection, "_attach_own_elo", lambda games, *_a, **_k: games)
+    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
+    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
+    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
+    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+    sources = data_collection._EtlSources(
+        current_season=2025,
+        current_week=1,
+        schedule_df=pl.DataFrame(),
+        team_stats_df=pl.DataFrame(),
+        pbp_df=pl.DataFrame(),
+        elo_df=pl.DataFrame(),
+        raw_elo_df=pl.DataFrame(),
+        qb_identity_sources=shared,
+    )
+    games = pl.DataFrame({"season": [2024], "week": [2], "away_qb": ["A"], "home_qb": ["B"]})
+
+    # Act
+    data_collection._finish_games(games, sources, 2024, enable_timing=False)
+
+    # Assert
+    assert handed == [shared]
+
+
 def test_attach_qb_features_joins_both_sides(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -685,4 +685,29 @@ def load_season_qb_identity(
     weekly_rosters = load_weekly_rosters(
         [season], cache_dir=cache_dir, force_refresh=force_refresh, current_season=current
     )
-    return player_identity.qb_identity_crosswalk(players, weekly_rosters)
+    return QbIdentitySources(players, weekly_rosters).season_identity(season)
+
+
+@dataclass(frozen=True)
+class QbIdentitySources:
+    """The players file and the weekly rosters, loaded once for every season's identity.
+
+    A run that already loaded both (the ETL's ratings do) reads each season's quarterback
+    identity from them instead of loading them again per season, as ``load_season_qb_identity``
+    does, so a current-season run downloads the players file and the current weekly roster once.
+
+    Attributes:
+        players: The players file (``load_players``).
+        weekly_rosters: The regular-season weekly rosters of the seasons wanted, with ``season``
+            (``load_weekly_rosters``); a season it lacks has the players file alone.
+
+    """
+
+    players: pl.DataFrame
+    weekly_rosters: pl.DataFrame
+
+    def season_identity(self, season: int) -> pl.DataFrame:
+        """Return ``season``'s quarterback identity (``player_identity.qb_identity_crosswalk``)."""
+        return player_identity.qb_identity_crosswalk(
+            self.players, self.weekly_rosters.filter(pl.col("season") == season)
+        )

@@ -301,11 +301,11 @@ a quarterback in a season when the players file or any regular-season week of th
 weekly roster lists him there, matched by GSIS id and never by name
 (`utils/polars/player_identity.py`). ESPN QBR (`utils/polars/espn_qbr.py`) is cached the same way
 as a validation reference only: nothing that builds the dataset or the model imports it. The ETL
-reads the season rosters of 2001 and 2002, for that repair, every season's quarterback identity
-(the players file and the weekly rosters), for the starter rule below, and the player sources for
-the ratings, every season from 1999 (so the first run that does downloads each season once); it
+reads the season rosters of 2001 and 2002, for that repair, and the player sources for the
+ratings, every season from 1999 (so the first run that does downloads each season once); it
 downloads the players file again whenever the run reaches the current season, falling back to its
-cached copy on an outage.
+cached copy on an outage. Every season's quarterback identity, for the starter rule below, reads
+the players file and weekly rosters the ratings loaded, so a run loads each of them once.
 
 Every quarterback feature keys on one starter: the quarterback family and the ratings'
 `ratings_qb` read it from `qb_stats.expected_starter_ids`, and the own Elo applies the same rule

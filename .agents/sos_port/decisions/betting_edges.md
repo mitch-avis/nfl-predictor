@@ -52,9 +52,9 @@ The rule:
     prediction row as `floor_sigma` (`src/nfl_predictor/ml/ml_model_predict.py`), and it is the
     one behind `home_win_prob`. Stage 4 passes that column's single value
     (`pipeline._report_floor_sigma`), and none when the column is missing or holds several.
-  - The tests follow the `tests/test_sos_port_*.py` pattern, but its loader
-    (`tests/sos_port_scripts.py`) was not on this branch; it is restored unchanged from commit
-    `92b6342`.
+  - The tests follow the `tests/test_sos_port_*.py` pattern of a parallel, unmerged branch. Its
+    loader (`tests/sos_port_scripts.py`) was never on the base branch; it is copied unchanged
+    from that branch's commit `92b6342` and is to be reconciled with it at merge.
   - The weekly-run snapshot (`tests/fixtures/weekly_run_characterization/betting_report.csv`)
     gains the three columns; every other column is unchanged, which was checked by comparing
     the old and new snapshots without them.
@@ -74,8 +74,10 @@ The rule:
   line, `AGENTS.md` rule 11), which is the revisit the follow-up asked for. The Week 3
   observation that started it was one week; on this sample it does not hold in general. (b) is
   the branch the rule reserved for a gap that outweighs the model's part, which did not happen,
-  and (c) doubles the labels; (a) stands, as the rule says. How many labels (b) would move was
-  not measured.
+  and (c) doubles the labels; (a) stands, as the rule says. Most scored games have moneylines
+  derived from the spread (see **Data**), but on the games with real moneyline pairs the gap
+  still outweighs the model's part in under half of the top decile. How many labels (b) would
+  move is in the review line below.
 - **Data**: `.agents/sos_port/BETTING_EDGES.md`, written by `.agents/sos_port/betting_edges.py`
   from the adopted-settings reference, seed 42 (`models/step4_reference/adopted_seed42`, fold
   checkpoints `models/wf_checkpoints/df20b775abf7f2657d13/`, 328 folds). 4,943 game rows, all
@@ -84,12 +86,35 @@ The rule:
   `0.0339`; top decile 495 games, `|gap| > |beyond|` in `0.1434`, `sign(gap) == sign(edge)` in
   `0.8222`; correlation of `edge` with `gap` `0.4363` and with `beyond` `0.7814`; Brier of
   `p_ml` `0.21286` and of `p_spread` `0.21337`, difference `+0.00051` (95% interval `-0.00026`
-  to `+0.00126`). Reproduce from the repository root:
-  `VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/betting_edges.py --checkpoint-dir
-  /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13`.
+  to `+0.00126`). Every fold's fingerprint begins with the checkpoint directory's name.
+  - 4,128 of the 4,943 games, in seasons 2007-2021 and 2023, have no real moneyline: their
+    moneylines come from the opening spread through the fitted spread-to-moneyline map
+    (`src/nfl_predictor/utils/polars/pick_time_lines.py`; `moneylines_from_map` in
+    `models/step4_reference/inputs/adopted_market_lines_metadata.json`; it counts seasons, not
+    games, and for 2023 it counts 283 of 285 games, playoffs included, so 2023 is grouped whole
+    with the derived seasons). Season 2022 uses stored closing lines. On those 4,128 games the
+    gap is a function of the spread and the sigma, not a disagreement between a game's spread
+    and its moneyline.
+  - On the 815 games with real moneyline pairs (2022, 2024 and 2025), `|gap| > |beyond|` in
+    `0.1829` of their top decile (82 games); on 2025 alone (272 games), in `0.3214` of its top
+    decile (28 games). Both match the review's `0.183` and `0.321`. These groups decide
+    nothing; their other numbers are in `BETTING_EDGES.md`.
+  - Reproduce from the repository root (`--market-lines-metadata` is the metadata file above):
+    `VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/betting_edges.py
+    --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13
+    --market-lines-metadata
+    /home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json`.
 - **How to reverse it**: the columns go with `_spread_home_prob` and the three assignments in
   `build_betting_report` (`src/nfl_predictor/reporting/betting_report.py`), the `floor_sigma`
   keyword in `pipeline._run_stage4`, and a snapshot rewrite (`NFLP_UPDATE_SNAPSHOTS=1`). A switch
   of the labels to `beyond` would map `edge_beyond_spread_home_prob` through
   `_edge_to_confidence_1_to_10` and `_edge_to_action`; it is the user's decision.
-- **Review: not yet reviewed.**
+- **Review**: one independent round by a separate reviewer, verdict "merge after fixes". Every
+  number was reproduced from the fold checkpoints, and the rule was applied as written. The
+  review's label context:
+  - Basing the labels on the model's part alone would change 3,312 of the 4,943 action labels
+    and 344 of the 495 in the top decile, and would flip the value side on 1,239 games.
+  - At the floor's sigma, the normal curve gives favorites of 3 or more points a lower
+    probability than the no-vig moneyline does: the gap is about `-0.045` at 7-7.5 points on
+    the map-derived seasons and `-0.042` on the real ones. A model sitting exactly on a 7-point
+    spread therefore shows an underdog edge of about `0.045`.

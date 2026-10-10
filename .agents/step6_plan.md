@@ -159,6 +159,11 @@ small and local.
   (Betting under "This week", Model above Data); the "Opponents faced" ledger is simpler than the
   source's; season tables go out uncompressed (about 0.9 MB per team table). None was checked in a
   browser (signing in needs a typed password); the user should look at the pages once.
+- Not done: the own Elo's alternative quarterback adjustment (the ported quarterback rating in
+  place of 538's VALUE, scored with `elo_eval.py`). Two implementer attempts stopped on an API
+  limit (a single response over 16,000 output tokens) before writing anything; per the
+  orchestration rule it was stopped after two failures. It is report-only and nothing depends on
+  it; a later session can retry it in smaller pieces.
 - Power rankings (phase 5, review pending): the pre-registered scoring, applied as written, picks
   the blend of the ported team rating and a model rating (weight about 0.5 on each since 2015) over
   the ported rating alone; the composite production ranks on today and the model rating alone tie.

@@ -6,18 +6,18 @@ import itertools
 import json
 from typing import TYPE_CHECKING
 
-import joblib
-import pandas as pd
 import polars as pl
 import pytest
+from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 from nfl_predictor import constants
-from nfl_predictor.ml.walk_forward import FOLD_CHECKPOINT_VERSION
 from nfl_predictor.ratings.team_rating import TEAM_RATING_COLUMNS
 from nfl_predictor.reporting import rating_sources
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pandas as pd
 
 STRENGTHS = {"AAA": 4.0, "BBB": 1.5, "CCC": -0.5, "DDD": -5.0}
 HOME_TERM = 2.0
@@ -361,40 +361,8 @@ def test_blend_ratings_weight_outside_zero_to_one_raises(weight: float) -> None:
         rating_sources.blend_ratings(ratings, ratings, weight)
 
 
-def _fold_frame(season: int, week: int, games: list[tuple[str, str, float]]) -> pd.DataFrame:
-    """Return a fold's prediction frame as the walk-forward stores it (extra columns included)."""
-    return pd.DataFrame(
-        {
-            "game_id": [f"{season}_{week:02d}_{away}_{home}" for away, home, _ in games],
-            "season": [season] * len(games),
-            "week": [week] * len(games),
-            "game_type": ["REG"] * len(games),
-            "away_abbr": [away for away, _, _ in games],
-            "home_abbr": [home for _, home, _ in games],
-            "neutral": [0] * len(games),
-            "home_rest": [7] * len(games),
-            "predicted_margin": [margin for _, _, margin in games],
-            "deterministic_home_win_prob": [0.5] * len(games),
-        }
-    )
-
-
-def _write_folds(directory: Path, frames: list[pd.DataFrame]) -> Path:
-    """Write fold checkpoint files in the walk-forward's format."""
-    directory.mkdir(parents=True)
-    for frame in frames:
-        season, week = int(frame["season"].iloc[0]), int(frame["week"].iloc[0])
-        payload = {
-            "version": FOLD_CHECKPOINT_VERSION,
-            "fingerprint": "f" * 64,
-            "season": season,
-            "week": week,
-            "metrics": {"margin_model.best_iteration": 199},
-            "predictions": frame,
-            "feature_columns": ["home_rest", "neutral"],
-        }
-        joblib.dump(payload, directory / f"fold_{season}_w{week:02d}.joblib")
-    return directory
+_fold_frame = fold_frame
+_write_folds = write_fold_checkpoints
 
 
 def _fold_frames() -> list[pd.DataFrame]:

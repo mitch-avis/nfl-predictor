@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,9 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 DEFAULT_FEATURE_START_COLUMN = "away_rest"
 DEFAULT_FEATURE_END_COLUMN = "home_moneyline"
@@ -146,6 +149,38 @@ def _drop_high_cardinality_columns(
     if not dropped:
         return df, []
     return df.drop(columns=dropped), dropped
+
+
+def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str]) -> list[str]:
+    """Resolve which columns belong to the given feature groups for ablation.
+
+    A column belongs to a group when any marker string configured for that group in
+    ``constants.FEATURE_GROUP_COLUMN_MARKERS`` is a *substring* of the column name (not a
+    prefix), so a single marker can match ``away_``/``home_``/``opponent_`` prefixed variants
+    and ``_diff`` suffixed variants of the same base name at once. A group whose marker tuple
+    is empty matches zero columns.
+
+    Raises:
+        ValueError: if any requested group name is not a key in
+            ``constants.FEATURE_GROUP_COLUMN_MARKERS``.
+
+    """
+    valid_groups = constants.FEATURE_GROUP_COLUMN_MARKERS
+    unknown = sorted({group for group in groups if group not in valid_groups})
+    if unknown:
+        msg = f"Unknown feature group(s): {unknown}. Valid groups: {sorted(valid_groups)}."
+        raise ValueError(msg)
+
+    matched: set[str] = set()
+    for group in groups:
+        markers = valid_groups[group]
+        if not markers:
+            continue
+        for column in columns:
+            if any(marker in column for marker in markers):
+                matched.add(column)
+
+    return sorted(matched)
 
 
 @dataclass(frozen=True, kw_only=True)

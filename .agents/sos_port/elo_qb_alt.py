@@ -66,7 +66,7 @@ TEAM_WEIGHT = 0.05
 PRESEASON_CARRYOVER = 1.0 / 3.0
 # 1999 has no rating and 2000 rates veterans for the first time: neither is a debut season.
 FIRST_DEBUT_SEASON = 2001
-# The candidate dataset rounds its attached ratings to six decimals.
+# Two ratings this close count as equal in the starter-rating check.
 MATCH_TOLERANCE = 1e-6
 SCALES = (1.0, 0.5, 1.5)
 # VALUE's market-free numbers in ELO_EVAL.md, which this run must reproduce.
@@ -472,14 +472,14 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     ratings = QuarterbackRatings(tables, attached=attached)
     window_games = set(window.games["game_id"].to_list())
     window_sides = [
-        (season, week, qb_id)
+        (game_id, side, (season, week, qb_id))
         for game_id, season, week, home_qb, away_qb in games.select(
             "game_id", "season", "week", "home_qb_id", "away_qb_id"
         ).iter_rows()
         if game_id in window_games
-        for qb_id in (home_qb, away_qb)
+        for side, qb_id in (("home", home_qb), ("away", away_qb))
     ]
-    unattached = sum(key not in attached for key in window_sides)
+    unattached = [f"{game_id} {side}" for game_id, side, key in window_sides if key not in attached]
     regular_games = dict(
         inputs.schedule.filter(pl.col("game_type") == "REG").group_by("season").len().iter_rows()
     )
@@ -586,7 +586,7 @@ def _check_lines(result: dict[str, Any]) -> list[str]:
             "Each completed regular-season game side whose starter is VALUE's (its play-by-play",
             "starter, the one the candidate dataset attaches its `ratings_qb` to), compared with",
             "the season-to-date rating each reading of the by-week table gives: a match is both",
-            f"null or within {MATCH_TOLERANCE:g} (the dataset rounds to six decimals).",
+            f"null or within {MATCH_TOLERANCE:g}.",
         ),
         *elo_eval._table(["reading", "matches", "mismatches"], rows),
         *elo_eval._paragraph(
@@ -600,14 +600,19 @@ def _check_lines(result: dict[str, Any]) -> list[str]:
             "(`src/nfl_predictor/ratings/pre_week.py`), where the published history uses the",
             "season's own cross-validated quarterback penalty, chosen on the whole season, and",
             "the attached rating the previous season's, so a season differs when its two",
-            "penalties do. The penalties are not on disk, so that last step is not checked. A",
-            "penalty chosen on the whole season is later information, so the run reads the",
-            "season-to-date rating from the attached `ratings_qb` (the fit on the season's games",
-            "before the week, with the previous season's penalty), keyed by season, week and",
-            "starter, and the by-week table only for its latest rows (earlier seasons, the",
-            "replacement level, `D(s)` and playoff games). Of the",
-            f"{result['window_sides']} window game sides, {result['unattached']} have no attached",
-            "rating (no play-by-play starter for VALUE to share) and read cases 2 and 3.",
+            "penalties do. `.agents/sos_port/RATINGS_PARITY.md` records the two penalties as",
+            "equal in exactly the 7 seasons that match here after 1999 (where both ratings are",
+            "null), and the independent review of this run refit 2010 and 2013 with both",
+            "penalties, with 2011 as the control, and confirmed the cause. A penalty chosen on",
+            "the whole season is later information, so the run reads the season-to-date rating",
+            "from the attached `ratings_qb` (the fit on the season's games before the week, with",
+            "the previous season's penalty), keyed by season, week and starter, and the by-week",
+            "table only for its latest rows (earlier seasons, the replacement level, `D(s)` and",
+            f"playoff games). Of the {result['window_sides']} window game sides,",
+            f"{len(result['unattached'])} read cases 2 and 3 although the dataset attaches a",
+            "rating to them: VALUE's starter there is not the game's play-by-play starter, so",
+            "the check's sides, which key the attached ratings, leave them out:",
+            ", ".join(f"`{side}`" for side in result["unattached"]) + ".",
         ),
     ]
 

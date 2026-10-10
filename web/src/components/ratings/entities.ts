@@ -92,9 +92,11 @@ export function entityPath(kind: EntityKind, id: string, season: number): string
   return `/${kind}/${encodeURIComponent(id)}?season=${season}`
 }
 
-/** The head-to-head page of a pair of teams or quarterbacks in one season. */
-export function headToHeadPath(kind: EntityKind, season: number, a: string, b: string): string {
-  return `/head-to-head?${new URLSearchParams({ kind, season: String(season), a, b }).toString()}`
+/** The head-to-head page of a pair of teams or quarterbacks in one season; `b` may wait. */
+export function headToHeadPath(kind: EntityKind, season: number, a: string, b?: string): string {
+  const params = new URLSearchParams({ kind, season: String(season), a })
+  if (b) params.set('b', b)
+  return `/head-to-head?${params.toString()}`
 }
 
 /** The index page of the teams or quarterbacks, keeping the season when there is one. */

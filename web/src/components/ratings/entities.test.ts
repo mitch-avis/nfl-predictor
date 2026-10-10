@@ -73,6 +73,14 @@ describe('entityPath and ratingsPagePath', () => {
     expect(path).toBe('/qbs/00-0034857?season=2025')
   })
 
+  it('links the head-to-head page of one entity before the other is picked', () => {
+    // Act
+    const path = headToHeadPath('teams', 2025, 'BUF')
+
+    // Assert
+    expect(path).toBe('/head-to-head?kind=teams&season=2025&a=BUF')
+  })
+
   it('links the head-to-head page of a pair', () => {
     // Act
     const path = headToHeadPath('qbs', 2025, '00-1', '00-2')

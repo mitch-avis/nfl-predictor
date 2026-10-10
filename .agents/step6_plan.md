@@ -145,8 +145,13 @@ small and local.
   source's rush-attempt rule (`.agents/sos_port/DECISIONS.md`).
 - Held for the user: the live-betting design's three choices (score source, odds source, odds
   snapshots under `data/live/`); calibrating the tiebreaker's top-score estimate (runs about 2
-  points low); the reviewed pool-interval labels in `benchmarks.md` (lines 459, 503, 577 need
-  their resampling unit confirmed from each run's own artifacts before labeling).
+  points low).
+- Fixed without asking (rule 2): three pool-point intervals in `.agents/benchmarks.md` (the GPU
+  reference against the CPU pair, the market transform's off-minus-on, the adopted-settings
+  reference against the pick-time lines test) were quoted without their resampling unit; each now
+  says "week-block bootstrap", the unit each run's `REVIEW.md` states
+  (`models/step3_gpu_reference/`, `models/step3_market_transform/`, `models/step4/`). No number
+  changed.
 - The `compare` tie fix changes market-line pick accuracy in future reports (170 pick-time and 25
   closing-line coin flips; 0.6401 to 0.6579 and 0.6648 to 0.6670), no model number.
 - Modeling observation (not changed): completed games carry the actual starting quarterback in

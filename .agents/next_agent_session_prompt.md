@@ -113,11 +113,7 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
    a separate `reviewer` checks every chunk (and re-runs any script whose numbers enter a doc)
    before it merges into `feat/step6-sos-port`, and the delegating session writes
    `CHANGELOG.md` and the version at each merge.
-2. `constants.MODELS_PATH` and the `compare` tie rule landed in `0.46.0` on the step-6 branch.
-   Left from the 2026-10-09 review: `.agents/benchmarks.md` still quotes pool-point intervals
-   without their resampling unit (around lines 459, 503 and 577); label each only after
-   confirming the unit from the run that produced it.
-3. Weekly runs and picks are the user's. Production-changing work lands between game weeks
+2. Weekly runs and picks are the user's. Production-changing work lands between game weeks
    (after Monday night, before Thursday).
 
 ## How the last sessions worked (keep doing this)

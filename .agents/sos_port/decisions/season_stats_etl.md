@@ -7,7 +7,11 @@ Commits on branch `worktree-agent-ad5396b63790d07a8` (off `feat/step6-sos-port` 
 `0.54.0`): `a962f1b` (the season cache's code fingerprint), `e3dee51` (the step and its ratings
 hook), `735109e` (the ETL writes the tables and keys the cache on them), `10698f5` (the parity and
 timing scripts), `d01df69` (the missing-source check), `c511e50` (the READMEs), `c378123` (the web
-empty states).
+empty states). After the branch's independent review: `7f916fd` (the determinism tests' labeled
+phases), `90f21f2` (the row-order guard over the season statistics package, entry 9), `7b37868` and
+`631187c` (the download and fallback tests, entry 2), `3ff547f` (a reused season's game rows,
+entry 7), `fc07d16` and `66b732c` (one schema for every table, entry 6), `3dfb4c6` (the season
+cache round trip in the parity script), and the reruns of the parity and missing-source checks.
 
 Scripts and their outputs, run from the repository root with the worktree's environment; each
 writes only to a temporary directory under `~/scratch`, reading the snapshot of the nflreadpy
@@ -17,7 +21,12 @@ official weekly team stats cache from the snapshot's team stats files):
 
 - `.agents/sos_port/season_stats_etl_parity.py` writes `SEASON_STATS_ETL_PARITY.md` and
   `season_stats_etl_parity.json` beside it: every season of 1999-2026 built through the ETL's
-  step, written by the ETL's writer, read back and compared with the published files.
+  step, written by the ETL's writer, read back and compared with the published files; then every
+  season's frames stored in a season cache, loaded back, reused as an incremental run reuses them
+  and written again, each file compared byte for byte with the fresh build's.
+- `.agents/sos_port/season_stats_etl_schema.py` writes
+  `src/nfl_predictor/utils/polars/season_stats_schema.py`, the columns and types of every table's
+  full build (entry 6); with `--check` it only says whether that module is up to date.
 - `.agents/sos_port/season_stats_etl_timing.py` and its captured output in this directory,
   `season_stats_etl_timing_output.txt`: what the step adds to a full and to an incremental run.
 - `.agents/sos_port/decisions/season_stats_etl_degrade.py` and its captured output,
@@ -45,7 +54,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   loading code to a 715-line module about the ratings.
 - **Data**: `git diff --stat b6f85ed -- src/nfl_predictor/data_collection.py`: 31 lines added,
   5 removed (the build constructed in `_load_sources`, the key's frames in `_season_frames`).
-  `tests/test_season_stats_build.py`: `test_build_adds_each_seasons_statistics_tables_to_its_frames`,
+  `tests/test_season_stats_build.py`:
+  `test_build_adds_each_seasons_statistics_tables_to_its_frames`,
   `test_published_tables_name_the_season_statistics_tables_by_season_and_kind`,
   `test_reused_season_frames_publish_the_same_season_statistics_tables`;
   `tests/test_data_collection_helpers.py`:
@@ -76,11 +86,18 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **Data**: `tests/test_season_stats_build.py`:
   `test_sources_load_the_official_team_stats_of_the_runs_seasons_once` (one load, the run's
   seasons), `test_sources_reuse_every_other_frame_the_ratings_loaded` (every other loader fails
-  the test if called), and
+  the test if called),
   `test_the_current_seasons_team_stats_file_is_downloaded_once_for_both_loaders` (one HTTP request
-  for both loaders; two when nflreadpy's cache is cleared between them). Caveat: an environment
-  that turns nflreadpy's cache off (`NFLREADPY_CACHE=off`) downloads the current season's file
-  twice.
+  for both loaders) and its control,
+  `test_the_team_stats_file_is_downloaded_again_once_nflreadpy_forgets_it` (two requests when
+  nflreadpy's cache is cleared between the loaders, so the single request is the cache's doing).
+  The official stats keep the cache-then-degrade contract: when the current season's download
+  fails with a `ConnectionError` or a `ValueError` from `nfl.load_team_stats`,
+  `test_a_failed_current_season_download_falls_back_to_the_cached_official_team_stats` reads the
+  cached file and
+  `test_a_failed_current_season_download_without_a_cache_leaves_no_official_team_stats` gets no
+  rows with the source's columns. Caveat: an environment that turns nflreadpy's cache off
+  (`NFLREADPY_CACHE=off`) downloads the current season's file twice.
 - **Feature-value impact**: none.
 - **How to reverse it**: in `season_stats_build.load_season_stats_sources`, load the other
   sources per season instead of taking them from the ratings' frames.
@@ -151,31 +168,71 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **How to reverse it**: give `RatingsBuild._tables` a quarterback fit for such a season.
 - **Review**: not yet reviewed.
 
-## 6. A missing source: build without it and say what the tables lose
+## 6. A missing source: build without it, keep every column, and say what is missing
 
 - **What differs**: `load_season_inputs` lets a missing current-season source become no rows
-  without saying what the tables lose; `build_season_tables` refuses a season without a game.
-- **Options**: (a) build the season without the source and warn, naming what its tables lack;
-  log and skip a season before its first game; (b) skip a season's tables while any source is
-  missing; (c) fail the ETL.
-- **Decision**: (a).
-- **Reasoning**: the task asks that a missing current-season source not fail the ETL and that
-  what is skipped be logged. (b) would leave the pages without the current season while nflverse
-  catches up each week. A table built without a source loses named columns or rows, and the
-  warning says which.
-- **Data**: `season_stats_etl_degrade_output.txt` (2025): without the official team stats every
-  table keeps its columns (the play-by-play totals stand in); without the weekly player stats the
-  team tables lose the 14 defense box-score columns, `qb_game_logs` 11 columns and `qb_combined`
-  34; without the snap counts `qb_game_logs` loses 52 of its 687 rows (the passers without a
-  dropback) and `qb_combined` 4 of its 82; without the season's play-by-play there is no table.
-  Tests: `test_a_season_without_a_game_has_no_tables`,
+  without saying what the tables lose; `build_season_tables` refuses a season without a game. The
+  package's builders also drop the columns a missing source fills (a 2025 build without the
+  weekly player stats lost up to 34 columns of `qb_combined`) and the opponent-profile columns of
+  `combined` and `qb_combined` in a season where no opponent has played anyone else yet, and give
+  `qb_game_logs.week` the play-by-play's `Int32` before the snap counts begin (2013) and `Int64`
+  once they join. `AGENTS.md`'s "Missing Data Rules" ask the ETL for an invariant schema in every
+  run, a missing source becoming nulls or defined defaults.
+- **Options**: (a) build the season without the source and warn, naming what is missing; log and
+  skip a season before its first game; conform every table built to the columns and types of a
+  full build, with nulls of each column's type, in the ETL's step, leaving the reviewed package as
+  ported; (b) as (a), each table keeping the columns its build gives it (the step before the
+  review); (c) as (a), also writing the opponent-profile tables empty in a season too early for a
+  profile, where the builders make none; (d) skip a season's tables while any source is missing;
+  (e) fail the ETL.
+- **Decision**: (a); the branch's independent review raised the missing columns against the rule,
+  and the delegating session chose to conform in the step. The reference is `SEASON_STATS_SCHEMAS`
+  in `src/nfl_predictor/utils/polars/season_stats_schema.py`, generated by
+  `.agents/sos_port/season_stats_etl_schema.py` from the full builds of every season of 1999-2026,
+  which have the same columns in the same order and each column one type, apart from
+  `qb_game_logs.week`, written as the published files' `Int32` in every season.
+  `season_stats_build.conform_table` adds a missing column as nulls of its type, in its place, casts
+  a column to the reference's type, and refuses a column a full build lacks rather than dropping it.
+- **Reasoning**: the task asks that a missing current-season source not fail the ETL and that what
+  is skipped be logged, so (d) and (e) are out: (d) would leave the pages without the current season
+  while nflverse catches up each week. Under (b) a file's columns would change as nflverse
+  publishes, against the rule. Conforming in the step keeps the package's parity with
+  `nfl-sos-ratings` as it was proven. The reference comes from real builds because the synthetic
+  test league gives some columns other types than nflverse's files; it cannot go stale silently: a
+  test fails when the builders' columns drift from it, and the generator's `--check` compares its
+  types with the real builds again. Against (c): an absent table already reads as not computed (the
+  pages hide a season's missing section), the case lasts only until the season's second week of
+  games, and an empty table would show an empty section instead. Rows a missing source supplies are
+  still missing (without the snap counts, the passers' games without a dropback), and the warning
+  says so.
+- **Data**: `season_stats_etl_degrade_output.txt` (2025, rerun at `3dfb4c6`): every variant with
+  plays has every table with a full build's columns. Without the official team stats the
+  play-by-play totals stand in; without the weekly player stats the columns they fill are null
+  (the 14 defense box-score columns of the team tables, 11 of `qb_game_logs`, 34 of
+  `qb_combined`); without the snap counts `qb_game_logs` has 635 of the full build's 687 rows,
+  `qb_per_game_stats` and `qb_combined` 78 of 82, and `qb_opponent_profiles` 65 against 64;
+  without the season's play-by-play there is no table. `SEASON_STATS_ETL_PARITY.md` (at
+  `3dfb4c6`): every one of the 280 published tables still matches cell for cell, and
+  `qb_game_logs.week` no longer differs in type from the published files in 2013-2026. Tests in
+  `tests/test_season_stats_build.py`:
+  `test_a_build_missing_a_source_has_every_column_of_a_full_build` (each of the official team
+  stats, weekly player stats and snap counts),
+  `test_a_build_without_player_stats_leaves_their_columns_null`,
+  `test_qb_game_logs_week_has_one_type_with_or_without_snap_counts`,
+  `test_a_season_whose_opponents_played_no_one_else_keeps_every_combined_column`,
+  `test_the_reference_schema_names_every_season_statistics_kind`,
+  `test_a_full_build_has_exactly_the_reference_columns_before_it_is_conformed`,
+  `test_conforming_a_full_build_keeps_every_value`,
+  `test_conforming_refuses_a_column_a_full_build_does_not_have`,
+  `test_a_season_without_a_game_has_no_tables`,
   `test_a_played_season_without_a_source_logs_what_its_tables_lack`,
   `test_a_season_whose_snap_counts_nflverse_publishes_logs_their_absence`,
   `test_a_season_before_nflverse_has_snap_counts_logs_nothing` (nflverse's 2012 snap-count file
   is empty, so the warning starts in 2013).
 - **Feature-value impact**: none.
-- **How to reverse it**: `season_stats_build.log_missing_sources` and the early return in
-  `SeasonStatsBuild.tables`.
+- **How to reverse it**: drop the `conform_table` call in `SeasonStatsBuild.tables` (the tables
+  then keep the builders' columns and types); `season_stats_build.log_missing_sources` and the
+  early return in `SeasonStatsBuild.tables` for the rest.
 - **Review**: not yet reviewed.
 
 ## 7. The season cache keeps a finished season's tables, keyed on what they read
@@ -205,7 +262,13 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   `test_a_new_player_in_the_players_file_keeps_every_finished_season_cached`.
   `tests/test_season_stats_build.py`:
   `test_key_frames_ignore_a_players_file_row_no_source_of_the_season_names` and
-  `test_key_frames_change_when_the_players_file_renames_a_passer_of_the_season`.
+  `test_key_frames_change_when_the_players_file_renames_a_passer_of_the_season`. After the review,
+  a season reused from the cache also drops the game rows built for its key, which only building
+  the season's tables used to release (`RatingsBuild.reuse`;
+  `test_reusing_a_season_drops_the_game_rows_its_key_kept`). `SEASON_STATS_ETL_PARITY.md`,
+  "Season cache round trip" (at `3dfb4c6`): every season of 1999-2026 stored in a season cache,
+  loaded back and reused; the 534 tables written from them are byte-identical to the fresh
+  build's.
 - **Feature-value impact**: none.
 - **How to reverse it**: for (d), build the tables after the season loop of
   `data_collection.collect_all_data` rather than in `RatingsBuild.build`, and drop the season
@@ -229,26 +292,34 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **How to reverse it**: return the frames from `RatingsBuild.key_frames` instead.
 - **Review**: not yet reviewed.
 
-## 9. Determinism: a two-run test; the row-order guard stays as it is
+## 9. Determinism: a two-run test, and the row-order guard over the package as ported
 
 - **What differs**: the task asks for a test that two runs write byte-identical tables, and to
   extend the ETL's row-order guard (`tests/test_etl_determinism.py`) if the new code has
   group-bys.
 - **Options**: for the guard, (a) leave it: the new module has no group-by or unique and lies
   under `utils/polars/`, which the guard already scans; (b) extend it to the season statistics
-  package and add `maintain_order=True` to each of its calls.
-- **Decision**: (a).
+  package and add `maintain_order=True` to each of its calls; (c) extend it to the package and list
+  the package's 33 calls that leave row order open, counted by file, enclosing function, call and
+  problem, so a new one fails the test while the package stays as ported.
+- **Decision**: (c). The step first chose (a); the branch's independent review asked for the guard
+  over the package without editing its calls.
 - **Reasoning**: (b) edits the reviewed package's 33 group-bys and uniques, and its README notes
   that Polars sums a group's floats in another order on another code path, so the change could
-  move published bits. The package fixes its row order by sorting before every reduction (its
-  README, "Determinism"), and the tests below cover its output through the step.
-- **Data**: the guard's own `_order_violations` finds 33 calls in six files of
-  `src/nfl_predictor/season_stats/` and none in `season_stats_build.py`.
+  move published bits. Under (a) a new unordered call in the package would pass unnoticed. The
+  listed calls stay because the package fixes its row order by sorting before every reduction (its
+  README, "Determinism"), the parity audits match the published files bit for bit, and the tests
+  below cover its output through the step.
+- **Data**: `tests/test_etl_determinism.py`: `_ETL_PATHS` takes every module under
+  `src/nfl_predictor/season_stats/`, and `_REVIEWED_UNORDERED_CALLS` lists the 33 calls (24 keys
+  in six files); `test_etl_group_by_and_unique_calls_keep_a_deterministic_order` fails on a call
+  outside the list and on a listed call that is gone (an unordered `group_by` added to `wp_bins.py`
+  failed it). `tests/test_season_stats_build.py`:
   `test_two_runs_write_byte_identical_season_statistics_tables` (the second run fed whole games
   and every other source in another row order). `season_stats_etl_timing_output.txt`: the 280
   tables written with one Polars thread and with 24, in two processes, have the same digest.
 - **Feature-value impact**: none.
-- **How to reverse it**: not applicable.
+- **How to reverse it**: drop the package from `_ETL_PATHS` and the list from the test.
 - **Review**: not yet reviewed.
 
 ## 10. The web empty states say the ETL writes the tables, in words only

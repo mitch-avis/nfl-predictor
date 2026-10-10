@@ -337,18 +337,31 @@ providers can be swapped without touching the routes.
 - A `none` provider for each is the default; the live view then says live data is off. Games
   match on `(season, week, home, away)` after team normalization, like the lines refresh.
 
-**Polling and serving.** A background task in the app's lifespan, started only when a provider
-is configured, polls every `NFLP_LIVE_POLL_SECONDS` (default 60) inside the week's game windows
-only (30 minutes before the first kickoff to the last final), backs off on errors and on the
-provider's rate-limit headers, and keeps the latest snapshot in memory with its time.
+**Polling and serving.** Background tasks in the app's lifespan, each started only when its
+provider is configured and polling only inside the week's game windows (30 minutes before the
+first kickoff to the last final), keep the latest snapshot in memory with its time and back off
+on errors:
+
+- Scores and clock every `NFLP_LIVE_POLL_SECONDS` (default 60).
+- Odds on their own schedule, set by a monthly credit budget, because odds feeds charge per
+  request. The Odds API charges one credit per market and region per request and reports the
+  credits left in its `x-requests-remaining` response header. A 60-second odds poll through one
+  Sunday's games (about 10.5 hours) would make about 630 requests and spend the free plan's 500
+  credits in that one Sunday. The poller instead spreads `NFLP_ODDS_CREDITS_PER_MONTH` (default
+  500, one credit per poll for moneylines in one region) over the game windows left in the month:
+  with Thursday, Sunday and Monday games (about 17.5 hours a week) that is one odds poll about
+  every 9 minutes. It re-reads the credits left after each call, stretches the interval when they
+  run low, never polls faster than `NFLP_LIVE_ODDS_MIN_SECONDS` (default 120), and stops at zero
+  (the live view then shows the last odds with their age).
+
 `GET /api/live?season=&week=` returns per game the state, the pregame and live probabilities,
-the live no-vig market probability, their difference and the age of each part (marked stale
-after three missed polls). The frontend refetches every 30 seconds while a game is live (a strip
-on the Predictions page during game windows, and a `/live` page).
+the live no-vig market probability, their difference and the age of each part (each marked stale
+after three missed polls of its own schedule). The frontend refetches every 30 seconds while a
+game is live (a strip on the Predictions page during game windows, and a `/live` page).
 
 **Configuration.** `NFLP_LIVE_PROVIDER` and `NFLP_LIVE_ODDS_PROVIDER` (both `none` by default),
-`NFLP_LIVE_POLL_SECONDS`, and `NFLP_ODDS_API_KEY` read from the environment only, never logged or
-written to disk.
+`NFLP_LIVE_POLL_SECONDS`, `NFLP_ODDS_CREDITS_PER_MONTH`, `NFLP_LIVE_ODDS_MIN_SECONDS`, and
+`NFLP_ODDS_API_KEY` read from the environment only, never logged or written to disk.
 
 **Validation before anything is shown** (no network needed). Score the in-game probability on
 past seasons' nflverse play-by-play: at every snap, the lead and `game_seconds_remaining`, `mu`
@@ -368,7 +381,8 @@ asks about first):
 2. The odds source. Recommendation: none at first, showing the live probability alone; add The
    Odds API (the-odds-api.com) only if the probability passes its validation. Its free plan was
    500 credits a month at one credit per market and region per request (check before choosing),
-   which covers roughly one moneyline poll every five minutes through the Sunday games only.
+   which the budgeted poller above spreads to one moneyline poll about every 9 minutes through
+   the Thursday, Sunday and Monday games; a paid plan buys a shorter interval.
 3. Whether to keep odds snapshots under `data/live/` for research, such as the pick-time line
    yardstick (a write under `data/`).
 

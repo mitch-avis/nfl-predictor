@@ -238,15 +238,15 @@ def test_pre_week_sos_refits_without_each_team_and_its_previous_season() -> None
 def test_pre_week_week_one_rates_every_team_at_its_preseason_prior() -> None:
     # Arrange
     priors = PriorHistory(_team_games, first_season=_FIRST)
-    season_prior = priors.season_prior(_PRIOR_SEASON)
-    assert season_prior is not None
-    means = prior_means(season_prior, dict.fromkeys(_TEAMS, 0), PRIOR_HORIZON_GAMES, _TEAMS)
     scale = priors.penalties(_PRIOR_SEASON).scrimmage_plays_per_game
 
     # Act
     teams = _history().pre_week(_PRIOR_SEASON, 1, _TEAMS).teams
 
     # Assert
+    season_prior = priors.season_prior(_PRIOR_SEASON)
+    assert season_prior is not None
+    means = prior_means(season_prior, dict.fromkeys(_TEAMS, 0), PRIOR_HORIZON_GAMES, _TEAMS)
     row = teams.filter(pl.col("team") == "CCC").row(0, named=True)
     assert row["offense_rating"] == pytest.approx(means.offense["CCC"] * scale)
     assert row["defense_rating"] == pytest.approx(means.defense["CCC"] * scale)

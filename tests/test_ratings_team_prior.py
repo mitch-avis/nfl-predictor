@@ -384,17 +384,28 @@ def test_games_played_counts_each_teams_games_and_zero_for_the_rest() -> None:
     assert games == {**dict.fromkeys(_TEAMS, 2), "ZZZ": 0}
 
 
+def test_history_penalties_of_the_first_season_are_its_own_cross_validation() -> None:
+    # Arrange
+    league, _ = _carryover_league(3, 0.7, noise=0.3, seed=1)
+    history = _history(league)
+
+    # Act
+    penalties = history.penalties(2000)
+
+    # Assert
+    assert penalties is history.cross_validated_fit(2000)
+
+
 def test_history_penalties_come_from_the_previous_seasons_cross_validation() -> None:
     # Arrange
     league, _ = _carryover_league(3, 0.7, noise=0.3, seed=1)
     history = _history(league)
 
     # Act
-    first, second = history.penalties(2000), history.penalties(2001)
+    penalties = history.penalties(2001)
 
     # Assert
-    assert first is history.cross_validated_fit(2000)
-    assert second is history.cross_validated_fit(2000)
+    assert penalties is history.cross_validated_fit(2000)
 
 
 def test_history_has_no_prior_before_enough_season_pairs() -> None:
@@ -403,10 +414,21 @@ def test_history_has_no_prior_before_enough_season_pairs() -> None:
     history = _history(league)
 
     # Act
-    too_early, first_prior = history.season_prior(2003), history.season_prior(2004)
+    too_early = history.season_prior(2003)
 
     # Assert
     assert too_early is None
+
+
+def test_history_first_prior_pools_three_pairs_and_the_previous_published_fit() -> None:
+    # Arrange
+    league, _ = _carryover_league(5, 0.7, noise=0.3, seed=2)
+    history = _history(league)
+
+    # Act
+    first_prior = history.season_prior(2004)
+
+    # Assert
     assert first_prior is not None
     assert first_prior.slopes.pairs == MIN_CARRYOVER_PAIRS
     assert first_prior.offense == history.published_scrimmage(2003).offense
@@ -416,10 +438,11 @@ def test_history_reads_only_the_seasons_before_the_one_rated() -> None:
     # Arrange
     league, _ = _carryover_league(5, 0.7, noise=0.3, seed=2)
     earlier = {season: logs for season, logs in league.items() if season < 2004}
-    full, restricted = _history(league), PriorHistory(earlier.__getitem__, first_season=2000)
+    expected = _history(league).season_prior(2004)
+    restricted = PriorHistory(earlier.__getitem__, first_season=2000)
 
     # Act
-    expected, actual = full.season_prior(2004), restricted.season_prior(2004)
+    actual = restricted.season_prior(2004)
 
     # Assert
     assert actual == expected
@@ -727,11 +750,10 @@ def test_history_first_season_defaults_to_the_first_play_by_play_season() -> Non
     history = PriorHistory(renumbered.__getitem__)
 
     # Act
-    first, second = history.penalties(1999), history.penalties(2000)
+    penalties = history.penalties(1999)
 
     # Assert
-    assert first is history.cross_validated_fit(1999)
-    assert second is history.cross_validated_fit(1999)
+    assert penalties is history.cross_validated_fit(1999)
 
 
 def test_history_reports_its_first_season() -> None:

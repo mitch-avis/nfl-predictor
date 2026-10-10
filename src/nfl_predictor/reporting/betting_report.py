@@ -11,8 +11,8 @@ Given the floor's sigma, the home edge is split in two: ``market_home_prob_sprea
 floor's curve at the market's margin, ``Phi(-home_spread / sigma)``;
 ``edge_beyond_spread_home_prob`` (the model's probability minus that) is what the model adds
 beyond the spread; and ``spread_moneyline_gap_home_prob`` (that minus the no-vig moneyline
-probability) is the gap between the spread and the moneyline, which carries no model
-information. The two parts sum to ``edge_home_prob``. The confidence score and the action label
+probability) is the gap between the spread and the moneyline, with no information from the
+model's margin. The two parts sum to ``edge_home_prob``. The confidence score and the action label
 still read the whole edge.
 """
 
@@ -121,7 +121,7 @@ def build_betting_report(
 ) -> pd.DataFrame:
     """Build a betting-oriented report from a predictions table.
 
-    Expects the output schema from ml_model_predict.predict_week_blended (or margin_total).
+    Expects the output schema of ``ml_model_predict.predict_week_margin_total``.
 
     The report focuses on moneyline value signals (probability calibration) and also
     includes simple spread/total deltas (without claiming cover probabilities).

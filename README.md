@@ -1262,10 +1262,11 @@ games.
   responses. Published per team as `adj_off_pass_epa_snap`, `adj_off_rush_epa_snap`,
   `adj_def_pass_epa_snap`, `adj_def_rush_epa_snap`, a point-margin SRS companion (`adj_srs`), a
   special-teams rating (`st_rating`), a standardized display composite
-  (`adj_strength_composite`), and the games behind the solve (`strength_games_played`).
-  A **higher** `adj_def_*` value means a **better** defense: the solve models a team-game as
-  `offense[team] - defense[opponent]`, so the defense coefficient is what suppresses the
-  opponent's output.
+  (`adj_strength_composite`), and the games behind the solve (`strength_games_played`, per side
+  only: the two teams have almost always played the same number of games, so its diff would be
+  zero outside bye weeks). A **higher** `adj_def_*` value means a **better** defense: the solve
+  models a team-game as `offense[team] - defense[opponent]`, so the defense coefficient is what
+  suppresses the opponent's output.
 - Schedule strength in two lenses (`constants.SCHEDULE_STRENGTH_STATS`): `sos_played_adj` and
   `sos_remaining_adj`, the mean pre-week composite of the opponents already faced and still to
   come; and `sos_played_raw`, the one-hop companion that profiles each faced opponent from only

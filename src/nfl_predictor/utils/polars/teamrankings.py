@@ -1146,7 +1146,8 @@ def remove_diff_columns(df: pl.DataFrame) -> pl.DataFrame:
 def get_stats_for_diff() -> list[str]:
     """Get list of stats that should have differentials calculated.
 
-    Excludes opponent stats that are duplicates of their non-opponent counterparts.
+    Excludes opponent stats that are duplicates of their non-opponent counterparts, and the
+    stats published per side only (`constants.STATS_WITHOUT_DIFF`).
 
     Returns:
         List of stat names (without prefix) to calculate diffs for
@@ -1176,8 +1177,8 @@ def get_stats_for_diff() -> list[str]:
     # Trend feature columns
     all_stats.extend(constants.TREND_FEATURE_COLUMNS)
 
-    # Deduplicate
-    seen = set()
+    # Deduplicate, leaving out the stats published per side only
+    seen = set(constants.STATS_WITHOUT_DIFF)
     unique_stats = []
     for stat in all_stats:
         if stat not in seen:

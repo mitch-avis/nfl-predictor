@@ -104,8 +104,11 @@ def build_final_column_order() -> list[str]:
     # 5. home_opponent_<stat> columns (alphabetically)
     columns.extend([f"home_{s}" for s in opponent_stats_sorted])
 
-    # 6. diff columns (all stats, alphabetically)
-    all_stats_for_diff = non_opponent_stats_sorted + opponent_stats_sorted
+    # 6. diff columns (every stat but those published per side only, alphabetically)
+    without_diff = set(constants.STATS_WITHOUT_DIFF)
+    all_stats_for_diff = [
+        s for s in non_opponent_stats_sorted + opponent_stats_sorted if s not in without_diff
+    ]
     columns.extend([f"{s}_diff" for s in sorted(all_stats_for_diff)])
 
     # 6b. Game-level feature columns: the own Elo's home win probabilities.

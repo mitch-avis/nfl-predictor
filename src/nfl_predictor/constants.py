@@ -896,7 +896,8 @@ PRUNED_FEATURE_COLUMNS = [
     "away_games_played",
     "home_games_played",
     # The two teams in a game have almost always played the same number of games, so the diff
-    # is a constant zero outside bye weeks.
+    # is a constant zero outside bye weeks. The ETL does not publish it (STATS_WITHOUT_DIFF);
+    # it stays pruned so a dataset that still carries it trains the same way.
     "strength_games_played_diff",
     # Equal to the schedule's `division` flag from the 2002 realignment on, and derived from
     # the current division map before it, so the schedule flag is the one to keep.
@@ -1402,6 +1403,11 @@ SCHEDULE_STRENGTH_STATS = [
 
 # Every per-team strength column published in the final schema.
 ADJUSTED_STRENGTH_STATS = [*STRENGTH_TEAM_STATS, *SCHEDULE_STRENGTH_STATS]
+
+# Stats published per side without the away-minus-home `_diff` companion: the two teams in a
+# game have almost always played the same number of games, so that diff is a constant zero
+# outside bye weeks.
+STATS_WITHOUT_DIFF = ["strength_games_played"]
 
 # Columns the weekly snapshot builder emits, keyed by team. `adj_hfa` is the shared
 # home-field term: one league-wide value per (season, week), so it is deliberately

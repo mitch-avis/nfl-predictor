@@ -1831,6 +1831,8 @@ def test_red_zone_trips_count_drives_not_snaps() -> None:
                 posteam="KC",
                 defteam="BUF",
                 play_type="run",
+                rush=1,
+                rush_attempt=1,
                 fixed_drive=1,
                 fixed_drive_result="Touchdown",
                 drive_inside20=1.0,
@@ -1840,6 +1842,8 @@ def test_red_zone_trips_count_drives_not_snaps() -> None:
                 posteam="KC",
                 defteam="BUF",
                 play_type="run",
+                rush=1,
+                rush_attempt=1,
                 fixed_drive=1,
                 fixed_drive_result="Touchdown",
                 drive_inside20=1.0,
@@ -1882,6 +1886,8 @@ def test_red_zone_trip_counted_once_per_drive_without_a_touchdown() -> None:
                 posteam="SF",
                 defteam="DAL",
                 play_type="run",
+                rush=1,
+                rush_attempt=1,
                 fixed_drive=3,
                 fixed_drive_result="Turnover",
                 drive_inside20=1.0,
@@ -2017,6 +2023,120 @@ def test_a_drive_is_one_red_zone_trip_when_any_of_its_plays_carries_the_flag() -
     assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (1, 1)
     buf = _row_for(result, "BUF")
     assert (buf["red_zone_trips_allowed"], buf["red_zone_td_drives_allowed"]) == (1, 1)
+
+
+@pytest.mark.parametrize(
+    "play",
+    [
+        pytest.param({"play_type": "kickoff", "special": 1}, id="kickoff-the-kicking-team-kept"),
+        pytest.param({"play_type": "extra_point", "special": 1}, id="extra-point-alone"),
+        pytest.param(
+            {"play_type": "run", "rush": 1, "rush_attempt": 1, "two_point_attempt": 1},
+            id="two-point-try-alone",
+        ),
+        pytest.param({"play_type": "field_goal", "special": 1}, id="field-goal-alone"),
+        pytest.param({"play_type": "no_play", "penalty": 1}, id="penalty-without-a-snap"),
+    ],
+)
+def test_a_flagged_drive_group_without_an_offensive_snap_is_no_red_zone_trip(
+    play: dict[str, Any],
+) -> None:
+    """A flagged drive group in which the team ran no scrimmage snap is not its trip."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                fixed_drive=5,
+                fixed_drive_result="Touchdown",
+                drive_inside20=1.0,
+                **play,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    kc = _row_for(result, "KC")
+    assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (0, 0)
+    buf = _row_for(result, "BUF")
+    assert (buf["red_zone_trips_allowed"], buf["red_zone_td_drives_allowed"]) == (0, 0)
+
+
+def test_a_scramble_filed_as_a_run_play_is_the_snap_that_makes_a_red_zone_trip() -> None:
+    """A scramble filed as a run play without the rush flag is a snap, so the drive is a trip."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="LAR",
+                defteam="MIN",
+                play_type="run",
+                qb_scramble=1,
+                fixed_drive=15,
+                fixed_drive_result="Touchdown",
+                drive_inside20=1.0,
+                yardline_100=12.0,
+                td_team="LAR",
+            ),
+            _play(
+                posteam="LAR",
+                defteam="MIN",
+                play_type="extra_point",
+                special=1,
+                qb_scramble=0,
+                fixed_drive=15,
+                fixed_drive_result="Touchdown",
+                drive_inside20=1.0,
+                yardline_100=2.0,
+            ),
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    lar = _row_for(result, "LAR")
+    assert (lar["red_zone_trips"], lar["red_zone_td_drives"]) == (1, 1)
+
+
+def test_the_drive_flag_and_the_snap_may_sit_on_different_plays() -> None:
+    """A drive is a trip when one of its plays carries the flag and another is the snap."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="kickoff",
+                special=1,
+                fixed_drive=7,
+                fixed_drive_result="Field goal",
+                drive_inside20=1.0,
+            ),
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                rush=1,
+                rush_attempt=1,
+                fixed_drive=7,
+                fixed_drive_result="Field goal",
+                drive_inside20=0.0,
+            ),
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    kc = _row_for(result, "KC")
+    assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (1, 0)
 
 
 def test_red_zone_trips_are_zero_without_the_drive_flag_column() -> None:

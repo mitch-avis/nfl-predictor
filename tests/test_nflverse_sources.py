@@ -246,6 +246,30 @@ def test_conforming_a_frame_without_any_requested_column_keeps_its_rows(
     assert conformed.height == rows
 
 
+@pytest.mark.parametrize("value", [0.5, -2.5], ids=["half", "negative-half"])
+def test_conforming_a_fractional_float_into_an_integer_column_is_an_error(value: float) -> None:
+    # Arrange
+    schema = pl.Schema({"attempts": pl.Int64()})
+    frame = pl.DataFrame({"attempts": [30.0, value]})
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="attempts"):
+        nflverse_sources.conform(frame, schema)
+
+
+def test_conforming_whole_floats_into_an_integer_column_keeps_their_values() -> None:
+    # Arrange
+    schema = pl.Schema({"attempts": pl.Int64()})
+    frame = pl.DataFrame({"attempts": [30.0, None, -2.0]})
+
+    # Act
+    conformed = nflverse_sources.conform(frame, schema)
+
+    # Assert
+    assert conformed.get_column("attempts").to_list() == [30, None, -2]
+    assert conformed.schema == schema
+
+
 def test_no_seasons_give_an_empty_frame_with_every_requested_column(tmp_path: Path) -> None:
     # Act
     rosters = nflverse_sources.load_rosters([], cache_dir=tmp_path, current_season=CURRENT)

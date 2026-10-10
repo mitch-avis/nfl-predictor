@@ -61,12 +61,39 @@ DOWNLOAD_ERRORS: tuple[type[Exception], ...] = (ConnectionError, ValueError)
 _PLAYERS_CACHE_NAME = "players.parquet"
 
 
+def _require_whole_numbers(frame: pl.DataFrame, schema: pl.Schema) -> None:
+    """Raise if a float column bound for a whole-number column holds a non-whole value.
+
+    Polars casts 0.5 to 0 without complaint, so a revised source that started publishing
+    fractions in a count would otherwise be truncated silently.
+
+    Raises:
+        ValueError: Naming the column and one offending value.
+
+    """
+    for column, dtype in schema.items():
+        if not (dtype.is_integer() and frame.schema[column].is_float()):
+            continue
+        values = frame.get_column(column).drop_nulls()
+        fractional = values.filter((values - values.floor()) != 0)
+        if not fractional.is_empty():
+            msg = (
+                f"column {column!r} holds {fractional[0]!r}, which is not a whole number, "
+                f"for the whole-number type {dtype}"
+            )
+            raise ValueError(msg)
+
+
 def conform(frame: pl.DataFrame, schema: pl.Schema) -> pl.DataFrame:
     """Return ``frame`` with exactly the columns of ``schema``, in order and with its types.
 
     A column ``frame`` lacks is added as nulls; a column ``schema`` does not name is dropped. The
     nulls are added before the selection so they take ``frame``'s height: a selection made of
     literals alone would give one row, whatever the frame held.
+
+    Raises:
+        ValueError: If a float column bound for a whole-number type holds a fraction.
+
     """
     missing = [
         pl.lit(None, dtype=dtype).alias(column)
@@ -75,6 +102,7 @@ def conform(frame: pl.DataFrame, schema: pl.Schema) -> pl.DataFrame:
     ]
     if missing:
         frame = frame.with_columns(missing)
+    _require_whole_numbers(frame, schema)
     return frame.select(pl.col(column).cast(dtype) for column, dtype in schema.items())
 
 

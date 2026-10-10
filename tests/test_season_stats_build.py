@@ -262,27 +262,29 @@ class _Response:
 
 
 @pytest.fixture
-def empty_nflreadpy_cache() -> Generator[None]:
-    """Start and end with nflreadpy's in-memory cache empty."""
-    nflreadpy.clear_cache()
-    yield
-    nflreadpy.clear_cache()
+def downloads(monkeypatch: pytest.MonkeyPatch) -> Generator[list[str]]:
+    """Record every file nflreadpy downloads, serving the fixture's 2024 weekly team stats.
 
-
-@pytest.mark.usefixtures("empty_nflreadpy_cache")
-def test_the_current_seasons_team_stats_file_is_downloaded_once_for_both_loaders(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """The ETL's team-stat loader and the official team stats ask nflreadpy for one file."""
-    # Arrange
+    nflreadpy's in-memory cache starts and ends empty.
+    """
     content = (FIXTURES / "2024_games_team_stats.parquet").read_bytes()
-    downloads: list[str] = []
+    requested: list[str] = []
 
     def get(url: str, **_kwargs: object) -> _Response:
-        downloads.append(url)
+        requested.append(url)
         return _Response(content)
 
     monkeypatch.setattr(get_downloader().session, "get", get)
+    nflreadpy.clear_cache()
+    yield requested
+    nflreadpy.clear_cache()
+
+
+def test_the_current_seasons_team_stats_file_is_downloaded_once_for_both_loaders(
+    downloads: list[str], tmp_path: Path
+) -> None:
+    """The ETL's team-stat loader and the official team stats ask nflreadpy for one file."""
+    # Arrange
     loaders.load_team_stats([2024], cache_dir=tmp_path, current_season=2024)
 
     # Act
@@ -292,6 +294,24 @@ def test_the_current_seasons_team_stats_file_is_downloaded_once_for_both_loaders
 
     # Assert
     assert len(downloads) == 1
+    assert official.height == 4
+
+
+def test_the_team_stats_file_is_downloaded_again_once_nflreadpy_forgets_it(
+    downloads: list[str], tmp_path: Path
+) -> None:
+    """The control of the test above: without nflreadpy's cache, each loader downloads the file."""
+    # Arrange
+    loaders.load_team_stats([2024], cache_dir=tmp_path, current_season=2024)
+    nflreadpy.clear_cache()
+
+    # Act
+    official = season_stats_sources.load_official_team_stats(
+        [2024], cache_dir=tmp_path, current_season=2024
+    )
+
+    # Assert
+    assert len(downloads) == 2
     assert official.height == 4
 
 

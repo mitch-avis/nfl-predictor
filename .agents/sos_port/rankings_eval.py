@@ -562,12 +562,26 @@ def _window_table(window: dict[str, Any], names: list[str]) -> list[str]:
     return lines
 
 
+def _weight_runs(weights: list[tuple[int, float]]) -> str:
+    """Return the seasons' weights as runs of equal weight: ``0.7 in 2008-2009, 0.5 in 2010``."""
+    runs: list[tuple[float, int, int]] = []
+    for season, weight in sorted(weights):
+        if runs and runs[-1][0] == weight and runs[-1][2] == season - 1:
+            runs[-1] = (weight, runs[-1][1], season)
+        else:
+            runs.append((weight, season, season))
+    return ", ".join(
+        f"{weight:.1f} in {first}" + (f"-{last}" if last != first else "")
+        for weight, first, last in runs
+    )
+
+
 def _supplement_lines(supplement: dict[str, Any], names: list[str]) -> list[str]:
     """Return the supplement: the model rating on predictions averaged over several seeds."""
     seeds = ", ".join(str(seed) for seed in supplement["seeds"])
     overall = next(window for window in supplement["windows"] if window["last_week"] is None)
-    weights = ", ".join(
-        f"{season} {weight:.1f}" for season, weight in sorted(supplement["blend_weights"].items())
+    weights = _weight_runs(
+        [(int(season), weight) for season, weight in supplement["blend_weights"].items()]
     )
     return [
         "",

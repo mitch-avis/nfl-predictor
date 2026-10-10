@@ -57,7 +57,6 @@ class Settings(BaseSettings):
         jwt_secret: Secret used to sign session tokens; generated into ``state_dir`` when unset.
         cookie_secure: Whether the session cookie carries the ``Secure`` flag.
         session_hours: Session token lifetime in hours.
-        sos_data_dir: Parquet outputs of the sibling ``nfl-sos-ratings`` project.
         web_dist: Built frontend directory (defaults to ``root_dir/web/dist``).
         python_executable: Interpreter used to launch jobs (defaults to ``root_dir/.venv``).
         host: Bind address for ``python -m nfl_predictor.api``.
@@ -76,7 +75,6 @@ class Settings(BaseSettings):
     jwt_secret: str | None = None
     cookie_secure: bool = False
     session_hours: int = 24 * 7
-    sos_data_dir: Path | None = None
     web_dist: Path | None = None
     python_executable: Path | None = None
     host: str = "127.0.0.1"
@@ -92,7 +90,6 @@ class Settings(BaseSettings):
         self.reports_dir = (self.reports_dir or root / "reports").resolve()
         self.state_dir = (self.state_dir or self.data_dir / "web").resolve()
         self.db_path = (self.db_path or self.state_dir / "app.db").resolve()
-        self.sos_data_dir = (self.sos_data_dir or root / "nfl-sos-ratings" / "data").resolve()
         self.web_dist = (self.web_dist or root / "web" / "dist").resolve()
         # The venv interpreter is a symlink to the base Python; resolving it would launch jobs
         # outside the virtual environment, so this path is made absolute but never resolved.
@@ -130,9 +127,13 @@ class Settings(BaseSettings):
         return _filled(self.web_dist, "web_dist")
 
     @property
-    def sos_data_path(self) -> Path:
-        """Return the resolved nfl-sos-ratings data directory."""
-        return _filled(self.sos_data_dir, "sos_data_dir")
+    def ratings_path(self) -> Path:
+        """Return the directory of the per-season ratings and statistics tables.
+
+        The ETL writes each season's tables there as ``{season}_{kind}.parquet``; it always sits
+        inside the data directory, so pointing ``data_dir`` at another tree moves it too.
+        """
+        return self.data_path / "ratings"
 
     @property
     def python_path(self) -> Path:

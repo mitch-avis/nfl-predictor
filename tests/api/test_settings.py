@@ -22,7 +22,7 @@ def test_paths_default_relative_to_root(tmp_path: Path) -> None:
     assert settings.state_path == tmp_path / "data" / "web"
     assert settings.database_path == tmp_path / "data" / "web" / "app.db"
     assert settings.web_dist_path == tmp_path / "web" / "dist"
-    assert settings.sos_data_path == tmp_path / "nfl-sos-ratings" / "data"
+    assert settings.ratings_path == tmp_path / "data" / "ratings"
     assert settings.python_path == tmp_path / ".venv" / "bin" / Path(sys.executable).name
 
 
@@ -34,6 +34,7 @@ def test_explicit_paths_win(tmp_path: Path) -> None:
     # Assert
     assert settings.data_path == tmp_path / "elsewhere"
     assert settings.state_path == tmp_path / "elsewhere" / "web"
+    assert settings.ratings_path == tmp_path / "elsewhere" / "ratings"
 
 
 def test_environment_overrides(tmp_path: Path, monkeypatch) -> None:

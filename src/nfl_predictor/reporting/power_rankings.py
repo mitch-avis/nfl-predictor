@@ -43,6 +43,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -51,8 +52,12 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.ml import ml_model_core
 from nfl_predictor.ml.ml_model_core import margin_to_home_win_prob
+from nfl_predictor.reporting import rating_sources
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars.strength_snapshot import COMPOSITE_WEIGHTS
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # Internal column used to carry per-game fit weights; never published.
 _WEIGHT_COLUMN = "__fit_weight"
@@ -617,6 +622,63 @@ def _bradley_terry_power_rankings(
 
 
 @dataclass(frozen=True)
+class TeamRatings:
+    """One week's team ratings in points from a rating source (`rating_sources`).
+
+    Attributes:
+        ratings: Each rated team's rating in points against an average team.
+        source: The method that produced them (``ported``, ``model`` or ``blend``).
+        rating_week: The week whose games they come before.
+        blend_weight: The ported rating's weight, for a blend.
+
+    """
+
+    ratings: Mapping[str, float]
+    source: str
+    rating_week: int
+    blend_weight: float | None = None
+
+
+def _points_power_rankings(
+    team_ratings: TeamRatings,
+    current_records: pd.DataFrame,
+    *,
+    season: int,
+    through_week: int,
+) -> pd.DataFrame:
+    """Rank teams on a rating in points and attach their records.
+
+    The rating's distance from the rated teams' mean is turned into a win probability against
+    an average team on a neutral field through the model's margin curve and placed on the two
+    display scales, as for the composite. A team with a record but no rating is kept, with null
+    ratings, and ranked last.
+    """
+    ratings = {str(team): float(value) for team, value in team_ratings.ratings.items()}
+    team_universe = sorted(_record_teams(current_records) | set(ratings))
+    unrated = [team for team in team_universe if team not in ratings]
+    if unrated:
+        log.warning("No %s rating for %s; ranked last.", team_ratings.source, ", ".join(unrated))
+    pr = _team_frame(team_universe)
+    rating = pr["team_abbr"].map(ratings).to_numpy(dtype=float)
+    points = rating - float(np.nanmean(rating)) if ratings else rating
+    p_vs_average = np.asarray(margin_to_home_win_prob(points), dtype=float)
+    pr["team_rating"] = rating
+    pr["points_vs_average"] = np.round(points, 2)
+    pr["power_rating_1_10"] = np.round(win_prob_to_power_1_10(p_vs_average), 2)
+    pr["power_rating_0_10"] = np.round(win_prob_to_power_0_10(p_vs_average), 2)
+    pr = _with_records(pr, current_records)
+    pr["season"] = int(season)
+    pr["through_week"] = int(through_week)
+    pr["rating_week"] = int(team_ratings.rating_week)
+    pr["rating_source"] = team_ratings.source
+    if team_ratings.blend_weight is not None:
+        pr["blend_weight"] = float(team_ratings.blend_weight)
+    pr = pr.sort_values(["team_rating", "team_abbr"], ascending=[False, True], na_position="last")
+    pr["rank"] = np.arange(1, len(pr) + 1)
+    return pr
+
+
+@dataclass(frozen=True)
 class LeagueStandings:
     """The league through a week: each team's record and the remaining games' probabilities."""
 
@@ -631,6 +693,7 @@ def build_power_rankings_and_standings(
     *,
     games_for_ratings: pd.DataFrame | None = None,
     strength_snapshot: pd.DataFrame | None = None,
+    team_ratings: TeamRatings | None = None,
 ) -> PowerRatingsResult:
     """Build power rankings and projected standings tables.
 
@@ -642,30 +705,40 @@ def build_power_rankings_and_standings(
     - ``games_for_ratings``: games with a ``p_home`` target for the Bradley-Terry fit. A
       `fit_weight` column is used as per-game sample weights, which is how the caller
       down-weights older seasons.
+    - ``team_ratings``: one week's ratings in points from a rating source (the ported, model
+      or blend rating). Teams are ranked on them, published as ``team_rating`` with
+      ``points_vs_average``, the scales, ``rating_week`` and ``rating_source``.
 
-    Projected standings are the same under both: current record plus the model's win
+    Projected standings are the same under every source: current record plus the model's win
     probabilities for the remaining games.
 
     Raises:
-        ValueError: If neither or both ratings sources are given.
+        ValueError: If no ratings source or more than one is given.
 
     """
     season = standings.season
     through_week = standings.through_week
     current_records = standings.current_records
     future_games_with_probs = standings.future_games_with_probs
-    if strength_snapshot is not None and games_for_ratings is None:
+    only_snapshot = games_for_ratings is None and team_ratings is None
+    only_games = strength_snapshot is None and team_ratings is None
+    only_ratings = games_for_ratings is None and strength_snapshot is None
+    if strength_snapshot is not None and only_snapshot:
         pr = _composite_power_rankings(
             strength_snapshot, current_records, season=season, through_week=through_week
         )
-    elif games_for_ratings is not None and strength_snapshot is None:
+    elif games_for_ratings is not None and only_games:
         pr = _bradley_terry_power_rankings(
             games_for_ratings, current_records, season=season, through_week=through_week
         )
+    elif team_ratings is not None and only_ratings:
+        pr = _points_power_rankings(
+            team_ratings, current_records, season=season, through_week=through_week
+        )
     else:
         msg = (
-            "Pass exactly one ratings source: games_for_ratings (Bradley-Terry) or "
-            "strength_snapshot (adjusted composite)."
+            "Pass exactly one ratings source: games_for_ratings (Bradley-Terry), "
+            "strength_snapshot (adjusted composite) or team_ratings (a rating in points)."
         )
         raise ValueError(msg)
 
@@ -714,10 +787,16 @@ _RATINGS_COLUMNS = (
 )
 
 # Ranking methods, default first.
-RANKING_METHODS = ("composite", "bradley_terry")
+RANKING_METHODS = ("composite", "bradley_terry", "ported", "model", "blend")
+
+# The methods that rank on a rating in points from `rating_sources`.
+POINTS_METHODS = ("ported", "model", "blend")
 
 # Where the ETL writes the per-team weekly strength snapshots the composite method reads.
 DEFAULT_STRENGTH_SNAPSHOTS = constants.DATA_PATH / f"{constants.STRENGTH_SNAPSHOTS_NAME}.csv"
+
+# Where the ETL publishes the ported ratings tables the ported, model and blend methods read.
+DEFAULT_RATINGS_DIR = constants.DATA_PATH / constants.RATINGS_DIRNAME
 
 # Scores are read as numbers explicitly. The ETL writes the newest games first, so the rows
 # Polars samples to infer types can all be unplayed, and scores inferred as text compare
@@ -735,7 +814,7 @@ _SNAPSHOT_KEY_DTYPES: dict[str, pl.DataType | type[pl.DataType]] = {
 }
 
 
-class StrengthSnapshotUnavailableError(ValueError):
+class StrengthSnapshotUnavailableError(rating_sources.RatingSourceUnavailableError):
     """The strength snapshot a composite ranking needs cannot be read."""
 
 
@@ -743,8 +822,9 @@ class StrengthSnapshotUnavailableError(ValueError):
 class RankingOptions:
     """How a ranking is computed. Build it with `resolve_ranking_options`.
 
-    The Bradley-Terry fields are ignored by the composite method, and the snapshot path
-    is ignored by the Bradley-Terry method.
+    Each method reads only its own fields: the Bradley-Terry fields, the snapshot path
+    (composite), the ratings directory (ported, and model and blend in week 1), the
+    walk-forward predictions (model and blend) and the blend weight.
     """
 
     method: str = RANKING_METHODS[0]
@@ -754,6 +834,9 @@ class RankingOptions:
     include_future: bool = False
     ratings_min_season: int | None = None
     strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS
+    ratings_dir: Path = DEFAULT_RATINGS_DIR
+    model_predictions: tuple[Path, ...] = ()
+    blend_weight: float | None = None
 
 
 def _pl_to_pandas(df: pl.DataFrame) -> pd.DataFrame:
@@ -1111,6 +1194,29 @@ class RankingRequest:
     include_future: bool = False
     ratings_min_season: int | None = None
     strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS
+    ratings_dir: Path = DEFAULT_RATINGS_DIR
+    model_predictions: tuple[Path, ...] = ()
+    blend_weight: float | None = None
+
+
+def _check_points_method(request: RankingRequest) -> None:
+    """Refuse a model or blend ranking without its inputs.
+
+    Raises:
+        ValueError: If the model or blend method has no walk-forward predictions, or the blend
+            no weight between 0 and 1.
+
+    """
+    if request.method in {"model", "blend"} and not request.model_predictions:
+        msg = (
+            f"--method {request.method} needs walk-forward predictions (--model-predictions): "
+            "a run directory or fold checkpoint directory per source."
+        )
+        raise ValueError(msg)
+    weight = request.blend_weight
+    if request.method == "blend" and (weight is None or not 0.0 <= weight <= 1.0):
+        msg = f"--method blend needs a blend weight between 0 and 1 (--blend-weight), got {weight}"
+        raise ValueError(msg)
 
 
 def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
@@ -1122,19 +1228,22 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
     equally, binary targets, future model probabilities in the fit).
 
     Raises:
-        ValueError: For an unknown method, or for the legacy fit combined with the
-            composite.
+        ValueError: For an unknown method, for the legacy fit combined with another method
+            than Bradley-Terry, or for a model or blend ranking without its inputs.
 
     """
     method = request.method
     if method is not None and method not in RANKING_METHODS:
         msg = f"Unknown ranking method {method!r}; expected one of {', '.join(RANKING_METHODS)}."
         raise ValueError(msg)
+    _check_points_method(request)
+    ratings_dir = Path(request.ratings_dir)
+    model_predictions = tuple(Path(path) for path in request.model_predictions)
     if request.legacy_franchise_fit:
-        if method == "composite":
+        if method is not None and method != "bradley_terry":
             msg = (
                 "--legacy-franchise-fit is a Bradley-Terry fit and cannot be combined with "
-                "--method composite."
+                f"--method {method}."
             )
             raise ValueError(msg)
         log.info("Legacy franchise fit requested; the other --ratings-* options are ignored.")
@@ -1146,6 +1255,9 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
             include_future=True,
             ratings_min_season=request.ratings_min_season,
             strength_snapshots=Path(request.strength_snapshots),
+            ratings_dir=ratings_dir,
+            model_predictions=model_predictions,
+            blend_weight=request.blend_weight,
         )
     return RankingOptions(
         method=method or RANKING_METHODS[0],
@@ -1155,6 +1267,9 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
         include_future=bool(request.include_future),
         ratings_min_season=request.ratings_min_season,
         strength_snapshots=Path(request.strength_snapshots),
+        ratings_dir=ratings_dir,
+        model_predictions=model_predictions,
+        blend_weight=request.blend_weight,
     )
 
 
@@ -1171,12 +1286,23 @@ def compute_power_rankings(
         StrengthSnapshotUnavailableError: For the composite method, when the snapshot for
             the week after ``through_week`` cannot be read. This is checked before the
             model predicts anything.
+        rating_sources.RatingSourceUnavailableError: For the ported, model and blend methods,
+            when their files cannot rate the week after ``through_week``, also checked first.
 
     """
     snapshot = None
+    team_ratings = None
     if options.method == "composite":
         snapshot = load_strength_snapshot(
             options.strength_snapshots, season=inputs.season, through_week=inputs.through_week
+        )
+    elif options.method in POINTS_METHODS:
+        team_ratings = load_team_ratings(inputs, options)
+        log.info(
+            "Ranking on the %s rating: season %d, before week %d",
+            team_ratings.source,
+            inputs.season,
+            team_ratings.rating_week,
         )
 
     current_records = _load_current_records(
@@ -1196,9 +1322,126 @@ def compute_power_rankings(
             options.strength_snapshots,
         )
         return build_power_rankings_and_standings(standings, strength_snapshot=snapshot)
+    if team_ratings is not None:
+        return build_power_rankings_and_standings(standings, team_ratings=team_ratings)
 
     games_for_ratings = _build_games_for_ratings(inputs, options, future_games)
     return build_power_rankings_and_standings(standings, games_for_ratings=games_for_ratings)
+
+
+def load_team_ratings(inputs: RankingInputs, options: RankingOptions) -> TeamRatings:
+    """Return the ported, model or blend rating of every team before the week after the inputs'.
+
+    - ported: `rating_sources.ported_ratings_for_week` from ``options.ratings_dir`` and the game
+      rows in ``inputs.data_ml``;
+    - model: `rating_sources.model_ratings_for_week` from the walk-forward predictions in
+      ``options.model_predictions``, which must cover every completed regular-season game of
+      the season before the week (of the previous season, for week 1, whose carryover factor
+      comes from the ported ratings);
+    - blend: ``blend_weight * ported + (1 - blend_weight) * model`` for the teams both rate.
+
+    Raises:
+        rating_sources.RatingSourceUnavailableError: If a source cannot rate the week.
+        ValueError: If ``options.method`` is not one of `POINTS_METHODS`, or a blend has no
+            weight.
+
+    """
+    if options.method not in POINTS_METHODS:
+        msg = f"{options.method!r} is not a rating-in-points method"
+        raise ValueError(msg)
+    weight = options.blend_weight
+    if options.method == "blend" and weight is None:
+        msg = "a blend ranking needs its blend weight"
+        raise ValueError(msg)
+    week = inputs.through_week + 1
+    ported = None
+    if options.method in {"ported", "blend"}:
+        ported = rating_sources.ported_ratings_for_week(
+            options.ratings_dir, inputs.data_ml, season=inputs.season, week=week
+        )
+        if options.method == "ported":
+            return TeamRatings(ratings=ported, source="ported", rating_week=week)
+    model = _model_week_ratings(inputs, options, week)
+    if ported is None or weight is None:
+        return TeamRatings(ratings=model, source="model", rating_week=week)
+    blended = {
+        team: weight * ported[team] + (1.0 - weight) * model[team]
+        for team in sorted(set(ported) & set(model))
+    }
+    return TeamRatings(ratings=blended, source="blend", rating_week=week, blend_weight=weight)
+
+
+def _model_week_ratings(
+    inputs: RankingInputs, options: RankingOptions, week: int
+) -> dict[str, float]:
+    """Return the model rating before ``week`` from the walk-forward predictions."""
+    predictions = rating_sources.read_predictions(list(options.model_predictions))
+    fits_this_season = week >= rating_sources.FIRST_FITTED_WEEK
+    _check_prediction_coverage(
+        predictions,
+        inputs.data_schedule,
+        season=inputs.season if fits_this_season else inputs.season - 1,
+        before_week=week if fits_this_season else None,
+    )
+    carryover = None
+    if not fits_this_season:
+        carryover = rating_sources.carryover_factor(
+            rating_sources.ported_ratings_for_week(
+                options.ratings_dir, inputs.data_ml, season=inputs.season, week=1
+            ),
+            rating_sources.season_ported_ratings(options.ratings_dir, inputs.season - 1),
+        )
+    return rating_sources.model_ratings_for_week(
+        predictions,
+        season=inputs.season,
+        week=week,
+        teams=_season_teams(inputs.data_schedule, inputs.season),
+        carryover=carryover,
+    )
+
+
+def _regular_season_rows(schedule_path: Path, season: int) -> pl.DataFrame:
+    """Return the season's regular-season rows of the schedule, played or not."""
+    return _filter_by_game_type(
+        pl.read_csv(schedule_path, schema_overrides=_SCORE_DTYPES, infer_schema_length=None).filter(
+            pl.col("season") == season
+        ),
+        include_postseason=False,
+    )
+
+
+def _season_teams(schedule_path: Path, season: int) -> list[str]:
+    """Return the teams on the season's regular-season schedule."""
+    rows = _regular_season_rows(schedule_path, season)
+    teams = pl.concat([rows.get_column("away_abbr"), rows.get_column("home_abbr")])
+    return sorted(teams.cast(pl.String).drop_nulls().unique().to_list())
+
+
+def _check_prediction_coverage(
+    predictions: pl.DataFrame, schedule_path: Path, *, season: int, before_week: int | None
+) -> None:
+    """Refuse predictions that miss a completed regular-season game the model rating reads.
+
+    Raises:
+        rating_sources.RatingSourceUnavailableError: If the predictions of ``season`` (before
+            ``before_week``, or the whole season when it is ``None``) number fewer than its
+            completed regular-season games.
+
+    """
+    games = _regular_season_rows(schedule_path, season).filter(
+        pl.col("away_score").is_not_null() & pl.col("home_score").is_not_null()
+    )
+    predicted = predictions.filter(pl.col("season") == season)
+    if before_week is not None:
+        games = games.filter(pl.col("week") < before_week)
+        predicted = predicted.filter(pl.col("week") < before_week)
+    if predicted.height < games.height:
+        span = "the season" if before_week is None else f"before week {before_week}"
+        msg = (
+            f"the walk-forward predictions cover {predicted.height} of {games.height} "
+            f"completed {season} games {span}; point --model-predictions at runs that cover them"
+        )
+        raise rating_sources.RatingSourceUnavailableError(msg)
 
 
 def write_ranking_outputs(

@@ -105,8 +105,10 @@ def test_default_weekly_settings_and_hashes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The shipped configuration's stage-1 options, final-fit options and resume hashes."""
+    # Act
     captured = _capture_weekly_settings(tmp_path, monkeypatch, [])
 
+    # Assert
     assert captured["stage1"] == {
         "resume": True,
         "checkpoint_per_fold": False,
@@ -168,6 +170,7 @@ def test_overridden_weekly_settings_and_hashes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Overrides reach stage 1 and the final fit; the training half-life follows stage 1's."""
+    # Act
     captured = _capture_weekly_settings(
         tmp_path,
         monkeypatch,
@@ -186,6 +189,7 @@ def test_overridden_weekly_settings_and_hashes(
         ],
     )
 
+    # Assert
     assert captured["stage1"]["xgb_params_overrides"] == {
         "n_estimators": 300,
         "max_depth": 5,
@@ -217,15 +221,18 @@ def test_config_tree_settings_reach_stage1_and_the_final_fit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The config file's tree budget, depth and learning rate train both stages."""
+    # Arrange
     config_path = tmp_path / "weekly_run.json"
     config_path.write_text(
         json.dumps({"wf_n_estimators": 300, "wf_max_depth": 3, "wf_learning_rate": 0.05}),
         encoding="utf-8",
     )
+    expected = {"n_estimators": 300, "max_depth": 3, "learning_rate": 0.05}
 
+    # Act
     captured = _capture_weekly_settings(tmp_path, monkeypatch, ["--config", str(config_path)])
 
-    expected = {"n_estimators": 300, "max_depth": 3, "learning_rate": 0.05}
+    # Assert
     stage1_overrides = captured["stage1"]["xgb_params_overrides"]
     assert {name: stage1_overrides[name] for name in expected} == expected
     assert captured["train"]["xgb_params_overrides"] == expected

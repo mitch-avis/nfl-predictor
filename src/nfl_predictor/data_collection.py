@@ -941,7 +941,8 @@ def _open_season_cache(
 
     A season's build reads the schedule, the team stats and the ELO ratings through that
     season (the coach history reaches back to the run's first season), its own and the
-    previous season's TeamRankings, and the options below; the keys cover exactly those.
+    previous season's TeamRankings, and the options below, and its ratings read the ratings'
+    team-game and passer-game rows through that season; the keys cover exactly those.
     """
     if not config.incremental:
         return None
@@ -974,7 +975,8 @@ def _build_season(
     """Build one season's game rows, reusing a finished season's cached build when valid.
 
     The season in progress is always rebuilt. A cached build carries the season's strength
-    snapshots too, so they reach ``inputs.strength_snapshots`` exactly as a rebuild's would.
+    snapshots too, so they reach ``inputs.strength_snapshots`` exactly as a rebuild's would,
+    and its ratings frames, which ``sources.ratings`` records instead of fitting them again.
     """
     key = (
         None

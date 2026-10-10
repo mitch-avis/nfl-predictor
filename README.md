@@ -203,6 +203,13 @@ Typical outputs:
   after the regular season), keyed by `season`, `week` and `team_abbr`. The values equal the
   `away_`/`home_` strength columns on that week's game rows, plus the league-wide home-field term
   `adj_hfa`. Power rankings read it.
+- `data/ratings/{season}_{kind}.parquet`: the team and quarterback ratings ported from
+  `nfl-sos-ratings`, one file per season and table, named as that project names its files
+  (`ratings`, `team_prior`, `ratings_by_week`, `rating_ranges`, `rating_pairs`, `qb_ratings`,
+  `qb_ratings_by_week`, `qb_rating_ranges`, `qb_rating_pairs`), and for the current season each
+  week's rank ranges (`rating_ranges_by_week`, `qb_rating_ranges_by_week`). A finished season's
+  weekly ranges stay as its last build as the current season wrote them.
+  [The ratings README](src/nfl_predictor/ratings/README.md) describes every table.
 
 Note: the `data/` directory is gitignored by default; generate it via the data collection step
 above. Note: `*_ml.csv` files include model-ready engineered features.
@@ -212,18 +219,20 @@ with the same code, locked dependencies and inputs, on the same machine with the
 thread count (`POLARS_MAX_THREADS`), write byte-identical files.
 
 Building each season's weekly feature rows is nearly all of the ETL's run time.
-`nfl-predictor data --incremental` keeps each finished season's rows and strength snapshots under
-`<data dir>/cache/etl_seasons/` and reuses them when nothing they are built from has changed; the
-season in progress is always rebuilt, and every input is still loaded. An entry is keyed on:
+`nfl-predictor data --incremental` keeps each finished season's rows, strength snapshots and
+ratings tables under `<data dir>/cache/etl_seasons/` and reuses them when nothing they are built
+from has changed; the season in progress is always rebuilt, and every input is still loaded. An
+entry is keyed on:
 
 - the source of the ETL modules (`data_collection.py`, `constants.py` and everything under
-  `src/nfl_predictor/utils/`), the Polars, Polars runtime and NumPy versions, the Python
-  version, the CPU architecture and the Polars thread count;
+  `src/nfl_predictor/utils/` and `src/nfl_predictor/ratings/`), the Polars, Polars runtime and
+  NumPy versions, the Python version, the CPU architecture and the Polars thread count;
 - the options that change a season's rows (`--min-season`, the two prior-blend switches,
   `--strength-prior-blend-games`, `--stat-prior-blend-games`, `--team-stats-source`,
   `--tr-stats-source` and `--line-source`);
-- the loaded schedule, team stats and Elo rows from that season and every earlier one, and that
-  season's and the previous season's TeamRankings, compared by value.
+- the loaded schedule, team stats and Elo rows and the ratings' team-game and passer-game rows
+  from that season and every earlier one, and that season's and the previous season's
+  TeamRankings, compared by value.
 
 So a changed input row rebuilds its season and every later one, and an edit to the ETL code
 rebuilds everything. A stale, damaged or unreadable entry is rebuilt and rewritten, never an error,
@@ -265,7 +274,8 @@ is fetched one season at a time, reduced to the column list in `constants.PBP_CO
 the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<season>_reg.parquet`.
 The list also holds every play-by-play column the ratings ported from `nfl-sos-ratings` read
 (play ids, scramble and botched-snap flags, rusher, receiver, fumble and tackle credits, game
-state, drive and series results, and the play text), which no feature reads yet. Every column
+state, drive and series results, and the play text); the ratings' rows read the ones they need.
+Every column
 that holds a team code (`constants.PBP_TEAM_COLUMNS`) is normalized; yard-line text such as
 `LA 25` is kept as nflverse writes it. Each column keeps one type across seasons (nflverse
 publishes `goal_to_go` as a whole number in some seasons and a float in others; the cache stores
@@ -286,7 +296,9 @@ player is a quarterback in a season when the players file or any regular-season 
 season's weekly roster lists him there, matched by GSIS id and never by name
 (`utils/polars/player_identity.py`). ESPN QBR (`utils/polars/espn_qbr.py`) is cached the same way
 as a validation reference only: nothing that builds the dataset or the model imports it. The ETL
-reads none of these sources yet, so `nfl-predictor data` downloads nothing new.
+reads the player sources for the ratings, every season from 1999 (so the first run that does
+downloads each season once), and downloads the players file again whenever the run reaches the
+current season, falling back to its cached copy on an outage.
 
 The quarterback family needs `data/meta_data.csv`, a read-only copy of
 `../nfeloqb/Other Data/meta_data.csv` made the same way as `data/qb_elos.csv`. It maps the Elo
@@ -1217,7 +1229,8 @@ import paths.
 - `src/nfl_predictor/ratings/` holds the team and quarterback ratings ported from the sibling
   `nfl-sos-ratings` project (offense, defense, and special-teams ratings, head-to-head-excluded
   schedule strength, quarterback ratings, weekly histories, and bootstrap rank ranges), with a
-  leakage-safe pre-week entry point for model features. Nothing in the ETL or the model uses it;
+  leakage-safe pre-week entry point for model features and the adapter from this repository's
+  play-by-play (`pbp_inputs.py`). The ETL runs them through `utils/polars/ratings_build.py`;
   [its README](src/nfl_predictor/ratings/README.md) covers the methods, inputs, and parity checks.
 
 ## Implemented feature areas
@@ -1257,6 +1270,23 @@ games.
   and is legitimately known, but the postseason bracket is an outcome of the season being
   predicted and must never reach a pre-week feature. `sos_played_raw` is therefore null through
   week 2, because a week-2 opponent's only prior game is the one against the subject.
+- The team and quarterback ratings ported from `nfl-sos-ratings`
+  (`constants.RATINGS_FEATURE_STATS`, built by `src/nfl_predictor/utils/polars/ratings_build.py`),
+  the `ratings` feature group (`--disable-feature-groups ratings`; every name starts with
+  `ratings_`). Per side with a `_diff` companion: `ratings_offense`, `ratings_defense`,
+  `ratings_special_teams` and `ratings_team` (points per game against an average team on a
+  neutral field, from opponent-adjusted EPA) and `ratings_sos` (the mean team rating of the
+  opponents played, each rated without the team's games), each fit only on the season's games
+  before the row's week with the previous season's penalties and a preseason prior from earlier
+  seasons; and `ratings_qb` (the expected starter's adjusted EPA per dropback, the starter the
+  quarterback family reads) with `ratings_qb_dropbacks`, his dropbacks this season before the
+  week, the passers counted as the players file and the roster weeks before the week list them.
+  Week 1 holds each team's preseason prior (from 2003; null before), no `ratings_sos`, and no
+  quarterback rating with 0 dropbacks; `ratings_sos` is still null in week 2, when no opponent has
+  played anyone else; 1999 is null throughout; a postseason row reads the whole regular season;
+  a starter without a dropback yet this season has no rating and 0 dropbacks, an unidentified one
+  nulls. The strength family above stays in the build beside it, so a walk-forward can compare
+  the two with `--disable-feature-groups`.
 
 - Quarterback per-dropback production for the expected starter (`constants.QB_PBP_STATS`, in
   `src/nfl_predictor/utils/polars/qb_stats.py`): for `away_qb` and `home_qb`, from that quarterback's

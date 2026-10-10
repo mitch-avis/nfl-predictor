@@ -241,6 +241,10 @@ Feature areas tracked in `.agents/TODO.md` include (examples):
 - weekly schedule-adjusted (ridge) offense/defense strength and EPA-based schedule strength, in
   both the ridge form and the one-hop head-to-head-excluded form
 - QB per-dropback EPA families for the expected starter
+- the team and quarterback ratings ported from `nfl-sos-ratings` (the `ratings` group,
+  `utils/polars/ratings_build.py`): offense, defense, special-teams and team ratings and the
+  head-to-head-excluded `sos`, and the expected starter's adjusted EPA per dropback, each fit only
+  on the games before the week
 
 Rules for stat-style features:
 

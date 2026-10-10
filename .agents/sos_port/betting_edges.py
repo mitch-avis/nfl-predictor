@@ -221,8 +221,8 @@ def real_moneyline_seasons(metadata_path: Path) -> list[int]:
     """Return the scored seasons none of whose moneylines were derived from the spread.
 
     A season qualifies when the market-lines metadata counts no moneyline from the fitted
-    spread-to-moneyline map and none from the fixed conversion. The metadata counts seasons, not
-    games, so a season with any derived moneyline is left out whole.
+    spread-to-moneyline map and none from the fixed conversion. The metadata holds per-season
+    counts, not per-game flags, so a season with any derived moneyline is left out whole.
     """
     seasons = json.loads(metadata_path.read_text(encoding="utf-8"))["seasons"]
     return sorted(

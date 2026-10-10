@@ -29,6 +29,8 @@ from nfl_predictor.ratings.team_rating import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from nfl_predictor.ratings.team_prior import SeasonPrior
 
 _TEAMS: tuple[str, ...] = ("AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG", "HHH")
@@ -119,41 +121,225 @@ def _qb_games(season: int) -> pl.DataFrame:
     return pl.DataFrame(rows).sort("team", "week", "game_id", "qb_name")
 
 
-def _history(
-    team_games=_team_games,
-    qb_games=_qb_games,
-) -> RatingsHistory:
+type Loader = Callable[[int], pl.DataFrame]
+
+
+class LaterSeasonReadError(Exception):
+    """Raised by a test loader asked for a season after the one being rated."""
+
+
+def _history(team_games: Loader = _team_games, qb_games: Loader = _qb_games) -> RatingsHistory:
     """Return a ratings history over the synthetic league, whose first season is 2000."""
     return RatingsHistory(team_games, qb_games, first_season=_FIRST)
 
 
-def _changed_from(season: int, week: int):
-    """Return loaders that change every game of ``season`` from ``week`` on and every later one."""
+def _refusing_later_seasons(load: Loader, season: int) -> Loader:
+    """Return ``load`` for seasons up to ``season``; a later season raises if it is read."""
 
-    def later(frame: pl.DataFrame, frame_season: int) -> pl.Expr:
-        return (pl.lit(frame_season) > season) | (
-            (pl.lit(frame_season) == season) & (pl.col("week") >= week)
-        )
+    def guarded(frame_season: int) -> pl.DataFrame:
+        if frame_season > season:
+            message = f"season {frame_season} was read while rating {season}"
+            raise LaterSeasonReadError(message)
+        return load(frame_season)
 
-    def team_games(frame_season: int) -> pl.DataFrame:
-        frame = _team_games(frame_season)
-        return frame.with_columns(
-            pl.when(later(frame, frame_season))
+    return guarded
+
+
+def _first_game_of_week(games: pl.DataFrame, week: int) -> str:
+    """Return the first game id of ``week`` in ``games``."""
+    return str(games.filter(pl.col("week") == week).get_column("game_id").sort().item(0))
+
+
+def _rewritten_team_games(season: int, week: int) -> Loader:
+    """Return team-game loaders whose ``season`` rows from ``week`` on all differ.
+
+    Every input column of those rows changes (plays, EPA, special-teams plays and EPA, margin,
+    home flag), the week's first game is dropped, a second game between known teams is added
+    that week, and a phantom game between two new team codes is added in the last week. Later
+    seasons raise if read.
+    """
+
+    def load(frame_season: int) -> pl.DataFrame:
+        games = _team_games(frame_season)
+        if frame_season != season:
+            return games
+        later = pl.col("week") >= week
+        changed = games.with_columns(
+            pl.when(later)
+            .then(pl.col("offensive_snaps") + 7)
+            .otherwise(pl.col("offensive_snaps"))
+            .alias("offensive_snaps"),
+            pl.when(later)
             .then(pl.col("offensive_epa") * -3.0 + 9.0)
             .otherwise(pl.col("offensive_epa"))
-            .alias("offensive_epa")
+            .alias("offensive_epa"),
+            pl.when(later)
+            .then(pl.col("st_plays") + 3)
+            .otherwise(pl.col("st_plays"))
+            .alias("st_plays"),
+            pl.when(later)
+            .then(pl.col("st_epa") * -2.0 + 1.0)
+            .otherwise(pl.col("st_epa"))
+            .alias("st_epa"),
+            pl.when(later)
+            .then(5 - pl.col("point_margin"))
+            .otherwise(pl.col("point_margin"))
+            .alias("point_margin"),
+            pl.when(later).then(~pl.col("is_home")).otherwise(pl.col("is_home")).alias("is_home"),
+        ).filter(pl.col("game_id") != _first_game_of_week(games, week))
+        added = _extra_team_games(
+            [
+                (f"{season}_{week:02d}_BBB_AAA_X", week, "AAA", "BBB"),
+                (f"{season}_{_WEEKS:02d}_ZZB_ZZA", _WEEKS, "ZZA", "ZZB"),
+            ]
         )
+        return pl.concat([changed, added]).sort("team", "week", "game_id")
 
-    def qb_games(frame_season: int) -> pl.DataFrame:
-        frame = _qb_games(frame_season)
-        return frame.with_columns(
-            pl.when(later(frame, frame_season))
+    return _refusing_later_seasons(load, season)
+
+
+def _extra_team_games(games: list[tuple[str, int, str, str]]) -> pl.DataFrame:
+    """Return both team rows of each ``(game_id, week, home, away)`` with made-up values."""
+    rows: list[dict[str, object]] = []
+    for game_id, week, home, away in games:
+        for team, opponent, is_home in ((home, away, True), (away, home, False)):
+            rows.append(
+                {
+                    "game_id": game_id,
+                    "week": week,
+                    "team": team,
+                    "opponent_team": opponent,
+                    "is_home": is_home,
+                    "offensive_snaps": 70,
+                    "offensive_epa": 30.0 if is_home else -30.0,
+                    "st_plays": 15,
+                    "st_epa": 4.0,
+                    "point_margin": 40 if is_home else -40,
+                }
+            )
+    return pl.DataFrame(rows)
+
+
+def _rewritten_qb_games(season: int, week: int) -> Loader:
+    """Return quarterback-game loaders whose ``season`` rows from ``week`` on all differ.
+
+    Every input column of those rows changes (dropbacks, dropback EPA, attempts, home flag,
+    name), the week's first game is dropped, and passers are added for a second game between
+    known teams that week and for a phantom game between new team codes. Later seasons raise.
+    """
+
+    def load(frame_season: int) -> pl.DataFrame:
+        games = _qb_games(frame_season)
+        if frame_season != season:
+            return games
+        later = pl.col("week") >= week
+        changed = games.with_columns(
+            pl.when(later)
+            .then(pl.col("qb_dropbacks") + 5)
+            .otherwise(pl.col("qb_dropbacks"))
+            .alias("qb_dropbacks"),
+            pl.when(later)
             .then(pl.col("qb_dropback_epa") * -2.0 - 5.0)
             .otherwise(pl.col("qb_dropback_epa"))
-            .alias("qb_dropback_epa")
+            .alias("qb_dropback_epa"),
+            pl.when(later)
+            .then(pl.col("qb_attempts") + 4)
+            .otherwise(pl.col("qb_attempts"))
+            .alias("qb_attempts"),
+            pl.when(later).then(~pl.col("is_home")).otherwise(pl.col("is_home")).alias("is_home"),
+            pl.when(later)
+            .then(pl.col("qb_name") + " Jr.")
+            .otherwise(pl.col("qb_name"))
+            .alias("qb_name"),
+        ).filter(pl.col("game_id") != _first_game_of_week(games, week))
+        added = pl.DataFrame(
+            {
+                "game_id": [f"{season}_{week:02d}_BBB_AAA_X"] * 2
+                + [f"{season}_{_WEEKS:02d}_ZZB_ZZA"] * 2,
+                "week": [week, week, _WEEKS, _WEEKS],
+                "team": ["AAA", "BBB", "ZZA", "ZZB"],
+                "opponent_team": ["BBB", "AAA", "ZZB", "ZZA"],
+                "is_home": [True, False, True, False],
+                "qb_id": ["qb-AAA", "qb-BBB", "qb-ZZA", "qb-ZZB"],
+                "qb_name": ["AAA Passer", "BBB Passer", "ZZA Passer", "ZZB Passer"],
+                "qb_dropbacks": [50, 50, 60, 60],
+                "qb_dropback_epa": [25.0, -25.0, 40.0, -40.0],
+                "qb_attempts": [45, 45, 55, 55],
+            }
         )
+        return pl.concat([changed, added]).sort("team", "week", "game_id", "qb_name")
 
-    return team_games, qb_games
+    return _refusing_later_seasons(load, season)
+
+
+def _rewritten_history(season: int, week: int) -> RatingsHistory:
+    """Return a ratings history whose ``season`` games from ``week`` on are all rewritten."""
+    return _history(_rewritten_team_games(season, week), _rewritten_qb_games(season, week))
+
+
+# Seasons without a prior (2003), the first with one (2004), week 1, mid-season, and the last week.
+_LEAKAGE_CASES = [(2003, 3), (2004, 1), (2004, 2), (2005, 6), (2005, _WEEKS)]
+
+
+@pytest.mark.parametrize(("season", "week"), _LEAKAGE_CASES)
+def test_pre_week_team_ratings_never_see_the_week_or_later_games(season: int, week: int) -> None:
+    # Arrange
+    expected = _history().pre_week(season, week, _TEAMS).teams
+    rewritten = _rewritten_history(season, week)
+
+    # Act
+    teams = rewritten.pre_week(season, week, _TEAMS).teams
+
+    # Assert
+    assert_frame_equal(teams, expected, check_exact=True)
+
+
+@pytest.mark.parametrize(("season", "week"), _LEAKAGE_CASES)
+def test_pre_week_qb_ratings_never_see_the_week_or_later_games(season: int, week: int) -> None:
+    # Arrange
+    expected = _history().pre_week(season, week, _TEAMS).quarterbacks
+    rewritten = _rewritten_history(season, week)
+
+    # Act
+    quarterbacks = rewritten.pre_week(season, week, _TEAMS).quarterbacks
+
+    # Assert
+    assert_frame_equal(quarterbacks, expected, check_exact=True)
+
+
+def test_pre_week_rewritten_games_before_the_week_do_change_the_team_ratings() -> None:
+    """The guards above are not vacuous: rewriting the week before moves the ratings."""
+    # Arrange
+    expected = _history().pre_week(2005, 6, _TEAMS).teams
+    rewritten = _rewritten_history(2005, 5)
+
+    # Act
+    teams = rewritten.pre_week(2005, 6, _TEAMS).teams
+
+    # Assert
+    assert not teams.equals(expected)
+
+
+def test_pre_week_rewritten_games_before_the_week_do_change_the_qb_ratings() -> None:
+    # Arrange
+    expected = _history().pre_week(2005, 6, _TEAMS).quarterbacks
+    rewritten = _rewritten_history(2005, 5)
+
+    # Act
+    quarterbacks = rewritten.pre_week(2005, 6, _TEAMS).quarterbacks
+
+    # Assert
+    assert not quarterbacks.equals(expected)
+
+
+def test_pre_week_reading_a_later_season_raises_in_the_test_loaders() -> None:
+    """The rewritten loaders refuse later seasons, so the guards would catch such a read."""
+    # Arrange
+    load = _rewritten_team_games(2004, 3)
+
+    # Act & Assert
+    with pytest.raises(LaterSeasonReadError, match="season 2005"):
+        load(2005)
 
 
 def test_pre_week_team_ratings_publish_one_row_per_team_in_order() -> None:
@@ -164,43 +350,6 @@ def test_pre_week_team_ratings_publish_one_row_per_team_in_order() -> None:
     assert ratings.teams.columns == list(TEAM_PRE_WEEK_COLUMNS)
     assert ratings.teams.get_column("team").to_list() == list(_TEAMS)
     assert (ratings.season, ratings.week) == (2005, 5)
-
-
-def test_pre_week_team_ratings_never_see_the_week_or_later_games() -> None:
-    # Arrange
-    expected = _history().pre_week(2005, 6, _TEAMS).teams
-    changed = _history(*_changed_from(2005, 6))
-
-    # Act
-    teams = changed.pre_week(2005, 6, _TEAMS).teams
-
-    # Assert
-    assert_frame_equal(teams, expected)
-
-
-def test_pre_week_qb_ratings_never_see_the_week_or_later_games() -> None:
-    # Arrange
-    expected = _history().pre_week(2005, 6, _TEAMS).quarterbacks
-    changed = _history(*_changed_from(2005, 6))
-
-    # Act
-    quarterbacks = changed.pre_week(2005, 6, _TEAMS).quarterbacks
-
-    # Assert
-    assert_frame_equal(quarterbacks, expected)
-
-
-def test_pre_week_changed_games_before_the_week_do_change_the_ratings() -> None:
-    """The guard above is not vacuous: the games just before the week do move the ratings."""
-    # Arrange
-    expected = _history().pre_week(2005, 6, _TEAMS).teams
-    changed = _history(*_changed_from(2005, 5))
-
-    # Act
-    teams = changed.pre_week(2005, 6, _TEAMS).teams
-
-    # Assert
-    assert not teams.equals(expected)
 
 
 def test_pre_week_team_ratings_are_the_history_of_the_week_before() -> None:

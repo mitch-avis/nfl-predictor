@@ -24,13 +24,14 @@ them naming a player without a quarterback row in 42 team-games of 2006-2025.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars import pbp
+from nfl_predictor.utils.polars import pbp, qb_stats
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -51,6 +52,31 @@ _FIRST_QUARTER = 1
 # The order of a play's candidates: the passer, then the rusher.
 _CANDIDATE_COLUMNS = ("passer_player_id", "rusher_player_id")
 _REQUIRED_COLUMNS = frozenset({"game_id", "season", "week", "posteam", "qtr", "play_id"})
+
+
+@dataclass(frozen=True, eq=False)
+class QuarterbackHistory:
+    """The play-by-play inputs every quarterback feature reads, built once per run.
+
+    Attributes:
+        plays: Regular-season play-by-play from the first season through the run's last.
+        qb_games: ``qb_stats.aggregate_qb_game_stats`` over ``plays``.
+        positions: Each season's positions (``POSITIONS_SCHEMA``).
+        starters: ``play_by_play_starters`` over ``plays``.
+
+    """
+
+    plays: pl.DataFrame
+    qb_games: pl.DataFrame
+    positions: pl.DataFrame
+    starters: pl.DataFrame
+
+
+def quarterback_history(plays: pl.DataFrame, positions: pl.DataFrame) -> QuarterbackHistory:
+    """Return the quarterback games and the play-by-play starters of ``plays``."""
+    qb_games = qb_stats.aggregate_qb_game_stats(plays)
+    starters = play_by_play_starters(plays, qb_games=qb_games, positions=positions)
+    return QuarterbackHistory(plays, qb_games, positions, starters)
 
 
 def season_positions(crosswalks: Mapping[int, pl.DataFrame]) -> pl.DataFrame:

@@ -234,6 +234,8 @@ def _install(monkeypatch: pytest.MonkeyPatch, run: _Run) -> None:
         "load_team_rankings",
         lambda season, *_args, **_kwargs: run.world.rankings[season],
     )
+    # The world has no play-by-play: no quarterback history, so no quarterback join.
+    monkeypatch.setattr(data_collection, "_quarterback_history", lambda *_a, **_k: None)
     monkeypatch.setattr(data_collection, "_attach_qb_features", lambda games, *_a, **_k: games)
     monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
     monkeypatch.setattr(clock, "local_today", lambda: date(_CURRENT_SEASON, 9, 22))

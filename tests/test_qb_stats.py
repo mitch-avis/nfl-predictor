@@ -9,7 +9,7 @@ import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.ml.walk_forward import resolve_feature_group_columns
-from nfl_predictor.utils.polars import qb_stats
+from nfl_predictor.utils.polars import qb_starters, qb_stats
 from nfl_predictor.utils.polars.finalize import build_final_column_order
 
 _PLAY_DEFAULTS: dict[str, Any] = {
@@ -350,6 +350,90 @@ def test_attach_qb_features_matches_abbreviated_names_and_nulls_unknown_quarterb
     assert first["home_qb_history_dropbacks"] is None
     assert first["home_qb_dropback_epa"] is None
     assert first["qb_dropback_epa_diff"] is None
+
+
+def _games_with_teams(rows: list[tuple[str, int, int, str | None, str | None]]) -> pl.DataFrame:
+    """Return game rows of ``(game_id, season, week, away_qb, home_qb)``, NE at NYJ."""
+    return pl.DataFrame(
+        [
+            {
+                "game_id": game_id,
+                "season": season,
+                "week": week,
+                "away_abbr": "NE",
+                "home_abbr": "NYJ",
+                "away_qb": away,
+                "home_qb": home,
+            }
+            for game_id, season, week, away, home in rows
+        ]
+    )
+
+
+def _starter_rows(rows: list[tuple[str, str, str]]) -> pl.DataFrame:
+    """Return play-by-play starters of ``(game_id, team_abbr, qb_id)``."""
+    return pl.DataFrame(
+        [(game_id, 2023, 2, team, qb_id) for game_id, team, qb_id in rows],
+        schema=qb_starters.STARTERS_SCHEMA,
+        orient="row",
+    )
+
+
+def test_attach_qb_features_keys_a_game_on_its_play_by_play_starter() -> None:
+    """A completed game's play-by-play starter wins over the name the ETL carries for it."""
+    # Arrange
+    games = _games_with_teams([("g", 2023, 2, "Name A", "Name A")])
+    starters = _starter_rows([("g", "NE", "B")])
+
+    # Act
+    out = qb_stats.attach_qb_features(games, _qb_games([_A1, _B1]), _IDENTITY, starters=starters)
+
+    # Assert
+    row = out.row(0, named=True)
+    assert row["away_qb_history_dropbacks"] == 35
+    assert row["home_qb_history_dropbacks"] == 30
+
+
+def test_attach_qb_features_keys_a_game_without_a_starter_on_its_named_quarterback() -> None:
+    """A game the play-by-play names no starter for keeps the starter the ETL names."""
+    # Arrange
+    games = _games_with_teams([("g", 2023, 2, "Name A", "Name B")])
+    starters = _starter_rows([("other", "NE", "B")])
+
+    # Act
+    out = qb_stats.attach_qb_features(games, _qb_games([_A1, _B1]), _IDENTITY, starters=starters)
+
+    # Assert
+    row = out.row(0, named=True)
+    assert (row["away_qb_history_dropbacks"], row["home_qb_history_dropbacks"]) == (30, 35)
+
+
+def test_attach_qb_features_uses_the_play_by_play_starter_of_a_game_without_names() -> None:
+    """A completed game whose starter names are missing still gets its play-by-play starter."""
+    # Arrange
+    games = _games_with_teams([("g", 2023, 2, None, None)])
+    starters = _starter_rows([("g", "NYJ", "A")])
+
+    # Act
+    out = qb_stats.attach_qb_features(games, _qb_games([_A1, _B1]), _IDENTITY, starters=starters)
+
+    # Assert
+    row = out.row(0, named=True)
+    assert (row["away_qb_history_dropbacks"], row["home_qb_history_dropbacks"]) == (None, 30)
+
+
+def test_named_starters_map_each_side_name_to_an_id() -> None:
+    """The ETL's named starters become ids per game and team, unknown names left out."""
+    # Arrange
+    games = _games_with_teams(
+        [("g1", 2023, 2, "Name A", "Nobody"), ("g2", 2023, 3, None, "Name B")]
+    )
+
+    # Act
+    named = qb_stats.named_starters(games, _IDENTITY, _qb_games([_A1, _B1]))
+
+    # Assert
+    assert named.sort("game_id", "team_abbr").rows() == [("g1", "NE", "A"), ("g2", "NYJ", "B")]
 
 
 def test_qb_columns_join_the_final_schema_as_their_own_feature_group() -> None:

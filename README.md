@@ -288,13 +288,22 @@ a quarterback in a season when the players file or any regular-season week of th
 weekly roster lists him there, matched by GSIS id and never by name
 (`utils/polars/player_identity.py`). ESPN QBR (`utils/polars/espn_qbr.py`) is cached the same way
 as a validation reference only: nothing that builds the dataset or the model imports it. The ETL
-reads the season rosters of 2001 and 2002, for that repair.
+reads the season rosters of 2001 and 2002, for that repair, and every season's quarterback identity
+(the players file and the weekly rosters), for the starter rule below.
 
-The quarterback family needs `data/meta_data.csv`, a read-only copy of
-`../nfeloqb/Other Data/meta_data.csv` made the same way as `data/qb_elos.csv`. It maps the Elo
-quarterback names to GSIS ids, which are also the play-by-play passer ids. Without the file the
-quarterback columns are null and the ETL logs a warning. Career rates need every earlier season, so
-the ETL reads the cached play-by-play from 1999 even when `--min-season` is later.
+Every quarterback feature keys on one starter (`utils/polars/qb_starters.py`, the
+`nfl-sos-ratings` rule). A completed game's starter comes from its play-by-play: the quarterback
+on the team's first first-quarter snap, by `play_id`, whose passer or rusher has a dropback for the
+team in that game and is a quarterback that season (or is listed by no identity source), the
+passer before the rusher on one play. A game the play-by-play names no starter for (an upcoming
+game, every postseason game, and the six 1999-2025 team-games without a first-quarter quarterback
+snap) takes the starter the ETL names (`away_qb`/`home_qb`: the projected starter of an upcoming
+game). nflverse's schedule columns `away_qb_id`/`home_qb_id` are not read. A named starter maps to
+a GSIS id through `data/meta_data.csv`, a read-only copy of `../nfeloqb/Other Data/meta_data.csv`
+made the same way as `data/qb_elos.csv`; without the file only the play-by-play starters and the
+abbreviated passer names identify quarterbacks, and the ETL logs a warning. Career rates need every
+earlier season, so the ETL reads the cached play-by-play from 1999 even when `--min-season` is
+later.
 
 TeamRankings data is cached under `data/<season>/` as week-level CSVs; enable debug logging to see
 cache hits. Use `--timing` to log per-step runtimes and `--debug-logs` for detailed ETL diagnostics.
@@ -1260,16 +1269,17 @@ games.
   predicted and must never reach a pre-week feature. `sos_played_raw` is therefore null through
   week 2, because a week-2 opponent's only prior game is the one against the subject.
 
-- Quarterback per-dropback production for the expected starter (`constants.QB_PBP_STATS`, in
-  `src/nfl_predictor/utils/polars/qb_stats.py`): for `away_qb` and `home_qb`, from that quarterback's
+- Quarterback per-dropback production for each side's starter (`constants.QB_PBP_STATS`, in
+  `src/nfl_predictor/utils/polars/qb_stats.py`; the starter is the one of "Data collection": the
+  play-by-play starter of a completed game, the named one otherwise), from that quarterback's
   regular-season dropbacks in every earlier week across teams and seasons (never the game's own
   week). Career EPA per dropback (`qb_dropback_epa`), CPOE (2006+), sack rate and ANY/A are shrunk
   toward the league with `K = constants.QB_PRIOR_DROPBACKS` pseudo-dropbacks,
   `(sum + K * league_rate) / (count + K)`, so a first start gets the league rate; the last
   `constants.QB_RECENT_GAMES` games (`qb_dropback_epa_recent`, `qb_any_a_recent`) are shrunk
   toward the career rate the same way; `qb_history_dropbacks` tells the model how much evidence
-  stands behind them. Scrambles are credited to the team-game's primary passer: nflverse leaves
-  the passer id empty on a scramble, and this family does not read the rusher id.
+  stands behind them. A scramble, which nflverse files without a passer id, is credited to its
+  rusher, the quarterback who scrambled.
 
 - This repository's own Elo, computed from game results with FiveThirtyEight's published method
   instead of read from `data/qb_elos.csv`. **Not yet in the datasets**: `build_own_elo_features`

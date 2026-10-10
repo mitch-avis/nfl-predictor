@@ -650,3 +650,146 @@ rating replaces VALUE without touching the engine.
 **How to reverse it**: nothing to reverse.
 
 **Review**: not yet reviewed.
+
+## 17. The ported quarterback rating as the adjustment (the rule)
+
+**What differs**: entry 16 left the ported `nfl-sos-ratings` quarterback rating
+(`adj_qb_epa_per_dropback`, the opponent-adjusted EPA per dropback) unmeasured as the own Elo's
+quarterback adjustment. This entry fixes the measurement and its rule before the first run. The
+alternative keeps everything of the market-free recommendation (`elo_ratings.MARKET_FREE_SETTINGS`:
+the framework, travel, the rolling home field and the quarterback adjustment), the same games in
+the same order and the same starters, the `home_qb_id` and `away_qb_id` of
+`elo_quarterbacks.value_qb_adjustments` with its default `pre_game_starter="game_starter"`. Only
+the per-game `home_qb_adj` and `away_qb_adj` handed to `EloInputs.qb_adjustments` change.
+
+For a game in season `s`, week `w`, the rating `r(q)` it uses for quarterback `q` is:
+
+1. Season-to-date: when `q` has at least one dropback in season `s` before week `w`, his pre-week
+   season-to-date rating, the value fit on season `s`'s games before week `w`, read from the
+   candidate build's `ratings/{s}_qb_ratings_by_week.parquet`. The script first establishes
+   whether the row labelled `week` holds the fit through that week or before it, by matching the
+   candidate dataset's attached starter rating (the `ratings` group's quarterback columns,
+   `constants.RATINGS_FEATURE_STATS`) on completed games whose starter equals VALUE's, and
+   reports the match and mismatch counts. Mismatches are 0 or each explained, or the run stops.
+2. No dropback yet this season: his rating in the latest row of the most recent earlier season
+   where it is not null.
+3. Neither: the replacement level for season `s`, the unweighted mean of debut quarterbacks'
+   latest-row ratings over the debut seasons `2001..s-1` (a debut season is a quarterback's first
+   season with a non-null rating; 1999, where every rating is null, and 2000, where veterans
+   appear for the first time, are not debut seasons); 0 when there is no such season.
+4. Playoff games: `q`'s latest regular-season row of season `s`, with no updates, as VALUE's book
+   does not update on playoff games.
+
+The team baseline is VALUE's team rule with `r` as the per-start value: after each
+regular-season game in which the team had a play-by-play starter,
+`team = 0.95 * team + 0.05 * r(starter at that game)`; in the preseason,
+`team = (1/3) * end-of-season team + (2/3) * r(first starter of the season)`; a team seen for
+the first time starts at its first starter's `r`. There is no defense adjustment, because the
+rating is already opponent-adjusted.
+
+The adjustment is `25 * D(s) * (r(starter) - team)` Elo points, with 538's 25 Elo points per
+point of spread, and 0 when no starter is known. `D(s)` is the mean dropbacks per team-game over
+the regular seasons `1999..s-1`: per season, the sum of every quarterback's latest-row
+`qb_dropbacks`, divided by twice the number of regular-season games. In 1999 every adjustment
+is 0. As a sensitivity that decides nothing, the same is scored with the scale times 0.5 and
+times 1.5.
+
+No later information enters: every rating a game reads comes from weeks or seasons before it;
+only the starter's identity comes from the game itself, as VALUE's does (entry 15).
+
+**Options**: keep VALUE, the measured incumbent (entry 14); or replace it with the ported
+rating, which needs no box-score quarterback model of its own.
+
+**Decision**: the rule, written before the first run. Paired per game over the 2007-2025
+regular-season games with final scores (4,943 games), candidate minus VALUE, with
+`elo_eval`'s bootstrap (5,000 game resamples, seed 42):
+
+- the alternative would replace VALUE only if its Brier difference interval lies entirely
+  below zero and its log-loss difference interval does not lie entirely above zero;
+- it measures at least as well if neither interval lies entirely above zero;
+- otherwise VALUE stays. A tie keeps VALUE, the measured incumbent.
+
+The result is report-only either way: adopting it needs a new build and a walk-forward, which is
+the user's decision.
+
+**Reasoning**: the same seam (`EloInputs.qb_adjustments`), the same starters and the same
+engine settings isolate the rating itself; the bootstrap and the window are entry 1's, so the
+numbers compare with `ELO_EVAL.md`.
+
+**Data**: none yet; `.agents/sos_port/elo_qb_alt.py` writes `ELO_QB_ALT.md`.
+
+**Feature-value impact**: none; nothing under `src/` changes.
+
+**How to reverse it**: nothing to reverse.
+
+**Review**: not yet reviewed.
+
+## 18. The ported quarterback rating as the adjustment (the result)
+
+**What differs**: entry 17's rule applied to `.agents/sos_port/ELO_QB_ALT.md`, with one change
+to entry 17's method, made after its check stopped the first run and before any score existed.
+The check found that the by-week row labelled `week` holds the fit through that week (4,838 of
+13,894 completed regular-season sides match that reading, 466 the other), but equals the
+candidate dataset's attached starter rating (`ratings_qb`) only in 8 seasons (1999, where both
+are null, 2006, 2008, 2011, 2015, 2019, 2021 and 2022) and differs at every rated side in the
+other 19. That
+all-or-nothing pattern is the difference `src/nfl_predictor/ratings/pre_week.py` documents: the
+published history fits each season with that season's own cross-validated penalty, chosen on the
+whole season, which is later information; the attached rating uses the previous season's. So the
+season-to-date rating (case 1) is read from the attached `ratings_qb`, keyed by season, week and
+starter; the by-week table is read only for its latest rows (earlier seasons, the replacement
+level, `D(s)` and playoff games), all from regular seasons wholly before the game. The
+penalties are on disk: `.agents/sos_port/RATINGS_PARITY.md` records the two as equal in exactly
+the 7 seasons after 1999 that match here, and the independent review refit 2010 and 2013 with
+both penalties, with 2011 as the control, and confirmed the cause. 4 of the 9,886 window game
+sides (`2008_17_NE_BUF` home, `2015_12_MIN_ATL` home, `2016_05_TB_CAR` home and
+`2017_14_IND_BUF` away) read cases 2 and 3 although the dataset attaches a rating to them:
+VALUE's starter there is not the game's play-by-play starter, so `check_sides`, which keys the
+attached ratings, leaves them out. With them read from the attached rating, the review measured
+Brier difference `+0.00525`, interval `[+0.00319, +0.00727]`, so the outcome does not hang on
+them. Two smaller choices: 1999's published ratings are read as null, as the
+ETL treats 1999 and as entry 17 assumed; a team whose first game has no known starter starts at
+the season's replacement level, where VALUE starts it at its debut rating.
+
+**Options**: keep VALUE, the measured incumbent; or replace it with the ported rating.
+
+**Decision**: VALUE stays. The alternative's Brier difference interval lies entirely above zero,
+and so does its log-loss interval, so it neither would replace VALUE nor measures at least as
+well. Nothing is adopted; the measurement was report-only either way.
+
+**Reasoning**: entry 17's rule as written. The sensitivity scales decide nothing, and both are
+also worse than VALUE with intervals entirely above zero, so no scale near 25 Elo points per
+point of spread rescues the rating. The gap is widest in week 2, where the season-to-date rating
+rests on a single game.
+
+**Data**: candidate minus VALUE (Brier `0.21701`, log loss `0.62243`, reproduced from
+`ELO_EVAL.md`), per game on the 4,943 window games, with `elo_eval`'s bootstrap (5,000 game
+resamples, seed 42):
+
+| adjustment | Brier | Brier diff | 95% interval | log loss | log-loss diff | 95% interval |
+| --- | --- | --- | --- | --- | --- | --- |
+| ported rating | 0.22225 | +0.00524 | [+0.00319, +0.00725] | 0.63447 | +0.01203 | [+0.00736, +0.01667] |
+| scale times 0.5 | 0.21922 | +0.00221 | [+0.00095, +0.00351] | 0.62753 | +0.00510 | [+0.00228, +0.00798] |
+| scale times 1.5 | 0.22795 | +0.01094 | [+0.00794, +0.01392] | 0.64914 | +0.02671 | [+0.01952, +0.03383] |
+
+Brier by week window (no intervals): VALUE `0.22041`, `0.22664` and `0.21610` in weeks 1, 2
+and 3-18; the ported rating `0.22322`, `0.24982` and `0.22025`. First generated at commit
+`3cb8618` and regenerated, with corrected wording and the same numbers, at `076cb0a`, from the
+candidate build `/home/mitch/scratch/step6/data`; reproduce from the repository root with:
+
+```bash
+VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/elo_qb_alt.py \
+    --data-dir /home/mitch/workspace/nfl-predictor/data \
+    --nflreadpy-cache /tmp/step6_int/cache \
+    --candidate-data /home/mitch/scratch/step6/data
+```
+
+**How to reverse it**: nothing changed. To measure again (another build, rating or scale), rerun
+the script under a rule written first.
+
+**Review**: one independent round, verdict "merge after small fixes" (since made). Every number
+was reproduced by an independent implementation and bootstrap, which matched these adjustments
+on all 7,276 games to 1e-13. The premise of the source change was confirmed by refitting 2010
+and 2013 with both penalties, with 2011 as the control. Robustness: entry 17's original source,
+the published by-week table, gives Brier difference `+0.00537`, interval
+`[+0.00329, +0.00746]`, and VALUE still stays.

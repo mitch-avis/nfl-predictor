@@ -112,6 +112,35 @@ describe('RatingsIndexPage', () => {
     expect(screen.getByRole('link', { name: 'M.Backup' })).toHaveAttribute('href', '/qbs/00-9?season=2025')
   })
 
+  it('compares the teams ticked side by side', async () => {
+    // Arrange
+    stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/teams': teamTable() })
+    const user = userEvent.setup()
+    renderWithProviders(<RatingsIndexPage kind="teams" />, { route: '/teams' })
+    await user.click(await screen.findByRole('checkbox', { name: 'Compare BUF' }))
+
+    // Act
+    await user.click(screen.getByRole('checkbox', { name: 'Compare WSH' }))
+
+    // Assert
+    const comparison = screen.getByRole('table', { name: 'Comparison' })
+    const headers = within(comparison).getAllByRole('columnheader').map((header) => header.textContent)
+    expect(headers.slice(1)).toEqual(['Buffalo Bills', 'Washington Commanders'])
+  })
+
+  it('restores a comparison from the page address', async () => {
+    // Arrange
+    stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/teams': teamTable() })
+
+    // Act
+    renderWithProviders(<RatingsIndexPage kind="teams" />, { route: '/teams?compare=KC,WSH' })
+
+    // Assert
+    const comparison = await screen.findByRole('table', { name: 'Comparison' })
+    expect(within(comparison).getAllByRole('columnheader').map((header) => header.textContent).slice(1)).toEqual(['Kansas City Chiefs', 'Washington Commanders'])
+    expect(screen.getByRole('checkbox', { name: 'Compare KC' })).toBeChecked()
+  })
+
   it('explains how to get tables when there are none', async () => {
     // Arrange
     stubApi({ '/api/ratings/seasons': { seasons: [], current_season: 2026 } })

@@ -6,20 +6,25 @@ import { useEntityTable } from '@/api/queries'
 import type { EntityKind, EntityTable, Row } from '@/api/types'
 import { ErrorState } from '@/components/common/ErrorState'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ComparisonPanel } from '@/components/ratings/ComparisonPanel'
 import { RatingsSeasonState, UnavailableSeason } from '@/components/ratings/RatingsStates'
 import { SeasonPicker } from '@/components/ratings/SeasonPicker'
 import { ViewControls, type ViewChange } from '@/components/ratings/ViewControls'
 import { withDecimals } from '@/components/ratings/decimals'
-import { entityConfig, entityId, entityLabel } from '@/components/ratings/entities'
+import { entityConfig, entityId, entityLabel, findEntityRow } from '@/components/ratings/entities'
 import { carriedSearch, useRatingsParams, useRatingsSeason, viewPatch } from '@/components/ratings/useRatingsParams'
 import { resolveViewState, seasonView, VIEWS } from '@/components/ratings/views'
 import { DataTable, type CellRenderer } from '@/components/table/DataTable'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+
+/** The most rows the comparison puts side by side. */
+const MAX_COMPARE = 4
 
 function matches(kind: EntityKind, row: Row, names: Record<string, string>, needle: string): boolean {
   const team = String(row.team ?? '')
@@ -67,13 +72,25 @@ function SeasonTable({ kind, data }: { kind: EntityKind; data: EntityTable }) {
   const table = withDecimals({ ...view.table, rows }, view.columns)
   const search = carriedSearch(searchParams, data.season)
   const nameColumn = config.labelColumn
+  const compareIds = (searchParams.get('compare') ?? '').split(',').filter((id) => id !== '' && findEntityRow(kind, data.table.rows, id) !== undefined)
+  const toggleCompare = (id: string) =>
+    update({ compare: (compareIds.includes(id) ? compareIds.filter((picked) => picked !== id) : [...compareIds, id].slice(0, MAX_COMPARE)).join(',') })
   const renderers: Record<string, CellRenderer> = {
-    [nameColumn]: (value, row) => (
-      <Link to={`/${kind}/${encodeURIComponent(entityId(kind, row))}${search}`} className="font-medium text-primary underline-offset-4 hover:underline">
-        {String(value ?? entityId(kind, row))}
-      </Link>
-    ),
+    [nameColumn]: (value, row) => {
+      const id = entityId(kind, row)
+      const name = String(value ?? id)
+      const picked = compareIds.includes(id)
+      return (
+        <span className="inline-flex items-center gap-2">
+          <Checkbox aria-label={`Compare ${name}`} checked={picked} disabled={!picked && compareIds.length >= MAX_COMPARE} onCheckedChange={() => toggleCompare(id)} />
+          <Link to={`/${kind}/${encodeURIComponent(id)}${search}`} className="font-medium text-primary underline-offset-4 hover:underline">
+            {name}
+          </Link>
+        </span>
+      )
+    },
   }
+  const compareColumns = view.metricColumns.length > 0 ? view.metricColumns : (data.table.column_groups.ratings ?? [])
   const onChange = (change: ViewChange) => update(viewPatch(change))
   const sortable = view.columns.includes(config.ratingColumn)
   return (
@@ -104,6 +121,8 @@ function SeasonTable({ kind, data }: { kind: EntityKind; data: EntityTable }) {
         maxHeight="70vh"
         emptyMessage={needle ? `No ${config.singular} matches “${query.trim()}”.` : 'No rows.'}
       />
+      <p className="text-xs text-muted-foreground">Tick up to {MAX_COMPARE} rows to compare them side by side on this view’s columns.</p>
+      <ComparisonPanel kind={kind} season={data.season} data={data} ids={compareIds} columns={compareColumns} onRemove={toggleCompare} />
     </div>
   )
 }

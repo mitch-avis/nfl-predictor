@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.48.0] - 2026-10-10
+
+### Added
+
+- The web app's Pool page (`/pool`) with three tabs. Every helper reads the week's prediction
+  files and changes no probability, pick or rank.
+  - A confidence pool sheet: the picks by points, the lock at the week's first kickoff, expected
+    points and, once games end, the points won by the pool rules (a tie scores for neither side).
+    When the week was re-predicted after the lock, the sheet is built and scored from the picks
+    file written before it, with the newer ranks shown as notes.
+  - A tiebreaker card: whole-point entries for two selectable tiebreak games (the Sunday and
+    Monday night games preselected) and the week's highest and lowest team scores.
+  - A survivor planner: one plan per possible pick this week, each solved exactly over the later
+    predicted weeks (an assignment of weeks to teams), with the teams already used kept per
+    season in the browser.
+  - Routes: `GET /api/pool/confidence`, `GET /api/pool/tiebreakers`, `POST /api/pool/survivor`;
+    `GET /api/predictions/picks?format=csv` downloads the picks.
+- A "Margin head only" switch on the Model page's feature importance; `GET /api/model` returns
+  `feature_importance.margin_rows`, every feature ranked by the margin head alone.
+
+### Fixed
+
+- Predicting a later week into the active run no longer hides the run's own week from the week
+  selector and the routes, and a newer weekly run's own week outranks a file predicted ahead into
+  an older pinned run; the selector and the routes now resolve every week to the same file.
+- The week selector changes the week in one URL update; choosing another run's week or a week not
+  yet predicted used to leave the page unchanged.
+- The navigation, the Overview cards and the not-found page no longer show plan labels.
+
 ## [0.47.0] - 2026-10-10
 
 ### Added

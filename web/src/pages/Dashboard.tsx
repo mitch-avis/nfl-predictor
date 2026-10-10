@@ -1,13 +1,41 @@
+import { useId } from 'react'
 import { Link } from 'react-router'
 
 import { useRuns } from '@/api/queries'
-import { NAV_ITEMS } from '@/app/nav'
+import { NAV_ITEMS, NAV_SECTIONS, type NavItem } from '@/app/nav'
 import { ErrorState } from '@/components/common/ErrorState'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatTile } from '@/components/common/StatTile'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatNumber, formatPercent, formatRelative, seasonWeekLabel } from '@/utils/format'
+
+/** One sidebar section's pages as cards. */
+function PageSection({ section, items }: { section: string; items: NavItem[] }) {
+  const titleId = useId()
+  if (items.length === 0) return null
+  return (
+    <section aria-labelledby={titleId}>
+      <h2 id={titleId} className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {section}
+      </h2>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <Link key={item.to} to={item.to} className="group focus-visible:outline-2">
+            <Card className="h-full transition-colors group-hover:bg-accent/40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <item.icon className="size-4 text-primary" /> {item.label}
+                </CardTitle>
+                <CardDescription>{item.description}</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        ))}
+      </div>
+    </section>
+  )
+}
 
 export function DashboardPage() {
   const runs = useRuns('all')
@@ -26,18 +54,9 @@ export function DashboardPage() {
           <StatTile label="Holdout accuracy" value={formatPercent(active?.holdout?.winner_accuracy ?? active?.holdout?.pick_accuracy, 1)} hint="Share of held-out games where the favored side won." />
         </div>
       ) : null}
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {NAV_ITEMS.filter((item) => item.to !== '/').map((item) => (
-          <Link key={item.to} to={item.to} className="group focus-visible:outline-2">
-            <Card className="h-full transition-colors group-hover:bg-accent/40">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <item.icon className="size-4 text-primary" /> {item.label}
-                </CardTitle>
-                <CardDescription>{item.description}</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
+      <div className="mt-6 flex flex-col gap-6">
+        {NAV_SECTIONS.map((section) => (
+          <PageSection key={section} section={section} items={NAV_ITEMS.filter((item) => item.section === section && item.to !== '/')} />
         ))}
       </div>
     </>

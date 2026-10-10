@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from nfl_predictor.api.auth.ratelimit import LoginRateLimiter
@@ -24,6 +25,7 @@ from nfl_predictor.api.routers.model import router as model_router
 from nfl_predictor.api.routers.pool import router as pool_router
 from nfl_predictor.api.routers.power import router as power_router
 from nfl_predictor.api.routers.predictions import router as predictions_router
+from nfl_predictor.api.routers.ratings import router as ratings_router
 from nfl_predictor.api.routers.registry import router as registry_router
 from nfl_predictor.api.routers.runs import router as runs_router
 from nfl_predictor.api.routers.static import mount_frontend
@@ -85,6 +87,12 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     app.state.fingerprints = FingerprintCache(app.state.db)
     app.state.job_runner = JobRunner(app.state.db, settings, app.state.run_index)
     install_error_handlers(app)
+    # Compress responses for clients that accept gzip: a completed season's team table is close
+    # to 1 MB of JSON and under a fifth of that gzipped. Level 6, gzip's own default, rather than
+    # Starlette's 9: level 9 saves only a few percent more bytes for noticeably more CPU per
+    # response. Starlette leaves text/event-stream alone by default, so the job log stream is
+    # sent as written.
+    app.add_middleware(GZipMiddleware, compresslevel=6)
 
     @app.middleware("http")
     async def require_csrf_header(
@@ -106,6 +114,7 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     app.include_router(predictions_router, prefix=API_PREFIX)
     app.include_router(betting_router, prefix=API_PREFIX)
     app.include_router(power_router, prefix=API_PREFIX)
+    app.include_router(ratings_router, prefix=API_PREFIX)
     app.include_router(model_router, prefix=API_PREFIX)
     app.include_router(pool_router, prefix=API_PREFIX)
     app.include_router(data_router, prefix=API_PREFIX)

@@ -6,22 +6,30 @@ import type {
   BettingOut,
   ConfidenceSheet,
   DataStatusOut,
+  EntityKind,
+  EntityTable,
+  GameLogsTable,
   Job,
   JobCatalog,
   JobList,
   JobLogs,
   JobParams,
   JobStatus,
+  MetricRegistry,
   ModelOut,
   PicksOut,
   PowerOut,
   PredictionsOut,
+  RankRangeTable,
+  RatingsSeasons,
   Registry,
   WeekRef,
   Role,
   RunDetail,
   RunKind,
   RunList,
+  ScheduleRanks,
+  SeasonTable,
   Session,
   SurvivorOut,
   SurvivorRequest,
@@ -217,6 +225,88 @@ export function usePower(run: string | null) {
   return useQuery({
     queryKey: ['power', run],
     queryFn: () => apiFetch<PowerOut>(`/api/power${qs({ run })}`),
+  })
+}
+
+/** Whether a request failed because the season or its table does not exist (the API's 404). */
+export function isMissing(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404
+}
+
+/** Retry a failed ratings request once, unless the API said the table is not there. */
+function retryUnlessMissing(failures: number, error: unknown): boolean {
+  return !isMissing(error) && failures < 1
+}
+
+/** The path of a ratings route: `/api/ratings/<season>/<kind>/<parts...>`, each part encoded. */
+export function ratingsPath(season: number, kind: EntityKind, ...parts: string[]): string {
+  return ['/api/ratings', String(season), kind, ...parts.map(encodeURIComponent)].join('/')
+}
+
+/** Every season with team and quarterback tables, newest first, and the season under way. */
+export function useRatingsSeasons() {
+  return useQuery({
+    queryKey: ['ratings-seasons'],
+    queryFn: () => apiFetch<RatingsSeasons>('/api/ratings/seasons'),
+  })
+}
+
+/** One season's team or quarterback table; waits until a season is chosen. */
+export function useEntityTable(kind: EntityKind, season: number | null) {
+  return useQuery({
+    queryKey: ['ratings-table', kind, season],
+    queryFn: () => apiFetch<EntityTable>(ratingsPath(season ?? 0, kind)),
+    enabled: season !== null,
+    retry: retryUnlessMissing,
+  })
+}
+
+/** The league's rank ranges for a season, by published rank. */
+export function useRankRanges(kind: EntityKind, season: number | null) {
+  return useQuery({
+    queryKey: ['ratings-rank-ranges', kind, season],
+    queryFn: () => apiFetch<RankRangeTable>(ratingsPath(season ?? 0, kind, 'rank-ranges')),
+    enabled: season !== null,
+    retry: retryUnlessMissing,
+  })
+}
+
+/** One team's or quarterback's games, with the league size their opponents' ranks run to. */
+export function useGameLogs(kind: EntityKind, season: number | null, entityId: string | null) {
+  return useQuery({
+    queryKey: ['ratings-game-logs', kind, season, entityId],
+    queryFn: () => apiFetch<GameLogsTable>(ratingsPath(season ?? 0, kind, entityId ?? '', 'game-logs')),
+    enabled: season !== null && entityId !== null && entityId !== '',
+    retry: retryUnlessMissing,
+  })
+}
+
+type EntitySection = 'rating-history' | 'rank-history' | 'head-to-head'
+
+/** One team's or quarterback's section of a season; waits for a season and an id. */
+export function useEntitySection(section: EntitySection, kind: EntityKind, season: number | null, entityId: string | null) {
+  return useQuery({
+    queryKey: ['ratings-section', section, kind, season, entityId],
+    queryFn: () => apiFetch<SeasonTable>(ratingsPath(season ?? 0, kind, entityId ?? '', section)),
+    enabled: season !== null && entityId !== null && entityId !== '',
+    retry: retryUnlessMissing,
+  })
+}
+
+/** Every completed team-season ranked on schedule strength. */
+export function useScheduleRanks() {
+  return useQuery({
+    queryKey: ['ratings-schedules'],
+    queryFn: () => apiFetch<ScheduleRanks>('/api/ratings/schedules'),
+  })
+}
+
+/** The metric registry the glossary describes; it changes only with the code. */
+export function useMetricRegistry() {
+  return useQuery({
+    queryKey: ['ratings-metrics'],
+    queryFn: () => apiFetch<MetricRegistry>('/api/ratings/metrics'),
+    staleTime: Infinity,
   })
 }
 

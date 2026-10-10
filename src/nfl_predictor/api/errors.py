@@ -63,6 +63,14 @@ class UnprocessableEntityError(ApiError):
         super().__init__(422, code, message)
 
 
+class ServiceUnavailableError(ApiError):
+    """A 503 error: the data a route reads exists but cannot be used right now."""
+
+    def __init__(self, message: str, code: str = "unavailable") -> None:
+        """Build a 503 error."""
+        super().__init__(503, code, message)
+
+
 class BadRequestError(ApiError):
     """A 400 error."""
 

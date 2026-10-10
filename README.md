@@ -1066,6 +1066,31 @@ predictions into pool entries and never changes a probability, pick or rank:
   weeks show as near-term picks. Weeks without predictions are listed; predict them first to plan
   for them. The teams already used are kept in the browser, per season.
 
+The team and quarterback pages (`src/nfl_predictor/api/ratings/`, routes under `/api/ratings`)
+read each season's tables from `data/ratings/{season}_{kind}.parquet`, with the kinds and columns
+of the `nfl-sos-ratings` files that `src/nfl_predictor/ratings/` and
+`src/nfl_predictor/season_stats/` were ported from. No job in this app writes those tables yet, so
+until one does the pages show where they look for them. Every column's label, description and
+shading direction comes from the metric registry; green shades better or worse, slate shades
+context such as schedule strength, deeper for tougher. They only read, and a season built without
+a table hides that section.
+
+- **Teams** and **Quarterbacks**: a season's table by view (ratings, per game, per play, season
+  totals, and the opponents faced per game and per play) and registry category, with a search, the
+  quarterback qualifier, and up to four rows compared side by side. Each row opens a page with the
+  ratings and their ranks, the rank range across 1,000 redraws of the season's games, head-to-head
+  chances, the rating by week (and, for a season in progress, the rank range by week), the season
+  stats by view, the game log with each opponent's season ratings, and one row per opponent faced.
+- **Schedules**: every completed team-season ranked on schedule strength (`sos`), softest and
+  hardest first.
+- **Rank ranges**: where every team or qualifying quarterback ranks across those redraws.
+- **Head to head**: how often one team or quarterback was rated above another, and both side by
+  side.
+- The **Glossary** describes these stats from the registry beside the model's own columns.
+
+Power Rankings stays the model's own team strengths and projected standings; it and the Teams page
+link to each other.
+
 ```bash
 nfl-predictor users create-user <name> --role admin   # once
 nfl-predictor web                                     # http://127.0.0.1:8000
@@ -1245,13 +1270,15 @@ import paths.
   `nfl-sos-ratings` project (offense, defense, and special-teams ratings, head-to-head-excluded
   schedule strength, quarterback ratings, weekly histories, and bootstrap rank ranges), with a
   leakage-safe pre-week entry point for model features. Nothing in the ETL or the model uses it;
-  [its README](src/nfl_predictor/ratings/README.md) covers the methods, inputs, and parity checks.
+  the web app's team and quarterback pages read the tables it builds.
+  [Its README](src/nfl_predictor/ratings/README.md) covers the methods, inputs, and parity checks.
 - `src/nfl_predictor/season_stats/` holds the season statistics ported from the sibling
   `nfl-sos-ratings` project (team and quarterback game logs, season rows, head-to-head-excluded
   opponent profiles, win-probability bins) and its metric registry, with the stats catalogs
   generated from it. Its tables are whole-season display data, not values known before a week's
-  games, and nothing in the ETL, the model, or the web API uses them yet;
-  [its README](src/nfl_predictor/season_stats/README.md) covers the inputs, outputs, and parity
+  games. Nothing in the ETL or the model uses them yet; the web app's team and quarterback pages
+  read them and the registry.
+  [Its README](src/nfl_predictor/season_stats/README.md) covers the inputs, outputs, and parity
   checks.
 
 ## Implemented feature areas

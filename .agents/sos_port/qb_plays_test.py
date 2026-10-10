@@ -2568,7 +2568,7 @@ def run(
         },
         "provenance": {**provenance, "input_files": ledger.files},
     }
-    (out_dir / OUT_JSON).write_text(json.dumps(_json_ready(payload), indent=1))
+    (out_dir / OUT_JSON).write_text(json.dumps(_json_ready(payload), indent=1) + "\n")
     return 0
 
 

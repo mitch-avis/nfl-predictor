@@ -197,3 +197,26 @@ independent round (verdict "merge as is") plus three hardening items checked by 
   model needs nothing new, because its feature list already says what it was trained on.
 - **A group that matches no column warns** once per command, against the data it loaded (so an
   older dataset build without a group cannot silently train differently from the adopted arm).
+
+### The team and quarterback web pages (`0.53.0`)
+
+Full records: [decisions/web_pages.md](decisions/web_pages.md) (21 entries). Review: two
+independent rounds (verdict "merge as is"; 5,603 payloads matched the source app's, every table in
+the app rendered identically before and after the shared table change) plus a last small round
+checked by the session. Not yet checked in a browser: look at the pages once.
+
+- **For your review**: the sidebar is regrouped into four sections (Betting moves up under "This
+  week", Model sits above Data); the "Opponents faced" ledger is simpler than the source's
+  (games, results, average score, the opponent's season rating and a Tougher/Middle/Softer tier on
+  Team Rating everywhere, where the source switched the metric by stat group).
+- **Not ported** (logged, additive later if wanted): the per-row rank-range column and the rank
+  ranges in the comparison, the "n selected" bar, search and sort kept across navigation, the
+  refresh button, team palettes, CSV export and outside links, and the garbage-time filter view
+  (its 8 glossary metrics are hidden).
+- **Gzip at level 6** app-wide (the job log stream stays uncompressed): the team table goes from
+  about 0.96 MB to 0.18 MB; level 9 saved only 1-9% more bytes for up to 10 ms more CPU.
+- **Robustness**: a table a page needs that cannot be read answers 503 naming the file; one it can
+  do without is left out with a warning; the API reads `data/ratings/` and the old
+  `NFLP_SOS_DATA_DIR` setting is gone.
+- **Waiting on**: no job writes the season-statistics tables yet, so the pages show where they
+  read from until the season-statistics ETL step lands.

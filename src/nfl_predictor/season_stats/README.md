@@ -8,6 +8,17 @@ port reproduces the tables that project published, cell by cell (see "Checking t
 Nothing in the ETL, the game dataset, the model, the weekly run, or the web API uses the package
 yet, and no default depends on it.
 
+The tables are whole-season display data, not values known before a week's games: a season row
+pools every game played so far, and an opponent profile pools every played game of each
+opponent against everyone else, later weeks included. A model feature built from them needs its
+own pre-week version, solved from the games strictly before each week, as `AGENTS.md` requires
+of every schedule- or opponent-adjusted value.
+
+When an ETL step starts reading the package, add `season_stats` to `_ETL_SOURCE_DIRECTORIES` in
+`utils/season_cache.py` in the same change: the season cache's code fingerprint covers
+`data_collection.py`, `constants.py`, and `utils/` only, so a change here would otherwise leave
+cached seasons built from the old code.
+
 ## What it computes
 
 - **Game logs** (`game_logs.py`): one row per team-game from play-by-play (`team_stats.py`,
@@ -71,19 +82,22 @@ schedule and no game rows: `SeasonGames.played` is false, and `build_season_tabl
 rather than tabulate nothing.
 
 `published_logs.py` turns the game logs that project published back into the rows the season
-tables read. The published logs leave out each rate's hidden parts; the adapter rebuilds those the
-published columns determine (`rebuilt_team_rates`), so a season row built from published logs
-matches the published one only on the columns those parts cover.
+tables read. The published logs leave out each rate's hidden parts; the adapter rebuilds those it
+can read off the published columns as the code defines them, a whole-number total as its
+published rate times its published denominator, rounded (`rebuilt_team_rates`). A season row
+built from published logs therefore matches the published one only on the columns those parts
+cover.
 
 ## Determinism
 
 The same inputs give the same bits. The tables sum floats over rows, so their order is fixed
 rather than left to Polars: the builders sort the team-game and passer-game rows, and the two
-profile joins keep their inputs' order. Polars also sums a group's floats in another order when
-the frame is flagged sorted by the group key, so `build_season_tables` sorts the game rows itself
-and gives every caller the same order and flag. Play order is the order nflverse publishes, which
-the play-by-play cache keeps; `play_id` is not monotonic within every game, so plays are not
-re-sorted. No linear algebra is involved, so the BLAS thread count does not matter.
+profile joins ask Polars to keep their inputs' order, which it leaves unspecified otherwise (a
+guard: Polars 2.0 gives the same bits without it). Polars also sums a group's floats in another
+order when the frame is flagged sorted by the group key, so `build_season_tables` sorts the game
+rows itself and gives every caller the same order and flag. Play order is the order nflverse
+publishes, which the play-by-play cache keeps; `play_id` is not monotonic within every game, so
+plays are not re-sorted. No linear algebra is involved, so the BLAS thread count does not matter.
 
 ## Checking the port
 
@@ -93,7 +107,8 @@ re-sorted. No linear algebra is involved, so the BLAS thread count does not matt
   tables from published logs, against fixtures cut from the published files
   (`tests/fixtures/sos_season_stats_parity/`, with their provenance and hashes).
 - `.agents/sos_port/season_stats_parity.py`: rebuilds every published season of these tables
-  (1999-2025) from that snapshot through the loaders, compares each table cell by cell, builds the
-  season tables a second way from the published logs, and writes
-  `.agents/sos_port/SEASON_STATS_PARITY.md` with the counts and timings. The judgment calls and
-  departures are in `.agents/sos_port/decisions/season_stats.md`.
+  (1999-2026, 2026 through the weeks played at that commit) from that snapshot through the
+  loaders, compares each table cell by cell, builds the season tables a second way from the
+  published logs, compares the schedule leaderboard with the one that project's own code ranks,
+  and writes `.agents/sos_port/SEASON_STATS_PARITY.md` with the counts and timings. The judgment
+  calls and departures are in `.agents/sos_port/decisions/season_stats.md`.

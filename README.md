@@ -974,7 +974,8 @@ model metrics and data status; the Jobs pages run the ETL, a lines-only refresh
 (`src/nfl_predictor/lines_refresh.py`), future-week inputs (`src/nfl_predictor/week_builder.py`),
 training, prediction, walk-forward and the reports as streamed background subprocesses. A week
 predicted ahead with the Predictions page's Generate action lands in the active run beside the
-run's own week, and both stay selectable.
+run's own week, and both stay selectable; once a newer weekly run predicts that week as its own,
+the newer run's predictions stand for it.
 
 The Pool page (`src/nfl_predictor/api/pool/`, routes under `/api/pool`) turns a week's
 predictions into pool entries and never changes a probability, pick or rank:
@@ -983,17 +984,21 @@ predictions into pool entries and never changes a probability, pick or rank:
   ranks (ranks that are not the unique `1..N` are reported, not repaired), the expected points,
   the lock (the week's first kickoff, since picks are single-shot) with a warning when the
   predictions were written after it, and, once games end, the points won under the pool rules
-  below (final scores from the predictions file or `data/all_data.csv`). Copy it, or download it
-  as CSV (`GET /api/predictions/picks?format=csv`).
+  below (final scores from the predictions file or `data/all_data.csv`). When the predictions were
+  rewritten after the lock (a lines refresh chains a new prediction) and the weekly run's picks
+  file was written before it, the sheet, its points and the picks download come from that picks
+  file, and the newer ranks show only as notes. Copy it, or download it as CSV
+  (`GET /api/predictions/picks?format=csv`).
 - **Tiebreakers**: whole-point total, home and road entries for any two games (the latest Sunday
   and Monday kickoffs preselected, since the pool names its games each week), with p10 to p90
   bands from the quantile models, and the week's highest and lowest team scores, estimated as
   the extremes of normal team scores rather than the best and worst projections.
 - **Survivor**: one team a week, each team once, a loss or a tie ending the entry. For each
-  possible pick this week, a beam search lays out the next weeks pick by pick, and every later
-  week with predictions is filled in with the best assignment of the teams left, so a team worth
-  more later is saved. Weeks without predictions are listed; predict them first to plan for them.
-  The teams already used are kept in the browser, per season.
+  possible pick this week, every later week with predictions is assigned exactly (the
+  assignment of weeks to distinct teams that maximizes the chance of surviving them all,
+  `scipy.optimize.linear_sum_assignment`), so a team worth more later is saved; the next few
+  weeks show as near-term picks. Weeks without predictions are listed; predict them first to plan
+  for them. The teams already used are kept in the browser, per season.
 
 ```bash
 nfl-predictor users create-user <name> --role admin   # once

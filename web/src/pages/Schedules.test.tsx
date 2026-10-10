@@ -79,7 +79,7 @@ describe('SchedulesPage', () => {
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2)
   })
 
-  it('explains an empty ranking', async () => {
+  it('explains an empty ranking by the tables it reads', async () => {
     // Arrange
     stubApi({ '/api/ratings/schedules': ranks([]) })
 
@@ -88,5 +88,7 @@ describe('SchedulesPage', () => {
 
     // Assert
     expect(await screen.findByText('No completed seasons to rank yet')).toBeInTheDocument()
+    expect(screen.getByText(/\{season\}_ratings\.parquet in data\/ratings\//)).toBeInTheDocument()
+    expect(screen.queryByText(/ETL/)).toBeNull()
   })
 })

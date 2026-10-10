@@ -1,8 +1,8 @@
-import { Link } from 'react-router'
-
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
 import { Skeleton } from '@/components/ui/skeleton'
+
+const CODE = 'rounded bg-muted px-1'
 
 /** What a ratings page shows until it has a season: loading, an error, or no tables yet. */
 export function RatingsSeasonState({ isLoading, error }: { isLoading: boolean; error: unknown }) {
@@ -13,11 +13,8 @@ export function RatingsSeasonState({ isLoading, error }: { isLoading: boolean; e
       title="No team or quarterback tables yet"
       description={
         <>
-          The ETL writes each season’s ratings and statistics to <code className="rounded bg-muted px-1">data/ratings/</code>. Run it from the{' '}
-          <Link to="/jobs" className="underline underline-offset-2">
-            Jobs page
-          </Link>
-          , then reload.
+          These pages read each season’s tables from <code className={CODE}>data/ratings/</code>, starting with <code className={CODE}>{'{season}_combined.parquet'}</code> and{' '}
+          <code className={CODE}>{'{season}_qb_combined.parquet'}</code>, and that folder holds none yet. No job in this app writes them yet; once a season’s tables are there, reload.
         </>
       }
     />

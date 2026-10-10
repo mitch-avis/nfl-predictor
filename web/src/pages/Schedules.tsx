@@ -115,7 +115,7 @@ export function SchedulesPage() {
       {query.isLoading ? <Skeleton className="h-96 w-full" /> : null}
       {query.isError ? <ErrorState error={query.error} title="Could not load the schedule rankings" /> : null}
       {query.data && query.data.count === 0 ? (
-        <EmptyState title="No completed seasons to rank yet" description="The ranking reads each completed season’s team ratings, which the ETL writes to data/ratings/." />
+        <EmptyState title="No completed seasons to rank yet" description="The ranking reads each completed season’s team ratings, {season}_ratings.parquet in data/ratings/, and that folder holds none yet." />
       ) : null}
       {query.data && query.data.count > 0 ? <Leaderboard data={query.data} /> : null}
     </>

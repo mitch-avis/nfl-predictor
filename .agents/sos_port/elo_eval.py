@@ -93,6 +93,10 @@ PROB_GAP_FLAG = 1e-4
 BACKUP_ADJUSTMENT = -100.0
 # 538's game-level terms count as reproduced by its 2019 constants within this many points.
 FIXED_MODEL_TOLERANCE = 0.5
+# A published rolling value counts as reproduced within this many Elo points.
+ROLLING_TOLERANCE = 0.01
+# 538's stated preseason team rating: this share of the end-of-season one, the rest the starter's.
+PRESEASON_CARRYOVER = 1.0 / 3.0
 
 
 def _main_checkout_data() -> Path:
@@ -598,6 +602,89 @@ def check_published_adjustments(inputs: Inputs) -> list[dict[str, Any]]:
     return fits
 
 
+def check_published_rolling_updates(inputs: Inputs) -> dict[str, Any]:
+    """Test candidate rolling rates against 538's published quarterback and team values.
+
+    538's own seasons (2007-2022) in ``qb_elos.csv`` give, per side, the starter's value before
+    and after the game, his game value and his adjustment over the team, all in Elo points, so
+    the team's rating is ``value - adjustment``. A rate fits when the next published value is
+    ``(1 - rate) * before + rate * game value``.
+    """
+    published = inputs.qb_elos.filter(pl.col("season").is_between(2007, 2022)).with_row_index("row")
+    sides = pl.concat(
+        [
+            published.select(
+                "row",
+                "season",
+                pl.col(f"{side}_abbr").alias("team"),
+                pl.col(f"qb{number}_value_pre").alias("before"),
+                pl.col(f"qb{number}_adj").alias("adjustment"),
+                pl.col(f"qb{number}_game_value").alias("game"),
+                pl.col(f"qb{number}_value_post").alias("after"),
+            )
+            for side, number in (("home", 1), ("away", 2))
+        ]
+    ).sort("team", "row")
+    sides = sides.with_columns(
+        (pl.col("before") - pl.col("adjustment")).alias("team_before"),
+    ).with_columns(
+        pl.col("team_before").shift(-1).over("team").alias("team_next"),
+        pl.col("season").shift(-1).over("team").alias("next_season"),
+    )
+    quarterback = sides.filter(pl.col("game").is_not_null() & pl.col("after").is_not_null())
+    team = sides.filter(
+        pl.col("game").is_not_null()
+        & pl.col("team_next").is_not_null()
+        & (pl.col("next_season") == pl.col("season"))
+    )
+    ends = sides.with_columns(
+        (0.95 * pl.col("team_before") + 0.05 * pl.col("game")).alias("team_end"),
+        pl.col("season").shift(1).over("team").alias("previous_season"),
+        (0.95 * pl.col("team_before") + 0.05 * pl.col("game"))
+        .shift(1)
+        .over("team")
+        .alias("previous_end"),
+    )
+    starts = ends.filter(
+        (pl.col("previous_season") == pl.col("season") - 1) & pl.col("previous_end").is_not_null()
+    )
+    stated = (
+        PRESEASON_CARRYOVER * starts["previous_end"] + (1 - PRESEASON_CARRYOVER) * starts["before"]
+    )
+    preseason_gap = (starts["team_before"] - stated).abs()
+    result: dict[str, Any] = {
+        "quarterback": [],
+        "team": [],
+        "team_preseason": {
+            "season_starts": starts.height,
+            "median_abs_gap": float(preseason_gap.median() or 0.0),
+            "share_within_0.01": float((preseason_gap <= ROLLING_TOLERANCE).mean() or 0.0),
+        },
+    }
+    for rate in (0.1, 0.05):
+        gap = (
+            quarterback["after"] - ((1 - rate) * quarterback["before"] + rate * quarterback["game"])
+        ).abs()
+        result["quarterback"].append(
+            {
+                "rate": rate,
+                "updates": quarterback.height,
+                "median_abs_gap": float(gap.median() or 0.0),
+                "share_within_0.01": float((gap <= ROLLING_TOLERANCE).mean() or 0.0),
+            }
+        )
+        gap = (team["team_next"] - ((1 - rate) * team["team_before"] + rate * team["game"])).abs()
+        result["team"].append(
+            {
+                "rate": rate,
+                "updates": team.height,
+                "median_abs_gap": float(gap.median() or 0.0),
+                "share_within_0.01": float((gap <= ROLLING_TOLERANCE).mean() or 0.0),
+            }
+        )
+    return result
+
+
 def check_starters(inputs: Inputs, box: pl.DataFrame) -> dict[str, Any]:
     """Compare play-by-play starter rules with the starters ``qb_elos.csv`` names."""
     passing = qb_stats.aggregate_qb_game_stats(inputs.plays)
@@ -846,6 +933,7 @@ def evaluate(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path) 
             "framework_against_538": check_framework(inputs, seeds),
             "published_adjustments": check_published_adjustments(inputs),
             "starters": check_starters(inputs, box),
+            "rolling_updates": check_published_rolling_updates(inputs),
             "quarterback_adjustments": check_quarterback_adjustments(inputs, adjustments),
         },
         "seeds_538_1999": seeds,
@@ -1198,6 +1286,37 @@ def _check_lines(result: dict[str, Any]) -> list[str]:
             ]
             for label in ("1999-2025", "2007-2025")
         ],
+    )
+    rolling = checks["rolling_updates"]
+    lines += [
+        "### 538's rolling updates",
+        "",
+        "538's seasons 2007-2022: how often the next published value is the candidate rolling",
+        "update of the published one (within 0.01 Elo points). A quarterback's value moves with",
+        "his own starts; the team's (value minus adjustment) with each game of the season.",
+        "",
+    ]
+    lines += _table(
+        ["rating", "rate", "updates", "median abs gap", "within 0.01"],
+        [
+            [
+                name,
+                _number(row["rate"], 2),
+                str(row["updates"]),
+                _number(row["median_abs_gap"], 4),
+                _number(row["share_within_0.01"], 3),
+            ]
+            for name in ("quarterback", "team")
+            for row in rolling[name]
+        ],
+    )
+    preseason = rolling["team_preseason"]
+    lines += _paragraph(
+        "At a team's first game of a season, 538's stated rule (a third of the previous",
+        "season's end-of-season team value, two thirds the starter's preseason value) against",
+        f"the published team value: {preseason['season_starts']} season starts, median gap",
+        f"{_number(preseason['median_abs_gap'], 2)} Elo points, within 0.01 for",
+        f"{_number(preseason['share_within_0.01'], 3)} of them.",
     )
     lines += [
         "### Quarterback adjustments",

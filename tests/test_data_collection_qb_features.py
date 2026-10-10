@@ -154,6 +154,31 @@ def test_quarterback_history_loads_the_missing_seasons_from_the_cache(
     assert history.qb_games.get_column("dropbacks").sum() == 50
 
 
+def test_quarterback_history_never_requests_a_season_the_run_already_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A season the team-stat load asked for and got no plays for is not asked for again."""
+    # Arrange
+    in_memory = pl.DataFrame(_dropbacks(2000, 1, "NE", "TB", 5))
+    requested: list[list[int]] = []
+
+    def fake_load_pbp(seasons: list[int], **_kwargs: Any) -> pl.DataFrame:
+        """Record the requested seasons."""
+        requested.append(list(seasons))
+        return pl.DataFrame(_dropbacks(1999, 1, "NE", "TB", 3))
+
+    monkeypatch.setattr(polars_utils, "load_pbp", fake_load_pbp)
+    _no_identity(monkeypatch)
+
+    # Act
+    data_collection._quarterback_history(
+        in_memory, max_season=2001, current_season=2001, requested_seasons=(2000, 2001)
+    )
+
+    # Assert
+    assert requested == [[1999]]
+
+
 def test_attach_qb_features_joins_both_sides(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

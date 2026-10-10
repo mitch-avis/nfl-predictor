@@ -1458,6 +1458,36 @@ def test_load_team_game_frame_repairs_player_teams_in_one_team_games(
     assert penalties == [("JAX", float(half)), ("WSH", float(half))]
 
 
+def test_load_sources_records_every_play_by_play_season_it_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sources name the seasons the play-by-play load asked for, with or without plays."""
+    # Arrange
+    requested: list[list[int]] = []
+
+    def fake_load_pbp(seasons: list[int], **_kwargs: object) -> pl.DataFrame:
+        """Record the requested seasons and return no plays."""
+        requested.append(list(seasons))
+        return loaders._empty_pbp_frame()
+
+    monkeypatch.setattr(polars_utils, "load_pbp", fake_load_pbp)
+    monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (2026, 1))
+    monkeypatch.setattr(polars_utils, "load_schedule", lambda *_a, **_k: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: pl.DataFrame())
+    monkeypatch.setattr(data_collection, "_build_team_game_frame", lambda stats, *_a: stats)
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
+
+    # Act
+    sources = data_collection._load_sources([2025, 2026], _stored_lines_config([2025, 2026]))
+
+    # Assert
+    assert requested == [[2024, 2025, 2026]]
+    assert sources.pbp_seasons == (2024, 2025, 2026)
+
+
 def test_join_pbp_team_game_stats_attaches_counts_by_team_week() -> None:
     """Play-by-play counts join onto the matching team-week rows."""
     # Arrange

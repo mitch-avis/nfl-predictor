@@ -464,18 +464,24 @@ def _save_market_lines_metadata(metadata: dict[str, object], data_dir: Path | No
 
 
 def _quarterback_history(
-    pbp_df: pl.DataFrame, *, max_season: int, current_season: int
+    pbp_df: pl.DataFrame,
+    *,
+    max_season: int,
+    current_season: int,
+    requested_seasons: tuple[int, ...] = (),
 ) -> qb_starters.QuarterbackHistory:
     """Return every regular season's quarterback games and play-by-play starters.
 
     Career rates and the own Elo need every earlier regular season, so play-by-play seasons
     from ``constants.NFLREADPY_MIN_SEASON`` through ``max_season`` that are not already in
     ``pbp_df`` are loaded from the per-season cache; a partial-season run therefore produces
-    the same values as a full rebuild. Those history seasons are never force-refreshed: a
-    refresh applies to the seasons being processed, which arrive in ``pbp_df``, and re-pulling
-    every earlier season would turn a one-season refresh into a full-history download. Each
-    season's quarterback identity (``nflverse_sources.load_season_qb_identity``) decides who
-    can start (``qb_starters``).
+    the same values as a full rebuild. A season in ``requested_seasons`` (the seasons the run
+    already asked for, ``_EtlSources.pbp_seasons``) is never asked for again, so the current
+    season, which has no plays before kickoff, is requested once. Those history seasons are
+    never force-refreshed: a refresh applies to the seasons being processed, which arrive in
+    ``pbp_df``, and re-pulling every earlier season would turn a one-season refresh into a
+    full-history download. Each season's quarterback identity
+    (``nflverse_sources.load_season_qb_identity``) decides who can start (``qb_starters``).
     """
     seasons = list(range(constants.NFLREADPY_MIN_SEASON, max_season + 1))
     loaded = (
@@ -483,7 +489,9 @@ def _quarterback_history(
         if "season" in pbp_df
         else set()
     )
-    missing = [season for season in seasons if season not in loaded]
+    missing = [
+        season for season in seasons if season not in loaded and season not in requested_seasons
+    ]
     plays = pbp_df
     if missing:
         history = polars_utils.load_pbp(missing, force_refresh=False, current_season=current_season)
@@ -682,6 +690,8 @@ class _EtlSources:
     raw_elo_df: pl.DataFrame
     # Set for a pick-time build: the nfelo snapshot, the line order's report and the maps.
     pick_time: pick_time_lines.PickTimeLines | None = None
+    # The play-by-play seasons the run asked for, plays or none, so none is asked for twice.
+    pbp_seasons: tuple[int, ...] = ()
 
 
 def _stats_window(
@@ -824,6 +834,7 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         pbp_df=pbp_df,
         elo_df=elo_df,
         raw_elo_df=raw_elo_df,
+        pbp_seasons=tuple(stats_seasons),
     )
 
 
@@ -905,7 +916,10 @@ def _finish_games(
     with _timed_step("attach_qb_features", enabled=enable_timing):
         history = (
             _quarterback_history(
-                sources.pbp_df, max_season=max_season, current_season=sources.current_season
+                sources.pbp_df,
+                max_season=max_season,
+                current_season=sources.current_season,
+                requested_seasons=sources.pbp_seasons,
             )
             if _QB_NAME_COLUMNS.issubset(combined_df.columns)
             else None

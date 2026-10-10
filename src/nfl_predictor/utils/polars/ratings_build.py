@@ -288,10 +288,12 @@ def load_ratings_build(
     current_season: int,
     force_refresh: bool,
 ) -> RatingsBuild | None:
-    """Return the ratings build of an ETL run, or ``None`` when no season has a play.
+    """Return a ratings build over the sources an ETL run loads, or ``None`` with no play.
 
-    The arguments are those of :func:`load_ratings_sources`; ``current_season`` is also the
-    season the build gives weekly rank ranges.
+    The build has the ratings alone, without the season statistics: ``nfl-predictor data``
+    builds its own, with them (``data_collection._load_sources``). The arguments are those of
+    :func:`load_ratings_sources`; ``current_season`` is also the season the build gives weekly
+    rank ranges.
     """
     sources = load_ratings_sources(
         max_season,
@@ -499,6 +501,9 @@ class RatingsBuild:
     def reuse(self, season: int, frames: Mapping[str, pl.DataFrame]) -> None:
         """Record a season's frames from a cached build instead of fitting them again.
 
+        The game rows the season statistics built for the season's key are dropped: the cached
+        frames hold its tables already.
+
         Raises:
             ValueError: If ``frames`` lacks a pre-week table, so it is not a ratings build.
 
@@ -508,6 +513,8 @@ class RatingsBuild:
             msg = f"season {season}'s cached ratings lack {', '.join(missing)}"
             raise ValueError(msg)
         self._frames[season] = dict(frames)
+        if self._season_stats is not None:
+            self._season_stats.forget(season)
 
     def build_frames(self, season: int) -> dict[str, pl.DataFrame]:
         """Return the frames recorded for ``season`` by :meth:`build` or :meth:`reuse`."""

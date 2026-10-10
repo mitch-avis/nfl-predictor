@@ -756,6 +756,28 @@ def test_season_key_frames_are_empty_without_season_statistics() -> None:
     assert frames == {}
 
 
+def test_reusing_a_season_drops_the_game_rows_its_key_kept(
+    built: ratings_build.RatingsBuild,
+) -> None:
+    """A season reused from the season cache never builds its tables, so nothing reads them."""
+    # Arrange
+    data = _league()
+    season_stats = _season_stats(data)
+    build = ratings_build.RatingsBuild(
+        ratings_build.ratings_inputs(_loaded(data)),
+        current_season=_LAST + 1,
+        bootstrap=_FAST,
+        season_stats=season_stats,
+    )
+    build.season_key_frames(_SEASON)
+
+    # Act
+    build.reuse(_SEASON, built.build_frames(_SEASON))
+
+    # Assert
+    assert season_stats._games == {}
+
+
 def test_reused_season_frames_publish_the_same_season_statistics_tables(
     built: ratings_build.RatingsBuild,
 ) -> None:

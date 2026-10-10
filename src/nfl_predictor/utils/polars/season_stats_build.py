@@ -243,6 +243,13 @@ class SeasonStatsBuild:
             "season_stats_schedule": games.schedule,
         }
 
+    def forget(self, season: int) -> None:
+        """Drop the game rows :meth:`key_frames` kept for ``season``, if any.
+
+        A season reused from the season cache never builds its tables, so nothing reads them.
+        """
+        self._games.pop(season, None)
+
     def tables(
         self,
         season: int,

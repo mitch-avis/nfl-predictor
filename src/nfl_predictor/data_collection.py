@@ -61,6 +61,7 @@ from nfl_predictor.utils.polars import (
     qb_starters,
     qb_stats,
     ratings_build,
+    season_stats_build,
 )
 from nfl_predictor.utils.polars.strength_snapshot import StrengthPrior
 from nfl_predictor.utils.polars.strength_table import (
@@ -884,7 +885,16 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
             None
             if loaded is None
             else ratings_build.RatingsBuild(
-                ratings_build.ratings_inputs(loaded), current_season=current_season
+                ratings_build.ratings_inputs(loaded),
+                current_season=current_season,
+                season_stats=season_stats_build.SeasonStatsBuild(
+                    season_stats_build.load_season_stats_sources(
+                        seasons,
+                        loaded,
+                        current_season=current_season,
+                        force_refresh=config.force_refresh_nflreadpy,
+                    )
+                ),
             )
         )
     return _EtlSources(
@@ -1134,8 +1144,9 @@ def _open_season_cache(
 
     A season's build reads the schedule, the team stats and the ELO ratings through that
     season (the coach history reaches back to the run's first season), its own and the
-    previous season's TeamRankings, and the options below, and its ratings read the ratings'
-    team-game and passer-game rows through that season; the keys cover exactly those.
+    previous season's TeamRankings, and the options below, its ratings read the ratings'
+    team-game and passer-game rows through that season, and its season statistics their own
+    frames of that season (``_season_frames``); the keys cover exactly those.
     """
     if not config.incremental:
         return None
@@ -1162,6 +1173,20 @@ def _open_season_cache(
     return _SeasonCacheRun(season_cache.SeasonCache(directory), keys, sources.current_season)
 
 
+def _season_frames(
+    season: int, sources: _EtlSources, inputs: SeasonInputs
+) -> dict[str, pl.DataFrame | None]:
+    """Return the frames of ``season`` alone that its build reads, by name, for its cache key.
+
+    They are its own and the previous season's TeamRankings and, with the ratings, the season
+    statistics' frames of the season (``ratings_build.RatingsBuild.season_key_frames``).
+    """
+    frames: dict[str, pl.DataFrame | None] = {"tr": inputs.tr_df, "prev_tr": inputs.prev_tr_df}
+    if sources.ratings is not None:
+        frames |= sources.ratings.season_key_frames(season)
+    return frames
+
+
 def _build_season(
     season: int, sources: _EtlSources, inputs: SeasonInputs, cache: _SeasonCacheRun | None
 ) -> pl.DataFrame:
@@ -1169,12 +1194,13 @@ def _build_season(
 
     The season in progress is always rebuilt. A cached build carries the season's strength
     snapshots too, so they reach ``inputs.strength_snapshots`` exactly as a rebuild's would,
-    and its ratings frames, which ``sources.ratings`` records instead of fitting them again.
+    and its ratings frames (the season statistics' tables among them), which
+    ``sources.ratings`` records instead of building them again.
     """
     key = (
         None
         if cache is None or season >= cache.current_season
-        else cache.keys.key(season, {"tr": inputs.tr_df, "prev_tr": inputs.prev_tr_df})
+        else cache.keys.key(season, _season_frames(season, sources, inputs))
     )
     if cache is None or key is None:
         games = process_season(season, sources.schedule_df, sources.team_stats_df, inputs)

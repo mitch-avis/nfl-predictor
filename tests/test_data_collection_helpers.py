@@ -13,7 +13,13 @@ import pytest
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import clock, polars_utils
-from nfl_predictor.utils.polars import loaders, nflverse_sources, ratings_build, week_rows
+from nfl_predictor.utils.polars import (
+    loaders,
+    nflverse_sources,
+    ratings_build,
+    season_stats_build,
+    week_rows,
+)
 
 
 @pytest.mark.parametrize(("today", "season"), [(date(2024, 9, 1), 2024), (date(2024, 2, 1), 2023)])
@@ -1501,13 +1507,9 @@ def test_load_sources_records_every_play_by_play_season_it_requested(
     assert sources.pbp_seasons == (2024, 2025, 2026)
 
 
-def test_load_sources_keeps_the_ratings_player_sources_for_the_quarterback_identity(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The players file and weekly rosters the ratings load are the ones every identity reads."""
-    # Arrange
-    _empty_upstream(monkeypatch, [])
-    loaded = ratings_build.LoadedSources(
+def _loaded_sources() -> ratings_build.LoadedSources:
+    """Return the ratings' sources of a run, one row of each identity source."""
+    return ratings_build.LoadedSources(
         plays=pl.DataFrame({"season": [2025]}),
         schedule=pl.DataFrame(),
         player_stats=pl.DataFrame(),
@@ -1516,8 +1518,20 @@ def test_load_sources_keeps_the_ratings_player_sources_for_the_quarterback_ident
         weekly_rosters=pl.DataFrame({"season": [2025], "gsis_id": ["00-1"]}),
         starter_identity=pl.DataFrame(),
     )
+
+
+def test_load_sources_keeps_the_ratings_player_sources_for_the_quarterback_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The players file and weekly rosters the ratings load are the ones every identity reads."""
+    # Arrange
+    _empty_upstream(monkeypatch, [])
+    loaded = _loaded_sources()
     monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_a, **_k: loaded)
     monkeypatch.setattr(ratings_build, "ratings_inputs", lambda sources: sources)
+    monkeypatch.setattr(
+        season_stats_build, "load_season_stats_sources", lambda *_a, **_k: "season statistics"
+    )
     monkeypatch.setattr(ratings_build, "RatingsBuild", lambda inputs, **_kwargs: inputs)
 
     # Act
@@ -1527,6 +1541,69 @@ def test_load_sources_keeps_the_ratings_player_sources_for_the_quarterback_ident
     assert sources.qb_identity_sources is not None
     assert sources.qb_identity_sources.players is loaded.players
     assert sources.qb_identity_sources.weekly_rosters is loaded.weekly_rosters
+
+
+def test_load_sources_builds_the_season_statistics_beside_the_ratings_from_their_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The season statistics read the frames the ratings loaded, for the run's seasons."""
+    # Arrange
+    _empty_upstream(monkeypatch, [])
+    loaded = _loaded_sources()
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_a, **_k: loaded)
+    monkeypatch.setattr(ratings_build, "ratings_inputs", lambda sources: sources)
+    loads: list[tuple[list[int], object, dict[str, object]]] = []
+
+    def load_season_stats_sources(
+        seasons: list[int], sources: object, **kwargs: object
+    ) -> season_stats_build.SeasonStatsSources:
+        loads.append((list(seasons), sources, kwargs))
+        return season_stats_build.SeasonStatsSources(
+            plays=pl.DataFrame(),
+            schedule=pl.DataFrame(),
+            player_stats=pl.DataFrame(),
+            snap_counts=pl.DataFrame(),
+            official_team_stats=pl.DataFrame(),
+            identity=nflverse_sources.QbIdentitySources(pl.DataFrame(), pl.DataFrame()),
+        )
+
+    monkeypatch.setattr(season_stats_build, "load_season_stats_sources", load_season_stats_sources)
+    builds: list[dict[str, object]] = []
+
+    def ratings_build_of(inputs: object, **kwargs: object) -> object:
+        builds.append(kwargs)
+        return inputs
+
+    monkeypatch.setattr(ratings_build, "RatingsBuild", ratings_build_of)
+
+    # Act
+    data_collection._load_sources([2025, 2026], _stored_lines_config([2025, 2026]))
+
+    # Assert
+    assert loads == [([2025, 2026], loaded, {"current_season": 2026, "force_refresh": False})]
+    assert [type(build["season_stats"]) for build in builds] == [
+        season_stats_build.SeasonStatsBuild
+    ]
+
+
+def test_load_sources_without_play_by_play_loads_no_season_statistics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    _empty_upstream(monkeypatch, [])
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_a, **_k: None)
+
+    def refuse(*_args: object, **_kwargs: object) -> season_stats_build.SeasonStatsSources:
+        msg = "the season statistics need the ratings' sources"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(season_stats_build, "load_season_stats_sources", refuse)
+
+    # Act
+    sources = data_collection._load_sources([2025, 2026], _stored_lines_config([2025, 2026]))
+
+    # Assert
+    assert sources.ratings is None
 
 
 def test_join_pbp_team_game_stats_attaches_counts_by_team_week() -> None:

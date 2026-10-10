@@ -1,8 +1,9 @@
 """Per-season cache of the ETL's season builds, for the incremental rebuild.
 
 A season's build is its game rows and its weekly strength snapshots, as
-``data_collection.process_season`` produces them, and its ratings frames (published tables and
-pre-week ratings, ``utils.polars.ratings_build``). For a finished season those depend on the
+``data_collection.process_season`` produces them, and its ratings frames (the ratings' published
+tables and pre-week ratings, ``utils.polars.ratings_build``, and the season statistics' tables,
+``utils.polars.season_stats_build``). For a finished season those depend on the
 code, the library environment, the run's options and the values of the input rows from that
 season and earlier, so ``SeasonKeys`` hashes exactly those and the cache returns a stored build
 only when the key matches. Anything else, including a later season's rows, cannot change the

@@ -353,10 +353,16 @@ because the fixed 55 or 65 points overstate home field since 2020.
 
 ## 10. Quarterback box scores and starters
 
+Superseded in part by the integration (`integration_pbp_elo.md`, section 3): the play-by-play
+cache now keeps the rusher and play ids, VALUE's rushing is every rush attempt the quarterback
+made as the rusher (designed runs, scrambles and kneel-downs), and a completed game's starter is
+the shared play-by-play starter (`qb_starters`: the quarterback on the team's first
+first-quarter snap). The entry below records the decision as it was taken.
+
 **What differs**: 538's VALUE reads box scores, rushing included. This repository's
-play-by-play cache keeps the passer id but not the rusher id, and holds regular-season plays
-only. The plan asks for the box stats from this repository's play-by-play or another source
-already here, and for the source and the reason to be logged.
+play-by-play cache kept the passer id but not the rusher id when this was decided, and holds
+regular-season plays only. The plan asks for the box stats from this repository's play-by-play
+or another source already here, and for the source and the reason to be logged.
 
 **Options**: the cached play-by-play (designed quarterback runs missing); nflverse team stats
 (team totals, so a running back's carries would count as the quarterback's); `qb_elos.csv`'s

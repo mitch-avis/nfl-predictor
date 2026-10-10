@@ -13,7 +13,7 @@ import pytest
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import clock, polars_utils
-from nfl_predictor.utils.polars import loaders, week_rows
+from nfl_predictor.utils.polars import loaders, nflverse_sources, week_rows
 
 
 @pytest.mark.parametrize(("today", "season"), [(date(2024, 9, 1), 2024), (date(2024, 2, 1), 2023)])
@@ -1402,6 +1402,60 @@ def _team_stats_stub() -> pl.DataFrame:
             "pass_yards": [250.0, 180.0],
         }
     )
+
+
+def _one_team_penalties(season: int) -> pl.DataFrame:
+    """Return a game's penalties, every one charged to the visitor, as nflverse writes 2001's."""
+    half = constants.ONE_TEAM_GAME_MIN_VALUES // 2
+    return pl.DataFrame(
+        [
+            {
+                "game_id": f"{season}_01_WAS_JAX",
+                "season": season,
+                "week": 1,
+                "season_type": "REG",
+                "posteam": offense,
+                "defteam": defense,
+                "play_type": "no_play",
+                "penalty": 1.0,
+                "penalty_yards": 5.0,
+                "penalty_team": "WSH",
+                "penalty_player_id": f"{side}_{index}",
+            }
+            for side, offense, defense in (("was", "WSH", "JAX"), ("jax", "JAX", "WSH"))
+            for index in range(half)
+        ]
+    )
+
+
+def test_load_team_game_frame_repairs_player_teams_in_one_team_games(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Penalties in a game nflverse credits to one team go to the team of each penalized player."""
+    # Arrange
+    half = constants.ONE_TEAM_GAME_MIN_VALUES // 2
+    rosters = pl.DataFrame(
+        {
+            "season": [2001] * (2 * half),
+            "team": ["WAS"] * half + ["JAX"] * half,
+            "gsis_id": [f"was_{i}" for i in range(half)] + [f"jax_{i}" for i in range(half)],
+        }
+    ).with_columns(pl.col("season").cast(pl.Int32))
+    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_a, **_k: _one_team_penalties(2001))
+    monkeypatch.setattr(nflverse_sources.nfl, "load_rosters", lambda **_k: rosters)
+    monkeypatch.setattr(data_collection, "_build_team_game_frame", lambda stats, *_a: stats)
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
+
+    # Act
+    team_stats, _plays = data_collection._load_team_game_frame(
+        [2001], pl.DataFrame(), _stored_lines_config([2001]), 2026
+    )
+
+    # Assert
+    penalties = team_stats.select("team_abbr", "penalties").sort("team_abbr").rows()
+    assert penalties == [("JAX", float(half)), ("WSH", float(half))]
 
 
 def test_join_pbp_team_game_stats_attaches_counts_by_team_week() -> None:

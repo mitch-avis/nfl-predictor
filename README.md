@@ -281,12 +281,14 @@ where the source has a season type, given canonical team codes (the 2002-2015 ro
 season, is one `players.parquet`. Weekly player stats leave null the stats nflverse never charted
 in a season (tackles for loss in 2003-2011, quarterback hits in 2003-2005), and in Jacksonville's
 2001-2002 home games, which nflverse credits wholly to the visitors (nflverse-pbp issue 92), each
-player's team comes back from that season's roster (`utils/polars/player_team_repair.py`). A
-player is a quarterback in a season when the players file or any regular-season week of that
-season's weekly roster lists him there, matched by GSIS id and never by name
+player's team comes back from that season's roster (`utils/polars/player_team_repair.py`), in the
+weekly player stats and in the play-by-play the ETL aggregates: who scored, fumbled, recovered,
+tackled or drew a penalty, so each penalty is charged to the penalized player's team. A player is
+a quarterback in a season when the players file or any regular-season week of that season's
+weekly roster lists him there, matched by GSIS id and never by name
 (`utils/polars/player_identity.py`). ESPN QBR (`utils/polars/espn_qbr.py`) is cached the same way
 as a validation reference only: nothing that builds the dataset or the model imports it. The ETL
-reads none of these sources yet, so `nfl-predictor data` downloads nothing new.
+reads the season rosters of 2001 and 2002, for that repair.
 
 The quarterback family needs `data/meta_data.csv`, a read-only copy of
 `../nfeloqb/Other Data/meta_data.csv` made the same way as `data/qb_elos.csv`. It maps the Elo

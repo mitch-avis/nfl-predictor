@@ -48,7 +48,7 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.utils import clock, game_utils, polars_utils, season_cache
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars import nfelo_lines, pbp, pick_time_lines, qb_stats
+from nfl_predictor.utils.polars import nfelo_lines, nflverse_sources, pbp, pick_time_lines, qb_stats
 from nfl_predictor.utils.polars.strength_snapshot import StrengthPrior
 from nfl_predictor.utils.polars.strength_table import (
     build_prior_strength_snapshot,
@@ -715,6 +715,10 @@ def _load_team_game_frame(
             stats_seasons,
             force_refresh=config.force_refresh_nflreadpy,
             current_season=current_season,
+        )
+        # Jacksonville's 2001-2002 home games credit every player to the visitor.
+        pbp_df = nflverse_sources.repair_one_team_pbp_games(
+            pbp_df, force_refresh=config.force_refresh_nflreadpy, current_season=current_season
         )
     log.info("Loaded play-by-play: %d regular season plays", pbp_df.height)
 

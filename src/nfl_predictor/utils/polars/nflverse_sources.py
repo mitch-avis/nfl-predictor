@@ -25,10 +25,12 @@ file lacks it), so seasons stack and an empty result keeps the schema.
 Two nflverse quirks are handled after the cache, so the cache keeps the stats as published:
 weekly player stats leave null the stats nflverse never charted in a season
 (``constants.NFLREADPY_PLAYER_STAT_GAPS``), and the games nflverse credits wholly to one team get
-their team codes back from the season rosters (``player_team_repair``). The quarterback identity
-of a season (``player_identity``) combines the players file with the weekly roster.
+their team codes back from the season rosters (``player_team_repair``), in the weekly player
+stats and in the play-by-play (``repair_one_team_pbp_games``). The quarterback identity of a
+season (``player_identity``) combines the players file with the weekly roster.
 
-The ETL does not read these sources yet.
+The ETL reads the season rosters of the seasons that hold such a game, to repair the
+play-by-play it aggregates.
 """
 
 from __future__ import annotations
@@ -398,6 +400,80 @@ def blank_player_stat_gaps(stats: pl.DataFrame) -> pl.DataFrame:
     return stats.with_columns(gaps) if gaps else stats
 
 
+def _one_team_game_player_teams(
+    games: list[str],
+    *,
+    cache_dir: os.PathLike[str] | str | None,
+    force_refresh: bool,
+    current_season: int | None,
+) -> pl.DataFrame:
+    """Return each rostered player's team in ``games``, from those seasons' rosters.
+
+    Logs the games, which nflverse credits wholly to one team (``player_team_repair``).
+    """
+    log.warning(
+        "Rebuilding player teams from the rosters in %d game(s) nflverse credits to one team: %s",
+        len(games),
+        games,
+    )
+    roster_seasons = (
+        player_team_repair.game_sides(games)
+        .get_column("season")
+        .unique(maintain_order=True)
+        .sort()
+        .to_list()
+    )
+    rosters = load_rosters(
+        roster_seasons,
+        cache_dir=cache_dir,
+        force_refresh=force_refresh,
+        current_season=current_season,
+    )
+    return player_team_repair.game_player_teams(
+        games,
+        rosters.select("season", pl.col("gsis_id").alias("player_id"), "team")
+        .drop_nulls()
+        .unique(maintain_order=True),
+    )
+
+
+def repair_one_team_pbp_games(
+    pbp: pl.DataFrame,
+    *,
+    cache_dir: os.PathLike[str] | str | None = None,
+    force_refresh: bool = False,
+    current_season: int | None = None,
+) -> pl.DataFrame:
+    """Return play-by-play with the player team columns rebuilt in games credited to one team.
+
+    nflverse credits every player in Jacksonville's 2001-2002 home games to the visitor
+    (nflverse-pbp issue 92): every team column of ``constants.PBP_PLAYER_TEAM_ID_COLUMNS`` (who
+    scored, fumbled, recovered, tackled or drew a penalty) names the visitor. Those games are
+    found by ``player_team_repair.one_team_games`` over the same columns, and each player's team
+    is rebuilt from that season's roster (``load_rosters``) by
+    ``player_team_repair.repair_pbp_player_teams``. ``posteam`` and ``defteam`` are right in
+    those games and are not touched. Play-by-play without such a game is returned as it is,
+    and no roster is loaded.
+
+    Args:
+        pbp: Play-by-play rows with ``game_id`` and the player team and id columns
+        cache_dir: Optional cache directory override (default: the nflreadpy cache directory)
+        force_refresh: If True, fetch the rosters again even when cached
+        current_season: Optional current season override for cache decisions
+
+    Returns:
+        ``pbp`` with the same rows, order and columns
+
+    """
+    games = player_team_repair.one_team_games(pbp, list(constants.PBP_PLAYER_TEAM_ID_COLUMNS))
+    if not games:
+        return pbp
+    player_teams = _one_team_game_player_teams(
+        games, cache_dir=cache_dir, force_refresh=force_refresh, current_season=current_season
+    )
+    return player_team_repair.repair_pbp_player_teams(pbp, games, player_teams)
+
+
 def load_weekly_player_stats(
     seasons: Sequence[int],
     *,
@@ -436,29 +512,8 @@ def load_weekly_player_stats(
     if not games:
         return stats
 
-    log.warning(
-        "Rebuilding player teams from the rosters in %d game(s) nflverse credits to one team: %s",
-        len(games),
-        games,
-    )
-    roster_seasons = (
-        player_team_repair.game_sides(games)
-        .get_column("season")
-        .unique(maintain_order=True)
-        .sort()
-        .to_list()
-    )
-    rosters = load_rosters(
-        roster_seasons,
-        cache_dir=cache_dir,
-        force_refresh=force_refresh,
-        current_season=current_season,
-    )
-    player_teams = player_team_repair.game_player_teams(
-        games,
-        rosters.select("season", pl.col("gsis_id").alias("player_id"), "team")
-        .drop_nulls()
-        .unique(maintain_order=True),
+    player_teams = _one_team_game_player_teams(
+        games, cache_dir=cache_dir, force_refresh=force_refresh, current_season=current_season
     )
     repaired = player_team_repair.repair_player_stats_teams(stats, games, player_teams)
     unplaced = repaired.filter(pl.col("game_id").is_in(games) & pl.col("team").is_null()).height

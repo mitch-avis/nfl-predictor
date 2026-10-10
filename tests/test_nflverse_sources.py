@@ -517,6 +517,71 @@ def test_a_player_the_rosters_cannot_place_keeps_no_team_and_is_logged(
     assert "1 player row(s) in those games stay without a team" in caplog.text
 
 
+def _jacksonville_home_plays(season: int) -> pl.DataFrame:
+    """Return a game's penalties, every one charged to the visitor, as nflverse writes 2001's."""
+    half = constants.ONE_TEAM_GAME_MIN_VALUES // 2
+    return pl.DataFrame(
+        [
+            {
+                "game_id": f"{season}_01_WAS_JAX",
+                "season": season,
+                "posteam": offense,
+                "defteam": defense,
+                "penalty": 1.0,
+                "penalty_team": "WSH",
+                "penalty_player_id": f"{side}_{index}",
+            }
+            for side, offense, defense in (("was", "WSH", "JAX"), ("jax", "JAX", "WSH"))
+            for index in range(half)
+        ]
+    )
+
+
+def test_one_team_play_by_play_games_take_their_player_teams_from_the_rosters(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange
+    half = constants.ONE_TEAM_GAME_MIN_VALUES // 2
+    roster = [(f"was_{index}", "WAS") for index in range(half)] + [
+        (f"jax_{index}", "JAX") for index in range(half)
+    ]
+    monkeypatch.setattr(
+        nflverse_sources.nfl, "load_rosters", _fake({2001: _roster_rows(2001, roster)})
+    )
+    plays = _jacksonville_home_plays(2001)
+
+    # Act
+    repaired = nflverse_sources.repair_one_team_pbp_games(
+        plays, cache_dir=tmp_path, current_season=CURRENT
+    )
+
+    # Assert
+    charged = (
+        repaired.group_by("posteam", "penalty_team", maintain_order=True).len().sort("posteam")
+    )
+    assert charged.rows() == [("JAX", "JAX", half), ("WSH", "WSH", half)]
+    assert repaired.columns == plays.columns
+
+
+@pytest.mark.usefixtures("no_rosters")
+def test_play_by_play_without_one_team_games_is_returned_unchanged(tmp_path: Path) -> None:
+    # Arrange
+    plays = _jacksonville_home_plays(2001).with_columns(
+        pl.when(pl.col("posteam") == "JAX")
+        .then(pl.lit("JAX"))
+        .otherwise(pl.col("penalty_team"))
+        .alias("penalty_team")
+    )
+
+    # Act
+    repaired = nflverse_sources.repair_one_team_pbp_games(
+        plays, cache_dir=tmp_path, current_season=CURRENT
+    )
+
+    # Assert
+    assert repaired.equals(plays)
+
+
 def test_roster_team_codes_are_canonical_including_the_league_codes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

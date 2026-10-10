@@ -85,7 +85,14 @@ Commands run from this repository's root with the worktree's environment. "The a
   `tests/test_ratings_published_parity.py` fail on exact equality (every quarterback table); with
   it, all pass (`.venv/bin/python -m pytest -p no:cacheprovider -n 0 --no-cov
   tests/test_ratings_published_parity.py`). The audit's input checks find 0 passer-game rows tied
-  on team, week, game, and name, so the re-sort is unambiguous.
+  on team, week, game, and name, so the re-sort is unambiguous. The BLAS thread count acts the
+  same way: `OPENBLAS_NUM_THREADS=24 OMP_NUM_THREADS=24 MKL_NUM_THREADS=24 POLARS_MAX_THREADS=24
+  .venv/bin/python .agents/sos_port/ratings_parity.py --seasons 2024 2026 --out-dir <dir>` passes
+  with every team table bit-identical but 3,126 of 55,332 cells only within tolerance (largest
+  1.7e-16): 3,124 in the 2024 quarterback tables (fitted ratings, faced pass defense, rating
+  percentiles, and pair gaps) and the 2 raw season rates of 2026. With one thread (the audit's
+  default, and how that project built its files) only 12 of those cells differ, all raw season
+  rates (decision 4).
 - **Feature-value impact**: none.
 - **How to reverse it**: sort inside `ridge.build_unit_design` and accept tolerance-level parity.
 - **Review**: not yet reviewed.

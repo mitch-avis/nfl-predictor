@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import joblib
 import pytest
 
 from nfl_predictor.cli import rankings
@@ -110,4 +111,32 @@ def test_an_unavailable_rating_source_is_a_clear_error(
 
     # Act & Assert
     with pytest.raises(SystemExit, match="no ported team rating"):
+        rankings.main(args)
+
+
+def test_a_missing_model_predictions_path_is_a_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(rankings.ml_model_core, "load_model_checkpoint", lambda *_args: None)
+    missing = tmp_path / "no_such_run"
+    args = [*_base_args(tmp_path), "--method", "model", "--model-predictions", str(missing)]
+
+    # Act & Assert
+    with pytest.raises(SystemExit, match=r"^error: .*no_such_run"):
+        rankings.main(args)
+
+
+def test_an_unreadable_fold_file_is_a_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(rankings.ml_model_core, "load_model_checkpoint", lambda *_args: None)
+    folds = tmp_path / "folds"
+    folds.mkdir()
+    joblib.dump(["not a fold"], folds / "fold_2024_w01.joblib")
+    args = [*_base_args(tmp_path), "--method", "model", "--model-predictions", str(folds)]
+
+    # Act & Assert
+    with pytest.raises(SystemExit, match=r"^error: .*folds"):
         rankings.main(args)

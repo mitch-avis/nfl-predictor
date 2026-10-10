@@ -133,3 +133,48 @@ def test_weekly_rankings_skip_an_unavailable_rating_source(
     # Assert
     assert written == []
     assert "no ported team rating" in caplog.text
+
+
+def test_weekly_rankings_skip_unreadable_model_predictions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    data = tmp_path / "all_data_ml.csv"
+    data.write_text("season,week\n", encoding="utf-8")
+    args = _args(
+        [
+            "--power-rankings-method",
+            "model",
+            "--power-rankings-model-predictions",
+            str(tmp_path / "no_such_run"),
+            "--power-rankings-data-ml",
+            str(data),
+            "--power-rankings-data-schedule",
+            str(data),
+            "--power-rankings-season",
+            "2024",
+            "--power-rankings-through-week",
+            "3",
+            "--power-rankings-out-dir",
+            str(tmp_path / "out"),
+        ]
+    )
+    context = pipeline._RunContext(
+        args=args,
+        run_id="run",
+        run_dir=tmp_path,
+        output_dir=tmp_path,
+        created_at="now",
+        dataset_hash="hash",
+        dataset_fingerprint={},
+        config_payload={},
+    )
+    monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
+
+    # Act
+    with caplog.at_level(logging.WARNING):
+        written = pipeline._write_power_rankings(context, 2024, 4, tmp_path / "model.joblib")
+
+    # Assert
+    assert written == []
+    assert "no_such_run" in caplog.text

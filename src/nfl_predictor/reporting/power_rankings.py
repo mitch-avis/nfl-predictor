@@ -1379,8 +1379,20 @@ def load_team_ratings(inputs: RankingInputs, options: RankingOptions) -> TeamRat
 def _model_week_ratings(
     inputs: RankingInputs, options: RankingOptions, week: int
 ) -> dict[str, float]:
-    """Return the model rating before ``week`` from the walk-forward predictions."""
-    predictions = rating_sources.read_predictions(list(options.model_predictions))
+    """Return the model rating before ``week`` from the walk-forward predictions.
+
+    Raises:
+        rating_sources.RatingSourceUnavailableError: If the predictions cannot be read (a missing
+            or foreign directory, a fold file without predictions, a game in two sources), miss
+            a game the fit reads, or week 1 has no carryover factor; the message names the paths.
+
+    """
+    sources = ", ".join(str(path) for path in options.model_predictions)
+    try:
+        predictions = rating_sources.read_predictions(list(options.model_predictions))
+    except (ValueError, TypeError, OSError) as error:
+        msg = f"cannot read the walk-forward predictions in {sources}: {error}"
+        raise rating_sources.RatingSourceUnavailableError(msg) from error
     fits_this_season = week >= rating_sources.FIRST_FITTED_WEEK
     _check_prediction_coverage(
         predictions,
@@ -1390,12 +1402,18 @@ def _model_week_ratings(
     )
     carryover = None
     if not fits_this_season:
-        carryover = rating_sources.carryover_factor(
-            rating_sources.ported_ratings_for_week(
-                options.ratings_dir, inputs.data_ml, season=inputs.season, week=1
-            ),
-            rating_sources.season_ported_ratings(options.ratings_dir, inputs.season - 1),
+        week_one = rating_sources.ported_ratings_for_week(
+            options.ratings_dir, inputs.data_ml, season=inputs.season, week=1
         )
+        previous = rating_sources.season_ported_ratings(options.ratings_dir, inputs.season - 1)
+        try:
+            carryover = rating_sources.carryover_factor(week_one, previous)
+        except ValueError as error:
+            msg = (
+                f"no week-1 carryover factor for {inputs.season} from {options.ratings_dir} "
+                f"and {inputs.data_ml}: {error}"
+            )
+            raise rating_sources.RatingSourceUnavailableError(msg) from error
     return rating_sources.model_ratings_for_week(
         predictions,
         season=inputs.season,

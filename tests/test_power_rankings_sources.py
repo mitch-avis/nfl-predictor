@@ -354,3 +354,29 @@ def test_model_method_refuses_predictions_missing_a_game(
     # Act & Assert
     with pytest.raises(rating_sources.RatingSourceUnavailableError, match="2 of 4"):
         power_rankings.compute_power_rankings(cast("MarginTotalModel", None), inputs, options)
+
+
+def test_model_method_in_week_one_without_a_carryover_factor_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(power_rankings, "_predict_future_games", _no_future_games)
+    games_path, ratings_dir, folds = _write_league(tmp_path)
+    pl.DataFrame({"team": ["XXX", "YYY"], "team_rating": [1.0, -1.0]}).write_parquet(
+        ratings_dir / "2023_ratings.parquet"
+    )
+    options = power_rankings.resolve_ranking_options(
+        power_rankings.RankingRequest(
+            method="model",
+            legacy_franchise_fit=False,
+            ratings_dir=ratings_dir,
+            model_predictions=(folds,),
+        )
+    )
+    inputs = power_rankings.RankingInputs(
+        data_ml=games_path, data_schedule=games_path, season=2024, through_week=0
+    )
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="carryover"):
+        power_rankings.compute_power_rankings(cast("MarginTotalModel", None), inputs, options)

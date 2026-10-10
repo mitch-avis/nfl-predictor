@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import polars as pl
 import pytest
 
@@ -503,3 +505,62 @@ def test_a_weeks_box_scores_never_reach_that_weeks_pre_game_values() -> None:
         after = _row(with_change, game_id)
         assert [before[c] for c in pre_game] == [after[c] for c in pre_game]
     assert _row(adjustments, "w3")["away_qb_value"] != _row(with_change, "w3")["away_qb_value"]
+
+
+def test_last_starter_mode_rates_a_game_with_the_teams_previous_starter() -> None:
+    # Arrange
+    games = _games(
+        ("g1", 2000, 1, "AAA", "BBB"),
+        ("g2", 2000, 2, "AAA", "BBB"),
+        ("g3", 2000, 3, "AAA", "BBB"),
+    )
+    box = _box(
+        (2000, 1, "AAA", "A", 50.0),
+        (2000, 1, "BBB", "B", 50.0),
+        (2000, 2, "AAA", "BACKUP", 30.0),
+        (2000, 2, "BBB", "B", 50.0),
+        (2000, 3, "AAA", "BACKUP", 30.0),
+        (2000, 3, "BBB", "B", 50.0),
+    )
+
+    # Act
+    adjustments = quarterbacks.value_qb_adjustments(games, box, pre_game_starter="last_starter")
+
+    # Assert
+    assert [_row(adjustments, g)["home_qb_id"] for g in ("g1", "g2", "g3")] == [
+        None,
+        "A",
+        "BACKUP",
+    ]
+    assert _row(adjustments, "g2")["home_qb_value"] == pytest.approx(0.1 * 50.0)
+    assert _row(adjustments, "g3")["home_qb_value"] == pytest.approx(0.1 * 30.0)
+
+
+def test_last_starter_mode_prefers_a_projected_starter() -> None:
+    # Arrange
+    games = _games(("g1", 2000, 1, "AAA", "BBB"), ("g2", 2000, 2, "AAA", "BBB"))
+    box = _box(
+        (2000, 1, "AAA", "A", 50.0),
+        (2000, 1, "BBB", "B", 50.0),
+        (2000, 2, "AAA", "BACKUP", 30.0),
+        (2000, 2, "BBB", "B", 50.0),
+    )
+    projected = pl.DataFrame({"game_id": ["g2"], "team_abbr": ["AAA"], "qb_id": ["BACKUP"]})
+
+    # Act
+    adjustments = quarterbacks.value_qb_adjustments(
+        games, box, projected_starters=projected, pre_game_starter="last_starter"
+    )
+
+    # Assert
+    assert _row(adjustments, "g2")["home_qb_id"] == "BACKUP"
+
+
+def test_value_qb_adjustments_rejects_an_unknown_starter_rule() -> None:
+    # Arrange
+    games = _games(("g1", 2000, 1, "AAA", "BBB"))
+    options: dict[str, Any] = {"pre_game_starter": "best_guess"}
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="pre_game_starter"):
+        quarterbacks.value_qb_adjustments(games, _box(), **options)

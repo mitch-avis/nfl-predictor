@@ -47,9 +47,15 @@ Preseason
     of every first start in earlier seasons (the frame's first season excluded, where veterans
     start too), or 0 before there are any.
 
-A game's starter is the play-by-play starter for a regular-season game with plays, then the
-starter ``projected_starters`` names, then the team's last starter. Every value for a game comes
-from games strictly before it.
+Starters
+    By default (``pre_game_starter="first_passer"``) a completed regular-season game's starter is
+    the passer on that game's first dropback, which is known only at kickoff, not when picks are
+    made; this is the convention of the ``qb_elos.csv`` columns, whose completed games carry the
+    actual starter. An unplayed or playoff game's starter is the one ``projected_starters`` names,
+    else the team's last starter. With ``pre_game_starter="last_starter"`` every game is rated
+    that way, with the starter known before kickoff, while the ratings still roll in the actual
+    starter's game. Every rating, team value and defense value a game reads comes from games
+    strictly before it; only the starter's identity can come from the game itself.
 """
 
 from __future__ import annotations
@@ -57,7 +63,7 @@ from __future__ import annotations
 import functools
 import operator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
@@ -114,6 +120,9 @@ ADJUSTMENT_SCHEMA: dict[str, pl.DataType] = {
 _TEAM_GAME = ["season", "week", "posteam"]
 _RUSH_COLUMNS = ("rush_attempts", "rush_yards", "rush_tds")
 _SORT_COLUMNS = ("season", "week", "date", "game_id")
+# Which starter a game's pre-game values are computed for (see the module docstring).
+type PreGameStarter = Literal["first_passer", "last_starter"]
+PRE_GAME_STARTERS: tuple[PreGameStarter, ...] = ("first_passer", "last_starter")
 
 
 def quarterback_value() -> pl.Expr:
@@ -356,6 +365,7 @@ def value_qb_adjustments(
     box_scores: pl.DataFrame,
     *,
     projected_starters: pl.DataFrame | None = None,
+    pre_game_starter: PreGameStarter = "first_passer",
 ) -> pl.DataFrame:
     """Return each game's quarterback adjustments in Elo points, from 538's VALUE model.
 
@@ -364,15 +374,27 @@ def value_qb_adjustments(
             ``away_abbr`` and, when present, ``date``; every game, upcoming ones included.
         box_scores: ``quarterback_box_scores`` output (``season``, ``week``, ``team_abbr``,
             ``qb_id``, ``starter`` and ``value`` are read).
-        projected_starters: Optional ``game_id``, ``team_abbr`` and ``qb_id`` naming the
-            expected starter of a game the play-by-play does not cover (an upcoming one).
+        projected_starters: Optional ``game_id``, ``team_abbr`` and ``qb_id`` naming a game's
+            expected starter; read for a game the play-by-play does not cover (an upcoming or
+            playoff one), and for every game with ``pre_game_starter="last_starter"``.
+        pre_game_starter: ``"first_passer"`` rates a completed regular-season game with its
+            actual starter, the passer on its first dropback, known only at kickoff;
+            ``"last_starter"`` rates every game with the projected starter, else the team's
+            last starter, as known before kickoff. The ratings roll in the actual starter's
+            game either way.
 
     Returns:
         ``ADJUSTMENT_SCHEMA``, one row per game in rating order: each side's starter, his and
         his team's pre-game rolling VALUE, and the adjustment ``3.3 * (starter - team)`` (0
         when no starter is known). The method is in the module docstring.
 
+    Raises:
+        ValueError: When ``pre_game_starter`` is not one of ``PRE_GAME_STARTERS``.
+
     """
+    if pre_game_starter not in PRE_GAME_STARTERS:
+        msg = f"pre_game_starter must be one of {PRE_GAME_STARTERS}, not {pre_game_starter!r}"
+        raise ValueError(msg)
     keys = [column for column in _SORT_COLUMNS if column in schedule.columns]
     games = schedule.sort(keys, maintain_order=True)
     if games.height == 0:
@@ -396,7 +418,7 @@ def value_qb_adjustments(
             start = lookup.starts.get((season, week, team))
             starter = (
                 start[0]
-                if start is not None
+                if start is not None and pre_game_starter == "first_passer"
                 else projected.get((game_id, team), last_starter.get(team))
             )
             pre[team] = book.pre_game(team, starter, season)
@@ -404,6 +426,7 @@ def value_qb_adjustments(
             start = lookup.starts.get((season, week, team))
             if start is not None:
                 qb_id, value = start
+                book.quarterback(qb_id, season)
                 book.record_start(qb_id, team, value - pre[opponent].defense, season)
                 last_starter[team] = qb_id
             allowed = lookup.team_values.get((season, week, opponent))

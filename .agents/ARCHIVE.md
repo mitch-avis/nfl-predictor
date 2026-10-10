@@ -64,6 +64,25 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Roadmap step 5 - Market-free baseline (closed 2026-10-10)
+
+Approved 2026-10-08, closed by the user on 2026-10-10. Run on the decisions chunk's code
+(`2522cb6`, `0.44.0`) and the adopted-settings build (`models/step4_reference/inputs/adopted.csv`,
+the through-2025 cut of the rebuilt `data/`), alongside the adopted-settings reference. The user
+chose (2026-10-09) to measure two variants, two GPU seeds each: without betting-line columns
+(`--exclude-market --no-market-anchor --no-market-transform`, `marketfree_lines_seed*`) and also
+without the 18 Elo columns, whose preseason values `../nfeloqb` pulls toward betting win totals
+(`--disable-feature-groups elo`, `marketfree_all_seed*`). The option landed as flags rather than a
+`market` feature group (rule 2 note in `TODO.md`, accepted). Rules: `models/step4_reference/
+HYPOTHESIS.md`; second key `REVIEW.md` there (a separate reviewer, recomputed from the fold
+checkpoints); numbers in `.agents/benchmarks.md`, "Adopted-settings reference and market-free
+baselines". In short: both market-free runs trail the reference and the pick-time line, tie QB
+Elo, and the Elo columns add a little. Decided by the user on 2026-10-10: the run without
+betting-line or Elo columns is the test bench for the `nfl-sos-ratings` port (roadmap step 6,
+phase 4).
+
+---
+
 ## Roadmap step 4 (in progress) - Resolved follow-ups
 
 Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as they land.

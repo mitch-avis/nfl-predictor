@@ -202,15 +202,8 @@ Steps:
    market-free variants: without betting-line columns, and without them and the Elo columns
    (whose preseason values `../nfeloqb` pulls toward betting win totals), via a new `elo`
    feature group.
-5. **Market-free baseline** (approved 2026-10-08; same code and build as the adopted-settings
-   reference). GPU walk-forwards with no market column, no anchoring and no market transform,
-   scored against the reference, the pick-time line, the closing line and QB Elo (partly
-   market-informed: its preseason Elo is pulled toward betting win totals). It measures what the
-   data pipeline is worth without the betting line, and it is the test bench for the ported
-   ratings in step 6, whose value an anchored model hides. No default changes from it. Done
-   2026-10-09 in both variants the user chose (without betting-line columns; without them and the
-   Elo columns), two seeds each, reviewed (`models/step4_reference/REVIEW.md`; numbers in
-   `.agents/benchmarks.md`). Open with the user: which variant is step 6's test bench.
+5. **Market-free baseline.** Closed by the user on 2026-10-10 (record: `ARCHIVE.md`, "Roadmap
+   step 5"). The test bench for step 6 is the run without betting-line or Elo columns.
 6. **Absorb `nfl-sos-ratings` into this repo** (approved 2026-10-08: absorb fully; that repo
    finishes its in-flight work, the port starts from a frozen commit of it, and it then becomes
    read-only). The frozen commit is `9081bce` (2026-10-09); it, what changed there since this
@@ -227,8 +220,9 @@ Steps:
       head-to-head-excluded `sos` refit), quarterback ratings, weekly histories and rank ranges,
       with tests that match its published outputs; this replaces the current strength snapshot
       and the defense-adjusted quarterback rate;
-   4. the ported ratings as model features, measured anchored and market-free against the
-      adopted-settings reference;
+   4. the ported ratings as model features, measured anchored against the adopted-settings
+      reference and market-free on the test bench the user chose 2026-10-10 (no betting-line and
+      no Elo columns, `models/step4_reference/marketfree_all_seed*`);
    5. power rankings and projected standings on the ported ratings combined with the trained
       model (the user's direction 2026-10-08; how to combine them is decided by measurement:
       each candidate ranking predicts next week's margins, scored like the `nfl-sos-ratings`

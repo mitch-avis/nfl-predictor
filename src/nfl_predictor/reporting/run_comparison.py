@@ -81,6 +81,9 @@ COLUMN_LABELS = {
     "pool": "pool pts",
     "market_brier": "market Brier",
 }
+# The paired tables quote intervals, so their pool column names its resampling unit; the loss
+# columns resample games, as the report's preamble says.
+CONTRAST_COLUMN_LABELS = {**COLUMN_LABELS, "pool": "pool pts (week blocks)"}
 REQUIRED_COLUMNS = (
     "game_id",
     "season",
@@ -570,9 +573,15 @@ def _run_cells(row: dict[str, Any]) -> list[str]:
     ]
 
 
-def _table_header(leading: Sequence[str], columns: Sequence[str], *, market: bool) -> list[str]:
+def _table_header(
+    leading: Sequence[str],
+    columns: Sequence[str],
+    *,
+    market: bool,
+    labels: dict[str, str] = COLUMN_LABELS,
+) -> list[str]:
     """Return a Markdown table header: the leading labels, the metric columns, the interval."""
-    cells = [*leading, *(COLUMN_LABELS[c] for c in columns)]
+    cells = [*leading, *(labels[c] for c in columns)]
     if market:
         cells.append("det - market Brier [95%]")
     return ["| " + " | ".join(cells) + " |", "| --- " * len(cells) + "|"]
@@ -585,7 +594,7 @@ def _stability_preamble() -> list[str]:
         "",
         (
             "Each window split by season, with the same columns and definitions. [n/a] = too "
-            "few games (weeks, for pool pts) to resample."
+            "few games (for pool pts, (season, week) blocks) to resample."
         ),
     ]
 
@@ -624,7 +633,12 @@ def _format_comparison_stability(report: dict[str, Any]) -> list[str]:
                 )
         lines += [
             "",
-            *_table_header(("contrast", "season", "games"), CONTRAST_COLUMNS, market=False),
+            *_table_header(
+                ("contrast", "season", "games"),
+                CONTRAST_COLUMNS,
+                market=False,
+                labels=CONTRAST_COLUMN_LABELS,
+            ),
         ]
         for season, entry in seasons.items():
             cells = [_format_interval(entry["contrast"][c], c) for c in CONTRAST_COLUMNS]
@@ -644,7 +658,8 @@ def format_report(report: dict[str, Any]) -> list[str]:
         (
             f"Paired differences are candidate minus reference, averaged over "
             f"{len(report['candidates'])} pair(s); {report['resamples']} resamples, "
-            f"bootstrap seed {report['bootstrap_seed']}. * = the 95% interval excludes zero. "
+            f"bootstrap seed {report['bootstrap_seed']}; intervals resample games; pool pts "
+            "resample (season, week) blocks. * = the 95% interval excludes zero. "
             "Loss columns: negative favors the candidate; pick acc and pool pts: positive does."
         ),
         "",
@@ -679,7 +694,9 @@ def format_report(report: dict[str, Any]) -> list[str]:
             lines.append(f"| {run_label} | " + " | ".join(_run_cells(row)) + " |")
         lines += [
             "",
-            *_table_header(("contrast",), CONTRAST_COLUMNS, market=False),
+            *_table_header(
+                ("contrast",), CONTRAST_COLUMNS, market=False, labels=CONTRAST_COLUMN_LABELS
+            ),
             "| candidate - reference | "
             + " | ".join(_format_interval(window["contrast"][c], c) for c in CONTRAST_COLUMNS)
             + " |",

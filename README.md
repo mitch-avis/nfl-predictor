@@ -727,13 +727,16 @@ hash, the git commit and the settings that differ) or a checkpoint directory. Fo
 weeks 3-18 and all weeks it reports each run's deterministic Brier, log loss, pick accuracy, margin
 and total MAE, confidence-pool points (ranked as in "Confidence pool rules" below) and market
 Brier, and the candidate-minus-reference difference with a 95% bootstrap interval (5,000
-resamples over games, over weeks for pool points).
+resamples over games, over (season, week) blocks for pool points). The report names the unit: its
+first lines say so, and the paired tables head the pool column `pool pts (week blocks)`. A pick is
+the home side at `p >= 0.5`, as everywhere else ("Confidence pool rules" below).
 A closing "Stability by season" section repeats each window per season, for every run and for the
 paired difference; week 1 or week 2 of one season is a single week, so its pool-points difference
-has no interval (`[n/a]`). Everything before that section is byte-identical to the report
-`compare` wrote before the section existed, and the JSON is a strict superset of it (each window
-gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the same order,
-to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
+has no interval (`[n/a]`). Everything before that section matches the report `compare` wrote
+before the section existed, apart from those unit labels, and the JSON is a strict superset of it
+(each window gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the
+same order, to combine seeds: the per-game differences are averaged over the seed pairs before the
+bootstrap.
 By default each run's market Brier and its det - market interval use that run's own
 `market_home_win_prob`. `--market-from <run>` (a run or checkpoint directory, given once) takes
 it from another run instead, matched on `game_id`, for every compared run: a run anchored to the

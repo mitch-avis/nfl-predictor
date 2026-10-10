@@ -388,9 +388,10 @@ def _assert_contains(where: str, actual: object, expected: object) -> None:
 def test_the_existing_comparison_report_is_unchanged(tmp_path: Path) -> None:
     """The window tables, provenance and JSON keys that ``compare`` wrote before stay exact.
 
-    The snapshot was written from the report before the per-season view was added; the report
-    may add sections after it and keys beside it, but every existing line and value is kept
-    byte for byte, so the command still reproduces earlier reviewed rescores.
+    The snapshot was written from the report before the per-season view was added, and its labels
+    were updated when the report started naming each interval's resampling unit. The report may
+    add sections after it and keys beside it, but every other line and every value is kept byte
+    for byte, so the command still reproduces earlier reviewed rescores.
     """
     # Arrange
     report = _season_comparison(tmp_path)
@@ -569,6 +570,21 @@ def test_a_single_game_contrast_prints_its_estimate_with_no_interval(tmp_path: P
     assert brier_cell == f"{0.33**2 - 0.38**2:+.5f} [n/a]"
 
 
+def test_the_report_names_the_resampling_unit_of_every_interval(tmp_path: Path) -> None:
+    """Intervals resample games, except pool points, which resample (season, week) blocks."""
+    # Arrange
+    report = _season_comparison(tmp_path)
+
+    # Act
+    lines = run_comparison.format_report(report)
+
+    # Assert
+    assert "intervals resample games; pool pts resample (season, week) blocks" in lines[2]
+    contrast_headers = [line for line in lines if line.startswith("| contrast |")]
+    assert len(contrast_headers) == 4 * (1 + 1)
+    assert all("| pool pts (week blocks) |" in line for line in contrast_headers)
+
+
 def test_the_comparison_report_ends_with_the_season_tables(tmp_path: Path) -> None:
     """The Markdown gains a stability section with run rows and contrast rows per season."""
     # Arrange
@@ -639,9 +655,10 @@ def _command_outputs(tmp_path: Path, *extra: str) -> tuple[int, list[str], dict[
 def test_the_command_output_without_a_market_run_is_unchanged(tmp_path: Path) -> None:
     """Without ``--market-from`` the written Markdown and JSON stay exactly as before.
 
-    The snapshot holds the command's complete output from before the option existed: every
-    Markdown line byte for byte, and the JSON with exactly the same keys (floats to the
-    snapshot tolerance), so no key is added when each run's own market rows are used.
+    The snapshot holds the command's complete output from before the option existed, with the
+    resampling-unit labels added since: every Markdown line byte for byte, and the JSON with
+    exactly the same keys (floats to the snapshot tolerance), so no key is added when each run's
+    own market rows are used.
     """
     # Act
     code, lines, payload = _command_outputs(tmp_path)

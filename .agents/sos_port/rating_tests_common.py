@@ -1,0 +1,301 @@
+"""Shared pieces of the rating-definition tests: intervals, the season bootstrap, and inputs.
+
+Used by ``qb_plays_test.py``, ``botched_snaps.py`` and ``team_plays_test.py`` beside this file,
+the scripts of the pre-registered protocols in ``protocols/``. The bootstrap resamples whole
+seasons, as the source's preseason-prior and quarterback protocols specify: the games of one
+season share its penalties and prior, and the games of one week share a rating snapshot, so they
+are not independent draws.
+
+The inputs come through this repository's loaders from an nflreadpy cache directory, read only:
+every season is treated as historical (``CACHE_CURRENT_SEASON``), so a cached file is read and
+never refreshed, and :func:`block_downloads` makes a cache miss fail instead of downloading.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+import nflreadpy as nfl
+import numpy as np
+import polars as pl
+from scipy import stats
+
+from nfl_predictor import constants
+from nfl_predictor.ratings.pbp_inputs import SeasonSources
+from nfl_predictor.utils.polars import loaders, nflverse_sources
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from pathlib import Path
+
+    import numpy.typing as npt
+
+BOOTSTRAP_RESAMPLES = 10_000
+BOOTSTRAP_SEED = 0
+FAMILY_CONFIDENCE = 0.95
+# The single-game bootstrap draws in chunks, so a 5,000-game by 10,000-resample matrix never sits
+# in memory at once.
+_RESAMPLE_CHUNK = 500
+# Every season of the inputs is historical to the loaders, so they read the cache and never
+# refresh it.
+CACHE_CURRENT_SEASON = 2027
+_NFLREADPY_LOADERS = (
+    "load_pbp",
+    "load_player_stats",
+    "load_players",
+    "load_rosters",
+    "load_rosters_weekly",
+    "load_schedules",
+    "load_snap_counts",
+    "load_team_stats",
+)
+
+
+class DownloadBlockedError(RuntimeError):
+    """Raised when a rating test tries to download from nflverse."""
+
+
+def block_downloads() -> None:
+    """Replace nflreadpy's loaders with ones that raise, so a cache miss cannot download."""
+
+    def refuse(*_args: object, **_kwargs: object) -> pl.DataFrame:
+        msg = "a rating test tried to download from nflverse; the cache lacks a file"
+        raise DownloadBlockedError(msg)
+
+    for name in _NFLREADPY_LOADERS:
+        setattr(nfl, name, refuse)
+
+
+def sha256_file(path: Path) -> str:
+    """Return the SHA-256 of a file's bytes."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+@dataclass
+class InputLedger:
+    """The SHA-256 of every input file a run reads, by path."""
+
+    files: dict[str, str] = field(default_factory=dict)
+
+    def record(self, path: Path) -> None:
+        """Hash ``path`` once.
+
+        Raises:
+            FileNotFoundError: If the file does not exist, so the run would not read what it says.
+
+        """
+        if not path.is_file():
+            msg = f"input file missing: {path}"
+            raise FileNotFoundError(msg)
+        key = str(path)
+        if key not in self.files:
+            self.files[key] = sha256_file(path)
+
+    def fingerprint(self) -> str:
+        """Return one SHA-256 over every recorded file's ``sha256sum`` line, in path order."""
+        listing = "".join(f"{digest}  {path}\n" for path, digest in sorted(self.files.items()))
+        return hashlib.sha256(listing.encode()).hexdigest()
+
+
+def load_season_plays(
+    cache_dir: Path, season: int, ledger: InputLedger
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Return one season's regular-season play-by-play and schedule from the cache."""
+    ledger.record(cache_dir / f"pbp_{season}_reg.parquet")
+    ledger.record(cache_dir / f"schedule_{season}.parquet")
+    plays = loaders.load_pbp([season], cache_dir=cache_dir, current_season=CACHE_CURRENT_SEASON)
+    schedule = loaders.load_schedule(
+        [season], cache_dir=cache_dir, current_season=CACHE_CURRENT_SEASON
+    )
+    return plays, schedule
+
+
+def load_players(cache_dir: Path, ledger: InputLedger) -> pl.DataFrame:
+    """Return the cached players file."""
+    ledger.record(cache_dir / "players.parquet")
+    return nflverse_sources.load_players(cache_dir=cache_dir)
+
+
+def load_season_sources(
+    cache_dir: Path, season: int, players: pl.DataFrame, ledger: InputLedger
+) -> tuple[SeasonSources, pl.DataFrame]:
+    """Return one season's quarterback-row sources and its schedule, as the ETL loads them.
+
+    Each player source is asked only for a season it publishes, as the ETL asks
+    (``ratings_build.load_ratings_sources``); an earlier season gets the source's empty frame.
+    """
+    plays, schedule = load_season_plays(cache_dir, season, ledger)
+    sources = {
+        "player_stats": (
+            constants.NFLREADPY_PLAYER_STATS_MIN_SEASON,
+            "player_stats_week",
+            nflverse_sources.load_weekly_player_stats,
+        ),
+        "snap_counts": (
+            constants.NFLREADPY_SNAP_COUNTS_MIN_SEASON,
+            "snap_counts",
+            nflverse_sources.load_snap_counts,
+        ),
+        "weekly_rosters": (
+            constants.NFLREADPY_WEEKLY_ROSTERS_MIN_SEASON,
+            "rosters_weekly",
+            nflverse_sources.load_weekly_rosters,
+        ),
+    }
+    frames: dict[str, pl.DataFrame] = {}
+    for name, (first, stem, load) in sources.items():
+        if season >= first:
+            ledger.record(cache_dir / f"{stem}_{season}_reg.parquet")
+        frames[name] = load(
+            [season] if season >= first else [],
+            cache_dir=cache_dir,
+            current_season=CACHE_CURRENT_SEASON,
+        )
+    return (
+        SeasonSources(
+            season=season,
+            plays=plays,
+            player_stats=frames["player_stats"],
+            snap_counts=frames["snap_counts"],
+            players=players,
+            weekly_rosters=frames["weekly_rosters"],
+        ),
+        schedule,
+    )
+
+
+def as_float(value: object) -> float:
+    """Return a Polars scalar (a sum, mean or largest value) as a float, 0.0 for a null.
+
+    Raises:
+        TypeError: If the value is not a number.
+
+    """
+    if value is None:
+        return 0.0
+    if isinstance(value, int | float):
+        return float(value)
+    msg = f"expected a number, got {value!r}"
+    raise TypeError(msg)
+
+
+def comparison_confidence(comparisons: int, family: float = FAMILY_CONFIDENCE) -> float:
+    """Return the per-comparison level that keeps ``family`` over ``comparisons`` (Bonferroni)."""
+    return 1.0 - (1.0 - family) / comparisons
+
+
+@dataclass(frozen=True, slots=True)
+class Interval:
+    """A paired difference's estimate and interval; negative favors the first of the pair."""
+
+    estimate: float
+    lower: float
+    upper: float
+
+    @property
+    def below_zero(self) -> bool:
+        """Return whether the whole interval lies below zero."""
+        return self.upper < 0.0
+
+    @property
+    def above_zero(self) -> bool:
+        """Return whether the whole interval lies above zero."""
+        return self.lower > 0.0
+
+    @property
+    def excludes_zero(self) -> bool:
+        """Return whether the interval lies entirely on one side of zero."""
+        return self.below_zero or self.above_zero
+
+    def flipped(self) -> Interval:
+        """Return the interval of the reversed difference (Y - X instead of X - Y)."""
+        return Interval(estimate=-self.estimate, lower=-self.upper, upper=-self.lower)
+
+
+def season_draws(
+    season_count: int, *, resamples: int = BOOTSTRAP_RESAMPLES, seed: int = BOOTSTRAP_SEED
+) -> npt.NDArray[np.int64]:
+    """Return ``resamples`` rows of ``season_count`` season indexes drawn with replacement."""
+    return np.random.default_rng(seed).integers(0, season_count, size=(resamples, season_count))
+
+
+def _tail(confidence: float) -> float:
+    """Return the probability in each tail of a central interval at ``confidence``."""
+    return (1.0 - confidence) / 2.0
+
+
+def season_bootstrap(
+    differences: pl.DataFrame,
+    seasons: Sequence[int],
+    draws: npt.NDArray[np.int64],
+    confidence: float,
+) -> Interval:
+    """Return the mean paired difference and its percentile interval from whole-season resamples.
+
+    Args:
+        differences: One row per game (or team-game) with ``season`` and ``difference``.
+        seasons: The seasons the draws index, in order.
+        draws: From :func:`season_draws`; each row picks ``len(seasons)`` seasons, keeping each
+            drawn season's rows together.
+        confidence: The central share the interval covers.
+
+    Returns:
+        The mean over every row, and the quantiles of the mean over each resample's drawn rows.
+
+    Raises:
+        ValueError: If a season of ``seasons`` has no row, so a resample could hold none.
+
+    """
+    totals = dict(differences.group_by("season").agg(pl.col("difference").sum()).iter_rows())
+    counts = dict(differences.group_by("season").len().iter_rows())
+    empty = [season for season in seasons if counts.get(season, 0) == 0]
+    if empty:
+        msg = f"seasons without a paired difference: {', '.join(map(str, empty))}"
+        raise ValueError(msg)
+    sums = np.array([totals[season] for season in seasons], dtype=np.float64)
+    games = np.array([counts[season] for season in seasons], dtype=np.float64)
+    resampled = sums[draws].sum(axis=1) / games[draws].sum(axis=1)
+    tail = _tail(confidence)
+    lower, upper = np.quantile(resampled, [tail, 1.0 - tail])
+    return Interval(float(sums.sum() / games.sum()), float(lower), float(upper))
+
+
+def season_t_interval(
+    differences: pl.DataFrame, seasons: Sequence[int], confidence: float
+) -> Interval:
+    """Return the mean of the season means and its Student-t interval (seasons - 1 df)."""
+    means = dict(differences.group_by("season").agg(pl.col("difference").mean()).iter_rows())
+    values = np.array([means[season] for season in seasons], dtype=np.float64)
+    center = float(values.mean())
+    half = float(
+        stats.t.ppf(1.0 - _tail(confidence), df=values.size - 1)
+        * values.std(ddof=1)
+        / np.sqrt(values.size)
+    )
+    return Interval(center, center - half, center + half)
+
+
+def game_bootstrap(
+    values: npt.NDArray[np.float64],
+    *,
+    confidence: float,
+    resamples: int = BOOTSTRAP_RESAMPLES,
+    seed: int = BOOTSTRAP_SEED,
+) -> Interval:
+    """Return the mean of ``values`` and its percentile interval from resampling single rows."""
+    rng = np.random.default_rng(seed)
+    means = np.empty(resamples, dtype=np.float64)
+    for start in range(0, resamples, _RESAMPLE_CHUNK):
+        size = min(_RESAMPLE_CHUNK, resamples - start)
+        means[start : start + size] = values[
+            rng.integers(0, values.size, (size, values.size))
+        ].mean(axis=1)
+    tail = _tail(confidence)
+    lower, upper = np.quantile(means, [tail, 1.0 - tail])
+    return Interval(float(values.mean()), float(lower), float(upper))

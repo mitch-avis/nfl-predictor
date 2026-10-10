@@ -1219,6 +1219,13 @@ import paths.
   schedule strength, quarterback ratings, weekly histories, and bootstrap rank ranges), with a
   leakage-safe pre-week entry point for model features. Nothing in the ETL or the model uses it;
   [its README](src/nfl_predictor/ratings/README.md) covers the methods, inputs, and parity checks.
+- `src/nfl_predictor/season_stats/` holds the season statistics ported from the sibling
+  `nfl-sos-ratings` project (team and quarterback game logs, season rows, head-to-head-excluded
+  opponent profiles, win-probability bins) and its metric registry, with the stats catalogs
+  generated from it. Its tables are whole-season display data, not values known before a week's
+  games, and nothing in the ETL, the model, or the web API uses them yet;
+  [its README](src/nfl_predictor/season_stats/README.md) covers the inputs, outputs, and parity
+  checks.
 
 ## Implemented feature areas
 

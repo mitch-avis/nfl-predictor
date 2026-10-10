@@ -1,4 +1,4 @@
-"""Tests for the survivor planner: a beam search over the planned weeks with a lookahead."""
+"""Tests for the survivor planner: exact plans, one per pick this week, over predicted weeks."""
 
 from __future__ import annotations
 

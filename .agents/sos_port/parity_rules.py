@@ -14,7 +14,12 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from port_audit import ROOT
 
-from nfl_predictor.utils.polars.pbp import SITUATIONAL_PLAY_TYPES
+# ``_play_conditions`` holds the carry and dropback conditions the aggregates count with.
+from nfl_predictor.utils.polars.pbp import (
+    SITUATIONAL_PLAY_TYPES,
+    _play_conditions,
+    regular_season_plays,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -232,10 +237,11 @@ def uncounted_situational_plays(pbp: pl.DataFrame) -> dict[str, int]:
 
 
 def wiped_out_plays(pbp: pl.DataFrame) -> dict[str, float]:
-    """Count the plays a penalty wiped out (``play_type`` ``no_play``) by the flag they keep.
+    """Count the plays nflverse records as ``no_play`` by the flag they keep.
 
-    ``plays`` is every such play with a team on each side; ``rush``, ``pass`` and ``qb_dropback``
-    count those with that flag still set, and ``rush_epa`` and ``pass_epa`` sum their EPA.
+    ``plays`` is every such play with a team on each side; ``without_penalty_flag`` counts those
+    whose ``penalty`` flag is not set. ``rush``, ``pass`` and ``qb_dropback`` count those with that
+    flag still set, and ``rush_epa`` and ``pass_epa`` sum their EPA.
     """
     sides = pl.all_horizontal(
         pl.col(c).is_not_null() & (pl.col(c) != "") for c in ("posteam", "defteam")
@@ -244,11 +250,83 @@ def wiped_out_plays(pbp: pl.DataFrame) -> dict[str, float]:
     runs, passes = wiped.filter(_flag("rush")), wiped.filter(_flag("pass"))
     return {
         "plays": wiped.height,
+        "without_penalty_flag": wiped.filter(~_flag("penalty")).height,
         "rush": runs.height,
         "pass": passes.height,
         "qb_dropback": wiped.filter(_flag("qb_dropback")).height,
         "rush_epa": float(runs["epa"].fill_null(0.0).sum()),
         "pass_epa": float(passes["epa"].fill_null(0.0).sum()),
+    }
+
+
+# What the play text of a ``no_play`` row without the penalty flag says, tried in this order.
+NO_PLAY_TEXTS = {
+    "offsetting_penalties": "(?i)offsetting",
+    "declined_penalties": "(?i)declined",
+    "plays_under_review": "(?i)under review",
+    "timeouts": "(?i)timeout",
+}
+
+
+def unflagged_no_plays(pbp: pl.DataFrame) -> dict[str, int]:
+    """Count the ``no_play`` rows without the penalty flag by what their play text (``desc``) says.
+
+    The rows are those ``wiped_out_plays`` counts as ``without_penalty_flag``; each falls under the
+    first ``NO_PLAY_TEXTS`` pattern its text matches, else ``other``.
+    """
+    sides = pl.all_horizontal(
+        pl.col(c).is_not_null() & (pl.col(c) != "") for c in ("posteam", "defteam")
+    )
+    no_play = (pl.col("play_type") == "no_play").fill_null(value=False)
+    rows = pbp.filter(sides & no_play & ~_flag("penalty"))
+    text = pl.col("desc").fill_null("")
+    kind: pl.Expr = pl.lit("other")
+    for name, pattern in reversed(NO_PLAY_TEXTS.items()):
+        kind = pl.when(text.str.contains(pattern)).then(pl.lit(name)).otherwise(kind)
+    found = dict(rows.select(kind.alias("kind")).group_by("kind").len().iter_rows())
+    return {name: int(found.get(name, 0)) for name in [*NO_PLAY_TEXTS, "other"]}
+
+
+def carries_without_rush_attempt(pbp: pl.DataFrame) -> dict[str, int]:
+    """Count this repository's carries that lack the ``rush_attempt`` flag, by play type.
+
+    These are the plays a carry rule built from ``rush_attempt`` takes out of carries; they keep
+    the ``rush`` flag, so they stay scrimmage snaps. A missing play type is ``none``.
+    """
+    plays = regular_season_plays(pbp)
+    today = _play_conditions(plays.columns)["rush"]
+    rows = plays.filter(today & ~_flag("rush_attempt"))
+    found = rows.select(pl.col("play_type").fill_null("none")).group_by("play_type").len()
+    return {str(kind): int(count) for kind, count in sorted(found.iter_rows())}
+
+
+def carries_from_rush_attempts(pbp: pl.DataFrame) -> dict[str, int]:
+    """Count how carry rules built from ``rush_attempt`` differ from this repository's carries.
+
+    Over the plays this repository's aggregates read, ``today`` counts its carries (the ``rush``
+    condition of ``_play_conditions``). ``with_flag`` is its designed-run rule,
+    ``rush_attempt & ~two_point_attempt & ~qb_scramble & ~qb_kneel``; ``without_flag`` is the same
+    rule without ``~qb_scramble``, the closest a cache without the scramble flag can build. Each
+    counts the plays it adds to and removes from today's carries; the ``without_flag_added_*``
+    counts split that rule's added plays by the scramble flag and by today's dropback condition.
+    """
+    plays = regular_season_plays(pbp)
+    conditions = _play_conditions(plays.columns)
+    today, dropback = conditions["rush"], conditions["dropback"]
+    without_flag = _flag("rush_attempt") & ~_flag("two_point_attempt") & ~_flag("qb_kneel")
+    with_flag = without_flag & ~_flag("qb_scramble")
+    added = plays.filter(without_flag & ~today)
+    return {
+        "today": plays.filter(today).height,
+        "with_flag_added": plays.filter(with_flag & ~today).height,
+        "with_flag_removed": plays.filter(today & ~with_flag).height,
+        "without_flag_added": added.height,
+        "without_flag_removed": plays.filter(today & ~without_flag).height,
+        "without_flag_added_scrambles": added.filter(_flag("qb_scramble")).height,
+        "without_flag_added_dropbacks": added.filter(dropback).height,
+        "without_flag_added_scramble_dropbacks": added.filter(
+            _flag("qb_scramble") & dropback
+        ).height,
     }
 
 

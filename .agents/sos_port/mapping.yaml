@@ -13,8 +13,12 @@
 # (its registry's affixes), `source` (the code-derived source for game logs, else its registry's
 # label). A `rest: true` rule takes every column of its kinds that no other rule matches, and must
 # say how many (`expect`), so a column the frozen commit does not have fails the run; any other
-# rule may pin its count the same way. A column left `missing` fails the run when this repository
-# has a column of the same name (or, for a season total or per-game value, of its base metric).
+# rule may pin its count the same way. A column left `missing` (other than an opponents-faced
+# profile column) fails the run when this repository has a column of the same name (or, for a
+# season total or per-game value, of its base metric), or when another file kind gives that name
+# a counterpart, unless `cross_kind_exceptions` (keyed `kind.column`) says why. A rule with
+# `mirror_kind` takes each column's counterparts from the same column in that kind (`mirror_base`:
+# from its base metric's column there).
 # Counterparts are `<catalog>:<column>`, where the catalogs are this repository's
 #   team_game  - aggregate_pbp_team_game_stats (play-by-play, per team-game)
 #   box_score  - aggregate_pbp_team_box_score_stats (play-by-play, per team-game; it overrides
@@ -28,6 +32,10 @@
 #
 # "Season-to-date" below means this repository's pre-game feature: the team's stats through the
 # week before, blended toward the previous season (polars_utils.blend_with_prior_stats).
+
+# Columns that may stay missing in one kind although another kind gives their name a
+# counterpart, each with the reason. None today.
+cross_kind_exceptions: {}
 
 sources:
   - id: pbp
@@ -639,8 +647,17 @@ columns:
     note: >-
       Here nflverse's weekly team stats per team-game (not published as a season value); there
       play-by-play, as in the game logs.
+  - id: season-mirrors-game-logs
+    kinds: [team_per_game_stats, combined]
+    prefix: ""
+    columns: [completion_pct, defensive_penalties, defensive_penalty_yards, designed_carries, epa_per_defensive_snap_allowed, epa_per_offensive_snap, int_rate_per_attempt, offensive_epa, offensive_penalties, offensive_penalty_yards, offensive_tds, passing_2pt_conversions, passing_first_downs, passing_first_downs_allowed, passing_td_rate_per_attempt, receiving_fumbles, receiving_fumbles_lost, receiving_yards_allowed, receptions_allowed, rushing_2pt_conversions, rushing_first_downs, rushing_first_downs_allowed, rushing_fumbles, rushing_fumbles_lost, sack_fumbles, sack_fumbles_lost, sack_rate_per_dropback, scrimmage_tds, st_epa, turnovers_on_downs, two_pt_attempts, two_pt_conversions, win_value]
+    class: different
+    mirror_kind: team_game_logs
+    note: >-
+      There a completed season's value; here the counterpart its game-log column names, which this
+      repository keeps per team-game or as a season-to-date feature, never as a season's value.
   - id: season-rest
-    expect: 288
+    expect: 222
     kinds: [team_per_game_stats, combined]
     rest: true
     class: missing
@@ -747,7 +764,7 @@ columns:
       qb_any_a: qb_game:(pass_yards + 20 * pass_tds - 45 * interceptions - sack_yards) / (attempts + sacks)
       qb_completion_pct: qb_game:completions / attempts
       qb_pass_yards_per_dropback: qb_game:pass_yards / dropbacks
-      qb_td_int_margin_rate: qb_game:pass_tds - interceptions / dropbacks
+      qb_td_int_margin_rate: qb_game:(pass_tds - interceptions) / dropbacks
     note: >-
       The same game rates from the passer's totals (ANY/A with 20 per touchdown and 45 per
       interception), with the totals' differences above.
@@ -778,8 +795,26 @@ columns:
     class: different
     here: dataset:{column}
     note: The quarterback's team's record; here before each game, season to date.
+  - id: qb-season-mirrors-game-logs
+    kinds: [qb_per_game_stats, qb_combined]
+    columns: [qb_completion_pct, qb_pass_yards_per_dropback, qb_td_int_margin_rate]
+    class: different
+    mirror_kind: qb_game_logs
+    note: >-
+      There the season's rate; here only the game rate its game-log column names, from the
+      passer's per-game totals, and no season or career value.
+  - id: qb-season-totals
+    kinds: [qb_per_game_stats, qb_combined]
+    columns: [qb_attempts_per_game, qb_attempts_total, qb_completions_per_game, qb_completions_total, qb_dropbacks_per_game, qb_interceptions_per_game, qb_interceptions_total, qb_pass_touchdowns_per_game, qb_pass_touchdowns_total, qb_pass_yards_per_game, qb_pass_yards_total, qb_passing_epa_per_game, qb_passing_epa_total, qb_sack_yards_lost_per_game, qb_sack_yards_lost_total, qb_sacks_per_game, qb_sacks_total]
+    class: different
+    mirror_kind: qb_game_logs
+    mirror_base: true
+    note: >-
+      There a season total or per-game average of a quarterback game-log column; here only the
+      passer's per-game total its base metric's game-log column names (the career rates sum
+      several of them), never a season value.
   - id: qb-season-rest
-    expect: 152
+    expect: 112
     kinds: [qb_per_game_stats, qb_combined]
     rest: true
     class: missing
@@ -807,12 +842,21 @@ columns:
     class: missing
     phase: phase 3 (quarterback ratings)
     note: The average adjusted pass defense a quarterback faced.
+  - id: qb-ratings-plays
+    kinds: [qb_ratings, qb_ratings_by_week]
+    columns: [qb_attempts_total, qb_dropbacks]
+    expect: 2
+    class: different
+    mirror_kind: qb_game_logs
+    mirror_base: true
+    phase: phase 3 (quarterback ratings)
+    note: The attempts or dropbacks behind each rating; here only the passer's per-game totals.
   - id: qb-ratings-volume
     kinds: [qb_ratings, qb_ratings_by_week]
-    columns: [qb_games_played, qb_dropbacks, qb_attempts_total]
+    columns: [qb_games_played]
     class: missing
     phase: phase 3 (quarterback ratings)
-    note: The games and plays behind each rating.
+    note: The games behind each rating.
 
   # --- Rank ranges, pairs, histories, the prior, win-probability bins --------------------------
   - id: ratings-volume

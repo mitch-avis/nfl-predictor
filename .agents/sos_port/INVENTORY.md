@@ -11,19 +11,22 @@ checked as they are applied. The full data is in `inventory.json` beside this fi
 
 - nfl-sos-ratings at `9081bce` (checkout HEAD `9081bce`); its data built from `4d23890`; output code changed since: nothing.
 - Output file kinds: 21 (19 per completed season, read over 1999-2025; 2 only for the season in progress: qb_rating_ranges_by_week, rating_ranges_by_week).
-- Output columns (kind and column): 1736; matched 25, different 359, missing 1352.
+- Output columns (kind and column): 1736; matched 30, different 418, missing 1288.
 - Columns present in only some seasons of their kind: 0.
+- Columns classified missing that the same-name guard checked: 708 (exempt: opponent_profiles, qb_opponent_profiles, columns with a registry prefix).
 - Distinct column names: 765; resolved through its registry: 1736 of 1736.
 - Registry metrics: 319 (team 248, quarterback 71); metrics no output file uses: 2.
 - Data sources it loads: 12; matched 1, different 2, missing 9. This repository's: 11.
 - Web items (API endpoints, pages, page components): 45; matched 1, different 9, missing 35. This app's: 57.
-- Classification rules: 62.
+- Classification rules: 68.
 - Failures: 0.
 
 ## Data sources
 
 Found in each repository's Python source: nflreadpy `load_*` calls, network fetches, web
 addresses, and data files named under the data directory.
+
+Scope: Its package `nfl_sos_ratings/` at the frozen commit, and this repository's tracked Python under `src/` and `scripts/`. Not covered: its `.agents/` analysis scripts (one reads ESPN's summary API), and data files named through f-strings or variables, such as this repository's `meta_data.csv` (`data_collection.py`, `constants.QB_META_DATA_NAME`).
 
 ### nfl-sos-ratings
 
@@ -62,12 +65,12 @@ addresses, and data files named under the data directory.
 
 | kind | seasons read | columns | matched | different | missing |
 | --- | --- | --- | --- | --- | --- |
-| `combined` | 1999-2025 | 492 | 0 | 88 | 404 |
+| `combined` | 1999-2025 | 492 | 0 | 109 | 383 |
 | `opponent_profiles` | 1999-2025 | 241 | 0 | 2 | 239 |
-| `qb_combined` | 1999-2025 | 141 | 0 | 9 | 132 |
-| `qb_game_logs` | 1999-2025 | 54 | 5 | 20 | 29 |
+| `qb_combined` | 1999-2025 | 141 | 0 | 13 | 128 |
+| `qb_game_logs` | 1999-2025 | 54 | 5 | 23 | 26 |
 | `qb_opponent_profiles` | 1999-2025 | 54 | 0 | 3 | 51 |
-| `qb_per_game_stats` | 1999-2025 | 88 | 0 | 8 | 80 |
+| `qb_per_game_stats` | 1999-2025 | 88 | 0 | 12 | 76 |
 | `qb_rating_pairs` | 1999-2025 | 7 | 0 | 2 | 5 |
 | `qb_rating_ranges` | 1999-2025 | 22 | 0 | 3 | 19 |
 | `qb_rating_ranges_by_week` | 2026 | 13 | 1 | 1 | 11 |
@@ -79,8 +82,8 @@ addresses, and data files named under the data directory.
 | `rating_ranges_by_week` | 2026 | 13 | 1 | 1 | 11 |
 | `ratings` | 1999-2025 | 8 | 0 | 8 | 0 |
 | `ratings_by_week` | 1999-2025 | 7 | 1 | 6 | 0 |
-| `team_game_logs` | 1999-2025 | 246 | 12 | 111 | 123 |
-| `team_per_game_stats` | 1999-2025 | 246 | 0 | 81 | 165 |
+| `team_game_logs` | 1999-2025 | 246 | 17 | 117 | 112 |
+| `team_per_game_stats` | 1999-2025 | 246 | 0 | 102 | 144 |
 | `team_prior` | 1999-2025 | 4 | 0 | 2 | 2 |
 | `team_wp_bins` | 1999-2025 | 8 | 2 | 2 | 4 |
 
@@ -289,7 +292,7 @@ snapshot and quarterback columns with how many of its columns name each.
 
 ## Columns by file kind
 
-### `combined` (492; matched 0, different 88, missing 404)
+### `combined` (492; matched 0, different 109, missing 383)
 
 | column | base metric (affixes) | source there | class | here | rule (phase and note: Column rules) |
 | --- | --- | --- | --- | --- | --- |
@@ -364,13 +367,13 @@ snapshot and quarterback columns with how many of its columns name each.
 | `def_safeties_per_defensive_snap` | `def_safeties` (..._per_defensive_snap) | PLS | missing | - | `season-rest` |
 | `attempts` | `attempts` | PBP +TS | different | `dataset:pass_attempts` | `season-features` |
 | `completions` | `completions` | PBP +TS | different | `dataset:pass_completions` | `season-features` |
-| `targets` | `targets` | PBP +TS | missing | - | `season-rest` |
-| `dropbacks` | `dropbacks` | PBP | missing | - | `season-rest` |
-| `sack_yards_lost` | `sack_yards_lost` | PBP +TS | missing | - | `season-rest` |
+| `targets` | `targets` | PBP +TS | different | `team_stats:targets` | `season-nflverse-here` |
+| `dropbacks` | `dropbacks` | PBP | different | `team_game:dropbacks` | `season-team-game-counts` |
+| `sack_yards_lost` | `sack_yards_lost` | PBP +TS | different | `team_stats:yards_lost_from_sacks` | `season-nflverse-here` |
 | `scrambles` | `scrambles` | PBP | missing | - | `season-rest` |
 | `scramble_yards` | `scramble_yards` | PBP | missing | - | `season-rest` |
-| `passing_air_yards` | `passing_air_yards` | PBP +TS | missing | - | `season-rest` |
-| `passing_yards_after_catch` | `passing_yards_after_catch` | PBP +TS | missing | - | `season-rest` |
+| `passing_air_yards` | `passing_air_yards` | PBP +TS | different | `team_stats:passing_air_yards` | `season-nflverse-here` |
+| `passing_yards_after_catch` | `passing_yards_after_catch` | PBP +TS | different | `team_stats:passing_yac` | `season-nflverse-here` |
 | `longest_pass` | `longest_pass` | PBP | missing | - | `season-rest` |
 | `sack_fumbles` | `sack_fumbles` | PBP +TS | missing | - | `season-rest` |
 | `passing_2pt_conversions` | `passing_2pt_conversions` | PBP +TS | missing | - | `season-rest` |
@@ -385,7 +388,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `rushing_2pt_conversions` | `rushing_2pt_conversions` | PBP +TS | missing | - | `season-rest` |
 | `offensive_epa` | `offensive_epa` | PBP | missing | - | `season-rest` |
 | `offensive_wpa` | `offensive_wpa` | PBP | missing | - | `season-rest` |
-| `st_plays` | `st_plays` | PBP | missing | - | `season-rest` |
+| `st_plays` | `st_plays` | PBP | different | `team_game:st_plays` | `season-team-game-counts` |
 | `st_epa` | `st_epa` | PBP | missing | - | `season-rest` |
 | `success_rate` | `success_rate` | PBP | different | `dataset:success_rate` | `season-features` |
 | `pass_success_rate` | `pass_success_rate` | PBP | different | `dataset:pass_success_rate` | `season-features` |
@@ -400,11 +403,11 @@ snapshot and quarterback columns with how many of its columns name each.
 | `turnover_epa` | `turnover_epa` | PBP | missing | - | `season-rest` |
 | `first_downs` | `first_downs` | PBP | different | `dataset:first_downs` | `season-features` |
 | `first_downs_penalty` | `first_downs_penalty` | PBP | missing | - | `season-rest` |
-| `third_down_conversions` | `third_down_conversions` | PBP | missing | - | `season-rest` |
-| `third_down_attempts` | `third_down_attempts` | PBP | missing | - | `season-rest` |
+| `third_down_conversions` | `third_down_conversions` | PBP | different | `team_game:third_down_conversions` | `season-team-game-counts` |
+| `third_down_attempts` | `third_down_attempts` | PBP | different | `team_game:third_down_attempts` | `season-team-game-counts` |
 | `third_down_avg_distance` | `third_down_avg_distance` | PBP | missing | - | `season-rest` |
-| `fourth_down_conversions` | `fourth_down_conversions` | PBP | missing | - | `season-rest` |
-| `fourth_down_attempts` | `fourth_down_attempts` | PBP | missing | - | `season-rest` |
+| `fourth_down_conversions` | `fourth_down_conversions` | PBP | different | `team_game:fourth_down_conversions` | `season-team-game-counts` |
+| `fourth_down_attempts` | `fourth_down_attempts` | PBP | different | `team_game:fourth_down_attempts` | `season-team-game-counts` |
 | `turnovers_on_downs` | `turnovers_on_downs` | PBP | missing | - | `season-rest` |
 | `two_pt_attempts` | `two_pt_attempts` | PBP +TS | missing | - | `season-rest` |
 | `two_pt_conversions` | `two_pt_conversions` | PBP +TS | missing | - | `season-rest` |
@@ -423,7 +426,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `turnover_pct_per_drive` | `turnover_pct_per_drive` | PBP | missing | - | `season-rest` |
 | `three_and_out_rate` | `three_and_out_rate` | PBP | missing | - | `season-rest` |
 | `points_per_drive` | `points_per_drive` | PBP | missing | - | `season-rest` |
-| `red_zone_trips` | `red_zone_trips` | PBP | missing | - | `season-rest` |
+| `red_zone_trips` | `red_zone_trips` | PBP | different | `team_game:red_zone_trips` | `season-team-game-counts` |
 | `red_zone_td_pct` | `red_zone_td_pct` | PBP | different | `dataset:red_zone_td_pct` | `season-features` |
 | `points_per_red_zone_trip` | `points_per_red_zone_trip` | PBP | missing | - | `season-rest` |
 | `avg_starting_field_position` | `avg_starting_field_position` | PBP | missing | - | `season-rest` |
@@ -479,7 +482,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `explosive_pass_rate_allowed` | `explosive_pass_rate_allowed` | PBP | different | `dataset:explosive_pass_rate_allowed` | `season-features` |
 | `team_passer_rating_allowed` | `team_passer_rating_allowed` | PBP | missing | - | `season-rest` |
 | `deep_attempt_rate_faced` | `deep_attempt_rate_faced` | PBP | missing | - | `season-rest` |
-| `def_sack_yards` | `def_sack_yards` | PBP +TS | missing | - | `season-rest` |
+| `def_sack_yards` | `def_sack_yards` | PBP +TS | different | `team_stats:def_sack_yards` | `season-nflverse-here` |
 | `def_sack_rate_per_dropback` | `def_sack_rate_per_dropback` | PBP | missing | - | `season-rest` |
 | `qb_pressure_events_rate` | `qb_pressure_events_rate` | PBP | missing | - | `season-rest` |
 | `carries_faced` | `carries_faced` | PBP +TS | different | `dataset:opponent_rush_attempts` | `season-features` |
@@ -505,13 +508,13 @@ snapshot and quarterback columns with how many of its columns name each.
 | `avg_starting_field_position_allowed` | `avg_starting_field_position_allowed` | PBP | missing | - | `season-rest` |
 | `two_pt_conversion_rate_allowed` | `two_pt_conversion_rate_allowed` | PBP | different | `dataset:opponent_two_point_conversion_pct` | `season-features` |
 | `takeaways` | `takeaways` | PBP | missing | - | `season-rest` |
-| `fumble_recovery_opp` | `fumble_recovery_opp` | PBP +TS | missing | - | `season-rest` |
+| `fumble_recovery_opp` | `fumble_recovery_opp` | PBP +TS | different | `team_stats:fumble_recoveries` | `season-nflverse-here` |
 | `takeaway_rate_per_defensive_snap` | `takeaway_rate_per_defensive_snap` | PBP | missing | - | `season-rest` |
 | `takeaways_per_drive` | `takeaways_per_drive` | PBP | missing | - | `season-rest` |
-| `def_interception_yards` | `def_interception_yards` | PBP +TS | missing | - | `season-rest` |
+| `def_interception_yards` | `def_interception_yards` | PBP +TS | different | `team_stats:def_interception_yards` | `season-nflverse-here` |
 | `def_tds` | `def_tds` | PBP +TS | different | `dataset:def_tds` | `season-features` |
 | `fumble_recovery_tds` | `fumble_recovery_tds` | PBP +TS | different | `dataset:fumble_recovery_tds` | `season-features` |
-| `defensive_2pt_conversions` | `defensive_2pt_conversions` | PBP | missing | - | `season-rest` |
+| `defensive_2pt_conversions` | `defensive_2pt_conversions` | PBP | different | `team_stats:def_2pt_made` | `season-nflverse-here` |
 | `havoc_rate` | `havoc_rate` | PBP | missing | - | `season-rest` |
 | `defensive_penalties` | `defensive_penalties` | PBP | missing | - | `season-rest` |
 | `defensive_penalty_yards` | `defensive_penalty_yards` | PBP | missing | - | `season-rest` |
@@ -526,12 +529,12 @@ snapshot and quarterback columns with how many of its columns name each.
 | `total_yards_differential` | `total_yards_differential` | PBP | missing | - | `season-rest` |
 | `epa_margin_per_play` | `epa_margin_per_play` | PBP | different | `dataset:epa_margin_per_play` | `season-features` |
 | `success_rate_margin` | `success_rate_margin` | PBP | missing | - | `season-rest` |
-| `receptions` | `receptions` | PBP +TS | missing | - | `season-rest` |
-| `receiving_yards` | `receiving_yards` | PBP +TS | missing | - | `season-rest` |
-| `receiving_tds` | `receiving_tds` | PBP +TS | missing | - | `season-rest` |
-| `receiving_air_yards` | `receiving_air_yards` | PBP +TS | missing | - | `season-rest` |
-| `receiving_yards_after_catch` | `receiving_yards_after_catch` | PBP +TS | missing | - | `season-rest` |
-| `receiving_first_downs` | `receiving_first_downs` | PBP +TS | missing | - | `season-rest` |
+| `receptions` | `receptions` | PBP +TS | different | `team_stats:receptions` | `season-nflverse-here` |
+| `receiving_yards` | `receiving_yards` | PBP +TS | different | `team_stats:receiving_yards` | `season-nflverse-here` |
+| `receiving_tds` | `receiving_tds` | PBP +TS | different | `team_stats:receiving_touchdowns` | `season-nflverse-here` |
+| `receiving_air_yards` | `receiving_air_yards` | PBP +TS | different | `team_stats:receiving_air_yards` | `season-nflverse-here` |
+| `receiving_yards_after_catch` | `receiving_yards_after_catch` | PBP +TS | different | `team_stats:receiving_yac` | `season-nflverse-here` |
+| `receiving_first_downs` | `receiving_first_downs` | PBP +TS | different | `team_stats:receiving_first_downs` | `season-nflverse-here` |
 | `receptions_allowed` | `receptions_allowed` | PBP +TS | missing | - | `season-rest` |
 | `receiving_yards_allowed` | `receiving_yards_allowed` | PBP +TS | missing | - | `season-rest` |
 | `games_played` | `games_played` | SCH | different | `dataset:games_played` | `season-features` |
@@ -1032,7 +1035,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `receptions_allowed` | `receptions_allowed` | PBP +TS | missing | - | `opponent-rest` |
 | `receiving_yards_allowed` | `receiving_yards_allowed` | PBP +TS | missing | - | `opponent-rest` |
 
-### `qb_combined` (141; matched 0, different 9, missing 132)
+### `qb_combined` (141; matched 0, different 13, missing 128)
 
 | column | base metric (affixes) | source there | class | here | rule (phase and note: Column rules) |
 | --- | --- | --- | --- | --- | --- |
@@ -1120,10 +1123,10 @@ snapshot and quarterback columns with how many of its columns name each.
 | `qb_td_int_differential` | `qb_td_int_differential` | D | missing | - | `qb-season-rest` |
 | `qb_attempt_qualifier` | `qb_attempt_qualifier` | D | missing | - | `qb-season-rest` |
 | `qb_is_eligible` | `qb_is_eligible` | D | missing | - | `qb-season-rest` |
-| `wins` | `wins` | SCH | missing | - | `qb-season-rest` |
-| `losses` | `losses` | SCH | missing | - | `qb-season-rest` |
-| `ties` | `ties` | SCH | missing | - | `qb-season-rest` |
-| `win_pct` | `win_pct` | D | missing | - | `qb-season-rest` |
+| `wins` | `wins` | SCH | different | `dataset:wins` | `qb-season-record` |
+| `losses` | `losses` | SCH | different | `dataset:losses` | `qb-season-record` |
+| `ties` | `ties` | SCH | different | `dataset:ties` | `qb-season-record` |
+| `win_pct` | `win_pct` | D | different | `dataset:win_pct` | `qb-season-record` |
 | `qopp_points_allowed` | `points_allowed` (qopp_...) | SCH | missing | - | `qb-opponents` |
 | `qopp_def_sacks` | `def_sacks` (qopp_...) | PLS | missing | - | `qb-opponents` |
 | `qopp_def_interceptions` | `def_interceptions` (qopp_...) | PLS | missing | - | `qb-opponents` |
@@ -1178,7 +1181,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `adj_qb_epa_per_dropback` | `adj_qb_epa_per_dropback` | D | different | `dataset:qb_dropback_epa` | `qb-ratings` |
 | `qb_faced_pass_defense` | `qb_faced_pass_defense` | D | missing | - | `qb-faced-defense` |
 
-### `qb_game_logs` (54; matched 5, different 20, missing 29)
+### `qb_game_logs` (54; matched 5, different 23, missing 26)
 
 | column | base metric (affixes) | source there | class | here | rule (phase and note: Column rules) |
 | --- | --- | --- | --- | --- | --- |
@@ -1204,7 +1207,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `qb_pass_yards_per_dropback` | `qb_pass_yards_per_dropback` | D | different | `qb_game:pass_yards / dropbacks` | `qb-game-rates` |
 | `qb_td_int_margin_rate` | `qb_td_int_margin_rate` | D | different | `qb_game:pass_tds - interceptions / dropbacks` | `qb-game-rates` |
 | `qb_sack_rate` | `qb_sack_rate` | D | different | `qb_game:sacks / dropbacks` | `qb-game-rates` |
-| `qb_any_a` | `qb_any_a` | D | different | `qb_game:pass_yards + pass_tds - interceptions - sack_yards / attempts + sacks` | `qb-game-rates` |
+| `qb_any_a` | `qb_any_a` | D | different | `qb_game:(pass_yards + 20 * pass_tds - 45 * interceptions - sack_yards) / (attempts + sacks)` | `qb-game-rates` |
 | `qb_fourth_quarter_comeback` | `qb_fourth_quarter_comeback` | D | missing | - | `qb-game-rest` |
 | `qb_game_winning_drive` | `qb_game_winning_drive` | D | missing | - | `qb-game-rest` |
 | `qb_completion_percentage_above_expectation` | `qb_completion_percentage_above_expectation` | PLS | different | `qb_game:cpoe_sum / cpoe_count` | `qb-game-pbp` |
@@ -1233,9 +1236,9 @@ snapshot and quarterback columns with how many of its columns name each.
 | `is_home` | `is_home` | SCH | matched | `team_game:is_home` | `qb-game-context` |
 | `points_for` | `points_for` | SCH | matched | `dataset:score` | `qb-game-context` |
 | `points_allowed` | `points_allowed` | SCH | matched | `dataset:score` | `qb-game-context` |
-| `point_margin` | `point_margin` | D | missing | - | `qb-game-context-derived` |
-| `win_value` | `win_value` | D | missing | - | `qb-game-context-derived` |
-| `turnover_margin` | `turnover_margin` | PBP | missing | - | `qb-game-context-derived` |
+| `point_margin` | `point_margin` | D | different | `dataset:scoring_margin` | `qb-game-context-derived` |
+| `win_value` | `win_value` | D | different | `dataset:win_pct` | `qb-game-context-derived` |
+| `turnover_margin` | `turnover_margin` | PBP | different | `team_stats:turnover_margin` | `qb-game-context-derived` |
 
 ### `qb_opponent_profiles` (54; matched 0, different 3, missing 51)
 
@@ -1296,7 +1299,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `qopp_qb_td_int_margin_rate` | `qb_td_int_margin_rate` (qopp_...) | D | missing | - | `qb-opponents` |
 | `qopp_qb_any_a` | `qb_any_a` (qopp_...) | D | missing | - | `qb-opponents` |
 
-### `qb_per_game_stats` (88; matched 0, different 8, missing 80)
+### `qb_per_game_stats` (88; matched 0, different 12, missing 76)
 
 | column | base metric (affixes) | source there | class | here | rule (phase and note: Column rules) |
 | --- | --- | --- | --- | --- | --- |
@@ -1384,10 +1387,10 @@ snapshot and quarterback columns with how many of its columns name each.
 | `qb_td_int_differential` | `qb_td_int_differential` | D | missing | - | `qb-season-rest` |
 | `qb_attempt_qualifier` | `qb_attempt_qualifier` | D | missing | - | `qb-season-rest` |
 | `qb_is_eligible` | `qb_is_eligible` | D | missing | - | `qb-season-rest` |
-| `wins` | `wins` | SCH | missing | - | `qb-season-rest` |
-| `losses` | `losses` | SCH | missing | - | `qb-season-rest` |
-| `ties` | `ties` | SCH | missing | - | `qb-season-rest` |
-| `win_pct` | `win_pct` | D | missing | - | `qb-season-rest` |
+| `wins` | `wins` | SCH | different | `dataset:wins` | `qb-season-record` |
+| `losses` | `losses` | SCH | different | `dataset:losses` | `qb-season-record` |
+| `ties` | `ties` | SCH | different | `dataset:ties` | `qb-season-record` |
+| `win_pct` | `win_pct` | D | different | `dataset:win_pct` | `qb-season-record` |
 
 ### `qb_wp_bins` (6; matched 2, different 1, missing 3)
 
@@ -1400,7 +1403,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `qb_wp_bin_dropbacks` | `qb_wp_bin_dropbacks` | PBP | missing | - | `wp-bins` |
 | `qb_wp_bin_epa` | `qb_wp_bin_epa` | PBP | missing | - | `wp-bins` |
 
-### `team_game_logs` (246; matched 12, different 111, missing 123)
+### `team_game_logs` (246; matched 17, different 117, missing 112)
 
 | column | base metric (affixes) | source there | class | here | rule (phase and note: Column rules) |
 | --- | --- | --- | --- | --- | --- |
@@ -1445,9 +1448,9 @@ snapshot and quarterback columns with how many of its columns name each.
 | `def_pass_defended` | `def_pass_defended` | weekly player stats | different | `team_stats:def_pass_defended` | `gl-player-stats` |
 | `def_safeties` | `def_safeties` | weekly player stats | different | `team_stats:def_safeties` | `gl-player-stats` |
 | `games` | `games` | identity | missing | - | `gl-games` |
-| `point_margin` | `point_margin` | schedule | missing | - | `gl-result` |
-| `win_value` | `win_value` | schedule | missing | - | `gl-result` |
-| `points_per_offensive_snap` | `points_per_offensive_snap` | schedule over play-by-play offensive_snaps | missing | - | `gl-rest` |
+| `point_margin` | `point_margin` | schedule | different | `dataset:scoring_margin` | `gl-result` |
+| `win_value` | `win_value` | schedule | different | `dataset:win_pct` | `gl-result` |
+| `points_per_offensive_snap` | `points_per_offensive_snap` | schedule over play-by-play offensive_snaps | different | `dataset:points_per_play` | `gl-result` |
 | `total_yards_per_offensive_snap` | `total_yards` (..._per_offensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play offensive_snaps | missing | - | `gl-rest` |
 | `passing_yards_per_offensive_snap` | `passing_yards` (..._per_offensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play offensive_snaps | missing | - | `gl-rest` |
 | `rushing_yards_per_offensive_snap` | `rushing_yards` (..._per_offensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play offensive_snaps | missing | - | `gl-rest` |
@@ -1461,7 +1464,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `rushing_fumbles_lost_per_offensive_snap` | `rushing_fumbles_lost` (..._per_offensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play offensive_snaps | missing | - | `gl-rest` |
 | `passing_first_downs_per_offensive_snap` | `passing_first_downs` (..._per_offensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play offensive_snaps | missing | - | `gl-rest` |
 | `rushing_first_downs_per_offensive_snap` | `rushing_first_downs` (..._per_offensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play offensive_snaps | missing | - | `gl-rest` |
-| `points_allowed_per_defensive_snap` | `points_allowed_per_defensive_snap` | schedule over play-by-play defensive_snaps | missing | - | `gl-rest` |
+| `points_allowed_per_defensive_snap` | `points_allowed_per_defensive_snap` | schedule over play-by-play defensive_snaps | different | `dataset:opponent_points_per_play` | `gl-result` |
 | `total_yards_allowed_per_defensive_snap` | `total_yards_allowed` (..._per_defensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play defensive_snaps | missing | - | `gl-rest` |
 | `passing_yards_allowed_per_defensive_snap` | `passing_yards_allowed` (..._per_defensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play defensive_snaps | missing | - | `gl-rest` |
 | `rushing_yards_allowed_per_defensive_snap` | `rushing_yards_allowed` (..._per_defensive_snap) | official weekly team stats (play-by-play where nflverse has one team's row only) over play-by-play defensive_snaps | missing | - | `gl-rest` |
@@ -1503,7 +1506,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `offensive_wpa` | `offensive_wpa` | play-by-play | missing | - | `gl-rest` |
 | `st_plays` | `st_plays` | play-by-play | different | `team_game:st_plays` | `gl-st-plays` |
 | `st_epa` | `st_epa` | play-by-play | matched | `team_game:st_epa_for` | `gl-same-pbp` |
-| `success_rate` | `success_rate` | play-by-play | different | `team_game:pass_success_count + rush_success_count / dropbacks + carries` | `gl-success` |
+| `success_rate` | `success_rate` | play-by-play | different | `team_game:(pass_success_count + rush_success_count) / (dropbacks + carries)` | `gl-success` |
 | `pass_success_rate` | `pass_success_rate` | play-by-play | different | `team_game:pass_success_count / dropbacks` | `gl-dropbacks` |
 | `rush_success_rate` | `rush_success_rate` | play-by-play | different | `team_game:rush_success_count / carries` | `gl-designed-runs` |
 | `shotgun_rate` | `shotgun_rate` | play-by-play | missing | - | `gl-rest` |
@@ -1521,7 +1524,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `third_down_avg_distance` | `third_down_avg_distance` | play-by-play | missing | - | `gl-rest` |
 | `fourth_down_conversions` | `fourth_down_conversions` | play-by-play | different | `team_game:fourth_down_conversions` | `gl-downs` |
 | `fourth_down_attempts` | `fourth_down_attempts` | play-by-play | different | `team_game:fourth_down_attempts` | `gl-downs` |
-| `turnovers_on_downs` | `turnovers_on_downs` | play-by-play | missing | - | `gl-rest` |
+| `turnovers_on_downs` | `turnovers_on_downs` | play-by-play | different | `team_game:fourth_down_fails` | `gl-turnovers-on-downs` |
 | `two_pt_attempts` | `two_pt_attempts` | play-by-play | different | `team_game:two_point_attempts` | `gl-downs` |
 | `two_pt_conversions` | `two_pt_conversions` | play-by-play | matched | `box_score:2pt_conversions` | `gl-same-pbp` |
 | `offensive_penalties` | `offensive_penalties` | play-by-play | different | `box_score:penalties` | `gl-totals-here` |
@@ -1546,26 +1549,26 @@ snapshot and quarterback columns with how many of its columns name each.
 | `long_field_score_pct` | `long_field_score_pct` | play-by-play | missing | - | `gl-rest` |
 | `drive_penalty_yards` | `drive_penalty_yards` | play-by-play | missing | - | `gl-rest` |
 | `giveaways` | `giveaways` | play-by-play | missing | - | `gl-rest` |
-| `scrimmage_tds` | `scrimmage_tds` | play-by-play | missing | - | `gl-rest` |
+| `scrimmage_tds` | `scrimmage_tds` | play-by-play | matched | `box_score:pass_touchdowns + rush_touchdowns` | `gl-same-box-rates` |
 | `net_passing_yards` | `net_passing_yards` | play-by-play | missing | - | `gl-rest` |
-| `offensive_tds` | `offensive_tds` | play-by-play | missing | - | `gl-rest` |
-| `completion_pct` | `completion_pct` | play-by-play | missing | - | `gl-rest` |
+| `offensive_tds` | `offensive_tds` | play-by-play | matched | `box_score:pass_touchdowns + rush_touchdowns` | `gl-same-box-rates` |
+| `completion_pct` | `completion_pct` | play-by-play | matched | `box_score:pass_completions / pass_attempts` | `gl-same-box-rates` |
 | `catch_rate` | `catch_rate` | play-by-play | missing | - | `gl-rest` |
-| `sack_rate_per_dropback` | `sack_rate_per_dropback` | play-by-play | missing | - | `gl-rest` |
+| `sack_rate_per_dropback` | `sack_rate_per_dropback` | play-by-play | different | `box_score:times_sacked`, `team_game:dropbacks` | `gl-sack-rate` |
 | `air_yards_per_attempt` | `air_yards_per_attempt` | play-by-play | missing | - | `gl-rest` |
 | `yac_per_completion` | `yac_per_completion` | play-by-play | missing | - | `gl-rest` |
 | `yards_per_attempt` | `yards_per_attempt` | play-by-play | missing | - | `gl-rest` |
 | `yards_per_dropback` | `yards_per_dropback` | play-by-play | missing | - | `gl-rest` |
 | `epa_per_dropback` | `epa_per_dropback` | play-by-play | different | `team_game:pass_epa_sum / dropbacks` | `gl-dropbacks` |
-| `passing_td_rate_per_attempt` | `passing_td_rate_per_attempt` | play-by-play | missing | - | `gl-rest` |
-| `int_rate_per_attempt` | `int_rate_per_attempt` | play-by-play | missing | - | `gl-rest` |
+| `passing_td_rate_per_attempt` | `passing_td_rate_per_attempt` | play-by-play | matched | `box_score:pass_touchdowns / pass_attempts` | `gl-same-box-rates` |
+| `int_rate_per_attempt` | `int_rate_per_attempt` | play-by-play | matched | `box_score:interceptions_thrown / pass_attempts` | `gl-same-box-rates` |
 | `explosive_pass_rate` | `explosive_pass_rate` | play-by-play | different | `team_game:explosive_pass_count / dropbacks` | `gl-explosive-pass` |
 | `deep_attempt_rate` | `deep_attempt_rate` | play-by-play | missing | - | `gl-rest` |
 | `yards_per_carry` | `yards_per_carry` | play-by-play | missing | - | `gl-rest` |
 | `epa_per_carry` | `epa_per_carry` | play-by-play | different | `team_game:rush_epa_sum / carries` | `gl-carry-rates` |
 | `explosive_rush_rate` | `explosive_rush_rate` | play-by-play | different | `team_game:explosive_rush_count / carries` | `gl-carry-rates` |
 | `stuffed_run_rate` | `stuffed_run_rate` | play-by-play | different | `team_game:stuffed_rush_count / carries` | `gl-carry-rates` |
-| `epa_per_offensive_snap` | `epa_per_offensive_snap` | play-by-play | different | `team_game:pass_epa_sum + rush_epa_sum / offensive_snaps` | `gl-scrimmage-epa` |
+| `epa_per_offensive_snap` | `epa_per_offensive_snap` | play-by-play | different | `team_game:(pass_epa_sum + rush_epa_sum) / offensive_snaps` | `gl-scrimmage-epa` |
 | `yards_per_offensive_snap` | `yards_per_offensive_snap` | play-by-play | missing | - | `gl-rest` |
 | `pass_rate` | `pass_rate` | play-by-play | missing | - | `gl-rest` |
 | `early_down_pass_rate` | `early_down_pass_rate` | play-by-play | different | `team_game:early_down_passes / early_down_plays` | `gl-early-down` |
@@ -1603,9 +1606,9 @@ snapshot and quarterback columns with how many of its columns name each.
 | `rush_success_rate_allowed` | `rush_success_rate_allowed` | play-by-play | different | `team_game:rush_success_allowed_count / carries_allowed` | `gl-defense-rates` |
 | `explosive_rush_rate_allowed` | `explosive_rush_rate_allowed` | play-by-play | different | `team_game:explosive_rush_allowed_count / carries_allowed` | `gl-defense-rates` |
 | `stuff_rate` | `stuff_rate` | play-by-play | different | `team_game:stuffed_rush_allowed_count / carries_allowed` | `gl-defense-rates` |
-| `success_rate_allowed` | `success_rate_allowed` | play-by-play | different | `team_game:pass_success_allowed_count + rush_success_allowed_count / dropbacks_allowed + carries_allowed` | `gl-defense-rates` |
+| `success_rate_allowed` | `success_rate_allowed` | play-by-play | different | `team_game:(pass_success_allowed_count + rush_success_allowed_count) / (dropbacks_allowed + carries_allowed)` | `gl-defense-rates` |
 | `explosive_play_rate_allowed` | `explosive_play_rate_allowed` | play-by-play | missing | - | `gl-rest` |
-| `epa_per_defensive_snap_allowed` | `epa_per_defensive_snap_allowed` | play-by-play | different | `team_game:pass_epa_allowed_sum + rush_epa_allowed_sum / defensive_snaps` | `gl-defense-rates` |
+| `epa_per_defensive_snap_allowed` | `epa_per_defensive_snap_allowed` | play-by-play | different | `team_game:(pass_epa_allowed_sum + rush_epa_allowed_sum) / defensive_snaps` | `gl-defense-rates` |
 | `yards_per_defensive_snap_allowed` | `yards_per_defensive_snap_allowed` | play-by-play | missing | - | `gl-rest` |
 | `first_downs_allowed` | `first_downs_allowed` | play-by-play | different | `box_score:first_downs` | `gl-first-downs-allowed` |
 | `penalty_first_downs_allowed` | `penalty_first_downs_allowed` | play-by-play | missing | - | `gl-rest` |
@@ -1651,7 +1654,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `receptions_allowed` | `receptions_allowed` | play-by-play | different | `team_stats:receptions` | `gl-receiving-allowed` |
 | `receiving_yards_allowed` | `receiving_yards_allowed` | play-by-play | different | `team_stats:receiving_yards` | `gl-receiving-allowed` |
 
-### `team_per_game_stats` (246; matched 0, different 81, missing 165)
+### `team_per_game_stats` (246; matched 0, different 102, missing 144)
 
 | column | base metric (affixes) | source there | class | here | rule (phase and note: Column rules) |
 | --- | --- | --- | --- | --- | --- |
@@ -1726,13 +1729,13 @@ snapshot and quarterback columns with how many of its columns name each.
 | `def_safeties_per_defensive_snap` | `def_safeties` (..._per_defensive_snap) | PLS | missing | - | `season-rest` |
 | `attempts` | `attempts` | PBP +TS | different | `dataset:pass_attempts` | `season-features` |
 | `completions` | `completions` | PBP +TS | different | `dataset:pass_completions` | `season-features` |
-| `targets` | `targets` | PBP +TS | missing | - | `season-rest` |
-| `dropbacks` | `dropbacks` | PBP | missing | - | `season-rest` |
-| `sack_yards_lost` | `sack_yards_lost` | PBP +TS | missing | - | `season-rest` |
+| `targets` | `targets` | PBP +TS | different | `team_stats:targets` | `season-nflverse-here` |
+| `dropbacks` | `dropbacks` | PBP | different | `team_game:dropbacks` | `season-team-game-counts` |
+| `sack_yards_lost` | `sack_yards_lost` | PBP +TS | different | `team_stats:yards_lost_from_sacks` | `season-nflverse-here` |
 | `scrambles` | `scrambles` | PBP | missing | - | `season-rest` |
 | `scramble_yards` | `scramble_yards` | PBP | missing | - | `season-rest` |
-| `passing_air_yards` | `passing_air_yards` | PBP +TS | missing | - | `season-rest` |
-| `passing_yards_after_catch` | `passing_yards_after_catch` | PBP +TS | missing | - | `season-rest` |
+| `passing_air_yards` | `passing_air_yards` | PBP +TS | different | `team_stats:passing_air_yards` | `season-nflverse-here` |
+| `passing_yards_after_catch` | `passing_yards_after_catch` | PBP +TS | different | `team_stats:passing_yac` | `season-nflverse-here` |
 | `longest_pass` | `longest_pass` | PBP | missing | - | `season-rest` |
 | `sack_fumbles` | `sack_fumbles` | PBP +TS | missing | - | `season-rest` |
 | `passing_2pt_conversions` | `passing_2pt_conversions` | PBP +TS | missing | - | `season-rest` |
@@ -1747,7 +1750,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `rushing_2pt_conversions` | `rushing_2pt_conversions` | PBP +TS | missing | - | `season-rest` |
 | `offensive_epa` | `offensive_epa` | PBP | missing | - | `season-rest` |
 | `offensive_wpa` | `offensive_wpa` | PBP | missing | - | `season-rest` |
-| `st_plays` | `st_plays` | PBP | missing | - | `season-rest` |
+| `st_plays` | `st_plays` | PBP | different | `team_game:st_plays` | `season-team-game-counts` |
 | `st_epa` | `st_epa` | PBP | missing | - | `season-rest` |
 | `success_rate` | `success_rate` | PBP | different | `dataset:success_rate` | `season-features` |
 | `pass_success_rate` | `pass_success_rate` | PBP | different | `dataset:pass_success_rate` | `season-features` |
@@ -1762,11 +1765,11 @@ snapshot and quarterback columns with how many of its columns name each.
 | `turnover_epa` | `turnover_epa` | PBP | missing | - | `season-rest` |
 | `first_downs` | `first_downs` | PBP | different | `dataset:first_downs` | `season-features` |
 | `first_downs_penalty` | `first_downs_penalty` | PBP | missing | - | `season-rest` |
-| `third_down_conversions` | `third_down_conversions` | PBP | missing | - | `season-rest` |
-| `third_down_attempts` | `third_down_attempts` | PBP | missing | - | `season-rest` |
+| `third_down_conversions` | `third_down_conversions` | PBP | different | `team_game:third_down_conversions` | `season-team-game-counts` |
+| `third_down_attempts` | `third_down_attempts` | PBP | different | `team_game:third_down_attempts` | `season-team-game-counts` |
 | `third_down_avg_distance` | `third_down_avg_distance` | PBP | missing | - | `season-rest` |
-| `fourth_down_conversions` | `fourth_down_conversions` | PBP | missing | - | `season-rest` |
-| `fourth_down_attempts` | `fourth_down_attempts` | PBP | missing | - | `season-rest` |
+| `fourth_down_conversions` | `fourth_down_conversions` | PBP | different | `team_game:fourth_down_conversions` | `season-team-game-counts` |
+| `fourth_down_attempts` | `fourth_down_attempts` | PBP | different | `team_game:fourth_down_attempts` | `season-team-game-counts` |
 | `turnovers_on_downs` | `turnovers_on_downs` | PBP | missing | - | `season-rest` |
 | `two_pt_attempts` | `two_pt_attempts` | PBP +TS | missing | - | `season-rest` |
 | `two_pt_conversions` | `two_pt_conversions` | PBP +TS | missing | - | `season-rest` |
@@ -1785,7 +1788,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `turnover_pct_per_drive` | `turnover_pct_per_drive` | PBP | missing | - | `season-rest` |
 | `three_and_out_rate` | `three_and_out_rate` | PBP | missing | - | `season-rest` |
 | `points_per_drive` | `points_per_drive` | PBP | missing | - | `season-rest` |
-| `red_zone_trips` | `red_zone_trips` | PBP | missing | - | `season-rest` |
+| `red_zone_trips` | `red_zone_trips` | PBP | different | `team_game:red_zone_trips` | `season-team-game-counts` |
 | `red_zone_td_pct` | `red_zone_td_pct` | PBP | different | `dataset:red_zone_td_pct` | `season-features` |
 | `points_per_red_zone_trip` | `points_per_red_zone_trip` | PBP | missing | - | `season-rest` |
 | `avg_starting_field_position` | `avg_starting_field_position` | PBP | missing | - | `season-rest` |
@@ -1841,7 +1844,7 @@ snapshot and quarterback columns with how many of its columns name each.
 | `explosive_pass_rate_allowed` | `explosive_pass_rate_allowed` | PBP | different | `dataset:explosive_pass_rate_allowed` | `season-features` |
 | `team_passer_rating_allowed` | `team_passer_rating_allowed` | PBP | missing | - | `season-rest` |
 | `deep_attempt_rate_faced` | `deep_attempt_rate_faced` | PBP | missing | - | `season-rest` |
-| `def_sack_yards` | `def_sack_yards` | PBP +TS | missing | - | `season-rest` |
+| `def_sack_yards` | `def_sack_yards` | PBP +TS | different | `team_stats:def_sack_yards` | `season-nflverse-here` |
 | `def_sack_rate_per_dropback` | `def_sack_rate_per_dropback` | PBP | missing | - | `season-rest` |
 | `qb_pressure_events_rate` | `qb_pressure_events_rate` | PBP | missing | - | `season-rest` |
 | `carries_faced` | `carries_faced` | PBP +TS | different | `dataset:opponent_rush_attempts` | `season-features` |
@@ -1867,13 +1870,13 @@ snapshot and quarterback columns with how many of its columns name each.
 | `avg_starting_field_position_allowed` | `avg_starting_field_position_allowed` | PBP | missing | - | `season-rest` |
 | `two_pt_conversion_rate_allowed` | `two_pt_conversion_rate_allowed` | PBP | different | `dataset:opponent_two_point_conversion_pct` | `season-features` |
 | `takeaways` | `takeaways` | PBP | missing | - | `season-rest` |
-| `fumble_recovery_opp` | `fumble_recovery_opp` | PBP +TS | missing | - | `season-rest` |
+| `fumble_recovery_opp` | `fumble_recovery_opp` | PBP +TS | different | `team_stats:fumble_recoveries` | `season-nflverse-here` |
 | `takeaway_rate_per_defensive_snap` | `takeaway_rate_per_defensive_snap` | PBP | missing | - | `season-rest` |
 | `takeaways_per_drive` | `takeaways_per_drive` | PBP | missing | - | `season-rest` |
-| `def_interception_yards` | `def_interception_yards` | PBP +TS | missing | - | `season-rest` |
+| `def_interception_yards` | `def_interception_yards` | PBP +TS | different | `team_stats:def_interception_yards` | `season-nflverse-here` |
 | `def_tds` | `def_tds` | PBP +TS | different | `dataset:def_tds` | `season-features` |
 | `fumble_recovery_tds` | `fumble_recovery_tds` | PBP +TS | different | `dataset:fumble_recovery_tds` | `season-features` |
-| `defensive_2pt_conversions` | `defensive_2pt_conversions` | PBP | missing | - | `season-rest` |
+| `defensive_2pt_conversions` | `defensive_2pt_conversions` | PBP | different | `team_stats:def_2pt_made` | `season-nflverse-here` |
 | `havoc_rate` | `havoc_rate` | PBP | missing | - | `season-rest` |
 | `defensive_penalties` | `defensive_penalties` | PBP | missing | - | `season-rest` |
 | `defensive_penalty_yards` | `defensive_penalty_yards` | PBP | missing | - | `season-rest` |
@@ -1888,12 +1891,12 @@ snapshot and quarterback columns with how many of its columns name each.
 | `total_yards_differential` | `total_yards_differential` | PBP | missing | - | `season-rest` |
 | `epa_margin_per_play` | `epa_margin_per_play` | PBP | different | `dataset:epa_margin_per_play` | `season-features` |
 | `success_rate_margin` | `success_rate_margin` | PBP | missing | - | `season-rest` |
-| `receptions` | `receptions` | PBP +TS | missing | - | `season-rest` |
-| `receiving_yards` | `receiving_yards` | PBP +TS | missing | - | `season-rest` |
-| `receiving_tds` | `receiving_tds` | PBP +TS | missing | - | `season-rest` |
-| `receiving_air_yards` | `receiving_air_yards` | PBP +TS | missing | - | `season-rest` |
-| `receiving_yards_after_catch` | `receiving_yards_after_catch` | PBP +TS | missing | - | `season-rest` |
-| `receiving_first_downs` | `receiving_first_downs` | PBP +TS | missing | - | `season-rest` |
+| `receptions` | `receptions` | PBP +TS | different | `team_stats:receptions` | `season-nflverse-here` |
+| `receiving_yards` | `receiving_yards` | PBP +TS | different | `team_stats:receiving_yards` | `season-nflverse-here` |
+| `receiving_tds` | `receiving_tds` | PBP +TS | different | `team_stats:receiving_touchdowns` | `season-nflverse-here` |
+| `receiving_air_yards` | `receiving_air_yards` | PBP +TS | different | `team_stats:receiving_air_yards` | `season-nflverse-here` |
+| `receiving_yards_after_catch` | `receiving_yards_after_catch` | PBP +TS | different | `team_stats:receiving_yac` | `season-nflverse-here` |
+| `receiving_first_downs` | `receiving_first_downs` | PBP +TS | different | `team_stats:receiving_first_downs` | `season-nflverse-here` |
 | `receptions_allowed` | `receptions_allowed` | PBP +TS | missing | - | `season-rest` |
 | `receiving_yards_allowed` | `receiving_yards_allowed` | PBP +TS | missing | - | `season-rest` |
 | `games_played` | `games_played` | SCH | different | `dataset:games_played` | `season-features` |
@@ -2368,8 +2371,11 @@ kinds no other rule matches, and must take exactly the number it expects.
 | `gl-games` | missing | 1 | - | none planned (a row count) |  |
 | `gl-home` | matched | 1 | - | - |  |
 | `gl-score` | matched | 2 | - | - | The schedule's final score (here the game row's home_score and away_score). |
-| `gl-result` | missing | 2 | - | none planned (computed from the score where needed; the margin is the model's target) |  |
+| `gl-result` | different | 4 | - | - | Here only as season-to-date features (the per-game margin is the model's target, computed from the game row's score). |
 | `gl-same-pbp` | matched | 5 | - | - | The same play-by-play definition; equal in every team-game of 1999-2025 (PARITY.md). |
+| `gl-same-box-rates` | matched | 5 | - | - | The same play-by-play counts over the same attempts; equal in every team-game of 1999-2025 (PARITY.md, pairs pass_completions, pass_attempts, interceptions_from_rate, pass_touchdowns_from_rate and offensive_tds). |
+| `gl-sack-rate` | different | 1 | - | - | The same sacks (PARITY.md, pair sacks_from_rate) over different dropbacks: there two-point passes and pre-2006 scrambles are dropbacks. |
+| `gl-turnovers-on-downs` | different | 1 | - | - | Fourth downs that failed; here only on run, pass, kneel and spike plays (PARITY.md, pair turnovers_on_downs). |
 | `gl-snaps` | different | 2 | - | phase 3 (team ratings) | There a pre-2006 scramble is a snap (its dropback rule); here it is in no count. |
 | `gl-dropbacks` | different | 3 | - | phase 3 (team ratings) | There two-point passes and pre-2006 scrambles are dropbacks; here neither is. |
 | `gl-scrimmage-epa` | different | 2 | - | phase 3 (team ratings) | There EPA over every scrimmage snap, the team rating's input; here dropback plus carry EPA, without kneel-downs, spikes, two-point tries and pre-2006 scrambles. |
@@ -2398,9 +2404,11 @@ kinds no other rule matches, and must take exactly the number it expects.
 | `gl-epa-per-snap` | different | 4 | - | - | There nflverse's official passing and rushing EPA per snap; here play-by-play dropback and carry EPA per snap (the strength snapshot's ridge responses). |
 | `gl-margins` | different | 1 | - | - | Here only as a season-to-date feature. |
 | `gl-totals-here` | different | 10 | - | - | Kept here only as totals: two-point conversions, fumbles of every kind, and penalties of every unit. |
-| `gl-rest` | missing | 120 | 120 | phase 6 (web pages) | Descriptive game-log stats its team pages show; none feeds its ratings. |
+| `gl-rest` | missing | 111 | 111 | phase 6 (web pages) | Descriptive game-log stats its team pages show; none feeds its ratings. |
 | `season-features` | different | 160 | - | - | There the full season (counts per game, rates pooled over the games); here a season-to-date feature, with the per-game definitions of the game-log rules above. Third-down, fourth-down, red-zone and two-point rates here are on a 0-100 scale (proportions there). |
-| `season-rest` | missing | 330 | 330 | phase 6 (web pages) | Season stats its team pages show. |
+| `season-team-game-counts` | different | 14 | - | - | Here a per-team-game count, summed to date inside the ETL and not published as a season value, with the game-log definitions above. |
+| `season-nflverse-here` | different | 28 | - | - | Here nflverse's weekly team stats per team-game (not published as a season value); there play-by-play, as in the game logs. |
+| `season-rest` | missing | 288 | 288 | phase 6 (web pages) | Season stats its team pages show. |
 | `season-ratings` | different | 12 | - | phase 3 (team ratings) | There points per game against an average team from one ridge fit per unit (scrimmage EPA, special-teams EPA), its penalty cross-validated, the preseason prior inside the fit, and a head-to-head-excluded schedule strength; here per-snap pass and rush coefficients from a frozen-penalty ridge, an SRS on special-teams EPA margin, a standardized composite, the prior blended after the fit, all solved before each week. Phase 3 replaces these. |
 | `opponent-margin` | different | 1 | - | - | Both average each unique opponent's EPA margin per play over its games against other teams; here before each week and from dropback and carry EPA. |
 | `opponent-margin-combined` | different | 1 | - | - | The same as in its opponent profiles. |
@@ -2408,11 +2416,12 @@ kinds no other rule matches, and must take exactly the number it expects.
 | `opponent-prefix-rest` | missing | 239 | - | phase 6 (web pages) | Its opponents-faced context for every stat. |
 | `qb-game-pbp` | different | 11 | - | phase 3 (quarterback ratings) | There the passer's official weekly player stats where nflverse has them (play-by-play otherwise) and EPA per dropback without spikes; here the passer's play-by-play dropbacks (this repository's dropback rule) and qb_epa. |
 | `qb-game-context` | matched | 3 | - | - | The team-game's context. |
-| `qb-game-context-derived` | missing | 3 | - | none planned (the team-game's result and turnovers, joined where needed) |  |
+| `qb-game-context-derived` | different | 3 | - | - | The team-game's result and turnovers: here the margin and record only as season-to-date features, the turnover margin from nflverse's team stats (there from play-by-play). |
 | `qb-game-rates` | different | 5 | - | - | The same game rates from the passer's totals (ANY/A with 20 per touchdown and 45 per interception), with the totals' differences above. |
 | `qb-game-rest` | missing | 26 | 26 | phase 3 (quarterback ratings) for its inputs, phase 6 (web pages) for the rest | Snap counts, quarterback runs, spikes and late-game credits. |
 | `qb-season-features` | different | 12 | - | phase 3 (quarterback ratings) | There the season's raw rate (official totals); here the expected starter's career rate before the game, shrunk toward the league with 300 dropbacks of prior. |
-| `qb-season-rest` | missing | 160 | 160 | phase 6 (web pages) | Quarterback season stats, totals and per-game values its pages show. |
+| `qb-season-record` | different | 8 | - | - | The quarterback's team's record; here before each game, season to date. |
+| `qb-season-rest` | missing | 152 | 152 | phase 6 (web pages) | Quarterback season stats, totals and per-game values its pages show. |
 | `qb-opponents` | missing | 102 | - | phase 6 (web pages) | The defenses each quarterback faced. |
 | `qb-ratings` | different | 3 | - | phase 3 (quarterback ratings) | There EPA per dropback adjusted for the defenses faced (a ridge on its shared solver); here the unadjusted career rate shrunk toward the league. Phase 3 ports the rating. |
 | `qb-faced-defense` | missing | 2 | - | phase 3 (quarterback ratings) | The average adjusted pass defense a quarterback faced. |

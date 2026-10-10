@@ -212,3 +212,139 @@ revises its files, so a later run can differ in the last rows.
   request), week level 2016 512 rows with the 32 canonical codes, 2026 51 rows.
 - **Feature-value impact**: none, by construction.
 - **How to reverse it**: not applicable.
+
+## The models directory: `constants.MODELS_PATH`
+
+### Which places read it, and which stay on `ROOT_DIR`
+
+- **What differs**: not a difference from the source; the task leaves open what counts as "every
+  place that builds the models directory from `ROOT_DIR`".
+- **Options**: move every hit of the search below to `constants.MODELS_PATH`; or move the six that
+  build the models directory and leave the rest.
+- **Decision**: the six (commit `0336682`): the artifact run paths, the backtest's checkpoint
+  default and run directory, the checkpoint listing's two defaults, the weekly run's run
+  directory and the web app's run index. `walk_forward.DEFAULT_CHECKPOINT_DIR`, a copy made at
+  import, became `default_checkpoint_dir()`, read when called.
+- **Reasoning**: the others do not build the models directory: the repository root itself (the
+  web app's `root_dir`, the checkpoint listing's `--docs-dir`, git's working directory), the
+  weekly-run config file, a command-group name and a JSON key. The floor-sigma reference runs
+  (`ml/floor_sigma.py:210`) resolve a relative path from the config against the repository root,
+  a documented contract (`test_relative_reference_paths_resolve_against_the_repository`); their
+  metadata names checkpoint directories by absolute path, so resolving them against
+  `MODELS_PATH` would not redirect them anyway, and tests that load reference runs pass their own.
+- **Data**: the search at the starting commit, `git grep -n -E 'ROOT_DIR|"models"' 3ab0bd1 --
+  'src/*.py'`, 20 hits:
+
+  ```text
+  changed  api/settings.py:79 (models_dir default), cli/backtest.py:376 (run directory),
+           cli/checkpoints.py:40 (checkpoint and models defaults), ml/artifacts.py:118 (run
+           paths), ml/walk_forward.py:52 (DEFAULT_CHECKPOINT_DIR), weekly_run/pipeline.py:255
+           (run directory); cli/backtest.py also read DEFAULT_CHECKPOINT_DIR as its default
+  kept     api/settings.py:4 (docstring) and :58 (root_dir default); cli/checkpoints.py:59
+           (--docs-dir default); cli/main.py:118, 125, 133, 158 (the "models" command group);
+           constants.py:10-11 (ROOT_DIR, DATA_PATH); ml/artifacts.py:134 and
+           ml/walk_forward.py:1688 (git's working directory); ml/feature_importance.py:229 (a
+           JSON key); ml/floor_sigma.py:210 (reference runs); weekly_run/config.py:45 (config)
+  ```
+
+  A second search, `git grep -n -E "models/|models_dir|models_path" -- 'src/*.py'`, finds only
+  docstrings, help text, examples and readers of `Settings.models_path` (the run index, the job
+  catalog and runner, the data router), which follow the settings. Six characterization tests
+  (`tests/test_models_path.py`) passed before and after the move without edits, and each failed
+  when its site was broken on purpose (`/tmp` mutation run, not kept).
+- **Feature-value impact**: none; editing `ml/` and `constants.py` changes every walk-forward
+  checkpoint fingerprint, as the task expects.
+- **How to reverse it**: revert `0336682` (and the guard commit `28c2754`, which depends on it).
+
+### The web app's models directory follows the constant only for this checkout
+
+- **What differs**: `api/settings.Settings` fills `models_dir` from `root_dir / "models"`, and
+  `NFLP_ROOT_DIR` can point it at another checkout.
+- **Options**: `constants.MODELS_PATH` when `root_dir` is this package's checkout and
+  `root_dir / "models"` otherwise; `MODELS_PATH` always, which would show this checkout's runs
+  for another root; or leave the settings alone, so the guard would not cover the run index of a
+  `Settings()` built without a root.
+- **Decision**: the first (`_default_models_dir`).
+- **Reasoning**: it keeps the documented contract ("a single variable points the API at a
+  different checkout") and lets the test guard redirect the default.
+- **Data**: `tests/api/test_settings.py::test_paths_default_relative_to_root` (another root keeps
+  `root/models`), `tests/test_models_path.py` (this checkout's models directory) and
+  `tests/test_conftest.py::test_the_web_app_built_without_a_root_indexes_the_tests_models_directory`
+  (the guard) all pass.
+- **Feature-value impact**: none; in production `MODELS_PATH` is `ROOT_DIR / "models"`.
+- **How to reverse it**: `_default_models_dir` in `src/nfl_predictor/api/settings.py`.
+
+### The test guard covers the models directory
+
+- **What differs**: `tests/data_isolation.py` redirected the data paths only.
+- **Options**: redirect `MODELS_PATH` for the session and per test, with a fixture that restores
+  the checkout's path for tests that only compute paths; or leave models out of the guard.
+- **Decision**: redirect it (commit `28c2754`); `packaged_models_path` restores it.
+- **Reasoning**: the task asks for it. The data guard's design carries over unchanged: a session
+  directory installed before any import, a fresh directory per test, and a scan of every module for
+  a path captured inside the checkout's models directory.
+- **Data**: before the guard, the new scan
+  (`test_no_module_captures_a_path_inside_the_checkouts_models_directory`) failed with exactly one
+  capture, `nfl_predictor.constants.MODELS_PATH` pointing at the checkout; after it, the full suite
+  passes (1,675 tests at that commit) and the worktree never gained a `models/` directory.
+- **Feature-value impact**: none; tests only.
+- **How to reverse it**: revert `28c2754`.
+
+## `compare` tie scoring
+
+### An exact coin flip picks home, as `metrics.picks_home` does
+
+- **What differs**: `reporting/run_comparison.per_game_scores` scored a probability of exactly 0.5
+  as no pick, so always wrong, while `ml/metrics.picks_home` (the walk-forward, the training pool
+  summaries and the weekly picks) picks the home side. `compare` now uses `picks_home`
+  (commit `9fda7bf`); a tie still scores as wrong for either side.
+- **Options**: `picks_home`; half credit for a coin flip (the review's "0.5 = half" column); keep
+  "no pick".
+- **Decision**: `picks_home`, as the task says.
+- **Reasoning**: one rule in every report, and the rule the weekly picks submit.
+- **Data**: `compare_tie_check.py` reads the fold checkpoints of the nine runs the step-4 reviews
+  compared (read only) and scores all weeks under both rules:
+
+  ```text
+  .venv/bin/python .agents/sos_port/decisions/compare_tie_check.py \
+      /home/mitch/workspace/nfl-predictor/models/step4_reference/{adopted,marketfree_lines,marketfree_all}_seed{42,7} \
+      /home/mitch/workspace/nfl-predictor/models/step4/PT_seed{42,7} \
+      /home/mitch/workspace/nfl-predictor/models/step4/R0_seed42
+
+  model probabilities exactly 0.5: 0 in every run (4,943 games each), so compare's pick
+    accuracy and pool points are unchanged, for example adopted_seed42 0.6605 and 28,465.0
+    under both rules
+  pick-time line (market in the adopted, market-free and pick-time runs): 170 games at
+    exactly 0.5; as a pick, accuracy 0.6401 -> 0.6579 and pool points 28,310.0 -> 28,438.0
+  closing line (R0_seed42): 25 games at exactly 0.5; accuracy 0.6648 -> 0.6670, pool points
+    28,825.0 -> 28,837.0
+  ```
+
+  `compare` never scores the market as a pick. The already-reviewed numbers this rule touches are
+  the betting lines' pick accuracies in `models/step4_reference/REVIEW.md` ("Pick accuracy counts
+  an exact 0.5 probability as a wrong pick, as compare does"), computed by that review's own
+  `review/elo.py`; under the one rule they are the 0.6579 and 0.6670 the review already quotes,
+  and its "pick-time line minus QB Elo" pick-accuracy interval would need that script rerun. No
+  `compare` output of these runs changes.
+- **Feature-value impact**: none; evaluation only.
+- **How to reverse it**: revert `9fda7bf`.
+
+### Every pool-point interval names its resampling unit
+
+- **What differs**: `compare` bootstraps loss columns over games and pool points over (season,
+  week) blocks, and its report did not say which; the 2026-10-09 review found three pool cells
+  whose interval excludes zero under one unit and not the other.
+- **Options**: name the units in the report's first lines; label the pool column of the paired
+  tables; or both, and the loss columns too.
+- **Decision**: both of the first two (commit `a80a557`): "intervals resample games; pool pts
+  resample (season, week) blocks" in the report's third line, and `pool pts (week blocks)` heading
+  the pool column of every paired table; the stability note says "(season, week) blocks" too.
+  The loss columns keep their short headers; the first lines cover them.
+- **Reasoning**: a paired table copied out of the report keeps its unit; the run tables quote no
+  pool interval and keep `pool pts`.
+- **Data**: the two report snapshots change in those labels only (`compare_report.txt` five lines,
+  `compare_command.txt` ten); the JSON snapshots are unchanged, so no number moved. Docs the
+  delegating session owns still quote pool-point intervals without the unit:
+  `.agents/benchmarks.md` near lines 340, 459, 503 and 577 (line 589 names it).
+- **Feature-value impact**: none.
+- **How to reverse it**: revert `a80a557`.

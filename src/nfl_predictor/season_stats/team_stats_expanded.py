@@ -66,7 +66,7 @@ _RECEIVER_COLUMNS = ("receiver_player_id", "receiver_player_name")
 _FUMBLER_COLUMNS = ("fumbled_1_player_id", "fumbled_2_player_id")
 
 # Offense-row column -> opponent's defense-row column.
-_DEFENSE_MIRROR_RENAMES = {
+DEFENSE_MIRROR_RENAMES = {
     "attempts": "attempts_faced",
     "completions": "completions_allowed",
     "completion_pct": "completion_pct_allowed",
@@ -122,11 +122,48 @@ _DEFENSE_MIRROR_RENAMES = {
 # Offense rates without a published defensive mirror whose mirror still feeds a published rate
 # over several games (passer rating allowed, ``TEAM_FORMULA_RATES``): only their numerator and
 # denominator are mirrored.
-_DEFENSE_MIRROR_PARTS_ONLY = {
+DEFENSE_MIRROR_PARTS_ONLY = {
     "yards_per_attempt": "yards_per_attempt_allowed",
     "passing_td_rate_per_attempt": "passing_td_rate_per_attempt_allowed",
     "int_rate_per_attempt": "int_rate_per_attempt_allowed",
 }
+
+
+# Offense ratios of game totals: (numerator, denominator, rate). Each carries its numerator
+# and denominator as hidden parts, so rows for several games pool it (``pooled_rates``).
+OFFENSE_RATIO_SPECS: tuple[tuple[str, str, str], ...] = (
+    ("completions", "attempts", "completion_pct"),
+    ("completions", "targets", "catch_rate"),
+    ("aux_sacks", "dropbacks", "sack_rate_per_dropback"),
+    ("passing_air_yards", "attempts", "air_yards_per_attempt"),
+    ("passing_yards_after_catch", "completions", "yac_per_completion"),
+    ("aux_pass_yards", "attempts", "yards_per_attempt"),
+    ("aux_pass_yards", "dropbacks", "yards_per_dropback"),
+    ("aux_pass_epa", "dropbacks", "epa_per_dropback"),
+    ("aux_pass_tds", "attempts", "passing_td_rate_per_attempt"),
+    ("aux_interceptions", "attempts", "int_rate_per_attempt"),
+    ("aux_explosive_passes", "dropbacks", "explosive_pass_rate"),
+    ("aux_deep_attempts", "attempts", "deep_attempt_rate"),
+    ("aux_rush_yards", "carries", "yards_per_carry"),
+    ("aux_rush_epa", "carries", "epa_per_carry"),
+    ("aux_explosive_rushes", "carries", "explosive_rush_rate"),
+    ("aux_stuffed_rushes", "aux_carries_without_kneels", "stuffed_run_rate"),
+    ("offensive_epa", "aux_off_snaps", "epa_per_offensive_snap"),
+    ("aux_total_yards", "aux_off_snaps", "yards_per_offensive_snap"),
+    ("dropbacks", "aux_off_snaps", "pass_rate"),
+    ("aux_early_dropbacks", "aux_early_snaps", "early_down_pass_rate"),
+    ("third_down_conversions", "third_down_attempts", "third_down_pct"),
+    ("fourth_down_conversions", "fourth_down_attempts", "fourth_down_pct"),
+    ("fourth_down_attempts", "aux_fourth_downs_faced", "fourth_down_go_rate"),
+    ("aux_fourth_short_go", "aux_fourth_short_faced", "fourth_down_aggressiveness"),
+    ("two_pt_conversions", "two_pt_attempts", "two_pt_conversion_rate"),
+    ("giveaways", "aux_off_snaps", "giveaway_rate_per_offensive_snap"),
+    ("offensive_penalties", "aux_off_snaps", "penalty_rate_per_offensive_snap"),
+    ("aux_presnap_penalties", "aux_off_snaps", "presnap_penalty_rate"),
+    ("aux_havoc_events", "aux_off_snaps", "aux_havoc_rate"),
+)
+# Giveaways per drive, built once the drive totals are joined.
+GIVEAWAYS_PER_DRIVE_SPEC = ("giveaways", "drives", "giveaways_per_drive")
 
 
 def compute_expanded_team_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
@@ -797,41 +834,10 @@ def _add_offense_ratios(frame: pl.DataFrame) -> pl.DataFrame:
     )
     frame = frame.with_columns(pl.col("scrimmage_tds").alias("offensive_tds"))
 
-    ratio_specs = [
-        ("completions", "attempts", "completion_pct"),
-        ("completions", "targets", "catch_rate"),
-        ("aux_sacks", "dropbacks", "sack_rate_per_dropback"),
-        ("passing_air_yards", "attempts", "air_yards_per_attempt"),
-        ("passing_yards_after_catch", "completions", "yac_per_completion"),
-        ("aux_pass_yards", "attempts", "yards_per_attempt"),
-        ("aux_pass_yards", "dropbacks", "yards_per_dropback"),
-        ("aux_pass_epa", "dropbacks", "epa_per_dropback"),
-        ("aux_pass_tds", "attempts", "passing_td_rate_per_attempt"),
-        ("aux_interceptions", "attempts", "int_rate_per_attempt"),
-        ("aux_explosive_passes", "dropbacks", "explosive_pass_rate"),
-        ("aux_deep_attempts", "attempts", "deep_attempt_rate"),
-        ("aux_rush_yards", "carries", "yards_per_carry"),
-        ("aux_rush_epa", "carries", "epa_per_carry"),
-        ("aux_explosive_rushes", "carries", "explosive_rush_rate"),
-        ("aux_stuffed_rushes", "aux_carries_without_kneels", "stuffed_run_rate"),
-        ("offensive_epa", "aux_off_snaps", "epa_per_offensive_snap"),
-        ("aux_total_yards", "aux_off_snaps", "yards_per_offensive_snap"),
-        ("dropbacks", "aux_off_snaps", "pass_rate"),
-        ("aux_early_dropbacks", "aux_early_snaps", "early_down_pass_rate"),
-        ("third_down_conversions", "third_down_attempts", "third_down_pct"),
-        ("fourth_down_conversions", "fourth_down_attempts", "fourth_down_pct"),
-        ("fourth_down_attempts", "aux_fourth_downs_faced", "fourth_down_go_rate"),
-        ("aux_fourth_short_go", "aux_fourth_short_faced", "fourth_down_aggressiveness"),
-        ("two_pt_conversions", "two_pt_attempts", "two_pt_conversion_rate"),
-        ("giveaways", "aux_off_snaps", "giveaway_rate_per_offensive_snap"),
-        ("offensive_penalties", "aux_off_snaps", "penalty_rate_per_offensive_snap"),
-        ("aux_presnap_penalties", "aux_off_snaps", "presnap_penalty_rate"),
-        ("aux_havoc_events", "aux_off_snaps", "aux_havoc_rate"),
-    ]
     frame = frame.with_columns(
         [
             expr
-            for numerator, denominator, output in ratio_specs
+            for numerator, denominator, output in OFFENSE_RATIO_SPECS
             if {numerator, denominator}.issubset(frame.columns)
             for expr in ratio_with_parts(output, numerator, denominator)
         ]
@@ -869,7 +875,8 @@ def _add_offense_ratios(frame: pl.DataFrame) -> pl.DataFrame:
     frame = frame.with_columns(derived)
 
     if "drives" in frame.columns:
-        frame = frame.with_columns(ratio_with_parts("giveaways_per_drive", "giveaways", "drives"))
+        numerator, denominator, rate = GIVEAWAYS_PER_DRIVE_SPEC
+        frame = frame.with_columns(ratio_with_parts(rate, numerator, denominator))
     return frame
 
 
@@ -881,13 +888,13 @@ def _join_defense_mirrors(frame: pl.DataFrame, keys: list[str]) -> pl.DataFrame:
     """
     available = {
         source: target
-        for source, target in _DEFENSE_MIRROR_RENAMES.items()
+        for source, target in DEFENSE_MIRROR_RENAMES.items()
         if source in frame.columns
     }
     # A mirrored rate's numerator and denominator are the opponent's, so its defense pools too.
     part_mirrors = [
         pl.col(part(source)).alias(part(target))
-        for source, target in {**available, **_DEFENSE_MIRROR_PARTS_ONLY}.items()
+        for source, target in {**available, **DEFENSE_MIRROR_PARTS_ONLY}.items()
         for part in (numerator_column, denominator_column)
         if part(source) in frame.columns
     ]

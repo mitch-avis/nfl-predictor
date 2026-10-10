@@ -19,6 +19,14 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   branch is `feat/web-ui`: leave it alone. `scripts/gate.sh --web` exits `0` on `main` (1580
   passed, coverage 93.29%), and the main checkout's environment is synced with the LightGBM CUDA
   flags.
+- Landed on `feat/step6-sos-port` (each reviewed independently, gate green on the merged tree):
+  `0.46.0` the nflverse player sources, `constants.MODELS_PATH` and the `compare` tie rule;
+  `0.47.0` this repo's own Elo (not yet in the ETL); `0.48.0` the Pool page, the margin-only
+  switch and the live-betting design (gate `--web`: 1945 passed, vitest 77). In review or fixes
+  at the time of writing: the phase-1 inventory and parity scripts (rerun on the snapshot of
+  `nfl-sos-ratings`' own play-by-play at `~/scratch/nflreadpy_cache_snapshot_20261008/`), the
+  ratings port (`src/nfl_predictor/ratings/`), and the play-by-play column extension. The stream
+  table and the integration design are in `.agents/step6_plan.md`.
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
   or restart it yourself (rule 5); it loads new code only when the user restarts it.
 - Roadmap step 4 (feature values, `0.37.2`-`0.45.0`) and step 5 (market-free baseline) are closed
@@ -73,15 +81,11 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
    a separate `reviewer` checks every chunk (and re-runs any script whose numbers enter a doc)
    before it merges into `feat/step6-sos-port`, and the delegating session writes
    `CHANGELOG.md` and the version at each merge.
-2. Batch with step 6's first edit to `constants.py` (it changes every checkpoint fingerprint):
-   a `constants.MODELS_PATH` read at call time by the five places that build `ROOT_DIR /
-   "models"` (`walk_forward.DEFAULT_CHECKPOINT_DIR`, `cli/backtest.py`, `ml/artifacts.py`,
-   `weekly_run/pipeline.py`, `cli/checkpoints.py`) and the API settings, so the test guard can
-   cover `models/` too.
-3. Small follow-ups from the 2026-10-09 review (`models/step4_reference/REVIEW.md`): `compare`
-   scores an exact 0.5 probability as a wrong pick while `ml/metrics.picks_home` picks home (only
-   market lines are affected); name the resampling unit wherever pool-point intervals are quoted.
-4. Weekly runs and picks are the user's. Production-changing work lands between game weeks
+2. `constants.MODELS_PATH` and the `compare` tie rule landed in `0.46.0` on the step-6 branch.
+   Left from the 2026-10-09 review: `.agents/benchmarks.md` still quotes pool-point intervals
+   without their resampling unit (around lines 459, 503 and 577); label each only after
+   confirming the unit from the run that produced it.
+3. Weekly runs and picks are the user's. Production-changing work lands between game weeks
    (after Monday night, before Thursday).
 
 ## How the last sessions worked (keep doing this)

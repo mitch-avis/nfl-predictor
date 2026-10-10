@@ -16,6 +16,7 @@ import pytest
 from tests.feature_group_fixture import build_group_fixture, write_group_weekly_config
 from tests.weekly_fixture import build_fixture
 
+from nfl_predictor import constants
 from nfl_predictor.cli import backtest
 from nfl_predictor.ml import feature_spec, walk_forward
 from nfl_predictor.weekly_run import pipeline
@@ -126,3 +127,31 @@ def test_stage1_warns_about_a_group_the_data_lacks(
     unmatched = [message for message in _warnings(caplog) if "match no column" in message]
     assert len(unmatched) == 1
     assert "own_elo" in unmatched[0]
+
+
+# Columns no feature group may match. The final fit resolves its market settings on the full
+# header and stage 1 on the frame after the drop, so a group that matched a line column would
+# split the two weekly stages; a target, a feature-range boundary or a key column every fit reads
+# by name would break every run that disables the group.
+PROTECTED_COLUMNS = (
+    *constants.LINES_COLUMNS,
+    *feature_spec.MARKET_DERIVED_COLUMNS,
+    *constants.RESULT_COLUMNS,
+    feature_spec.DEFAULT_FEATURE_START_COLUMN,
+    feature_spec.DEFAULT_FEATURE_END_COLUMN,
+    "season",
+    "week",
+    "game_type",
+    "game_id",
+)
+
+
+@pytest.mark.parametrize("group", sorted(constants.FEATURE_GROUP_COLUMN_MARKERS))
+def test_no_group_matches_a_market_target_boundary_or_key_column(group: str) -> None:
+    # Act
+    matched = feature_spec.resolve_feature_group_columns(
+        PROTECTED_COLUMNS, [group], warn_unmatched=False
+    )
+
+    # Assert
+    assert matched == []

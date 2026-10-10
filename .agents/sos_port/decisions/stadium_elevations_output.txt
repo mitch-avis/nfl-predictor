@@ -1,0 +1,37 @@
+Output of stadium_elevations.py, run 2026-10-10 at 04:07 MDT (10:07 UTC), with --existing.
+Coordinates from the English Wikipedia articles at the revisions shown (MediaWiki API); ground
+elevations from the USGS Elevation Point Query Service (3DEP, United States only) at the
+coordinates, and from the Open-Meteo elevation API (Copernicus GLO-90) at the coordinates and as
+the median of eight points on a 300 m ring around them. Feet, rounded. "table" is the value
+constants.STADIUMS held when the script ran (None: no entry yet).
+
+Command, from the worktree root:
+.venv/bin/python -I .agents/sos_port/decisions/stadium_elevations.py --existing
+
+venue | Wikipedia article | latitude, longitude | elevations | table
+BOS99 | Foxboro Stadium (revision 1378188029) | 42.09278, -71.26750 | USGS 3DEP 313 ft | Copernicus GLO-90 315 ft, ring median 297 ft | table None
+CHI99 | Gies Memorial Stadium (revision 1374715681) | 40.09917, -88.23583 | USGS 3DEP 732 ft | Copernicus GLO-90 748 ft, ring median 743 ft | table None
+CIN99 | Riverfront Stadium (revision 1372225253) | 39.09667, -84.50833 | USGS 3DEP 505 ft | Copernicus GLO-90 538 ft, ring median 497 ft | table None
+DEN99 | Mile High Stadium (revision 1372216043) | 39.74611, -105.02167 | USGS 3DEP 5210 ft | Copernicus GLO-90 5220 ft, ring median 5244 ft | table None
+DET99 | Pontiac Silverdome (revision 1374832707) | 42.64583, -83.25500 | USGS 3DEP 892 ft | Copernicus GLO-90 883 ft, ring median 915 ft | table None
+PHI99 | Veterans Stadium (revision 1379233321) | 39.90667, -75.17111 | USGS 3DEP 21 ft | Copernicus GLO-90 20 ft, ring median 16 ft | table None
+PIT99 | Three Rivers Stadium (revision 1372243664) | 40.44667, -80.01278 | USGS 3DEP 731 ft | Copernicus GLO-90 728 ft, ring median 751 ft | table None
+SEA98 | Kingdome (revision 1379223521) | 47.59528, -122.33139 | USGS 3DEP 18 ft | Copernicus GLO-90 36 ft, ring median 34 ft | table None
+SEA99 | Husky Stadium (revision 1379420708) | 47.65030, -122.30160 | USGS 3DEP 32 ft | Copernicus GLO-90 59 ft, ring median 46 ft | table None
+MAD01 | Bernabéu (stadium) (revision 1376542686) | 40.45306, -3.68835 | USGS 3DEP - ft | Copernicus GLO-90 2343 ft, ring median 2315 ft | table None
+MEL00 | Melbourne Cricket Ground (revision 1376948300) | -37.82000, 144.98333 | USGS 3DEP - ft | Copernicus GLO-90 43 ft, ring median 54 ft | table None
+MUN01 | Allianz Arena (revision 1378827353) | 48.21878, 11.62475 | USGS 3DEP - ft | Copernicus GLO-90 1611 ft, ring median 1621 ft | table None
+PAR00 | Stade de France (revision 1379022826) | 48.92440, 2.36000 | USGS 3DEP - ft | Copernicus GLO-90 108 ft, ring median 138 ft | table None
+RIO00 | Maracanã Stadium (revision 1378863637) | -22.91220, -43.23030 | USGS 3DEP - ft | Copernicus GLO-90 49 ft, ring median 38 ft | table None
+
+Entries already in the table, for comparison:
+DEN00 | Empower Field at Mile High (revision 1378808714) | 39.74389, -105.02000 | USGS 3DEP 5195 ft | Copernicus GLO-90 5187 ft, ring median 5203 ft | table 5280.0
+GER00 | Allianz Arena (revision 1378827353) | 48.21878, 11.62475 | USGS 3DEP - ft | Copernicus GLO-90 1611 ft, ring median 1621 ft | table 1617.0
+NOR00 | Caesars Superdome (revision 1378776769) | 29.95083, -90.08111 | USGS 3DEP 2 ft | Copernicus GLO-90 75 ft, ring median 7 ft | table 3.0
+SEA00 | Lumen Field (revision 1373998493) | 47.59520, -122.33160 | USGS 3DEP 18 ft | Copernicus GLO-90 36 ft, ring median 34 ft | table 16.0
+PIT00 | Acrisure Stadium (revision 1372194646) | 40.44667, -80.01583 | USGS 3DEP 724 ft | Copernicus GLO-90 751 ft, ring median 728 ft | table 712.0
+PHI00 | Lincoln Financial Field (revision 1379430203) | 39.90083, -75.16750 | USGS 3DEP 11 ft | Copernicus GLO-90 3 ft, ring median 20 ft | table 39.0
+CIN00 | Paycor Stadium (revision 1372206140) | 39.09500, -84.51600 | USGS 3DEP 480 ft | Copernicus GLO-90 492 ft, ring median 490 ft | table 482.0
+BOS00 | Gillette Stadium (revision 1378807964) | 42.09100, -71.26400 | USGS 3DEP 260 ft | Copernicus GLO-90 276 ft, ring median 271 ft | table 289.0
+DET00 | Ford Field (revision 1375366384) | 42.34000, -83.04556 | USGS 3DEP 603 ft | Copernicus GLO-90 617 ft, ring median 604 ft | table 600.0
+CHI98 | Soldier Field (revision 1378157339) | 41.86230, -87.61670 | USGS 3DEP 586 ft | Copernicus GLO-90 610 ft, ring median 597 ft | table 590.0

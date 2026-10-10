@@ -201,6 +201,30 @@ def _every_play_type(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
     )
 
 
+SITUATIONAL_FLAGS = (
+    "third_down_converted",
+    "third_down_failed",
+    "fourth_down_converted",
+    "fourth_down_failed",
+    "two_point_attempt",
+)
+
+
+def uncounted_situational_plays(pbp: pl.DataFrame) -> dict[str, int]:
+    """Count, by play type, the flagged plays this repository's play-type filter leaves out.
+
+    A play counts when it has a team on each side and any third-down, fourth-down or two-point
+    flag, and its play type is not one of ``SITUATIONAL_PLAY_TYPES``; a missing type is ``none``.
+    """
+    sides = pl.all_horizontal(
+        pl.col(c).is_not_null() & (pl.col(c) != "") for c in ("posteam", "defteam")
+    )
+    flagged = pl.any_horizontal(_flag(flag) for flag in SITUATIONAL_FLAGS)
+    counted = pl.col("play_type").is_in(list(SITUATIONAL_PLAY_TYPES)).fill_null(value=False)
+    left_out = pbp.filter(sides & flagged & ~counted).select(pl.col("play_type").fill_null("none"))
+    return {str(k): int(v) for k, v in left_out.group_by("play_type").len().iter_rows()}
+
+
 def _both_conversion_flags(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
     """Count a down flagged both converted and failed once, as converted."""
     return pbp.with_columns(

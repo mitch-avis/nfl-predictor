@@ -147,6 +147,22 @@ def test_confidence_sheet_after_the_lock_without_earlier_picks_warns(
     assert (payload["picks_file"], payload["generated_after_lock"]) == (None, True)
 
 
+def test_confidence_sheet_for_a_week_without_a_picks_file_keeps_its_predictions(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """A week predicted ahead has no picks file, so after the lock it keeps its ranks and warns."""
+    # Arrange
+    _seed(project_root, app, 6)
+
+    # Act
+    payload = viewer_client.get("/api/pool/confidence", params={"season": 2026, "week": 6}).json()
+
+    # Assert
+    assert payload["week"] == 6
+    assert {row["game_id"][:7] for row in payload["rows"]} == {"2026_06"}
+    assert (payload["picks_file"], payload["generated_after_lock"]) == (None, True)
+
+
 def test_picks_after_the_lock_follow_the_picks_made_before_it(
     project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:

@@ -798,8 +798,11 @@ class _PreparedRun:
 def _prepare_run(df: pd.DataFrame, config: WalkForwardConfig) -> _PreparedRun:
     """Drop disabled groups, filter the games, resolve the settings, and build the folds."""
     if config.disabled_feature_groups:
+        # The callers that load the data (the backtest, stage 1 of the weekly run) drop the
+        # groups first and warn about any that match no column there, so this drop is a safety
+        # net that may find nothing left to drop; it does not repeat the warning.
         group_columns = resolve_feature_group_columns(
-            list(df.columns), config.disabled_feature_groups
+            list(df.columns), config.disabled_feature_groups, warn_unmatched=False
         )
         if group_columns:
             log.info(

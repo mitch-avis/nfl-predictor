@@ -12,11 +12,13 @@ with a ten-tree budget to stay fast.
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
 from tests.feature_group_fixture import GROUP_COLUMNS, build_group_fixture
+from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.ml import ml_model_core, ml_model_training
 from nfl_predictor.ml.ml_model_core import OptunaConfig
@@ -154,3 +156,21 @@ def test_a_saved_model_predicts_without_reading_the_dropped_columns(tmp_path: Pa
     pd.testing.assert_frame_equal(
         predictions[list(PREDICTION_COLUMNS)], expected[list(PREDICTION_COLUMNS)]
     )
+
+
+def test_a_group_the_data_lacks_drops_nothing_and_warns(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    caplog.set_level(logging.INFO)
+    paths = build_fixture(tmp_path)
+
+    # Act
+    result = _train(paths["completed"], ("own_elo",))
+
+    # Assert
+    assert result.dropped_feature_group_columns == ()
+    warnings = [
+        record.getMessage() for record in caplog.records if record.levelno == logging.WARNING
+    ]
+    assert any("own_elo" in message and "match no column" in message for message in warnings)

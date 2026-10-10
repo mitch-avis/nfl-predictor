@@ -166,12 +166,18 @@ def validate_feature_groups(groups: Sequence[str]) -> None:
         raise ValueError(msg)
 
 
-def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str]) -> list[str]:
+def resolve_feature_group_columns(
+    columns: Sequence[str], groups: Sequence[str], *, warn_unmatched: bool = True
+) -> list[str]:
     """Resolve which columns belong to the given feature groups: what disabling them removes.
 
     Every fit that leaves feature groups out drops exactly these columns: each walk-forward
     fold (``WalkForwardConfig.disabled_feature_groups``) and the final fit
     (``TrainingOptions.disabled_feature_groups``).
+
+    A group that matches none of ``columns`` leaves nothing out, so a dataset build that lacks
+    it trains differently from one that has it; each such group is logged as a warning, unless
+    ``warn_unmatched`` is off for a caller resolving columns that may already have been dropped.
 
     A column belongs to a group when any marker string configured for that group in
     ``constants.FEATURE_GROUP_COLUMN_MARKERS`` is a *substring* of the column name (not a
@@ -186,14 +192,21 @@ def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str])
     """
     validate_feature_groups(groups)
     matched: set[str] = set()
+    unmatched: list[str] = []
     for group in groups:
         markers = constants.FEATURE_GROUP_COLUMN_MARKERS[group]
-        if not markers:
-            continue
-        for column in columns:
-            if any(marker in column for marker in markers):
-                matched.add(column)
-
+        group_columns = [
+            column for column in columns if any(marker in column for marker in markers)
+        ]
+        if not group_columns:
+            unmatched.append(group)
+        matched.update(group_columns)
+    if unmatched and warn_unmatched:
+        log.warning(
+            "Feature group(s) %s match no column of the data, so leaving them out drops "
+            "nothing; a dataset build without them trains differently from one with them.",
+            sorted(set(unmatched)),
+        )
     return sorted(matched)
 
 

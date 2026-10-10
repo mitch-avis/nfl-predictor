@@ -31,7 +31,14 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
-from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, walk_forward, wf_compare_utils
+from nfl_predictor.ml import (
+    artifacts,
+    feature_spec,
+    floor_sigma,
+    ml_model_core,
+    walk_forward,
+    wf_compare_utils,
+)
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.utils.logger import log
 
@@ -272,8 +279,16 @@ def evaluate_production(
 ) -> dict[str, Any]:
     """Walk the production configuration forward and return its summary row.
 
-    The squared margin errors of every predicted game are written to ``wf_margin_errors.csv``.
+    The disabled feature groups' columns are dropped first, as the backtest drops them, and a
+    group that matches no column of the data is logged as a warning. The squared margin errors
+    of every predicted game are written to ``wf_margin_errors.csv``.
     """
+    if options.disabled_feature_groups:
+        df = df.drop(
+            columns=feature_spec.resolve_feature_group_columns(
+                list(df.columns), options.disabled_feature_groups
+            )
+        )
     run_dir = run.run_dir
     wf_dir = _wf_compare_dir(run_dir)
     wf_dir.mkdir(parents=True, exist_ok=True)

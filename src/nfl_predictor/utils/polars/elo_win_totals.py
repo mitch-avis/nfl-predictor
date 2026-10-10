@@ -3,15 +3,17 @@
 greerreNFL's ``nfelosrs`` repository publishes ``wt_ratings.csv``: one row per team and season
 from 2003, rating each team by the sportsbooks' preseason win totals (the over/under on its
 season wins) and its schedule. ``wt_rating_elo`` is that rating on the Elo scale, every season
-averaging 1505, so it is market information: the own Elo's optional win-total pull
-(``elo_ratings``) is the only reader, and a market-free rating never reads it.
+averaging 1505, so it is market information: the own Elo's win-total pull (``elo_ratings``, the
+win-total preset the ETL builds with ``own_elo_build``) is the only reader, and a market-free
+rating never reads it.
 
 ``load_win_totals`` downloads the file, keeps the last good copy as ``wt_ratings.csv`` in the
 cache directory (``NFELO_CACHE_DIR / "win_totals"`` by default), keeps every copy a run used
 under ``snapshots/wt_ratings_<sha256>.csv``, and falls back to the cached copy when the download
-fails or returns something that is not the file. With neither, the run continues with no rows,
-and every preseason rating is the plain offseason regression. Team codes are normalized to the
-canonical abbreviations (the file writes ``OAK`` and ``WAS`` for those franchises' whole history).
+fails or returns something that is not the file. With neither, it returns no rows; the ETL then
+stops rather than publish the win-total preset without its pull
+(``own_elo_build.require_win_totals``). Team codes are normalized to the canonical abbreviations
+(the file writes ``OAK`` and ``WAS`` for those franchises' whole history).
 """
 
 from __future__ import annotations

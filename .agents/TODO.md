@@ -515,6 +515,11 @@ happens on a fresh branch off `main` and merges back after each phase.
       reviews' simulations are in `.agents/sos_port/decisions/web.md`, entry 9, and on the step-6
       approval list in `.agents/sos_port/DECISIONS.md`.
 - [ ] 58.2 Phase 5: team and QB pages over the `nfl-sos-ratings` Parquet outputs.
+      Narrowed (2026-10-10): the pages, their API and the navigation landed on the step-6
+      integration branch as `0.53.0`, over the ported ratings and season statistics, but the
+      phase's done-criterion (a current-season team page with heatmaps and a game log) waits on
+      the season-statistics ETL step, which no job runs yet; four source features are logged as
+      not ported (`.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21).
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
       2026-09-21 (`0.12.12`, narrowed and accepted by the user's decision): the `web` extra is
       dropped, and `etl_full`/`validate_offline`/`validate_live` now take `--data-dir` with the

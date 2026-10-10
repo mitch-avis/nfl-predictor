@@ -19,9 +19,17 @@ Nothing in the output is typed by hand:
   spread, so a near copy of the line under another name would show up;
 - the exclusion check builds the model's feature spec on the build with market features
   excluded, for both transform settings, and lists any inventory column that still enters;
-- the indirect inputs are columns of a source this repo does not compute (the Elo family from
-  ``data/qb_elos.csv``, produced by ``../nfeloqb``), with the evidence lines read from that
-  repository (read only), never inferred.
+- the indirect inputs are the columns of every market-informed feature group
+  (``constants.MARKET_INFORMED_FEATURE_GROUPS``, which also gives the no-market command and the
+  selection that leaves them out): the Elo family from ``data/qb_elos.csv``, produced by
+  ``../nfeloqb``, with the evidence lines read from that repository (read only), never inferred,
+  and the own Elo's win-total preset, which this repository computes with a preseason pull
+  toward nfelosrs's betting win totals.
+
+Regenerate ``MARKET_COLUMNS.md`` and ``market_columns.json`` after the next dataset rebuild. The
+copies beside this file come from a build without the own Elo's columns, made when this script
+read only the ``elo`` group; on such a build the check that every market-informed group is in
+the build fails.
 """
 
 from __future__ import annotations
@@ -93,17 +101,24 @@ ELO_STATS = (*constants.ELO_COLUMNS, "elo_4wk_trend", "qb_elo_4wk_trend", "qb_va
 NFELOQB_ELO = Path("nfeloqb/Resources/elo.py")
 NFELOQB_EVIDENCE = re.compile(r"reg_vegas|wt_ratings|wt_rating_elo")
 NFELOQB_WIN_TOTALS = Path("nfeloqb/Manual Data/wt_ratings.csv")
-# The feature group that drops the Elo family, and how each of its columns carries the market.
-ELO_GROUP = "elo"
-MARKET_INFORMED_SOURCE = (
+# The feature groups that carry market information without being line columns, and how the
+# columns of each carry the market.
+MARKET_INFORMED_GROUPS = tuple(constants.MARKET_INFORMED_FEATURE_GROUPS)
+ELO_SOURCE = (
     "market-informed through the preseason Vegas win-total regression in ../nfeloqb "
     "Resources/elo.py"
+)
+OWN_WT_ELO_SOURCE = (
+    "market-informed through the preseason pull toward nfelosrs's betting win totals "
+    "(this repository's own Elo, win-total preset: utils/polars/own_elo_build.py)"
 )
 # The two market-free command lines a backtest takes.
 LINES_ONLY_COMMAND = (
     "nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform"
 )
-NO_MARKET_COMMAND = f"{LINES_ONLY_COMMAND} --disable-feature-groups {ELO_GROUP}"
+NO_MARKET_COMMAND = (
+    f"{LINES_ONLY_COMMAND} --disable-feature-groups {','.join(MARKET_INFORMED_GROUPS)}"
+)
 
 
 class InventoryError(RuntimeError):
@@ -329,10 +344,11 @@ SELECTIONS: tuple[tuple[str, bool, bool, tuple[str, ...]], ...] = (
     ("--exclude-market --no-market-transform", False, False, ()),
     ("--exclude-market", False, True, ()),
     (
-        "--exclude-market --no-market-transform --disable-feature-groups elo",
+        "--exclude-market --no-market-transform --disable-feature-groups "
+        + ",".join(MARKET_INFORMED_GROUPS),
         False,
         False,
-        (ELO_GROUP,),
+        MARKET_INFORMED_GROUPS,
     ),
     ("(default: market features, transformed)", True, True, ()),
 )
@@ -376,6 +392,36 @@ def _elo_columns(columns: list[str]) -> list[str]:
         if base in stats:
             found.append(column)
     return found
+
+
+def _own_wt_elo_columns(columns: list[str]) -> list[str]:
+    published = set(constants.OWN_WT_ELO_COLUMNS)
+    return [column for column in columns if column in published]
+
+
+# Each market-informed group: how its columns are found by name, independently of the group's
+# markers, and how they carry the market.
+MARKET_INFORMED_FAMILIES = {
+    "elo": (_elo_columns, ELO_SOURCE),
+    "own_elo_wt": (_own_wt_elo_columns, OWN_WT_ELO_SOURCE),
+}
+
+
+def _market_informed_groups(header: list[str]) -> dict[str, dict[str, Any]]:
+    """Return each market-informed group's columns, found by name and by the group's markers."""
+    missing = sorted(set(MARKET_INFORMED_GROUPS) - set(MARKET_INFORMED_FAMILIES))
+    if missing:
+        msg = f"no family for market-informed group(s) {missing}; add how their columns are found"
+        raise InventoryError(msg)
+    groups: dict[str, dict[str, Any]] = {}
+    for group in MARKET_INFORMED_GROUPS:
+        family, source = MARKET_INFORMED_FAMILIES[group]
+        groups[group] = {
+            "family_columns": family(header),
+            "group_columns": walk_forward.resolve_feature_group_columns(header, [group]),
+            "source": source,
+        }
+    return groups
 
 
 def _nfeloqb_evidence(nfeloqb: Path) -> dict[str, Any]:
@@ -430,9 +476,15 @@ def build_inventory(data_path: Path, nfeloqb: Path) -> dict[str, Any]:
     completed = frame[frame["home_score"].notna()] if "home_score" in frame.columns else frame
     correlations = _correlations(completed, feature_range)
     near_copies = [row for row in correlations if row["abs_corr"] >= NEAR_COPY_CORRELATION]
-    elo_columns = _elo_columns(header)
-    elo_group = walk_forward.resolve_feature_group_columns(header, [ELO_GROUP])
-    exclusion = _exclusion(completed, set(inventory), set(elo_columns))
+    groups = _market_informed_groups(header)
+    market_informed = [
+        {"column": column, "group": group, "source": entry["source"]}
+        for group, entry in groups.items()
+        for column in entry["family_columns"]
+    ]
+    exclusion = _exclusion(
+        completed, set(inventory), {entry["column"] for entry in market_informed}
+    )
     no_market_information = exclusion[SELECTIONS[2][0]]
 
     checks = {
@@ -449,7 +501,14 @@ def build_inventory(data_path: Path, nfeloqb: Path) -> dict[str, Any]:
             for entry in exclusion.values()
             if not entry["include_market"]
         ),
-        "elo_group_drops_exactly_the_elo_family": sorted(elo_group) == sorted(elo_columns),
+        "every_market_informed_group_is_in_the_build": all(
+            entry["family_columns"] for entry in groups.values()
+        ),
+        **{
+            f"{group}_group_drops_exactly_its_family": sorted(entry["group_columns"])
+            == sorted(entry["family_columns"])
+            for group, entry in groups.items()
+        },
         "no_market_information_spec_carries_no_market_column": not (
             no_market_information["inventory_columns_in_features"]
             or no_market_information["market_informed_columns_in_features"]
@@ -477,11 +536,14 @@ def build_inventory(data_path: Path, nfeloqb: Path) -> dict[str, Any]:
         "near_copies_of_the_spread": near_copies,
         "exclusion": exclusion,
         "indirect_market_inputs": {
-            "elo_family_columns_in_build": elo_columns,
-            "elo_group_columns": elo_group,
-            "market_informed_columns": [
-                {"column": column, "source": MARKET_INFORMED_SOURCE} for column in elo_columns
-            ],
+            "groups": {
+                group: {
+                    "family_columns": entry["family_columns"],
+                    "group_columns": entry["group_columns"],
+                }
+                for group, entry in groups.items()
+            },
+            "market_informed_columns": market_informed,
             "nfeloqb": _nfeloqb_evidence(nfeloqb),
         },
         "checks": checks,
@@ -535,10 +597,13 @@ def _markdown(result: dict[str, Any]) -> str:
     add(f"  - other build columns named for the market: {_other_market_named(result)}")
     add(f"  - training-time transforms of the lines: {len(result['training_time_transforms'])}")
     add(f"- ETL references to a line column name: {len(result['etl_call_sites'])}")
+    indirect = result["indirect_market_inputs"]
     add(
-        "- Market-informed columns (the Elo family, not computed from game lines): "
-        f"{len(result['indirect_market_inputs']['elo_family_columns_in_build'])}"
+        "- Market-informed columns (the market-informed feature groups, not computed from game "
+        f"lines): {len(indirect['market_informed_columns'])}"
     )
+    for group, entry in indirect["groups"].items():
+        add(f"  - `{group}`: {len(entry['family_columns'])}")
     add("")
     add("## Checks")
     add("")
@@ -563,7 +628,7 @@ def _markdown(result: dict[str, Any]) -> str:
     add("")
     add("## Market-free command lines")
     add("")
-    add(f"- No betting-line column (the Elo columns stay): `{LINES_ONLY_COMMAND}`")
+    add(f"- No betting-line column (the market-informed groups stay): `{LINES_ONLY_COMMAND}`")
     add(f"- No market information at all: `{NO_MARKET_COMMAND}`")
     add("")
     add("## Market selection and the feature spec on this build")
@@ -573,7 +638,7 @@ def _markdown(result: dict[str, Any]) -> str:
     for label, entry in result["exclusion"].items():
         lines = ", ".join(f"`{c}`" for c in entry["inventory_columns_in_features"]) or "none"
         informed = entry["market_informed_columns_in_features"]
-        informed_text = f"{len(informed)} Elo columns" if informed else "none"
+        informed_text = f"{len(informed)} columns" if informed else "none"
         add(f"| `{label}` | {entry['feature_columns']} | {lines} | {informed_text} |")
     add("")
     add("## Largest correlations of a non-line feature with the home spread")
@@ -616,7 +681,6 @@ def _markdown(result: dict[str, Any]) -> str:
     add("")
     add("## Indirect market inputs")
     add("")
-    indirect = result["indirect_market_inputs"]
     evidence = indirect["nfeloqb"]
     add(
         "The Elo family comes from `data/qb_elos.csv`, which `../nfeloqb` produces; this repo "
@@ -634,16 +698,23 @@ def _markdown(result: dict[str, Any]) -> str:
         )
     add("")
     add(
-        f"The `{ELO_GROUP}` feature group (`--disable-feature-groups {ELO_GROUP}`) drops "
-        f"{len(indirect['elo_group_columns'])} columns of the build; the Elo family found from "
-        f"the Elo stat names is {len(indirect['elo_family_columns_in_build'])} columns, and the "
-        "check above says whether they are the same."
+        "The own Elo's win-total preset is computed in this repository "
+        "(`utils/polars/own_elo_build.py`); its preseason pull reads nfelosrs's betting win "
+        "totals, so its columns carry market information too."
     )
     add("")
-    add("| Column | How it carries the market |")
-    add("| --- | --- |")
+    for group, entry in indirect["groups"].items():
+        add(
+            f"- The `{group}` feature group (`--disable-feature-groups {group}`) drops "
+            f"{len(entry['group_columns'])} columns of the build; its family found by name is "
+            f"{len(entry['family_columns'])} columns, and the checks above say whether they are "
+            "the same."
+        )
+    add("")
+    add("| Column | Group | How it carries the market |")
+    add("| --- | --- | --- |")
     for entry in indirect["market_informed_columns"]:
-        add(f"| `{entry['column']}` | {entry['source']} |")
+        add(f"| `{entry['column']}` | `{entry['group']}` | {entry['source']} |")
     add("")
     add("## ETL references to a line column name")
     add("")
@@ -673,7 +744,8 @@ def main() -> int:
         f"transforms {len(result['training_time_transforms'])}, "
         f"other market-named {_other_market_named(result)}; "
         f"ETL references {len(result['etl_call_sites'])}; "
-        f"Elo family {len(result['indirect_market_inputs']['elo_family_columns_in_build'])}; "
+        "market-informed "
+        f"{len(result['indirect_market_inputs']['market_informed_columns'])}; "
         f"failed checks: {failed or 'none'}"
     )
     return 1 if failed else 0

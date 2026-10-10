@@ -1,8 +1,9 @@
 # NFL Predictor web UI
 
 A React single-page app served by the FastAPI backend in `src/nfl_predictor/api/`. It shows the
-project's outputs (predictions, power rankings, betting edges, data and model status) and, for
-admins, runs the project's jobs.
+project's outputs (predictions, pool helpers, power rankings, betting edges, team and quarterback
+ratings and stats, schedule strength, data and model status) and, for admins, runs the project's
+jobs.
 
 ## Prerequisites
 
@@ -49,13 +50,13 @@ Every setting is an `NFLP_`-prefixed environment variable (see `src/nfl_predicto
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `NFLP_ROOT_DIR` | repository root | Base for every other path |
-| `NFLP_DATA_DIR` | `data/` | Datasets read and written by jobs |
+| `NFLP_DATA_DIR` | `data/` | Datasets read and written by jobs; the team and quarterback pages read its `ratings/` folder |
 | `NFLP_MODELS_DIR` | `models/` | Run directories |
 | `NFLP_STATE_DIR` | `data/web/` | SQLite database and signing key |
 | `NFLP_JWT_SECRET` | generated into the state dir | Session signing secret |
 | `NFLP_SESSION_HOURS` | `168` | Session lifetime |
 | `NFLP_WEB_DIST` | `web/dist/` | Built frontend |
-| `NFLP_PYTHON` | `.venv/bin/python` | Interpreter for jobs; each runs `<python> -m nfl_predictor <command>` |
+| `NFLP_PYTHON_EXECUTABLE` | `.venv/bin/python` | Interpreter for jobs; each runs `<python> -m nfl_predictor <command>` |
 
 ## Checks
 
@@ -74,9 +75,11 @@ web/src/
   app/          shell, sidebar, theme, auth gate, navigation
   pages/        one component per route
   components/   ui/ (shadcn primitives), common/ (shared pieces), one folder per page area
-                (pool/ for the Pool page's sheet, tiebreakers and survivor plans, model/, ...)
+                (pool/ for the Pool page's sheet, tiebreakers and survivor plans, ratings/ for the
+                team and quarterback pages' view model, rank ranges and charts, model/, ...)
   hooks/        URL, storage and viewport hooks (useWeekParams: the week a page shows)
-  test/         vitest setup and renderWithProviders (router and tooltip providers)
+  test/         vitest setup, renderWithProviders (router and tooltip providers), stubApi
+                (fetch answered by path) and small ratings payloads
   utils/        cn() and formatting helpers  (not src/lib: that path is gitignored)
 ```
 

@@ -42,7 +42,7 @@ data are logged for review. Read as:
 
 | stream | phase | depends on | branch / state |
 | --- | --- | --- | --- |
-| S1 inventory and parity scripts | 1 | none | merged `0.50.1` (reports pinned to `main`'s code); refresh after integration |
+| S1 inventory and parity scripts | 1 | none | merged `0.50.1` (reports pinned to `main`'s code); refresh after integration (also the stale `gl-red-zone`, `gl-designed-runs`, `gl-carries-faced` notes in `mapping.yaml`) |
 | S2 new nflverse sources, `MODELS_PATH`, `compare` tie fix | 2 | none | merged, `0.46.0` |
 | S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | merged, `0.47.0` |
 | S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | merged, `0.49.0` |
@@ -63,8 +63,12 @@ kinds and columns named as in `nfl-sos-ratings`, plus the current season's `*_ra
 ## Measurement ladder (phase 4)
 
 Pre-registered on 2026-10-10 before any step-6 code merged: the main checkout's
-`models/step6/HYPOTHESIS.md` (arms, cap of 8 runs plus 2 conditional and one build, instrument,
-decision rules). Do not edit it after the launch record is written.
+`models/step6/HYPOTHESIS.md` (arms, instrument, decision rules). Amended at about 09:35 the same
+day, before the build and before any run: two diagnostic runs (a new-build reference: strength
+snapshot on, ratings and own Elo off, anchored) that report the corrections' and the ratings'
+shares and play no part in the rules; cap 10 runs plus the 2 conditional ones, and one build. The
+original checksum is in `HYPOTHESIS.original.sha256`. Do not edit it after the launch record is
+written.
 
 ## Integration design (decided 2026-10-10, before the integration streams start)
 
@@ -162,11 +166,18 @@ small and local.
   run's `disable_feature_groups`) is set. The integration adds a warning, not an automatic drop.
   The reviewer recommends automatic (high confidence); the cost is that market-free results stop
   being comparable with earlier market-free runs that kept the `elo` group.
-- Pre-existing defect found in review (outside step 6's changes): an upcoming game's
-  `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` differ from the same game's completed
-  row (all 16 games of 2025 week 18 when made upcoming, up to 15.75 points), so the model trains
-  on one version of the trends and predicts with another. To investigate and fix with a failing
-  test on the integration branch; the fix changes weekly output, so it is held for approval.
+- Pre-existing defect found in review and fixed on a branch (held with step 6): an upcoming
+  game's `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` were filled with 0.0 (and
+  every playoff game's), while the completed rows the model trains on carry the real pre-game
+  trend. Not leakage (completed rows use earlier games only), so no training row or walk-forward
+  result changes; production predicted with zeros from week 6 on. The fix changes weekly
+  predictions from week 6 and playoff predictions (`.agents/sos_port/decisions/trend_parity.md`).
+- Weekly-run hygiene (not a defect today): the copied `data/qb_elos.csv` (2026-10-08 16:20)
+  covers 2026 through week 5, the current week; nfeloqb publishes only the upcoming week, so a
+  week-6 run needs the usual fresh copy. Without it the Elo columns silently fall back to stale
+  values and the Elo and quarterback trends go to 0.0 or null; a warning for a missing week is a
+  planned small follow-up. (Corrects a session message that said this weekend's run was
+  affected; it is not.)
 - A fresh machine with no network and no cached win-total file stops the whole ETL (the own Elo's
   win-total preset fails loudly by design); the ETL did not depend on nfelosrs before.
 - nflverse lists the 2026 Melbourne, Munich and Paris venues as domes (none has a roof over the

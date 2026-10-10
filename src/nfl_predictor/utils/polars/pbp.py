@@ -12,13 +12,24 @@ metrics divide them.
 
 Definitions used throughout:
 
-- Scrimmage snap (the single definition of an offensive snap):
-  ``(qb_dropback + rush + qb_kneel + qb_spike) > 0`` with nulls filled to 0.
-- Dropback: a scrimmage snap with ``qb_dropback > 0`` that is neither a kneel
-  nor a spike.
-- Carry: a scrimmage snap with ``rush > 0`` that is neither a kneel nor a spike.
-  Kneels and spikes are therefore offensive snaps but are neither dropbacks nor
-  carries.
+- Scrimmage snap (the single definition of an offensive snap): a play with the
+  dropback flag or any of ``rush``, ``qb_kneel`` and ``qb_spike`` set, with nulls
+  read as 0. The dropback flag is ``qb_dropback > 0`` or a scramble filed as a run
+  play (``qb_scramble > 0`` with ``play_type == "run"``): nflverse leaves
+  ``qb_dropback`` at 0 on most scrambles before 2006 and gives a few scrambles the
+  ``rush`` flag. A scramble a penalty wiped out (``no_play``) is not one.
+- Dropback: a scrimmage snap with the dropback flag that is neither a kneel, a
+  spike nor a two-point try.
+- Carry: a designed run, the rule ``nfl-sos-ratings`` uses: a rush attempt
+  (``rush_attempt > 0``, whatever the ``rush`` flag) that is neither a scramble
+  (``qb_scramble``), a kneel-down nor a two-point try, and has no dropback flag, so
+  a play flagged both counts once, as a dropback. A run a penalty wiped out keeps
+  ``rush`` but loses ``rush_attempt``: it stays an offensive snap, as the source's
+  scrimmage snap keeps it, and is no carry, as a pass a penalty wiped out is no
+  dropback. A rush attempt nflverse files without ``rush`` is a carry but not an
+  offensive snap. Kneels are offensive snaps but neither dropbacks nor carries; a
+  spike is a snap and never a dropback, and a carry only when nflverse also files it
+  as a rush attempt (a spike overturned into a fumbled snap).
 - Offense perspective: the team is ``posteam`` on the play.
 - Allowed perspective: the team is ``defteam`` on the same play, so every
   ``*_allowed_*`` column of a team-game equals the matching offensive column of
@@ -50,7 +61,8 @@ documented default (0 for flags and counts, 0.0 for EPA and yardage sums, and
 worth stating outright: a missing ``success`` column means no play counts as a
 success, and a missing ``yards_gained`` column means every play gained 0 yards,
 so nothing is explosive and every rush counts as stuffed. A missing
-``play_type`` column leaves all of the situational counts at 0.
+``play_type`` column means no run play counts as a scramble, and a missing
+``fixed_drive`` column leaves the red-zone trip counts at 0.
 
 The special-teams columns are the one exception to the zero-default rule: when
 no special-teams flag column is present, ``st_epa_for``, ``st_epa_against``, and
@@ -82,9 +94,6 @@ EARLY_DOWN_MAX = 2
 # Distance to the opponent goal line that defines the red zone.
 # Source: existing red-zone aggregation in this repo's Polars loaders.
 RED_ZONE_YARDLINE = 20
-# Play types counted by the situational aggregation.
-# Source: existing red-zone/down/two-point aggregation in this repo's Polars loaders.
-SITUATIONAL_PLAY_TYPES = ("run", "pass", "qb_kneel", "qb_spike")
 
 _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     # Identity keys.
@@ -125,23 +134,15 @@ _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     "st_epa_for": pl.Float64,
     "st_epa_against": pl.Float64,
     "st_plays": pl.Int64,
-    # Situational counts.
+    # Situational counts, each read by a published rate.
     "third_down_conversions": pl.Int64,
-    "third_down_fails": pl.Int64,
     "third_down_attempts": pl.Int64,
     "third_down_conversions_allowed": pl.Int64,
-    "third_down_fails_allowed": pl.Int64,
     "third_down_attempts_allowed": pl.Int64,
     "fourth_down_conversions": pl.Int64,
-    "fourth_down_fails": pl.Int64,
     "fourth_down_attempts": pl.Int64,
     "fourth_down_conversions_allowed": pl.Int64,
-    "fourth_down_fails_allowed": pl.Int64,
     "fourth_down_attempts_allowed": pl.Int64,
-    "red_zone_plays": pl.Int64,
-    "red_zone_tds": pl.Int64,
-    "red_zone_plays_allowed": pl.Int64,
-    "red_zone_tds_allowed": pl.Int64,
     "red_zone_trips": pl.Int64,
     "red_zone_td_drives": pl.Int64,
     "red_zone_trips_allowed": pl.Int64,
@@ -150,7 +151,6 @@ _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     "two_point_successes": pl.Int64,
     "two_point_attempts_allowed": pl.Int64,
     "two_point_successes_allowed": pl.Int64,
-    "total_plays": pl.Int64,
 }
 
 PBP_TEAM_GAME_COLUMNS: list[str] = list(_PBP_TEAM_GAME_SCHEMA)
@@ -232,18 +232,39 @@ def _possession_side_expr(columns: list[str], side: str) -> pl.Expr:
     return pl.col("posteam_type").cast(pl.Utf8, strict=False).str.to_lowercase().eq(side).max()
 
 
+def _run_play_scramble_expr(columns: list[str]) -> pl.Expr:
+    """Return whether a play is a scramble nflverse filed as a run play.
+
+    Formula: ``qb_scramble > 0`` and ``play_type == "run"``. nflverse codes a scramble as
+    a pass play (``rush`` is 0) and, from 2006 on, flags it with ``qb_dropback``; before
+    2006 it leaves ``qb_dropback`` at 0 on most scrambles, and a few scrambles carry the
+    ``rush`` flag. A scramble a penalty wiped out (``play_type == "no_play"``) is not one.
+    Without a ``play_type`` column no play is one.
+    """
+    if "play_type" not in columns:
+        return pl.lit(value=False)
+    is_run = (pl.col("play_type") == "run").fill_null(value=False)
+    return (flag_expr(columns, "qb_scramble") > 0) & is_run
+
+
+def _dropback_flag_expr(columns: list[str]) -> pl.Expr:
+    """Return the dropback flag: ``qb_dropback > 0``, or a scramble filed as a run play."""
+    return (flag_expr(columns, "qb_dropback") > 0) | _run_play_scramble_expr(columns)
+
+
 def _scrimmage_snap_expr(columns: list[str]) -> pl.Expr:
     """Return the single offensive-snap definition.
 
-    Formula: ``(qb_dropback + rush + qb_kneel + qb_spike) > 0`` with nulls filled
-    to 0, so a play counts as a scrimmage snap when any of those flags is set.
+    Formula: a play with the dropback flag (``_dropback_flag_expr``: ``qb_dropback`` or a
+    scramble filed as a run play) or any of ``rush``, ``qb_kneel`` and ``qb_spike`` set,
+    with nulls read as 0.
     """
     return (
-        flag_expr(columns, "qb_dropback")
-        + flag_expr(columns, "rush")
-        + flag_expr(columns, "qb_kneel")
-        + flag_expr(columns, "qb_spike")
-    ) > 0
+        _dropback_flag_expr(columns)
+        | (flag_expr(columns, "rush") > 0)
+        | (flag_expr(columns, "qb_kneel") > 0)
+        | (flag_expr(columns, "qb_spike") > 0)
+    )
 
 
 def count_where(condition: pl.Expr, name: str) -> pl.Expr:
@@ -298,13 +319,17 @@ def _play_conditions(columns: list[str]) -> dict[str, pl.Expr]:
     """Build the shared per-play condition and value expressions.
 
     Formulas:
-        - ``scrimmage``: ``(qb_dropback + rush + qb_kneel + qb_spike) > 0``.
-        - ``dropback``: scrimmage snap with ``qb_dropback > 0``, excluding kneels,
-          spikes, and two-point tries.
-        - ``rush``: scrimmage snap with ``rush > 0``, excluding kneels, spikes, and
-          two-point tries. Two-point tries are untimed conversion attempts rather than
-          scrimmage downs, so counting them would contaminate the per-attempt EPA and
-          success denominators.
+        - ``scrimmage``: the dropback flag or any of ``rush``, ``qb_kneel`` and ``qb_spike``
+          (``_scrimmage_snap_expr``).
+        - ``dropback``: scrimmage snap with the dropback flag (``qb_dropback > 0``, or a
+          scramble filed as a run play), excluding kneels, spikes, and two-point tries.
+        - ``rush`` (a carry): a designed run, ``nfl-sos-ratings``' rule: a rush attempt
+          (``rush_attempt > 0``, whatever the ``rush`` flag) that is neither a scramble
+          (``qb_scramble``), a kneel-down nor a two-point try; and, so a play flagged
+          both counts once, as a dropback, one without the dropback flag (no 1999-2025
+          designed run has it). Two-point tries are untimed conversion attempts rather
+          than scrimmage downs, so counting them would contaminate the per-attempt EPA
+          and success denominators.
         - ``success``: ``success > 0`` (missing column counts as no success).
         - ``early_down``: ``down <= EARLY_DOWN_MAX`` (missing/null down is not early).
         - ``special``: the special-teams flag column is set (missing column is never special).
@@ -312,10 +337,15 @@ def _play_conditions(columns: list[str]) -> dict[str, pl.Expr]:
     scrimmage = _scrimmage_snap_expr(columns)
     is_kneel_or_spike = (flag_expr(columns, "qb_kneel") + flag_expr(columns, "qb_spike")) > 0
     is_two_point = flag_expr(columns, "two_point_attempt") > 0
-    dropback = (
-        scrimmage & (flag_expr(columns, "qb_dropback") > 0) & ~is_kneel_or_spike & ~is_two_point
+    dropback_flag = _dropback_flag_expr(columns)
+    dropback = scrimmage & dropback_flag & ~is_kneel_or_spike & ~is_two_point
+    rush = (
+        (flag_expr(columns, "rush_attempt") > 0)
+        & ~(flag_expr(columns, "qb_scramble") > 0)
+        & ~(flag_expr(columns, "qb_kneel") > 0)
+        & ~is_two_point
+        & ~dropback_flag
     )
-    rush = scrimmage & (flag_expr(columns, "rush") > 0) & ~is_kneel_or_spike & ~is_two_point
     yards = value_expr(columns, "yards_gained")
     down = _nullable_expr(columns, "down", pl.Int64)
     st_flag = special_teams_flag_column(columns)
@@ -375,67 +405,45 @@ def _red_zone_drive_aggregations(
 def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> list[pl.Expr]:
     """Build the situational count aggregations for one perspective.
 
-    Formulas (all restricted to plays whose ``play_type`` is in
-    ``SITUATIONAL_PLAY_TYPES``, matching the existing pipeline definition):
+    Each count feeds a published rate (``teamrankings._PBP_PERCENT_RATE_SPECS``). The down and
+    two-point counts read their nflverse flags on every play, whatever its ``play_type``
+    (1999-2000 plays often have none). Formulas:
         - ``third_down_conversions``: plays with ``third_down_converted`` set.
-        - ``third_down_fails``: plays with ``third_down_failed`` set.
         - ``fourth_down_conversions``: plays with ``fourth_down_converted`` set.
-        - ``fourth_down_fails``: plays with ``fourth_down_failed`` set.
-        - ``red_zone_plays``: plays with ``yardline_100 <= RED_ZONE_YARDLINE``.
-        - ``red_zone_tds``: red-zone plays whose ``td_team == posteam``.
-        - ``red_zone_trips``: distinct ``fixed_drive`` values with at least one red-zone
-          play, i.e. drives that reached the red zone rather than snaps taken inside it.
+        - ``third_down_attempts`` / ``fourth_down_attempts``: plays with the down's converted
+          or failed flag set, so a play nflverse flags both counts once (and as a
+          conversion).
+        - ``red_zone_trips``: distinct ``fixed_drive`` values with at least one play at
+          ``yardline_100 <= RED_ZONE_YARDLINE``, i.e. drives that reached the red zone
+          rather than snaps taken inside it.
         - ``red_zone_td_drives``: those trips whose ``fixed_drive_result`` is
           ``"Touchdown"``. ``red_zone_td_drives / red_zone_trips`` is the per-trip
           conversion rate that the published ``red_zone_td_pct`` reports.
         - ``two_point_attempts``: plays with ``two_point_attempt`` set.
         - ``two_point_successes``: plays with ``two_point_conv_result == "success"``.
-        - ``total_plays``: the number of such plays.
-    Third- and fourth-down attempts are the conversion plus fail counts and are
-    added after aggregation. When ``allowed`` is true, the same offense-side events are
-    counted again but written to ``*_allowed`` columns for the team that defended them.
+    When ``allowed`` is true, the same offense-side events are counted again but written to
+    ``*_allowed`` columns for the team that defended them.
     """
-    if "play_type" in columns:
-        counted = pl.col("play_type").is_in(list(SITUATIONAL_PLAY_TYPES)).fill_null(value=False)
-    else:
-        counted = pl.lit(False)
     yardline = _nullable_expr(columns, "yardline_100", pl.Float64)
     in_red_zone = (yardline <= RED_ZONE_YARDLINE).fill_null(value=False)
-    if {"td_team", "posteam"} <= set(columns):
-        scored_td = (pl.col("td_team") == pl.col("posteam")).fill_null(value=False)
-    else:
-        scored_td = pl.lit(False)
     if "two_point_conv_result" in columns:
         two_point_success = (pl.col("two_point_conv_result") == "success").fill_null(value=False)
     else:
         two_point_success = pl.lit(False)
     suffix = "_allowed" if allowed else ""
+    downs: list[pl.Expr] = []
+    for down in ("third", "fourth"):
+        converted = flag_expr(columns, f"{down}_down_converted") > 0
+        failed = flag_expr(columns, f"{down}_down_failed") > 0
+        downs += [
+            count_where(converted, f"{down}_down_conversions{suffix}"),
+            count_where(converted | failed, f"{down}_down_attempts{suffix}"),
+        ]
     return [
-        count_where(
-            counted & (flag_expr(columns, "third_down_converted") > 0),
-            f"third_down_conversions{suffix}",
-        ),
-        count_where(
-            counted & (flag_expr(columns, "third_down_failed") > 0),
-            f"third_down_fails{suffix}",
-        ),
-        count_where(
-            counted & (flag_expr(columns, "fourth_down_converted") > 0),
-            f"fourth_down_conversions{suffix}",
-        ),
-        count_where(
-            counted & (flag_expr(columns, "fourth_down_failed") > 0),
-            f"fourth_down_fails{suffix}",
-        ),
-        count_where(counted & in_red_zone, f"red_zone_plays{suffix}"),
-        count_where(counted & in_red_zone & scored_td, f"red_zone_tds{suffix}"),
+        *downs,
         *_red_zone_drive_aggregations(columns, in_red_zone, suffix),
-        count_where(
-            counted & (flag_expr(columns, "two_point_attempt") > 0),
-            f"two_point_attempts{suffix}",
-        ),
-        count_where(counted & two_point_success, f"two_point_successes{suffix}"),
-        *([] if allowed else [count_where(counted, "total_plays")]),
+        count_where(flag_expr(columns, "two_point_attempt") > 0, f"two_point_attempts{suffix}"),
+        count_where(two_point_success, f"two_point_successes{suffix}"),
     ]
 
 
@@ -444,12 +452,13 @@ def _aggregate_offense(plays: pl.DataFrame) -> pl.DataFrame:
 
     Formulas:
         - ``offensive_snaps``: scrimmage snaps taken by the team.
-        - ``dropbacks`` / ``carries``: dropback and rush snaps (kneels and spikes excluded).
-        - ``pass_epa_sum`` / ``rush_epa_sum``: sum of ``epa`` over dropbacks / rushes.
-        - ``pass_success_count`` / ``rush_success_count``: dropbacks / rushes with ``success > 0``.
+        - ``dropbacks`` / ``carries``: dropbacks and carries (``_play_conditions``).
+        - ``pass_epa_sum`` / ``rush_epa_sum``: sum of ``epa`` over dropbacks / carries.
+        - ``pass_success_count`` / ``rush_success_count``: dropbacks / carries with
+          ``success > 0``.
         - ``explosive_pass_count``: dropbacks gaining at least ``EXPLOSIVE_PASS_YARDS`` yards.
-        - ``explosive_rush_count``: rushes gaining at least ``EXPLOSIVE_RUSH_YARDS`` yards.
-        - ``stuffed_rush_count``: rushes gaining at most ``STUFFED_RUSH_YARDS`` yards.
+        - ``explosive_rush_count``: carries gaining at least ``EXPLOSIVE_RUSH_YARDS`` yards.
+        - ``stuffed_rush_count``: carries gaining at most ``STUFFED_RUSH_YARDS`` yards.
         - ``early_down_plays``: scrimmage snaps with ``down <= EARLY_DOWN_MAX``.
         - ``early_down_passes``: dropbacks with ``down <= EARLY_DOWN_MAX``.
         - ``st_epa_for``: sum of ``epa`` on special-teams plays where the team has possession.
@@ -479,14 +488,6 @@ def _aggregate_offense(plays: pl.DataFrame) -> pl.DataFrame:
             *_situational_aggregations(columns),
         )
         .rename({"posteam": "team_abbr", "defteam": "opponent_abbr"})
-        .with_columns(
-            (pl.col("third_down_conversions") + pl.col("third_down_fails")).alias(
-                "third_down_attempts"
-            ),
-            (pl.col("fourth_down_conversions") + pl.col("fourth_down_fails")).alias(
-                "fourth_down_attempts"
-            ),
-        )
     )
 
 
@@ -497,13 +498,12 @@ def _aggregate_allowed(plays: pl.DataFrame) -> pl.DataFrame:
     over the plays where the team is defending, so a team's allowed column always
     equals its opponent's matching offensive column for that game:
         - ``defensive_snaps``: scrimmage snaps faced.
-        - ``dropbacks_allowed`` / ``carries_allowed``: dropback and rush snaps
-          faced (kneels and spikes excluded), the denominators for the
-          per-dropback and per-carry rates allowed.
+        - ``dropbacks_allowed`` / ``carries_allowed``: dropbacks and carries faced, the
+          denominators for the per-dropback and per-carry rates allowed.
         - ``pass_epa_allowed_sum`` / ``rush_epa_allowed_sum``: ``epa`` allowed on
-          dropbacks / rushes.
+          dropbacks / carries.
         - ``pass_success_allowed_count`` / ``rush_success_allowed_count``:
-          dropbacks / rushes faced with ``success > 0``.
+          dropbacks / carries faced with ``success > 0``.
         - ``explosive_pass_allowed_count`` / ``explosive_rush_allowed_count`` /
           ``stuffed_rush_allowed_count``: the explosive and stuffed thresholds
           applied to the plays faced.
@@ -533,14 +533,6 @@ def _aggregate_allowed(plays: pl.DataFrame) -> pl.DataFrame:
             *_situational_aggregations(columns, allowed=True),
         )
         .rename({"defteam": "team_abbr", "posteam": "opponent_abbr"})
-        .with_columns(
-            (pl.col("third_down_conversions_allowed") + pl.col("third_down_fails_allowed")).alias(
-                "third_down_attempts_allowed"
-            ),
-            (pl.col("fourth_down_conversions_allowed") + pl.col("fourth_down_fails_allowed")).alias(
-                "fourth_down_attempts_allowed"
-            ),
-        )
     )
 
 
@@ -572,8 +564,9 @@ def regular_season_plays(pbp_df: pl.DataFrame) -> pl.DataFrame:
 def dropback_condition(columns: list[str]) -> pl.Expr:
     """Return the dropback definition shared by every play-by-play family.
 
-    Formula: a scrimmage snap with ``qb_dropback > 0`` that is not a kneel, a spike, or a
-    two-point try (see ``_play_conditions``).
+    Formula: a scrimmage snap with the dropback flag (``qb_dropback > 0``, or a scramble
+    filed as a run play) that is not a kneel, a spike, or a two-point try (see
+    ``_play_conditions``).
     """
     return _play_conditions(columns)["dropback"]
 

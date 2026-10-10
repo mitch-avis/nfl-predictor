@@ -175,15 +175,17 @@ def test_newest_first_sort_without_game_ids_keeps_same_date_rows_in_input_order(
 
 
 _PACKAGE = Path(nfl_predictor.__file__).parent
-# Modules whose frames reach the files `nfl-predictor data` writes.
+# Modules whose frames reach the files `nfl-predictor data` writes, the ratings package included.
 _ETL_PATHS = (
     _PACKAGE / "data_collection.py",
     _PACKAGE / "week_builder.py",
     _PACKAGE / "utils" / "game_utils.py",
     _PACKAGE / "utils" / "scraping_utils.py",
     *sorted((_PACKAGE / "utils" / "polars").glob("*.py")),
+    *sorted((_PACKAGE / "ratings").glob("*.py")),
 )
 _ORDERED_CALLS = frozenset({"group_by", "unique"})
+_NUMPY_NAMES = frozenset({"np", "numpy"})
 _DETERMINISTIC_KEEP = frozenset({"first", "last", "none"})
 
 
@@ -201,6 +203,9 @@ def _order_violations(path: Path) -> list[str]:
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
             continue
         if node.func.attr not in _ORDERED_CALLS:
+            continue
+        # numpy.unique always returns its values sorted, and takes no maintain_order.
+        if isinstance(node.func.value, ast.Name) and node.func.value.id in _NUMPY_NAMES:
             continue
         where = f"{path.name}:{node.lineno} {node.func.attr}"
         if _keyword(node, "maintain_order") is not True:

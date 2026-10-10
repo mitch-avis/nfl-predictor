@@ -1,5 +1,81 @@
 # Changelog
 
+## [0.54.0] - 2026-10-10
+
+### Changed
+
+- Carries in the play-by-play features count designed runs as `nfl-sos-ratings` does (a rush
+  attempt that is not a scramble, kneel-down or two-point try): runs a penalty wiped out leave the
+  rushing sums but stay snaps, so penalty-wiped plays are in neither the dropback nor the carry
+  family.
+- Scrambles nflverse files as run plays count as dropbacks (most scrambles before 2006), a play
+  flagged both a dropback and a rush counts once, down and two-point flags are read on every play,
+  a down flagged both converted and failed counts once, and Jacksonville's 2001-2002 play-by-play
+  player teams are repaired from the season rosters.
+- Every quarterback feature keys on one starter (`qb_stats.expected_starter_ids`): a completed
+  game's play-by-play starter, else the projected starter; a starter's name is matched only
+  against passers of games before the row's week, and scrambles are credited to the scrambler.
+- The ETL loads the players file and weekly rosters once per run and requests the current
+  season's play-by-play once before kickoff.
+- `nfl-predictor data --incremental` keeps each finished season's ratings in the season cache
+  (format version 2, so the first run rebuilds every season once).
+
+### Added
+
+- The ETL fits the ported team and quarterback ratings on this repository's play-by-play, writes
+  their tables to `data/ratings/{season}_{kind}.parquet` (plus the current season's weekly rank
+  ranges) through files written whole, and adds a `ratings` feature group of pre-week ratings:
+  offense, defense, special-teams and team ratings, schedule strength, and the expected starter's
+  quarterback rating with his dropbacks before the week, each per side with a `_diff`. One BLAS
+  thread is pinned around the fits (`threadpoolctl`, now a direct dependency).
+- Both own Elo presets in every dataset (`own_elo`, `own_elo_wt`), with
+  `data/own_elo_metadata.json` recording the win-total file's origin and SHA-256; a build whose
+  win totals cover none of its seasons stops.
+- A warning when a run leaves the market columns out but keeps a market-informed feature group
+  (`elo`, `own_elo_wt`), naming the groups and how to leave them out.
+
+### Removed
+
+- `strength_games_played_diff` from the published schema, and nine play-by-play counts no rate
+  reads.
+
+### Fixed
+
+- A season whose qualified passers have no rating, or a team whose games lack a final score, no
+  longer stops the ratings build.
+
+## [0.53.0] - 2026-10-10
+
+### Changed
+
+- The web sidebar and overview group the pages into sections, and Power Rankings and the new Teams
+  page link to each other.
+- Context columns such as schedule strength shade in a muted slate hue instead of the grade
+  gradient.
+- The API gzips responses of 500 bytes or more at level 6 for clients that accept it; the job log
+  stream is sent uncompressed.
+
+### Added
+
+- Team and quarterback pages over the ported ratings and season statistics: `/teams` and `/qbs`
+  with their detail pages (ratings with rank ranges, weekly rating history, game logs with each
+  opponent's season rating and league tier, opponent profiles), `/schedules` (every team-season
+  since 1999 ranked on schedule strength), `/rank-ranges`, `/head-to-head`, and a team-and-
+  quarterback tab in the Glossary. They read `data/ratings/{season}_{kind}.parquet` through
+  read-only routes under `/api/ratings`, take labels, tooltips and shading from the metric
+  registry, and compare up to four rows side by side. No job writes those tables yet, so the
+  pages show where they read from until one does.
+
+### Removed
+
+- The web API's `sos_data_dir` setting (`NFLP_SOS_DATA_DIR`): the pages read the data directory's
+  `ratings/` folder.
+
+### Fixed
+
+- `web/README.md` names the job interpreter's setting `NFLP_PYTHON_EXECUTABLE` (it said
+  `NFLP_PYTHON`, which the settings ignore).
+
 ## [0.52.0] - 2026-10-10
 
 ### Changed

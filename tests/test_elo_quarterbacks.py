@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 
 from nfl_predictor.utils.polars import elo_quarterbacks as quarterbacks
+from nfl_predictor.utils.polars import qb_starters
 
 PLAY_SCHEMA = {
     "game_id": pl.String,
@@ -31,6 +32,9 @@ PLAY_SCHEMA = {
     "yards_gained": pl.Float64,
     "passer_player_id": pl.String,
     "passer_player_name": pl.String,
+    "rusher_player_id": pl.String,
+    "qtr": pl.Float64,
+    "play_id": pl.Float64,
 }
 GAME_SCHEMA = {
     "game_id": pl.String,
@@ -80,8 +84,27 @@ def _pass(team: str, passer: str, yards: float = 0.0, **flags: object) -> dict[s
     )
 
 
+def _run(team: str, rusher: str, yards: float) -> dict[str, object]:
+    """Return a designed run by ``rusher``."""
+    return _play(
+        team, "OPP", None, rush=1.0, rush_attempt=1.0, yards_gained=yards, rusher_player_id=rusher
+    )
+
+
 def _plays(*rows: dict[str, object]) -> pl.DataFrame:
-    return pl.DataFrame(list(rows), schema=PLAY_SCHEMA)
+    """Return the plays in order, first quarter, numbered by their position."""
+    numbered = [{**row, "qtr": 1.0, "play_id": float(index)} for index, row in enumerate(rows)]
+    return pl.DataFrame(numbered, schema=PLAY_SCHEMA)
+
+
+def _history(plays: pl.DataFrame, **positions: str) -> qb_starters.QuarterbackHistory:
+    """Return the quarterback history of 2020 ``plays``, ``positions`` naming each id's."""
+    frame = pl.DataFrame(
+        [(2020, qb_id, position) for qb_id, position in positions.items()],
+        schema=qb_starters.POSITIONS_SCHEMA,
+        orient="row",
+    )
+    return qb_starters.quarterback_history(plays, frame)
 
 
 def _games(*rows: tuple[str, int, int, str, str]) -> pl.DataFrame:
@@ -153,7 +176,7 @@ def test_quarterback_value_is_fivethirtyeights_box_score_formula() -> None:
     assert value == pytest.approx(expected)
 
 
-def test_box_scores_count_passing_sacks_scrambles_and_kneels() -> None:
+def test_box_scores_count_passing_sacks_and_every_quarterback_rush() -> None:
     # Arrange
     plays = _plays(
         _pass("AAA", "A", 10.0, complete_pass=1.0),
@@ -161,24 +184,37 @@ def test_box_scores_count_passing_sacks_scrambles_and_kneels() -> None:
         _pass("AAA", "A"),
         _pass("AAA", "A", interception=1.0),
         _play("AAA", "OPP", "A", qb_dropback=1.0, sack=1.0, yards_gained=-7.0),
-        _play("AAA", "OPP", None, qb_dropback=1.0, rush_attempt=1.0, yards_gained=8.0),
-        _play("AAA", "OPP", None, qb_kneel=1.0, rush_attempt=1.0, yards_gained=-1.0),
-        _play("AAA", "OPP", None, rush=1.0, rush_attempt=1.0, yards_gained=40.0),
-    )
+        _play(
+            "AAA", "OPP", None, qb_dropback=1.0, rush_attempt=1.0, yards_gained=8.0,
+            rusher_player_id="A",
+        ),
+        _play(
+            "AAA", "OPP", None, qb_kneel=1.0, rush_attempt=1.0, yards_gained=-1.0,
+            rusher_player_id="A",
+        ),
+        _play(
+            "AAA", "OPP", None, rush=1.0, rush_attempt=1.0, yards_gained=6.0,
+            rush_touchdown=1.0, rusher_player_id="A",
+        ),
+        _play(
+            "AAA", "OPP", None, rush=1.0, rush_attempt=1.0, yards_gained=40.0,
+            rusher_player_id="RB",
+        ),
+    )  # fmt: skip
 
     # Act
-    box = quarterbacks.quarterback_box_scores(plays)
+    box = quarterbacks.quarterback_box_scores(_history(plays, A="QB", RB="RB"))
 
     # Assert
     row = box.row(0, named=True)
     assert box.height == 1
     assert (row["attempts"], row["completions"], row["pass_yards"]) == (4.0, 2.0, 30.0)
     assert (row["pass_tds"], row["interceptions"], row["sacks"]) == (1.0, 1.0, 1.0)
-    assert (row["rush_attempts"], row["rush_yards"], row["rush_tds"]) == (2.0, 7.0, 0.0)
-    assert row["value"] == pytest.approx(-4.2)
+    assert (row["rush_attempts"], row["rush_yards"], row["rush_tds"]) == (3.0, 13.0, 1.0)
+    assert row["value"] == pytest.approx(-4.2 - 1.1 + 0.6 * 6.0 + 15.9)
 
 
-def test_box_scores_mark_the_first_passer_as_the_starter() -> None:
+def test_box_scores_mark_the_play_by_play_starter() -> None:
     # Arrange
     plays = _plays(
         _pass("BBB", "B2", 5.0, complete_pass=1.0),
@@ -186,7 +222,7 @@ def test_box_scores_mark_the_first_passer_as_the_starter() -> None:
     )
 
     # Act
-    box = quarterbacks.quarterback_box_scores(plays)
+    box = quarterbacks.quarterback_box_scores(_history(plays, B1="QB", B2="QB"))
 
     # Assert
     starters = box.filter(pl.col("starter"))["qb_id"].to_list()
@@ -194,21 +230,32 @@ def test_box_scores_mark_the_first_passer_as_the_starter() -> None:
     assert sorted(box["qb_id"].to_list()) == ["B1", "B2"]
 
 
-def test_box_scores_credit_scrambles_to_the_passer_with_the_most_dropbacks() -> None:
+def test_box_scores_skip_a_gadget_passer_for_the_starter() -> None:
+    # Arrange
+    plays = _plays(_pass("BBB", "WR", 30.0, complete_pass=1.0), _pass("BBB", "B1", 8.0))
+
+    # Act
+    box = quarterbacks.quarterback_box_scores(_history(plays, B1="QB", WR="WR"))
+
+    # Assert
+    assert box.filter(pl.col("starter"))["qb_id"].to_list() == ["B1"]
+
+
+def test_box_scores_credit_a_rush_to_its_rusher_only_when_he_is_a_quarterback() -> None:
     # Arrange
     plays = _plays(
-        _pass("BBB", "B2"),
         _pass("BBB", "B1"),
-        _pass("BBB", "B1"),
-        _play("BBB", "OPP", None, qb_dropback=1.0, rush_attempt=1.0, yards_gained=12.0),
+        _pass("BBB", "RB"),
+        _run("BBB", "B1", 12.0),
+        _run("BBB", "RB", 30.0),
     )
 
     # Act
-    box = quarterbacks.quarterback_box_scores(plays)
+    box = quarterbacks.quarterback_box_scores(_history(plays, B1="QB", RB="RB"))
 
     # Assert
     rushing = dict(zip(box["qb_id"].to_list(), box["rush_yards"].to_list(), strict=True))
-    assert rushing == {"B1": 12.0, "B2": 0.0}
+    assert rushing == {"B1": 12.0, "RB": 0.0}
 
 
 def test_box_scores_leave_out_two_point_tries_and_the_postseason() -> None:
@@ -217,13 +264,17 @@ def test_box_scores_leave_out_two_point_tries_and_the_postseason() -> None:
         _pass("AAA", "A", 10.0, complete_pass=1.0),
         _pass("AAA", "A", 2.0, complete_pass=1.0, two_point_attempt=1.0),
         _pass("AAA", "A", 30.0, complete_pass=1.0, season_type="POST"),
-    )
+        _play(
+            "AAA", "OPP", None, rush=1.0, rush_attempt=1.0, two_point_attempt=1.0,
+            yards_gained=2.0, rusher_player_id="A",
+        ),
+    )  # fmt: skip
 
     # Act
-    box = quarterbacks.quarterback_box_scores(plays)
+    box = quarterbacks.quarterback_box_scores(_history(plays, A="QB"))
 
     # Assert
-    assert box["pass_yards"].to_list() == [10.0]
+    assert box.select("pass_yards", "rush_attempts").rows() == [(10.0, 0.0)]
 
 
 def test_first_game_of_a_team_has_no_quarterback_adjustment() -> None:
@@ -442,7 +493,7 @@ def test_box_scores_of_plays_without_a_passer_are_an_empty_typed_frame() -> None
     plays = _plays(_play("AAA", "OPP", None, rush=1.0, rush_attempt=1.0, yards_gained=4.0))
 
     # Act
-    box = quarterbacks.quarterback_box_scores(plays)
+    box = quarterbacks.quarterback_box_scores(_history(plays))
 
     # Assert
     assert box.height == 0

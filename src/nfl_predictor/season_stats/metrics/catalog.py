@@ -29,8 +29,7 @@ TEAM_CATEGORIES: tuple[CategoryDef, ...] = (
         name="Overall",
         entity="team",
         description=(
-            "Who played whom and how games turned out: record, points, and whole-team margins, "
-            "plus the win-probability data behind the garbage-time filter."
+            "Who played whom and how games turned out: record, points, and whole-team margins."
         ),
     ),
     CategoryDef(
@@ -98,7 +97,7 @@ QB_CATEGORIES: tuple[CategoryDef, ...] = (
         entity="qb",
         description=(
             "Raw passing production (attempts, completions, yards, touchdowns, interceptions, and "
-            "passing EPA), plus the win-probability data behind the garbage-time filter."
+            "passing EPA)."
         ),
     ),
     CategoryDef(

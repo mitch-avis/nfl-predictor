@@ -99,7 +99,9 @@ class SeasonPrior:
 def games_played(game_logs: pl.DataFrame, teams: Iterable[str]) -> dict[str, int]:
     """Return how many games each of ``teams`` has in ``game_logs``, zero for a team without one."""
     counts: dict[str, int] = dict(
-        game_logs.group_by("team").agg(pl.col("game_id").n_unique()).iter_rows()
+        game_logs.group_by("team", maintain_order=True)
+        .agg(pl.col("game_id").n_unique())
+        .iter_rows()
     )
     return {team: int(counts.get(team, 0)) for team in teams}
 
@@ -222,8 +224,8 @@ def snapshot_fit(
         msg = "a prior needs the season's penalties; cross-validation never sees a prior"
         raise ValueError(msg)
     rows = scrimmage_rows(game_logs)
-    fitted = sorted(rows.get_column("team").unique().to_list())
-    if fitted != sorted(rows.get_column("opponent_team").unique().to_list()):
+    fitted = sorted(rows.get_column("team").unique(maintain_order=True).to_list())
+    if fitted != sorted(rows.get_column("opponent_team").unique(maintain_order=True).to_list()):
         msg = "every game needs both teams' scrimmage rows to center the prior"
         raise ValueError(msg)
     means = prior_means(season_prior, games_played(game_logs, season_teams), horizon, fitted)

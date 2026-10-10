@@ -48,9 +48,9 @@ Games are rated in season, week, date and ``game_id`` order. Every rating and le
 a game reads comes from games strictly before it: a game's pre-game ratings never include its own
 result, a season's pull weight is fitted on earlier seasons only, and a game without a final score
 (an upcoming one) is rated but moves no rating. The one exception is the quarterback adjustment's
-starter: with ``elo_quarterbacks``' default, a completed game's starter is the passer on that
-game's first dropback, known only at kickoff, while an upcoming game uses the projected starter,
-else the team's last one. The ``qb_elos.csv`` columns follow the same convention.
+starter: with ``elo_quarterbacks``' default, a completed game's starter is its play-by-play
+starter (``qb_starters``), known only at kickoff, while an upcoming game uses the projected
+starter, else the team's last one. The ``qb_elos.csv`` columns follow the same convention.
 
 The schedule should start in 1999, nflverse's first season: the seeding (every team at 1505 in
 the first season), the quarterback model's first-start mean and the rolling home field all count

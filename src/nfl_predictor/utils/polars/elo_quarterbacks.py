@@ -15,11 +15,12 @@ VALUE
 
     The box scores come from the cached regular-season play-by-play (``quarterback_box_scores``):
     the passing lines are ``qb_stats.aggregate_qb_game_stats``'s, and a quarterback's rushing is
-    his scrambles (dropbacks without a pass) and kneels. The cache keeps the passer id but not
-    the rusher id, so designed quarterback runs are left out, and scrambles and kneels go to the
-    team-game's primary passer (the most dropbacks with a passer id), as in ``qb_stats``. The
-    starter is the passer of the team's first dropback with a passer id, in play order (the order
-    the frame lists each game's plays in, which the cache keeps).
+    every rush attempt credited to him as the rusher (``rusher_player_id``, two-point tries out):
+    his designed runs, scrambles and kneel-downs, the box score's carries, counted for a player
+    who is a quarterback that season (or whom no identity source lists), so a running back who
+    threw a pass keeps his passing line and none of his carries. The starter is the team-game's
+    play-by-play starter (``qb_starters``: the quarterback on the team's first first-quarter
+    snap).
 
 Defense
     Each team carries a rolling rating of the quarterback VALUE it allows, relative to the
@@ -48,11 +49,12 @@ Preseason
     start too), or 0 before there are any.
 
 Starters
-    By default (``pre_game_starter="first_passer"``) a completed regular-season game's starter is
-    the passer on that game's first dropback, which is known only at kickoff, not when picks are
-    made; this is the convention of the ``qb_elos.csv`` columns, whose completed games carry the
-    actual starter. An unplayed or playoff game's starter is the one ``projected_starters`` names,
-    else the team's last starter. With ``pre_game_starter="last_starter"`` every game is rated
+    By default (``pre_game_starter="game_starter"``) a completed regular-season game's starter is
+    its play-by-play starter, which is known only at kickoff, not when picks are made; this is
+    the convention of the ``qb_elos.csv`` columns, whose completed games carry the actual
+    starter. A game without one (an unplayed or playoff game, or a team-game without a
+    first-quarter quarterback snap) takes the starter ``projected_starters`` names, else the
+    team's last starter. With ``pre_game_starter="last_starter"`` every game is rated
     that way, with the starter known before kickoff, while the ratings still roll in the actual
     starter's game. Every rating, team value and defense value a game reads comes from games
     strictly before it; only the starter's identity can come from the game itself.
@@ -67,10 +69,13 @@ from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
-from nfl_predictor.utils.polars import pbp, qb_stats
+from nfl_predictor import constants
+from nfl_predictor.utils.polars import pbp
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from nfl_predictor.utils.polars import qb_starters
 
 # 538's VALUE weights per box-score column.
 VALUE_WEIGHTS: dict[str, float] = {
@@ -117,12 +122,11 @@ ADJUSTMENT_SCHEMA: dict[str, pl.DataType] = {
     "home_qb_adj": pl.Float64(),
     "away_qb_adj": pl.Float64(),
 }
-_TEAM_GAME = ["season", "week", "posteam"]
 _RUSH_COLUMNS = ("rush_attempts", "rush_yards", "rush_tds")
 _SORT_COLUMNS = ("season", "week", "date", "game_id")
 # Which starter a game's pre-game values are computed for (see the module docstring).
-type PreGameStarter = Literal["first_passer", "last_starter"]
-PRE_GAME_STARTERS: tuple[PreGameStarter, ...] = ("first_passer", "last_starter")
+type PreGameStarter = Literal["game_starter", "last_starter"]
+PRE_GAME_STARTERS: tuple[PreGameStarter, ...] = ("game_starter", "last_starter")
 
 
 def quarterback_value() -> pl.Expr:
@@ -131,77 +135,73 @@ def quarterback_value() -> pl.Expr:
     return functools.reduce(operator.add, terms).alias("value")
 
 
-def _rushing(plays: pl.DataFrame, dropbacks: pl.DataFrame) -> pl.DataFrame:
-    """Return scramble and kneel rushing per team-game: attempts, yards and touchdowns."""
+def _rushing(plays: pl.DataFrame, positions: pl.DataFrame) -> pl.DataFrame:
+    """Return each quarterback's rushing per team-game: attempts, yards and touchdowns.
+
+    A rush is a rush attempt (``rush_attempt``, two-point tries out: designed runs, scrambles
+    and kneel-downs, the box score's carries) credited to its rusher (``rusher_player_id``)
+    when he is a quarterback that season, or no identity source lists him.
+    """
     columns = plays.columns
-    scrambles = dropbacks.filter(
-        pl.col("passer_player_id").is_null() & (pbp.flag_expr(columns, "rush_attempt") > 0)
-    )
-    kneels = plays.filter(
-        (pbp.flag_expr(columns, "qb_kneel") > 0)
+    if "rusher_player_id" not in columns:
+        return pl.DataFrame(
+            schema={
+                "season": pl.Int64,
+                "week": pl.Int64,
+                "team_abbr": pl.String,
+                "qb_id": pl.String,
+                **dict.fromkeys(_RUSH_COLUMNS, pl.Float64),
+            }
+        )
+    elsewhere = positions.filter(
+        pl.col("qb_position").is_not_null() & (pl.col("qb_position") != constants.QB_POSITION)
+    ).select("season", "qb_id")
+    rushes = plays.filter(
+        (pbp.flag_expr(columns, "rush_attempt") > 0)
         & (pbp.flag_expr(columns, "two_point_attempt") == 0)
+        & pl.col("rusher_player_id").is_not_null()
+    ).select(
+        pl.col("season").cast(pl.Int64),
+        pl.col("week").cast(pl.Int64),
+        pl.col("posteam").cast(pl.String).alias("team_abbr"),
+        pl.col("rusher_player_id").cast(pl.String).alias("qb_id"),
+        pbp.value_expr(columns, "yards_gained").alias("yards"),
+        pbp.flag_expr(columns, "rush_touchdown").alias("touchdown"),
     )
-    carries = pl.concat(
-        [
-            frame.select(
-                *_TEAM_GAME,
-                pbp.value_expr(columns, "yards_gained").alias("yards"),
-                pbp.flag_expr(columns, "rush_touchdown").alias("touchdown"),
-            )
-            for frame in (scrambles, kneels)
-        ]
-    )
-    return carries.group_by(_TEAM_GAME, maintain_order=True).agg(
-        pl.len().cast(pl.Float64).alias("rush_attempts"),
-        pl.col("yards").sum().alias("rush_yards"),
-        pl.col("touchdown").sum().alias("rush_tds"),
+    return (
+        rushes.join(elsewhere, on=["season", "qb_id"], how="anti")
+        .group_by("season", "week", "team_abbr", "qb_id", maintain_order=True)
+        .agg(
+            pl.len().cast(pl.Float64).alias("rush_attempts"),
+            pl.col("yards").sum().alias("rush_yards"),
+            pl.col("touchdown").sum().alias("rush_tds"),
+        )
     )
 
 
-def quarterback_box_scores(pbp_df: pl.DataFrame) -> pl.DataFrame:
+def quarterback_box_scores(history: qb_starters.QuarterbackHistory) -> pl.DataFrame:
     """Return one row per quarterback per regular-season team-game, with VALUE.
 
     Args:
-        pbp_df: Play-by-play rows with each game's plays in order (the cache's order).
+        history: The run's quarterback history: its plays, quarterback games (the passing
+            lines), season positions and play-by-play starters.
 
     Returns:
-        ``BOX_SCORE_SCHEMA``: the keys, the passer name, whether he started (passed on his
-        team's first dropback), the nine box-score inputs and ``value``, sorted by season,
-        week, team and id. Definitions are in the module docstring.
+        ``BOX_SCORE_SCHEMA``: the keys, the passer name, whether he started (the team-game's
+        play-by-play starter, ``qb_starters``), the nine box-score inputs and ``value``, sorted
+        by season, week, team and id. Definitions are in the module docstring.
 
     """
-    ordered = pbp_df.with_row_index("_play_order")
-    passing = qb_stats.aggregate_qb_game_stats(ordered)
+    passing = history.qb_games
     if passing.height == 0:
         return pl.DataFrame(schema=BOX_SCORE_SCHEMA)
-    plays = pbp.regular_season_plays(ordered)
-    dropbacks = plays.filter(pbp.dropback_condition(plays.columns))
-    with_passer = dropbacks.filter(pl.col("passer_player_id").is_not_null()).with_columns(
-        pl.col("passer_player_id").cast(pl.String)
-    )
-    starters = (
-        with_passer.sort("_play_order")
-        .group_by(_TEAM_GAME, maintain_order=True)
-        .agg(pl.col("passer_player_id").first().alias("starter_id"))
-        .rename({"posteam": "team_abbr"})
-    )
-    primary = (
-        with_passer.group_by([*_TEAM_GAME, "passer_player_id"], maintain_order=True)
-        .len()
-        .sort(
-            [*_TEAM_GAME, "len", "passer_player_id"], descending=[False, False, False, True, False]
-        )
-        .unique(_TEAM_GAME, keep="first", maintain_order=True)
-        .select(*_TEAM_GAME, pl.col("passer_player_id").alias("qb_id"))
-    )
-    rushing = (
-        _rushing(plays, dropbacks)
-        .join(primary, on=_TEAM_GAME, how="inner")
-        .rename({"posteam": "team_abbr"})
+    plays = pbp.regular_season_plays(history.plays)
+    starters = history.starters.select(
+        "season", "week", "team_abbr", pl.col("qb_id").alias("starter_id")
     )
     keys = ["season", "week", "team_abbr"]
     box = (
-        passing.join(rushing, on=[*keys, "qb_id"], how="left")
+        passing.join(_rushing(plays, history.positions), on=[*keys, "qb_id"], how="left")
         .with_columns(pl.col(name).fill_null(0.0) for name in _RUSH_COLUMNS)
         .join(starters, on=keys, how="left")
         .with_columns(
@@ -365,7 +365,7 @@ def value_qb_adjustments(
     box_scores: pl.DataFrame,
     *,
     projected_starters: pl.DataFrame | None = None,
-    pre_game_starter: PreGameStarter = "first_passer",
+    pre_game_starter: PreGameStarter = "game_starter",
 ) -> pl.DataFrame:
     """Return each game's quarterback adjustments in Elo points, from 538's VALUE model.
 
@@ -375,10 +375,10 @@ def value_qb_adjustments(
         box_scores: ``quarterback_box_scores`` output (``season``, ``week``, ``team_abbr``,
             ``qb_id``, ``starter`` and ``value`` are read).
         projected_starters: Optional ``game_id``, ``team_abbr`` and ``qb_id`` naming a game's
-            expected starter; read for a game the play-by-play does not cover (an upcoming or
+            expected starter; read for a game without a play-by-play starter (an upcoming or
             playoff one), and for every game with ``pre_game_starter="last_starter"``.
-        pre_game_starter: ``"first_passer"`` rates a completed regular-season game with its
-            actual starter, the passer on its first dropback, known only at kickoff;
+        pre_game_starter: ``"game_starter"`` rates a completed regular-season game with its
+            actual starter, its play-by-play starter, known only at kickoff;
             ``"last_starter"`` rates every game with the projected starter, else the team's
             last starter, as known before kickoff. The ratings roll in the actual starter's
             game either way.
@@ -418,7 +418,7 @@ def value_qb_adjustments(
             start = lookup.starts.get((season, week, team))
             starter = (
                 start[0]
-                if start is not None and pre_game_starter == "first_passer"
+                if start is not None and pre_game_starter == "game_starter"
                 else projected.get((game_id, team), last_starter.get(team))
             )
             pre[team] = book.pre_game(team, starter, season)

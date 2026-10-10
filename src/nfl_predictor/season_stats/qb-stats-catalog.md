@@ -60,8 +60,7 @@ Who the quarterback is, how much he played, and whether he played enough to be r
 
 ## Passing Volume
 
-Raw passing production (attempts, completions, yards, touchdowns, interceptions, and passing EPA),
-plus the win-probability data behind the garbage-time filter.
+Raw passing production (attempts, completions, yards, touchdowns, interceptions, and passing EPA).
 
 | Column | Label | Shape | Per | Since | Source | Description |
 | --- | --- | --- | --- | --- | --- | --- |

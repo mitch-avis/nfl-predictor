@@ -1,7 +1,8 @@
 """Per-season cache of the ETL's season builds, for the incremental rebuild.
 
 A season's build is its game rows and its weekly strength snapshots, as
-``data_collection.process_season`` produces them. For a finished season those depend on the
+``data_collection.process_season`` produces them, and its ratings frames (published tables and
+pre-week ratings, ``utils.polars.ratings_build``). For a finished season those depend on the
 code, the library environment, the run's options and the values of the input rows from that
 season and earlier, so ``SeasonKeys`` hashes exactly those and the cache returns a stored build
 only when the key matches. Anything else, including a later season's rows, cannot change the
@@ -27,7 +28,7 @@ import json
 import platform
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -40,25 +41,31 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 # Bumped whenever the entry layout or the key payload changes shape.
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 _MANIFEST = "manifest.json"
 _GAMES = "games.arrow"
 _SNAPSHOTS = "snapshots.arrow"
+_RATINGS_PREFIX = "ratings_"
 # A season build reads Polars and NumPy (the strength ridge); their versions can move results.
 _LIBRARIES = ("polars", "numpy")
-# The modules a season build runs: the orchestration, the constants and every utility module.
+# The modules a season build runs: the orchestration, the constants, every utility module and
+# the ratings package.
 _ETL_SOURCES = ("data_collection.py", "constants.py")
-_ETL_SOURCE_DIRECTORIES = ("utils",)
+_ETL_SOURCE_DIRECTORIES = ("utils", "ratings")
 
 
 @dataclass(frozen=True)
 class SeasonBuild:
-    """One season's game rows and its strength snapshots, stacked in the order recorded."""
+    """One season's game rows, its strength snapshots, and its ratings frames by name.
+
+    The snapshots are stacked in the order recorded; the ratings frames keep their order.
+    """
 
     games: pl.DataFrame
     snapshots: pl.DataFrame
+    ratings: dict[str, pl.DataFrame] = field(default_factory=dict)
 
 
 def _sha256(data: bytes) -> str:
@@ -243,8 +250,9 @@ class SeasonCache:
             ):
                 log.info("Season cache: %d is stale; rebuilding it", season)
                 return None
+            ratings = [f"{_RATINGS_PREFIX}{name}.arrow" for name in manifest["ratings"]]
             frames = {}
-            for name in (_GAMES, _SNAPSHOTS):
+            for name in (_GAMES, _SNAPSHOTS, *ratings):
                 data = (entry / name).read_bytes()
                 if _sha256(data) != manifest["files"][name]:
                     log.warning("Season cache: %s for %d fails its checksum", name, season)
@@ -256,7 +264,13 @@ class SeasonCache:
         except _READ_ERRORS as error:
             log.warning("Season cache: unreadable entry for %d (%s)", season, error)
             return None
-        return SeasonBuild(games=frames[_GAMES], snapshots=frames[_SNAPSHOTS])
+        return SeasonBuild(
+            games=frames[_GAMES],
+            snapshots=frames[_SNAPSHOTS],
+            ratings={
+                name: frames[f"{_RATINGS_PREFIX}{name}.arrow"] for name in manifest["ratings"]
+            },
+        )
 
     def store(self, season: int, key: str, build: SeasonBuild) -> None:
         """Write ``build`` as the entry for ``season``; a failure is logged, not raised.
@@ -268,12 +282,28 @@ class SeasonCache:
         try:
             entry.mkdir(parents=True, exist_ok=True)
             (entry / _MANIFEST).unlink(missing_ok=True)
+            for stale in entry.glob(f"{_RATINGS_PREFIX}*.arrow"):
+                stale.unlink()
             checksums = {}
-            for name, frame in ((_GAMES, build.games), (_SNAPSHOTS, build.snapshots)):
+            frames = [
+                (_GAMES, build.games),
+                (_SNAPSHOTS, build.snapshots),
+                *(
+                    (f"{_RATINGS_PREFIX}{name}.arrow", frame)
+                    for name, frame in build.ratings.items()
+                ),
+            ]
+            for name, frame in frames:
                 path = entry / name
                 frame.write_ipc(path)
                 checksums[name] = _sha256(path.read_bytes())
-            manifest = {"format": FORMAT_VERSION, "season": season, "key": key, "files": checksums}
+            manifest = {
+                "format": FORMAT_VERSION,
+                "season": season,
+                "key": key,
+                "files": checksums,
+                "ratings": list(build.ratings),
+            }
             staged = entry / f"{_MANIFEST}.tmp"
             staged.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
             staged.replace(entry / _MANIFEST)

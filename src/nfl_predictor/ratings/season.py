@@ -72,6 +72,7 @@ from nfl_predictor.ratings.team_rating import (
     fit_team_ratings_by_week,
     fit_team_ratings_with_previous_penalties,
 )
+from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars.adjusted_strength import solve_srs
 
 if TYPE_CHECKING:
@@ -171,20 +172,25 @@ def build_team_ratings(
         prior_without: The preseason prior source of the head-to-head-excluded refits.
 
     Returns:
-        ``TEAM_RATINGS_ORDER`` columns, best team first.
+        ``TEAM_RATINGS_ORDER`` columns, best team first. A team whose every game lacks a final
+        score keeps its row with a null ``SRS`` (the score-based rating), and a warning names it.
 
     """
-    games_played = team_games.group_by("team").len("games_played")
+    games_played = team_games.group_by("team", maintain_order=True).len("games_played")
     schedule = compute_team_schedule_strength(team_games, fit, prior_without=prior_without)
     srs = solve_srs(team_games, "point_margin", team_col="team", opponent_col="opponent_team")
-    return (
-        fit.ratings.join(schedule, on="team")
-        .join(srs, on="team")
+    ratings = (
+        fit.ratings.join(schedule, on="team", how="left", maintain_order="left")
+        .join(srs, on="team", how="left", maintain_order="left")
         .rename({"srs_rating": "SRS"})
-        .join(games_played, on="team")
+        .join(games_played, on="team", how="left", maintain_order="left")
         .select(TEAM_RATINGS_ORDER)
         .sort("team_rating", descending=True)
     )
+    unscored = sorted(ratings.filter(pl.col("SRS").is_null()).get_column("team").to_list())
+    if unscored:
+        log.warning("SRS: no final score for %s; their SRS is null", unscored)
+    return ratings
 
 
 def build_team_rank_summaries(
@@ -249,7 +255,7 @@ def build_team_rank_ranges_by_week(
     matches the season's ranges.
     """
     frames: list[pl.DataFrame] = []
-    for week in sorted(team_games.get_column("week").unique().to_list()):
+    for week in sorted(team_games.get_column("week").unique(maintain_order=True).to_list()):
         through_week = team_games.filter(pl.col("week") <= week)
         means = snapshot_prior(season_prior, through_week)
         week_fit = fit_team_ratings(
@@ -357,7 +363,7 @@ def build_qb_rank_summaries(
     eligible_ids: Collection[str] = eligible.get_column(QB_ID_COLUMN).to_list()
     draws = bootstrap_qb_ratings(qb_games, fit, resamples=bootstrap.resamples, seed=bootstrap.seed)
     ranges = summarize_rank_ranges(draws, fit.ratings, QB_RANGE_COLUMNS, eligible=eligible_ids)
-    identity = eligible.select(_QB_IDENTITY).unique(QB_ID_COLUMN, keep="first")
+    identity = eligible.select(_QB_IDENTITY).unique(QB_ID_COLUMN, keep="first", maintain_order=True)
     ranges = ranges.join(identity, on=QB_ID_COLUMN, how="left", maintain_order="left").select(
         *identity.columns, pl.exclude(identity.columns)
     )
@@ -379,7 +385,7 @@ def build_qb_rank_ranges_by_week(
     """
     eligible = _eligible_ids(qb_season)
     frames: list[pl.DataFrame] = []
-    for week in sorted(qb_games.get_column("week").unique().to_list()):
+    for week in sorted(qb_games.get_column("week").unique(maintain_order=True).to_list()):
         through_week = qb_games.filter(pl.col("week") <= week)
         week_fit = fit_qb_ratings(through_week, ridge_lambda=fit.ridge_lambda)
         draws = bootstrap_qb_ratings(

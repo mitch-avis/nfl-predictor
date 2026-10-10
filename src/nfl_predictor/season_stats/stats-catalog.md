@@ -56,8 +56,7 @@ teams.
 
 ## Overall
 
-Who played whom and how games turned out: record, points, and whole-team margins, plus the win-
-probability data behind the garbage-time filter.
+Who played whom and how games turned out: record, points, and whole-team margins.
 
 | Column | Label | Shape | Per | Since | Source | Description |
 | --- | --- | --- | --- | --- | --- | --- |

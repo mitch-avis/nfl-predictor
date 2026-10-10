@@ -1,0 +1,64 @@
+team-games compared: 13928
+this repository vs the source's published logs, team-games that differ: 8238
+drive_inside20 on these plays vs the published logs, team-games that differ: 0
+trips 1999-2025: this repository 56127, drive_inside20 43771, published 43771
+league-wide touchdown rate per trip, this repository: 32045 touchdown drives of 56127 trips, 0.5709
+league-wide touchdown rate per trip, drive_inside20: 23570 touchdown drives of 43771 trips, 0.5385
+
+## Drives the definitions disagree on, by cause
+shape: (5, 2)
+┌───────────────────┬────────┐
+│ cause             ┆ drives │
+│ ---               ┆ ---    │
+│ str               ┆ u32    │
+╞═══════════════════╪════════╡
+│ try_only          ┆ 10234  │
+│ at_the_20         ┆ 2132   │
+│ flag_without_snap ┆ 224    │
+│ other             ┆ 132    │
+│ wiped_only        ┆ 82     │
+└───────────────────┴────────┘
+
+## By season
+shape: (27, 6)
+┌────────┬──────────┬───────────┬────────────┬───────┬───────────────────┐
+│ season ┆ try_only ┆ at_the_20 ┆ wiped_only ┆ other ┆ flag_without_snap │
+│ ---    ┆ ---      ┆ ---       ┆ ---        ┆ ---   ┆ ---               │
+│ i32    ┆ u32      ┆ u32       ┆ u32        ┆ u32   ┆ u32               │
+╞════════╪══════════╪═══════════╪════════════╪═══════╪═══════════════════╡
+│ 1999   ┆ 381      ┆ 85        ┆ 4          ┆ 14    ┆ 10                │
+│ 2000   ┆ 334      ┆ 64        ┆ 4          ┆ 17    ┆ 21                │
+│ 2001   ┆ 371      ┆ 69        ┆ 3          ┆ 1     ┆ 8                 │
+│ 2002   ┆ 374      ┆ 91        ┆ 1          ┆ 8     ┆ 12                │
+│ 2003   ┆ 381      ┆ 67        ┆ 13         ┆ 7     ┆ 11                │
+│ 2004   ┆ 401      ┆ 64        ┆ 10         ┆ 10    ┆ 12                │
+│ 2005   ┆ 356      ┆ 71        ┆ 3          ┆ 7     ┆ 8                 │
+│ 2006   ┆ 386      ┆ 58        ┆ 3          ┆ 11    ┆ 5                 │
+│ 2007   ┆ 410      ┆ 73        ┆ 3          ┆ 12    ┆ 6                 │
+│ 2008   ┆ 381      ┆ 82        ┆ 1          ┆ 17    ┆ 12                │
+│ 2009   ┆ 400      ┆ 64        ┆ 3          ┆ 10    ┆ 9                 │
+│ 2010   ┆ 419      ┆ 61        ┆ 4          ┆ 12    ┆ 8                 │
+│ 2011   ┆ 404      ┆ 83        ┆ 0          ┆ 3     ┆ 13                │
+│ 2012   ┆ 423      ┆ 74        ┆ 1          ┆ 1     ┆ 8                 │
+│ 2013   ┆ 411      ┆ 89        ┆ 1          ┆ 1     ┆ 13                │
+│ 2014   ┆ 395      ┆ 104       ┆ 4          ┆ 0     ┆ 11                │
+│ 2015   ┆ 402      ┆ 91        ┆ 4          ┆ 0     ┆ 6                 │
+│ 2016   ┆ 354      ┆ 101       ┆ 1          ┆ 0     ┆ 10                │
+│ 2017   ┆ 385      ┆ 90        ┆ 3          ┆ 0     ┆ 7                 │
+│ 2018   ┆ 384      ┆ 80        ┆ 1          ┆ 0     ┆ 12                │
+│ 2019   ┆ 381      ┆ 78        ┆ 1          ┆ 0     ┆ 4                 │
+│ 2020   ┆ 372      ┆ 100       ┆ 1          ┆ 1     ┆ 4                 │
+│ 2021   ┆ 339      ┆ 83        ┆ 5          ┆ 0     ┆ 6                 │
+│ 2022   ┆ 335      ┆ 80        ┆ 2          ┆ 0     ┆ 2                 │
+│ 2023   ┆ 347      ┆ 88        ┆ 2          ┆ 0     ┆ 1                 │
+│ 2024   ┆ 342      ┆ 79        ┆ 0          ┆ 0     ┆ 3                 │
+│ 2025   ┆ 366      ┆ 63        ┆ 4          ┆ 0     ┆ 2                 │
+└────────┴──────────┴───────────┴────────────┴───────┴───────────────────┘
+
+## The try-only drives
+try-only drives: 10234
+  that scored a touchdown themselves (fixed_drive_result Touchdown): 7952
+  the rest: 2282, of which one play: 2230
+    by fixed_drive_result: Opp touchdown 2276, none 5, Punt 1
+    with a play before them in the game: 2279; after a touchdown by the try's team: 2259, of which that team did not have the ball on it: 2259, and the touchdown play has the try's fixed_drive: 2257
+    the other 23, by the play before them: field_goal 6, pass 5, a touchdown by the other team 3, no play before it 3, extra_point 2, qb_kneel 2, a row without a play type 1, no_play 1

@@ -208,17 +208,15 @@ def test_the_stored_source_never_reads_nfelo_and_fills_as_before(
     monkeypatch.setattr(nfelo_lines, "load_nfelo_lines", no_nfelo)
     monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", future_fill)
     monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", moneyline_fill)
-    metadata: dict[str, object] = {}
+    records = data_collection.CollectionRecords()
 
     # Act
-    games = data_collection.collect_all_data(
-        [_SEASON], config=_config("stored"), market_lines_metadata=metadata
-    )
+    games = data_collection.collect_all_data([_SEASON], config=_config("stored"), records=records)
 
     # Assert
     assert fills == ["future", "moneyline"]
     assert games.select("home_spread", "home_moneyline").row(0) == (-3.0, -160)
-    assert metadata == {}
+    assert records.market_lines_metadata == {}
     assert all(seasons in ([_SEASON], [_SEASON - 1]) for seasons in schedule_calls)
 
 
@@ -231,13 +229,13 @@ def test_the_pick_time_source_anchors_to_the_opener_and_records_the_run(
     _patch_sources(monkeypatch, schedule_calls)
     monkeypatch.setattr(nfelo_lines, "load_nfelo_lines", lambda **_kwargs: _snapshot())
     monkeypatch.setattr(data_collection.game_utils, "scrape_survivor_grid_spreads", dict)
-    metadata: dict[str, object] = {}
+    records = data_collection.CollectionRecords()
     expected = moneyline_map.fit_spread_moneyline_map(_price_history())
     assert expected is not None
 
     # Act
     games = data_collection.collect_all_data(
-        [_SEASON], config=_config("pick_time"), market_lines_metadata=metadata
+        [_SEASON], config=_config("pick_time"), records=records
     )
 
     # Assert
@@ -247,6 +245,7 @@ def test_the_pick_time_source_anchors_to_the_opener_and_records_the_run(
     assert row["total_line"] == pytest.approx(44.0)
     history_call = list(range(constants.NFLREADPY_MIN_SEASON, _SEASON))
     assert history_call in schedule_calls
+    metadata = records.market_lines_metadata
     assert metadata["line_source"] == "pick_time"
     assert metadata["nfelo"] == _snapshot().metadata()
     seasons = metadata["seasons"]
@@ -269,12 +268,10 @@ def _patch_main(monkeypatch: pytest.MonkeyPatch) -> None:
         _seasons: list[int],
         *,
         config: data_collection.DataCollectionConfig,
-        strength_snapshots: list[pl.DataFrame],
-        market_lines_metadata: dict[str, object],
+        records: data_collection.CollectionRecords,
     ) -> pl.DataFrame:
-        del strength_snapshots
         if config.line_source == "pick_time":
-            market_lines_metadata.update(_PICK_TIME_RECORD)
+            records.market_lines_metadata.update(_PICK_TIME_RECORD)
         return pl.DataFrame({"season": [2026], "week": [4], "away_score": [None]})
 
     monkeypatch.setattr(data_collection, "collect_all_data", fake_collect)

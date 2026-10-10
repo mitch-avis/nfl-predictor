@@ -78,9 +78,11 @@ When market lines exist, the system produces market-derived features and support
   `../nfeloqb` pulls each preseason Elo toward a rating built from betting win totals (2003-2023). A
   run with no market information at all also leaves out the `elo` group (the 18 Elo columns):
   `--disable-feature-groups elo` on `backtest` or `train`, `disable_feature_groups: [elo]` in the
-  weekly config. The repository's own Elo (`utils/polars/elo_ratings.py`, not yet in the datasets)
-  publishes its win-total preset as the `own_elo_wt` group, market-informed in the same way: once a
-  build carries it, such a run disables `elo,own_elo_wt` and keeps the market-free `own_elo`.
+  weekly config. The repository's own Elo (`utils/polars/own_elo_build.py`) publishes its
+  win-total preset as the `own_elo_wt` group, market-informed in the same way, so such a run
+  disables `elo,own_elo_wt` and keeps the market-free `own_elo`. Leaving the market columns out
+  does not leave these groups out (`constants.MARKET_INFORMED_FEATURE_GROUPS`); a run that keeps
+  either of them logs a warning naming it (`ml/feature_spec.build_feature_spec`).
 
 Market anchoring details:
 
@@ -244,7 +246,14 @@ Feature areas tracked in `.agents/TODO.md` include (examples):
 - PBP-derived per-snap EPA, success, explosive, and special-teams families
 - weekly schedule-adjusted (ridge) offense/defense strength and EPA-based schedule strength, in
   both the ridge form and the one-hop head-to-head-excluded form
-- QB per-dropback EPA families for the expected starter
+- QB per-dropback EPA families for each side's starter: every quarterback feature reads it from
+  `qb_stats.expected_starter_ids`, a completed game's play-by-play starter (known only at
+  kickoff, the convention the `qb_elos.csv` columns share) and an upcoming game's projected
+  starter
+- the team and quarterback ratings ported from `nfl-sos-ratings` (the `ratings` group,
+  `utils/polars/ratings_build.py`): offense, defense, special-teams and team ratings and the
+  head-to-head-excluded `sos`, and the starter's adjusted EPA per dropback, each fit only on the
+  games before the week
 
 Rules for stat-style features:
 

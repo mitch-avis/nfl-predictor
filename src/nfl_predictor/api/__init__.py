@@ -24,6 +24,7 @@ from nfl_predictor.api.routers.model import router as model_router
 from nfl_predictor.api.routers.pool import router as pool_router
 from nfl_predictor.api.routers.power import router as power_router
 from nfl_predictor.api.routers.predictions import router as predictions_router
+from nfl_predictor.api.routers.ratings import router as ratings_router
 from nfl_predictor.api.routers.registry import router as registry_router
 from nfl_predictor.api.routers.runs import router as runs_router
 from nfl_predictor.api.routers.static import mount_frontend
@@ -106,6 +107,7 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     app.include_router(predictions_router, prefix=API_PREFIX)
     app.include_router(betting_router, prefix=API_PREFIX)
     app.include_router(power_router, prefix=API_PREFIX)
+    app.include_router(ratings_router, prefix=API_PREFIX)
     app.include_router(model_router, prefix=API_PREFIX)
     app.include_router(pool_router, prefix=API_PREFIX)
     app.include_router(data_router, prefix=API_PREFIX)

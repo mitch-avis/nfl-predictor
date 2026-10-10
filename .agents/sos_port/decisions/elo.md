@@ -15,7 +15,8 @@ NFL Predictions Work" (saved as `~/scratch/elo_research/538_method.html`), its
 season, `../nfeloqb`'s from 2023).
 
 Every number below the rule is quoted from `ELO_EVAL.md` (or its JSON twin), generated at commit
-`ff14dec` from the main checkout's data, read-only. Reproduce it from the repository root with:
+`e0c0663` from the main checkout's data, read-only (the numbers of entries 2-14 are unchanged
+since `ff14dec`). Reproduce it from the repository root with:
 
 ```bash
 VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/elo_eval.py
@@ -158,26 +159,37 @@ and neutral flag on every game 538 lists, all 5,852 match, with a largest probab
 
 ## 4. Home sides and neutral sites as this repository's schedule records them
 
-**What differs**: nflverse and 538 record 30 games of 1999-2020 with home and away swapped
-(Super Bowls, international games and the 2005 Saints' displaced home games) and, after those
-swaps, 9 with a different neutral-site flag: three 2005 Saints games, two of the Bills' Toronto
-games and the 2014 Detroit snow game (`2008_14_MIA_BUF`, `2013_13_ATL_BUF`, `2014_12_NYJ_BUF`)
-and the 49ers' three 2020 Arizona games (`2020_13_BUF_SF`, `2020_14_WAS_SF`, `2020_17_SEA_SF`).
+**What differs**: nflverse and 538 record 30 games of 1999-2020 with home and away swapped: 12
+Super Bowls, 12 international games, 2 relocated games (`2003_08_MIA_SD` in Tempe after the San
+Diego fires, `2010_14_NYG_MIN` at Ford Field after the Metrodome roof fell in), all neutral-site
+in both sources, and 4 of the 2005 Saints' displaced games. After those swaps, 9 carry a
+different neutral-site flag, in two directions. nflverse calls three Saints games at the
+Alamodome Saints home games where 538 called them neutral (`2005_04_BUF_NO`, `2005_06_ATL_NO`,
+`2005_16_DET_NO`). nflverse calls neutral six games where 538 gave the listed home team its home
+field: two of the Bills' Toronto games and the 2014 Detroit snow game (`2008_14_MIA_BUF`,
+`2013_13_ATL_BUF`, `2014_12_NYJ_BUF`) and the 49ers' three 2020 Arizona games
+(`2020_13_BUF_SF`, `2020_14_WAS_SF`, `2020_17_SEA_SF`). The fourth Saints game,
+`2005_02_NYG_NO` at Giants Stadium, is non-neutral in both, with the home field given to the
+Saints by nflverse and to the Giants by 538.
 
 **Options**: follow nflverse (this repository's schedule frame); patch the flags to 538's.
 
 **Decision**: follow the schedule frame as it is.
 
-**Reasoning**: the own Elo rates this repository's schedule, which every other feature reads, and
-the nflverse flags are the more accurate ones where they differ (a team playing in Toronto or
-Arizona is not at home). A swap at a neutral site changes nothing in the framework, since the
-probability and the update are symmetric there.
+**Reasoning**: the own Elo rates this repository's schedule, which every other feature reads.
+Where the flags differ, nflverse is the more accurate for the Bills' and 49ers' games (a team
+playing in Toronto or Arizona is not at home), arguable for the Alamodome games (the Saints'
+temporary home) and the less accurate for the Saints' "home" game at Giants Stadium. A swap at a
+neutral site changes nothing in the framework, since the probability and the update are
+symmetric there.
 
 **Data**: entry 3; the game lists are in `ELO_EVAL.md`.
 
-**Feature-value impact**: on those games the own Elo gives the "home" team no home field where
-538 gave it 65 points; the probability gap is up to `0.093`, and the ratings it moves differ by
-up to 16 points for a few weeks afterwards.
+**Feature-value impact**: on the six games nflverse calls neutral, the own Elo gives the listed
+home team no home field where 538 gave it 65 points; on the three Alamodome games it gives the
+Saints 65 points where 538 gave none; at Giants Stadium it gives the Saints the 65 points 538
+gave the Giants. The probability gap is up to `0.093`, and the ratings these games move differ
+by up to 16 points for a few weeks afterwards.
 
 **How to reverse it**: patch `neutral` on those games in the schedule frame before calling
 `build_own_elo_features`.
@@ -262,7 +274,11 @@ venue without coordinates gets no term and a warning.
 
 **Reasoning**: this is 538's 2019 split of the home edge, and its live numbers confirm it to a
 few thousandths of a point with these distances, so the coordinates are accurate enough. The
-`home_miles` term covers a home team away from its own stadium.
+`home_miles` term covers a home team away from its own stadium. nflverse records the 2025
+international games at the listed home team's usual stadium (São Paulo as `LAX01`, Dublin as
+`PIT00`, London as `CLE00`, `NYC01` and `JAX00`, Berlin as `IND00`, Madrid as `MIA00`), with the
+neutral flag set; that is harmless, because a neutral game other than the Super Bowl gets no
+travel term and neutral games never count toward a team's home stadium.
 
 **Data**: entry 6's fit: within 0.5 points for `0.996` of 2021's non-neutral games and `0.858`
 of 2019's, median gap `0.004` and `0.004`; neutral games within 0.5 points with no travel term:
@@ -350,13 +366,19 @@ with the most dropbacks, or the passer of the team's first dropback.
 
 **Decision**: the cached play-by-play, through `elo_quarterbacks.quarterback_box_scores`:
 passing lines from `qb_stats.aggregate_qb_game_stats` (two-point tries, kneels and spikes left
-out of attempts), plus scrambles and kneels as rushes credited to the primary passer. The
-starter is the passer of the team's first dropback with a passer id, in the cache's play order.
+out of attempts), plus scrambles and kneels as rushes credited to the primary passer. A completed
+game's starter is the passer of the team's first dropback with a passer id, in the cache's play
+order: the game's actual starter, known only at kickoff, not when picks are made. An unplayed
+game's starter is the one `projected_starters` names, else the team's last starter. This is the
+convention of the `qb_elos.csv` columns, whose completed games carry the actual starter, and it
+stays (entry 15 measures what knowing the starter before kickoff would cost).
 
 **Reasoning**: it is the only per-quarterback source in the repository, and the
 `value_qb_adjustments` seam takes any per-game box scores, so weekly player stats can replace it
 when they land. The first passer is the player who took the first snap, which is what 538 and
 `qb_elos.csv` call the starter; the most-dropbacks passer is wrong when a starter leaves early.
+The starter's identity is the one input a completed game takes from itself; every rating and
+value the adjustment reads comes from earlier games.
 
 **Data**: the first passer agrees with `qb_elos.csv`'s starter (names mapped to GSIS ids through
 `meta_data.csv`) on `0.9981` of 13,921 team-games of 1999-2025 and `0.9979` of 9,879 of
@@ -391,8 +413,11 @@ above the week's league mean, at rate 0.05, reverting a third toward 0 each offs
 veteran reversion targets the previous season's mean adjusted start; the team preseason rating
 follows 538's stated blend; a quarterback's first start in the data is rated at the mean
 adjusted value of every first start in earlier seasons (the first season excluded), 0 before
-any. Ratings update on regular-season starts only. An upcoming or playoff game's starter is the
-one `projected_starters` names, else the team's last starter.
+any. Ratings update on regular-season starts only. A completed regular-season game is rated
+for its actual starter (entry 10), known only at kickoff; an upcoming or playoff game for the one
+`projected_starters` names, else the team's last starter. `value_qb_adjustments(...,
+pre_game_starter="last_starter")` rates every game the second way, as known before kickoff,
+while the ratings still roll in the actual starter's game (entry 15).
 
 **Reasoning**: 538's published values fix the two rolling rates and show that the team rolls in
 the starter's value; the defense rate follows the team one because 538 describes both as team
@@ -469,41 +494,51 @@ per-game columns, not wired into the ETL.
 **Options**: each side's base rating, or its rating with the quarterback adjustment, or both; the
 difference home minus away or away minus home.
 
-**Decision**: `build_own_elo_features` returns `game_id` and `constants.OWN_ELO_COLUMNS`:
-`away_own_elo` and `home_own_elo` (the side's pre-game rating plus its quarterback adjustment,
-538's "effective" Elo; home field, travel and the boost are game-level and only in the
-probability), `own_elo_diff` (away minus home, the repository's `_diff` convention) and
-`own_elo_home_win_prob`. The `own_elo` marker makes them the `own_elo` group of
-`--disable-feature-groups`; the name contains none of the `elo` group's markers (`elo_pre`,
-`qb_elo_pre`, `qb_value_pre` and the trends), so the two groups are disjoint and one build can
-carry both.
+**Decision**: `build_own_elo_features(schedule, variant=..., inputs=...)` publishes one of two
+families and returns it with metadata (the variant, its switches, its columns, the first season,
+whether seeds were given, the win-total weights used). The `market_free` variant
+(`MARKET_FREE_SETTINGS`) returns `game_id` and `constants.OWN_ELO_COLUMNS`: `away_own_elo` and
+`home_own_elo` (the side's pre-game rating plus its quarterback adjustment, 538's "effective" Elo;
+home field, travel and the boost are game-level and only in the probability), `own_elo_diff`
+(away minus home, the repository's `_diff` convention) and `own_elo_home_win_prob`, the `own_elo`
+group of `--disable-feature-groups`. The `win_totals` variant (`WIN_TOTAL_SETTINGS`) returns the
+same four under the stat `own_wt_elo` (`constants.OWN_WT_ELO_COLUMNS`), the `own_elo_wt` group,
+which is market-informed: a run with no market information disables it with `elo`. A family's
+names always come with its preset, so the market-free columns can never carry the win totals.
+The stat is `own_wt_elo` rather than `own_elo_wt` because group markers match substrings and
+`away_own_elo` is a substring of `away_own_elo_wt`. No name contains another group's markers
+(`elo_pre`, `qb_elo_pre`, `qb_value_pre` and the trends), so the three Elo groups are disjoint
+and one build can carry all of them.
 
 **Reasoning**: the effective rating is what the probability uses for each side; the base rating
 and the adjustment stay available from `compute_elo_ratings` if a later measurement wants them
 apart.
 
-**Data**: `tests/test_own_elo_feature_group.py` (the group resolves to exactly the four columns
-on the published schema plus them, is disjoint from every other group, and `elo` leaves them in).
+**Data**: `tests/test_own_elo_feature_group.py` (each group resolves to exactly its four columns
+on the published schema plus both families, each is disjoint from every other group, and
+`elo,own_elo_wt` leaves the market-free columns in); `tests/test_elo_ratings.py` (each variant
+publishes only its own family, the market-free one refuses win totals, the metadata records the
+preset).
 
 **Feature-value impact**: none until the integration stream adds the columns to a build.
 
-**How to reverse it**: `constants.OWN_ELO_TEAM_STATS` and `OWN_ELO_GAME_COLUMNS`, and the
-builder's `select`.
+**How to reverse it**: `constants.OWN_ELO_TEAM_STATS`, `OWN_WT_ELO_TEAM_STATS` and their game
+columns, and `elo_ratings.OWN_ELO_VARIANTS`.
 
 **Review**: not yet reviewed.
 
 ## 14. The rule applied
 
 **What differs**: nothing; this entry applies entry 1 as written to the numbers of `ELO_EVAL.md`
-(commit `ff14dec`).
+(commit `ff14dec`, unchanged at `e0c0663`).
 
 **Options**: none; the rule decides.
 
 **Decision**: seeding every team at 1505; components kept, in order: travel, the rolling home
 field, the quarterback adjustment and the win-total pull; not kept: rest and the playoff boost.
 The recommendations are `elo_ratings.MARKET_FREE_SETTINGS` (travel, rolling home field,
-quarterback) and `elo_ratings.WIN_TOTAL_SETTINGS` (the same plus the win-total pull);
-`build_own_elo_features` defaults to the market-free one.
+quarterback) and `elo_ratings.WIN_TOTAL_SETTINGS` (the same plus the win-total pull), published
+by `build_own_elo_features` as its `market_free` (default) and `win_totals` variants.
 
 **Reasoning**: entry 1. Two kept components pass by a hair: the rolling home field's Brier
 interval ends at `-0.0000058` and the win-total pull's at `-0.0000074`. The rule counts both as
@@ -535,5 +570,70 @@ and `0.21541`.
 
 **How to reverse it**: rerun `.agents/sos_port/elo_eval.py` under another rule, or pass other
 `EloSettings`.
+
+**Review**: not yet reviewed.
+
+## 15. The starter is known at kickoff
+
+**What differs**: a completed game's quarterback adjustment is computed for that game's actual
+starter, the passer on its first dropback, which is known only at kickoff, not when picks are
+made before the week's first game. The rest of the own Elo reads only earlier games. The
+independent review flagged that the docs overclaimed "every value from earlier games".
+
+**Options**: keep the actual starter, as the `qb_elos.csv` columns do for completed games; or
+rate every game for the starter known before kickoff (the projected one, else the team's last).
+
+**Decision**: keep the actual starter (decided by the delegating session); state the convention
+exactly in the code, the README and entries 10 and 11; report the before-kickoff alternative as a
+measured diagnostic that does not feed the rule.
+
+**Reasoning**: it is the convention of the columns the own Elo would replace, so a comparison
+between the two stays like for like; a pick-time starter needs a projected-starter source, which
+the integration stream can pass through `projected_starters`.
+
+**Data**: `ELO_EVAL.md`, "Starters known before kickoff", every game rated for the team's previous
+starter while the ratings still roll in the actual starter's game (`pre_game_starter=
+"last_starter"`), previous minus actual on the 4,943 window games:
+
+| preset | actual Brier | previous Brier | Brier diff | 95% interval | log-loss diff | 95% interval |
+| --- | --- | --- | --- | --- | --- | --- |
+| market-free | 0.21712 | 0.21813 | +0.00101 | [-0.00027, +0.00232] | +0.00331 | [+0.00035, +0.00631] |
+| win-total | 0.21616 | 0.21744 | +0.00128 | [-0.00002, +0.00261] | +0.00365 | [+0.00077, +0.00665] |
+
+The quarterback step (travel and the rolling home field, with the adjustment against without
+it) gains Brier `-0.00249`, interval `[-0.00381, -0.00119]`, with actual starters and
+`-0.00148`, interval `[-0.00294, +0.00002]`, with previous starters; its log loss moves
+`-0.00290`, interval `[-0.00632, +0.00049]`, with previous starters. These reproduce the
+reviewer's measurement.
+
+**Feature-value impact**: none today; with a projected-starter source the integration stream
+can rate upcoming games for the expected starter, and historical games would keep the actual one.
+
+**How to reverse it**: `value_qb_adjustments(..., pre_game_starter="last_starter")` rates every
+game for the starter known before kickoff.
+
+**Review**: not yet reviewed (the numbers reproduce the independent review's).
+
+## 16. Where the remaining quarterback alternative lives
+
+**What differs**: the plan names two quarterback adjustments, 538's VALUE first and the ported
+`nfl-sos-ratings` quarterback rating as the alternative. Only VALUE is built here.
+
+**Options**: port the rating now (it belongs to the ratings-port stream); measure it later
+through the same seam.
+
+**Decision**: the ported rating is measured with `.agents/sos_port/elo_eval.py` after the ratings
+port and the play-by-play column extension merge into the integration branch; the delegating
+session schedules it. Its entry point is `EloInputs.qb_adjustments`, which takes per-game
+adjustments in Elo points (`game_id`, `home_qb_adj`, `away_qb_adj`) from any source, so the
+rating replaces VALUE without touching the engine.
+
+**Reasoning**: the rating is another stream's work, and the seam already exists.
+
+**Data**: none yet.
+
+**Feature-value impact**: none until it is measured and chosen.
+
+**How to reverse it**: nothing to reverse.
 
 **Review**: not yet reviewed.

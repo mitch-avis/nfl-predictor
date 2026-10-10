@@ -646,14 +646,19 @@ class RatingsBuild:
 
 
 def _has_qualified_passer(quarterbacks: pl.DataFrame, team_games: pl.DataFrame) -> bool:
-    """Return whether a passer qualifies for the season's quarterback rankings.
+    """Return whether a passer the fit rates qualifies for the season's quarterback rankings.
 
-    The quarterback tables rank the qualified passers (14 attempts a game of their primary team),
-    so a season without one (a season in progress after its first game, at worst) gets none.
+    The quarterback tables rank the qualified passers (14 attempts a game of their primary team)
+    among the passers the fit rates (a game with a dropback), so a season without such a passer
+    gets none: a season in progress after its first game, at worst, or one whose qualified
+    passers have no dropback recorded.
     """
-    if qb_rating_rows(quarterbacks).is_empty():
+    rated = qb_rating_rows(quarterbacks)
+    if rated.is_empty():
         return False
-    return bool(qb_season_summary(quarterbacks, team_games).get_column("qb_is_eligible").any())
+    qualified = qb_season_summary(quarterbacks, team_games).filter(pl.col("qb_is_eligible"))
+    rated_ids = rated.get_column(QB_ID_COLUMN).unique().to_list()
+    return bool(qualified.get_column(QB_ID_COLUMN).is_in(rated_ids).any())
 
 
 def _stamped(frame: pl.DataFrame, season: int, week: int) -> pl.DataFrame:

@@ -628,3 +628,39 @@ def test_two_runs_attach_identical_features() -> None:
 
     # Assert
     assert_frame_equal(attached, expected, check_exact=True)
+
+
+def _passer_games(dropbacks: list[int | None]) -> pl.DataFrame:
+    """Return one game each for a qualified passer (30 attempts) and a backup (5 attempts)."""
+    return pl.DataFrame(
+        {
+            "game_id": ["g1", "g2"],
+            "week": [1, 1],
+            "team": ["AAA", "BBB"],
+            "opponent_team": ["BBB", "AAA"],
+            "qb_id": ["QUALIFIED", "BACKUP"],
+            "qb_name": ["Qualified Passer", "Backup Passer"],
+            "qb_attempts": [30, 5],
+            "qb_dropbacks": dropbacks,
+            "qb_dropback_epa": [None if count is None else 2.0 for count in dropbacks],
+        },
+        schema_overrides={"qb_dropbacks": pl.Int64, "qb_dropback_epa": pl.Float64},
+    )
+
+
+@pytest.mark.parametrize(
+    ("dropbacks", "qualified"),
+    [([35, 10], True), ([None, 10], False)],
+    ids=["qualified-and-rated", "qualified-but-unrated"],
+)
+def test_quarterback_tables_need_a_qualified_passer_the_fit_rates(
+    dropbacks: list[int | None], *, qualified: bool
+) -> None:
+    # Arrange
+    team_games = pl.DataFrame({"team": ["AAA", "BBB"]})
+
+    # Act
+    found = ratings_build._has_qualified_passer(_passer_games(dropbacks), team_games)
+
+    # Assert
+    assert found is qualified

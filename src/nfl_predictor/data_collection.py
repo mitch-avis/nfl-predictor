@@ -20,6 +20,8 @@ Output Files:
     - data/predict/week_XX_games_to_predict.csv: Upcoming games for prediction
     - data/strength_snapshots.csv: Pre-week schedule-adjusted strength for every team on
       each season's schedule and every processed week, teams on a bye included
+    - data/ratings/{season}_{kind}.parquet: The ratings tables ported from nfl-sos-ratings, for
+      every season processed (see `utils.polars.ratings_build`)
 
 Usage:
     Run directly to collect and process all data:
@@ -48,7 +50,7 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.utils import clock, game_utils, polars_utils, season_cache
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars import nfelo_lines, pbp, pick_time_lines, qb_stats
+from nfl_predictor.utils.polars import nfelo_lines, pbp, pick_time_lines, qb_stats, ratings_build
 from nfl_predictor.utils.polars.strength_snapshot import StrengthPrior
 from nfl_predictor.utils.polars.strength_table import (
     build_prior_strength_snapshot,
@@ -402,12 +404,14 @@ def main(argv: list[str] | None = None) -> None:
 
     strength_snapshots: list[pl.DataFrame] = []
     market_lines_metadata: dict[str, object] = {}
+    rating_tables: dict[str, pl.DataFrame] = {}
     with _timed_step("collect_all_data", enabled=config.enable_timing):
         all_data_df = collect_all_data(
             seasons_to_process,
             config=config,
             strength_snapshots=strength_snapshots,
             market_lines_metadata=market_lines_metadata,
+            rating_tables=rating_tables,
         )
 
     _log_df_stats("all_data", all_data_df, enabled=config.enable_debug)
@@ -433,6 +437,12 @@ def main(argv: list[str] | None = None) -> None:
         constants.STRENGTH_SNAPSHOTS_NAME,
         config.data_dir,
     )
+
+    # The ratings tables of every season processed, named as nfl-sos-ratings names its files.
+    if rating_tables:
+        ratings_build.write_published_tables(
+            rating_tables, _resolve_data_dir(config.data_dir) / constants.RATINGS_DIRNAME
+        )
 
     # Filter and save upcoming games for prediction (ML version only)
     upcoming_df = polars_utils.filter_upcoming_games(all_data_df, current_season, current_week)
@@ -660,6 +670,8 @@ class _EtlSources:
     raw_elo_df: pl.DataFrame
     # Set for a pick-time build: the nfelo snapshot, the line order's report and the maps.
     pick_time: pick_time_lines.PickTimeLines | None = None
+    # The ratings' inputs and per-season outputs; None leaves the ratings columns null.
+    ratings: ratings_build.RatingsBuild | None = None
 
 
 def _stats_window(
@@ -790,6 +802,14 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         stats_seasons, stats_schedule_df, config, current_season
     )
     elo_df, raw_elo_df = _load_elo(seasons, config)
+    with _timed_step("load_ratings_sources", enabled=config.enable_timing):
+        ratings = ratings_build.load_ratings_build(
+            max(seasons),
+            pbp_df=pbp_df,
+            schedule_df=stats_schedule_df,
+            current_season=current_season,
+            force_refresh=config.force_refresh_nflreadpy,
+        )
     return _EtlSources(
         current_season=current_season,
         current_week=current_week,
@@ -798,6 +818,7 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         pbp_df=pbp_df,
         elo_df=elo_df,
         raw_elo_df=raw_elo_df,
+        ratings=ratings,
     )
 
 
@@ -883,6 +904,9 @@ def _finish_games(
             max_season=max_season,
             current_season=sources.current_season,
         )
+    if sources.ratings is not None:
+        with _timed_step("attach_rating_features", enabled=enable_timing):
+            combined_df = sources.ratings.attach(combined_df)
     if sources.pick_time is None:
         # Fill in lines for future games from SurvivorGrid
         combined_df = game_utils.fill_future_game_lines(combined_df)
@@ -926,6 +950,7 @@ def _open_season_cache(
             "schedule": sources.schedule_df,
             "team_stats": sources.team_stats_df,
             "elo": sources.elo_df,
+            **({} if sources.ratings is None else sources.ratings.key_frames()),
         },
         {
             "min_season": min_season,
@@ -957,7 +982,10 @@ def _build_season(
         else cache.keys.key(season, {"tr": inputs.tr_df, "prev_tr": inputs.prev_tr_df})
     )
     if cache is None or key is None:
-        return process_season(season, sources.schedule_df, sources.team_stats_df, inputs)
+        games = process_season(season, sources.schedule_df, sources.team_stats_df, inputs)
+        if sources.ratings is not None:
+            sources.ratings.build(season)
+        return games
     build = cache.cache.load(season, key)
     if build is None:
         recorded: list[pl.DataFrame] = []
@@ -970,10 +998,13 @@ def _build_season(
         snapshots = (
             pl.concat(recorded, how="vertical") if recorded else combine_strength_snapshots([])
         )
-        build = season_cache.SeasonBuild(games=games, snapshots=snapshots)
+        ratings = {} if sources.ratings is None else sources.ratings.build(season)
+        build = season_cache.SeasonBuild(games=games, snapshots=snapshots, ratings=ratings)
         cache.cache.store(season, key, build)
     else:
         log.info("Season %d reused from the season cache", season)
+        if sources.ratings is not None:
+            sources.ratings.reuse(season, build.ratings)
     if inputs.strength_snapshots is not None and build.snapshots.height > 0:
         inputs.strength_snapshots.append(build.snapshots)
     return build.games
@@ -985,6 +1016,7 @@ def collect_all_data(
     config: DataCollectionConfig | None = None,
     strength_snapshots: list[pl.DataFrame] | None = None,
     market_lines_metadata: dict[str, object] | None = None,
+    rating_tables: dict[str, pl.DataFrame] | None = None,
 ) -> pl.DataFrame:
     """Collect and combine all data for specified seasons.
 
@@ -996,6 +1028,8 @@ def collect_all_data(
         market_lines_metadata: Optional dict that receives a pick-time build's line record
             (the nfelo snapshot and its hash, per-season counts, the moneyline maps); a
             stored-line build leaves it empty
+        rating_tables: Optional dict that receives the ratings tables of every season processed,
+            by file stem ``{season}_{kind}`` (``utils.polars.ratings_build``)
 
     Returns:
         Combined DataFrame with all game data and features
@@ -1049,6 +1083,8 @@ def collect_all_data(
     )
     if sources.pick_time is not None and market_lines_metadata is not None:
         market_lines_metadata.update(sources.pick_time.metadata())
+    if sources.ratings is not None and rating_tables is not None:
+        rating_tables.update(sources.ratings.published_tables())
     return games
 
 

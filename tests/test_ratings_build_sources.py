@@ -7,9 +7,11 @@ from typing import Any
 
 import polars as pl
 import pytest
+from tests.ratings_league import league
 
 from nfl_predictor import constants
-from nfl_predictor.utils.polars import loaders, nflverse_sources, ratings_build
+from nfl_predictor.utils import polars_utils
+from nfl_predictor.utils.polars import nflverse_sources, ratings_build
 
 _FIRST = constants.NFLREADPY_MIN_SEASON
 
@@ -53,8 +55,8 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> _Calls:
         recorded.players.append(kwargs)
         return pl.DataFrame({"gsis_id": ["00-1"]})
 
-    monkeypatch.setattr(loaders, "load_pbp", load_pbp)
-    monkeypatch.setattr(loaders, "load_schedule", load_schedule)
+    monkeypatch.setattr(polars_utils, "load_pbp", load_pbp)
+    monkeypatch.setattr(polars_utils, "load_schedule", load_schedule)
     monkeypatch.setattr(
         nflverse_sources, "load_weekly_player_stats", source("load_weekly_player_stats")
     )
@@ -66,13 +68,15 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> _Calls:
 
 def _load(max_season: int = 2005, current_season: int = 2005) -> ratings_build.LoadedSources:
     """Load the sources with the ETL's play-by-play and schedules for 2003 on."""
-    return ratings_build.load_ratings_sources(
+    sources = ratings_build.load_ratings_sources(
         max_season,
         pbp_df=_seasons_frame([2003, 2004, 2005], "etl"),
         schedule_df=_seasons_frame([2003, 2004, 2005], "etl"),
         current_season=current_season,
         force_refresh=True,
     )
+    assert sources is not None
+    return sources
 
 
 def test_sources_reuse_the_etls_seasons_and_read_the_earlier_ones_unrefreshed(
@@ -172,3 +176,78 @@ def test_sources_load_every_season_when_the_etl_loaded_none(calls: _Calls) -> No
 
     # Assert
     assert [seasons for seasons, _ in calls.pbp] == [[1999, 2000, 2001]]
+
+
+def test_no_play_by_play_at_all_loads_no_other_source_and_returns_none(
+    calls: _Calls, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
+
+    # Act
+    sources = ratings_build.load_ratings_sources(
+        2001,
+        pbp_df=pl.DataFrame(),
+        schedule_df=pl.DataFrame(),
+        current_season=2005,
+        force_refresh=False,
+    )
+
+    # Assert
+    assert sources is None
+    assert (calls.sources, calls.players) == ({}, [])
+
+
+def test_load_ratings_build_without_play_by_play_returns_none(
+    calls: _Calls, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
+
+    # Act
+    build = ratings_build.load_ratings_build(
+        2001,
+        pbp_df=pl.DataFrame(),
+        schedule_df=pl.DataFrame(),
+        current_season=2005,
+        force_refresh=False,
+    )
+
+    # Assert
+    assert build is None
+
+
+def test_load_ratings_build_builds_from_the_loaded_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    data = league()
+    sources = ratings_build.LoadedSources(
+        plays=data.plays,
+        schedule=data.schedule,
+        player_stats=data.player_stats,
+        snap_counts=data.snap_counts,
+        players=data.players,
+        weekly_rosters=data.weekly_rosters,
+        starter_identity=data.starter_identity,
+    )
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_args, **_kwargs: sources)
+
+    # Act
+    build = ratings_build.load_ratings_build(
+        2001,
+        pbp_df=data.plays,
+        schedule_df=data.schedule,
+        current_season=2001,
+        force_refresh=False,
+    )
+
+    # Assert
+    assert build is not None
+    assert (
+        build.key_frames()["ratings_team_games"].height
+        == data.plays.select("game_id", "posteam")
+        .filter(pl.col("game_id").str.slice(5, 2) != "18")
+        .unique()
+        .height
+    )

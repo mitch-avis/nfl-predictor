@@ -478,7 +478,7 @@ def test_main_orchestrates_collection_and_output_writes(
     monkeypatch.setattr(
         data_collection,
         "collect_all_data",
-        lambda seasons, config, strength_snapshots, market_lines_metadata: all_data,
+        lambda seasons, config, strength_snapshots, market_lines_metadata, rating_tables: all_data,
     )
     monkeypatch.setattr(data_collection, "_log_df_stats", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(data_collection, "_timed_step", fake_timed_step)
@@ -1014,6 +1014,7 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
     assert warnings == [
         "No play-by-play team-game rows available; emitting null count columns.",
         "No ELO ratings loaded",
+        "No play-by-play for the ratings; their columns stay null",
     ]
 
 

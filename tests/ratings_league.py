@@ -60,7 +60,7 @@ _PLAY_SCHEMA: dict[str, pl.DataType] = {
 
 def starter_id(team: str) -> str:
     """Return the GSIS id of ``team``'s starter."""
-    return f"00-00000{TEAMS.index(team) + 1:02d}"
+    return f"00-QB-{team}"
 
 
 def starter_name(team: str) -> str:
@@ -125,7 +125,7 @@ def _team_plays(
         "complete_pass": 0.0,
         "yards_gained": 0.0,
     }
-    strength = 0.08 * (TEAMS.index(team) - 1.5)
+    strength = 0.04 * (sum(map(ord, team)) % 5 - 2)
     plays: list[dict[str, object]] = []
     for index in range(_DROPBACKS):
         epa = float(rng.normal(strength, 1.1))
@@ -196,10 +196,29 @@ def _team_plays(
     return plays
 
 
+def plays_for(schedule: pl.DataFrame, seed: int = 0) -> pl.DataFrame:
+    """Return play-by-play for every game of ``schedule``, in its row order.
+
+    ``schedule`` needs ``game_id``, ``season``, ``week``, ``game_type``, ``away_abbr`` and
+    ``home_abbr``; each team's passer is its starter (``starter_id``).
+    """
+    rng = np.random.default_rng(seed)
+    plays: list[dict[str, object]] = []
+    for game in schedule.iter_rows(named=True):
+        season_type = "REG" if game["game_type"] == "REG" else "POST"
+        for team, opponent in (
+            (game["away_abbr"], game["home_abbr"]),
+            (game["home_abbr"], game["away_abbr"]),
+        ):
+            plays += _team_plays(
+                rng, (game["game_id"], game["season"], game["week"], team, opponent, season_type)
+            )
+    return pl.DataFrame(plays, schema=_PLAY_SCHEMA)
+
+
 def league(seed: int = 0) -> League:
     """Return the synthetic league; ``seed`` changes every EPA and score."""
     rng = np.random.default_rng(seed)
-    plays: list[dict[str, object]] = []
     schedule: list[dict[str, object]] = []
     for season in SEASONS:
         slate = [(week, away, home, "REG") for week, away, home in _slate(season)]
@@ -207,9 +226,6 @@ def league(seed: int = 0) -> League:
             slate.append((POSTSEASON_WEEK, "AAA", "BBB", "WC"))
         for week, away, home, game_type in slate:
             game_id = f"{season}_{week:02d}_{away}_{home}"
-            season_type = "REG" if game_type == "REG" else "POST"
-            for team, opponent in ((away, home), (home, away)):
-                plays += _team_plays(rng, (game_id, season, week, team, opponent, season_type))
             schedule.append(
                 {
                     "game_id": game_id,
@@ -269,7 +285,7 @@ def league(seed: int = 0) -> League:
         for week in range(TRICK_ROSTER_WEEK, WEEKS + 1)
     ]
     return League(
-        plays=pl.DataFrame(plays, schema=_PLAY_SCHEMA),
+        plays=plays_for(schedule_frame, seed),
         schedule=schedule_frame.drop("away_qb", "home_qb"),
         player_stats=pl.DataFrame(
             schema={
@@ -343,6 +359,7 @@ __all__ = [
     "WEEKS",
     "League",
     "league",
+    "plays_for",
     "starter_id",
     "starter_name",
     "with_backup_starting",

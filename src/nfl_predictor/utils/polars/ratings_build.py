@@ -71,8 +71,9 @@ from nfl_predictor.ratings.season import (
     build_qb_season,
     build_team_season,
 )
+from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars import loaders, nflverse_sources, qb_stats
+from nfl_predictor.utils.polars import nflverse_sources, qb_stats
 from nfl_predictor.utils.polars.teamrankings import calculate_stat_differentials
 
 if TYPE_CHECKING:
@@ -173,7 +174,7 @@ def load_ratings_sources(
     schedule_df: pl.DataFrame,
     current_season: int,
     force_refresh: bool,
-) -> LoadedSources:
+) -> LoadedSources | None:
     """Load every source the ratings read, from the first play-by-play season to ``max_season``.
 
     Every earlier season counts: the penalties come from the season before and the preseason
@@ -182,7 +183,9 @@ def load_ratings_sources(
     for the quarterback family's history. The player sources follow their loaders' cache
     contract (``nflverse_sources``), each asked only for the seasons it publishes; the players
     file is downloaded again when the run reaches the current season and then survives an outage
-    with its cached copy. The quarterback identity is the quarterback family's file.
+    with its cached copy. The quarterback identity is the quarterback family's file. The
+    play-by-play and schedules are read through ``polars_utils``, as the rest of the ETL reads
+    them; without any play there is nothing to rate, and no other source is read.
 
     Args:
         max_season: The last season of the run.
@@ -192,27 +195,32 @@ def load_ratings_sources(
         force_refresh: Whether the run downloads its sources again (``--refresh-nflreadpy``).
 
     Returns:
-        The sources of every season from ``constants.NFLREADPY_MIN_SEASON`` to ``max_season``.
+        The sources of every season from ``constants.NFLREADPY_MIN_SEASON`` to ``max_season``,
+        or ``None`` when no season has a play.
 
     """
     seasons = list(range(constants.NFLREADPY_MIN_SEASON, max_season + 1))
+    plays = _with_earlier_seasons(
+        pbp_df,
+        seasons,
+        lambda missing: polars_utils.load_pbp(
+            missing, force_refresh=False, current_season=current_season
+        ),
+    )
+    if plays.is_empty():
+        log.warning("No play-by-play for the ratings; their columns stay null")
+        return None
 
     def published(first: int) -> list[int]:
         return [season for season in seasons if season >= first]
 
     is_current = max_season >= current_season
     return LoadedSources(
-        plays=_with_earlier_seasons(
-            pbp_df,
-            seasons,
-            lambda missing: loaders.load_pbp(
-                missing, force_refresh=False, current_season=current_season
-            ),
-        ),
+        plays=plays,
         schedule=_with_earlier_seasons(
             schedule_df,
             seasons,
-            lambda missing: loaders.load_schedule(
+            lambda missing: polars_utils.load_schedule(
                 missing, force_refresh=False, current_season=current_season
             ),
         ),
@@ -238,6 +246,31 @@ def load_ratings_sources(
             constants.DATA_PATH / f"{constants.QB_META_DATA_NAME}.csv"
         ),
     )
+
+
+def load_ratings_build(
+    max_season: int,
+    *,
+    pbp_df: pl.DataFrame,
+    schedule_df: pl.DataFrame,
+    current_season: int,
+    force_refresh: bool,
+) -> RatingsBuild | None:
+    """Return the ratings build of an ETL run, or ``None`` when no season has a play.
+
+    The arguments are those of :func:`load_ratings_sources`; ``current_season`` is also the
+    season the build gives weekly rank ranges.
+    """
+    sources = load_ratings_sources(
+        max_season,
+        pbp_df=pbp_df,
+        schedule_df=schedule_df,
+        current_season=current_season,
+        force_refresh=force_refresh,
+    )
+    if sources is None:
+        return None
+    return RatingsBuild(ratings_inputs(sources), current_season=current_season)
 
 
 def _of_season(frame: pl.DataFrame, season: int) -> pl.DataFrame:
@@ -620,6 +653,7 @@ __all__ = [
     "LoadedSources",
     "RatingsBuild",
     "RatingsInputs",
+    "load_ratings_build",
     "load_ratings_sources",
     "ratings_inputs",
     "write_published_tables",

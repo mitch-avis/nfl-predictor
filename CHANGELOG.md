@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.50.0] - 2026-10-10
+
+### Changed
+
+- The play-by-play cache holds 139 columns instead of 55: every column the code ported from
+  `nfl-sos-ratings` reads (the scramble and botched-snap flags, rusher, receiver, fumble and tackle
+  credits, game state, drive and series results, the play text). No feature reads them yet. Each
+  cached season downloads once more on the next ETL, which must run online (about 490 MB), and the
+  cache grows from about 39 MB to 104 MB.
+- Every play-by-play team-code column is normalized at load (`constants.PBP_TEAM_COLUMNS`), and
+  each cached column keeps one type across seasons (`goal_to_go` is stored as a float).
+- The 163 games played at the 14 venues the stadium table lacked (Mile High Stadium, the Pontiac
+  Silverdome and other 1999-2002 venues, and five 2026 international venues) get their real
+  elevation instead of 0 ft in `stadium_elevation`, and a city and state.
+
+### Added
+
+- The schedule loader warns when a venue has no stadium-table entry or a game has no venue id,
+  since those games fall back to an elevation of 0 ft.
+
+### Fixed
+
+- Cached schedules take the stadium city and state from the table on every load, so a venue the
+  table gains is located without refreshing the cache.
+
 ## [0.49.0] - 2026-10-10
 
 ### Added

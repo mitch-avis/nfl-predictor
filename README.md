@@ -256,8 +256,14 @@ The ETL logs every `(season, team)` whose nflverse team-stat row count differs f
 Play-by-play is the largest of those sources (roughly 1.2M regular-season plays for 1999-2025). It
 is fetched one season at a time, reduced to the column list in `constants.PBP_COLUMNS`, filtered to
 the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<season>_reg.parquet`.
-Before kickoff the current season has no play-by-play published at all; that is non-fatal, and the
-ETL falls back to cache or continues without it.
+The list also holds every play-by-play column the ratings ported from `nfl-sos-ratings` read
+(play ids, scramble and botched-snap flags, rusher, receiver, fumble and tackle credits, game
+state, drive and series results, and the play text), which no feature reads yet. Every column
+that holds a team code (`constants.PBP_TEAM_COLUMNS`) is normalized; yard-line text such as
+`LA 25` is kept as nflverse writes it. Each column keeps one type across seasons (nflverse
+publishes `goal_to_go` as a whole number in some seasons and a float in others; the cache stores
+floats). Before kickoff the current season has no play-by-play published at all; that is
+non-fatal, and the ETL falls back to cache or continues without it.
 
 The quarterback family needs `data/meta_data.csv`, a read-only copy of
 `../nfeloqb/Other Data/meta_data.csv` made the same way as `data/qb_elos.csv`. It maps the Elo
@@ -1190,8 +1196,8 @@ games.
   `(sum + K * league_rate) / (count + K)`, so a first start gets the league rate; the last
   `constants.QB_RECENT_GAMES` games (`qb_dropback_epa_recent`, `qb_any_a_recent`) are shrunk
   toward the career rate the same way; `qb_history_dropbacks` tells the model how much evidence
-  stands behind them. Scrambles are credited to the team-game's primary passer, because the
-  play-by-play cache keeps the passer id but not the rusher id.
+  stands behind them. Scrambles are credited to the team-game's primary passer: nflverse leaves
+  the passer id empty on a scramble, and this family does not read the rusher id.
 
 The strength family is ablatable as the `strength` feature group
 (`--disable-feature-groups strength`). Its early-season prior blend weights the in-season solve

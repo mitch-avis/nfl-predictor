@@ -71,6 +71,13 @@ decision rules). Do not edit it after the launch record is written.
   their resampling unit confirmed from each run's own artifacts before labeling).
 - The `compare` tie fix changes market-line pick accuracy in future reports (170 pick-time and 25
   closing-line coin flips; 0.6401 to 0.6579 and 0.6648 to 0.6670), no model number.
+- Modeling observation (not changed): completed games carry the actual starting quarterback in
+  every quarterback feature (the `qb_elos.csv` convention, and now the own Elo's), while
+  upcoming games carry the projected one. The own-Elo evaluation's diagnostic puts the cost of
+  knowing only the previous starter at +0.00101 Brier [-0.00027, +0.00232] and +0.00331 log loss
+  [+0.00035, +0.00631] for the market-free preset (`.agents/sos_port/ELO_EVAL.md`, "Starters
+  known before kickoff"; second review pending), so training rows hold slightly better
+  quarterback information than prediction rows. A question for the user, not a step-6 change.
 
 ## Snapshots and timings
 

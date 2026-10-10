@@ -468,6 +468,28 @@ def test_a_run_that_leaves_one_group_out_names_only_the_other(
 
 
 @pytest.mark.parametrize(
+    ("emptied", "kept"),
+    [(("own_elo_wt",), ["elo"]), (("elo", "own_elo_wt"), [])],
+    ids=["own-elo-wt-empty", "both-empty"],
+)
+def test_a_market_informed_group_the_spec_drops_as_empty_goes_unnamed(
+    monkeypatch: pytest.MonkeyPatch, emptied: tuple[str, ...], kept: list[str]
+) -> None:
+    """A group whose columns are all null leaves the features, so the warning leaves it out."""
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+    empty = walk_forward.resolve_feature_group_columns(list(frame.columns), emptied)
+    frame.loc[:, empty] = np.nan
+
+    # Act
+    warnings = _spec_warnings(monkeypatch, frame, include_market=False)
+
+    # Assert
+    assert len(warnings) == (1 if kept else 0)
+    assert all(f"feature group(s) {kept} stay" in message for message in warnings)
+
+
+@pytest.mark.parametrize(
     ("include_market", "dropped"),
     [(True, ()), (False, ("elo", "own_elo_wt"))],
     ids=["with-market", "groups-left-out"],

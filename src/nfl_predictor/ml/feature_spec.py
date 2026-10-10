@@ -272,7 +272,8 @@ def _warn_kept_market_informed_groups(columns: Sequence[str], selection: Feature
     A run without the market columns (``include_market`` off) still trains on the groups of
     ``constants.MARKET_INFORMED_FEATURE_GROUPS`` unless it leaves them out too. That is the
     run's choice, so the warning only names the groups it keeps and how to leave them out, once
-    per set of groups in a process.
+    per set of groups in a process. ``columns`` are the spec's final feature columns, so a group
+    whose columns all dropped out (all null or constant in the training rows) goes unnamed.
     """
     if selection.include_market:
         return
@@ -369,7 +370,6 @@ def build_feature_spec(df: pd.DataFrame, selection: FeatureSelection) -> Feature
         if pruned_columns:
             drop_columns.update(pruned_columns)
             selected_columns = [col for col in selected_columns if col not in pruned_columns]
-    _warn_kept_market_informed_groups(selected_columns, selection)
 
     feature_df = df[selected_columns].copy()
 
@@ -378,6 +378,7 @@ def build_feature_spec(df: pd.DataFrame, selection: FeatureSelection) -> Feature
     feature_df, high_cardinality_columns = _drop_high_cardinality_columns(
         feature_df, selection.max_cardinality_ratio
     )
+    _warn_kept_market_informed_groups(feature_df.columns.tolist(), selection)
 
     categorical_columns = feature_df.select_dtypes(include=["object", "category"]).columns.tolist()
     numeric_columns = [col for col in feature_df.columns if col not in categorical_columns]

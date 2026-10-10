@@ -248,8 +248,9 @@ Reproduce from the repository root (the cache once, then any script):
 - **Decision**: the ETL keeps the frames the ratings loaded
   (`nflverse_sources.QbIdentitySources`) and reads each season's identity from them (`d9a2c6b`);
   without them it still loads the identity per season.
-- **Data**: on the cached 1999-2025 sources every season's identity read this way equals the
-  per-season load's (a one-off check, 27 seasons, 0 differences);
+- **Data**: on the measurement cache every season's identity read this way equals the per-season
+  load's in all 27 seasons, 1999-2025 (`integration_identity_check.py`, output
+  `integration_identity_check_output.txt`);
   `test_shared_identity_sources_give_each_season_the_loaders_identity`,
   `test_quarterback_history_reads_the_shared_identity_sources_without_loading_them`.
 - **Feature-value impact**: none.
@@ -421,18 +422,31 @@ source's treatment of an empty team code (entry 14). None reads a field entry 15
   measurement cache and the source's published logs). Counting `drive_inside20` on this
   repository's plays reproduces the source's `red_zone_trips` in all 13,928 team-games (0
   differences). Over 1999-2025 this repository counts 56,127 trips against the source's 43,771.
-  The drives the two disagree on: 10,234 touchdown drives whose only plays inside the 20 belong
-  to the try after the touchdown (the extra point is snapped from the 15 since 2015 and the 2
-  before, the two-point try from the 2, plus penalties on the try); 2,132 whose only other plays
-  inside are at exactly the 20 (nflverse's flag means inside it); 82 whose only other plays
-  inside were wiped out by a penalty; 132 with a live play inside the 20 that nflverse does not
-  flag; and 224 that nflverse flags without a play of the drive inside the 20.
+  The drives the two disagree on:
+  - 10,234 whose only plays inside the 20 belong to a try (the extra point is snapped from the 15
+    since 2015 and the 2 before, the two-point try from the 2, plus penalties on the try), of two
+    kinds. 7,952 are touchdown drives that never snapped inside the 20 before scoring. The other
+    2,282 hold the try alone after a defensive or return touchdown, which nflverse files under
+    the drive that lost the ball with the scoring team as `posteam`, so grouping by team and
+    drive makes it a drive of its own: their `fixed_drive_result` is "Opp touchdown" in 2,276,
+    none in 5 and "Punt" in 1. 2,230 of them are a single play; 2,259 come right after a
+    touchdown by the try's team on a play where it did not have the ball, and in 2,257 of those
+    the try has that play's `fixed_drive`. The play before each of the other 23 is a field goal
+    (6), a pass without a touchdown (5), a touchdown credited to the other team (3), an extra
+    point (2), a kneel-down (2), a penalty (1) or a row without a play type (1), and 3 have no
+    play before them.
+  - 2,132 whose only other plays inside are at exactly the 20 (nflverse's flag means inside it).
+  - 82 whose only other plays inside were wiped out by a penalty.
+  - 132 with a live play inside the 20 that nflverse does not flag.
+  - 224 that nflverse flags without a play of the drive inside the 20.
 - **Assessment**: the 10,234 try-only drives are a bug against this repository's own definition
   (the docstring and the README say "drives that reached the red zone", and the try is snapped
-  there by rule after the drive has scored). They make every long touchdown drive a converted
-  red-zone trip: the league-wide touchdown rate per trip is 0.5709 by this repository's count
-  against 0.5385 by nflverse's flag. The other cases are definitional (a snap at the 20 or closer
-  against nflverse's inside-the-20 flag).
+  there by rule after the touchdown). The 7,952 touchdown drives make every long touchdown drive
+  a converted red-zone trip, adding to both the trips and the touchdown drives; the 2,282 tries
+  after a defensive or return touchdown add trips only, since their drive result is not a
+  touchdown. Together the league-wide touchdown rate per trip is 0.5709 by this repository's
+  count against 0.5385 by nflverse's flag. The other cases are definitional (a snap at the 20 or
+  closer against nflverse's inside-the-20 flag).
 - **Options**: (a) keep the count; (b) leave the try (the extra point, the two-point try and the
   penalties on them) out of the snap test, keeping this repository's definition, which still
   differs from the source in about 2,600 drives; (c) count nflverse's `drive_inside20`, the
@@ -512,8 +526,10 @@ publishes it.
   market-informed `own_elo_wt` (or `elo`): a run with no market information at all disables them
   itself (`--disable-feature-groups elo,own_elo_wt`, `disable_feature_groups` in the weekly
   config), and since `8fcbb8a` a run that leaves the market columns out but keeps either logs a
-  warning naming it (`.agents/modeling_spec.md`). Whether the exclusion should be automatic is
-  a question for the user.
+  warning naming it (`.agents/modeling_spec.md`); since `f8336b1` the warning names only a group
+  with a column left in the spec's final features, so a group whose columns are all null or
+  constant in the training rows goes unnamed. Whether the exclusion should be automatic is a
+  question for the user.
 - **How to reverse it**: drop the `_attach_own_elo` step from `_finish_games` and the own Elo's
   entries from `finalize.build_final_column_order`.
 

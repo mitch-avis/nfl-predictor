@@ -39,6 +39,7 @@ season's build and an incremental run rebuilds only the seasons whose inputs cha
 from __future__ import annotations
 
 import time
+import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -673,9 +674,10 @@ def _stamped(frame: pl.DataFrame, season: int, week: int) -> pl.DataFrame:
 def write_published_tables(tables: Mapping[str, pl.DataFrame], directory: Path) -> None:
     """Write each table as ``{name}.parquet`` under ``directory``, creating it as needed.
 
-    Each file is written to a temporary file in the same directory and then moved over the
-    published one, so a reader (a web page during a web-launched ETL) sees the old file or the
-    new one, never half of one; a failed write leaves the old file and no temporary file.
+    Each file is written to a temporary file of its own in the same directory and then moved
+    over the published one, so a reader (a web page during a web-launched ETL) sees the old file
+    or the new one, never half of one, and two ETL runs writing a table at once each publish a
+    whole file; a failed write leaves the old file and no temporary file.
     """
     directory.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
@@ -684,8 +686,13 @@ def write_published_tables(tables: Mapping[str, pl.DataFrame], directory: Path) 
 
 
 def _write_parquet_atomic(frame: pl.DataFrame, path: Path) -> None:
-    """Write ``frame`` to ``path`` through a temporary file in the same directory."""
-    tmp_path = path.with_name(f"{path.name}.tmp")
+    """Write ``frame`` to ``path`` through a temporary file of its own in the same directory.
+
+    The temporary name ends in a random hex string, so no other writer shares it. It is not
+    made with ``tempfile.mkstemp``, which creates the file readable by its owner only, a mode
+    the move would carry onto the published table.
+    """
+    tmp_path = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         frame.write_parquet(tmp_path)
         tmp_path.replace(path)

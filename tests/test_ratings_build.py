@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -771,4 +772,38 @@ def test_a_failed_table_write_leaves_the_published_file_whole(
     # Assert
     monkeypatch.undo()
     assert pl.read_parquet(directory / "2024_ratings.parquet").get_column("a").to_list() == [1]
+    assert sorted(path.name for path in directory.iterdir()) == ["2024_ratings.parquet"]
+
+
+def test_overlapping_table_writers_each_publish_a_whole_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A second ETL publishes a table while the first is half way through writing it."""
+    # Arrange
+    directory = tmp_path / "ratings"
+    write = pl.DataFrame.write_parquet
+
+    def overlapped(frame: pl.DataFrame, file: str | Path, *args: Any, **kwargs: Any) -> None:
+        if frame.get_column("a").to_list() == [1]:
+            write(frame, file, *args, **kwargs)
+            return
+        content = io.BytesIO()
+        write(frame, content, *args, **kwargs)
+        half = len(content.getvalue()) // 2
+        with Path(file).open("wb") as handle:
+            handle.write(content.getvalue()[:half])
+            handle.flush()
+            ratings_build.write_published_tables(
+                {"2024_ratings": pl.DataFrame({"a": [1]})}, directory
+            )
+            handle.write(content.getvalue()[half:])
+
+    monkeypatch.setattr(pl.DataFrame, "write_parquet", overlapped)
+
+    # Act
+    ratings_build.write_published_tables({"2024_ratings": pl.DataFrame({"a": [2]})}, directory)
+
+    # Assert
+    monkeypatch.undo()
+    assert pl.read_parquet(directory / "2024_ratings.parquet").get_column("a").to_list() == [2]
     assert sorted(path.name for path in directory.iterdir()) == ["2024_ratings.parquet"]

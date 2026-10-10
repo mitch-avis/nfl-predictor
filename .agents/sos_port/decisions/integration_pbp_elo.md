@@ -566,6 +566,20 @@ source's treatment of an empty team code (entry 14). None reads a field entry 15
   published rates in 7,163 and 7,151 games, by at most 16.7 points (`167f4fb_d308db6.txt`).
 - **How to reverse it**: the snap term of `pbp._with_red_zone_trip_flag` (without it every flagged
   group counts, the source's definition); the flag itself, by a test on `yardline_100` again.
+- **Review** (second round, independent, "merge as is"): every figure above reproduced byte for
+  byte from the reviewer's own runs. Of the 227 groups the snap rule drops, 202 are phantom or
+  non-possession groups (128 recovered kickoffs, 62 extra points, 3 two-point tries, 4 extra
+  point with kickoff, 5 penalty or end-of-game rows), 9 are the second piece of a drive nflverse
+  split at a timeout (removing a double count the source keeps), and about 16 are genuine
+  possessions that start inside the 20 and kick a field goal at once (after a turnover, a muffed
+  punt or in overtime), all non-touchdowns, about 0.04% of trips; the session accepts that loss
+  (counting a field goal as the snap would bring the 9 double counts back without logic over the
+  order of plays). Known leftover: in 1999-2000 nflverse's `fixed_drive` sometimes splits one
+  drive at a timeout, the first piece without a drive result; of the 40 trips without a result
+  that remain, 28 are followed directly by another counted trip of the same team (9 of those
+  touchdowns), so keeping the no-result trips in the rate's denominator counts those drives twice.
+  At 0.1% of trips it is recorded rather than fixed now; the fix is to join a no-result group to
+  the same team's next group when no other team's play lies between them.
 
 ## 3. The own Elo in the ETL
 

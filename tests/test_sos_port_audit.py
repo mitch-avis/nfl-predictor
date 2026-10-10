@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import pytest
 
+from nfl_predictor import constants
+from nfl_predictor.utils.polars import loaders
 from nfl_predictor.utils.polars.season_stats_schema import SEASON_STATS_SCHEMAS
 
 if TYPE_CHECKING:
@@ -34,6 +36,52 @@ def inventory(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     """Return the inventory script, imported from its directory."""
     monkeypatch.syspath_prepend(str(AUDIT_DIR))
     return importlib.import_module("inventory")
+
+
+@pytest.fixture
+def parity(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """Return the parity check, imported from its directory."""
+    monkeypatch.syspath_prepend(str(AUDIT_DIR))
+    return importlib.import_module("parity")
+
+
+# Two plays of one game as nflverse publishes them, in the columns the parity check needs.
+_RAW_PLAYS = {
+    "season": [2025, 2025],
+    "season_type": ["REG", "REG"],
+    "week": [1, 1],
+    "game_id": ["2025_01_BUF_MIA", "2025_01_BUF_MIA"],
+    "play_id": [40.0, 61.0],
+    "posteam": ["BUF", "MIA"],
+    "defteam": ["MIA", "BUF"],
+    "home_team": ["MIA", "MIA"],
+    "away_team": ["BUF", "BUF"],
+    "qb_scramble": [0.0, 1.0],
+    "desc": ["pass", "scramble"],
+    "epa": [0.25, -0.5],
+}
+
+
+def _snapshot_and_cache(tmp_path: Path, *, cache_epa: float = 0.25, stale: bool = False) -> Path:
+    """Write the raw plays as a snapshot file and, prepared, as the season's cache file.
+
+    ``cache_epa`` is the first play's EPA in the cache; ``stale`` writes the cache without
+    ``desc`` and as if the code had not asked for it then.
+    """
+    raw = pl.DataFrame(_RAW_PLAYS)
+    raw.write_parquet(tmp_path / "snapshot.parquet")
+    prepared = loaders._prepare_pbp(raw, regular_season_only=True).with_columns(
+        pl.Series("epa", [cache_epa, -0.5])
+    )
+    requested = tuple(constants.PBP_COLUMNS)
+    if stale:
+        prepared = prepared.drop("desc")
+        requested = tuple(column for column in requested if column != "desc")
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    path = loaders._pbp_cache_path(cache_dir, 2025, regular_season_only=True)
+    loaders._write_cached_frame(prepared, path, requested)
+    return cache_dir
 
 
 def _column(inventory: ModuleType, kind: str, column: str, **fields: str) -> Any:
@@ -278,3 +326,61 @@ def test_classify_simple_fills_the_items_key_into_its_counterpart(inventory: Mod
     # Assert
     assert rows[0]["here"] == ["load:nflreadpy.load_players"]
     assert audit.failures == []
+
+
+def test_season_pbp_returns_the_cache_the_snapshot_equals(
+    parity: ModuleType, tmp_path: Path
+) -> None:
+    # Arrange
+    cache_dir = _snapshot_and_cache(tmp_path)
+    audit = parity.Audit()
+
+    # Act
+    found = parity.season_pbp(2025, tmp_path / "snapshot.parquet", cache_dir, audit)
+
+    # Assert
+    assert found is not None
+    pbp, report = found
+    assert pbp["desc"].to_list() == ["pass", "scramble"]
+    assert report["identical_to_cache"] is True
+    assert audit.failures == []
+
+
+def test_season_pbp_snapshot_that_differs_from_the_cache_fails(
+    parity: ModuleType, tmp_path: Path
+) -> None:
+    # Arrange
+    cache_dir = _snapshot_and_cache(tmp_path, cache_epa=0.75)
+    audit = parity.Audit()
+
+    # Act
+    parity.season_pbp(2025, tmp_path / "snapshot.parquet", cache_dir, audit)
+
+    # Assert
+    assert [failure.what for failure in audit.failures] == ["snapshot"]
+
+
+def test_season_pbp_cache_that_predates_the_code_fails(parity: ModuleType, tmp_path: Path) -> None:
+    # Arrange
+    cache_dir = _snapshot_and_cache(tmp_path, stale=True)
+    audit = parity.Audit()
+
+    # Act
+    found = parity.season_pbp(2025, tmp_path / "snapshot.parquet", cache_dir, audit)
+
+    # Assert
+    assert found is None
+    assert [failure.what for failure in audit.failures] == ["cache"]
+
+
+def test_season_pbp_missing_cache_fails(parity: ModuleType, tmp_path: Path) -> None:
+    # Arrange
+    pl.DataFrame(_RAW_PLAYS).write_parquet(tmp_path / "snapshot.parquet")
+    audit = parity.Audit()
+
+    # Act
+    found = parity.season_pbp(2025, tmp_path / "snapshot.parquet", tmp_path, audit)
+
+    # Assert
+    assert found is None
+    assert [failure.what for failure in audit.failures] == ["cache"]

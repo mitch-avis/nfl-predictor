@@ -136,11 +136,6 @@ pairs:
     theirs: fourth_down_attempts
     kind: count
     causes: [every_play_type, both_conversion_flags]
-  - id: turnovers_on_downs
-    ours: fourth_down_fails
-    theirs: turnovers_on_downs
-    kind: count
-    causes: [every_play_type]
   - id: two_point_attempts
     ours: two_point_attempts
     theirs: two_pt_attempts

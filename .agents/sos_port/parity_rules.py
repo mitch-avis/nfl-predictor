@@ -15,11 +15,10 @@ import polars as pl
 from port_audit import ROOT
 
 # ``_play_conditions`` holds the carry and dropback conditions the aggregates count with.
-from nfl_predictor.utils.polars.pbp import (
-    SITUATIONAL_PLAY_TYPES,
-    _play_conditions,
-    regular_season_plays,
-)
+from nfl_predictor.utils.polars.pbp import _play_conditions, regular_season_plays
+
+# The play types this repository read situational flags on before it read them on every play.
+SITUATIONAL_PLAY_TYPES = ("run", "pass", "qb_kneel", "qb_spike")
 
 if TYPE_CHECKING:
     from collections.abc import Callable

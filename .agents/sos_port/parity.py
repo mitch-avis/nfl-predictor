@@ -3,21 +3,21 @@
 Run from the repository root (``PYTHONDONTWRITEBYTECODE=1`` keeps the run from leaving
 ``__pycache__`` beside the scripts):
 
-    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py
+    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py [--data-dir DIR]
 
-For every regular season 1999-2025 it aggregates this repository's cached play-by-play (the main
-checkout's ``data/cache/nflreadpy/pbp_{season}_reg.parquet``) with
-``aggregate_pbp_team_game_stats`` and ``aggregate_pbp_team_box_score_stats`` and compares every
+For every regular season 1999-2025 it reads this repository's cached play-by-play
+(``data/cache/nflreadpy/pbp_{season}_reg.parquet`` of ``--data-dir``, by default the main
+checkout's ``data/``) through its own loader, repairs it as the ETL does, aggregates it with
+``aggregate_pbp_team_game_stats`` and ``aggregate_pbp_team_box_score_stats``, and compares every
 team-game with ``{season}_team_game_logs.parquet`` of `nfl-sos-ratings` at its frozen commit, on
 the pairs ``parity.yaml`` judges to share a definition. Which game-log columns come from
 play-by-play is read from that repository's code (``sos_sources.py``); only those are judged.
+Every nflverse download is blocked, so nothing is written to the data directory.
 
-The columns this repository does not cache (``qb_scramble``, ``play_id``, the play text ``desc``)
-come from the snapshot of nflreadpy's on-disk cache that `nfl-sos-ratings` read
+The play-by-play `nfl-sos-ratings` read is the snapshot of nflreadpy's on-disk cache it used
 (``port_audit.NFLREADPY_SNAPSHOT``). Each season's file is found by its content and checked
 against the snapshot's manifest, and the run fails unless that file, prepared as this repository
-prepares its cache, equals the cache row by row on every cached column; the extra columns are
-then attached by row position (``season_pbp`` says what else must hold).
+prepares its cache, equals the cache row by row on every cached column (``season_pbp``).
 
 Counts must be equal, sums and rates within the tolerance. A mismatching team-game is attributed
 to a named cause only when that cause's adjustment (``parity_rules.CAUSES``), alone or with the
@@ -34,7 +34,7 @@ import itertools
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import yaml
@@ -54,7 +54,6 @@ from parity_rules import (
     wiped_out_plays,
 )
 from port_audit import (
-    DATA,
     HERE,
     NFLREADPY_SNAPSHOT,
     NFLREADPY_SNAPSHOT_MANIFEST,
@@ -62,33 +61,38 @@ from port_audit import (
     Audit,
     SosCode,
     check_sos_checkout,
+    parse_args,
     portable,
     sos_output,
     team_code_map,
 )
 from report_text import dump_json
+from snapshot_cache import block_downloads
 from sos_sources import PLAY_BY_PLAY, classify_game_log_columns
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars.loaders import _prepare_pbp
+from nfl_predictor.utils.polars import loaders, nflverse_sources, player_team_repair
+from nfl_predictor.utils.polars.loaders import _pbp_cache_path, _prepare_pbp, _read_cached_frame
 from nfl_predictor.utils.polars.pbp import (
     aggregate_pbp_team_box_score_stats,
     aggregate_pbp_team_game_stats,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from pathlib import Path
+
 RULES = HERE / "parity.yaml"
 OUT_MD = HERE / "PARITY.md"
 OUT_JSON = HERE / "parity.json"
 OUT_ATTRIBUTIONS = HERE / "parity_attributions.parquet"
-CACHE = DATA / "cache" / "nflreadpy"
-TEAM_COLUMNS = ("posteam", "defteam", "home_team", "away_team", "td_team", "penalty_team")
+# Every audited season is history to the loaders, so they read the cache and never refresh it.
+CURRENT_SEASON = SEASONS[-1] + 1
+TEAM_COLUMNS = tuple(constants.PBP_TEAM_COLUMNS)
 ADJUSTABLE = ("ours", "theirs")
 KINDS = ("count", "count_from_rate", "sum", "rate")
 COUNT_KEYS = ("compared", "mismatched", "explained", "unexplained")
-# Columns of its play-by-play this repository's cache leaves out and the check reads: the causes
-# read qb_scramble, and the counts of plays recorded as no_play read the play text (desc).
-SNAPSHOT_EXTRAS = ("play_id", "qb_scramble", "desc")
 PBP_MARKERS = {"play_id", "game_id", "qb_scramble", "posteam", "epa", "season"}
 
 
@@ -163,61 +167,60 @@ def snapshot_files(audit: Audit) -> dict[int, Any]:
     return chosen
 
 
-def season_pbp(season: int, snapshot: Any, audit: Audit) -> tuple[pl.DataFrame, dict[str, Any]]:
-    """Return the season's cached play-by-play with the snapshot's extra columns attached.
+def season_pbp(
+    season: int, snapshot: Path, cache_dir: Path, audit: Audit
+) -> tuple[pl.DataFrame, dict[str, Any]] | None:
+    """Return the season's play-by-play as the ETL aggregates it, checked against the snapshot.
 
-    The extra columns are attached by row position. That is sound only because the snapshot's
-    regular-season rows, prepared with this repository's own ``_prepare_pbp`` (which keeps their
-    order), equal the cache row by row on every cached column, so the run fails otherwise. Two
-    more checks fail the run: a ``play_id`` repeated within a game, and rows equal on every cached
-    column (which equality cannot tell apart) whose attached ``qb_scramble`` values differ.
+    The season is read through this repository's loader from ``cache_dir`` (a cache hit only:
+    every audited season is historical, and a cache file that predates the columns the code
+    reads fails the run instead of downloading), then repaired as the ETL repairs it
+    (``nflverse_sources.repair_one_team_pbp_games``, reading the season rosters from the same
+    cache). Before the repair the snapshot's regular-season rows, prepared with this repository's
+    own ``_prepare_pbp``, must equal the cached rows on every cached column, ``play_id``,
+    ``qb_scramble`` and ``desc`` included, or the run fails. Returns ``None`` when the season
+    cannot be read.
     """
-    cached = pl.read_parquet(audit.record(CACHE / f"pbp_{season}_reg.parquet"))
+    path = _pbp_cache_path(cache_dir, season, regular_season_only=True)
+    if not path.is_file():
+        audit.fail("cache", f"{season}: {portable(str(path))} does not exist")
+        return None
+    if _read_cached_frame(audit.record(path), tuple(constants.PBP_COLUMNS)) is None:
+        audit.fail("cache", f"{season}: {portable(str(path))} predates the columns the code reads")
+        return None
+    cached = loaders.load_pbp([season], cache_dir=cache_dir, current_season=CURRENT_SEASON)
     schema = pl.read_parquet_schema(snapshot)
-    wanted = [c for c in constants.PBP_COLUMNS if c in schema] + list(SNAPSHOT_EXTRAS)
-    raw = pl.read_parquet(snapshot, columns=wanted)
+    raw = pl.read_parquet(snapshot, columns=[c for c in constants.PBP_COLUMNS if c in schema])
     prepared = _prepare_pbp(raw, regular_season_only=True)
     regular = raw.filter(pl.col("season_type") == "REG") if "season_type" in raw.columns else raw
     identical = prepared.equals(cached) and regular.height == cached.height
+    if not identical:
+        audit.fail("snapshot", f"{season}: the snapshot is not row by row equal to the cache")
+    repaired_games = repair_games(cached)
+    for roster_season in sorted({int(game[:4]) for game in repaired_games}):
+        roster = nflverse_sources.ROSTERS.cache_path(
+            cache_dir, roster_season, regular_season_only=False
+        )
+        if not roster.is_file():
+            audit.fail("cache", f"{season}: the repair's {portable(str(roster))} does not exist")
+            return None
+        audit.record(roster)
+    repaired = nflverse_sources.repair_one_team_pbp_games(
+        cached, cache_dir=cache_dir, current_season=CURRENT_SEASON
+    )
     report: dict[str, Any] = {
         "file": snapshot.name,
         "plays": cached.height,
         "identical_to_cache": identical,
         "cached_columns_compared": len(cached.columns),
+        "repaired_games": repaired_games,
     }
-    extras = regular.select(SNAPSHOT_EXTRAS)
-    if not identical:
-        audit.fail("snapshot", f"{season}: the snapshot is not row by row equal to the cache")
-        # The extra columns cannot be lined up: attach them empty so the rest of the run reports.
-        return cached.hstack(extras.clear(n=cached.height)), report
-    attached = cached.hstack(extras)
-    repeated_ids = (
-        attached.group_by("game_id")
-        .agg(pl.col("play_id").n_unique().alias("ids"), pl.len().alias("rows"))
-        .filter(pl.col("ids") != pl.col("rows"))
-        .height
-    )
-    twins = (
-        attached.group_by(cached.columns)
-        .agg(pl.len().alias("rows"), pl.col("qb_scramble").n_unique().alias("flags"))
-        .filter(pl.col("rows") > 1)
-    )
-    differing = twins.filter(pl.col("flags") > 1).height
-    report.update(
-        games_repeating_a_play_id=repeated_ids,
-        rows_equal_to_another_row=int(twins["rows"].sum()),
-        groups_of_equal_rows=twins.height,
-        groups_of_equal_rows_differing_in_qb_scramble=differing,
-    )
-    if repeated_ids:
-        audit.fail("snapshot", f"{season}: {repeated_ids} games repeat a play_id")
-    if differing:
-        audit.fail(
-            "snapshot",
-            f"{season}: {differing} groups of rows equal on every cached column differ in "
-            "qb_scramble, so attaching it by row position is ambiguous",
-        )
-    return attached, report
+    return repaired, report
+
+
+def repair_games(pbp: pl.DataFrame) -> list[str]:
+    """Return the games the ETL's repair rebuilds: their player team columns name one team."""
+    return player_team_repair.one_team_games(pbp, list(constants.PBP_PLAYER_TEAM_ID_COLUMNS))
 
 
 def ours_frame(pbp: pl.DataFrame) -> pl.DataFrame:
@@ -435,15 +438,16 @@ def check_keys(
 
 
 def check_coverage(
-    season: int,
+    cached_schedule: pl.DataFrame,
     ours: pl.DataFrame,
     theirs: pl.DataFrame,
     pbp: pl.DataFrame,
     expected_missing: set[str],
     audit: Audit,
 ) -> dict[str, Any]:
-    """Check every played regular-season game of the cached schedule against both sides."""
-    schedule = pl.read_parquet(audit.record(CACHE / f"schedule_{season}.parquet")).filter(
+    """Check every played regular-season game of the season's cached schedule against both sides."""
+    season = int(cached_schedule["season"][0])
+    schedule = cached_schedule.filter(
         (pl.col("game_type") == "REG")
         & pl.col("home_score").is_not_null()
         & pl.col("away_score").is_not_null()
@@ -483,10 +487,21 @@ def check_coverage(
 # ---------------------------------------------------------------------------------------------
 
 
-def main() -> int:
-    """Run the parity check and write the reports."""
-    audit = Audit()
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the parity check and write the reports, with every nflverse download blocked."""
+    args = parse_args((__doc__ or "").splitlines()[0], argv)
+    block_downloads()
     code = SosCode()
+    try:
+        return _run(code, args.data_dir)
+    finally:
+        code.cleanup()
+
+
+def _run(code: SosCode, data_dir: Path) -> int:
+    """Run the parity check on ``data_dir``'s play-by-play cache and write the reports."""
+    audit = Audit()
+    cache_dir = data_dir / "cache" / "nflreadpy"
     rules = yaml.safe_load(RULES.read_text(encoding="utf-8"))
     tolerance = float(rules["tolerance"])
     expected_missing = set(rules["games_without_play_by_play"])
@@ -513,7 +528,10 @@ def main() -> int:
         if season not in snapshots:
             continue
         log.info("Season %d", season)
-        pbp, snapshot_report = season_pbp(season, snapshots[season], audit)
+        read = season_pbp(season, snapshots[season], cache_dir, audit)
+        if read is None:
+            continue
+        pbp, snapshot_report = read
         theirs = theirs_frame(season, audit, code_map)
         if list(theirs.columns[: len(log_columns)]) != log_columns:
             audit.fail("game-log columns", f"{season} columns differ from {SEASONS[0]}'s")
@@ -536,7 +554,8 @@ def main() -> int:
             if len(audit.failures) > before:
                 break
         keys = check_keys(season, ours_frame(pbp), theirs, pbp, audit)
-        coverage = check_coverage(season, base_ours, theirs, pbp, expected_missing, audit)
+        schedule = pl.read_parquet(audit.record(cache_dir / f"schedule_{season}.parquet"))
+        coverage = check_coverage(schedule, base_ours, theirs, pbp, expected_missing, audit)
         season_pairs = {}
         for pair in pairs:
             base = compare(pair, base_ours, theirs, tolerance)
@@ -560,6 +579,7 @@ def main() -> int:
             "snapshot": snapshot_report,
             "keys": keys,
             "coverage": coverage,
+            "repaired_games": snapshot_report.pop("repaired_games"),
             "one_team_games": broken,
             "uncounted_situational_plays": uncounted_situational_plays(pbp),
             "wiped_out_plays": wiped_out_plays(pbp),
@@ -576,15 +596,21 @@ def main() -> int:
             audit.fail("unexplained", _describe(record))
 
     payload = {
-        "generated_by": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py",
+        "generated_by": (
+            "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py "
+            f"--data-dir {portable(str(data_dir))}"
+        ),
+        "data_dir": portable(str(data_dir)),
         "tolerance": tolerance,
         "sos_checkout": checkout,
         "team_code_map": dict(sorted(code_map.items())),
         "snapshot": {
             "directory": str(NFLREADPY_SNAPSHOT),
             "manifest": str(NFLREADPY_SNAPSHOT_MANIFEST),
-            "extra_columns": list(SNAPSHOT_EXTRAS),
         },
+        "repaired_games": sorted(
+            game for report in seasons_report.values() for game in report["repaired_games"]
+        ),
         "one_team_games": dict(sorted(broken_all.items())),
         "game_log_sources": {
             column: {"source": sources[column].source, "via": sources[column].via}
@@ -611,7 +637,6 @@ def main() -> int:
     }
     write_outputs(payload, records)
     OUT_MD.write_text(portable(render(payload, rules, records)), encoding="utf-8")
-    code.cleanup()
     log.info("%d mismatching pair values, %d failures", len(records), len(audit.failures))
     return 1 if audit.failures else 0
 
@@ -702,15 +727,9 @@ def summarize_causes(
                 plays_compared=sum(s["plays"] for s in snapshots),
                 seasons_identical=sum(s["identical_to_cache"] for s in snapshots),
                 seasons_compared=len(snapshots),
-                **{
-                    key: sum(s.get(key, 0) for s in snapshots)
-                    for key in (
-                        "games_repeating_a_play_id",
-                        "rows_equal_to_another_row",
-                        "groups_of_equal_rows",
-                        "groups_of_equal_rows_differing_in_qb_scramble",
-                    )
-                },
+                cached_columns_compared=max(
+                    (s["cached_columns_compared"] for s in snapshots), default=0
+                ),
             )
         summary[cause_id] = entry
     return summary

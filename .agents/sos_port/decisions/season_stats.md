@@ -4,11 +4,13 @@ Every judgment call made while porting `nfl-sos-ratings`' season statistics into
 `src/nfl_predictor/season_stats/` (its team and quarterback game logs, season rows, opponent
 profiles, win-probability bins, schedule leaderboard, and metric registry), and every place the
 port departs from that project at its frozen commit `9081bce`. The parity audit rebuilds every
-published table of these kinds for 1999-2025 from the snapshot of nflreadpy's disk cache that
-project's files were built from, read through this repository's loaders, and compares them cell by
-cell: 270 tables, 11,754,571 cells, all bit-identical, 0 column or row differences
-(`.agents/sos_port/SEASON_STATS_PARITY.md`). So the departures below change how inputs are read,
-how the code is organized, or a column's integer width, never a published value.
+published table of these kinds for 1999-2026 (2026 through the weeks played at that commit) from
+the snapshot of nflreadpy's disk cache that project's files were built from, read through this
+repository's loaders, and compares them cell by cell: 280 tables, 11,895,632 cells, all
+bit-identical, 0 column or row differences; its schedule leaderboard equals that project's own on
+all 861 team-seasons (`.agents/sos_port/SEASON_STATS_PARITY.md`). So the departures below change
+how inputs are read, how the code is organized, or a column's integer width, never a published
+value.
 
 Commands run from this repository's root with the worktree's environment:
 
@@ -19,7 +21,11 @@ Commands run from this repository's root with the worktree's environment:
 - "the parity tests": `.venv/bin/python -m pytest -p no:cacheprovider -n 0 --no-cov
   tests/test_season_stats_published_parity.py`;
 - "the comparator check": `.venv/bin/python .agents/sos_port/decisions/season_stats_audit_check.py`,
-  output in `season_stats_audit_check_output.txt` beside this file.
+  output in `season_stats_audit_check_output.txt` beside this file;
+- "the parts analysis": `.venv/bin/python
+  .agents/sos_port/decisions/season_stats_recoverable_parts.py`, output in
+  `season_stats_recoverable_parts_output.txt` beside this file, run at `0b68047`, before the
+  adapter rebuilt the rates it found.
 
 ## 1. Where the package and the metric registry live
 
@@ -54,19 +60,24 @@ Commands run from this repository's root with the worktree's environment:
 - **What differs**: that project's registry imports `BOOTSTRAP_RESAMPLES`, `RANGE_QUANTILES` and
   `quantile_suffix` from its `rating_ranges` module, which the ratings port carries as
   `nfl_predictor.ratings.rating_ranges`. Here `metrics/rank_ranges.py` restates the three.
-- **Options**: (a) restate them; (b) import them from the ratings package.
+- **Options**: (a) restate them, with tests that hold them equal to the ratings package's; (b)
+  import them from the ratings package.
 - **Decision**: (a).
-- **Reasoning**: the ratings package is on another branch that has not merged into the
-  integration branch, so (b) would leave this branch unable to import its own registry; restating
-  three values also keeps the registry free of the ratings code's numpy imports. A test pins the
-  values to the published column suffixes.
-- **Data**: `test_rank_range_settings_match_the_published_rank_ranges` in
-  `tests/test_season_stats_registry.py` (1000 resamples; suffixes `_q025` through `_q975`); the
-  ratings branch's `rating_ranges.py` has the same values (`git show
-  worktree-agent-af021dc0836482a44:src/nfl_predictor/ratings/rating_ranges.py | sed -n 27,29p`).
+- **Reasoning**: `ratings.rating_ranges` imports numpy for the bootstrap that sits beside the
+  settings, and the web API reads the registry, so (b) would load numpy and the ratings code
+  wherever the registry is read; today the registry loads neither. Restating three values costs a
+  test that keeps them equal.
+- **Data**: in `tests/test_season_stats_registry.py`,
+  `test_rank_range_settings_equal_the_ratings_packages` requires the resample count, the quantile
+  levels and every suffix to equal those of `ratings.rating_ranges`;
+  `test_the_registry_imports_without_numpy` imports the registry in a fresh interpreter and finds
+  neither numpy nor `nfl_predictor.ratings` loaded; and
+  `test_rank_range_settings_match_the_published_rank_ranges` pins the values to the published
+  column suffixes (1000 resamples; `_q025` through `_q975`).
 - **Feature-value impact**: none.
-- **How to reverse it**: once both are merged, import the three from
-  `nfl_predictor.ratings.rating_ranges` in `metrics/registry.py` and delete `rank_ranges.py`.
+- **How to reverse it**: import the three from `nfl_predictor.ratings.rating_ranges` in
+  `metrics/registry.py`, delete `rank_ranges.py`, and drop the numpy test, accepting that the
+  registry then loads numpy.
 - **Review**: not yet reviewed.
 
 ## 3. The inputs come through this repository's loaders, plus what that project's loaders added
@@ -109,9 +120,10 @@ Commands run from this repository's root with the worktree's environment:
 - **Reasoning**: (b) changes the columns of a cache the ETL reads, invalidating it, for a change
   that wires nothing in; (c) bypasses the cache contract. (a) reuses the reviewed loader without
   editing it.
-- **Data**: the facts, section 3: `fumbles_lost` sums `sack_fumbles_lost` and
-  `rushing_fumbles_lost`, and `first_downs` sums `passing_first_downs` and `rushing_first_downs`,
-  all four read by the override (`game_logs.OFFICIAL_TEAM_STAT_COLUMNS`).
+- **Data**: the facts, section 3: `fumbles_lost` sums `sack_fumbles_lost`, `rushing_fumbles_lost`
+  and `receiving_fumbles_lost`, and `first_downs` sums `passing_first_downs` and
+  `rushing_first_downs`; the override reads four of those five parts, all but
+  `receiving_fumbles_lost` (`game_logs.OFFICIAL_TEAM_STAT_COLUMNS`).
 - **Feature-value impact**: none; once the integration stream runs it, one new cache file per
   season.
 - **How to reverse it**: point `load_season_inputs` at another team-stat loader.
@@ -168,8 +180,11 @@ Commands run from this repository's root with the worktree's environment:
   `play_id` does not increase within thousands of games. No linear algebra is involved, so there is
   no BLAS thread count to pin.
 - **Data**: the audit is bit-identical at one Polars thread (the committed report) and at 24 (the
-  audit run with `POLARS_MAX_THREADS=24` and `--out-dir` pointing elsewhere: 11,754,571 of
-  11,754,571 cells, on the committed code). Before the sort in
+  audit run with `POLARS_MAX_THREADS=24` and `--out-dir` pointing elsewhere: 11,895,632 of
+  11,895,632 cells, at `508d2a9`). The `maintain_order` of the two profile joins is a guard, not a
+  fix: with it removed from all three joins, the 765 season statistics and ratings tests pass and
+  the audit of 1999-2026 stays bit-identical at 1 and at 24 threads (at `508d2a9`); it pins an
+  order Polars documents as unspecified without it. Before the sort in
   `build_season_tables`, reversed input rows gave other bits in `team_per_game_stats`,
   `opponent_profiles`, and `combined`
   (`test_build_season_tables_sum_each_teams_games_in_one_order_whatever_the_input_order` fails with
@@ -188,30 +203,42 @@ Commands run from this repository's root with the worktree's environment:
   `qb_opponent_stats._qb_allowed_stats_by_pair`.
 - **Review**: not yet reviewed.
 
-## 8. The published-log check covers what the published logs determine
+## 8. The published-log check covers the rate parts the published logs determine
 
 - **What differs**: the task asks for an adapter that reads the published game logs to check the
   season tables. The published logs leave out every rate's hidden numerator and denominator, which
-  the season rows and opponent profiles pool over games. `published_logs.py` rebuilds exactly the
-  parts the published columns determine, as the code defines them (the per-snap rates, the offense
-  ratios of published columns, and their defensive mirrors from the opponent's row), and the
-  audit's second comparison checks every column that does not need another rate's parts.
-- **Options**: (a) rebuild the determined parts and leave the rest uncompared; (b) estimate the
-  missing parts (a published rate times a published denominator where one exists); (c) no
-  published-log layer, only the play-by-play build.
-- **Decision**: (a).
-- **Reasoning**: (b) would invent values that project never had, with rounding error, and still
-  could not cover rates whose denominator the logs do not carry (passes with a completion
-  probability over expected, third-down plays, drives with a starting yard line). The full check of
+  the season rows and opponent profiles pool over games. `published_logs.py` rebuilds the parts
+  the published columns determine, as the code defines them: a numerator and denominator that are
+  both published (the build's working count of scrimmage snaps is the published
+  `offensive_snaps`), a whole-number total the logs drop as the published rate times its published
+  denominator, rounded, and the defensive mirror of each from the opponent's row. The audit's
+  second comparison checks every column that needs no part the adapter does not rebuild.
+- **Options**: (a) rebuild only the parts whose numerator, denominator and rate are all published
+  under the specs' names (the first version); (b) also rebuild a whole-number total from its
+  published rate and denominator, and read the working snap count as `offensive_snaps`; (c) also
+  estimate parts that are not whole numbers the same way; (d) no published-log layer, only the
+  play-by-play build.
+- **Decision**: (b).
+- **Reasoning**: a count, or a sum of whole yards or points, is a whole number, so the published
+  rate times its denominator rounds back to it exactly, and the parts analysis confirms it in every
+  team-game of 1999-2025; (b) adds values that project had, not estimates. (c) would invent EPA
+  totals with rounding error, and some rates' denominators are not published at all (passes with
+  a completion probability, third-down plays, drives with a starting yard line). The full check of
   those columns is the play-by-play build, which reproduces the published game logs bit for bit
   and every season table from them; the published-log layer adds an independent check of the
   season-table code on the published inputs.
-- **Data**: the audit's second comparison: 1,125,975 cells compared, all bit-identical; 276,432
-  cells not determined by the published logs; 77 team rates and 1 quarterback rate whose parts the
-  logs do not determine, listed in the report.
+- **Data**: the parts analysis: of the 77 team rates the first version did not rebuild, 15 have
+  both parts among the published columns, 29 more a whole-number numerator that the published
+  rate times a published denominator rounds back to, and 33 neither. The audit's second
+  comparison, 1999-2026: 1,322,210 cells compared, all bit-identical, and 125,876 cells not
+  rebuilt; in 1999-2025, 1,280,955 compared and 121,452 not rebuilt, against 1,125,975 and 276,432
+  in the first version. The 33 team rates and 1 quarterback rate (completion percentage over
+  expected) the adapter does not rebuild are listed in the report. Each rule has a test in
+  `tests/test_season_stats_published_logs.py`.
 - **Feature-value impact**: none.
-- **How to reverse it**: extend `published_logs._own_specs` if a later published log carries more
-  parts.
+- **How to reverse it**: drop `_PUBLISHED_COUNTS`, `_WHOLE_NUMBER_TOTALS` and
+  `_WHOLE_NUMBER_RATES` from `published_logs.py`; extend them if a later published log carries
+  more parts.
 - **Review**: not yet reviewed.
 
 ## 9. The published-log check takes each team's opponents from the schedule
@@ -246,12 +273,10 @@ Commands run from this repository's root with the worktree's environment:
 - **Reasoning**: a missing column would silently zero every statistic built on it. The audit sets
   the play-by-play cache's column list to exactly these columns and reproduces every table, so the
   list is sufficient.
-- **Data**: the audit's "Play-by-play columns" section: 74 of the 122 are missing from this
-  branch's `constants.PBP_COLUMNS`; all 122 are in the 139-column list of the play-by-play cache
-  stream's branch at `3870a39` (`git show
-  worktree-agent-aee4f463ac1335152:src/nfl_predictor/constants.py`, compared with
-  `SEASON_STATS_PBP_COLUMNS`). Until that list merges, `load_season_inputs` raises for any season
-  with plays; the audit and the parity tests set the list themselves.
+- **Data**: the audit's "Play-by-play columns" section: none of the 122 is missing from
+  `constants.PBP_COLUMNS`, whose 139 columns arrived when the play-by-play cache stream merged, so
+  `load_season_inputs` reads a season from this repository's own cache. The audit and the parity
+  tests still set the list to exactly these 122, so the build reads nothing else.
 - **Feature-value impact**: none.
 - **How to reverse it**: drop the guard in `load_season_inputs`.
 - **Review**: not yet reviewed.
@@ -279,7 +304,10 @@ Commands run from this repository's root with the worktree's environment:
   integration stream.
 - **Data**: `main.py` at `9081bce` never names `wp_filter` (`grep -c wp_filter
   nfl_sos_ratings/main.py` in an archive of that commit prints 0); the published file kinds are the
-  ten the audit compares plus the ratings files.
+  ten the audit compares plus the ratings files. The ported ranking equals that project's own
+  `schedules.rank_schedules` on the published ratings: the audit's "Schedule leaderboard" section,
+  861 team-seasons of 1999-2025 (2026 is still in progress, so both leave it out), every cell
+  equal; the season column is `Int64` here and `Int32` there.
 - **Feature-value impact**: none.
 - **How to reverse it**: port a part when a stream needs it.
 - **Review**: not yet reviewed.
@@ -334,13 +362,13 @@ Commands run from this repository's root with the worktree's environment:
   2024, scrambles coded as runs in 2004, Jacksonville's 2001 home game credited to the visitor, a
   1999 game) served as nflreadpy served them and built through the loaders, and the 1999 and 2024
   published logs for the season tables. Fixtures are Parquet (935 KB, 47 files), re-included by a
-  `.gitignore` line at the end of the file, with provenance and hashes.
+  `.gitignore` line beside the ratings fixtures' line, with provenance and hashes.
 - **Reasoning**: bit identity depends on the CPU's kernels and library versions, so the tolerance
   keeps the check meaningful elsewhere, and the counts show the result is stronger. A sum of plays'
   EPA differs from another summation order by about 1e-15; 1e-9 is far below any single play's
   value.
-- **Data**: the audit: 0 cells outside the tolerance and 0 within it but not bit-identical, in both
-  comparisons. The comparator check: a copy of the 2024 team game logs fails with a text, an
+- **Data**: the audit: 0 cells outside the tolerance and 0 within it but not bit-identical, in all
+  three comparisons. The comparator check: a copy of the 2024 team game logs fails with a text, an
   integer, a null, or a float moved by 1e-6 changed in one cell, with its rows reversed or cut, its
   columns reversed, or Washington's code written back, and passes with a float moved by 1e-12 (one
   cell within tolerance) or unchanged. Two runs of

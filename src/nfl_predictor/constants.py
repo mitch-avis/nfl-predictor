@@ -802,6 +802,20 @@ ELO_TREND_COLUMNS = [
     "qb_value_4wk_trend",
 ]
 
+# This repository's own Elo (FiveThirtyEight's method, computed from game results by
+# `utils/polars/elo_ratings.py`), separate from the `data/qb_elos.csv` columns above so one
+# dataset can carry both. Per team, prefixed with away_/home_ and with an away-minus-home `_diff`:
+# the team's pre-game rating, its quarterback adjustment included when that component is on.
+OWN_ELO_TEAM_STATS = ["own_elo"]
+# Per game: the home team's pre-game win probability from the same ratings, home field and the
+# other game-level adjustments included.
+OWN_ELO_GAME_COLUMNS = ["own_elo_home_win_prob"]
+OWN_ELO_COLUMNS = [
+    *(f"{side}_{stat}" for stat in OWN_ELO_TEAM_STATS for side in ("away", "home")),
+    *(f"{stat}_diff" for stat in OWN_ELO_TEAM_STATS),
+    *OWN_ELO_GAME_COLUMNS,
+]
+
 TREND_FEATURE_COLUMNS = [
     "last_5_games_rating_trend",
     *ELO_TREND_COLUMNS,
@@ -923,6 +937,9 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     # betting win totals, so the group is market-informed; a run with no market information
     # disables it along with the market features.
     "elo": (*ELO_COLUMNS, *ELO_TREND_COLUMNS),
+    # Every column of this repository's own Elo (OWN_ELO_COLUMNS). Its win-total pull is market
+    # information like the `elo` group's; with that component off, the group carries none.
+    "own_elo": tuple(OWN_ELO_TEAM_STATS),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
         "special_teams_tds",

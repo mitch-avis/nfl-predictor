@@ -9,6 +9,7 @@ import numpy as np
 import polars as pl
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.utils.polars import elo_ratings
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fivethirtyeight_elo" / "nfl_games_2017_2019.csv"
@@ -653,3 +654,36 @@ def test_fit_win_total_weights_needs_the_win_totals() -> None:
     # Act & Assert
     with pytest.raises(ValueError, match="win_totals"):
         elo_ratings.fit_win_total_weights(games)
+
+
+def test_build_own_elo_features_publishes_the_group_columns_in_schedule_order() -> None:
+    """One row per schedule row, in its order: game id, then the own Elo group's columns."""
+    # Arrange
+    games = _schedule(
+        _game("late", (2020, 2), ("BBB", "AAA")),
+        _game("early", (2020, 1), ("AAA", "BBB"), (30, 0)),
+    )
+
+    # Act
+    features = elo_ratings.build_own_elo_features(games, settings=elo_ratings.FRAMEWORK)
+
+    # Assert
+    assert features.columns == ["game_id", *constants.OWN_ELO_COLUMNS]
+    assert features["game_id"].to_list() == ["late", "early"]
+
+
+def test_build_own_elo_features_rate_each_side_with_its_quarterback_adjustment() -> None:
+    """A side's own Elo is its rating plus its adjustment; the diff is away minus home."""
+    # Arrange
+    games = _schedule(_game("g1", (2020, 1), ("AAA", "BBB")))
+    inputs = elo_ratings.EloInputs(qb_adjustments=_qb_adjustments(("g1", 30.0, -20.0)))
+    settings = elo_ratings.EloSettings(quarterback=True)
+
+    # Act
+    features = elo_ratings.build_own_elo_features(games, settings=settings, inputs=inputs)
+
+    # Assert
+    row = features.row(0, named=True)
+    assert (row["home_own_elo"], row["away_own_elo"]) == (1535.0, 1485.0)
+    assert row["own_elo_diff"] == 1485.0 - 1535.0
+    assert row["own_elo_home_win_prob"] == pytest.approx(_logistic(65.0 + 50.0))

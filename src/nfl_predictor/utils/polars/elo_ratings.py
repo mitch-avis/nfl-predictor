@@ -58,6 +58,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from nfl_predictor import constants
 from nfl_predictor.utils.polars import elo_game_context
 
 if TYPE_CHECKING:
@@ -572,4 +573,40 @@ def compute_elo_ratings(
             "away_rating_post": rated.away_posts,
         },
         schema=_RESULT_SCHEMA,
+    )
+
+
+def build_own_elo_features(
+    schedule: pl.DataFrame,
+    *,
+    settings: EloSettings,
+    inputs: EloInputs = NO_INPUTS,
+) -> pl.DataFrame:
+    """Return the own Elo feature group for every game of this repository's schedule frame.
+
+    Args:
+        schedule: The schedule, as for :func:`compute_elo_ratings`: every game, upcoming ones
+            included, with the columns that function reads.
+        settings: The components switched on.
+        inputs: Seeds and the inputs the quarterback and win-total switches read.
+
+    Returns:
+        One row per schedule row, in its order: ``game_id`` and ``constants.OWN_ELO_COLUMNS``,
+        that is each side's pre-game rating with its quarterback adjustment
+        (``away_own_elo``, ``home_own_elo``), away minus home (``own_elo_diff``) and the home
+        win probability (``own_elo_home_win_prob``), all from games strictly before.
+
+    """
+    rated = compute_elo_ratings(schedule, settings=settings, inputs=inputs)
+    teams = rated.select(
+        "game_id",
+        (pl.col("away_rating") + pl.col("away_qb_adj")).alias("away_own_elo"),
+        (pl.col("home_rating") + pl.col("home_qb_adj")).alias("home_own_elo"),
+        pl.col("home_win_prob").alias("own_elo_home_win_prob"),
+    ).with_columns((pl.col("away_own_elo") - pl.col("home_own_elo")).alias("own_elo_diff"))
+    return schedule.select(pl.col("game_id").cast(pl.String)).join(
+        teams.select("game_id", *constants.OWN_ELO_COLUMNS),
+        on="game_id",
+        how="left",
+        maintain_order="left",
     )

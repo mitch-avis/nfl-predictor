@@ -80,7 +80,9 @@ When market lines exist, the system produces market-derived features and support
   `--disable-feature-groups elo` on `backtest` or `train`, `disable_feature_groups: [elo]` in the
   weekly config. The repository's own Elo (`utils/polars/own_elo_build.py`) publishes its
   win-total preset as the `own_elo_wt` group, market-informed in the same way, so such a run
-  disables `elo,own_elo_wt` and keeps the market-free `own_elo`.
+  disables `elo,own_elo_wt` and keeps the market-free `own_elo`. Leaving the market columns out
+  does not leave these groups out (`constants.MARKET_INFORMED_FEATURE_GROUPS`); a run that keeps
+  either of them logs a warning naming it (`ml/feature_spec.build_feature_spec`).
 
 Market anchoring details:
 

@@ -1256,13 +1256,13 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     "next_opponent_identity": ("next_opponent_abbr",),
     # Every column built from `data/qb_elos.csv` (the `../nfeloqb` Elo file): the Elo values
     # and their four-week trends. That Elo pulls each preseason rating toward one built from
-    # betting win totals, so the group is market-informed; a run with no market information
-    # disables it along with the market features.
+    # betting win totals, so the group is market-informed (MARKET_INFORMED_FEATURE_GROUPS): a
+    # run that leaves the market columns out keeps it unless it disables the group as well.
     "elo": (*ELO_COLUMNS, *ELO_TREND_COLUMNS),
     # This repository's own Elo, market-free preset (OWN_ELO_COLUMNS).
     "own_elo": tuple(OWN_ELO_TEAM_STATS),
-    # The own Elo's win-total preset (OWN_WT_ELO_COLUMNS). Market-informed like the `elo` group:
-    # a run with no market information disables both.
+    # The own Elo's win-total preset (OWN_WT_ELO_COLUMNS). Market-informed like the `elo` group,
+    # and likewise kept by a run without the market columns unless it disables the group.
     "own_elo_wt": tuple(OWN_WT_ELO_TEAM_STATS),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
@@ -1274,6 +1274,12 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
         "def_tds",
     ),
 }
+
+# Feature groups built on betting-market information without being line columns. Leaving the
+# market columns out (`include_market` off) does not leave these out: a run with no market
+# information at all disables them too, and a run that keeps any of them while leaving the
+# market columns out logs a warning naming it (`ml.feature_spec.build_feature_spec`).
+MARKET_INFORMED_FEATURE_GROUPS = ("elo", "own_elo_wt")
 
 # Raw per-team-game counts and sums produced from play-by-play.
 # These are carried through season-to-date aggregation so rates can be computed as a

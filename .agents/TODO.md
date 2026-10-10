@@ -203,7 +203,12 @@ Steps:
         unexplained mismatch fails;
       - report only: phase 1 changes no production code or data. Its differences (the pre-2006
         scramble rule first) become a list of proposed changes for the user, batched with
-        phase 3's feature-value changes so they share one rebuild and one new reference;
+        phase 3's feature-value changes so they share one rebuild and one new reference.
+        Changed by the user later on 2026-10-10 (about 02:00): step 6 runs autonomously, and every
+        difference is decided by the session and logged with its reasoning and data in
+        `.agents/sos_port/DECISIONS.md` for the user's review; the adopted changes land on the
+        step-6 integration branch, and the production rebuild and merge stay held for the user's
+        final approval (`.agents/step6_plan.md`, "Authority");
    2. the nflverse sources it uses and this repo lacks (weekly player stats, snap counts, players
       and rosters for quarterback identity; ESPN QBR as a validation reference only), with the
       cache-then-degrade pattern;

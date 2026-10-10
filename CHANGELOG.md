@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.46.0] - 2026-10-10
+
+### Changed
+
+- `nfl-predictor compare` names each interval's resampling unit: games, and (season, week) blocks
+  for confidence-pool points (`pool pts (week blocks)` in the paired tables).
+- Every default run, checkpoint and model-artifact directory reads the new `constants.MODELS_PATH`
+  at call time; `walk_forward.DEFAULT_CHECKPOINT_DIR` is now `walk_forward.default_checkpoint_dir()`.
+
+### Added
+
+- Cached loaders for the nflverse player sources the `nfl-sos-ratings` port needs (weekly player
+  stats, snap counts, the players file, season and weekly rosters), with the cache-then-degrade
+  contract of the other nflverse sources (`utils/polars/nflverse_sources.py`). Nothing in the ETL
+  reads them yet, so a default `nfl-predictor data` downloads nothing new.
+- The season quarterback identity rule (a player listed at QB in the players file or any roster
+  week of the season is a quarterback that season) and the Jacksonville 2001-2002 player-team
+  repair, ported from `nfl-sos-ratings` (`player_identity.py`, `player_team_repair.py`).
+- A cached ESPN QBR loader for validation only (`utils/polars/espn_qbr.py`); the suite fails if any
+  command, the weekly run or the web app imports it.
+- The test data guard also redirects `models/`; the README lists what it still leaves alone.
+
+### Fixed
+
+- `nfl-predictor compare` picks the home side at an exact 0.5 probability, as `metrics.picks_home`
+  and the weekly picks do. No model probability in the reviewed runs is exactly 0.5, so only the
+  betting lines' scores change (`.agents/sos_port/decisions/sources.md`).
+- A source frame that lacks every requested column keeps its rows (it used to collapse to one), and
+  a fractional value bound for a whole-number column is an error instead of being truncated.
+
 ## [0.45.0] - 2026-10-09
 
 ### Changed

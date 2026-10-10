@@ -10,7 +10,7 @@ import polars as pl
 import pytest
 
 from nfl_predictor import constants
-from nfl_predictor.utils.polars import elo_ratings
+from nfl_predictor.utils.polars import elo_game_context, elo_ratings
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fivethirtyeight_elo" / "nfl_games_2017_2019.csv"
 
@@ -329,12 +329,15 @@ def test_travel_switch_uses_55_points_plus_the_visitors_trip() -> None:
         _game("ne_home", (2020, 1), ("NE", "LAC"), stadium_id="BOS00"),
         _game("lac_home", (2020, 2), ("LAC", "NE"), stadium_id="LAX01"),
     )
+    miles = elo_game_context.great_circle_miles(
+        constants.STADIUM_COORDINATES["LAX01"], constants.STADIUM_COORDINATES["BOS00"]
+    )
 
     # Act
     rated = elo_ratings.compute_elo_ratings(games, settings=elo_ratings.EloSettings(travel=True))
 
     # Assert
-    assert 55.0 + 10.0 < _diffs(rated)["ne_home"] < 55.0 + 11.0
+    assert _diffs(rated)["ne_home"] == pytest.approx(55.0 + 4.0 * miles / 1000.0, abs=1e-9)
 
 
 def test_compute_elo_ratings_with_travel_needs_the_stadium_column() -> None:

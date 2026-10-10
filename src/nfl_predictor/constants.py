@@ -804,8 +804,9 @@ ELO_TREND_COLUMNS = [
 
 # This repository's own Elo (FiveThirtyEight's method, computed from game results by
 # `utils/polars/elo_ratings.py`), separate from the `data/qb_elos.csv` columns above so one
-# dataset can carry both. Per team, prefixed with away_/home_ and with an away-minus-home `_diff`:
-# the team's pre-game rating, its quarterback adjustment included when that component is on.
+# dataset can carry both. It is published as two families, one per preset. The market-free one:
+# per team, prefixed with away_/home_ and with an away-minus-home `_diff`, the team's pre-game
+# rating, its quarterback adjustment included.
 OWN_ELO_TEAM_STATS = ["own_elo"]
 # Per game: the home team's pre-game win probability from the same ratings, home field and the
 # other game-level adjustments included.
@@ -814,6 +815,16 @@ OWN_ELO_COLUMNS = [
     *(f"{side}_{stat}" for stat in OWN_ELO_TEAM_STATS for side in ("away", "home")),
     *(f"{stat}_diff" for stat in OWN_ELO_TEAM_STATS),
     *OWN_ELO_GAME_COLUMNS,
+]
+# The same columns from the preset with the win-total pull (market information). The stat is
+# `own_wt_elo`, not `own_elo_wt`: group markers match substrings, and `away_own_elo` is a
+# substring of `away_own_elo_wt`, so the market-free group could not leave those columns out.
+OWN_WT_ELO_TEAM_STATS = ["own_wt_elo"]
+OWN_WT_ELO_GAME_COLUMNS = ["own_wt_elo_home_win_prob"]
+OWN_WT_ELO_COLUMNS = [
+    *(f"{side}_{stat}" for stat in OWN_WT_ELO_TEAM_STATS for side in ("away", "home")),
+    *(f"{stat}_diff" for stat in OWN_WT_ELO_TEAM_STATS),
+    *OWN_WT_ELO_GAME_COLUMNS,
 ]
 
 TREND_FEATURE_COLUMNS = [
@@ -937,9 +948,11 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     # betting win totals, so the group is market-informed; a run with no market information
     # disables it along with the market features.
     "elo": (*ELO_COLUMNS, *ELO_TREND_COLUMNS),
-    # Every column of this repository's own Elo (OWN_ELO_COLUMNS). Its win-total pull is market
-    # information like the `elo` group's; with that component off, the group carries none.
+    # This repository's own Elo, market-free preset (OWN_ELO_COLUMNS).
     "own_elo": tuple(OWN_ELO_TEAM_STATS),
+    # The own Elo's win-total preset (OWN_WT_ELO_COLUMNS). Market-informed like the `elo` group:
+    # a run with no market information disables both.
+    "own_elo_wt": tuple(OWN_WT_ELO_TEAM_STATS),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
         "special_teams_tds",

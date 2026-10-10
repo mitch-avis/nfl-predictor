@@ -44,17 +44,24 @@ smaller weight). The first win-total season has nothing earlier and gets no pull
 without a win total keeps the plain regression. The win totals are market information, so a
 setting without the switch refuses them.
 
-Games are rated in season, week, date and ``game_id`` order. Every value for a game comes from
-games strictly before it: a game's pre-game ratings never include its own result, a season's
-pull weight is fitted on earlier seasons only, and a game without a final score (an upcoming
-one) is rated but moves no rating.
+Games are rated in season, week, date and ``game_id`` order. Every rating and league-wide value
+a game reads comes from games strictly before it: a game's pre-game ratings never include its own
+result, a season's pull weight is fitted on earlier seasons only, and a game without a final score
+(an upcoming one) is rated but moves no rating. The one exception is the quarterback adjustment's
+starter: with ``elo_quarterbacks``' default, a completed game's starter is the passer on that
+game's first dropback, known only at kickoff, while an upcoming game uses the projected starter,
+else the team's last one. The ``qb_elos.csv`` columns follow the same convention.
+
+The schedule should start in 1999, nflverse's first season: the seeding (every team at 1505 in
+the first season), the quarterback model's first-start mean and the rolling home field all count
+from the frame's first season, so a frame starting later rates its games differently.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from dataclasses import asdict, dataclass, field, replace
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
@@ -589,39 +596,121 @@ def compute_elo_ratings(
     )
 
 
+@dataclass(frozen=True)
+class OwnEloVariant:
+    """One published family of own Elo columns: a preset and the names its columns take."""
+
+    name: str
+    settings: EloSettings
+    team_stat: str
+    probability_column: str
+
+    @property
+    def columns(self) -> list[str]:
+        """Return the family's columns: each side's rating, away minus home, the probability."""
+        stat = self.team_stat
+        return [f"away_{stat}", f"home_{stat}", f"{stat}_diff", self.probability_column]
+
+
+type OwnEloVariantName = Literal["market_free", "win_totals"]
+# The two published families: the market-free preset under the `own_elo` names, and the preset
+# with the win-total pull under the `own_wt_elo` names. A family's names always come with its
+# preset, so the market-free columns can never carry the win totals.
+OWN_ELO_VARIANTS: dict[str, OwnEloVariant] = {
+    "market_free": OwnEloVariant(
+        "market_free",
+        MARKET_FREE_SETTINGS,
+        constants.OWN_ELO_TEAM_STATS[0],
+        constants.OWN_ELO_GAME_COLUMNS[0],
+    ),
+    "win_totals": OwnEloVariant(
+        "win_totals",
+        WIN_TOTAL_SETTINGS,
+        constants.OWN_WT_ELO_TEAM_STATS[0],
+        constants.OWN_WT_ELO_GAME_COLUMNS[0],
+    ),
+}
+
+
+@dataclass(frozen=True, eq=False)
+class OwnEloFeatures:
+    """One variant's own Elo columns and the record of how they were built.
+
+    Attributes:
+        frame: ``game_id`` and the variant's columns, one row per schedule row in its order.
+        metadata: ``variant``, its ``settings`` switches, its ``columns``, the schedule's
+            ``first_season``, whether seed ratings were given (``seeded``) and the
+            ``win_total_weights`` it used by season (``None`` without the pull).
+
+    """
+
+    frame: pl.DataFrame
+    metadata: dict[str, object]
+
+
 def build_own_elo_features(
     schedule: pl.DataFrame,
     *,
-    settings: EloSettings = MARKET_FREE_SETTINGS,
+    variant: OwnEloVariantName = "market_free",
     inputs: EloInputs = NO_INPUTS,
-) -> pl.DataFrame:
-    """Return the own Elo feature group for every game of this repository's schedule frame.
+) -> OwnEloFeatures:
+    """Return one own Elo feature family for every game of this repository's schedule frame.
+
+    Call it once per variant to publish both families.
 
     Args:
-        schedule: The schedule, as for :func:`compute_elo_ratings`: every game, upcoming ones
-            included, with the columns that function reads.
-        settings: The components switched on; by default the market-free preset, whose
-            quarterback adjustment needs ``inputs.qb_adjustments``
-            (``elo_quarterbacks.value_qb_adjustments``).
-        inputs: Seeds and the inputs the quarterback and win-total switches read.
+        schedule: The schedule, as for :func:`compute_elo_ratings`: every game from 1999 on,
+            upcoming ones included (the module docstring says why the start matters).
+        variant: ``"market_free"`` (``MARKET_FREE_SETTINGS``, the ``own_elo`` columns) or
+            ``"win_totals"`` (``WIN_TOTAL_SETTINGS``, the ``own_wt_elo`` columns).
+        inputs: The quarterback adjustments both presets need
+            (``elo_quarterbacks.value_qb_adjustments``), and the win totals the win-total one
+            needs and the market-free one refuses. Weights not given are fitted.
 
     Returns:
-        One row per schedule row, in its order: ``game_id`` and ``constants.OWN_ELO_COLUMNS``,
-        that is each side's pre-game rating with its quarterback adjustment
-        (``away_own_elo``, ``home_own_elo``), away minus home (``own_elo_diff``) and the home
-        win probability (``own_elo_home_win_prob``), all from games strictly before.
+        The variant's frame, ``game_id`` and its four columns (each side's pre-game rating with
+        its quarterback adjustment, away minus home, the home win probability), and the
+        metadata of :class:`OwnEloFeatures`.
+
+    Raises:
+        ValueError: For an unknown variant, or as :func:`compute_elo_ratings` does.
 
     """
+    preset = OWN_ELO_VARIANTS.get(variant)
+    if preset is None:
+        msg = f"unknown own Elo variant {variant!r}; choose one of {sorted(OWN_ELO_VARIANTS)}"
+        raise ValueError(msg)
+    settings = preset.settings
+    _check_win_totals(settings, inputs.win_totals)
+    weights: Mapping[int, float] | None = None
+    if settings.win_totals:
+        weights = inputs.win_total_weights
+        if weights is None:
+            weights = fit_win_total_weights(schedule, settings=settings, inputs=inputs)
+        inputs = replace(inputs, win_total_weights=weights)
     rated = compute_elo_ratings(schedule, settings=settings, inputs=inputs)
+    away, home, diff, probability = preset.columns
     teams = rated.select(
         "game_id",
-        (pl.col("away_rating") + pl.col("away_qb_adj")).alias("away_own_elo"),
-        (pl.col("home_rating") + pl.col("home_qb_adj")).alias("home_own_elo"),
-        pl.col("home_win_prob").alias("own_elo_home_win_prob"),
-    ).with_columns((pl.col("away_own_elo") - pl.col("home_own_elo")).alias("own_elo_diff"))
-    return schedule.select(pl.col("game_id").cast(pl.String)).join(
-        teams.select("game_id", *constants.OWN_ELO_COLUMNS),
+        (pl.col("away_rating") + pl.col("away_qb_adj")).alias(away),
+        (pl.col("home_rating") + pl.col("home_qb_adj")).alias(home),
+        pl.col("home_win_prob").alias(probability),
+    ).with_columns((pl.col(away) - pl.col(home)).alias(diff))
+    frame = schedule.select(pl.col("game_id").cast(pl.String)).join(
+        teams.select("game_id", *preset.columns),
         on="game_id",
         how="left",
         maintain_order="left",
     )
+    seasons = schedule.get_column("season").cast(pl.Int64).to_list()
+    metadata: dict[str, object] = {
+        "variant": preset.name,
+        "settings": asdict(settings),
+        "columns": preset.columns,
+        "first_season": min(seasons) if seasons else None,
+        "seeded": bool(inputs.initial_ratings),
+        "win_total_weights": None
+        if weights is None
+        else {str(season): weight for season, weight in sorted(weights.items())},
+    }
+    return OwnEloFeatures(frame, metadata)

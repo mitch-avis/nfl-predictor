@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -659,39 +661,6 @@ def test_fit_win_total_weights_needs_the_win_totals() -> None:
         elo_ratings.fit_win_total_weights(games)
 
 
-def test_build_own_elo_features_publishes_the_group_columns_in_schedule_order() -> None:
-    """One row per schedule row, in its order: game id, then the own Elo group's columns."""
-    # Arrange
-    games = _schedule(
-        _game("late", (2020, 2), ("BBB", "AAA")),
-        _game("early", (2020, 1), ("AAA", "BBB"), (30, 0)),
-    )
-
-    # Act
-    features = elo_ratings.build_own_elo_features(games, settings=elo_ratings.FRAMEWORK)
-
-    # Assert
-    assert features.columns == ["game_id", *constants.OWN_ELO_COLUMNS]
-    assert features["game_id"].to_list() == ["late", "early"]
-
-
-def test_build_own_elo_features_rate_each_side_with_its_quarterback_adjustment() -> None:
-    """A side's own Elo is its rating plus its adjustment; the diff is away minus home."""
-    # Arrange
-    games = _schedule(_game("g1", (2020, 1), ("AAA", "BBB")))
-    inputs = elo_ratings.EloInputs(qb_adjustments=_qb_adjustments(("g1", 30.0, -20.0)))
-    settings = elo_ratings.EloSettings(quarterback=True)
-
-    # Act
-    features = elo_ratings.build_own_elo_features(games, settings=settings, inputs=inputs)
-
-    # Assert
-    row = features.row(0, named=True)
-    assert (row["home_own_elo"], row["away_own_elo"]) == (1535.0, 1485.0)
-    assert row["own_elo_diff"] == 1485.0 - 1535.0
-    assert row["own_elo_home_win_prob"] == pytest.approx(_logistic(65.0 + 50.0))
-
-
 def test_market_free_settings_are_the_components_the_evaluation_kept() -> None:
     """Travel, the rolling home field and the quarterback adjustment; no market information."""
     # Act
@@ -712,25 +681,6 @@ def test_win_total_settings_add_only_the_win_total_pull() -> None:
     assert settings == elo_ratings.EloSettings(
         travel=True, rolling_home_field=True, quarterback=True, win_totals=True
     )
-
-
-def test_build_own_elo_features_defaults_to_the_market_free_settings() -> None:
-    """Without settings the builder rates with the market-free preset."""
-    # Arrange
-    games = _schedule(
-        _game("g1", (2020, 1), ("NE", "LAC"), (24, 20), stadium_id="BOS00"),
-        _game("g2", (2020, 2), ("LAC", "NE"), stadium_id="LAX01"),
-    )
-    inputs = elo_ratings.EloInputs(qb_adjustments=_qb_adjustments(("g1", 10.0, -5.0)))
-
-    # Act
-    features = elo_ratings.build_own_elo_features(games, inputs=inputs)
-
-    # Assert
-    expected = elo_ratings.build_own_elo_features(
-        games, settings=elo_ratings.MARKET_FREE_SETTINGS, inputs=inputs
-    )
-    assert features.equals(expected)
 
 
 def test_quarterback_adjustments_with_a_repeated_game_id_are_refused() -> None:
@@ -763,3 +713,158 @@ def test_fitting_win_total_weights_refuses_a_repeated_quarterback_game_id() -> N
         elo_ratings.fit_win_total_weights(
             games, settings=elo_ratings.EloSettings(quarterback=True), inputs=inputs
         )
+
+
+def _market_free_inputs() -> elo_ratings.EloInputs:
+    """Return quarterback adjustments for the two-game schedule of the builder tests."""
+    return elo_ratings.EloInputs(qb_adjustments=_qb_adjustments(("g1", 10.0, -5.0)))
+
+
+def _two_games() -> pl.DataFrame:
+    """Return two games at known stadiums, the later one listed first."""
+    return _schedule(
+        _game("g2", (2020, 2), ("LAC", "NE"), stadium_id="LAX01"),
+        _game("g1", (2020, 1), ("NE", "LAC"), (24, 20), stadium_id="BOS00"),
+    )
+
+
+def test_build_own_elo_features_publishes_the_market_free_columns_in_schedule_order() -> None:
+    """By default: one row per schedule row, in its order, with the market-free columns."""
+    # Arrange
+    games = _two_games()
+
+    # Act
+    features = elo_ratings.build_own_elo_features(games, inputs=_market_free_inputs())
+
+    # Assert
+    assert features.frame.columns == ["game_id", *constants.OWN_ELO_COLUMNS]
+    assert features.frame["game_id"].to_list() == ["g2", "g1"]
+
+
+def test_build_own_elo_features_rate_each_side_with_its_quarterback_adjustment() -> None:
+    """A side's own Elo is its rating plus its adjustment; the diff is away minus home."""
+    # Arrange
+    games = _two_games()
+    inputs = _market_free_inputs()
+    rated = elo_ratings.compute_elo_ratings(
+        games, settings=elo_ratings.MARKET_FREE_SETTINGS, inputs=inputs
+    )
+
+    # Act
+    features = elo_ratings.build_own_elo_features(games, inputs=inputs)
+
+    # Assert
+    joined = rated.join(features.frame, on="game_id").filter(pl.col("game_id") == "g1")
+    row = joined.row(0, named=True)
+    assert row["home_own_elo"] == row["home_rating"] + 10.0
+    assert row["away_own_elo"] == row["away_rating"] - 5.0
+    assert row["own_elo_diff"] == row["away_own_elo"] - row["home_own_elo"]
+    assert row["own_elo_home_win_prob"] == row["home_win_prob"]
+
+
+def _win_total_build() -> elo_ratings.OwnEloFeatures:
+    """Return the win-total variant built on the strong-favorite seasons."""
+    inputs = elo_ratings.EloInputs(
+        qb_adjustments=_qb_adjustments(), win_totals=STRONG_FAVORITE_TOTALS
+    )
+    return elo_ratings.build_own_elo_features(
+        _strong_favorite_seasons(), variant="win_totals", inputs=inputs
+    )
+
+
+def test_market_free_variant_never_publishes_a_win_total_column() -> None:
+    """The market-free build carries exactly its four columns, none of the win-total family."""
+    # Act
+    features = elo_ratings.build_own_elo_features(_two_games(), inputs=_market_free_inputs())
+
+    # Assert
+    assert set(features.frame.columns) & set(constants.OWN_WT_ELO_COLUMNS) == set()
+    assert features.metadata["variant"] == "market_free"
+
+
+def test_win_total_variant_never_publishes_a_market_free_column() -> None:
+    """The win-total build carries exactly its four columns, none of the market-free family."""
+    # Act
+    features = _win_total_build()
+
+    # Assert
+    assert features.frame.columns == ["game_id", *constants.OWN_WT_ELO_COLUMNS]
+    assert set(features.frame.columns) & set(constants.OWN_ELO_COLUMNS) == set()
+
+
+def test_market_free_variant_refuses_the_win_totals() -> None:
+    """Win totals passed to the market-free variant fail instead of leaking into it."""
+    # Arrange
+    inputs = elo_ratings.EloInputs(
+        qb_adjustments=_qb_adjustments(), win_totals=STRONG_FAVORITE_TOTALS
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="market"):
+        elo_ratings.build_own_elo_features(_strong_favorite_seasons(), inputs=inputs)
+
+
+def test_win_total_variant_records_its_preset_and_fitted_weights() -> None:
+    """The metadata names the variant, its switches, its columns and the weights it used."""
+    # Act
+    features = _win_total_build()
+
+    # Assert
+    metadata = features.metadata
+    assert metadata["variant"] == "win_totals"
+    assert metadata["settings"] == dataclasses.asdict(elo_ratings.WIN_TOTAL_SETTINGS)
+    assert metadata["columns"] == constants.OWN_WT_ELO_COLUMNS
+    assert metadata["first_season"] == 2000
+    weights = metadata["win_total_weights"]
+    assert isinstance(weights, dict)
+    assert set(weights) == {"2001", "2002", "2003"}
+
+
+def test_market_free_variant_records_no_win_total_weights() -> None:
+    """The market-free metadata says no weights were used."""
+    # Act
+    features = elo_ratings.build_own_elo_features(_two_games(), inputs=_market_free_inputs())
+
+    # Assert
+    assert features.metadata["win_total_weights"] is None
+    assert features.metadata["settings"] == dataclasses.asdict(elo_ratings.MARKET_FREE_SETTINGS)
+
+
+def test_variants_publish_the_constants_column_families() -> None:
+    """Each variant's names are the constants' lists, so the feature groups resolve to them."""
+    # Act
+    families = {name: variant.columns for name, variant in elo_ratings.OWN_ELO_VARIANTS.items()}
+
+    # Assert
+    assert families == {
+        "market_free": constants.OWN_ELO_COLUMNS,
+        "win_totals": constants.OWN_WT_ELO_COLUMNS,
+    }
+
+
+def test_build_own_elo_features_rejects_an_unknown_variant() -> None:
+    """Only the two presets exist; any other name fails."""
+    # Arrange
+    options: dict[str, Any] = {"variant": "custom"}
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="variant"):
+        elo_ratings.build_own_elo_features(_two_games(), **options)
+
+
+def test_win_total_variant_uses_and_records_weights_it_is_given() -> None:
+    """Explicit weights are used as given, not refitted, and the metadata records them."""
+    # Arrange
+    inputs = elo_ratings.EloInputs(
+        qb_adjustments=_qb_adjustments(),
+        win_totals=STRONG_FAVORITE_TOTALS,
+        win_total_weights={2001: 0.25, 2002: 0.5, 2003: 0.75},
+    )
+
+    # Act
+    features = elo_ratings.build_own_elo_features(
+        _strong_favorite_seasons(), variant="win_totals", inputs=inputs
+    )
+
+    # Assert
+    assert features.metadata["win_total_weights"] == {"2001": 0.25, "2002": 0.5, "2003": 0.75}

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Link } from 'react-router'
 
 import { usePower } from '@/api/queries'
 import type { Row, TablePayload } from '@/api/types'
@@ -33,7 +34,16 @@ export function PowerRankingsPage() {
     <>
       <PageHeader
         title="Power Rankings"
-        description="Bradley-Terry team strength fit on margins over a two-season window (prior season down-weighted), plus projected standings from the model's remaining-schedule win probabilities."
+        description={
+          <>
+            Bradley-Terry team strength fit on margins over a two-season window (prior season down-weighted), plus projected standings from the model&apos;s remaining-schedule win probabilities.
+            Ratings built from play-by-play and adjusted for every opponent, with each team&apos;s season stats, are on{' '}
+            <Link to="/teams" className="font-medium text-primary underline-offset-4 hover:underline">
+              Teams
+            </Link>
+            .
+          </>
+        }
       />
       {query.isLoading ? <Skeleton className="h-64 w-full" /> : null}
       {query.isError ? <ErrorState error={query.error} title="No power rankings for this run" /> : null}

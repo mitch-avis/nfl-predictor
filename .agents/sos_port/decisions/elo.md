@@ -650,3 +650,76 @@ rating replaces VALUE without touching the engine.
 **How to reverse it**: nothing to reverse.
 
 **Review**: not yet reviewed.
+
+## 17. The ported quarterback rating as the adjustment (the rule)
+
+**What differs**: entry 16 left the ported `nfl-sos-ratings` quarterback rating
+(`adj_qb_epa_per_dropback`, the opponent-adjusted EPA per dropback) unmeasured as the own Elo's
+quarterback adjustment. This entry fixes the measurement and its rule before the first run. The
+alternative keeps everything of the market-free recommendation (`elo_ratings.MARKET_FREE_SETTINGS`:
+the framework, travel, the rolling home field and the quarterback adjustment), the same games in
+the same order and the same starters, the `home_qb_id` and `away_qb_id` of
+`elo_quarterbacks.value_qb_adjustments` with its default `pre_game_starter="game_starter"`. Only
+the per-game `home_qb_adj` and `away_qb_adj` handed to `EloInputs.qb_adjustments` change.
+
+For a game in season `s`, week `w`, the rating `r(q)` it uses for quarterback `q` is:
+
+1. Season-to-date: when `q` has at least one dropback in season `s` before week `w`, his pre-week
+   season-to-date rating, the value fit on season `s`'s games before week `w`, read from the
+   candidate build's `ratings/{s}_qb_ratings_by_week.parquet`. The script first establishes
+   whether the row labelled `week` holds the fit through that week or before it, by matching the
+   candidate dataset's attached starter rating (the `ratings` group's quarterback columns,
+   `constants.RATINGS_FEATURE_STATS`) on completed games whose starter equals VALUE's, and
+   reports the match and mismatch counts. Mismatches are 0 or each explained, or the run stops.
+2. No dropback yet this season: his rating in the latest row of the most recent earlier season
+   where it is not null.
+3. Neither: the replacement level for season `s`, the unweighted mean of debut quarterbacks'
+   latest-row ratings over the debut seasons `2001..s-1` (a debut season is a quarterback's first
+   season with a non-null rating; 1999, where every rating is null, and 2000, where veterans
+   appear for the first time, are not debut seasons); 0 when there is no such season.
+4. Playoff games: `q`'s latest regular-season row of season `s`, with no updates, as VALUE's book
+   does not update on playoff games.
+
+The team baseline is VALUE's team rule with `r` as the per-start value: after each
+regular-season game in which the team had a play-by-play starter,
+`team = 0.95 * team + 0.05 * r(starter at that game)`; in the preseason,
+`team = (1/3) * end-of-season team + (2/3) * r(first starter of the season)`; a team seen for
+the first time starts at its first starter's `r`. There is no defense adjustment, because the
+rating is already opponent-adjusted.
+
+The adjustment is `25 * D(s) * (r(starter) - team)` Elo points, with 538's 25 Elo points per
+point of spread, and 0 when no starter is known. `D(s)` is the mean dropbacks per team-game over
+the regular seasons `1999..s-1`: per season, the sum of every quarterback's latest-row
+`qb_dropbacks`, divided by twice the number of regular-season games. In 1999 every adjustment
+is 0. As a sensitivity that decides nothing, the same is scored with the scale times 0.5 and
+times 1.5.
+
+No later information enters: every rating a game reads comes from weeks or seasons before it;
+only the starter's identity comes from the game itself, as VALUE's does (entry 15).
+
+**Options**: keep VALUE, the measured incumbent (entry 14); or replace it with the ported
+rating, which needs no box-score quarterback model of its own.
+
+**Decision**: the rule, written before the first run. Paired per game over the 2007-2025
+regular-season games with final scores (4,943 games), candidate minus VALUE, with
+`elo_eval`'s bootstrap (5,000 game resamples, seed 42):
+
+- the alternative would replace VALUE only if its Brier difference interval lies entirely
+  below zero and its log-loss difference interval does not lie entirely above zero;
+- it measures at least as well if neither interval lies entirely above zero;
+- otherwise VALUE stays. A tie keeps VALUE, the measured incumbent.
+
+The result is report-only either way: adopting it needs a new build and a walk-forward, which is
+the user's decision.
+
+**Reasoning**: the same seam (`EloInputs.qb_adjustments`), the same starters and the same
+engine settings isolate the rating itself; the bootstrap and the window are entry 1's, so the
+numbers compare with `ELO_EVAL.md`.
+
+**Data**: none yet; `.agents/sos_port/elo_qb_alt.py` writes `ELO_QB_ALT.md`.
+
+**Feature-value impact**: none; nothing under `src/` changes.
+
+**How to reverse it**: nothing to reverse.
+
+**Review**: not yet reviewed.

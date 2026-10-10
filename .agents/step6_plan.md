@@ -48,13 +48,15 @@ data are logged for review. Read as:
 | S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | merged, `0.49.0` |
 | S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | merged, `0.48.0` |
 | S5a play-by-play cache columns, stadium table | 3-4 | none | merged, `0.50.0` |
-| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | in review; contains S5c, merges alone |
-| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | reviewed (merge after fixes); fixes go on S5b's branch |
-| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | in review (270 tables, 11,754,571 cells bit-identical) |
-| S8b web: teams, quarterbacks, schedules, rank ranges, head-to-head, glossary (58.2) | 6 | S4, S10 | implementer running (on S10's branch) |
-| S5d ETL step for the season statistics tables, ratings columns into `combined` | 6 | S5c, S10 | after those merge |
-| S6 candidate build and measurement (`models/step6/build.sh`, `driver.sh`) | 4 | S3, S5b, S5c | after S5b and S5c |
-| S7 power rankings and projected standings (`models/step6/rankings/HYPOTHESIS.md`) | 5 | S5c, S6 | after S6's first arm |
+| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | merged with S5c, `0.54.0`; red zone `0.55.0`, trend fix `0.55.1` |
+| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | merged with S5b, `0.54.0` |
+| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | merged, `0.51.0` |
+| S8b web: teams, quarterbacks, schedules, rank ranges, head-to-head, glossary (58.2) | 6 | S4, S10 | merged, `0.53.0`; 58.2 stays open for the production rebuild and a browser check |
+| S5d ETL step for the season statistics tables, ratings columns into `combined` | 6 | S5c, S10 | merged, `0.56.0` |
+| S6 candidate build and measurement (`models/step6/build.sh`, `driver.sh`) | 4 | S3, S5b, S5c | build done at `0.55.0`; runs in progress since 10:08 (one at a time, ten plus two conditional) |
+| S7 power rankings and projected standings (`models/step6/rankings/HYPOTHESIS.md`) | 5 | S5c, S6 | reviewed on seed 42 (`models/step6/rankings/REVIEW.md`); fixes and a two-seed supplement in second-round review |
+| S11 the source's open rating tests (all-plays, botched snaps, kneel-downs and spikes, penalty-wiped plays) | report only | S4, S5c | implementer running; each rule pre-registered before scoring |
+| S12 the own Elo's alternative quarterback adjustment (the ported rating in place of VALUE) | report only | S3, S4 | third attempt running with every design choice fixed in the brief (the first two stopped on runaway deliberation, not on the task) |
 
 Data contract for the pages (decided 2026-10-10): every per-season table, the ratings kinds and
 the season-statistics kinds alike, is written by the ETL to `data/ratings/{season}_{kind}.parquet`,
@@ -159,11 +161,13 @@ small and local.
   (Betting under "This week", Model above Data); the "Opponents faced" ledger is simpler than the
   source's; season tables go out uncompressed (about 0.9 MB per team table). None was checked in a
   browser (signing in needs a typed password); the user should look at the pages once.
-- Not done: the own Elo's alternative quarterback adjustment (the ported quarterback rating in
-  place of 538's VALUE, scored with `elo_eval.py`). Two implementer attempts stopped on an API
-  limit (a single response over 16,000 output tokens) before writing anything; per the
-  orchestration rule it was stopped after two failures. It is report-only and nothing depends on
-  it; a later session can retry it in smaller pieces.
+- The own Elo's alternative quarterback adjustment (the ported quarterback rating in place of
+  538's VALUE): two implementer attempts stopped on an API limit before writing anything. Their
+  transcripts show why: each response spent its whole 16,000-token output budget deliberating
+  over design choices the brief had left open (six responses in a row), not on output size. A
+  third attempt runs with every choice fixed in the brief (the scale `25` Elo points per point
+  times the dropbacks per team-game of earlier seasons, VALUE's starters and team rule, the
+  earlier-season fallbacks); it is report-only and nothing depends on it.
 - Power rankings (phase 5, review pending): the pre-registered scoring, applied as written, picks
   the blend of the ported team rating and a model rating (weight about 0.5 on each since 2015) over
   the ported rating alone; the composite production ranks on today and the model rating alone tie.

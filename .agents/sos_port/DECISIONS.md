@@ -39,3 +39,30 @@ fixes were checked by the delegating session before the merge.
 - **`compare` coin flips**: an exact 0.5 picks home, as the weekly picks do. No model number
   changes; the betting lines' pick accuracy does (170 pick-time and 25 closing-line coin flips).
 - **Pool-point intervals** name their resampling unit (week blocks) in `compare`'s report.
+
+### This repository's own Elo (`0.47.0`)
+
+Full records: [decisions/elo.md](decisions/elo.md) (16 entries) and the generated evaluation
+[ELO_EVAL.md](ELO_EVAL.md). Review: two independent rounds (verdict "merge as is"); the reviewer
+reproduced the evaluation byte for byte and ran its own leakage perturbations (0 of 4,380
+pre-cutoff games moved).
+
+- **Component rule, written before scoring**: a component stays only if its paired Brier interval
+  (5,000 game resamples, seed 42, 2007-2025) lies below zero and log loss does not get worse.
+  Kept: travel, rolling home field, the quarterback adjustment, the win-total pull. Dropped:
+  rest and byes, the playoff boost. Two kept components passed by a hair (rolling home field and
+  the win-total pull; the reviewer found they would fail on 40 and 17 of 100 other bootstrap
+  seeds); the rule's outcome stands as written, and the phase-4 walk-forward decides whether the
+  own Elo is used at all.
+- **Seeding**: every team starts at 1505 in 1999 with a burn-in; 538's published 1999 ratings
+  changed nothing measurable (Brier difference about 4e-09).
+- **Home sides and neutral sites follow nflverse**, not 538 (30 swapped games: Super Bowls,
+  international and relocated games, and four Saints games of 2005).
+- **Quarterback adjustment from this repository's play-by-play**; 538's draft-based rookie
+  ratings are replaced by the mean of earlier first starts (no draft data here); designed
+  quarterback runs are missing until the play-by-play cache carries the rusher's id.
+- **Starters**: a completed game uses its actual starter, an upcoming game the projected one, as
+  the `qb_elos.csv` columns do; the diagnostic cost of knowing only the previous starter is in
+  the evaluation report and on the user's list (`.agents/step6_plan.md`).
+- **Two groups**: `own_elo` (no market information) and `own_elo_wt` (with the win-total pull),
+  named so the substring-based group switches stay disjoint.

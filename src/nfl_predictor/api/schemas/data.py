@@ -23,7 +23,7 @@ class PredictionQuery(WeekQuery):
     source: str | None = None
 
 
-class PicksQuery(WeekQuery):
+class PicksQuery(PredictionQuery):
     """A week query for the confidence picks, as JSON (the page) or CSV (a download)."""
 
     format: Literal["json", "csv"] = "json"

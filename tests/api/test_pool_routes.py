@@ -126,6 +126,29 @@ def test_picks_export_as_csv(project_root: Path, viewer_client: TestClient, app:
     assert [row["predicted_winner"] for row in rows] == ["NE", "GB", "BUF", "DEN"]
 
 
+def test_picks_export_follows_an_unattached_week(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """The download takes the same week the sheet shows, an unattached file included."""
+    # Arrange
+    _seed(project_root, app)
+    factories.write_predictions_csv(
+        project_root / "data" / "predict" / "week_05_predictions.csv", 2026, START_WEEK
+    )
+    path = project_root / "data" / "predict" / "week_05_predictions.csv"
+    path.write_text(path.read_text(encoding="utf-8").replace("2026_05_", "loose_"), "utf-8")
+
+    # Act
+    response = viewer_client.get(
+        "/api/predictions/picks",
+        params={"season": 2026, "week": START_WEEK, "source": "unattached", "format": "csv"},
+    )
+
+    # Assert
+    rows = list(csv.DictReader(io.StringIO(response.text)))
+    assert {row["game_id"][:6] for row in rows} == {"loose_"}
+
+
 def test_picks_export_rejects_an_unknown_format(
     project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:

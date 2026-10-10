@@ -1266,7 +1266,7 @@ def _tied_starters() -> pl.DataFrame:
 
 @pytest.mark.parametrize("reverse", [False, True])
 def test_compute_qb_season_stats_breaks_a_primary_qb_tie_the_same_way_in_any_row_order(
-    reverse: bool,  # noqa: FBT001 - pytest parameter
+    *, reverse: bool
 ) -> None:
     # Arrange
     qb_df = _tied_starters().reverse() if reverse else _tied_starters()
@@ -1283,7 +1283,7 @@ def test_compute_qb_season_stats_breaks_a_primary_qb_tie_the_same_way_in_any_row
 
 @pytest.mark.parametrize("reverse", [False, True])
 def test_compute_qb_season_stats_gives_a_traded_qb_his_latest_team_on_a_games_tie(
-    reverse: bool,  # noqa: FBT001 - pytest parameter
+    *, reverse: bool
 ) -> None:
     # Arrange
     qb_df = pl.DataFrame(

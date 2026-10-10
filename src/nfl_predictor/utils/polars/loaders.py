@@ -256,7 +256,7 @@ def _warn_about_unlisted_venues(stadium_ids: pl.Series) -> None:
         return
     parts = []
     if not unlisted.is_empty():
-        venues = sorted(unlisted.unique().to_list())
+        venues = sorted(unlisted.unique(maintain_order=True).to_list())
         parts.append(f"venue ids {venues} ({_plural(unlisted.len(), 'game')})")
     if without_id:
         parts.append(f"{_plural(without_id, 'game')} without a venue id")

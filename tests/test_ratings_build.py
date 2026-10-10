@@ -13,9 +13,12 @@ from polars.testing import assert_frame_equal
 from tests.ratings_league import (
     BACKUP_FROM_WEEK,
     BACKUP_ID,
+    CONVERT_ID,
+    CONVERT_SEASON,
     POSTSEASON_WEEK,
     SEASONS,
     TEAMS,
+    TRICK_ROSTER_WEEK,
     WEEKS,
     League,
     league,
@@ -560,7 +563,10 @@ def _week_features(build: ratings_build.RatingsBuild, season: int, week: int) ->
     )
 
 
-@pytest.mark.parametrize(("season", "week"), [(2000, 1), (2000, 4), (_LAST, 3), (_LAST, WEEKS)])
+@pytest.mark.parametrize(
+    ("season", "week"),
+    [(2000, 1), (2000, 4), (_LAST, 3), (_LAST, TRICK_ROSTER_WEEK), (_LAST, WEEKS)],
+)
 def test_features_of_a_week_never_see_that_week_or_later(season: int, week: int) -> None:
     # Arrange
     expected = _week_features(_build(_sourced_league()), season, week)
@@ -598,6 +604,41 @@ def test_the_sourced_league_rates_its_passers_from_the_player_sources() -> None:
     assert passers.get_column("official_attempts").drop_nulls().len() > 0
     snap_only = passers.filter((pl.col("qb_id") == BACKUP_ID) & (pl.col("qb_dropbacks") == 0))
     assert snap_only.height > 0
+
+
+def test_a_later_seasons_roster_never_reaches_an_earlier_seasons_passers() -> None:
+    """The convert's next-season listing at quarterback must not touch his season's rows."""
+    # Arrange
+    data = league()
+    later = pl.col("season") > CONVERT_SEASON
+    relisted = replace(
+        data,
+        weekly_rosters=data.weekly_rosters.with_columns(
+            pl.when(later).then(pl.lit("WR")).otherwise(pl.col("position")).alias("position")
+        ),
+    )
+    expected = _inputs(data).passer_games.filter(pl.col("season") <= CONVERT_SEASON)
+
+    # Act
+    passers = _inputs(relisted).passer_games.filter(pl.col("season") <= CONVERT_SEASON)
+
+    # Assert
+    assert CONVERT_ID in passers.get_column("qb_id").to_list()
+    assert_frame_equal(passers, expected, check_exact=True)
+
+
+def test_a_passer_listed_at_another_position_all_season_is_no_quarterback_that_season(
+    built: ratings_build.RatingsBuild,
+) -> None:
+    """The convert throws in his wide-receiver season; none of its quarterback tables rate him."""
+    # Act
+    frames = built.build_frames(CONVERT_SEASON)
+
+    # Assert
+    pre_week = frames[ratings_build.PRE_WEEK_QUARTERBACKS]
+    published = built.published_tables()[f"{CONVERT_SEASON}_qb_ratings_by_week"]
+    assert CONVERT_ID not in pre_week.get_column("qb_id").to_list()
+    assert CONVERT_ID not in published.get_column("qb_id").to_list()
 
 
 # Determinism: two runs, the second fed its inputs in another order, write the same bytes.

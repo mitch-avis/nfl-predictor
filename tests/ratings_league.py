@@ -4,11 +4,13 @@ Four teams play a double round robin (six weeks) in each of three seasons from 1
 play-by-play season, plus one postseason game in the last season. Every team-game has a starter's
 dropbacks (enough attempts to qualify him for the quarterback rankings), runs and a punt with
 seeded, uneven EPA, so a summation in another order would show in the last bits. AAA's starter
-hands over to a backup from week 4 of the last season, and BBB's receiver throws in its first two
-weeks. The players file lists every starter and the backup at quarterback; the weekly rosters list
-the starters each week, the backup from week 4 and the receiver from week 5. Game rows carry the
-starters' names, which the identity file maps to their ids, as the ETL's game rows carry
-``away_qb`` / ``home_qb``.
+hands over to a backup from week 4 of the last season, BBB's receiver throws in its first two
+weeks, and CCC's convert throws in weeks 2 and 5 of the middle season. The players file lists
+every starter and the backup at quarterback; the weekly rosters list the starters each week, the
+backup from week 4 of the last season, the receiver at wide receiver through week 4 of the last
+season and at quarterback from week 5, and the convert at wide receiver through the middle
+season and at quarterback through the last. Game rows carry the starters' names, which the
+identity file maps to their ids, as the ETL's game rows carry ``away_qb`` / ``home_qb``.
 """
 
 from __future__ import annotations
@@ -26,11 +28,19 @@ BACKUP_FROM_WEEK = 4
 BACKUP_ID = "00-0000099"
 BACKUP_NAME = "Backup Passer"
 # BBB's receiver throws once in weeks 1 and 2 of the last season; no players file row places
-# him, and the weekly roster lists him at quarterback from week 5, so only the season's
-# identity, which looks ahead, knows him as a quarterback in those weeks.
+# him, and the weekly roster lists him at wide receiver through week 4 and at quarterback from
+# week 5. Only the season's identity, which looks ahead, knows him as a quarterback in those
+# weeks, and only a pre-week identity that read week 5's own roster would at week 5.
 TRICK_ID = "00-0000088"
 TRICK_ROSTER_WEEK = 5
 _TRICK_WEEKS = (1, 2)
+# CCC's convert throws once in weeks 2 and 5 of the middle season, whose weekly roster lists him
+# at wide receiver every week; the next season's roster lists him at quarterback. Only an
+# identity that reads a later season's roster would count his passes as a quarterback's.
+CONVERT_ID = "00-0000077"
+CONVERT_NAME = "Convert Passer"
+CONVERT_SEASON = SEASONS[1]
+_CONVERT_WEEKS = (2, 5)
 _DROPBACKS = 16
 
 _PLAY_SCHEMA: dict[str, pl.DataType] = {
@@ -176,6 +186,22 @@ def _team_plays(
                 "qb_epa": epa,
                 "passer_player_id": TRICK_ID,
                 "passer_player_name": "T.Receiver",
+            }
+        )
+    if team == "CCC" and season == CONVERT_SEASON and week in _CONVERT_WEEKS:
+        # A fixed EPA, so the seeded draws of every other play stay as they were.
+        plays.append(
+            base
+            | {
+                "play_type": "pass",
+                "qb_dropback": 1.0,
+                "rush": 0.0,
+                "pass": 1.0,
+                "special": 0.0,
+                "epa": 0.4,
+                "qb_epa": 0.4,
+                "passer_player_id": CONVERT_ID,
+                "passer_player_name": "C.Convert",
             }
         )
     punt = float(rng.normal(0.0, 0.5))
@@ -391,12 +417,26 @@ def league(seed: int = 0) -> League:
             "week": week,
             "game_type": "REG",
             "team": "BBB",
-            "position": "QB",
+            "position": "QB" if week >= TRICK_ROSTER_WEEK else "WR",
             "full_name": "Trick Receiver",
             "gsis_id": TRICK_ID,
             "pfr_id": None,
         }
-        for week in range(TRICK_ROSTER_WEEK, WEEKS + 1)
+        for week in range(1, WEEKS + 1)
+    ]
+    rosters += [
+        {
+            "season": season,
+            "week": week,
+            "game_type": "REG",
+            "team": "CCC",
+            "position": "WR" if season == CONVERT_SEASON else "QB",
+            "full_name": CONVERT_NAME,
+            "gsis_id": CONVERT_ID,
+            "pfr_id": None,
+        }
+        for season in (CONVERT_SEASON, SEASONS[-1])
+        for week in range(1, WEEKS + 1)
     ]
     return League(
         plays=plays_for(schedule_frame, seed),
@@ -465,6 +505,9 @@ __all__ = [
     "BACKUP_FROM_WEEK",
     "BACKUP_ID",
     "BACKUP_NAME",
+    "CONVERT_ID",
+    "CONVERT_NAME",
+    "CONVERT_SEASON",
     "POSTSEASON_WEEK",
     "SEASONS",
     "TEAMS",

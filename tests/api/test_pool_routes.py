@@ -266,6 +266,20 @@ def test_survivor_stops_at_the_end_of_the_regular_season(
     assert response.status_code == 422
 
 
+def test_survivor_rejects_more_used_teams_than_the_league_has(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """A list of used teams longer than the league's 32 teams is a request error."""
+    # Arrange
+    _seed(project_root, app)
+
+    # Act
+    response = _survivor(viewer_client, used_teams=["KC"] * 33)
+
+    # Assert
+    assert response.status_code == 422
+
+
 def test_survivor_needs_at_least_one_planned_week(
     project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:

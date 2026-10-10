@@ -6,6 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+MAX_USED_TEAMS = 32
+"""A survivor entry can have used at most every team in the league."""
+
 
 class SheetRowOut(BaseModel):
     """One game on the confidence sheet.
@@ -111,7 +114,7 @@ class SurvivorRequest(BaseModel):
 
     season: int
     start_week: int = Field(ge=1)
-    used_teams: list[str] = Field(default_factory=list)
+    used_teams: list[str] = Field(default_factory=list, max_length=MAX_USED_TEAMS)
     horizon_weeks: int = Field(default=4, ge=1)
 
 

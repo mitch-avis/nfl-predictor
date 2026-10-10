@@ -1,5 +1,5 @@
-Output of .agents/sos_port/decisions/season_stats_etl_degrade.py, run on 2026-10-10 at 10:32 local
-time at commit d01df69 in the worktree of branch worktree-agent-ad5396b63790d07a8, with one Polars
+Output of .agents/sos_port/decisions/season_stats_etl_degrade.py, run on 2026-10-10 at 11:35 local
+time at commit 3dfb4c6 in the worktree of branch worktree-agent-ad5396b63790d07a8, with one Polars
 and BLAS thread (the script's default; a second run gave the same output). Each variant leaves one
 nflverse source of the 2025 season out of the ETL's season statistics step. The rating columns are
 left null in every variant, so every variant also warns that the season has no team ratings.
@@ -36,17 +36,17 @@ Command, from the worktree root:
   warning: Season statistics: season 2025 has no team ratings, so combined leaves them null
 
 2025, no weekly player stats: 10 tables
-  team_game_logs: 544 rows, 232 columns (full build 544 rows, 246 columns); lacks 14: def_tackles_for_loss, def_fumbles_forced, def_sacks, def_qb_hits, def_interceptions, def_pass_defended, def_safeties, def_sacks_per_defensive_snap, def_interceptions_per_defensive_snap, def_pass_defended_per_defensive_snap, def_tackles_for_loss_per_defensive_snap, def_qb_hits_per_defensive_snap, def_fumbles_forced_per_defensive_snap, def_safeties_per_defensive_snap
-  qb_game_logs: 687 rows, 43 columns (full build 687 rows, 54 columns); lacks 11: qb_completion_pct, qb_carries, qb_rushing_yards, qb_rushing_tds, qb_rushing_first_downs, qb_rushing_epa, qb_rushing_fumbles, qb_rushing_fumbles_lost, qb_rushing_2pt_conversions, qb_yards_per_carry, qb_epa_per_carry
-  team_per_game_stats: 32 rows, 232 columns (full build 32 rows, 246 columns); lacks 14: def_tackles_for_loss, def_fumbles_forced, def_sacks, def_qb_hits, def_interceptions, def_pass_defended, def_safeties, def_sacks_per_defensive_snap, def_interceptions_per_defensive_snap, def_pass_defended_per_defensive_snap, def_tackles_for_loss_per_defensive_snap, def_qb_hits_per_defensive_snap, def_fumbles_forced_per_defensive_snap, def_safeties_per_defensive_snap
-  qb_per_game_stats: 82 rows, 70 columns (full build 82 rows, 88 columns); lacks 18: qb_yards_per_carry, qb_epa_per_carry, qb_carries_total, qb_rushing_yards_total, qb_rushing_tds_total, qb_rushing_first_downs_total, qb_rushing_epa_total, qb_rushing_fumbles_total, qb_rushing_fumbles_lost_total, qb_rushing_2pt_conversions_total, qb_carries_per_game, qb_rushing_yards_per_game, qb_rushing_tds_per_game, qb_rushing_first_downs_per_game, qb_rushing_epa_per_game, qb_rushing_fumbles_per_game, qb_rushing_fumbles_lost_per_game, qb_rushing_2pt_conversions_per_game
-  qb_opponent_profiles: 64 rows, 38 columns (full build 64 rows, 54 columns); lacks 16: qopp_def_sacks, qopp_def_interceptions, qopp_def_pass_defended, qopp_def_tackles_for_loss, qopp_def_qb_hits, qopp_qb_completion_pct, qopp_qb_carries, qopp_qb_rushing_yards, qopp_qb_rushing_tds, qopp_qb_rushing_first_downs, qopp_qb_rushing_epa, qopp_qb_rushing_fumbles, qopp_qb_rushing_fumbles_lost, qopp_qb_rushing_2pt_conversions, qopp_qb_yards_per_carry, qopp_qb_epa_per_carry
-  opponent_profiles: 32 rows, 227 columns (full build 32 rows, 241 columns); lacks 14: def_tackles_for_loss, def_fumbles_forced, def_sacks, def_qb_hits, def_interceptions, def_pass_defended, def_safeties, def_sacks_per_defensive_snap, def_interceptions_per_defensive_snap, def_pass_defended_per_defensive_snap, def_tackles_for_loss_per_defensive_snap, def_qb_hits_per_defensive_snap, def_fumbles_forced_per_defensive_snap, def_safeties_per_defensive_snap
-  combined: 32 rows, 464 columns (full build 32 rows, 492 columns); lacks 28: def_tackles_for_loss, def_fumbles_forced, def_sacks, def_qb_hits, def_interceptions, def_pass_defended, def_safeties, def_sacks_per_defensive_snap, def_interceptions_per_defensive_snap, def_pass_defended_per_defensive_snap, def_tackles_for_loss_per_defensive_snap, def_qb_hits_per_defensive_snap, def_fumbles_forced_per_defensive_snap, def_safeties_per_defensive_snap, opp_def_tackles_for_loss, opp_def_fumbles_forced, opp_def_sacks, opp_def_qb_hits, opp_def_interceptions, opp_def_pass_defended, opp_def_safeties, opp_def_sacks_per_defensive_snap, opp_def_interceptions_per_defensive_snap, opp_def_pass_defended_per_defensive_snap, opp_def_tackles_for_loss_per_defensive_snap, opp_def_qb_hits_per_defensive_snap, opp_def_fumbles_forced_per_defensive_snap, opp_def_safeties_per_defensive_snap
-  qb_combined: 82 rows, 107 columns (full build 82 rows, 141 columns); lacks 34: qb_yards_per_carry, qb_epa_per_carry, qb_carries_total, qb_rushing_yards_total, qb_rushing_tds_total, qb_rushing_first_downs_total, qb_rushing_epa_total, qb_rushing_fumbles_total, qb_rushing_fumbles_lost_total, qb_rushing_2pt_conversions_total, qb_carries_per_game, qb_rushing_yards_per_game, qb_rushing_tds_per_game, qb_rushing_first_downs_per_game, qb_rushing_epa_per_game, qb_rushing_fumbles_per_game, qb_rushing_fumbles_lost_per_game, qb_rushing_2pt_conversions_per_game, qopp_def_sacks, qopp_def_interceptions, qopp_def_pass_defended, qopp_def_tackles_for_loss, qopp_def_qb_hits, qopp_qb_completion_pct, qopp_qb_carries, qopp_qb_rushing_yards, qopp_qb_rushing_tds, qopp_qb_rushing_first_downs, qopp_qb_rushing_epa, qopp_qb_rushing_fumbles, qopp_qb_rushing_fumbles_lost, qopp_qb_rushing_2pt_conversions, qopp_qb_yards_per_carry, qopp_qb_epa_per_carry
+  team_game_logs: 544 rows, 246 columns (full build 544 rows, 246 columns)
+  qb_game_logs: 687 rows, 54 columns (full build 687 rows, 54 columns)
+  team_per_game_stats: 32 rows, 246 columns (full build 32 rows, 246 columns)
+  qb_per_game_stats: 82 rows, 88 columns (full build 82 rows, 88 columns)
+  qb_opponent_profiles: 64 rows, 54 columns (full build 64 rows, 54 columns)
+  opponent_profiles: 32 rows, 241 columns (full build 32 rows, 241 columns)
+  combined: 32 rows, 492 columns (full build 32 rows, 492 columns)
+  qb_combined: 82 rows, 141 columns (full build 82 rows, 141 columns)
   team_wp_bins: 20629 rows, 8 columns (full build 20629 rows, 8 columns)
   qb_wp_bins: 11053 rows, 6 columns (full build 11053 rows, 6 columns)
-  warning: Season statistics: season 2025 has no weekly player stats, so its tables leave out the defense box score and the passers' official passing and rushing figures
+  warning: Season statistics: season 2025 has no weekly player stats, so its tables leave the defense box score and the passers' official passing and rushing figures null
   warning: Season statistics: season 2025 has no team ratings, so combined leaves them null
 
 2025, no snap counts: 10 tables
@@ -60,7 +60,7 @@ Command, from the worktree root:
   qb_combined: 78 rows, 141 columns (full build 82 rows, 141 columns)
   team_wp_bins: 20629 rows, 8 columns (full build 20629 rows, 8 columns)
   qb_wp_bins: 11053 rows, 6 columns (full build 11053 rows, 6 columns)
-  warning: Season statistics: season 2025 has no snap counts, so its tables leave out the passers' offensive snaps and the passers who played without a dropback
+  warning: Season statistics: season 2025 has no snap counts, so its tables leave the passers' offensive snaps null and leave out the passers who played without a dropback
   warning: Season statistics: season 2025 has no team ratings, so combined leaves them null
 
 2025, no play-by-play (before kickoff): 0 tables

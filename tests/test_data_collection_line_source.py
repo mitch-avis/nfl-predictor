@@ -271,8 +271,9 @@ def _patch_main(monkeypatch: pytest.MonkeyPatch) -> None:
         config: data_collection.DataCollectionConfig,
         strength_snapshots: list[pl.DataFrame],
         market_lines_metadata: dict[str, object],
+        own_elo_metadata: dict[str, object],
     ) -> pl.DataFrame:
-        del strength_snapshots
+        del strength_snapshots, own_elo_metadata
         if config.line_source == "pick_time":
             market_lines_metadata.update(_PICK_TIME_RECORD)
         return pl.DataFrame({"season": [2026], "week": [4], "away_score": [None]})

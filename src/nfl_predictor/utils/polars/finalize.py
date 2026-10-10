@@ -26,7 +26,8 @@ def build_final_column_order() -> list[str]:
     3. away_opponent_<stat> columns (alphabetically sorted)
     4. home_<stat> columns (alphabetically sorted)
     5. home_opponent_<stat> columns (alphabetically sorted)
-    6. <stat>_diff columns (alphabetically sorted)
+    6. <stat>_diff columns (alphabetically sorted), then the own Elo's game-level home win
+       probabilities
     7. Lines/odds columns
     8. Result columns
 
@@ -62,6 +63,8 @@ def build_final_column_order() -> list[str]:
     base_stats.extend(pbp_stats)
     base_stats.extend(strength_stats)
     base_stats.extend(constants.QB_PBP_STATS)
+    base_stats.extend(constants.OWN_ELO_TEAM_STATS)
+    base_stats.extend(constants.OWN_WT_ELO_TEAM_STATS)
 
     # Deduplicate
     seen = set()
@@ -104,6 +107,9 @@ def build_final_column_order() -> list[str]:
     # 6. diff columns (all stats, alphabetically)
     all_stats_for_diff = non_opponent_stats_sorted + opponent_stats_sorted
     columns.extend([f"{s}_diff" for s in sorted(all_stats_for_diff)])
+
+    # 6b. Game-level feature columns: the own Elo's home win probabilities.
+    columns.extend([*constants.OWN_ELO_GAME_COLUMNS, *constants.OWN_WT_ELO_GAME_COLUMNS])
 
     # 7. Lines/odds
     columns.extend(constants.LINES_COLUMNS)

@@ -216,12 +216,14 @@ def _install(monkeypatch: pytest.MonkeyPatch, run: _Run) -> None:
         config: data_collection.DataCollectionConfig,
         strength_snapshots: list[pl.DataFrame],
         market_lines_metadata: dict[str, object],
+        own_elo_metadata: dict[str, object],
     ) -> pl.DataFrame:
         run.games = collect_all_data(
             seasons,
             config=config,
             strength_snapshots=strength_snapshots,
             market_lines_metadata=market_lines_metadata,
+            own_elo_metadata=own_elo_metadata,
         )
         run.snapshots = data_collection.combine_strength_snapshots(strength_snapshots)
         return run.games

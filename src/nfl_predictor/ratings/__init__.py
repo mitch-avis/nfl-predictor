@@ -13,6 +13,7 @@ commit ``9081bce`` so that this package reproduces that project's published rati
   head-to-head-excluded faced pass defense, and each passer's season volume and ranking
   qualifier.
 - :mod:`.rating_ranges`: game-bootstrap rank ranges and head-to-head chances.
+- :mod:`.published_logs`: the adapter from the game logs ``nfl-sos-ratings`` published.
 
 Nothing here reads files or the network: every function takes Polars frames and returns them.
 """

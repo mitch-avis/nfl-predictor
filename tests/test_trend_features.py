@@ -203,6 +203,22 @@ def test_build_team_stat_trends_keeps_a_game_without_a_value_in_the_window() -> 
     assert by_week[7] == pytest.approx(21.0 / 3.0 - 23.0 / 5.0)
 
 
+@pytest.mark.parametrize("missing", ["season", "week", "away_abbr", "home_abbr"])
+def test_build_team_stat_trends_rejects_a_schedule_it_cannot_key_on(missing: str) -> None:
+    """A schedule without the team-week columns is an error, not a season of 0.0 trends."""
+    # Arrange
+    schedule = _schedule(list(range(1, 8))).drop(missing)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=missing):
+        polars_utils.build_team_stat_trends(
+            _team_stat_games(6),
+            season=2023,
+            stats=["scoring_margin"],
+            schedule_df=schedule,
+        )
+
+
 def test_build_team_stat_trends_is_zero_for_a_team_without_an_earlier_game() -> None:
     """A team-week with no earlier game has no trend signal yet, published as 0.0."""
     # Arrange

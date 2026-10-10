@@ -1045,10 +1045,12 @@ def build_qb_trends(
     )
 
 
+# The schedule columns the team-stat trends key every team-week on.
+_TEAM_WEEK_SCHEDULE_COLUMNS = ("season", "week", "away_abbr", "home_abbr")
+
+
 def _scheduled_team_weeks(schedule_df: pl.DataFrame, season: int) -> pl.DataFrame:
     """Return each team-week the season's schedule lists, played or not, playoffs included."""
-    if not {"season", "week", "away_abbr", "home_abbr"}.issubset(schedule_df.columns):
-        return pl.DataFrame(schema={"season": pl.Int64, "week": pl.Int64, "team_abbr": pl.Utf8})
     games = schedule_df.filter(pl.col("season") == season)
     return pl.concat(
         [
@@ -1085,7 +1087,17 @@ def build_team_stat_trends(
     Returns:
         DataFrame with columns: season, week, team_abbr, <stat>_4wk_trend.
 
+    Raises:
+        ValueError: If ``schedule_df`` lacks ``season``, ``week``, ``away_abbr`` or
+            ``home_abbr``, without which no team-week could be keyed and every row would
+            silently take 0.0.
+
     """
+    missing = [col for col in _TEAM_WEEK_SCHEDULE_COLUMNS if col not in schedule_df.columns]
+    if missing:
+        msg = f"The schedule lacks {missing}, the columns the team-stat trends key every week on"
+        raise ValueError(msg)
+
     schema: dict[str, DataTypeClass] = {
         "season": pl.Int64,
         "week": pl.Int64,

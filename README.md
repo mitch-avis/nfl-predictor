@@ -148,12 +148,16 @@ lookup of a host name other than `localhost` is refused, as on an offline machin
 session, fixtures included; a refusal fails the next test to finish, or the session. A test that
 checks the packaged paths themselves asks for the `packaged_data_paths` or `packaged_models_path`
 fixture, and tests in `tests/test_conftest.py` scan every module for a path still inside `data/`
-or `models/`. Two things are not redirected, because neither reads those constants; tests that
-touch them pass their own paths:
+or `models/`. Three things are not redirected, because none of them reads those constants; tests
+that touch them pass their own paths:
 
 - `api.settings.Settings()` built without a root, which fills its data, state and database paths
   from `constants.ROOT_DIR` (the checkout's `data/web/app.db`, the running web app's database); its
   models directory follows `constants.MODELS_PATH`;
+- the floor-sigma reference runs (`constants.FLOOR_SIGMA_REFERENCE_RUNS`, by default
+  `models/step4_reference/adopted_seed*`), which `ml/floor_sigma.py` resolves against
+  `constants.ROOT_DIR`: the default of `nfl-predictor train --floor-sigma-reference-runs` and the
+  weekly run's `floor_sigma_reference_runs`, read when a model is trained;
 - the relative `data/...` defaults of `nfl-predictor rankings` (`--data-ml`, `--data-schedule`,
   `--out-dir`), resolved against the current directory.
 

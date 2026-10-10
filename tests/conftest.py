@@ -15,8 +15,10 @@ test reads the checkout's data through ``constants.DATA_PATH``, writes its cache
 writes or reads a run under ``constants.MODELS_PATH``, or downloads anything; a test that checks
 the packaged paths themselves asks for ``packaged_data_paths`` or ``packaged_models_path``. Not
 redirected (see ``tests/data_isolation.py``): ``api.settings.Settings()`` built without a root
-(its data, state and database paths, the checkout's ``data/web/app.db``), and the relative
-``data/`` defaults of ``cli/rankings.py``; tests that touch them pass their own paths.
+(its data, state and database paths, the checkout's ``data/web/app.db``), the floor-sigma
+reference runs (resolved against ``constants.ROOT_DIR``, by default
+``models/step4_reference/adopted_seed*``), and the relative ``data/`` defaults of
+``cli/rankings.py``; tests that touch them pass their own paths.
 """
 
 from __future__ import annotations

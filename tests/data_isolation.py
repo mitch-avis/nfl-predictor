@@ -1,4 +1,4 @@
-"""Keep the test suite out of the checkout's ``data/`` directory and off the network.
+"""Keep the test suite out of the checkout's ``data/`` and ``models/`` and off the network.
 
 ``install`` runs once per test process, from ``tests/conftest.py`` before any test module imports
 the package:
@@ -9,20 +9,23 @@ the package:
   the dataclass defaults built from it) starts out redirected too. ``conftest.py`` points the
   constants at a fresh directory for each test on top of that; the import-time copies keep the
   shared session directory, not the per-test one.
+- It points ``constants.MODELS_PATH`` at a second temporary directory for the session, which
+  ``conftest.py`` again replaces for each test. Code reads that constant when it runs, so run
+  directories, walk-forward checkpoints and the web app's run index for this checkout all follow
+  it.
 - It refuses every TCP connection and every lookup of a host name other than ``localhost``, for
   the whole session, module- and session-scoped fixtures included. A refusal raises ``OSError``
   (``socket.gaierror`` for a lookup), as on an offline machine, so code that degrades on a
   network failure still runs and an offline machine never waits on DNS; the attempt is recorded
   and fails the test (or the session) in ``conftest.py``.
 
-It covers the data paths built from ``constants.DATA_PATH`` only. Out of scope, because none of
-them reads that constant, so redirecting them would need a package change; tests that touch them
-pass their own paths:
+It covers the paths built from ``constants.DATA_PATH`` and ``constants.MODELS_PATH`` only. Out of
+scope, because none of them reads those constants, so redirecting them would need a package
+change; tests that touch them pass their own paths:
 
-- the run directories under ``models/``, built from ``constants.ROOT_DIR`` when they are used;
 - ``api.settings.Settings()`` built without a root, which fills its data, state and database
   paths from ``constants.ROOT_DIR`` in ``model_post_init`` (the checkout's ``data/web/app.db``,
-  the database the running web app uses);
+  the database the running web app uses); its models directory follows ``MODELS_PATH``;
 - the relative argparse defaults in ``cli/rankings.py`` (``Path("data/...")`` for
   ``--data-ml``, ``--data-schedule`` and ``--out-dir``), resolved against the current directory.
 """
@@ -42,9 +45,10 @@ import pytest
 
 from nfl_predictor import constants
 
-# The checkout's data directory, worked out from the root so a second import cannot mistake the
-# redirected value for it.
+# The checkout's data and models directories, worked out from the root so a second import cannot
+# mistake the redirected values for them.
 PACKAGED_DATA_DIR = Path(constants.ROOT_DIR) / "data"
+PACKAGED_MODELS_DIR = Path(constants.ROOT_DIR) / "models"
 # The constants that hold a data path, with the part of the data directory each one names.
 CONSTANT_DATA_PATHS: dict[str, tuple[str, ...]] = {
     "DATA_PATH": (),
@@ -53,6 +57,8 @@ CONSTANT_DATA_PATHS: dict[str, tuple[str, ...]] = {
 }
 SESSION_DATA_DIR = Path(tempfile.mkdtemp(prefix="nfl-predictor-tests-data-"))
 atexit.register(shutil.rmtree, SESSION_DATA_DIR, ignore_errors=True)
+SESSION_MODELS_DIR = Path(tempfile.mkdtemp(prefix="nfl-predictor-tests-models-"))
+atexit.register(shutil.rmtree, SESSION_MODELS_DIR, ignore_errors=True)
 # The session-wide patches; never undone, since they must outlive every fixture.
 _SESSION_PATCH = pytest.MonkeyPatch()
 _installed: list[bool] = []
@@ -96,11 +102,12 @@ def _refused_getaddrinfo(host: Any, *args: Any, **kwargs: Any) -> Any:
 
 
 def install() -> None:
-    """Redirect the data constants to the session directory and refuse the network, once."""
+    """Redirect the data and models constants to session directories and refuse the network."""
     if _installed:
         return
     for name, parts in CONSTANT_DATA_PATHS.items():
         _SESSION_PATCH.setattr(constants, name, SESSION_DATA_DIR.joinpath(*parts))
+    _SESSION_PATCH.setattr(constants, "MODELS_PATH", SESSION_MODELS_DIR)
     _SESSION_PATCH.setattr(socket.socket, "connect", _refused_connect)
     _SESSION_PATCH.setattr(socket, "getaddrinfo", _refused_getaddrinfo)
     _installed.append(True)
@@ -113,23 +120,32 @@ def take_network_attempts() -> list[str]:
     return attempts
 
 
-def packaged_path(value: object, redirected_dirs: tuple[Path, ...]) -> Path | None:
-    """Return the checkout path a redirected path stands for, or ``None`` for any other value."""
+def packaged_path(
+    value: object, redirected_dirs: tuple[Path, ...], packaged_dir: Path = PACKAGED_DATA_DIR
+) -> Path | None:
+    """Return the checkout path a redirected path stands for, or ``None`` for any other value.
+
+    ``packaged_dir`` is the checkout directory the ``redirected_dirs`` stand in for.
+    """
     if not isinstance(value, PurePath):
         return None
     path = Path(value)
     for directory in redirected_dirs:
         if path.is_relative_to(directory):
-            return PACKAGED_DATA_DIR / path.relative_to(directory)
+            return packaged_dir / path.relative_to(directory)
     return None
 
 
-def restore_packaged_paths(patch: pytest.MonkeyPatch, redirected_dirs: tuple[Path, ...]) -> None:
-    """Point every loaded package module's redirected data path back at the checkout's."""
+def restore_packaged_paths(
+    patch: pytest.MonkeyPatch,
+    redirected_dirs: tuple[Path, ...],
+    packaged_dir: Path = PACKAGED_DATA_DIR,
+) -> None:
+    """Point every loaded package module's redirected path back at the checkout's."""
     for name, module in list(sys.modules.items()):
         if name != "nfl_predictor" and not name.startswith("nfl_predictor."):
             continue
         for attribute, value in list(vars(module).items()):
-            packaged = packaged_path(value, redirected_dirs)
+            packaged = packaged_path(value, redirected_dirs, packaged_dir)
             if packaged is not None:
                 patch.setattr(module, attribute, packaged)

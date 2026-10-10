@@ -19,14 +19,18 @@ from tests.conftest import THREAD_VARIABLES, DataIsolation, limit_threads
 
 import nfl_predictor
 from nfl_predictor import constants, lines_refresh, week_builder
+from nfl_predictor.api.settings import Settings
 from nfl_predictor.reporting import power_rankings
 
 if TYPE_CHECKING:
     from types import ModuleType
 
-# The checkout's data directory, worked out from this file rather than from the package, whose
-# paths the suite redirects.
+    import pytest
+
+# The checkout's data and models directories, worked out from this file rather than from the
+# package, whose paths the suite redirects.
 PACKAGED_DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+PACKAGED_MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
 
 POOL_VARIABLES = {
     "openmp": "OMP_NUM_THREADS",
@@ -108,6 +112,31 @@ def test_every_data_path_points_at_the_tests_own_temporary_directory(
     assert data_dir.resolve() != (constants.ROOT_DIR / "data").resolve()
 
 
+def test_the_models_directory_points_at_the_tests_own_temporary_directory(
+    isolated_data: DataIsolation,
+) -> None:
+    # Act
+    models = Path(constants.MODELS_PATH)
+
+    # Assert
+    assert models == isolated_data.models_dir
+    assert models.resolve() != PACKAGED_MODELS_DIR
+
+
+def test_the_web_app_built_without_a_root_indexes_the_tests_models_directory(
+    isolated_data: DataIsolation, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    for variable in ("NFLP_ROOT_DIR", "NFLP_MODELS_DIR"):
+        monkeypatch.delenv(variable, raising=False)
+
+    # Act
+    settings = Settings()
+
+    # Assert
+    assert settings.models_path == isolated_data.models_dir.resolve()
+
+
 def _refused_connection(isolated_data: DataIsolation) -> tuple[str, list[str]]:
     """Try to open a TCP connection and return the refusal and the recorded attempts."""
     message = ""
@@ -176,14 +205,14 @@ def _package_modules() -> list[ModuleType]:
     return [importlib.import_module(name) for name in names]
 
 
-def _packaged_data_path(value: object) -> bool:
-    """Return whether a value is a path inside the checkout's data directory."""
+def _path_inside(value: object, directory: Path) -> bool:
+    """Return whether a value is a path inside one of the checkout's directories."""
     if not isinstance(value, PurePath):
         return False
     path = Path(value)
     if not path.is_absolute():
-        path = PACKAGED_DATA_DIR.parent / path
-    return path.resolve().is_relative_to(PACKAGED_DATA_DIR)
+        path = directory.parent / path
+    return path.resolve().is_relative_to(directory)
 
 
 def _function_defaults(label: str, function: object) -> list[tuple[str, object]]:
@@ -236,7 +265,25 @@ def test_no_module_captures_a_path_inside_the_checkouts_data_directory() -> None
             f"{label} = {value}"
             for module in modules
             for label, value in _module_values(module)
-            if _packaged_data_path(value)
+            if _path_inside(value, PACKAGED_DATA_DIR)
+        }
+    )
+
+    # Assert
+    assert captured == []
+
+
+def test_no_module_captures_a_path_inside_the_checkouts_models_directory() -> None:
+    # Arrange
+    modules = _package_modules()
+
+    # Act
+    captured = sorted(
+        {
+            f"{label} = {value}"
+            for module in modules
+            for label, value in _module_values(module)
+            if _path_inside(value, PACKAGED_MODELS_DIR)
         }
     )
 

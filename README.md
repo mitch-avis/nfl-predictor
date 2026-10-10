@@ -137,20 +137,23 @@ defaults and about 42 s with one thread each. `pytest-xdist` then spreads the su
 worker per core by default (`-n=auto` in `pyproject.toml`; about 15 s on the same machine). Pass
 `-n 0` to run in a single process, for example to use `pdb` or to run one test quickly.
 
-The suite also stays out of the checkout's `data/` and off the network (`tests/data_isolation.py`,
-installed by `tests/conftest.py` before any test module imports the package). `constants.DATA_PATH`
-and the nflreadpy and nfelo caches point at a session temporary directory, so every path a module
-copies from them at import time starts out redirected (to that shared session directory), and
-each test gets a fresh directory on top. Every TCP connection and every lookup of a host name other
-than `localhost` is refused, as on an offline machine, for the whole session, fixtures included; a
-refusal fails the next test to finish, or the session. A test that checks the packaged paths
-themselves asks for the `packaged_data_paths` fixture, and a test in `tests/test_conftest.py` scans
-every module for a path still inside `data/`. Three things are not redirected, because none of them
-reads `constants.DATA_PATH`; tests that touch them pass their own paths:
+The suite also stays out of the checkout's `data/` and `models/` and off the network
+(`tests/data_isolation.py`, installed by `tests/conftest.py` before any test module imports the
+package). `constants.DATA_PATH` and the nflreadpy and nfelo caches point at a session temporary
+directory, so every path a module copies from them at import time starts out redirected (to that
+shared session directory), and each test gets a fresh directory on top. `constants.MODELS_PATH`,
+which the run directories, the walk-forward checkpoints and this checkout's web run index read when
+they run, points at a second temporary directory the same way. Every TCP connection and every
+lookup of a host name other than `localhost` is refused, as on an offline machine, for the whole
+session, fixtures included; a refusal fails the next test to finish, or the session. A test that
+checks the packaged paths themselves asks for the `packaged_data_paths` or `packaged_models_path`
+fixture, and tests in `tests/test_conftest.py` scan every module for a path still inside `data/`
+or `models/`. Two things are not redirected, because neither reads those constants; tests that
+touch them pass their own paths:
 
-- the run directories under `models/`, built from `constants.ROOT_DIR` when used;
 - `api.settings.Settings()` built without a root, which fills its data, state and database paths
-  from `constants.ROOT_DIR` (the checkout's `data/web/app.db`, the running web app's database);
+  from `constants.ROOT_DIR` (the checkout's `data/web/app.db`, the running web app's database); its
+  models directory follows `constants.MODELS_PATH`;
 - the relative `data/...` defaults of `nfl-predictor rankings` (`--data-ml`, `--data-schedule`,
   `--out-dir`), resolved against the current directory.
 

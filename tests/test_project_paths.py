@@ -41,13 +41,17 @@ def test_data_paths_sit_under_the_repository_root() -> None:
     assert cache_dir.resolve() == REPO_ROOT / "data" / "cache" / "nflreadpy"
 
 
+@pytest.mark.usefixtures("packaged_models_path")
 def test_models_and_config_defaults_sit_under_the_repository_root() -> None:
-    """Walk-forward checkpoints and the weekly-run config default to the repository root."""
+    """The models directory, walk-forward checkpoints and the weekly-run config sit at the root."""
     # Act
+    models_path = Path(constants.MODELS_PATH)
     checkpoint_dir = walk_forward.default_checkpoint_dir().resolve()
     config_path = weekly_config.DEFAULT_CONFIG_PATH
 
     # Assert
+    assert models_path == Path(constants.ROOT_DIR) / "models"
+    assert models_path.resolve() == REPO_ROOT / "models"
     assert checkpoint_dir == REPO_ROOT / "models" / "wf_checkpoints"
     assert config_path.resolve() == REPO_ROOT / "config" / "weekly_run.yaml"
     assert config_path.is_file()

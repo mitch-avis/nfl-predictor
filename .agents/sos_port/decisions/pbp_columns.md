@@ -14,6 +14,9 @@ Scripts and their captured output sit beside this file:
 - `pbp_release_check.py` and `pbp_release_check_output.txt`: a fresh nflverse download of
   1999-2025 against the main checkout's cache on every shared column, and the cache size before
   and after.
+- `pbp_column_facts.py` and `pbp_column_facts_output.txt`: the dtypes that vary between seasons,
+  the team codes normalization changes in each team-code and yard-line column, and what the play
+  text and the credit columns add to a season's cache file.
 - `stadium_venues.py` and `stadium_venues_output.txt`: every venue id of the cached 1999-2026
   schedules against `constants.STADIUMS`, the games at the missing ones, and the venue fixture
   of `tests/test_stadiums.py`.
@@ -97,8 +100,9 @@ Scripts and their captured output sit beside this file:
   game; leaving some out changes which games it flags. They are cheap: the 28 fumble and tackle
   credit columns are 3% of a season's new cache file.
 - **Data**: 2024 cache file with every requested column 4,217,398 bytes, without the 28 fumble and
-  tackle credit columns 4,073,921 bytes (scratch measurement with the loader's own writer on the
-  same download as `pbp_release_check_output.txt`).
+  tackle credit columns 4,073,921 bytes, both written with the loader's own cache writer
+  (`pbp_column_facts_output.txt`, from
+  `.venv/bin/python -I .agents/sos_port/decisions/pbp_column_facts.py --work-dir "$(mktemp -d)"`).
 - **Feature-value impact**: none (entry 1).
 - **How to reverse it**: remove them from `constants.PBP_COLUMNS` (and, for team-code columns,
   from `constants.PBP_TEAM_COLUMNS`).
@@ -113,8 +117,9 @@ Scripts and their captured output sit beside this file:
 - **Decision**: cache it.
 - **Reasoning**: a rule there parses it, which is the condition the step plan set. It is the
   largest added column, but the whole cache stays near 100 MB.
-- **Data**: 2024 cache file 4,217,398 bytes with `desc`, 3,275,462 without (22% of the file);
-  all seasons together 104,039,588 bytes with every requested column (table in "Cache size").
+- **Data**: 2024 cache file 4,217,398 bytes with `desc`, 3,275,462 without (22% of the file;
+  `pbp_column_facts_output.txt`); all seasons together 104,039,588 bytes with every requested
+  column (table in "Cache size").
 - **Feature-value impact**: none.
 - **How to reverse it**: remove `desc` from `constants.PBP_COLUMNS` and `_PBP_STRING_COLUMNS`.
 - **Review**: not yet reviewed.
@@ -134,11 +139,10 @@ Scripts and their captured output sit beside this file:
   repo rule is to normalize every team identifier. A test checks that every cached column whose
   name ends in `team`, and `side_of_field`, is in the list.
 - **Data**: in today's 1999-2025 downloads (regular season), the only codes normalization
-  changes are `LA` and `WAS`, in every one of the 23 columns that has values (scratch count over
-  the raw files `pbp_release_check.py` compared), for example 73,005 `posteam` values, 1,258
-  `fumbled_1_team`, 9,100 `return_team` and 35,308 `solo_tackle_1_team`;
+  changes are `LA` and `WAS`, in every one of the 23 columns that has values, for example 73,005
+  `posteam` values, 1,258 `fumbled_1_team`, 9,100 `return_team` and 35,308 `solo_tackle_1_team`;
   `tackle_with_assist_2_team` has no such value. `side_of_field` also holds `''`, `50` and `MID`,
-  which pass through unchanged. Tests:
+  and `posteam` holds `''`, which pass through unchanged (`pbp_column_facts_output.txt`). Tests:
   `tests/test_pbp_cache_columns.py::test_load_pbp_normalizes_the_added_team_code_columns` and
   `::test_pbp_team_columns_name_every_cached_team_code_column`.
 - **Feature-value impact**: none; the six earlier columns are normalized exactly as before.
@@ -161,7 +165,7 @@ Scripts and their captured output sit beside this file:
 - **Data**: in today's 1999-2025 downloads (regular season), the code is one that normalization
   changes (`LA` or `WAS`; canonical `LAR` and `WSH`) on 75,362 plays in `yrdln`, 76,210 in
   `drive_start_yard_line`, 75,028 in `drive_end_yard_line` and 4,578 in `end_yard_line`
-  (scratch count over the raw files `pbp_release_check.py` compared). Test:
+  (`pbp_column_facts_output.txt`). Test:
   `tests/test_pbp_cache_columns.py::test_load_pbp_keeps_yard_line_text_as_published`.
 - **Feature-value impact**: none now. For the ETL integration: a ported field-position stat that
   skips the normalization misreads the Rams' and Washington's drive starts.
@@ -184,8 +188,8 @@ Scripts and their captured output sit beside this file:
 - **Reasoning**: a stable type per column is the cache's contract (the empty frame already uses
   the map). Every one of the 55 earlier columns already had its mapped dtype, so the cast changes
   none of them.
-- **Data**: dtypes of every raw column in the 27 downloads (scratch scan): only `goal_to_go` and
-  `xyac_median_yardage` vary. Test:
+- **Data**: of the 372 raw columns in the 27 downloads, only `goal_to_go` and
+  `xyac_median_yardage` change dtype between seasons (`pbp_column_facts_output.txt`). Test:
   `tests/test_pbp_cache_columns.py::test_load_pbp_stacks_seasons_that_type_goal_to_go_differently`;
   with the cast removed it fails with the `SchemaError` above, and so does the characterization
   test, whose fixture types `goal_to_go` per season the same way.
@@ -410,9 +414,10 @@ The full cache grows from about 39 MB to about 104 MB.
   schedule before the week-7 Paris game.
 - **Reasoning**: three of the four games are still to be played, and an override would be a new
   table field and loader rule for three games whose source may still be corrected.
-- **Data**: scratch query of the main checkout's cached schedules (roof by venue and season):
-  `GER00` 2022 and 2024 `outdoors`; `MUN01` 2026 `dome`; `MEL00` 2026 `dome`; `PAR00` 2026 `dome`;
-  `MAD01` 2026 empty; `RIO00` 2026 `open` (also in run 1 of `stadium_venues_output.txt`).
+- **Data**: the roof column of the "Every venue id" table in run 1 of
+  `stadium_venues_output.txt` (the main checkout's cached schedules): `GER00` (2022-2024)
+  `outdoors`; `MUN01`, `MEL00` and `PAR00` (2026) `dome`; `MAD01` (2026) empty; `RIO00` (2026)
+  `open`.
 - **Feature-value impact**: none from this chunk; if left, those games keep `stadium_type`
   `dome` (three) and `unknown` (Madrid).
 - **How to reverse it**: not applicable.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 import joblib
@@ -187,10 +188,30 @@ def test_paired_bootstrap_interval_constant_difference_collapses_to_it() -> None
     assert (low, high) == pytest.approx((0.01, 0.01), abs=1e-15)
 
 
-def _write_fold(directory: Path, season: int, week: int, sigma: float) -> None:
-    """Write one fold checkpoint whose metrics carry ``sigma``."""
-    payload = {"metrics": {"floor_sigma": sigma}, "predictions": _games(week=[week] * 3)}
+def _write_fold(
+    directory: Path, season: int, week: int, sigma: float, fingerprint: str | None = None
+) -> None:
+    """Write one fold checkpoint whose metrics carry ``sigma``.
+
+    Its fingerprint is the directory's name, as in a walk-forward's checkpoint directory, unless
+    ``fingerprint`` says otherwise.
+    """
+    payload = {
+        "fingerprint": directory.name if fingerprint is None else fingerprint,
+        "metrics": {"floor_sigma": sigma},
+        "predictions": _games(week=[week] * 3, season=[season] * 3),
+    }
     joblib.dump(payload, directory / f"fold_{season}_w{week:02d}.joblib")
+
+
+def _write_metadata(path: Path, derived: dict[int, tuple[int, int]]) -> Path:
+    """Write market-lines metadata giving each season's (map, fixed) derived moneyline counts."""
+    seasons = {
+        str(season): {"moneylines_from_map": by_map, "moneylines_from_fixed_conversion": fixed}
+        for season, (by_map, fixed) in derived.items()
+    }
+    path.write_text(json.dumps({"seasons": seasons}), encoding="utf-8")
+    return path
 
 
 def test_load_fold_games_takes_each_weeks_sigma_from_its_metrics(tmp_path: Path) -> None:
@@ -224,26 +245,101 @@ def test_render_report_gap_dominated_recommends_beyond_and_names_the_command(
     summary = edges.summarize(
         _decomposed(edge=[0.10, -0.08, 0.01, 0.01], gap=[0.09, -0.07, 0.0, 0.0])
     )
+    inputs = edges.ReportInputs(
+        checkpoint_dir=tmp_path,
+        folds=1,
+        fold_rows=4,
+        floor_difference=0.0,
+        metadata_path=tmp_path / "market_lines_metadata.json",
+    )
 
     # Act
-    report = edges.render_report(
-        summary, checkpoint_dir=tmp_path, folds=1, fold_rows=4, floor_difference=0.0
-    )
+    report = edges.render_report([(edges.ALL_GAMES, summary)], inputs)
 
     # Assert
     assert ".agents/sos_port/betting_edges.py" in report
     assert edges.RECOMMEND_BEYOND in report
 
 
-def test_main_writes_the_report_for_the_scored_games(tmp_path: Path) -> None:
+def test_main_writes_every_group_of_the_scored_games(tmp_path: Path) -> None:
     # Arrange
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
-    _write_fold(checkpoints, 2010, 1, _SIGMA)
+    _write_fold(checkpoints, 2025, 1, _SIGMA)
+    metadata = _write_metadata(tmp_path / "metadata.json", {2025: (0, 0)})
     out = tmp_path / "BETTING_EDGES.md"
+    argv = ["--checkpoint-dir", str(checkpoints), "--expected-folds", "1", "--out", str(out)]
 
     # Act
-    edges.main(["--checkpoint-dir", str(checkpoints), "--expected-folds", "1", "--out", str(out)])
+    edges.main([*argv, "--market-lines-metadata", str(metadata)])
 
     # Assert
-    assert "| Scored games | 3 |" in out.read_text(encoding="utf-8")
+    assert "| Scored games | 3 | 3 | 3 |" in out.read_text(encoding="utf-8")
+
+
+def test_load_fold_games_accepts_the_full_fingerprint_the_directory_abbreviates(
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    checkpoints = tmp_path / "df20b775abf7f2657d13"
+    checkpoints.mkdir()
+    _write_fold(checkpoints, 2010, 1, 12.0, fingerprint="df20b775abf7f2657d13d05694d016dd")
+
+    # Act
+    games = edges.load_fold_games(checkpoints, expected_folds=1)
+
+    # Assert
+    assert len(games) == 3
+
+
+def test_load_fold_games_foreign_fingerprint_raises(tmp_path: Path) -> None:
+    # Arrange
+    _write_fold(tmp_path, 2010, 1, 12.0, fingerprint="another_run")
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="fingerprint"):
+        edges.load_fold_games(tmp_path, expected_folds=1)
+
+
+def test_real_moneyline_seasons_skip_seasons_with_derived_moneylines(tmp_path: Path) -> None:
+    # Arrange
+    metadata = _write_metadata(
+        tmp_path / "metadata.json",
+        {2006: (0, 0), 2021: (285, 0), 2022: (0, 0), 2023: (0, 3), 2025: (0, 0)},
+    )
+
+    # Act
+    seasons = edges.real_moneyline_seasons(metadata)
+
+    # Assert
+    assert seasons == [2022, 2025]
+
+
+def test_summary_groups_add_the_real_moneyline_seasons_and_the_last_season() -> None:
+    # Arrange
+    decomposed = _decomposed(
+        edge=[0.10, -0.08, 0.05, 0.02, 0.03, -0.04], gap=[0.01, 0.02, -0.01, 0.0, 0.01, 0.02]
+    ).assign(season=[2021, 2021, 2024, 2024, 2025, 2025])
+
+    # Act
+    groups = edges.summary_groups(decomposed, real_seasons=[2022, 2024, 2025])
+
+    # Assert
+    assert [(name, summary.games) for name, summary in groups] == [
+        ("All scored games", 6),
+        ("Real moneyline pairs (2022, 2024, 2025)", 4),
+        ("2025 alone", 2),
+    ]
+
+
+def test_summary_groups_skip_a_group_without_games() -> None:
+    # Arrange
+    decomposed = _decomposed(edge=[0.10, -0.08, 0.05], gap=[0.01, 0.02, -0.01]).assign(
+        season=[2021, 2021, 2021]
+    )
+
+    # Act
+    groups = edges.summary_groups(decomposed, real_seasons=[2022])
+
+    # Assert
+    assert [name for name, _ in groups] == ["All scored games"]

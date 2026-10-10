@@ -7,19 +7,24 @@ Run from the repository root (a worktree is fine):
 It writes ``BETTING_EDGES.md`` beside this file and nothing else. It reads, read-only, the fold
 checkpoints of the adopted-settings reference, seed 42 (``--checkpoint-dir``, by default the main
 checkout's ``models/wf_checkpoints/df20b775abf7f2657d13``): each fold's ``predictions`` frame and
-its ``metrics["floor_sigma"]``, that week's sigma. The rule is ``decisions/betting_edges.md``,
-entry 1, written before this ran.
+its ``metrics["floor_sigma"]``, that week's sigma; every fold's fingerprint must begin
+with the directory's name. It also reads the reference's market-lines metadata
+(``--market-lines-metadata``) to find the seasons whose moneylines are all real pairs rather than
+derived from the spread. The rule is ``decisions/betting_edges.md``, entry 1, written before this
+ran; it reads all scored games, and the other groups decide nothing.
 
 Per game, on the home side, with ``sigma`` the week's floor sigma: ``p_model`` is
 ``Phi(predicted_margin / sigma)``, ``p_ml`` the no-vig moneyline probability (the betting
 report's own conversion) and ``p_spread`` is ``Phi(-home_spread / sigma)``. The report's edge,
 ``p_model - p_ml``, is the sum of ``beyond = p_model - p_spread`` (what the model adds beyond the
-spread) and ``gap = p_spread - p_ml`` (the curve-versus-moneyline gap, no model information).
+spread) and ``gap = p_spread - p_ml`` (the curve-versus-moneyline gap, with no information from
+the model's margin).
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
 from dataclasses import dataclass
@@ -47,7 +52,14 @@ RUN_DIR = "models/step4_reference/adopted_seed42"
 DEFAULT_CHECKPOINT_DIR = Path(
     "/home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13"
 )
+DEFAULT_METADATA_PATH = Path(
+    "/home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/"
+    "adopted_market_lines_metadata.json"
+)
 REPORT_PATH = Path(__file__).resolve().parent / "BETTING_EDGES.md"
+ALL_GAMES = "All scored games"
+# The per-season counts of moneylines derived from the spread in the market-lines metadata.
+_DERIVED_MONEYLINE_COUNTS = ("moneylines_from_map", "moneylines_from_fixed_conversion")
 _FOLD_COLUMNS = [
     "game_id",
     "season",
@@ -66,7 +78,8 @@ def load_fold_games(checkpoint_dir: Path, expected_folds: int = EXPECTED_FOLDS) 
     """Return every fold's games, each with its week's ``floor_sigma`` from the fold's metrics.
 
     Raises:
-        ValueError: If the directory does not hold exactly ``expected_folds`` fold checkpoints.
+        ValueError: If the directory does not hold exactly ``expected_folds`` fold checkpoints, or
+            a fold's fingerprint does not begin with the directory's name (another run's fold).
 
     """
     paths = sorted(checkpoint_dir.glob("fold_*.joblib"))
@@ -76,6 +89,13 @@ def load_fold_games(checkpoint_dir: Path, expected_folds: int = EXPECTED_FOLDS) 
     frames: list[pd.DataFrame] = []
     for path in paths:
         payload = joblib.load(path)
+        # A walk-forward names its checkpoint directory after the start of the run's fingerprint.
+        if not str(payload.get("fingerprint")).startswith(checkpoint_dir.name):
+            msg = (
+                f"{path} has fingerprint {payload.get('fingerprint')!r}, which the checkpoint "
+                f"directory's name {checkpoint_dir.name!r} does not abbreviate."
+            )
+            raise ValueError(msg)
         frame = payload["predictions"].loc[:, _FOLD_COLUMNS].copy()
         frame["floor_sigma"] = float(payload["metrics"]["floor_sigma"])
         frames.append(frame)
@@ -197,44 +217,110 @@ def summarize(decomposed: pd.DataFrame) -> EdgeSummary:
     )
 
 
+def real_moneyline_seasons(metadata_path: Path) -> list[int]:
+    """Return the scored seasons none of whose moneylines were derived from the spread.
+
+    A season qualifies when the market-lines metadata counts no moneyline from the fitted
+    spread-to-moneyline map and none from the fixed conversion. The metadata counts seasons, not
+    games, so a season with any derived moneyline is left out whole.
+    """
+    seasons = json.loads(metadata_path.read_text(encoding="utf-8"))["seasons"]
+    return sorted(
+        int(season)
+        for season, counts in seasons.items()
+        if FIRST_SEASON <= int(season) <= LAST_SEASON
+        and all(int(counts[key]) == 0 for key in _DERIVED_MONEYLINE_COUNTS)
+    )
+
+
+def summary_groups(
+    decomposed: pd.DataFrame, real_seasons: list[int]
+) -> list[tuple[str, EdgeSummary]]:
+    """Return the summary of all scored games, then of the real-moneyline seasons and the last.
+
+    The first group is the one the rule reads; a group without games is left out.
+    """
+    real_names = ", ".join(str(season) for season in real_seasons)
+    groups = [
+        (ALL_GAMES, decomposed),
+        (
+            f"Real moneyline pairs ({real_names})",
+            decomposed[decomposed["season"].isin(real_seasons)],
+        ),
+        (f"{LAST_SEASON} alone", decomposed[decomposed["season"] == LAST_SEASON]),
+    ]
+    return [(name, summarize(group)) for name, group in groups if len(group) > 0]
+
+
 RECOMMEND_BEYOND = (
     "base the confidence and action labels on `beyond`, not `edge` (held for the user)"
 )
 RECOMMEND_KEEP = "keep the confidence and action labels on `edge`"
 
 
-def render_report(
-    summary: EdgeSummary,
-    *,
-    checkpoint_dir: Path,
-    folds: int,
-    fold_rows: int,
-    floor_difference: float,
-) -> str:
-    """Return ``BETTING_EDGES.md``: the data, the numbers and the rule's outcome."""
+_MEASURES = (
+    "Scored games",
+    "Mean `\\|edge\\|`",
+    "Mean `\\|gap\\|`",
+    "Mean `\\|beyond\\|`",
+    "Top-decile games",
+    "Top decile: share with `\\|gap\\| > \\|beyond\\|`",
+    "Top decile: share with `sign(gap) == sign(edge)`",
+    "Correlation of `edge` with `gap`",
+    "Correlation of `edge` with `beyond`",
+    "Brier of `p_ml`",
+    "Brier of `p_spread`",
+    "Brier of `p_spread` minus `p_ml` (95% interval)",
+)
+
+
+def _values(summary: EdgeSummary) -> list[str]:
+    """Return one group's formatted values, in the order of ``_MEASURES``."""
     low, high = summary.brier_difference_interval
-    recommendation = RECOMMEND_BEYOND if summary.recommend_beyond else RECOMMEND_KEEP
-    rows = [
-        ("Scored games", f"{summary.games}"),
-        ("Mean `\\|edge\\|`", f"{summary.mean_abs_edge:.4f}"),
-        ("Mean `\\|gap\\|`", f"{summary.mean_abs_gap:.4f}"),
-        ("Mean `\\|beyond\\|`", f"{summary.mean_abs_beyond:.4f}"),
-        ("Top-decile games", f"{summary.top_decile_games}"),
-        ("Top decile: share with `\\|gap\\| > \\|beyond\\|`", f"{summary.share_gap_dominates:.4f}"),
-        (
-            "Top decile: share with `sign(gap) == sign(edge)`",
-            f"{summary.share_gap_sign_matches_edge:.4f}",
-        ),
-        ("Correlation of `edge` with `gap`", f"{summary.corr_edge_gap:.4f}"),
-        ("Correlation of `edge` with `beyond`", f"{summary.corr_edge_beyond:.4f}"),
-        ("Brier of `p_ml`", f"{summary.brier_moneyline:.5f}"),
-        ("Brier of `p_spread`", f"{summary.brier_spread:.5f}"),
-        (
-            "Brier of `p_spread` minus `p_ml` (95% interval)",
-            f"{summary.brier_difference:+.5f} ({low:+.5f} to {high:+.5f})",
-        ),
+    return [
+        f"{summary.games}",
+        f"{summary.mean_abs_edge:.4f}",
+        f"{summary.mean_abs_gap:.4f}",
+        f"{summary.mean_abs_beyond:.4f}",
+        f"{summary.top_decile_games}",
+        f"{summary.share_gap_dominates:.4f}",
+        f"{summary.share_gap_sign_matches_edge:.4f}",
+        f"{summary.corr_edge_gap:.4f}",
+        f"{summary.corr_edge_beyond:.4f}",
+        f"{summary.brier_moneyline:.5f}",
+        f"{summary.brier_spread:.5f}",
+        f"{summary.brier_difference:+.5f} ({low:+.5f} to {high:+.5f})",
     ]
-    table = "\n".join(f"| {name} | {value} |" for name, value in rows)
+
+
+@dataclass(frozen=True)
+class ReportInputs:
+    """Where the numbers came from: the checkpoints, the floor check and the lines metadata."""
+
+    checkpoint_dir: Path
+    folds: int
+    fold_rows: int
+    floor_difference: float
+    metadata_path: Path
+
+
+def render_report(groups: list[tuple[str, EdgeSummary]], inputs: ReportInputs) -> str:
+    """Return ``BETTING_EDGES.md``: the data, each group's numbers and the rule's outcome.
+
+    The rule reads the first group, all scored games.
+    """
+    checkpoint_dir, metadata_path = inputs.checkpoint_dir, inputs.metadata_path
+    folds, fold_rows, floor_difference = inputs.folds, inputs.fold_rows, inputs.floor_difference
+    summary = groups[0][1]
+    recommendation = RECOMMEND_BEYOND if summary.recommend_beyond else RECOMMEND_KEEP
+    columns = [_values(group) for _, group in groups]
+    header = "| Measure | " + " | ".join(name for name, _ in groups) + " |"
+    separator = "| --- |" + " --- |" * len(groups)
+    rows = [
+        f"| {measure} | " + " | ".join(column[index] for column in columns) + " |"
+        for index, measure in enumerate(_MEASURES)
+    ]
+    table = "\n".join([header, separator, *rows])
     return f"""# Betting report edges: the model's part and the spread-moneyline gap
 
 Generated by `.agents/sos_port/betting_edges.py`; do not edit by hand. The rule is
@@ -247,7 +333,8 @@ Reproduce from the repository root (it reads the fold checkpoints and writes onl
 
 ```bash
 VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/betting_edges.py \\
-    --checkpoint-dir {checkpoint_dir}
+    --checkpoint-dir {checkpoint_dir} \\
+    --market-lines-metadata {metadata_path}
 ```
 
 ## Data
@@ -262,17 +349,22 @@ VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/betting_edges.py \\
   (tolerance `{FLOOR_TOLERANCE:.0e}`).
 - The Brier interval resamples games {BOOTSTRAP_RESAMPLES:,} times (numpy seed {BOOTSTRAP_SEED},
   95% percentile interval); a tie scores 0, as in every walk-forward Brier here.
+- Groups: the rule reads all scored games. The real-moneyline seasons are those whose
+  moneylines the market-lines metadata counts none of as derived from the spread (by the
+  fitted spread-to-moneyline map or the fixed conversion), read from
+  `{metadata_path}`.
+  On a game with a derived moneyline the gap is a function of the spread and the sigma, not a
+  disagreement between the game's spread and its moneyline. Each group's top decile is its own.
+  These groups decide nothing.
 
 ## Numbers
 
-| Measure | Value |
-| --- | --- |
 {table}
 
 ## The rule's outcome
 
-`|gap| > |beyond|` in {summary.share_gap_dominates:.4f} of the top decile of `|edge|`; the rule's
-threshold is more than {RULE_SHARE}.
+`|gap| > |beyond|` in {summary.share_gap_dominates:.4f} of the top decile of `|edge|` over all
+scored games; the rule's threshold is more than {RULE_SHARE}.
 
 Recommendation: {recommendation}.
 """
@@ -283,20 +375,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Split the betting report's moneyline edges.")
     parser.add_argument("--checkpoint-dir", type=Path, default=DEFAULT_CHECKPOINT_DIR)
     parser.add_argument("--expected-folds", type=int, default=EXPECTED_FOLDS)
+    parser.add_argument("--market-lines-metadata", type=Path, default=DEFAULT_METADATA_PATH)
     parser.add_argument("--out", type=Path, default=REPORT_PATH)
     args = parser.parse_args(argv)
     games = load_fold_games(args.checkpoint_dir, args.expected_folds)
     floor_difference = check_floor_reproduction(games)
-    summary = summarize(decompose(games))
-    report = render_report(
-        summary,
+    real_seasons = real_moneyline_seasons(args.market_lines_metadata)
+    groups = summary_groups(decompose(games), real_seasons)
+    inputs = ReportInputs(
         checkpoint_dir=args.checkpoint_dir,
         folds=args.expected_folds,
         fold_rows=len(games),
         floor_difference=floor_difference,
+        metadata_path=args.market_lines_metadata,
     )
+    report = render_report(groups, inputs)
     args.out.write_text(report, encoding="utf-8")
-    log.info("Wrote %s (%d scored games).", args.out, summary.games)
+    log.info("Wrote %s (%d scored games).", args.out, groups[0][1].games)
     return 0
 
 

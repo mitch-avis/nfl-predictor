@@ -121,6 +121,13 @@ plays are not re-sorted. No linear algebra is involved, so the BLAS thread count
   file through a temporary file of its own. A season before its first game gets none, and a season
   whose plays exist without official team stats, weekly player stats or snap counts (the current
   season before nflverse publishes them) is built without them; both are logged.
+- Every table keeps the columns and types of a full build whatever is missing: the step conforms
+  it (`conform_table`) to `utils/polars/season_stats_schema.py`, which
+  `.agents/sos_port/season_stats_etl_schema.py` generates from the full builds of 1999-2026. A
+  column that a missing source or a season too early for an opponent profile leaves out is null,
+  and `qb_game_logs.week` is `Int32` in every season, as published. Rows a missing source supplies
+  stay missing: without the snap counts, the passers' games without a dropback. The opponent
+  profile tables themselves are absent until a profile can be computed.
 - Each slice of a frame that spans seasons is rechunked, so a later season's rows cannot move where
   a sum's chunks split, and two runs, the second fed its games and every other source in another
   row order (each game's plays in nflverse's order), write the same bytes
@@ -132,8 +139,9 @@ plays are not re-sorted. No linear algebra is involved, so the BLAS thread count
   season downloads again with new players each week, and only a change to a player the season's
   sources name moves them.
 - `.agents/sos_port/season_stats_etl_parity.py` builds every published season through this step
-  on the snapshot that project's files were built from and compares what the ETL writes with the
-  published files (`.agents/sos_port/SEASON_STATS_ETL_PARITY.md`);
+  on the snapshot that project's files were built from, compares what the ETL writes with the
+  published files, and checks that the tables written from the season cache's entries equal the
+  fresh ones byte for byte (`.agents/sos_port/SEASON_STATS_ETL_PARITY.md`);
   `.agents/sos_port/season_stats_etl_timing.py` times what the step adds to a full and an
   incremental run.
 

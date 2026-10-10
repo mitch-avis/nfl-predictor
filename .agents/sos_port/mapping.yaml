@@ -4,8 +4,9 @@
 # inventory.py finds every item itself and applies these rules; it fails when an item matches no
 # rule or more than one, when a rule matches nothing, and when a counterpart named here does not
 # exist in this repository. Classes:
-#   matched   - the same definition here; `here` names it.
-#   different - a counterpart here with a different definition; `note` says how.
+#   matched   - the same definition here; `here` names it. With several counterparts, every one
+#               shares the definition.
+#   different - a counterpart here with a different definition; `note` says which and how.
 #   missing   - no counterpart here; `phase` says which step-6 phase ports it, or "none planned".
 #
 # Column rules match on any of: `kinds` (file kinds, or "*"), `columns` (exact names), `match`
@@ -13,13 +14,20 @@
 # (its registry's affixes), `source` (the code-derived source for game logs, else its registry's
 # label). A `rest: true` rule takes every column of its kinds that no other rule matches, and must
 # say how many (`expect`), so a column the frozen commit does not have fails the run; any other
-# rule may pin its count the same way. A column left `missing` (other than an opponents-faced
-# profile column) fails the run when this repository has a column of the same name (or, for a
-# season total or per-game value, of its base metric), or when another file kind gives that name
-# a counterpart, unless `cross_kind_exceptions` (keyed `kind.column`) says why. A rule with
-# `mirror_kind` takes each column's counterparts from the same column in that kind (`mirror_base`:
-# from its base metric's column there).
+# rule may pin its count the same way. A column left `missing` fails the run when the ported
+# tables write it (below), when this repository has a column of the same name (or, for a season
+# total or per-game value, of its base metric; opponents-faced profile columns are exempt from
+# this guard), or when another file kind gives that name a counterpart, unless
+# `cross_kind_exceptions` (keyed `kind.column`) says why. A rule with `mirror_kind` takes each
+# column's counterparts from the same column in that kind (`mirror_base`: from its base metric's
+# column there), less that column's ported table, and fails when nothing else is left.
 # Counterparts are `<catalog>:<column>`, where the catalogs are this repository's
+#   ratings    - the table of the column's own kind that the ETL writes to
+#                data/ratings/{season}_{kind}.parquet: the ported ratings (nfl_predictor.ratings,
+#                utils/polars/ratings_build.py) and season statistics (nfl_predictor.season_stats,
+#                utils/polars/season_stats_build.py), each kind and column named as there. The
+#                inventory names it first for every matched or different column it writes; a rule
+#                names it only when it is the column's one counterpart (`ratings:{column}`).
 #   team_game  - aggregate_pbp_team_game_stats (play-by-play, per team-game)
 #   box_score  - aggregate_pbp_team_box_score_stats (play-by-play, per team-game; it overrides
 #                nflverse's team stats by default, team_stats_source "pbp")
@@ -28,10 +36,17 @@
 #   dataset    - a published game-dataset column, without its home_/away_ side prefix
 #   strength   - the weekly strength snapshot file
 # and arithmetic over names of one catalog (`team_game:pass_epa_sum / dropbacks`). `{column}`,
-# `{base}` and `{core}` (the column without its prefix) are filled in per column.
+# `{base}` and `{core}` (the column without its prefix) are filled in per column; in source and
+# web rules `{key}` is the item's own key.
 #
-# "Season-to-date" below means this repository's pre-game feature: the team's stats through the
-# week before, blended toward the previous season (polars_utils.blend_with_prior_stats).
+# The ported tables equal nfl-sos-ratings' published files cell for cell, Washington's code
+# apart (SEASON_STATS_ETL_PARITY.md, RATINGS_PARITY.md, ADAPTER_PARITY.md). So a column's class
+# turns on this repository's own model inputs where it has them: the play-by-play aggregates the
+# ETL builds team-game features from (PARITY.md compares them with its game logs), its team
+# stats, the game dataset and the strength snapshot. "Season-to-date" below means this
+# repository's pre-game feature: the team's stats through the week before, blended toward the
+# previous season (polars_utils.blend_with_prior_stats); "pre-week" a rating fitted on the games
+# before the week (ratings/pre_week.py).
 
 # Columns that may stay missing in one kind although another kind gives their name a
 # counterpart, each with the reason. None today.
@@ -40,77 +55,105 @@ cross_kind_exceptions: {}
 sources:
   - id: pbp
     match: 'nflreadpy\.load_pbp'
-    class: different
-    here: load:nflreadpy.load_pbp
-    phase: phase 3 (team ratings) for the columns it needs
+    class: matched
+    here: load:{key}
     note: >-
       Same regular-season play-by-play; there the full frame, here the columns of
-      constants.PBP_COLUMNS, which leave out qb_scramble, play_id, play text and player ids.
+      constants.PBP_COLUMNS, which hold every column it reads (qb_scramble, play_id, the play text
+      and the player ids included), with the same team codes and Jacksonville's 2001-2002 player
+      teams repaired before the aggregates (PARITY.md).
   - id: schedules
     match: 'nflreadpy\.load_schedules'
     class: matched
-    here: load:nflreadpy.load_schedules
+    here: load:{key}
     note: Same nflverse schedules; there regular season only.
   - id: team-stats
     match: 'nflreadpy\.load_team_stats'
     class: different
-    here: load:nflreadpy.load_team_stats
+    here: load:{key}
     note: >-
-      Same weekly team stats; there it drops a game with one team's row (Jacksonville's 2001-2002
-      home games) and its values override play-by-play, here play-by-play overrides them.
+      Same weekly team stats. The season statistics read them as it does, as their own cached
+      source (season_stats/sources.py, OFFICIAL_TEAM_STATS), dropping a game with one team's row
+      (Jacksonville's 2001-2002 home games) and overriding play-by-play with them; the model's
+      team-game frame (loaders.load_team_stats) lets play-by-play override them instead.
   - id: player-stats
     match: 'nflreadpy\.load_player_stats'
-    class: missing
-    phase: phase 2 (nflverse sources)
-    note: Weekly player stats, for the defensive stats and the quarterback's official totals.
+    class: matched
+    here: load:{key}
+    note: >-
+      Weekly player stats (nflverse_sources.PLAYER_STATS), for the season statistics' defensive
+      stats and quarterback totals, with the stats nflverse never charted null as there
+      (decisions/sources.md).
   - id: snap-counts
     match: 'nflreadpy\.load_snap_counts'
-    class: missing
-    phase: phase 2 (nflverse sources)
-    note: Snap counts (2013 on), for quarterback offensive snaps.
+    class: matched
+    here: load:{key}
+    note: Snap counts (2012 on, nflverse_sources.SNAP_COUNTS), for quarterback offensive snaps.
   - id: identity
     match: 'nflreadpy\.load_(players|rosters_weekly|rosters)'
-    class: missing
-    phase: phase 2 (nflverse sources)
+    class: matched
+    here: load:{key}
     note: >-
-      Players and rosters, for quarterback identity and the player-team repair of one-team games.
-      This repository bridges quarterbacks through ../nfeloqb's meta_data.csv instead.
+      Players and rosters (nflverse_sources), for the quarterback identity (its rule: the players
+      file or any roster week of the season) and the player-team repair of one-team games. The
+      Elo file's quarterbacks are still bridged through ../nfeloqb's meta_data.csv.
   - id: teams
     match: 'nflreadpy\.load_teams'
     class: missing
-    phase: phase 6 (web pages)
+    phase: none planned (team palettes are not ported, decisions/web_pages.md entry 13)
     note: Team colors for its pages (team_palettes.py).
-  - id: espn-qbr
-    match: 'url https://github\.com/nflverse/nflverse-data/releases/download/espn_data/qbr_(season|week)_level\.parquet|network fetch'
-    class: missing
-    phase: phase 2 (nflverse sources), validation reference only
-    note: ESPN QBR from the nflverse release assets, read over the network (data_loader._fetch_release_parquet).
+  - id: espn-qbr-files
+    match: 'url https://github\.com/nflverse/nflverse-data/releases/download/espn_data/qbr_(season|week)_level\.parquet'
+    class: matched
+    here: load:{key}
+    note: >-
+      ESPN QBR from the nflverse release assets (utils/polars/espn_qbr.py), a validation
+      reference only, as there (decisions/sources.md).
+  - id: espn-qbr-fetch
+    match: 'network fetch'
+    class: matched
+    here: load:{key}
+    note: >-
+      Its one network fetch reads the ESPN QBR files above (data_loader._fetch_release_parquet);
+      this repository's fetches include the same read (espn_qbr._download_parquet).
 
+# This app serves the ported pages under one route family, /api/ratings/{season}/{kind}/..., with
+# kind teams or qbs (decisions/web_pages.md entry 2), so its team and quarterback routes share one
+# counterpart; "web_pages.md entry N" below is an entry of that file.
 web:
   - id: game-logs
     match: 'api GET /api/seasons/\{season\}/(teams/\{team\}|qbs/\{qb_id\})/game-logs'
-    class: missing
-    phase: phase 6 (web pages)
-    note: Team and quarterback game logs.
+    class: different
+    here: api GET /api/ratings/{season}/{kind}/{entity_id}/game-logs
+    note: >-
+      Team and quarterback game logs; here each game also carries its opponent's season ratings,
+      joined on the server, and no rank-range chip (web_pages.md entry 6).
   - id: rating-history
-    match: 'api GET /api/seasons/\{season\}/(teams/\{team\}|qbs/\{qb_id\})/(rating|rank)-history'
-    class: missing
-    phase: phase 6 (web pages), on phase 3's weekly histories
-    note: Weekly rating and rank histories.
+    match: 'api GET /api/seasons/\{season\}/(teams/\{team\}|qbs/\{qb_id\})/rating-history'
+    class: different
+    here: api GET /api/ratings/{season}/{kind}/{entity_id}/rating-history
+    note: Weekly rating histories, under this app's route family (web_pages.md entry 2).
+  - id: rank-history
+    match: 'api GET /api/seasons/\{season\}/(teams/\{team\}|qbs/\{qb_id\})/rank-history'
+    class: different
+    here: api GET /api/ratings/{season}/{kind}/{entity_id}/rank-history
+    note: Weekly rank histories, under this app's route family (web_pages.md entry 2).
   - id: rating-pairs
     match: 'api GET /api/seasons/\{season\}/(teams/\{team\}|qbs/\{qb_id\})/rating-pairs'
-    class: missing
-    phase: phase 6 (web pages), on phase 3's rank ranges
-    note: Head-to-head chances between two teams or two quarterbacks.
+    class: different
+    here: api GET /api/ratings/{season}/{kind}/{entity_id}/head-to-head
+    note: >-
+      Head-to-head chances between two teams or two quarterbacks, renamed (web_pages.md
+      entry 2).
   - id: rating-ranges
     match: 'api GET /api/seasons/\{season\}/(teams|qbs)/rating-ranges'
-    class: missing
-    phase: phase 6 (web pages), on phase 3's rank ranges
-    note: Rank ranges.
+    class: different
+    here: api GET /api/ratings/{season}/{kind}/rank-ranges
+    note: Rank ranges, under this app's route family (web_pages.md entry 2).
   - id: wp-ratings
     match: 'api GET /api/seasons/\{season\}/(teams|qbs)/wp-ratings'
     class: missing
-    phase: phase 6 (web pages)
+    phase: none planned (the garbage-time filter view is not ported, web_pages.md entry 9)
     note: Ratings refit with the garbage-time filter (exploration only there).
   - id: refresh
     match: 'api (GET|POST) /api/refresh'
@@ -124,13 +167,25 @@ web:
   - id: metadata
     match: 'api GET /api/metadata'
     class: different
-    here: api GET /api/registry
-    note: Its metric registry against this app's column registry.
-  - id: seasons
-    match: 'api GET /api/seasons(/\{season\})?'
-    class: missing
-    phase: phase 6 (web pages)
-    note: The season list and one season's whole dataset for its pages.
+    here: api GET /api/ratings/metrics
+    note: >-
+      Its metric registry, ported (nfl_predictor.season_stats.metrics); here each table maps its
+      columns into this app's column format (web_pages.md entry 4) and the glossary leaves out the
+      garbage-time filter's 8 metrics (web_pages.md entry 9).
+  - id: season-list
+    match: 'api GET /api/seasons'
+    class: different
+    here: api GET /api/ratings/seasons
+    note: >-
+      The season list; here a season is listed once its two index tables exist (web_pages.md
+      entry 3).
+  - id: season-dataset
+    match: 'api GET /api/seasons/\{season\}'
+    class: different
+    here: api GET /api/ratings/{season}/{kind}
+    note: >-
+      One season's whole dataset for its pages; here one table per request, the teams' or the
+      quarterbacks' (web_pages.md entry 2).
   - id: layout-route
     match: 'page /'
     class: different
@@ -141,31 +196,93 @@ web:
     class: different
     here: page / (index)
     note: Its index redirects to the teams page; this app's is the dashboard.
-  - id: teams-page
-    match: 'page /teams|component EntityIndexPage'
+  - id: index-pages
+    match: 'page /(teams|qbs)'
     class: different
-    here: [page /power, component PowerRankings]
-    phase: phase 5 (power rankings) and phase 6 (web pages)
-    note: Its team and quarterback tables against this app's power rankings.
-  - id: entity-pages
-    match: 'page /(teams|qbs)/:entityId|page /qbs|component (EntityDetailPage|SeasonDataRoute)'
-    class: missing
-    phase: phase 6 (web pages)
-    note: Team and quarterback detail pages and the quarterback table.
+    here: '{key}'
+    note: >-
+      The team and quarterback tables; here without the rank-range column and the selection bar
+      (web_pages.md entries 19 and 20), with search, sort and the qualifier switch reset on
+      leaving (entry 21), in this app's sidebar and shading (entries 5 and 14). Power Rankings
+      stays beside them (entry 15).
+  - id: index-page-component
+    match: 'component EntityIndexPage'
+    class: different
+    here: component Ratings
+    note: The index page of both tables, with the differences of its pages above.
+  - id: detail-pages
+    match: 'page /(teams|qbs)/:entityId'
+    class: different
+    here: '{key}'
+    note: >-
+      Team and quarterback detail pages; here the opponents faced are one row per opponent
+      (web_pages.md entry 11) and a missing team or quarterback is a message on the page
+      (entry 12).
+  - id: detail-page-component
+    match: 'component EntityDetailPage'
+    class: different
+    here: component RatingsDetail
+    note: The detail page of both kinds, with the differences of its pages above.
+  - id: season-data-route
+    match: 'component SeasonDataRoute'
+    class: different
+    here: component RatingsRoutes
+    note: >-
+      Its route wrapper loads the registry and the whole season before any page; this app's loads
+      the ratings pages lazily and each page its own table (web_pages.md entries 2 and 3).
   - id: glossary
     match: 'page /glossary|component GlossaryPage'
     class: different
     here: [page /glossary, component Glossary]
-    note: Both glossaries; its entries come from its metric registry.
-  - id: entity-components
-    match: 'component (ComparisonPanel|EntityTable|GameLogTable|HeadToHeadCard|MetricSections|OpponentBreakdownTable|RankHistogram|RankHistoryCard|RankInterval|RankRangeChart|RatingSummary|UnitRankRanges|ViewControls|WeeklyTrendChart)'
-    class: missing
-    phase: phase 6 (web pages)
-    note: The parts of its detail pages (game logs, opponents, head-to-head, rank ranges, histories).
+    note: >-
+      Both glossaries come from the same metric registry, ported; this app's leaves out the
+      garbage-time filter's 8 metrics (web_pages.md entry 9).
+  - id: same-components
+    match: 'component (HeadToHeadCard|MetricSections|RankHistogram|RankHistoryCard|RankInterval|RankRangeChart|RatingSummary|UnitRankRanges|ViewControls)'
+    class: matched
+    here: '{key}'
+    note: >-
+      Parts of its detail and range pages, ported under the same names
+      (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13).
+  - id: trend-chart
+    match: 'component WeeklyTrendChart'
+    class: matched
+    here: component TrendChart
+    note: The weekly line chart of one metric with its metric picker, renamed.
+  - id: comparison-panel
+    match: 'component ComparisonPanel'
+    class: different
+    here: '{key}'
+    note: >-
+      The comparison of up to four rows; here without each row's rank range (web_pages.md
+      entry 19).
+  - id: game-log-table
+    match: 'component GameLogTable'
+    class: different
+    here: '{key}'
+    note: >-
+      The game log; here with the opponent's season ratings and no rank-range chip (web_pages.md
+      entry 6).
+  - id: entity-table
+    match: 'component EntityTable'
+    class: different
+    here: component DataTable
+    note: >-
+      Its table component; this app draws every table with its shared DataTable, fed the
+      registry's metadata in its own column format (web_pages.md entry 4), without the
+      rank-range column (entry 19).
+  - id: opponent-table
+    match: 'component OpponentBreakdownTable'
+    class: different
+    here: component RatingsDetail
+    note: >-
+      Its opponents ledger averaged each stat over the games against each opponent; here the
+      detail page's "Opponents faced" card lists one row per opponent with the games, results,
+      average score, season ratings and tier (web_pages.md entry 11).
   - id: wp-components
     match: 'component (WpEntityLine|WpFilterControl)'
     class: missing
-    phase: phase 6 (web pages)
+    phase: none planned (the garbage-time filter view is not ported, web_pages.md entry 9)
     note: The garbage-time filter controls (exploration only there).
 
 columns:
@@ -190,28 +307,34 @@ columns:
       opponent_team: team_game:opponent_abbr
       excluded_team: team_game:opponent_abbr
       other_team: team_game:opponent_abbr
-    note: The same team codes except Washington, WAS there and WSH here.
+    note: >-
+      The same team codes except Washington, WAS there and WSH here, in the ported tables too
+      (decisions/season_stats.md, kept on purpose).
   - id: key-qb
     kinds: "*"
     columns: [qb_id, other_qb_id]
     class: different
     here: qb_game:qb_id
     note: >-
-      Both GSIS player ids; there a quarterback without one falls back to his snap-count id or his
-      name, here a dropback without a passer id goes to the team-game's main passer.
+      Both GSIS player ids, a scramble credited to its rusher. There a quarterback without one
+      falls back to his snap-count id or his name, as in the ported tables; in the model's
+      quarterback games a dropback with neither a passer nor a rusher id is no quarterback's.
   - id: key-qb-name
     kinds: "*"
     columns: [qb_name]
     class: different
     here: qb_game:passer_name
-    note: There the players file's display name; here the play-by-play passer name.
+    note: >-
+      There the players file's display name, as in the ported tables; in the model's quarterback
+      games the play-by-play passer name.
 
   # --- Team game logs (one row per team-game) -----------------------------------------------
   - id: gl-games
     kinds: [team_game_logs, team_per_game_stats, combined]
     columns: [games]
-    class: missing
-    phase: none planned (a row count)
+    class: matched
+    here: ratings:{column}
+    note: The games a row counts, written only by the ported tables.
   - id: gl-home
     kinds: [team_game_logs]
     columns: [is_home]
@@ -266,23 +389,24 @@ columns:
     class: different
     here: [box_score:times_sacked, team_game:dropbacks]
     note: >-
-      The same sacks (PARITY.md, pair sacks_from_rate) over different dropbacks: there two-point
-      passes and pre-2006 scrambles are dropbacks.
+      The same sacks (PARITY.md, pair sacks_from_rate) over different dropbacks: there a
+      two-point pass is a dropback (PARITY.md, cause two_point_tries, kept).
   - id: gl-turnovers-on-downs
     kinds: [team_game_logs]
     columns: [turnovers_on_downs]
-    class: different
-    here: team_game:fourth_down_fails
+    class: matched
+    here: ratings:{column}
     note: >-
-      Fourth downs that failed; here only on run, pass, kneel and spike plays (PARITY.md, pair
-      turnovers_on_downs).
+      Fourth downs that failed, written only by the ported tables; the model's play-by-play
+      aggregates no longer count failed downs.
   - id: gl-snaps
     kinds: [team_game_logs]
     columns: [offensive_snaps, defensive_snaps]
-    class: different
+    class: matched
     here: team_game:{column}
-    phase: phase 3 (team ratings)
-    note: There a pre-2006 scramble is a snap (its dropback rule); here it is in no count.
+    note: >-
+      The same scrimmage snaps, a scramble filed as a run play included (since 0.54.0); equal in
+      every team-game of 1999-2025 (PARITY.md, pairs offensive_snaps and defensive_snaps).
   - id: gl-dropbacks
     kinds: [team_game_logs]
     columns: [dropbacks, epa_per_dropback, pass_success_rate]
@@ -291,8 +415,9 @@ columns:
       dropbacks: team_game:dropbacks
       epa_per_dropback: team_game:pass_epa_sum / dropbacks
       pass_success_rate: team_game:pass_success_count / dropbacks
-    phase: phase 3 (team ratings)
-    note: There two-point passes and pre-2006 scrambles are dropbacks; here neither is.
+    note: >-
+      Scrambles filed as runs are dropbacks in both (since 0.54.0); there a two-point pass is one
+      too, here not (PARITY.md, cause two_point_tries, kept).
   - id: gl-scrimmage-epa
     kinds: [team_game_logs]
     columns: [offensive_epa, epa_per_offensive_snap]
@@ -300,21 +425,22 @@ columns:
     here_map:
       offensive_epa: team_game:pass_epa_sum + rush_epa_sum
       epa_per_offensive_snap: team_game:(pass_epa_sum + rush_epa_sum) / offensive_snaps
-    phase: phase 3 (team ratings)
     note: >-
-      There EPA over every scrimmage snap, the team rating's input; here dropback plus carry EPA,
-      without kneel-downs, spikes, two-point tries and pre-2006 scrambles.
+      There EPA over every scrimmage snap, the team rating's input (the ported ratings read it
+      that way); here dropback plus designed-carry EPA, which leaves out two-point tries,
+      kneel-downs, spikes without a rush attempt and runs a penalty wiped out, and takes in rush
+      attempts nflverse files without the run flag (PARITY.md, pair scrimmage_epa_sum).
   - id: gl-designed-runs
     kinds: [team_game_logs]
     columns: [designed_carries, rush_success_rate]
-    class: different
+    class: matched
     here_map:
       designed_carries: team_game:carries
       rush_success_rate: team_game:rush_success_count / carries
-    phase: phase 3 (team ratings)
     note: >-
-      There rush attempts that are neither scrambles nor kneel-downs; here the rush flag, which
-      also counts runs a penalty wiped out.
+      The same designed runs, rush attempts that are neither scrambles, kneel-downs nor two-point
+      tries (since 0.54.0); equal in every team-game of 1999-2025 (PARITY.md, pairs
+      designed_carries and rush_success_count).
   - id: gl-carry-rates
     kinds: [team_game_logs]
     columns: [epa_per_carry, explosive_rush_rate, stuffed_run_rate]
@@ -325,7 +451,8 @@ columns:
       stuffed_run_rate: team_game:stuffed_rush_count / carries
     note: >-
       There over every carry (scrambles and kneel-downs too; explosive at 10 yards, stuffs
-      without kneel-downs); here over the rush flag's carries, explosive at 12 yards.
+      without kneel-downs); here over designed runs, explosive at 12 yards (kept on purpose in
+      phase 1, DECISIONS.md).
   - id: gl-explosive-pass
     kinds: [team_game_logs]
     columns: [explosive_pass_rate]
@@ -343,11 +470,13 @@ columns:
     columns: [early_down_pass_rate]
     class: different
     here: team_game:early_down_passes / early_down_plays
-    note: There a snap without a down (a two-point try) is an early down and two-point passes are dropbacks.
+    note: >-
+      There a snap without a down (a two-point try) is an early down and two-point passes are
+      dropbacks (PARITY.md, causes null_downs and two_point_tries).
   - id: gl-downs
     kinds: [team_game_logs]
     columns: [third_down_conversions, third_down_attempts, fourth_down_conversions, fourth_down_attempts, two_pt_attempts, third_down_pct, fourth_down_pct, two_pt_conversion_rate]
-    class: different
+    class: matched
     here_map:
       third_down_conversions: team_game:third_down_conversions
       third_down_attempts: team_game:third_down_attempts
@@ -358,14 +487,16 @@ columns:
       fourth_down_pct: team_game:fourth_down_conversions / fourth_down_attempts
       two_pt_conversion_rate: team_game:two_point_successes / two_point_attempts
     note: >-
-      There the flags on every play, an attempt counted once; here only run, pass, kneel and
-      spike plays, and an attempt is conversions plus failures.
+      The same flags read on every play, an attempt counted once (since 0.54.0); equal in every
+      team-game of 1999-2025 (PARITY.md, the third-down, fourth-down and two-point pairs).
   - id: gl-first-downs
     kinds: [team_game_logs]
     columns: [first_downs]
     class: different
     here: box_score:first_downs
-    note: There first downs by penalty count too; here passing plus rushing first downs.
+    note: >-
+      There first downs by penalty count too; here passing plus rushing first downs (PARITY.md,
+      cause penalty_first_downs, kept).
   - id: gl-fumbles
     kinds: [team_game_logs]
     columns: [fumbles, fumbles_lost]
@@ -373,13 +504,16 @@ columns:
     here: box_score:{column}
     note: >-
       There fumbles on scrimmage snaps, a lost one charged to the team that fumbled; here fumbles
-      on plays that are not special-teams plays, a lost one charged to the team with the ball.
+      on plays that are not special-teams plays, a lost one charged to the team with the ball
+      (PARITY.md, cause fumbles_on_scrimmage_snaps, kept).
   - id: gl-penalties
     kinds: [team_game_logs]
     columns: [penalties, penalty_yards]
-    class: different
+    class: matched
     here: box_score:{column}
-    note: The same count, but there Jacksonville's 2001-2002 home games get their player teams repaired.
+    note: >-
+      The same counts, Jacksonville's 2001-2002 home games repaired here too (since 0.54.0);
+      equal in every team-game of 1999-2025 (PARITY.md, pairs penalties and penalty_yards).
   - id: gl-red-zone
     kinds: [team_game_logs]
     columns: [red_zone_trips, red_zone_td_pct]
@@ -387,13 +521,17 @@ columns:
     here_map:
       red_zone_trips: team_game:red_zone_trips
       red_zone_td_pct: team_game:red_zone_td_drives / red_zone_trips
-    note: There drives nflverse flags as reaching the 20; here drives with a snap inside the 20.
+    note: >-
+      Both count the drives nflverse flags inside the 20 (drive_inside20, here since 0.55.0);
+      here only those in which the team ran an offensive snap other than a two-point try, which
+      leaves out kickoffs the kicking team recovered and the tries after return touchdowns
+      (kept on purpose: DECISIONS.md, red-zone trips; decisions/integration_pbp_elo.md entries
+      2.8 and 2.9 attribute every remaining difference).
   - id: gl-st-plays
     kinds: [team_game_logs]
     columns: [st_plays]
     class: different
     here: team_game:st_plays
-    phase: phase 3 (team ratings)
     note: There the team's own special-teams plays (the special-teams rating's weight); here both teams'.
   - id: gl-official-box
     kinds: [team_game_logs]
@@ -450,25 +588,33 @@ columns:
   - id: gl-carries-faced
     kinds: [team_game_logs]
     columns: [carries_faced]
-    class: different
-    here: team_game:carries_allowed
-    note: There the opponent's rush attempts; here its rush-flag carries.
+    class: matched
+    here: box_score:rush_attempts
+    note: >-
+      The opponent's row: its carries, every rush attempt but a two-point try, equal in every
+      team-game of 1999-2025 (PARITY.md, pair rush_attempts).
+  - id: gl-defense-rates-same
+    kinds: [team_game_logs]
+    columns: [rush_success_rate_allowed, third_down_pct_allowed, fourth_down_pct_allowed, two_pt_conversion_rate_allowed]
+    class: matched
+    here_map:
+      rush_success_rate_allowed: team_game:rush_success_allowed_count / carries_allowed
+      third_down_pct_allowed: team_game:third_down_conversions_allowed / third_down_attempts_allowed
+      fourth_down_pct_allowed: team_game:fourth_down_conversions_allowed / fourth_down_attempts_allowed
+      two_pt_conversion_rate_allowed: team_game:two_point_successes_allowed / two_point_attempts_allowed
+    note: The opponent's offense, with the offense judgments above (gl-designed-runs, gl-downs).
   - id: gl-defense-rates
     kinds: [team_game_logs]
-    columns: [epa_per_dropback_allowed, epa_per_defensive_snap_allowed, rush_success_rate_allowed, success_rate_allowed, explosive_pass_rate_allowed, explosive_rush_rate_allowed, stuff_rate, third_down_pct_allowed, fourth_down_pct_allowed, red_zone_td_pct_allowed, two_pt_conversion_rate_allowed]
+    columns: [epa_per_dropback_allowed, epa_per_defensive_snap_allowed, success_rate_allowed, explosive_pass_rate_allowed, explosive_rush_rate_allowed, stuff_rate, red_zone_td_pct_allowed]
     class: different
     here_map:
       epa_per_dropback_allowed: team_game:pass_epa_allowed_sum / dropbacks_allowed
       epa_per_defensive_snap_allowed: team_game:(pass_epa_allowed_sum + rush_epa_allowed_sum) / defensive_snaps
-      rush_success_rate_allowed: team_game:rush_success_allowed_count / carries_allowed
       success_rate_allowed: team_game:(pass_success_allowed_count + rush_success_allowed_count) / (dropbacks_allowed + carries_allowed)
       explosive_pass_rate_allowed: team_game:explosive_pass_allowed_count / dropbacks_allowed
       explosive_rush_rate_allowed: team_game:explosive_rush_allowed_count / carries_allowed
       stuff_rate: team_game:stuffed_rush_allowed_count / carries_allowed
-      third_down_pct_allowed: team_game:third_down_conversions_allowed / third_down_attempts_allowed
-      fourth_down_pct_allowed: team_game:fourth_down_conversions_allowed / fourth_down_attempts_allowed
       red_zone_td_pct_allowed: team_game:red_zone_td_drives_allowed / red_zone_trips_allowed
-      two_pt_conversion_rate_allowed: team_game:two_point_successes_allowed / two_point_attempts_allowed
     note: The opponent's offense, with the offense judgments above.
   - id: gl-first-downs-allowed
     kinds: [team_game_logs]
@@ -563,9 +709,11 @@ columns:
     kinds: [team_game_logs]
     rest: true
     expect: 111
-    class: missing
-    phase: phase 6 (web pages)
-    note: Descriptive game-log stats its team pages show; none feeds its ratings.
+    class: matched
+    here: ratings:{column}
+    note: >-
+      Descriptive game-log stats its team pages show (none feeds its ratings), written only by the
+      ported season statistics.
 
   # --- Team season rows (team_per_game_stats, and the same columns in combined) -------------
   - id: season-features
@@ -650,37 +798,37 @@ columns:
   - id: season-mirrors-game-logs
     kinds: [team_per_game_stats, combined]
     prefix: ""
-    columns: [completion_pct, defensive_penalties, defensive_penalty_yards, designed_carries, epa_per_defensive_snap_allowed, epa_per_offensive_snap, int_rate_per_attempt, offensive_epa, offensive_penalties, offensive_penalty_yards, offensive_tds, passing_2pt_conversions, passing_first_downs, passing_first_downs_allowed, passing_td_rate_per_attempt, receiving_fumbles, receiving_fumbles_lost, receiving_yards_allowed, receptions_allowed, rushing_2pt_conversions, rushing_first_downs, rushing_first_downs_allowed, rushing_fumbles, rushing_fumbles_lost, sack_fumbles, sack_fumbles_lost, sack_rate_per_dropback, scrimmage_tds, st_epa, turnovers_on_downs, two_pt_attempts, two_pt_conversions, win_value]
+    columns: [completion_pct, defensive_penalties, defensive_penalty_yards, designed_carries, epa_per_defensive_snap_allowed, epa_per_offensive_snap, int_rate_per_attempt, offensive_epa, offensive_penalties, offensive_penalty_yards, offensive_tds, passing_2pt_conversions, passing_first_downs, passing_first_downs_allowed, passing_td_rate_per_attempt, receiving_fumbles, receiving_fumbles_lost, receiving_yards_allowed, receptions_allowed, rushing_2pt_conversions, rushing_first_downs, rushing_first_downs_allowed, rushing_fumbles, rushing_fumbles_lost, sack_fumbles, sack_fumbles_lost, sack_rate_per_dropback, scrimmage_tds, st_epa, two_pt_attempts, two_pt_conversions, win_value]
     class: different
     mirror_kind: team_game_logs
     note: >-
-      There a completed season's value; here the counterpart its game-log column names, which this
-      repository keeps per team-game or as a season-to-date feature, never as a season's value.
+      There a completed season's value, as in the ported tables; the model's counterpart is the
+      one its game-log column names, kept per team-game or as a season-to-date feature, never as a
+      season's value.
   - id: season-rest
-    expect: 222
+    expect: 224
     kinds: [team_per_game_stats, combined]
     rest: true
-    class: missing
-    phase: phase 6 (web pages)
-    note: Season stats its team pages show.
+    class: matched
+    here: ratings:{column}
+    note: Season stats its team pages show, written only by the ported season statistics.
   - id: season-ratings
     kinds: [combined, ratings]
     columns: [offense_rating, defense_rating, special_teams_rating, team_rating, sos, SRS]
     class: different
     here_map:
-      offense_rating: strength:adj_off_pass_epa_snap + adj_off_rush_epa_snap
-      defense_rating: strength:adj_def_pass_epa_snap + adj_def_rush_epa_snap
-      special_teams_rating: strength:st_rating
-      team_rating: strength:adj_strength_composite
-      sos: strength:sos_played_adj
+      offense_rating: dataset:ratings_offense
+      defense_rating: dataset:ratings_defense
+      special_teams_rating: dataset:ratings_special_teams
+      team_rating: dataset:ratings_team
+      sos: dataset:ratings_sos
       SRS: strength:adj_srs
-    phase: phase 3 (team ratings)
     note: >-
-      There points per game against an average team from one ridge fit per unit (scrimmage EPA,
-      special-teams EPA), its penalty cross-validated, the preseason prior inside the fit, and a
-      head-to-head-excluded schedule strength; here per-snap pass and rush coefficients from a
-      frozen-penalty ridge, an SRS on special-teams EPA margin, a standardized composite, the prior
-      blended after the fit, all solved before each week. Phase 3 replaces these.
+      The ported ratings: the published tables equal its files (RATINGS_PARITY.md). The model's
+      features are the same fits solved before each week, from the games before it with the
+      previous season's penalties (ratings/pre_week.py; a postseason row takes the regular
+      season's fit), and its SRS the strength snapshot's, also before each week. The strength
+      snapshot's own ratings stay in the dataset beside them.
 
   # --- Opponent profiles (head-to-head excluded) ----------------------------------------------
   - id: opponent-margin
@@ -701,17 +849,21 @@ columns:
     expect: 239
     kinds: [opponent_profiles]
     rest: true
-    class: missing
-    phase: phase 6 (web pages)
-    note: Its opponents-faced context for every stat.
+    class: matched
+    here: ratings:{column}
+    note: >-
+      Its opponents-faced context for every stat, head-to-head excluded, written only by the
+      ported season statistics.
   - id: opponent-prefix-rest
     expect: 239
     kinds: [combined]
     prefix: opp_
     match: 'opp_(?!epa_margin_per_play$).*'
-    class: missing
-    phase: phase 6 (web pages)
-    note: Its opponents-faced context for every stat.
+    class: matched
+    here: ratings:{column}
+    note: >-
+      Its opponents-faced context for every stat, head-to-head excluded, written only by the
+      ported season statistics.
 
   # --- Quarterbacks ---------------------------------------------------------------------------
   - id: qb-game-pbp
@@ -730,11 +882,11 @@ columns:
       qb_passing_epa: qb_game:qb_epa_sum
       qb_completion_percentage_above_expectation: qb_game:cpoe_sum / cpoe_count
       qb_epa_per_dropback: qb_game:qb_epa_sum / dropbacks
-    phase: phase 3 (quarterback ratings)
     note: >-
       There the passer's official weekly player stats where nflverse has them (play-by-play
-      otherwise) and EPA per dropback without spikes; here the passer's play-by-play dropbacks
-      (this repository's dropback rule) and qb_epa.
+      otherwise) and EPA per dropback without spikes, as in the ported tables; the model's
+      quarterback games count the passer's play-by-play dropbacks (this repository's dropback
+      rule, a scramble credited to its rusher) and qb_epa.
   - id: qb-game-context
     kinds: [qb_game_logs]
     columns: [is_home, points_for, points_allowed]
@@ -772,9 +924,11 @@ columns:
     kinds: [qb_game_logs]
     rest: true
     expect: 26
-    class: missing
-    phase: phase 3 (quarterback ratings) for its inputs, phase 6 (web pages) for the rest
-    note: Snap counts, quarterback runs, spikes and late-game credits.
+    class: matched
+    here: ratings:{column}
+    note: >-
+      Snap counts, quarterback runs, spikes and late-game credits, written only by the ported
+      season statistics.
   - id: qb-season-features
     kinds: [qb_per_game_stats, qb_combined, qb_ratings]
     columns: [qb_epa_per_dropback, qb_sack_rate, qb_any_a, qb_completion_percentage_above_expectation, qb_dropbacks_total]
@@ -785,10 +939,10 @@ columns:
       qb_any_a: dataset:qb_any_a
       qb_completion_percentage_above_expectation: dataset:qb_cpoe
       qb_dropbacks_total: dataset:qb_history_dropbacks
-    phase: phase 3 (quarterback ratings)
     note: >-
-      There the season's raw rate (official totals); here the expected starter's career rate
-      before the game, shrunk toward the league with 300 dropbacks of prior.
+      There the season's raw rate (official totals), as in the ported tables; the model's feature
+      is the expected starter's career rate before the game, shrunk toward the league with 300
+      dropbacks of prior.
   - id: qb-season-record
     kinds: [qb_per_game_stats, qb_combined]
     columns: [wins, losses, ties, win_pct]
@@ -817,31 +971,34 @@ columns:
     expect: 112
     kinds: [qb_per_game_stats, qb_combined]
     rest: true
-    class: missing
-    phase: phase 6 (web pages)
-    note: Quarterback season stats, totals and per-game values its pages show.
+    class: matched
+    here: ratings:{column}
+    note: >-
+      Quarterback season stats, totals and per-game values its pages show, written only by the
+      ported season statistics.
   - id: qb-opponents
     expect: 102
     kinds: [qb_opponent_profiles, qb_combined]
     prefix: qopp_
-    class: missing
-    phase: phase 6 (web pages)
-    note: The defenses each quarterback faced.
+    class: matched
+    here: ratings:{column}
+    note: The defenses each quarterback faced, written only by the ported season statistics.
   - id: qb-ratings
     kinds: [qb_combined, qb_ratings, qb_ratings_by_week]
     columns: [adj_qb_epa_per_dropback]
     class: different
-    here: dataset:qb_dropback_epa
-    phase: phase 3 (quarterback ratings)
+    here: dataset:ratings_qb
     note: >-
-      There EPA per dropback adjusted for the defenses faced (a ridge on its shared solver); here
-      the unadjusted career rate shrunk toward the league. Phase 3 ports the rating.
+      The ported quarterback rating: EPA per dropback adjusted for the defenses faced, the
+      published tables equal to its files (RATINGS_PARITY.md). The model's feature is the same
+      fit on the passer-games before each week with the previous season's penalty, where the
+      published history uses the season's own, so the two differ slightly (ratings/pre_week.py).
   - id: qb-faced-defense
     kinds: [qb_combined, qb_ratings]
     columns: [qb_faced_pass_defense]
-    class: missing
-    phase: phase 3 (quarterback ratings)
-    note: The average adjusted pass defense a quarterback faced.
+    class: matched
+    here: ratings:{column}
+    note: The average adjusted pass defense a quarterback faced, written only by the ported tables.
   - id: qb-ratings-plays
     kinds: [qb_ratings, qb_ratings_by_week]
     columns: [qb_attempts_total, qb_dropbacks]
@@ -849,14 +1006,15 @@ columns:
     class: different
     mirror_kind: qb_game_logs
     mirror_base: true
-    phase: phase 3 (quarterback ratings)
-    note: The attempts or dropbacks behind each rating; here only the passer's per-game totals.
+    note: >-
+      The attempts or dropbacks behind each rating, as in the ported tables; the model's
+      quarterback games keep only the passer's per-game totals.
   - id: qb-ratings-volume
     kinds: [qb_ratings, qb_ratings_by_week]
     columns: [qb_games_played]
-    class: missing
-    phase: phase 3 (quarterback ratings)
-    note: The games behind each rating.
+    class: matched
+    here: ratings:{column}
+    note: The games behind each rating, written only by the ported tables.
 
   # --- Rank ranges, pairs, histories, the prior, win-probability bins --------------------------
   - id: ratings-volume
@@ -864,41 +1022,46 @@ columns:
     columns: [games_played]
     class: different
     here: strength:strength_games_played
-    phase: phase 3 (team ratings)
-    note: There games through the season or the week; here games before the week.
+    note: >-
+      There games through the season or the week, as in the ported tables; the strength
+      snapshot's are the games before the week.
   - id: ratings-history
     kinds: [ratings_by_week]
     columns: [offense_rating, defense_rating, special_teams_rating, team_rating]
-    class: different
+    class: matched
     here_map:
-      offense_rating: strength:adj_off_pass_epa_snap + adj_off_rush_epa_snap
-      defense_rating: strength:adj_def_pass_epa_snap + adj_def_rush_epa_snap
-      special_teams_rating: strength:st_rating
-      team_rating: strength:adj_strength_composite
-    phase: phase 3 (team ratings)
+      offense_rating: dataset:ratings_offense
+      defense_rating: dataset:ratings_defense
+      special_teams_rating: dataset:ratings_special_teams
+      team_rating: dataset:ratings_team
     note: >-
-      Both weekly; there the rating after each week's games with the season's penalties, here the
-      strength snapshot before each week (the methods differ as for the season ratings).
+      The same weekly fit: a team's rating after week N, as published, is the model's pre-week
+      feature on its next game row, from week N + 1 (ratings/pre_week.py: "for a week after the
+      first, the ratings of the teams that have played equal the published week-by-week history
+      of the week before"). The strength snapshot's own weekly ratings stay beside them.
   - id: rank-ranges
     expect: 115
     kinds: [rating_ranges, rating_pairs, rating_ranges_by_week, qb_rating_ranges, qb_rating_pairs, qb_rating_ranges_by_week]
     rest: true
-    class: missing
-    phase: phase 3 (rank ranges), shown in phase 6
-    note: Game-bootstrap rank ranges and head-to-head chances.
+    class: matched
+    here: ratings:{column}
+    note: Game-bootstrap rank ranges and head-to-head chances, written only by the ported tables.
   - id: team-prior
     expect: 2
     kinds: [team_prior]
     rest: true
-    class: missing
-    phase: phase 3 (team ratings)
+    class: matched
+    here: ratings:{column}
     note: >-
-      The preseason prior means inside the fit, with each team's head-to-head-excluded refit;
-      here the early-season prior is the previous season's final snapshot, blended after the fit.
+      The preseason prior means inside the fit, with each team's head-to-head-excluded refit,
+      written only by the ported tables (the model's pre-week ratings fit with the same prior).
   - id: wp-bins
     expect: 7
     kinds: [team_wp_bins, qb_wp_bins]
     rest: true
-    class: missing
-    phase: phase 6 (web pages)
-    note: Plays and EPA by win-probability bin, behind its garbage-time filter (exploration only there).
+    class: matched
+    here: ratings:{column}
+    note: >-
+      Plays and EPA by win-probability bin, written by the ported season statistics; no page here
+      reads them, since the garbage-time filter view is not ported (decisions/web_pages.md
+      entry 9).

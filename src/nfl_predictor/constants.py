@@ -475,6 +475,38 @@ NFLREADPY_SCHEDULE_RENAME = {
 }
 
 # ============================================================================
+# nflverse player sources: weekly player stats, snap counts, the players file, rosters, ESPN QBR
+# ============================================================================
+
+# Games with at least this many player team values that all name one team are credited wholly to
+# one team (`utils/polars/player_team_repair.py`): every real game credits plays to both teams,
+# but a short fixture or a partly published game may not.
+ONE_TEAM_GAME_MIN_VALUES = 20
+
+# Play-by-play team columns that name a player's team, with the player id each one belongs to.
+PBP_PLAYER_TEAM_ID_COLUMNS = {
+    "td_team": "td_player_id",
+    "penalty_team": "penalty_player_id",
+    "fumbled_1_team": "fumbled_1_player_id",
+    "fumbled_2_team": "fumbled_2_player_id",
+    "fumble_recovery_1_team": "fumble_recovery_1_player_id",
+    "fumble_recovery_2_team": "fumble_recovery_2_player_id",
+    "forced_fumble_player_1_team": "forced_fumble_player_1_player_id",
+    "forced_fumble_player_2_team": "forced_fumble_player_2_player_id",
+    "solo_tackle_1_team": "solo_tackle_1_player_id",
+    "solo_tackle_2_team": "solo_tackle_2_player_id",
+    "assist_tackle_1_team": "assist_tackle_1_player_id",
+    "assist_tackle_2_team": "assist_tackle_2_player_id",
+    "assist_tackle_3_team": "assist_tackle_3_player_id",
+    "assist_tackle_4_team": "assist_tackle_4_player_id",
+    "tackle_with_assist_1_team": "tackle_with_assist_1_player_id",
+    "tackle_with_assist_2_team": "tackle_with_assist_2_player_id",
+}
+
+# Play-by-play team columns with no player behind them, unknown in a game credited to one team.
+PBP_TEAM_ONLY_COLUMNS = ("return_team", "timeout_team")
+
+# ============================================================================
 # Data Collection Column Definitions
 # ============================================================================
 

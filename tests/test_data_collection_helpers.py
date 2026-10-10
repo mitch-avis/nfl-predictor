@@ -13,7 +13,7 @@ import pytest
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import clock, polars_utils
-from nfl_predictor.utils.polars import loaders, nflverse_sources, week_rows
+from nfl_predictor.utils.polars import loaders, nflverse_sources, ratings_build, week_rows
 
 
 @pytest.mark.parametrize(("today", "season"), [(date(2024, 9, 1), 2024), (date(2024, 2, 1), 2023)])
@@ -478,9 +478,7 @@ def test_main_orchestrates_collection_and_output_writes(
     monkeypatch.setattr(
         data_collection,
         "collect_all_data",
-        lambda seasons, config, strength_snapshots, market_lines_metadata, own_elo_metadata: (
-            all_data
-        ),
+        lambda seasons, config, records: all_data,
     )
     monkeypatch.setattr(data_collection, "_log_df_stats", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(data_collection, "_timed_step", fake_timed_step)
@@ -1016,6 +1014,7 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
     assert warnings == [
         "No play-by-play team-game rows available; emitting null count columns.",
         "No ELO ratings loaded",
+        "No play-by-play for the ratings; their columns stay null",
     ]
 
 
@@ -1463,7 +1462,10 @@ def test_load_team_game_frame_repairs_player_teams_in_one_team_games(
 def test_load_sources_records_every_play_by_play_season_it_requested(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The sources name the seasons the play-by-play load asked for, with or without plays."""
+    """The sources name the seasons the play-by-play load asked for, with or without plays.
+
+    The ratings' own requests are covered in ``test_ratings_build_sources.py``.
+    """
     # Arrange
     requested: list[list[int]] = []
 
@@ -1473,6 +1475,7 @@ def test_load_sources_records_every_play_by_play_season_it_requested(
         return loaders._empty_pbp_frame()
 
     monkeypatch.setattr(polars_utils, "load_pbp", fake_load_pbp)
+    monkeypatch.setattr(ratings_build, "load_ratings_build", lambda *_a, **_k: None)
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (2026, 1))
     monkeypatch.setattr(polars_utils, "load_schedule", lambda *_a, **_k: pl.DataFrame())
     monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: pl.DataFrame())

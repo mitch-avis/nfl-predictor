@@ -174,7 +174,7 @@ def build_team_ratings(
         ``TEAM_RATINGS_ORDER`` columns, best team first.
 
     """
-    games_played = team_games.group_by("team").len("games_played")
+    games_played = team_games.group_by("team", maintain_order=True).len("games_played")
     schedule = compute_team_schedule_strength(team_games, fit, prior_without=prior_without)
     srs = solve_srs(team_games, "point_margin", team_col="team", opponent_col="opponent_team")
     return (
@@ -249,7 +249,7 @@ def build_team_rank_ranges_by_week(
     matches the season's ranges.
     """
     frames: list[pl.DataFrame] = []
-    for week in sorted(team_games.get_column("week").unique().to_list()):
+    for week in sorted(team_games.get_column("week").unique(maintain_order=True).to_list()):
         through_week = team_games.filter(pl.col("week") <= week)
         means = snapshot_prior(season_prior, through_week)
         week_fit = fit_team_ratings(
@@ -357,7 +357,7 @@ def build_qb_rank_summaries(
     eligible_ids: Collection[str] = eligible.get_column(QB_ID_COLUMN).to_list()
     draws = bootstrap_qb_ratings(qb_games, fit, resamples=bootstrap.resamples, seed=bootstrap.seed)
     ranges = summarize_rank_ranges(draws, fit.ratings, QB_RANGE_COLUMNS, eligible=eligible_ids)
-    identity = eligible.select(_QB_IDENTITY).unique(QB_ID_COLUMN, keep="first")
+    identity = eligible.select(_QB_IDENTITY).unique(QB_ID_COLUMN, keep="first", maintain_order=True)
     ranges = ranges.join(identity, on=QB_ID_COLUMN, how="left", maintain_order="left").select(
         *identity.columns, pl.exclude(identity.columns)
     )
@@ -379,7 +379,7 @@ def build_qb_rank_ranges_by_week(
     """
     eligible = _eligible_ids(qb_season)
     frames: list[pl.DataFrame] = []
-    for week in sorted(qb_games.get_column("week").unique().to_list()):
+    for week in sorted(qb_games.get_column("week").unique(maintain_order=True).to_list()):
         through_week = qb_games.filter(pl.col("week") <= week)
         week_fit = fit_qb_ratings(through_week, ridge_lambda=fit.ridge_lambda)
         draws = bootstrap_qb_ratings(

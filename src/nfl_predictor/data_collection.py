@@ -20,6 +20,8 @@ Output Files:
     - data/predict/week_XX_games_to_predict.csv: Upcoming games for prediction
     - data/strength_snapshots.csv: Pre-week schedule-adjusted strength for every team on
       each season's schedule and every processed week, teams on a bye included
+    - data/ratings/{season}_{kind}.parquet: The ratings tables ported from nfl-sos-ratings, for
+      every season processed (see `utils.polars.ratings_build`)
 
 Usage:
     Run directly to collect and process all data:
@@ -39,7 +41,7 @@ import logging
 import math
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -58,6 +60,7 @@ from nfl_predictor.utils.polars import (
     pick_time_lines,
     qb_starters,
     qb_stats,
+    ratings_build,
 )
 from nfl_predictor.utils.polars.strength_snapshot import StrengthPrior
 from nfl_predictor.utils.polars.strength_table import (
@@ -124,6 +127,30 @@ class DataCollectionConfig:
     # Which market line each game carries: the line known at pick time ("pick_time", the
     # default, see `utils.polars.pick_time_lines`) or the stored nflverse line ("stored").
     line_source: str = constants.DEFAULT_LINE_SOURCE
+
+
+@dataclass
+class CollectionRecords:
+    """What a collection run records beside the game rows; ``main`` writes each of them.
+
+    Attributes:
+        strength_snapshots: Receives each processed week's per-team strength snapshot; see
+            `combine_strength_snapshots`.
+        market_lines_metadata: Receives a pick-time build's line record (the nfelo snapshot and
+            its hash, per-season counts, the moneyline maps); a stored-line build leaves it
+            empty.
+        own_elo_metadata: Receives the own Elo's record (both presets and the win-total file it
+            read, `own_elo_build.OwnEloColumns.metadata`); a build without the own Elo leaves
+            it empty.
+        rating_tables: Receives the ratings tables of every season processed, by file stem
+            ``{season}_{kind}`` (``utils.polars.ratings_build``).
+
+    """
+
+    strength_snapshots: list[pl.DataFrame] = field(default_factory=list)
+    market_lines_metadata: dict[str, object] = field(default_factory=dict)
+    own_elo_metadata: dict[str, object] = field(default_factory=dict)
+    rating_tables: dict[str, pl.DataFrame] = field(default_factory=dict)
 
 
 def _configure_logging(*, enable_debug: bool) -> None:
@@ -410,17 +437,9 @@ def main(argv: list[str] | None = None) -> None:
         len(seasons_to_process),
     )
 
-    strength_snapshots: list[pl.DataFrame] = []
-    market_lines_metadata: dict[str, object] = {}
-    own_elo_metadata: dict[str, object] = {}
+    records = CollectionRecords()
     with _timed_step("collect_all_data", enabled=config.enable_timing):
-        all_data_df = collect_all_data(
-            seasons_to_process,
-            config=config,
-            strength_snapshots=strength_snapshots,
-            market_lines_metadata=market_lines_metadata,
-            own_elo_metadata=own_elo_metadata,
-        )
+        all_data_df = collect_all_data(seasons_to_process, config=config, records=records)
 
     _log_df_stats("all_data", all_data_df, enabled=config.enable_debug)
 
@@ -441,10 +460,16 @@ def main(argv: list[str] | None = None) -> None:
 
     # Per-team pre-week strength, bye teams included, for reports that rank teams.
     save_dataframe(
-        combine_strength_snapshots(strength_snapshots),
+        combine_strength_snapshots(records.strength_snapshots),
         constants.STRENGTH_SNAPSHOTS_NAME,
         config.data_dir,
     )
+
+    # The ratings tables of every season processed, named as nfl-sos-ratings names its files.
+    if records.rating_tables:
+        ratings_build.write_published_tables(
+            records.rating_tables, _resolve_data_dir(config.data_dir) / constants.RATINGS_DIRNAME
+        )
 
     # Filter and save upcoming games for prediction (ML version only)
     upcoming_df = polars_utils.filter_upcoming_games(all_data_df, current_season, current_week)
@@ -456,11 +481,11 @@ def main(argv: list[str] | None = None) -> None:
     # outlives its data: a stored-line build names its line source, and a build without the
     # own Elo writes an empty record.
     _save_build_record(
-        market_lines_metadata or {"line_source": config.line_source},
+        records.market_lines_metadata or {"line_source": config.line_source},
         constants.MARKET_LINES_METADATA_NAME,
         config.data_dir,
     )
-    _save_build_record(own_elo_metadata, constants.OWN_ELO_METADATA_NAME, config.data_dir)
+    _save_build_record(records.own_elo_metadata, constants.OWN_ELO_METADATA_NAME, config.data_dir)
 
     log.info("Data collection complete.")
 
@@ -702,6 +727,8 @@ class _EtlSources:
     pick_time: pick_time_lines.PickTimeLines | None = None
     # The play-by-play seasons the run asked for, plays or none, so none is asked for twice.
     pbp_seasons: tuple[int, ...] = ()
+    # The ratings' inputs and per-season outputs; None leaves the ratings columns null.
+    ratings: ratings_build.RatingsBuild | None = None
 
 
 def _stats_window(
@@ -836,6 +863,14 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         stats_seasons, stats_schedule_df, config, current_season
     )
     elo_df, raw_elo_df = _load_elo(seasons, config)
+    with _timed_step("load_ratings_sources", enabled=config.enable_timing):
+        ratings = ratings_build.load_ratings_build(
+            max(seasons),
+            pbp_df=pbp_df,
+            schedule_df=stats_schedule_df,
+            current_season=current_season,
+            force_refresh=config.force_refresh_nflreadpy,
+        )
     return _EtlSources(
         current_season=current_season,
         current_week=current_week,
@@ -845,6 +880,7 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         elo_df=elo_df,
         raw_elo_df=raw_elo_df,
         pbp_seasons=tuple(stats_seasons),
+        ratings=ratings,
     )
 
 
@@ -1037,6 +1073,9 @@ def _finish_games(
         combined_df = _attach_own_elo(
             combined_df, sources, history, max_season=max_season, metadata=own_elo_metadata
         )
+    if sources.ratings is not None:
+        with _timed_step("attach_rating_features", enabled=enable_timing):
+            combined_df = sources.ratings.attach(combined_df)
     if sources.pick_time is None:
         # Fill in lines for future games from SurvivorGrid
         combined_df = game_utils.fill_future_game_lines(combined_df)
@@ -1071,7 +1110,8 @@ def _open_season_cache(
 
     A season's build reads the schedule, the team stats and the ELO ratings through that
     season (the coach history reaches back to the run's first season), its own and the
-    previous season's TeamRankings, and the options below; the keys cover exactly those.
+    previous season's TeamRankings, and the options below, and its ratings read the ratings'
+    team-game and passer-game rows through that season; the keys cover exactly those.
     """
     if not config.incremental:
         return None
@@ -1080,6 +1120,7 @@ def _open_season_cache(
             "schedule": sources.schedule_df,
             "team_stats": sources.team_stats_df,
             "elo": sources.elo_df,
+            **({} if sources.ratings is None else sources.ratings.key_frames()),
         },
         {
             "min_season": min_season,
@@ -1103,7 +1144,8 @@ def _build_season(
     """Build one season's game rows, reusing a finished season's cached build when valid.
 
     The season in progress is always rebuilt. A cached build carries the season's strength
-    snapshots too, so they reach ``inputs.strength_snapshots`` exactly as a rebuild's would.
+    snapshots too, so they reach ``inputs.strength_snapshots`` exactly as a rebuild's would,
+    and its ratings frames, which ``sources.ratings`` records instead of fitting them again.
     """
     key = (
         None
@@ -1111,8 +1153,18 @@ def _build_season(
         else cache.keys.key(season, {"tr": inputs.tr_df, "prev_tr": inputs.prev_tr_df})
     )
     if cache is None or key is None:
-        return process_season(season, sources.schedule_df, sources.team_stats_df, inputs)
+        games = process_season(season, sources.schedule_df, sources.team_stats_df, inputs)
+        if sources.ratings is not None:
+            sources.ratings.build(season)
+        return games
     build = cache.cache.load(season, key)
+    if (
+        build is not None
+        and sources.ratings is not None
+        and not sources.ratings.can_reuse(build.ratings)
+    ):
+        log.warning("Season cache: %d holds no ratings; rebuilding it", season)
+        build = None
     if build is None:
         recorded: list[pl.DataFrame] = []
         games = process_season(
@@ -1124,10 +1176,13 @@ def _build_season(
         snapshots = (
             pl.concat(recorded, how="vertical") if recorded else combine_strength_snapshots([])
         )
-        build = season_cache.SeasonBuild(games=games, snapshots=snapshots)
+        ratings = {} if sources.ratings is None else sources.ratings.build(season)
+        build = season_cache.SeasonBuild(games=games, snapshots=snapshots, ratings=ratings)
         cache.cache.store(season, key, build)
     else:
         log.info("Season %d reused from the season cache", season)
+        if sources.ratings is not None:
+            sources.ratings.reuse(season, build.ratings)
     if inputs.strength_snapshots is not None and build.snapshots.height > 0:
         inputs.strength_snapshots.append(build.snapshots)
     return build.games
@@ -1137,23 +1192,16 @@ def collect_all_data(
     seasons: list[int],
     *,
     config: DataCollectionConfig | None = None,
-    strength_snapshots: list[pl.DataFrame] | None = None,
-    market_lines_metadata: dict[str, object] | None = None,
-    own_elo_metadata: dict[str, object] | None = None,
+    records: CollectionRecords | None = None,
 ) -> pl.DataFrame:
     """Collect and combine all data for specified seasons.
 
     Args:
         seasons: List of season years to process
         config: Optional runtime config for logging/timing and cache refresh
-        strength_snapshots: Optional list that receives each processed week's per-team
-            strength snapshot; see `combine_strength_snapshots`
-        market_lines_metadata: Optional dict that receives a pick-time build's line record
-            (the nfelo snapshot and its hash, per-season counts, the moneyline maps); a
-            stored-line build leaves it empty
-        own_elo_metadata: Optional dict that receives the own Elo's record (both presets and
-            the win-total file it read, `own_elo_build.OwnEloColumns.metadata`); a build
-            without the own Elo leaves it empty
+        records: Optional records the run fills in beside the game rows (the strength
+            snapshots, the line and own Elo records, the ratings tables); without them none is
+            kept
 
     Returns:
         Combined DataFrame with all game data and features
@@ -1189,7 +1237,7 @@ def collect_all_data(
             strength_prior_blend_games=config.strength_prior_blend_games,
             blend_stat_prior=config.blend_stat_prior,
             stat_prior_blend_games=config.stat_prior_blend_games,
-            strength_snapshots=strength_snapshots,
+            strength_snapshots=None if records is None else records.strength_snapshots,
             timing_enabled=config.enable_timing,
         )
         with _timed_step(f"process_season_{season}", enabled=config.enable_timing):
@@ -1204,10 +1252,12 @@ def collect_all_data(
         sources,
         max(seasons),
         enable_timing=config.enable_timing,
-        own_elo_metadata=own_elo_metadata,
+        own_elo_metadata=None if records is None else records.own_elo_metadata,
     )
-    if sources.pick_time is not None and market_lines_metadata is not None:
-        market_lines_metadata.update(sources.pick_time.metadata())
+    if records is not None and sources.pick_time is not None:
+        records.market_lines_metadata.update(sources.pick_time.metadata())
+    if records is not None and sources.ratings is not None:
+        records.rating_tables.update(sources.ratings.published_tables())
     return games
 
 

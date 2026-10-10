@@ -65,6 +65,7 @@ def build_final_column_order() -> list[str]:
     base_stats.extend(constants.QB_PBP_STATS)
     base_stats.extend(constants.OWN_ELO_TEAM_STATS)
     base_stats.extend(constants.OWN_WT_ELO_TEAM_STATS)
+    base_stats.extend(constants.RATINGS_FEATURE_STATS)
 
     # Deduplicate
     seen = set()

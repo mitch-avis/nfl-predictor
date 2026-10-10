@@ -233,13 +233,13 @@ def test_collect_all_data_hands_its_record_to_the_own_elo_build(
         max_season=2020,
         line_source=constants.LINE_SOURCE_STORED,
     )
-    record: dict[str, object] = {}
+    records = data_collection.CollectionRecords()
 
     # Act
-    data_collection.collect_all_data([2020], config=config, own_elo_metadata=record)
+    data_collection.collect_all_data([2020], config=config, records=records)
 
     # Assert
-    assert record == _RECORD
+    assert records.own_elo_metadata == _RECORD
 
 
 def _patch_main(monkeypatch: pytest.MonkeyPatch, record: dict[str, object]) -> None:
@@ -250,9 +250,9 @@ def _patch_main(monkeypatch: pytest.MonkeyPatch, record: dict[str, object]) -> N
     monkeypatch.setattr(polars_utils, "filter_upcoming_games", lambda df, _s, _w: df)
 
     def fake_collect(
-        _seasons: list[int], *, own_elo_metadata: dict[str, object], **_kwargs: Any
+        _seasons: list[int], *, records: data_collection.CollectionRecords, **_kwargs: Any
     ) -> pl.DataFrame:
-        own_elo_metadata.update(record)
+        records.own_elo_metadata.update(record)
         return pl.DataFrame({"season": [2026], "week": [4], "away_score": [None]})
 
     monkeypatch.setattr(data_collection, "collect_all_data", fake_collect)

@@ -1467,6 +1467,30 @@ QB_NAME_ALIASES = {
     "Robert Griffin": "Robert Griffin III",
 }
 
+# The team and quarterback ratings ported from nfl-sos-ratings (`nfl_predictor.ratings`), fit by
+# the ETL on the games before each week (`utils/polars/ratings_build.py`). Published per side
+# with a _diff companion; every name starts with "ratings_", which no other column contains, so
+# the group stays disjoint from the strength, quarterback and TeamRankings rating columns.
+RATINGS_FEATURE_STATS = [
+    # Points per game against an average team on a neutral field, from opponent-adjusted EPA.
+    "ratings_offense",
+    "ratings_defense",
+    "ratings_special_teams",
+    "ratings_team",
+    # Mean team rating of the opponents played, each rated without the team's games (null in
+    # weeks 1 and 2, before any opponent has played someone else).
+    "ratings_sos",
+    # The expected starter's adjusted EPA per dropback, from this season's games before the week.
+    "ratings_qb",
+    # His dropbacks behind it (0 before his first dropback of the season).
+    "ratings_qb_dropbacks",
+]
+
+FEATURE_GROUP_COLUMN_MARKERS["ratings"] = tuple(RATINGS_FEATURE_STATS)
+
+# Directory under DATA_PATH for the published ratings tables, `{season}_{kind}.parquet`.
+RATINGS_DIRNAME = "ratings"
+
 # Stats to EXCLUDE from opponent stat generation (they create duplicates)
 # These stats are duplicates when viewed from opponent's perspective:
 # - scoring_margin: opponent_scoring_margin = -scoring_margin

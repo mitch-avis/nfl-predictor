@@ -172,11 +172,11 @@ def fit_qb_ratings_by_week(qb_games: pl.DataFrame, fit: QbRatingFit) -> pl.DataF
         msg = "QB game rows need a week column for the weekly rating history"
         raise ValueError(msg)
     rows = _rated_rows(qb_games)
-    weeks: list[int] = sorted(rows.get_column("week").unique().to_list())
+    weeks: list[int] = sorted(rows.get_column("week").unique(maintain_order=True).to_list())
     frames: list[pl.DataFrame] = []
     for week in weeks:
         through_week = rows.filter(pl.col("week") <= week)
-        volume = through_week.group_by(QB_ID_COLUMN).agg(
+        volume = through_week.group_by(QB_ID_COLUMN, maintain_order=True).agg(
             pl.len().cast(pl.Int64).alias("qb_games_played"),
             pl.col(QB_DROPBACKS_COLUMN).sum().cast(pl.Int64).alias("qb_dropbacks"),
         )
@@ -208,7 +208,9 @@ class QbRatingResampler:
         rows = _rated_rows(qb_games).drop_nulls(
             [QB_ID_COLUMN, "opponent_team", QB_EPA_PER_DROPBACK_COLUMN]
         )
-        self.game_ids: list[str] = sorted(rows.get_column("game_id").unique().to_list())
+        self.game_ids: list[str] = sorted(
+            rows.get_column("game_id").unique(maintain_order=True).to_list()
+        )
         index = {game_id: position for position, game_id in enumerate(self.game_ids)}
         self._design = build_unit_design(rows, QB_UNIT_COLUMNS)
         self._games = np.array(
@@ -300,7 +302,7 @@ def _primary_teams(qb_games: pl.DataFrame) -> pl.DataFrame:
     recently, then to the alphabetically first team, so the pick never depends on row order.
     """
     return (
-        qb_games.group_by([QB_ID_COLUMN, "team"])
+        qb_games.group_by([QB_ID_COLUMN, "team"], maintain_order=True)
         .agg(pl.len().alias("_games"), pl.col("week").max().alias("_last_week"))
         .sort(
             ["_games", "_last_week", "team"],
@@ -348,7 +350,7 @@ def qb_season_summary(qb_games: pl.DataFrame, team_games: pl.DataFrame) -> pl.Da
             _known_total(QB_DROPBACK_EPA_COLUMN).alias("_dropback_epa_total"),
         )
     )
-    team_counts = team_games.group_by("team").len("_team_games")
+    team_counts = team_games.group_by("team", maintain_order=True).len("_team_games")
     most_games = (
         team_counts.get_column("_team_games").max()
         if team_counts.height

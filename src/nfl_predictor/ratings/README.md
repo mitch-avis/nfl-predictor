@@ -6,9 +6,10 @@ opponent profiling and the simultaneous ridge that generalizes it. The package r
 ratings file that project published, bit for bit apart from one display column (see "Checking
 the port" below).
 
-Nothing in the ETL, the game dataset, the model, or the weekly run uses the package, and no
-default depends on it: the model's strength features come from the schedule-adjusted strength
-snapshot (`utils/polars/strength_snapshot.py`).
+`nfl-predictor data` fits them on this repository's play-by-play every run, writes their tables
+to `data/ratings/`, and adds pre-week rating features to the game dataset as the `ratings`
+feature group (see "In the ETL" below). The schedule-adjusted strength snapshot
+(`utils/polars/strength_snapshot.py`) stays in the dataset beside them.
 
 ## What it computes
 
@@ -52,13 +53,32 @@ consume two kinds of regular-season rows, documented column by column in `inputs
 
 `team_game_rows` and `qb_game_rows` check a frame against these and keep its row order, and they
 refuse empty ids and team codes. `published_logs.py` adapts the game logs `nfl-sos-ratings`
-published, in the order its fits read them.
+published, in the order its fits read them, and `pbp_inputs.py` builds the same rows from this
+repository's play-by-play and nflverse player sources with that project's definitions:
+
+- team-game rows (`team_games_from_pbp`): a scrimmage snap is a dropback, a run, a kneel-down or a
+  spike with both teams known (an empty team code counts as unknown), a run play flagged
+  `qb_scramble` counting as a dropback (nflverse leaves most scrambles before 2006 unflagged);
+  `offensive_epa` sums the snaps' EPA in the plays' order; special-teams plays (`special`) go to
+  the team with the ball; the margin and the home side come from the schedule, whose home team is
+  the home team at a neutral site too, as there;
+- quarterback rows (`passer_games_from_pbp`, then `quarterback_rows`): a passer's dropbacks (sacks
+  included), the pass attempts among them, and their `qb_epa` with his spikes' EPA left out of the
+  dropback EPA; the weekly player stats' attempts and passing EPA for a passer they or the
+  identity list at quarterback; the snap counts' quarterbacks without a dropback; names from the
+  players file, then the weekly roster, then the play-by-play; and the identity rule: a passer
+  stays when the players file or a regular-season roster week lists him at quarterback, or when
+  no source places him at all. `quarterback_rows(..., before_week=w)` applies the rule with only
+  the roster weeks before week `w` and returns only the games before it, sorted by team, week,
+  game and passer id, for the pre-week ratings; without `before_week` every roster week counts
+  and the rows come in that project's fit order (team, week, game, name), for the season tables.
 
 The exact bits of a fit depend on more than its inputs, so a rebuild that must be byte-identical
 fixes all of these:
 
 - Row order: the fits sum over rows in the order given, so an adapter should emit a fixed order
-  (team, week, and game; for passers also the name).
+  (team, week, and game; for passers also the name). `pbp_inputs.py` does, and keeps each game's
+  plays in nflverse's order, which its EPA sums follow.
 - BLAS threads: with one thread, as the tests and the parity audit run and as `nfl-sos-ratings`
   built its files, the quarterback fits are reproducible; with more, they can differ in their last
   bits.
@@ -83,11 +103,39 @@ fixes all of these:
   history of the week before. Week 1 rates every team at its centered preseason prior on the
   previous season's scale (null before 2003) with `sos` null and no quarterback rows; 1999 has no
   earlier season for its penalties and so returns nulls; a postseason week takes the whole regular
-  season. `pre_week_teams` and `pre_week_quarterbacks` return the two parts on their own.
+  season. `pre_week_teams` and `pre_week_quarterbacks` return the two parts on their own. Given
+  `load_qb_games_before`, the quarterback part reads a season's rows as known before the week
+  (who counts as a passer then); the penalties still come from the previous season's whole rows.
 
 The quarterback history `nfl-sos-ratings` published uses the season's own cross-validated penalty,
 which depends on games after the week, so it is for display only; the pre-week ratings differ from
 it slightly in the seasons whose penalty changed.
+
+## In the ETL
+
+`utils/polars/ratings_build.py` runs the package inside `nfl-predictor data`:
+
+- It loads every season from 1999 through the run's last one (the penalties and the preseason
+  prior need every earlier season): the play-by-play and schedules the ETL already loaded, the
+  earlier seasons from the cache, and the nflverse player sources under their cache contract.
+- For each season of the run it builds the published tables (`build_team_season` and
+  `build_qb_season`), and for the current season the weekly rank ranges too, and the pre-week
+  team and quarterback ratings of every scheduled week (a postseason week reads the whole regular
+  season). A season with no passer qualified for the rankings, such as a season in progress after
+  its first game, gets no quarterback tables. `nfl-predictor data` writes the tables to
+  `data/ratings/{season}_{kind}.parquet`.
+- It attaches the `ratings` feature group (`constants.RATINGS_FEATURE_STATS`) to every game row:
+  both teams' pre-week ratings and `sos` for the row's week, and the expected starter's
+  `adj_qb_epa_per_dropback` and dropbacks before the week. The starter is the one the quarterback
+  family reads (`qb_stats.expected_starter_ids`), and the passers are counted as the identity knew
+  them before the week. What the early weeks hold: week 1 has each team's preseason prior (from
+  2003), no `sos`, and no quarterback rating with 0 dropbacks; `sos` is still null in week 2,
+  since no opponent has played anyone else yet; 1999 is null throughout.
+- The fits run with one BLAS thread (`threadpoolctl`), the rows reach them in a fixed order, and
+  each season's slices are rechunked, so two runs on the same inputs write the same bytes. A
+  season's outputs read only it and earlier seasons, so the incremental ETL keeps them in the
+  season cache with the season's build (`utils/season_cache.py`, keyed on the ratings' rows and on
+  this package's code).
 
 ## Checking the port
 
@@ -100,3 +148,12 @@ it slightly in the seasons whose penalty changed.
   the pre-week entry point for every week, and writes `.agents/sos_port/RATINGS_PARITY.md` with the
   counts and timings. The judgment calls and departures are in
   `.agents/sos_port/decisions/ratings.md`.
+- `.agents/sos_port/adapter_parity.py`: loads every season of the snapshot of the nflreadpy cache
+  that project read through this repository's loaders, compares the adapter's team-game and
+  quarterback-game rows with its published game logs, rebuilds every season's tables from them,
+  and writes `.agents/sos_port/ADAPTER_PARITY.md`; the integration's judgment calls are in
+  `.agents/sos_port/decisions/integration_ratings.md`.
+- `tests/test_ratings_pbp_inputs.py`, `tests/test_ratings_build.py` and the ratings cases of
+  `tests/test_data_collection_incremental.py`: the adapter's definitions, the build and its
+  features, a rewrite of every later input (plays, rosters, scores) that leaves a week's
+  features unchanged, two runs that write identical bytes, and the incremental ETL.

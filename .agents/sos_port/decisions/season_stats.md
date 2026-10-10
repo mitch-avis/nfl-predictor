@@ -348,3 +348,25 @@ Commands run from this repository's root with the worktree's environment:
 - **Feature-value impact**: none.
 - **How to reverse it**: change `FLOAT_TOLERANCE` in the audit and the parity tests.
 - **Review**: not yet reviewed.
+
+## 15. A season with no game played yet has no tables
+
+- **What differs**: that project builds a season only once it has games (its current season ran
+  through week 4); a season with a schedule and no plays fails in its win totals for want of
+  scores. This repository's ETL runs before kickoff (`AGENTS.md`, "Readiness behaviors"), so here
+  `build_season_games` succeeds on such a season, `SeasonGames.played` is false, and
+  `build_season_tables` refuses it with a `ValueError` that says so.
+- **Options**: (a) a `played` flag and a clear refusal; (b) return `None` from
+  `build_season_tables`; (c) empty tables of the published schema.
+- **Decision**: (a).
+- **Reasoning**: the caller (the ETL) checks the flag and skips the season's tables, as it does
+  for sources not published yet, while a call without games fails with a message instead of a
+  missing-column error. (b) makes every caller handle `None`; (c) cannot know a table's columns
+  without data, since they follow the inputs.
+- **Data**: `test_a_season_before_kickoff_has_no_game_played` and
+  `test_build_season_tables_refuse_a_season_without_a_game_played` in
+  `tests/test_season_stats_season.py`; before the change the second raised Polars'
+  `ColumnNotFoundError` for `points_for`.
+- **Feature-value impact**: none.
+- **How to reverse it**: remove the check at the top of `build_season_tables`.
+- **Review**: not yet reviewed.

@@ -416,8 +416,9 @@ def _red_zone_drive_aggregations(
 def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> list[pl.Expr]:
     """Build the situational count aggregations for one perspective.
 
-    Formulas (all restricted to plays whose ``play_type`` is in
-    ``SITUATIONAL_PLAY_TYPES``, matching the existing pipeline definition):
+    Formulas. The down and two-point counts read their nflverse flags on every play, whatever
+    its ``play_type`` (1999-2000 plays often have none); the red-zone play counts and
+    ``total_plays`` keep to plays whose ``play_type`` is in ``SITUATIONAL_PLAY_TYPES``:
         - ``third_down_conversions``: plays with ``third_down_converted`` set.
         - ``third_down_fails``: plays with ``third_down_failed`` set.
         - ``fourth_down_conversions``: plays with ``fourth_down_converted`` set.
@@ -431,7 +432,7 @@ def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> l
           conversion rate that the published ``red_zone_td_pct`` reports.
         - ``two_point_attempts``: plays with ``two_point_attempt`` set.
         - ``two_point_successes``: plays with ``two_point_conv_result == "success"``.
-        - ``total_plays``: the number of such plays.
+        - ``total_plays``: the number of run, pass, kneel and spike plays.
     Third- and fourth-down attempts are the conversion plus fail counts and are
     added after aggregation. When ``allowed`` is true, the same offense-side events are
     counted again but written to ``*_allowed`` columns for the team that defended them.
@@ -453,29 +454,18 @@ def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> l
     suffix = "_allowed" if allowed else ""
     return [
         count_where(
-            counted & (flag_expr(columns, "third_down_converted") > 0),
-            f"third_down_conversions{suffix}",
+            flag_expr(columns, "third_down_converted") > 0, f"third_down_conversions{suffix}"
         ),
+        count_where(flag_expr(columns, "third_down_failed") > 0, f"third_down_fails{suffix}"),
         count_where(
-            counted & (flag_expr(columns, "third_down_failed") > 0),
-            f"third_down_fails{suffix}",
+            flag_expr(columns, "fourth_down_converted") > 0, f"fourth_down_conversions{suffix}"
         ),
-        count_where(
-            counted & (flag_expr(columns, "fourth_down_converted") > 0),
-            f"fourth_down_conversions{suffix}",
-        ),
-        count_where(
-            counted & (flag_expr(columns, "fourth_down_failed") > 0),
-            f"fourth_down_fails{suffix}",
-        ),
+        count_where(flag_expr(columns, "fourth_down_failed") > 0, f"fourth_down_fails{suffix}"),
         count_where(counted & in_red_zone, f"red_zone_plays{suffix}"),
         count_where(counted & in_red_zone & scored_td, f"red_zone_tds{suffix}"),
         *_red_zone_drive_aggregations(columns, in_red_zone, suffix),
-        count_where(
-            counted & (flag_expr(columns, "two_point_attempt") > 0),
-            f"two_point_attempts{suffix}",
-        ),
-        count_where(counted & two_point_success, f"two_point_successes{suffix}"),
+        count_where(flag_expr(columns, "two_point_attempt") > 0, f"two_point_attempts{suffix}"),
+        count_where(two_point_success, f"two_point_successes{suffix}"),
         *([] if allowed else [count_where(counted, "total_plays")]),
     ]
 

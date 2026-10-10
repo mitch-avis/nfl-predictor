@@ -1057,7 +1057,7 @@ def test_missing_optional_columns_use_documented_defaults() -> None:
     # No down column, so no play counts as an early down.
     assert row["early_down_plays"] == 0
     assert row["early_down_passes"] == 0
-    # No play_type column, so the situational counts stay at zero.
+    # No down or two-point flag columns and no play_type, so the situational counts stay at zero.
     assert row["third_down_attempts"] == 0
     assert row["fourth_down_attempts"] == 0
     assert row["red_zone_plays"] == 0
@@ -1142,6 +1142,36 @@ def test_red_zone_touchdown_counts_only_the_offense_that_scored() -> None:
     assert _row_for(result, "KC")["red_zone_plays"] == 1
     assert _row_for(result, "KC")["red_zone_tds"] == 0
     assert _row_for(result, "BUF")["red_zone_tds"] == 0
+
+
+def test_down_and_two_point_flags_count_on_plays_of_any_type() -> None:
+    """Third-down, fourth-down and two-point flags count on every play, with no play type too."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(posteam="KC", defteam="BUF", play_type=None, third_down_converted=1),
+            _play(posteam="KC", defteam="BUF", play_type=None, third_down_failed=1),
+            _play(posteam="KC", defteam="BUF", play_type="punt", fourth_down_failed=1),
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="no_play",
+                two_point_attempt=1,
+                two_point_conv_result="success",
+            ),
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["third_down_conversions"], row["third_down_attempts"]) == (1, 2)
+    assert (row["fourth_down_conversions"], row["fourth_down_attempts"]) == (0, 1)
+    assert (row["two_point_attempts"], row["two_point_successes"]) == (1, 1)
+    allowed = _row_for(result, "BUF")
+    assert (allowed["third_down_attempts_allowed"], allowed["two_point_attempts_allowed"]) == (2, 1)
 
 
 def test_box_score_aggregation_derives_team_game_stats() -> None:

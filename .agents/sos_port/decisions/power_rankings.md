@@ -222,6 +222,27 @@ No result of the measurement is quoted here: the numbers live in the generated
   blend were chosen (its own stage-1 folds for the season so far, and the floor-sigma reference
   runs for the previous season, are the natural sources); the setting takes explicit paths today.
 
+## 11. The second seed
+
+- **What differs**: the hypothesis reads the model rating from the anchored ported-ratings run on
+  seed 42; a result that would change a default holds on two seeds (`AGENTS.md` rule 13).
+- **Options**: (a) fit the model rating to each game's predicted margin averaged over the seed-42
+  and seed-7 runs; (b) fit each seed's rating and average the ratings; (c) score each seed and
+  average the per-game errors, as `nfl-predictor compare` pairs seeds.
+- **Decision**: (a), given by the delegating session after the review: `rankings_eval.py` takes
+  `--run-dir` once per run, seed 42 first, and reports the two-seed result as a supplement beside
+  the seed-42 result, which alone stays the rule's input.
+- **Reasoning**: the ridge is linear in its targets, so (a) and (b) give the same ratings for a
+  week (the averaged targets fit to the averaged strengths), and (a) keeps one fit per week; (c)
+  would average two blends with two sets of chosen weights, which is not one ranking anyone could
+  publish.
+- **Data**: `rating_sources.average_predictions` and its tests (`test_average_predictions_*`):
+  margins summed in the given order, runs of different games or of a game with other teams
+  refused.
+- **How to reverse it**: give `--run-dir` once.
+
 ## Review
 
-Not yet reviewed.
+An independent review found the measurement faithful to the design and its numbers reproducible,
+and asked for the fixes now recorded in decisions 8 and 10, the week-1 fit's regular-season filter
+(decision 2) and the second seed (decision 11).

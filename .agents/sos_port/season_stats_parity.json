@@ -1,9 +1,9 @@
 {
   "command": "python .agents/sos_port/season_stats_parity.py",
-  "code_commit": "eab3564afc24120150dec8b795f42578b31a2392",
+  "code_commit": "7e105e0ecf2de6c454c46a29a4bc6dadf726ad81",
   "source": "/home/mitch/workspace/nfl-sos-ratings",
   "source_commit": "9081bced89b0d51c99e28f80f8f62b9fcd0118e0",
-  "finished": "2026-10-10T11:20:25+00:00",
+  "finished": "2026-10-10T11:44:28+00:00",
   "seasons": [
     1999,
     2000,
@@ -39,12 +39,12 @@
   },
   "polars_threads": "1",
   "float_tolerance": 1e-09,
-  "work_dir": "/home/mitch/scratch/season_stats_parity_gig1rb3o",
-  "total_seconds": 65.61458445899916,
+  "work_dir": "/home/mitch/scratch/season_stats_parity_0jgzh6pm",
+  "total_seconds": 44.919067284998164,
   "timings": {
-    "load": 11.31940688400573,
-    "build": 20.15305132100184,
-    "compare": 34.10962892699172
+    "load": 8.17902127299385,
+    "build": 15.136365523016138,
+    "compare": 21.579903447989636
   },
   "pbp_columns": {
     "read": [
@@ -2588,9 +2588,9 @@
   "runs": [
     {
       "season": 1999,
-      "load_seconds": 0.34441946600054507,
-      "build_seconds": 0.7236039290000917,
-      "compare_seconds": 1.1872909639969293,
+      "load_seconds": 0.28853909199824557,
+      "build_seconds": 0.5260379380015365,
+      "compare_seconds": 0.6715995029990154,
       "comparisons": [
         {
           "season": 1999,
@@ -2959,9 +2959,9 @@
     },
     {
       "season": 2000,
-      "load_seconds": 0.29626751899922965,
-      "build_seconds": 0.6559938930004137,
-      "compare_seconds": 1.1543788369999675,
+      "load_seconds": 0.23843490199942607,
+      "build_seconds": 0.49239782500080764,
+      "compare_seconds": 0.6591832949998206,
       "comparisons": [
         {
           "season": 2000,
@@ -3330,9 +3330,9 @@
     },
     {
       "season": 2001,
-      "load_seconds": 0.41073576399867306,
-      "build_seconds": 0.6563218650007911,
-      "compare_seconds": 1.2105461619976268,
+      "load_seconds": 0.2925553690001834,
+      "build_seconds": 0.49200425800154335,
+      "compare_seconds": 0.7153805339985411,
       "comparisons": [
         {
           "season": 2001,
@@ -3701,9 +3701,9 @@
     },
     {
       "season": 2002,
-      "load_seconds": 0.5329417380016821,
-      "build_seconds": 0.7576436439994723,
-      "compare_seconds": 1.453498678998585,
+      "load_seconds": 0.3242457269989245,
+      "build_seconds": 0.5030354340015037,
+      "compare_seconds": 0.7344045719983114,
       "comparisons": [
         {
           "season": 2002,
@@ -4072,9 +4072,9 @@
     },
     {
       "season": 2003,
-      "load_seconds": 0.4291880269993271,
-      "build_seconds": 0.6146601710024697,
-      "compare_seconds": 1.3466319479994127,
+      "load_seconds": 0.25697498400040786,
+      "build_seconds": 0.5102562459978799,
+      "compare_seconds": 0.7135729450019426,
       "comparisons": [
         {
           "season": 2003,
@@ -4443,9 +4443,9 @@
     },
     {
       "season": 2004,
-      "load_seconds": 0.4076132800000778,
-      "build_seconds": 0.7062061090000498,
-      "compare_seconds": 1.5725322450016392,
+      "load_seconds": 0.26289987199925235,
+      "build_seconds": 0.4945942570011539,
+      "compare_seconds": 0.7009056809984031,
       "comparisons": [
         {
           "season": 2004,
@@ -4814,9 +4814,9 @@
     },
     {
       "season": 2005,
-      "load_seconds": 0.36418752199824667,
-      "build_seconds": 0.7709282850009913,
-      "compare_seconds": 1.393249864999234,
+      "load_seconds": 0.2612171459986712,
+      "build_seconds": 0.5048636600004102,
+      "compare_seconds": 0.696296647998679,
       "comparisons": [
         {
           "season": 2005,
@@ -5185,9 +5185,9 @@
     },
     {
       "season": 2006,
-      "load_seconds": 0.34206274199823383,
-      "build_seconds": 0.9873754250002094,
-      "compare_seconds": 1.106149233000906,
+      "load_seconds": 0.26541403999726754,
+      "build_seconds": 0.5234581060030905,
+      "compare_seconds": 0.6750943689985434,
       "comparisons": [
         {
           "season": 2006,
@@ -5556,9 +5556,9 @@
     },
     {
       "season": 2007,
-      "load_seconds": 0.35163700100019923,
-      "build_seconds": 0.707960184001422,
-      "compare_seconds": 1.1865748009986419,
+      "load_seconds": 0.2646272290003253,
+      "build_seconds": 0.541250474001572,
+      "compare_seconds": 0.6967180329993425,
       "comparisons": [
         {
           "season": 2007,
@@ -5927,9 +5927,9 @@
     },
     {
       "season": 2008,
-      "load_seconds": 0.31000843400033773,
-      "build_seconds": 0.6346405309996044,
-      "compare_seconds": 1.1012900230016385,
+      "load_seconds": 0.2688881260000926,
+      "build_seconds": 0.5179734920020564,
+      "compare_seconds": 0.7119572159972449,
       "comparisons": [
         {
           "season": 2008,
@@ -6298,9 +6298,9 @@
     },
     {
       "season": 2009,
-      "load_seconds": 0.34114557199791307,
-      "build_seconds": 0.6593334009994578,
-      "compare_seconds": 1.1674457440021797,
+      "load_seconds": 0.2731113320005534,
+      "build_seconds": 0.5089770729973679,
+      "compare_seconds": 0.6755884730009711,
       "comparisons": [
         {
           "season": 2009,
@@ -6669,9 +6669,9 @@
     },
     {
       "season": 2010,
-      "load_seconds": 0.358431886001199,
-      "build_seconds": 0.6749793630006025,
-      "compare_seconds": 1.3244405089972133,
+      "load_seconds": 0.2792288300006476,
+      "build_seconds": 0.5180895800003782,
+      "compare_seconds": 0.6894553740021365,
       "comparisons": [
         {
           "season": 2010,
@@ -7040,9 +7040,9 @@
     },
     {
       "season": 2011,
-      "load_seconds": 0.5570656010022503,
-      "build_seconds": 0.7300962199988135,
-      "compare_seconds": 1.3984342379990267,
+      "load_seconds": 0.2824071789982554,
+      "build_seconds": 0.5205696000011812,
+      "compare_seconds": 0.6931914749984571,
       "comparisons": [
         {
           "season": 2011,
@@ -7411,9 +7411,9 @@
     },
     {
       "season": 2012,
-      "load_seconds": 0.412002847999247,
-      "build_seconds": 1.139670599000965,
-      "compare_seconds": 1.6995697950005706,
+      "load_seconds": 0.2972121769998921,
+      "build_seconds": 0.5081991090009979,
+      "compare_seconds": 0.6941332559981674,
       "comparisons": [
         {
           "season": 2012,
@@ -7782,9 +7782,9 @@
     },
     {
       "season": 2013,
-      "load_seconds": 0.6591102159982256,
-      "build_seconds": 0.8360640210012207,
-      "compare_seconds": 1.461950799999613,
+      "load_seconds": 0.30421072999888565,
+      "build_seconds": 0.5382283620019734,
+      "compare_seconds": 0.7174445130003733,
       "comparisons": [
         {
           "season": 2013,
@@ -8155,9 +8155,9 @@
     },
     {
       "season": 2014,
-      "load_seconds": 0.5069360010020318,
-      "build_seconds": 0.8449052039977687,
-      "compare_seconds": 1.2674198109998542,
+      "load_seconds": 0.29076744499980123,
+      "build_seconds": 0.5359487919995445,
+      "compare_seconds": 0.7191251020012714,
       "comparisons": [
         {
           "season": 2014,
@@ -8528,9 +8528,9 @@
     },
     {
       "season": 2015,
-      "load_seconds": 0.3663255299979937,
-      "build_seconds": 0.6919752200010407,
-      "compare_seconds": 1.1854940109988092,
+      "load_seconds": 0.30012566599907586,
+      "build_seconds": 0.5309491900006833,
+      "compare_seconds": 0.7064909580003587,
       "comparisons": [
         {
           "season": 2015,
@@ -8901,9 +8901,9 @@
     },
     {
       "season": 2016,
-      "load_seconds": 0.9683691410027677,
-      "build_seconds": 1.0013921669997217,
-      "compare_seconds": 1.3037920959977782,
+      "load_seconds": 0.2822661669997615,
+      "build_seconds": 0.5315038059998187,
+      "compare_seconds": 0.7233855620033864,
       "comparisons": [
         {
           "season": 2016,
@@ -9274,9 +9274,9 @@
     },
     {
       "season": 2017,
-      "load_seconds": 0.3540018390012847,
-      "build_seconds": 0.6819064859992068,
-      "compare_seconds": 1.1732597000009264,
+      "load_seconds": 0.2888708950013097,
+      "build_seconds": 0.5395140029977483,
+      "compare_seconds": 0.6875388629996451,
       "comparisons": [
         {
           "season": 2017,
@@ -9647,9 +9647,9 @@
     },
     {
       "season": 2018,
-      "load_seconds": 0.37041074100125115,
-      "build_seconds": 0.6519184889984899,
-      "compare_seconds": 1.1788625110020803,
+      "load_seconds": 0.2999199090008915,
+      "build_seconds": 0.617829400998744,
+      "compare_seconds": 1.023319995001657,
       "comparisons": [
         {
           "season": 2018,
@@ -10020,9 +10020,9 @@
     },
     {
       "season": 2019,
-      "load_seconds": 0.35615631000109715,
-      "build_seconds": 0.6787366659991676,
-      "compare_seconds": 1.0701451370005088,
+      "load_seconds": 0.35592401300164056,
+      "build_seconds": 0.660922238999774,
+      "compare_seconds": 1.0177410509968468,
       "comparisons": [
         {
           "season": 2019,
@@ -10393,9 +10393,9 @@
     },
     {
       "season": 2020,
-      "load_seconds": 0.37304344900258,
-      "build_seconds": 0.687045908998698,
-      "compare_seconds": 1.1595290820005175,
+      "load_seconds": 0.3742688509992149,
+      "build_seconds": 0.6686622930028534,
+      "compare_seconds": 1.1440700299972377,
       "comparisons": [
         {
           "season": 2020,
@@ -10766,9 +10766,9 @@
     },
     {
       "season": 2021,
-      "load_seconds": 0.39750481500232127,
-      "build_seconds": 0.6990112249986851,
-      "compare_seconds": 1.2640259319996403,
+      "load_seconds": 0.3546398529979342,
+      "build_seconds": 0.6453992560018378,
+      "compare_seconds": 0.9835256289989047,
       "comparisons": [
         {
           "season": 2021,
@@ -11139,9 +11139,9 @@
     },
     {
       "season": 2022,
-      "load_seconds": 0.378379533001862,
-      "build_seconds": 0.7311333030011156,
-      "compare_seconds": 1.203339543997572,
+      "load_seconds": 0.37604343900238746,
+      "build_seconds": 0.6671870329992089,
+      "compare_seconds": 1.0717070680002507,
       "comparisons": [
         {
           "season": 2022,
@@ -11512,9 +11512,9 @@
     },
     {
       "season": 2023,
-      "load_seconds": 0.37473443999988376,
-      "build_seconds": 0.6752939500001958,
-      "compare_seconds": 1.1478057589993114,
+      "load_seconds": 0.35429442600070615,
+      "build_seconds": 0.6958394790017337,
+      "compare_seconds": 1.0752314679994015,
       "comparisons": [
         {
           "season": 2023,
@@ -11885,9 +11885,9 @@
     },
     {
       "season": 2024,
-      "load_seconds": 0.37940522200005944,
-      "build_seconds": 0.7213538809992315,
-      "compare_seconds": 1.2256705590007186,
+      "load_seconds": 0.3656631660014682,
+      "build_seconds": 0.6743209710002702,
+      "compare_seconds": 0.9783991180011071,
       "comparisons": [
         {
           "season": 2024,
@@ -12258,9 +12258,9 @@
     },
     {
       "season": 2025,
-      "load_seconds": 0.37732224699720973,
-      "build_seconds": 0.8329011810019438,
-      "compare_seconds": 1.1663009420008166,
+      "load_seconds": 0.3762707079986285,
+      "build_seconds": 0.6683536460004689,
+      "compare_seconds": 1.0044427169996197,
       "comparisons": [
         {
           "season": 2025,

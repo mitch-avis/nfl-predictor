@@ -38,6 +38,7 @@ from parity_rules import (
     check_evidence,
     expression,
     one_team_games,
+    uncounted_situational_plays,
     scramble_flag,
     unrepair_penalties,
 )
@@ -413,6 +414,7 @@ def main() -> int:
             "coverage": coverage,
             "one_team_games": broken,
             "scramble_flag": flag_kind,
+            "uncounted_situational_plays": uncounted_situational_plays(pbp),
             "pairs": season_pairs,
         }
 
@@ -520,6 +522,14 @@ def summarize_causes(
             ]
             entry.update(games=len(games), team_games=2 * len(games), listed=sorted(games))
             entry["seasons"] = sorted(int(g[:4]) for g in games)
+        if cause_id == "every_play_type":
+            by_type: dict[str, dict[str, Any]] = {}
+            for season, report in sorted(seasons.items()):
+                for play_type, plays in report["uncounted_situational_plays"].items():
+                    entry_type = by_type.setdefault(play_type, {"plays": 0, "seasons": []})
+                    entry_type["plays"] += plays
+                    entry_type["seasons"].append(season)
+            entry["flagged_plays_left_out_here"] = dict(sorted(by_type.items()))
         if cause_id == "rams_written_la":
             rekeyed = [k for s in seasons.values() for k in s["keys"]["rekeyed_rams"]]
             entry.update(

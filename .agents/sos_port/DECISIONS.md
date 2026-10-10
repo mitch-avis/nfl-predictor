@@ -93,3 +93,23 @@ the last found every code fix correct (the exact survivor planner checked on 3,8
 - **Live betting (design only)**: the in-game probability updates the pregame prediction with the
   score and clock, the market is shown beside it and never blended, providers are off by
   default, and odds poll on a monthly credit budget. Three provider choices are on your list.
+
+### The ported ratings (`0.49.0`)
+
+Full records: [decisions/ratings.md](decisions/ratings.md) (13 entries) and the generated audit
+[RATINGS_PARITY.md](RATINGS_PARITY.md). Review: two independent rounds (verdict "merge as is");
+the reviewer reproduced the audit on three CPU math kernels and caught every planted leak.
+
+- **Parity**: rebuilt over 1999-2026, the port reproduces every ratings file `nfl-sos-ratings`
+  published (767,141 cells; 766,979 bit-identical, the rest within 1.1e-16 on this machine; all
+  114 rank-range and head-to-head tables bit-identical). Tests compare floats to 1e-12 rather than
+  bit for bit, because last bits depend on the CPU's math kernel.
+- **Pre-week ratings for features**: fitted only on earlier weeks, with the previous season's
+  cross-validated penalty for both teams and quarterbacks (the source's quarterback history uses
+  the season's own penalty, which is not known before the week; the two agree in 7 of 27
+  seasons, and elsewhere differ by 0.021 EPA per dropback on average).
+- **Week 1** returns the preseason prior only, `sos` is null in weeks 1-2 (no opponent has an
+  earlier game to rate it by), and the first season (1999) is null throughout.
+- **Determinism**: the fits keep the caller's row order and `sos` sums opponents in a fixed order;
+  the ETL must pin one math-library thread (an integration note).
+- **SRS** comes from this repository's existing solver (bit-identical to the source's).

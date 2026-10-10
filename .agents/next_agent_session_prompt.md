@@ -52,13 +52,13 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 1. Decided 2026-10-10: the test bench for step 6 is the market-free run without betting-line or
    Elo columns; roadmap steps 4 and 5 closed (`ARCHIVE.md`), step 4's leftovers moved to step 6;
    `main` pushed at `9bb237a` (the later docs commits are only on the pushed feature branch).
-   Open with the user: an own market-free, 538-style Elo for step 6 phase 4 (tentative yes;
-   questions answered 2026-10-10 about `nfelo` against `nfeloqb`, what this repo reads from
-   `qb_elos.csv`, and preseason betting win totals). Found then: the user's `nfeloqb` fork reads a
-   stale local `Manual Data/wt_ratings.csv` (2003-2023), so its 2024-2026 preseason Elo gets no
-   win-total pull, while upstream `greerreNFL/nfelosrs` `wt_ratings.csv` (free, public) covers
-   2003-2026. Research files in `~/scratch/elo_research/`.
-2. Then roadmap step 6, phase 1, on a new branch off `main`: the scripted inventory of
+   Decided 2026-10-10: this repo's own 538-style Elo is a step 6 phase 4 candidate (plan in
+   `TODO.md` step 6, phase 4), and the user's `nfeloqb` fork gets its win-total fix only after
+   that Elo replaces the `qb_elos.csv` columns. Found then: the fork reads a stale local
+   `Manual Data/wt_ratings.csv` (2003-2023), so its 2024-2026 preseason Elo gets no win-total
+   pull; upstream `greerreNFL/nfelosrs` `wt_ratings.csv` (free) covers 2003-2026.
+2. Next: merge the step-4 close-out docs into `main` (must-ask), then roadmap step 6, phase 1,
+   on a new branch off `main`: the scripted inventory of
    `nfl-sos-ratings` at `9081bce` against this repo, and the play-by-play parity check (with its
    pre-2006 scramble rule).
 3. Batch with step 6's first edit to `constants.py` (it changes every checkpoint fingerprint):

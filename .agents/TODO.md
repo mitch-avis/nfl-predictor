@@ -201,6 +201,21 @@ Steps:
    4. the ported ratings as model features, measured anchored against the adopted-settings
       reference and market-free on the test bench the user chose 2026-10-10 (no betting-line and
       no Elo columns, `models/step4_reference/marketfree_all_seed*`);
+      a candidate in the same phase (approved by the user 2026-10-10): this repo's own Elo,
+      computed in the ETL, replacing the `qb_elos.csv` columns if it measures at least as well
+      on the test bench and anchored. Build it in this order, each with tests: 538's public
+      framework first, pinned by a test that reproduces `elo_prob1` in `fivethirtyeight/
+      nfl-elo-game` `data/nfl_games.csv` (K 20, home field 65, a one-third offseason pull to
+      1505, the margin-of-victory multiplier); then the 2019 additions (rest and bye, travel,
+      playoff boost, rolling home field); then the QB adjustment, 538's published VALUE formula
+      first and the ported `nfl-sos-ratings` quarterback rating as the alternative; then the
+      preseason pull toward betting win totals as a measured option, read and cached from the
+      free `greerreNFL/nfelosrs` `wt_ratings.csv` (2003 on; plain regression before), its weight
+      fitted on earlier seasons only. The market-free test bench never gets the win totals.
+      After this Elo replaces the `qb_elos.csv` columns (and only then, to keep a production
+      input stable mid-season), fix the user's `../nfeloqb` fork to read the upstream win-total
+      file instead of its stale local `Manual Data/wt_ratings.csv` (2003-2023), with the user's
+      go-ahead at that time. Research: `~/scratch/elo_research/`.
    5. power rankings and projected standings on the ported ratings combined with the trained
       model (the user's direction 2026-10-08; how to combine them is decided by measurement:
       each candidate ranking predicts next week's margins, scored like the `nfl-sos-ratings`

@@ -10,6 +10,7 @@ import { JobsPage } from './pages/Jobs'
 import { LoginPage } from './pages/Login'
 import { ModelRoute } from './pages/ModelRoute'
 import { PlaceholderPage } from './pages/Placeholder'
+import { PoolPage } from './pages/Pool'
 import { PowerRankingsPage } from './pages/PowerRankings'
 import { PredictionsPage } from './pages/Predictions'
 import { RunsPage } from './pages/Runs'
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'predictions', element: <PredictionsPage /> },
+      { path: 'pool', element: <PoolPage /> },
       { path: 'power', element: <PowerRankingsPage /> },
       { path: 'betting', element: <BettingPage /> },
       { path: 'data', element: <DataStatusPage /> },

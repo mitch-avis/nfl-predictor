@@ -1,9 +1,10 @@
 /** TanStack Query hooks for every backend route. Query keys live here so invalidation is uniform. */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { ApiError, apiFetch, qs } from './client'
 import type {
   BettingOut,
+  ConfidenceSheet,
   DataStatusOut,
   Job,
   JobCatalog,
@@ -22,6 +23,9 @@ import type {
   RunKind,
   RunList,
   Session,
+  SurvivorOut,
+  SurvivorRequest,
+  Tiebreakers,
   User,
 } from './types'
 
@@ -171,6 +175,35 @@ export function usePicks(params: WeekParams) {
     queryKey: ['picks', params],
     queryFn: () => apiFetch<PicksOut>(`/api/predictions/picks${qs(params)}`),
   })
+}
+
+export function useConfidenceSheet(params: WeekParams) {
+  return useQuery({
+    queryKey: ['pool-confidence', params],
+    queryFn: () => apiFetch<ConfidenceSheet>(`/api/pool/confidence${qs(params)}`),
+  })
+}
+
+export function useTiebreakers(params: WeekParams) {
+  return useQuery({
+    queryKey: ['pool-tiebreakers', params],
+    queryFn: () => apiFetch<Tiebreakers>(`/api/pool/tiebreakers${qs(params)}`),
+  })
+}
+
+/** Survivor plans for `request`; the planner only reads predictions, so the POST is cached like a read. */
+export function useSurvivor(request: SurvivorRequest | null) {
+  return useQuery({
+    queryKey: ['pool-survivor', request],
+    queryFn: () => apiFetch<SurvivorOut>('/api/pool/survivor', { method: 'POST', body: request }),
+    enabled: request !== null,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** The URL that downloads a week's confidence picks as CSV. */
+export function picksCsvUrl(params: WeekParams): string {
+  return `/api/predictions/picks${qs({ ...params, format: 'csv' })}`
 }
 
 export function useBetting(params: WeekParams) {

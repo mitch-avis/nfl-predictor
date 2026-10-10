@@ -160,3 +160,24 @@ by re-running both scripts on the integration branch.
   filed as missing, or a column missing in one file kind but classified in another.
 - **Parity**: every mismatching team-game explained by a named cause (40,694 values); the
   snapshot of the play-by-play the source read equals this repository's cache row by row.
+
+### The season statistics (`0.51.0`)
+
+Full records: [decisions/season_stats.md](decisions/season_stats.md) (15 entries) and the
+generated audit [SEASON_STATS_PARITY.md](SEASON_STATS_PARITY.md). Review: two independent rounds
+(verdict "merge as is"); the reviewer reproduced the audit at 1 and 24 threads and with this
+repository's own play-by-play column list.
+
+- **Parity**: rebuilt from the play-by-play `nfl-sos-ratings` used, read through this
+  repository's loaders, every published season table of 1999-2026 comes out bit for bit (280
+  tables; the rating columns of two tables are taken from the ported ratings by design).
+- **Inputs** come through this repository's loaders, plus the source's own preparation steps
+  (canonical codes, the never-charted fields, the Jacksonville repair); nflverse's official weekly
+  team stats get their own cached source, because the existing team-stats loader sums away
+  columns the source's overrides read.
+- **Washington is `WSH`** and whole numbers are 64-bit (the published files hold some as 32-bit;
+  values are equal).
+- **Not ported**: the garbage-time filter view (no published table depends on it), the source's
+  SRS (the ratings package covers it), its command-line parts and file writing.
+- **Display data only**: these tables are whole-season values, not pre-week values, and feed the
+  web pages, never the model.

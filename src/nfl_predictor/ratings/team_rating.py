@@ -255,7 +255,9 @@ class TeamRatingResampler:
         _require_columns(game_logs)
         self._fit = fit
         self._priors: tuple[UnitPrior | None, UnitPrior | None] = (scrimmage_prior, None)
-        self.game_ids: list[str] = sorted(game_logs.get_column("game_id").unique().to_list())
+        self.game_ids: list[str] = sorted(
+            game_logs.get_column("game_id").unique(maintain_order=True).to_list()
+        )
         index = {game_id: position for position, game_id in enumerate(self.game_ids)}
         self._units: list[tuple[UnitDesign, npt.NDArray[np.int64], npt.NDArray[np.float64]]] = []
         for plays_column, epa_column in (
@@ -390,11 +392,11 @@ def fit_team_ratings_by_week(
     if "week" not in game_logs.columns:
         msg = "team game logs need a week column for the weekly rating history"
         raise ValueError(msg)
-    weeks: list[int] = sorted(game_logs.get_column("week").unique().to_list())
+    weeks: list[int] = sorted(game_logs.get_column("week").unique(maintain_order=True).to_list())
     frames: list[pl.DataFrame] = []
     for week in weeks:
         through_week = game_logs.filter(pl.col("week") <= week)
-        games_played = through_week.group_by("team").len("games_played")
+        games_played = through_week.group_by("team", maintain_order=True).len("games_played")
         ratings = fit_team_ratings(
             through_week,
             scrimmage_lambda=fit.scrimmage_lambda,

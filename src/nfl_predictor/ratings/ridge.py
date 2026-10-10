@@ -120,8 +120,8 @@ def build_unit_design(rows: pl.DataFrame, columns: UnitColumns) -> UnitDesign:
 
     offense_units = rows.get_column(columns.offense).cast(pl.String)
     defense_units = rows.get_column(columns.defense).cast(pl.String)
-    offense_labels = sorted(offense_units.unique().to_list())
-    defense_labels = sorted(defense_units.unique().to_list())
+    offense_labels = sorted(offense_units.unique(maintain_order=True).to_list())
+    defense_labels = sorted(defense_units.unique(maintain_order=True).to_list())
     home = _home_signs(rows, columns.home)
     has_home = bool(np.any(home != 0.0))
 
@@ -151,7 +151,7 @@ def build_unit_design(rows: pl.DataFrame, columns: UnitColumns) -> UnitDesign:
         )
     )
     group_values = rows.get_column(columns.group).cast(pl.String)
-    group_labels = sorted(group_values.unique().to_list())
+    group_labels = sorted(group_values.unique(maintain_order=True).to_list())
     groups = np.asarray(
         group_values.replace_strict({label: i for i, label in enumerate(group_labels)}).to_numpy(),
         dtype=np.int64,

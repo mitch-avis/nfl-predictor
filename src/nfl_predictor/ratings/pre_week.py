@@ -211,7 +211,7 @@ class RatingsHistory:
             | set(snapshot.get_column("team").to_list())
             | set(snapshot.get_column("opponent_team").to_list())
         )
-        games_played = snapshot.group_by("team").len("games_played")
+        games_played = snapshot.group_by("team", maintain_order=True).len("games_played")
         frame = (
             pl.DataFrame({"team": universe}, schema={"team": pl.String()})
             .join(games_played, on="team", how="left")
@@ -263,7 +263,7 @@ class RatingsHistory:
         if rated.is_empty():
             return pl.DataFrame(schema=_QB_PRE_WEEK_SCHEMA)
         fit = fit_qb_ratings(snapshot, ridge_lambda=penalty)
-        volume = rated.group_by(QB_ID_COLUMN).agg(
+        volume = rated.group_by(QB_ID_COLUMN, maintain_order=True).agg(
             pl.len().cast(pl.Int64).alias("qb_games_played"),
             pl.col(QB_DROPBACKS_COLUMN).sum().cast(pl.Int64),
         )

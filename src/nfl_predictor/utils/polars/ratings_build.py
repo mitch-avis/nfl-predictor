@@ -155,7 +155,9 @@ def _with_earlier_seasons(
 ) -> pl.DataFrame:
     """Return ``loaded``'s rows of ``seasons`` with the seasons it lacks from ``load``."""
     present = (
-        set(loaded.get_column("season").unique().to_list()) if "season" in loaded.columns else set()
+        set(loaded.get_column("season").unique(maintain_order=True).to_list())
+        if "season" in loaded.columns
+        else set()
     )
     missing = [season for season in seasons if season not in present]
     parts = [loaded.filter(pl.col("season").is_in(seasons))] if present else []

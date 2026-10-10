@@ -33,6 +33,7 @@ from threadpoolctl import threadpool_info, threadpool_limits
 from nfl_predictor import constants
 from nfl_predictor.ratings.pbp_inputs import quarterback_rows
 from nfl_predictor.ratings.pre_week import RatingsHistory
+from nfl_predictor.ratings.qb_rating import QUALIFIER_ATTEMPTS_PER_TEAM_GAME
 from nfl_predictor.ratings.season import BootstrapSettings, TeamSeasonRatings
 from nfl_predictor.utils.polars import qb_starters, ratings_build
 
@@ -157,6 +158,39 @@ def test_build_of_a_season_without_a_qualified_passer_publishes_only_team_tables
     frames = build.build(2000)
 
     # Assert
+    assert set(frames) == {
+        "ratings",
+        "team_prior",
+        "ratings_by_week",
+        "rating_ranges",
+        "rating_pairs",
+        ratings_build.PRE_WEEK_TEAMS,
+        ratings_build.PRE_WEEK_QUARTERBACKS,
+    }
+
+
+def test_build_of_a_season_of_unrated_qualified_passers_publishes_only_team_tables() -> None:
+    """The box scores qualify the season's passers, but no dropback names one, so none is rated."""
+    # Arrange
+    data = with_player_sources(league())
+    unnamed = pl.col("season") == 2000
+    plays = data.plays.with_columns(
+        pl.when(unnamed).then(None).otherwise(pl.col(column)).alias(column)
+        for column in ("passer_player_id", "passer_player_name")
+    )
+    inputs = _inputs(replace(data, plays=plays))
+    build = ratings_build.RatingsBuild(inputs, current_season=_LAST + 1, bootstrap=_FAST)
+
+    # Act
+    frames = build.build(2000)
+
+    # Assert
+    starters = inputs.passer_games.filter(
+        (pl.col("season") == 2000) & pl.col("qb_id").is_in([starter_id(team) for team in TEAMS])
+    )
+    assert starters.height == len(TEAMS) * WEEKS
+    assert (starters.get_column("official_attempts") >= QUALIFIER_ATTEMPTS_PER_TEAM_GAME).all()
+    assert starters.get_column("qb_dropbacks").fill_null(0).max() == 0
     assert set(frames) == {
         "ratings",
         "team_prior",

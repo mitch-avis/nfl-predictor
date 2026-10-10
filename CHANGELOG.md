@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.55.1] - 2026-10-10
+
+### Added
+
+- The ETL warns when `data/qb_elos.csv` has no rows for the week being predicted: those games fall
+  back to each team's latest listed Elo rating, a 0.0 Elo trend and no quarterback trends, values
+  no completed row carries once its teams have played. Refresh the file before the run.
+
+### Fixed
+
+- An upcoming game's `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` (each side and the
+  difference) carry the team's trend from its games before the week, as its completed row will,
+  instead of 0.0; a playoff game carries the trend over the full regular season. Completed
+  regular-season rows, and so every training row and walk-forward result, are unchanged; weekly
+  predictions change from week 6 on (`.agents/sos_port/decisions/trend_parity.md`).
+
 ## [0.55.0] - 2026-10-10
 
 ### Changed

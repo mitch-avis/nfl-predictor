@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -269,6 +270,68 @@ def test_load_pbp_earlier_cache_file_is_downloaded_again(
     # Assert
     assert loaded.get_column("posteam").to_list() == ["BUF"]
     assert set(_ADDED_COLUMNS) <= set(pl.read_parquet_schema(tmp_path / "pbp_2020_reg.parquet"))
+
+
+def _unavailable(seasons: list[int]) -> pl.DataFrame:
+    """Fail the way an nflreadpy outage does."""
+    msg = f"play-by-play for {seasons} is unavailable"
+    raise ConnectionError(msg)
+
+
+def _gap_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Return the warnings that name requested columns a cache file lacks."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "lacks the requested columns" in record.getMessage()
+    ]
+
+
+def test_load_pbp_fallback_to_an_earlier_cache_file_names_the_columns_it_lacks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed current-season refresh that falls back to an earlier file warns of its gaps."""
+    # Arrange
+    stale = pl.DataFrame(
+        [{**dict.fromkeys(_EARLIER_PBP_COLUMNS), "season": 2026, "week": 1, "posteam": "OLD"}],
+        schema={column: loaders._PBP_COLUMN_DTYPES[column] for column in _EARLIER_PBP_COLUMNS},
+    )
+    stale.write_parquet(tmp_path / "pbp_2026_reg.parquet")
+    monkeypatch.setattr(loaders.nfl, "load_pbp", _unavailable)
+    caplog.set_level(logging.WARNING)
+    lacking = [column for column in constants.PBP_COLUMNS if column not in _EARLIER_PBP_COLUMNS]
+
+    # Act
+    loaded = loaders.load_pbp([2026], cache_dir=tmp_path, current_season=2026)
+
+    # Assert
+    assert loaded.get_column("posteam").to_list() == ["OLD"]
+    warnings = _gap_warnings(caplog)
+    assert len(warnings) == 1
+    assert "drive_inside20" in lacking
+    assert warnings[0].endswith(": " + ", ".join(lacking))
+
+
+def test_load_pbp_fallback_to_a_complete_cache_file_names_no_columns(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A fallback file that holds every requested column draws no warning about columns."""
+    # Arrange
+    complete = pl.DataFrame(
+        [{**dict.fromkeys(constants.PBP_COLUMNS), "season": 2026, "week": 1, "posteam": "NEW"}],
+        schema=loaders._PBP_COLUMN_DTYPES,
+    )
+    complete.write_parquet(tmp_path / "pbp_2026_reg.parquet")
+    monkeypatch.setattr(loaders.nfl, "load_pbp", _unavailable)
+    caplog.set_level(logging.WARNING)
+
+    # Act
+    loaded = loaders.load_pbp([2026], cache_dir=tmp_path, current_season=2026)
+
+    # Assert
+    assert loaded.get_column("posteam").to_list() == ["NEW"]
+    assert _gap_warnings(caplog) == []
 
 
 def test_load_pbp_keeps_every_added_column_as_published(

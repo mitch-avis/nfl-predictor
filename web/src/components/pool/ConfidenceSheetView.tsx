@@ -28,8 +28,9 @@ function SheetLine({ row }: { row: SheetRow }) {
   const final = row.away_score !== null && row.home_score !== null
   return (
     <li data-pick={row.pick ?? ''} className="flex items-center gap-3 px-3 py-2">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground" aria-label={`${row.points ?? 'no'} points`}>
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
         {row.points ?? '—'}
+        <span className="sr-only"> points</span>
       </span>
       <div className="min-w-0 flex-1">
         <div className="font-medium">

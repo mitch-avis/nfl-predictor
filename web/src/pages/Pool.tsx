@@ -100,7 +100,8 @@ export function PoolPage() {
           <TiebreakersTab params={params} />
         </TabsContent>
         <TabsContent value="survivor" className="mt-3">
-          <SurvivorPanel season={season} week={week} />
+          {/* Keyed by season: the used teams are stored per season and read when the panel mounts. */}
+          <SurvivorPanel key={season ?? 'none'} season={season} week={week} />
         </TabsContent>
       </Tabs>
     </>

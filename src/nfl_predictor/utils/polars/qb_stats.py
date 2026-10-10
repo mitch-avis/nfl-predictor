@@ -58,7 +58,8 @@ from nfl_predictor.utils.polars.teamrankings import calculate_stat_differentials
 if TYPE_CHECKING:
     from pathlib import Path
 
-# Per quarterback-game sums carried from play-by-play into the pre-game rates.
+# Per quarterback-game sums from play-by-play. The pre-game rates read all but ``completions``,
+# which the own Elo's VALUE reads (``elo_quarterbacks``).
 QB_GAME_SUM_COLUMNS = [
     "dropbacks",
     "attempts",
@@ -71,6 +72,30 @@ QB_GAME_SUM_COLUMNS = [
     "qb_epa_sum",
     "cpoe_sum",
     "cpoe_count",
+]
+# The sums the career and league rates read.
+_CAREER_SUM_COLUMNS = [
+    "dropbacks",
+    "attempts",
+    "pass_yards",
+    "pass_tds",
+    "interceptions",
+    "sacks",
+    "sack_yards",
+    "qb_epa_sum",
+    "cpoe_sum",
+    "cpoe_count",
+]
+# The sums the recent-window rates (EPA per dropback and ANY/A) read.
+_RECENT_SUM_COLUMNS = [
+    "dropbacks",
+    "attempts",
+    "pass_yards",
+    "pass_tds",
+    "interceptions",
+    "sacks",
+    "sack_yards",
+    "qb_epa_sum",
 ]
 
 QB_GAME_SCHEMA: dict[str, type[pl.DataType]] = {
@@ -260,13 +285,13 @@ def _history_tables(qb_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame,
     per_game = (
         _keyed(qb_games)
         .group_by(["qb_id", _KEY], maintain_order=True)
-        .agg(pl.col(c).sum() for c in QB_GAME_SUM_COLUMNS)
+        .agg(pl.col(c).sum() for c in _CAREER_SUM_COLUMNS)
         .sort(["qb_id", _KEY])
     )
     career = per_game.select(
         "qb_id",
         _KEY,
-        *[pl.col(c).cum_sum().over("qb_id").alias(f"c_{c}") for c in QB_GAME_SUM_COLUMNS],
+        *[pl.col(c).cum_sum().over("qb_id").alias(f"c_{c}") for c in _CAREER_SUM_COLUMNS],
     ).sort(_KEY)
     recent = per_game.select(
         "qb_id",
@@ -276,14 +301,14 @@ def _history_tables(qb_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame,
             .rolling_sum(window_size=constants.QB_RECENT_GAMES, min_samples=1)
             .over("qb_id")
             .alias(f"r_{c}")
-            for c in QB_GAME_SUM_COLUMNS
+            for c in _RECENT_SUM_COLUMNS
         ],
     ).sort(_KEY)
     league = (
         per_game.group_by(_KEY, maintain_order=True)
-        .agg(pl.col(c).sum() for c in QB_GAME_SUM_COLUMNS)
+        .agg(pl.col(c).sum() for c in _CAREER_SUM_COLUMNS)
         .sort(_KEY)
-        .select(_KEY, *[pl.col(c).cum_sum().alias(f"l_{c}") for c in QB_GAME_SUM_COLUMNS])
+        .select(_KEY, *[pl.col(c).cum_sum().alias(f"l_{c}") for c in _CAREER_SUM_COLUMNS])
     )
     return career, recent, league
 
@@ -377,8 +402,8 @@ def _side_features(
     known = pl.col("qb_id").is_not_null()
     frame = frame.with_columns(
         pl.when(known).then(pl.col(f"{p}{c}").fill_null(0.0)).otherwise(None).alias(f"{p}{c}")
-        for p in ("c_", "r_")
-        for c in QB_GAME_SUM_COLUMNS
+        for p, sums in (("c_", _CAREER_SUM_COLUMNS), ("r_", _RECENT_SUM_COLUMNS))
+        for c in sums
     )
     league_any_a = _ratio(*_any_a_parts("l_"))
     career_epa = _shrink(

@@ -473,3 +473,33 @@ def test_value_qb_adjustments_of_an_empty_schedule_is_an_empty_typed_frame() -> 
     # Assert
     assert adjustments.height == 0
     assert adjustments.columns == list(quarterbacks.ADJUSTMENT_SCHEMA)
+
+
+def test_a_weeks_box_scores_never_reach_that_weeks_pre_game_values() -> None:
+    # Arrange
+    games = _games(
+        ("w1", 2000, 1, "AAA", "BBB"),
+        ("w2a", 2000, 2, "AAA", "CCC"),
+        ("w2b", 2000, 2, "BBB", "DDD"),
+        ("w3", 2000, 3, "AAA", "BBB"),
+    )
+    earlier = [
+        (2000, 1, "AAA", "A", 40.0),
+        (2000, 1, "BBB", "B", 20.0),
+        (2000, 2, "AAA", "A", 40.0),
+        (2000, 2, "CCC", "C", 30.0),
+    ]
+    box = _box(*earlier, (2000, 2, "BBB", "B", 20.0), (2000, 2, "DDD", "D", 25.0))
+    changed = _box(*earlier, (2000, 2, "BBB", "B", 90.0), (2000, 2, "DDD", "D", -60.0))
+
+    # Act
+    adjustments = quarterbacks.value_qb_adjustments(games, box)
+
+    # Assert
+    with_change = quarterbacks.value_qb_adjustments(games, changed)
+    pre_game = ["home_qb_value", "away_qb_value", "home_team_qb_value", "away_team_qb_value"]
+    for game_id in ("w1", "w2a", "w2b"):
+        before = _row(adjustments, game_id)
+        after = _row(with_change, game_id)
+        assert [before[c] for c in pre_game] == [after[c] for c in pre_game]
+    assert _row(adjustments, "w3")["away_qb_value"] != _row(with_change, "w3")["away_qb_value"]

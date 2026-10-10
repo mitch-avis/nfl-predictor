@@ -352,3 +352,19 @@ def test_home_edges_travel_warns_and_skips_a_venue_without_coordinates(
     # Assert
     assert edges["home_edge"].to_list() == [55.0]
     assert any("NOWHERE" in message for message in caplog.messages)
+
+
+def test_rolling_home_field_never_reads_the_predicted_weeks_own_games() -> None:
+    # Arrange
+    games = _schedule(
+        _game("earlier", (2000, 1), ("AAA", "BBB"), (22, 20)),
+        _game("same_week_a", (2001, 1), ("AAA", "BBB"), (40, 0)),
+        _game("same_week_b", (2001, 1), ("CCC", "DDD"), (40, 0)),
+    )
+
+    # Act
+    rolling = context.rolling_home_field(games, travel=False)
+
+    # Assert
+    row = rolling.filter((pl.col("season") == 2001) & (pl.col("week") == 1))
+    assert row["home_field"].item() == pytest.approx(50.0)

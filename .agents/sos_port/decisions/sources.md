@@ -4,9 +4,11 @@ Absorbing `nfl-sos-ratings` (roadmap step 6), the nflverse-sources phase (phase 
 `.agents/step6_plan.md`) with the two items batched into it: the models-directory constant and the
 `compare` tie rule. Written by the phase's implementer on 2026-10-10 on the branch
 `worktree-agent-ac0e0051f63130c11` (from `feat/step6-sos-port` at `3ab0bd1`). The source is
-`nfl-sos-ratings` at its frozen commit `9081bce`. Review: not yet reviewed.
+`nfl-sos-ratings` at its frozen commit `9081bce`. Review: an independent review found the points
+corrected here on 2026-10-10 (its verdict: merge after fixes); the corrections are not yet
+re-reviewed.
 
-Two scripts beside this file reproduce the data, and neither reads or writes `data/` beyond the
+Three scripts beside this file reproduce the data, and none reads or writes `data/` beyond the
 play-by-play cache the first one reads:
 
 ```bash
@@ -16,10 +18,14 @@ NFLREADPY_CACHE=filesystem NFLREADPY_CACHE_DIR=/tmp/nflreadpy_cache \
     --pbp-cache /home/mitch/workspace/nfl-predictor/data/cache/nflreadpy
 # The new loaders against the live files (their cache in a temporary directory):
 .venv/bin/python .agents/sos_port/decisions/sources_live_check.py
+# The players weekly player stats list at QB that the season identity misses:
+.venv/bin/python .agents/sos_port/decisions/sources_qb_listing_check.py 2001 2012 2022
 ```
 
-Both ran on 2026-10-10 (08:21 and 08:42 UTC) with nflreadpy `0.1.5` and Polars `2.0.0`. nflverse
-revises its files, so a later run can differ in the last rows.
+All ran on 2026-10-10 with nflreadpy `0.1.5` and Polars `2.0.0`: the data script at 08:21 UTC, the
+live check at 08:42 UTC and again at 09:43 UTC after the review fixes (the same numbers; only the
+ESPN QBR row for 2027 changed, see below), the listing check at 09:43 UTC. nflverse revises its
+files, so a later run can differ in the last rows.
 
 ## The nflverse player sources
 
@@ -98,7 +104,7 @@ revises its files, so a later run can differ in the last rows.
   `load_pbp` now, or with the phase-3 feature-value changes.
 - **Decision**: canonical sides; play-by-play repair ported but not wired; weekly player stats
   repaired.
-- **Reasoning**: sides as written leave 35 more rows without a team here, all in
+- **Reasoning**: sides as written leave 34 more rows without a team here (36 against 2), all in
   `2002_10_WAS_JAX`. Wiring the play-by-play repair needs the player-id columns in
   `constants.PBP_COLUMNS` (a refetch of every cached season) and changes `td_team` and
   `penalty_team` in the 16 games, which feed this repository's red-zone touchdown and penalty
@@ -131,7 +137,8 @@ revises its files, so a later run can differ in the last rows.
   would not reach files written under the old one.
 - **Data** (`sources_data.py`, regular-season totals): tackles for loss 1,878-2,202 a season in
   1999-2002, 0 in 2003-2005, 1 in 2006, 0 in 2007-2011, 2,221 in 2012; quarterback hits 1,056-1,154
-  in 1999-2002, 0 in 2003-2005, 2,055 or more from 2006.
+  in 1999-2002, 0 in 2003-2005, 2,040 or more a season in 2006-2013 (2008's 2,040 is the
+  lowest).
 - **Feature-value impact**: none.
 - **How to reverse it**: edit or empty `constants.NFLREADPY_PLAYER_STAT_GAPS`.
 
@@ -153,8 +160,11 @@ revises its files, so a later run can differ in the last rows.
 - **Data**: `sources_data.py`, a season after the current one: player stats `ConnectionError`
   (404), snap counts `ValueError` "Season must be between 2012 and 2026", weekly rosters
   `ValueError` "... 2002 and 2026", season rosters `ValueError` "... 1920 and 2026". The 2012 snap
-  counts file has no rows (2013 has 22,821 regular-season rows). `sources_live_check.py`: 2026
-  loads for every source; 2027 is skipped with a warning by each.
+  counts file has no rows (2013 has 22,821 regular-season rows). `sources_live_check.py`, rerun
+  after the review fixes: 2026 loads for every source, and 2027 is skipped with a warning by each,
+  ESPN QBR included, with no 2027 file cached. The first run, before the fix, cached an empty
+  `espn_qbr_season_2027_reg.parquet`: the QBR asset holds every season in one file, so a season it
+  lacked came back as an empty frame; the asset now raises for a season it holds no row for.
 - **Feature-value impact**: none.
 - **How to reverse it**: the lists and `*_MIN_SEASON` constants in `constants.py`.
 
@@ -187,8 +197,11 @@ revises its files, so a later run can differ in the last rows.
 - **Options**: refresh by age (nflreadpy's one day), on every load, or by the season rule the
   other sources follow.
 - **Decision**: the season rule.
-- **Reasoning**: one contract for every source, and deterministic for finished seasons. Without a
-  players file the weekly roster still marks the season's quarterbacks.
+- **Reasoning**: one contract for every source. A finished season's identity is deterministic
+  only between refreshes: a current-season identity load downloads the players file again and
+  rewrites `players.parquet`, which every later load of a finished season then reads, so a
+  player's latest position can move a finished season's identity after that. Without a players
+  file the weekly roster still marks the season's quarterbacks.
 - **Data**: none needed beyond the tests (`tests/test_nflverse_sources.py`).
 - **Feature-value impact**: none.
 - **How to reverse it**: the `load_players` arguments in `load_season_qb_identity`.
@@ -201,17 +214,39 @@ revises its files, so a later run can differ in the last rows.
   downloads with `requests` (60 s, the repository's nfelo pattern), reports failures as
   `ConnectionError` or `ValueError` as nflreadpy does, caches each season from the one download
   under the same contract, keeps only the regular season, leaves Washington `WSH`, and keeps ESPN's
-  `player_id` while the players file keeps `espn_id`, so a later check can join by id. A test runs
-  the dataset, model, weekly-run and command-line modules in a fresh interpreter and requires that
-  none imports it.
+  `player_id` while the players file keeps `espn_id`, so a later check can join by id. Two tests
+  guard the "validation only" rule: a static scan of the package rejects any import of the module
+  outside an allow-list (none today), inside functions, relative and `importlib` forms included;
+  and importing every module the command table names, and the web app, in a fresh interpreter
+  leaves it unloaded. Planting the import at the top of `cli/backtest.py` and `cli/train.py` fails
+  both; planting it inside a function fails the scan. A season the asset holds no row for raises,
+  as nflreadpy does for a season it does not serve, so nothing empty is cached.
 - **Options**: keep a postseason option (dropped: the source never uses one); a name join (left to
   the chunk that ports the validation).
 - **Decision**: as described.
-- **Reasoning**: the task makes QBR a validation reference only; the import test enforces it.
+- **Reasoning**: the task makes QBR a validation reference only; the two tests enforce it.
 - **Data**: `sources_live_check.py`: season level 2006 56 rows and 2007 57 (2005 skipped, no
-  request), week level 2016 512 rows with the 32 canonical codes, 2026 51 rows.
+  request), week level 2016 512 rows with the 32 canonical codes, 2026 51 rows, 2027 skipped with a
+  warning after the fix.
 - **Feature-value impact**: none, by construction.
 - **How to reverse it**: not applicable.
+
+## Forward notes for the integration (no code change now)
+
+- **The season quarterback identity looks ahead within its season.**
+  `nflverse_sources.load_season_qb_identity(season)` marks a player a quarterback when any
+  regular-season week of that season's roster lists him there, or when the players file's latest
+  position does, so a listing in week 12 makes him a quarterback in week 1 too, and the players
+  file's position is later than every past week. That suits full-season ratings. A pre-week
+  feature must not use it as it is: when the identity is wired into the dataset, build it from the
+  roster weeks before the predicted week.
+- **The source's third quarterback listing.** `nfl-sos-ratings` also counts a weekly player-stats
+  row whose own `position` is QB (`data_loader._load_official_weekly_qb_stats`, `listed_qb`). The
+  port's identity misses none of those players in the seasons checked: `sources_qb_listing_check.py
+  2001 2012 2022` finds 76, 70 and 83 players listed at QB and 0 missed in each. The quarterback
+  stats port can add the rule or rely on this; it should run the check over every season first.
+- **`nfl.load_teams`.** The source reads nflverse's teams table only for its team colour palettes
+  (`team_palettes.py`). It is deferred to the web-page phase and is not loaded here.
 
 ## The models directory: `constants.MODELS_PATH`
 
@@ -286,7 +321,13 @@ revises its files, so a later run can differ in the last rows.
 - **Data**: before the guard, the new scan
   (`test_no_module_captures_a_path_inside_the_checkouts_models_directory`) failed with exactly one
   capture, `nfl_predictor.constants.MODELS_PATH` pointing at the checkout; after it, the full suite
-  passes (1,675 tests at that commit) and the worktree never gained a `models/` directory.
+  passes (1,675 tests at that commit) and the worktree never gained a `models/` directory. The
+  review then found that reverting `walk_forward.default_checkpoint_dir` or the checkpoint
+  listing's defaults to `ROOT_DIR / "models"` kept the suite green, because the pins checked the
+  checkout's path, which both spellings give. Three tests under the default isolation now expect
+  them in the test's own models directory, and reverting either site fails them (commit
+  `3da437e`). The floor-sigma reference runs, which resolve against `ROOT_DIR`, are listed with
+  what the guard does not redirect (commit `2155cba`).
 - **Feature-value impact**: none; tests only.
 - **How to reverse it**: revert `28c2754`.
 

@@ -90,6 +90,22 @@ def test_read_table_reports_a_file_removed_after_the_check_as_missing(
         files.read_table(tmp_path, 2025, "ratings")
 
 
+@pytest.mark.parametrize("cut", [0, 300])
+def test_read_table_names_an_empty_or_truncated_file_as_unreadable(
+    tmp_path: Path, cut: int
+) -> None:
+    """A table the ETL left empty or cut short raises an error that names the file."""
+    # Arrange
+    factories.write_season(tmp_path, 2025, kinds=("ratings",))
+    path = files.table_path(tmp_path, 2025, "ratings")
+    path.write_bytes(path.read_bytes()[:cut])
+
+    # Act & Assert
+    with pytest.raises(files.RatingsTableUnreadableError, match=r"2025_ratings\.parquet") as raised:
+        files.read_table(tmp_path, 2025, "ratings")
+    assert (raised.value.season, raised.value.kind) == (2025, "ratings")
+
+
 def test_entity_rows_keeps_one_team_by_week(tmp_path: Path) -> None:
     """Game logs narrow to one team, in week order."""
     # Arrange

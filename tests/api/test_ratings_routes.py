@@ -354,6 +354,33 @@ def test_qb_head_to_head_lists_a_passers_chances(
     ]
 
 
+@pytest.mark.parametrize(
+    ("kind", "path"),
+    [
+        ("rating_pairs", f"/api/ratings/{SEASON}/teams/BUF/head-to-head"),
+        ("combined", f"/api/ratings/{SEASON}/teams"),
+        ("ratings", f"/api/ratings/{SEASON}/teams/BUF/game-logs"),
+        ("ratings", "/api/ratings/schedules"),
+    ],
+)
+def test_a_broken_table_is_a_503_that_names_it(
+    ratings_dir: Path, viewer_client: TestClient, kind: str, path: str
+) -> None:
+    """A table left empty or cut short says which file to rebuild instead of failing blindly."""
+    # Arrange
+    table = ratings_dir / f"{SEASON}_{kind}.parquet"
+    table.write_bytes(table.read_bytes()[:100])
+
+    # Act
+    response = viewer_client.get(path)
+
+    # Assert
+    assert response.status_code == 503
+    error = response.json()["error"]
+    assert error["code"] == "ratings_table_unreadable"
+    assert f"{SEASON}_{kind}.parquet" in error["message"]
+
+
 def test_schedules_rank_every_completed_team_season(
     project_root: Path, viewer_client: TestClient
 ) -> None:

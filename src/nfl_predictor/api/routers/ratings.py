@@ -1,9 +1,10 @@
 """Routes for the team and quarterback pages: season tables, sections, schedules and glossary.
 
-Every route reads the season tables the ETL writes to ``data/ratings/`` (``Settings.ratings_path``)
-and none writes anything. A missing season or table is a 404 with code ``no_ratings_table``
-naming the file, and a team or quarterback without rows a 404 with code ``no_ratings_entity``,
-so a page can hide a section the season was built without.
+Every route reads the season tables in ``data/ratings/`` (``Settings.ratings_path``) and none
+writes anything. A missing season or table is a 404 with code ``no_ratings_table`` naming the
+file, and a team or quarterback without rows a 404 with code ``no_ratings_entity``, so a page can
+hide a section the season was built without. A table that exists but cannot be read (empty or
+cut short) is a 503 with code ``ratings_table_unreadable`` naming the file.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter
 
 from nfl_predictor.api.deps import CurrentUser, SettingsDep
-from nfl_predictor.api.errors import NotFoundError
+from nfl_predictor.api.errors import NotFoundError, ServiceUnavailableError
 from nfl_predictor.api.ratings import files, glossary, schedules, sections, tables
 from nfl_predictor.api.schemas.ratings import (
     EntityKind,
@@ -56,20 +57,29 @@ def current_season() -> int:
     return clock.nfl_season(clock.local_today())
 
 
+def _unreadable(exc: files.RatingsTableUnreadableError) -> ServiceUnavailableError:
+    """Return the 503 that names a table which exists but cannot be read."""
+    return ServiceUnavailableError(str(exc), code="ratings_table_unreadable")
+
+
 def _read(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame:
-    """Return one season's table, or raise the 404 that names the missing file."""
+    """Return one season's table, or raise the 404 or 503 that names the file."""
     try:
         return files.read_table(ratings_dir, season, kind)
     except files.RatingsTableMissingError as exc:
         raise NotFoundError(str(exc), code="no_ratings_table") from exc
+    except files.RatingsTableUnreadableError as exc:
+        raise _unreadable(exc) from exc
 
 
 def _read_optional(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame | None:
-    """Return one season's table when the season has it, else ``None``."""
+    """Return one season's table when the season has it, else ``None``; a broken one is a 503."""
     try:
         return files.read_table(ratings_dir, season, kind)
     except files.RatingsTableMissingError:
         return None
+    except files.RatingsTableUnreadableError as exc:
+        raise _unreadable(exc) from exc
 
 
 def _entity_rows(
@@ -108,7 +118,10 @@ def metrics(_user: CurrentUser) -> MetricRegistryOut:
 @router.get("/schedules", response_model=ScheduleRanksOut)
 def schedule_ranks(_user: CurrentUser, settings: SettingsDep) -> ScheduleRanksOut:
     """Rank every completed team-season on schedule strength, softest first."""
-    return schedules.schedule_ranks(settings.ratings_path)
+    try:
+        return schedules.schedule_ranks(settings.ratings_path)
+    except files.RatingsTableUnreadableError as exc:
+        raise _unreadable(exc) from exc
 
 
 @router.get("/{season}/{kind}", response_model=EntityTableOut)

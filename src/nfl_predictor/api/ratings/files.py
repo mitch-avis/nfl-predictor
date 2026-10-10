@@ -33,6 +33,19 @@ class RatingsTableMissingError(LookupError):
         super().__init__(f"Season {season} has no {kind} table ({table_name(season, kind)})")
 
 
+class RatingsTableUnreadableError(RuntimeError):
+    """A season's table exists but cannot be read: empty, cut short, or not Parquet."""
+
+    def __init__(self, season: int, kind: str, reason: str) -> None:
+        """Name the season, kind and file, and say why the read failed."""
+        self.season = season
+        self.kind = kind
+        super().__init__(
+            f"Season {season}'s {kind} table ({table_name(season, kind)}) cannot be read: "
+            f"{reason}. It may be cut short or still being written."
+        )
+
+
 class EntityNotFoundError(LookupError):
     """A table has no rows for the requested team or quarterback."""
 
@@ -68,6 +81,7 @@ def read_table(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame:
     Raises:
         RatingsTableMissingError: If the file does not exist, including one removed between the
             check and the read (an ETL rewriting the folder).
+        RatingsTableUnreadableError: If Polars cannot read the file (empty or cut short).
 
     """
     path = table_path(ratings_dir, season, kind)
@@ -77,6 +91,8 @@ def read_table(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame:
         frame: pl.DataFrame = cached(path, pl.read_parquet)
     except FileNotFoundError as exc:
         raise RatingsTableMissingError(season, kind) from exc
+    except pl.exceptions.PolarsError as exc:
+        raise RatingsTableUnreadableError(season, kind, str(exc)) from exc
     return frame
 
 

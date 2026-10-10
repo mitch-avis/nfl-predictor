@@ -42,11 +42,13 @@ data are logged for review. Read as:
 
 | stream | phase | depends on | branch / state |
 | --- | --- | --- | --- |
-| S1 inventory and parity scripts | 1 | none | implementer running (from `cacd301`) |
-| S2 new nflverse sources, `MODELS_PATH`, `compare` tie fix | 2 | none | implementer running |
-| S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | implementer running |
-| S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | implementer running |
-| S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | implementer running |
+| S1 inventory and parity scripts | 1 | none | review fixes (rerun on the play-by-play snapshot) |
+| S2 new nflverse sources, `MODELS_PATH`, `compare` tie fix | 2 | none | merged, `0.46.0` |
+| S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | merged, `0.47.0` |
+| S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | review fixes |
+| S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | merged, `0.48.0` |
+| S5a play-by-play cache columns, stadium table | 3-4 | none | implementer running |
+| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | implementer running |
 | S5 ETL integration: play-by-play fixes, ratings inputs and outputs, pre-week features, follow-ups | 3-4 | S1, S2, S4 | after those merge |
 | S6 candidate build and measurement | 4 | S3, S5 | after S5 |
 | S7 power rankings and projected standings | 5 | S5, S6 | after S6 |

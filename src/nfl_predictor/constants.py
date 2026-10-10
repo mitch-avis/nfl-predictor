@@ -1582,3 +1582,77 @@ STADIUMS = {
         "elevation_ft": 2490.0,
     },
 }
+
+# Approximate stadium coordinates (latitude, longitude in degrees, north and east positive) for
+# every nflverse `stadium_id` on the 1999-2026 schedules, temporary and international venues
+# included. Only the own Elo's travel-distance term reads them: 4 Elo points per 1,000 miles,
+# so an error of a few miles moves a rating by a hundredth of a point.
+STADIUM_COORDINATES: dict[str, tuple[float, float]] = {
+    "ATL00": (33.758, -84.401),  # Georgia Dome, Atlanta
+    "ATL97": (33.755, -84.401),  # Mercedes-Benz Stadium, Atlanta
+    "BAL00": (39.278, -76.623),  # M&T Bank Stadium, Baltimore
+    "BOS00": (42.091, -71.264),  # Gillette Stadium, Foxborough
+    "BOS99": (42.093, -71.266),  # Foxboro Stadium, Foxborough
+    "BRG00": (30.412, -91.184),  # Tiger Stadium, Baton Rouge
+    "BUF00": (42.774, -78.787),  # Highmark Stadium, Orchard Park
+    "BUF01": (43.641, -79.389),  # Rogers Centre, Toronto
+    "CAR00": (35.226, -80.853),  # Bank of America Stadium, Charlotte
+    "CHI98": (41.862, -87.617),  # Soldier Field, Chicago
+    "CHI99": (40.099, -88.236),  # Memorial Stadium, Champaign
+    "CIN00": (39.095, -84.516),  # Paycor Stadium, Cincinnati
+    "CIN99": (39.097, -84.508),  # Cinergy Field, Cincinnati
+    "CLE00": (41.506, -81.700),  # Cleveland Browns Stadium, Cleveland
+    "DAL00": (32.748, -97.093),  # AT&T Stadium, Arlington
+    "DAL99": (32.840, -96.911),  # Texas Stadium, Irving
+    "DEN00": (39.744, -105.020),  # Empower Field at Mile High, Denver
+    "DEN99": (39.746, -105.022),  # Mile High Stadium, Denver
+    "DET00": (42.340, -83.046),  # Ford Field, Detroit
+    "DET99": (42.646, -83.255),  # Pontiac Silverdome, Pontiac
+    "FRA00": (50.069, 8.645),  # Deutsche Bank Park, Frankfurt
+    "GER00": (48.219, 11.625),  # Allianz Arena, Munich
+    "GNB00": (44.501, -88.062),  # Lambeau Field, Green Bay
+    "HOU00": (29.685, -95.411),  # NRG Stadium, Houston
+    "IND00": (39.760, -86.164),  # Lucas Oil Stadium, Indianapolis
+    "IND99": (39.763, -86.163),  # RCA Dome, Indianapolis
+    "JAX00": (30.324, -81.637),  # EverBank Stadium, Jacksonville
+    "KAN00": (39.049, -94.484),  # Arrowhead Stadium, Kansas City
+    "LAX01": (33.953, -118.339),  # SoFi Stadium, Inglewood
+    "LAX97": (33.864, -118.261),  # StubHub Center, Carson
+    "LAX99": (34.014, -118.288),  # Los Angeles Memorial Coliseum
+    "LON00": (51.556, -0.280),  # Wembley Stadium, London
+    "LON01": (51.456, -0.342),  # Twickenham Stadium, London
+    "LON02": (51.604, -0.066),  # Tottenham Hotspur Stadium, London
+    "MAD01": (40.453, -3.688),  # Santiago Bernabeu, Madrid
+    "MEL00": (-37.820, 144.983),  # Melbourne Cricket Ground
+    "MEX00": (19.303, -99.150),  # Estadio Azteca, Mexico City
+    "MIA00": (25.958, -80.239),  # Hard Rock Stadium, Miami Gardens
+    "MIN00": (44.974, -93.258),  # Metrodome, Minneapolis
+    "MIN01": (44.974, -93.258),  # U.S. Bank Stadium, Minneapolis
+    "MIN98": (44.977, -93.225),  # TCF Bank Stadium, Minneapolis
+    "MUN01": (48.219, 11.625),  # FC Bayern Munich Stadium (Allianz Arena), Munich
+    "NAS00": (36.166, -86.771),  # Nissan Stadium, Nashville
+    "NOR00": (29.951, -90.081),  # Superdome, New Orleans
+    "NYC00": (40.812, -74.077),  # Giants Stadium, East Rutherford
+    "NYC01": (40.814, -74.074),  # MetLife Stadium, East Rutherford
+    "OAK00": (37.752, -122.201),  # Oakland Coliseum
+    "PAR00": (48.924, 2.360),  # Stade de France, Saint-Denis
+    "PHI00": (39.901, -75.168),  # Lincoln Financial Field, Philadelphia
+    "PHI99": (39.907, -75.171),  # Veterans Stadium, Philadelphia
+    "PHO00": (33.528, -112.263),  # State Farm Stadium, Glendale
+    "PHO99": (33.426, -111.933),  # Sun Devil Stadium, Tempe
+    "PIT00": (40.447, -80.016),  # Acrisure Stadium, Pittsburgh
+    "PIT99": (40.447, -80.013),  # Three Rivers Stadium, Pittsburgh
+    "RIO00": (-22.912, -43.230),  # Maracana Stadium, Rio de Janeiro
+    "SAN00": (29.417, -98.479),  # Alamodome, San Antonio
+    "SAO00": (-23.545, -46.474),  # Arena Corinthians, Sao Paulo
+    "SDG00": (32.783, -117.120),  # Qualcomm Stadium, San Diego
+    "SEA00": (47.595, -122.332),  # Lumen Field, Seattle
+    "SEA98": (47.595, -122.332),  # Kingdome, Seattle
+    "SEA99": (47.650, -122.302),  # Husky Stadium, Seattle
+    "SFO00": (37.714, -122.386),  # Candlestick Park, San Francisco
+    "SFO01": (37.403, -121.970),  # Levi's Stadium, Santa Clara
+    "STL00": (38.633, -90.188),  # Edward Jones Dome, St. Louis
+    "TAM00": (27.976, -82.503),  # Raymond James Stadium, Tampa
+    "VEG00": (36.091, -115.184),  # Allegiant Stadium, Las Vegas
+    "WAS00": (38.908, -76.864),  # Northwest Stadium, Landover
+}

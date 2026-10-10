@@ -2,7 +2,12 @@
 
 FiveThirtyEight (538) published its NFL Elo method in "How Our NFL Predictions Work" and the
 code behind its classic ratings in ``fivethirtyeight/nfl-elo-game`` (``forecast.py``, MIT
-License). This module reproduces that public framework exactly.
+License). This module reproduces that public framework exactly, and adds 538's later additions
+as separate switches of :class:`EloSettings`: the rest, travel and rolling home-field
+adjustments of ``elo_game_context``, and the playoff boost (538's 2019 version multiplies a
+playoff game's whole difference by 1.2 before the probability, because favorites outplay
+underdogs by more in the playoffs). With the boost on, the boosted difference is also the one
+the margin-of-victory multiplier damps.
 
 The framework
 -------------
@@ -37,6 +42,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from nfl_predictor.utils.polars import elo_game_context
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -45,12 +52,14 @@ MEAN_RATING = 1505.0
 K_FACTOR = 20.0
 # Elo points per factor of ten in the odds: p = 1 / (10 ** (-diff / LOGISTIC_SCALE) + 1).
 LOGISTIC_SCALE = 400.0
-CLASSIC_HOME_FIELD = 65.0
 OFFSEASON_REVERSION = 1.0 / 3.0
 EXPANSION_RATING = 1300.0
 # The margin-of-victory multiplier: ln(max(margin, 1) + 1) * DAMPING / (diff * SCALE + DAMPING).
 MOV_DAMPING = 2.2
 MOV_DIFF_SCALE = 0.001
+# 538's 2019 playoff boost: a playoff game's whole Elo difference is multiplied by this.
+PLAYOFF_MULTIPLIER = 1.2
+_REGULAR_SEASON = "REG"
 
 _REQUIRED_COLUMNS = (
     "game_id",
@@ -78,6 +87,32 @@ _RESULT_SCHEMA: dict[str, pl.DataType] = {
     "home_rating_post": pl.Float64(),
     "away_rating_post": pl.Float64(),
 }
+
+
+@dataclass(frozen=True, kw_only=True)
+class EloSettings:
+    """Which of FiveThirtyEight's additions to the classic Elo are switched on.
+
+    With every switch off (the default) the ratings are 538's public framework, described in
+    the module docstring.
+
+    Attributes:
+        rest: 25 points for a team coming off a bye week (``elo_game_context``).
+        travel: A 55-point home field plus 4 points per 1,000 miles of the visitor's trip,
+            instead of the classic 65 (``elo_game_context``).
+        playoff_boost: Multiply a playoff game's whole difference by 1.2.
+        rolling_home_field: Use the rolling ten-season home field as the base
+            (``elo_game_context``).
+
+    """
+
+    rest: bool = False
+    travel: bool = False
+    playoff_boost: bool = False
+    rolling_home_field: bool = False
+
+
+FRAMEWORK = EloSettings()
 
 
 def win_probability(diff: float) -> float:
@@ -120,11 +155,15 @@ def _result(home_score: float, away_score: float) -> float:
     return 0.5
 
 
-def _require_columns(games: pl.DataFrame) -> None:
-    """Raise when the schedule lacks a column the ratings read."""
-    missing = [column for column in _REQUIRED_COLUMNS if column not in games.columns]
+def _require_columns(games: pl.DataFrame, settings: EloSettings) -> None:
+    """Raise when the schedule lacks a column the ratings read or repeats a game id."""
+    required = [*_REQUIRED_COLUMNS, *(("stadium_id",) if settings.travel else ())]
+    missing = [column for column in required if column not in games.columns]
     if missing:
         msg = f"the schedule is missing column(s): {', '.join(missing)}"
+        raise ValueError(msg)
+    if games.get_column("game_id").is_duplicated().any():
+        msg = "the schedule lists a game_id more than once"
         raise ValueError(msg)
 
 
@@ -134,10 +173,23 @@ def _ordered(games: pl.DataFrame) -> pl.DataFrame:
     return games.sort(keys, maintain_order=True)
 
 
-def _home_edges(games: pl.DataFrame) -> list[float]:
-    """Return the Elo points each game credits to the home side: 65, or 0 at a neutral site."""
-    neutral = games.get_column("neutral").fill_null(0).cast(pl.Int64).to_list()
-    return [0.0 if flag == 1 else CLASSIC_HOME_FIELD for flag in neutral]
+def _home_edges(games: pl.DataFrame, settings: EloSettings) -> list[float]:
+    """Return the Elo points each game credits to the home side, in the order of ``games``."""
+    edges = elo_game_context.home_edges(
+        games,
+        rest=settings.rest,
+        travel=settings.travel,
+        rolling=settings.rolling_home_field,
+    )
+    return edges.get_column("home_edge").to_list()
+
+
+def _playoff_multipliers(games: pl.DataFrame, settings: EloSettings) -> list[float]:
+    """Return 1.2 for a playoff game when the boost is on, else 1, in the order of ``games``."""
+    if not settings.playoff_boost:
+        return [1.0] * games.height
+    game_types = games.get_column("game_type").cast(pl.String).to_list()
+    return [1.0 if kind == _REGULAR_SEASON else PLAYOFF_MULTIPLIER for kind in game_types]
 
 
 @dataclass
@@ -167,6 +219,7 @@ class _RatingBook:
 def compute_elo_ratings(
     games: pl.DataFrame,
     *,
+    settings: EloSettings = FRAMEWORK,
     initial_ratings: Mapping[str, float] | None = None,
 ) -> pl.DataFrame:
     """Rate every game in order and return the pre-game ratings and probabilities.
@@ -174,8 +227,11 @@ def compute_elo_ratings(
     Args:
         games: One row per game with this repository's schedule columns: ``game_id``,
             ``season``, ``week``, ``game_type``, ``home_abbr``, ``away_abbr``, ``home_score``,
-            ``away_score`` (null for an unplayed game), ``neutral`` (1 at a neutral site) and,
-            when present, ``date``.
+            ``away_score`` (null for an unplayed game), ``neutral`` (1 at a neutral site),
+            ``stadium_id`` when travel is on and, when present, ``date``. Every game of a
+            season belongs in it, unplayed ones too: byes and home stadiums come from the
+            whole schedule.
+        settings: The components switched on; the framework alone by default.
         initial_ratings: A team's rating at its first game in the frame, by team code; a team
             without one starts at 1505 in the frame's first season and at 1300 later.
 
@@ -187,10 +243,10 @@ def compute_elo_ratings(
         ``away_rating_post``, null for an unplayed game).
 
     Raises:
-        ValueError: When a required column is missing.
+        ValueError: When a required column is missing or a game id repeats.
 
     """
-    _require_columns(games)
+    _require_columns(games, settings)
     ordered = _ordered(games)
     if ordered.height == 0:
         return pl.DataFrame(schema=_RESULT_SCHEMA)
@@ -199,7 +255,8 @@ def compute_elo_ratings(
     aways = ordered.get_column("away_abbr").cast(pl.String).to_list()
     home_scores = ordered.get_column("home_score").cast(pl.Float64).to_list()
     away_scores = ordered.get_column("away_score").cast(pl.Float64).to_list()
-    edges = _home_edges(ordered)
+    edges = _home_edges(ordered, settings)
+    multipliers = _playoff_multipliers(ordered, settings)
     book = _RatingBook(min(seasons), initial_ratings or {}, {}, {})
 
     columns: dict[str, list[float | None]] = {
@@ -213,12 +270,12 @@ def compute_elo_ratings(
             "away_rating_post",
         )
     }
-    for season, home, away, home_score, away_score, edge in zip(
-        seasons, homes, aways, home_scores, away_scores, edges, strict=True
+    for season, home, away, home_score, away_score, edge, boost in zip(
+        seasons, homes, aways, home_scores, away_scores, edges, multipliers, strict=True
     ):
         home_rating = book.pre_game(home, season)
         away_rating = book.pre_game(away, season)
-        diff = home_rating - away_rating + edge
+        diff = (home_rating - away_rating + edge) * boost
         p = win_probability(diff)
         home_post: float | None = None
         away_post: float | None = None

@@ -80,6 +80,7 @@ def _game(
         "home_score": home_score,
         "away_score": away_score,
         "neutral": 0,
+        "stadium_id": f"{home}00",
         **context,
     }
 
@@ -98,6 +99,7 @@ def _schedule(*rows: dict[str, object]) -> pl.DataFrame:
             "home_score": pl.Int64,
             "away_score": pl.Int64,
             "neutral": pl.Int64,
+            "stadium_id": pl.String,
         },
     )
 
@@ -278,3 +280,145 @@ def test_compute_elo_ratings_rejects_a_frame_without_the_score_columns() -> None
     # Act & Assert
     with pytest.raises(ValueError, match="home_score"):
         elo_ratings.compute_elo_ratings(games)
+
+
+def _diffs(rated: pl.DataFrame) -> dict[str, float]:
+    """Return each game's pre-game Elo difference, by game id."""
+    return dict(zip(rated["game_id"].to_list(), rated["elo_diff"].to_list(), strict=True))
+
+
+def test_settings_default_to_the_framework() -> None:
+    """Calling without settings is the same as calling with every switch off."""
+    # Arrange
+    games = _schedule(
+        _game("g1", (2020, 1), ("AAA", "BBB"), (27, 17)),
+        _game("g2", (2020, 3), ("AAA", "BBB")),
+    )
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(games, settings=elo_ratings.EloSettings())
+
+    # Assert
+    assert rated.equals(elo_ratings.compute_elo_ratings(games))
+
+
+def test_rest_switch_credits_25_points_to_a_home_team_off_a_bye() -> None:
+    """With rest on, a home team that sat out the previous week starts 25 points stronger."""
+    # Arrange
+    games = _schedule(
+        _game("w1", (2020, 1), ("AAA", "BBB")),
+        _game("w2", (2020, 2), ("BBB", "CCC")),
+        _game("w3", (2020, 3), ("AAA", "BBB")),
+    )
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(games, settings=elo_ratings.EloSettings(rest=True))
+
+    # Assert
+    assert _diffs(rated)["w3"] == 65.0 + 25.0
+
+
+def test_travel_switch_uses_55_points_plus_the_visitors_trip() -> None:
+    """With travel on, the home edge is 55 plus 4 points per 1,000 miles the visitor travels."""
+    # Arrange
+    games = _schedule(
+        _game("ne_home", (2020, 1), ("NE", "LAC"), stadium_id="BOS00"),
+        _game("lac_home", (2020, 2), ("LAC", "NE"), stadium_id="LAX01"),
+    )
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(games, settings=elo_ratings.EloSettings(travel=True))
+
+    # Assert
+    assert 55.0 + 10.0 < _diffs(rated)["ne_home"] < 55.0 + 11.0
+
+
+def test_compute_elo_ratings_with_travel_needs_the_stadium_column() -> None:
+    """Travel reads ``stadium_id``; a schedule without it fails with the column named."""
+    # Arrange
+    games = _schedule(_game("g1", (2020, 1), ("AAA", "BBB"))).drop("stadium_id")
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="stadium_id"):
+        elo_ratings.compute_elo_ratings(games, settings=elo_ratings.EloSettings(travel=True))
+
+
+def test_playoff_boost_multiplies_a_playoff_games_difference_by_1_2() -> None:
+    """With the boost on, a playoff game's whole difference, home field included, grows 20%."""
+    # Arrange
+    games = _schedule(
+        _game("regular", (2020, 17), ("AAA", "BBB")),
+        _game("playoff", (2020, 19), ("AAA", "BBB"), game_type="DIV"),
+    )
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(
+        games, settings=elo_ratings.EloSettings(playoff_boost=True)
+    )
+
+    # Assert
+    assert _diffs(rated) == {"regular": 65.0, "playoff": 65.0 * 1.2}
+
+
+def test_playoff_boost_feeds_the_boosted_difference_to_the_margin_multiplier() -> None:
+    """The update after a boosted playoff game damps the favorite's win with the boosted gap."""
+    # Arrange
+    games = _schedule(
+        _game("playoff", (2020, 19), ("AAA", "BBB"), (31, 10), game_type="DIV"),
+        _game("next", (2020, 20), ("AAA", "BBB"), game_type="CON"),
+    )
+    diff = 65.0 * 1.2
+    multiplier = math.log(22.0) * (2.2 / (diff * 0.001 + 2.2))
+    shift = 20.0 * multiplier * (1.0 - _logistic(diff))
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(
+        games, settings=elo_ratings.EloSettings(playoff_boost=True)
+    )
+
+    # Assert
+    nxt = rated.filter(pl.col("game_id") == "next")
+    assert nxt["home_rating"].item() == pytest.approx(1505.0 + shift, abs=1e-12)
+
+
+def test_rolling_home_field_switch_uses_the_rolling_ten_season_base() -> None:
+    """With the rolling home field on, a later season's base is 25 points per point of margin."""
+    # Arrange
+    games = _schedule(
+        _game("first", (2000, 1), ("AAA", "BBB"), (22, 20)),
+        _game("second", (2001, 1), ("CCC", "DDD")),
+    )
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(
+        games, settings=elo_ratings.EloSettings(rolling_home_field=True)
+    )
+
+    # Assert
+    assert _diffs(rated) == {"first": 65.0, "second": 50.0}
+
+
+def test_compute_elo_ratings_rejects_a_repeated_game_id() -> None:
+    """Every game must appear once; a repeated id fails instead of rating the game twice."""
+    # Arrange
+    games = _schedule(
+        _game("g1", (2020, 1), ("AAA", "BBB")),
+        _game("g1", (2020, 2), ("AAA", "BBB")),
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="more than once"):
+        elo_ratings.compute_elo_ratings(games)
+
+
+def test_compute_elo_ratings_of_an_empty_schedule_is_an_empty_typed_frame() -> None:
+    """No games, no rows, but the full column set."""
+    # Arrange
+    games = _schedule()
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(games)
+
+    # Assert
+    assert rated.height == 0
+    assert "home_win_prob" in rated.columns

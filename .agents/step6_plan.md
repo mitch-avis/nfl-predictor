@@ -104,7 +104,13 @@ small and local.
 - **Later, cheap measurements without walk-forwards**: the ported quarterback rating as the own
   Elo's quarterback adjustment (`elo_eval.py`); the source's pre-registered quarterback all-plays
   test and kneel-and-spike test, and its approved botched-snap rule (logged as departures from
-  the published files).
+  the published files); a pre-registered test of the team rating's penalty-wiped plays (its
+  scrimmage EPA keeps 8,848 penalty-wiped runs at -5,660 EPA and no penalty-wiped pass, +11,142
+  EPA, 1999-2025), scored like the kneel-and-spike test on next-game margins.
+- **Carries (corrected 2026-10-10)**: the play-by-play corrections base carries on the source's
+  designed-carry rule (`rush_attempt & ~two_point & ~qb_scramble & ~qb_kneel`), not the `rush`
+  flag; acceptance check: equal to the source's `designed_carries` and `rush_success_count` in
+  every team-game 1999-2025 apart from named causes.
 
 ## For the morning report (running list)
 

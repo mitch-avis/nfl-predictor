@@ -42,6 +42,11 @@ def source_head(source: Path) -> str:
     return _git("-C", str(source), "rev-parse", "HEAD")
 
 
+def uncommitted_changes(root: Path, path: str) -> list[str]:
+    """Return ``git status --porcelain`` lines for ``path`` in the checkout at ``root``."""
+    return _git("-C", str(root), "status", "--porcelain", "--", path).splitlines()
+
+
 def check_source(source: Path) -> str:
     """Return the source checkout's HEAD after asserting it is the frozen commit.
 

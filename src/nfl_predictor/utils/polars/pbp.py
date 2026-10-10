@@ -433,9 +433,11 @@ def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> l
         - ``two_point_attempts``: plays with ``two_point_attempt`` set.
         - ``two_point_successes``: plays with ``two_point_conv_result == "success"``.
         - ``total_plays``: the number of run, pass, kneel and spike plays.
-    Third- and fourth-down attempts are the conversion plus fail counts and are
-    added after aggregation. When ``allowed`` is true, the same offense-side events are
-    counted again but written to ``*_allowed`` columns for the team that defended them.
+        - ``third_down_attempts`` / ``fourth_down_attempts``: plays with the down's converted
+          or failed flag set, so a play nflverse flags both counts once (and as a
+          conversion).
+    When ``allowed`` is true, the same offense-side events are counted again but written to
+    ``*_allowed`` columns for the team that defended them.
     """
     if "play_type" in columns:
         counted = pl.col("play_type").is_in(list(SITUATIONAL_PLAY_TYPES)).fill_null(value=False)
@@ -452,15 +454,17 @@ def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> l
     else:
         two_point_success = pl.lit(False)
     suffix = "_allowed" if allowed else ""
+    downs: list[pl.Expr] = []
+    for down in ("third", "fourth"):
+        converted = flag_expr(columns, f"{down}_down_converted") > 0
+        failed = flag_expr(columns, f"{down}_down_failed") > 0
+        downs += [
+            count_where(converted, f"{down}_down_conversions{suffix}"),
+            count_where(failed, f"{down}_down_fails{suffix}"),
+            count_where(converted | failed, f"{down}_down_attempts{suffix}"),
+        ]
     return [
-        count_where(
-            flag_expr(columns, "third_down_converted") > 0, f"third_down_conversions{suffix}"
-        ),
-        count_where(flag_expr(columns, "third_down_failed") > 0, f"third_down_fails{suffix}"),
-        count_where(
-            flag_expr(columns, "fourth_down_converted") > 0, f"fourth_down_conversions{suffix}"
-        ),
-        count_where(flag_expr(columns, "fourth_down_failed") > 0, f"fourth_down_fails{suffix}"),
+        *downs,
         count_where(counted & in_red_zone, f"red_zone_plays{suffix}"),
         count_where(counted & in_red_zone & scored_td, f"red_zone_tds{suffix}"),
         *_red_zone_drive_aggregations(columns, in_red_zone, suffix),
@@ -511,14 +515,6 @@ def _aggregate_offense(plays: pl.DataFrame) -> pl.DataFrame:
             *_situational_aggregations(columns),
         )
         .rename({"posteam": "team_abbr", "defteam": "opponent_abbr"})
-        .with_columns(
-            (pl.col("third_down_conversions") + pl.col("third_down_fails")).alias(
-                "third_down_attempts"
-            ),
-            (pl.col("fourth_down_conversions") + pl.col("fourth_down_fails")).alias(
-                "fourth_down_attempts"
-            ),
-        )
     )
 
 
@@ -564,14 +560,6 @@ def _aggregate_allowed(plays: pl.DataFrame) -> pl.DataFrame:
             *_situational_aggregations(columns, allowed=True),
         )
         .rename({"defteam": "team_abbr", "posteam": "opponent_abbr"})
-        .with_columns(
-            (pl.col("third_down_conversions_allowed") + pl.col("third_down_fails_allowed")).alias(
-                "third_down_attempts_allowed"
-            ),
-            (pl.col("fourth_down_conversions_allowed") + pl.col("fourth_down_fails_allowed")).alias(
-                "fourth_down_attempts_allowed"
-            ),
-        )
     )
 
 

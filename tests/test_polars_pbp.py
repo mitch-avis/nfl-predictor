@@ -1174,6 +1174,45 @@ def test_down_and_two_point_flags_count_on_plays_of_any_type() -> None:
     assert (allowed["third_down_attempts_allowed"], allowed["two_point_attempts_allowed"]) == (2, 1)
 
 
+def test_a_down_flagged_converted_and_failed_is_one_attempt() -> None:
+    """A third or fourth down nflverse flags both converted and failed counts once."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="pass",
+                qb_dropback=1,
+                down=3,
+                third_down_converted=1,
+                third_down_failed=1,
+            ),
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                down=4,
+                fourth_down_converted=1,
+                fourth_down_failed=1,
+            ),
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["third_down_conversions"], row["third_down_attempts"]) == (1, 1)
+    assert (row["fourth_down_conversions"], row["fourth_down_attempts"]) == (1, 1)
+    allowed = _row_for(result, "BUF")
+    assert (allowed["third_down_attempts_allowed"], allowed["fourth_down_attempts_allowed"]) == (
+        1,
+        1,
+    )
+
+
 def test_box_score_aggregation_derives_team_game_stats() -> None:
     """The box-score helper derives nflreadpy-style team stats from raw play rows.
 

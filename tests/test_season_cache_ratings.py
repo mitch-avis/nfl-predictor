@@ -86,12 +86,13 @@ def test_a_missing_ratings_frame_makes_the_entry_a_miss(tmp_path: Path) -> None:
 
 
 def _package(root: Path) -> Path:
-    """Write a minimal package tree with an ETL module, a utility and a ratings module."""
+    """Write a minimal package tree: ETL, utility, ratings and season statistics modules."""
     for relative in (
         "data_collection.py",
         "constants.py",
         "utils/helpers.py",
         "ratings/fits.py",
+        "season_stats/tables.py",
         "ml/model.py",
     ):
         path = root / relative
@@ -105,6 +106,19 @@ def test_the_code_fingerprint_covers_the_ratings_package(tmp_path: Path) -> None
     package = _package(tmp_path)
     before = season_cache.etl_code_fingerprint(package)
     (package / "ratings" / "fits.py").write_text("# changed\n", encoding="utf-8")
+
+    # Act
+    after = season_cache.etl_code_fingerprint(package)
+
+    # Assert
+    assert after != before
+
+
+def test_the_code_fingerprint_covers_the_season_statistics_package(tmp_path: Path) -> None:
+    # Arrange
+    package = _package(tmp_path)
+    before = season_cache.etl_code_fingerprint(package)
+    (package / "season_stats" / "tables.py").write_text("# changed\n", encoding="utf-8")
 
     # Act
     after = season_cache.etl_code_fingerprint(package)

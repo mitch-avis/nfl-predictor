@@ -50,10 +50,10 @@ _SNAPSHOTS = "snapshots.arrow"
 _RATINGS_PREFIX = "ratings_"
 # A season build reads Polars and NumPy (the strength ridge); their versions can move results.
 _LIBRARIES = ("polars", "numpy")
-# The modules a season build runs: the orchestration, the constants, every utility module and
-# the ratings package.
+# The modules a season build runs: the orchestration, the constants, every utility module, the
+# ratings package and the season statistics package.
 _ETL_SOURCES = ("data_collection.py", "constants.py")
-_ETL_SOURCE_DIRECTORIES = ("utils", "ratings")
+_ETL_SOURCE_DIRECTORIES = ("utils", "ratings", "season_stats")
 
 
 @dataclass(frozen=True)

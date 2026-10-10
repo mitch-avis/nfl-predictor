@@ -757,6 +757,36 @@ def test_a_scramble_coded_as_a_run_is_a_dropback_not_a_carry() -> None:
     assert (row["stuffed_rush_count"], row["early_down_passes"]) == (0, 1)
 
 
+def test_a_play_flagged_dropback_and_rush_counts_once_as_a_dropback() -> None:
+    """A play nflverse flags both a dropback and a run is one dropback snap and no carry."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                qb_dropback=1,
+                rush=1,
+                down=1,
+                yards_gained=13.0,
+                epa=0.86,
+                success=1,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    row = _row_for(result, "KC")
+    assert (row["offensive_snaps"], row["dropbacks"], row["carries"]) == (1, 1, 0)
+    assert row["pass_epa_sum"] == pytest.approx(0.86)
+    assert row["rush_epa_sum"] == pytest.approx(0.0)
+    assert (row["explosive_rush_count"], row["rush_success_count"]) == (0, 0)
+
+
 def test_a_penalty_wiped_scramble_is_not_a_dropback() -> None:
     """The scramble rule reads run plays only: a scramble a penalty wiped out stays out."""
     # Arrange

@@ -1278,7 +1278,8 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
 # Raw per-team-game counts and sums produced from play-by-play.
 # These are carried through season-to-date aggregation so rates can be computed as a
 # ratio of sums afterwards; they are not published in the final schema themselves,
-# apart from the snap volumes that also appear in PBP_STATS.
+# apart from the snap volumes that also appear in PBP_STATS. Each one feeds a published
+# rate: a count no rate reads is not carried.
 PBP_COUNT_COLUMNS = [
     "offensive_snaps",
     "defensive_snaps",
@@ -1306,21 +1307,13 @@ PBP_COUNT_COLUMNS = [
     "st_epa_against",
     "st_plays",
     "third_down_conversions",
-    "third_down_fails",
     "third_down_attempts",
     "third_down_conversions_allowed",
-    "third_down_fails_allowed",
     "third_down_attempts_allowed",
     "fourth_down_conversions",
-    "fourth_down_fails",
     "fourth_down_attempts",
     "fourth_down_conversions_allowed",
-    "fourth_down_fails_allowed",
     "fourth_down_attempts_allowed",
-    "red_zone_plays",
-    "red_zone_tds",
-    "red_zone_plays_allowed",
-    "red_zone_tds_allowed",
     "red_zone_trips",
     "red_zone_td_drives",
     "red_zone_trips_allowed",
@@ -1329,7 +1322,6 @@ PBP_COUNT_COLUMNS = [
     "two_point_successes",
     "two_point_attempts_allowed",
     "two_point_successes_allowed",
-    "total_plays",
 ]
 
 # Play-by-play stats published in the final schema (per team, prefixed with away_/home_).

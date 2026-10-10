@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from nfl_predictor import constants
-from nfl_predictor.utils.polars import pbp
+from nfl_predictor.utils.polars import pbp, teamrankings
 
 # Default values for one fixture play. Every fixture row starts from these and
 # overrides only the fields that matter for the hand-computed expectations.
@@ -359,21 +359,13 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "st_epa_against": 0.0,
         "st_plays": 1,
         "third_down_conversions": 1,
-        "third_down_fails": 0,
         "third_down_attempts": 1,
         "third_down_conversions_allowed": 0,
-        "third_down_fails_allowed": 0,
         "third_down_attempts_allowed": 0,
         "fourth_down_conversions": 0,
-        "fourth_down_fails": 1,
         "fourth_down_attempts": 1,
         "fourth_down_conversions_allowed": 0,
-        "fourth_down_fails_allowed": 0,
         "fourth_down_attempts_allowed": 0,
-        "red_zone_plays": 1,
-        "red_zone_tds": 1,
-        "red_zone_plays_allowed": 0,
-        "red_zone_tds_allowed": 0,
         "red_zone_trips": 0,
         "red_zone_td_drives": 0,
         "red_zone_trips_allowed": 0,
@@ -382,7 +374,6 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "two_point_successes": 0,
         "two_point_attempts_allowed": 0,
         "two_point_successes_allowed": 0,
-        "total_plays": 5,
     },
     "BUF": {
         "season": 2024,
@@ -416,21 +407,13 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "st_epa_against": -0.6,
         "st_plays": 1,
         "third_down_conversions": 0,
-        "third_down_fails": 0,
         "third_down_attempts": 0,
         "third_down_conversions_allowed": 1,
-        "third_down_fails_allowed": 0,
         "third_down_attempts_allowed": 1,
         "fourth_down_conversions": 0,
-        "fourth_down_fails": 0,
         "fourth_down_attempts": 0,
         "fourth_down_conversions_allowed": 0,
-        "fourth_down_fails_allowed": 1,
         "fourth_down_attempts_allowed": 1,
-        "red_zone_plays": 0,
-        "red_zone_tds": 0,
-        "red_zone_plays_allowed": 1,
-        "red_zone_tds_allowed": 1,
         "red_zone_trips": 0,
         "red_zone_td_drives": 0,
         "red_zone_trips_allowed": 0,
@@ -439,7 +422,6 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "two_point_successes": 0,
         "two_point_attempts_allowed": 0,
         "two_point_successes_allowed": 0,
-        "total_plays": 4,
     },
     "SF": {
         "season": 2024,
@@ -473,21 +455,13 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "st_epa_against": 1.4,
         "st_plays": 1,
         "third_down_conversions": 1,
-        "third_down_fails": 0,
         "third_down_attempts": 1,
         "third_down_conversions_allowed": 0,
-        "third_down_fails_allowed": 0,
         "third_down_attempts_allowed": 0,
         "fourth_down_conversions": 0,
-        "fourth_down_fails": 0,
         "fourth_down_attempts": 0,
         "fourth_down_conversions_allowed": 0,
-        "fourth_down_fails_allowed": 0,
         "fourth_down_attempts_allowed": 0,
-        "red_zone_plays": 2,
-        "red_zone_tds": 0,
-        "red_zone_plays_allowed": 0,
-        "red_zone_tds_allowed": 0,
         "red_zone_trips": 0,
         "red_zone_td_drives": 0,
         "red_zone_trips_allowed": 0,
@@ -496,7 +470,6 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "two_point_successes": 1,
         "two_point_attempts_allowed": 0,
         "two_point_successes_allowed": 0,
-        "total_plays": 3,
     },
     "DAL": {
         "season": 2024,
@@ -530,21 +503,13 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "st_epa_against": 0.0,
         "st_plays": 1,
         "third_down_conversions": 0,
-        "third_down_fails": 0,
         "third_down_attempts": 0,
         "third_down_conversions_allowed": 1,
-        "third_down_fails_allowed": 0,
         "third_down_attempts_allowed": 1,
         "fourth_down_conversions": 0,
-        "fourth_down_fails": 0,
         "fourth_down_attempts": 0,
         "fourth_down_conversions_allowed": 0,
-        "fourth_down_fails_allowed": 0,
         "fourth_down_attempts_allowed": 0,
-        "red_zone_plays": 0,
-        "red_zone_tds": 0,
-        "red_zone_plays_allowed": 2,
-        "red_zone_tds_allowed": 0,
         "red_zone_trips": 0,
         "red_zone_td_drives": 0,
         "red_zone_trips_allowed": 0,
@@ -553,7 +518,6 @@ _EXPECTED: dict[str, dict[str, Any]] = {
         "two_point_successes": 0,
         "two_point_attempts_allowed": 1,
         "two_point_successes_allowed": 1,
-        "total_plays": 2,
     },
 }
 
@@ -569,13 +533,9 @@ _MIRRORED_COLUMNS = (
     ("dropbacks_allowed", "dropbacks"),
     ("carries_allowed", "carries"),
     ("third_down_conversions_allowed", "third_down_conversions"),
-    ("third_down_fails_allowed", "third_down_fails"),
     ("third_down_attempts_allowed", "third_down_attempts"),
     ("fourth_down_conversions_allowed", "fourth_down_conversions"),
-    ("fourth_down_fails_allowed", "fourth_down_fails"),
     ("fourth_down_attempts_allowed", "fourth_down_attempts"),
-    ("red_zone_plays_allowed", "red_zone_plays"),
-    ("red_zone_tds_allowed", "red_zone_tds"),
     ("red_zone_trips_allowed", "red_zone_trips"),
     ("red_zone_td_drives_allowed", "red_zone_td_drives"),
     ("two_point_attempts_allowed", "two_point_attempts"),
@@ -656,6 +616,27 @@ def test_allowed_columns_mirror_the_opponent_offense() -> None:
             )
 
 
+def test_every_carried_count_feeds_a_published_play_by_play_rate() -> None:
+    """No count is carried through the season-to-date aggregation unless a rate reads it."""
+    # Arrange
+    counts = constants.PBP_COUNT_COLUMNS
+    base = pl.DataFrame({name: [float(10 + index)] for index, name in enumerate(counts)})
+    baseline = teamrankings._compute_pbp_derived_metrics(base)
+    rates = [column for column in baseline.columns if column not in counts]
+
+    # Act
+    unread = [
+        name
+        for name in counts
+        if teamrankings._compute_pbp_derived_metrics(base.with_columns(pl.col(name) * 2))
+        .select(rates)
+        .equals(baseline.select(rates))
+    ]
+
+    # Assert
+    assert unread == []
+
+
 def test_kneels_and_spikes_are_snaps_but_not_dropbacks_or_carries() -> None:
     """A kneel and a spike each add an offensive snap without a dropback or carry."""
     # Arrange
@@ -702,7 +683,6 @@ def test_kneels_and_spikes_are_snaps_but_not_dropbacks_or_carries() -> None:
     assert row["stuffed_rush_count"] == 0
     assert row["early_down_plays"] == 2
     assert row["early_down_passes"] == 0
-    assert row["total_plays"] == 2
 
 
 def test_a_run_play_scramble_without_the_dropback_flag_is_a_dropback() -> None:
@@ -1057,13 +1037,11 @@ def test_missing_optional_columns_use_documented_defaults() -> None:
     # No down column, so no play counts as an early down.
     assert row["early_down_plays"] == 0
     assert row["early_down_passes"] == 0
-    # No down or two-point flag columns and no play_type, so the situational counts stay at zero.
+    # No down, two-point or drive columns, so the situational counts stay at zero.
     assert row["third_down_attempts"] == 0
     assert row["fourth_down_attempts"] == 0
-    assert row["red_zone_plays"] == 0
-    assert row["red_zone_tds"] == 0
+    assert row["red_zone_trips"] == 0
     assert row["two_point_attempts"] == 0
-    assert row["total_plays"] == 0
 
 
 def test_missing_special_teams_flag_yields_null_special_teams_columns() -> None:
@@ -1130,6 +1108,8 @@ def test_red_zone_touchdown_counts_only_the_offense_that_scored() -> None:
                 third_down_failed=1,
                 td_team="BUF",
                 interception=1,
+                fixed_drive=1,
+                fixed_drive_result="Opp touchdown",
             )
         ],
         schema_overrides=_FIXTURE_DTYPES,
@@ -1139,9 +1119,9 @@ def test_red_zone_touchdown_counts_only_the_offense_that_scored() -> None:
     result = pbp.aggregate_pbp_team_game_stats(plays)
 
     # Assert
-    assert _row_for(result, "KC")["red_zone_plays"] == 1
-    assert _row_for(result, "KC")["red_zone_tds"] == 0
-    assert _row_for(result, "BUF")["red_zone_tds"] == 0
+    kc = _row_for(result, "KC")
+    assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (1, 0)
+    assert _row_for(result, "BUF")["red_zone_td_drives"] == 0
 
 
 def test_down_and_two_point_flags_count_on_plays_of_any_type() -> None:
@@ -1882,7 +1862,6 @@ def test_red_zone_trips_count_drives_not_snaps() -> None:
     kc = _row_for(result, "KC")
     buf = _row_for(result, "BUF")
     # Three red-zone snaps, but only two drives reached the red zone.
-    assert kc["red_zone_plays"] == 3
     assert kc["red_zone_trips"] == 2
     assert kc["red_zone_td_drives"] == 1
     # The defence sees the same events as "allowed".

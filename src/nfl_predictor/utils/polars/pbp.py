@@ -61,7 +61,8 @@ documented default (0 for flags and counts, 0.0 for EPA and yardage sums, and
 worth stating outright: a missing ``success`` column means no play counts as a
 success, and a missing ``yards_gained`` column means every play gained 0 yards,
 so nothing is explosive and every rush counts as stuffed. A missing
-``play_type`` column leaves all of the situational counts at 0.
+``play_type`` column means no run play counts as a scramble, and a missing
+``fixed_drive`` column leaves the red-zone trip counts at 0.
 
 The special-teams columns are the one exception to the zero-default rule: when
 no special-teams flag column is present, ``st_epa_for``, ``st_epa_against``, and
@@ -93,9 +94,6 @@ EARLY_DOWN_MAX = 2
 # Distance to the opponent goal line that defines the red zone.
 # Source: existing red-zone aggregation in this repo's Polars loaders.
 RED_ZONE_YARDLINE = 20
-# Play types counted by the situational aggregation.
-# Source: existing red-zone/down/two-point aggregation in this repo's Polars loaders.
-SITUATIONAL_PLAY_TYPES = ("run", "pass", "qb_kneel", "qb_spike")
 
 _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     # Identity keys.
@@ -136,23 +134,15 @@ _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     "st_epa_for": pl.Float64,
     "st_epa_against": pl.Float64,
     "st_plays": pl.Int64,
-    # Situational counts.
+    # Situational counts, each read by a published rate.
     "third_down_conversions": pl.Int64,
-    "third_down_fails": pl.Int64,
     "third_down_attempts": pl.Int64,
     "third_down_conversions_allowed": pl.Int64,
-    "third_down_fails_allowed": pl.Int64,
     "third_down_attempts_allowed": pl.Int64,
     "fourth_down_conversions": pl.Int64,
-    "fourth_down_fails": pl.Int64,
     "fourth_down_attempts": pl.Int64,
     "fourth_down_conversions_allowed": pl.Int64,
-    "fourth_down_fails_allowed": pl.Int64,
     "fourth_down_attempts_allowed": pl.Int64,
-    "red_zone_plays": pl.Int64,
-    "red_zone_tds": pl.Int64,
-    "red_zone_plays_allowed": pl.Int64,
-    "red_zone_tds_allowed": pl.Int64,
     "red_zone_trips": pl.Int64,
     "red_zone_td_drives": pl.Int64,
     "red_zone_trips_allowed": pl.Int64,
@@ -161,7 +151,6 @@ _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     "two_point_successes": pl.Int64,
     "two_point_attempts_allowed": pl.Int64,
     "two_point_successes_allowed": pl.Int64,
-    "total_plays": pl.Int64,
 }
 
 PBP_TEAM_GAME_COLUMNS: list[str] = list(_PBP_TEAM_GAME_SCHEMA)
@@ -416,39 +405,27 @@ def _red_zone_drive_aggregations(
 def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> list[pl.Expr]:
     """Build the situational count aggregations for one perspective.
 
-    Formulas. The down and two-point counts read their nflverse flags on every play, whatever
-    its ``play_type`` (1999-2000 plays often have none); the red-zone play counts and
-    ``total_plays`` keep to plays whose ``play_type`` is in ``SITUATIONAL_PLAY_TYPES``:
+    Each count feeds a published rate (``teamrankings._PBP_PERCENT_RATE_SPECS``). The down and
+    two-point counts read their nflverse flags on every play, whatever its ``play_type``
+    (1999-2000 plays often have none). Formulas:
         - ``third_down_conversions``: plays with ``third_down_converted`` set.
-        - ``third_down_fails``: plays with ``third_down_failed`` set.
         - ``fourth_down_conversions``: plays with ``fourth_down_converted`` set.
-        - ``fourth_down_fails``: plays with ``fourth_down_failed`` set.
-        - ``red_zone_plays``: plays with ``yardline_100 <= RED_ZONE_YARDLINE``.
-        - ``red_zone_tds``: red-zone plays whose ``td_team == posteam``.
-        - ``red_zone_trips``: distinct ``fixed_drive`` values with at least one red-zone
-          play, i.e. drives that reached the red zone rather than snaps taken inside it.
+        - ``third_down_attempts`` / ``fourth_down_attempts``: plays with the down's converted
+          or failed flag set, so a play nflverse flags both counts once (and as a
+          conversion).
+        - ``red_zone_trips``: distinct ``fixed_drive`` values with at least one play at
+          ``yardline_100 <= RED_ZONE_YARDLINE``, i.e. drives that reached the red zone
+          rather than snaps taken inside it.
         - ``red_zone_td_drives``: those trips whose ``fixed_drive_result`` is
           ``"Touchdown"``. ``red_zone_td_drives / red_zone_trips`` is the per-trip
           conversion rate that the published ``red_zone_td_pct`` reports.
         - ``two_point_attempts``: plays with ``two_point_attempt`` set.
         - ``two_point_successes``: plays with ``two_point_conv_result == "success"``.
-        - ``total_plays``: the number of run, pass, kneel and spike plays.
-        - ``third_down_attempts`` / ``fourth_down_attempts``: plays with the down's converted
-          or failed flag set, so a play nflverse flags both counts once (and as a
-          conversion).
     When ``allowed`` is true, the same offense-side events are counted again but written to
     ``*_allowed`` columns for the team that defended them.
     """
-    if "play_type" in columns:
-        counted = pl.col("play_type").is_in(list(SITUATIONAL_PLAY_TYPES)).fill_null(value=False)
-    else:
-        counted = pl.lit(False)
     yardline = _nullable_expr(columns, "yardline_100", pl.Float64)
     in_red_zone = (yardline <= RED_ZONE_YARDLINE).fill_null(value=False)
-    if {"td_team", "posteam"} <= set(columns):
-        scored_td = (pl.col("td_team") == pl.col("posteam")).fill_null(value=False)
-    else:
-        scored_td = pl.lit(False)
     if "two_point_conv_result" in columns:
         two_point_success = (pl.col("two_point_conv_result") == "success").fill_null(value=False)
     else:
@@ -460,17 +437,13 @@ def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> l
         failed = flag_expr(columns, f"{down}_down_failed") > 0
         downs += [
             count_where(converted, f"{down}_down_conversions{suffix}"),
-            count_where(failed, f"{down}_down_fails{suffix}"),
             count_where(converted | failed, f"{down}_down_attempts{suffix}"),
         ]
     return [
         *downs,
-        count_where(counted & in_red_zone, f"red_zone_plays{suffix}"),
-        count_where(counted & in_red_zone & scored_td, f"red_zone_tds{suffix}"),
         *_red_zone_drive_aggregations(columns, in_red_zone, suffix),
         count_where(flag_expr(columns, "two_point_attempt") > 0, f"two_point_attempts{suffix}"),
         count_where(two_point_success, f"two_point_successes{suffix}"),
-        *([] if allowed else [count_where(counted, "total_plays")]),
     ]
 
 

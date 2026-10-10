@@ -1,8 +1,13 @@
-"""The page payloads over real published tables, cut from the ``nfl-sos-ratings`` files.
+"""The page payloads over cuts of real published tables from the ``nfl-sos-ratings`` files.
 
-The parity fixtures under ``tests/fixtures/`` hold columns of the published 2024 tables (provenance
-and hashes beside them). Written into a ratings folder the way the ETL writes them, with Washington
-recoded to this repository's ``WSH``, every one of their columns must reach the pages described.
+The parity fixtures under ``tests/fixtures/`` are cut from the published 2024 tables (provenance
+and hashes beside them). They keep every row, but only some of the columns of the season-statistics
+tables (the team and quarterback tables and their game logs); the rating tables are whole. Written
+into a ratings folder under the file names the pages read, with Washington recoded to this
+repository's ``WSH``, every column a fixture holds must reach the pages described. The columns the
+fixtures leave out are checked where the season tables are built
+(``nfl_predictor.season_stats.season.finalize_table``), which rejects any column the metric
+registry cannot describe.
 """
 
 from __future__ import annotations
@@ -65,10 +70,10 @@ def test_published_seasons_are_listed(ratings_dir: Path) -> None:
 
 
 @pytest.mark.parametrize(("kind", "table_kind"), [("teams", "combined"), ("qbs", "qb_combined")])
-def test_published_index_tables_keep_every_column(
+def test_published_index_tables_keep_every_fixture_column(
     ratings_dir: Path, kind: EntityKind, table_kind: str
 ) -> None:
-    """Every published column of the team and quarterback tables reaches the page."""
+    """Every column the team and quarterback table fixtures hold reaches the page."""
     # Arrange
     frame = files.read_table(ratings_dir, 2024, table_kind)
 
@@ -80,8 +85,8 @@ def test_published_index_tables_keep_every_column(
     assert len(table.rows) == frame.height
 
 
-def test_published_team_game_logs_keep_every_column(ratings_dir: Path) -> None:
-    """A team's published game log reaches the page whole, with its opponents' ratings."""
+def test_published_team_game_logs_keep_every_fixture_column(ratings_dir: Path) -> None:
+    """Every column of a team's game log fixture reaches the page, with its opponents' ratings."""
     # Arrange
     logs = files.entity_rows(files.read_table(ratings_dir, 2024, "team_game_logs"), "team", "WSH")
     ratings = files.read_table(ratings_dir, 2024, "ratings")
@@ -96,7 +101,7 @@ def test_published_team_game_logs_keep_every_column(ratings_dir: Path) -> None:
 
 
 def test_published_qb_sections_keep_every_column(ratings_dir: Path) -> None:
-    """The published quarterback rank ranges, pairs and history reach the page whole."""
+    """The quarterback rank ranges, pairs and history, whole published tables, reach the page."""
     # Arrange
     ranges = files.read_table(ratings_dir, 2024, "qb_rating_ranges")
     qb_id = str(ranges.get_column("qb_id")[0])

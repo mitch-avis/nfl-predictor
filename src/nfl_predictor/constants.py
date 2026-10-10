@@ -615,6 +615,49 @@ PBP_PLAYER_TEAM_ID_COLUMNS = {
 # Play-by-play team columns with no player behind them, unknown in a game credited to one team.
 PBP_TEAM_ONLY_COLUMNS = ("return_team", "timeout_team")
 
+# ESPN QBR (utils/polars/espn_qbr.py), a validation reference only: never a game-dataset column
+# or a model input. nflverse publishes it from 2006 as release assets, every season in one file
+# per level.
+ESPN_QBR_MIN_SEASON = 2006
+ESPN_QBR_RELEASE_URLS = {
+    "season": (
+        "https://github.com/nflverse/nflverse-data/releases/download/espn_data/"
+        "qbr_season_level.parquet"
+    ),
+    "week": (
+        "https://github.com/nflverse/nflverse-data/releases/download/espn_data/"
+        "qbr_week_level.parquet"
+    ),
+}
+
+# Columns kept from each QBR asset. `player_id` is ESPN's id (`espn_id` in the players file).
+ESPN_QBR_SEASON_COLUMNS = [
+    "season",
+    "season_type",
+    "game_week",
+    "team_abb",
+    "player_id",
+    "name_display",
+    "qb_plays",
+    "qbr_total",
+    "qbr_raw",
+    "qualified",
+]
+ESPN_QBR_WEEK_COLUMNS = [
+    "season",
+    "season_type",
+    "game_id",
+    "game_week",
+    "team_abb",
+    "opp_abb",
+    "player_id",
+    "name_display",
+    "qb_plays",
+    "qbr_total",
+    "qbr_raw",
+    "qualified",
+]
+
 # ============================================================================
 # Data Collection Column Definitions
 # ============================================================================

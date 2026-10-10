@@ -90,11 +90,11 @@ The rule:
   - 4,128 of the 4,943 games, in seasons 2007-2021 and 2023, have no real moneyline: their
     moneylines come from the opening spread through the fitted spread-to-moneyline map
     (`src/nfl_predictor/utils/polars/pick_time_lines.py`; `moneylines_from_map` in
-    `models/step4_reference/inputs/adopted_market_lines_metadata.json`; it counts seasons, not
-    games, and for 2023 it counts 283 of 285 games, playoffs included, so 2023 is grouped whole
-    with the derived seasons). Season 2022 uses stored closing lines. On those 4,128 games the
-    gap is a function of the spread and the sigma, not a disagreement between a game's spread
-    and its moneyline.
+    `models/step4_reference/inputs/adopted_market_lines_metadata.json`; it holds per-season
+    counts, not per-game flags, and for 2023 it counts 283 of 285 games, playoffs included, so
+    2023 is grouped whole with the derived seasons). Season 2022 uses stored closing lines. On
+    those 4,128 games the gap is a function of the spread and the sigma, not a disagreement
+    between a game's spread and its moneyline.
   - On the 815 games with real moneyline pairs (2022, 2024 and 2025), `|gap| > |beyond|` in
     `0.1829` of their top decile (82 games); on 2025 alone (272 games), in `0.3214` of its top
     decile (28 games). Both match the review's `0.183` and `0.321`. These groups decide
@@ -109,12 +109,34 @@ The rule:
   keyword in `pipeline._run_stage4`, and a snapshot rewrite (`NFLP_UPDATE_SNAPSHOTS=1`). A switch
   of the labels to `beyond` would map `edge_beyond_spread_home_prob` through
   `_edge_to_confidence_1_to_10` and `_edge_to_action`; it is the user's decision.
-- **Review**: one independent round by a separate reviewer, verdict "merge after fixes". Every
-  number was reproduced from the fold checkpoints, and the rule was applied as written. The
-  review's label context:
+- **Label context from the review**: the reviewer's own scripts, copied unchanged into
+  `.agents/sos_port/review/betting_edges/`, reproduce these numbers from the fold checkpoints
+  (rerun from the copies on 2026-10-10, with the same results).
   - Basing the labels on the model's part alone would change 3,312 of the 4,943 action labels
     and 344 of the 495 in the top decile, and would flip the value side on 1,239 games.
+    `recompute.py` prints them on its "labels (unrounded floor)" lines ("action differs on
+    3312 of 4943", "top-decile games whose action changes: 344 of 495", "games where beyond
+    points to the other side than edge: 1239").
   - At the floor's sigma, the normal curve gives favorites of 3 or more points a lower
     probability than the no-vig moneyline does: the gap is about `-0.045` at 7-7.5 points on
-    the map-derived seasons and `-0.042` on the real ones. A model sitting exactly on a 7-point
-    spread therefore shows an underdog edge of about `0.045`.
+    the map-derived seasons and `-0.042` on the real ones (`tilt.py`, bucket `(6.5, 7.5]`:
+    `-0.0451` and `-0.0418`). A model sitting exactly on a 7-point spread therefore shows an
+    underdog edge of about `0.045`.
+  - `groups_r2.py` recomputes every group of `BETTING_EDGES.md`, including the `0.1829` and
+    `0.3214` above, and checks the season split against the metadata.
+  - Commands, from the repository root:
+
+    ```bash
+    .venv/bin/python -I .agents/sos_port/review/betting_edges/recompute.py \
+        /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13
+    .venv/bin/python -I .agents/sos_port/review/betting_edges/tilt.py \
+        /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13
+    .venv/bin/python -I .agents/sos_port/review/betting_edges/groups_r2.py \
+        /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13 \
+        /home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json
+    ```
+
+- **Review**: Two independent rounds by a reviewer subagent that did not produce the work,
+  2026-10-10. Round one: merge after fixes. Round two: merge after one doc fix (these script
+  copies). Every number reproduced from the fold checkpoints with the reviewer's own scripts
+  (commands above).

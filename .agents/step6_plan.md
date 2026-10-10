@@ -173,17 +173,22 @@ small and local.
   third attempt runs with every choice fixed in the brief (the scale `25` Elo points per point
   times the dropbacks per team-game of earlier seasons, VALUE's starters and team rule, the
   earlier-season fallbacks); it is report-only and nothing depends on it.
-- Power rankings (phase 5, review pending): the pre-registered scoring, applied as written, picks
-  the blend of the ported team rating and a model rating (weight about 0.5 on each since 2015) over
-  the ported rating alone; the composite production ranks on today and the model rating alone tie.
-  Switching what the weekly run publishes (`config/weekly_run.yaml`, default the composite) is the
-  user's call; if the blend is chosen, the weekly run also needs a source for the model's
-  predictions (the implementer recommends the run's own stage-1 folds for the current season plus
-  the floor-sigma reference runs for the previous season's week 1). Reviewed: the rule's outcome
-  holds under every alternative reading (seed 42, the pre-registered input); a two-seed supplement
-  is being computed (rule 13). Weigh: the model rating comes from the market-anchored model, so a
+- Power rankings (phase 5, reviewed in two rounds, `models/step6/rankings/REVIEW.md`): the
+  pre-registered scoring (next-week margin MAE, 2008-2025 from week 2, 4,400 games), applied as
+  written, picks the blend of the ported team rating and a model rating over the ported rating
+  alone: blend 10.497 against 10.643, difference -0.146, games [-0.204, -0.088], seasons
+  [-0.194, -0.102], better in 18 of 18 seasons; the composite production ranks on today (10.590)
+  and the model rating alone (10.678) tie the ported rating. On both seeds the blend is 10.492,
+  -0.151 [-0.208, -0.094] (weights on the ported rating 0.7 in 2008-2009, 0.6 in 2010-2014, 0.5
+  from 2015). The supplement averages each game's predicted margin over the seeds before the fit,
+  where rule 13 averages per-game loss differences; the reviewer computed both and the outcome is
+  the same (-0.146 [-0.202, -0.090]). Switching what the weekly run publishes
+  (`config/weekly_run.yaml`, default the composite) is the user's call; if the blend is chosen,
+  the weekly run also needs a source for the model's predictions (the implementer recommends the
+  run's own stage-1 folds for the current season plus the floor-sigma reference runs for the
+  previous season's week 1). Weigh: the model rating comes from the market-anchored model, so a
   published blend partly carries the betting line (the user prefers a stats-only view); the ported
-  rating alone and the current composite tied each other.
+  rating alone and the current composite tie each other.
 - Question: should a market-free run leave out the market-informed Elo groups automatically? Today
   `--exclude-market` (and the weekly run's market-free mode) drops only line columns, per the
   step-5 design the user accepted; the `qb_elos.csv` Elo and, after a rebuild, the own Elo's

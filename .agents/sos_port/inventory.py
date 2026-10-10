@@ -1,8 +1,9 @@
 """Generate the inventory of `nfl-sos-ratings` (at its frozen commit) against this repository.
 
-Run from the repository root:
+Run from the repository root (``PYTHONDONTWRITEBYTECODE=1`` keeps the run from leaving
+``__pycache__`` beside the scripts):
 
-    .venv/bin/python .agents/sos_port/inventory.py
+    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/inventory.py
 
 It writes ``INVENTORY.md`` and ``inventory.json`` beside this file. Everything listed is found
 mechanically; only the classifications come from ``mapping.yaml``, and each is applied only where
@@ -287,10 +288,86 @@ def guard_missing(items: list[Column], catalog: dict[str, list[str]], audit: Aud
     return checked
 
 
+def _guard_names(item: Column) -> set[str]:
+    """Return the names a column is known by: itself, and a total's or per-game value's base."""
+    names = {item.column}
+    if item.suffix in {"_total", "_per_game"}:
+        names.add(item.base)
+    return names
+
+
+def guard_cross_kind(items: list[Column], exceptions: dict[str, str], audit: Audit) -> int:
+    """Fail a column left ``missing`` that another file kind gives a counterpart.
+
+    A column, or the base metric of a total or per-game column, that is ``matched`` or
+    ``different`` in one kind cannot be ``missing`` in another, unless ``exceptions`` (keyed
+    ``kind.column``) says why; an exception nothing needs fails too. Opponents-faced profile
+    columns are exempt, as in ``guard_missing``. Returns the number of columns checked.
+    """
+    classified: dict[str, set[str]] = defaultdict(set)
+    for item in items:
+        if (
+            item.classification in {"matched", "different"}
+            and not item.prefix
+            and item.kind not in PROFILE_KINDS
+        ):
+            for name in _guard_names(item):
+                classified[name].add(item.kind)
+    checked, used = 0, set()
+    for item in items:
+        if item.classification != "missing" or item.prefix or item.kind in PROFILE_KINDS:
+            continue
+        checked += 1
+        others = sorted(
+            {kind for name in _guard_names(item) for kind in classified[name] if kind != item.kind}
+        )
+        key = f"{item.kind}.{item.column}"
+        if not others:
+            continue
+        if key in exceptions:
+            used.add(key)
+            continue
+        audit.fail("cross-kind guard", f"{key} is missing, but has a counterpart in {others}")
+    for key in sorted(set(exceptions) - used):
+        audit.fail("cross-kind guard", f"exception {key} is not needed")
+    return checked
+
+
+def resolve_mirrors(items: list[Column], mirrored: list[tuple[Column, Rule]], audit: Audit) -> None:
+    """Copy each mirrored column's counterparts from the column its rule mirrors.
+
+    The mirrored column must exist in the rule's ``mirror_kind``, be ``matched`` or ``different``
+    there, and not be a mirror itself; otherwise the run fails.
+    """
+    by_key = {(item.kind, item.column): item for item in items}
+    mirrors = {(item.kind, item.column) for item, _ in mirrored}
+    for item, rule in mirrored:
+        name = item.base if rule.spec.get("mirror_base") else item.column
+        key = (rule.spec["mirror_kind"], name)
+        source = by_key.get(key)
+        if source is None or source.classification not in {"matched", "different"}:
+            problem = "which has no counterpart"
+        elif key in mirrors:
+            problem = "which is itself a mirror"
+        else:
+            item.here = list(source.here)
+            continue
+        audit.fail(
+            "column rules",
+            f"{item.kind}.{item.column}: rule {rule.id} mirrors {key[0]}.{name}, {problem}",
+        )
+
+
 def classify(
     items: list[Column], rules: list[Rule], catalog: dict[str, list[str]], audit: Audit
 ) -> None:
-    """Apply the rules: one explicit rule per column, else its kind's one rest rule."""
+    """Apply the rules: one explicit rule per column, else its kind's one rest rule.
+
+    A rule with ``mirror_kind`` takes its counterparts from the same column's classification in
+    that kind (with ``mirror_base``, from its base metric's column there), so a season value names
+    what its game-log column names; mirrors resolve after every other rule.
+    """
+    mirrored: list[tuple[Column, Rule]] = []
     for item in items:
         explicit = [rule for rule in rules if rule.matches(item)]
         if len(explicit) > 1:
@@ -306,12 +383,16 @@ def classify(
         rule.hits += 1
         item.rule = rule.id
         item.classification = rule.spec["class"]
-        item.here = counterparts(rule, item)
         item.phase = str(rule.spec.get("phase", ""))
         item.note = str(rule.spec.get("note", ""))
+        if "mirror_kind" in rule.spec:
+            mirrored.append((item, rule))
+            continue
+        item.here = counterparts(rule, item)
         for ref in item.here:
             if not check_counterpart(ref, catalog):
                 audit.fail("counterpart", f"{item.kind}.{item.column}: {ref} does not exist here")
+    resolve_mirrors(items, mirrored, audit)
     for rule in rules:
         if not rule.hits:
             audit.fail("column rules", f"rule {rule.id} matches nothing")
@@ -335,7 +416,7 @@ def validate_rules(specs: list[dict[str, Any]], audit: Audit, section: str) -> l
         cls = spec.get("class")
         if cls not in CLASSES:
             audit.fail(section, f"{rule_id}: class {cls!r} is not one of {CLASSES}")
-        has_here = "here" in spec or "here_map" in spec
+        has_here = "here" in spec or "here_map" in spec or "mirror_kind" in spec
         if cls in {"matched", "different"} and not has_here:
             audit.fail(section, f"{rule_id}: a {cls} rule names no counterpart here")
         if cls == "missing" and not spec.get("phase"):
@@ -475,6 +556,8 @@ def _run(code: SosCode) -> int:
     rules = validate_rules(mapping["columns"], audit, "column rules")
     classify(items, rules, catalog, audit)
     guarded = guard_missing(items, catalog, audit)
+    exceptions = mapping.get("cross_kind_exceptions") or {}
+    cross_checked = guard_cross_kind(items, exceptions, audit)
 
     # Web pages and API endpoints.
     sos_web = [
@@ -518,7 +601,7 @@ def _run(code: SosCode) -> int:
         for metric in registry.metrics.values()
     ]
     payload = {
-        "generated_by": ".venv/bin/python .agents/sos_port/inventory.py",
+        "generated_by": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/inventory.py",
         "sos_checkout": checkout,
         "sources": {
             "sos": sos_sources,
@@ -528,8 +611,9 @@ def _run(code: SosCode) -> int:
         "scan_scope": SCAN_SCOPE,
         "missing_guard": {
             "columns_checked": guarded,
-            "exempt": sorted(PROFILE_KINDS) + ["columns with a registry prefix"],
+            "exempt": [*sorted(PROFILE_KINDS), "columns with a registry prefix"],
         },
+        "cross_kind_guard": {"columns_checked": cross_checked, "exceptions": exceptions},
         "kinds": dict(sorted(seasons_by_kind.items())),
         "columns": [item.__dict__ for item in items],
         "rules": [{"id": rule.id, "hits": rule.hits, **rule.spec} for rule in rules],
@@ -570,8 +654,9 @@ COLUMN_FIELDS = [
 def write_json(payload: dict[str, Any]) -> None:
     """Write ``inventory.json``, with the column table as rows of ``COLUMN_FIELDS``.
 
-    A column's phase and note are its rule's (``rules``), its source label and entity its base
-    metric's (``registry``), and a game-log column's code-derived source is in
+    A column's phase and note are its rule's (``rules``; a rule with ``mirror_kind`` copies its
+    counterparts from the same column, or its base metric's, in that kind), its source label and
+    entity its base metric's (``registry``), and a game-log column's code-derived source is in
     ``game_log_sources``; its seasons are written as ranges.
     """
     rows = [

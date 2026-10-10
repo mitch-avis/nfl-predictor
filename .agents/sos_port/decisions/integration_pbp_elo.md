@@ -28,10 +28,14 @@ output is kept as `<script>_output.txt` where the docs quote it.
   `integration_feature_diff.py` compares two runs column by column, by season. A commit before
   the current one runs from a `git archive` export with `PYTHONPATH`. Every comparison the
   entries quote is kept in `integration_feature_diffs/<before>_<after>.txt`, named by the two
-  commits, from `f601835` (the branch before the first correction) through `06e9863`, after which
-  no change touches the columns these runs build; each run used `POLARS_MAX_THREADS=8`.
-- `integration_carry_parity.py` and `integration_starters.py` compare with `nfl-sos-ratings`'
-  published files (`/home/mitch/workspace/nfl-sos-ratings/data/`, read-only).
+  commits: from `f601835` (the branch before the first correction) through `06e9863`, after which
+  no change on this integration's branch touches the columns these runs build, and
+  `7ad10ec_167f4fb.txt` for the red-zone change of entry 2.9; each run used
+  `POLARS_MAX_THREADS=8`. `integration_red_zone_movement.py` splits a comparison's published
+  red-zone columns by column and season, with the sign.
+- `integration_carry_parity.py`, `integration_starters.py` and `integration_red_zone_parity.py`
+  compare with `nfl-sos-ratings`' published files (`/home/mitch/workspace/nfl-sos-ratings/data/`,
+  read-only).
 
 Reproduce from the repository root (the cache once, then any script):
 
@@ -444,6 +448,76 @@ source's treatment of an empty team code (entry 14). None reads a field entry 15
   construction, and one rebuild with the other step-6 changes. Its cost is that both rates move
   in most games (not measured here).
 - **How to reverse it**: not applicable.
+
+### 2.9 Red-zone trips: the drives nflverse flags inside the 20
+
+- **What differs**: entry 2.8. A red-zone trip was any drive with a play at `yardline_100 <= 20`,
+  so a drive whose only plays that deep belonged to the try after a touchdown was a trip, and a
+  converted one when it was the scoring drive. The source counts the drives nflverse flags inside
+  the 20 (`drive_inside20`).
+- **Options**: entry 2.8's three: keep the count; leave the try out of the yard-line test; count
+  `drive_inside20`.
+- **Decision**: count `drive_inside20`, entry 2.8's recommendation, decided for this integration
+  by the delegating session's brief of 2026-10-10. It landed in `167f4fb` on branch
+  `worktree-agent-ad305e6aaa9e860bd` (`feat/step6-sos-port` with this integration merged at
+  `7ad10ec`). A trip is a drive any of whose plays carries the flag
+  (`pbp._red_zone_drive_aggregations`), for the offense and, from the same plays, the allowed
+  mirror; its touchdowns stay the trips whose `fixed_drive_result` is `Touchdown`, the possession
+  team's. The yard line is no longer read (`pbp.RED_ZONE_YARDLINE` is removed), and a frame
+  without `drive_inside20` counts no trip, as one without `fixed_drive` already did.
+  `red_zone_td_pct` and `opponent_red_zone_td_pct` divide the same counts as before.
+- **Reasoning**: exact parity with the source and with nflverse's own drive flag, which with rare
+  exceptions leaves out the try; and one definition rather than a second yard-line rule that would
+  still differ from the source in about 2,600 drives. The rule reads any play of the drive, as the
+  source reads the flag's maximum over the drive, because nflverse leaves the flag null or 0 on
+  some plays of a flagged drive.
+- **Data**: the acceptance check, `integration_red_zone_parity.py` (output
+  `integration_red_zone_parity_output.txt`, on the counts of the run at `167f4fb`). Over the 13,928
+  regular-season team-games of 1999-2025:
+  - `red_zone_trips` equals the source's published `red_zone_trips` in every team-game (**0**
+    differences, 43,771 trips on each side), and `red_zone_trips_allowed` equals the opponent's
+    (**0**).
+  - Touchdown drives and their allowed mirror match in every team-game too (0 differences each,
+    23,570 on each side), with the source's `red_zone_td_pct` read over its own denominator. That
+    rate is the mean of `fixed_drive_result == "Touchdown"` over the trips, so a trip whose drive
+    has no recorded result drops out of it. There are 44 such trips: 18 in 1999, 21 in 2000, 2 in
+    2002 and 1 each in 2001, 2005 and 2018. Read over all trips, the touchdown drives differ in 14
+    team-games. This repository counts the 44 as trips without a touchdown, so its per-game rate
+    (touchdown drives over trips) differs from the source's game-log `red_zone_td_pct` in 37
+    team-games, each holding one, and the allowed rate likewise in 37; in the other 7 the game has
+    no touchdown and both rates are 0. This is the one red-zone difference left.
+  - The league touchdown rate per trip is 0.5385, against 0.5709 before.
+  - The flag on the plays: null on 3,999 of the 1,164,547 regular-season plays and on every play
+    of 2,664 drives, and set on some plays but not others in 627 drives; a rule reading only a
+    drive's first play would lose 295 of the 43,771 trips.
+  - The try, correcting entry 2.8's "10,234 touchdown drives": 10,305 drives have no play at or
+    inside the 20 other than the try's. 7,956 end in a touchdown, 4 of them flagged by nflverse,
+    and 2,343 in `Opp touchdown`, 67 of them flagged. 2,316 of the `Opp touchdown` drives hold
+    nothing but the try after a return or defensive touchdown: the try carries the drive number
+    of the drive the scorer stopped, so it groups as the scorer's own one-play drive. Five have no
+    recorded result and one ended in a punt. Entry 2.8's 10,234 are the ones nflverse does not
+    flag: 7,952 touchdown drives, which the yard-line rule counted as converted trips, 2,276
+    `Opp touchdown` drives, which it counted as trips without a touchdown, and the 6 others.
+- **Feature-value impact** (`7ad10ec_167f4fb.txt`; by column, with the sign, in
+  `integration_red_zone_movement_output.txt`; both runs read a cache rebuilt with
+  `integration_cache.py` whose files match `integration_cache_output.txt`'s SHA-256s one for
+  one): in the team-game frame only the four red-zone counts move. Trips fall from 56,127 to
+  43,771 (in 279-326 team-games a season) and touchdown drives from 32,045 to 23,570 (in 209-260
+  a season), each allowed mirror likewise; the box scores and the quarterback games are
+  identical. Published, only `red_zone_td_pct` and `opponent_red_zone_td_pct` move, each as
+  `away_`, `home_` and `_diff`:
+  - the four per-team columns change in 7,243-7,247 of the 7,261 games and fall in every season,
+    by 2.1 (2023) to 5.2 (2000) points on average;
+  - the two `_diff` columns change in 7,253 and 7,255 games, but their per-season mean moves by at
+    most 0.3 points, because the drop is shared by both teams;
+  - the largest change is 66.7 points, in week 2 of 1999 (one game of history and no earlier
+    season), and 50.0 after 1999 (week 2 of 2002); no value turns null or back (the 2-5 nulls per
+    column stay);
+  - the league rate per trip falls in every season, by 1.9 (2008) to 5.4 (1999) points.
+
+  The other 462 published numeric columns are identical.
+- **How to reverse it**: the `flagged` condition in `pbp._red_zone_drive_aggregations` (a test on
+  `yardline_100` again).
 
 ## 3. The own Elo in the ETL
 

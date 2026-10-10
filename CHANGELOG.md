@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.57.0] - 2026-10-10
+
+### Added
+
+- `nfl-predictor rankings --method ported|model|blend` (and the weekly run's
+  `--power-rankings-method`) rank teams on a rating in points known before the week: `ported` on
+  the ported team rating the ETL publishes, `model` on a ridge fit of team strengths and a home
+  term to a walk-forward's pre-game predicted margins (`--model-predictions`: fold checkpoints
+  that cover every completed game the fit reads; week 1 carries the previous season's fit forward
+  by the ported prior's factor), and `blend` on `--blend-weight` times the ported rating plus the
+  rest times the model rating. The default stays the composite. A source that is missing,
+  unreadable or incomplete stops the command with a one-line error and makes the weekly run skip
+  its rankings with a warning.
+- `.agents/sos_port/rankings_eval.py` scores candidate rankings on next-week margins with game and
+  season bootstraps; given several `--run-dir` options, it also scores the model rating on the
+  runs' averaged predictions. On 2008-2025 the blend predicts next-week margins better than the
+  ported rating alone, and the composite and the model rating tie it (reviewed in
+  `models/step6/rankings/REVIEW.md`); changing the default is left to the user.
+
+### Fixed
+
+- `nfl-predictor rankings` reports a missing strength-snapshot week in one line instead of a
+  traceback.
+
 ## [0.56.0] - 2026-10-10
 
 ### Changed

@@ -313,3 +313,30 @@ generated [SEASON_STATS_ETL_PARITY.md](SEASON_STATS_ETL_PARITY.md). Review: two 
   back to the cache.
 - **Cost**: about a minute more on a full rebuild and about half a minute on an incremental run
   (measured under the walk-forwards' load, so high).
+
+### Power rankings on the ported ratings and the model (`0.57.0`)
+
+Full record: [decisions/power_rankings.md](decisions/power_rankings.md) (11 entries); the score's
+rule is `models/step6/rankings/HYPOTHESIS.md` (main checkout, written before any candidate was
+scored) and its second key `models/step6/rankings/REVIEW.md` (two rounds, verdict "merge as is";
+the reviewer reproduced every number with an independent script).
+
+- **What was measured**: four candidate rankings, each a rating in points known before the week,
+  scored on next-week margins (MAE, 2008-2025 from week 2, 4,400 games, game and season
+  bootstraps): the ported team rating, the composite production ranks on today, a model rating
+  (a ridge fit of team strengths to the anchored ported-ratings walk-forward's pre-game predicted
+  margins), and a blend of the ported and model ratings with its weight chosen on earlier seasons.
+- **Outcome, applied as written** (seed 42, the rule's input): the blend replaces the ported
+  rating (10.497 against 10.643, -0.146, games [-0.204, -0.088], seasons [-0.194, -0.102], better
+  in 18 of 18 seasons); the composite (10.590) and the model rating (10.678) tie the ported rating.
+  Both seeds averaged give the same outcome (blend -0.151 [-0.208, -0.094]).
+- **Decided here**: the model rating's ridge penalty and week 1 (the previous regular season's
+  fit carried forward by the ported prior's factor), the league home term, the blend's weight
+  grid, the two bootstraps, and the three methods behind the existing setting with the composite
+  still the default (one implementation serves the measurement and production, rule 11).
+- **Seeds**: the two-seed supplement averages each game's predicted margin before the fit, where
+  rule 13 averages per-game loss differences; the reviewer computed both, with the same outcome.
+- **For the user**: whether production switches to the blend (`config/weekly_run.yaml`), and if
+  so where a weekly run reads the model's predictions (the implementer recommends the run's own
+  stage-1 folds plus the floor-sigma reference runs for week 1). The blend's model half comes
+  from the market-anchored model, so a published blend partly carries the betting line.

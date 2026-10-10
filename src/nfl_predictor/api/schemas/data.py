@@ -23,6 +23,12 @@ class PredictionQuery(WeekQuery):
     source: str | None = None
 
 
+class PicksQuery(WeekQuery):
+    """A week query for the confidence picks, as JSON (the page) or CSV (a download)."""
+
+    format: Literal["json", "csv"] = "json"
+
+
 class WeekRef(BaseModel):
     """A week for which predictions exist, and where they live."""
 

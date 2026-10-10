@@ -170,7 +170,11 @@ No result of the measurement is quoted here: the numbers live in the generated
 - **Reasoning**: (a) is the repository's paired-interval instrument; (c) resamples the same
   statistic as the point estimate, every game weighing the same.
 - **Data**: `test_paired_comparison_scores_only_the_window` checks the game interval equals
-  `bootstrap_mean`'s; `test_season_bootstrap_weights_each_season_by_its_games` checks (c).
+  `bootstrap_mean`'s. `test_season_bootstrap_pools_the_games_of_the_drawn_seasons` checks (c)
+  against (d) on five seasons of unequal size (one of a single game at +10, four of nine games at
+  0): pooling puts the upper bound at 30/21, averaging the drawn seasons' means at 6, and the test
+  fails with (d) in place (the review found the earlier two-season test could not tell them
+  apart).
 - **How to reverse it**: `paired_comparison` and `season_bootstrap` in `ranking_evaluation.py`.
 
 ## 9. Games a candidate cannot rate, and the rank agreement

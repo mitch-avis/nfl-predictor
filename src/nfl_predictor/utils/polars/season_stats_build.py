@@ -1,11 +1,11 @@
 """The ETL's season statistics: each season's tables of the statistics ported from nfl-sos-ratings.
 
-The season statistics (:mod:`nfl_predictor.season_stats`) are built from the frames an ETL run
-already holds, so no nflverse source is read twice in a run: the play-by-play the ETL loaded (its
-games credited to one team already repaired from the rosters), and the schedules, weekly player
-stats, snap counts, players file and weekly rosters the ratings loaded
-(``ratings_build.LoadedSources``). The official weekly team stats are the one source of their own,
-loaded once for every season of the run (:func:`load_season_stats_sources`).
+The season statistics (:mod:`nfl_predictor.season_stats`) are built for every season of an ETL
+run from the frames the run already holds, so no nflverse source is read twice in a run: the
+play-by-play the ETL loaded for its seasons (the games credited to one team already repaired from
+the rosters), and the schedules, weekly player stats, snap counts, players file and weekly rosters
+the ratings loaded (``ratings_build.LoadedSources``). The official weekly team stats are the one
+source of their own, loaded once for every season of the run (:func:`load_season_stats_sources`).
 
 A season's inputs are those ``season_stats.sources.load_season_inputs`` reads, cut from these
 frames (:meth:`SeasonStatsBuild.season_inputs`): the play-by-play's columns the builders read
@@ -88,8 +88,10 @@ class SeasonStatsSources:
     """Every season's sources of the season statistics, as an ETL run holds them.
 
     Attributes:
-        plays: Regular-season play-by-play (``loaders.load_pbp``, the games credited to one
-            team repaired by ``nflverse_sources.repair_one_team_pbp_games``).
+        plays: Regular-season play-by-play (``loaders.load_pbp``). The run's seasons, the ones
+            whose tables are built, come from the ETL's own load, whose games credited to one
+            team are repaired (``nflverse_sources.repair_one_team_pbp_games``); the ratings'
+            earlier seasons beside them are read from the cache as they are.
         schedule: The schedules (``loaders.load_schedule``), every game type.
         player_stats: Weekly player stats (``nflverse_sources.load_weekly_player_stats``).
         snap_counts: Snap counts (``nflverse_sources.load_snap_counts``).

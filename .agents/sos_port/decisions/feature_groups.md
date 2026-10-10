@@ -207,3 +207,29 @@ groups added inside the feature range.
   `test_predicting_with_a_saved_model_says_the_option_does_not_apply`.
 - **How to reverse it**: call `parser.error` in `cli/train.py` when both options are given.
 - **Review**: not yet reviewed.
+
+## 10. Where the warning for a group that matches no column comes from
+
+- **What differs**: decided by the coordinator after review: a known group that matches no column
+  must log a warning from `feature_spec.resolve_feature_group_columns`, so every caller warns. The
+  backtest resolves twice, once in `_apply_ablations`, which drops the columns, and again in the
+  walk-forward's `_prepare_run` on the frame already without them, where every group matches
+  nothing.
+- **Options**: (a) the resolver warns by default; the walk-forward's own drop, a safety net that
+  may find the columns already gone, resolves with `warn_unmatched=False`; stage 1 of the weekly
+  run drops the groups before its walk-forward, as the backtest does, so each entry point warns
+  once against the data it loaded; (b) a sixth parameter on `run_walk_forward_backtest` telling it
+  the caller already dropped; (c) the warning in the resolver with no opt-out.
+- **Decision**: (a).
+- **Reasoning**: (c) logs a false warning naming every group on every backtest that disables any.
+  (b) breaks the lint rule on parameter count (PLR0913, 6 > 5), and the repo does not suppress
+  rules inline. Under (a) the backtest, `train`, stage 1 and the final fit each warn once; only a
+  direct caller of `run_walk_forward_backtest` gets no warning from the safety net.
+- **Data**: `tests/test_feature_group_columns.py`:
+  `test_a_backtest_whose_groups_match_columns_logs_no_warning` failed with the false warning before
+  the safety net went silent; `test_stage1_warns_about_a_group_the_data_lacks` fails when stage 1's
+  own drop is removed; `tests/test_training_feature_groups.py`,
+  `test_a_group_the_data_lacks_drops_nothing_and_warns`, covers the final fit.
+- **How to reverse it**: drop the keyword and stage 1's drop; then move the backtest's group drop
+  into the walk-forward so it resolves once.
+- **Review**: not yet reviewed.

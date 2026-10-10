@@ -37,6 +37,12 @@ function NumberChoice({ label, value, choices, onChange }: { label: string; valu
 
 /** The survivor planner: the teams already used (kept in this browser per season) and the plans. */
 export function SurvivorPanel({ season, week }: { season: number | null; week: number | null }) {
+  // The used teams are stored per season and read when the panel mounts, so a new season (the
+  // week resolving after the panel opened, or another week chosen) gets a fresh panel.
+  return <SeasonSurvivorPanel key={season ?? 'none'} season={season} week={week} />
+}
+
+function SeasonSurvivorPanel({ season, week }: { season: number | null; week: number | null }) {
   const [used, setUsed] = useLocalStorage<string[]>(`nflp.survivor.used.${season ?? 'none'}`, [])
   const [horizon, setHorizon] = useState(4)
   const request = season !== null && week !== null ? { season, start_week: week, used_teams: used, horizon_weeks: horizon } : null

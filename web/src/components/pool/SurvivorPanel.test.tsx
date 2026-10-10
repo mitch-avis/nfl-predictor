@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SurvivorOut } from '@/api/types'
@@ -45,5 +46,21 @@ describe('SurvivorPanel', () => {
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(JSON.parse(String(init.body))).toEqual({ season: 2026, start_week: 5, used_teams: [], horizon_weeks: 4 })
     expect(screen.queryByLabelText('Search width')).not.toBeInTheDocument()
+  })
+
+  it('keeps the season’s stored teams when the season arrives after the panel opens', async () => {
+    // Arrange
+    window.localStorage.setItem('nflp.survivor.used.2026', JSON.stringify(['KC']))
+    stubSurvivorApi()
+    const user = userEvent.setup()
+    const view = renderWithProviders(<SurvivorPanel season={null} week={null} />)
+    view.rerender(<SurvivorPanel season={2026} week={5} />)
+    const buf = await screen.findByRole('button', { name: 'BUF' })
+
+    // Act
+    await user.click(buf)
+
+    // Assert
+    expect(JSON.parse(window.localStorage.getItem('nflp.survivor.used.2026') ?? '[]')).toEqual(['BUF', 'KC'])
   })
 })

@@ -1016,11 +1016,22 @@ def evaluate(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path) 
 
 
 def _paragraph(*parts: str) -> list[str]:
-    """Return one paragraph, wrapped at 100 columns, and the blank line after it."""
+    """Return one paragraph, wrapped at 100 columns, and the blank line after it.
+
+    A line may not start with ``+`` (Markdown would read a list item), so such a ``+`` moves to
+    the end of the line before; wrapping at 98 leaves it room.
+    """
     wrapped = textwrap.wrap(
-        " ".join(parts), width=100, break_long_words=False, break_on_hyphens=False
+        " ".join(parts), width=98, break_long_words=False, break_on_hyphens=False
     )
-    return [*wrapped, ""]
+    lines: list[str] = []
+    for line in wrapped:
+        if lines and line.startswith("+ "):
+            lines[-1] += " +"
+            lines.append(line[2:])
+        else:
+            lines.append(line)
+    return [*lines, ""]
 
 
 def _number(value: float, digits: int = 5) -> str:

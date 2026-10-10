@@ -58,6 +58,20 @@ Pre-registered on 2026-10-10 before any step-6 code merged: the main checkout's
 `models/step6/HYPOTHESIS.md` (arms, cap of 8 runs plus 2 conditional and one build, instrument,
 decision rules). Do not edit it after the launch record is written.
 
+## For the morning report (running list)
+
+- Process incident: the own-Elo reviewer's first test request to Wikipedia's API (checking the
+  stadium coordinates) sent the user's email address in its User-Agent header; its later
+  requests used a generic agent. Disclose plainly.
+- The web implementer used system `python3` once to edit two web files (forbidden form; the edit
+  was harmless).
+- Held for the user: the live-betting design's three choices (score source, odds source, odds
+  snapshots under `data/live/`); calibrating the tiebreaker's top-score estimate (runs about 2
+  points low); the reviewed pool-interval labels in `benchmarks.md` (lines 459, 503, 577 need
+  their resampling unit confirmed from each run's own artifacts before labeling).
+- The `compare` tie fix changes market-line pick accuracy in future reports (170 pick-time and 25
+  closing-line coin flips; 0.6401 to 0.6579 and 0.6648 to 0.6670), no model number.
+
 ## Snapshots and timings
 
 - Upstream inputs for the candidate build were copied into `~/scratch/step6/data/` on 2026-10-10

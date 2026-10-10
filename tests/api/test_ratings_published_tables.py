@@ -1,11 +1,13 @@
 """The page payloads over cuts of real published tables from the ``nfl-sos-ratings`` files.
 
 The parity fixtures under ``tests/fixtures/`` are cut from the published 2024 tables (provenance
-and hashes beside them). They keep every row, but only some of the columns of the season-statistics
-tables (the team and quarterback tables and their game logs); the rating tables are whole. Written
-into a ratings folder under the file names the pages read, with Washington recoded to this
-repository's ``WSH``, every column a fixture holds must reach the pages described. The columns the
-fixtures leave out are checked where the season tables are built
+and hashes in the ``PROVENANCE.md`` beside them). The season-statistics fixtures (the team and
+quarterback tables and their game logs) keep every row but only some of the columns, and the team
+ratings fixture is whole. The quarterback rank-range, pair and weekly-rating fixtures keep every
+column but only some of the rows: every fourth passer by rank, the pairs among those passers, and
+four of the weeks. Written into a ratings folder under the file names the pages read, with
+Washington recoded to this repository's ``WSH``, every column a fixture holds must reach the pages
+described. The columns the fixtures leave out are checked where the season tables are built
 (``nfl_predictor.season_stats.season.finalize_table``), which rejects any column the metric
 registry cannot describe.
 """
@@ -101,7 +103,7 @@ def test_published_team_game_logs_keep_every_fixture_column(ratings_dir: Path) -
 
 
 def test_published_qb_sections_keep_every_column(ratings_dir: Path) -> None:
-    """The quarterback rank ranges, pairs and history, whole published tables, reach the page."""
+    """Every column of the quarterback rank-range, pair and history fixtures reaches the page."""
     # Arrange
     ranges = files.read_table(ratings_dir, 2024, "qb_rating_ranges")
     qb_id = str(ranges.get_column("qb_id")[0])

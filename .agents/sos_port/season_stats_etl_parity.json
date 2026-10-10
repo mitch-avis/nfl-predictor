@@ -1,9 +1,9 @@
 {
   "command": ".venv/bin/python .agents/sos_port/season_stats_etl_parity.py",
-  "code_commit": "69ce945e4419a14e60cb4ad26c6ba85d323deaa4",
+  "code_commit": "3dfb4c6ef3b6cd1f9c2e10a7a41177d44eaa79a9",
   "source": "/home/mitch/workspace/nfl-sos-ratings",
   "source_commit": "9081bced89b0d51c99e28f80f8f62b9fcd0118e0",
-  "finished": "2026-10-10T16:42:52+00:00",
+  "finished": "2026-10-10T17:35:19+00:00",
   "seasons": [
     1999,
     2000,
@@ -41,15 +41,16 @@
   },
   "threads": "`POLARS_MAX_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, `OMP_NUM_THREADS=1`",
   "float_tolerance": 1e-09,
-  "load_before": "9.12, 8.30, 7.53",
-  "load_after": "4.51, 6.66, 7.01",
+  "load_before": "1.61, 2.55, 4.26",
+  "load_after": "4.36, 3.25, 4.22",
   "timings": {
-    "cache": 6.15884191999794,
-    "load": 5.175559032002639,
-    "build": 120.38218339400191,
-    "season_stats": 14.516057780972915,
-    "write": 1.2031789100001333,
-    "compare": 8.943255603997386
+    "cache": 6.520600040996214,
+    "load": 8.193010515002243,
+    "build": 144.32986002899997,
+    "season_stats": 17.656631435005693,
+    "write": 1.605204830004368,
+    "compare": 10.948222988001362,
+    "round_trip": 2.705617933999747
   },
   "snapshot_files": {
     "01d4b428df8c28a579341df382d879d4.parquet": "9f7ba3d2daf4e6f7c77197c45600eb0ee9a11e243da2014f5f911b0f0164196d",
@@ -476,7 +477,7 @@
     "relabeled_cells": 36432,
     "max_abs_difference": 0.0,
     "tables_with_structure_differences": 0,
-    "tables_with_dtype_differences": 42,
+    "tables_with_dtype_differences": 28,
     "by_kind": {
       "team_game_logs": {
         "tables": 28,
@@ -504,7 +505,7 @@
         "relabeled_cells": 1035,
         "max_abs_difference": 0.0,
         "tables_with_structure_differences": 0,
-        "tables_with_dtype_differences": 14
+        "tables_with_dtype_differences": 0
       },
       "team_per_game_stats": {
         "tables": 28,
@@ -619,6 +620,12 @@
         "tables_with_dtype_differences": 0
       }
     }
+  },
+  "cache_round_trip": {
+    "files": 534,
+    "differing": [],
+    "one_side_only": [],
+    "passed": true
   },
   "passed": true,
   "comparisons": [
@@ -3280,9 +3287,7 @@
       "relabeled_cells": 38,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -3469,9 +3474,7 @@
       "relabeled_cells": 39,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -3658,9 +3661,7 @@
       "relabeled_cells": 38,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -3847,9 +3848,7 @@
       "relabeled_cells": 33,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -4036,9 +4035,7 @@
       "relabeled_cells": 35,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -4225,9 +4222,7 @@
       "relabeled_cells": 40,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -4414,9 +4409,7 @@
       "relabeled_cells": 38,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -4603,9 +4596,7 @@
       "relabeled_cells": 41,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -4792,9 +4783,7 @@
       "relabeled_cells": 42,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -4981,9 +4970,7 @@
       "relabeled_cells": 38,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -5170,9 +5157,7 @@
       "relabeled_cells": 41,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -5359,9 +5344,7 @@
       "relabeled_cells": 44,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -5548,9 +5531,7 @@
       "relabeled_cells": 45,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {
@@ -5737,9 +5718,7 @@
       "relabeled_cells": 10,
       "max_abs_difference": 0.0,
       "structure": [],
-      "dtype_differences": [
-        "week: Int64, published Int32"
-      ],
+      "dtype_differences": [],
       "differences": []
     },
     {

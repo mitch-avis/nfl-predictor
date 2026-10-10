@@ -15,14 +15,14 @@ Command, from the repository root:
 .venv/bin/python .agents/sos_port/season_stats_etl_parity.py
 ```
 
-- Code: `69ce945e4419a14e60cb4ad26c6ba85d323deaa4`
-- Finished: 2026-10-10T16:42:52+00:00
+- Code: `3dfb4c6ef3b6cd1f9c2e10a7a41177d44eaa79a9`
+- Finished: 2026-10-10T17:35:19+00:00
 - Seasons compared: 1999-2026 (28; the last one built as the season in progress)
 - Polars 2.0.0, nflreadpy 0.1.5, numpy 2.5.3; `POLARS_MAX_THREADS=1`, `OPENBLAS_NUM_THREADS=1`,
   `OMP_NUM_THREADS=1`
 - Snapshot files: 129, every one matching the manifest; published files read: 280
 - Float tolerance: 1e-09 absolute (`season_stats_parity.py`'s)
-- Machine load averages: before 9.12, 8.30, 7.53, after 4.51, 6.66, 7.01
+- Machine load averages: before 1.61, 2.55, 4.26, after 4.36, 3.25, 4.22
 
 ## Headline counts
 
@@ -37,7 +37,7 @@ fitted, so their cells are counted apart from the cells the season statistics co
 - Within tolerance but not bit-identical: 0 (largest difference 0)
 - Outside tolerance: 0
 - Tables with column or row differences: 0
-- Tables with a column type that differs: 42
+- Tables with a column type that differs: 28
 - Published team codes read as `WSH` instead of `WAS`: 36,432
 - Result: **PASS**
 
@@ -60,7 +60,6 @@ fitted, so their cells are counted apart from the cells the season statistics co
 
 Written type first, published second; every value in these columns is compared.
 
-- `qb_game_logs` `week: Int64, published Int32` (2013-2026)
 - `team_game_logs` `def_fumbles_forced: Int64, published Int32` (1999-2026)
 - `team_game_logs` `def_interceptions: Int64, published Int32` (1999-2026)
 - `team_game_logs` `def_pass_defended: Int64, published Int32` (1999-2026)
@@ -76,9 +75,20 @@ None.
 
 None.
 
+## Season cache round trip
+
+Every season's frames stored in a season cache, loaded back, handed to the ratings build as an
+incremental run hands them (`RatingsBuild.reuse`) and written again; each file compared byte for
+byte with the one the fresh build wrote, the ratings' tables and the season statistics' alike.
+
+- Files written by the fresh build: 534
+- Files that differ: 0
+- Files written by one side only: 0
+- Result: **PASS**
+
 ## Timings
 
 Wall-clock seconds with `POLARS_MAX_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, `OMP_NUM_THREADS=1`, on a
-machine shared with other work (load averages above): writing the snapshot's cache files 6, loading
-the sources as the ETL does 5, building every season (ratings and season statistics) 120, of which
-the season statistics 15, writing the tables 1.2, comparing 9.
+machine shared with other work (load averages above): writing the snapshot's cache files 7, loading
+the sources as the ETL does 8, building every season (ratings and season statistics) 144, of which
+the season statistics 18, writing the tables 1.6, comparing 11, the season cache round trip 3.

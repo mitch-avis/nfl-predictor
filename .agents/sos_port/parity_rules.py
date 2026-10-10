@@ -120,6 +120,10 @@ def check_evidence(
 # ---------------------------------------------------------------------------------------------
 # Cause adjustments
 # ---------------------------------------------------------------------------------------------
+#
+# Each adjustment changes one rule in a season's play-by-play (this repository's cached columns
+# plus the snapshot's ``qb_scramble`` and ``play_id``) before this repository's own aggregates
+# run again on it.
 
 
 def _flag(name: str) -> pl.Expr:
@@ -127,42 +131,48 @@ def _flag(name: str) -> pl.Expr:
     return pl.col(name).cast(pl.Float64).fill_null(0) > 0
 
 
-def scramble_flag(columns: list[str], *, enabled: bool) -> tuple[pl.Expr, str]:
-    """Return the per-play scramble flag and which implementation it is.
-
-    ``qb_scramble`` when the play-by-play carries it; otherwise nflverse's scramble coding (a rush
-    attempt coded as a pass play: ``pass`` 1, ``rush`` 0, ``rush_attempt`` 1), a stand-in. With
-    ``enabled`` false no play is a scramble, which is how an attribution is tested for depending
-    on the stand-in.
-    """
-    if not enabled:
-        return pl.lit(value=False), "off"
-    if "qb_scramble" in columns:
-        return _flag("qb_scramble"), "flag"
-    return _flag("pass") & ~_flag("rush") & _flag("rush_attempt"), "stand-in"
-
-
 def _run_play() -> pl.Expr:
     """Return whether the play's type is ``run``."""
     return (pl.col("play_type") == "run").fill_null(value=False)
 
 
-def _scramble_dropbacks(pbp: pl.DataFrame, scramble: pl.Expr) -> pl.DataFrame:
-    """Count a run play that is a scramble as a dropback (its ``dropback_expr``)."""
+def _scramble_dropbacks(pbp: pl.DataFrame) -> pl.DataFrame:
+    """Count a run play flagged ``qb_scramble`` as a dropback (its ``dropback_expr``)."""
     return pbp.with_columns(
-        pl.when(scramble & _run_play())
+        pl.when(_flag("qb_scramble") & _run_play())
         .then(1.0)
         .otherwise(pl.col("qb_dropback"))
         .alias("qb_dropback")
     )
 
 
-def _two_point_tries(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
+def _scrambles_coded_as_runs(pbp: pl.DataFrame) -> pl.DataFrame:
+    """Clear the rush flag of a play flagged both ``qb_scramble`` and ``rush``."""
+    coded = _flag("qb_scramble") & _flag("rush")
+    return pbp.with_columns(pl.when(coded).then(0.0).otherwise(pl.col("rush")).alias("rush"))
+
+
+def _dropback_and_carry(pbp: pl.DataFrame) -> pl.DataFrame:
+    """Count a play flagged both a dropback and a run once, as a dropback."""
+    both = _flag("qb_dropback") & _flag("rush")
+    return pbp.with_columns(pl.when(both).then(0.0).otherwise(pl.col("rush")).alias("rush"))
+
+
+def _spike_rush_attempts(pbp: pl.DataFrame) -> pl.DataFrame:
+    """Count a spike nflverse also records as a rush attempt as a carry, not a spike."""
+    both = _flag("qb_spike") & _flag("rush_attempt")
+    return pbp.with_columns(
+        pl.when(both).then(0.0).otherwise(pl.col("qb_spike")).alias("qb_spike"),
+        pl.when(both).then(1.0).otherwise(pl.col("rush")).alias("rush"),
+    )
+
+
+def _two_point_tries(pbp: pl.DataFrame) -> pl.DataFrame:
     """Stop treating two-point tries apart, so they count as dropbacks and carries."""
     return pbp.with_columns(pl.lit(0.0).alias("two_point_attempt"))
 
 
-def _kneels_and_spikes(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
+def _kneels_and_spikes(pbp: pl.DataFrame) -> pl.DataFrame:
     """Count a kneel-down as a carry and a spike as a dropback, so their EPA enters the sums."""
     return pbp.with_columns(
         pl.when(_flag("qb_kneel")).then(1.0).otherwise(pl.col("rush")).alias("rush"),
@@ -172,28 +182,24 @@ def _kneels_and_spikes(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
     )
 
 
-def _wiped_out_runs(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
+def _wiped_out_runs(pbp: pl.DataFrame) -> pl.DataFrame:
     """Drop the rush flag from runs a penalty wiped out (``rush`` 1, ``rush_attempt`` 0)."""
-    return pbp.with_columns(
-        pl.when(_flag("rush") & ~_flag("rush_attempt"))
-        .then(0.0)
-        .otherwise(pl.col("rush"))
-        .alias("rush")
-    )
+    wiped = _flag("rush") & ~_flag("rush_attempt")
+    return pbp.with_columns(pl.when(wiped).then(0.0).otherwise(pl.col("rush")).alias("rush"))
 
 
-def _unflagged_rush_attempts(pbp: pl.DataFrame, scramble: pl.Expr) -> pl.DataFrame:
+def _unflagged_rush_attempts(pbp: pl.DataFrame) -> pl.DataFrame:
     """Flag as runs the rush attempts nflverse does not flag (not scrambles, not kneel-downs)."""
-    unflagged = _flag("rush_attempt") & ~_flag("rush") & ~scramble & ~_flag("qb_kneel")
+    unflagged = _flag("rush_attempt") & ~_flag("rush") & ~_flag("qb_scramble") & ~_flag("qb_kneel")
     return pbp.with_columns(pl.when(unflagged).then(1.0).otherwise(pl.col("rush")).alias("rush"))
 
 
-def _null_downs(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
+def _null_downs(pbp: pl.DataFrame) -> pl.DataFrame:
     """Read a missing down as 0, so the play counts as an early down."""
     return pbp.with_columns(pl.col("down").fill_null(0.0))
 
 
-def _every_play_type(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
+def _every_play_type(pbp: pl.DataFrame) -> pl.DataFrame:
     """Give every play outside the four counted types the type ``run``."""
     counted = pl.col("play_type").is_in(list(SITUATIONAL_PLAY_TYPES)).fill_null(value=False)
     return pbp.with_columns(
@@ -225,7 +231,28 @@ def uncounted_situational_plays(pbp: pl.DataFrame) -> dict[str, int]:
     return {str(k): int(v) for k, v in left_out.group_by("play_type").len().iter_rows()}
 
 
-def _both_conversion_flags(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
+def wiped_out_plays(pbp: pl.DataFrame) -> dict[str, float]:
+    """Count the plays a penalty wiped out (``play_type`` ``no_play``) by the flag they keep.
+
+    ``plays`` is every such play with a team on each side; ``rush``, ``pass`` and ``qb_dropback``
+    count those with that flag still set, and ``rush_epa`` and ``pass_epa`` sum their EPA.
+    """
+    sides = pl.all_horizontal(
+        pl.col(c).is_not_null() & (pl.col(c) != "") for c in ("posteam", "defteam")
+    )
+    wiped = pbp.filter(sides & (pl.col("play_type") == "no_play").fill_null(value=False))
+    runs, passes = wiped.filter(_flag("rush")), wiped.filter(_flag("pass"))
+    return {
+        "plays": wiped.height,
+        "rush": runs.height,
+        "pass": passes.height,
+        "qb_dropback": wiped.filter(_flag("qb_dropback")).height,
+        "rush_epa": float(runs["epa"].fill_null(0.0).sum()),
+        "pass_epa": float(passes["epa"].fill_null(0.0).sum()),
+    }
+
+
+def _both_conversion_flags(pbp: pl.DataFrame) -> pl.DataFrame:
     """Count a down flagged both converted and failed once, as converted."""
     return pbp.with_columns(
         pl.when(_flag(f"{down}_down_converted") & _flag(f"{down}_down_failed"))
@@ -236,7 +263,7 @@ def _both_conversion_flags(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFram
     )
 
 
-def _penalty_first_downs(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
+def _penalty_first_downs(pbp: pl.DataFrame) -> pl.DataFrame:
     """Count ``first_down`` on every play, first downs by penalty included."""
     return pbp.with_columns(
         pl.col("first_down").cast(pl.Float64).fill_null(0.0).alias("first_down_pass"),
@@ -244,11 +271,11 @@ def _penalty_first_downs(pbp: pl.DataFrame, _scramble: pl.Expr) -> pl.DataFrame:
     )
 
 
-def _fumbles_on_scrimmage_snaps(pbp: pl.DataFrame, scramble: pl.Expr) -> pl.DataFrame:
+def _fumbles_on_scrimmage_snaps(pbp: pl.DataFrame) -> pl.DataFrame:
     """Treat every play that is not a scrimmage snap by its definition as special teams."""
     scrimmage = (
         _flag("qb_dropback")
-        | (scramble & _run_play())
+        | (_flag("qb_scramble") & _run_play())
         | _flag("rush")
         | _flag("qb_kneel")
         | _flag("qb_spike")
@@ -306,34 +333,31 @@ class Cause:
     """A named cause and how it adjusts one side of the comparison."""
 
     id: str
-    side: Literal["ours", "theirs", "keys", "coverage", "none"]
-    uses_scrambles: bool = False
-    ours: Callable[[pl.DataFrame, pl.Expr], pl.DataFrame] | None = None
+    side: Literal["ours", "theirs", "keys", "coverage", "identity"]
+    ours: Callable[[pl.DataFrame], pl.DataFrame] | None = None
 
 
+# Adjustments apply in this order when combined: the dropback-and-carry rule reads the dropback flag
+# as cached, before the scramble rule sets it on run plays flagged qb_scramble.
 CAUSES: dict[str, Cause] = {
     cause.id: cause
     for cause in (
-        Cause("scramble_dropbacks", "ours", uses_scrambles=True, ours=_scramble_dropbacks),
+        Cause("dropback_and_carry", "ours", ours=_dropback_and_carry),
+        Cause("scramble_dropbacks", "ours", ours=_scramble_dropbacks),
+        Cause("scrambles_coded_as_runs", "ours", ours=_scrambles_coded_as_runs),
+        Cause("spike_rush_attempts", "ours", ours=_spike_rush_attempts),
         Cause("two_point_tries", "ours", ours=_two_point_tries),
         Cause("kneels_and_spikes", "ours", ours=_kneels_and_spikes),
         Cause("wiped_out_runs", "ours", ours=_wiped_out_runs),
-        Cause(
-            "unflagged_rush_attempts", "ours", uses_scrambles=True, ours=_unflagged_rush_attempts
-        ),
+        Cause("unflagged_rush_attempts", "ours", ours=_unflagged_rush_attempts),
         Cause("null_downs", "ours", ours=_null_downs),
         Cause("every_play_type", "ours", ours=_every_play_type),
         Cause("both_conversion_flags", "ours", ours=_both_conversion_flags),
         Cause("penalty_first_downs", "ours", ours=_penalty_first_downs),
-        Cause(
-            "fumbles_on_scrimmage_snaps",
-            "ours",
-            uses_scrambles=True,
-            ours=_fumbles_on_scrimmage_snaps,
-        ),
+        Cause("fumbles_on_scrimmage_snaps", "ours", ours=_fumbles_on_scrimmage_snaps),
         Cause("jacksonville_player_teams", "theirs"),
         Cause("rams_written_la", "keys"),
         Cause("games_without_play_by_play", "coverage"),
-        Cause("release_difference", "none"),
+        Cause("release_difference", "identity"),
     )
 }

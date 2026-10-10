@@ -25,17 +25,20 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   switch and the live-betting design; `0.49.0` the ported ratings (`src/nfl_predictor/ratings/`);
   `0.50.0` the play-by-play cache extension (139 columns) and the stadium table; `0.50.1` the
   phase-1 inventory and parity scripts (reports pinned to `main`'s code; a refresh is due after
-  the integration lands). Gate on `0.50.1`: 2205 passed.
-- In review or fixes at 06:55 on 2026-10-10 (branches of implementer worktrees under
-  `.claude/worktrees/`): the ratings in the ETL (`worktree-agent-a0778ee61e6367a09`), the
-  play-by-play corrections, one starter and the own Elo in the ETL
-  (`worktree-agent-ab77a9529b8ed64b8`, which contains the former; merge the reviewed ratings
-  branch first), the season statistics port (`worktree-agent-a5d833400b788544f`), the
-  production feature-group setting (in progress), and the web pages for the ratings and season
-  statistics (in progress). The stream table, the integration design and the user's list are in
-  `.agents/step6_plan.md`; the phase-4 build and run scripts are `models/step6/build.sh` and
-  `driver.sh` (dry-run tested), with the pre-registered rules in `models/step6/HYPOTHESIS.md`
-  and `models/step6/rankings/HYPOTHESIS.md` (each with a `.sha256`).
+  the integration lands); `0.51.0` the ported season statistics (`src/nfl_predictor/season_stats/`,
+  not yet in the ETL); `0.52.0` leaving feature groups out of production
+  (`disable_feature_groups`, default empty). Gate on `0.52.0`: 2713 passed.
+- In review or fixes at 08:40 on 2026-10-10 (branches of implementer worktrees under
+  `.claude/worktrees/`): the integration branch `worktree-agent-ab77a9529b8ed64b8` (the ratings
+  in the ETL, the play-by-play corrections, one starter, the own Elo in the ETL; it contains the
+  ratings-integration branch, so merge it alone), in second review; the red-zone fix (counting
+  `drive_inside20`, built on that branch); the four-week trend investigation (a train/predict
+  mismatch the review found; possibly leakage); and the web pages for the ratings and season
+  statistics (a last small round). Still to start: the season-statistics ETL step, the candidate
+  build and the phase-4 runs (`models/step6/build.sh`, `driver.sh`, dry-run tested; rules in
+  `models/step6/HYPOTHESIS.md`), phase 5 (`models/step6/rankings/HYPOTHESIS.md`), the phase-1
+  refresh. The stream table, the integration design and the user's list are in
+  `.agents/step6_plan.md`.
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
   or restart it yourself (rule 5); it loads new code only when the user restarts it.
 - Roadmap step 4 (feature values, `0.37.2`-`0.45.0`) and step 5 (market-free baseline) are closed

@@ -89,6 +89,13 @@ MONEYLINE_MAP_MIN_GAMES = 200
 # Written beside the datasets by a pick-time build: the nfelo snapshot, match rates, fallback
 # rows and the moneyline maps the run used.
 MARKET_LINES_METADATA_NAME = "market_lines_metadata"
+# nfelosrs's preseason win-total ratings (`greerreNFL/nfelosrs`, 2003 on): each team's rating
+# implied by the sportsbooks' season win totals and its schedule, on the Elo scale. Market
+# information: only the own Elo's optional win-total pull reads it, cached and snapshotted like
+# the lines under NFELO_CACHE_DIR / "win_totals".
+NFELOSRS_WIN_TOTALS_URL = (
+    "https://raw.githubusercontent.com/greerreNFL/nfelosrs/main/wt_ratings.csv"
+)
 
 # Minimum season for data collection (default)
 MIN_SEASON = 1999

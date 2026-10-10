@@ -122,7 +122,8 @@ def test_framework_reproduces_fivethirtyeight_published_ratings_and_probabilitie
 
     # Act
     rated = elo_ratings.compute_elo_ratings(
-        games.drop("elo1", "elo2", "elo_prob1"), initial_ratings=seeds
+        games.drop("elo1", "elo2", "elo_prob1"),
+        inputs=elo_ratings.EloInputs(initial_ratings=seeds),
     )
 
     # Assert
@@ -249,7 +250,9 @@ def test_framework_initial_ratings_seed_teams_at_their_first_game() -> None:
     games = _schedule(_game("g1", (1999, 1), ("AAA", "BBB")))
 
     # Act
-    rated = elo_ratings.compute_elo_ratings(games, initial_ratings={"AAA": 1600.0})
+    rated = elo_ratings.compute_elo_ratings(
+        games, inputs=elo_ratings.EloInputs(initial_ratings={"AAA": 1600.0})
+    )
 
     # Assert
     assert rated["home_rating"].item() == 1600.0
@@ -441,7 +444,9 @@ def test_quarterback_switch_adds_each_sides_adjustment_to_its_rating() -> None:
 
     # Act
     rated = elo_ratings.compute_elo_ratings(
-        games, settings=elo_ratings.EloSettings(quarterback=True), qb_adjustments=adjustments
+        games,
+        settings=elo_ratings.EloSettings(quarterback=True),
+        inputs=elo_ratings.EloInputs(qb_adjustments=adjustments),
     )
 
     # Assert
@@ -464,7 +469,9 @@ def test_quarterback_adjusted_result_moves_only_the_base_ratings() -> None:
 
     # Act
     rated = elo_ratings.compute_elo_ratings(
-        games, settings=elo_ratings.EloSettings(quarterback=True), qb_adjustments=adjustments
+        games,
+        settings=elo_ratings.EloSettings(quarterback=True),
+        inputs=elo_ratings.EloInputs(qb_adjustments=adjustments),
     )
 
     # Assert
@@ -490,4 +497,159 @@ def test_quarterback_adjustments_without_the_switch_are_refused() -> None:
 
     # Act & Assert
     with pytest.raises(ValueError, match="quarterback"):
-        elo_ratings.compute_elo_ratings(games, qb_adjustments=_qb_adjustments(("g1", 1.0, 1.0)))
+        elo_ratings.compute_elo_ratings(
+            games, inputs=elo_ratings.EloInputs(qb_adjustments=_qb_adjustments(("g1", 1.0, 1.0)))
+        )
+
+
+def _win_totals(*rows: tuple[int, str, float]) -> pl.DataFrame:
+    """Return win-total ratings from (season, team, rating) tuples."""
+    return pl.DataFrame(
+        rows,
+        schema={"season": pl.Int64, "team_abbr": pl.String, "win_total_elo": pl.Float64},
+        orient="row",
+    )
+
+
+WIN_TOTALS = elo_ratings.EloSettings(win_totals=True)
+
+
+def test_win_total_pull_blends_the_reverted_rating_toward_the_win_total_rating() -> None:
+    """At a team's first game of a season its reverted rating moves toward its win-total rating."""
+    # Arrange
+    games = _schedule(
+        _game("g1", (2000, 17), ("AAA", "BBB"), (30, 0)),
+        _game("g2", (2001, 1), ("AAA", "BBB")),
+    )
+    totals = _win_totals((2001, "AAA", 1400.0))
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(
+        games,
+        settings=WIN_TOTALS,
+        inputs=elo_ratings.EloInputs(win_totals=totals, win_total_weights={2001: 0.5}),
+    )
+
+    # Assert
+    first, second = rated.iter_rows(named=True)
+    home_reverted = 1505.0 / 3.0 + first["home_rating_post"] * 2.0 / 3.0
+    away_reverted = 1505.0 / 3.0 + first["away_rating_post"] * 2.0 / 3.0
+    assert second["home_rating"] == pytest.approx(0.5 * home_reverted + 0.5 * 1400.0)
+    assert second["away_rating"] == pytest.approx(away_reverted)
+
+
+def test_win_total_switch_needs_the_win_totals() -> None:
+    """Switching the pull on without the ratings fails rather than silently regressing."""
+    # Arrange
+    games = _schedule(_game("g1", (2020, 1), ("AAA", "BBB")))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="win_totals"):
+        elo_ratings.compute_elo_ratings(games, settings=WIN_TOTALS)
+
+
+def test_win_totals_are_refused_without_the_switch_because_they_are_market_information() -> None:
+    """A market-free setting never reads the win totals, even when they are passed."""
+    # Arrange
+    games = _schedule(_game("g1", (2020, 1), ("AAA", "BBB")))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="market"):
+        elo_ratings.compute_elo_ratings(
+            games, inputs=elo_ratings.EloInputs(win_totals=_win_totals((2020, "AAA", 1600.0)))
+        )
+
+
+def _strong_favorite_seasons(*, last_score: tuple[int, int] = (30, 0)) -> pl.DataFrame:
+    """Return 2000 even, then 2001 and 2002 seasons the win totals call for AAA, which AAA wins."""
+    return _schedule(
+        _game("a", (2000, 1), ("AAA", "BBB"), (20, 20)),
+        *[_game(f"b{week}", (2001, week), ("AAA", "BBB"), (30, 0)) for week in range(1, 5)],
+        _game("c1", (2002, 1), ("AAA", "BBB"), last_score),
+        _game("d1", (2003, 1), ("AAA", "BBB")),
+    )
+
+
+STRONG_FAVORITE_TOTALS = _win_totals(
+    *[
+        (season, team, rating)
+        for season in (2001, 2002, 2003)
+        for team, rating in (("AAA", 1800.0), ("BBB", 1210.0))
+    ]
+)
+
+
+def test_fitted_win_total_weight_is_zero_in_the_first_win_total_season() -> None:
+    """With no earlier season to fit on, the first season with win totals gets no pull."""
+    # Arrange
+    games = _strong_favorite_seasons()
+
+    # Act
+    weights = elo_ratings.fit_win_total_weights(
+        games, inputs=elo_ratings.EloInputs(win_totals=STRONG_FAVORITE_TOTALS), grid=(0.0, 1.0)
+    )
+
+    # Assert
+    assert weights[2001] == 0.0
+
+
+def test_fitted_win_total_weight_takes_the_lowest_brier_over_earlier_seasons() -> None:
+    """When the win totals called 2001 right, 2002's weight is the full pull."""
+    # Arrange
+    games = _strong_favorite_seasons()
+
+    # Act
+    weights = elo_ratings.fit_win_total_weights(
+        games, inputs=elo_ratings.EloInputs(win_totals=STRONG_FAVORITE_TOTALS), grid=(0.0, 1.0)
+    )
+
+    # Assert
+    assert weights[2002] == 1.0
+
+
+def test_fitted_win_total_weight_never_reads_its_own_seasons_results() -> None:
+    """Reversing every result of 2002 leaves 2002's weight unchanged."""
+    # Arrange
+    games = _strong_favorite_seasons(last_score=(0, 30))
+
+    # Act
+    weights = elo_ratings.fit_win_total_weights(
+        games, inputs=elo_ratings.EloInputs(win_totals=STRONG_FAVORITE_TOTALS), grid=(0.0, 1.0)
+    )
+
+    # Assert
+    assert weights[2002] == 1.0
+
+
+def test_compute_elo_ratings_fits_the_weights_when_none_are_given() -> None:
+    """Without explicit weights the pull uses the weights fitted on earlier seasons."""
+    # Arrange
+    games = _strong_favorite_seasons()
+    fitted = elo_ratings.fit_win_total_weights(
+        games, inputs=elo_ratings.EloInputs(win_totals=STRONG_FAVORITE_TOTALS)
+    )
+
+    # Act
+    rated = elo_ratings.compute_elo_ratings(
+        games,
+        settings=WIN_TOTALS,
+        inputs=elo_ratings.EloInputs(win_totals=STRONG_FAVORITE_TOTALS),
+    )
+
+    # Assert
+    explicit = elo_ratings.compute_elo_ratings(
+        games,
+        settings=WIN_TOTALS,
+        inputs=elo_ratings.EloInputs(win_totals=STRONG_FAVORITE_TOTALS, win_total_weights=fitted),
+    )
+    assert rated.equals(explicit)
+
+
+def test_fit_win_total_weights_needs_the_win_totals() -> None:
+    """There is nothing to fit without the win totals."""
+    # Arrange
+    games = _strong_favorite_seasons()
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="win_totals"):
+        elo_ratings.fit_win_total_weights(games)

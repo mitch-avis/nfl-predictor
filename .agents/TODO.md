@@ -190,6 +190,20 @@ Steps:
    1. a scripted inventory (rule 10) of its data sources, metric registry columns, ratings,
       outputs and web pages against this repo's, plus a check that this repo's play-by-play
       aggregates match its game logs for the same seasons;
+      plan accepted by the user on 2026-10-10 (branch `feat/sos-port-inventory`, scripts and
+      their generated reports in `.agents/sos_port/`, following `.agents/m60/inventory.py`):
+      - the inventory covers everything: the nflreadpy sources each repo loads, every column of
+        its per-season output files, its metric registry, its ratings, and its web pages and API
+        endpoints. A checked-in mapping file classifies each of its columns (matched, a different
+        definition, or missing here), and the script fails on any unclassified column;
+      - parity is exact and explained: for 1999-2025, per team-game, counts equal and EPA sums
+        within `1e-6` on the columns both repos define the same way, and every mismatching game
+        assigned to a named cause (pre-2006 scrambles, Jacksonville's 2001-2002 home games, the
+        Rams as `LA`, the three games without play-by-play, a definitional difference); an
+        unexplained mismatch fails;
+      - report only: phase 1 changes no production code or data. Its differences (the pre-2006
+        scramble rule first) become a list of proposed changes for the user, batched with
+        phase 3's feature-value changes so they share one rebuild and one new reference;
    2. the nflverse sources it uses and this repo lacks (weekly player stats, snap counts, players
       and rosters for quarterback identity; ESPN QBR as a validation reference only), with the
       cache-then-degrade pattern;

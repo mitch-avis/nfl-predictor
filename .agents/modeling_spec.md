@@ -76,7 +76,10 @@ When market lines exist, the system produces market-derived features and support
   It still scores the market yardstick. The Elo columns from `data/qb_elos.csv` are not line
   columns but carry market information: `../nfeloqb` pulls each preseason Elo toward a rating
   built from betting win totals (2003-2023). A backtest with no market information at all adds
-  `--disable-feature-groups elo` (the 18 Elo columns; the weekly run has no group switch).
+  `--disable-feature-groups elo` (the 18 Elo columns; the weekly run has no group switch). The
+  repository's own Elo (`utils/polars/elo_ratings.py`, not yet in the datasets) publishes its
+  win-total preset as the `own_elo_wt` group, market-informed in the same way: once a build
+  carries it, such a backtest disables `elo,own_elo_wt` and keeps the market-free `own_elo`.
 
 Market anchoring details:
 

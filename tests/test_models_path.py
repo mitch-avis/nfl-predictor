@@ -76,6 +76,38 @@ def test_the_web_app_indexes_the_runs_in_the_checkouts_models_directory(
     assert settings.models_path == CHECKOUT_MODELS
 
 
+def test_the_checkpoint_root_follows_the_models_directory(isolated_data: DataIsolation) -> None:
+    # Act
+    root = walk_forward.default_checkpoint_dir()
+
+    # Assert
+    assert root == isolated_data.models_dir / "wf_checkpoints"
+
+
+def test_a_backtest_defaults_its_checkpoints_to_the_models_directory(
+    monkeypatch: pytest.MonkeyPatch, isolated_data: DataIsolation
+) -> None:
+    # Arrange
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
+
+    # Act
+    args = backtest._parse_args()
+
+    # Assert
+    assert args.checkpoint_dir == isolated_data.models_dir / "wf_checkpoints"
+
+
+def test_the_checkpoint_listing_defaults_to_the_models_directory(
+    isolated_data: DataIsolation,
+) -> None:
+    # Act
+    args = checkpoints._parse_args([])
+
+    # Assert
+    assert args.checkpoint_dir == isolated_data.models_dir / "wf_checkpoints"
+    assert args.models_dir == isolated_data.models_dir
+
+
 def test_a_backtest_writes_its_report_in_a_run_directory_under_the_models_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_data: DataIsolation
 ) -> None:

@@ -5,9 +5,11 @@
 pages show beside the ratings, and the metric registry that names and describes every column. The
 port reproduces the tables that project published, cell by cell (see "Checking the port" below).
 
-Nothing in the ETL, the game dataset, the model, or the weekly run uses the package yet, and no
-default depends on it. The web app's team and quarterback pages (`src/nfl_predictor/api/ratings/`)
-read the tables it builds and describe their columns from its metric registry.
+`nfl-predictor data` builds its tables for every season of the run and writes them to
+`data/ratings/` beside the ratings (see "In the ETL" below). Nothing in the game dataset, the model,
+or the weekly run's predictions uses them, and no default depends on them. The web app's team and
+quarterback pages (`src/nfl_predictor/api/ratings/`) read the tables and describe their columns
+from the package's metric registry.
 
 The tables are whole-season display data, not values known before a week's games: a season row
 pools every game played so far, and an opponent profile pools every played game of each
@@ -15,10 +17,8 @@ opponent against everyone else, later weeks included. A model feature built from
 own pre-week version, solved from the games strictly before each week, as `AGENTS.md` requires
 of every schedule- or opponent-adjusted value.
 
-When an ETL step starts reading the package, add `season_stats` to `_ETL_SOURCE_DIRECTORIES` in
-`utils/season_cache.py` in the same change: the season cache's code fingerprint covers
-`data_collection.py`, `constants.py`, and `utils/` only, so a change here would otherwise leave
-cached seasons built from the old code.
+The season cache's code fingerprint (`_ETL_SOURCE_DIRECTORIES` in `utils/season_cache.py`) covers
+this package, so an edit here rebuilds every season an incremental ETL run had cached.
 
 ## What it computes
 
@@ -99,6 +99,43 @@ order when the frame is flagged sorted by the group key, so `build_season_tables
 rows itself and gives every caller the same order and flag. Play order is the order nflverse
 publishes, which the play-by-play cache keeps; `play_id` is not monotonic within every game, so
 plays are not re-sorted. No linear algebra is involved, so the BLAS thread count does not matter.
+
+## In the ETL
+
+`utils/polars/season_stats_build.py` runs the package inside `nfl-predictor data`:
+
+- It reads no nflverse source twice. A season's inputs are the ones `load_season_inputs` reads,
+  cut from the frames the run already holds: the play-by-play the ETL loaded (its games credited
+  to one team already repaired from the season rosters), kept to `SEASON_STATS_PBP_COLUMNS` and
+  prepared as `prepare_pbp` prepares it; the schedules, weekly player stats, snap counts, players
+  file and weekly rosters the ratings loaded. The official weekly team stats are its one source of
+  its own, loaded once for the run's seasons under the cache-then-degrade contract of the other
+  per-season sources; in the current season they are the file the team-stat loader fetched earlier
+  in the run, which nflreadpy serves again from its in-memory cache.
+- The ratings build (`utils/polars/ratings_build.py`) builds each season's tables right after the
+  season's fit, so `combined` takes `TEAM_RATING_INPUT_COLUMNS` from the season's `ratings` table
+  and `qb_combined` takes `QB_RATING_INPUT_COLUMNS` from every passer's row of the quarterback fit
+  (`qb_season`), as `nfl-sos-ratings`' `main.run_season` fed them. A season without a qualified
+  passer has no quarterback fit, so its `qb_combined` leaves those columns null.
+- The tables are written to `data/ratings/{season}_{kind}.parquet` with the ratings tables, each
+  file through a temporary file of its own. A season before its first game gets none, and a season
+  whose plays exist without official team stats, weekly player stats or snap counts (the current
+  season before nflverse publishes them) is built without them; both are logged.
+- Each slice of a frame that spans seasons is rechunked, so a later season's rows cannot move where
+  a sum's chunks split, and two runs, the second fed its games and every other source in another
+  row order (each game's plays in nflverse's order), write the same bytes
+  (`tests/test_season_stats_build.py`).
+- An incremental run keeps a finished season's tables in its season cache entry, with its ratings.
+  The tables read only the season's play-by-play, its game rows and its played schedule besides the
+  ratings, so the entry's key holds exactly those (`SeasonStatsBuild.key_frames`). The game rows
+  are built again on every incremental run for that: they read the players file, which a run in
+  season downloads again with new players each week, and only a change to a player the season's
+  sources name moves them.
+- `.agents/sos_port/season_stats_etl_parity.py` builds every published season through this step
+  on the snapshot that project's files were built from and compares what the ETL writes with the
+  published files (`.agents/sos_port/SEASON_STATS_ETL_PARITY.md`);
+  `.agents/sos_port/season_stats_etl_timing.py` times what the step adds to a full and an
+  incremental run.
 
 ## Checking the port
 

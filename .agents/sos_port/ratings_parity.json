@@ -1,6 +1,6 @@
 {
   "result": "passed",
-  "generated": "2026-10-10 09:04 UTC",
+  "generated": "2026-10-10 09:25 UTC",
   "source": {
     "repository": "nfl-sos-ratings",
     "path": "/home/mitch/workspace/nfl-sos-ratings",
@@ -8,7 +8,7 @@
     "frozen_commit": "9081bced89b0d51c99e28f80f8f62b9fcd0118e0"
   },
   "port": {
-    "head": "21b2c5c73c0061f4b262befbb3ac5b6b8ab326c2",
+    "head": "75ab143a9e9836dc02eed6ca0de20a9c03c7985e",
     "uncommitted": []
   },
   "seasons": [
@@ -120,7 +120,7 @@
     },
     {
       "table": "rating_ranges_by_week",
-      "seasons": "2026",
+      "seasons": "2026-2026",
       "files": 1,
       "rows": 128,
       "cells": 1664,
@@ -200,7 +200,7 @@
     },
     {
       "table": "qb_rating_ranges_by_week",
-      "seasons": "2026",
+      "seasons": "2026-2026",
       "files": 1,
       "rows": 115,
       "cells": 1495,
@@ -228,19 +228,19 @@
     }
   ],
   "timings": {
-    "rebuild_seconds": 70.31637858599788,
-    "team_seconds": 36.88965105999887,
-    "qb_seconds": 33.42672752599901,
-    "pre_week_seconds": 159.049242355999,
+    "rebuild_seconds": 47.410426737003945,
+    "team_seconds": 24.835499208005785,
+    "qb_seconds": 22.57492752899816,
+    "pre_week_seconds": 128.59226163300082,
     "load_average_start": [
-      22.28,
-      16.83,
-      12.26
+      2.43,
+      12.54,
+      16.14
     ],
     "load_average_end": [
-      8.81,
-      13.77,
-      12.14
+      5.32,
+      9.29,
+      14.22
     ],
     "threads": {
       "OPENBLAS_NUM_THREADS": "1",
@@ -251,176 +251,176 @@
     "seasons": [
       {
         "season": 1999,
-        "team_seconds": 1.5393422769993776,
-        "qb_seconds": 1.3745810959990195,
+        "team_seconds": 0.8096492050008237,
+        "qb_seconds": 0.8158502229998703,
         "weekly_ranges": false
       },
       {
         "season": 2000,
-        "team_seconds": 1.461019177999333,
-        "qb_seconds": 1.4078442760001053,
+        "team_seconds": 0.7990471829998569,
+        "qb_seconds": 0.7841321399992012,
         "weekly_ranges": false
       },
       {
         "season": 2001,
-        "team_seconds": 1.14266684499853,
-        "qb_seconds": 1.0294281149999733,
+        "team_seconds": 0.8174845400008053,
+        "qb_seconds": 0.758028442000068,
         "weekly_ranges": false
       },
       {
         "season": 2002,
-        "team_seconds": 1.1776422100010677,
-        "qb_seconds": 1.0604648829994403,
+        "team_seconds": 0.8425430309998774,
+        "qb_seconds": 0.7703888670002925,
         "weekly_ranges": false
       },
       {
         "season": 2003,
-        "team_seconds": 1.1775665900004242,
-        "qb_seconds": 1.1050648750006076,
+        "team_seconds": 0.843988870999965,
+        "qb_seconds": 0.818998618000478,
         "weekly_ranges": false
       },
       {
         "season": 2004,
-        "team_seconds": 1.2225325589988643,
-        "qb_seconds": 1.090386172001672,
+        "team_seconds": 0.8410115509996103,
+        "qb_seconds": 0.8153532010001072,
         "weekly_ranges": false
       },
       {
         "season": 2005,
-        "team_seconds": 1.1670872830000008,
-        "qb_seconds": 1.0774148430009518,
+        "team_seconds": 0.9325321779997466,
+        "qb_seconds": 0.8331876060001377,
         "weekly_ranges": false
       },
       {
         "season": 2006,
-        "team_seconds": 1.1593025929996656,
-        "qb_seconds": 1.0320875650013477,
+        "team_seconds": 0.8598282689999905,
+        "qb_seconds": 0.7435363630011125,
         "weekly_ranges": false
       },
       {
         "season": 2007,
-        "team_seconds": 1.2450773649998155,
-        "qb_seconds": 1.1767262100001972,
+        "team_seconds": 0.8368155199987086,
+        "qb_seconds": 0.8524788530012302,
         "weekly_ranges": false
       },
       {
         "season": 2008,
-        "team_seconds": 1.2065727320004953,
-        "qb_seconds": 1.0896355189997848,
+        "team_seconds": 0.8298981909993017,
+        "qb_seconds": 0.754308351999498,
         "weekly_ranges": false
       },
       {
         "season": 2009,
-        "team_seconds": 1.2065681339990988,
-        "qb_seconds": 1.0745519190004416,
+        "team_seconds": 0.8262536830006866,
+        "qb_seconds": 0.7811774379988492,
         "weekly_ranges": false
       },
       {
         "season": 2010,
-        "team_seconds": 1.179019690000132,
-        "qb_seconds": 1.094962270999531,
+        "team_seconds": 0.832618682001339,
+        "qb_seconds": 0.7808812179991946,
         "weekly_ranges": false
       },
       {
         "season": 2011,
-        "team_seconds": 1.1921489520009345,
-        "qb_seconds": 1.0893506459997297,
+        "team_seconds": 0.8581904870006838,
+        "qb_seconds": 0.7765314740008762,
         "weekly_ranges": false
       },
       {
         "season": 2012,
-        "team_seconds": 1.2523209970004245,
-        "qb_seconds": 1.098498519999339,
+        "team_seconds": 0.8243423500007339,
+        "qb_seconds": 0.7236491789990396,
         "weekly_ranges": false
       },
       {
         "season": 2013,
-        "team_seconds": 1.3056525249994593,
-        "qb_seconds": 1.31359463499939,
+        "team_seconds": 0.8599187899999379,
+        "qb_seconds": 0.698407211999438,
         "weekly_ranges": false
       },
       {
         "season": 2014,
-        "team_seconds": 1.3754335150006227,
-        "qb_seconds": 1.6970136260006257,
+        "team_seconds": 0.8223850300000777,
+        "qb_seconds": 0.7286224519993993,
         "weekly_ranges": false
       },
       {
         "season": 2015,
-        "team_seconds": 1.3883299019998958,
-        "qb_seconds": 1.4208258729995578,
+        "team_seconds": 0.8271409169992694,
+        "qb_seconds": 0.7595327039998665,
         "weekly_ranges": false
       },
       {
         "season": 2016,
-        "team_seconds": 1.3953281140002218,
-        "qb_seconds": 0.9971387339992361,
+        "team_seconds": 0.8349259179994988,
+        "qb_seconds": 0.744906236001043,
         "weekly_ranges": false
       },
       {
         "season": 2017,
-        "team_seconds": 1.4541262090006057,
-        "qb_seconds": 1.0872752899995248,
+        "team_seconds": 0.850501881001037,
+        "qb_seconds": 0.7187241189985798,
         "weekly_ranges": false
       },
       {
         "season": 2018,
-        "team_seconds": 1.1657811049990414,
-        "qb_seconds": 1.0365458300002501,
+        "team_seconds": 0.8319085990005988,
+        "qb_seconds": 0.7273144640003011,
         "weekly_ranges": false
       },
       {
         "season": 2019,
-        "team_seconds": 1.2013224260008428,
-        "qb_seconds": 1.022097869999925,
+        "team_seconds": 0.8404528820010455,
+        "qb_seconds": 0.7195884829998249,
         "weekly_ranges": false
       },
       {
         "season": 2020,
-        "team_seconds": 1.184400321000794,
-        "qb_seconds": 1.152422425999248,
+        "team_seconds": 0.8253588320003473,
+        "qb_seconds": 0.8405314000010549,
         "weekly_ranges": false
       },
       {
         "season": 2021,
-        "team_seconds": 1.2130600170003163,
-        "qb_seconds": 1.1182876820003003,
+        "team_seconds": 0.8605713070010097,
+        "qb_seconds": 0.7994527219998417,
         "weekly_ranges": false
       },
       {
         "season": 2022,
-        "team_seconds": 1.2086696040005336,
-        "qb_seconds": 1.185752979999961,
+        "team_seconds": 0.8285445530000288,
+        "qb_seconds": 0.873890898999889,
         "weekly_ranges": false
       },
       {
         "season": 2023,
-        "team_seconds": 1.187734945999182,
-        "qb_seconds": 1.1074264849994506,
+        "team_seconds": 0.8415666339988093,
+        "qb_seconds": 0.815643216999888,
         "weekly_ranges": false
       },
       {
         "season": 2024,
-        "team_seconds": 1.2648501889998442,
-        "qb_seconds": 1.1858046790002845,
+        "team_seconds": 0.8349611360008566,
+        "qb_seconds": 0.7990041909997672,
         "weekly_ranges": false
       },
       {
         "season": 2025,
-        "team_seconds": 1.192312437999135,
-        "qb_seconds": 1.1107897609999782,
+        "team_seconds": 0.8402551470007893,
+        "qb_seconds": 0.7804888609989575,
         "weekly_ranges": false
       },
       {
         "season": 2026,
-        "team_seconds": 3.0237823440002103,
-        "qb_seconds": 2.19075474499914,
+        "team_seconds": 2.18280384100035,
+        "qb_seconds": 1.5603185950003535,
         "weekly_ranges": true
       }
     ]
   },
   "pre_week": {
-    "seconds": 159.049242355999,
+    "seconds": 128.59226163300082,
     "calls": 496,
     "team_weeks_compared": 451,
     "team_cells": 86364,

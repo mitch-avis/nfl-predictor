@@ -2,11 +2,16 @@
 
 Run from the repository root (single-threaded, several minutes):
 
-    .venv/bin/python .agents/sos_port/ratings_parity.py [--source PATH]
+    .venv/bin/python .agents/sos_port/ratings_parity.py [--source PATH] [--seasons S ...]
+        [--out-dir DIR]
 
 ``--source`` is the ``nfl-sos-ratings`` checkout (default: the one beside this repository's main
-checkout). The script asserts the checkout is at the frozen commit, reads its published Parquet
-files without writing there (recording each file's SHA-256), and:
+checkout); ``--seasons`` limits the comparison to some seasons (earlier ones are still read for
+the penalties and the prior); ``--out-dir`` writes the reports elsewhere (default: beside this
+script, where the checked-in report of the full run lives). The script runs with one BLAS and
+Polars thread unless the environment sets the counts. It asserts the checkout is at the frozen
+commit, reads its published Parquet files without writing there (recording each file's SHA-256),
+and:
 
 1. rebuilds every season's ratings tables from that project's published game logs with
    ``nfl_predictor.ratings``: the files its pipeline writes, rank ranges included (each season's
@@ -537,6 +542,18 @@ def pre_week_pass(source: Source, seasons: list[int]) -> PreWeekSummary:
     return summary
 
 
+def _season_span(seasons: list[int]) -> str:
+    """Return ``1999-2026`` for consecutive seasons, else the seasons listed."""
+    if seasons == list(range(seasons[0], seasons[-1] + 1)):
+        return f"{seasons[0]}-{seasons[-1]}"
+    return ", ".join(str(season) for season in seasons)
+
+
+def _thread_settings() -> str:
+    """Return the thread counts this run used, as the environment set them."""
+    return ", ".join(f"`{name}={os.environ.get(name)}`" for name in THREAD_VARIABLES)
+
+
 def _wrap(text: str) -> list[str]:
     """Return ``text`` as one Markdown paragraph wrapped at 100 characters."""
     return textwrap.wrap(text, width=100, break_long_words=False, break_on_hyphens=False)
@@ -608,11 +625,10 @@ class Report:
             subset = [result for result in self.results if result.table == table]
             if not subset:
                 continue
-            first, last = subset[0].season, subset[-1].season
             rows.append(
                 {
                     "table": table,
-                    "seasons": str(first) if first == last else f"{first}-{last}",
+                    "seasons": _season_span([result.season for result in subset]),
                     "files": len(subset),
                     "rows": sum(result.rows for result in subset),
                     "cells": sum(result.cells for result in subset),
@@ -694,9 +710,10 @@ class Report:
         """Return the title, provenance, tolerance, and headline counts."""
         totals = self.totals()
         uncommitted = (
-            f", with uncommitted changes under the package: {', '.join(self.port_uncommitted)}."
+            ", with uncommitted changes to the package's Python files: "
+            f"{', '.join(f'`{line}`' for line in self.port_uncommitted)}."
             if self.port_uncommitted
-            else ", with no uncommitted change under the package."
+            else ", with no uncommitted change to the package's Python files."
         )
         return [
             "# Ratings parity with `nfl-sos-ratings`",
@@ -719,8 +736,8 @@ class Report:
                 + uncommitted
             ),
             *_item(
-                f"Seasons: {self.seasons[0]}-{self.seasons[-1]}; {self.in_progress} is the season "
-                f"in progress (games through week {self.in_progress_through_week}), the only one "
+                f"Seasons: {_season_span(self.seasons)}; {self.in_progress} is the season in "
+                f"progress (games through week {self.in_progress_through_week}), the only one "
                 "with weekly rank-range files."
             ),
             *_item(
@@ -825,21 +842,40 @@ class Report:
         lines = ["", "## Cells within tolerance but not bit-identical", ""]
         if not rows:
             return [*lines, "None: every compared cell is bit-identical."]
+        columns: set[str] = set()
         for row in rows:
             names = row["columns_within_tolerance"]
             assert isinstance(names, list)  # noqa: S101  # built by table_rows
+            columns.update(str(name) for name in names)
             lines.append(f"- `{row['table']}`: {', '.join(f'`{name}`' for name in names)}")
-        return [
-            *lines,
-            "",
-            *_wrap(
-                "A passer's raw season EPA per dropback is a season statistic shown beside the "
-                "rating, not a fit. There it is the season's passing EPA total less the spikes' "
-                "EPA total, over the dropback total, each summed in that project's row order; here "
-                "it is the per-game dropback EPA (passing less spikes) summed over the passer's "
-                "games, so the last bit can differ. No fitted value differs."
-            ),
-        ]
+        lines.extend(
+            [
+                "",
+                *_wrap(
+                    "A passer's raw season EPA per dropback (`qb_epa_per_dropback`) is a season "
+                    "statistic shown beside the rating, not a fit. There it is the season's "
+                    "passing EPA total less the spikes' EPA total, over the dropback total, each "
+                    "summed in that project's row order; here it is the per-game dropback EPA "
+                    "(passing less spikes) summed over the passer's games, so the last bit can "
+                    "differ."
+                ),
+            ]
+        )
+        if columns - {"qb_epa_per_dropback"}:
+            lines.extend(
+                [
+                    "",
+                    *_wrap(
+                        f"This run used {_thread_settings()}. With more than one BLAS thread "
+                        "the matrix products of the larger fits (the quarterbacks') sum in "
+                        "another order, so fitted values can differ in their last bits too; "
+                        "that project built its files with one thread."
+                    ),
+                ]
+            )
+        else:
+            lines.extend(["", "No fitted value differs."])
+        return lines
 
     def _bootstrap_lines(self) -> list[str]:
         """Return the section on the rank ranges and head-to-head pairs."""
@@ -879,7 +915,7 @@ class Report:
             ),
             "",
             *_item(
-                "Team ratings: for every season from 2000 and every week from 2 on, the rows of "
+                "Team ratings: for every season after 1999 and every week from 2 on, the rows of "
                 "the teams that had played are compared with the published `ratings_by_week` rows "
                 f"of the week before ({_fmt(summary.team_weeks_compared)} weeks, "
                 f"{_fmt(summary.team_cells)} cells): {_fmt(summary.team_identical)} "
@@ -920,9 +956,9 @@ class Report:
             "## Timings",
             "",
             *_wrap(
-                "Wall-clock seconds on one thread (BLAS and Polars), on a machine shared with "
-                f"other work: load average {', '.join(f'{v:.2f}' for v in self.load_start)} at "
-                f"the start and {', '.join(f'{v:.2f}' for v in self.load_end)} at the end."
+                f"Wall-clock seconds with {_thread_settings()}, on a machine shared with other "
+                f"work: load average {', '.join(f'{v:.2f}' for v in self.load_start)} at the "
+                f"start and {', '.join(f'{v:.2f}' for v in self.load_end)} at the end."
             ),
             "",
             "| step | seconds |",
@@ -964,12 +1000,27 @@ def main(argv: list[str] | None = None) -> None:
     _single_threaded()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", type=Path, default=None, help="nfl-sos-ratings checkout")
+    parser.add_argument(
+        "--seasons",
+        type=int,
+        nargs="+",
+        default=None,
+        help="compare only these seasons (default: every published season)",
+    )
+    parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=HERE,
+        help="where to write the reports (default: beside this script)",
+    )
     args = parser.parse_args(argv)
     root = (args.source or default_source()).resolve()
     head = check_source(root)
     source = Source(root)
     load_start = os.getloadavg()
     seasons, in_progress = _seasons(source)
+    if args.seasons is not None:
+        seasons = [season for season in seasons if season in set(args.seasons)]
     inputs = input_checks(source, seasons)
     results, timings = rebuild_and_compare(source, seasons, in_progress)
     pre_week = pre_week_pass(source, seasons)
@@ -978,7 +1029,7 @@ def main(argv: list[str] | None = None) -> None:
         source_path=str(root),
         source_head=head,
         port_head=source_head(repo_root()),
-        port_uncommitted=uncommitted_changes(repo_root(), "src/nfl_predictor/ratings"),
+        port_uncommitted=uncommitted_changes(repo_root(), "src/nfl_predictor/ratings/*.py"),
         seasons=seasons,
         in_progress=in_progress,
         in_progress_through_week=(
@@ -994,10 +1045,13 @@ def main(argv: list[str] | None = None) -> None:
         load_end=os.getloadavg(),
         files_read=dict(sorted(source.hashes.items())),
     )
-    OUT_JSON.write_text(report.to_json())
-    OUT_MD.write_text(report.to_markdown())
+    out_dir: Path = args.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / OUT_JSON.name).write_text(report.to_json())
+    (out_dir / OUT_MD.name).write_text(report.to_markdown())
     sys.stdout.write(
-        f"{'passed' if report.passed else 'FAILED'}: wrote {OUT_MD.name} and {OUT_JSON.name}\n"
+        f"{'passed' if report.passed else 'FAILED'}: wrote {OUT_MD.name} and {OUT_JSON.name} "
+        f"to {out_dir}\n"
     )
     if not report.passed:
         raise SystemExit(1)

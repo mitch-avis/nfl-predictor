@@ -19,10 +19,22 @@ with earlier seasons down-weighted, optionally with the model's win probabilitie
 future games (the ``--ratings-*`` options). ``--legacy-franchise-fit`` restores the
 original all-seasons, equal-weight "franchise" fit and implies this method.
 
-Both methods map their rating onto the 1-10 and 0-10 scales through a win probability
+Three methods rank on a rating in points known before the week after ``--through-week``
+(``nfl_predictor.reporting.rating_sources``):
+
+- ``--method ported``: the ported team rating the ETL publishes under ``--ratings-dir``
+  (``data/ratings``), with the game rows' pre-week values from ``--data-ml``;
+- ``--method model``: a ridge fit of team strengths and a home term to a walk-forward's
+  pre-game predicted margins for the season's earlier games (``--model-predictions``: run
+  directories or fold checkpoint directories that cover them; in week 1 the previous
+  season's last fit, carried forward by the ported prior's factor);
+- ``--method blend``: ``--blend-weight`` times the ported rating plus the rest times the
+  model rating.
+
+Every method maps its rating onto the 1-10 and 0-10 scales through a win probability
 against an average team on a neutral field (see
-``nfl_predictor.reporting.power_rankings``). Projected standings are the same under both:
-current record plus the model's win probabilities for the remaining games.
+``nfl_predictor.reporting.power_rankings``). Projected standings are the same under all of
+them: current record plus the model's win probabilities for the remaining games.
 
 Usage example
 -------------
@@ -51,6 +63,7 @@ from nfl_predictor.cli import options
 from nfl_predictor.ml import ml_model_core
 from nfl_predictor.reporting.power_rankings import (
     DEFAULT_PRIOR_SEASON_WEIGHT,
+    DEFAULT_RATINGS_DIR,
     DEFAULT_RATINGS_WINDOW_SEASONS,
     DEFAULT_STRENGTH_SNAPSHOTS,
     RANKING_METHODS,
@@ -60,6 +73,7 @@ from nfl_predictor.reporting.power_rankings import (
     resolve_ranking_options,
     write_ranking_outputs,
 )
+from nfl_predictor.reporting.rating_sources import RatingSourceUnavailableError
 from nfl_predictor.utils.logger import log
 
 
@@ -100,8 +114,37 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "How teams are rated. 'composite' (default) ranks on the ETL's "
             "schedule-adjusted strength composite for the week after --through-week: the "
             "current-season view. 'bradley_terry' fits ratings to game results with the "
-            "--ratings-* options. --legacy-franchise-fit implies bradley_terry."
+            "--ratings-* options. --legacy-franchise-fit implies bradley_terry. 'ported' "
+            "ranks on the ported team rating (--ratings-dir), 'model' on a fit to a "
+            "walk-forward's predicted margins (--model-predictions), and 'blend' on both "
+            "(--blend-weight on the ported rating)."
         ),
+    )
+    p.add_argument(
+        "--ratings-dir",
+        type=Path,
+        default=DEFAULT_RATINGS_DIR,
+        help=(
+            "Published ported ratings tables, read by the ported method and by the model and "
+            "blend methods in week 1 (default: data/ratings)."
+        ),
+    )
+    p.add_argument(
+        "--model-predictions",
+        type=Path,
+        nargs="+",
+        default=(),
+        help=(
+            "Model and blend methods: walk-forward run directories or fold checkpoint "
+            "directories whose pre-game predictions cover every completed regular-season "
+            "game of the season before the ranked week (the previous season for week 1)."
+        ),
+    )
+    p.add_argument(
+        "--blend-weight",
+        type=float,
+        default=None,
+        help="Blend method: the weight on the ported rating, from 0 to 1.",
     )
     p.add_argument(
         "--strength-snapshots",
@@ -197,6 +240,9 @@ def main(argv: list[str] | None = None) -> int:
                 include_future=bool(args.ratings_include_future),
                 ratings_min_season=args.ratings_min_season,
                 strength_snapshots=args.strength_snapshots,
+                ratings_dir=args.ratings_dir,
+                model_predictions=tuple(args.model_predictions),
+                blend_weight=args.blend_weight,
             )
         )
     except ValueError as error:
@@ -227,7 +273,11 @@ def main(argv: list[str] | None = None) -> int:
         through_week=args.through_week,
         include_postseason=bool(args.include_postseason),
     )
-    result = compute_power_rankings(model, inputs, options)
+    try:
+        result = compute_power_rankings(model, inputs, options)
+    except RatingSourceUnavailableError as error:
+        msg = f"error: {error}"
+        raise SystemExit(msg) from error
 
     write_ranking_outputs(
         result, out_dir=args.out_dir, season=args.season, through_week=args.through_week

@@ -44,7 +44,7 @@ from nfl_predictor.ml.ml_model_training import (
     train_margin_total_model_with_report,
     write_training_artifacts,
 )
-from nfl_predictor.reporting import power_rankings
+from nfl_predictor.reporting import power_rankings, rating_sources
 from nfl_predictor.reporting.betting_report import build_betting_report
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.utils.logger import log
@@ -525,7 +525,7 @@ def _write_power_rankings(
         result = power_rankings.compute_power_rankings(
             model, ranking_inputs, config.power_ranking_options(args)
         )
-    except power_rankings.StrengthSnapshotUnavailableError as exc:
+    except rating_sources.RatingSourceUnavailableError as exc:
         log.warning("Power rankings skipped: %s", exc)
         return []
     power_rankings.write_ranking_outputs(

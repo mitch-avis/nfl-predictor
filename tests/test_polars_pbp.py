@@ -305,12 +305,13 @@ def _fixture_plays() -> pl.DataFrame:
 #     1 carry; SF faced DAL's 1 dropback and 1 carry; DAL faced SF's 1 dropback
 #     and 2 carries.
 #
+# The fixture has no drive columns, so no team has a red-zone trip.
+#
 # KC: snaps K1-K5 (5); dropbacks K1, K3, K5 (the kneel is excluded); carries K2
 #     only (the kneel row sets the rush flag here, but a kneel is never a carry).
 #     pass epa 1.5 + 2.0 - 1.2 = 2.3; rush epa 0.8.
 #     explosive pass K1 (25 >= 20); explosive rush K2 (14 >= 12); no stuffed rush.
 #     early downs K1, K2, K4 (3); early-down pass K1 (1).
-#     red zone K3 (18 <= 20) with a KC touchdown; total plays K1-K5 (5).
 #     Special teams: punt epa -0.6 credited for, 1 play.
 # BUF: snaps B1-B4 (4); dropback B2 only (the spike is excluded); carries B1, B3.
 #     pass epa 2.2; rush epa -0.1 - 0.5 = -0.6; explosive pass B2 (30 >= 20).
@@ -321,7 +322,7 @@ def _fixture_plays() -> pl.DataFrame:
 #     pass epa 0.6; rush epa 1.1; explosive rush F2 (13 >= 12);
 #     F1 gains 12 which is below the 20-yard explosive pass threshold.
 #     early down F2 only (F1 is 3rd down, F3 has no down).
-#     red zone F2 (13) and F3 (2) with no touchdown; two-point try F3 succeeded.
+#     two-point try F3 succeeded.
 #     Special teams: DAL's field goal is charged against SF, 1 play.
 # DAL: snaps D1, D2; dropback D1; carry D2; stuffed rush D2 (-3 <= 0).
 #     early downs D1, D2; early-down pass D1.
@@ -558,11 +559,10 @@ def test_thresholds_are_named_constants() -> None:
         pbp.EXPLOSIVE_RUSH_YARDS,
         pbp.STUFFED_RUSH_YARDS,
         pbp.EARLY_DOWN_MAX,
-        pbp.RED_ZONE_YARDLINE,
     )
 
     # Assert
-    assert thresholds == (20, 12, 0, 2, 20)
+    assert thresholds == (20, 12, 0, 2)
 
 
 def test_team_game_columns_start_with_identity_keys() -> None:
@@ -1110,6 +1110,7 @@ def test_red_zone_touchdown_counts_only_the_offense_that_scored() -> None:
                 interception=1,
                 fixed_drive=1,
                 fixed_drive_result="Opp touchdown",
+                drive_inside20=1.0,
             )
         ],
         schema_overrides=_FIXTURE_DTYPES,
@@ -1822,7 +1823,7 @@ def test_is_home_is_not_carried_as_a_count_or_published_stat() -> None:
 
 
 def test_red_zone_trips_count_drives_not_snaps() -> None:
-    """Red-zone trips count distinct drives that reached the 20, not plays inside it."""
+    """Red-zone trips count distinct drives nflverse flags inside the 20, not plays inside it."""
     # Arrange
     plays = _frame(
         [
@@ -1832,6 +1833,7 @@ def test_red_zone_trips_count_drives_not_snaps() -> None:
                 play_type="run",
                 fixed_drive=1,
                 fixed_drive_result="Touchdown",
+                drive_inside20=1.0,
                 yardline_100=18.0,
             ),
             _play(
@@ -1840,6 +1842,7 @@ def test_red_zone_trips_count_drives_not_snaps() -> None:
                 play_type="run",
                 fixed_drive=1,
                 fixed_drive_result="Touchdown",
+                drive_inside20=1.0,
                 yardline_100=9.0,
                 td_team="KC",
             ),
@@ -1850,6 +1853,7 @@ def test_red_zone_trips_count_drives_not_snaps() -> None:
                 qb_dropback=1,
                 fixed_drive=2,
                 fixed_drive_result="Field goal",
+                drive_inside20=1.0,
                 yardline_100=12.0,
             ),
         ]
@@ -1880,6 +1884,7 @@ def test_red_zone_trip_counted_once_per_drive_without_a_touchdown() -> None:
                 play_type="run",
                 fixed_drive=3,
                 fixed_drive_result="Turnover",
+                drive_inside20=1.0,
                 yardline_100=5.0,
             )
         ]
@@ -1891,3 +1896,149 @@ def test_red_zone_trip_counted_once_per_drive_without_a_touchdown() -> None:
     # Assert
     assert _row_for(result, "SF")["red_zone_trips"] == 1
     assert _row_for(result, "SF")["red_zone_td_drives"] == 0
+
+
+def test_a_touchdown_drive_inside_the_20_only_for_its_try_is_no_red_zone_trip() -> None:
+    """The try after a touchdown is snapped inside the 20 but does not make the drive a trip."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="pass",
+                qb_dropback=1,
+                fixed_drive=1,
+                fixed_drive_result="Touchdown",
+                drive_inside20=0.0,
+                yardline_100=45.0,
+                td_team="KC",
+            ),
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="extra_point",
+                special=1,
+                fixed_drive=1,
+                fixed_drive_result="Touchdown",
+                drive_inside20=0.0,
+                yardline_100=15.0,
+            ),
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    kc = _row_for(result, "KC")
+    assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    ("yardline", "flag", "trips"),
+    [
+        pytest.param(25.0, 1.0, 1, id="flagged-without-a-snap-inside-the-20"),
+        pytest.param(20.0, 0.0, 0, id="snap-at-the-20-not-flagged"),
+        pytest.param(12.0, 0.0, 0, id="snap-inside-the-20-not-flagged"),
+    ],
+)
+def test_red_zone_trips_follow_the_nflverse_drive_flag_not_the_yard_line(
+    yardline: float, flag: float, trips: int
+) -> None:
+    """A drive is a red-zone trip when nflverse flags it inside the 20, wherever it snapped."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="SF",
+                defteam="DAL",
+                play_type="run",
+                rush=1,
+                rush_attempt=1,
+                fixed_drive=2,
+                fixed_drive_result="Field goal",
+                drive_inside20=flag,
+                yardline_100=yardline,
+            )
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    assert _row_for(result, "SF")["red_zone_trips"] == trips
+    assert _row_for(result, "DAL")["red_zone_trips_allowed"] == trips
+
+
+def test_a_drive_is_one_red_zone_trip_when_any_of_its_plays_carries_the_flag() -> None:
+    """nflverse can leave the flag null or 0 on some plays of a flagged drive: it is one trip."""
+    # Arrange
+    plays = _frame(
+        [
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="run",
+                rush=1,
+                rush_attempt=1,
+                fixed_drive=3,
+                fixed_drive_result="Touchdown",
+                drive_inside20=None,
+            ),
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="pass",
+                qb_dropback=1,
+                fixed_drive=3,
+                fixed_drive_result="Touchdown",
+                drive_inside20=0.0,
+            ),
+            _play(
+                posteam="KC",
+                defteam="BUF",
+                play_type="pass",
+                qb_dropback=1,
+                fixed_drive=3,
+                fixed_drive_result="Touchdown",
+                drive_inside20=1.0,
+                td_team="KC",
+            ),
+        ]
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    kc = _row_for(result, "KC")
+    assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (1, 1)
+    buf = _row_for(result, "BUF")
+    assert (buf["red_zone_trips_allowed"], buf["red_zone_td_drives_allowed"]) == (1, 1)
+
+
+def test_red_zone_trips_are_zero_without_the_drive_flag_column() -> None:
+    """Without ``drive_inside20`` no drive is a red-zone trip, whatever its yard line."""
+    # Arrange
+    plays = pl.DataFrame(
+        {
+            "season": [2024],
+            "week": [1],
+            "posteam": ["KC"],
+            "defteam": ["BUF"],
+            "rush": [1],
+            "rush_attempt": [1],
+            "yardline_100": [5.0],
+            "fixed_drive": [1],
+            "fixed_drive_result": ["Touchdown"],
+        }
+    )
+
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
+    kc = _row_for(result, "KC")
+    assert (kc["red_zone_trips"], kc["red_zone_td_drives"]) == (0, 0)

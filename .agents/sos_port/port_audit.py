@@ -49,9 +49,13 @@ SCRATCH = Path.home() / "scratch"
 
 
 def _git(*args: str, cwd: Path | None = None) -> str:
-    """Run a read-only git command and return its standard output."""
+    """Run a read-only git command and return its standard output.
+
+    ``--no-optional-locks`` keeps ``git status`` from refreshing, and so rewriting, the index of
+    the read-only repository it inspects.
+    """
     return subprocess.run(  # noqa: S603 - fixed git argv built in this file
-        ["git", *args],  # noqa: S607 - git from PATH, as every agent shell uses it
+        ["git", "--no-optional-locks", *args],  # noqa: S607 - git from PATH
         cwd=cwd or ROOT,
         check=True,
         capture_output=True,

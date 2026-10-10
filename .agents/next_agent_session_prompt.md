@@ -38,7 +38,11 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   candidate.csv` (sha256 `74b21113...`, built 10:05, leakage audit ok); each run's directory is
   `models/step6/<arm>_seed<seed>/`, the order and the rules are in `models/step6/HYPOTHESIS.md`
   (amended before launch, see its checksum files), and `launch_record.txt` holds the provenance.
-  About 34 minutes a run; the last should end near 16:00. The driver's check for other runs uses
+  About 34 minutes a run on an idle GPU, but another project's GPU job (the user's
+  `tiktok-fav-dl` tagger soak, from another session) shares the card at 86-100% utilization, and
+  the first run took about 80 minutes; at that pace the last run ends late on 2026-10-10. Do not
+  move runs to the CPU (the references ran on the GPU) and do not interfere with the other
+  session's job. The driver's check for other runs uses
   `pgrep -af` on the command line: never type the text `bin/nfl-predictor` followed by
   `data`, `weekly` or `backtest` in a shell command while it runs, or it waits on that shell.
   After each run: a check-in with its numbers; after both seeds of an arm: `nfl-predictor compare`

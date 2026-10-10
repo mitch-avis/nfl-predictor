@@ -1072,8 +1072,9 @@ def build_team_stat_trends(
 
     A team's trend in week ``N`` is the mean of its last ``window`` games strictly before week
     ``N`` minus its season-to-date mean over all of those games, and 0.0 before it has a game
-    with a value. Every team-week the season's schedule lists gets a row, played or not, so an
-    upcoming game's row carries the values its completed row will carry. Only the games in
+    with a value. Every team-week the season's schedule lists gets a row, played or not: a game
+    of the next week to be played carries the values its completed row will carry, and a game
+    of a later week the trends after the team's last completed game. Only the games in
     ``team_stats_df`` count; in the ETL those are the completed regular-season games, so a
     playoff week's trend covers the full regular season.
 

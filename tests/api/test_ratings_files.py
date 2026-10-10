@@ -106,6 +106,23 @@ def test_read_table_names_an_empty_or_truncated_file_as_unreadable(
     assert (raised.value.season, raised.value.kind) == (2025, "ratings")
 
 
+def test_read_table_names_a_file_it_may_not_open_as_unreadable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A table the server may not open (its permissions, say) is unreadable, not a crash."""
+    # Arrange
+    factories.write_season(tmp_path, 2025, kinds=("ratings",))
+
+    def denied(path: Path, _loader: object) -> pl.DataFrame:
+        raise PermissionError(13, "Permission denied", str(path))
+
+    monkeypatch.setattr(files, "cached", denied)
+
+    # Act & Assert
+    with pytest.raises(files.RatingsTableUnreadableError, match="Permission denied"):
+        files.read_table(tmp_path, 2025, "ratings")
+
+
 def test_entity_rows_keeps_one_team_by_week(tmp_path: Path) -> None:
     """Game logs narrow to one team, in week order."""
     # Arrange

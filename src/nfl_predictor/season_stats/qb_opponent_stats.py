@@ -100,12 +100,20 @@ def _qb_allowed_stats_by_pair(
     faced = weekly_df.select(
         pl.col("opponent_team").alias("opponent"), pl.col("team").alias("offense"), "week"
     )
+    # Both joins keep the left rows' order, then the right's: the aggregation below sums floats
+    # in row order, so an unspecified join order could move a sum's last bits.
     qb_allowed = (
         pairs.select(pl.col("team").alias("opponent"), "excluded_opponent")
         .unique(maintain_order=True)
-        .join(faced, on="opponent", how="inner")
+        .join(faced, on="opponent", how="inner", maintain_order="left_right")
         .filter(pl.col("offense") != pl.col("excluded_opponent"))
-        .join(qb_df, left_on=["offense", "week"], right_on=["team_abbr", "week"], how="inner")
+        .join(
+            qb_df,
+            left_on=["offense", "week"],
+            right_on=["team_abbr", "week"],
+            how="inner",
+            maintain_order="left_right",
+        )
     )
     if qb_allowed.is_empty():
         return empty

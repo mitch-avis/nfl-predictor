@@ -684,3 +684,48 @@ def test_every_qb_game_rate_is_rebuilt_over_games() -> None:
     assert [
         rate for rate in rates if rate not in qb_stats.QB_RATES and rate not in with_parts
     ] == []
+
+
+def test_build_weekly_team_stats_returns_rows_in_team_week_game_order() -> None:
+    # Arrange
+    pbp = _team_pbp().reverse()
+
+    # Act
+    result = game_logs.build_weekly_team_stats(
+        pbp, _defense_player_stats(), _schedule(), _official_team_stats()
+    )
+
+    # Assert
+    assert result.select(game_logs.TEAM_GAME_ORDER).rows() == [
+        ("DEN", 1, _GAME),
+        ("KC", 1, _GAME),
+    ]
+
+
+def test_build_qb_game_stats_breaks_a_name_tie_by_passer_id() -> None:
+    """Two passers the play-by-play names alike in one game are ordered by their ids."""
+    # Arrange
+    pbp = pl.concat(
+        [
+            _passer_pbp().head(1).with_columns(pl.lit("00-0000002").alias("passer_player_id")),
+            _passer_pbp().head(1).with_columns(pl.lit("00-0000001").alias("passer_player_id")),
+        ]
+    ).with_columns(pl.lit("J.Smith").alias("passer_player_name"))
+    identity = pl.DataFrame(
+        {
+            "qb_id": ["00-0000001", "00-0000002"],
+            "snap_player_id": [None, None],
+            "qb_name": ["J.Smith", "J.Smith"],
+            "qb_position": ["QB", "QB"],
+        },
+        schema=QB_IDENTITY_SCHEMA,
+    )
+
+    # Act
+    result = game_logs.build_qb_game_stats(pbp, pl.DataFrame(), identity, pl.DataFrame())
+
+    # Assert
+    assert result.select("qb_name", "qb_id").rows() == [
+        ("J.Smith", "00-0000001"),
+        ("J.Smith", "00-0000002"),
+    ]

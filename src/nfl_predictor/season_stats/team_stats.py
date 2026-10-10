@@ -611,10 +611,12 @@ def compute_team_stats_excluding_opponents(
     (``_games_agg_exprs``: counts per game, rates pooled over the games), except that a longest
     play is averaged per game, and ``games_included``. One aggregation covers every pair.
     """
+    # The join keeps the pairs' order, then the games': the aggregation sums floats in row order,
+    # so an unspecified join order could move a sum's last bits.
     games = (
         pairs.select("team", "excluded_opponent")
         .unique(maintain_order=True)
-        .join(weekly_df, on="team", how="inner")
+        .join(weekly_df, on="team", how="inner", maintain_order="left_right")
         .filter(pl.col("opponent_team") != pl.col("excluded_opponent"))
     )
     return games.group_by(["team", "excluded_opponent"], maintain_order=True).agg(

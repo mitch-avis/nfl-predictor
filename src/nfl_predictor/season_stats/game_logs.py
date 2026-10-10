@@ -42,6 +42,9 @@ from nfl_predictor.season_stats.team_stats import (
 QB_POSITION = constants.QB_POSITION
 # Teams in one game: a game whose official weekly team stats name fewer is credited to one team.
 TEAMS_PER_GAME = 2
+# The row order of the team-game and passer-game rows the builders return.
+TEAM_GAME_ORDER = ("team", "week", "game_id")
+QB_GAME_ORDER = ("team_abbr", "week", "game_id", "qb_name", "qb_id")
 # The official weekly team stat columns the override reads, besides the game keys.
 OFFICIAL_TEAM_STAT_COLUMNS = (
     "passing_yards",
@@ -628,10 +631,12 @@ def build_weekly_team_stats(
     weekly_team_stats_df = compute_team_game_stats_from_pbp(pbp_df, player_stats_df, schedule_df)
     if "game_id" in official_team_stats_df.columns:
         official_team_stats_df = two_team_games_only(official_team_stats_df)
+    # The season rows and profiles sum floats over these rows in their order, so the order is
+    # fixed here rather than left to the override's joins.
     return override_team_game_stats_with_official_weekly(
         weekly_team_stats_df,
         official_team_stats_df,
-    )
+    ).sort(TEAM_GAME_ORDER)
 
 
 def build_qb_game_stats(
@@ -644,6 +649,9 @@ def build_qb_game_stats(
     qb_df = compute_qb_game_stats_from_pbp(pbp_df, snap_counts_df, qb_identity_df)
     official_qb_stats_df = official_weekly_qb_stats(weekly_player_stats_df, qb_identity_df)
     qb_df = override_qb_game_stats_with_official_weekly(qb_df, official_qb_stats_df)
+    # The season rows and profiles sum floats over these rows in their order, so the order is
+    # fixed here rather than left to the joins above; the passer id breaks a tie on the name.
+    qb_df = qb_df.sort(QB_GAME_ORDER)
 
     passer_rating = qb_passer_rating_expr(
         *(pl.col(column).cast(pl.Float64) for column in QB_PASSING_TOTALS)

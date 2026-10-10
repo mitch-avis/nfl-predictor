@@ -10,9 +10,14 @@ so the defect predates step 6. This file records the cause, each decision with i
 data, and the measured movement. The fix changes what a weekly run produces (the upcoming rows),
 so it is held for the user's approval with the rest of step 6.
 
-Commands run from this repository's root with the worktree's environment. Every number below
-comes from one of three scripts beside this file, each with its output checked in beside it.
-None writes outside a temporary directory, and the two that build do so offline (the network
+Commands run from this repository's root with the worktree's environment. The code they build
+with is commit `af66025`, this branch with the fix before it merged step 6's `0.54.0`: the merged
+ETL also reads nflverse's weekly player stats and nfelosrs's win totals, which no read-only cache
+holds, so it cannot build offline. Run `trend_parity_check.py` and `trend_parity_movement.py` from
+a checkout of `af66025`, whose working tree is the fixed code; `trend_parity_missing_values.py`
+(with `--base af66025`) and `trend_parity_audit_reach.py` run from any checkout. Every number below
+comes from one of four scripts beside this file, each with its output checked in beside it. None
+writes outside a temporary directory, and the three that build or load do so offline (the network
 refused) from read-only copies of the frozen step-6 inputs (`~/scratch/step6/data/`, manifest
 `~/scratch/step6_data_snapshot_20261010.sha256`) and of the integration build's play-by-play
 cache (`/tmp/step6_int/cache/`, byte-identical to the reviewer's `/tmp/rev_ab77/cache/` and,
@@ -34,6 +39,9 @@ season again; `--download-stale-pbp` does that into the temporary copy when the 
 - **The audit's reach**, `trend_parity_audit_reach.py`: how strongly the scoring-margin trend
   tracks the game margin, as published and in a deliberately leaking version. Output:
   `trend_parity_audit_reach_output.txt`.
+- **The missing values**, `trend_parity_missing_values.py --base af66025`: the sides whose trend
+  a missing value in the game before removes, with the trend each would otherwise carry. Output:
+  `trend_parity_missing_values_output.txt`.
 
 ## The cause
 
@@ -111,39 +119,50 @@ season again; `--download-stale-pbp` does that into the temporary copy when the 
   agree by throwing the signal away and moves every training row with a non-zero trend.
 - **Data**: in the scenario before the fix, all 16 upcoming games carry `0.0` in the four side
   columns and both differences while their completed rows carry up to 15.75 (22.625 on the
-  difference), the reviewer's numbers; after it, no trend column differs and each game's four
-  values match its completed row's (section 4 of each output). The played build reproduces the
-  published values of the week exactly, before and after (largest gap 0.0), so the temporary build
-  is the ETL that published them. `tests/test_trend_parity.py` builds a small season twice through
-  `data_collection.process_season`, played and with one week and everything after it unplayed, and
-  requires every trend column of that week to match, for the last regular-season week and for the
-  playoff round; on the code before the fix both cases fail (the first on the values, the second
-  because the completed playoff rows carry no trend). `tests/test_trend_features.py` adds
+  difference), the reviewer's numbers; after it, no trend column differs and each game's four values
+  match its completed row's (section 4 of each output). The played build reproduces the published
+  values of the week exactly, before and after (largest gap 0.0), so the temporary build is the ETL
+  that published them. `tests/test_trend_parity.py` builds a small season (one division's teams,
+  with their coaches and ELO rows) twice through `data_collection.process_season`, played and with
+  one week and everything after it unplayed, and requires every column of that week but the two
+  scores to match, for the last regular-season week and for the playoff round; on the code before
+  the fix both cases fail (the first on the values, the second because the completed playoff rows
+  carry no trend), and so does making the record features count the row's own week (on
+  `away_losses`). `tests/test_trend_features.py` adds
   `test_build_team_stat_trends_gives_an_unplayed_week_the_trend_from_earlier_games`,
   `test_build_team_stat_trends_gives_a_playoff_week_the_full_regular_season_trend` and
-  `test_build_team_stat_trends_is_zero_for_a_team_without_an_earlier_game`; the existing test of
-  the trend definition passes unchanged apart from the schedule it now passes.
+  `test_build_team_stat_trends_is_zero_for_a_team_without_an_earlier_game`; the existing test of the
+  trend definition passes unchanged apart from the schedule it now passes, and a schedule without
+  the team-week columns raises instead of giving every row `0.0`
+  (`test_build_team_stat_trends_rejects_a_schedule_it_cannot_key_on`).
   `test_build_team_stat_trends_keeps_a_game_without_a_value_in_the_window` pins the missing-value
-  handling, which the code before the fix shares for every played week: a game without a value
-  fills a slot of the four-game window but counts in neither mean, and the week right after it
-  has no trend (published as `0.0`).
+  handling, which the code before the fix shares for every played week: a game without a value fills
+  a slot of the four-game window but counts in neither mean, and the team's next row has no trend
+  (published as `0.0`). That reaches 16 regular-season turnover-margin sides of 2000-2002, 12 of
+  them Jacksonville's in 2001-2002; 11 publish `0.0` where the trend would otherwise be -2.0 to
+  1.714286, the 11 the review counted, and the other five would be `0.0` anyway. No playoff side and
+  no scoring-margin side is reached (`trend_parity_missing_values_output.txt`). The fix keeps that
+  behavior: changing it would change completed rows.
 - **Feature-value impact**: no training row moves. Over 1999-2025 none of the 6,952 completed
   regular-season rows changes in any season, and no column other than the six team-stat trend
   columns changes anywhere (the movement measurement, sections 2 and 3). A walk-forward without
   `--include-postseason` trains and scores on exactly those rows, so no benchmark result changes:
   the benchmark already measured the model with these trends, and the fix makes production predict
   with them too (the gap `AGENTS.md` rule 11 forbids, closed without a new walk-forward). Every
-  upcoming row changes: it carried `0.0` and now carries the value its completed row will carry.
-  Over every season's completed regular-season rows that value is `0.0` through week 5 by
-  construction (with four or fewer earlier games, the last four are the whole season), non-zero for
-  72.8% of team sides in week 6 (mostly teams that have had their bye) and 98.8-99.9% from week 7
-  on; the mean absolute scoring-margin trend is 1.76 points in week 6, 2.766-4.1 in weeks 7-12 and
-  4.349-5.055 in weeks 13-18 (largest 22.0, week 15), and the mean absolute turnover-margin trend
-  0.248-0.645 (largest 3.017, week 17) (section 4). In 2025 week 18 the upcoming rows move by up to
-  15.75 on a side and 22.625 on the difference (the scenario). A weekly run's predictions change
-  from week 6, the first week a team can have five earlier games, so the next affected run is 2026
-  week 6. The season-build characterization snapshot changes in two rows of its unplayed week: the
-  home-side trends and the two differences.
+  upcoming row changes from `0.0`. A row of the next week to be played now carries the value its
+  completed row will carry; a row two or more weeks out carries the trend after the team's last
+  completed game, which the games before its week will still change. Over every season's completed
+  regular-season rows, the value a next-week row now carries is `0.0` through week 5 by construction
+  (with four or fewer earlier games, the last four are the whole season), non-zero for 72.8% of team
+  sides in week 6 (mostly teams that have had their bye) and 98.8-99.9% from week 7 on; the mean
+  absolute scoring-margin trend is 1.76 points in week 6, 2.766-4.1 in weeks 7-12 and 4.349-5.055 in
+  weeks 13-18 (largest 22.0, week 15), and the mean absolute turnover-margin trend 0.248-0.645
+  (largest 3.017, week 17) (section 4). In 2025 week 18 the upcoming rows move by up to 15.75 on a
+  side and 22.625 on the difference (the scenario). A weekly run's predictions change from week 6,
+  the first week a team can have five earlier games, so the next affected run is 2026 week 6. The
+  season-build characterization snapshot changes in two rows of its unplayed week (`2020_06_KC_BUF`,
+  `2020_06_LV_MIA`), in the home-side trends and the two differences, both against the snapshot
+  before the fix and against step 6's `0.54.0` snapshot regenerated on the merged tree.
 - **How to reverse it**: restore `build_team_stat_trends` to its shifted computation over the
   per-team-game rows, drop its `schedule_df` argument and the caller's, and rewrite the
   season-build characterization snapshot (`NFLP_UPDATE_SNAPSHOTS=1`).
@@ -183,28 +202,38 @@ season again; `--download-stale-pbp` does that into the temporary copy when the 
   (`features.py`); playoff rows then find no trend row and take `0.0` again.
 - **Review**: not yet reviewed.
 
-## 3. The ELO, quarterback and TeamRankings trends stay as they are
+## 3. The ELO, quarterback and TeamRankings trends keep their values; a missing ELO week warns
 
 - **What differs**: the ELO trend and the two quarterback trends go through the same exact join,
   keyed by the rows of `qb_elos.csv`; the TeamRankings trend comes from the week's scraped file.
-- **Options**: (a) leave them; (b) give them the as-of treatment of decision 1.
-- **Decision**: (a).
+- **Options**: (a) keep their values, and warn when `qb_elos.csv` lacks the week being predicted;
+  (b) give them the as-of treatment of decision 1; (c) stop the run when the file lacks that week.
+- **Decision**: (a); after the review, warn and do not stop.
 - **Reasoning**: their inputs exist for an upcoming week before kickoff (`../nfeloqb` lists the
-  upcoming week's games with pre-game ratings, and a week's TeamRankings file is scraped before
-  the week), and the week-`N` value uses only those pre-game inputs, so a completed and an
-  upcoming row agree whenever the input carries the week; in the scenario none of them differs.
-  When `qb_elos.csv` lacks the predicted week, the ELO levels fall back to each team's latest
-  pre-game rating (`_merge_elo`, `week_rows.py` line 304), the team ELO trend becomes `0.0` and
-  the quarterback trends null (`_merge_qb_trends` finds no quarterback names, `week_rows.py`
-  line 576). That is a stale input rather than this defect, and an as-of rule would not repair it,
-  because the week-`N` ELO trend needs the week-`N` pre-game rating.
+  upcoming week's games with pre-game ratings, and a week's TeamRankings file is scraped before the
+  week), and the week-`N` value uses only those pre-game inputs, so a completed and an upcoming row
+  agree whenever the input carries the week; in the scenario none of them differs. When
+  `qb_elos.csv` lacks the predicted week, the ELO levels fall back to each team's latest pre-game
+  rating (`_merge_elo`, `week_rows.py` line 304 at `a000802`), the team ELO trend becomes `0.0` and
+  the quarterback trends null (`_merge_qb_trends` finds no quarterback names, line 576 at
+  `a000802`), values a completed row never carries once its teams have played. That is a stale input
+  rather than this defect, and an as-of rule would not repair it, because the week-`N` ELO trend
+  needs the week-`N` pre-game rating. So the source load now checks the week being predicted
+  (`week_rows.warn_if_elo_lacks_week`, called from `data_collection._load_sources` with the current
+  week the prediction file uses) and logs one warning naming the season and the week and saying to
+  refresh `data/qb_elos.csv` before the run. The weeks after it, which the file never lists yet, are
+  not checked, so a refreshed file gives no warning.
 - **Data**: the scenario's section 3 lists no ELO, quarterback or TeamRankings trend column. Its
-  section 6 shows the fallback in the frozen inputs' published `all_data_ml.csv` (built
-  2026-10-09): none of the 14 unplayed 2026 week-5 games, which `qb_elos.csv` lists, has a `0.0`
-  team ELO trend on both sides or a missing quarterback trend, while every unplayed game of weeks
-  6-18, which it does not list yet, has both.
-- **Feature-value impact**: none.
-- **How to reverse it**: nothing to reverse.
+  section 6 shows the fallback in the frozen inputs' published `all_data_ml.csv` (built 2026-10-09):
+  none of the 14 unplayed 2026 week-5 games, which `qb_elos.csv` lists, has a `0.0` team ELO trend
+  on both sides or a missing quarterback trend, while every unplayed game of weeks 6-18, which it
+  does not list yet, has both. `tests/test_elo_week_warning.py` pins the warning: one, worded as
+  above, when the rows stop before the week being predicted, also through `_load_sources`; none when
+  the file lists the week, when the week has no game left to play, or without any ELO rows (the
+  loader warns about that).
+- **Feature-value impact**: none; the warning changes no value.
+- **How to reverse it**: remove the `warn_if_elo_lacks_week` call from
+  `data_collection._load_sources`.
 - **Review**: not yet reviewed.
 
 ## 4. The leakage audit could not have caught this, and it is not changed here
@@ -214,10 +243,10 @@ season again; `--download-stale-pbp` does that into the temporary copy when the 
   names, and a correlation with the home margin or total of at least 0.995 in absolute value (a
   flag; 0.999999 fails) or near-equality with a score. The third check `.agents/modeling_spec.md`
   requires ("validates season-to-date features exclude the current game row") has no code in it.
-- **Options**: (a) no audit change in this task, with the parity test pinning the property and a
-  question for the user; (b) add a completed-against-upcoming parity check to the audit, as the
-  scenario script does; (c) implement the spec's third check by recomputing each season-to-date
-  family with and without the row's own game.
+- **Options**: (a) no audit change in this task, with the parity test pinning the property for
+  every column but the scores and a question for the user; (b) add a completed-against-upcoming
+  parity check to the audit, as the scenario script does; (c) implement the spec's third check by
+  recomputing each season-to-date family with and without the row's own game.
 - **Decision**: (a).
 - **Reasoning**: the audit should not have caught this defect and could not: it is a mismatch
   between completed and upcoming rows, not leakage, and the audit never sees an upcoming row. It

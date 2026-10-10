@@ -143,6 +143,20 @@ def test_glossary_registry_lists_both_entities_and_their_metrics() -> None:
     assert registry.metrics["adj_qb_epa_per_dropback"].entity == "qb"
 
 
+def test_glossary_categories_do_not_describe_the_garbage_time_filter() -> None:
+    """No category description points readers to a filter view the app does not have."""
+    # Act
+    registry = glossary.metric_registry()
+
+    # Assert
+    descriptions = [
+        category.description
+        for entity in registry.entities.values()
+        for category in entity.categories
+    ]
+    assert not [text for text in descriptions if "garbage" in text.lower()]
+
+
 def test_glossary_registry_leaves_out_the_garbage_time_filter() -> None:
     """The filter's own metrics and prefix belong to a view this app does not have."""
     # Act

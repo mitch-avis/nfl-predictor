@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 
 import { ApiError } from '@/api/client'
 import { usePicks, usePredictions, useWeeks } from '@/api/queries'
-import type { Row, WeekRef } from '@/api/types'
+import type { Row } from '@/api/types'
 import { CopyButton } from '@/components/common/CopyButton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { useNumberParam, useQueryParam } from '@/hooks/useQueryParam'
+import { useWeekParams } from '@/hooks/useWeekParams'
 import { cn } from '@/utils/cn'
 import { formatDateTime, formatNumber, formatPercent, formatRelative } from '@/utils/format'
 
@@ -48,20 +48,6 @@ function NotPredictedYet({ season, week }: { season: number | null; week: number
       }
     />
   )
-}
-
-function useWeekParams() {
-  const [run, setRun] = useQueryParam('run')
-  const [season, setSeason] = useNumberParam('season')
-  const [week, setWeek] = useNumberParam('week')
-  const [source, setSource] = useQueryParam('source')
-  const select = (ref: WeekRef | null) => {
-    setRun(ref?.source === 'run' ? ref.run_id : null)
-    setSeason(ref && ref.source !== 'run' ? ref.season : null)
-    setWeek(ref && ref.source !== 'run' ? ref.week : null)
-    setSource(ref?.source === 'unattached' ? 'unattached' : null)
-  }
-  return { params: { run, season, week, source }, select }
 }
 
 function PicksList({ params }: { params: { run: string | null; season: number | null; week: number | null } }) {

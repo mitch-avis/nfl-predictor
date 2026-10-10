@@ -51,6 +51,7 @@ import math
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 from dataclasses import asdict, dataclass, field
 from importlib.metadata import version
@@ -555,6 +556,18 @@ def _summary(comparisons: list[TableComparison], kinds: tuple[str, ...]) -> dict
     }
 
 
+def _code_list(names: list[str]) -> str:
+    """Return names as a code-formatted list wrapped to the Markdown line limit, or None."""
+    if not names:
+        return "None."
+    return textwrap.fill(
+        ", ".join(f"`{name}`" for name in names),
+        width=100,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+
+
 def _season_list(seasons: list[int]) -> str:
     """Return seasons as runs of consecutive years, such as ``1999-2012, 2014``."""
     runs: list[list[int]] = []
@@ -579,7 +592,12 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         "## Run",
         "",
-        f"- Command: `{report['command']}`",
+        "Command, from the repository root:",
+        "",
+        "```bash",
+        f"{report['command']}",
+        "```",
+        "",
         f"- Code: `{report['code_commit']}`",
         f"- Finished: {report['finished']}",
         f"- Seasons: {report['seasons'][0]}-{report['seasons'][-1]} ({len(report['seasons'])})",
@@ -665,11 +683,11 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         "Team rates whose parts the published logs do not determine, in every season:",
         "",
-        ", ".join(f"`{rate}`" for rate in report["unrecovered_rates"]["team"]) or "None.",
+        _code_list(report["unrecovered_rates"]["team"]),
         "",
         "Quarterback rates whose parts the published logs do not determine:",
         "",
-        ", ".join(f"`{rate}`" for rate in report["unrecovered_rates"]["qb"]) or "None.",
+        _code_list(report["unrecovered_rates"]["qb"]),
     ]
     lines += [
         "",
@@ -739,7 +757,7 @@ def _markdown(report: dict[str, Any]) -> str:
         "`constants.PBP_COLUMNS` (the play-by-play cache's list; the run set it to the columns",
         "above):",
         "",
-        ", ".join(f"`{c}`" for c in report["pbp_columns"]["missing_from_constants"]) or "None.",
+        _code_list(report["pbp_columns"]["missing_from_constants"]),
         "",
     ]
     return "\n".join(lines)

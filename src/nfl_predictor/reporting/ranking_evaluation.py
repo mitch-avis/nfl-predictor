@@ -1,8 +1,8 @@
-"""Score candidate power rankings on next week's margins, as pre-registered for roadmap step 6.
+"""Score candidate power rankings on how well they predict next week's margins.
 
-The design is the main checkout's ``models/step6/rankings/HYPOTHESIS.md``. Each candidate rates
-every team before every week, in points (:mod:`nfl_predictor.reporting.rating_sources`). For every
-regular-season game from week 2 on, a candidate predicts the home margin as
+Each candidate rates every team before every week, in points
+(:mod:`nfl_predictor.reporting.rating_sources`). For every regular-season game from week 2 on, a
+candidate predicts the home margin as
 
     rating[home] - rating[away] + h            (h is zero at a neutral site)
 
@@ -494,7 +494,7 @@ class Decision:
 
 
 def decide(verdicts: Iterable[CandidateVerdict], *, reference: str) -> Decision:
-    """Apply the pre-registered rule: replace the reference only with a clear all-weeks win.
+    """Apply the decision rule: replace the reference only with a clear all-weeks win.
 
     A candidate replaces the reference only if its error is lower and both all-weeks intervals
     exclude zero in its favor; among several, the lowest error wins. Anything else is a tie,

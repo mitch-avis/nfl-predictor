@@ -1,17 +1,21 @@
-"""Quarterback per-dropback features for the expected starter, built from play-by-play.
+"""Quarterback per-dropback features for each side's starter, built from play-by-play.
 
-The family gives each game row the production of the quarterback the ETL expects to start
-(``away_qb`` / ``home_qb``), measured only from that quarterback's regular-season games in
-earlier weeks, across teams and seasons.
+The family gives each game row the production of each side's starting quarterback, measured
+only from that quarterback's regular-season games in earlier weeks, across teams and seasons.
 
 Pipeline:
 
-1. Identity. Elo quarterback names map to GSIS ids through a read-only copy of the nfeloqb
-   metadata (``name_id`` -> ``gsis_id``), which is also the play-by-play ``passer_player_id``.
-   Names that map to more than one id are dropped as ambiguous, and
-   ``constants.QB_NAME_ALIASES`` covers Elo spellings the metadata lacks. A name still
-   unmapped falls back to the play-by-play passer name, abbreviated as ``F.Last``, when that
-   abbreviation belongs to exactly one passer.
+1. Starter. A completed game's starter is its play-by-play starter (``qb_starters``: the
+   quarterback on the team's first first-quarter snap), known at kickoff. A game the
+   play-by-play names no starter for (an upcoming game, every postseason game, and the rare
+   team-game without a first-quarter quarterback snap) takes the starter the ETL names
+   (``away_qb`` / ``home_qb``: the projected starter of an upcoming game). A name maps to a
+   GSIS id through a read-only copy of the nfeloqb metadata (``name_id`` -> ``gsis_id``), which
+   is also the play-by-play ``passer_player_id``. Names that map to more than one id are
+   dropped as ambiguous, and ``constants.QB_NAME_ALIASES`` covers Elo spellings the metadata
+   lacks. A name still unmapped falls back to the play-by-play passer name, abbreviated as
+   ``F.Last``, when that abbreviation belongs to exactly one passer among the games before the
+   row's week, so a later passer can neither name a row nor make its name ambiguous.
 2. Quarterback games. ``aggregate_qb_game_stats`` sums one row per
    ``(season, week, team, quarterback)`` over dropbacks, using the team families' dropback
    definition (``pbp.dropback_condition``). Sums only; rates come later.
@@ -39,11 +43,9 @@ Formulas, with ``K = constants.QB_PRIOR_DROPBACKS``:
 - ``qb_history_dropbacks``: career dropbacks, so the model can see how much evidence stands
   behind the rates. Null when the quarterback cannot be identified.
 
-Deviation from the ``nfl-sos-ratings`` reference (read-only): it credits scrambles through
-``rusher_player_id``, which this family does not read, though the play-by-play cache keeps it.
-Here a scramble (a dropback with no passer) is credited to the team-game's primary passer, the
-one with the most dropbacks that carry a passer id. Scrambles are about 5% of dropbacks, and
-nearly all of them belong to the starter.
+A scramble (a dropback with no passer id) is credited to its rusher, the quarterback who
+scrambled (``rusher_player_id``), as the ``nfl-sos-ratings`` reference (read-only) credits it;
+a dropback with neither id is no quarterback's.
 """
 
 from __future__ import annotations
@@ -60,7 +62,8 @@ from nfl_predictor.utils.polars.teamrankings import calculate_stat_differentials
 if TYPE_CHECKING:
     from pathlib import Path
 
-# Per quarterback-game sums carried from play-by-play into the pre-game rates.
+# Per quarterback-game sums from play-by-play. The pre-game rates read all but ``completions``,
+# which the own Elo's VALUE reads (``elo_quarterbacks``).
 QB_GAME_SUM_COLUMNS = [
     "dropbacks",
     "attempts",
@@ -73,6 +76,30 @@ QB_GAME_SUM_COLUMNS = [
     "qb_epa_sum",
     "cpoe_sum",
     "cpoe_count",
+]
+# The sums the career and league rates read.
+_CAREER_SUM_COLUMNS = [
+    "dropbacks",
+    "attempts",
+    "pass_yards",
+    "pass_tds",
+    "interceptions",
+    "sacks",
+    "sack_yards",
+    "qb_epa_sum",
+    "cpoe_sum",
+    "cpoe_count",
+]
+# The sums the recent-window rates (EPA per dropback and ANY/A) read.
+_RECENT_SUM_COLUMNS = [
+    "dropbacks",
+    "attempts",
+    "pass_yards",
+    "pass_tds",
+    "interceptions",
+    "sacks",
+    "sack_yards",
+    "qb_epa_sum",
 ]
 
 QB_GAME_SCHEMA: dict[str, type[pl.DataType]] = {
@@ -173,11 +200,12 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     """Sum play-by-play dropbacks into one row per quarterback game.
 
     Rows are ``(season, week, team_abbr, qb_id)`` with the defense faced (``opponent_abbr``),
-    ``passer_name`` and the sums in ``QB_GAME_SUM_COLUMNS``. Definitions (regular season
-    only, dropbacks as in ``pbp.dropback_condition``):
+    ``passer_name`` (his play-by-play passer name, or rusher name on a scramble) and the sums
+    in ``QB_GAME_SUM_COLUMNS``. Definitions (regular season only, dropbacks as in
+    ``pbp.dropback_condition``):
 
-    - ``dropbacks``: every dropback, a scramble included (credited as the module docstring
-      describes).
+    - ``dropbacks``: every dropback credited to him: as the passer, or as the rusher of a
+      scramble (a dropback with no passer id). A dropback with neither id is left out.
     - ``attempts``: dropbacks with a passer id that are not sacks.
     - ``completions``, ``pass_tds``, ``interceptions``: attempts with ``complete_pass``,
       ``pass_touchdown`` and ``interception`` set.
@@ -196,31 +224,28 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
         return empty_qb_game_frame()
     plays = pbp.regular_season_plays(pbp_df)
     columns = plays.columns
-    drops = plays.filter(pbp.dropback_condition(columns)).with_columns(
-        pl.col("passer_player_id").cast(pl.String).alias("_passer"),
-        (
-            pl.col("passer_player_name").cast(pl.String)
-            if "passer_player_name" in columns
-            else pl.lit(None, dtype=pl.String)
-        ).alias("_passer_name"),
+
+    def text(column: str) -> pl.Expr:
+        """Return a text column, or a null text column when the frame lacks it."""
+        if column in columns:
+            return pl.col(column).cast(pl.String)
+        return pl.lit(None, dtype=pl.String)
+
+    drops = (
+        plays.filter(pbp.dropback_condition(columns))
+        .with_columns(
+            text("passer_player_id").alias("_passer"),
+            pl.coalesce(text("passer_player_id"), text("rusher_player_id")).alias("qb_id"),
+            pl.coalesce(text("passer_player_name"), text("rusher_player_name")).alias(
+                "_passer_name"
+            ),
+        )
+        .filter(pl.col("qb_id").is_not_null())
     )
     if drops.height == 0:
         return empty_qb_game_frame()
 
     team_game = ["season", "week", "posteam"]
-    primary = (
-        drops.filter(pl.col("_passer").is_not_null())
-        .group_by([*team_game, "_passer"], maintain_order=True)
-        .len()
-        .sort([*team_game, "len", "_passer"], descending=[False, False, False, True, False])
-        .unique(subset=team_game, keep="first", maintain_order=True)
-        .select(*team_game, pl.col("_passer").alias("_primary"))
-    )
-    drops = (
-        drops.join(primary, on=team_game, how="left")
-        .with_columns(pl.coalesce("_passer", "_primary").alias("qb_id"))
-        .filter(pl.col("qb_id").is_not_null())
-    )
 
     is_attempt = pl.col("_passer").is_not_null() & ~_flag(columns, "sack")
     is_sack = _flag(columns, "sack")
@@ -264,13 +289,13 @@ def _history_tables(qb_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame,
     per_game = (
         _keyed(qb_games)
         .group_by(["qb_id", _KEY], maintain_order=True)
-        .agg(pl.col(c).sum() for c in QB_GAME_SUM_COLUMNS)
+        .agg(pl.col(c).sum() for c in _CAREER_SUM_COLUMNS)
         .sort(["qb_id", _KEY])
     )
     career = per_game.select(
         "qb_id",
         _KEY,
-        *[pl.col(c).cum_sum().over("qb_id").alias(f"c_{c}") for c in QB_GAME_SUM_COLUMNS],
+        *[pl.col(c).cum_sum().over("qb_id").alias(f"c_{c}") for c in _CAREER_SUM_COLUMNS],
     ).sort(_KEY)
     recent = per_game.select(
         "qb_id",
@@ -280,14 +305,14 @@ def _history_tables(qb_games: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame,
             .rolling_sum(window_size=constants.QB_RECENT_GAMES, min_samples=1)
             .over("qb_id")
             .alias(f"r_{c}")
-            for c in QB_GAME_SUM_COLUMNS
+            for c in _RECENT_SUM_COLUMNS
         ],
     ).sort(_KEY)
     league = (
         per_game.group_by(_KEY, maintain_order=True)
-        .agg(pl.col(c).sum() for c in QB_GAME_SUM_COLUMNS)
+        .agg(pl.col(c).sum() for c in _CAREER_SUM_COLUMNS)
         .sort(_KEY)
-        .select(_KEY, *[pl.col(c).cum_sum().alias(f"l_{c}") for c in QB_GAME_SUM_COLUMNS])
+        .select(_KEY, *[pl.col(c).cum_sum().alias(f"l_{c}") for c in _CAREER_SUM_COLUMNS])
     )
     return career, recent, league
 
@@ -300,29 +325,132 @@ def _abbreviated(name: pl.Expr) -> pl.Expr:
     )
 
 
-def _passer_name_map(qb_games: pl.DataFrame) -> pl.DataFrame:
-    """Return play-by-play passer names that belong to exactly one quarterback id."""
-    pairs = qb_games.select("passer_name", "qb_id").drop_nulls().unique(maintain_order=True)
-    unique_names = (
-        pairs.group_by("passer_name", maintain_order=True).len().filter(pl.col("len") == 1)
+def _passer_name_firsts(qb_games: pl.DataFrame) -> pl.DataFrame:
+    """Return each play-by-play passer name and id with the ordering key of their first game."""
+    return (
+        _keyed(qb_games)
+        .select("passer_name", "qb_id", _KEY)
+        .drop_nulls(["passer_name", "qb_id"])
+        .group_by("passer_name", "qb_id", maintain_order=True)
+        .agg(pl.col(_KEY).min().alias("_first_key"))
     )
-    return pairs.join(unique_names.select("passer_name"), on="passer_name", how="inner")
 
 
 def _resolve_ids(
     targets: pl.DataFrame, identity: pl.DataFrame, passer_names: pl.DataFrame
 ) -> pl.DataFrame:
-    """Attach ``qb_id`` to ``targets`` (column ``qb_name``) via identity, then passer names."""
+    """Attach ``qb_id`` to ``targets`` (``_ROW``, ``_KEY`` and ``qb_name``).
+
+    A name maps through ``identity``; a name it lacks takes the id of the one play-by-play
+    passer whose abbreviated name matches it among the games strictly before the row's
+    ``_KEY`` (``passer_names``, from ``_passer_name_firsts``), so a later passer can neither
+    name a row nor make its name ambiguous. With no such passer, or more than one, the id
+    stays null.
+    """
     resolved = targets.join(identity, on="qb_name", how="left")
-    fallback = (
-        resolved.filter(pl.col("qb_id").is_null() & pl.col("qb_name").is_not_null())
-        .with_columns(_abbreviated(pl.col("qb_name")).alias("passer_name"))
-        .drop("qb_id")
-        .join(passer_names, on="passer_name", how="left")
-        .drop("passer_name")
+    unresolved = resolved.filter(pl.col("qb_id").is_null() & pl.col("qb_name").is_not_null())
+    earlier = (
+        unresolved.select(_ROW, _KEY, _abbreviated(pl.col("qb_name")).alias("passer_name"))
+        .join(passer_names, on="passer_name", how="inner")
+        .filter(pl.col("_first_key") < pl.col(_KEY))
+        .group_by(_ROW, maintain_order=True)
+        .agg(pl.col("qb_id").n_unique().alias("_passers"), pl.col("qb_id").first())
+        .filter(pl.col("_passers") == 1)
+        .select(_ROW, "qb_id")
     )
+    fallback = unresolved.drop("qb_id").join(earlier, on=_ROW, how="left")
     matched = resolved.filter(pl.col("qb_id").is_not_null() | pl.col("qb_name").is_null())
     return pl.concat([matched, fallback.select(matched.columns)]).sort(_ROW)
+
+
+def _play_by_play_ids(
+    games: pl.DataFrame, starters: pl.DataFrame | None, side: str
+) -> pl.DataFrame:
+    """Return each game row's play-by-play starter for ``side``, as ``_ROW`` and ``qb_id``.
+
+    ``qb_id`` is null where the game has none, and on every row without ``starters`` or without
+    the ``game_id`` and ``<side>_abbr`` columns to find them by.
+    """
+    team = f"{side}_abbr"
+    rows = games.select(pl.int_range(pl.len(), dtype=pl.UInt32).alias(_ROW))
+    if starters is None or not {"game_id", team} <= set(games.columns):
+        return rows.with_columns(pl.lit(None, dtype=pl.String).alias("qb_id"))
+    keys = games.select(
+        pl.col("game_id").cast(pl.String), pl.col(team).cast(pl.String).alias("team_abbr")
+    )
+    found = starters.select(
+        pl.col("game_id").cast(pl.String),
+        pl.col("team_abbr").cast(pl.String),
+        pl.col("qb_id").cast(pl.String),
+    ).unique(subset=["game_id", "team_abbr"], keep="first", maintain_order=True)
+    return (
+        rows.hstack(keys)
+        .join(found, on=["game_id", "team_abbr"], how="left", maintain_order="left")
+        .select(_ROW, "qb_id")
+    )
+
+
+def expected_starter_ids(
+    games: pl.DataFrame,
+    qb_games: pl.DataFrame,
+    identity: pl.DataFrame,
+    *,
+    starters: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    """Return the GSIS id of each game row's starters, the one every quarterback feature reads.
+
+    A side's starter is the game's play-by-play starter (``starters``, from
+    ``qb_starters.play_by_play_starters``: a completed regular-season game's) when it has one,
+    else the ``away_qb`` / ``home_qb`` name the ETL expects to start (the projected starter of an
+    upcoming game), mapped to an id through ``identity`` and then through the play-by-play
+    passer names (module docstring, step 1). This family, the ratings' quarterback features and
+    the own Elo's named starters all read their starter from here.
+
+    Args:
+        games: Game rows; a frame without ``away_qb`` / ``home_qb`` has no named starters, and
+            one without ``game_id`` and ``away_abbr`` / ``home_abbr`` takes no play-by-play
+            starter.
+        qb_games: Quarterback-game sums from ``aggregate_qb_game_stats``, for the passer names.
+        identity: Name-to-id map from ``build_qb_identity``.
+        starters: Play-by-play starters (``qb_starters.STARTERS_SCHEMA``); without them every
+            side takes its named starter.
+
+    Returns:
+        One row per game row, in its order: ``away_qb_id`` and ``home_qb_id``, null where no
+        starter is known or the name cannot be identified.
+
+    """
+    passer_names = _passer_name_firsts(qb_games)
+    key = (
+        (pl.col("season") * 100 + pl.col("week")).cast(pl.Int64)
+        if {"season", "week"} <= set(games.columns)
+        else pl.lit(None, dtype=pl.Int64)
+    )
+    rows = games.select(
+        pl.int_range(pl.len(), dtype=pl.UInt32).alias(_ROW),
+        key.alias(_KEY),
+        *(
+            (
+                pl.col(f"{side}_qb").cast(pl.String)
+                if f"{side}_qb" in games.columns
+                else pl.lit(None, dtype=pl.String)
+            ).alias(f"{side}_qb")
+            for side in _SIDES
+        ),
+    )
+    ids = rows.select(_ROW)
+    for side in _SIDES:
+        targets = rows.select(_ROW, _KEY, pl.col(f"{side}_qb").alias("qb_name"))
+        named = _resolve_ids(targets, identity, passer_names).select(_ROW, "qb_id")
+        found = _play_by_play_ids(games, starters, side).rename({"qb_id": "_starter"})
+        ids = ids.join(
+            found.join(named, on=_ROW, how="left").select(
+                _ROW, pl.coalesce("_starter", "qb_id").alias(f"{side}_qb_id")
+            ),
+            on=_ROW,
+            how="left",
+        )
+    return ids.sort(_ROW).drop(_ROW)
 
 
 def _shrink(numerator: pl.Expr, denominator: pl.Expr, prior: pl.Expr) -> pl.Expr:
@@ -381,8 +509,8 @@ def _side_features(
     known = pl.col("qb_id").is_not_null()
     frame = frame.with_columns(
         pl.when(known).then(pl.col(f"{p}{c}").fill_null(0.0)).otherwise(None).alias(f"{p}{c}")
-        for p in ("c_", "r_")
-        for c in QB_GAME_SUM_COLUMNS
+        for p, sums in (("c_", _CAREER_SUM_COLUMNS), ("r_", _RECENT_SUM_COLUMNS))
+        for c in sums
     )
     league_any_a = _ratio(*_any_a_parts("l_"))
     career_epa = _shrink(
@@ -414,17 +542,85 @@ def _side_features(
     return frame.select(_ROW, *[expr.alias(f"{side}_{name}") for name, expr in stats.items()])
 
 
+def _log_starters(
+    games: pl.DataFrame, ids: pl.DataFrame, starters: pl.DataFrame | None, side: str
+) -> None:
+    """Log how one side's starters were found and the named starters left unidentified."""
+    sources = (
+        games.select(pl.col(f"{side}_qb").cast(pl.String).alias("qb_name"))
+        .hstack(ids.select(pl.col(f"{side}_qb_id").alias("qb_id")))
+        .with_columns(
+            _play_by_play_ids(games, starters, side)
+            .get_column("qb_id")
+            .is_not_null()
+            .alias("from_play_by_play")
+        )
+    )
+    named = sources.filter(~pl.col("from_play_by_play") & pl.col("qb_name").is_not_null())
+    unmatched = named.filter(pl.col("qb_id").is_null())
+    log.info(
+        "QB features (%s): %d rows keyed on the play-by-play starter, %d on a named starter, "
+        "%d named starters unmatched; names: %s",
+        side,
+        int(sources.get_column("from_play_by_play").sum()),
+        named.height,
+        unmatched.height,
+        sorted(set(unmatched["qb_name"].to_list()))[:10],
+    )
+
+
+def named_starters(
+    games: pl.DataFrame, identity: pl.DataFrame, qb_games: pl.DataFrame
+) -> pl.DataFrame:
+    """Return the starter the ETL names for each side of each game, as an id.
+
+    The names map to ids as every quarterback feature maps them (``expected_starter_ids``
+    without play-by-play starters).
+
+    Args:
+        games: Game rows with ``game_id``, ``season``, ``week``, ``away_abbr``,
+            ``home_abbr``, ``away_qb`` and ``home_qb`` (names).
+        identity: Name-to-id map from ``build_qb_identity``.
+        qb_games: Quarterback-game sums from ``aggregate_qb_game_stats``, for the abbreviated
+            passer-name fallback.
+
+    Returns:
+        ``game_id``, ``team_abbr`` and ``qb_id`` for every side whose name maps to an id.
+
+    """
+    ids = expected_starter_ids(games, qb_games, identity)
+    sides = [
+        games.select(
+            pl.col("game_id").cast(pl.String),
+            pl.col(f"{side}_abbr").cast(pl.String).alias("team_abbr"),
+        ).hstack(ids.select(pl.col(f"{side}_qb_id").alias("qb_id")))
+        for side in _SIDES
+    ]
+    return pl.concat(sides).drop_nulls("qb_id")
+
+
 def attach_qb_features(
     games: pl.DataFrame,
     qb_games: pl.DataFrame,
     identity: pl.DataFrame,
+    *,
+    starters: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
-    """Add the quarterback family for ``away_qb`` and ``home_qb`` to every game row.
+    """Add the quarterback family for each side's starter to every game row.
+
+    A side's starter is the one ``expected_starter_ids`` gives: the game's play-by-play starter
+    (``starters``, from ``qb_starters.play_by_play_starters``) when it has one, else the starter
+    the ETL names for it (``away_qb`` / ``home_qb``: the projected starter of an upcoming game,
+    the recorded starter of a completed game without play-by-play) mapped to an id through
+    ``identity``, then the abbreviated play-by-play passer name.
 
     Args:
-        games: Game rows with ``season``, ``week``, ``away_qb`` and ``home_qb``.
+        games: Game rows with ``season``, ``week``, ``away_qb`` and ``home_qb``, and
+            ``game_id``, ``away_abbr`` and ``home_abbr`` to find the play-by-play starters by.
         qb_games: Quarterback-game sums from ``aggregate_qb_game_stats``.
         identity: Name-to-id map from ``build_qb_identity``.
+        starters: Play-by-play starters (``qb_starters.STARTERS_SCHEMA``); without them every
+            side uses its named starter.
 
     Returns:
         ``games`` in its original row order with ``away_<stat>``, ``home_<stat>`` and
@@ -439,29 +635,17 @@ def attach_qb_features(
     base = games.drop([c for c in new_columns if c in games.columns])
     keyed = _keyed(base.with_row_index(_ROW))
     career, recent, league = _history_tables(qb_games)
-    passer_names = _passer_name_map(qb_games)
+    ids = expected_starter_ids(base, qb_games, identity, starters=starters)
+    rows = ids.with_row_index(_ROW)
 
     out = keyed
     for side in _SIDES:
-        targets = keyed.select(
-            _ROW,
-            _KEY,
-            "season",
-            "week",
-            pl.col(f"{side}_qb").cast(pl.String).alias("qb_name"),
+        _log_starters(base, ids, starters, side)
+        resolved = (
+            keyed.select(_ROW, _KEY, "season", "week")
+            .join(rows.select(_ROW, pl.col(f"{side}_qb_id").alias("qb_id")), on=_ROW)
+            .sort(_ROW)
         )
-        resolved = _resolve_ids(targets, identity, passer_names)
-        named = resolved.filter(pl.col("qb_name").is_not_null())
-        unmatched = named.filter(pl.col("qb_id").is_null())
-        if named.height:
-            log.info(
-                "QB features (%s): %d of %d rows unmatched (%.2f%%); names: %s",
-                side,
-                unmatched.height,
-                named.height,
-                100.0 * unmatched.height / named.height,
-                sorted(set(unmatched["qb_name"].to_list()))[:10],
-            )
         features = _side_features(resolved, career, recent, league, side)
         out = out.join(features, on=_ROW, how="left")
 

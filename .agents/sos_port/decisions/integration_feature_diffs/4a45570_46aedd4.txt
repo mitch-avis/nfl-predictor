@@ -1,0 +1,210 @@
+
+# team_games: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+
+## team_games: columns that differ, by season
+┌─────────────────────────────────┬────────┬──────────────┬──────────────┬─────────────┐
+│ column                          ┆ season ┆ rows_changed ┆ total_before ┆ total_after │
+│ ---                             ┆ ---    ┆ ---          ┆ ---          ┆ ---         │
+│ str                             ┆ i64    ┆ u32          ┆ f64          ┆ f64         │
+╞═════════════════════════════════╪════════╪══════════════╪══════════════╪═════════════╡
+│ fourth_down_attempts            ┆ 1999   ┆ 4            ┆ 469.000000   ┆ 473.000000  │
+│ fourth_down_attempts            ┆ 2000   ┆ 5            ┆ 448.000000   ┆ 453.000000  │
+│ fourth_down_attempts            ┆ 2013   ┆ 1            ┆ 471.000000   ┆ 472.000000  │
+│ fourth_down_attempts            ┆ 2018   ┆ 2            ┆ 539.000000   ┆ 542.000000  │
+│ fourth_down_attempts            ┆ 2024   ┆ 1            ┆ 765.000000   ┆ 766.000000  │
+│ fourth_down_attempts_allowed    ┆ 1999   ┆ 4            ┆ 469.000000   ┆ 473.000000  │
+│ fourth_down_attempts_allowed    ┆ 2000   ┆ 5            ┆ 448.000000   ┆ 453.000000  │
+│ fourth_down_attempts_allowed    ┆ 2013   ┆ 1            ┆ 471.000000   ┆ 472.000000  │
+│ fourth_down_attempts_allowed    ┆ 2018   ┆ 2            ┆ 539.000000   ┆ 542.000000  │
+│ fourth_down_attempts_allowed    ┆ 2024   ┆ 1            ┆ 765.000000   ┆ 766.000000  │
+│ fourth_down_conversions         ┆ 1999   ┆ 2            ┆ 204.000000   ┆ 206.000000  │
+│ fourth_down_conversions         ┆ 2000   ┆ 3            ┆ 214.000000   ┆ 217.000000  │
+│ fourth_down_conversions         ┆ 2024   ┆ 1            ┆ 434.000000   ┆ 435.000000  │
+│ fourth_down_conversions_allowe… ┆ 1999   ┆ 2            ┆ 204.000000   ┆ 206.000000  │
+│ fourth_down_conversions_allowe… ┆ 2000   ┆ 3            ┆ 214.000000   ┆ 217.000000  │
+│ fourth_down_conversions_allowe… ┆ 2024   ┆ 1            ┆ 434.000000   ┆ 435.000000  │
+│ fourth_down_fails               ┆ 1999   ┆ 2            ┆ 265.000000   ┆ 267.000000  │
+│ fourth_down_fails               ┆ 2000   ┆ 2            ┆ 234.000000   ┆ 236.000000  │
+│ fourth_down_fails               ┆ 2013   ┆ 1            ┆ 246.000000   ┆ 247.000000  │
+│ fourth_down_fails               ┆ 2018   ┆ 2            ┆ 239.000000   ┆ 242.000000  │
+│ fourth_down_fails_allowed       ┆ 1999   ┆ 2            ┆ 265.000000   ┆ 267.000000  │
+│ fourth_down_fails_allowed       ┆ 2000   ┆ 2            ┆ 234.000000   ┆ 236.000000  │
+│ fourth_down_fails_allowed       ┆ 2013   ┆ 1            ┆ 246.000000   ┆ 247.000000  │
+│ fourth_down_fails_allowed       ┆ 2018   ┆ 2            ┆ 239.000000   ┆ 242.000000  │
+│ third_down_attempts             ┆ 1999   ┆ 68           ┆ 6727.000000  ┆ 6800.000000 │
+│ third_down_attempts             ┆ 2000   ┆ 63           ┆ 6525.000000  ┆ 6601.000000 │
+│ third_down_attempts             ┆ 2018   ┆ 2            ┆ 6463.000000  ┆ 6468.000000 │
+│ third_down_attempts_allowed     ┆ 1999   ┆ 68           ┆ 6727.000000  ┆ 6800.000000 │
+│ third_down_attempts_allowed     ┆ 2000   ┆ 63           ┆ 6525.000000  ┆ 6601.000000 │
+│ third_down_attempts_allowed     ┆ 2018   ┆ 2            ┆ 6463.000000  ┆ 6468.000000 │
+│ third_down_conversions          ┆ 1999   ┆ 19           ┆ 2457.000000  ┆ 2477.000000 │
+│ third_down_conversions          ┆ 2000   ┆ 30           ┆ 2499.000000  ┆ 2529.000000 │
+│ third_down_conversions_allowed  ┆ 1999   ┆ 19           ┆ 2457.000000  ┆ 2477.000000 │
+│ third_down_conversions_allowed  ┆ 2000   ┆ 30           ┆ 2499.000000  ┆ 2529.000000 │
+│ third_down_fails                ┆ 1999   ┆ 49           ┆ 4270.000000  ┆ 4323.000000 │
+│ third_down_fails                ┆ 2000   ┆ 38           ┆ 4026.000000  ┆ 4072.000000 │
+│ third_down_fails                ┆ 2018   ┆ 2            ┆ 3939.000000  ┆ 3944.000000 │
+│ third_down_fails_allowed        ┆ 1999   ┆ 49           ┆ 4270.000000  ┆ 4323.000000 │
+│ third_down_fails_allowed        ┆ 2000   ┆ 38           ┆ 4026.000000  ┆ 4072.000000 │
+│ third_down_fails_allowed        ┆ 2018   ┆ 2            ┆ 3939.000000  ┆ 3944.000000 │
+│ two_point_attempts              ┆ 2000   ┆ 2            ┆ 83.000000    ┆ 85.000000   │
+│ two_point_attempts              ┆ 2003   ┆ 1            ┆ 63.000000    ┆ 64.000000   │
+│ two_point_attempts              ┆ 2004   ┆ 2            ┆ 72.000000    ┆ 74.000000   │
+│ two_point_attempts              ┆ 2006   ┆ 1            ┆ 37.000000    ┆ 38.000000   │
+│ two_point_attempts              ┆ 2007   ┆ 3            ┆ 54.000000    ┆ 57.000000   │
+│ two_point_attempts              ┆ 2008   ┆ 1            ┆ 63.000000    ┆ 64.000000   │
+│ two_point_attempts              ┆ 2014   ┆ 5            ┆ 53.000000    ┆ 58.000000   │
+│ two_point_attempts              ┆ 2015   ┆ 3            ┆ 91.000000    ┆ 94.000000   │
+│ two_point_attempts              ┆ 2016   ┆ 5            ┆ 100.000000   ┆ 105.000000  │
+│ two_point_attempts              ┆ 2017   ┆ 4            ┆ 81.000000    ┆ 86.000000   │
+│ two_point_attempts              ┆ 2018   ┆ 1            ┆ 129.000000   ┆ 130.000000  │
+│ two_point_attempts              ┆ 2019   ┆ 3            ┆ 110.000000   ┆ 113.000000  │
+│ two_point_attempts              ┆ 2021   ┆ 1            ┆ 153.000000   ┆ 154.000000  │
+│ two_point_attempts              ┆ 2022   ┆ 1            ┆ 118.000000   ┆ 119.000000  │
+│ two_point_attempts              ┆ 2023   ┆ 6            ┆ 121.000000   ┆ 127.000000  │
+│ two_point_attempts_allowed      ┆ 2000   ┆ 2            ┆ 83.000000    ┆ 85.000000   │
+│ two_point_attempts_allowed      ┆ 2003   ┆ 1            ┆ 63.000000    ┆ 64.000000   │
+│ two_point_attempts_allowed      ┆ 2004   ┆ 2            ┆ 72.000000    ┆ 74.000000   │
+│ two_point_attempts_allowed      ┆ 2006   ┆ 1            ┆ 37.000000    ┆ 38.000000   │
+│ two_point_attempts_allowed      ┆ 2007   ┆ 3            ┆ 54.000000    ┆ 57.000000   │
+│ two_point_attempts_allowed      ┆ 2008   ┆ 1            ┆ 63.000000    ┆ 64.000000   │
+│ two_point_attempts_allowed      ┆ 2014   ┆ 5            ┆ 53.000000    ┆ 58.000000   │
+│ two_point_attempts_allowed      ┆ 2015   ┆ 3            ┆ 91.000000    ┆ 94.000000   │
+│ two_point_attempts_allowed      ┆ 2016   ┆ 5            ┆ 100.000000   ┆ 105.000000  │
+│ two_point_attempts_allowed      ┆ 2017   ┆ 4            ┆ 81.000000    ┆ 86.000000   │
+│ two_point_attempts_allowed      ┆ 2018   ┆ 1            ┆ 129.000000   ┆ 130.000000  │
+│ two_point_attempts_allowed      ┆ 2019   ┆ 3            ┆ 110.000000   ┆ 113.000000  │
+│ two_point_attempts_allowed      ┆ 2021   ┆ 1            ┆ 153.000000   ┆ 154.000000  │
+│ two_point_attempts_allowed      ┆ 2022   ┆ 1            ┆ 118.000000   ┆ 119.000000  │
+│ two_point_attempts_allowed      ┆ 2023   ┆ 6            ┆ 121.000000   ┆ 127.000000  │
+│ two_point_successes             ┆ 2000   ┆ 2            ┆ 33.000000    ┆ 35.000000   │
+│ two_point_successes             ┆ 2003   ┆ 1            ┆ 28.000000    ┆ 29.000000   │
+│ two_point_successes             ┆ 2004   ┆ 2            ┆ 35.000000    ┆ 37.000000   │
+│ two_point_successes             ┆ 2006   ┆ 1            ┆ 20.000000    ┆ 21.000000   │
+│ two_point_successes             ┆ 2007   ┆ 2            ┆ 28.000000    ┆ 30.000000   │
+│ two_point_successes             ┆ 2008   ┆ 1            ┆ 27.000000    ┆ 28.000000   │
+│ two_point_successes             ┆ 2014   ┆ 4            ┆ 24.000000    ┆ 28.000000   │
+│ two_point_successes             ┆ 2015   ┆ 3            ┆ 42.000000    ┆ 45.000000   │
+│ two_point_successes             ┆ 2016   ┆ 5            ┆ 46.000000    ┆ 51.000000   │
+│ two_point_successes             ┆ 2017   ┆ 2            ┆ 35.000000    ┆ 37.000000   │
+│ two_point_successes             ┆ 2018   ┆ 1            ┆ 65.000000    ┆ 66.000000   │
+│ two_point_successes             ┆ 2019   ┆ 3            ┆ 51.000000    ┆ 54.000000   │
+│ two_point_successes             ┆ 2021   ┆ 1            ┆ 74.000000    ┆ 75.000000   │
+│ two_point_successes             ┆ 2023   ┆ 5            ┆ 65.000000    ┆ 70.000000   │
+│ two_point_successes_allowed     ┆ 2000   ┆ 2            ┆ 33.000000    ┆ 35.000000   │
+│ two_point_successes_allowed     ┆ 2003   ┆ 1            ┆ 28.000000    ┆ 29.000000   │
+│ two_point_successes_allowed     ┆ 2004   ┆ 2            ┆ 35.000000    ┆ 37.000000   │
+│ two_point_successes_allowed     ┆ 2006   ┆ 1            ┆ 20.000000    ┆ 21.000000   │
+│ two_point_successes_allowed     ┆ 2007   ┆ 2            ┆ 28.000000    ┆ 30.000000   │
+│ two_point_successes_allowed     ┆ 2008   ┆ 1            ┆ 27.000000    ┆ 28.000000   │
+│ two_point_successes_allowed     ┆ 2014   ┆ 4            ┆ 24.000000    ┆ 28.000000   │
+│ two_point_successes_allowed     ┆ 2015   ┆ 3            ┆ 42.000000    ┆ 45.000000   │
+│ two_point_successes_allowed     ┆ 2016   ┆ 5            ┆ 46.000000    ┆ 51.000000   │
+│ two_point_successes_allowed     ┆ 2017   ┆ 2            ┆ 35.000000    ┆ 37.000000   │
+│ two_point_successes_allowed     ┆ 2018   ┆ 1            ┆ 65.000000    ┆ 66.000000   │
+│ two_point_successes_allowed     ┆ 2019   ┆ 3            ┆ 51.000000    ┆ 54.000000   │
+│ two_point_successes_allowed     ┆ 2021   ┆ 1            ┆ 74.000000    ┆ 75.000000   │
+│ two_point_successes_allowed     ┆ 2023   ┆ 5            ┆ 65.000000    ┆ 70.000000   │
+└─────────────────────────────────┴────────┴──────────────┴──────────────┴─────────────┘
+
+# box_scores: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# qb_games: 17142 rows before, 17142 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# published game columns: 7261 games before, 7261 after; 513 columns before, 513 after
+columns added: []
+columns removed: []
+
+## published stats that moved (all seasons)
+┌─────────────────────────────────┬───────────────┬──────────────┬─────────────┬────────────────┐
+│ stat                            ┆ games_changed ┆ first_season ┆ last_season ┆ max_abs_change │
+│ ---                             ┆ ---           ┆ ---          ┆ ---         ┆ ---            │
+│ str                             ┆ u32           ┆ i32          ┆ i32         ┆ f64            │
+╞═════════════════════════════════╪═══════════════╪══════════════╪═════════════╪════════════════╡
+│ fourth_down_pct                 ┆ 1419          ┆ 1999         ┆ 2025        ┆ 50.000000      │
+│ opponent_fourth_down_pct        ┆ 1418          ┆ 1999         ┆ 2025        ┆ 19.273348      │
+│ opponent_third_down_pct         ┆ 1024          ┆ 1999         ┆ 2019        ┆ 10.212418      │
+│ opponent_two_point_conversion_… ┆ 4123          ┆ 2000         ┆ 2024        ┆ 61.418651      │
+│ third_down_pct                  ┆ 1009          ┆ 1999         ┆ 2019        ┆ 6.944444       │
+│ two_point_conversion_pct        ┆ 4139          ┆ 2000         ┆ 2024        ┆ 51.245427      │
+└─────────────────────────────────┴───────────────┴──────────────┴─────────────┴────────────────┘
+
+## published stats that moved, by season
+┌─────────────────────────────────┬────────┬───────────────┬──────────────┬────────────────┬─────────────────┐
+│ stat                            ┆ season ┆ games_changed ┆ null_changed ┆ max_abs_change ┆ mean_abs_change │
+│ ---                             ┆ ---    ┆ ---           ┆ ---          ┆ ---            ┆ ---             │
+│ str                             ┆ i32    ┆ u32           ┆ u32          ┆ f64            ┆ f64             │
+╞═════════════════════════════════╪════════╪═══════════════╪══════════════╪════════════════╪═════════════════╡
+│ fourth_down_pct                 ┆ 1999   ┆ 34            ┆ 0            ┆ 50.000000      ┆ 13.118842       │
+│ fourth_down_pct                 ┆ 2000   ┆ 259           ┆ 0            ┆ 10.287824      ┆ 1.002003        │
+│ fourth_down_pct                 ┆ 2001   ┆ 259           ┆ 0            ┆ 3.851222       ┆ 0.347551        │
+│ fourth_down_pct                 ┆ 2013   ┆ 11            ┆ 0            ┆ 3.928148       ┆ 3.391164        │
+│ fourth_down_pct                 ┆ 2014   ┆ 267           ┆ 0            ┆ 2.220752       ┆ 0.077091        │
+│ fourth_down_pct                 ┆ 2018   ┆ 32            ┆ 0            ┆ 16.048711      ┆ 5.188748        │
+│ fourth_down_pct                 ┆ 2019   ┆ 267           ┆ 0            ┆ 3.637231       ┆ 0.165220        │
+│ fourth_down_pct                 ┆ 2024   ┆ 5             ┆ 0            ┆ 2.088162       ┆ 1.985153        │
+│ fourth_down_pct                 ┆ 2025   ┆ 285           ┆ 0            ┆ 1.424711       ┆ 0.039709        │
+│ opponent_fourth_down_pct        ┆ 1999   ┆ 35            ┆ 0            ┆ 16.666667      ┆ 5.247347        │
+│ opponent_fourth_down_pct        ┆ 2000   ┆ 259           ┆ 0            ┆ 12.104913      ┆ 1.109703        │
+│ opponent_fourth_down_pct        ┆ 2001   ┆ 259           ┆ 0            ┆ 3.323234       ┆ 0.357015        │
+│ opponent_fourth_down_pct        ┆ 2013   ┆ 11            ┆ 0            ┆ 7.000619       ┆ 4.405822        │
+│ opponent_fourth_down_pct        ┆ 2014   ┆ 267           ┆ 0            ┆ 1.727811       ┆ 0.100260        │
+│ opponent_fourth_down_pct        ┆ 2018   ┆ 32            ┆ 0            ┆ 19.273348      ┆ 7.964348        │
+│ opponent_fourth_down_pct        ┆ 2019   ┆ 267           ┆ 0            ┆ 5.979870       ┆ 0.248296        │
+│ opponent_fourth_down_pct        ┆ 2024   ┆ 3             ┆ 0            ┆ 2.134521       ┆ 2.082744        │
+│ opponent_fourth_down_pct        ┆ 2025   ┆ 285           ┆ 0            ┆ 1.557193       ┆ 0.030495        │
+│ opponent_third_down_pct         ┆ 1999   ┆ 207           ┆ 0            ┆ 10.212418      ┆ 0.764679        │
+│ opponent_third_down_pct         ┆ 2000   ┆ 259           ┆ 0            ┆ 2.229100       ┆ 0.485909        │
+│ opponent_third_down_pct         ┆ 2001   ┆ 259           ┆ 0            ┆ 0.931365       ┆ 0.140168        │
+│ opponent_third_down_pct         ┆ 2018   ┆ 32            ┆ 0            ┆ 1.420416       ┆ 0.656141        │
+│ opponent_third_down_pct         ┆ 2019   ┆ 267           ┆ 0            ┆ 0.443332       ┆ 0.022048        │
+│ opponent_two_point_conversion_… ┆ 2000   ┆ 12            ┆ 0            ┆ 12.558781      ┆ 11.375846       │
+│ opponent_two_point_conversion_… ┆ 2001   ┆ 259           ┆ 0            ┆ 20.692491      ┆ 1.663377        │
+│ opponent_two_point_conversion_… ┆ 2003   ┆ 15            ┆ 0            ┆ 35.043663      ┆ 29.228893       │
+│ opponent_two_point_conversion_… ┆ 2004   ┆ 267           ┆ 0            ┆ 47.743056      ┆ 2.724862        │
+│ opponent_two_point_conversion_… ┆ 2005   ┆ 267           ┆ 0            ┆ 24.577295      ┆ 2.144555        │
+│ opponent_two_point_conversion_… ┆ 2006   ┆ 10            ┆ 0            ┆ 33.531461      ┆ 19.934754       │
+│ opponent_two_point_conversion_… ┆ 2007   ┆ 267           ┆ 0            ┆ 61.418651      ┆ 3.399961        │
+│ opponent_two_point_conversion_… ┆ 2008   ┆ 267           ┆ 0            ┆ 27.748136      ┆ 2.658502        │
+│ opponent_two_point_conversion_… ┆ 2009   ┆ 267           ┆ 0            ┆ 29.017857      ┆ 1.236405        │
+│ opponent_two_point_conversion_… ┆ 2014   ┆ 31            ┆ 0            ┆ 55.021536      ┆ 21.607010       │
+│ opponent_two_point_conversion_… ┆ 2015   ┆ 267           ┆ 0            ┆ 48.918542      ┆ 5.923447        │
+│ opponent_two_point_conversion_… ┆ 2016   ┆ 267           ┆ 0            ┆ 22.833496      ┆ 2.730613        │
+│ opponent_two_point_conversion_… ┆ 2017   ┆ 267           ┆ 0            ┆ 25.826059      ┆ 3.635645        │
+│ opponent_two_point_conversion_… ┆ 2018   ┆ 267           ┆ 0            ┆ 23.445443      ┆ 1.479555        │
+│ opponent_two_point_conversion_… ┆ 2019   ┆ 267           ┆ 0            ┆ 17.048760      ┆ 1.236218        │
+│ opponent_two_point_conversion_… ┆ 2020   ┆ 269           ┆ 0            ┆ 6.925784       ┆ 0.769530        │
+│ opponent_two_point_conversion_… ┆ 2021   ┆ 3             ┆ 0            ┆ 5.667025       ┆ 5.667025        │
+│ opponent_two_point_conversion_… ┆ 2022   ┆ 284           ┆ 0            ┆ 25.997212      ┆ 0.742146        │
+│ opponent_two_point_conversion_… ┆ 2023   ┆ 285           ┆ 0            ┆ 23.829747      ┆ 1.642522        │
+│ opponent_two_point_conversion_… ┆ 2024   ┆ 285           ┆ 0            ┆ 15.901852      ┆ 1.812872        │
+│ third_down_pct                  ┆ 1999   ┆ 192           ┆ 0            ┆ 6.944444       ┆ 0.771834        │
+│ third_down_pct                  ┆ 2000   ┆ 259           ┆ 0            ┆ 2.078270       ┆ 0.458758        │
+│ third_down_pct                  ┆ 2001   ┆ 259           ┆ 0            ┆ 0.780628       ┆ 0.142546        │
+│ third_down_pct                  ┆ 2018   ┆ 32            ┆ 0            ┆ 1.387567       ┆ 0.663646        │
+│ third_down_pct                  ┆ 2019   ┆ 267           ┆ 0            ┆ 0.381663       ┆ 0.021977        │
+│ two_point_conversion_pct        ┆ 2000   ┆ 23            ┆ 0            ┆ 51.245427      ┆ 29.946191       │
+│ two_point_conversion_pct        ┆ 2001   ┆ 259           ┆ 0            ┆ 12.407036      ┆ 0.877011        │
+│ two_point_conversion_pct        ┆ 2003   ┆ 16            ┆ 0            ┆ 22.154040      ┆ 9.956668        │
+│ two_point_conversion_pct        ┆ 2004   ┆ 267           ┆ 0            ┆ 47.743056      ┆ 2.792123        │
+│ two_point_conversion_pct        ┆ 2005   ┆ 267           ┆ 0            ┆ 24.264706      ┆ 2.412624        │
+│ two_point_conversion_pct        ┆ 2006   ┆ 9             ┆ 0            ┆ 29.381074      ┆ 24.825317       │
+│ two_point_conversion_pct        ┆ 2007   ┆ 267           ┆ 0            ┆ 41.917510      ┆ 3.622380        │
+│ two_point_conversion_pct        ┆ 2008   ┆ 267           ┆ 0            ┆ 16.996244      ┆ 2.438591        │
+│ two_point_conversion_pct        ┆ 2009   ┆ 267           ┆ 0            ┆ 29.017857      ┆ 1.667003        │
+│ two_point_conversion_pct        ┆ 2014   ┆ 33            ┆ 0            ┆ 33.497433      ┆ 20.758675       │
+│ two_point_conversion_pct        ┆ 2015   ┆ 267           ┆ 0            ┆ 29.111254      ┆ 2.171009        │
+│ two_point_conversion_pct        ┆ 2016   ┆ 267           ┆ 0            ┆ 40.925876      ┆ 2.942238        │
+│ two_point_conversion_pct        ┆ 2017   ┆ 267           ┆ 0            ┆ 21.307443      ┆ 3.501909        │
+│ two_point_conversion_pct        ┆ 2018   ┆ 267           ┆ 0            ┆ 13.372971      ┆ 1.024440        │
+│ two_point_conversion_pct        ┆ 2019   ┆ 267           ┆ 0            ┆ 18.063355      ┆ 1.461260        │
+│ two_point_conversion_pct        ┆ 2020   ┆ 269           ┆ 0            ┆ 17.259953      ┆ 0.951794        │
+│ two_point_conversion_pct        ┆ 2021   ┆ 6             ┆ 0            ┆ 22.502227      ┆ 16.644020       │
+│ two_point_conversion_pct        ┆ 2022   ┆ 284           ┆ 0            ┆ 13.785043      ┆ 0.613277        │
+│ two_point_conversion_pct        ┆ 2023   ┆ 285           ┆ 0            ┆ 26.455700      ┆ 1.725182        │
+│ two_point_conversion_pct        ┆ 2024   ┆ 285           ┆ 0            ┆ 10.513317      ┆ 1.645228        │
+└─────────────────────────────────┴────────┴───────────────┴──────────────┴────────────────┴─────────────────┘
+
+443 published numeric columns are identical before and after

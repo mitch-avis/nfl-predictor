@@ -565,11 +565,12 @@ validation; the adapters with fakes; the poller and `/api/live`; the live views.
   6), a table a route needs that cannot be read answers 503 while one that only adds to a page is
   left out with a warning, and each opponent faced carries a league tier.
 
-  No job writes `data/ratings/` yet: the season-statistics ETL step that is to write those tables
-  is planned separately, and until it lands the pages show an empty state that names the folder
-  and its files. The done-criterion above (the current-season team page shows rating heatmaps
-  and a team detail with game logs) therefore waits on that step; so far it has been checked only
-  against the copied tables.
+  The ETL writes the ratings tables to `data/ratings/` (`utils/polars/ratings_build.py`), but no
+  job writes the season-statistics tables the index and game-log pages need (`combined`,
+  `qb_combined`, the game logs) yet: that ETL step is planned separately, and until it lands those
+  pages show an empty state that names the folder and its files. The done-criterion above (the
+  current-season team page shows rating heatmaps and a team detail with game logs) therefore
+  waits on that step; so far it has been checked only against the copied tables.
 
   Deviations from the Phase 5 text above, all deliberate:
 

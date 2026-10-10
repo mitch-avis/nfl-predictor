@@ -20,6 +20,8 @@ Output Files:
     - data/predict/week_XX_games_to_predict.csv: Upcoming games for prediction
     - data/strength_snapshots.csv: Pre-week schedule-adjusted strength for every team on
       each season's schedule and every processed week, teams on a bye included
+    - data/ratings/{season}_{kind}.parquet: The ratings tables ported from nfl-sos-ratings, for
+      every season processed (see `utils.polars.ratings_build`)
 
 Usage:
     Run directly to collect and process all data:
@@ -39,7 +41,7 @@ import logging
 import math
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -48,7 +50,18 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.utils import clock, game_utils, polars_utils, season_cache
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars import nfelo_lines, pbp, pick_time_lines, qb_stats
+from nfl_predictor.utils.polars import (
+    elo_quarterbacks,
+    elo_win_totals,
+    nfelo_lines,
+    nflverse_sources,
+    own_elo_build,
+    pbp,
+    pick_time_lines,
+    qb_starters,
+    qb_stats,
+    ratings_build,
+)
 from nfl_predictor.utils.polars.strength_snapshot import StrengthPrior
 from nfl_predictor.utils.polars.strength_table import (
     build_prior_strength_snapshot,
@@ -114,6 +127,30 @@ class DataCollectionConfig:
     # Which market line each game carries: the line known at pick time ("pick_time", the
     # default, see `utils.polars.pick_time_lines`) or the stored nflverse line ("stored").
     line_source: str = constants.DEFAULT_LINE_SOURCE
+
+
+@dataclass
+class CollectionRecords:
+    """What a collection run records beside the game rows; ``main`` writes each of them.
+
+    Attributes:
+        strength_snapshots: Receives each processed week's per-team strength snapshot; see
+            `combine_strength_snapshots`.
+        market_lines_metadata: Receives a pick-time build's line record (the nfelo snapshot and
+            its hash, per-season counts, the moneyline maps); a stored-line build leaves it
+            empty.
+        own_elo_metadata: Receives the own Elo's record (both presets and the win-total file it
+            read, `own_elo_build.OwnEloColumns.metadata`); a build without the own Elo leaves
+            it empty.
+        rating_tables: Receives the ratings tables of every season processed, by file stem
+            ``{season}_{kind}`` (``utils.polars.ratings_build``).
+
+    """
+
+    strength_snapshots: list[pl.DataFrame] = field(default_factory=list)
+    market_lines_metadata: dict[str, object] = field(default_factory=dict)
+    own_elo_metadata: dict[str, object] = field(default_factory=dict)
+    rating_tables: dict[str, pl.DataFrame] = field(default_factory=dict)
 
 
 def _configure_logging(*, enable_debug: bool) -> None:
@@ -400,15 +437,9 @@ def main(argv: list[str] | None = None) -> None:
         len(seasons_to_process),
     )
 
-    strength_snapshots: list[pl.DataFrame] = []
-    market_lines_metadata: dict[str, object] = {}
+    records = CollectionRecords()
     with _timed_step("collect_all_data", enabled=config.enable_timing):
-        all_data_df = collect_all_data(
-            seasons_to_process,
-            config=config,
-            strength_snapshots=strength_snapshots,
-            market_lines_metadata=market_lines_metadata,
-        )
+        all_data_df = collect_all_data(seasons_to_process, config=config, records=records)
 
     _log_df_stats("all_data", all_data_df, enabled=config.enable_debug)
 
@@ -429,10 +460,16 @@ def main(argv: list[str] | None = None) -> None:
 
     # Per-team pre-week strength, bye teams included, for reports that rank teams.
     save_dataframe(
-        combine_strength_snapshots(strength_snapshots),
+        combine_strength_snapshots(records.strength_snapshots),
         constants.STRENGTH_SNAPSHOTS_NAME,
         config.data_dir,
     )
+
+    # The ratings tables of every season processed, named as nfl-sos-ratings names its files.
+    if records.rating_tables:
+        ratings_build.write_published_tables(
+            records.rating_tables, _resolve_data_dir(config.data_dir) / constants.RATINGS_DIRNAME
+        )
 
     # Filter and save upcoming games for prediction (ML version only)
     upcoming_df = polars_utils.filter_upcoming_games(all_data_df, current_season, current_week)
@@ -440,46 +477,94 @@ def main(argv: list[str] | None = None) -> None:
         upcoming_df, f"predict/week_{current_week:>02}_games_to_predict", config.data_dir
     )
 
-    # Written for every build, so a record left by an earlier build never outlives its data.
-    _save_market_lines_metadata(
-        market_lines_metadata or {"line_source": config.line_source}, config.data_dir
+    # Both records are written for every build, so a record left by an earlier build never
+    # outlives its data: a stored-line build names its line source, and a build without the
+    # own Elo writes an empty record.
+    _save_build_record(
+        records.market_lines_metadata or {"line_source": config.line_source},
+        constants.MARKET_LINES_METADATA_NAME,
+        config.data_dir,
     )
+    _save_build_record(records.own_elo_metadata, constants.OWN_ELO_METADATA_NAME, config.data_dir)
 
     log.info("Data collection complete.")
 
 
-def _save_market_lines_metadata(metadata: dict[str, object], data_dir: Path | None) -> None:
-    """Write the build's line record beside the datasets (a stored build names its source)."""
-    path = _resolve_data_dir(data_dir) / f"{constants.MARKET_LINES_METADATA_NAME}.json"
+def _save_build_record(record: dict[str, object], name: str, data_dir: Path | None) -> None:
+    """Write a record of how the build was made beside the datasets, as ``<name>.json``."""
+    path = _resolve_data_dir(data_dir) / f"{name}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    log.info("Saved the market-line record to %s", path)
+    path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    log.info("Saved the build record %s", path)
 
 
-def _attach_qb_features(
-    games: pl.DataFrame,
+def _quarterback_history(
     pbp_df: pl.DataFrame,
     *,
     max_season: int,
     current_season: int,
+    requested_seasons: tuple[int, ...] = (),
+    identity_sources: nflverse_sources.QbIdentitySources | None = None,
+) -> qb_starters.QuarterbackHistory:
+    """Return every regular season's quarterback games and play-by-play starters.
+
+    Career rates and the own Elo need every earlier regular season, so play-by-play seasons
+    from ``constants.NFLREADPY_MIN_SEASON`` through ``max_season`` that are not already in
+    ``pbp_df`` are loaded from the per-season cache; a partial-season run therefore produces
+    the same values as a full rebuild. A season in ``requested_seasons`` (the seasons the run
+    already asked for, ``_EtlSources.pbp_seasons``) is never asked for again, so the current
+    season, which has no plays before kickoff, is requested once. Those history seasons are
+    never force-refreshed: a refresh applies to the seasons being processed, which arrive in
+    ``pbp_df``, and re-pulling every earlier season would turn a one-season refresh into a
+    full-history download. Each season's quarterback identity decides who can start
+    (``qb_starters``): read from ``identity_sources``, the players file and weekly rosters the
+    run already loaded, else loaded per season (``nflverse_sources.load_season_qb_identity``).
+    """
+    seasons = list(range(constants.NFLREADPY_MIN_SEASON, max_season + 1))
+    loaded = (
+        set(pbp_df.get_column("season").unique(maintain_order=True).to_list())
+        if "season" in pbp_df
+        else set()
+    )
+    missing = [
+        season for season in seasons if season not in loaded and season not in requested_seasons
+    ]
+    plays = pbp_df
+    if missing:
+        history = polars_utils.load_pbp(missing, force_refresh=False, current_season=current_season)
+        plays = pl.concat([pbp_df, history], how="diagonal_relaxed")
+    positions = qb_starters.season_positions(
+        {
+            season: (
+                nflverse_sources.load_season_qb_identity(season, current_season=current_season)
+                if identity_sources is None
+                else identity_sources.season_identity(season)
+            )
+            for season in seasons
+        }
+    )
+    return qb_starters.quarterback_history(plays, positions)
+
+
+_QB_NAME_COLUMNS = frozenset({"season", "week", "away_qb", "home_qb"})
+
+
+def _attach_qb_features(
+    games: pl.DataFrame,
+    history: qb_starters.QuarterbackHistory | None,
+    *,
     identity_path: Path | None = None,
 ) -> pl.DataFrame:
     """Attach the quarterback per-dropback family to the combined game rows.
 
-    Career rates need every earlier regular season, so play-by-play seasons from
-    ``constants.NFLREADPY_MIN_SEASON`` through ``max_season`` that are not already in
-    ``pbp_df`` are loaded from the per-season cache before aggregating; a partial-season run
-    therefore produces the same values as a full rebuild. Those history seasons are never
-    force-refreshed: a refresh applies to the seasons being processed, which arrive in
-    ``pbp_df``, and re-pulling every earlier season would turn a one-season refresh into a
-    full-history download. Rows without ``away_qb`` / ``home_qb`` come back unchanged, and the
-    final schema fills the columns with nulls.
+    Each side's starter is the game's play-by-play starter, or the starter the ETL names when
+    the play-by-play names none (``qb_stats.attach_qb_features``). Rows without ``away_qb`` /
+    ``home_qb``, or a run without a quarterback history, come back unchanged, and the final
+    schema fills the columns with nulls.
 
     Args:
         games: Combined game rows after the future-week quarterback fill.
-        pbp_df: Play-by-play already loaded for the team-stat seasons.
-        max_season: Last season being processed.
-        current_season: Passed to ``load_pbp`` for its cache decisions.
+        history: The run's quarterback history (``_quarterback_history``).
         identity_path: Quarterback identity file; defaults to
             ``DATA_PATH/<QB_META_DATA_NAME>.csv``.
 
@@ -487,32 +572,18 @@ def _attach_qb_features(
         ``games`` with the quarterback columns from ``qb_stats.attach_qb_features``.
 
     """
-    if not {"season", "week", "away_qb", "home_qb"}.issubset(games.columns):
+    if history is None or not _QB_NAME_COLUMNS.issubset(games.columns):
         log.warning("Game rows have no away_qb/home_qb; skipping quarterback features")
         return games
-    loaded = (
-        set(pbp_df.get_column("season").unique(maintain_order=True).to_list())
-        if "season" in pbp_df
-        else set()
-    )
-    missing = [
-        season
-        for season in range(constants.NFLREADPY_MIN_SEASON, max_season + 1)
-        if season not in loaded
-    ]
-    parts = [qb_stats.aggregate_qb_game_stats(pbp_df)]
-    if missing:
-        history = polars_utils.load_pbp(missing, force_refresh=False, current_season=current_season)
-        parts.append(qb_stats.aggregate_qb_game_stats(history))
-    qb_games = pl.concat(parts, how="vertical")
     path = identity_path or constants.DATA_PATH / f"{constants.QB_META_DATA_NAME}.csv"
     identity = qb_stats.load_qb_identity(path)
     log.info(
-        "QB features: %d quarterback games from play-by-play, %d identity names",
-        qb_games.height,
+        "QB features: %d quarterback games and %d play-by-play starters, %d identity names",
+        history.qb_games.height,
+        history.starters.height,
         identity.height,
     )
-    return qb_stats.attach_qb_features(games, qb_games, identity)
+    return qb_stats.attach_qb_features(games, history.qb_games, identity, starters=history.starters)
 
 
 def _log_pbp_null_rates(team_stats_df: pl.DataFrame, *, enable_debug: bool) -> None:
@@ -660,6 +731,13 @@ class _EtlSources:
     raw_elo_df: pl.DataFrame
     # Set for a pick-time build: the nfelo snapshot, the line order's report and the maps.
     pick_time: pick_time_lines.PickTimeLines | None = None
+    # The play-by-play seasons the run asked for, plays or none, so none is asked for twice.
+    pbp_seasons: tuple[int, ...] = ()
+    # The ratings' inputs and per-season outputs; None leaves the ratings columns null.
+    ratings: ratings_build.RatingsBuild | None = None
+    # The players file and weekly rosters the ratings loaded, which every season's quarterback
+    # identity reads instead of loading them again; None loads them per season.
+    qb_identity_sources: nflverse_sources.QbIdentitySources | None = None
 
 
 def _stats_window(
@@ -715,6 +793,10 @@ def _load_team_game_frame(
             stats_seasons,
             force_refresh=config.force_refresh_nflreadpy,
             current_season=current_season,
+        )
+        # Jacksonville's 2001-2002 home games credit every player to the visitor.
+        pbp_df = nflverse_sources.repair_one_team_pbp_games(
+            pbp_df, force_refresh=config.force_refresh_nflreadpy, current_season=current_season
         )
     log.info("Loaded play-by-play: %d regular season plays", pbp_df.height)
 
@@ -790,6 +872,21 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         stats_seasons, stats_schedule_df, config, current_season
     )
     elo_df, raw_elo_df = _load_elo(seasons, config)
+    with _timed_step("load_ratings_sources", enabled=config.enable_timing):
+        loaded = ratings_build.load_ratings_sources(
+            max(seasons),
+            pbp_df=pbp_df,
+            schedule_df=stats_schedule_df,
+            current_season=current_season,
+            force_refresh=config.force_refresh_nflreadpy,
+        )
+        ratings = (
+            None
+            if loaded is None
+            else ratings_build.RatingsBuild(
+                ratings_build.ratings_inputs(loaded), current_season=current_season
+            )
+        )
     return _EtlSources(
         current_season=current_season,
         current_week=current_week,
@@ -798,6 +895,13 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         pbp_df=pbp_df,
         elo_df=elo_df,
         raw_elo_df=raw_elo_df,
+        pbp_seasons=tuple(stats_seasons),
+        ratings=ratings,
+        qb_identity_sources=(
+            None
+            if loaded is None
+            else nflverse_sources.QbIdentitySources(loaded.players, loaded.weekly_rosters)
+        ),
     )
 
 
@@ -869,20 +973,133 @@ def _combine_seasons(frames: list[pl.DataFrame]) -> pl.DataFrame:
     )
 
 
-def _finish_games(
-    combined_df: pl.DataFrame, sources: _EtlSources, max_season: int, *, enable_timing: bool
+def _own_elo_earlier_schedule(sources: _EtlSources, max_season: int) -> pl.DataFrame:
+    """Return the schedules of the seasons from 1999 that the run does not build, from cache."""
+    built = (
+        set(sources.schedule_df.get_column("season").unique(maintain_order=True).to_list())
+        if "season" in sources.schedule_df.columns
+        else set()
+    )
+    earlier = [
+        season
+        for season in range(constants.NFLREADPY_MIN_SEASON, max_season + 1)
+        if season not in built
+    ]
+    if not earlier:
+        return pl.DataFrame()
+    return polars_utils.load_schedule(
+        earlier, force_refresh=False, current_season=sources.current_season
+    )
+
+
+def _own_elo_named_games(games: pl.DataFrame, earlier: pl.DataFrame) -> pl.DataFrame:
+    """Return each game's named starters.
+
+    The published rows name their own; the seasons the run does not build take theirs from
+    ``qb_elos.csv``.
+    """
+    keys = ["game_id", "season", "week", "away_abbr", "home_abbr", "away_qb", "home_qb"]
+    named = games.select(keys)
+    if earlier.height == 0:
+        return named
+    seasons = earlier.get_column("season").unique(maintain_order=True).to_list()
+    names = polars_utils.load_elo_ratings(seasons)
+    if not {"home_qb", "away_qb"} <= set(names.columns):
+        return named
+    earlier_named = earlier.join(
+        names.select("season", "week", "home_abbr", "away_abbr", "home_qb", "away_qb"),
+        on=["season", "week", "home_abbr", "away_abbr"],
+        how="left",
+    ).select(keys)
+    return pl.concat([earlier_named, named], how="vertical_relaxed")
+
+
+def _attach_own_elo(
+    games: pl.DataFrame,
+    sources: _EtlSources,
+    history: qb_starters.QuarterbackHistory | None,
+    *,
+    max_season: int,
+    metadata: dict[str, object] | None,
 ) -> pl.DataFrame:
-    """Fill future games' quarterbacks and lines, add QB features, and order the columns."""
+    """Add both own Elo families to the game rows (``own_elo_build``).
+
+    The ratings run over every game from 1999 on, upcoming ones included; the seasons the run
+    does not build come from the schedule cache, with their starters named from
+    ``qb_elos.csv``. Each game is rated for its play-by-play starter, else the starter the ETL
+    names. A run without a quarterback history, or a schedule without a column the ratings
+    read, adds nothing and logs a warning; the final schema fills the columns with nulls.
+
+    Raises:
+        ValueError: When the win totals cover none of the built seasons
+            (``own_elo_build.require_win_totals``).
+
+    """
+    built = sources.schedule_df
+    missing = [column for column in own_elo_build.SCHEDULE_COLUMNS if column not in built.columns]
+    if history is None or missing or not _QB_NAME_COLUMNS.issubset(games.columns):
+        log.warning(
+            "Own Elo not built: %s",
+            f"the schedule lacks {missing}" if missing else "no quarterback starters",
+        )
+        return games
+    earlier = _own_elo_earlier_schedule(sources, max_season)
+    schedule = pl.concat([earlier, built], how="diagonal_relaxed") if earlier.height else built
+    identity = qb_stats.load_qb_identity(constants.DATA_PATH / f"{constants.QB_META_DATA_NAME}.csv")
+    columns = own_elo_build.own_elo_columns(
+        schedule,
+        box_scores=elo_quarterbacks.quarterback_box_scores(history),
+        named_starters=qb_stats.named_starters(
+            _own_elo_named_games(games, earlier), identity, history.qb_games
+        ),
+        win_totals=elo_win_totals.load_win_totals(),
+        seasons=built.get_column("season").unique(maintain_order=True).to_list(),
+    )
+    if metadata is not None:
+        metadata.update(columns.metadata)
+    return games.drop(own_elo_build.COLUMNS, strict=False).join(
+        columns.frame, on="game_id", how="left", maintain_order="left"
+    )
+
+
+def _finish_games(
+    combined_df: pl.DataFrame,
+    sources: _EtlSources,
+    max_season: int,
+    *,
+    enable_timing: bool,
+    own_elo_metadata: dict[str, object] | None = None,
+) -> pl.DataFrame:
+    """Finish the combined game rows for publication.
+
+    Fills future games' quarterbacks and lines, adds the quarterback features and the own Elo,
+    and orders the columns.
+    """
     # Fill in QB data for future games using most recent starters
     combined_df = game_utils.fill_future_qb_data(combined_df, sources.raw_elo_df)
     # Quarterback features key on the final starter assignment, future weeks included.
     with _timed_step("attach_qb_features", enabled=enable_timing):
-        combined_df = _attach_qb_features(
-            combined_df,
-            sources.pbp_df,
-            max_season=max_season,
-            current_season=sources.current_season,
+        history = (
+            _quarterback_history(
+                sources.pbp_df,
+                max_season=max_season,
+                current_season=sources.current_season,
+                requested_seasons=sources.pbp_seasons,
+                identity_sources=sources.qb_identity_sources,
+            )
+            if _QB_NAME_COLUMNS.issubset(combined_df.columns)
+            else None
         )
+        combined_df = _attach_qb_features(combined_df, history)
+    with _timed_step("attach_own_elo", enabled=enable_timing):
+        combined_df = _attach_own_elo(
+            combined_df, sources, history, max_season=max_season, metadata=own_elo_metadata
+        )
+    if sources.ratings is not None:
+        with _timed_step("attach_rating_features", enabled=enable_timing):
+            combined_df = sources.ratings.attach(
+                combined_df, starters=None if history is None else history.starters
+            )
     if sources.pick_time is None:
         # Fill in lines for future games from SurvivorGrid
         combined_df = game_utils.fill_future_game_lines(combined_df)
@@ -917,7 +1134,8 @@ def _open_season_cache(
 
     A season's build reads the schedule, the team stats and the ELO ratings through that
     season (the coach history reaches back to the run's first season), its own and the
-    previous season's TeamRankings, and the options below; the keys cover exactly those.
+    previous season's TeamRankings, and the options below, and its ratings read the ratings'
+    team-game and passer-game rows through that season; the keys cover exactly those.
     """
     if not config.incremental:
         return None
@@ -926,6 +1144,7 @@ def _open_season_cache(
             "schedule": sources.schedule_df,
             "team_stats": sources.team_stats_df,
             "elo": sources.elo_df,
+            **({} if sources.ratings is None else sources.ratings.key_frames()),
         },
         {
             "min_season": min_season,
@@ -949,7 +1168,8 @@ def _build_season(
     """Build one season's game rows, reusing a finished season's cached build when valid.
 
     The season in progress is always rebuilt. A cached build carries the season's strength
-    snapshots too, so they reach ``inputs.strength_snapshots`` exactly as a rebuild's would.
+    snapshots too, so they reach ``inputs.strength_snapshots`` exactly as a rebuild's would,
+    and its ratings frames, which ``sources.ratings`` records instead of fitting them again.
     """
     key = (
         None
@@ -957,8 +1177,18 @@ def _build_season(
         else cache.keys.key(season, {"tr": inputs.tr_df, "prev_tr": inputs.prev_tr_df})
     )
     if cache is None or key is None:
-        return process_season(season, sources.schedule_df, sources.team_stats_df, inputs)
+        games = process_season(season, sources.schedule_df, sources.team_stats_df, inputs)
+        if sources.ratings is not None:
+            sources.ratings.build(season)
+        return games
     build = cache.cache.load(season, key)
+    if (
+        build is not None
+        and sources.ratings is not None
+        and not sources.ratings.can_reuse(build.ratings)
+    ):
+        log.warning("Season cache: %d holds no ratings; rebuilding it", season)
+        build = None
     if build is None:
         recorded: list[pl.DataFrame] = []
         games = process_season(
@@ -970,10 +1200,13 @@ def _build_season(
         snapshots = (
             pl.concat(recorded, how="vertical") if recorded else combine_strength_snapshots([])
         )
-        build = season_cache.SeasonBuild(games=games, snapshots=snapshots)
+        ratings = {} if sources.ratings is None else sources.ratings.build(season)
+        build = season_cache.SeasonBuild(games=games, snapshots=snapshots, ratings=ratings)
         cache.cache.store(season, key, build)
     else:
         log.info("Season %d reused from the season cache", season)
+        if sources.ratings is not None:
+            sources.ratings.reuse(season, build.ratings)
     if inputs.strength_snapshots is not None and build.snapshots.height > 0:
         inputs.strength_snapshots.append(build.snapshots)
     return build.games
@@ -983,19 +1216,16 @@ def collect_all_data(
     seasons: list[int],
     *,
     config: DataCollectionConfig | None = None,
-    strength_snapshots: list[pl.DataFrame] | None = None,
-    market_lines_metadata: dict[str, object] | None = None,
+    records: CollectionRecords | None = None,
 ) -> pl.DataFrame:
     """Collect and combine all data for specified seasons.
 
     Args:
         seasons: List of season years to process
         config: Optional runtime config for logging/timing and cache refresh
-        strength_snapshots: Optional list that receives each processed week's per-team
-            strength snapshot; see `combine_strength_snapshots`
-        market_lines_metadata: Optional dict that receives a pick-time build's line record
-            (the nfelo snapshot and its hash, per-season counts, the moneyline maps); a
-            stored-line build leaves it empty
+        records: Optional records the run fills in beside the game rows (the strength
+            snapshots, the line and own Elo records, the ratings tables); without them none is
+            kept
 
     Returns:
         Combined DataFrame with all game data and features
@@ -1031,7 +1261,7 @@ def collect_all_data(
             strength_prior_blend_games=config.strength_prior_blend_games,
             blend_stat_prior=config.blend_stat_prior,
             stat_prior_blend_games=config.stat_prior_blend_games,
-            strength_snapshots=strength_snapshots,
+            strength_snapshots=None if records is None else records.strength_snapshots,
             timing_enabled=config.enable_timing,
         )
         with _timed_step(f"process_season_{season}", enabled=config.enable_timing):
@@ -1046,9 +1276,12 @@ def collect_all_data(
         sources,
         max(seasons),
         enable_timing=config.enable_timing,
+        own_elo_metadata=None if records is None else records.own_elo_metadata,
     )
-    if sources.pick_time is not None and market_lines_metadata is not None:
-        market_lines_metadata.update(sources.pick_time.metadata())
+    if records is not None and sources.pick_time is not None:
+        records.market_lines_metadata.update(sources.pick_time.metadata())
+    if records is not None and sources.ratings is not None:
+        records.rating_tables.update(sources.ratings.published_tables())
     return games
 
 

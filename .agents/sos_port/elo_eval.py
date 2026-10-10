@@ -1,15 +1,26 @@
 """Score the own Elo's components on the 2007-2025 regular season and write the report.
 
-Run from the repository root (a worktree is fine):
+Run from the repository root (a worktree is fine), with an nflreadpy cache that holds the
+rusher and play ids, the players file and the weekly rosters (``decisions/integration_cache.py``
+builds one from saved nflverse downloads):
 
-    VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/elo_eval.py
+    VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/elo_eval.py \
+        --data-dir /home/mitch/workspace/nfl-predictor/data --nflreadpy-cache /tmp/step6_int/cache
 
 It writes ``ELO_EVAL.md`` and ``ELO_EVAL.json`` beside this file and nothing else. It reads,
-read-only: the main checkout's cached nflverse schedules and regular-season play-by-play
-(``--data-dir``, by default the ``data/`` of the checkout that owns this repository's git
-directory), that checkout's ``qb_elos.csv`` and ``meta_data.csv``, FiveThirtyEight's
-``nfl-elo-game`` game file (``--fivethirtyeight``) and a downloaded copy of nfelosrs's
-``wt_ratings.csv`` (``--win-totals``). Every input file's SHA-256 is recorded in the report.
+read-only: cached nflverse schedules, regular-season play-by-play, the players file and the
+weekly rosters in this repository's cache format (``--nflreadpy-cache``, by default the
+``cache/nflreadpy`` of ``--data-dir``; the play-by-play must hold the rusher and play ids, and
+the players file and weekly rosters give each season's quarterback identity), the
+``qb_elos.csv`` and ``meta_data.csv`` of ``--data-dir`` (by default the main checkout's
+``data/``), FiveThirtyEight's ``nfl-elo-game`` game file (``--fivethirtyeight``) and a
+downloaded copy of nfelosrs's ``wt_ratings.csv`` (``--win-totals``). Every input file's SHA-256
+is recorded in the report.
+
+The quarterback adjustment reads the ETL's quarterback inputs: VALUE's box scores and starters
+from the shared quarterback history (``qb_starters.quarterback_history``), and, for a game
+without a play-by-play starter (every playoff game), the starter ``qb_elos.csv`` names, mapped
+to an id as the ETL maps it (``qb_stats.named_starters``).
 
 What it does, in order (the rule is ``decisions/elo.md``, entry 1, written before this ran):
 
@@ -47,6 +58,8 @@ from nfl_predictor.utils.polars import (
     elo_quarterbacks,
     elo_ratings,
     elo_win_totals,
+    player_identity,
+    qb_starters,
     qb_stats,
 )
 
@@ -138,6 +151,7 @@ class Inputs:
 
     schedule: pl.DataFrame
     plays: pl.DataFrame
+    positions: pl.DataFrame
     qb_elos: pl.DataFrame
     identity: pl.DataFrame
     fivethirtyeight: pl.DataFrame
@@ -145,12 +159,9 @@ class Inputs:
     provenance: dict[str, Any]
 
 
-def _season_files(data_dir: Path, pattern: str) -> list[Path]:
+def _season_files(cache_dir: Path, pattern: str, first: int = FIRST_SEASON) -> list[Path]:
     """Return one cache file per season of the evaluation, in season order."""
-    paths = [
-        data_dir / "cache" / "nflreadpy" / pattern.format(season=season)
-        for season in range(FIRST_SEASON, LAST_SEASON + 1)
-    ]
+    paths = [cache_dir / pattern.format(season=season) for season in range(first, LAST_SEASON + 1)]
     missing = [str(path) for path in paths if not path.is_file()]
     if missing:
         msg = f"missing cache files: {missing}"
@@ -163,9 +174,32 @@ def _canonical(column: str) -> pl.Expr:
     return pl.col(column).replace(constants.ALIAS_TO_CANONICAL)
 
 
-def load_inputs(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path) -> Inputs:
+def _positions(cache_dir: Path) -> tuple[pl.DataFrame, list[Path]]:
+    """Return each season's quarterback positions from the cached players file and rosters.
+
+    The files are read directly, so a cache without them is an error rather than a download.
+    """
+    players_path = cache_dir / "players.parquet"
+    first_weekly = constants.NFLREADPY_WEEKLY_ROSTERS_MIN_SEASON
+    roster_paths = _season_files(cache_dir, "rosters_weekly_{season}_reg.parquet", first_weekly)
+    players = pl.read_parquet(players_path)
+    rosters = {
+        season: pl.read_parquet(path)
+        for season, path in zip(range(first_weekly, LAST_SEASON + 1), roster_paths, strict=True)
+    }
+    none = pl.DataFrame(schema=rosters[first_weekly].schema)
+    crosswalks = {
+        season: player_identity.qb_identity_crosswalk(players, rosters.get(season, none))
+        for season in range(FIRST_SEASON, LAST_SEASON + 1)
+    }
+    return qb_starters.season_positions(crosswalks), [players_path, *roster_paths]
+
+
+def load_inputs(
+    data_dir: Path, cache_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path
+) -> Inputs:
     """Read every input, read-only, and record its hash."""
-    schedule_paths = _season_files(data_dir, "schedule_{season}.parquet")
+    schedule_paths = _season_files(cache_dir, "schedule_{season}.parquet")
     schedule = pl.concat(
         [pl.read_parquet(path).select(SCHEDULE_COLUMNS) for path in schedule_paths],
         how="vertical_relaxed",
@@ -174,8 +208,9 @@ def load_inputs(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Pat
         pl.col("week").cast(pl.Int64),
         pl.col("neutral").cast(pl.Int64),
     )
-    play_paths = _season_files(data_dir, "pbp_{season}_reg.parquet")
+    play_paths = _season_files(cache_dir, "pbp_{season}_reg.parquet")
     plays = pl.concat([pl.read_parquet(path) for path in play_paths], how="diagonal_relaxed")
+    positions, identity_paths = _positions(cache_dir)
     qb_elos_path = data_dir / "qb_elos.csv"
     qb_elos = (
         pl.read_csv(qb_elos_path, infer_schema_length=None)
@@ -200,8 +235,10 @@ def load_inputs(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Pat
     provenance = {
         "git_commit": _git_head(),
         "data_dir": str(data_dir),
+        "nflreadpy_cache": str(cache_dir),
         "schedule_files_sha256": _sha256_of_files(schedule_paths),
         "play_by_play_files_sha256": _sha256_of_files(play_paths),
+        "identity_files_sha256": _sha256_of_files(identity_paths),
         "qb_elos": {"path": str(qb_elos_path), "sha256": _sha256(qb_elos_path)},
         "meta_data": {"path": str(meta_path), "sha256": _sha256(meta_path)},
         "fivethirtyeight_games": {
@@ -212,7 +249,9 @@ def load_inputs(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Pat
         "schedule_games": schedule.height,
         "play_rows": plays.height,
     }
-    return Inputs(schedule, plays, qb_elos, identity, fivethirtyeight, win_totals, provenance)
+    return Inputs(
+        schedule, plays, positions, qb_elos, identity, fivethirtyeight, win_totals, provenance
+    )
 
 
 @dataclass(frozen=True)
@@ -696,8 +735,8 @@ def check_starters(inputs: Inputs, box: pl.DataFrame) -> dict[str, Any]:
         .unique(["season", "week", "team_abbr"], keep="first", maintain_order=True)
         .select("season", "week", "team_abbr", pl.col("qb_id").alias("most_dropbacks"))
     )
-    first_passer = box.filter(pl.col("starter")).select(
-        "season", "week", "team_abbr", pl.col("qb_id").alias("first_passer")
+    rule_starter = box.filter(pl.col("starter")).select(
+        "season", "week", "team_abbr", pl.col("qb_id").alias("rule_starter")
     )
     published = pl.concat(
         [
@@ -711,7 +750,7 @@ def check_starters(inputs: Inputs, box: pl.DataFrame) -> dict[str, Any]:
         ]
     ).join(inputs.identity, on="qb_name", how="left")
     joined = (
-        published.join(first_passer, on=["season", "week", "team_abbr"], how="inner")
+        published.join(rule_starter, on=["season", "week", "team_abbr"], how="inner")
         .join(most_dropbacks, on=["season", "week", "team_abbr"], how="inner")
         .filter(pl.col("qb_id").is_not_null())
     )
@@ -720,7 +759,7 @@ def check_starters(inputs: Inputs, box: pl.DataFrame) -> dict[str, Any]:
         part = joined.filter(pl.col("season").is_between(first, last))
         result[label] = {
             "team_games": part.height,
-            "first_passer_agrees": float((part["first_passer"] == part["qb_id"]).mean() or 0.0),
+            "rule_starter_agrees": float((part["rule_starter"] == part["qb_id"]).mean() or 0.0),
             "most_dropbacks_agrees": float((part["most_dropbacks"] == part["qb_id"]).mean() or 0.0),
         }
     return result
@@ -944,12 +983,33 @@ def pre_kickoff_starters(
     }
 
 
-def evaluate(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path) -> dict[str, Any]:
+def named_starters(inputs: Inputs, qb_games: pl.DataFrame) -> pl.DataFrame:
+    """Return the starter ``qb_elos.csv`` names for each side of each game, as the ETL maps it."""
+    names = inputs.qb_elos.select(
+        "season",
+        "week",
+        "home_abbr",
+        "away_abbr",
+        pl.col("qb1").alias("home_qb"),
+        pl.col("qb2").alias("away_qb"),
+    ).unique(subset=["season", "week", "home_abbr", "away_abbr"], keep="last", maintain_order=True)
+    games = inputs.schedule.join(
+        names, on=["season", "week", "home_abbr", "away_abbr"], how="left", maintain_order="left"
+    )
+    return qb_stats.named_starters(games, inputs.identity, qb_games)
+
+
+def evaluate(
+    data_dir: Path, cache_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path
+) -> dict[str, Any]:
     """Run every check, the seeding decision, the selection and the diagnostics."""
-    inputs = load_inputs(data_dir, fivethirtyeight_path, win_totals_path)
+    inputs = load_inputs(data_dir, cache_dir, fivethirtyeight_path, win_totals_path)
     window = evaluation_window(inputs.schedule)
-    box = elo_quarterbacks.quarterback_box_scores(inputs.plays)
-    adjustments = elo_quarterbacks.value_qb_adjustments(inputs.schedule, box)
+    history = qb_starters.quarterback_history(inputs.plays, inputs.positions)
+    box = elo_quarterbacks.quarterback_box_scores(history)
+    adjustments = elo_quarterbacks.value_qb_adjustments(
+        inputs.schedule, box, projected_starters=named_starters(inputs, history.qb_games)
+    )
     previous_adjustments = elo_quarterbacks.value_qb_adjustments(
         inputs.schedule, box, pre_game_starter="last_starter"
     )
@@ -1383,12 +1443,12 @@ def _check_lines(result: dict[str, Any]) -> list[str]:
         "",
     ]
     lines += _table(
-        ["seasons", "team-games", "first passer", "most dropbacks"],
+        ["seasons", "team-games", "play-by-play starter rule", "most dropbacks"],
         [
             [
                 label,
                 str(starters[label]["team_games"]),
-                _number(starters[label]["first_passer_agrees"], 4),
+                _number(starters[label]["rule_starter_agrees"], 4),
                 _number(starters[label]["most_dropbacks_agrees"], 4),
             ]
             for label in ("1999-2025", "2007-2025")
@@ -1470,10 +1530,14 @@ def markdown(result: dict[str, Any]) -> str:
         "# Own Elo evaluation",
         "",
         "Generated by `.agents/sos_port/elo_eval.py`; do not edit by hand. Reproduce from the",
-        "repository root with:",
+        "repository root with (the cache must hold the rusher and play ids, the players file",
+        "and the weekly rosters; `decisions/integration_cache.py` builds one from saved",
+        "nflverse downloads):",
         "",
         "```bash",
-        'VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/elo_eval.py',
+        'VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/elo_eval.py \\',
+        f"    --data-dir {provenance['data_dir']} \\",
+        f"    --nflreadpy-cache {provenance['nflreadpy_cache']}",
         "```",
         "",
         "The rule that reads these numbers is `decisions/elo.md`, entry 1, written before the",
@@ -1491,6 +1555,11 @@ def markdown(result: dict[str, Any]) -> str:
         [
             ["code commit", f"`{provenance['git_commit']}`"],
             ["data directory", f"`{provenance['data_dir']}`"],
+            ["nflreadpy cache", f"`{provenance['nflreadpy_cache']}`"],
+            [
+                "players file and weekly rosters (2002-2025) SHA-256",
+                f"`{provenance['identity_files_sha256']}`",
+            ],
             [
                 "schedule cache files (1999-2025) SHA-256",
                 f"`{provenance['schedule_files_sha256']}`",
@@ -1521,6 +1590,7 @@ def main() -> int:
     """Run the evaluation and write both reports."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--data-dir", type=Path, default=None)
+    parser.add_argument("--nflreadpy-cache", type=Path, default=None)
     parser.add_argument(
         "--fivethirtyeight",
         type=Path,
@@ -1533,7 +1603,8 @@ def main() -> int:
     )
     args = parser.parse_args()
     data_dir = args.data_dir or _main_checkout_data()
-    result = evaluate(data_dir, args.fivethirtyeight, args.win_totals)
+    cache_dir = args.nflreadpy_cache or data_dir / "cache" / "nflreadpy"
+    result = evaluate(data_dir, cache_dir, args.fivethirtyeight, args.win_totals)
     OUT_JSON.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     OUT_MD.write_text(markdown(result), encoding="utf-8")
     return 0

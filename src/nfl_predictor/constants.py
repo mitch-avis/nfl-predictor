@@ -92,10 +92,12 @@ MONEYLINE_MAP_MIN_GAMES = 200
 # Written beside the datasets by a pick-time build: the nfelo snapshot, match rates, fallback
 # rows and the moneyline maps the run used.
 MARKET_LINES_METADATA_NAME = "market_lines_metadata"
+# Base name of the own Elo's build record (both presets and the win-total file it read), JSON.
+OWN_ELO_METADATA_NAME = "own_elo_metadata"
 # nfelosrs's preseason win-total ratings (`greerreNFL/nfelosrs`, 2003 on): each team's rating
 # implied by the sportsbooks' season win totals and its schedule, on the Elo scale. Market
-# information: only the own Elo's optional win-total pull reads it, cached and snapshotted like
-# the lines under NFELO_CACHE_DIR / "win_totals".
+# information: only the own Elo's win-total preset reads it, cached and snapshotted like the
+# lines under NFELO_CACHE_DIR / "win_totals".
 NFELOSRS_WIN_TOTALS_URL = (
     "https://raw.githubusercontent.com/greerreNFL/nfelosrs/main/wt_ratings.csv"
 )
@@ -894,7 +896,8 @@ PRUNED_FEATURE_COLUMNS = [
     "away_games_played",
     "home_games_played",
     # The two teams in a game have almost always played the same number of games, so the diff
-    # is a constant zero outside bye weeks.
+    # is a constant zero outside bye weeks. The ETL does not publish it (STATS_WITHOUT_DIFF);
+    # it stays pruned so a dataset that still carries it trains the same way.
     "strength_games_played_diff",
     # Equal to the schedule's `division` flag from the 2002 realignment on, and derived from
     # the current division map before it, so the schedule flag is the one to keep.
@@ -1253,13 +1256,13 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     "next_opponent_identity": ("next_opponent_abbr",),
     # Every column built from `data/qb_elos.csv` (the `../nfeloqb` Elo file): the Elo values
     # and their four-week trends. That Elo pulls each preseason rating toward one built from
-    # betting win totals, so the group is market-informed; a run with no market information
-    # disables it along with the market features.
+    # betting win totals, so the group is market-informed (MARKET_INFORMED_FEATURE_GROUPS): a
+    # run that leaves the market columns out keeps it unless it disables the group as well.
     "elo": (*ELO_COLUMNS, *ELO_TREND_COLUMNS),
     # This repository's own Elo, market-free preset (OWN_ELO_COLUMNS).
     "own_elo": tuple(OWN_ELO_TEAM_STATS),
-    # The own Elo's win-total preset (OWN_WT_ELO_COLUMNS). Market-informed like the `elo` group:
-    # a run with no market information disables both.
+    # The own Elo's win-total preset (OWN_WT_ELO_COLUMNS). Market-informed like the `elo` group,
+    # and likewise kept by a run without the market columns unless it disables the group.
     "own_elo_wt": tuple(OWN_WT_ELO_TEAM_STATS),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
@@ -1272,10 +1275,17 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# Feature groups built on betting-market information without being line columns. Leaving the
+# market columns out (`include_market` off) does not leave these out: a run with no market
+# information at all disables them too, and a run that keeps any of them while leaving the
+# market columns out logs a warning naming it (`ml.feature_spec.build_feature_spec`).
+MARKET_INFORMED_FEATURE_GROUPS = ("elo", "own_elo_wt")
+
 # Raw per-team-game counts and sums produced from play-by-play.
 # These are carried through season-to-date aggregation so rates can be computed as a
 # ratio of sums afterwards; they are not published in the final schema themselves,
-# apart from the snap volumes that also appear in PBP_STATS.
+# apart from the snap volumes that also appear in PBP_STATS. Each one feeds a published
+# rate: a count no rate reads is not carried.
 PBP_COUNT_COLUMNS = [
     "offensive_snaps",
     "defensive_snaps",
@@ -1303,21 +1313,13 @@ PBP_COUNT_COLUMNS = [
     "st_epa_against",
     "st_plays",
     "third_down_conversions",
-    "third_down_fails",
     "third_down_attempts",
     "third_down_conversions_allowed",
-    "third_down_fails_allowed",
     "third_down_attempts_allowed",
     "fourth_down_conversions",
-    "fourth_down_fails",
     "fourth_down_attempts",
     "fourth_down_conversions_allowed",
-    "fourth_down_fails_allowed",
     "fourth_down_attempts_allowed",
-    "red_zone_plays",
-    "red_zone_tds",
-    "red_zone_plays_allowed",
-    "red_zone_tds_allowed",
     "red_zone_trips",
     "red_zone_td_drives",
     "red_zone_trips_allowed",
@@ -1326,7 +1328,6 @@ PBP_COUNT_COLUMNS = [
     "two_point_successes",
     "two_point_attempts_allowed",
     "two_point_successes_allowed",
-    "total_plays",
 ]
 
 # Play-by-play stats published in the final schema (per team, prefixed with away_/home_).
@@ -1401,6 +1402,11 @@ SCHEDULE_STRENGTH_STATS = [
 # Every per-team strength column published in the final schema.
 ADJUSTED_STRENGTH_STATS = [*STRENGTH_TEAM_STATS, *SCHEDULE_STRENGTH_STATS]
 
+# Stats published per side without the away-minus-home `_diff` companion: the two teams in a
+# game have almost always played the same number of games, so that diff is a constant zero
+# outside bye weeks.
+STATS_WITHOUT_DIFF = ["strength_games_played"]
+
 # Columns the weekly snapshot builder emits, keyed by team. `adj_hfa` is the shared
 # home-field term: one league-wide value per (season, week), so it is deliberately
 # NOT published to the game schema, where it would become two identical away_/home_
@@ -1466,6 +1472,30 @@ QB_NAME_ALIASES = {
     "Mitch Trubisky": "Mitchell Trubisky",
     "Robert Griffin": "Robert Griffin III",
 }
+
+# The team and quarterback ratings ported from nfl-sos-ratings (`nfl_predictor.ratings`), fit by
+# the ETL on the games before each week (`utils/polars/ratings_build.py`). Published per side
+# with a _diff companion; every name starts with "ratings_", which no other column contains, so
+# the group stays disjoint from the strength, quarterback and TeamRankings rating columns.
+RATINGS_FEATURE_STATS = [
+    # Points per game against an average team on a neutral field, from opponent-adjusted EPA.
+    "ratings_offense",
+    "ratings_defense",
+    "ratings_special_teams",
+    "ratings_team",
+    # Mean team rating of the opponents played, each rated without the team's games (null in
+    # weeks 1 and 2, before any opponent has played someone else).
+    "ratings_sos",
+    # The expected starter's adjusted EPA per dropback, from this season's games before the week.
+    "ratings_qb",
+    # His dropbacks behind it (0 before his first dropback of the season).
+    "ratings_qb_dropbacks",
+]
+
+FEATURE_GROUP_COLUMN_MARKERS["ratings"] = tuple(RATINGS_FEATURE_STATS)
+
+# Directory under DATA_PATH for the published ratings tables, `{season}_{kind}.parquet`.
+RATINGS_DIRNAME = "ratings"
 
 # Stats to EXCLUDE from opponent stat generation (they create duplicates)
 # These stats are duplicates when viewed from opponent's perspective:

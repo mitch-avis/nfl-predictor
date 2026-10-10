@@ -124,6 +124,7 @@ class RatingsHistory:
         load_qb_games: Callable[[int], pl.DataFrame],
         *,
         first_season: int = constants.NFLREADPY_MIN_SEASON,
+        load_qb_games_before: Callable[[int, int], pl.DataFrame] | None = None,
     ) -> None:
         """Remember where each season's rows come from and the first season there is.
 
@@ -131,12 +132,18 @@ class RatingsHistory:
             load_team_games: Returns one season's regular-season team-game rows.
             load_qb_games: Returns one season's regular-season quarterback-game rows.
             first_season: The first season with rows; it has no earlier season for penalties.
+            load_qb_games_before: Returns a season's quarterback-game rows as known before a
+                week (``season, week``), for the pre-week quarterback ratings of that week: who
+                counts as a passer can depend on what was known then. Its rows from the week on
+                are ignored. ``load_qb_games`` stands in when it is omitted; the penalties always
+                come from ``load_qb_games``, whose previous season is wholly before the week.
 
         """
         self._team = PriorHistory(
             lambda season: team_game_rows(load_team_games(season)), first_season=first_season
         )
         self._load_qb = load_qb_games
+        self._load_qb_before = load_qb_games_before
         self._qb_games: dict[int, pl.DataFrame] = {}
         self._qb_penalties: dict[int, float] = {}
 
@@ -204,7 +211,7 @@ class RatingsHistory:
             | set(snapshot.get_column("team").to_list())
             | set(snapshot.get_column("opponent_team").to_list())
         )
-        games_played = snapshot.group_by("team").len("games_played")
+        games_played = snapshot.group_by("team", maintain_order=True).len("games_played")
         frame = (
             pl.DataFrame({"team": universe}, schema={"team": pl.String()})
             .join(games_played, on="team", how="left")
@@ -246,12 +253,17 @@ class RatingsHistory:
         penalty = self.qb_penalty(season)
         if penalty is None:
             return pl.DataFrame(schema=_QB_PRE_WEEK_SCHEMA)
-        snapshot = self.qb_games(season).filter(pl.col("week") < week)
+        games = (
+            self.qb_games(season)
+            if self._load_qb_before is None
+            else qb_game_rows(self._load_qb_before(season, week))
+        )
+        snapshot = games.filter(pl.col("week") < week)
         rated = qb_rating_rows(snapshot)
         if rated.is_empty():
             return pl.DataFrame(schema=_QB_PRE_WEEK_SCHEMA)
         fit = fit_qb_ratings(snapshot, ridge_lambda=penalty)
-        volume = rated.group_by(QB_ID_COLUMN).agg(
+        volume = rated.group_by(QB_ID_COLUMN, maintain_order=True).agg(
             pl.len().cast(pl.Int64).alias("qb_games_played"),
             pl.col(QB_DROPBACKS_COLUMN).sum().cast(pl.Int64),
         )

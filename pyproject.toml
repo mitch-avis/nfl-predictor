@@ -32,6 +32,7 @@ dependencies = [
     "scikit-learn>=1.9",
     "scipy>=1.18",
     "sse-starlette>=3.5",
+    "threadpoolctl>=3.7",
     "uvicorn[standard]>=0.54",
     "xgboost>=3.4",
 ]

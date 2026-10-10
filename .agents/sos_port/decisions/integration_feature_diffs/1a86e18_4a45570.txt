@@ -1,0 +1,77 @@
+
+# team_games: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+
+## team_games: columns that differ, by season
+┌──────────────────────┬────────┬──────────────┬──────────────┬─────────────┐
+│ column               ┆ season ┆ rows_changed ┆ total_before ┆ total_after │
+│ ---                  ┆ ---    ┆ ---          ┆ ---          ┆ ---         │
+│ str                  ┆ i64    ┆ u32          ┆ f64          ┆ f64         │
+╞══════════════════════╪════════╪══════════════╪══════════════╪═════════════╡
+│ red_zone_tds         ┆ 2001   ┆ 6            ┆ 711.000000   ┆ 725.000000  │
+│ red_zone_tds         ┆ 2002   ┆ 8            ┆ 851.000000   ┆ 866.000000  │
+│ red_zone_tds_allowed ┆ 2001   ┆ 6            ┆ 711.000000   ┆ 725.000000  │
+│ red_zone_tds_allowed ┆ 2002   ┆ 8            ┆ 851.000000   ┆ 866.000000  │
+└──────────────────────┴────────┴──────────────┴──────────────┴─────────────┘
+
+# box_scores: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+
+## box_scores: columns that differ, by season
+┌───────────────┬────────┬──────────────┬──────────────┬──────────────┐
+│ column        ┆ season ┆ rows_changed ┆ total_before ┆ total_after  │
+│ ---           ┆ ---    ┆ ---          ┆ ---          ┆ ---          │
+│ str           ┆ i64    ┆ u32          ┆ f64          ┆ f64          │
+╞═══════════════╪════════╪══════════════╪══════════════╪══════════════╡
+│ penalties     ┆ 2001   ┆ 16           ┆ 2875.000000  ┆ 2875.000000  │
+│ penalties     ┆ 2002   ┆ 14           ┆ 3326.000000  ┆ 3326.000000  │
+│ penalty_yards ┆ 2001   ┆ 16           ┆ 24282.000000 ┆ 24282.000000 │
+│ penalty_yards ┆ 2002   ┆ 14           ┆ 27591.000000 ┆ 27591.000000 │
+└───────────────┴────────┴──────────────┴──────────────┴──────────────┘
+
+# qb_games: 17142 rows before, 17142 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# published game columns: 7261 games before, 7261 after; 513 columns before, 513 after
+columns added: []
+columns removed: []
+
+## published stats that moved (all seasons)
+┌─────────────────────────────────┬───────────────┬──────────────┬─────────────┬────────────────┐
+│ stat                            ┆ games_changed ┆ first_season ┆ last_season ┆ max_abs_change │
+│ ---                             ┆ ---           ┆ ---          ┆ ---         ┆ ---            │
+│ str                             ┆ u32           ┆ i32          ┆ i32         ┆ f64            │
+╞═════════════════════════════════╪═══════════════╪══════════════╪═════════════╪════════════════╡
+│ opponent_penalties              ┆ 346           ┆ 2001         ┆ 2003        ┆ 3.466667       │
+│ opponent_penalty_yards          ┆ 346           ┆ 2001         ┆ 2003        ┆ 25.812500      │
+│ opponent_penalty_yards_per_pen… ┆ 346           ┆ 2001         ┆ 2003        ┆ 0.482837       │
+│ penalties                       ┆ 346           ┆ 2001         ┆ 2003        ┆ 3.466667       │
+│ penalty_yards                   ┆ 346           ┆ 2001         ┆ 2003        ┆ 25.812500      │
+│ penalty_yards_per_penalty       ┆ 346           ┆ 2001         ┆ 2003        ┆ 0.548142       │
+└─────────────────────────────────┴───────────────┴──────────────┴─────────────┴────────────────┘
+
+## published stats that moved, by season
+┌─────────────────────────────────┬────────┬───────────────┬──────────────┬────────────────┬─────────────────┐
+│ stat                            ┆ season ┆ games_changed ┆ null_changed ┆ max_abs_change ┆ mean_abs_change │
+│ ---                             ┆ ---    ┆ ---           ┆ ---          ┆ ---            ┆ ---             │
+│ str                             ┆ i32    ┆ u32           ┆ u32          ┆ f64            ┆ f64             │
+╞═════════════════════════════════╪════════╪═══════════════╪══════════════╪════════════════╪═════════════════╡
+│ opponent_penalties              ┆ 2001   ┆ 74            ┆ 0            ┆ 3.466667       ┆ 0.823084        │
+│ opponent_penalties              ┆ 2002   ┆ 158           ┆ 0            ┆ 3.132479       ┆ 0.453439        │
+│ opponent_penalties              ┆ 2003   ┆ 114           ┆ 0            ┆ 1.583333       ┆ 0.183363        │
+│ opponent_penalty_yards          ┆ 2001   ┆ 74            ┆ 0            ┆ 25.812500      ┆ 6.384636        │
+│ opponent_penalty_yards          ┆ 2002   ┆ 158           ┆ 0            ┆ 24.529915      ┆ 3.401429        │
+│ opponent_penalty_yards          ┆ 2003   ┆ 114           ┆ 0            ┆ 11.791667      ┆ 1.367439        │
+│ opponent_penalty_yards_per_pen… ┆ 2001   ┆ 74            ┆ 0            ┆ 0.348640       ┆ 0.110938        │
+│ opponent_penalty_yards_per_pen… ┆ 2002   ┆ 158           ┆ 0            ┆ 0.482837       ┆ 0.076790        │
+│ opponent_penalty_yards_per_pen… ┆ 2003   ┆ 114           ┆ 0            ┆ 0.145808       ┆ 0.035481        │
+│ penalties                       ┆ 2001   ┆ 74            ┆ 0            ┆ 3.466667       ┆ 0.823084        │
+│ penalties                       ┆ 2002   ┆ 158           ┆ 0            ┆ 3.132479       ┆ 0.453439        │
+│ penalties                       ┆ 2003   ┆ 114           ┆ 0            ┆ 1.583333       ┆ 0.183363        │
+│ penalty_yards                   ┆ 2001   ┆ 74            ┆ 0            ┆ 25.812500      ┆ 6.384636        │
+│ penalty_yards                   ┆ 2002   ┆ 158           ┆ 0            ┆ 24.529915      ┆ 3.401429        │
+│ penalty_yards                   ┆ 2003   ┆ 114           ┆ 0            ┆ 11.791667      ┆ 1.367439        │
+│ penalty_yards_per_penalty       ┆ 2001   ┆ 74            ┆ 0            ┆ 0.413700       ┆ 0.110781        │
+│ penalty_yards_per_penalty       ┆ 2002   ┆ 158           ┆ 0            ┆ 0.548142       ┆ 0.072106        │
+│ penalty_yards_per_penalty       ┆ 2003   ┆ 114           ┆ 0            ┆ 0.342783       ┆ 0.041175        │
+└─────────────────────────────────┴────────┴───────────────┴──────────────┴────────────────┴─────────────────┘
+
+443 published numeric columns are identical before and after

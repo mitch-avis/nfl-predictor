@@ -27,7 +27,7 @@ another order can move a solution in its last bits. The published-log adapter
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.typing as npt
@@ -94,13 +94,25 @@ class UnitDesign:
     has_home: bool
 
 
+def _values(rows: pl.DataFrame, column: str, dtype: pl.DataType) -> list[Any]:
+    """Return a column's values as Python objects of ``dtype``, ``None`` where missing.
+
+    A column already of ``dtype`` is read as it is: a fit builds thousands of small designs, and
+    each Polars expression on a column costs a query, which with a large thread pool dwarfs the
+    arithmetic.
+    """
+    series = rows.get_column(column)
+    return (series if series.dtype == dtype else series.cast(dtype)).to_list()
+
+
 def _home_signs(rows: pl.DataFrame, home_column: str | None) -> FloatArray:
     """Return +1 for home rows, -1 for away rows, and 0 for neutral or unknown sites."""
     if home_column is None or home_column not in rows.columns:
         return np.zeros(rows.height, dtype=np.float64)
-    flags = rows.get_column(home_column).cast(pl.Boolean)
-    signs = pl.select(pl.when(flags).then(1.0).when(~flags).then(-1.0).otherwise(0.0)).to_series()
-    return np.asarray(signs.to_numpy(), dtype=np.float64)
+    flags = _values(rows, home_column, pl.Boolean())
+    return np.array(
+        [0.0 if flag is None else 1.0 if flag else -1.0 for flag in flags], dtype=np.float64
+    )
 
 
 def build_unit_design(rows: pl.DataFrame, columns: UnitColumns) -> UnitDesign:
@@ -113,15 +125,17 @@ def build_unit_design(rows: pl.DataFrame, columns: UnitColumns) -> UnitDesign:
         ValueError: If no row has an offense, defense, and response.
 
     """
-    rows = rows.drop_nulls([columns.offense, columns.defense, columns.response])
+    required = (columns.offense, columns.defense, columns.response)
+    if any(rows.get_column(column).null_count() for column in required):
+        rows = rows.drop_nulls(list(required))
     if rows.is_empty():
         msg = "fit_unit_ridge received no rows with an offense, defense, and response"
         raise ValueError(msg)
 
-    offense_units = rows.get_column(columns.offense).cast(pl.String)
-    defense_units = rows.get_column(columns.defense).cast(pl.String)
-    offense_labels = sorted(offense_units.unique().to_list())
-    defense_labels = sorted(defense_units.unique().to_list())
+    offense_units = _values(rows, columns.offense, pl.String())
+    defense_units = _values(rows, columns.defense, pl.String())
+    offense_labels = sorted(set(offense_units))
+    defense_labels = sorted(set(defense_units))
     home = _home_signs(rows, columns.home)
     has_home = bool(np.any(home != 0.0))
 
@@ -133,34 +147,31 @@ def build_unit_design(rows: pl.DataFrame, columns: UnitColumns) -> UnitDesign:
     design[:, 0] = 1.0
     if has_home:
         design[:, 1] = home
-    offense_index = {label: index for index, label in enumerate(offense_labels)}
-    defense_index = {label: index for index, label in enumerate(defense_labels)}
-    design[row_index, offense_start + offense_units.replace_strict(offense_index).to_numpy()] = 1.0
-    design[row_index, defense_start + defense_units.replace_strict(defense_index).to_numpy()] = -1.0
+    design[row_index, offense_start + _indices(offense_units, offense_labels)] = 1.0
+    design[row_index, defense_start + _indices(defense_units, defense_labels)] = -1.0
 
     weights = (
         np.ones(rows.height, dtype=np.float64)
         if columns.weight is None
         else np.clip(
-            np.asarray(
-                rows.get_column(columns.weight).cast(pl.Float64).fill_null(0.0).to_numpy(),
+            np.array(
+                [
+                    0.0 if weight is None else weight
+                    for weight in _values(rows, columns.weight, pl.Float64())
+                ],
                 dtype=np.float64,
             ),
             0.0,
             None,
         )
     )
-    group_values = rows.get_column(columns.group).cast(pl.String)
-    group_labels = sorted(group_values.unique().to_list())
-    groups = np.asarray(
-        group_values.replace_strict({label: i for i, label in enumerate(group_labels)}).to_numpy(),
-        dtype=np.int64,
-    )
+    group_values = _values(rows, columns.group, pl.String())
+    groups = _indices(group_values, sorted(set(group_values)))
     penalized = np.zeros(design.shape[1], dtype=np.float64)
     penalized[fixed_count:] = 1.0
     return UnitDesign(
         design=design,
-        response=np.asarray(rows.get_column(columns.response).cast(pl.Float64).to_numpy()),
+        response=np.array(_values(rows, columns.response, pl.Float64()), dtype=np.float64),
         weights=weights,
         groups=groups,
         penalized=penalized,
@@ -168,6 +179,12 @@ def build_unit_design(rows: pl.DataFrame, columns: UnitColumns) -> UnitDesign:
         defense_labels=defense_labels,
         has_home=has_home,
     )
+
+
+def _indices(values: list[Any], labels: list[str]) -> npt.NDArray[np.int64]:
+    """Return each value's position in ``labels``."""
+    position = {label: index for index, label in enumerate(labels)}
+    return np.array([position[value] for value in values], dtype=np.int64)
 
 
 def _normal_equations(

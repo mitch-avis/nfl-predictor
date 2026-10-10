@@ -73,6 +73,16 @@ DATASET = DATA / "all_data_ml.csv"
 TEAM_STATS = DATA / "cache" / "nflreadpy" / f"team_stats_{SEASONS[-1]}_reg.parquet"
 FILE_NAME = re.compile(r"^(\d{4})_(.+)\.parquet$")
 SIDES = ("home_", "away_")
+# A column name inside a counterpart formula: letters, digits and underscores, not only digits.
+NAME = re.compile(r"[A-Za-z0-9_]*[A-Za-z_][A-Za-z0-9_]*")
+# File kinds whose columns describe the opponents a team or quarterback faced.
+PROFILE_KINDS = frozenset({"opponent_profiles", "qb_opponent_profiles"})
+SCAN_SCOPE = (
+    "Its package `nfl_sos_ratings/` at the frozen commit, and this repository's tracked Python "
+    "under `src/` and `scripts/`. Not covered: its `.agents/` analysis scripts (one reads ESPN's "
+    "summary API), and data files named through f-strings or variables, such as this repository's "
+    "`meta_data.csv` (`data_collection.py`, `constants.QB_META_DATA_NAME`)."
+)
 
 
 @dataclass
@@ -180,6 +190,17 @@ def here_catalog(audit: Audit) -> dict[str, list[str]]:
         "qb_game": list(QB_GAME_SCHEMA),
         "dataset": team_level,
         "strength": list(constants.STRENGTH_SNAPSHOT_FILE_COLUMNS),
+        "constants": sorted(
+            {
+                name
+                for attr in dir(constants)
+                if attr.isupper()
+                and isinstance(values := getattr(constants, attr), list | tuple | set)
+                and values
+                and all(isinstance(value, str) for value in values)
+                for name in values
+            }
+        ),
     }
     for name, values in catalog.items():
         if not values:
@@ -233,9 +254,37 @@ def counterparts(rule: Rule, item: Column) -> list[str]:
 
 def check_counterpart(ref: str, catalog: dict[str, list[str]]) -> bool:
     """Return whether ``source:name`` names something that exists in this repository."""
-    source, _, name = ref.partition(":")
-    names = re.split(r"\s+[-+*/]\s+", name.strip())
-    return source in catalog and all(part in catalog[source] for part in names)
+    source, _, formula = ref.partition(":")
+    names = NAME.findall(formula)
+    return source in catalog and bool(names) and all(part in catalog[source] for part in names)
+
+
+def guard_missing(items: list[Column], catalog: dict[str, list[str]], audit: Audit) -> int:
+    """Fail every column left ``missing`` that has a same-name counterpart in a catalog here.
+
+    A column's own name is checked, and for a season total or per-game value (registry suffix
+    ``_total`` or ``_per_game``) its base metric's too. Opponents-faced profile columns (a registry
+    prefix, or the profile file kinds) are exempt: a same-name column here describes the team
+    itself, not its opponents. Returns the number of columns checked.
+    """
+    owners: dict[str, list[str]] = defaultdict(list)
+    for source, names in catalog.items():
+        for name in names:
+            owners[name].append(source)
+    checked = 0
+    for item in items:
+        if item.classification != "missing" or item.prefix or item.kind in PROFILE_KINDS:
+            continue
+        checked += 1
+        candidates = {item.column}
+        if item.suffix in {"_total", "_per_game"}:
+            candidates.add(item.base)
+        found = sorted(f"{source}:{name}" for name in candidates for source in owners.get(name, []))
+        if found:
+            audit.fail(
+                "missing guard", f"{item.kind}.{item.column} is missing, but here has {found}"
+            )
+    return checked
 
 
 def classify(
@@ -266,11 +315,11 @@ def classify(
     for rule in rules:
         if not rule.hits:
             audit.fail("column rules", f"rule {rule.id} matches nothing")
-        elif rule.spec.get("rest") and rule.hits != rule.spec.get("expect"):
+        elif "expect" in rule.spec and rule.hits != rule.spec["expect"]:
             audit.fail(
                 "column rules",
-                f"rest rule {rule.id} takes {rule.hits} columns, not the "
-                f"{rule.spec.get('expect')} it expects",
+                f"rule {rule.id} takes {rule.hits} columns, "
+                f"not the {rule.spec['expect']} it expects",
             )
 
 
@@ -362,9 +411,17 @@ def _route_key(route: Route) -> str:
 
 
 def main() -> int:
-    """Generate the inventory files."""
-    audit = Audit()
+    """Generate the inventory files, removing the extracted copy of its code whatever happens."""
     code = SosCode()
+    try:
+        return _run(code)
+    finally:
+        code.cleanup()
+
+
+def _run(code: SosCode) -> int:
+    """Generate the inventory files from ``code``, its frozen commit."""
+    audit = Audit()
     mapping = yaml.safe_load(MAPPING.read_text(encoding="utf-8"))
     checkout = check_sos_checkout(audit)
 
@@ -417,6 +474,7 @@ def main() -> int:
     catalog = here_catalog(audit)
     rules = validate_rules(mapping["columns"], audit, "column rules")
     classify(items, rules, catalog, audit)
+    guarded = guard_missing(items, catalog, audit)
 
     # Web pages and API endpoints.
     sos_web = [
@@ -467,6 +525,11 @@ def main() -> int:
             "here": here_sources,
             "classified": [{k: v for k, v in row.items() if k != "entry"} for row in source_rows],
         },
+        "scan_scope": SCAN_SCOPE,
+        "missing_guard": {
+            "columns_checked": guarded,
+            "exempt": sorted(PROFILE_KINDS) + ["columns with a registry prefix"],
+        },
         "kinds": dict(sorted(seasons_by_kind.items())),
         "columns": [item.__dict__ for item in items],
         "rules": [{"id": rule.id, "hits": rule.hits, **rule.spec} for rule in rules],
@@ -487,7 +550,6 @@ def main() -> int:
     }
     OUT_MD.write_text(portable(render(payload)), encoding="utf-8")
     write_json(payload)
-    code.cleanup()
     log.info("%d output columns, %d failures", len(items), len(audit.failures))
     return 1 if audit.failures else 0
 
@@ -524,8 +586,12 @@ def write_json(payload: dict[str, Any]) -> None:
         for column in payload["columns"]
         if column["kind"] == "team_game_logs"
     }
+    catalog = payload["here_catalog"]
     body = {
         **payload,
+        # The constants catalog is every module-level list, tuple or set of strings in
+        # nfl_predictor.constants; its names are rebuilt from the code, so only the count is kept.
+        "here_catalog": {**catalog, "constants": f"{len(catalog['constants'])} names"},
         "game_log_sources": sources,
         "columns": {"fields": COLUMN_FIELDS, "rows": rows},
     }

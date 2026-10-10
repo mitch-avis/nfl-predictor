@@ -1,8 +1,9 @@
 """Check this repository's play-by-play team-game aggregates against `nfl-sos-ratings` game logs.
 
-Run from the repository root:
+Run from the repository root (``PYTHONDONTWRITEBYTECODE=1`` keeps the run from leaving
+``__pycache__`` beside the scripts):
 
-    .venv/bin/python .agents/sos_port/parity.py
+    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py
 
 For every regular season 1999-2025 it aggregates this repository's cached play-by-play (the main
 checkout's ``data/cache/nflreadpy/pbp_{season}_reg.parquet``) with
@@ -11,11 +12,12 @@ team-game with ``{season}_team_game_logs.parquet`` of `nfl-sos-ratings` at its f
 the pairs ``parity.yaml`` judges to share a definition. Which game-log columns come from
 play-by-play is read from that repository's code (``sos_sources.py``); only those are judged.
 
-The columns this repository does not cache (``qb_scramble``, ``play_id``) come from the snapshot of
-nflreadpy's on-disk cache that `nfl-sos-ratings` read (``port_audit.NFLREADPY_SNAPSHOT``). Each
-season's file is found by its content and checked against the snapshot's manifest, and the run
-fails unless that file, prepared as this repository prepares its cache, equals the cache row by
-row on every cached column; the extra columns are then attached row by row.
+The columns this repository does not cache (``qb_scramble``, ``play_id``, the play text ``desc``)
+come from the snapshot of nflreadpy's on-disk cache that `nfl-sos-ratings` read
+(``port_audit.NFLREADPY_SNAPSHOT``). Each season's file is found by its content and checked
+against the snapshot's manifest, and the run fails unless that file, prepared as this repository
+prepares its cache, equals the cache row by row on every cached column; the extra columns are
+then attached by row position (``season_pbp`` says what else must hold).
 
 Counts must be equal, sums and rates within the tolerance. A mismatching team-game is attributed
 to a named cause only when that cause's adjustment (``parity_rules.CAUSES``), alone or with the
@@ -41,10 +43,13 @@ from parity_rules import (
     CAUSES,
     KEYS,
     Pair,
+    carries_from_rush_attempts,
+    carries_without_rush_attempt,
     check_evidence,
     expression,
     one_team_games,
     uncounted_situational_plays,
+    unflagged_no_plays,
     unrepair_penalties,
     wiped_out_plays,
 )
@@ -81,8 +86,9 @@ TEAM_COLUMNS = ("posteam", "defteam", "home_team", "away_team", "td_team", "pena
 ADJUSTABLE = ("ours", "theirs")
 KINDS = ("count", "count_from_rate", "sum", "rate")
 COUNT_KEYS = ("compared", "mismatched", "explained", "unexplained")
-# Columns of its play-by-play this repository's cache leaves out and the causes read.
-SNAPSHOT_EXTRAS = ("play_id", "qb_scramble")
+# Columns of its play-by-play this repository's cache leaves out and the check reads: the causes
+# read qb_scramble, and the counts of plays recorded as no_play read the play text (desc).
+SNAPSHOT_EXTRAS = ("play_id", "qb_scramble", "desc")
 PBP_MARKERS = {"play_id", "game_id", "qb_scramble", "posteam", "epa", "season"}
 
 
@@ -160,8 +166,11 @@ def snapshot_files(audit: Audit) -> dict[int, Any]:
 def season_pbp(season: int, snapshot: Any, audit: Audit) -> tuple[pl.DataFrame, dict[str, Any]]:
     """Return the season's cached play-by-play with the snapshot's extra columns attached.
 
-    The snapshot file, prepared with this repository's own ``_prepare_pbp``, must equal the cache
-    row by row on every cached column; that identity is what lets the extra columns line up.
+    The extra columns are attached by row position. That is sound only because the snapshot's
+    regular-season rows, prepared with this repository's own ``_prepare_pbp`` (which keeps their
+    order), equal the cache row by row on every cached column, so the run fails otherwise. Two
+    more checks fail the run: a ``play_id`` repeated within a game, and rows equal on every cached
+    column (which equality cannot tell apart) whose attached ``qb_scramble`` values differ.
     """
     cached = pl.read_parquet(audit.record(CACHE / f"pbp_{season}_reg.parquet"))
     schema = pl.read_parquet_schema(snapshot)
@@ -170,26 +179,45 @@ def season_pbp(season: int, snapshot: Any, audit: Audit) -> tuple[pl.DataFrame, 
     prepared = _prepare_pbp(raw, regular_season_only=True)
     regular = raw.filter(pl.col("season_type") == "REG") if "season_type" in raw.columns else raw
     identical = prepared.equals(cached) and regular.height == cached.height
-    if not identical:
-        audit.fail("snapshot", f"{season}: the snapshot is not row by row equal to the cache")
-        # The extra columns cannot be lined up: attach them empty so the rest of the run reports.
-        regular = cached.select("game_id").with_columns(
-            pl.lit(None, dtype=pl.Float64).alias(column) for column in SNAPSHOT_EXTRAS
-        )
-    extras = regular.select(SNAPSHOT_EXTRAS)
-    report = {
+    report: dict[str, Any] = {
         "file": snapshot.name,
         "plays": cached.height,
         "identical_to_cache": identical,
         "cached_columns_compared": len(cached.columns),
-        "distinct_play_ids_per_game": extras.with_columns(regular["game_id"])
-        .group_by("game_id")
+    }
+    extras = regular.select(SNAPSHOT_EXTRAS)
+    if not identical:
+        audit.fail("snapshot", f"{season}: the snapshot is not row by row equal to the cache")
+        # The extra columns cannot be lined up: attach them empty so the rest of the run reports.
+        return cached.hstack(extras.clear(n=cached.height)), report
+    attached = cached.hstack(extras)
+    repeated_ids = (
+        attached.group_by("game_id")
         .agg(pl.col("play_id").n_unique().alias("ids"), pl.len().alias("rows"))
         .filter(pl.col("ids") != pl.col("rows"))
         .height
-        == 0,
-    }
-    return cached.hstack(extras), report
+    )
+    twins = (
+        attached.group_by(cached.columns)
+        .agg(pl.len().alias("rows"), pl.col("qb_scramble").n_unique().alias("flags"))
+        .filter(pl.col("rows") > 1)
+    )
+    differing = twins.filter(pl.col("flags") > 1).height
+    report.update(
+        games_repeating_a_play_id=repeated_ids,
+        rows_equal_to_another_row=int(twins["rows"].sum()),
+        groups_of_equal_rows=twins.height,
+        groups_of_equal_rows_differing_in_qb_scramble=differing,
+    )
+    if repeated_ids:
+        audit.fail("snapshot", f"{season}: {repeated_ids} games repeat a play_id")
+    if differing:
+        audit.fail(
+            "snapshot",
+            f"{season}: {differing} groups of rows equal on every cached column differ in "
+            "qb_scramble, so attaching it by row position is ambiguous",
+        )
+    return attached, report
 
 
 def ours_frame(pbp: pl.DataFrame) -> pl.DataFrame:
@@ -535,6 +563,9 @@ def main() -> int:
             "one_team_games": broken,
             "uncounted_situational_plays": uncounted_situational_plays(pbp),
             "wiped_out_plays": wiped_out_plays(pbp),
+            "unflagged_no_plays": unflagged_no_plays(pbp),
+            "carries_without_rush_attempt": carries_without_rush_attempt(pbp),
+            "carries_from_rush_attempts": carries_from_rush_attempts(pbp),
             "pairs": season_pairs,
         }
 
@@ -545,7 +576,7 @@ def main() -> int:
             audit.fail("unexplained", _describe(record))
 
     payload = {
-        "generated_by": ".venv/bin/python .agents/sos_port/parity.py",
+        "generated_by": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py",
         "tolerance": tolerance,
         "sos_checkout": checkout,
         "team_code_map": dict(sorted(code_map.items())),
@@ -591,6 +622,21 @@ def _describe(record: dict[str, Any]) -> str:
         f"{record['pair']} {record['game_id']} {record['team']}: here {record['ours']}, "
         f"there {record['theirs']}"
     )
+
+
+# Per-season counts summed into the ``wiped_out_runs`` cause for the carry decision.
+CARRY_DIAGNOSTICS = (
+    "wiped_out_plays",
+    "unflagged_no_plays",
+    "carries_without_rush_attempt",
+    "carries_from_rush_attempts",
+)
+
+
+def _season_sums(seasons: dict[int, dict[str, Any]], name: str) -> dict[str, float]:
+    """Sum the per-season counts under ``name`` over every season, key by key (missing keys 0)."""
+    keys = dict.fromkeys(key for season in seasons.values() for key in season[name])
+    return {key: round(sum(s[name].get(key, 0) for s in seasons.values()), 6) for key in keys}
 
 
 def summarize_causes(
@@ -643,10 +689,7 @@ def summarize_causes(
                     entry_type["seasons"].append(season)
             entry["flagged_plays_left_out_here"] = dict(sorted(by_type.items()))
         if cause_id == "wiped_out_runs":
-            entry["wiped_out_plays"] = {
-                key: round(sum(s["wiped_out_plays"][key] for s in seasons.values()), 6)
-                for key in ("plays", "rush", "pass", "qb_dropback", "rush_epa", "pass_epa")
-            }
+            entry.update((name, _season_sums(seasons, name)) for name in CARRY_DIAGNOSTICS)
         if cause_id == "rams_written_la":
             rekeyed = [k for s in seasons.values() for k in s["keys"]["rekeyed_rams"]]
             entry.update(
@@ -659,7 +702,15 @@ def summarize_causes(
                 plays_compared=sum(s["plays"] for s in snapshots),
                 seasons_identical=sum(s["identical_to_cache"] for s in snapshots),
                 seasons_compared=len(snapshots),
-                play_ids_unique_per_game=all(s["distinct_play_ids_per_game"] for s in snapshots),
+                **{
+                    key: sum(s.get(key, 0) for s in snapshots)
+                    for key in (
+                        "games_repeating_a_play_id",
+                        "rows_equal_to_another_row",
+                        "groups_of_equal_rows",
+                        "groups_of_equal_rows_differing_in_qb_scramble",
+                    )
+                },
             )
         summary[cause_id] = entry
     return summary

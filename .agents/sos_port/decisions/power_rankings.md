@@ -204,10 +204,14 @@ No result of the measurement is quoted here: the numbers live in the generated
   `team_rating`, `points_vs_average`, `rating_week` and `rating_source`. `ported` reads the game
   rows first and the weekly history for byes (its last week for a postseason week). `model` and
   `blend` read walk-forward fold checkpoints (`--model-predictions`), which must cover every
-  completed regular-season game the fit reads, counted against the schedule; `blend` needs
+  completed regular-season game the fit reads, checked by `game_id` against the schedule (after
+  the review: a count let predictions of other games in equal number pass); `blend` needs
   `--blend-weight`. An unavailable source skips the weekly rankings with a warning, as a missing
   snapshot does, and stops the rankings command with a one-line error (a missing snapshot week
-  now does the same instead of a traceback). The weekly run's reports-stage key gains the new
+  now does the same instead of a traceback); since the review, predictions that cannot be read
+  (a missing or foreign directory, an empty checkpoint directory, a game in two sources, a fold
+  file without predictions) and a week-1 carryover factor that cannot be fit count as an
+  unavailable source too, named in the message. The weekly run's reports-stage key gains the new
   settings only when one of the three methods ranks, so the default's key is unchanged.
 - **Reasoning**: one implementation serves the measurement and production, so whichever candidate
   the rule picks can be switched on by the setting alone (`AGENTS.md` rule 11).

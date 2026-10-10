@@ -50,14 +50,14 @@ completed milestones"), `.agents/benchmarks.md` before any walk-forward, and thi
 ## Next
 
 1. Decided 2026-10-10: the test bench for step 6 is the market-free run without betting-line or
-   Elo columns; roadmap step 5 closed; `main` merged and pushed (`9bb237a`, tree equal to
-   `feat/step4-feature-values`, also pushed). Open with the user (asked 2026-10-10): close step 4
-   with its leftovers reassigned to step 6 (55.3 and 56.6 done; 53.7's ridge form, the
-   early-season strength-snapshot item and the step-4 follow-up group move to step 6 phases 3-5,
-   because the port replaces the code they concern; the betting-report edges item to phase 5);
-   and whether to add a market-free, 538-style Elo of this repo's own to step 6 phase 4 (the
-   current Elo columns carry Vegas win totals in every season: 538's file through February 2023
-   used them since 1990, `nfeloqb` after that; research in `~/scratch/elo_research/`).
+   Elo columns; roadmap steps 4 and 5 closed (`ARCHIVE.md`), step 4's leftovers moved to step 6;
+   `main` pushed at `9bb237a` (the later docs commits are only on the pushed feature branch).
+   Open with the user: an own market-free, 538-style Elo for step 6 phase 4 (tentative yes;
+   questions answered 2026-10-10 about `nfelo` against `nfeloqb`, what this repo reads from
+   `qb_elos.csv`, and preseason betting win totals). Found then: the user's `nfeloqb` fork reads a
+   stale local `Manual Data/wt_ratings.csv` (2003-2023), so its 2024-2026 preseason Elo gets no
+   win-total pull, while upstream `greerreNFL/nfelosrs` `wt_ratings.csv` (free, public) covers
+   2003-2026. Research files in `~/scratch/elo_research/`.
 2. Then roadmap step 6, phase 1, on a new branch off `main`: the scripted inventory of
    `nfl-sos-ratings` at `9081bce` against this repo, and the play-by-play parity check (with its
    pre-2006 scramble rule).

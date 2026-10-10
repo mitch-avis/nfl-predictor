@@ -88,6 +88,11 @@ def _summary(payload: dict[str, Any], w: Any) -> None:
     )
     w(f"- Output columns (kind and column): {len(columns)}; {_counts(columns)}.")
     w(f"- Columns present in only some seasons of their kind: {len(partial)}.")
+    guard = payload["missing_guard"]
+    w(
+        f"- Columns classified missing that the same-name guard checked: "
+        f"{guard['columns_checked']} (exempt: {', '.join(guard['exempt'])})."
+    )
     w(
         f"- Distinct column names: {len({c['column'] for c in columns})}; resolved through its "
         f"registry: {len(columns)} of {len(columns)}."
@@ -121,6 +126,8 @@ def _sources(payload: dict[str, Any], w: Any) -> None:
     w("")
     w("Found in each repository's Python source: nflreadpy `load_*` calls, network fetches, web")
     w("addresses, and data files named under the data directory.")
+    w("")
+    w(f"Scope: {payload['scan_scope']}")
     w("")
     w("### nfl-sos-ratings")
     w("")

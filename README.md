@@ -1143,6 +1143,11 @@ import paths.
   table from `utils/polars/strength_table.py`.
 - ML implementation lives under `src/nfl_predictor/ml/` with a compatibility facade at
   `src/nfl_predictor/ml_model.py`.
+- `src/nfl_predictor/ratings/` holds the team and quarterback ratings ported from the sibling
+  `nfl-sos-ratings` project (offense, defense, and special-teams ratings, head-to-head-excluded
+  schedule strength, quarterback ratings, weekly histories, and bootstrap rank ranges), with a
+  leakage-safe pre-week entry point for model features. Nothing in the ETL or the model uses it;
+  [its README](src/nfl_predictor/ratings/README.md) covers the methods, inputs, and parity checks.
 
 ## Implemented feature areas
 

@@ -63,8 +63,12 @@ kinds and columns named as in `nfl-sos-ratings`, plus the current season's `*_ra
 ## Measurement ladder (phase 4)
 
 Pre-registered on 2026-10-10 before any step-6 code merged: the main checkout's
-`models/step6/HYPOTHESIS.md` (arms, cap of 8 runs plus 2 conditional and one build, instrument,
-decision rules). Do not edit it after the launch record is written.
+`models/step6/HYPOTHESIS.md` (arms, instrument, decision rules). Amended at about 09:35 the same
+day, before the build and before any run: two diagnostic runs (a new-build reference: strength
+snapshot on, ratings and own Elo off, anchored) that report the corrections' and the ratings'
+shares and play no part in the rules; cap 10 runs plus the 2 conditional ones, and one build. The
+original checksum is in `HYPOTHESIS.original.sha256`. Do not edit it after the launch record is
+written.
 
 ## Integration design (decided 2026-10-10, before the integration streams start)
 
@@ -155,6 +159,13 @@ small and local.
   (Betting under "This week", Model above Data); the "Opponents faced" ledger is simpler than the
   source's; season tables go out uncompressed (about 0.9 MB per team table). None was checked in a
   browser (signing in needs a typed password); the user should look at the pages once.
+- Power rankings (phase 5, review pending): the pre-registered scoring, applied as written, picks
+  the blend of the ported team rating and a model rating (weight about 0.5 on each since 2015) over
+  the ported rating alone; the composite production ranks on today and the model rating alone tie.
+  Switching what the weekly run publishes (`config/weekly_run.yaml`, default the composite) is the
+  user's call; if the blend is chosen, the weekly run also needs a source for the model's
+  predictions (the implementer recommends the run's own stage-1 folds for the current season plus
+  the floor-sigma reference runs for the previous season's week 1).
 - Question: should a market-free run leave out the market-informed Elo groups automatically? Today
   `--exclude-market` (and the weekly run's market-free mode) drops only line columns, per the
   step-5 design the user accepted; the `qb_elos.csv` Elo and, after a rebuild, the own Elo's

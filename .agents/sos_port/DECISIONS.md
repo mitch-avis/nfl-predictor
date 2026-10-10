@@ -220,3 +220,76 @@ checked by the session. Not yet checked in a browser: look at the pages once.
   `NFLP_SOS_DATA_DIR` setting is gone.
 - **Waiting on**: no job writes the season-statistics tables yet, so the pages show where they
   read from until the season-statistics ETL step lands.
+
+### The ratings in the ETL, the play-by-play corrections and the own Elo in the datasets (`0.54.0`)
+
+Full records: [decisions/integration_ratings.md](decisions/integration_ratings.md) (19 entries),
+[decisions/integration_pbp_elo.md](decisions/integration_pbp_elo.md) (entries 1.1-4.2), the
+generated [ADAPTER_PARITY.md](ADAPTER_PARITY.md), and the measured feature changes in
+`decisions/integration_feature_diffs/`. Review: two independent reviews, each in two rounds
+(final fixes checked); the reviewers reproduced every quoted number from their own rebuilds.
+
+- **The ratings in the ETL**: the adapter from this repository's play-by-play reproduces the
+  source's game logs in all 305,830 input cells and its published ratings tables (741,295 cells
+  bit-identical, the rest within 1.1e-16). The ETL writes the tables to `data/ratings/` and adds a
+  `ratings` feature group (21 columns); the strength snapshot stays beside it until the
+  measurement decides. A full rebuild takes about 7.5 minutes longer; an incremental run about 30
+  seconds (about a minute late in the season).
+- **Leakage**: every pre-week rating uses games before the week and roster weeks before the week;
+  the reviewers' perturbations of every later input moved nothing; a starter's name is matched only
+  against earlier passers (a later rookie can no longer change an earlier season's feature).
+- **Play-by-play corrections adopted** (each measured, see the diffs): scrambles filed as runs are
+  dropbacks (3,744 more dropbacks in 1999-2005); carries follow the source's designed-carry rule
+  (348,419 instead of 357,227; penalty-wiped runs leave the rush sums but stay snaps), checked
+  equal to the source in all 13,928 team-games; flags read on every play; a down flagged both ways
+  counted once; the Jacksonville repair.
+- **One starter**: a completed game's starter comes from its play-by-play (the source's rule),
+  agreeing with the old name chain in all but 12 of 13,922 team-games (net better: the reviewer's
+  hand-check found the chain wrong in 8 of the 12); upcoming games use the projected starter.
+- **Own Elo in the datasets**: both presets in every build; designed quarterback runs now in
+  VALUE; the evaluation rerun under its unchanged rule kept the same components (Brier 0.21701
+  market-free, 0.21594 with win totals).
+- **Market-free runs** keep the step-5 design (line columns only, groups left out by flag) and now
+  warn when a market-informed group stays; making it automatic is on your list.
+
+### Red-zone trips (`0.55.0`)
+
+Full record: [decisions/integration_pbp_elo.md](decisions/integration_pbp_elo.md), entries 2.8 and
+2.9, with `integration_red_zone_parity.py`, `integration_red_zone_movement.py` and their outputs.
+Review: two independent rounds (verdict "merge as is"; every figure reproduced byte for byte).
+
+- **The bug**: this repository counted a red-zone trip for any drive with a play at or inside the
+  20, so 7,952 touchdown drives became converted trips through their extra point or two-point try
+  alone, and 2,282 one-play "drives" holding only a try after a defensive or return touchdown
+  became trips; the league red-zone touchdown rate read 0.5709.
+- **The fix**: a trip is a drive nflverse flags inside the 20 (`drive_inside20`, the definition
+  `nfl-sos-ratings` uses) in which the team ran an offensive snap, a two-point try not counting.
+  The snap condition is a departure from the source: it removes 202 phantom trips the source keeps
+  (128 kickoffs the kicking team recovered, 75 of them counted as the receiving team's red-zone
+  touchdowns; extra points and tries after return touchdowns) and 9 double counts, at the cost of
+  about 16 genuine field-goal-only possessions (0.04% of trips, all non-touchdowns). Every
+  remaining difference from the source is attributed (222 team-games, 0 unexplained). The league
+  rate now reads 0.5395; only the two red-zone rate columns move.
+- **Known leftover**: 44 trips without a recorded drive result, mostly the first half of a
+  1999-2000 drive nflverse split at a timeout, stay in the rate's denominator; joining split
+  pieces is a later fix (0.1% of trips).
+
+### The four-week trends of upcoming games (`0.55.1`)
+
+Full record: [decisions/trend_parity.md](decisions/trend_parity.md), with its scripts and outputs.
+Review: one independent round (merge after fixes; fixes checked); the reviewer recomputed every
+scheduled team-week by brute force.
+
+- **The defect** (found by a reviewer, predating step 6): an upcoming game's
+  `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` were filled with 0.0, and so was every
+  playoff game's, while completed rows carry the real pre-game trend. Not leakage: completed rows
+  use earlier games only, so no training row or walk-forward result changes (0 of 6,952 completed
+  regular-season rows move). Production predicted with zeros the model never trained on.
+- **The fix**: trends are keyed on the season's schedule, so each week takes the team's trend
+  after its last game before the week; playoff games take the full regular season's. Weekly
+  predictions change from week 6 on (held with step 6 for your approval).
+- **Also added**: a warning when `qb_elos.csv` lacks the week being predicted (a week-6 run with
+  today's copy would give every game a 0.0 Elo trend and no quarterback trends, values never seen
+  in training from week 6 on; refresh the file before each weekly run, as you do).
+- **Known leftover, unchanged**: 11 turnover-margin sides in 2000-2002 publish 0.0 after a game
+  nflverse has no team stats for; changing it would change completed training rows.

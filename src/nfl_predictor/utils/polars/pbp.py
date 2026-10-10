@@ -49,20 +49,26 @@ reference material, not a dependency):
 - That repo defines an explosive pass on *completed* passes; this repo defines
   it on *dropbacks*, so sacks and incompletions stay in the denominator family
   and the explosive-pass count shares the ``dropbacks`` denominator.
+- That repo counts every drive group nflverse flags inside the 20 as a red-zone
+  trip of the team in possession; this repo also requires the team to have run
+  an offensive snap in the group (``_with_red_zone_trip_flag``). nflverse files
+  a kickoff the kicking team recovers under the receiving team, with the
+  kicking team's next drive and its flag, and the try after a return or
+  defensive touchdown as a drive of the scorer's own, so neither is a trip here.
 
-Both divergences are intentional; keep them in mind when comparing outputs
+All three divergences are intentional; keep them in mind when comparing outputs
 against that reference.
 
 Missing-source-column contract: every source column read here is
 existence-guarded. A missing counting flag or value column contributes its
 documented default (0 for flags and counts, 0.0 for EPA and yardage sums, and
-"not an early down" / "not in the red zone" for missing ``down`` and
-``yardline_100``) instead of raising. Two consequences of those defaults are
-worth stating outright: a missing ``success`` column means no play counts as a
-success, and a missing ``yards_gained`` column means every play gained 0 yards,
-so nothing is explosive and every rush counts as stuffed. A missing
-``play_type`` column means no run play counts as a scramble, and a missing
-``fixed_drive`` column leaves the red-zone trip counts at 0.
+"not an early down" for a missing ``down``) instead of raising. Two consequences
+of those defaults are worth stating outright: a missing ``success`` column means
+no play counts as a success, and a missing ``yards_gained`` column means every
+play gained 0 yards, so nothing is explosive and every rush counts as stuffed. A
+missing ``play_type`` column means no run play counts as a scramble, and a
+missing ``fixed_drive`` or ``drive_inside20`` column leaves the red-zone trip
+counts at 0.
 
 The special-teams columns are the one exception to the zero-default rule: when
 no special-teams flag column is present, ``st_epa_for``, ``st_epa_against``, and
@@ -91,9 +97,6 @@ EXPLOSIVE_RUSH_YARDS = 12
 STUFFED_RUSH_YARDS = 0
 # Highest down that still counts as an early down (first and second down).
 EARLY_DOWN_MAX = 2
-# Distance to the opponent goal line that defines the red zone.
-# Source: existing red-zone aggregation in this repo's Polars loaders.
-RED_ZONE_YARDLINE = 20
 
 _PBP_TEAM_GAME_SCHEMA: dict[str, DataTypeClass] = {
     # Identity keys.
@@ -162,6 +165,10 @@ _ST_PLAYS_OFFENSE = "_st_plays_offense"
 _ST_PLAYS_DEFENSE = "_st_plays_defense"
 _IS_HOME_OFFENSE = "_is_home_offense"
 _IS_HOME_DEFENSE = "_is_home_defense"
+# Per-play mark: the play belongs to a drive group that is its offense's red-zone trip.
+_RED_ZONE_TRIP = "_red_zone_trip"
+# The plays of one team's drive in one game, the group a red-zone trip is decided over.
+_DRIVE_GROUP = ("season", "week", "posteam", "fixed_drive")
 _TEAM_BOX_SCORE_SCHEMA: dict[str, DataTypeClass] = {
     "season": pl.Int64,
     "week": pl.Int64,
@@ -364,23 +371,61 @@ def _play_conditions(columns: list[str]) -> dict[str, pl.Expr]:
     }
 
 
-def _red_zone_drive_aggregations(
-    columns: list[str], in_red_zone: pl.Expr, suffix: str
-) -> list[pl.Expr]:
-    """Build the drive-level red-zone counts for one perspective.
+def _with_red_zone_trip_flag(plays: pl.DataFrame) -> pl.DataFrame:
+    """Mark the plays of every drive group that is its offense's red-zone trip.
 
-    A red-zone trip is a drive that reached the red zone, so it is counted once however
-    many snaps it took inside the 20. A trip converts when the drive ends in a touchdown,
-    which ``fixed_drive_result`` records for every play of the drive. Counting drives
-    rather than snaps is what makes ``red_zone_td_pct`` comparable to the scraped column
-    of the same name; dividing touchdowns by red-zone snaps measures a different quantity.
+    A drive group is the plays of one team's ``fixed_drive`` in one game (``_DRIVE_GROUP``).
+    It is the team's red-zone trip when both of these hold, each on any of its plays:
 
-    Both counts are zero when ``fixed_drive`` is absent, so a season without drive ids
-    still emits the invariant schema.
+    - nflverse flags it as getting inside the opponent's 20 (``drive_inside20``). nflverse
+      leaves the flag null or 0 on some plays of a flagged drive, so one flagged play is
+      enough. Unlike a test on ``yardline_100``, the flag leaves out, with rare exceptions, the
+      try after a touchdown, which is snapped inside the 20 by rule once the drive has scored.
+    - The team ran an offensive scrimmage snap in it, as ``offensive_snaps`` counts them
+      (``_scrimmage_snap_expr``), other than a two-point try: the try follows the score, like
+      the extra point, which is never a snap, so a group holding only a try is no trip.
+
+    The snap is this repo's departure from ``nfl-sos-ratings``, which counts every flagged
+    group. nflverse files a kickoff the kicking team recovers under the receiving team, with the
+    kicking team's next drive and its flag, and the try after a return or defensive touchdown
+    as a drive of the scorer's own; neither group holds a snap of the team it is filed under.
 
     Args:
-        columns: Columns present on the prepared play frame.
-        in_red_zone: Per-play condition selecting snaps inside the red zone.
+        plays: Prepared play frame (``_prepare_plays``).
+
+    Returns:
+        The plays with the boolean ``_RED_ZONE_TRIP`` column added, False on every play when
+        ``fixed_drive`` or ``drive_inside20`` is absent.
+
+    """
+    columns = plays.columns
+    if "fixed_drive" not in columns or "drive_inside20" not in columns:
+        return plays.with_columns(pl.lit(value=False).alias(_RED_ZONE_TRIP))
+    group = list(_DRIVE_GROUP)
+    flagged = flag_expr(columns, "drive_inside20") > 0
+    snap = _scrimmage_snap_expr(columns) & ~(flag_expr(columns, "two_point_attempt") > 0)
+    return plays.with_columns(
+        (flagged.any().over(group) & snap.any().over(group)).alias(_RED_ZONE_TRIP)
+    )
+
+
+def _red_zone_drive_aggregations(columns: list[str], suffix: str) -> list[pl.Expr]:
+    """Build the drive-level red-zone counts for one perspective.
+
+    A red-zone trip is a drive group ``_with_red_zone_trip_flag`` marks: one nflverse flags as
+    getting inside the opponent's 20 in which the team ran an offensive snap. A drive counts
+    once, however many snaps it took inside the 20. A trip converts when the drive ends in the
+    possession team's touchdown, which ``fixed_drive_result`` records for every play of the
+    drive. Counting drives rather than snaps is what makes ``red_zone_td_pct`` comparable to
+    the scraped column of the same name; dividing touchdowns by red-zone snaps measures a
+    different quantity.
+
+    Both counts are zero when ``fixed_drive`` or ``drive_inside20`` is absent, so a season
+    without drive data still emits the invariant schema.
+
+    Args:
+        columns: Columns present on the prepared play frame, which carries the
+            ``_RED_ZONE_TRIP`` mark.
         suffix: ``"_allowed"`` for the defensive perspective, otherwise empty.
 
     Returns:
@@ -393,10 +438,11 @@ def _red_zone_drive_aggregations(
             pl.lit(0, dtype=pl.Int64).alias(f"red_zone_td_drives{suffix}"),
         ]
     drive = pl.col("fixed_drive")
-    trips = drive.filter(in_red_zone).n_unique().cast(pl.Int64).alias(f"red_zone_trips{suffix}")
+    trip = pl.col(_RED_ZONE_TRIP)
+    trips = drive.filter(trip).n_unique().cast(pl.Int64).alias(f"red_zone_trips{suffix}")
     if "fixed_drive_result" in columns:
         scored = (pl.col("fixed_drive_result") == "Touchdown").fill_null(value=False)
-        td_drives = drive.filter(in_red_zone & scored).n_unique().cast(pl.Int64)
+        td_drives = drive.filter(trip & scored).n_unique().cast(pl.Int64)
     else:
         td_drives = pl.lit(0, dtype=pl.Int64)
     return [trips, td_drives.alias(f"red_zone_td_drives{suffix}")]
@@ -413,8 +459,9 @@ def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> l
         - ``third_down_attempts`` / ``fourth_down_attempts``: plays with the down's converted
           or failed flag set, so a play nflverse flags both counts once (and as a
           conversion).
-        - ``red_zone_trips``: distinct ``fixed_drive`` values with at least one play at
-          ``yardline_100 <= RED_ZONE_YARDLINE``, i.e. drives that reached the red zone
+        - ``red_zone_trips``: distinct ``fixed_drive`` values with a play carrying nflverse's
+          ``drive_inside20`` flag and an offensive snap other than a two-point try
+          (``_with_red_zone_trip_flag``), i.e. drives that got inside the opponent's 20
           rather than snaps taken inside it.
         - ``red_zone_td_drives``: those trips whose ``fixed_drive_result`` is
           ``"Touchdown"``. ``red_zone_td_drives / red_zone_trips`` is the per-trip
@@ -424,8 +471,6 @@ def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> l
     When ``allowed`` is true, the same offense-side events are counted again but written to
     ``*_allowed`` columns for the team that defended them.
     """
-    yardline = _nullable_expr(columns, "yardline_100", pl.Float64)
-    in_red_zone = (yardline <= RED_ZONE_YARDLINE).fill_null(value=False)
     if "two_point_conv_result" in columns:
         two_point_success = (pl.col("two_point_conv_result") == "success").fill_null(value=False)
     else:
@@ -441,7 +486,7 @@ def _situational_aggregations(columns: list[str], *, allowed: bool = False) -> l
         ]
     return [
         *downs,
-        *_red_zone_drive_aggregations(columns, in_red_zone, suffix),
+        *_red_zone_drive_aggregations(columns, suffix),
         count_where(flag_expr(columns, "two_point_attempt") > 0, f"two_point_attempts{suffix}"),
         count_where(two_point_success, f"two_point_successes{suffix}"),
     ]
@@ -610,6 +655,7 @@ def aggregate_pbp_team_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     if plays.height == 0:
         log.warning("No play-by-play rows remain after filtering; returning empty team-game frame")
         return empty_team_game_frame()
+    plays = _with_red_zone_trip_flag(plays)
 
     has_special_teams = special_teams_flag_column(plays.columns) is not None
     offense = _aggregate_offense(plays)

@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.55.1] - 2026-10-10
+
+### Added
+
+- The ETL warns when `data/qb_elos.csv` has no rows for the week being predicted: those games fall
+  back to each team's latest listed Elo rating, a 0.0 Elo trend and no quarterback trends, values
+  no completed row carries once its teams have played. Refresh the file before the run.
+
+### Fixed
+
+- An upcoming game's `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` (each side and the
+  difference) carry the team's trend from its games before the week, as its completed row will,
+  instead of 0.0; a playoff game carries the trend over the full regular season. Completed
+  regular-season rows, and so every training row and walk-forward result, are unchanged; weekly
+  predictions change from week 6 on (`.agents/sos_port/decisions/trend_parity.md`).
+
+## [0.55.0] - 2026-10-10
+
+### Changed
+
+- A red-zone trip in the play-by-play features is a drive nflverse flags inside the 20
+  (`drive_inside20` on any of its plays) in which the team ran an offensive snap, a two-point try
+  not counting. Before, any drive with a play at or inside the 20 counted, which made a touchdown
+  drive a converted trip through its extra point or two-point try alone; unlike `nfl-sos-ratings`,
+  a kickoff the kicking team recovers or a try after a return touchdown is not the receiving or
+  scoring team's trip. `red_zone_td_pct` and `opponent_red_zone_td_pct` follow at the next dataset
+  rebuild (`.agents/sos_port/decisions/integration_pbp_elo.md`, entry 2.9).
+
+### Added
+
+- When a current-season play-by-play download fails and the loader falls back to an older cached
+  file, a warning names every requested column the file lacks.
+
 ## [0.54.0] - 2026-10-10
 
 ### Changed

@@ -31,13 +31,16 @@ still loaded and rated, as the ETL rates them); ``--out-dir`` writes the reports
    same rows in the same order, integers, text and flags equal, floats within its
    ``FLOAT_TOLERANCE``, and Washington's published ``WAS`` read as ``WSH`` (counted). The rating
    columns of ``combined`` and ``qb_combined`` are counted apart: here they come from the ratings
-   this run fitted, not from the published ratings.
+   this run fitted, not from the published ratings;
+5. stores every season's frames in a season cache in the temporary directory, loads them back,
+   hands them to the build as an incremental run does (``RatingsBuild.reuse``), writes every
+   table again and checks that each file equals the one the fresh build wrote, byte for byte.
 
 The loaders' current season is 2027, so every snapshot season is read from the cache as a finished
 one; the ratings build's current season is the last compared season, the one ``nfl-sos-ratings``
 built as in progress. It writes ``SEASON_STATS_ETL_PARITY.md`` and
-``season_stats_etl_parity.json`` and exits 1 if any cell is outside the tolerance or any table
-differs in columns or rows.
+``season_stats_etl_parity.json`` and exits 1 if any cell is outside the tolerance, any table
+differs in columns or rows, or any table written from the season cache differs from the fresh one.
 """
 
 from __future__ import annotations
@@ -61,7 +64,7 @@ import sys
 import tempfile
 import textwrap
 import time
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -84,7 +87,7 @@ from season_stats_parity import (  # a sibling module, importable once its dir i
 )
 
 from nfl_predictor import constants
-from nfl_predictor.utils import polars_utils
+from nfl_predictor.utils import polars_utils, season_cache
 from nfl_predictor.utils.polars import nflverse_sources, ratings_build, season_stats_build
 
 HERE = Path(__file__).resolve().parent
@@ -93,6 +96,8 @@ OUT_JSON = "season_stats_etl_parity.json"
 FIRST_SEASON = 1999
 LAST_SEASON = 2026
 THREAD_VARIABLES = ("POLARS_MAX_THREADS", "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS")
+# The longest line the repository's Markdown lint allows outside tables and code blocks.
+MARKDOWN_LINE_LIMIT = 100
 
 
 class TimedSeasonStatsBuild(season_stats_build.SeasonStatsBuild):
@@ -223,7 +228,7 @@ def _wrapped(lines: list[str]) -> list[str]:
     for line in lines:
         if line.startswith("```"):
             fenced = not fenced
-        if not fenced and line.startswith("- ") and len(line) > 100:  # noqa: PLR2004 - the limit
+        if not fenced and line.startswith("- ") and len(line) > MARKDOWN_LINE_LIMIT:
             out += _wrap(line[2:], "- ")
         else:
             out.append(line)
@@ -358,6 +363,25 @@ def _markdown(report: dict[str, Any]) -> str:
     ]
     lines += ["", "## Cells outside tolerance (first ones per table)", ""]
     lines += differences or ["None."]
+    round_trip = report["cache_round_trip"]
+    lines += [
+        "",
+        "## Season cache round trip",
+        "",
+        *_wrap(
+            "Every season's frames stored in a season cache, loaded back, handed to the ratings "
+            "build as an incremental run hands them (`RatingsBuild.reuse`) and written again; "
+            "each file compared byte for byte with the one the fresh build wrote, the ratings' "
+            "tables and the season statistics' alike."
+        ),
+        "",
+        f"- Files written by the fresh build: {round_trip['files']:,}",
+        f"- Files that differ: {len(round_trip['differing'])}",
+        f"- Files written by one side only: {len(round_trip['one_side_only'])}",
+        *(f"- Differs: `{name}`" for name in round_trip["differing"]),
+        *(f"- One side only: `{name}`" for name in round_trip["one_side_only"]),
+        f"- Result: **{'PASS' if round_trip['passed'] else 'FAIL'}**",
+    ]
     timings = report["timings"]
     lines += [
         "",
@@ -369,24 +393,93 @@ def _markdown(report: dict[str, Any]) -> str:
             f"loading the sources as the ETL does {timings['load']:.0f}, building every season "
             f"(ratings and season statistics) {timings['build']:.0f}, of which the season "
             f"statistics {timings['season_stats']:.0f}, writing the tables "
-            f"{timings['write']:.1f}, comparing {timings['compare']:.0f}."
+            f"{timings['write']:.1f}, comparing {timings['compare']:.0f}, the season cache "
+            f"round trip {timings['round_trip']:.0f}."
         ),
         "",
     ]
     return "\n".join(_wrapped(lines))
 
 
-def build_and_compare(
-    files: snapshot_cache.SnapshotFiles, seasons: list[int], source: Path
-) -> tuple[list[TableComparison], dict[str, float], dict[str, str]]:
-    """Build every season through the ETL's step in a temporary directory, and compare them.
+@dataclass
+class RoundTrip:
+    """Every table the ETL wrote against the same table written from the season cache."""
+
+    files: int = 0
+    differing: list[str] = field(default_factory=list)
+    one_side_only: list[str] = field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        """Whether every table came back byte for byte, and no table only on one side."""
+        return not self.differing and not self.one_side_only
+
+
+def cache_round_trip(
+    build: ratings_build.RatingsBuild, seasons: range, root: Path, written: Path
+) -> RoundTrip:
+    """Store every season's frames in a season cache, reuse them and write the tables again.
+
+    An incremental ETL run stores each season's frames in the season cache
+    (``season_cache.SeasonCache``), and the next run loads them back, hands them to the ratings
+    build (``RatingsBuild.reuse``) and writes the build's tables, so the tables written from the
+    loaded frames must equal the ones the fresh build wrote, byte for byte.
+
+    Raises:
+        SystemExit: If a season does not come back from the cache, or comes back without its
+            pre-week tables, which an incremental run would rebuild instead of reusing.
+
+    """
+    store = season_cache.SeasonCache(root / "season_cache")
+    empty = pl.DataFrame()
+    for season in seasons:
+        store.store(
+            season,
+            "round trip",
+            season_cache.SeasonBuild(
+                games=empty, snapshots=empty, ratings=build.build_frames(season)
+            ),
+        )
+        loaded = store.load(season, "round trip")
+        if loaded is None or not build.can_reuse(loaded.ratings):
+            message = f"season {season} did not come back from the season cache whole"
+            raise SystemExit(message)
+        build.reuse(season, loaded.ratings)
+    again = root / "ratings_from_the_cache"
+    ratings_build.write_published_tables(build.published_tables(), again)
+    first = {path.name for path in written.iterdir()}
+    second = {path.name for path in again.iterdir()}
+    return RoundTrip(
+        files=len(first),
+        differing=sorted(
+            name
+            for name in first & second
+            if (written / name).read_bytes() != (again / name).read_bytes()
+        ),
+        one_side_only=sorted(first ^ second),
+    )
+
+
+@dataclass
+class Run:
+    """What one run of the ETL's step on the snapshot found."""
+
+    comparisons: list[TableComparison]
+    timings: dict[str, float]
+    hashes: dict[str, str]
+    round_trip: RoundTrip
+
+
+def build_and_compare(files: snapshot_cache.SnapshotFiles, seasons: list[int], source: Path) -> Run:
+    """Build every season through the ETL's step in a temporary directory, and check it.
 
     Returns:
-        Each compared table's comparison, the seconds of each step, and the SHA-256 of every
-        published file read.
+        Each compared table's comparison, the seconds of each step, the SHA-256 of every
+        published file read, and the season cache round trip.
 
     """
     last = seasons[-1]
+    built = range(FIRST_SEASON, last + 1)
     timings: dict[str, float] = {}
     hashes: dict[str, str] = {}
     comparisons: list[TableComparison] = []
@@ -398,13 +491,13 @@ def build_and_compare(
             raise SystemExit(message)
         cache = root / "cache" / "nflreadpy"
         start = time.perf_counter()
-        snapshot_cache.write_cache(files, cache, list(range(FIRST_SEASON, last + 1)))
+        snapshot_cache.write_cache(files, cache, list(built))
         timings["cache"] = time.perf_counter() - start
         start = time.perf_counter()
         build, season_stats = load_like_the_etl(cache, last)
         timings["load"] = time.perf_counter() - start
         start = time.perf_counter()
-        for season in range(FIRST_SEASON, last + 1):
+        for season in built:
             build.build(season)
             sys.stderr.write(f"{season}: built\n")
         timings["build"] = time.perf_counter() - start
@@ -420,7 +513,10 @@ def build_and_compare(
             sys.stderr.write(f"{season}: compared, failed: {failed or 'none'}\n")
             comparisons += found
         timings["compare"] = time.perf_counter() - start
-    return comparisons, timings, hashes
+        start = time.perf_counter()
+        round_trip = cache_round_trip(build, built, root, written)
+        timings["round_trip"] = time.perf_counter() - start
+    return Run(comparisons, timings, hashes, round_trip)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -440,8 +536,8 @@ def main(argv: list[str] | None = None) -> int:
     load_before = ", ".join(f"{value:.2f}" for value in os.getloadavg())
     snapshot_cache.block_downloads()
     files = snapshot_cache.find_snapshot_files()
-    comparisons, timings, hashes = build_and_compare(files, seasons, arguments.source)
-    summary = _summary(comparisons)
+    run = build_and_compare(files, seasons, arguments.source)
+    summary = _summary(run.comparisons)
     report: dict[str, Any] = {
         "command": " ".join(
             [".venv/bin/python", ".agents/sos_port/season_stats_etl_parity.py", *(argv or [])]
@@ -456,12 +552,15 @@ def main(argv: list[str] | None = None) -> int:
         "float_tolerance": FLOAT_TOLERANCE,
         "load_before": load_before,
         "load_after": ", ".join(f"{value:.2f}" for value in os.getloadavg()),
-        "timings": timings,
+        "timings": run.timings,
         "snapshot_files": files.hashes,
-        "published_files": dict(sorted(hashes.items())),
+        "published_files": dict(sorted(run.hashes.items())),
         "summary": summary,
-        "passed": summary["outside"] == 0 and summary["tables_with_structure_differences"] == 0,
-        "comparisons": [asdict(c) for c in comparisons],
+        "cache_round_trip": {**asdict(run.round_trip), "passed": run.round_trip.passed},
+        "passed": summary["outside"] == 0
+        and summary["tables_with_structure_differences"] == 0
+        and run.round_trip.passed,
+        "comparisons": [asdict(c) for c in run.comparisons],
     }
     arguments.out_dir.mkdir(parents=True, exist_ok=True)
     (arguments.out_dir / OUT_JSON).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

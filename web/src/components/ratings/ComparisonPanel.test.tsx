@@ -19,7 +19,7 @@ describe('ComparisonPanel', () => {
     const data = teamTable()
 
     // Act
-    renderWithProviders(<ComparisonPanel kind="teams" season={2025} data={data} ids={['WSH', 'BUF']} columns={['team_rating', 'sos']} onRemove={() => {}} />)
+    renderWithProviders(<ComparisonPanel kind="teams" season={2025} table={data.table} teamNames={data.team_names} ids={['WSH', 'BUF']} columns={['team_rating', 'sos']} onRemove={() => {}} />)
 
     // Assert
     const table = screen.getByRole('table', { name: 'Comparison' })
@@ -34,7 +34,8 @@ describe('ComparisonPanel', () => {
     stubApi({})
     const onRemove = vi.fn()
     const user = userEvent.setup()
-    renderWithProviders(<ComparisonPanel kind="teams" season={2025} data={teamTable()} ids={['WSH', 'BUF']} columns={['team_rating']} onRemove={onRemove} />)
+    const data = teamTable()
+    renderWithProviders(<ComparisonPanel kind="teams" season={2025} table={data.table} teamNames={data.team_names} ids={['WSH', 'BUF']} columns={['team_rating']} onRemove={onRemove} />)
 
     // Act
     await user.click(screen.getByRole('button', { name: 'Remove Buffalo Bills from the comparison' }))
@@ -47,8 +48,10 @@ describe('ComparisonPanel', () => {
     // Arrange
     stubApi({ '/api/ratings/2025/teams/BUF/head-to-head': teamPairs('BUF') })
 
+    const data = teamTable()
+
     // Act
-    renderWithProviders(<ComparisonPanel kind="teams" season={2025} data={teamTable()} ids={['BUF', 'WSH']} columns={['team_rating']} onRemove={() => {}} />)
+    renderWithProviders(<ComparisonPanel kind="teams" season={2025} table={data.table} teamNames={data.team_names} ids={['BUF', 'WSH']} columns={['team_rating']} onRemove={() => {}} />)
 
     // Assert
     expect(await screen.findByText(/Buffalo Bills rated above Washington Commanders in 81% of redraws/)).toBeInTheDocument()

@@ -141,6 +141,19 @@ describe('RatingsIndexPage', () => {
     expect(screen.getByRole('checkbox', { name: 'Compare KC' })).toBeChecked()
   })
 
+  it('compares the season totals the table shows in the totals view', async () => {
+    // Arrange
+    stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/teams': teamTable() })
+
+    // Act
+    renderWithProviders(<RatingsIndexPage kind="teams" />, { route: '/teams?view=totals&compare=BUF,KC' })
+
+    // Assert
+    const comparison = await screen.findByRole('table', { name: 'Comparison' })
+    const passing = within(comparison).getByRole('rowheader', { name: 'Pass Yds' }).closest('tr') as HTMLElement
+    expect(within(passing).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['4,258.5', '4,590.0'])
+  })
+
   it('explains how to get tables when there are none', async () => {
     // Arrange
     stubApi({ '/api/ratings/seasons': { seasons: [], current_season: 2026 } })

@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { useEntitySection } from '@/api/queries'
-import type { EntityKind, EntityTable } from '@/api/types'
+import type { EntityKind, MetricTable } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { columnStats, heatStyle } from '@/utils/cells'
 
@@ -28,13 +28,30 @@ function PairSentence({ kind, season, first, second, labels }: { kind: EntityKin
 /**
  * The picked teams or quarterbacks side by side: one column each, one row per column of the
  * current view, shaded against the whole season so two picks are not painted as each other's
- * extremes. Two picks add their head-to-head chance.
+ * extremes. `table` is the view's table, so the values are the ones the table above shows (season
+ * totals in the totals view). Two picks add their head-to-head chance.
  */
-export function ComparisonPanel({ kind, season, data, ids, columns, onRemove }: { kind: EntityKind; season: number; data: EntityTable; ids: string[]; columns: string[]; onRemove: (id: string) => void }) {
-  const { rows, column_metadata: metadata } = data.table
+export function ComparisonPanel({
+  kind,
+  season,
+  table,
+  teamNames,
+  ids,
+  columns,
+  onRemove,
+}: {
+  kind: EntityKind
+  season: number
+  table: MetricTable
+  teamNames: Record<string, string>
+  ids: string[]
+  columns: string[]
+  onRemove: (id: string) => void
+}) {
+  const { rows, column_metadata: metadata } = table
   const picked = ids.flatMap((id) => {
     const row = findEntityRow(kind, rows, id)
-    return row ? [{ id, row, label: entityLabel(kind, row, data.team_names) }] : []
+    return row ? [{ id, row, label: entityLabel(kind, row, teamNames) }] : []
   })
   if (picked.length === 0) return null
   const stats = columnStats(rows, columns)

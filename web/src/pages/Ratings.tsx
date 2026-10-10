@@ -122,7 +122,7 @@ function SeasonTable({ kind, data }: { kind: EntityKind; data: EntityTable }) {
         emptyMessage={needle ? `No ${config.singular} matches “${query.trim()}”.` : 'No rows.'}
       />
       <p className="text-xs text-muted-foreground">Tick up to {MAX_COMPARE} rows to compare them side by side on this view’s columns.</p>
-      <ComparisonPanel kind={kind} season={data.season} data={data} ids={compareIds} columns={compareColumns} onRemove={toggleCompare} />
+      <ComparisonPanel kind={kind} season={data.season} table={view.table} teamNames={data.team_names} ids={compareIds} columns={compareColumns} onRemove={toggleCompare} />
     </div>
   )
 }

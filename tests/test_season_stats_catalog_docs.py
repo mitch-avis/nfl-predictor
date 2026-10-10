@@ -108,7 +108,7 @@ def test_main_reports_each_written_catalog(
     caplog.set_level(logging.INFO)
 
     # Act
-    catalog_docs.main([])
+    catalog_docs.main()
 
     # Assert
     assert [record.getMessage() for record in caplog.records] == ["Wrote docs/x.md"]

@@ -8,7 +8,6 @@ the committed copies drift from the registry.
 
 from __future__ import annotations
 
-import argparse
 import textwrap
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -149,13 +148,12 @@ def write_catalogs(repo_root: Path = _REPO_ROOT) -> list[Path]:
     return written
 
 
-def main(argv: list[str] | None = None) -> None:
-    """Rewrite both stats catalogs from the metric registry."""
-    argparse.ArgumentParser(
-        prog=REGENERATE_COMMAND,
-        description="Regenerate the team and quarterback stats catalogs beside the season "
-        "statistics package from the metric registry.",
-    ).parse_args(argv)
+def main() -> None:
+    """Rewrite both stats catalogs from the metric registry and log each file written.
+
+    A developer's tool, run as ``REGENERATE_COMMAND``; it takes no options and is not a command
+    of ``nfl-predictor``.
+    """
     for path in write_catalogs():
         log.info("Wrote %s", path)
 

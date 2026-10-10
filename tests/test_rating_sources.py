@@ -581,6 +581,19 @@ def test_read_fold_predictions_missing_column_raises(tmp_path: Path) -> None:
         rating_sources.read_fold_predictions(checkpoints)
 
 
+def test_read_fold_predictions_without_a_neutral_column_reads_home_games(tmp_path: Path) -> None:
+    # Arrange
+    frames = [frame.drop(columns="neutral") for frame in _fold_frames()]
+    checkpoints = write_fold_checkpoints(tmp_path / "abc", frames)
+
+    # Act
+    read = rating_sources.read_fold_predictions(checkpoints)
+
+    # Assert
+    assert read.predictions.columns == list(rating_sources.PREDICTION_COLUMNS)
+    assert read.predictions.get_column("neutral").null_count() == read.predictions.height
+
+
 def test_fit_model_ratings_with_a_missing_margin_raises() -> None:
     # Arrange
     games = _round_robin(STRENGTHS).with_columns(

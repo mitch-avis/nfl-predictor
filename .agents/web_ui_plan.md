@@ -75,7 +75,8 @@ Exploration findings that shape the design:
 
 ```text
 api/
-  __init__.py   create_app(settings) factory (mirrors nfl-sos-ratings ui_api.create_app)
+  __init__.py   create_app(settings) factory (mirrors nfl-sos-ratings ui_api.create_app); gzips
+                responses (GZipMiddleware, which leaves text/event-stream alone)
   __main__.py   python -m nfl_predictor.api  -> uvicorn (bootstrap under __main__ guard)
   settings.py   pydantic-settings: NFLP_ROOT_DIR, NFLP_DB_PATH (default data/web/app.db),
                 NFLP_JWT_SECRET (auto-generated to data/web/secret.key, 0600), NFLP_COOKIE_SECURE,
@@ -92,12 +93,19 @@ api/
                 artifacts.resolve_run_paths with every artifact name)
   readers/      cache.py (mtime-keyed bounded cache), predictions.py, picks.py, betting.py,
                 power.py, model.py, data_status.py, unattached.py, market.py (novig helpers)
+  ratings/      the team and quarterback pages' readers over data/ratings/{season}_{kind}.parquet:
+                files.py (the file contract, season discovery, reads), columns.py (metric
+                registry -> MetricColumnOut), tables.py (index tables, categories, team names),
+                sections.py (game logs, rating and rank history, rank ranges, head to head),
+                schedules.py (the schedule-strength leaderboard), glossary.py (registry payload)
   jobs/         catalog.py (JobTemplate: id, label, description, params schema, build_cmd,
                 exclusive_group, chain_after), runner.py, store.py, stream.py, router.py
   routers/      runs.py predictions.py betting.py power.py model.py data.py registry.py
+                ratings.py (/ratings, the team and quarterback pages)
                 users.py static.py (SPA mount + fallback, 503 page when web/dist missing)
   schemas/      common.py (TablePayload, ColumnMeta), runs.py, predictions.py, betting.py,
-                power.py, model.py, data.py, jobs.py, auth.py
+                power.py, model.py, data.py, jobs.py, auth.py, ratings.py (MetricColumnOut,
+                the ratings tables and the registry payload)
 ```
 
 `ColumnMeta`: `key, label, description, group, kind (text|int|float|pct|prob|money|spread|
@@ -159,7 +167,7 @@ mutating routes require header `X-Requested-With: nflp`.
 | `GET /pool/confidence`, `GET /pool/tiebreakers`, `POST /pool/survivor` | the Pool page (Phase 4 below): the confidence sheet, the tiebreaker card and ranked survivor plans; read-only |
 | `GET /betting`, `GET /betting/xlsx` | 25-col betting CSV, or derived from predictions when the CSV is older than the predictions file; ladder thresholds 0.02/0.04/0.07/0.10; `total_*` columns `actionable=false` |
 | `GET /power` | rankings + movement vs the prior run's `through_week - 1` file + standings + division standings |
-| `GET /ratings/seasons`, `GET /ratings/{season}/{kind}`, `GET /ratings/{season}/{kind}/rank-ranges`, `GET /ratings/{season}/{kind}/{id}/{game-logs,rating-history,rank-history,head-to-head}`, `GET /ratings/schedules`, `GET /ratings/metrics` | the team and quarterback pages (Phase 5 below), `kind` `teams` or `qbs`, over `data/ratings/{season}_{kind}.parquet`; columns described by the metric registry; read-only; a missing season or table is a 404 `no_ratings_table`, an entity without rows a 404 `no_ratings_entity` |
+| `GET /ratings/seasons`, `GET /ratings/{season}/{kind}`, `GET /ratings/{season}/{kind}/rank-ranges`, `GET /ratings/{season}/{kind}/{id}/{game-logs,rating-history,rank-history,head-to-head}`, `GET /ratings/schedules`, `GET /ratings/metrics` | the team and quarterback pages (Phase 5 below), `kind` `teams` or `qbs`, over `data/ratings/{season}_{kind}.parquet`; columns described by the metric registry; read-only; a missing season or table is a 404 `no_ratings_table`, an entity without rows a 404 `no_ratings_entity`, a table Polars cannot read a 503 `ratings_table_unreadable` |
 | `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 base features by mean absolute SHAP in points (`base_features.combined.mean_abs_shap`, returned as `{measure, rows, margin_rows}` with per-head `margin_value`/`total_value`; `margin_rows` ranks every feature by the margin head alone; runs without SHAP fall back to `combined.total_gain`, and runs written before total gain was recorded to `combined.gain`, labelled `summed_average_gain`), calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
 | `GET /data/status`, `GET /data/unattached` | current season/week via `clock.nfl_season` and `clock.nfl_week` (the ETL's calendar rules), file inventory with sizes/mtimes/row counts (`pl.scan_csv().select(pl.len())`), lazy cached sha256 via `fingerprints.dataset_fingerprint`, cache parquet coverage, latest leakage audit, last ETL job |
 | `GET /jobs/catalog`, `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/logs?after=`, `GET /jobs/{id}/stream` (SSE), `POST /jobs/{id}/cancel` | 409 when an exclusive group is busy; 422 on bad params |
@@ -537,8 +545,8 @@ validation; the adapters with fakes; the poller and `/api/live`; the live views.
   for runs without per-head numbers).
 - Phase 5 (2026-10-10, branch of roadmap step 6, not merged): built. `src/nfl_predictor/api/ratings/`
   (`files.py`, `columns.py`, `tables.py`, `sections.py`, `schedules.py`, `glossary.py`) and
-  `routers/ratings.py` serve the routes under `/api/ratings` over the season tables the ETL writes
-  to `data/ratings/{season}_{kind}.parquet` (the kinds and columns of `nfl-sos-ratings`, Washington
+  `routers/ratings.py` serve the routes under `/api/ratings` over the season tables in
+  `data/ratings/{season}_{kind}.parquet` (the kinds and columns of `nfl-sos-ratings`, Washington
   as `WSH`). Every column is described from the ported metric registry
   (`nfl_predictor.season_stats.metrics`) in the app's column format, so the existing table
   component labels, sorts and shades it; context columns (schedule strength, the opponents faced)
@@ -553,13 +561,20 @@ validation; the adapters with fakes; the poller and `/api/live`; the live views.
   codes and served from the worktree on a spare port: every route answered (the 492-column team
   table in about 0.12 s, about 0.9 MB of JSON), and the frontend's view model was run over those
   payloads; the pages were not checked in a browser. The judgment calls are logged in
-  `.agents/sos_port/decisions/web_pages.md`.
+  `.agents/sos_port/decisions/web_pages.md`. After review, responses are gzipped app-wide, a table
+  Polars cannot read answers 503, and each opponent faced carries a league tier.
+
+  No job writes `data/ratings/` yet: the season-statistics ETL step that is to write those tables
+  is planned separately, and until it lands the pages show an empty state that names the folder
+  and its files. The done-criterion above (the current-season team page shows rating heatmaps
+  and a team detail with game logs) therefore waits on that step; so far it has been checked only
+  against the copied tables.
 
   Deviations from the Phase 5 text above, all deliberate:
 
   - **The data folder.** The tables come from `data/ratings/` under the configured data directory
-    (`Settings.ratings_path`), the ETL's location for them, not from `NFLP_SOS_DATA_DIR` in the
-    sibling checkout; that setting is gone.
+    (`Settings.ratings_path`), where the season-statistics ETL step is to write them, not from
+    `NFLP_SOS_DATA_DIR` in the sibling checkout; that setting is gone.
   - **Routes and modules.** The routes are under `/api/ratings/{season}/{kind}/...` (one handler for
     teams and quarterbacks) rather than `/sos/...`, and the readers are the `api/ratings/` package
     rather than one `readers/sos.py`, because they port every reader the pages need, not the

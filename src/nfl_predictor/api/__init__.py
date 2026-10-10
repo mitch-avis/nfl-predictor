@@ -87,9 +87,9 @@ def create_app(settings: Settings | None = None, *, serve_frontend: bool = True)
     app.state.fingerprints = FingerprintCache(app.state.db)
     app.state.job_runner = JobRunner(app.state.db, settings, app.state.run_index)
     install_error_handlers(app)
-    # Compress responses for clients that accept gzip: a season's team table is about 0.96 MB of
-    # JSON and about 0.18 MB gzipped. Starlette leaves text/event-stream alone by default, so the
-    # job log stream still reaches the browser line by line.
+    # Compress responses for clients that accept gzip: a completed season's team table is close
+    # to 1 MB of JSON and under a fifth of that gzipped. Starlette leaves text/event-stream alone
+    # by default, so the job log stream is sent as written.
     app.add_middleware(GZipMiddleware)
 
     @app.middleware("http")

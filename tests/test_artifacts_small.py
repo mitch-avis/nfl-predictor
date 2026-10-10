@@ -225,9 +225,9 @@ def test_resolve_run_paths_defaults_to_repo_models_dir(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """resolve_run_paths should default under ``ROOT_DIR/models/<run_id>``."""
+    """resolve_run_paths should default under ``MODELS_PATH/<run_id>``."""
     # Arrange
-    monkeypatch.setattr(artifacts.constants, "ROOT_DIR", tmp_path)
+    monkeypatch.setattr(artifacts.constants, "MODELS_PATH", tmp_path / "models")
 
     # Act
     paths = artifacts.resolve_run_paths("weekly_run")

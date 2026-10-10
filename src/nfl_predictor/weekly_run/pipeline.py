@@ -252,7 +252,7 @@ def _start_run(args: argparse.Namespace) -> _RunContext:
 
     config_payload = _config_payload(args)
     run_id = args.run_id or artifacts.generate_run_id("weekly", dataset_hash, config_payload)
-    run_dir = args.run_dir or (Path(constants.ROOT_DIR) / "models" / run_id)
+    run_dir = args.run_dir or (Path(constants.MODELS_PATH) / run_id)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     output_dir = args.output_dir or run_dir

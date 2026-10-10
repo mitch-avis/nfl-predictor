@@ -46,10 +46,6 @@ DEFAULT_RANDOM_SEED = 42
 RELIABILITY_BINS = 10
 BOOTSTRAP_SAMPLES = 5000
 
-# Shared root for per-fold checkpoints. Each run writes into a subdirectory named for its
-# fingerprint, so any identical walk-forward (from any script) resumes where it stopped and
-# runs with different inputs never see each other's files.
-DEFAULT_CHECKPOINT_DIR = Path(constants.ROOT_DIR) / "models" / "wf_checkpoints"
 # Bump when the checkpoint payload layout changes, so older files are ignored, not misread.
 FOLD_CHECKPOINT_VERSION = 1
 
@@ -86,6 +82,16 @@ REPORT_WINDOWS: tuple[tuple[str, str, int | None, int | None], ...] = (
 )
 # A head whose best iteration is below this stopped too early to trust; it is flagged.
 MIN_HEALTHY_BEST_ITERATION = 10
+
+
+def default_checkpoint_dir() -> Path:
+    """Return the shared root for per-fold checkpoints, under ``constants.MODELS_PATH``.
+
+    Each run writes into a subdirectory named for its fingerprint, so any identical walk-forward
+    (from any script) resumes where it stopped and runs with different inputs never see each
+    other's files. The models directory is read when this is called, not copied at import.
+    """
+    return Path(constants.MODELS_PATH) / "wf_checkpoints"
 
 
 def _scalar_to_int(value: object) -> int:

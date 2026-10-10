@@ -9,6 +9,9 @@ from pathlib import Path
 # Project directory configurations
 ROOT_DIR = Path(__file__).parents[2]
 DATA_PATH = ROOT_DIR / "data"
+# Run directories and walk-forward checkpoints. Code reads it when it runs, never into a copy at
+# import, so the test suite can point it at a temporary directory (tests/data_isolation.py).
+MODELS_PATH = ROOT_DIR / "models"
 NFLREADPY_CACHE_DIR = DATA_PATH / "cache" / "nflreadpy"
 # Finished seasons' ETL builds for `nfl-predictor data --incremental`, kept under the output
 # directory's `cache/`. Safe to delete: a missing entry is rebuilt.

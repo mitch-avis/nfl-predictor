@@ -44,7 +44,7 @@ def test_data_paths_sit_under_the_repository_root() -> None:
 def test_models_and_config_defaults_sit_under_the_repository_root() -> None:
     """Walk-forward checkpoints and the weekly-run config default to the repository root."""
     # Act
-    checkpoint_dir = walk_forward.DEFAULT_CHECKPOINT_DIR.resolve()
+    checkpoint_dir = walk_forward.default_checkpoint_dir().resolve()
     config_path = weekly_config.DEFAULT_CONFIG_PATH
 
     # Assert

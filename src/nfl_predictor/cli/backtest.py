@@ -195,7 +195,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint-dir",
         type=Path,
-        default=walk_forward.DEFAULT_CHECKPOINT_DIR,
+        default=walk_forward.default_checkpoint_dir(),
         help=(
             "Root for per-week checkpoints; each run uses a subdirectory named for its "
             "fingerprint (default: models/wf_checkpoints)."
@@ -373,7 +373,7 @@ def main() -> None:
         floor_sigma_history=history,
     )
 
-    run_dir = Path(constants.ROOT_DIR) / "models" / run_id
+    run_dir = Path(constants.MODELS_PATH) / run_id
     out_json = args.out_json or (run_dir / "metrics_report.json")
     out_json.parent.mkdir(parents=True, exist_ok=True)
 

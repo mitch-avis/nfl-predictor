@@ -62,7 +62,7 @@ def test_resume_is_on_by_default_and_uses_the_shared_checkpoint_dir(
 
     # Assert
     assert defaults.resume is True
-    assert defaults.checkpoint_dir == walk_forward.DEFAULT_CHECKPOINT_DIR
+    assert defaults.checkpoint_dir == walk_forward.default_checkpoint_dir()
 
 
 def test_no_resume_and_another_checkpoint_dir_can_be_asked_for(

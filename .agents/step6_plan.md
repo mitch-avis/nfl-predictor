@@ -58,6 +58,50 @@ Pre-registered on 2026-10-10 before any step-6 code merged: the main checkout's
 `models/step6/HYPOTHESIS.md` (arms, cap of 8 runs plus 2 conditional and one build, instrument,
 decision rules). Do not edit it after the launch record is written.
 
+## Integration design (decided 2026-10-10, before the integration streams start)
+
+Three integration streams start once the ratings port and the play-by-play column extension are
+merged; they all touch the ETL orchestration, so each keeps its `data_collection.py` edits
+small and local.
+
+- **Play-by-play corrections (this repo's own play-by-play feature family)**, adopted from the
+  phase-1 differences: a run play flagged `qb_scramble` counts as a dropback, not a carry (fixes
+  the pre-2006 coding gap and the scrambles coded as runs); a play flagged both `qb_dropback` and
+  `rush` counts once, as a dropback; the Jacksonville 2001-2002 play-by-play player-team repair is
+  wired in; third-down, fourth-down and two-point flags are read on every play; a down flagged
+  both converted and failed counts once. Kept as they are (definitional, both defensible):
+  carries on the `rush` flag (penalty-wiped runs stay carries, symmetric with penalty-wiped
+  dropbacks), two-point tries out of dropbacks, first downs as passing plus rushing, fumbles on
+  plays that are not special teams, both-sides special-teams play counts, the explosive and
+  stuffed definitions, Washington as `WSH`. Follow-ups in the same stream: quarterback scrambles
+  credited to the scrambler (`rusher_player_id`), not the team-game's plurality passer; the
+  current season's play-by-play requested once before kickoff; the unread `PBP_COUNT_COLUMNS`
+  and quarterback sums dropped; `strength_games_played_diff` dropped.
+- **One starter definition for every quarterback feature**: a completed game's starter comes
+  from its play-by-play (the source's rule: the first first-quarter snap by a passer or rusher
+  who is a quarterback that season), an upcoming game's from the projected starter the ETL
+  already resolves (`away_qb`/`home_qb`). The schedule's `away_qb_id`/`home_qb_id` are wrong in
+  42 team-games of 2006-2025 (the source's finding), so they are not used. Measure agreement with
+  the current identity chain before switching and log it.
+- **Ratings integration**: an adapter from this repo's play-by-play to the ratings package's
+  input frames, using the source's definitions internally (so its ratings reproduce the published
+  files), checked against the source's game logs and published ratings for 1999-2025; the
+  published tables written to `data/ratings/{season}_{kind}.parquet`; pre-week features as a new
+  feature group (offense, defense, special-teams and team ratings, `sos`, and the expected
+  starter's pre-week quarterback rating, with `_diff` companions), group markers checked against
+  every column name for collisions; one BLAS thread pinned in code (`threadpoolctl`), fixed row
+  order, a two-run byte-identity test, `ratings` in the season cache's source directories. The
+  pre-week quarterback identity uses the players file and roster weeks strictly before the week.
+- **Own Elo wiring**: both presets built by the ETL (`own_elo`, `own_elo_wt`); upcoming games'
+  projected starters from the ETL's expected starter; designed quarterback runs added to VALUE
+  from the play-by-play rusher ids, then `elo_eval.py` rerun under its unchanged rule; the
+  win-total preset fails loudly when the win totals cover none of the build's seasons, and the
+  build metadata records the win-total file's origin and sha256.
+- **Later, cheap measurements without walk-forwards**: the ported quarterback rating as the own
+  Elo's quarterback adjustment (`elo_eval.py`); the source's pre-registered quarterback all-plays
+  test and kneel-and-spike test, and its approved botched-snap rule (logged as departures from
+  the published files).
+
 ## For the morning report (running list)
 
 - Process incident: the own-Elo reviewer's first test request to Wikipedia's API (checking the

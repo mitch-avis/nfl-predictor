@@ -42,3 +42,54 @@ The rule:
   the fold's `actual_home_win` (a tie scores 0, as in every walk-forward Brier here), with the
   paired difference bootstrapped over games (5,000 resamples, numpy seed 0, 95% percentile
   interval).
+
+## 2. The outcome: the columns are added and the labels stay on the whole edge
+
+- **What differs**: three things, none of them the rule.
+  - The weekly run's sigma comes from the predictions, not from `_production_floor_sigma`. That
+    function (`src/nfl_predictor/weekly_run/pipeline.py`) returns the final fit's error pool and
+    the week, not a sigma; the sigma is estimated at the final fit and written to every
+    prediction row as `floor_sigma` (`src/nfl_predictor/ml/ml_model_predict.py`), and it is the
+    one behind `home_win_prob`. Stage 4 passes that column's single value
+    (`pipeline._report_floor_sigma`), and none when the column is missing or holds several.
+  - The tests follow the `tests/test_sos_port_*.py` pattern, but its loader
+    (`tests/sos_port_scripts.py`) was not on this branch; it is restored unchanged from commit
+    `92b6342`.
+  - The weekly-run snapshot (`tests/fixtures/weekly_run_characterization/betting_report.csv`)
+    gains the three columns; every other column is unchanged, which was checked by comparing
+    the old and new snapshots without them.
+- **Options**: (a) keep the confidence score and the action label on the whole edge and show the
+  split beside it; (b) base both on `beyond`, the model's part, so a game's label ignores the
+  spread-moneyline gap; (c) report two sets of labels.
+- **Decision**: the rule's first branch fails (`|gap| > |beyond|` in 14.3% of the top decile,
+  against more than half), so the recommendation to the user is (a): keep the labels on `edge`.
+  The three columns are in the report either way, and no label changed.
+- **Reasoning**: on 19 seasons of walk-forward games the largest edges are mostly the model's
+  own disagreement with the spread, not the gap: `edge` correlates `0.78` with `beyond` and
+  `0.44` with `gap`, and the mean `|beyond|` (`0.0339`) is larger than the mean `|gap|`
+  (`0.0263`). The gap usually leans the same way as the edge (82.2% of the top decile), so it
+  enlarges large edges without making them. The floor's curve at the spread and the no-vig
+  moneyline score alike: their Brier difference has an interval that holds zero. The fold rows
+  carry the pick-time lines the walk-forward anchors to (for a completed game, nfelo's opening
+  line, `AGENTS.md` rule 11), which is the revisit the follow-up asked for. The Week 3
+  observation that started it was one week; on this sample it does not hold in general. (b) is
+  the branch the rule reserved for a gap that outweighs the model's part, which did not happen,
+  and (c) doubles the labels; (a) stands, as the rule says. How many labels (b) would move was
+  not measured.
+- **Data**: `.agents/sos_port/BETTING_EDGES.md`, written by `.agents/sos_port/betting_edges.py`
+  from the adopted-settings reference, seed 42 (`models/step4_reference/adopted_seed42`, fold
+  checkpoints `models/wf_checkpoints/df20b775abf7f2657d13/`, 328 folds). 4,943 game rows, all
+  2007-2025 regular-season games with both moneylines and a spread, so all are scored; the floor
+  check's largest difference is `0`. Mean `|edge|` `0.0384`, `|gap|` `0.0263`, `|beyond|`
+  `0.0339`; top decile 495 games, `|gap| > |beyond|` in `0.1434`, `sign(gap) == sign(edge)` in
+  `0.8222`; correlation of `edge` with `gap` `0.4363` and with `beyond` `0.7814`; Brier of
+  `p_ml` `0.21286` and of `p_spread` `0.21337`, difference `+0.00051` (95% interval `-0.00026`
+  to `+0.00126`). Reproduce from the repository root:
+  `VIRTUAL_ENV="$PWD/.venv" .venv/bin/python .agents/sos_port/betting_edges.py --checkpoint-dir
+  /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/df20b775abf7f2657d13`.
+- **How to reverse it**: the columns go with `_spread_home_prob` and the three assignments in
+  `build_betting_report` (`src/nfl_predictor/reporting/betting_report.py`), the `floor_sigma`
+  keyword in `pipeline._run_stage4`, and a snapshot rewrite (`NFLP_UPDATE_SNAPSHOTS=1`). A switch
+  of the labels to `beyond` would map `edge_beyond_spread_home_prob` through
+  `_edge_to_confidence_1_to_10` and `_edge_to_action`; it is the user's decision.
+- **Review: not yet reviewed.**

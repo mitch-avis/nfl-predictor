@@ -340,7 +340,7 @@
    "choices": null,
    "default": null,
    "dest": "disable_feature_groups",
-   "help": "Comma-separated feature group names to drop for ablation comparisons (e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS.",
+   "help": "Comma-separated feature groups to leave out, every column of each (for example 'elo' or 'elo,own_elo_wt'); a column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error.",
    "nargs": null,
    "options": [
     "--disable-feature-groups"
@@ -1306,6 +1306,20 @@
   },
   {
    "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "disable_feature_groups",
+   "help": "Comma-separated feature groups to leave out, every column of each (for example 'elo' or 'elo,own_elo_wt'); a column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error.",
+   "nargs": null,
+   "options": [
+    "--disable-feature-groups"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
    "choices": [
     "auto",
     "none"
@@ -2262,6 +2276,20 @@
    "required": false,
    "subcommand": null,
    "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [],
+   "dest": "disable_feature_groups",
+   "help": "Stage 1 and the final fit: feature groups to leave out, every column of each, comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a list in the config file; default: none). An unknown group stops the run before the data refresh.",
+   "nargs": null,
+   "options": [
+    "--disable-feature-groups"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "parse_feature_groups"
   },
   {
    "action": "BooleanOptionalAction",

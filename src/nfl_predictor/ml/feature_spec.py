@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,9 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 DEFAULT_FEATURE_START_COLUMN = "away_rest"
 DEFAULT_FEATURE_END_COLUMN = "home_moneyline"
@@ -146,6 +149,65 @@ def _drop_high_cardinality_columns(
     if not dropped:
         return df, []
     return df.drop(columns=dropped), dropped
+
+
+def validate_feature_groups(groups: Sequence[str]) -> None:
+    """Check that every name in ``groups`` is a feature group, before any data is read.
+
+    Raises:
+        ValueError: if any name is not a key in ``constants.FEATURE_GROUP_COLUMN_MARKERS``; the
+            message lists the unknown names and the valid ones.
+
+    """
+    valid_groups = constants.FEATURE_GROUP_COLUMN_MARKERS
+    unknown = sorted({group for group in groups if group not in valid_groups})
+    if unknown:
+        msg = f"Unknown feature group(s): {unknown}. Valid groups: {sorted(valid_groups)}."
+        raise ValueError(msg)
+
+
+def resolve_feature_group_columns(
+    columns: Sequence[str], groups: Sequence[str], *, warn_unmatched: bool = True
+) -> list[str]:
+    """Resolve which columns belong to the given feature groups: what disabling them removes.
+
+    Every fit that leaves feature groups out drops exactly these columns: each walk-forward
+    fold (``WalkForwardConfig.disabled_feature_groups``) and the final fit
+    (``TrainingOptions.disabled_feature_groups``).
+
+    A group that matches none of ``columns`` leaves nothing out, so a dataset build that lacks
+    it trains differently from one that has it; each such group is logged as a warning, unless
+    ``warn_unmatched`` is off for a caller resolving columns that may already have been dropped.
+
+    A column belongs to a group when any marker string configured for that group in
+    ``constants.FEATURE_GROUP_COLUMN_MARKERS`` is a *substring* of the column name (not a
+    prefix), so a single marker can match ``away_``/``home_``/``opponent_`` prefixed variants
+    and ``_diff`` suffixed variants of the same base name at once. A group whose marker tuple
+    is empty matches zero columns.
+
+    Raises:
+        ValueError: if any requested group name is not a key in
+            ``constants.FEATURE_GROUP_COLUMN_MARKERS`` (``validate_feature_groups``).
+
+    """
+    validate_feature_groups(groups)
+    matched: set[str] = set()
+    unmatched: list[str] = []
+    for group in groups:
+        markers = constants.FEATURE_GROUP_COLUMN_MARKERS[group]
+        group_columns = [
+            column for column in columns if any(marker in column for marker in markers)
+        ]
+        if not group_columns:
+            unmatched.append(group)
+        matched.update(group_columns)
+    if unmatched and warn_unmatched:
+        log.warning(
+            "Feature group(s) %s match no column of the data, so leaving them out drops "
+            "nothing; a dataset build without them trains differently from one with them.",
+            sorted(set(unmatched)),
+        )
+    return sorted(matched)
 
 
 @dataclass(frozen=True, kw_only=True)

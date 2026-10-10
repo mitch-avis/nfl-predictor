@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.52.0] - 2026-10-10
+
+### Changed
+
+- The settings-versus-production report reads production's disabled feature groups from
+  `config/weekly_run.yaml` for both stage 1 and the final fit, and compares groups as a set.
+- The feature-group resolver moved from `ml/walk_forward.py` to `ml/feature_spec.py`
+  (`walk_forward` still imports it); every walk-forward checkpoint fingerprint changes.
+
+### Added
+
+- `disable_feature_groups` in `config/weekly_run.yaml` (default `[]`, so no weekly output
+  changes) and `--disable-feature-groups` on `nfl-predictor weekly` and `nfl-predictor train`:
+  stage 1's walk-forward and the final fit leave out exactly the columns
+  `nfl-predictor backtest --disable-feature-groups` drops for the same groups, through one shared
+  resolver, so a walk-forward arm that leaves groups out can be adopted without a gap between the
+  benchmark and production. An unknown group stops `train` and the weekly run before any data
+  loads, and a group that matches no column of the data is logged as a warning.
+- Every trained model's `metadata.json` records `disabled_feature_groups` and
+  `dropped_feature_group_columns`.
+
+## [0.51.0] - 2026-10-10
+
+### Added
+
+- `nfl_predictor.season_stats`: the season statistics of `nfl-sos-ratings` (frozen at `9081bce`),
+  ported: team and quarterback game logs built from play-by-play, nflverse's official weekly team
+  and player stats and the schedules through this repository's loaders, season rows,
+  head-to-head-excluded opponent profiles, win-probability bins, the all-time schedule-strength
+  leaderboard, and the metric registry (labels, descriptions, polarity, column rules) with its
+  generated stats catalogs. Rebuilt over 1999-2026 from the play-by-play it used, it reproduces
+  every season table that repository published bit for bit
+  (`.agents/sos_port/SEASON_STATS_PARITY.md`). Nothing in the ETL, the model or the web API uses it
+  yet.
+- A cached source for nflverse's official weekly team stats, read by the season statistics.
+- Parity tests on fixtures cut from the published files, tests that pin the passer season summary
+  and the rank-range settings to the ratings package's, and
+  `.agents/sos_port/season_stats_parity.py`, which rebuilds every season and compares every cell.
+
+## [0.50.1] - 2026-10-10
+
+### Added
+
+- A scripted inventory of `nfl-sos-ratings` at its frozen commit against this repository
+  (`.agents/sos_port/inventory.py`, generating `INVENTORY.md` and `inventory.json` from
+  `mapping.yaml`): its data sources, every output column resolved through its metric registry and
+  classified as matched, different or missing here, its ratings, and its web pages and endpoints.
+  The run fails on an unclassified column, a same-name counterpart filed as missing, or a column
+  missing in one file kind but classified in another.
+- A play-by-play parity check against its game logs for 1999-2025 (`.agents/sos_port/parity.py`,
+  `PARITY.md`, `parity.json`, `parity_attributions.parquet`): every mismatching team-game is
+  explained by a named cause through a counterfactual re-aggregation, reading the scramble flag
+  from a snapshot of the play-by-play that repository used, which equals this repository's cache
+  row by row. The differences and the decision taken on each are in `.agents/sos_port/`
+  (`FINDINGS.md`, `DECISIONS.md`).
+
 ## [0.50.0] - 2026-10-10
 
 ### Changed

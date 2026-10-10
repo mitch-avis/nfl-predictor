@@ -76,14 +76,22 @@ def add_wf_window_options(parser: argparse.ArgumentParser) -> None:
     )
 
 
+# What ``--disable-feature-groups`` means, wherever a command takes it.
+FEATURE_GROUPS_HELP = (
+    "Comma-separated feature groups to leave out, every column of each (for example 'elo' or "
+    "'elo,own_elo_wt'); a column belongs to a group when one of the group's markers in "
+    "constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error."
+)
+
+
 def add_feature_group_option(parser: argparse.ArgumentParser) -> None:
-    """Add ``--disable-feature-groups`` for ablation runs."""
+    """Add ``--disable-feature-groups``, which ``backtest`` and ``train`` share.
+
+    The value is the raw comma-separated string; ``parse_feature_groups`` splits it.
+    """
     parser.add_argument(
         "--disable-feature-groups",
         type=str,
         default=None,
-        help=(
-            "Comma-separated feature group names to drop for ablation comparisons "
-            "(e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS."
-        ),
+        help=FEATURE_GROUPS_HELP,
     )

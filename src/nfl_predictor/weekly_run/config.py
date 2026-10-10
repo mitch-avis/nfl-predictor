@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Any, override
 import yaml
 
 from nfl_predictor import constants
-from nfl_predictor.ml import ml_model_core, walk_forward
+from nfl_predictor.cli import options
+from nfl_predictor.ml import feature_spec, ml_model_core, walk_forward
 from nfl_predictor.ml.ml_model_core import OptunaConfig
 from nfl_predictor.ml.ml_model_xgb_utils import (
     XGB_DEVICE_AUTO,
@@ -39,6 +40,8 @@ _PATH_KEYS = {
     "power_rankings_strength_snapshots",
 }
 _PATH_LIST_KEYS = {"floor_sigma_reference_runs"}
+# Config keys that list feature groups; the command line takes them comma-separated.
+_FEATURE_GROUP_LIST_KEYS = {"disable_feature_groups"}
 
 
 # The configuration a weekly run reads when no --config is given.
@@ -128,6 +131,17 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
                 msg = f"Config key {key} must be a list of paths."
                 raise ValueError(msg)
             normalized[key] = [Path(value) for value in normalized[key]]
+    for key in _FEATURE_GROUP_LIST_KEYS:
+        if key not in normalized:
+            continue
+        # A key with no value (YAML null) names no group; anything else must be a list.
+        groups = normalized[key]
+        if groups is None:
+            groups = []
+        elif not isinstance(groups, list):
+            msg = f"Config key {key} must be a list of feature group names."
+            raise ValueError(msg)
+        normalized[key] = tuple(str(name).strip() for name in groups)
     return normalized
 
 
@@ -308,6 +322,17 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
             "Market mode of the walk-forward and the final fit: market lines as features, "
             "the model anchored to them, both (hybrid, the default), or none (market-free: no "
             "market feature, no anchor and no market transform)."
+        ),
+    )
+    parser.add_argument(
+        "--disable-feature-groups",
+        type=options.parse_feature_groups,
+        default=defaults.get("disable_feature_groups", ()),
+        help=(
+            "Stage 1 and the final fit: feature groups to leave out, every column of each, "
+            "comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a "
+            "list in the config file; default: none). An unknown group stops the run before "
+            "the data refresh."
         ),
     )
     parser.add_argument(
@@ -645,6 +670,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         args = parser.parse_args(argv)
     try:
         power_ranking_options(args)
+        # An unknown feature group stops the run here, before the data refresh.
+        feature_spec.validate_feature_groups(args.disable_feature_groups)
     except ValueError as error:
         parser.error(str(error))
     _warn_on_an_overridden_transform(args)
@@ -720,6 +747,7 @@ def stage1_options(args: argparse.Namespace) -> stage1.ProductionOptions:
         include_quantiles=bool(args.wf_include_quantiles),
         market_transform=args.market_transform,
         max_cardinality_ratio=float(args.max_cardinality_ratio),
+        disabled_feature_groups=tuple(args.disable_feature_groups),
     )
 
 
@@ -777,6 +805,7 @@ def final_fit_options(
         "max_cardinality_ratio": float(args.max_cardinality_ratio),
         "feature_start": str(args.feature_start),
         "feature_end": str(args.feature_end),
+        "disabled_feature_groups": list(args.disable_feature_groups),
         "xgb_params_overrides": xgb_model_params(args),
         "optuna": {
             "enabled": optuna_config.enabled,

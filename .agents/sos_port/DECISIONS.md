@@ -60,7 +60,9 @@ pre-cutoff games moved).
   international and relocated games, and four Saints games of 2005).
 - **Quarterback adjustment from this repository's play-by-play**; 538's draft-based rookie
   ratings are replaced by the mean of earlier first starts (no draft data here); designed
-  quarterback runs are missing until the play-by-play cache carries the rusher's id.
+  quarterback runs were missing because the play-by-play cache lacked the rusher's id, which it
+  carries since `0.50.0`, so the integration adds them and reruns the evaluation under the same
+  rule.
 - **Starters**: a completed game uses its actual starter, an upcoming game the projected one, as
   the `qb_elos.csv` columns do; the diagnostic cost of knowing only the previous starter is in
   the evaluation report and on the user's list (`.agents/step6_plan.md`).
@@ -113,3 +115,85 @@ the reviewer reproduced the audit on three CPU math kernels and caught every pla
 - **Determinism**: the fits keep the caller's row order and `sos` sums opponents in a fixed order;
   the ETL must pin one math-library thread (an integration note).
 - **SRS** comes from this repository's existing solver (bit-identical to the source's).
+
+### The play-by-play columns and the stadium table (`0.50.0`)
+
+Full records: [decisions/pbp_columns.md](decisions/pbp_columns.md) (15 entries and a note on the
+first ETL after the merge). Review: one independent round plus a verified documentation round;
+the reviewer reproduced every number on real data for all 27 seasons and found no existing value,
+type or aggregation changed.
+
+- **One refresh for the whole port**: the cache takes every play-by-play column `nfl-sos-ratings`
+  reads (134, derived by script from its code; 84 added), plus the play text its repair parses.
+- **Release check**: a fresh nflverse download equals the cache the 2026-10-09 reference build
+  used, on every shared column, in 27 of 27 seasons, so the candidate build is not confounded by
+  a newer release.
+- **Team codes**: all 23 team-code columns are normalized at load; yard-line text stays as
+  published (normalizing it would change an already-cached column).
+- **Stadiums**: 14 venue ids the table lacked are added (9 used in 1999-2002, 5 in 2026), with
+  elevations measured from terrain models at each venue's coordinates; 163 games move from 0 ft.
+  Mile High Stadium gets its measured 5,210 ft while Empower Field keeps its nominal 5,280 ft.
+- **2026 roofs**: nflverse lists three 2026 international venues as domes; no override now (the
+  current season's schedule re-downloads every run); recheck before the Paris game on Oct 25.
+
+### Phase 1: the inventory and the play-by-play parity check
+
+Full records: [decisions/phase1_parity.md](decisions/phase1_parity.md) (18 entries), the generated
+[INVENTORY.md](INVENTORY.md) and [PARITY.md](PARITY.md), and the summary
+[FINDINGS.md](FINDINGS.md). Review: two independent rounds; the final round's fixes were checked
+by re-running both scripts on the integration branch.
+
+- **Adopted**: pre-2006 scrambles as dropbacks; situational flags read on every play; a down
+  flagged both ways counted once; the Jacksonville 2001-2002 player-team repair; the play-by-play
+  cache extension; carries on the source's designed-carry rule.
+- **Corrected by the session**: carries were first kept on this repository's `rush` flag, on the
+  premise that penalty-wiped passes stay dropbacks. The data showed none does (of 65,122
+  penalty-wiped plays, 8,848 keep the run flag at -5,660 EPA, 27,906 the pass flag at +11,142 EPA,
+  0 the dropback flag), so the old rule put penalty-wiped runs' EPA into rushing while
+  penalty-wiped passes counted nowhere. Carries now follow the source (`rush_attempt` and not a
+  two-point try, scramble or kneel-down).
+- **Kept** (definitional): two-point tries out of dropbacks, first downs as passing plus rushing,
+  fumbles on plays that are not special teams, play-by-play ahead of nflverse team stats,
+  both-sides special-teams counts, the explosive and stuffed definitions, Washington as `WSH`.
+- **Inventory**: 1,736 output columns, each resolved to one rule (matched 30, different 526,
+  missing 1,180 here), with guards that fail on an unclassified column, a same-name counterpart
+  filed as missing, or a column missing in one file kind but classified in another.
+- **Parity**: every mismatching team-game explained by a named cause (40,694 values); the
+  snapshot of the play-by-play the source read equals this repository's cache row by row.
+
+### The season statistics (`0.51.0`)
+
+Full records: [decisions/season_stats.md](decisions/season_stats.md) (15 entries) and the
+generated audit [SEASON_STATS_PARITY.md](SEASON_STATS_PARITY.md). Review: two independent rounds
+(verdict "merge as is"); the reviewer reproduced the audit at 1 and 24 threads and with this
+repository's own play-by-play column list.
+
+- **Parity**: rebuilt from the play-by-play `nfl-sos-ratings` used, read through this
+  repository's loaders, every published season table of 1999-2026 comes out bit for bit (280
+  tables; the rating columns of two tables are taken from the ported ratings by design).
+- **Inputs** come through this repository's loaders, plus the source's own preparation steps
+  (canonical codes, the never-charted fields, the Jacksonville repair); nflverse's official weekly
+  team stats get their own cached source, because the existing team-stats loader sums away
+  columns the source's overrides read.
+- **Washington is `WSH`** and whole numbers are 64-bit (the published files hold some as 32-bit;
+  values are equal).
+- **Not ported**: the garbage-time filter view (no published table depends on it), the source's
+  SRS (the ratings package covers it), its command-line parts and file writing.
+- **Display data only**: these tables are whole-season values, not pre-week values, and feed the
+  web pages, never the model.
+
+### Leaving feature groups out of production (`0.52.0`)
+
+Full records: [decisions/feature_groups.md](decisions/feature_groups.md) (10 entries). Review: one
+independent round (verdict "merge as is") plus three hardening items checked by the session.
+
+- **One resolver** decides which columns a set of disabled groups removes, for the backtest,
+  `nfl-predictor train` and both weekly stages, so an adopted walk-forward arm and production
+  train on exactly the same columns (checked for the four combinations the step-6 arms use).
+- **The setting ships empty** (`disable_feature_groups: []` in `config/weekly_run.yaml`), so no
+  weekly output changes; setting a value after the measurement is a default change held for the
+  user.
+- **A saved model records** the groups and the columns it left out in `metadata.json`; the pickled
+  model needs nothing new, because its feature list already says what it was trained on.
+- **A group that matches no column warns** once per command, against the data it loaded (so an
+  older dataset build without a group cannot silently train differently from the adopted arm).

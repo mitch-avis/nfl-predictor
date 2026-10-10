@@ -33,6 +33,7 @@ from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import feature_spec as feature_spec_utils
 from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils
 from nfl_predictor.ml import metrics as metrics_utils
+from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
 
@@ -178,38 +179,6 @@ def filter_regular_season(df: pd.DataFrame, *, include_postseason: bool = False)
     if len(filtered) != len(df):
         log.info("Filtered to regular-season games: %d -> %d rows", len(df), len(filtered))
     return filtered
-
-
-def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str]) -> list[str]:
-    """Resolve which columns belong to the given feature groups for ablation.
-
-    A column belongs to a group when any marker string configured for that group in
-    ``constants.FEATURE_GROUP_COLUMN_MARKERS`` is a *substring* of the column name (not a
-    prefix), so a single marker can match ``away_``/``home_``/``opponent_`` prefixed variants
-    and ``_diff`` suffixed variants of the same base name at once. A group whose marker tuple
-    is empty matches zero columns.
-
-    Raises:
-        ValueError: if any requested group name is not a key in
-            ``constants.FEATURE_GROUP_COLUMN_MARKERS``.
-
-    """
-    valid_groups = constants.FEATURE_GROUP_COLUMN_MARKERS
-    unknown = sorted({group for group in groups if group not in valid_groups})
-    if unknown:
-        msg = f"Unknown feature group(s): {unknown}. Valid groups: {sorted(valid_groups)}."
-        raise ValueError(msg)
-
-    matched: set[str] = set()
-    for group in groups:
-        markers = valid_groups[group]
-        if not markers:
-            continue
-        for column in columns:
-            if any(marker in column for marker in markers):
-                matched.add(column)
-
-    return sorted(matched)
 
 
 def resolve_eval_seasons(
@@ -829,8 +798,11 @@ class _PreparedRun:
 def _prepare_run(df: pd.DataFrame, config: WalkForwardConfig) -> _PreparedRun:
     """Drop disabled groups, filter the games, resolve the settings, and build the folds."""
     if config.disabled_feature_groups:
+        # The callers that load the data (the backtest, stage 1 of the weekly run) drop the
+        # groups first and warn about any that match no column there, so this drop is a safety
+        # net that may find nothing left to drop; it does not repeat the warning.
         group_columns = resolve_feature_group_columns(
-            list(df.columns), config.disabled_feature_groups
+            list(df.columns), config.disabled_feature_groups, warn_unmatched=False
         )
         if group_columns:
             log.info(

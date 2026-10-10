@@ -1,0 +1,781 @@
+"""Check this repository's play-by-play team-game aggregates against `nfl-sos-ratings` game logs.
+
+Run from the repository root (``PYTHONDONTWRITEBYTECODE=1`` keeps the run from leaving
+``__pycache__`` beside the scripts):
+
+    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py
+
+For every regular season 1999-2025 it aggregates this repository's cached play-by-play (the main
+checkout's ``data/cache/nflreadpy/pbp_{season}_reg.parquet``) with
+``aggregate_pbp_team_game_stats`` and ``aggregate_pbp_team_box_score_stats`` and compares every
+team-game with ``{season}_team_game_logs.parquet`` of `nfl-sos-ratings` at its frozen commit, on
+the pairs ``parity.yaml`` judges to share a definition. Which game-log columns come from
+play-by-play is read from that repository's code (``sos_sources.py``); only those are judged.
+
+The columns this repository does not cache (``qb_scramble``, ``play_id``, the play text ``desc``)
+come from the snapshot of nflreadpy's on-disk cache that `nfl-sos-ratings` read
+(``port_audit.NFLREADPY_SNAPSHOT``). Each season's file is found by its content and checked
+against the snapshot's manifest, and the run fails unless that file, prepared as this repository
+prepares its cache, equals the cache row by row on every cached column; the extra columns are
+then attached by row position (``season_pbp`` says what else must hold).
+
+Counts must be equal, sums and rates within the tolerance. A mismatching team-game is attributed
+to a named cause only when that cause's adjustment (``parity_rules.CAUSES``), alone or with the
+fewest other causes the pair allows, makes it match exactly. It writes ``PARITY.md``,
+``parity.json`` and ``parity_attributions.parquet`` (every mismatching team-game with its causes)
+beside this file and exits non-zero when any team-game stays unexplained, when a team-game exists
+on one side only, when an evidence pattern or a source check fails, or when an input is missing,
+not at its expected commit, or not identical to this repository's cache.
+"""
+
+from __future__ import annotations
+
+import itertools
+import sys
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any
+
+import polars as pl
+import yaml
+from parity_report import render
+from parity_rules import (
+    CAUSES,
+    KEYS,
+    Pair,
+    carries_from_rush_attempts,
+    carries_without_rush_attempt,
+    check_evidence,
+    expression,
+    one_team_games,
+    uncounted_situational_plays,
+    unflagged_no_plays,
+    unrepair_penalties,
+    wiped_out_plays,
+)
+from port_audit import (
+    DATA,
+    HERE,
+    NFLREADPY_SNAPSHOT,
+    NFLREADPY_SNAPSHOT_MANIFEST,
+    SEASONS,
+    Audit,
+    SosCode,
+    check_sos_checkout,
+    portable,
+    sos_output,
+    team_code_map,
+)
+from report_text import dump_json
+from sos_sources import PLAY_BY_PLAY, classify_game_log_columns
+
+from nfl_predictor import constants
+from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.polars.loaders import _prepare_pbp
+from nfl_predictor.utils.polars.pbp import (
+    aggregate_pbp_team_box_score_stats,
+    aggregate_pbp_team_game_stats,
+)
+
+RULES = HERE / "parity.yaml"
+OUT_MD = HERE / "PARITY.md"
+OUT_JSON = HERE / "parity.json"
+OUT_ATTRIBUTIONS = HERE / "parity_attributions.parquet"
+CACHE = DATA / "cache" / "nflreadpy"
+TEAM_COLUMNS = ("posteam", "defteam", "home_team", "away_team", "td_team", "penalty_team")
+ADJUSTABLE = ("ours", "theirs")
+KINDS = ("count", "count_from_rate", "sum", "rate")
+COUNT_KEYS = ("compared", "mismatched", "explained", "unexplained")
+# Columns of its play-by-play this repository's cache leaves out and the check reads: the causes
+# read qb_scramble, and the counts of plays recorded as no_play read the play text (desc).
+SNAPSHOT_EXTRAS = ("play_id", "qb_scramble", "desc")
+PBP_MARKERS = {"play_id", "game_id", "qb_scramble", "posteam", "epa", "season"}
+
+
+def load_pairs(rules: dict[str, Any], audit: Audit) -> list[Pair]:
+    """Build the judged pairs and check that every cause they name exists."""
+    pairs = []
+    for entry in rules["pairs"]:
+        causes = tuple(entry["causes"])
+        if entry["kind"] not in KINDS:
+            audit.fail("pair", f"{entry['id']}: unknown kind {entry['kind']}")
+        for cause in causes:
+            if cause not in CAUSES or cause not in rules["causes"]:
+                audit.fail("pair", f"{entry['id']}: unknown cause {cause}")
+            elif CAUSES[cause].side not in ADJUSTABLE:
+                audit.fail("pair", f"{entry['id']}: cause {cause} adjusts no value")
+        pairs.append(
+            Pair(
+                id=entry["id"],
+                ours=expression(str(entry["ours"])),
+                theirs=expression(str(entry["theirs"])),
+                kind=entry["kind"],
+                causes=causes,
+                null_as_zero=bool(entry.get("null_as_zero", False)),
+            )
+        )
+    implemented, described = set(CAUSES), set(rules["causes"])
+    for cause in sorted(implemented ^ described):
+        side = "described in parity.yaml only" if cause in described else "implemented only"
+        audit.fail("cause", f"{cause}: {side}")
+    return pairs
+
+
+# ---------------------------------------------------------------------------------------------
+# Inputs
+# ---------------------------------------------------------------------------------------------
+
+
+def snapshot_files(audit: Audit) -> dict[int, Any]:
+    """Find each season's play-by-play file in the snapshot by its content.
+
+    A file is play-by-play when its schema has ``PBP_MARKERS``; its season is the one value of its
+    ``season`` column. Every completed season must have exactly one such file, and every file used
+    must match the snapshot's sha256 manifest.
+    """
+    manifest: dict[str, str] = {}
+    if NFLREADPY_SNAPSHOT_MANIFEST.exists():
+        for line in audit.record(NFLREADPY_SNAPSHOT_MANIFEST).read_text().splitlines():
+            digest, _, name = line.strip().partition("  ")
+            manifest[name] = digest
+    else:
+        audit.fail("snapshot", f"no manifest at {portable(str(NFLREADPY_SNAPSHOT_MANIFEST))}")
+    found: dict[int, list[Any]] = defaultdict(list)
+    for path in sorted(NFLREADPY_SNAPSHOT.glob("*.parquet")):
+        if not PBP_MARKERS <= set(pl.read_parquet_schema(path)):
+            continue
+        seasons = pl.read_parquet(path, columns=["season"])["season"].unique().to_list()
+        if len(seasons) == 1:
+            found[int(seasons[0])].append(path)
+        else:
+            audit.fail("snapshot", f"{path.name} holds seasons {sorted(seasons)}")
+    chosen: dict[int, Any] = {}
+    for season in SEASONS:
+        paths = found.get(season, [])
+        if len(paths) != 1:
+            audit.fail("snapshot", f"{season}: {len(paths)} play-by-play files, not one")
+            continue
+        path = paths[0]
+        audit.record(path)
+        if manifest.get(path.name) != audit.files[portable(str(path))]:
+            audit.fail("snapshot", f"{path.name} does not match the snapshot's manifest")
+        chosen[season] = path
+    return chosen
+
+
+def season_pbp(season: int, snapshot: Any, audit: Audit) -> tuple[pl.DataFrame, dict[str, Any]]:
+    """Return the season's cached play-by-play with the snapshot's extra columns attached.
+
+    The extra columns are attached by row position. That is sound only because the snapshot's
+    regular-season rows, prepared with this repository's own ``_prepare_pbp`` (which keeps their
+    order), equal the cache row by row on every cached column, so the run fails otherwise. Two
+    more checks fail the run: a ``play_id`` repeated within a game, and rows equal on every cached
+    column (which equality cannot tell apart) whose attached ``qb_scramble`` values differ.
+    """
+    cached = pl.read_parquet(audit.record(CACHE / f"pbp_{season}_reg.parquet"))
+    schema = pl.read_parquet_schema(snapshot)
+    wanted = [c for c in constants.PBP_COLUMNS if c in schema] + list(SNAPSHOT_EXTRAS)
+    raw = pl.read_parquet(snapshot, columns=wanted)
+    prepared = _prepare_pbp(raw, regular_season_only=True)
+    regular = raw.filter(pl.col("season_type") == "REG") if "season_type" in raw.columns else raw
+    identical = prepared.equals(cached) and regular.height == cached.height
+    report: dict[str, Any] = {
+        "file": snapshot.name,
+        "plays": cached.height,
+        "identical_to_cache": identical,
+        "cached_columns_compared": len(cached.columns),
+    }
+    extras = regular.select(SNAPSHOT_EXTRAS)
+    if not identical:
+        audit.fail("snapshot", f"{season}: the snapshot is not row by row equal to the cache")
+        # The extra columns cannot be lined up: attach them empty so the rest of the run reports.
+        return cached.hstack(extras.clear(n=cached.height)), report
+    attached = cached.hstack(extras)
+    repeated_ids = (
+        attached.group_by("game_id")
+        .agg(pl.col("play_id").n_unique().alias("ids"), pl.len().alias("rows"))
+        .filter(pl.col("ids") != pl.col("rows"))
+        .height
+    )
+    twins = (
+        attached.group_by(cached.columns)
+        .agg(pl.len().alias("rows"), pl.col("qb_scramble").n_unique().alias("flags"))
+        .filter(pl.col("rows") > 1)
+    )
+    differing = twins.filter(pl.col("flags") > 1).height
+    report.update(
+        games_repeating_a_play_id=repeated_ids,
+        rows_equal_to_another_row=int(twins["rows"].sum()),
+        groups_of_equal_rows=twins.height,
+        groups_of_equal_rows_differing_in_qb_scramble=differing,
+    )
+    if repeated_ids:
+        audit.fail("snapshot", f"{season}: {repeated_ids} games repeat a play_id")
+    if differing:
+        audit.fail(
+            "snapshot",
+            f"{season}: {differing} groups of rows equal on every cached column differ in "
+            "qb_scramble, so attaching it by row position is ambiguous",
+        )
+    return attached, report
+
+
+def ours_frame(pbp: pl.DataFrame) -> pl.DataFrame:
+    """Return this repository's two play-by-play aggregates joined per team-game."""
+    team_game = aggregate_pbp_team_game_stats(pbp)
+    box_score = aggregate_pbp_team_box_score_stats(pbp).drop("season_type")
+    return team_game.join(box_score, on=["season", *KEYS], how="full", coalesce=True).drop("season")
+
+
+def canonical(frame: pl.DataFrame) -> pl.DataFrame:
+    """Return ``frame`` with its team codes in this repository's canonical spelling."""
+    codes = team_code_map(frame["team_abbr"].to_list() + frame["opponent_abbr"].to_list())
+    return frame.with_columns(
+        pl.col("team_abbr").replace_strict(codes),
+        pl.col("opponent_abbr").replace_strict(codes),
+    )
+
+
+def theirs_frame(season: int, audit: Audit, code_map: dict[str, str]) -> pl.DataFrame:
+    """Read one season's game logs, keyed with this repository's team codes."""
+    frame = pl.read_parquet(audit.record(sos_output(season, "team_game_logs")))
+    mapping = team_code_map(frame["team"].to_list() + frame["opponent_team"].to_list())
+    code_map.update({code: ours for code, ours in mapping.items() if code != ours})
+    return frame.with_columns(
+        pl.col("team").replace_strict(mapping).alias("team_abbr"),
+        pl.col("opponent_team").replace_strict(mapping).alias("opponent_abbr"),
+        pl.col("week").cast(pl.Int64),
+    )
+
+
+# ---------------------------------------------------------------------------------------------
+# Comparison and attribution
+# ---------------------------------------------------------------------------------------------
+
+
+def compare(pair: Pair, ours: pl.DataFrame, theirs: pl.DataFrame, tolerance: float) -> pl.DataFrame:
+    """Return one row per team-game on both sides with both values and whether they match.
+
+    Both frames are keyed in canonical team codes, so a team-game one source writes ``LA`` lines up.
+    """
+    their_value = pair.theirs.expr
+    if pair.null_as_zero:
+        their_value = their_value.fill_null(0.0)
+    joined = theirs.select(*KEYS, "game_id", their_value.alias("theirs")).join(
+        ours.select(*KEYS, pair.ours.expr.alias("ours")), on=KEYS, how="inner"
+    )
+    both_null = pl.col("ours").is_null() & pl.col("theirs").is_null()
+    if pair.kind == "count":
+        equal = pl.col("ours") == pl.col("theirs")
+    else:
+        equal = (pl.col("ours") - pl.col("theirs")).abs() <= tolerance
+    return joined.with_columns(
+        (both_null | equal.fill_null(value=False)).alias("match"),
+        (pl.col("ours") - pl.col("theirs")).alias("diff"),
+    )
+
+
+@dataclass
+class SeasonFrames:
+    """One season's inputs and its adjusted frames, each built once."""
+
+    season: int
+    pbp: pl.DataFrame
+    theirs_base: pl.DataFrame
+    broken_games: dict[str, str]
+    _ours: dict[frozenset[str], pl.DataFrame] = field(default_factory=dict)
+    _theirs: dict[frozenset[str], pl.DataFrame] = field(default_factory=dict)
+
+    def ours(self, causes: frozenset[str]) -> pl.DataFrame:
+        """Return this repository's aggregates, canonically keyed, after ``causes``' adjustments."""
+        if causes not in self._ours:
+            pbp = self.pbp
+            for cause in CAUSES.values():
+                if cause.id in causes and cause.ours is not None:
+                    pbp = cause.ours(pbp)
+            self._ours[causes] = canonical(ours_frame(pbp))
+        return self._ours[causes]
+
+    def theirs(self, causes: frozenset[str]) -> pl.DataFrame:
+        """Return its game logs after the ``causes`` adjustments on its side."""
+        if causes not in self._theirs:
+            frame = self.theirs_base
+            if "jacksonville_player_teams" in causes:
+                frame = unrepair_penalties(frame, self.broken_games)
+            self._theirs[causes] = frame
+        return self._theirs[causes]
+
+
+def _split(combo: tuple[str, ...]) -> tuple[frozenset[str], frozenset[str]]:
+    """Split a cause combination into its play-by-play and its game-log adjustments."""
+    ours = frozenset(cause for cause in combo if CAUSES[cause].side == "ours")
+    return ours, frozenset(combo) - ours
+
+
+def attribute(
+    pair: Pair, frames: SeasonFrames, base: pl.DataFrame, tolerance: float
+) -> list[dict[str, Any]]:
+    """Attribute every mismatching team-game of ``base`` to its fewest matching causes."""
+    mismatched = base.filter(~pl.col("match"))
+    records: dict[tuple[int, str, str], dict[str, Any]] = {
+        (row["week"], row["team_abbr"], row["opponent_abbr"]): {
+            "season": frames.season,
+            "game_id": row["game_id"],
+            "week": row["week"],
+            "team": row["team_abbr"],
+            "opponent": row["opponent_abbr"],
+            "pair": pair.id,
+            "ours": row["ours"],
+            "theirs": row["theirs"],
+            "diff": row["diff"],
+            "causes": [],
+            "status": "unexplained",
+        }
+        for row in mismatched.iter_rows(named=True)
+    }
+    remaining = set(records)
+    for size in range(1, len(pair.causes) + 1):
+        if not remaining:
+            break
+        found: dict[tuple[int, str, str], list[str]] = defaultdict(list)
+        for combo in itertools.combinations(pair.causes, size):
+            ours_causes, their_causes = _split(combo)
+            adjusted = compare(
+                pair, frames.ours(ours_causes), frames.theirs(their_causes), tolerance
+            ).filter(pl.col("match"))
+            keys = {(r[0], r[1], r[2]) for r in adjusted.select(KEYS).iter_rows()} & remaining
+            for key in keys:
+                found[key].append(" + ".join(combo))
+        for key, labels in found.items():
+            records[key]["causes"] = sorted(labels)
+            records[key]["status"] = "explained"
+        remaining -= set(found)
+    return list(records.values())
+
+
+def cause_effects(
+    pairs: list[Pair], rules: dict[str, Any], frames: SeasonFrames
+) -> dict[str, dict[str, list[float]]]:
+    """Return each cause's own effect this season, alone, on its pairs and effect columns.
+
+    The effect on a value is the adjusted value minus the unadjusted one, per team-game, on the
+    side the cause adjusts: this repository's for a play-by-play adjustment, the other's for an
+    undone repair. Returns cause -> value name -> [team-games changed, total, absolute total].
+    """
+    effects: dict[str, dict[str, list[float]]] = defaultdict(dict)
+    for cause_id, cause in CAUSES.items():
+        if cause.side not in ADJUSTABLE:
+            continue
+        values = {
+            f"{pair.id} ({'here' if cause.side == 'ours' else 'there'})": (
+                pair.ours.expr if cause.side == "ours" else pair.theirs.expr
+            )
+            for pair in pairs
+            if cause_id in pair.causes
+        }
+        values |= {name: pl.col(name) for name in rules["causes"][cause_id].get("effects", [])}
+        if cause.side == "ours":
+            base, adjusted = frames.ours(frozenset()), frames.ours(frozenset({cause_id}))
+        else:
+            base, adjusted = frames.theirs(frozenset()), frames.theirs(frozenset({cause_id}))
+        for name, value in values.items():
+            joined = base.select(*KEYS, value.alias("base")).join(
+                adjusted.select(*KEYS, value.alias("adjusted")), on=KEYS, how="inner"
+            )
+            delta = (pl.col("adjusted").fill_null(0.0) - pl.col("base").fill_null(0.0)).alias("d")
+            change = joined.select(delta)["d"]
+            effects[cause_id][name] = [
+                float((change.abs() > 0).sum()),
+                float(change.sum()),
+                float(change.abs().sum()),
+            ]
+    return effects
+
+
+# ---------------------------------------------------------------------------------------------
+# Keys and coverage
+# ---------------------------------------------------------------------------------------------
+
+
+def check_keys(
+    season: int, ours_raw: pl.DataFrame, theirs: pl.DataFrame, pbp: pl.DataFrame, audit: Audit
+) -> dict[str, Any]:
+    """Compare raw team-game keys; a one-sided key that lines up in canonical codes is re-keyed.
+
+    The comparison itself joins on canonical keys (``canonical``), so a re-keyed team-game is
+    compared like any other.
+    """
+    our_keys = {tuple(row) for row in ours_raw.select(KEYS).iter_rows()}
+    their_keys = {tuple(row) for row in theirs.select(KEYS).iter_rows()}
+    codes = team_code_map([k[i] for k in our_keys | their_keys for i in (1, 2)])
+
+    def canonical_key(key: tuple[Any, ...]) -> tuple[Any, ...]:
+        return (key[0], codes[key[1]], codes[key[2]])
+
+    ours_only, theirs_only = our_keys - their_keys, their_keys - our_keys
+    rekeyed = {canonical_key(k) for k in ours_only} & {canonical_key(k) for k in theirs_only}
+    unpaired = sorted(
+        str(key) for key in (ours_only | theirs_only) if canonical_key(key) not in rekeyed
+    )
+    for key in unpaired:
+        audit.fail("team-game keys", f"{season} {key} exists on one side only")
+    la_values = sum(
+        pbp.filter(pl.col(column) == "LA").height
+        for column in TEAM_COLUMNS
+        if column in pbp.columns
+    )
+    return {
+        "both": len(our_keys & their_keys),
+        "ours_only": len(ours_only),
+        "theirs_only": len(theirs_only),
+        "rekeyed_rams": sorted(str(key) for key in rekeyed),
+        "unpaired": unpaired,
+        "cached_la_values": la_values,
+    }
+
+
+def check_coverage(
+    season: int,
+    ours: pl.DataFrame,
+    theirs: pl.DataFrame,
+    pbp: pl.DataFrame,
+    expected_missing: set[str],
+    audit: Audit,
+) -> dict[str, Any]:
+    """Check every played regular-season game of the cached schedule against both sides."""
+    schedule = pl.read_parquet(audit.record(CACHE / f"schedule_{season}.parquet")).filter(
+        (pl.col("game_type") == "REG")
+        & pl.col("home_score").is_not_null()
+        & pl.col("away_score").is_not_null()
+    )
+    codes = team_code_map(schedule["home_abbr"].to_list() + schedule["away_abbr"].to_list())
+    our_keys = {tuple(row) for row in ours.select(KEYS).iter_rows()}
+    their_games = set(theirs["game_id"].to_list())
+    played_games = set(pbp["game_id"].drop_nulls().to_list())
+    without_rows, unexpected = [], []
+    for row in schedule.iter_rows(named=True):
+        home, away = codes[row["home_abbr"]], codes[row["away_abbr"]]
+        ours_has = {(row["week"], home, away), (row["week"], away, home)} <= our_keys
+        theirs_has = row["game_id"] in their_games
+        if ours_has and theirs_has:
+            continue
+        explained = (
+            row["game_id"] in expected_missing
+            and not ours_has
+            and not theirs_has
+            and row["game_id"] not in played_games
+        )
+        (without_rows if explained else unexpected).append(row["game_id"])
+    for game in unexpected:
+        audit.fail("coverage", f"{game} has no team-game rows on one or both sides")
+    for game in sorted(expected_missing):
+        if game.startswith(f"{season}_") and game not in without_rows:
+            audit.fail("coverage", f"{game} is listed without play-by-play but has rows or plays")
+    return {
+        "played_games": schedule.height,
+        "games_without_play_by_play": sorted(without_rows),
+        "unexpected": sorted(unexpected),
+    }
+
+
+# ---------------------------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------------------------
+
+
+def main() -> int:
+    """Run the parity check and write the reports."""
+    audit = Audit()
+    code = SosCode()
+    rules = yaml.safe_load(RULES.read_text(encoding="utf-8"))
+    tolerance = float(rules["tolerance"])
+    expected_missing = set(rules["games_without_play_by_play"])
+    checkout = check_sos_checkout(audit)
+    pairs = load_pairs(rules, audit)
+    evidence = {}
+    for cause_id, cause in rules["causes"].items():
+        held, rows = check_evidence(cause.get("evidence", []), code)
+        evidence[cause_id] = rows
+        if not held:
+            audit.fail("evidence", f"{cause_id}: an evidence pattern no longer holds")
+
+    log_columns = list(pl.read_parquet_schema(sos_output(SEASONS[0], "team_game_logs")))
+    sources, source_facts = classify_game_log_columns(code, log_columns, audit)
+    snapshots = snapshot_files(audit)
+
+    code_map: dict[str, str] = {}
+    records: list[dict[str, Any]] = []
+    per_pair: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    seasons_report: dict[int, dict[str, Any]] = {}
+    effects: dict[str, dict[str, list[Any]]] = defaultdict(dict)
+    broken_all: dict[str, str] = {}
+    for season in SEASONS:
+        if season not in snapshots:
+            continue
+        log.info("Season %d", season)
+        pbp, snapshot_report = season_pbp(season, snapshots[season], audit)
+        theirs = theirs_frame(season, audit, code_map)
+        if list(theirs.columns[: len(log_columns)]) != log_columns:
+            audit.fail("game-log columns", f"{season} columns differ from {SEASONS[0]}'s")
+        broken = one_team_games(pbp)
+        broken_all.update(broken)
+        frames = SeasonFrames(season, pbp, theirs, broken)
+        base_ours = frames.ours(frozenset())
+        if season == SEASONS[0]:
+            before = len(audit.failures)
+            for pair in pairs:
+                for column in sorted(pair.ours.columns - set(base_ours.columns)):
+                    audit.fail("pair", f"{pair.id}: {column} is not in this repo's aggregates")
+                for column in sorted(pair.theirs.columns):
+                    source = sources.get(column)
+                    if column not in log_columns:
+                        audit.fail("pair", f"{pair.id}: {column} is not in its game logs")
+                    elif source is None or source.source != PLAY_BY_PLAY:
+                        found = source.source if source else "unknown"
+                        audit.fail("pair", f"{pair.id}: {column} comes from {found}")
+            if len(audit.failures) > before:
+                break
+        keys = check_keys(season, ours_frame(pbp), theirs, pbp, audit)
+        coverage = check_coverage(season, base_ours, theirs, pbp, expected_missing, audit)
+        season_pairs = {}
+        for pair in pairs:
+            base = compare(pair, base_ours, theirs, tolerance)
+            found = attribute(pair, frames, base, tolerance)
+            records.extend(found)
+            counts = per_pair[pair.id]
+            counts["compared"] += base.height
+            counts["mismatched"] += len(found)
+            for record in found:
+                counts[record["status"]] += 1
+            season_pairs[pair.id] = {"compared": base.height, "mismatched": len(found)}
+        for cause_id, values in cause_effects(pairs, rules, frames).items():
+            for name, (changed, total, absolute) in values.items():
+                running = effects[cause_id].setdefault(name, [0.0, 0.0, 0.0, []])
+                running[0] += changed
+                running[1] += total
+                running[2] += absolute
+                if changed:
+                    running[3].append(season)
+        seasons_report[season] = {
+            "snapshot": snapshot_report,
+            "keys": keys,
+            "coverage": coverage,
+            "one_team_games": broken,
+            "uncounted_situational_plays": uncounted_situational_plays(pbp),
+            "wiped_out_plays": wiped_out_plays(pbp),
+            "unflagged_no_plays": unflagged_no_plays(pbp),
+            "carries_without_rush_attempt": carries_without_rush_attempt(pbp),
+            "carries_from_rush_attempts": carries_from_rush_attempts(pbp),
+            "pairs": season_pairs,
+        }
+
+    order = {pair.id: index for index, pair in enumerate(pairs)}
+    records.sort(key=lambda r: (order[r["pair"]], r["season"], r["week"], r["team"]))
+    for record in records:
+        if record["status"] == "unexplained":
+            audit.fail("unexplained", _describe(record))
+
+    payload = {
+        "generated_by": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py",
+        "tolerance": tolerance,
+        "sos_checkout": checkout,
+        "team_code_map": dict(sorted(code_map.items())),
+        "snapshot": {
+            "directory": str(NFLREADPY_SNAPSHOT),
+            "manifest": str(NFLREADPY_SNAPSHOT_MANIFEST),
+            "extra_columns": list(SNAPSHOT_EXTRAS),
+        },
+        "one_team_games": dict(sorted(broken_all.items())),
+        "game_log_sources": {
+            column: {"source": sources[column].source, "via": sources[column].via}
+            for column in log_columns
+            if column in sources
+        },
+        "game_log_source_facts": source_facts,
+        "pairs": [
+            {
+                "id": pair.id,
+                "ours": pair.ours.text,
+                "theirs": pair.theirs.text,
+                "kind": pair.kind,
+                "causes": list(pair.causes),
+                **{k: per_pair[pair.id].get(k, 0) for k in COUNT_KEYS},
+            }
+            for pair in pairs
+        ],
+        "causes": summarize_causes(rules, records, seasons_report, effects),
+        "evidence": evidence,
+        "seasons": {str(season): report for season, report in seasons_report.items()},
+        "inputs": audit.files,
+        "failures": [{"what": f.what, "detail": f.detail} for f in audit.failures],
+    }
+    write_outputs(payload, records)
+    OUT_MD.write_text(portable(render(payload, rules, records)), encoding="utf-8")
+    code.cleanup()
+    log.info("%d mismatching pair values, %d failures", len(records), len(audit.failures))
+    return 1 if audit.failures else 0
+
+
+def _describe(record: dict[str, Any]) -> str:
+    """Return a one-line description of a mismatching team-game."""
+    return (
+        f"{record['pair']} {record['game_id']} {record['team']}: here {record['ours']}, "
+        f"there {record['theirs']}"
+    )
+
+
+# Per-season counts summed into the ``wiped_out_runs`` cause for the carry decision.
+CARRY_DIAGNOSTICS = (
+    "wiped_out_plays",
+    "unflagged_no_plays",
+    "carries_without_rush_attempt",
+    "carries_from_rush_attempts",
+)
+
+
+def _season_sums(seasons: dict[int, dict[str, Any]], name: str) -> dict[str, float]:
+    """Sum the per-season counts under ``name`` over every season, key by key (missing keys 0)."""
+    keys = dict.fromkeys(key for season in seasons.values() for key in season[name])
+    return {key: round(sum(s[name].get(key, 0) for s in seasons.values()), 6) for key in keys}
+
+
+def summarize_causes(
+    rules: dict[str, Any],
+    records: list[dict[str, Any]],
+    seasons: dict[int, dict[str, Any]],
+    effects: dict[str, dict[str, list[Any]]],
+) -> dict[str, Any]:
+    """Return, per cause, what it explains (attribution) and what it changes on its own (effect)."""
+    summary: dict[str, Any] = {}
+    for cause_id, cause in rules["causes"].items():
+        mine = [r for r in records if any(cause_id in c.split(" + ") for c in r["causes"])]
+        columns: dict[str, Any] = {}
+        for pair_id in sorted({r["pair"] for r in mine}):
+            rows = [r for r in mine if r["pair"] == pair_id]
+            columns[pair_id] = {
+                "team_games": len(rows),
+                "alone": sum(cause_id in r["causes"] for r in rows),
+                "shared_with_another_cause": sum(len(r["causes"]) > 1 for r in rows),
+                "seasons": sorted({r["season"] for r in rows}),
+            }
+        entry: dict[str, Any] = {
+            "name": cause["name"],
+            "team_games": len({(r["season"], r["week"], r["team"]) for r in mine}),
+            "games": len({(r["season"], r["game_id"]) for r in mine}),
+            "seasons": sorted({r["season"] for r in mine}),
+            "columns": columns,
+            "effect": {
+                name: {
+                    "team_games_changed": int(values[0]),
+                    "adjusted_minus_unadjusted": round(values[1], 6),
+                    "absolute": round(values[2], 6),
+                    "seasons": sorted(set(values[3])),
+                }
+                for name, values in sorted(effects.get(cause_id, {}).items())
+            },
+        }
+        if cause_id == "games_without_play_by_play":
+            games = [
+                g for s in seasons.values() for g in s["coverage"]["games_without_play_by_play"]
+            ]
+            entry.update(games=len(games), team_games=2 * len(games), listed=sorted(games))
+            entry["seasons"] = sorted({int(g[:4]) for g in games})
+        if cause_id == "every_play_type":
+            by_type: dict[str, dict[str, Any]] = {}
+            for season, report in sorted(seasons.items()):
+                for play_type, plays in report["uncounted_situational_plays"].items():
+                    entry_type = by_type.setdefault(play_type, {"plays": 0, "seasons": []})
+                    entry_type["plays"] += plays
+                    entry_type["seasons"].append(season)
+            entry["flagged_plays_left_out_here"] = dict(sorted(by_type.items()))
+        if cause_id == "wiped_out_runs":
+            entry.update((name, _season_sums(seasons, name)) for name in CARRY_DIAGNOSTICS)
+        if cause_id == "rams_written_la":
+            rekeyed = [k for s in seasons.values() for k in s["keys"]["rekeyed_rams"]]
+            entry.update(
+                team_games=len(rekeyed),
+                cached_la_values=sum(s["keys"]["cached_la_values"] for s in seasons.values()),
+            )
+        if cause_id == "release_difference":
+            snapshots = [s["snapshot"] for s in seasons.values()]
+            entry.update(
+                plays_compared=sum(s["plays"] for s in snapshots),
+                seasons_identical=sum(s["identical_to_cache"] for s in snapshots),
+                seasons_compared=len(snapshots),
+                **{
+                    key: sum(s.get(key, 0) for s in snapshots)
+                    for key in (
+                        "games_repeating_a_play_id",
+                        "rows_equal_to_another_row",
+                        "groups_of_equal_rows",
+                        "groups_of_equal_rows_differing_in_qb_scramble",
+                    )
+                },
+            )
+        summary[cause_id] = entry
+    return summary
+
+
+ATTRIBUTION_COLUMNS = [
+    "season",
+    "game_id",
+    "week",
+    "team",
+    "opponent",
+    "pair",
+    "ours",
+    "theirs",
+    "diff",
+    "status",
+    "causes",
+]
+
+
+def write_outputs(payload: dict[str, Any], records: list[dict[str, Any]]) -> None:
+    """Write ``parity.json`` and every mismatching team-game to ``parity_attributions.parquet``.
+
+    A team-game's ``causes`` are the cause combinations that make it match with the fewest
+    causes, separated by `` | ``; ``parity.json`` lists the unexplained ones too.
+    """
+    frame = pl.DataFrame(
+        [[record[column] for column in ATTRIBUTION_COLUMNS] for record in records],
+        schema={
+            "season": pl.Int64,
+            "game_id": pl.String,
+            "week": pl.Int64,
+            "team": pl.String,
+            "opponent": pl.String,
+            "pair": pl.String,
+            "ours": pl.Float64,
+            "theirs": pl.Float64,
+            "diff": pl.Float64,
+            "status": pl.String,
+            "causes": pl.List(pl.String),
+        },
+        orient="row",
+    ).with_columns(pl.col("causes").list.join(" | "))
+    frame.write_parquet(OUT_ATTRIBUTIONS, statistics=False)
+    unexplained = [
+        [_rounded(record[column]) for column in ATTRIBUTION_COLUMNS[:-2]]
+        for record in records
+        if record["status"] == "unexplained"
+    ]
+    body = {
+        **payload,
+        "attributions": {
+            "file": OUT_ATTRIBUTIONS.name,
+            "rows": frame.height,
+            "columns": ATTRIBUTION_COLUMNS,
+        },
+        "unexplained": {"columns": ATTRIBUTION_COLUMNS[:-2], "rows": unexplained},
+    }
+    OUT_JSON.write_text(portable(dump_json(body)) + "\n", encoding="utf-8")
+
+
+def _rounded(value: object) -> object:
+    """Round floats so the report is stable across platforms."""
+    return round(value, 9) if isinstance(value, float) else value
+
+
+if __name__ == "__main__":
+    sys.exit(main())

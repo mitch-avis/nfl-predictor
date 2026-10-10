@@ -31,6 +31,9 @@ class _StopAtFinalFitError(Exception):
 # The floor sigma's pools, stubbed: their contents are tested in test_weekly_run_floor_sigma.py.
 REFERENCE_POOL = floor_sigma.ErrorPool()
 PRODUCTION_POOL = floor_sigma.ErrorPool(sources=("stage1",))
+# The shipped configuration's stage-1 and final-fit marker hashes, which a run directory
+# resumes from.
+DEFAULT_HASHES = ["ca6a81c8", "082f6915"]
 
 
 def _capture_weekly_settings(
@@ -105,8 +108,10 @@ def test_default_weekly_settings_and_hashes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The shipped configuration's stage-1 options, final-fit options and resume hashes."""
+    # Act
     captured = _capture_weekly_settings(tmp_path, monkeypatch, [])
 
+    # Assert
     assert captured["stage1"] == {
         "resume": True,
         "checkpoint_per_fold": False,
@@ -127,6 +132,7 @@ def test_default_weekly_settings_and_hashes(
         "include_quantiles": False,
         "market_transform": None,
         "max_cardinality_ratio": 0.5,
+        "disabled_feature_groups": (),
     }
     optuna_config = captured["train"].pop("optuna_config")
     assert optuna_config == ml_model_core.OptunaConfig(
@@ -157,17 +163,37 @@ def test_default_weekly_settings_and_hashes(
         "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
         "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
         "xgb_params_overrides": {"n_estimators": 200, "max_depth": 5, "learning_rate": 0.0165},
+        "disabled_feature_groups": (),
     }
     # Both markers cover the floor sigma's inputs (the reference errors and the final fit's
     # pool and week), so a run directory from before them retrains instead of resuming. The
-    # stage-1 hash also covers the start week (now 1).
-    assert captured["hashes"] == ["ca6a81c8", "082f6915"]
+    # stage-1 hash also covers the start week (now 1). Leaving no feature group out keeps both
+    # hashes, so a run directory from before that setting still resumes.
+    assert captured["hashes"] == DEFAULT_HASHES
+
+
+def test_disabled_feature_groups_reach_both_stages_and_change_both_hashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stage 1 and the final fit leave the same groups out; a run without them retrains."""
+    # Act
+    captured = _capture_weekly_settings(
+        tmp_path, monkeypatch, ["--disable-feature-groups", "elo,own_elo_wt"]
+    )
+
+    # Assert
+    assert captured["stage1"]["disabled_feature_groups"] == ("elo", "own_elo_wt")
+    assert captured["train"]["disabled_feature_groups"] == ("elo", "own_elo_wt")
+    assert [
+        new != default for new, default in zip(captured["hashes"], DEFAULT_HASHES, strict=True)
+    ] == [True, True]
 
 
 def test_overridden_weekly_settings_and_hashes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Overrides reach stage 1 and the final fit; the training half-life follows stage 1's."""
+    # Act
     captured = _capture_weekly_settings(
         tmp_path,
         monkeypatch,
@@ -186,6 +212,7 @@ def test_overridden_weekly_settings_and_hashes(
         ],
     )
 
+    # Assert
     assert captured["stage1"]["xgb_params_overrides"] == {
         "n_estimators": 300,
         "max_depth": 5,
@@ -217,15 +244,18 @@ def test_config_tree_settings_reach_stage1_and_the_final_fit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The config file's tree budget, depth and learning rate train both stages."""
+    # Arrange
     config_path = tmp_path / "weekly_run.json"
     config_path.write_text(
         json.dumps({"wf_n_estimators": 300, "wf_max_depth": 3, "wf_learning_rate": 0.05}),
         encoding="utf-8",
     )
+    expected = {"n_estimators": 300, "max_depth": 3, "learning_rate": 0.05}
 
+    # Act
     captured = _capture_weekly_settings(tmp_path, monkeypatch, ["--config", str(config_path)])
 
-    expected = {"n_estimators": 300, "max_depth": 3, "learning_rate": 0.05}
+    # Assert
     stage1_overrides = captured["stage1"]["xgb_params_overrides"]
     assert {name: stage1_overrides[name] for name in expected} == expected
     assert captured["train"]["xgb_params_overrides"] == expected

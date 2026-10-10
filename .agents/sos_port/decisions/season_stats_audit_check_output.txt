@@ -1,0 +1,10 @@
+identical: passed True, identical 133,824, within tolerance 0, outside 0, structure none
+text: passed False, identical 133,823, within tolerance 0, outside 1, structure none
+integer: passed False, identical 133,823, within tolerance 0, outside 1, structure none
+float moved by 1e-12: passed True, identical 133,823, within tolerance 1, outside 0, structure none
+float moved by 1e-6: passed False, identical 133,823, within tolerance 0, outside 1, structure none
+null: passed False, identical 133,823, within tolerance 0, outside 1, structure none
+rows reversed: passed False, identical 17,616, within tolerance 0, outside 116,208, structure none
+first 10 rows: passed False, identical 0, within tolerance 0, outside 0, structure ['10 rows, published 544']
+columns reversed: passed False, identical 133,824, within tolerance 0, outside 0, structure ['columns in another order']
+WAS written back in team: passed False, identical 133,807, within tolerance 0, outside 17, structure none

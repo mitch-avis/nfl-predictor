@@ -1382,6 +1382,12 @@ STADIUMS = {
         "state": "MA",
         "elevation_ft": 289.0,
     },
+    "BOS99": {
+        "name": "Foxboro Stadium",
+        "city": "Foxborough",
+        "state": "MA",
+        "elevation_ft": 313.0,
+    },
     "BUF00": {
         "name": "Highmark Stadium",
         "city": "Orchard Park",
@@ -1425,6 +1431,12 @@ STADIUMS = {
         "state": "OH",
         "elevation_ft": 482.0,
     },
+    "CIN99": {
+        "name": "Cinergy Field",
+        "city": "Cincinnati",
+        "state": "OH",
+        "elevation_ft": 505.0,
+    },
     "CLE00": {
         "name": "Cleveland Browns Stadium",
         "city": "Cleveland",
@@ -1436,6 +1448,12 @@ STADIUMS = {
         "city": "Pittsburgh",
         "state": "PA",
         "elevation_ft": 712.0,
+    },
+    "PIT99": {
+        "name": "Three Rivers Stadium",
+        "city": "Pittsburgh",
+        "state": "PA",
+        "elevation_ft": 731.0,
     },
     # AFC South
     "HOU00": {
@@ -1474,6 +1492,12 @@ STADIUMS = {
         "city": "Denver",
         "state": "CO",
         "elevation_ft": 5280.0,
+    },
+    "DEN99": {
+        "name": "Mile High Stadium",
+        "city": "Denver",
+        "state": "CO",
+        "elevation_ft": 5210.0,
     },
     "KAN00": {
         "name": "Arrowhead Stadium",
@@ -1536,6 +1560,12 @@ STADIUMS = {
         "state": "PA",
         "elevation_ft": 39.0,
     },
+    "PHI99": {
+        "name": "Veterans Stadium",
+        "city": "Philadelphia",
+        "state": "PA",
+        "elevation_ft": 21.0,
+    },
     "WAS00": {
         "name": "Northwest Stadium (FedEx Field)",
         "city": "Landover",
@@ -1549,11 +1579,23 @@ STADIUMS = {
         "state": "IL",
         "elevation_ft": 590.0,
     },
+    "CHI99": {
+        "name": "Memorial Stadium (Champaign)",
+        "city": "Champaign",
+        "state": "IL",
+        "elevation_ft": 732.0,
+    },
     "DET00": {
         "name": "Ford Field",
         "city": "Detroit",
         "state": "MI",
         "elevation_ft": 600.0,
+    },
+    "DET99": {
+        "name": "Pontiac Silverdome",
+        "city": "Pontiac",
+        "state": "MI",
+        "elevation_ft": 892.0,
     },
     "GNB00": {
         "name": "Lambeau Field",
@@ -1641,6 +1683,18 @@ STADIUMS = {
         "state": "WA",
         "elevation_ft": 16.0,
     },
+    "SEA98": {
+        "name": "Kingdome",
+        "city": "Seattle",
+        "state": "WA",
+        "elevation_ft": 18.0,
+    },
+    "SEA99": {
+        "name": "Husky Stadium",
+        "city": "Seattle",
+        "state": "WA",
+        "elevation_ft": 32.0,
+    },
     "SFO00": {
         "name": "Candlestick Park",
         "city": "San Francisco",
@@ -1690,11 +1744,42 @@ STADIUMS = {
         "state": "UK",
         "elevation_ft": 82.0,
     },
+    "MAD01": {
+        "name": "Santiago Bernabéu Stadium",
+        "city": "Madrid",
+        "state": "ES",
+        "elevation_ft": 2315.0,
+    },
+    "MEL00": {
+        "name": "Melbourne Cricket Ground",
+        "city": "Melbourne",
+        "state": "AU",
+        "elevation_ft": 54.0,
+    },
     "MEX00": {
         "name": "Estadio Azteca",
         "city": "Mexico City",
         "state": "MX",
         "elevation_ft": 7380.0,
+    },
+    # The Allianz Arena again, under the name it has at UEFA and NFL events.
+    "MUN01": {
+        "name": "Allianz Arena",
+        "city": "Munich",
+        "state": "DE",
+        "elevation_ft": 1617.0,
+    },
+    "PAR00": {
+        "name": "Stade de France",
+        "city": "Saint-Denis",
+        "state": "FR",
+        "elevation_ft": 138.0,
+    },
+    "RIO00": {
+        "name": "Maracanã Stadium",
+        "city": "Rio de Janeiro",
+        "state": "BR",
+        "elevation_ft": 38.0,
     },
     "SAO00": {
         "name": "Arena Corinthians (Neo Química Arena)",

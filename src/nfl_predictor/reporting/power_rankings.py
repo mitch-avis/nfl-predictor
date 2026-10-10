@@ -803,6 +803,9 @@ DEFAULT_STRENGTH_SNAPSHOTS = constants.DATA_PATH / f"{constants.STRENGTH_SNAPSHO
 # Where the ETL publishes the ported ratings tables the ported, model and blend methods read.
 DEFAULT_RATINGS_DIR = constants.DATA_PATH / constants.RATINGS_DIRNAME
 
+# How many games without a prediction a coverage error names.
+_MISSING_GAMES_SHOWN = 5
+
 # Scores are read as numbers explicitly. The ETL writes the newest games first, so the rows
 # Polars samples to infer types can all be unplayed, and scores inferred as text compare
 # alphabetically ("9" > "31").
@@ -1445,24 +1448,31 @@ def _check_prediction_coverage(
 ) -> None:
     """Refuse predictions that miss a completed regular-season game the model rating reads.
 
+    The schedule's ``game_id`` of every completed regular-season game of ``season`` (before
+    ``before_week``, or the whole season when it is ``None``) must be among the predictions'.
+
     Raises:
-        rating_sources.RatingSourceUnavailableError: If the predictions of ``season`` (before
-            ``before_week``, or the whole season when it is ``None``) number fewer than its
-            completed regular-season games.
+        rating_sources.RatingSourceUnavailableError: If one is not, naming the first few, or the
+            schedule has no ``game_id``.
 
     """
     games = _regular_season_rows(schedule_path, season).filter(
         pl.col("away_score").is_not_null() & pl.col("home_score").is_not_null()
     )
-    predicted = predictions.filter(pl.col("season") == season)
+    if "game_id" not in games.columns:
+        msg = f"{schedule_path} has no game_id to check the walk-forward predictions against"
+        raise rating_sources.RatingSourceUnavailableError(msg)
     if before_week is not None:
         games = games.filter(pl.col("week") < before_week)
-        predicted = predicted.filter(pl.col("week") < before_week)
-    if predicted.height < games.height:
+    expected = set(games.get_column("game_id").cast(pl.String).to_list())
+    missing = sorted(expected - set(predictions.get_column("game_id").to_list()))
+    if missing:
         span = "the season" if before_week is None else f"before week {before_week}"
+        shown = ", ".join(missing[:_MISSING_GAMES_SHOWN])
         msg = (
-            f"the walk-forward predictions cover {predicted.height} of {games.height} "
-            f"completed {season} games {span}; point --model-predictions at runs that cover them"
+            f"the walk-forward predictions miss {len(missing)} of {len(expected)} completed "
+            f"{season} games {span} (first: {shown}); point --model-predictions at runs that "
+            "cover them"
         )
         raise rating_sources.RatingSourceUnavailableError(msg)
 

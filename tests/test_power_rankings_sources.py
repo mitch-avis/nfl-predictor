@@ -187,6 +187,7 @@ def _write_league(tmp_path: Path) -> tuple[Path, Path, Path]:
     games = pl.DataFrame(
         [
             {
+                "game_id": f"{row[0]}_{row[1]:02d}_{row[2]}_{row[3]}",
                 "season": row[0],
                 "week": row[1],
                 "game_type": "REG",
@@ -356,6 +357,32 @@ def test_model_method_refuses_predictions_missing_a_game(
         power_rankings.compute_power_rankings(cast("MarginTotalModel", None), inputs, options)
 
 
+def test_model_method_refuses_predictions_of_other_games_in_equal_number(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(power_rankings, "_predict_future_games", _no_future_games)
+    games_path, ratings_dir, _ = _write_league(tmp_path)
+    renamed = _league_fold(2024, 2)
+    renamed.loc[0, "game_id"] = "2024_02_XXX_YYY"
+    folds = write_fold_checkpoints(tmp_path / "renamed", [_league_fold(2024, 1), renamed])
+    options = power_rankings.resolve_ranking_options(
+        power_rankings.RankingRequest(
+            method="model",
+            legacy_franchise_fit=False,
+            ratings_dir=ratings_dir,
+            model_predictions=(folds,),
+        )
+    )
+    inputs = power_rankings.RankingInputs(
+        data_ml=games_path, data_schedule=games_path, season=2024, through_week=2
+    )
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="2024_02_CCC_BBB"):
+        power_rankings.compute_power_rankings(cast("MarginTotalModel", None), inputs, options)
+
+
 def test_model_method_in_week_one_without_a_carryover_factor_is_unavailable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -379,4 +406,29 @@ def test_model_method_in_week_one_without_a_carryover_factor_is_unavailable(
 
     # Act & Assert
     with pytest.raises(rating_sources.RatingSourceUnavailableError, match="carryover"):
+        power_rankings.compute_power_rankings(cast("MarginTotalModel", None), inputs, options)
+
+
+def test_model_method_needs_game_ids_in_the_schedule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(power_rankings, "_predict_future_games", _no_future_games)
+    games_path, ratings_dir, folds = _write_league(tmp_path)
+    schedule = tmp_path / "schedule_without_ids.csv"
+    pl.read_csv(games_path).drop("game_id").write_csv(schedule)
+    options = power_rankings.resolve_ranking_options(
+        power_rankings.RankingRequest(
+            method="model",
+            legacy_franchise_fit=False,
+            ratings_dir=ratings_dir,
+            model_predictions=(folds,),
+        )
+    )
+    inputs = power_rankings.RankingInputs(
+        data_ml=games_path, data_schedule=schedule, season=2024, through_week=2
+    )
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="no game_id"):
         power_rankings.compute_power_rankings(cast("MarginTotalModel", None), inputs, options)

@@ -45,6 +45,16 @@ TEAMS_PER_GAME = 2
 # The row order of the team-game and passer-game rows the builders return.
 TEAM_GAME_ORDER = ("team", "week", "game_id")
 QB_GAME_ORDER = ("team_abbr", "week", "game_id", "qb_name", "qb_id")
+# The game's opponent, venue, and result, joined from the team-game rows onto the QB game logs.
+QB_LOG_CONTEXT_COLUMNS = (
+    "opponent_team",
+    "is_home",
+    "points_for",
+    "points_allowed",
+    "point_margin",
+    "win_value",
+    "turnover_margin",
+)
 # The official weekly team stat columns the override reads, besides the game keys.
 OFFICIAL_TEAM_STAT_COLUMNS = (
     "passing_yards",
@@ -741,17 +751,7 @@ def build_qb_game_logs(qb_df: pl.DataFrame, weekly_df: pl.DataFrame) -> pl.DataF
     context = weekly_df.select(
         [
             column
-            for column in (
-                "team",
-                "week",
-                "opponent_team",
-                "is_home",
-                "points_for",
-                "points_allowed",
-                "point_margin",
-                "win_value",
-                "turnover_margin",
-            )
+            for column in ("team", "week", *QB_LOG_CONTEXT_COLUMNS)
             if column in weekly_df.columns
         ]
     ).rename({"team": "team_abbr"})
@@ -775,8 +775,11 @@ def build_qb_game_logs(qb_df: pl.DataFrame, weekly_df: pl.DataFrame) -> pl.DataF
 
 __all__ = [
     "OFFICIAL_TEAM_STAT_COLUMNS",
+    "QB_GAME_ORDER",
+    "QB_LOG_CONTEXT_COLUMNS",
     "QB_POSITION",
     "TEAMS_PER_GAME",
+    "TEAM_GAME_ORDER",
     "build_qb_game_logs",
     "build_qb_game_stats",
     "build_team_game_logs",

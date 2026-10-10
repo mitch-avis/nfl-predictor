@@ -85,6 +85,16 @@ class SeasonTableOut(BaseModel):
     table: MetricTableOut
 
 
+class GameLogsOut(SeasonTableOut):
+    """One team's or quarterback's games, with how many teams the opponents' ranks run to.
+
+    ``league_size`` is the number of teams in the season's ratings table, which the page uses to
+    tier each opponent (``opp_team_rank``); it is null for a season without ratings.
+    """
+
+    league_size: int | None
+
+
 class RankRangesOut(SeasonTableOut):
     """A season's rank ranges, with the franchise name of every team code in them."""
 

@@ -60,6 +60,16 @@ OPPONENT_RATINGS = (
     "SRS",
 )
 """The season ratings attached to every game for its opponent, as ``opp_<rating>``."""
+OPPONENT_RANK = "opp_team_rank"
+"""The opponent's place in the league by season Team Rating, 1 the best (ties share it)."""
+OPPONENT_COLUMNS = (
+    "opp_team_rating",
+    OPPONENT_RANK,
+    "opp_offense_rating",
+    "opp_defense_rating",
+    "opp_special_teams_rating",
+    "opp_SRS",
+)
 _LOG_EXCLUDED = ("season", "season_type")
 _OPPONENT_NOTE = (
     "Shown for this game's opponent, rated over its whole season: it describes the opponent, "
@@ -95,15 +105,27 @@ def with_opponent_ratings(logs: pl.DataFrame, ratings: pl.DataFrame | None) -> p
         ratings: The season's team ratings table, or ``None`` when the season has none.
 
     Returns:
-        ``logs`` in their own order, with the ratings ``ratings`` holds; unchanged without it.
+        ``logs`` in their own order, with the ratings ``ratings`` holds and the opponent's league
+        rank on ``team_rating`` (``opp_team_rank``); unchanged without ``ratings``.
 
     """
     if ratings is None or "opponent_team" not in logs.columns or "team" not in ratings.columns:
         return logs
     rated = existing(ratings.columns, OPPONENT_RATINGS)
+    rank = (
+        [
+            pl.col("team_rating")
+            .rank(method="min", descending=True)
+            .cast(pl.Int64)
+            .alias(OPPONENT_RANK)
+        ]
+        if "team_rating" in ratings.columns
+        else []
+    )
     opponents = ratings.select(
         pl.col("team").alias("opponent_team"),
         *(pl.col(column).alias(f"opp_{column}") for column in rated),
+        *rank,
     )
     return logs.join(opponents, on="opponent_team", how="left", maintain_order="left")
 
@@ -122,7 +144,7 @@ def game_log_table(
     rows = with_opponent_ratings(logs, ratings)
     identity = existing(rows.columns, TEAM_LOG_IDENTITY if kind == "teams" else QB_LOG_IDENTITY)
     results = existing(rows.columns, TEAM_LOG_RESULTS if kind == "teams" else QB_LOG_RESULTS)
-    opponents = [f"opp_{column}" for column in OPPONENT_RATINGS if f"opp_{column}" in rows.columns]
+    opponents = existing(rows.columns, OPPONENT_COLUMNS)
     if kind == "teams":
         rate_group = "per_snap_rates"
         rates = [

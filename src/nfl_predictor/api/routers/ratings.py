@@ -19,6 +19,7 @@ from nfl_predictor.api.ratings import files, glossary, schedules, sections, tabl
 from nfl_predictor.api.schemas.ratings import (
     EntityKind,
     EntityTableOut,
+    GameLogsOut,
     MetricRegistryOut,
     RankRangesOut,
     RatingsSeasonsOut,
@@ -161,15 +162,21 @@ def rank_ranges(
     )
 
 
-@router.get("/{season}/{kind}/{entity_id}/game-logs", response_model=SeasonTableOut)
+@router.get("/{season}/{kind}/{entity_id}/game-logs", response_model=GameLogsOut)
 def game_logs(
     season: int, kind: EntityKind, entity_id: str, _user: CurrentUser, settings: SettingsDep
-) -> SeasonTableOut:
+) -> GameLogsOut:
     """Return one team's or quarterback's games, each with its opponent's season ratings."""
     ratings_dir = settings.ratings_path
     rows = _entity_rows(ratings_dir, season, kind, GAME_LOG_KIND[kind], entity_id)
     team_ratings = _read_optional(ratings_dir, season, TEAM_RATINGS_KIND)
-    return _section(kind, season, entity_id, sections.game_log_table(kind, rows, team_ratings))
+    return GameLogsOut(
+        kind=kind,
+        season=season,
+        entity_id=entity_id,
+        table=sections.game_log_table(kind, rows, team_ratings),
+        league_size=None if team_ratings is None else team_ratings.height,
+    )
 
 
 @router.get("/{season}/{kind}/{entity_id}/rating-history", response_model=SeasonTableOut)

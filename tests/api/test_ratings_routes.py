@@ -177,6 +177,22 @@ def test_team_game_logs_carry_each_opponents_season_ratings(
     assert {row["opponent_team"]: row["opp_team_rating"] for row in rows}["BUF"] == 6.5
 
 
+def test_game_logs_give_the_league_size_the_opponent_ranks_run_to(
+    ratings_dir: Path, viewer_client: TestClient
+) -> None:
+    """The page tiers each opponent by its rank among the season's teams."""
+    # Act
+    payload = viewer_client.get(f"/api/ratings/{SEASON}/teams/WSH/game-logs").json()
+
+    # Assert
+    assert payload["league_size"] == 4
+    assert {row["opponent_team"]: row["opp_team_rank"] for row in payload["table"]["rows"]} == {
+        "BUF": 1,
+        "KC": 2,
+        "NE": 3,
+    }
+
+
 def test_qb_game_logs_list_one_passers_games(ratings_dir: Path, viewer_client: TestClient) -> None:
     """A quarterback's log holds only his games."""
     # Act
@@ -215,6 +231,7 @@ def test_game_logs_without_a_ratings_table_still_load(
 
     # Assert
     assert payload["table"]["column_groups"]["opponent_ratings"] == []
+    assert payload["league_size"] is None
 
 
 def test_rating_history_lists_a_teams_weeks(ratings_dir: Path, viewer_client: TestClient) -> None:

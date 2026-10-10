@@ -42,6 +42,7 @@ def test_game_logs_attach_each_opponents_season_ratings() -> None:
     # Assert
     assert table.column_groups["opponent_ratings"] == [
         "opp_team_rating",
+        "opp_team_rank",
         "opp_offense_rating",
         "opp_defense_rating",
         "opp_special_teams_rating",
@@ -49,6 +50,19 @@ def test_game_logs_attach_each_opponents_season_ratings() -> None:
     ]
     by_opponent = {row["opponent_team"]: row["opp_team_rating"] for row in table.rows}
     assert by_opponent == {"BUF": 6.5, "KC": 4.0, "NE": -2.0}
+
+
+def test_game_logs_rank_each_opponent_in_the_league() -> None:
+    """Each game carries its opponent's league rank on Team Rating, 1 the best."""
+    # Act
+    table = sections.game_log_table("teams", _team_logs("WSH"), factories.ratings(17))
+
+    # Assert
+    by_opponent = {row["opponent_team"]: row["opp_team_rank"] for row in table.rows}
+    assert by_opponent == {"BUF": 1, "KC": 2, "NE": 3}
+    meta = table.column_metadata["opp_team_rank"]
+    assert (meta.group, meta.contextual, meta.polarity) == ("opponent_ratings", True, "lower")
+    assert "this game's opponent" in meta.description.lower()
 
 
 def test_game_log_opponent_ratings_describe_the_opponent_not_the_schedule() -> None:

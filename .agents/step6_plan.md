@@ -165,7 +165,11 @@ small and local.
   Switching what the weekly run publishes (`config/weekly_run.yaml`, default the composite) is the
   user's call; if the blend is chosen, the weekly run also needs a source for the model's
   predictions (the implementer recommends the run's own stage-1 folds for the current season plus
-  the floor-sigma reference runs for the previous season's week 1).
+  the floor-sigma reference runs for the previous season's week 1). Reviewed: the rule's outcome
+  holds under every alternative reading (seed 42, the pre-registered input); a two-seed supplement
+  is being computed (rule 13). Weigh: the model rating comes from the market-anchored model, so a
+  published blend partly carries the betting line (the user prefers a stats-only view); the ported
+  rating alone and the current composite tied each other.
 - Question: should a market-free run leave out the market-informed Elo groups automatically? Today
   `--exclude-market` (and the weekly run's market-free mode) drops only line columns, per the
   step-5 design the user accepted; the `qb_elos.csv` Elo and, after a rebuild, the own Elo's

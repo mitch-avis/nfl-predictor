@@ -1,0 +1,52 @@
+Output of pbp_column_facts.py, run 2026-10-10 at 04:13 MDT (10:13 UTC) on the code of commit
+d2212ab. Seasons 1999-2025 were downloaded fresh with nflreadpy 0.1.5 into memory; the size files
+went to a scratch directory outside every checkout, deleted afterwards.
+
+Command, from the worktree root:
+.venv/bin/python -I .agents/sos_port/decisions/pbp_column_facts.py \
+    --work-dir /tmp/pbp_facts_work.68UkYY
+
+## Raw columns whose dtype differs between seasons, 1999-2025
+
+goal_to_go: {'Float64': [1999, 2000, 2001, 2002, 2020, 2024, 2025], 'Int32': [2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2021, 2022, 2023]}
+xyac_median_yardage: {'Float64': [1999, 2000, 2001, 2002, 2003, 2004, 2005], 'Int32': [2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]}
+(2 of 372 columns)
+
+## Team-code columns, regular season 1999-2025: values normalization changes
+
+posteam: 73005 values, codes ['LA', 'WAS'], unknown to the alias table ['']
+defteam: 72528 values, codes ['LA', 'WAS'], unknown to the alias table []
+home_team: 76322 values, codes ['LA', 'WAS'], unknown to the alias table []
+away_team: 76834 values, codes ['LA', 'WAS'], unknown to the alias table []
+side_of_field: 71045 values, codes ['LA', 'WAS'], unknown to the alias table ['', '50', 'MID']
+td_team: 2084 values, codes ['LA', 'WAS'], unknown to the alias table []
+penalty_team: 5598 values, codes ['LA', 'WAS'], unknown to the alias table []
+timeout_team: 3345 values, codes ['LA', 'WAS'], unknown to the alias table []
+return_team: 9100 values, codes ['LA', 'WAS'], unknown to the alias table []
+fumbled_1_team: 1258 values, codes ['LA', 'WAS'], unknown to the alias table []
+fumbled_2_team: 8 values, codes ['LA', 'WAS'], unknown to the alias table []
+fumble_recovery_1_team: 1107 values, codes ['LA', 'WAS'], unknown to the alias table []
+fumble_recovery_2_team: 7 values, codes ['LA', 'WAS'], unknown to the alias table []
+forced_fumble_player_1_team: 818 values, codes ['LA', 'WAS'], unknown to the alias table []
+forced_fumble_player_2_team: 7 values, codes ['LA', 'WAS'], unknown to the alias table []
+solo_tackle_1_team: 35308 values, codes ['LA', 'WAS'], unknown to the alias table []
+solo_tackle_2_team: 446 values, codes ['LA', 'WAS'], unknown to the alias table []
+assist_tackle_1_team: 9976 values, codes ['LA', 'WAS'], unknown to the alias table []
+assist_tackle_2_team: 4911 values, codes ['LA', 'WAS'], unknown to the alias table []
+assist_tackle_3_team: 1 values, codes ['WAS'], unknown to the alias table []
+assist_tackle_4_team: 1 values, codes ['WAS'], unknown to the alias table []
+tackle_with_assist_1_team: 5065 values, codes ['LA', 'WAS'], unknown to the alias table []
+tackle_with_assist_2_team: 0 values, codes [], unknown to the alias table []
+
+## Yard-line text, regular season 1999-2025: plays whose code would change
+
+yrdln: 75362 plays, codes ['LA', 'WAS']
+drive_start_yard_line: 76210 plays, codes ['LA', 'WAS']
+drive_end_yard_line: 75028 plays, codes ['LA', 'WAS']
+end_yard_line: 4578 plays, codes ['LA', 'WAS']
+
+## Cache file size of 2024 (bytes)
+
+every requested column (139): 4217398
+without desc: 3275462
+without the 28 fumble and tackle credit columns: 4073921

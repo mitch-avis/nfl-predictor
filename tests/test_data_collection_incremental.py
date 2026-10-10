@@ -485,6 +485,46 @@ def test_a_warm_incremental_run_reuses_finished_seasons_and_equals_the_full_rebu
     assert warm.rated == [_CURRENT_SEASON]
 
 
+_RATING_COLUMNS = [
+    column
+    for stat in constants.RATINGS_FEATURE_STATS
+    for column in (f"away_{stat}", f"home_{stat}", f"{stat}_diff")
+]
+
+
+def _rating_features(games: pl.DataFrame, season: int, week: int) -> pl.DataFrame:
+    """Return the rating features of one week's game rows, by game."""
+    return (
+        games.filter((pl.col("season") == season) & (pl.col("week") == week))
+        .select("game_id", *_RATING_COLUMNS)
+        .sort("game_id")
+    )
+
+
+def test_a_weeks_rating_features_never_see_its_or_later_plays_through_the_etl(
+    baseline: _Baseline, etl: _Run, tmp_path: Path
+) -> None:
+    # Arrange
+    later = (pl.col("season") > 2020) | ((pl.col("season") == 2020) & (pl.col("week") >= 2))
+    etl.world.plays = etl.world.plays.with_columns(
+        pl.when(later).then(pl.col("epa") * -2.0 + 0.75).otherwise("epa").alias("epa"),
+        pl.when(later).then(pl.col("qb_epa") * 3.0 - 1.5).otherwise("qb_epa").alias("qb_epa"),
+    )
+
+    # Act
+    rewritten = _main(etl, tmp_path)
+
+    # Assert
+    expected = _rating_features(baseline.full.games, 2020, 2)
+    assert expected.select(_RATING_COLUMNS).null_count().row(0) != (expected.height,) * len(
+        _RATING_COLUMNS
+    )
+    assert_frame_equal(_rating_features(rewritten.games, 2020, 2), expected, check_exact=True)
+    assert not _rating_features(rewritten.games, 2020, 3).equals(
+        _rating_features(baseline.full.games, 2020, 3)
+    )
+
+
 def test_a_changed_play_in_a_cached_season_rebuilds_from_that_season_on(
     baseline: _Baseline, etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:

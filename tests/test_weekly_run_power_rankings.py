@@ -14,16 +14,16 @@ from nfl_predictor.weekly_run import inputs
 def _options(argv: list[str]) -> power_rankings.RankingOptions:
     """Parse weekly-run arguments and resolve the ranking options they describe."""
     args = run_config._build_parser().parse_args(argv)
-    return run_config.power_ranking_options(args)
+    return run_config.power_ranking_options(args, run_dir=Path("run"))
 
 
-def test_weekly_rankings_default_to_the_composite() -> None:
-    """With no ranking flags, the weekly run ranks on the adjusted composite."""
+def test_weekly_rankings_default_to_the_blend() -> None:
+    """With no ranking flags, the weekly run ranks on the blend, keeping the other defaults."""
     # Act
     options = _options([])
 
     # Assert
-    assert options.method == "composite"
+    assert options.method == "blend"
     assert options.strength_snapshots == power_rankings.DEFAULT_STRENGTH_SNAPSHOTS
     assert options.window_seasons == power_rankings.DEFAULT_RATINGS_WINDOW_SEASONS
     assert options.prior_season_weight == pytest.approx(power_rankings.DEFAULT_PRIOR_SEASON_WEIGHT)
@@ -95,7 +95,7 @@ def test_weekly_ranking_flags_are_valid_config_keys() -> None:
 def test_weekly_ranking_options_change_the_report_config() -> None:
     """Changing the ranking method invalidates a reused reports stage."""
     # Arrange
-    composite_args = run_config._build_parser().parse_args([])
+    composite_args = run_config._build_parser().parse_args(["--power-rankings-method", "composite"])
     bradley_terry_args = run_config._build_parser().parse_args(
         ["--power-rankings-method", "bradley_terry"]
     )

@@ -2810,9 +2810,9 @@
     "model",
     "blend"
    ],
-   "default": null,
+   "default": "blend",
    "dest": "power_rankings_method",
-   "help": "Power rankings method: 'composite' (default; the ETL's schedule-adjusted strength for the week after the through-week), 'bradley_terry', 'ported' (the ported team rating), 'model' (a fit to walk-forward predicted margins) or 'blend' (both). --legacy-franchise-fit implies bradley_terry.",
+   "help": "Power rankings method: 'blend' (default; the ported team rating and the model rating weighted by --power-rankings-blend-weight), 'composite' (the ETL's schedule-adjusted strength for the week after the through-week), 'bradley_terry', 'ported' (the ported team rating) or 'model' (a fit to walk-forward predicted margins). --legacy-franchise-fit implies bradley_terry.",
    "nargs": null,
    "options": [
     "--power-rankings-method"
@@ -2854,7 +2854,7 @@
    "choices": null,
    "default": [],
    "dest": "power_rankings_model_predictions",
-   "help": "Walk-forward runs or fold checkpoint directories whose pre-game predictions the model and blend methods fit their rating to; they must cover every completed regular-season game of the season before the ranked week (the previous season for week 1).",
+   "help": "Walk-forward runs or fold checkpoint directories whose pre-game predictions the model and blend methods fit their rating to; they must cover every completed regular-season game of the season before the ranked week (the previous season for week 1). Default: this run's stage-1 fold checkpoints for the ranked season and the --floor-sigma-reference-runs, averaged as one source, for earlier seasons.",
    "nargs": "*",
    "options": [
     "--power-rankings-model-predictions"
@@ -2866,9 +2866,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": null,
+   "default": 0.5,
    "dest": "power_rankings_blend_weight",
-   "help": "The blend method's weight on the ported rating, from 0 to 1.",
+   "help": "The blend method's weight on the ported rating, from 0 to 1 (default: 0.5).",
    "nargs": null,
    "options": [
     "--power-rankings-blend-weight"

@@ -41,6 +41,10 @@ _PATH_KEYS = {
     "power_rankings_ratings_dir",
 }
 _PATH_LIST_KEYS = {"floor_sigma_reference_runs", "power_rankings_model_predictions"}
+# The weekly run ranks on the even blend of the ported and model ratings: the user's choice after
+# the rankings measurement, whose pre-registered rule picks this weight for the current season.
+DEFAULT_POWER_RANKINGS_METHOD = "blend"
+DEFAULT_POWER_RANKINGS_BLEND_WEIGHT = 0.5
 # Config keys that list feature groups; the command line takes them comma-separated.
 _FEATURE_GROUP_LIST_KEYS = {"disable_feature_groups"}
 
@@ -589,12 +593,13 @@ def _add_power_rankings_arguments(parser: WeeklyParser, defaults: dict[str, Any]
     parser.add_argument(
         "--power-rankings-method",
         choices=power_rankings.RANKING_METHODS,
-        default=defaults.get("power_rankings_method"),
+        default=defaults.get("power_rankings_method", DEFAULT_POWER_RANKINGS_METHOD),
         help=(
-            "Power rankings method: 'composite' (default; the ETL's schedule-adjusted "
-            "strength for the week after the through-week), 'bradley_terry', 'ported' (the "
-            "ported team rating), 'model' (a fit to walk-forward predicted margins) or "
-            "'blend' (both). --legacy-franchise-fit implies bradley_terry."
+            "Power rankings method: 'blend' (default; the ported team rating and the model "
+            "rating weighted by --power-rankings-blend-weight), 'composite' (the ETL's "
+            "schedule-adjusted strength for the week after the through-week), 'bradley_terry', "
+            "'ported' (the ported team rating) or 'model' (a fit to walk-forward predicted "
+            "margins). --legacy-franchise-fit implies bradley_terry."
         ),
     )
     parser.add_argument(
@@ -623,14 +628,15 @@ def _add_power_rankings_arguments(parser: WeeklyParser, defaults: dict[str, Any]
             "Walk-forward runs or fold checkpoint directories whose pre-game predictions the "
             "model and blend methods fit their rating to; they must cover every completed "
             "regular-season game of the season before the ranked week (the previous season "
-            "for week 1)."
+            "for week 1). Default: this run's stage-1 fold checkpoints for the ranked season "
+            "and the --floor-sigma-reference-runs, averaged as one source, for earlier seasons."
         ),
     )
     parser.add_argument(
         "--power-rankings-blend-weight",
         type=float,
-        default=defaults.get("power_rankings_blend_weight"),
-        help="The blend method's weight on the ported rating, from 0 to 1.",
+        default=defaults.get("power_rankings_blend_weight", DEFAULT_POWER_RANKINGS_BLEND_WEIGHT),
+        help="The blend method's weight on the ported rating, from 0 to 1 (default: 0.5).",
     )
     parser.add_argument(
         "--ratings-window-seasons",
@@ -698,7 +704,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)
     try:
-        power_ranking_options(args)
+        # The run directory may not exist yet; only the settings are checked here.
+        power_ranking_options(args, run_dir=args.run_dir or Path(constants.MODELS_PATH))
         # An unknown feature group stops the run here, before the data refresh.
         feature_spec.validate_feature_groups(args.disable_feature_groups)
     except ValueError as error:
@@ -853,11 +860,39 @@ def final_fit_options(
     return optuna_config, train_config
 
 
-def power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOptions:
-    """Resolve the ranking options the weekly run's flags describe."""
+def _default_prediction_sources(
+    args: argparse.Namespace, run_dir: Path | None
+) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
+    """Return the model and blend methods' walk-forward predictions and reference runs.
+
+    Explicit ``--power-rankings-model-predictions`` win. Otherwise, given the run directory, the
+    ranked season comes from this run's stage-1 fold checkpoints and earlier seasons (week 1's
+    carried-forward fit reads the previous one) from the floor-sigma reference runs, seeds of one
+    configuration averaged into one source.
+    """
+    explicit = tuple(Path(path) for path in args.power_rankings_model_predictions)
+    if explicit or run_dir is None or args.power_rankings_method not in {"model", "blend"}:
+        return explicit, ()
+    reference = tuple(Path(path) for path in args.floor_sigma_reference_runs or [])
+    return (stage1.predictions_source(run_dir),), reference
+
+
+def power_ranking_options(
+    args: argparse.Namespace, *, run_dir: Path | None = None
+) -> power_rankings.RankingOptions:
+    """Resolve the ranking options the weekly run's flags describe.
+
+    ``run_dir`` is the weekly run's directory; with it, the model and blend methods read their
+    predictions from the run's own sources when none are given (`_default_prediction_sources`).
+    """
+    model_predictions, reference_predictions = _default_prediction_sources(args, run_dir)
+    method = args.power_rankings_method
+    if args.legacy_franchise_fit and method == DEFAULT_POWER_RANKINGS_METHOD:
+        # The legacy fit implies Bradley-Terry; only another method set explicitly conflicts.
+        method = None
     return power_rankings.resolve_ranking_options(
         power_rankings.RankingRequest(
-            method=args.power_rankings_method,
+            method=method,
             legacy_franchise_fit=bool(args.legacy_franchise_fit),
             window_seasons=int(args.ratings_window_seasons),
             prior_season_weight=float(args.ratings_prior_season_weight),
@@ -866,19 +901,22 @@ def power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOpt
             ratings_min_season=args.ratings_min_season,
             strength_snapshots=Path(args.power_rankings_strength_snapshots),
             ratings_dir=Path(args.power_rankings_ratings_dir),
-            model_predictions=tuple(Path(path) for path in args.power_rankings_model_predictions),
+            model_predictions=model_predictions,
+            reference_predictions=reference_predictions,
             blend_weight=args.power_rankings_blend_weight,
         )
     )
 
 
-def power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
+def power_rankings_report_config(
+    args: argparse.Namespace, *, run_dir: Path | None = None
+) -> dict[str, Any]:
     """Return the ranking settings that decide whether a reports stage can be reused.
 
-    The ported, model and blend sources' settings join only when one of those methods ranks,
-    so the other methods' records stay as they were.
+    The ported, model and blend sources' settings, the resolved prediction sources included,
+    join only when one of those methods ranks, so the other methods' records stay as they were.
     """
-    options = power_ranking_options(args)
+    options = power_ranking_options(args, run_dir=run_dir)
     report: dict[str, Any] = {
         "power_rankings_method": options.method,
         "power_rankings_strength_snapshots": str(options.strength_snapshots),
@@ -892,6 +930,9 @@ def power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
         report |= {
             "power_rankings_ratings_dir": str(options.ratings_dir),
             "power_rankings_model_predictions": [str(path) for path in options.model_predictions],
+            "power_rankings_reference_predictions": [
+                str(path) for path in options.reference_predictions
+            ],
             "power_rankings_blend_weight": options.blend_weight,
         }
     return report

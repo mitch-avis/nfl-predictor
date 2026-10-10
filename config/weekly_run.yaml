@@ -124,3 +124,15 @@ score_rounding: none
 # power_rankings_season and power_rankings_through_week are inferred from the prediction input.
 # whether to include postseason games in power rankings (default: false)
 power_rankings_include_postseason: false
+# what the power rankings rank on (options: blend, composite, bradley_terry, ported, model,
+# default: blend): blend averages the ported team rating and the model rating, a fit to the
+# walk-forward's predicted margins. With no power_rankings_model_predictions, the model rating
+# reads this run's stage-1 fold checkpoints for the ranked season and the
+# floor_sigma_reference_runs, averaged as one source, for the seasons before it. The user chose
+# the blend after the rankings measurement (.agents/sos_port/decisions/power_rankings.md,
+# decision 12; models/step6/rankings/REVIEW.md); composite restores the earlier ranking.
+power_rankings_method: blend
+# the blend's weight on the ported rating, from 0 to 1 (default: 0.5): the weight
+# the measurement's pre-registered rule chooses for 2026 from the earlier seasons' scored weeks
+# (decisions 7 and 12 of the same file)
+power_rankings_blend_weight: 0.5

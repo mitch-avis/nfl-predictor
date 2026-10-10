@@ -523,7 +523,7 @@ def _write_power_rankings(
             include_postseason=bool(args.power_rankings_include_postseason),
         )
         result = power_rankings.compute_power_rankings(
-            model, ranking_inputs, config.power_ranking_options(args)
+            model, ranking_inputs, config.power_ranking_options(args, run_dir=ctx.run_dir)
         )
     except rating_sources.RatingSourceUnavailableError as exc:
         log.warning("Power rankings skipped: %s", exc)
@@ -554,7 +554,7 @@ def _run_stage4(
         "power_rankings_data_schedule": str(args.power_rankings_data_schedule),
         "power_rankings_out_dir": str(pr_out_dir_default),
         "power_rankings_include_postseason": bool(args.power_rankings_include_postseason),
-        **config.power_rankings_report_config(args),
+        **config.power_rankings_report_config(args, run_dir=ctx.run_dir),
     }
     report_hash = artifacts.stable_short_hash(report_config)
     report_marker = _stage_marker_path(ctx.run_dir, "reports")

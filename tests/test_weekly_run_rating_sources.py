@@ -45,15 +45,15 @@ def test_weekly_rating_source_flags_reach_the_ranking_options() -> None:
     assert options.blend_weight == pytest.approx(0.4)
 
 
-def test_weekly_rating_source_defaults_leave_the_composite_in_place() -> None:
+def test_weekly_rating_source_defaults_rank_on_the_even_blend() -> None:
     # Act
-    options = run_config.power_ranking_options(_args([]))
+    options = run_config.power_ranking_options(_args([]), run_dir=Path("run"))
 
     # Assert
-    assert options.method == "composite"
+    assert options.method == "blend"
     assert options.ratings_dir == power_rankings.DEFAULT_RATINGS_DIR
-    assert options.model_predictions == ()
-    assert options.blend_weight is None
+    assert options.model_predictions == (Path("run/wf_compare"),)
+    assert options.blend_weight == pytest.approx(0.5)
 
 
 def test_weekly_rating_source_settings_are_valid_config_keys() -> None:
@@ -68,9 +68,12 @@ def test_weekly_rating_source_settings_are_valid_config_keys() -> None:
     } <= allowed
 
 
-def test_default_report_config_carries_no_rating_source_setting() -> None:
+def test_composite_report_config_carries_no_rating_source_setting() -> None:
+    # Arrange
+    args = _args(["--power-rankings-method", "composite"])
+
     # Act
-    report = run_config.power_rankings_report_config(_args([]))
+    report = run_config.power_rankings_report_config(args, run_dir=Path("run"))
 
     # Assert
     assert not {key for key in report if key.startswith("power_rankings_ratings")}
@@ -181,6 +184,108 @@ def test_weekly_rankings_skip_unreadable_model_predictions(
     # Assert
     assert written == []
     assert "no_such_run" in caplog.text
+
+
+DEFAULT_SOURCE_FLAGS = [
+    "--power-rankings-method",
+    "blend",
+    "--power-rankings-blend-weight",
+    "0.5",
+    "--floor-sigma-reference-runs",
+    "ref/seed42",
+    "ref/seed7",
+]
+
+
+def test_weekly_points_method_defaults_to_stage_one_folds_and_reference_runs() -> None:
+    # Arrange
+    args = _args(DEFAULT_SOURCE_FLAGS)
+
+    # Act
+    options = run_config.power_ranking_options(args, run_dir=Path("run"))
+
+    # Assert
+    assert options.model_predictions == (Path("run/wf_compare"),)
+    assert options.reference_predictions == (Path("ref/seed42"), Path("ref/seed7"))
+
+
+def test_explicit_model_predictions_override_the_weekly_default() -> None:
+    # Arrange
+    args = _args([*DEFAULT_SOURCE_FLAGS, "--power-rankings-model-predictions", "runs/a"])
+
+    # Act
+    options = run_config.power_ranking_options(args, run_dir=Path("run"))
+
+    # Assert
+    assert options.model_predictions == (Path("runs/a"),)
+    assert options.reference_predictions == ()
+
+
+def test_report_config_of_the_default_blend_names_its_resolved_sources() -> None:
+    # Arrange
+    args = _args(DEFAULT_SOURCE_FLAGS)
+
+    # Act
+    report = run_config.power_rankings_report_config(args, run_dir=Path("run"))
+
+    # Assert
+    assert report["power_rankings_model_predictions"] == [str(Path("run/wf_compare"))]
+    assert report["power_rankings_reference_predictions"] == ["ref/seed42", "ref/seed7"]
+    assert report["power_rankings_blend_weight"] == pytest.approx(0.5)
+
+
+def test_shipped_weekly_config_ranks_on_the_even_blend() -> None:
+    # Act
+    args = run_config.parse_args([])
+
+    # Assert
+    assert args.power_rankings_method == "blend"
+    assert args.power_rankings_blend_weight == pytest.approx(0.5)
+    assert args.power_rankings_model_predictions == []
+
+
+def test_weekly_rankings_skip_without_stage_one_folds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    data = tmp_path / "all_data_ml.csv"
+    data.write_text("season,week\n", encoding="utf-8")
+    args = _args(
+        [
+            "--power-rankings-method",
+            "model",
+            "--power-rankings-data-ml",
+            str(data),
+            "--power-rankings-data-schedule",
+            str(data),
+            "--power-rankings-season",
+            "2024",
+            "--power-rankings-through-week",
+            "3",
+            "--power-rankings-out-dir",
+            str(tmp_path / "out"),
+        ]
+    )
+    context = pipeline._RunContext(
+        args=args,
+        run_id="run",
+        run_dir=tmp_path / "run",
+        output_dir=tmp_path,
+        created_at="now",
+        dataset_hash="hash",
+        dataset_fingerprint={},
+        config_payload={},
+    )
+    monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
+
+    # Act
+    with caplog.at_level(logging.WARNING):
+        written = pipeline._write_power_rankings(context, 2024, 4, tmp_path / "model.joblib")
+
+    # Assert
+    assert written == []
+    assert "Power rankings skipped" in caplog.text
+    assert str(Path("run") / "wf_compare") in caplog.text
 
 
 def test_stage_one_records_its_fold_checkpoints_as_a_prediction_source(

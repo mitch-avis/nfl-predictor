@@ -5,8 +5,9 @@
 pages show beside the ratings, and the metric registry that names and describes every column. The
 port reproduces the tables that project published, cell by cell (see "Checking the port" below).
 
-Nothing in the ETL, the game dataset, the model, the weekly run, or the web API uses the package
-yet, and no default depends on it.
+Nothing in the ETL, the game dataset, the model, or the weekly run uses the package yet, and no
+default depends on it. The web app's team and quarterback pages (`src/nfl_predictor/api/ratings/`)
+read the tables it builds and describe their columns from its metric registry.
 
 ## What it computes
 

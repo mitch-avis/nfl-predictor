@@ -8,7 +8,9 @@ the port" below).
 
 Nothing in the ETL, the game dataset, the model, or the weekly run uses the package, and no
 default depends on it: the model's strength features come from the schedule-adjusted strength
-snapshot (`utils/polars/strength_snapshot.py`).
+snapshot (`utils/polars/strength_snapshot.py`). The web app's team and quarterback pages
+(`src/nfl_predictor/api/ratings/`) read the tables it builds, with the rank-range and pair column
+names of `rating_ranges.py`.
 
 ## What it computes
 

@@ -200,11 +200,12 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   `nfl-sos-ratings` as it was proven. The reference comes from real builds because the synthetic
   test league gives some columns other types than nflverse's files; it cannot go stale silently: a
   test fails when the builders' columns drift from it, and the generator's `--check` compares its
-  types with the real builds again. Against (c): an absent table already reads as not computed (the
-  pages hide a season's missing section), the case lasts only until the season's second week of
-  games, and an empty table would show an empty section instead. Rows a missing source supplies are
-  still missing (without the snap counts, the passers' games without a dropback), and the warning
-  says so.
+  types with the real builds again. Against (c): `nfl-sos-ratings` wrote no profile file then
+  either (`nfl_sos_ratings/main.py` at `9081bce` writes one only when the profile exists), an
+  absent table already reads as not computed (the pages hide a season's missing section), the case
+  lasts only until the season's second week of games, and an empty table would show an empty
+  section instead. Rows a missing source supplies are still missing (without the snap counts, the
+  passers' games without a dropback), and the warning says so.
 - **Data**: `season_stats_etl_degrade_output.txt` (2025, rerun at `3dfb4c6`): every variant with
   plays has every table with a full build's columns. Without the official team stats the
   play-by-play totals stand in; without the weekly player stats the columns they fill are null

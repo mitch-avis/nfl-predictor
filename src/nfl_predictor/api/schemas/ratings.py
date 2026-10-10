@@ -85,6 +85,12 @@ class SeasonTableOut(BaseModel):
     table: MetricTableOut
 
 
+class RankRangesOut(SeasonTableOut):
+    """A season's rank ranges, with the franchise name of every team code in them."""
+
+    team_names: dict[str, str]
+
+
 class ScheduleRanksOut(BaseModel):
     """Every completed team-season ranked on schedule strength (``sos``), softest first.
 

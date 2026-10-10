@@ -20,6 +20,7 @@ from nfl_predictor.api.schemas.ratings import (
     EntityKind,
     EntityTableOut,
     MetricRegistryOut,
+    RankRangesOut,
     RatingsSeasonsOut,
     ScheduleRanksOut,
     SeasonTableOut,
@@ -145,13 +146,19 @@ def entity_table(
     )
 
 
-@router.get("/{season}/{kind}/rank-ranges", response_model=SeasonTableOut)
+@router.get("/{season}/{kind}/rank-ranges", response_model=RankRangesOut)
 def rank_ranges(
     season: int, kind: EntityKind, _user: CurrentUser, settings: SettingsDep
-) -> SeasonTableOut:
+) -> RankRangesOut:
     """Return every team's or qualifying quarterback's rank range, by published rank."""
     frame = _read(settings.ratings_path, season, RANK_RANGE_KIND[kind])
-    return _section(kind, season, None, sections.rank_range_table(kind, frame))
+    return RankRangesOut(
+        kind=kind,
+        season=season,
+        entity_id=None,
+        table=sections.rank_range_table(kind, frame),
+        team_names=tables.team_names(frame),
+    )
 
 
 @router.get("/{season}/{kind}/{entity_id}/game-logs", response_model=SeasonTableOut)

@@ -152,6 +152,7 @@ export function teamRankRanges(): RankRangeTable {
       column_groups: {},
       column_metadata: {},
     },
+    team_names: { BUF: 'Buffalo Bills', KC: 'Kansas City Chiefs', WSH: 'Washington Commanders' },
   }
 }
 

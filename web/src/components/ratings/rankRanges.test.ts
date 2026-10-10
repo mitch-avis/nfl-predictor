@@ -44,6 +44,7 @@ function payload(rows: RankRangeRow[]): RankRangeTable {
     season: 2025,
     entity_id: null,
     table: { rows, visible_columns: [], column_groups: {}, column_metadata: {} },
+    team_names: {},
   }
 }
 

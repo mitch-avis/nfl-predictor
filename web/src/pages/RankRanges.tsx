@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 
-import { isMissing, useEntityTable, useRankRanges } from '@/api/queries'
+import { isMissing, useRankRanges } from '@/api/queries'
 import type { EntityKind } from '@/api/types'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
@@ -22,9 +22,8 @@ export function RankRangesPage() {
   const kind: EntityKind = kindParam === 'qbs' ? 'qbs' : 'teams'
   const { query: seasonsQuery, season, seasons, setSeason } = useRatingsSeason()
   const ranges = useRankRanges(kind, season)
-  const teams = useEntityTable('teams', kind === 'teams' ? season : null)
   const parsed = useMemo(() => (ranges.data ? parseRankRanges(kind, ranges.data) : []), [kind, ranges.data])
-  const labels = kind === 'teams' ? (teams.data?.team_names ?? {}) : {}
+  const labels = kind === 'teams' ? (ranges.data?.team_names ?? {}) : {}
   const unit = kind === 'teams' ? 'team' : 'qualifying quarterback'
   return (
     <>

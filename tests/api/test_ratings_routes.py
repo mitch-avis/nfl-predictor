@@ -253,6 +253,23 @@ def test_rank_ranges_list_every_team_by_published_rank(
     assert len(rows[0]["team_rank_probabilities"]) == 4
 
 
+@pytest.mark.parametrize("kind", ["teams", "qbs"])
+def test_rank_ranges_name_the_teams_they_list(
+    ratings_dir: Path, viewer_client: TestClient, kind: str
+) -> None:
+    """The rank-range chart labels its rows without fetching the whole team table."""
+    # Act
+    payload = viewer_client.get(f"/api/ratings/{SEASON}/{kind}/rank-ranges").json()
+
+    # Assert
+    assert payload["team_names"] == {
+        "BUF": "Buffalo Bills",
+        "KC": "Kansas City Chiefs",
+        "NE": "New England Patriots",
+        "WSH": "Washington Commanders",
+    }
+
+
 def test_qb_rank_ranges_list_the_qualifiers(ratings_dir: Path, viewer_client: TestClient) -> None:
     """Only qualifying quarterbacks have rank ranges."""
     # Act

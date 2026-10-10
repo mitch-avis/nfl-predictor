@@ -515,8 +515,10 @@ export interface SeasonTable {
 /** A rank-range row: the scalar columns plus `<rank>_probabilities`, the chance of each rank. */
 export type RankRangeRow = Record<string, Row[string] | number[]>
 
+/** A season's rank ranges, with the franchise name of every team code in them. */
 export interface RankRangeTable extends Omit<SeasonTable, 'table'> {
   table: Omit<MetricTable, 'rows'> & { rows: RankRangeRow[] }
+  team_names: Record<string, string>
 }
 
 /** Every completed team-season ranked on schedule strength, softest first. */

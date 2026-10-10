@@ -17,13 +17,26 @@ describe('RankRangesPage', () => {
 
   it('charts every team’s rank range for the newest season', async () => {
     // Arrange
-    stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/teams/rank-ranges': teamRankRanges(), '/api/ratings/2025/teams': teamTable() })
+    stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/teams/rank-ranges': teamRankRanges() })
 
     // Act
     renderWithProviders(<RankRangesPage />, { route: '/rank-ranges' })
 
     // Assert
     expect(await screen.findByRole('link', { name: /^Buffalo Bills: published rank 1st/ })).toHaveAttribute('href', '/teams/BUF?season=2025')
+  })
+
+  it('names the teams from the rank ranges without fetching the team table', async () => {
+    // Arrange
+    const fetchMock = stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/teams/rank-ranges': teamRankRanges() })
+
+    // Act
+    renderWithProviders(<RankRangesPage />, { route: '/rank-ranges' })
+
+    // Assert
+    await screen.findByRole('link', { name: /^Buffalo Bills:/ })
+    const paths = fetchMock.mock.calls.map(([input]) => new URL(String(input), 'http://localhost').pathname)
+    expect(paths).not.toContain('/api/ratings/2025/teams')
   })
 
   it('charts the quarterbacks when asked', async () => {
@@ -38,6 +51,7 @@ describe('RankRangesPage', () => {
         column_groups: {},
         column_metadata: {},
       },
+      team_names: { BUF: 'Buffalo Bills' },
     }
     stubApi({ '/api/ratings/seasons': SEASONS, '/api/ratings/2025/qbs/rank-ranges': qbRanges })
 

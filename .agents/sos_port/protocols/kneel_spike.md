@@ -65,9 +65,13 @@ The quarterback rating already leaves both out.
 
 1. Today's rating is the production rating: for every season 1999-2025, today's full-season fit
    (the previous season's penalties and the prior, as published) equals the four rating columns of
-   the candidate build's `data/ratings/{season}_ratings.parquet`, and every snapshot's team ratings
-   equal the published history's rows of the last week before it
-   (`data/ratings/{season}_ratings_by_week.parquet`, teams in both), to 1e-9.
+   the candidate build's `data/ratings/{season}_ratings.parquet`, and for every season 2000-2025
+   every snapshot's team ratings equal the published history's rows of the last week before it
+   (`data/ratings/{season}_ratings_by_week.parquet`, teams in both), to 1e-9. 1999 has no earlier
+   season, so the source's harness cross-validates each 1999 snapshot's own penalties while the
+   published 1999 history reuses the full-season fit's; its snapshots are checked against a
+   separate cross-validated fit of the same games instead. (Amended before any scoring: the first
+   version asked the history check of 1999 too, which cannot hold.)
 2. The harness reproduces the source's validation: today's predictions give 5,297 games and an
    overall MAE of 10.575, 10.567 over the 1,141 games of weeks 5-7 and 10.577 over the 4,156 of
    weeks 8 on, to three decimals.

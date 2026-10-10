@@ -19,10 +19,9 @@ export interface NavItem {
   icon: LucideIcon
   description: string
   adminOnly?: boolean
-  phase?: number
 }
 
-/** Sidebar navigation, in display order. Items with a `phase` beyond the current build show a placeholder. */
+/** Sidebar navigation, in display order. */
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, description: 'This week at a glance' },
   { to: '/predictions', label: 'Predictions', icon: Trophy, description: 'Game-by-game model output with market lines' },
@@ -36,5 +35,3 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/users', label: 'Users', icon: Users, description: 'Accounts and roles', adminOnly: true },
   { to: '/glossary', label: 'Glossary', icon: BookOpen, description: 'What every column means' },
 ]
-
-export const CURRENT_PHASE = 2

@@ -723,3 +723,62 @@ numbers compare with `ELO_EVAL.md`.
 **How to reverse it**: nothing to reverse.
 
 **Review**: not yet reviewed.
+
+## 18. The ported quarterback rating as the adjustment (the result)
+
+**What differs**: entry 17's rule applied to `.agents/sos_port/ELO_QB_ALT.md`, with one change
+to entry 17's method, made after its check stopped the first run and before any score existed.
+The check found that the by-week row labelled `week` holds the fit through that week (4,838 of
+13,894 completed regular-season sides match that reading, 466 the other), but equals the
+candidate dataset's attached starter rating (`ratings_qb`) only in 8 seasons (1999, where both
+are null, 2006, 2008, 2011, 2015, 2019, 2021 and 2022) and differs at every rated side in the
+other 19. That
+all-or-nothing pattern is the difference `src/nfl_predictor/ratings/pre_week.py` documents: the
+published history fits each season with that season's own cross-validated penalty, chosen on the
+whole season, which is later information; the attached rating uses the previous season's. So the
+season-to-date rating (case 1) is read from the attached `ratings_qb`, keyed by season, week and
+starter; the by-week table is read only for its latest rows (earlier seasons, the replacement
+level, `D(s)` and playoff games), all from regular seasons wholly before the game. The
+penalties themselves are not on disk, so the last step of that explanation is not checked. 4 of
+the 9,886 window game sides have no attached rating (no play-by-play starter for VALUE to share)
+and read cases 2 and 3. Two smaller choices: 1999's published ratings are read as null, as the
+ETL treats 1999 and as entry 17 assumed; a team whose first game has no known starter starts at
+the season's replacement level, where VALUE starts it at its debut rating.
+
+**Options**: keep VALUE, the measured incumbent; or replace it with the ported rating.
+
+**Decision**: VALUE stays. The alternative's Brier difference interval lies entirely above zero,
+and so does its log-loss interval, so it neither would replace VALUE nor measures at least as
+well. Nothing is adopted; the measurement was report-only either way.
+
+**Reasoning**: entry 17's rule as written. The sensitivity scales decide nothing, and both are
+also worse than VALUE with intervals entirely above zero, so no scale near 25 Elo points per
+point of spread rescues the rating. The gap is widest in week 2, where the season-to-date rating
+rests on a single game.
+
+**Data**: candidate minus VALUE (Brier `0.21701`, log loss `0.62243`, reproduced from
+`ELO_EVAL.md`), per game on the 4,943 window games, with `elo_eval`'s bootstrap (5,000 game
+resamples, seed 42):
+
+| adjustment | Brier | Brier diff | 95% interval | log loss | log-loss diff | 95% interval |
+| --- | --- | --- | --- | --- | --- | --- |
+| ported rating | 0.22225 | +0.00524 | [+0.00319, +0.00725] | 0.63447 | +0.01203 | [+0.00736, +0.01667] |
+| scale times 0.5 | 0.21922 | +0.00221 | [+0.00095, +0.00351] | 0.62753 | +0.00510 | [+0.00228, +0.00798] |
+| scale times 1.5 | 0.22795 | +0.01094 | [+0.00794, +0.01392] | 0.64914 | +0.02671 | [+0.01952, +0.03383] |
+
+Brier by week window (no intervals): VALUE `0.22041`, `0.22664` and `0.21610` in weeks 1, 2
+and 3-18; the ported rating `0.22322`, `0.24982` and `0.22025`. Generated at commit `3cb8618`
+from the candidate build `/home/mitch/scratch/step6/data`; reproduce from the repository root
+with:
+
+```bash
+VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/elo_qb_alt.py \
+    --data-dir /home/mitch/workspace/nfl-predictor/data \
+    --nflreadpy-cache /tmp/step6_int/cache \
+    --candidate-data /home/mitch/scratch/step6/data
+```
+
+**How to reverse it**: nothing changed. To measure again (another build, rating or scale), rerun
+the script under a rule written first.
+
+**Review**: not yet reviewed.

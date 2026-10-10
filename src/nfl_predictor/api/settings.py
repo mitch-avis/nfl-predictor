@@ -31,13 +31,25 @@ def _filled(value: Path | None, name: str) -> Path:
     return value
 
 
+def _default_models_dir(root: Path) -> Path:
+    """Return ``root/models``, which for this package's own checkout is read from constants.
+
+    ``constants.MODELS_PATH`` is that checkout's models directory, read when the settings are
+    built, so the test suite can point it at a temporary directory.
+    """
+    if root == Path(constants.ROOT_DIR).resolve():
+        return Path(constants.MODELS_PATH)
+    return root / "models"
+
+
 class Settings(BaseSettings):
     """Configuration for the API process.
 
     Attributes:
         root_dir: Repository root; defaults to the checkout that owns this package.
         data_dir: Directory holding ETL outputs (defaults to ``root_dir/data``).
-        models_dir: Directory holding run directories (defaults to ``root_dir/models``).
+        models_dir: Directory holding run directories (defaults to ``root_dir/models``, read
+            from ``constants.MODELS_PATH`` when ``root_dir`` is this package's checkout).
         reports_dir: Directory holding ad-hoc reports (defaults to ``root_dir/reports``).
         state_dir: Directory for the API's own state such as the SQLite database
             (defaults to ``data_dir/web``).
@@ -76,7 +88,7 @@ class Settings(BaseSettings):
         root = self.root_dir.resolve()
         self.root_dir = root
         self.data_dir = (self.data_dir or root / "data").resolve()
-        self.models_dir = (self.models_dir or root / "models").resolve()
+        self.models_dir = (self.models_dir or _default_models_dir(root)).resolve()
         self.reports_dir = (self.reports_dir or root / "reports").resolve()
         self.state_dir = (self.state_dir or self.data_dir / "web").resolve()
         self.db_path = (self.db_path or self.state_dir / "app.db").resolve()

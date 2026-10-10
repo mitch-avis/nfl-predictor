@@ -137,20 +137,27 @@ defaults and about 42 s with one thread each. `pytest-xdist` then spreads the su
 worker per core by default (`-n=auto` in `pyproject.toml`; about 15 s on the same machine). Pass
 `-n 0` to run in a single process, for example to use `pdb` or to run one test quickly.
 
-The suite also stays out of the checkout's `data/` and off the network (`tests/data_isolation.py`,
-installed by `tests/conftest.py` before any test module imports the package). `constants.DATA_PATH`
-and the nflreadpy and nfelo caches point at a session temporary directory, so every path a module
-copies from them at import time starts out redirected (to that shared session directory), and
-each test gets a fresh directory on top. Every TCP connection and every lookup of a host name other
-than `localhost` is refused, as on an offline machine, for the whole session, fixtures included; a
-refusal fails the next test to finish, or the session. A test that checks the packaged paths
-themselves asks for the `packaged_data_paths` fixture, and a test in `tests/test_conftest.py` scans
-every module for a path still inside `data/`. Three things are not redirected, because none of them
-reads `constants.DATA_PATH`; tests that touch them pass their own paths:
+The suite also stays out of the checkout's `data/` and `models/` and off the network
+(`tests/data_isolation.py`, installed by `tests/conftest.py` before any test module imports the
+package). `constants.DATA_PATH` and the nflreadpy and nfelo caches point at a session temporary
+directory, so every path a module copies from them at import time starts out redirected (to that
+shared session directory), and each test gets a fresh directory on top. `constants.MODELS_PATH`,
+which the run directories, the walk-forward checkpoints and this checkout's web run index read when
+they run, points at a second temporary directory the same way. Every TCP connection and every
+lookup of a host name other than `localhost` is refused, as on an offline machine, for the whole
+session, fixtures included; a refusal fails the next test to finish, or the session. A test that
+checks the packaged paths themselves asks for the `packaged_data_paths` or `packaged_models_path`
+fixture, and tests in `tests/test_conftest.py` scan every module for a path still inside `data/`
+or `models/`. Three things are not redirected, because none of them reads those constants; tests
+that touch them pass their own paths:
 
-- the run directories under `models/`, built from `constants.ROOT_DIR` when used;
 - `api.settings.Settings()` built without a root, which fills its data, state and database paths
-  from `constants.ROOT_DIR` (the checkout's `data/web/app.db`, the running web app's database);
+  from `constants.ROOT_DIR` (the checkout's `data/web/app.db`, the running web app's database); its
+  models directory follows `constants.MODELS_PATH`;
+- the floor-sigma reference runs (`constants.FLOOR_SIGMA_REFERENCE_RUNS`, by default
+  `models/step4_reference/adopted_seed*`), which `ml/floor_sigma.py` resolves against
+  `constants.ROOT_DIR`: the default of `nfl-predictor train --floor-sigma-reference-runs` and the
+  weekly run's `floor_sigma_reference_runs`, read when a model is trained;
 - the relative `data/...` defaults of `nfl-predictor rankings` (`--data-ml`, `--data-schedule`,
   `--out-dir`), resolved against the current directory.
 
@@ -259,6 +266,22 @@ the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<se
 Before kickoff the current season has no play-by-play published at all; that is non-fatal, and the
 ETL falls back to cache or continues without it.
 
+The nflverse player sources (`src/nfl_predictor/utils/polars/nflverse_sources.py`: weekly player
+stats, snap counts, the players file, and season and weekly rosters) load under the same cache
+contract. Each season is kept to its column list in `constants.py`, filtered to the regular season
+where the source has a season type, given canonical team codes (the 2002-2015 rosters' league codes
+`ARZ`, `BLT`, `CLV`, `HST` and `SL` included), and cached as
+`data/cache/nflreadpy/<source>_<season>[_reg|_all].parquet`; the players file, which covers every
+season, is one `players.parquet`. Weekly player stats leave null the stats nflverse never charted
+in a season (tackles for loss in 2003-2011, quarterback hits in 2003-2005), and in Jacksonville's
+2001-2002 home games, which nflverse credits wholly to the visitors (nflverse-pbp issue 92), each
+player's team comes back from that season's roster (`utils/polars/player_team_repair.py`). A
+player is a quarterback in a season when the players file or any regular-season week of that
+season's weekly roster lists him there, matched by GSIS id and never by name
+(`utils/polars/player_identity.py`). ESPN QBR (`utils/polars/espn_qbr.py`) is cached the same way
+as a validation reference only: nothing that builds the dataset or the model imports it. The ETL
+reads none of these sources yet, so `nfl-predictor data` downloads nothing new.
+
 The quarterback family needs `data/meta_data.csv`, a read-only copy of
 `../nfeloqb/Other Data/meta_data.csv` made the same way as `data/qb_elos.csv`. It maps the Elo
 quarterback names to GSIS ids, which are also the play-by-play passer ids. Without the file the
@@ -363,6 +386,9 @@ are missing historically.
 Primary sources:
 
 - `nflreadpy` (NFLverse): schedules, results, team-level stats, and play-by-play.
+- nflverse player sources (weekly player stats, snap counts, the players file, rosters) and ESPN
+  QBR as a validation reference: cached loaders the ETL does not read yet (see "Data collection"
+  above).
 - nfelo's market-lines file (`greerreNFL/nfelomarket_data`) for the default
   `--line-source pick_time`.
 - Local cached CSVs under `data/` for Elo/market data when present.
@@ -705,13 +731,16 @@ hash, the git commit and the settings that differ) or a checkpoint directory. Fo
 weeks 3-18 and all weeks it reports each run's deterministic Brier, log loss, pick accuracy, margin
 and total MAE, confidence-pool points (ranked as in "Confidence pool rules" below) and market
 Brier, and the candidate-minus-reference difference with a 95% bootstrap interval (5,000
-resamples over games, over weeks for pool points).
+resamples over games, over (season, week) blocks for pool points). The report names the unit: its
+first lines say so, and the paired tables head the pool column `pool pts (week blocks)`. A pick is
+the home side at `p >= 0.5`, as everywhere else ("Confidence pool rules" below).
 A closing "Stability by season" section repeats each window per season, for every run and for the
 paired difference; week 1 or week 2 of one season is a single week, so its pool-points difference
-has no interval (`[n/a]`). Everything before that section is byte-identical to the report
-`compare` wrote before the section existed, and the JSON is a strict superset of it (each window
-gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the same order,
-to combine seeds: the per-game differences are averaged over the seed pairs before the bootstrap.
+has no interval (`[n/a]`). Everything before that section matches the report `compare` wrote
+before the section existed, apart from those unit labels, and the JSON is a strict superset of it
+(each window gains a `seasons` entry). Repeat `--candidate` and `--reference` once per seed, in the
+same order, to combine seeds: the per-game differences are averaged over the seed pairs before the
+bootstrap.
 By default each run's market Brier and its det - market interval use that run's own
 `market_home_win_prob`. `--market-from <run>` (a run or checkpoint directory, given once) takes
 it from another run instead, matched on `game_id`, for every compared run: a run anchored to the
@@ -1106,8 +1135,8 @@ Training/backtests can write a run directory containing reproducible artifacts.
   walk-forward pool points, the prediction log and `nfl-predictor compare` all rank this way.
 - The pick is the home team when the unrounded home win probability is at least `0.5`
   (`p >= 0.5`, so an exact coin flip picks home), else the away team (`picks_home` in
-  `src/nfl_predictor/ml/metrics.py`); the walk-forward, the training pool summaries and the weekly
-  `predicted_winner` all use this rule.
+  `src/nfl_predictor/ml/metrics.py`); the walk-forward, the training pool summaries, the weekly
+  `predicted_winner` and `nfl-predictor compare` all use this rule.
 - The weekly picks and ranks use the unrounded probability, as the walk-forward does: the
   published `home_win_prob` and `away_win_prob` are rounded to 4 decimals, but a game published
   at `0.5000` still picks the side its unrounded probability favors, two games that share a

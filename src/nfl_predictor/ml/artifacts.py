@@ -114,8 +114,8 @@ FEATURE_IMPORTANCE_FILENAME = "feature_importance.json"
 
 
 def resolve_run_paths(run_id: str, run_dir: Path | None = None) -> RunPaths:
-    """Resolve the artifact paths of a run, under ``models/<run_id>`` unless ``run_dir``."""
-    base = run_dir if run_dir is not None else (Path(constants.ROOT_DIR) / "models" / run_id)
+    """Resolve a run's artifact paths: ``constants.MODELS_PATH/<run_id>`` unless ``run_dir``."""
+    base = run_dir if run_dir is not None else (Path(constants.MODELS_PATH) / run_id)
     return RunPaths(
         run_id=run_id,
         run_dir=base,

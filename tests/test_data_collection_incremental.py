@@ -22,7 +22,7 @@ import numpy as np
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
-from tests.ratings_league import plays_for, starter_id
+from tests.ratings_league import plays_for, rewritten_plays, starter_id
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.ratings.season import BootstrapSettings
@@ -499,24 +499,23 @@ def _rating_features(games: pl.DataFrame, season: int, week: int) -> pl.DataFram
 def test_a_weeks_rating_features_never_see_its_or_later_plays_through_the_etl(
     baseline: _Baseline, etl: _Run, tmp_path: Path
 ) -> None:
+    """Week 3, the first week with every rating feature, ``ratings_sos`` included."""
     # Arrange
-    later = (pl.col("season") > 2020) | ((pl.col("season") == 2020) & (pl.col("week") >= 2))
-    etl.world.plays = etl.world.plays.with_columns(
-        pl.when(later).then(pl.col("epa") * -2.0 + 0.75).otherwise("epa").alias("epa"),
-        pl.when(later).then(pl.col("qb_epa") * 3.0 - 1.5).otherwise("qb_epa").alias("qb_epa"),
+    later = (pl.col("season") > 2020) | ((pl.col("season") == 2020) & (pl.col("week") >= 3))
+    etl.world.plays = rewritten_plays(etl.world.plays, later)
+    etl.world.ratings_schedule = etl.world.ratings_schedule.with_columns(
+        pl.when(later).then(pl.col("home_score") + 21).otherwise("home_score").alias("home_score")
     )
 
     # Act
     rewritten = _main(etl, tmp_path)
 
     # Assert
-    expected = _rating_features(baseline.full.games, 2020, 2)
-    assert expected.select(_RATING_COLUMNS).null_count().row(0) != (expected.height,) * len(
-        _RATING_COLUMNS
-    )
-    assert_frame_equal(_rating_features(rewritten.games, 2020, 2), expected, check_exact=True)
-    assert not _rating_features(rewritten.games, 2020, 3).equals(
-        _rating_features(baseline.full.games, 2020, 3)
+    expected = _rating_features(baseline.full.games, 2020, 3)
+    assert expected.select(_RATING_COLUMNS).null_count().row(0) == (0,) * len(_RATING_COLUMNS)
+    assert_frame_equal(_rating_features(rewritten.games, 2020, 3), expected, check_exact=True)
+    assert not _rating_features(rewritten.games, 2021, 2).equals(
+        _rating_features(baseline.full.games, 2021, 2)
     )
 
 

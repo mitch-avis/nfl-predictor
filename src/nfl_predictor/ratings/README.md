@@ -157,5 +157,9 @@ it slightly in the seasons whose penalty changed.
   `.agents/sos_port/decisions/integration_ratings.md`.
 - `tests/test_ratings_pbp_inputs.py`, `tests/test_ratings_build.py` and the ratings cases of
   `tests/test_data_collection_incremental.py`: the adapter's definitions, the build and its
-  features, a rewrite of every later input (plays, rosters, scores) that leaves a week's
-  features unchanged, two runs that write identical bytes, and the incremental ETL.
+  features, two runs that write identical bytes, and the incremental ETL. The leakage cases
+  rewrite every input from a week on and check that the week's features do not move: in the
+  build (weeks 1, 3, 4 and 6), the plays' EPA, passer ids and names and dropback, pass, run,
+  kneel, spike and special-teams flags, the weekly player stats, the snap counts, the weekly
+  rosters and the scores; through the ETL (week 3, the first week with every rating feature),
+  the plays and the scores. A rewrite of the week before does move them.

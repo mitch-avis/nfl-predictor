@@ -13,7 +13,7 @@ starters' names, which the identity file maps to their ids, as the ETL's game ro
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import polars as pl
@@ -196,6 +196,120 @@ def _team_plays(
     return plays
 
 
+def rewritten_plays(plays: pl.DataFrame, later: pl.Expr) -> pl.DataFrame:
+    """Return ``plays`` with every value the ratings read rewritten where ``later`` holds.
+
+    Every later play's EPA changes; every other later dropback goes to another passer of the
+    same team (a new id and name); a fifth
+    of the later plays have their dropback, pass, run and special-teams flags flipped; some
+    later runs become kneel-downs and some incomplete passes spikes; and the other later runs
+    become plays a penalty wiped out. A feature that reads any of them from a later play moves,
+    and every season still has the rows each fit needs.
+    """
+    row = pl.int_range(pl.len())
+    flip = later & (row % 5 == 0)
+
+    def flipped(column: str) -> pl.Expr:
+        return pl.when(flip).then(1.0 - pl.col(column)).otherwise(pl.col(column)).alias(column)
+
+    is_run = pl.col("play_type") == "run"
+    incomplete = (pl.col("play_type") == "pass") & (pl.col("complete_pass") == 0)
+    renamed = later & (row % 2 == 0)
+    kneel = later & is_run & (row % 4 == 0)
+    return plays.with_columns(
+        pl.when(later).then(pl.col("epa") * -3.0 + 1.25).otherwise(pl.col("epa")).alias("epa"),
+        pl.when(later)
+        .then(pl.col("qb_epa") * 2.0 - 0.75)
+        .otherwise(pl.col("qb_epa"))
+        .alias("qb_epa"),
+        pl.when(renamed & pl.col("passer_player_id").is_not_null())
+        .then("00-RW-" + pl.col("posteam"))
+        .otherwise(pl.col("passer_player_id"))
+        .alias("passer_player_id"),
+        pl.when(renamed & pl.col("passer_player_name").is_not_null())
+        .then("R." + pl.col("posteam"))
+        .otherwise(pl.col("passer_player_name"))
+        .alias("passer_player_name"),
+        flipped("qb_dropback"),
+        flipped("pass"),
+        flipped("rush"),
+        flipped("special"),
+        pl.when(kneel).then(1.0).otherwise(pl.col("qb_kneel")).alias("qb_kneel"),
+        pl.when(later & incomplete & (row % 3 == 0))
+        .then(1.0)
+        .otherwise(pl.col("qb_spike"))
+        .alias("qb_spike"),
+        pl.when(later & is_run & ~(row % 4 == 0))
+        .then(pl.lit("no_play"))
+        .otherwise(pl.col("play_type"))
+        .alias("play_type"),
+    )
+
+
+def with_player_sources(data: League) -> League:
+    """Return the league with weekly player stats and snap counts for every passer-game.
+
+    Each regular-season passer-game gets a player-stats row (its pass attempts and passing
+    EPA) and a snap-count row (60 offensive snaps), linked to the players file through a
+    snap-count id, and AAA's backup gets 5 snaps in every regular-season AAA game, so the games
+    he does not pass in become quarterback-games without a dropback. Both sources are
+    regular-season only, as the loaders keep them.
+    """
+    regular = data.plays.filter(pl.col("season_type") == "REG")
+    passer_games = (
+        regular.filter(pl.col("passer_player_id").is_not_null())
+        .group_by("game_id", "season", "week", "posteam", "passer_player_id", maintain_order=True)
+        .agg(
+            pl.col("pass").sum().cast(pl.Int64).alias("attempts"),
+            pl.col("qb_epa").sum().alias("passing_epa"),
+            pl.col("passer_player_name").first(),
+        )
+    )
+    player_stats = passer_games.select(
+        pl.col("passer_player_id").alias("player_id"),
+        pl.lit("QB").alias("position"),
+        pl.col("season").cast(pl.Int64),
+        pl.col("week").cast(pl.Int64),
+        pl.lit("REG").alias("season_type"),
+        "game_id",
+        pl.col("posteam").alias("team"),
+        "attempts",
+        "passing_epa",
+    )
+    snap_counts = passer_games.select(
+        "game_id",
+        pl.col("season").cast(pl.Int64),
+        pl.col("week").cast(pl.Int64),
+        pl.col("posteam").alias("team"),
+        pl.col("passer_player_name").alias("player"),
+        ("pfr-" + pl.col("passer_player_id")).alias("pfr_player_id"),
+        pl.lit("QB").alias("position"),
+        pl.lit(60.0).alias("offense_snaps"),
+    )
+    backup_snaps = (
+        regular.filter(pl.col("posteam") == "AAA")
+        .select("game_id", "season", "week")
+        .unique(maintain_order=True)
+        .select(
+            "game_id",
+            pl.col("season").cast(pl.Int64),
+            pl.col("week").cast(pl.Int64),
+            pl.lit("AAA").alias("team"),
+            pl.lit(BACKUP_NAME).alias("player"),
+            pl.lit(f"pfr-{BACKUP_ID}").alias("pfr_player_id"),
+            pl.lit("QB").alias("position"),
+            pl.lit(5.0).alias("offense_snaps"),
+        )
+    )
+    players = data.players.with_columns(("pfr-" + pl.col("gsis_id")).alias("pfr_id"))
+    return replace(
+        data,
+        player_stats=player_stats,
+        snap_counts=pl.concat([snap_counts, backup_snaps]),
+        players=players,
+    )
+
+
 def plays_for(schedule: pl.DataFrame, seed: int = 0) -> pl.DataFrame:
     """Return play-by-play for every game of ``schedule``, in its row order.
 
@@ -360,7 +474,9 @@ __all__ = [
     "League",
     "league",
     "plays_for",
+    "rewritten_plays",
     "starter_id",
     "starter_name",
     "with_backup_starting",
+    "with_player_sources",
 ]

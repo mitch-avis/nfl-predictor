@@ -19,8 +19,10 @@ from tests.ratings_league import (
     WEEKS,
     League,
     league,
+    rewritten_plays,
     starter_id,
     with_backup_starting,
+    with_player_sources,
 )
 from threadpoolctl import threadpool_info, threadpool_limits
 
@@ -501,22 +503,26 @@ def test_write_published_tables_writes_one_parquet_file_per_table(
 # Leakage: every input from a week on (and every later season) is rewritten, the week's
 # features must not move.
 def _rewritten(data: League, season: int, week: int) -> League:
-    """Return the league with every play, roster week and score from a week on rewritten."""
+    """Return the league with every input from a week on rewritten.
+
+    The plays (``rewritten_plays``: EPA, passer ids and names, and the dropback, pass, run,
+    kneel, spike and special-teams flags), the weekly player stats, the snap counts, the
+    weekly rosters and the scores all change.
+    """
     later = (pl.col("season") > season) | ((pl.col("season") == season) & (pl.col("week") >= week))
-    plays = data.plays.with_columns(
-        pl.when(later).then(pl.col("epa") * -3.0 + 1.25).otherwise(pl.col("epa")).alias("epa"),
+    player_stats = data.player_stats.with_columns(
+        pl.when(later).then(pl.col("attempts") + 9).otherwise(pl.col("attempts")).alias("attempts"),
         pl.when(later)
-        .then(pl.col("qb_epa") * 2.0 - 0.75)
-        .otherwise(pl.col("qb_epa"))
-        .alias("qb_epa"),
-        pl.when(later & (pl.col("play_type") == "run"))
-        .then(pl.lit(0.0))
-        .otherwise(pl.col("rush"))
-        .alias("rush"),
-        pl.when(later & (pl.col("play_type") == "run"))
-        .then(pl.lit("no_play"))
-        .otherwise(pl.col("play_type"))
-        .alias("play_type"),
+        .then(pl.col("passing_epa") * -2.0 + 1.0)
+        .otherwise(pl.col("passing_epa"))
+        .alias("passing_epa"),
+    )
+    snap_counts = data.snap_counts.with_columns(
+        pl.when(later)
+        .then(pl.col("offense_snaps") + 25.0)
+        .otherwise(pl.col("offense_snaps"))
+        .alias("offense_snaps"),
+        pl.when(later).then(pl.lit("WR")).otherwise(pl.col("position")).alias("position"),
     )
     rosters = data.weekly_rosters.with_columns(
         pl.when(later).then(pl.lit("WR")).otherwise(pl.col("position")).alias("position"),
@@ -528,7 +534,19 @@ def _rewritten(data: League, season: int, week: int) -> League:
         .otherwise(pl.col("home_score"))
         .alias("home_score")
     )
-    return replace(data, plays=plays, weekly_rosters=rosters, schedule=schedule)
+    return replace(
+        data,
+        plays=rewritten_plays(data.plays, later),
+        player_stats=player_stats,
+        snap_counts=snap_counts,
+        weekly_rosters=rosters,
+        schedule=schedule,
+    )
+
+
+def _sourced_league() -> League:
+    """Return the synthetic league with weekly player stats and snap counts filled in."""
+    return with_player_sources(league())
 
 
 def _week_features(build: ratings_build.RatingsBuild, season: int, week: int) -> pl.DataFrame:
@@ -545,8 +563,8 @@ def _week_features(build: ratings_build.RatingsBuild, season: int, week: int) ->
 @pytest.mark.parametrize(("season", "week"), [(2000, 1), (2000, 4), (_LAST, 3), (_LAST, WEEKS)])
 def test_features_of_a_week_never_see_that_week_or_later(season: int, week: int) -> None:
     # Arrange
-    expected = _week_features(_build(), season, week)
-    rewritten = _build(_rewritten(league(), season, week))
+    expected = _week_features(_build(_sourced_league()), season, week)
+    rewritten = _build(_rewritten(_sourced_league(), season, week))
 
     # Act
     features = _week_features(rewritten, season, week)
@@ -558,14 +576,28 @@ def test_features_of_a_week_never_see_that_week_or_later(season: int, week: int)
 def test_rewriting_the_week_before_does_move_the_features() -> None:
     """The leakage guard above is not vacuous: an earlier rewrite moves the week's features."""
     # Arrange
-    expected = _week_features(_build(), _LAST, 4)
-    rewritten = _build(_rewritten(league(), _LAST, 3))
+    expected = _week_features(_build(_sourced_league()), _LAST, 4)
+    rewritten = _build(_rewritten(_sourced_league(), _LAST, 3))
 
     # Act
     features = _week_features(rewritten, _LAST, 4)
 
     # Assert
     assert not features.equals(expected)
+
+
+def test_the_sourced_league_rates_its_passers_from_the_player_sources() -> None:
+    """The leakage cases above read player stats and snap counts, not only the plays."""
+    # Arrange
+    data = _sourced_league()
+
+    # Act
+    passers = _inputs(data).passer_games
+
+    # Assert
+    assert passers.get_column("official_attempts").drop_nulls().len() > 0
+    snap_only = passers.filter((pl.col("qb_id") == BACKUP_ID) & (pl.col("qb_dropbacks") == 0))
+    assert snap_only.height > 0
 
 
 # Determinism: two runs, the second fed its inputs in another order, write the same bytes.

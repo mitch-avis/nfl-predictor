@@ -1,4 +1,4 @@
-"""Quarterback metric definitions: every QB column the pipeline publishes.
+"""Quarterback metric definitions: every QB column the season tables publish.
 
 Human-readable companion: [docs/qb-stats-catalog.md](../../docs/qb-stats-catalog.md).
 """

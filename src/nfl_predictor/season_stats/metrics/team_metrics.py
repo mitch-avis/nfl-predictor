@@ -1,4 +1,4 @@
-"""Team metric definitions: every team column the pipeline publishes, in catalog order.
+"""Team metric definitions: every team column the season tables publish, in catalog order.
 
 The definitions live in one module per category (`team_rating_metrics`, `team_overall_metrics`,
 `team_offense_metrics`, `team_passing_metrics`, `team_defense_metrics`); this module assembles

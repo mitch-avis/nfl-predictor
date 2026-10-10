@@ -119,8 +119,9 @@ DEFAULT_PREFIX_RULES: tuple[PrefixRule, ...] = (
     ),
 )
 
-# Suffixes the pipeline and the API add to a base metric. A stat with its own per-play denominator
-# (qb_epa_per_dropback, epa_per_carry, points_per_drive) is a metric of its own and needs no rule.
+# Suffixes the season tables and the API add to a base metric. A stat with its own per-play
+# denominator (qb_epa_per_dropback, epa_per_carry, points_per_drive) is a metric of its own and
+# needs no rule.
 DEFAULT_SUFFIX_RULES: tuple[SuffixRule, ...] = (
     SuffixRule(
         suffix="_per_game",

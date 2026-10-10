@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { entityConfig, entityId, entityLabel, entityPath, findEntityRow, ratingsPagePath } from './entities'
+import { entityConfig, entityId, entityLabel, entityPath, findEntityRow, headToHeadPath, ratingsPagePath } from './entities'
 
 const qbRows = [
   { qb_id: '00-0034857', qb_name: 'J.Allen', team: 'BUF' },
@@ -71,6 +71,14 @@ describe('entityPath and ratingsPagePath', () => {
 
     // Assert
     expect(path).toBe('/qbs/00-0034857?season=2025')
+  })
+
+  it('links the head-to-head page of a pair', () => {
+    // Act
+    const path = headToHeadPath('qbs', 2025, '00-1', '00-2')
+
+    // Assert
+    expect(path).toBe('/head-to-head?kind=qbs&season=2025&a=00-1&b=00-2')
   })
 
   it.each([

@@ -215,18 +215,22 @@ def test_season_bootstrap_with_equal_season_means_has_no_spread() -> None:
     assert (mean, low, high) == pytest.approx((0.0, 0.0, 0.0), abs=1e-12)
 
 
-def test_season_bootstrap_weights_each_season_by_its_games() -> None:
+def test_season_bootstrap_pools_the_games_of_the_drawn_seasons() -> None:
     # Arrange
-    differences = np.array([1.0, 1.0, 1.0, -2.0])
-    seasons = np.array([2008, 2008, 2008, 2009])
+    # One season of a single game at +10 and four of nine games at 0. A resample draws the
+    # small season three times in about 5% of draws and four or more times in under 1%, so the
+    # upper bound comes from the draws holding it three times: pooled, 30 over 3 + 2 * 9 = 21
+    # games; averaging the drawn seasons' means instead would give 3 * 10 / 5 = 6.
+    differences = np.array([10.0, *([0.0] * 36)])
+    seasons = np.array([2008, *np.repeat([2009, 2010, 2011, 2012], 9)])
 
     # Act
-    mean, low, high = ranking_evaluation.season_bootstrap(differences, seasons, 2000, 42)
+    mean, low, high = ranking_evaluation.season_bootstrap(differences, seasons, 20_000, 42)
 
     # Assert
-    assert mean == pytest.approx(0.25)
-    assert low == pytest.approx(-2.0)
-    assert high == pytest.approx(1.0)
+    assert mean == pytest.approx(10.0 / 37.0)
+    assert low == pytest.approx(0.0)
+    assert high == pytest.approx(30.0 / 21.0)
 
 
 def _paired_games() -> pl.DataFrame:

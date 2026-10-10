@@ -1,0 +1,286 @@
+{
+  "source_repository": "nfl-sos-ratings",
+  "source_commit": "9081bced89b0d51c99e28f80f8f62b9fcd0118e0",
+  "generator": ".agents/sos_port/ratings_fixtures.py",
+  "files": [
+    {
+      "fixture": "1999_team_game_logs.parquet",
+      "source_file": "data/1999_team_game_logs.parquet",
+      "source_sha256": "f390b0bef7ae0c36833ba5306c79ed7d01d310e44a28818b33ac524ffeb03dba",
+      "columns": [
+        "game_id",
+        "week",
+        "team",
+        "opponent_team",
+        "is_home",
+        "offensive_snaps",
+        "offensive_epa",
+        "st_plays",
+        "st_epa",
+        "point_margin"
+      ],
+      "rows": "every row",
+      "row_count": 494,
+      "sha256": "97f75631713d9121b47c6f8e380b796e088f76205085b88599d9220b9b8ac721"
+    },
+    {
+      "fixture": "2000_team_game_logs.parquet",
+      "source_file": "data/2000_team_game_logs.parquet",
+      "source_sha256": "3afe7dcb9d7fbad25bc304533a2a8f3ec12f473b5673c4bf9cd8f40ad4002bf6",
+      "columns": [
+        "game_id",
+        "week",
+        "team",
+        "opponent_team",
+        "is_home",
+        "offensive_snaps",
+        "offensive_epa",
+        "st_plays",
+        "st_epa",
+        "point_margin"
+      ],
+      "rows": "every row",
+      "row_count": 492,
+      "sha256": "2e6fd732d47446485720f14e4c441348a14113ce7c3935116608a19844061b82"
+    },
+    {
+      "fixture": "2001_team_game_logs.parquet",
+      "source_file": "data/2001_team_game_logs.parquet",
+      "source_sha256": "2e2c25752fc3e88e6a554ab0b1022ccc2cbe2d5da01d2f5272fb692f46a3f6e0",
+      "columns": [
+        "game_id",
+        "week",
+        "team",
+        "opponent_team",
+        "is_home",
+        "offensive_snaps",
+        "offensive_epa",
+        "st_plays",
+        "st_epa",
+        "point_margin"
+      ],
+      "rows": "every row",
+      "row_count": 496,
+      "sha256": "ef237602b4e8bbec2c1d92e26a758d1dfed209693e0c8324955134865de527dd"
+    },
+    {
+      "fixture": "2002_team_game_logs.parquet",
+      "source_file": "data/2002_team_game_logs.parquet",
+      "source_sha256": "5a60176be43e980ed6e880609dc0ac02ad419e2f34ffd9f1ee1c88f154918727",
+      "columns": [
+        "game_id",
+        "week",
+        "team",
+        "opponent_team",
+        "is_home",
+        "offensive_snaps",
+        "offensive_epa",
+        "st_plays",
+        "st_epa",
+        "point_margin"
+      ],
+      "rows": "every row",
+      "row_count": 512,
+      "sha256": "5838ba983af81134e9bb085ca1f1d7db383c5b4eb3b4a7bed2e5629c79149828"
+    },
+    {
+      "fixture": "2003_team_game_logs.parquet",
+      "source_file": "data/2003_team_game_logs.parquet",
+      "source_sha256": "f414480b53bb6941bc1cdce5a98315605df7726a2f227197cf0772c560a46cac",
+      "columns": [
+        "game_id",
+        "week",
+        "team",
+        "opponent_team",
+        "is_home",
+        "offensive_snaps",
+        "offensive_epa",
+        "st_plays",
+        "st_epa",
+        "point_margin"
+      ],
+      "rows": "every row",
+      "row_count": 512,
+      "sha256": "8b01890f75b74be0a53faf61d85f11f18dd6f54555f7f999bd9eec2bdeb76703"
+    },
+    {
+      "fixture": "2024_team_game_logs.parquet",
+      "source_file": "data/2024_team_game_logs.parquet",
+      "source_sha256": "6a57fca8336796013bdb8dad303745741a2a8cd8de2517816ea1c4f9cd4fdef2",
+      "columns": [
+        "game_id",
+        "week",
+        "team",
+        "opponent_team",
+        "is_home",
+        "offensive_snaps",
+        "offensive_epa",
+        "st_plays",
+        "st_epa",
+        "point_margin"
+      ],
+      "rows": "every row",
+      "row_count": 544,
+      "sha256": "37472e0d3c9e1801da83dab9f1f22aa9d72b454d69d9b53b83662439cb1aa949"
+    },
+    {
+      "fixture": "1999_qb_game_logs.parquet",
+      "source_file": "data/1999_qb_game_logs.parquet",
+      "source_sha256": "b66481c4233533edafe7a3254bb90d5ed8318c13e09052a0db5d848bc0acd68c",
+      "columns": [
+        "game_id",
+        "week",
+        "team",
+        "opponent_team",
+        "is_home",
+        "qb_id",
+        "qb_name",
+        "qb_dropbacks",
+        "qb_attempts",
+        "qb_passing_epa",
+        "qb_spike_epa"
+      ],
+      "rows": "every row",
+      "row_count": 617,
+      "sha256": "5888f15e2b66274fefd92de71e9136f8938604b26a8912aa595f07a900e635e1"
+    },
+    {
+      "fixture": "2024_qb_game_logs.parquet",
+      "source_file": "data/2024_qb_game_logs.parquet",
+      "source_sha256": "f9cf129d3a19995d723d82d74ee478c44175f8399179c8a013a918e72e0c8ed0",
+      "columns": [
+        "game_id",
+        "week",
+        "team",
+        "opponent_team",
+        "is_home",
+        "qb_id",
+        "qb_name",
+        "qb_dropbacks",
+        "qb_attempts",
+        "qb_passing_epa",
+        "qb_spike_epa"
+      ],
+      "rows": "every row",
+      "row_count": 682,
+      "sha256": "705437b6aad5b25ed27c61c03d55c113185694aedb5cdb146b4e7078ee9fbc9c"
+    },
+    {
+      "fixture": "1999_ratings.parquet",
+      "source_file": "data/1999_ratings.parquet",
+      "source_sha256": "41b4166028d3dfdd4a2cc0f314194b163adcbbc6dc9cea3b806b0f0431d97a7b",
+      "columns": null,
+      "rows": "every row",
+      "row_count": 31,
+      "sha256": "41b4166028d3dfdd4a2cc0f314194b163adcbbc6dc9cea3b806b0f0431d97a7b"
+    },
+    {
+      "fixture": "1999_rating_ranges.parquet",
+      "source_file": "data/1999_rating_ranges.parquet",
+      "source_sha256": "801517f5b67ca5fca8264618b95eef27f4ae5c72031c0078081c711f3eb4737d",
+      "columns": null,
+      "rows": "every fourth row by published rank",
+      "row_count": 8,
+      "sha256": "60e78a383ac28aaf19d582fe5f8cb673783951f559082d7cdfad16e964e77400"
+    },
+    {
+      "fixture": "1999_rating_pairs.parquet",
+      "source_file": "data/1999_rating_pairs.parquet",
+      "source_sha256": "1d7a35968cea258ba34322fe59543d5e4f856825a8535396567d5741fe5f156d",
+      "columns": null,
+      "rows": "pairs of the teams in the rating_ranges cut",
+      "row_count": 56,
+      "sha256": "4c1f8562b486d99008775f43e52be35cdae71507662913c8d09aca6f16e15e7b"
+    },
+    {
+      "fixture": "1999_qb_ratings.parquet",
+      "source_file": "data/1999_qb_ratings.parquet",
+      "source_sha256": "daafddece665b7a0332575174421d6774c21dbab99538d3aefc94a066efb2378",
+      "columns": null,
+      "rows": "every row",
+      "row_count": 35,
+      "sha256": "daafddece665b7a0332575174421d6774c21dbab99538d3aefc94a066efb2378"
+    },
+    {
+      "fixture": "1999_qb_ratings_by_week.parquet",
+      "source_file": "data/1999_qb_ratings_by_week.parquet",
+      "source_sha256": "ffd29c49738d40705fd1491231975f0c9123ed2c592e6674c01e2ef95a4efb23",
+      "columns": null,
+      "rows": "weeks 1, 2, 9, and the last",
+      "row_count": 238,
+      "sha256": "3ad7b703c51fa857341f7d0200f832e40cb2bfe188d290259706ea184c0852a1"
+    },
+    {
+      "fixture": "1999_qb_rating_ranges.parquet",
+      "source_file": "data/1999_qb_rating_ranges.parquet",
+      "source_sha256": "177d0061c3e9aa8990998f5eafe084e5ff559a2f6937d5a7697246b88d114084",
+      "columns": null,
+      "rows": "every fourth row by published rank",
+      "row_count": 9,
+      "sha256": "6926fe3fcdfa9a4bb20e7d346787ff30b642052323d0861585d6da0b5da50367"
+    },
+    {
+      "fixture": "1999_qb_rating_pairs.parquet",
+      "source_file": "data/1999_qb_rating_pairs.parquet",
+      "source_sha256": "e26c2964965c762093f28bc530e3c70ee90c71191373743f4aa104fe8cf5aea1",
+      "columns": null,
+      "rows": "pairs of the passers in the qb_rating_ranges cut",
+      "row_count": 72,
+      "sha256": "3af66aa3d2444f813379ec287dc465c11b730a3e7fe242addbd4ad2465f56a6f"
+    },
+    {
+      "fixture": "2003_ratings.parquet",
+      "source_file": "data/2003_ratings.parquet",
+      "source_sha256": "2f6eddc4006fc8bfea903d2a31db8bcf88eac88f7744a4fb6e3804410aecc907",
+      "columns": null,
+      "rows": "every row",
+      "row_count": 32,
+      "sha256": "2f6eddc4006fc8bfea903d2a31db8bcf88eac88f7744a4fb6e3804410aecc907"
+    },
+    {
+      "fixture": "2003_ratings_by_week.parquet",
+      "source_file": "data/2003_ratings_by_week.parquet",
+      "source_sha256": "96d666b6408dc60e4895bbe22436f18d8517b69dabc75250b82caab3e76e76ab",
+      "columns": null,
+      "rows": "every row",
+      "row_count": 544,
+      "sha256": "96d666b6408dc60e4895bbe22436f18d8517b69dabc75250b82caab3e76e76ab"
+    },
+    {
+      "fixture": "2024_qb_ratings.parquet",
+      "source_file": "data/2024_qb_ratings.parquet",
+      "source_sha256": "2707f65f92197f6371733e6e2c073e647386761254c99edb2daff2421a96ec6a",
+      "columns": null,
+      "rows": "every row",
+      "row_count": 36,
+      "sha256": "2707f65f92197f6371733e6e2c073e647386761254c99edb2daff2421a96ec6a"
+    },
+    {
+      "fixture": "2024_qb_ratings_by_week.parquet",
+      "source_file": "data/2024_qb_ratings_by_week.parquet",
+      "source_sha256": "8cc2396ca6ab7dd8763711a65124f2d5b9744bbb2f9a25e86a01cdf8f91bd51c",
+      "columns": null,
+      "rows": "weeks 1, 2, 9, and the last",
+      "row_count": 211,
+      "sha256": "d081c67a2f11d2adb2b97397fe86cd1c77b15bc80c898afe0d6ebf7f76755b73"
+    },
+    {
+      "fixture": "2024_qb_rating_ranges.parquet",
+      "source_file": "data/2024_qb_rating_ranges.parquet",
+      "source_sha256": "7fe04baa7e200096da48a95f6bdebdf4927accdb01416b5c7ad3ee0838995046",
+      "columns": null,
+      "rows": "every fourth row by published rank",
+      "row_count": 9,
+      "sha256": "7eb99ff9a16326f9bfffcd3af0fcb1a71bd7fcb1e132d2b85550f861d533b781"
+    },
+    {
+      "fixture": "2024_qb_rating_pairs.parquet",
+      "source_file": "data/2024_qb_rating_pairs.parquet",
+      "source_sha256": "579bd30bf96851f321955da0c2db1809efdd4ed91738228b84054f996de22316",
+      "columns": null,
+      "rows": "pairs of the passers in the qb_rating_ranges cut",
+      "row_count": 72,
+      "sha256": "2c945d013f9013eab1c3db1990ffbbf517b7e7aed2353be8ec7246dd3e94a0ab"
+    }
+  ]
+}

@@ -40,10 +40,10 @@ Formulas, with ``K = constants.QB_PRIOR_DROPBACKS``:
   behind the rates. Null when the quarterback cannot be identified.
 
 Deviation from the ``nfl-sos-ratings`` reference (read-only): it credits scrambles through
-``rusher_player_id``, which this repo's play-by-play cache does not select. Here a scramble
-(a dropback with no passer) is credited to the team-game's primary passer, the one with the
-most dropbacks that carry a passer id. Scrambles are about 5% of dropbacks, and nearly all of
-them belong to the starter.
+``rusher_player_id``, which this family does not read, though the play-by-play cache keeps it.
+Here a scramble (a dropback with no passer) is credited to the team-game's primary passer, the
+one with the most dropbacks that carry a passer id. Scrambles are about 5% of dropbacks, and
+nearly all of them belong to the starter.
 """
 
 from __future__ import annotations

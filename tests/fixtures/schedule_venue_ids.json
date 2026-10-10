@@ -1,0 +1,411 @@
+{
+  "source": "Every stadium_id of the cached nflverse schedules for these seasons, written by .agents/sos_port/decisions/stadium_venues.py",
+  "seasons": [
+    1999,
+    2026
+  ],
+  "venues": [
+    {
+      "stadium_id": "ATL00",
+      "first_season": 1999,
+      "last_season": 2016,
+      "games": 150
+    },
+    {
+      "stadium_id": "ATL97",
+      "first_season": 2017,
+      "last_season": 2026,
+      "games": 82
+    },
+    {
+      "stadium_id": "BAL00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 237
+    },
+    {
+      "stadium_id": "BOS00",
+      "first_season": 2002,
+      "last_season": 2026,
+      "games": 227
+    },
+    {
+      "stadium_id": "BOS99",
+      "first_season": 1999,
+      "last_season": 2001,
+      "games": 25
+    },
+    {
+      "stadium_id": "BRG00",
+      "first_season": 2005,
+      "last_season": 2005,
+      "games": 4
+    },
+    {
+      "stadium_id": "BUF00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 227
+    },
+    {
+      "stadium_id": "BUF01",
+      "first_season": 2008,
+      "last_season": 2013,
+      "games": 6
+    },
+    {
+      "stadium_id": "CAR00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 233
+    },
+    {
+      "stadium_id": "CHI98",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 227
+    },
+    {
+      "stadium_id": "CHI99",
+      "first_season": 2002,
+      "last_season": 2002,
+      "games": 8
+    },
+    {
+      "stadium_id": "CIN00",
+      "first_season": 2000,
+      "last_season": 2026,
+      "games": 223
+    },
+    {
+      "stadium_id": "CIN99",
+      "first_season": 1999,
+      "last_season": 1999,
+      "games": 8
+    },
+    {
+      "stadium_id": "CLE00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 226
+    },
+    {
+      "stadium_id": "DAL00",
+      "first_season": 2009,
+      "last_season": 2026,
+      "games": 153
+    },
+    {
+      "stadium_id": "DAL99",
+      "first_season": 1999,
+      "last_season": 2008,
+      "games": 81
+    },
+    {
+      "stadium_id": "DEN00",
+      "first_season": 2001,
+      "last_season": 2026,
+      "games": 222
+    },
+    {
+      "stadium_id": "DEN99",
+      "first_season": 1999,
+      "last_season": 2000,
+      "games": 16
+    },
+    {
+      "stadium_id": "DET00",
+      "first_season": 2002,
+      "last_season": 2026,
+      "games": 209
+    },
+    {
+      "stadium_id": "DET99",
+      "first_season": 1999,
+      "last_season": 2001,
+      "games": 24
+    },
+    {
+      "stadium_id": "FRA00",
+      "first_season": 2023,
+      "last_season": 2023,
+      "games": 2
+    },
+    {
+      "stadium_id": "GER00",
+      "first_season": 2022,
+      "last_season": 2024,
+      "games": 2
+    },
+    {
+      "stadium_id": "GNB00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 241
+    },
+    {
+      "stadium_id": "HOU00",
+      "first_season": 2002,
+      "last_season": 2026,
+      "games": 213
+    },
+    {
+      "stadium_id": "IND00",
+      "first_season": 2008,
+      "last_season": 2026,
+      "games": 161
+    },
+    {
+      "stadium_id": "IND99",
+      "first_season": 1999,
+      "last_season": 2007,
+      "games": 79
+    },
+    {
+      "stadium_id": "JAX00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 222
+    },
+    {
+      "stadium_id": "KAN00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 243
+    },
+    {
+      "stadium_id": "LAX01",
+      "first_season": 2020,
+      "last_season": 2026,
+      "games": 120
+    },
+    {
+      "stadium_id": "LAX97",
+      "first_season": 2017,
+      "last_season": 2019,
+      "games": 22
+    },
+    {
+      "stadium_id": "LAX99",
+      "first_season": 2016,
+      "last_season": 2019,
+      "games": 31
+    },
+    {
+      "stadium_id": "LON00",
+      "first_season": 2007,
+      "last_season": 2026,
+      "games": 27
+    },
+    {
+      "stadium_id": "LON01",
+      "first_season": 2016,
+      "last_season": 2017,
+      "games": 3
+    },
+    {
+      "stadium_id": "LON02",
+      "first_season": 2019,
+      "last_season": 2026,
+      "games": 11
+    },
+    {
+      "stadium_id": "MAD01",
+      "first_season": 2026,
+      "last_season": 2026,
+      "games": 1
+    },
+    {
+      "stadium_id": "MEL00",
+      "first_season": 2026,
+      "last_season": 2026,
+      "games": 1
+    },
+    {
+      "stadium_id": "MEX00",
+      "first_season": 2005,
+      "last_season": 2026,
+      "games": 6
+    },
+    {
+      "stadium_id": "MIA00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 230
+    },
+    {
+      "stadium_id": "MIN00",
+      "first_season": 1999,
+      "last_season": 2013,
+      "games": 121
+    },
+    {
+      "stadium_id": "MIN01",
+      "first_season": 2016,
+      "last_season": 2026,
+      "games": 93
+    },
+    {
+      "stadium_id": "MIN98",
+      "first_season": 2010,
+      "last_season": 2015,
+      "games": 18
+    },
+    {
+      "stadium_id": "MUN01",
+      "first_season": 2026,
+      "last_season": 2026,
+      "games": 1
+    },
+    {
+      "stadium_id": "NAS00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 232
+    },
+    {
+      "stadium_id": "NOR00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 229
+    },
+    {
+      "stadium_id": "NYC00",
+      "first_season": 1999,
+      "last_season": 2009,
+      "games": 182
+    },
+    {
+      "stadium_id": "NYC01",
+      "first_season": 2010,
+      "last_season": 2026,
+      "games": 280
+    },
+    {
+      "stadium_id": "OAK00",
+      "first_season": 1999,
+      "last_season": 2019,
+      "games": 168
+    },
+    {
+      "stadium_id": "PAR00",
+      "first_season": 2026,
+      "last_season": 2026,
+      "games": 1
+    },
+    {
+      "stadium_id": "PHI00",
+      "first_season": 2003,
+      "last_season": 2026,
+      "games": 210
+    },
+    {
+      "stadium_id": "PHI99",
+      "first_season": 1999,
+      "last_season": 2002,
+      "games": 36
+    },
+    {
+      "stadium_id": "PHO00",
+      "first_season": 2006,
+      "last_season": 2026,
+      "games": 181
+    },
+    {
+      "stadium_id": "PHO99",
+      "first_season": 1999,
+      "last_season": 2005,
+      "games": 56
+    },
+    {
+      "stadium_id": "PIT00",
+      "first_season": 2001,
+      "last_season": 2026,
+      "games": 226
+    },
+    {
+      "stadium_id": "PIT99",
+      "first_season": 1999,
+      "last_season": 2000,
+      "games": 16
+    },
+    {
+      "stadium_id": "RIO00",
+      "first_season": 2026,
+      "last_season": 2026,
+      "games": 1
+    },
+    {
+      "stadium_id": "SAN00",
+      "first_season": 2005,
+      "last_season": 2005,
+      "games": 3
+    },
+    {
+      "stadium_id": "SAO00",
+      "first_season": 2024,
+      "last_season": 2024,
+      "games": 1
+    },
+    {
+      "stadium_id": "SDG00",
+      "first_season": 1999,
+      "last_season": 2016,
+      "games": 149
+    },
+    {
+      "stadium_id": "SEA00",
+      "first_season": 2002,
+      "last_season": 2026,
+      "games": 217
+    },
+    {
+      "stadium_id": "SEA98",
+      "first_season": 1999,
+      "last_season": 1999,
+      "games": 9
+    },
+    {
+      "stadium_id": "SEA99",
+      "first_season": 2000,
+      "last_season": 2001,
+      "games": 16
+    },
+    {
+      "stadium_id": "SFO00",
+      "first_season": 1999,
+      "last_season": 2013,
+      "games": 123
+    },
+    {
+      "stadium_id": "SFO01",
+      "first_season": 2014,
+      "last_season": 2026,
+      "games": 111
+    },
+    {
+      "stadium_id": "STL00",
+      "first_season": 1999,
+      "last_season": 2015,
+      "games": 140
+    },
+    {
+      "stadium_id": "TAM00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 235
+    },
+    {
+      "stadium_id": "VEG00",
+      "first_season": 2020,
+      "last_season": 2026,
+      "games": 60
+    },
+    {
+      "stadium_id": "WAS00",
+      "first_season": 1999,
+      "last_season": 2026,
+      "games": 230
+    }
+  ]
+}

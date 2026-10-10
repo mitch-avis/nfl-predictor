@@ -60,7 +60,9 @@ pre-cutoff games moved).
   international and relocated games, and four Saints games of 2005).
 - **Quarterback adjustment from this repository's play-by-play**; 538's draft-based rookie
   ratings are replaced by the mean of earlier first starts (no draft data here); designed
-  quarterback runs are missing until the play-by-play cache carries the rusher's id.
+  quarterback runs were missing because the play-by-play cache lacked the rusher's id, which it
+  carries since `0.50.0`, so the integration adds them and reruns the evaluation under the same
+  rule.
 - **Starters**: a completed game uses its actual starter, an upcoming game the projected one, as
   the `qb_elos.csv` columns do; the diagnostic cost of knowing only the previous starter is in
   the evaluation report and on the user's list (`.agents/step6_plan.md`).
@@ -93,3 +95,68 @@ the last found every code fix correct (the exact survivor planner checked on 3,8
 - **Live betting (design only)**: the in-game probability updates the pregame prediction with the
   score and clock, the market is shown beside it and never blended, providers are off by
   default, and odds poll on a monthly credit budget. Three provider choices are on your list.
+
+### The ported ratings (`0.49.0`)
+
+Full records: [decisions/ratings.md](decisions/ratings.md) (13 entries) and the generated audit
+[RATINGS_PARITY.md](RATINGS_PARITY.md). Review: two independent rounds (verdict "merge as is");
+the reviewer reproduced the audit on three CPU math kernels and caught every planted leak.
+
+- **Parity**: rebuilt over 1999-2026, the port reproduces every ratings file `nfl-sos-ratings`
+  published (767,141 cells; 766,979 bit-identical, the rest within 1.1e-16 on this machine; all
+  114 rank-range and head-to-head tables bit-identical). Tests compare floats to 1e-12 rather than
+  bit for bit, because last bits depend on the CPU's math kernel.
+- **Pre-week ratings for features**: fitted only on earlier weeks, with the previous season's
+  cross-validated penalty for both teams and quarterbacks (the source's quarterback history uses
+  the season's own penalty, which is not known before the week; the two agree in 7 of 27
+  seasons, and elsewhere differ by 0.021 EPA per dropback on average).
+- **Week 1** returns the preseason prior only, `sos` is null in weeks 1-2 (no opponent has an
+  earlier game to rate it by), and the first season (1999) is null throughout.
+- **Determinism**: the fits keep the caller's row order and `sos` sums opponents in a fixed order;
+  the ETL must pin one math-library thread (an integration note).
+- **SRS** comes from this repository's existing solver (bit-identical to the source's).
+
+### The play-by-play columns and the stadium table (`0.50.0`)
+
+Full records: [decisions/pbp_columns.md](decisions/pbp_columns.md) (15 entries and a note on the
+first ETL after the merge). Review: one independent round plus a verified documentation round;
+the reviewer reproduced every number on real data for all 27 seasons and found no existing value,
+type or aggregation changed.
+
+- **One refresh for the whole port**: the cache takes every play-by-play column `nfl-sos-ratings`
+  reads (134, derived by script from its code; 84 added), plus the play text its repair parses.
+- **Release check**: a fresh nflverse download equals the cache the 2026-10-09 reference build
+  used, on every shared column, in 27 of 27 seasons, so the candidate build is not confounded by
+  a newer release.
+- **Team codes**: all 23 team-code columns are normalized at load; yard-line text stays as
+  published (normalizing it would change an already-cached column).
+- **Stadiums**: 14 venue ids the table lacked are added (9 used in 1999-2002, 5 in 2026), with
+  elevations measured from terrain models at each venue's coordinates; 163 games move from 0 ft.
+  Mile High Stadium gets its measured 5,210 ft while Empower Field keeps its nominal 5,280 ft.
+- **2026 roofs**: nflverse lists three 2026 international venues as domes; no override now (the
+  current season's schedule re-downloads every run); recheck before the Paris game on Oct 25.
+
+### Phase 1: the inventory and the play-by-play parity check
+
+Full records: [decisions/phase1_parity.md](decisions/phase1_parity.md) (18 entries), the generated
+[INVENTORY.md](INVENTORY.md) and [PARITY.md](PARITY.md), and the summary
+[FINDINGS.md](FINDINGS.md). Review: two independent rounds; the final round's fixes were checked
+by re-running both scripts on the integration branch.
+
+- **Adopted**: pre-2006 scrambles as dropbacks; situational flags read on every play; a down
+  flagged both ways counted once; the Jacksonville 2001-2002 player-team repair; the play-by-play
+  cache extension; carries on the source's designed-carry rule.
+- **Corrected by the session**: carries were first kept on this repository's `rush` flag, on the
+  premise that penalty-wiped passes stay dropbacks. The data showed none does (of 65,122
+  penalty-wiped plays, 8,848 keep the run flag at -5,660 EPA, 27,906 the pass flag at +11,142 EPA,
+  0 the dropback flag), so the old rule put penalty-wiped runs' EPA into rushing while
+  penalty-wiped passes counted nowhere. Carries now follow the source (`rush_attempt` and not a
+  two-point try, scramble or kneel-down).
+- **Kept** (definitional): two-point tries out of dropbacks, first downs as passing plus rushing,
+  fumbles on plays that are not special teams, play-by-play ahead of nflverse team stats,
+  both-sides special-teams counts, the explosive and stuffed definitions, Washington as `WSH`.
+- **Inventory**: 1,736 output columns, each resolved to one rule (matched 30, different 526,
+  missing 1,180 here), with guards that fail on an unclassified column, a same-name counterpart
+  filed as missing, or a column missing in one file kind but classified in another.
+- **Parity**: every mismatching team-game explained by a named cause (40,694 values); the
+  snapshot of the play-by-play the source read equals this repository's cache row by row.

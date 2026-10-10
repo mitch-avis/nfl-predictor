@@ -687,3 +687,44 @@ def test_build_own_elo_features_rate_each_side_with_its_quarterback_adjustment()
     assert (row["home_own_elo"], row["away_own_elo"]) == (1535.0, 1485.0)
     assert row["own_elo_diff"] == 1485.0 - 1535.0
     assert row["own_elo_home_win_prob"] == pytest.approx(_logistic(65.0 + 50.0))
+
+
+def test_market_free_settings_are_the_components_the_evaluation_kept() -> None:
+    """Travel, the rolling home field and the quarterback adjustment; no market information."""
+    # Act
+    settings = elo_ratings.MARKET_FREE_SETTINGS
+
+    # Assert
+    assert settings == elo_ratings.EloSettings(
+        travel=True, rolling_home_field=True, quarterback=True
+    )
+
+
+def test_win_total_settings_add_only_the_win_total_pull() -> None:
+    """The market-informed preset is the market-free one plus the win-total pull."""
+    # Act
+    settings = elo_ratings.WIN_TOTAL_SETTINGS
+
+    # Assert
+    assert settings == elo_ratings.EloSettings(
+        travel=True, rolling_home_field=True, quarterback=True, win_totals=True
+    )
+
+
+def test_build_own_elo_features_defaults_to_the_market_free_settings() -> None:
+    """Without settings the builder rates with the market-free preset."""
+    # Arrange
+    games = _schedule(
+        _game("g1", (2020, 1), ("NE", "LAC"), (24, 20), stadium_id="BOS00"),
+        _game("g2", (2020, 2), ("LAC", "NE"), stadium_id="LAX01"),
+    )
+    inputs = elo_ratings.EloInputs(qb_adjustments=_qb_adjustments(("g1", 10.0, -5.0)))
+
+    # Act
+    features = elo_ratings.build_own_elo_features(games, inputs=inputs)
+
+    # Assert
+    expected = elo_ratings.build_own_elo_features(
+        games, settings=elo_ratings.MARKET_FREE_SETTINGS, inputs=inputs
+    )
+    assert features.equals(expected)

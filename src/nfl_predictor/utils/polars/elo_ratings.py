@@ -141,6 +141,16 @@ class EloSettings:
 
 
 FRAMEWORK = EloSettings()
+# The components a forward selection kept on the 2007-2025 regular season, adding them in the
+# order of the settings above and keeping each only when it improved the Brier score of the
+# ratings' own probabilities with a paired game-bootstrap interval below zero; rest and the
+# playoff boost were not kept. Market-free: no input built from betting lines or win totals.
+MARKET_FREE_SETTINGS = EloSettings(travel=True, rolling_home_field=True, quarterback=True)
+# The same plus the win-total pull, which the selection also kept: market information, for a
+# rating that may carry it.
+WIN_TOTAL_SETTINGS = EloSettings(
+    travel=True, rolling_home_field=True, quarterback=True, win_totals=True
+)
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
@@ -579,7 +589,7 @@ def compute_elo_ratings(
 def build_own_elo_features(
     schedule: pl.DataFrame,
     *,
-    settings: EloSettings,
+    settings: EloSettings = MARKET_FREE_SETTINGS,
     inputs: EloInputs = NO_INPUTS,
 ) -> pl.DataFrame:
     """Return the own Elo feature group for every game of this repository's schedule frame.
@@ -587,7 +597,9 @@ def build_own_elo_features(
     Args:
         schedule: The schedule, as for :func:`compute_elo_ratings`: every game, upcoming ones
             included, with the columns that function reads.
-        settings: The components switched on.
+        settings: The components switched on; by default the market-free preset, whose
+            quarterback adjustment needs ``inputs.qb_adjustments``
+            (``elo_quarterbacks.value_qb_adjustments``).
         inputs: Seeds and the inputs the quarterback and win-total switches read.
 
     Returns:

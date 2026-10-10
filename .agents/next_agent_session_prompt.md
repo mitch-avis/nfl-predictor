@@ -76,10 +76,20 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   - Branch `worktree-agent-ab92fdaea474da115` (phase-1 inventory and parity refresh, `74641b8`):
     implementer done (columns 30/526/1180 to 1236/500/0; parity 40,694 to 25,564 mismatches, all
     explained); its review died at the start. Review, then merge.
-  - Branch `worktree-agent-a5c5909054257aa73` (the source's open rating tests, report only) and
-    branch `worktree-agent-a2071e4c492dbbdda` (the blend rankings default with the weekly run's own
-    prediction sources, and the "no game lines" log and help wording): implementers probably died
-    on the limit; check each worktree's commits and uncommitted state with `git -C`, then resume.
+  - Branch `worktree-agent-a5c5909054257aa73` (the source's open rating tests, report only,
+    `a668e7f`): implementer done, gate green (3187 passed), protocols committed before scoring;
+    not yet reviewed. Results (the producer's, unreviewed): kneel-downs and spikes, keep today's
+    rating (removal -0.021 MAE, interval reaches +0.0005); penalty-wiped plays, a four-way tie, the
+    rule's simplicity order picks "every wiped snap"; quarterback all-plays, no gain, the user's
+    order picks "every quarterback play"; botched snaps, the approved removal of 60 plays moves
+    ratings by at most 0.008 EPA per dropback. Its questions for the user are in its decision log
+    (`decisions/open_rating_tests.md`); it skipped the QBR extras and the passer holdout
+    (descriptive, recorded as departures). Review, then merge (its `tests/sos_port_scripts.py`
+    equals the branch's), with a `DECISIONS.md` index entry.
+  - Branch `worktree-agent-a2071e4c492dbbdda` (the blend rankings default with the weekly run's
+    own prediction sources, and the "no game lines" log and help wording): the implementer
+    probably died on the limit with uncommitted edits; check the worktree with `git -C`, then
+    resume.
   - Still to do after those: the adoption chunk (`config/weekly_run.yaml`'s
     `disable_feature_groups` to the adopted arms' groups, `floor_sigma_reference_runs` to the
     adopted arms' runs; the reviewer's P3: production must not train on groups no arm measured),

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.52.0] - 2026-10-10
+
+### Changed
+
+- The settings-versus-production report reads production's disabled feature groups from
+  `config/weekly_run.yaml` for both stage 1 and the final fit, and compares groups as a set.
+- The feature-group resolver moved from `ml/walk_forward.py` to `ml/feature_spec.py`
+  (`walk_forward` still imports it); every walk-forward checkpoint fingerprint changes.
+
+### Added
+
+- `disable_feature_groups` in `config/weekly_run.yaml` (default `[]`, so no weekly output
+  changes) and `--disable-feature-groups` on `nfl-predictor weekly` and `nfl-predictor train`:
+  stage 1's walk-forward and the final fit leave out exactly the columns
+  `nfl-predictor backtest --disable-feature-groups` drops for the same groups, through one shared
+  resolver, so a walk-forward arm that leaves groups out can be adopted without a gap between the
+  benchmark and production. An unknown group stops `train` and the weekly run before any data
+  loads, and a group that matches no column of the data is logged as a warning.
+- Every trained model's `metadata.json` records `disabled_feature_groups` and
+  `dropped_feature_group_columns`.
+
 ## [0.51.0] - 2026-10-10
 
 ### Added

@@ -269,3 +269,12 @@ def test_build_betting_report_floor_sigma_leaves_the_existing_columns_unchanged(
     # Assert
     existing = [column for column in without_sigma.columns if column not in _SPLIT_COLUMNS]
     pd.testing.assert_frame_equal(with_sigma[existing], without_sigma[existing])
+
+
+def test_build_betting_report_non_positive_floor_sigma_raises() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, 3.0])
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="sigma must be positive"):
+        betting_report.build_betting_report(predictions, floor_sigma=0.0)

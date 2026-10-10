@@ -197,14 +197,15 @@ game logs) waits on that step; so far the pages have been checked only against t
   ranking metric by stat group (the opponent's defense rating for offense stats and a
   quarterback's passing stats, its offense rating for defense stats, Team Rating otherwise); here
   it is always Team Rating, the one rank the game log carries, and the tier is plain text rather
-  than shaded.
+  than shaded. An opponent without a rank (one the season's ratings table does not list) is
+  Middle, as in the source.
 - **Reasoning:** averaging per-game rates over one or two games mixes rates without their
   denominators, which the season statistics port takes care to avoid; scores and the opponent's
   own season ratings say how the games went and how strong the opponent was. The opponent
   profiles (what the opponents did against everyone else) are the views the stats card already
   offers.
-- **How to reverse it:** `opponents.ts` (`10077c9`, the tiers `68b381a`) and the detail page's
-  "Opponents faced" card (`b4144de`).
+- **How to reverse it:** `opponents.ts` (`10077c9`, the tiers `68b381a` and `ca25600`) and the
+  detail page's "Opponents faced" card (`b4144de`).
 
 ## 12. A missing team or quarterback is a message on its page
 
@@ -275,37 +276,56 @@ game logs) waits on that step; so far the pages have been checked only against t
   (0.33 MB for 2026), and a game log runs up to 0.27 MB (one team's 0.16 MB for 2026).
 - **How to reverse it:** add slicing to `api/ratings/tables.py`.
 
-## 17. Responses are gzipped app-wide
+## 17. Responses are gzipped app-wide, at level 6
 
 - **What differs:** the source app sent its JSON uncompressed, as this app did.
 - **Options:** (a) leave responses uncompressed; (b) Starlette's `GZipMiddleware` on the whole
-  app; (c) compress only the ratings routes.
-- **Decision:** (b), the delegating session's decision in review. `create_app` adds the middleware
-  with its defaults: responses of 500 bytes or more, compression level 9, for clients that send
+  app at its default level, 9; (c) the same at level 6, gzip's own default; (d) compress only the
+  ratings routes.
+- **Decision:** (c). The delegating session chose app-wide compression in review, and level 6
+  after the independent review timed both levels. `create_app` adds the middleware with
+  `compresslevel=6`; it compresses responses of 500 bytes or more for clients that send
   `Accept-Encoding: gzip`.
 - **Reasoning:** the season tables are the app's largest payloads and repetitive JSON, so they
-  shrink five- to seven-fold, and one middleware covers every route. Starlette skips
-  `text/event-stream` by default, so the job log stream is sent uncompressed as before;
-  `tests/api/test_compression.py` pins both.
-- **Data:** measured in review on the published tables, plain JSON to gzipped, in bytes: the 2025
-  team table 960,538 to 179,773, the quarterback table 490,907 to 82,421, the Chiefs' game log
-  264,451 to 38,200, and the metric list 145,645 to 20,479.
-- **How to reverse it:** remove the middleware from `create_app` (`c4362e8`).
+  shrink five- to seven-fold, and one middleware covers every route. Level 9 saves a few percent
+  more bytes for noticeably more CPU on every response, which pays only on slow links. Starlette
+  skips `text/event-stream` by default, so the job log stream is sent uncompressed as before.
+  `tests/api/test_compression.py` pins the level, the plain response to a client without gzip, and
+  the uncompressed stream.
+- **Data:** measured by the independent review on the published tables at `5536417`, in bytes,
+  for the 2025 team table, the 2025 quarterback table, the Chiefs' 2025 game log and the metric
+  list: plain JSON 960,476 / 490,845 / 265,378 / 145,521; level 6 179,732 / 82,391 / 38,427 /
+  20,444 (zlib on the served payloads); level 9 171,389 / 75,331 / 37,431 / 20,237 (served
+  through the app). Level 9 saves 4.6% / 8.6% / 2.6% / 1.0% over level 6 for +7.2 / +10.2 / +1.4 /
+  +0.8 ms of CPU (one pinned core, median of 100 runs), worth it only on links slower than about
+  2-9 Mbit/s.
+- **How to reverse it:** remove the middleware from `create_app` (`c4362e8`), or drop
+  `compresslevel=6` for Starlette's level 9 (`8149a6d`).
 
-## 18. A table that cannot be read answers 503; one that vanishes mid-scan is skipped
+## 18. A table a page needs that cannot be read answers 503; one it can do without is left out
 
-- **What differs:** review found two paths to a 500: a file Polars cannot read (empty, cut short,
-  not Parquet), and a table removed between the schedule leaderboard's folder scan and its read.
-- **Options:** for an unreadable file, (a) the 500, (b) a 404 as if missing, or (c) a 503 naming
-  the file; for a vanished table, (a) the 500 or (b) leave that season out.
-- **Decision:** (c) and (b), from review. Every ratings route that reads a table answers an
-  unreadable one with a 503, code `ratings_table_unreadable`, whose message names the file and
-  says it may be cut short or still being written; the leaderboard leaves a vanished season out.
+- **What differs:** review found paths to a 500 and to needless 503s. A file Polars cannot read
+  (empty, cut short, not Parquet) or the server may not open (a `PermissionError`, which Polars
+  raises as the builtin `OSError`) was a 500, as was a table removed between the schedule
+  leaderboard's folder scan and its read. Once those were 503s, an unreadable table that only
+  adds to a page (the season ratings beside a game log, the team history that starts a rank
+  history) failed the whole page, and one unreadable season failed the whole leaderboard.
+- **Options:** for an unreadable table a route needs, (a) the 500, (b) a 404 as if missing, or
+  (c) a 503 naming the file; for an unreadable table that only adds to a page, or one season of
+  the leaderboard, (a) a 503 for the whole page or (b) leave it out as if missing, with a warning;
+  for a vanished table, (a) the 500 or (b) leave that season out.
+- **Decision:** (c), (b) and (b), from review. A route answers an unreadable table it needs with a
+  503, code `ratings_table_unreadable`, whose message names the file and says it may be cut short,
+  still being written, or not readable by the server. A table that only adds to a page is treated
+  as missing when it cannot be read, with a warning in the server log naming it; the leaderboard
+  leaves out a season it cannot read (with the same warning) or that vanished.
 - **Reasoning:** a 503 says the data is there but cannot be used yet (a table being rewritten),
-  which a 404 would hide, and the page shows that message instead of a bare server error. A season
-  that vanished would have been left out by a scan a moment later.
-- **How to reverse it:** `files.read_table` and the router's `_unreadable` (`b7b1f1a`);
-  `schedules._ratings_by_season` (`63b6b0f`).
+  which a 404 would hide, and the page shows that message instead of a bare server error. A page
+  that can be served without a table should not fail because of it; the warning keeps the broken
+  file in view for whoever runs the server.
+- **How to reverse it:** `files.read_table` and the router's `_unreadable` (`b7b1f1a`, the
+  `OSError` case `8c2b224`); the router's `_read_optional` and `schedules._ratings_by_season`
+  (`63b6b0f`, `a9e24b6`).
 
 ## 19. The index table and the comparison show no rank ranges
 

@@ -76,7 +76,7 @@ Exploration findings that shape the design:
 ```text
 api/
   __init__.py   create_app(settings) factory (mirrors nfl-sos-ratings ui_api.create_app); gzips
-                responses (GZipMiddleware, which leaves text/event-stream alone)
+                responses (GZipMiddleware at level 6, which leaves text/event-stream alone)
   __main__.py   python -m nfl_predictor.api  -> uvicorn (bootstrap under __main__ guard)
   settings.py   pydantic-settings: NFLP_ROOT_DIR, NFLP_DB_PATH (default data/web/app.db),
                 NFLP_JWT_SECRET (auto-generated to data/web/secret.key, 0600), NFLP_COOKIE_SECURE,
@@ -167,7 +167,7 @@ mutating routes require header `X-Requested-With: nflp`.
 | `GET /pool/confidence`, `GET /pool/tiebreakers`, `POST /pool/survivor` | the Pool page (Phase 4 below): the confidence sheet, the tiebreaker card and ranked survivor plans; read-only |
 | `GET /betting`, `GET /betting/xlsx` | 25-col betting CSV, or derived from predictions when the CSV is older than the predictions file; ladder thresholds 0.02/0.04/0.07/0.10; `total_*` columns `actionable=false` |
 | `GET /power` | rankings + movement vs the prior run's `through_week - 1` file + standings + division standings |
-| `GET /ratings/seasons`, `GET /ratings/{season}/{kind}`, `GET /ratings/{season}/{kind}/rank-ranges`, `GET /ratings/{season}/{kind}/{id}/{game-logs,rating-history,rank-history,head-to-head}`, `GET /ratings/schedules`, `GET /ratings/metrics` | the team and quarterback pages (Phase 5 below), `kind` `teams` or `qbs`, over `data/ratings/{season}_{kind}.parquet`; columns described by the metric registry; read-only; a missing season or table is a 404 `no_ratings_table`, an entity without rows a 404 `no_ratings_entity`, a table Polars cannot read a 503 `ratings_table_unreadable` |
+| `GET /ratings/seasons`, `GET /ratings/{season}/{kind}`, `GET /ratings/{season}/{kind}/rank-ranges`, `GET /ratings/{season}/{kind}/{id}/{game-logs,rating-history,rank-history,head-to-head}`, `GET /ratings/schedules`, `GET /ratings/metrics` | the team and quarterback pages (Phase 5 below), `kind` `teams` or `qbs`, over `data/ratings/{season}_{kind}.parquet`; columns described by the metric registry; read-only; a missing season or table is a 404 `no_ratings_table`, an entity without rows a 404 `no_ratings_entity`, a table the route needs that cannot be read a 503 `ratings_table_unreadable`; an unreadable table that only adds to a page, or one season of the schedule leaderboard, is left out with a warning |
 | `GET /model`, `GET /runs/{id}/model` | metadata, holdout metrics, pool summary, missing-data groups, top-40 base features by mean absolute SHAP in points (`base_features.combined.mean_abs_shap`, returned as `{measure, rows, margin_rows}` with per-head `margin_value`/`total_value`; `margin_rows` ranks every feature by the margin head alone; runs without SHAP fall back to `combined.total_gain`, and runs written before total gain was recorded to `combined.gain`, labelled `summed_average_gain`), calibration bins when a WF report exists, `wf_compare` + `wf_best`, `metric_strategy` |
 | `GET /data/status`, `GET /data/unattached` | current season/week via `clock.nfl_season` and `clock.nfl_week` (the ETL's calendar rules), file inventory with sizes/mtimes/row counts (`pl.scan_csv().select(pl.len())`), lazy cached sha256 via `fingerprints.dataset_fingerprint`, cache parquet coverage, latest leakage audit, last ETL job |
 | `GET /jobs/catalog`, `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/logs?after=`, `GET /jobs/{id}/stream` (SSE), `POST /jobs/{id}/cancel` | 409 when an exclusive group is busy; 422 on bad params |
@@ -561,8 +561,9 @@ validation; the adapters with fakes; the poller and `/api/live`; the live views.
   codes and served from the worktree on a spare port: every route answered (the 492-column team
   table in about 0.12 s, about 0.9 MB of JSON), and the frontend's view model was run over those
   payloads; the pages were not checked in a browser. The judgment calls are logged in
-  `.agents/sos_port/decisions/web_pages.md`. After review, responses are gzipped app-wide, a table
-  Polars cannot read answers 503, and each opponent faced carries a league tier.
+  `.agents/sos_port/decisions/web_pages.md`. After review, responses are gzipped app-wide (level
+  6), a table a route needs that cannot be read answers 503 while one that only adds to a page is
+  left out with a warning, and each opponent faced carries a league tier.
 
   No job writes `data/ratings/` yet: the season-statistics ETL step that is to write those tables
   is planned separately, and until it lands the pages show an empty state that names the folder

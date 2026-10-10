@@ -16,9 +16,10 @@ A snap is an offensive scrimmage snap as ``offensive_snaps`` counts them, writte
 rather than imported: a play with ``qb_dropback``, ``rush``, ``qb_kneel`` or ``qb_spike`` set,
 or a scramble filed as a run play (``qb_scramble`` set on a ``run`` play), that is not a
 two-point try. The groups are counted on the measurement cache ``integration_cache.py`` writes,
-the plays the source's logs were built from. For comparison it also counts the groups a
-narrower test would leave without a snap, one that does not count a scramble filed as a run
-play, and lists the groups whose only snap is such a scramble.
+the plays the source's logs were built from. For comparison it also lists the groups whose only
+scrimmage play is a two-point try, and counts the groups a narrower test would leave without a
+snap, one that does not count a scramble filed as a run play, listing those whose only snap is
+such a scramble.
 
 The touchdown drives are compared too, with the same attribution (a group without a snap whose
 drive ended in a touchdown). The source publishes a rate, not a count: its ``red_zone_td_pct``
@@ -170,17 +171,18 @@ def _set(name: str) -> pl.Expr:
     return pl.col(name).fill_null(0.0) > 0
 
 
-def _snap(*, run_play_scrambles: bool = True) -> pl.Expr:
+def _snap(*, run_play_scrambles: bool = True, two_point_tries: bool = False) -> pl.Expr:
     """Return an offensive scrimmage snap as ``offensive_snaps`` counts it, not a two-point try.
 
-    With ``run_play_scrambles`` false, a scramble filed as a run play without the rush or dropback
-    flag is no snap: the narrower test, printed for comparison only.
+    The two switches give the variants printed for comparison only: with ``run_play_scrambles``
+    false, a scramble filed as a run play without the rush or dropback flag is no snap; with
+    ``two_point_tries`` true, a two-point try is one, as ``offensive_snaps`` counts it.
     """
     run_play_scramble = _set("qb_scramble") & (pl.col("play_type") == "run").fill_null(value=False)
     scrimmage = _set("qb_dropback") | _set("rush") | _set("qb_kneel") | _set("qb_spike")
     if run_play_scrambles:
         scrimmage |= run_play_scramble
-    return scrimmage & ~_set("two_point_attempt")
+    return scrimmage if two_point_tries else scrimmage & ~_set("two_point_attempt")
 
 
 def _drives(plays: pl.DataFrame) -> pl.DataFrame:
@@ -194,6 +196,7 @@ def _drives(plays: pl.DataFrame) -> pl.DataFrame:
         pl.col("drive_inside20").is_null().all().alias("all_null"),
         _snap().any().alias("snap"),
         _snap(run_play_scrambles=False).any().alias("snap_without_scrambles"),
+        _snap(two_point_tries=True).any().alias("snap_with_two_point_tries"),
         pl.col("fixed_drive_result").first().alias("result"),
         pl.col("fixed_drive_result").is_null().all().alias("no_result"),
         pl.col("play_type").drop_nulls().unique().sort().str.join(",").alias("plays"),
@@ -290,11 +293,14 @@ def _no_snap_facts(drives: pl.DataFrame) -> str:
     listing = groups.select(columns).sort(order)
     narrower = drives.filter(pl.col("flagged") & ~pl.col("snap_without_scrambles"))
     scramble_only = narrower.filter(pl.col("snap")).select(columns).sort(order)
+    two_point_only = groups.filter(pl.col("snap_with_two_point_tries")).select(columns).sort(order)
     return (
         f"flagged groups without a snap: {groups.height} of {int(drives['flagged'].sum())}, "
         f"{groups.filter(touchdown).height} of them ending in a touchdown\n"
         f"by the play types they hold:\n{by_plays}\nby drive result:\n{by_result}\n"
         f"by season:\n{by_season}\nevery group:\n{listing}\n"
+        f"of these, the groups whose only snap is a two-point try: {two_point_only.height}\n"
+        f"{two_point_only}\n"
         f"with a snap test that leaves out a scramble filed as a run play: {narrower.height} "
         f"groups, the scramble being the only snap of these:\n{scramble_only}\n"
     )

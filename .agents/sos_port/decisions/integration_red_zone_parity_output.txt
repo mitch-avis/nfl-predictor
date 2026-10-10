@@ -390,6 +390,16 @@ every group:
 │ 2025   ┆ 9    ┆ 2025_09_CHI_CIN ┆ CHI     ┆ 22.0        ┆ Touchdown         ┆ kickoff             │
 │ 2025   ┆ 16   ┆ 2025_16_GB_CHI  ┆ GB      ┆ 15.0        ┆ Touchdown         ┆ kickoff             │
 └────────┴──────┴─────────────────┴─────────┴─────────────┴───────────────────┴─────────────────────┘
+of these, the groups whose only snap is a two-point try: 3
+┌────────┬──────┬─────────────────┬─────────┬─────────────┬───────────────┬───────┐
+│ season ┆ week ┆ game_id         ┆ posteam ┆ fixed_drive ┆ result        ┆ plays │
+│ ---    ┆ ---  ┆ ---             ┆ ---     ┆ ---         ┆ ---           ┆ ---   │
+│ i32    ┆ i32  ┆ str             ┆ str     ┆ f64         ┆ str           ┆ str   │
+╞════════╪══════╪═════════════════╪═════════╪═════════════╪═══════════════╪═══════╡
+│ 2000   ┆ 1    ┆ 2000_01_DEN_STL ┆ DEN     ┆ 17.0        ┆ Opp touchdown ┆ run   │
+│ 2001   ┆ 6    ┆ 2001_06_TEN_DET ┆ TEN     ┆ 14.0        ┆ Opp touchdown ┆ pass  │
+│ 2002   ┆ 17   ┆ 2002_17_MIN_DET ┆ DET     ┆ 17.0        ┆ Opp touchdown ┆ pass  │
+└────────┴──────┴─────────────────┴─────────┴─────────────┴───────────────┴───────┘
 with a snap test that leaves out a scramble filed as a run play: 230 groups, the scramble being the only snap of these:
 ┌────────┬──────┬─────────────────┬─────────┬─────────────┬───────────┬─────────────────────────────────┐
 │ season ┆ week ┆ game_id         ┆ posteam ┆ fixed_drive ┆ result    ┆ plays                           │

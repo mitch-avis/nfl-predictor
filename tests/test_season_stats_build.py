@@ -34,6 +34,7 @@ from nfl_predictor.utils.polars import (
     nflverse_sources,
     ratings_build,
     season_stats_build,
+    season_stats_schema,
 )
 
 if TYPE_CHECKING:
@@ -409,18 +410,24 @@ def _serve_loaders(monkeypatch: pytest.MonkeyPatch, data: League, official: pl.D
 def test_tables_equal_those_built_from_the_season_statistics_own_loader(
     monkeypatch: pytest.MonkeyPatch, season: int
 ) -> None:
-    """The step feeds the builders what ``season_stats.sources.load_season_inputs`` would."""
+    """The step feeds the builders what ``season_stats.sources.load_season_inputs`` would.
+
+    Both sides are conformed to the full build's schema, as the step writes every table.
+    """
     # Arrange
     data = _league()
     official = _official(data)
     _serve_loaders(monkeypatch, data, official)
     inputs = season_stats_sources.load_season_inputs(season)
-    expected = season_tables.build_season_tables(
+    built = season_tables.build_season_tables(
         season_tables.build_season_games(inputs),
         inputs.pbp,
         team_ratings=_team_ratings(),
         qb_ratings=_qb_ratings(),
     ).tables()
+    expected = {
+        kind: season_stats_build.conform_table(kind, table) for kind, table in built.items()
+    }
 
     # Act
     tables = _tables(_season_stats(data, official), season)
@@ -528,6 +535,125 @@ def test_a_season_before_nflverse_has_snap_counts_logs_nothing(
 
     # Assert
     assert caplog.text == ""
+
+
+def _without(sources: season_stats_build.SeasonStatsSources, source: str, season: int) -> Any:
+    """Return ``sources`` with one source's rows of ``season`` left out."""
+    frame: pl.DataFrame = getattr(sources, source)
+    return replace(sources, **{source: frame.filter(pl.col("season") != season)})
+
+
+@pytest.mark.parametrize("source", ["official_team_stats", "player_stats", "snap_counts"])
+def test_a_build_missing_a_source_has_every_column_of_a_full_build(source: str) -> None:
+    """AGENTS.md, "Missing Data Rules": an invariant schema, a missing source's columns null."""
+    # Arrange
+    build = season_stats_build.SeasonStatsBuild(_without(_sources(_league()), source, _SEASON))
+
+    # Act
+    tables = _tables(build, _SEASON)
+
+    # Assert
+    assert tuple(tables) == season_stats_build.SEASON_STATS_KINDS
+    for kind, table in tables.items():
+        assert table.schema == season_stats_schema.SEASON_STATS_SCHEMAS[kind], kind
+
+
+def test_a_build_without_player_stats_leaves_their_columns_null() -> None:
+    # Arrange
+    build = season_stats_build.SeasonStatsBuild(_without(_sources(_league()), "player_stats", 2000))
+
+    # Act
+    logs = _tables(build, 2000)["team_game_logs"]
+
+    # Assert
+    assert logs.get_column("def_sacks").null_count() == logs.height
+
+
+@pytest.mark.parametrize("snap_counts", [True, False], ids=["with snap counts", "without"])
+def test_qb_game_logs_week_has_one_type_with_or_without_snap_counts(*, snap_counts: bool) -> None:
+    """Snap counts begin in 2013; the published files write the week as Int32 in every season."""
+    # Arrange
+    sources = _sources(_league())
+    build = season_stats_build.SeasonStatsBuild(
+        sources if snap_counts else _without(sources, "snap_counts", _SEASON)
+    )
+
+    # Act
+    logs = _tables(build, _SEASON)["qb_game_logs"]
+
+    # Assert
+    assert logs.schema["week"] == pl.Int32()
+
+
+def test_a_season_whose_opponents_played_no_one_else_keeps_every_combined_column() -> None:
+    """Week 1: no opponent game supports a profile, so no profile table, but every column."""
+    # Arrange
+    data = _league()
+    week = pl.col("week") == 1
+    first_week = replace(data, plays=data.plays.filter(week), schedule=data.schedule.filter(week))
+    build = _season_stats(first_week)
+
+    # Act
+    tables = _tables(build, _SEASON)
+
+    # Assert
+    assert "opponent_profiles" not in tables
+    assert tables["combined"].schema == season_stats_schema.SEASON_STATS_SCHEMAS["combined"]
+    assert tables["combined"].get_column("opp_points_for").null_count() == len(TEAMS)
+
+
+def _unconformed_tables(season: int) -> dict[str, pl.DataFrame]:
+    """Return a full build of the league's season straight from the package's builders."""
+    build = _season_stats()
+    inputs = build.season_inputs(season)
+    return season_tables.build_season_tables(
+        season_tables.build_season_games(inputs),
+        inputs.pbp,
+        team_ratings=_team_ratings(),
+        qb_ratings=_qb_ratings(),
+    ).tables()
+
+
+def test_the_reference_schema_names_every_season_statistics_kind() -> None:
+    # Act
+    kinds = tuple(season_stats_schema.SEASON_STATS_SCHEMAS)
+
+    # Assert
+    assert kinds == season_stats_build.SEASON_STATS_KINDS
+
+
+def test_a_full_build_has_exactly_the_reference_columns_before_it_is_conformed() -> None:
+    """A changed builder fails here until the reference schema is generated again."""
+    # Act
+    tables = _unconformed_tables(_SEASON)
+
+    # Assert
+    assert {kind: table.columns for kind, table in tables.items()} == {
+        kind: schema.names() for kind, schema in season_stats_schema.SEASON_STATS_SCHEMAS.items()
+    }
+
+
+def test_conforming_a_full_build_keeps_every_value() -> None:
+    # Arrange
+    tables = _unconformed_tables(_SEASON)
+
+    # Act
+    conformed = {
+        kind: season_stats_build.conform_table(kind, table) for kind, table in tables.items()
+    }
+
+    # Assert
+    for kind, table in conformed.items():
+        assert_frame_equal(table, tables[kind], check_dtypes=False, check_exact=True)
+
+
+def test_conforming_refuses_a_column_a_full_build_does_not_have() -> None:
+    # Arrange
+    logs = _unconformed_tables(_SEASON)["team_game_logs"].with_columns(pl.lit(1).alias("extra"))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="extra"):
+        season_stats_build.conform_table("team_game_logs", logs)
 
 
 def test_tables_without_ratings_leave_the_rating_columns_null() -> None:

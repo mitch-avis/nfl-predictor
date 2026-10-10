@@ -23,9 +23,13 @@ ratings (``utils.season_cache``), keyed on exactly those frames
 incremental run: they read the players file, which an in-season run downloads again and which
 gains players every week, and only a change to a player the season's sources name moves them.
 
-Before kickoff the current season has no game played, so no tables. A season with plays but
-without official team stats, weekly player stats or snap counts (the current season before
-nflverse publishes them) is built without them, with a warning naming what its tables lack.
+Every table is then conformed to the columns and types of a full build
+(:func:`conform_table`, ``season_stats_schema``), as ``AGENTS.md``'s missing-data rules ask: one
+schema on every run. Before kickoff the current season has no game played, so no tables. A season
+with plays but without official team stats, weekly player stats or snap counts (the current season
+before nflverse publishes them) is built without them, with a warning naming what its tables lack,
+and keeps every column, null where the missing source fills it; so does a season too early for an
+opponent profile, whose profile tables are absent, as that project wrote none.
 """
 
 from __future__ import annotations
@@ -42,6 +46,7 @@ from nfl_predictor.season_stats import season as season_tables
 from nfl_predictor.season_stats import sources as season_stats_sources
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import nflverse_sources
+from nfl_predictor.utils.polars.season_stats_schema import SEASON_STATS_SCHEMAS
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -61,12 +66,12 @@ _WITHOUT_OFFICIAL_TEAM_STATS = (
     "stand in for the official ones"
 )
 _WITHOUT_PLAYER_STATS = (
-    "its tables leave out the defense box score and the passers' official passing and rushing "
-    "figures"
+    "its tables leave the defense box score and the passers' official passing and rushing "
+    "figures null"
 )
 _WITHOUT_SNAP_COUNTS = (
-    "its tables leave out the passers' offensive snaps and the passers who played without a "
-    "dropback"
+    "its tables leave the passers' offensive snaps null and leave out the passers who played "
+    "without a dropback"
 )
 # The rating columns of a season without ratings: null in ``combined`` and ``qb_combined``.
 _NO_TEAM_RATINGS = pl.DataFrame(
@@ -160,6 +165,27 @@ def load_season_stats_sources(
 def _of_season(frame: pl.DataFrame, season: int) -> pl.DataFrame:
     """Return the rows of ``season``, rechunked so later seasons cannot reach their sums."""
     return frame.filter(pl.col("season") == season).rechunk()
+
+
+def conform_table(kind: str, table: pl.DataFrame) -> pl.DataFrame:
+    """Return ``table`` with exactly the columns and types of a full build of ``kind``.
+
+    ``AGENTS.md``'s missing-data rules ask the ETL for one schema on every run. A table built
+    without a source, or without an opponent profile, lacks the columns those fill; they are
+    added as nulls of their type, in their place, and every column takes its type in a full
+    build (``season_stats_schema.SEASON_STATS_SCHEMAS``), so every season's table has one schema.
+
+    Raises:
+        ValueError: If ``table`` has a column a full build does not (never dropped silently), or
+            a fraction in a column a full build holds whole numbers in.
+
+    """
+    schema = SEASON_STATS_SCHEMAS[kind]
+    unknown = [column for column in table.columns if column not in schema]
+    if unknown:
+        msg = f"the {kind} table has columns a full build does not: " + ", ".join(unknown)
+        raise ValueError(msg)
+    return nflverse_sources.conform(table, schema)
 
 
 def log_missing_sources(inputs: season_stats_sources.SeasonInputs) -> None:
@@ -270,7 +296,8 @@ class SeasonStatsBuild:
 
         Returns:
             The season's tables by kind (``SEASON_STATS_KINDS``; the opponent profiles are absent
-            when no opponent game supports one), each in its published row order.
+            when no opponent game supports one), each in its published row order and with the
+            columns and types of a full build (:func:`conform_table`).
 
         """
         start = time.perf_counter()
@@ -293,12 +320,13 @@ class SeasonStatsBuild:
                 "for the rankings), so qb_combined leaves them null",
                 season,
             )
-        tables = season_tables.build_season_tables(
+        built = season_tables.build_season_tables(
             games,
             inputs.pbp,
             team_ratings=_NO_TEAM_RATINGS if team_ratings is None else team_ratings,
             qb_ratings=_NO_QB_RATINGS if qb_ratings is None else qb_ratings,
         ).tables()
+        tables = {kind: conform_table(kind, table) for kind, table in built.items()}
         log.info(
             "Season statistics for season %d: %d tables in %.1fs",
             season,
@@ -313,6 +341,7 @@ __all__ = [
     "SNAP_COUNTS_FIRST_SEASON",
     "SeasonStatsBuild",
     "SeasonStatsSources",
+    "conform_table",
     "load_season_stats_sources",
     "log_missing_sources",
 ]

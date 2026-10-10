@@ -222,6 +222,27 @@ def _read_cached_frame(path: Path, requested_columns: Sequence[str] = ()) -> pl.
         return None
 
 
+def _warn_about_pbp_fallback_gaps(
+    frame: pl.DataFrame, requested_columns: Sequence[str], *, season: int, path: Path
+) -> None:
+    """Log every requested column a play-by-play file used as a fallback lacks.
+
+    A fallback file is read as it is, even one written before a column was requested, so a
+    feature that reads a column the file lacks is built without it (play-by-play red-zone trips,
+    for one, count none without ``drive_inside20``). Naming the columns keeps such a run from
+    passing as a complete one.
+    """
+    lacking = [column for column in requested_columns if column not in frame.columns]
+    if lacking:
+        log.warning(
+            "The cached play-by-play for season %d (%s) lacks the requested columns, so each "
+            "feature that reads one is built without it for that season: %s",
+            season,
+            path,
+            ", ".join(lacking),
+        )
+
+
 def _write_cached_frame(
     df: pl.DataFrame, path: Path, requested_columns: Sequence[str] = ()
 ) -> None:
@@ -1171,8 +1192,10 @@ def load_pbp(
         - A failure for a historical season is re-raised, because historical data is expected
           to be available.
         - A failure for the current or a future season is logged as a warning and the cached
-          frame is used when one exists, even one that predates the requested columns;
-          otherwise that season is skipped. Both a `ConnectionError` and a `ValueError`
+          frame is used when one exists, even one that predates the requested columns, in
+          which case a second warning names every requested column the file lacks (each
+          feature that reads one is built without it for that season); otherwise that
+          season is skipped. Both a `ConnectionError` and a `ValueError`
           count as a failure here: before kickoff the current season has no play-by-play
           published at all, and nflreadpy reports that by raising `ValueError` for an
           out-of-range season rather than by failing to connect.
@@ -1234,6 +1257,9 @@ def load_pbp(
                     season,
                     cache_path,
                     exc,
+                )
+                _warn_about_pbp_fallback_gaps(
+                    fallback_cached, requested_columns, season=season, path=cache_path
                 )
                 pbp_frames.append(_select_pbp_columns(fallback_cached))
             else:

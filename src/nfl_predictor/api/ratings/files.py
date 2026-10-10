@@ -47,11 +47,6 @@ def table_path(ratings_dir: Path, season: int, kind: str) -> Path:
     return ratings_dir / table_name(season, kind)
 
 
-def has_table(ratings_dir: Path, season: int, kind: str) -> bool:
-    """Return whether ``ratings_dir`` holds the season's table of ``kind``."""
-    return table_path(ratings_dir, season, kind).is_file()
-
-
 def available_seasons(ratings_dir: Path) -> list[int]:
     """Return the seasons with both index tables (``INDEX_KINDS``), newest first."""
     if not ratings_dir.is_dir():
@@ -71,13 +66,17 @@ def read_table(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame:
     """Return one season's table of ``kind``, cached until the file changes.
 
     Raises:
-        RatingsTableMissingError: If the file does not exist.
+        RatingsTableMissingError: If the file does not exist, including one removed between the
+            check and the read (an ETL rewriting the folder).
 
     """
     path = table_path(ratings_dir, season, kind)
     if not path.is_file():
         raise RatingsTableMissingError(season, kind)
-    frame: pl.DataFrame = cached(path, pl.read_parquet)
+    try:
+        frame: pl.DataFrame = cached(path, pl.read_parquet)
+    except FileNotFoundError as exc:
+        raise RatingsTableMissingError(season, kind) from exc
     return frame
 
 

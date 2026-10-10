@@ -73,19 +73,21 @@ def test_read_table_names_the_missing_file(tmp_path: Path) -> None:
     assert (raised.value.season, raised.value.kind) == (2025, "rating_pairs")
 
 
-@pytest.mark.parametrize(("kind", "expected"), [("combined", True), ("ratings", False)])
-def test_has_table_reports_whether_the_file_exists(
-    tmp_path: Path, kind: str, *, expected: bool
+def test_read_table_reports_a_file_removed_after_the_check_as_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Optional tables are checked before a page asks for them."""
+    """A table the ETL removes between the existence check and the read is missing, not a crash."""
     # Arrange
-    factories.write_season(tmp_path, 2025, kinds=("combined",))
+    factories.write_season(tmp_path, 2025, kinds=("ratings",))
 
-    # Act
-    present = files.has_table(tmp_path, 2025, kind)
+    def vanished(path: Path, _loader: object) -> pl.DataFrame:
+        raise FileNotFoundError(path)
 
-    # Assert
-    assert present is expected
+    monkeypatch.setattr(files, "cached", vanished)
+
+    # Act & Assert
+    with pytest.raises(files.RatingsTableMissingError):
+        files.read_table(tmp_path, 2025, "ratings")
 
 
 def test_entity_rows_keeps_one_team_by_week(tmp_path: Path) -> None:

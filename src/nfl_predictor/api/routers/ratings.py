@@ -65,10 +65,11 @@ def _read(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame:
 
 
 def _read_optional(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame | None:
-    """Return one season's table when the season has it."""
-    if not files.has_table(ratings_dir, season, kind):
+    """Return one season's table when the season has it, else ``None``."""
+    try:
+        return files.read_table(ratings_dir, season, kind)
+    except files.RatingsTableMissingError:
         return None
-    return files.read_table(ratings_dir, season, kind)
 
 
 def _entity_rows(

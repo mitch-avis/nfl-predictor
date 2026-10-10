@@ -1,0 +1,60 @@
+Output of .agents/sos_port/ratings_etl_timing.py, run on 2026-10-10 (UTC morning) in the worktree
+of branch worktree-agent-a0778ee61e6367a09, on a 24-core machine shared with other work (load
+averages as printed). Thread variables "unset" means the ETL's own defaults: Polars sizes its pool
+to every core, and the fits pin one BLAS thread themselves. Each run wrote only to a temporary
+directory.
+
+1. The 1999-2026 run, at commit e21da94 (the ridge design built from plain values):
+
+Command, from the worktree root:
+.venv/bin/python .agents/sos_port/ratings_etl_timing.py
+
+Ratings ETL timing, seasons 1999-2026; threads {'POLARS_MAX_THREADS': 'unset', 'OPENBLAS_NUM_THREADS': 'unset', 'OMP_NUM_THREADS': 'unset'}
+load averages before 8.04, 9.29, 11.73; after 12.51, 10.65, 11.29
+     9.0 s  load the other sources and build the adapter's rows
+   442.8 s  full rebuild: build every season, 1999-2026
+    21.4 s  incremental: reuse 1999-2025, build 2026
+     0.6 s  season cache: store and load every finished season's frames
+     0.2 s  attach the features to 7,548 game rows
+     0.2 s  write 254 tables
+
+2. 1999-2001 before that change, at commit ff0de1a, with one Polars thread and with the default:
+
+Commands, from the worktree root:
+POLARS_MAX_THREADS=1 .venv/bin/python .agents/sos_port/ratings_etl_timing.py --seasons 1999 2001
+.venv/bin/python .agents/sos_port/ratings_etl_timing.py --seasons 1999 2001
+
+Ratings ETL timing, seasons 1999-2001; threads {'POLARS_MAX_THREADS': '1', 'OPENBLAS_NUM_THREADS': 'unset', 'OMP_NUM_THREADS': 'unset'}
+load averages before 13.09, 17.28, 15.47; after 9.17, 15.56, 14.97
+     0.4 s  load the other sources and build the adapter's rows
+    29.8 s  full rebuild: build every season, 1999-2001
+    21.1 s  incremental: reuse 1999-2000, build 2001
+     0.0 s  season cache: store and load every finished season's frames
+     0.0 s  attach the features to 777 game rows
+     0.0 s  write 29 tables
+
+Ratings ETL timing, seasons 1999-2001; threads {'POLARS_MAX_THREADS': 'unset', 'OPENBLAS_NUM_THREADS': 'unset', 'OMP_NUM_THREADS': 'unset'}
+load averages before 8.16, 15.13, 14.84; after 9.25, 12.03, 13.63
+     1.0 s  load the other sources and build the adapter's rows
+   173.8 s  full rebuild: build every season, 1999-2001
+    93.4 s  incremental: reuse 1999-2000, build 2001
+     0.0 s  season cache: store and load every finished season's frames
+     0.1 s  attach the features to 777 game rows
+     0.0 s  write 29 tables
+
+3. 1999-2001 after that change, at commit 3334075, with the default threads:
+
+Command, from the worktree root:
+.venv/bin/python .agents/sos_port/ratings_etl_timing.py --seasons 1999 2001
+
+Ratings ETL timing, seasons 1999-2001; threads {'POLARS_MAX_THREADS': 'unset', 'OPENBLAS_NUM_THREADS': 'unset', 'OMP_NUM_THREADS': 'unset'}
+load averages before 7.48, 9.53, 10.86; after 8.29, 9.35, 10.66
+     0.9 s  load the other sources and build the adapter's rows
+    61.9 s  full rebuild: build every season, 1999-2001
+    41.7 s  incremental: reuse 1999-2000, build 2001
+     0.0 s  season cache: store and load every finished season's frames
+     0.1 s  attach the features to 777 game rows
+     0.0 s  write 29 tables
+
+In runs 2 and 3 the last season, 2001, is built as the season in progress, so its "incremental"
+line includes its 17 weeks of rank ranges, which a finished season does not build.

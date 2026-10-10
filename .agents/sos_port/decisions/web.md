@@ -334,13 +334,16 @@ none of the pool modules or `margin_rows`.
 - **Decision:** fix it: a week resolves to the active run's own week, else the newest other run
   whose predictions stage wrote that week, else the active run's ahead-of-time file, else another
   run's newest file; the selector lists the same file for each week. A run whose own week is only
-  its newest file (no stage marker) does not outrank the active run's file.
+  its newest file (no stage marker) does not outrank the active run's file, and the selector
+  skips such a run's week when another run's predictions stage wrote it (the second review's
+  case: an older marked run and a newer unmarked copy of the same week).
 - **Reasoning:** a weekly run made for the week has its fresh data and lines; a file predicted
   weeks ahead does not. The rule is the review's ("the newest run that wrote a week by its own
   predictions stage wins").
 - **Data:** `tests/api/test_run_weeks.py` (a pinned week-5 run holding week 6 beside a newer
-  week-6 run, with and without its stage marker).
-- **How to reverse it:** revert `74a879b`.
+  week-6 run, with and without its stage marker; and an older marked week-6 run beside a newer
+  unmarked one).
+- **How to reverse it:** revert `74a879b` and `485696f`.
 - **Review:** not yet reviewed.
 
 ## 15. Live odds poll on a credit budget

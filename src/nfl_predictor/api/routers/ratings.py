@@ -127,6 +127,7 @@ def entity_table(
         games_per_team=tables.games_per_team(season),
         table=tables.index_table(kind, frame),
         categories=tables.categories(kind),
+        team_names=tables.team_names(frame),
     )
 
 

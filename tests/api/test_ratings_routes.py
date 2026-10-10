@@ -106,6 +106,7 @@ def test_team_table_returns_the_season_with_its_categories(
     assert table["column_metadata"]["team_rating"]["label"] == "Team Rating"
     assert table["column_metadata"]["sos"]["contextual"] is True
     assert payload["categories"][0]["name"] == "Schedule-Adjusted Ratings"
+    assert payload["team_names"]["WSH"] == "Washington Commanders"
 
 
 def test_qb_table_returns_every_passer_with_the_qualifier(

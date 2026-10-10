@@ -144,6 +144,35 @@ def test_season_progress_without_games_played_counts_the_current_season_as_in_pr
     assert progress == (True, None)
 
 
+def test_team_names_name_every_team_of_the_table() -> None:
+    """Each team code in the table gets its franchise name from the canonical team mapping."""
+    # Arrange
+    frame = factories.qb_combined()
+
+    # Act
+    names = tables.team_names(frame)
+
+    # Assert
+    assert names == {
+        "BUF": "Buffalo Bills",
+        "KC": "Kansas City Chiefs",
+        "NE": "New England Patriots",
+        "WSH": "Washington Commanders",
+    }
+
+
+def test_team_names_keep_an_unknown_code_as_it_is() -> None:
+    """A code the mapping does not know names itself rather than disappearing."""
+    # Arrange
+    frame = pl.DataFrame({"team": ["KC", "XYZ", None]})
+
+    # Act
+    names = tables.team_names(frame)
+
+    # Assert
+    assert names == {"KC": "Kansas City Chiefs", "XYZ": "XYZ"}
+
+
 @pytest.mark.parametrize(("season", "games"), [(2020, 16), (2021, 17), (1999, 16)])
 def test_games_per_team_is_one_bye_short_of_the_weeks(season: int, games: int) -> None:
     """Teams play every regular-season week but one."""

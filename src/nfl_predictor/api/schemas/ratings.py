@@ -62,7 +62,8 @@ class EntityTableOut(BaseModel):
     ``in_progress`` is true only for the season being played while a team still has
     regular-season games left; ``games_played`` is the most games any team has played and
     ``games_per_team`` a full regular season. ``categories`` lists the entity's metric categories
-    in display order, the ratings category first.
+    in display order, the ratings category first, and ``team_names`` the franchise name of every
+    team code in the table.
     """
 
     kind: EntityKind
@@ -72,6 +73,7 @@ class EntityTableOut(BaseModel):
     games_per_team: int
     table: MetricTableOut
     categories: list[CategoryOut]
+    team_names: dict[str, str]
 
 
 class SeasonTableOut(BaseModel):

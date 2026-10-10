@@ -166,6 +166,21 @@ def categories(kind: EntityKind) -> list[CategoryOut]:
     ]
 
 
+def team_names(frame: pl.DataFrame) -> dict[str, str]:
+    """Return the franchise name of every team code in ``frame``'s ``team`` column.
+
+    Names come from the canonical team mapping (``constants.TEAM_MAPPING``); a code it does not
+    know names itself.
+    """
+    if "team" not in frame.columns:
+        return {}
+    codes = frame.get_column("team").drop_nulls().unique().sort().to_list()
+    return {
+        str(code): str(constants.TEAM_MAPPING.get(str(code), {}).get("name", code))
+        for code in codes
+    }
+
+
 def games_per_team(season: int) -> int:
     """Return how many regular-season games each team plays: 16 before 2021, 17 since."""
     return constants.get_regular_season_weeks(season) - _BYE_WEEKS

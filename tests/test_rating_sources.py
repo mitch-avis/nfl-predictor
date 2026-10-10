@@ -567,3 +567,63 @@ def test_read_fold_predictions_missing_column_raises(tmp_path: Path) -> None:
     # Act & Assert
     with pytest.raises(ValueError, match="predicted_margin"):
         rating_sources.read_fold_predictions(checkpoints)
+
+
+def test_fit_model_ratings_with_a_missing_margin_raises() -> None:
+    # Arrange
+    games = _round_robin(STRENGTHS).with_columns(
+        pl.when(pl.col("home_abbr") == "AAA")
+        .then(None)
+        .otherwise(pl.col("predicted_margin"))
+        .alias("predicted_margin")
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="margin for every game"):
+        rating_sources.fit_model_ratings(games, sorted(STRENGTHS))
+
+
+def test_ported_ratings_from_games_two_ratings_for_a_team_week_raise() -> None:
+    # Arrange
+    games = pl.concat(
+        [
+            _feature_rows(),
+            _feature_rows().head(1).with_columns(pl.lit(9.0).alias("home_ratings_team")),
+        ]
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="two different pre-week ratings"):
+        rating_sources.ported_ratings_from_games(games)
+
+
+def test_read_fold_predictions_from_a_run_without_folds_raises(tmp_path: Path) -> None:
+    # Arrange
+    checkpoints = tmp_path / "empty"
+    checkpoints.mkdir()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    metadata = {"config": {"checkpoint": {"dir": str(checkpoints)}}}
+    (run_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="no fold checkpoints"):
+        rating_sources.read_fold_predictions(run_dir)
+
+
+def test_season_ported_ratings_without_the_table_raises(tmp_path: Path) -> None:
+    # Arrange
+    ratings_dir = _write_ratings_dir(tmp_path / "ratings")
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="2019_ratings"):
+        rating_sources.season_ported_ratings(ratings_dir, 2019)
+
+
+def test_model_ratings_for_a_week_without_earlier_games_raises() -> None:
+    # Arrange
+    predictions = _season_predictions(2020, WEEK_GAMES)
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="2021"):
+        rating_sources.model_ratings_for_week(predictions, season=2021, week=4, teams=TEAMS)

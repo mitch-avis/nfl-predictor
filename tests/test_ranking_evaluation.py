@@ -378,3 +378,60 @@ def test_decide_takes_the_lowest_error_among_candidates_that_beat_the_reference(
     # Assert
     assert decision.winner == "model"
     assert decision.qualified == ("composite", "model")
+
+
+def test_fit_home_term_with_only_neutral_sites_raises() -> None:
+    # Arrange
+    games = _scored([(2007, 1, 10.0, 4.0)])
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="non-neutral"):
+        ranking_evaluation.fit_home_term(games)
+
+
+def test_choose_blend_weights_without_earlier_games_raises() -> None:
+    # Arrange
+    games = _blend_games([(2008, 3.0, 1.0, 2.0)])
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="before 2008"):
+        ranking_evaluation.choose_blend_weights(games, [2008])
+
+
+def test_blend_differences_without_a_season_weight_raises() -> None:
+    # Arrange
+    games = _blend_games([(2009, 0.0, 4.0, 0.0)])
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="2009"):
+        ranking_evaluation.blend_differences(games, {})
+
+
+def test_paired_comparison_of_an_empty_window_raises() -> None:
+    # Arrange
+    games = _paired_games()
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="no scored game"):
+        ranking_evaluation.paired_comparison(
+            games, first_week=30, last_week=31, resamples=10, seed=42
+        )
+
+
+def test_composite_ratings_by_week_drops_a_week_without_a_points_scale() -> None:
+    # Arrange
+    snapshots = pl.DataFrame(
+        {
+            "season": [2010] * 3,
+            "week": [2] * 3,
+            "team_abbr": ["AAA", "BBB", "CCC"],
+            "adj_strength_composite": [1.0, 0.0, -1.0],
+            "adj_srs": [-7.0, 0.0, 7.0],
+        }
+    )
+
+    # Act
+    ratings = ranking_evaluation.composite_ratings_by_week(snapshots)
+
+    # Assert
+    assert ratings.is_empty()

@@ -67,3 +67,18 @@ def test_weekly_run_without_a_floor_sigma_column_passes_no_sigma(
 
     # Assert
     assert received == [None]
+
+
+def test_weekly_run_with_several_floor_sigmas_passes_no_sigma(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    predictions = pd.DataFrame(
+        {"season": [2026, 2026], "week": [3, 3], "floor_sigma": [13.25, 12.0]}
+    )
+
+    # Act
+    received = _sigmas_received(tmp_path, monkeypatch, predictions)
+
+    # Assert
+    assert received == [None]

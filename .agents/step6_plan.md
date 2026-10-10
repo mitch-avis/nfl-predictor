@@ -42,7 +42,7 @@ data are logged for review. Read as:
 
 | stream | phase | depends on | branch / state |
 | --- | --- | --- | --- |
-| S1 inventory and parity scripts | 1 | none | merged `0.50.1` (reports pinned to `main`'s code); refresh after integration (also the stale `gl-red-zone`, `gl-designed-runs`, `gl-carries-faced` notes in `mapping.yaml`) |
+| S1 inventory and parity scripts | 1 | none | merged `0.50.1` (reports pinned to `main`'s code); refresh on the candidate build running (judgments for the integrated code, including the stale `gl-red-zone`, `gl-designed-runs`, `gl-carries-faced` notes in `mapping.yaml`) |
 | S2 new nflverse sources, `MODELS_PATH`, `compare` tie fix | 2 | none | merged, `0.46.0` |
 | S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | merged, `0.47.0` |
 | S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | merged, `0.49.0` |
@@ -54,7 +54,8 @@ data are logged for review. Read as:
 | S8b web: teams, quarterbacks, schedules, rank ranges, head-to-head, glossary (58.2) | 6 | S4, S10 | merged, `0.53.0`; 58.2 stays open for the production rebuild and a browser check |
 | S5d ETL step for the season statistics tables, ratings columns into `combined` | 6 | S5c, S10 | merged, `0.56.0` |
 | S6 candidate build and measurement (`models/step6/build.sh`, `driver.sh`) | 4 | S3, S5b, S5c | build done at `0.55.0`; runs in progress since 10:08 (one at a time, ten plus two conditional) |
-| S7 power rankings and projected standings (`models/step6/rankings/HYPOTHESIS.md`) | 5 | S5c, S6 | reviewed on seed 42 (`models/step6/rankings/REVIEW.md`); fixes and a two-seed supplement in second-round review |
+| S7 power rankings and projected standings (`models/step6/rankings/HYPOTHESIS.md`) | 5 | S5c, S6 | merged, `0.57.0` (two review rounds, `models/step6/rankings/REVIEW.md`); the default switch is the user's |
+| S13 the betting report's edges split into the model's view beyond the spread and the spread-versus-moneyline gap | 5 (follow-up) | none | implementer running; the rule is written before scoring |
 | S11 the source's open rating tests (all-plays, botched snaps, kneel-downs and spikes, penalty-wiped plays) | report only | S4, S5c | implementer running; each rule pre-registered before scoring |
 | S12 the own Elo's alternative quarterback adjustment (the ported rating in place of VALUE) | report only | S3, S4 | third attempt running with every design choice fixed in the brief (the first two stopped on runaway deliberation, not on the task) |
 

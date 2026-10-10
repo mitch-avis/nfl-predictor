@@ -50,13 +50,24 @@ consume two kinds of regular-season rows, documented column by column in `inputs
 - quarterback-game rows (`QB_GAME_SCHEMA`): `game_id`, `week`, `team`, `opponent_team`, `is_home`,
   `qb_id`, `qb_name`, `qb_dropbacks`, `qb_dropback_epa`, `qb_attempts`.
 
-`team_game_rows` and `qb_game_rows` check a frame against these and keep its row order. The fits
-sum over rows in the order given, so an adapter should emit a fixed order (team, week, and game;
-for passers also the name) to make rebuilds byte-identical. The BLAS thread count matters the
-same way: with one thread, as the tests and the parity audit run and as `nfl-sos-ratings` built
-its files, the port reproduces those files bit for bit; with more, the quarterback fits can differ
-in their last bits. `published_logs.py` adapts the game logs `nfl-sos-ratings` published, in the
-order its fits read them.
+`team_game_rows` and `qb_game_rows` check a frame against these and keep its row order, and they
+refuse empty ids and team codes. `published_logs.py` adapts the game logs `nfl-sos-ratings`
+published, in the order its fits read them.
+
+The exact bits of a fit depend on more than its inputs, so a rebuild that must be byte-identical
+fixes all of these:
+
+- Row order: the fits sum over rows in the order given, so an adapter should emit a fixed order
+  (team, week, and game; for passers also the name).
+- BLAS threads: with one thread, as the tests and the parity audit run and as `nfl-sos-ratings`
+  built its files, the quarterback fits are reproducible; with more, they can differ in their last
+  bits.
+- The BLAS kernel and the library versions: with numpy 2.5.3 (OpenBLAS 0.3.34 on its SkylakeX
+  kernel) and Polars 2.0.0 the port reproduces the published files bit for bit. Another kernel
+  moves fitted floats in their last bits (a few 1e-14) and can move `SRS`, rounded to six
+  decimals, by one step, so the parity tests compare floats within 1e-12 (`SRS` within 1.5e-6)
+  and keep ranks, rank and pair chances, and text exact; they pass on the SkylakeX, Sandybridge,
+  and Nehalem kernels.
 
 ## Outputs
 

@@ -12,6 +12,7 @@ commit ``9081bce`` so that this package reproduces that project's published rati
 - :mod:`.qb_rating`: the quarterback rating (adjusted EPA per dropback), the
   head-to-head-excluded faced pass defense, and each passer's season volume and ranking
   qualifier.
+- :mod:`.rating_ranges`: game-bootstrap rank ranges and head-to-head chances.
 
 Nothing here reads files or the network: every function takes Polars frames and returns them.
 """

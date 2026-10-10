@@ -15,7 +15,8 @@ Scripts and their captured output sit beside this file:
   1999-2025 against the main checkout's cache on every shared column, and the cache size before
   and after.
 - `pbp_column_facts.py` and `pbp_column_facts_output.txt`: the dtypes that vary between seasons,
-  the team codes normalization changes in each team-code and yard-line column, and what the play
+  the team codes normalization changes in each team-code and yard-line column, the empty team
+  codes, the values nflverse writes in the fields `nfl-sos-ratings` blanks, and what the play
   text and the credit columns add to a season's cache file.
 - `stadium_venues.py` and `stadium_venues_output.txt`: every venue id of the cached 1999-2026
   schedules against `constants.STADIUMS`, the games at the missing ones, and the venue fixture
@@ -274,6 +275,14 @@ total 1999-2025 | 38698844 | 38720948 | 104039588 | 2.69
 
 The full cache grows from about 39 MB to about 104 MB.
 
+### The first ETL after the merge
+
+From the independent review of this branch (its measurements): the first ETL after the merge
+must run online. Every cached season lacks the added columns, so each one downloads again (about
+488 MB of release files), and a failed download of a past season re-raises instead of falling
+back to the cache (`loaders.load_pbp`'s contract). The play-by-play frame the ETL holds in memory
+grows from about 437 MB to about 962 MB.
+
 ## The stadium table
 
 ### 9. Which venues: every venue id of the cached schedules, 2026 included
@@ -339,13 +348,21 @@ The full cache grows from about 39 MB to about 104 MB.
   ids in `stadium_elevations_output.txt`), rounded to the foot; `DEN99` gets its measured
   5,210 ft. Names are the ones the venue had during its NFL use (`Cinergy Field`, not Riverfront
   Stadium; `Memorial Stadium (Champaign)`, as the schedule names it); city and state come from the
-  same articles, with an ISO country code for non-US venues (`ES`, `AU`, `DE`, `FR`, `BR`), as
-  most existing international entries have (Toronto's `ON` is the exception).
+  same articles, with a two-letter country code for non-US venues (`ES`, `AU`, `DE`, `FR`, `BR`),
+  as the existing international entries have. Those codes are not all ISO 3166 (the London
+  entries use `UK`, where ISO has `GB`), Toronto has its province (`ON`), and because one field
+  holds both US state and country codes, `DE` for Germany is also Delaware's code; nothing reads
+  the field as a country.
 - **Reasoning**: 3DEP is a bare-earth, lidar-based model at about 10 m. Copernicus GLO-90 is a
   surface model, so a stadium's stands and roof raise its value at the center (the Superdome
   reads 75 ft there, 2 ft in USGS and 7 ft as the ring median); on 18 US sites the ring median is
   within -16 to +34 ft of USGS. The step plan asks for sourced values, which rules out (d); for
-  the model, Denver at 5,210 or 5,280 ft is the same high-altitude venue.
+  the model, Denver at 5,210 or 5,280 ft is the same high-altitude venue. Mile High Stadium was
+  demolished in 2002, so its 5,210 ft is today's ground at the site; Empower Field next door
+  (`DEN00`) keeps its nominal 5,280 ft, although the two sites measure 15 ft apart in USGS
+  (5,210 and 5,195 ft). Denver's 1999-2000 home games therefore sit 70 ft below its 2001-2026
+  ones; re-sourcing the existing entries the same way would change values for most games and is
+  not part of this chunk.
 - **Data**: command and output in `stadium_elevations_output.txt`
   (`.venv/bin/python -I .agents/sos_port/decisions/stadium_elevations.py --existing`), one line
   per venue, for example:
@@ -421,4 +438,63 @@ The full cache grows from about 39 MB to about 104 MB.
 - **Feature-value impact**: none from this chunk; if left, those games keep `stadium_type`
   `dome` (three) and `unknown` (Madrid).
 - **How to reverse it**: not applicable.
+- **Review**: not yet reviewed.
+
+## Repairs the `nfl-sos-ratings` loader makes that this cache does not
+
+Its `data_loader.load_pbp_data` changes two more things before any statistic reads the
+play-by-play. The cache keeps what nflverse publishes (normalized only through the alias table,
+entries 4 and 5); both are applied where the ported code reads the columns, by the ETL
+integration and the ports wherever their outputs must match the source's.
+
+### 14. Empty team codes
+
+- **What differs**: its `_normalize_team_abbreviations` turns an empty string into null in all 23
+  team-code columns before normalizing; this cache keeps the empty string.
+- **Options**: (a) turn `""` into null when the cache is written; (b) keep it and apply the rule
+  where the ported code reads a team-code column.
+- **Decision**: (b), applied where the ported code reads them.
+- **Reasoning**: in 1999-2025 nflverse writes `""` in two of the 23 columns only, `posteam` and
+  `side_of_field`. `posteam` was already cached, and this repo's aggregations already treat its
+  empty string as missing (`pbp._prepare_plays` drops plays whose `posteam` or `defteam` is null
+  or empty), so rewriting it would change cached values of an earlier column without changing any
+  output, the change this chunk avoided (entry 5). `side_of_field` is read by nothing yet.
+- **Data**: regular seasons 1999-2025, `""` in `posteam` on 103 plays and in `side_of_field` on
+  78; none in the other 21 columns (`pbp_column_facts_output.txt`, "empty strings").
+- **Feature-value impact**: none.
+- **How to reverse it**: make the loader's team-code loop in `loaders._prepare_pbp` turn `""`
+  into null, then refresh the cache (`--refresh-nflreadpy`).
+- **Review**: not yet reviewed.
+
+### 15. Fields blanked in the seasons nflverse lacks them
+
+- **What differs**: its `_blank_fields_missing_in_season` sets nine fields to null in the seasons
+  of `_PBP_FIELD_GAPS`, so every statistic built on them is unknown there rather than zero:
+  `air_yards`, `air_epa`, `pass_length`, `yards_after_catch`, `yac_epa` and `xyac_mean_yardage`
+  before 2006, `qb_hit` in 2003-2005, `no_huddle` before 2003 and `drive_yards_penalized` before
+  2001. This cache keeps the values nflverse publishes there.
+- **Options**: (a) blank them when the cache is written; (b) keep them and blank them where the
+  ported code reads them.
+- **Decision**: (b), applied where the ported code reads them.
+- **Reasoning**: which seasons of a field to trust is a property of the statistic built on it,
+  and the cache should hold the source as published. The blanking changes values in four places
+  only: nflverse writes `qb_hit` as 0 on every play of 2003-2005 (no hit recorded), `no_huddle` on
+  every play of 1999-2002 with almost no nonzero values, and a few hundred 1999 plays carry a
+  `pass_length` or `yards_after_catch`; the other fields have no value in their blanked seasons.
+- **Data**: from `pbp_column_facts_output.txt` ("Fields nfl-sos-ratings blanks"), regular-season
+  plays with a value / with a nonzero or nonempty value:
+
+  ```text
+  qb_hit 2003-2005: 43456 / 0, 43373 / 0, 43562 / 0      (2006: 42942 / 2058)
+  no_huddle 1999-2002: 44164 / 1, 43576 / 0, 43074 / 0, 45326 / 23      (2003: 44850 / 307)
+  pass_length 1999: 344 / 344; 2000-2005: 0      (2006: 15195 / 15195)
+  yards_after_catch 1999: 337 / 240; 2000-2005: 0      (2006: 9775 / 7426)
+  air_yards, air_epa, yac_epa, xyac_mean_yardage 1999-2005: 0; drive_yards_penalized 1999-2000: 0
+  ```
+
+- **Feature-value impact**: none now, since nothing reads these fields. For the ports: a
+  statistic on `qb_hit` or `no_huddle` that skips the blanking reads 2003-2005 as seasons with no
+  hits and 1999-2002 as seasons with almost no no-huddle snaps, where the source reads unknown;
+  a pass-depth statistic would count 1999's few charted plays.
+- **How to reverse it**: not applicable; the rule lives in the ported code.
 - **Review**: not yet reviewed.

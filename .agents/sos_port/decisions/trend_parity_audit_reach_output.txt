@@ -1,0 +1,4 @@
+Completed regular-season games: 7017
+Correlation with the home margin, published difference: -0.0244
+Correlation with the home margin, difference including the game: -0.4237
+The audit flags at |r| >= 0.995 and fails at |r| >= 0.999999.

@@ -275,6 +275,9 @@ def _quarterback_adjustments(
     if not settings.quarterback:
         msg = "qb_adjustments were given but the quarterback switch is off"
         raise ValueError(msg)
+    if qb_adjustments.get_column("game_id").is_duplicated().any():
+        msg = "qb_adjustments lists a game_id more than once"
+        raise ValueError(msg)
     joined = games.select("game_id").join(
         qb_adjustments.select("game_id", "home_qb_adj", "away_qb_adj"),
         on="game_id",

@@ -731,3 +731,35 @@ def test_build_own_elo_features_defaults_to_the_market_free_settings() -> None:
         games, settings=elo_ratings.MARKET_FREE_SETTINGS, inputs=inputs
     )
     assert features.equals(expected)
+
+
+def test_quarterback_adjustments_with_a_repeated_game_id_are_refused() -> None:
+    """Two adjustment rows for one game fail instead of misaligning every later game."""
+    # Arrange
+    games = _schedule(
+        _game("g1", (2020, 1), ("AAA", "BBB")),
+        _game("g2", (2020, 2), ("AAA", "BBB")),
+    )
+    adjustments = _qb_adjustments(("g1", 10.0, 0.0), ("g1", 20.0, 0.0), ("g2", 0.0, 0.0))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=r"qb_adjustments.*more than once"):
+        elo_ratings.compute_elo_ratings(
+            games,
+            settings=elo_ratings.EloSettings(quarterback=True),
+            inputs=elo_ratings.EloInputs(qb_adjustments=adjustments),
+        )
+
+
+def test_fitting_win_total_weights_refuses_a_repeated_quarterback_game_id() -> None:
+    """The weight fit reads the same adjustments and refuses the same repeated id."""
+    # Arrange
+    games = _strong_favorite_seasons()
+    adjustments = _qb_adjustments(("a", 1.0, 0.0), ("a", 2.0, 0.0))
+    inputs = elo_ratings.EloInputs(win_totals=STRONG_FAVORITE_TOTALS, qb_adjustments=adjustments)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=r"qb_adjustments.*more than once"):
+        elo_ratings.fit_win_total_weights(
+            games, settings=elo_ratings.EloSettings(quarterback=True), inputs=inputs
+        )

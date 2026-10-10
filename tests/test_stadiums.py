@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -115,6 +116,61 @@ def test_add_stadium_features_puts_mile_high_stadium_at_denver_altitude() -> Non
 
     # Assert
     assert elevation > 5000
+
+
+def _warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Return the messages of the warnings captured so far."""
+    return [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+
+
+def test_add_stadium_features_names_venues_the_table_lacks_in_one_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Venues without an entry fall back to 0 ft, so one warning lists each of them once."""
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    games = pl.DataFrame({"stadium_id": ["ZZZ01", "DEN00", "ZZZ02", "ZZZ01"]})
+
+    # Act
+    loaders._add_stadium_features(games)
+
+    # Assert
+    warnings = _warnings(caplog)
+    assert len(warnings) == 1
+    assert "['ZZZ01', 'ZZZ02'] (3 games)" in warnings[0]
+    assert "DEN00" not in warnings[0]
+
+
+def test_add_stadium_features_counts_games_without_a_venue_id_in_the_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A game with no venue id also falls back to 0 ft, so the warning counts it."""
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    games = pl.DataFrame({"stadium_id": ["DEN00", None]})
+
+    # Act
+    loaders._add_stadium_features(games)
+
+    # Assert
+    warnings = _warnings(caplog)
+    assert len(warnings) == 1
+    assert "1 game without a venue id" in warnings[0]
+
+
+def test_add_stadium_features_is_silent_when_every_venue_has_an_entry(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Known venues raise no warning."""
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    games = pl.DataFrame({"stadium_id": ["DEN00", "DEN99"]})
+
+    # Act
+    loaders._add_stadium_features(games)
+
+    # Assert
+    assert _warnings(caplog) == []
 
 
 def test_load_schedule_locates_a_cached_venue_the_table_gained_later(

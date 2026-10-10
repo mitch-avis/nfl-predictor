@@ -238,8 +238,40 @@ def _write_cached_frame(
         log.warning("Failed to write nflreadpy cache file %s: %s", path, exc)
 
 
+def _plural(count: int, noun: str) -> str:
+    """Return ``count`` with ``noun``, adding an ``s`` unless the count is one."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def _warn_about_unlisted_venues(stadium_ids: pl.Series) -> None:
+    """Log one warning naming the venues `constants.STADIUMS` lacks.
+
+    Their games get the unknown venue's elevation of 0 ft, which looks like a sea-level stadium
+    to the model, so every venue id without an entry, and any game without a venue id, is named.
+    """
+    listed = stadium_ids.drop_nulls()
+    unlisted = listed.filter(~listed.is_in(list(constants.STADIUMS)))
+    without_id = stadium_ids.null_count()
+    if unlisted.is_empty() and not without_id:
+        return
+    parts = []
+    if not unlisted.is_empty():
+        venues = sorted(unlisted.unique().to_list())
+        parts.append(f"venue ids {venues} ({_plural(unlisted.len(), 'game')})")
+    if without_id:
+        parts.append(f"{_plural(without_id, 'game')} without a venue id")
+    log.warning(
+        "constants.STADIUMS has no entry for %s; their stadium_elevation falls back to 0 ft.",
+        " and ".join(parts),
+    )
+
+
 def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
-    """Add stadium type and altitude features."""
+    """Add stadium type and altitude features.
+
+    A game whose venue `constants.STADIUMS` lacks gets an elevation of 0 ft, and a warning names
+    the venue (`_warn_about_unlisted_venues`).
+    """
     roof_expr = pl.lit(None)
     if "stadium_roof" in df.columns:
         roof_raw = pl.col("stadium_roof").cast(pl.Utf8).str.to_lowercase()
@@ -254,6 +286,7 @@ def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
         )
 
     if "stadium_id" in df.columns:
+        _warn_about_unlisted_venues(df.get_column("stadium_id"))
         altitude_map = {
             stadium_id: meta.get("elevation_ft", 0.0)
             for stadium_id, meta in constants.STADIUMS.items()

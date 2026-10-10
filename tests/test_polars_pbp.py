@@ -584,23 +584,38 @@ def _row_for(result: pl.DataFrame, team: str) -> dict[str, Any]:
 
 def test_thresholds_are_named_constants() -> None:
     """Threshold constants hold the documented values for this repo."""
-    assert pbp.EXPLOSIVE_PASS_YARDS == 20
-    assert pbp.EXPLOSIVE_RUSH_YARDS == 12
-    assert pbp.STUFFED_RUSH_YARDS == 0
-    assert pbp.EARLY_DOWN_MAX == 2
-    assert pbp.RED_ZONE_YARDLINE == 20
+    # Act
+    thresholds = (
+        pbp.EXPLOSIVE_PASS_YARDS,
+        pbp.EXPLOSIVE_RUSH_YARDS,
+        pbp.STUFFED_RUSH_YARDS,
+        pbp.EARLY_DOWN_MAX,
+        pbp.RED_ZONE_YARDLINE,
+    )
+
+    # Assert
+    assert thresholds == (20, 12, 0, 2, 20)
 
 
 def test_team_game_columns_start_with_identity_keys() -> None:
     """The exported column order lists the identity keys before the stat columns."""
-    assert pbp.PBP_TEAM_GAME_COLUMNS[:4] == ["season", "week", "team_abbr", "opponent_abbr"]
-    assert len(set(pbp.PBP_TEAM_GAME_COLUMNS)) == len(pbp.PBP_TEAM_GAME_COLUMNS)
+    # Act
+    columns = pbp.PBP_TEAM_GAME_COLUMNS
+
+    # Assert
+    assert columns[:4] == ["season", "week", "team_abbr", "opponent_abbr"]
+    assert len(set(columns)) == len(columns)
 
 
 def test_aggregation_matches_hand_computed_values() -> None:
     """Every produced column matches the hand-computed value for all four team-games."""
-    result = pbp.aggregate_pbp_team_game_stats(_fixture_plays())
+    # Arrange
+    plays = _fixture_plays()
 
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
     assert result.columns == pbp.PBP_TEAM_GAME_COLUMNS
     assert result.height == 4
 
@@ -617,8 +632,13 @@ def test_aggregation_matches_hand_computed_values() -> None:
 
 def test_allowed_columns_mirror_the_opponent_offense() -> None:
     """Each team's allowed columns equal its opponent's matching offensive columns."""
-    result = pbp.aggregate_pbp_team_game_stats(_fixture_plays())
+    # Arrange
+    plays = _fixture_plays()
 
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
     for team, opponent in (("KC", "BUF"), ("BUF", "KC"), ("SF", "DAL"), ("DAL", "SF")):
         team_row = _row_for(result, team)
         opponent_row = _row_for(result, opponent)
@@ -630,6 +650,7 @@ def test_allowed_columns_mirror_the_opponent_offense() -> None:
 
 def test_kneels_and_spikes_are_snaps_but_not_dropbacks_or_carries() -> None:
     """A kneel and a spike each add an offensive snap without a dropback or carry."""
+    # Arrange
     plays = _frame(
         [
             _play(
@@ -655,10 +676,12 @@ def test_kneels_and_spikes_are_snaps_but_not_dropbacks_or_carries() -> None:
         ]
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
     row = _row_for(result, "KC")
     opponent_row = _row_for(result, "BUF")
-
     assert row["offensive_snaps"] == 2
     assert row["dropbacks"] == 0
     assert row["carries"] == 0
@@ -676,6 +699,7 @@ def test_kneels_and_spikes_are_snaps_but_not_dropbacks_or_carries() -> None:
 
 def test_special_teams_play_credits_both_teams() -> None:
     """A special-teams play credits the possessing team and charges the other team."""
+    # Arrange
     plays = _frame(
         [
             _play(
@@ -697,10 +721,12 @@ def test_special_teams_play_credits_both_teams() -> None:
         ]
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
     kc_row = _row_for(result, "KC")
     buf_row = _row_for(result, "BUF")
-
     assert kc_row["st_epa_for"] == pytest.approx(-0.6)
     assert kc_row["st_epa_against"] == pytest.approx(0.0)
     assert kc_row["st_plays"] == 1
@@ -713,15 +739,22 @@ def test_special_teams_play_credits_both_teams() -> None:
 
 def test_special_teams_flag_column_prefers_the_first_candidate() -> None:
     """The special-teams flag resolves in candidate order and is None when absent."""
-    assert pbp.special_teams_flag_column(["special", "special_teams_play"]) == "special"
-    assert pbp.special_teams_flag_column(["special_teams_play"]) == "special_teams_play"
-    assert pbp.special_teams_flag_column(["epa"]) is None
+    # Arrange
+    candidates = (["special", "special_teams_play"], ["special_teams_play"], ["epa"])
+
+    # Act
+    resolved = [pbp.special_teams_flag_column(columns) for columns in candidates]
+
+    # Assert
+    assert resolved == ["special", "special_teams_play", None]
 
 
 def test_empty_input_returns_typed_empty_frame() -> None:
     """Empty input returns a typed empty frame with exactly the expected columns."""
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(pl.DataFrame())
 
+    # Assert
     assert result.height == 0
     assert result.columns == pbp.PBP_TEAM_GAME_COLUMNS
     assert result.schema["season"] == pl.Int64
@@ -734,14 +767,17 @@ def test_empty_input_returns_typed_empty_frame() -> None:
 
 def test_missing_identity_columns_raise() -> None:
     """Missing identity columns raise instead of producing unkeyed rows."""
+    # Arrange
     plays = pl.DataFrame({"season": [2024], "week": [1], "posteam": ["KC"]})
 
+    # Act & Assert
     with pytest.raises(ValueError, match="defteam"):
         pbp.aggregate_pbp_team_game_stats(plays)
 
 
 def test_missing_optional_columns_use_documented_defaults() -> None:
     """Missing optional source columns fall back to documented defaults without crashing."""
+    # Arrange
     plays = pl.DataFrame(
         {
             "season": [2024, 2024],
@@ -753,9 +789,11 @@ def test_missing_optional_columns_use_documented_defaults() -> None:
         }
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
-    row = _row_for(result, "KC")
 
+    # Assert
+    row = _row_for(result, "KC")
     assert result.columns == pbp.PBP_TEAM_GAME_COLUMNS
     assert row["offensive_snaps"] == 2
     assert row["dropbacks"] == 1
@@ -788,6 +826,7 @@ def test_missing_optional_columns_use_documented_defaults() -> None:
 
 def test_missing_special_teams_flag_yields_null_special_teams_columns() -> None:
     """Without a special-teams flag column the special-teams stats are null, not zero."""
+    # Arrange
     plays = pl.DataFrame(
         {
             "season": [2024],
@@ -799,8 +838,11 @@ def test_missing_special_teams_flag_yields_null_special_teams_columns() -> None:
         }
     )
 
-    row = _row_for(pbp.aggregate_pbp_team_game_stats(plays), "KC")
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
+    row = _row_for(result, "KC")
     assert row["st_epa_for"] is None
     assert row["st_epa_against"] is None
     assert row["st_plays"] is None
@@ -809,6 +851,7 @@ def test_missing_special_teams_flag_yields_null_special_teams_columns() -> None:
 
 def test_alternate_special_teams_flag_column_is_used() -> None:
     """The alternate special-teams flag name is honored when the primary name is absent."""
+    # Arrange
     plays = pl.DataFrame(
         {
             "season": [2024],
@@ -820,14 +863,17 @@ def test_alternate_special_teams_flag_column_is_used() -> None:
         }
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
     assert _row_for(result, "KC")["st_epa_for"] == pytest.approx(-0.9)
     assert _row_for(result, "BUF")["st_epa_against"] == pytest.approx(-0.9)
 
 
 def test_red_zone_touchdown_counts_only_the_offense_that_scored() -> None:
     """A red-zone defensive score must not credit the offense with a red-zone touchdown."""
+    # Arrange
     plays = pl.DataFrame(
         [
             _play(
@@ -847,8 +893,10 @@ def test_red_zone_touchdown_counts_only_the_offense_that_scored() -> None:
         schema_overrides=_FIXTURE_DTYPES,
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
     assert _row_for(result, "KC")["red_zone_plays"] == 1
     assert _row_for(result, "KC")["red_zone_tds"] == 0
     assert _row_for(result, "BUF")["red_zone_tds"] == 0
@@ -869,6 +917,7 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
     Fumbles exclude special-teams plays, matching nflverse's offense-only fumble stat
     (87.5% match, up from 73.6% when special-teams fumbles were included).
     """
+    # Arrange
     plays = pl.DataFrame(
         [
             {
@@ -1135,10 +1184,12 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
         },
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_box_score_stats(plays)
+
+    # Assert
     kc = _row_for(result, "KC")
     buf = _row_for(result, "BUF")
-
     assert kc["pass_attempts"] == 3
     assert kc["pass_completions"] == 2
     assert kc["pass_yards"] == pytest.approx(32.0)
@@ -1177,6 +1228,7 @@ def test_box_score_aggregation_derives_team_game_stats() -> None:
 
 def test_non_regular_season_rows_are_excluded() -> None:
     """Rows outside the regular season are dropped when season_type exists."""
+    # Arrange
     plays = _frame(
         [
             _play(
@@ -1201,8 +1253,11 @@ def test_non_regular_season_rows_are_excluded() -> None:
         ]
     )
 
-    row = _row_for(pbp.aggregate_pbp_team_game_stats(plays), "KC")
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
+    row = _row_for(result, "KC")
     assert row["dropbacks"] == 1
     assert row["pass_epa_sum"] == pytest.approx(0.4)
     assert row["explosive_pass_count"] == 0
@@ -1210,6 +1265,7 @@ def test_non_regular_season_rows_are_excluded() -> None:
 
 def test_all_postseason_rows_return_empty_frame() -> None:
     """A frame with no regular-season rows returns the typed empty frame."""
+    # Arrange
     plays = _frame(
         [
             _play(
@@ -1223,14 +1279,17 @@ def test_all_postseason_rows_return_empty_frame() -> None:
         ]
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
     assert result.height == 0
     assert result.columns == pbp.PBP_TEAM_GAME_COLUMNS
 
 
 def test_rows_are_kept_when_season_type_column_is_absent() -> None:
     """Every row is kept when the frame has no season_type column."""
+    # Arrange
     plays = pl.DataFrame(
         {
             "season": [2024],
@@ -1242,14 +1301,18 @@ def test_rows_are_kept_when_season_type_column_is_absent() -> None:
         }
     )
 
-    row = _row_for(pbp.aggregate_pbp_team_game_stats(plays), "KC")
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
+    row = _row_for(result, "KC")
     assert row["offensive_snaps"] == 1
     assert row["pass_epa_sum"] == pytest.approx(0.7)
 
 
 def test_plays_without_both_teams_are_dropped() -> None:
     """Plays missing posteam or defteam cannot be credited and are dropped."""
+    # Arrange
     plays = pl.DataFrame(
         {
             "season": [2024, 2024, 2024],
@@ -1261,9 +1324,11 @@ def test_plays_without_both_teams_are_dropped() -> None:
         }
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
-    row = _row_for(result, "KC")
 
+    # Assert
+    row = _row_for(result, "KC")
     assert result.height == 2
     assert row["offensive_snaps"] == 1
     assert row["pass_epa_sum"] == pytest.approx(0.5)
@@ -1271,6 +1336,7 @@ def test_plays_without_both_teams_are_dropped() -> None:
 
 def test_boolean_and_integer_flag_dtypes_are_handled() -> None:
     """Boolean flag columns and integer yardage are cast rather than rejected."""
+    # Arrange
     plays = pl.DataFrame(
         {
             "season": [2024],
@@ -1285,8 +1351,11 @@ def test_boolean_and_integer_flag_dtypes_are_handled() -> None:
         }
     )
 
-    row = _row_for(pbp.aggregate_pbp_team_game_stats(plays), "KC")
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
+    row = _row_for(result, "KC")
     assert row["offensive_snaps"] == 1
     assert row["dropbacks"] == 1
     assert row["pass_epa_sum"] == pytest.approx(0.25)
@@ -1302,6 +1371,7 @@ def test_blank_team_identifiers_are_dropped_like_nulls() -> None:
     possession team; grouping on it would invent a phantom team-game row and duplicate
     the `(season, week, team_abbr)` key the downstream join relies on.
     """
+    # Arrange
     plays = pl.DataFrame(
         {
             "season": [2001, 2001, 2001],
@@ -1320,8 +1390,10 @@ def test_blank_team_identifiers_are_dropped_like_nulls() -> None:
         }
     )
 
+    # Act
     out = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
     assert out.height == 2, "expected exactly one row per real team"
     assert set(out["team_abbr"].to_list()) == {"AAA", "BBB"}
     assert "" not in out["team_abbr"].to_list()
@@ -1338,6 +1410,7 @@ def test_two_point_attempts_are_not_dropbacks_or_carries() -> None:
     They are untimed conversion attempts rather than scrimmage downs, so counting them
     would contaminate the per-attempt EPA and success denominators.
     """
+    # Arrange
     plays = pl.DataFrame(
         {
             "season": [2001, 2001, 2001, 2001],
@@ -1357,9 +1430,11 @@ def test_two_point_attempts_are_not_dropbacks_or_carries() -> None:
         }
     )
 
+    # Act
     out = pbp.aggregate_pbp_team_game_stats(plays)
-    row = out.filter(pl.col("team_abbr") == "AAA").row(0, named=True)
 
+    # Assert
+    row = out.filter(pl.col("team_abbr") == "AAA").row(0, named=True)
     assert row["dropbacks"] == 1
     assert row["carries"] == 1
     assert row["pass_epa_sum"] == pytest.approx(1.0)
@@ -1377,8 +1452,13 @@ def test_two_point_attempts_are_not_dropbacks_or_carries() -> None:
 
 def test_is_home_is_derived_from_posteam_type() -> None:
     """The home indicator marks the home team on both sides of each game."""
-    result = pbp.aggregate_pbp_team_game_stats(_fixture_plays())
+    # Arrange
+    plays = _fixture_plays()
 
+    # Act
+    result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
     assert _row_for(result, "KC")["is_home"] is True
     assert _row_for(result, "BUF")["is_home"] is False
     assert _row_for(result, "SF")["is_home"] is True
@@ -1387,6 +1467,7 @@ def test_is_home_is_derived_from_posteam_type() -> None:
 
 def test_is_home_is_recovered_for_a_team_with_no_offensive_snaps() -> None:
     """A team seen only on defense still gets its home indicator from the other side."""
+    # Arrange
     plays = _frame(
         [
             _play(
@@ -1401,14 +1482,17 @@ def test_is_home_is_recovered_for_a_team_with_no_offensive_snaps() -> None:
         ]
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
     assert _row_for(result, "AAA")["is_home"] is False
     assert _row_for(result, "BBB")["is_home"] is True
 
 
 def test_is_home_is_null_when_posteam_type_is_absent() -> None:
     """A missing possession-side column yields a null indicator rather than a guess."""
+    # Arrange
     plays = _frame(
         [
             _play(
@@ -1422,15 +1506,21 @@ def test_is_home_is_null_when_posteam_type_is_absent() -> None:
         ]
     ).drop("posteam_type")
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
     assert result.schema["is_home"] == pl.Boolean
     assert result["is_home"].to_list() == [None, None]
 
 
 def test_is_home_is_not_carried_as_a_count_or_published_stat() -> None:
     """The home indicator is context, so it is never averaged, mirrored, or published."""
-    assert "is_home" in pbp.PBP_TEAM_GAME_COLUMNS
+    # Act
+    team_game_columns = pbp.PBP_TEAM_GAME_COLUMNS
+
+    # Assert
+    assert "is_home" in team_game_columns
     # Not a count, so season-to-date aggregation never averages it.
     assert "is_home" not in constants.PBP_COUNT_COLUMNS
     # Not a published stat, so it never reaches the final schema.
@@ -1441,6 +1531,7 @@ def test_is_home_is_not_carried_as_a_count_or_published_stat() -> None:
 
 def test_red_zone_trips_count_drives_not_snaps() -> None:
     """Red-zone trips count distinct drives that reached the 20, not plays inside it."""
+    # Arrange
     plays = _frame(
         [
             _play(
@@ -1472,10 +1563,12 @@ def test_red_zone_trips_count_drives_not_snaps() -> None:
         ]
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
+
+    # Assert
     kc = _row_for(result, "KC")
     buf = _row_for(result, "BUF")
-
     # Three red-zone snaps, but only two drives reached the red zone.
     assert kc["red_zone_plays"] == 3
     assert kc["red_zone_trips"] == 2
@@ -1487,6 +1580,7 @@ def test_red_zone_trips_count_drives_not_snaps() -> None:
 
 def test_red_zone_trip_counted_once_per_drive_without_a_touchdown() -> None:
     """A drive that reaches the red zone and fails is a trip with no touchdown drive."""
+    # Arrange
     plays = _frame(
         [
             _play(
@@ -1500,7 +1594,9 @@ def test_red_zone_trip_counted_once_per_drive_without_a_touchdown() -> None:
         ]
     )
 
+    # Act
     result = pbp.aggregate_pbp_team_game_stats(plays)
 
+    # Assert
     assert _row_for(result, "SF")["red_zone_trips"] == 1
     assert _row_for(result, "SF")["red_zone_td_drives"] == 0

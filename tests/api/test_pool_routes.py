@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
 import pytest
 from tests.api import factories
 
@@ -86,6 +89,78 @@ def test_confidence_sheet_scores_finals_from_the_dataset(
     results = {row["pick"]: (row["result"], row["points_won"]) for row in payload["rows"]}
     assert results == {"NE": ("win", 4), "GB": ("tie", 0), "BUF": (None, None), "DEN": (None, None)}
     assert (payload["games_final"], payload["points_won"], payload["points_possible"]) == (2, 4, 7)
+
+
+def _repredict_after_the_lock(run_dir: Path, *, picks_before_lock: bool) -> None:
+    """Rewrite week 5's predictions with reversed ranks after the first kickoff (Sept. 13).
+
+    The weekly run's picks file is dated the day before the lock, or the day after it.
+    """
+    predictions = run_dir / "season_2026_week_05_predictions.csv"
+    frame = pl.read_csv(predictions, infer_schema_length=10000)
+    frame.with_columns((5 - pl.col("confidence_rank")).alias("confidence_rank")).write_csv(
+        predictions
+    )
+    after = datetime(2026, 9, 15, tzinfo=UTC).timestamp()
+    picks_day = datetime(2026, 9, 12 if picks_before_lock else 14, tzinfo=UTC).timestamp()
+    os.utime(predictions, (after, after))
+    os.utime(run_dir / "season_2026_week_05_confidence_picks.csv", (picks_day, picks_day))
+
+
+def test_confidence_sheet_after_the_lock_reads_the_picks_made_before_it(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """A re-predict after the first kickoff leaves the sheet on the picks entered before it."""
+    # Arrange
+    run_dir = _seed(project_root, app)
+    _repredict_after_the_lock(run_dir, picks_before_lock=True)
+
+    # Act
+    payload = viewer_client.get("/api/pool/confidence").json()
+
+    # Assert
+    assert [(row["points"], row["pick"], row["newer_points"]) for row in payload["rows"]] == [
+        (4, "NE", 1),
+        (3, "GB", 2),
+        (2, "BUF", 3),
+        (1, "DEN", 4),
+    ]
+    assert payload["picks_file"] == "season_2026_week_05_confidence_picks.csv"
+    assert (payload["generated_after_lock"], payload["changed_after_lock"]) == (False, 4)
+    assert payload["generated_at"].startswith("2026-09-12")
+
+
+def test_confidence_sheet_after_the_lock_without_earlier_picks_warns(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """With no picks written before the lock, the sheet shows the newer ranks and warns."""
+    # Arrange
+    run_dir = _seed(project_root, app)
+    _repredict_after_the_lock(run_dir, picks_before_lock=False)
+
+    # Act
+    payload = viewer_client.get("/api/pool/confidence").json()
+
+    # Assert
+    assert [row["points"] for row in payload["rows"]] == [4, 3, 2, 1]
+    assert [row["pick"] for row in payload["rows"]] == ["DEN", "BUF", "GB", "NE"]
+    assert (payload["picks_file"], payload["generated_after_lock"]) == (None, True)
+
+
+def test_picks_after_the_lock_follow_the_picks_made_before_it(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """The Predictions page's picks and the CSV download keep the pre-lock picks too."""
+    # Arrange
+    run_dir = _seed(project_root, app)
+    _repredict_after_the_lock(run_dir, picks_before_lock=True)
+
+    # Act
+    payload = viewer_client.get("/api/predictions/picks").json()
+
+    # Assert
+    picks = [(row["confidence_rank"], row["predicted_winner"]) for row in payload["table"]["rows"]]
+    assert picks == [(4, "NE"), (3, "GB"), (2, "BUF"), (1, "DEN")]
 
 
 def test_confidence_sheet_without_predictions_is_a_404(viewer_client: TestClient) -> None:

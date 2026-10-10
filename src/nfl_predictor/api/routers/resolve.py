@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING
 
 from nfl_predictor import week_builder
 from nfl_predictor.api.errors import NotFoundError
+from nfl_predictor.api.pool.kickoff import first_kickoff
 from nfl_predictor.api.readers.data_status import current_season_week, unattached_files
+from nfl_predictor.api.readers.predictions import load_frame
 from nfl_predictor.api.runs import active
 from nfl_predictor.api.runs.files import week_of
 from nfl_predictor.api.schemas.data import PredictionQuery, WeekQuery, WeekRef
@@ -182,22 +184,48 @@ def _unattached_source(settings: Settings, query: WeekQuery) -> PredictionSource
     return None
 
 
+def _week_picks_file(src: PredictionSource) -> Path | None:
+    """Return the run's picks file for ``src``'s week, if the run wrote one."""
+    picks = src.run.run_files.picks if src.run else None
+    if picks is None or not picks.is_file() or week_of(picks) != (src.season, src.week):
+        return None
+    return picks
+
+
+def pre_lock_picks_file(src: PredictionSource) -> Path | None:
+    """Return the week's picks file when it was written before the lock and ``src`` after it.
+
+    Pool picks are single-shot before the week's first kickoff. When the week's predictions are
+    rewritten after that kickoff (a lines refresh chains a new prediction), the picks file the
+    weekly run wrote before it still holds the picks that count.
+    """
+    picks = _week_picks_file(src)
+    if picks is None:
+        return None
+    lock = first_kickoff(load_frame(src.path).to_dicts())
+    if lock is None:
+        return None
+    locked_at = lock.timestamp()
+    if picks.stat().st_mtime < locked_at < src.path.stat().st_mtime:
+        return picks
+    return None
+
+
 def current_picks_file(src: PredictionSource) -> Path | None:
     """Return the run's picks file when it still describes ``src``, else ``None``.
 
     The weekly run writes the picks file beside its own week's predictions. It describes ``src``
-    only when it is for the same week and no older than ``src.path``: predicting the week again
-    (after a lines refresh) or predicting a later week leaves it behind, and the picks then come
-    from the predictions themselves.
+    when it is for the same week and no older than ``src.path``, or when it was written before the
+    week's lock and ``src`` after it (the single-shot picks). Otherwise, predicting the week again
+    before the lock or predicting a later week leaves it behind, and the picks then come from the
+    predictions themselves.
     """
-    picks = src.run.run_files.picks if src.run else None
-    if picks is None or not picks.is_file():
+    picks = _week_picks_file(src)
+    if picks is None:
         return None
-    if week_of(picks) != (src.season, src.week):
-        return None
-    if picks.stat().st_mtime < src.path.stat().st_mtime:
-        return None
-    return picks
+    if picks.stat().st_mtime >= src.path.stat().st_mtime:
+        return picks
+    return pre_lock_picks_file(src)
 
 
 def resolve_predictions(

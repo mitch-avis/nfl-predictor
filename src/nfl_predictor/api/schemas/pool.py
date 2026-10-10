@@ -14,7 +14,9 @@ class SheetRowOut(BaseModel):
     """One game on the confidence sheet.
 
     ``points`` is the confidence rank to assign; ``result`` and ``points_won`` are set once the
-    game is final, and a tie is a ``tie`` worth no points for either pick.
+    game is final, and a tie is a ``tie`` worth no points for either pick. On a sheet built from
+    the picks entered before the lock, ``newer_points`` and ``newer_pick`` note a game whose
+    points or pick the predictions written after the lock changed.
     """
 
     game_id: str
@@ -31,6 +33,8 @@ class SheetRowOut(BaseModel):
     home_score: int | None
     result: Literal["win", "loss", "tie"] | None
     points_won: int | None
+    newer_points: int | None = None
+    newer_pick: str | None = None
 
 
 class ConfidenceSheetOut(BaseModel):
@@ -38,7 +42,10 @@ class ConfidenceSheetOut(BaseModel):
 
     ``lock_at`` is the week's first kickoff (picks are single-shot before it), and
     ``generated_after_lock`` flags predictions written after it. ``rank_problem`` explains ranks
-    that are not the unique ``1..N`` the pool needs.
+    that are not the unique ``1..N`` the pool needs. When the week's predictions were rewritten
+    after the lock and the run's picks file was written before it, the sheet comes from that file:
+    ``picks_file`` names it, ``generated_at`` is when it was written, ``newer_predictions_at`` is
+    when the predictions were, and ``changed_after_lock`` counts the games they changed.
     """
 
     run_id: str | None
@@ -56,6 +63,9 @@ class ConfidenceSheetOut(BaseModel):
     lock_at: str | None
     generated_after_lock: bool | None
     rank_problem: str | None
+    picks_file: str | None = None
+    newer_predictions_at: str | None = None
+    changed_after_lock: int = 0
 
 
 class TiebreakGameOut(BaseModel):

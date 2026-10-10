@@ -16,11 +16,11 @@ from nfl_predictor import constants
 from nfl_predictor.api.deps import CurrentUser, DbDep, SettingsDep
 from nfl_predictor.api.errors import NotFoundError, UnprocessableEntityError
 from nfl_predictor.api.pool.results import final_scores
-from nfl_predictor.api.pool.sheet import build_sheet
+from nfl_predictor.api.pool.sheet import SubmittedPicks, build_pre_lock_sheet, build_sheet
 from nfl_predictor.api.pool.survivor import plan_survivor, week_options
 from nfl_predictor.api.pool.tiebreakers import build_tiebreakers
 from nfl_predictor.api.readers.predictions import load_frame
-from nfl_predictor.api.routers.resolve import resolve_predictions
+from nfl_predictor.api.routers.resolve import pre_lock_picks_file, resolve_predictions
 from nfl_predictor.api.schemas.data import PredictionQuery, WeekQuery
 from nfl_predictor.api.schemas.pool import (
     ConfidenceSheetOut,
@@ -33,12 +33,19 @@ from nfl_predictor.api.schemas.pool import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from nfl_predictor.api.db import Database
     from nfl_predictor.api.pool.survivor import Option, Plan
     from nfl_predictor.api.routers.resolve import PredictionSource
     from nfl_predictor.api.settings import Settings
 
 router = APIRouter(prefix="/pool", tags=["pool"])
+
+
+def _written_at(path: Path) -> datetime:
+    """Return when ``path`` was last written, in UTC."""
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
 
 def _source_fields(src: PredictionSource) -> dict[str, Any]:
@@ -60,11 +67,23 @@ def confidence(
     request: Request,
     query: Annotated[PredictionQuery, Query()],
 ) -> ConfidenceSheetOut:
-    """Return the week's confidence pool sheet, scored against any final scores."""
+    """Return the week's confidence pool sheet, scored against any final scores.
+
+    When the week's predictions were rewritten after its first kickoff and the run's picks file
+    was written before it, the sheet and its points come from that picks file.
+    """
     src = resolve_predictions(request, db, settings, query)
-    written = datetime.fromtimestamp(src.path.stat().st_mtime, tz=UTC)
-    sheet = build_sheet(load_frame(src.path), final_scores(settings.data_path), written)
-    return ConfidenceSheetOut.model_validate({**asdict(sheet), **_source_fields(src)})
+    finals = final_scores(settings.data_path)
+    predictions = load_frame(src.path)
+    written = _written_at(src.path)
+    pre_lock = pre_lock_picks_file(src)
+    if pre_lock is None:
+        sheet = build_sheet(predictions, finals, written)
+        return ConfidenceSheetOut.model_validate({**asdict(sheet), **_source_fields(src)})
+    submitted = SubmittedPicks(load_frame(pre_lock), pre_lock.name, _written_at(pre_lock))
+    sheet = build_pre_lock_sheet(predictions, submitted, finals, written)
+    fields = {**_source_fields(src), "generated_at": submitted.written_at.isoformat()}
+    return ConfidenceSheetOut.model_validate({**asdict(sheet), **fields})
 
 
 @router.get("/tiebreakers", response_model=TiebreakersOut)

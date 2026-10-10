@@ -8,7 +8,12 @@ from typing import Any
 import polars as pl
 import pytest
 
-from nfl_predictor.api.pool.sheet import build_sheet
+from nfl_predictor.api.pool.sheet import (
+    ConfidenceSheet,
+    SubmittedPicks,
+    build_pre_lock_sheet,
+    build_sheet,
+)
 
 
 def _frame(**overrides: list[Any]) -> pl.DataFrame:
@@ -244,3 +249,87 @@ def test_sheet_without_a_pick_column_picks_by_the_win_probability() -> None:
 
     # Assert
     assert [row.pick for row in sheet.rows] == ["DAL", "HOU", "PIT"]
+
+
+def _pre_lock_picks() -> pl.DataFrame:
+    """Return the picks file the weekly run wrote before the lock: DAL for 3, HOU 2, PIT 1."""
+    return pl.DataFrame(
+        {
+            "season": [2026, 2026, 2026],
+            "week": [5, 5, 5],
+            "date": ["2026-10-08", "2026-10-11", "2026-10-11"],
+            "game_id": ["2026_05_TB_DAL", "2026_05_HOU_TEN", "2026_05_IND_PIT"],
+            "away_abbr": ["TB", "HOU", "IND"],
+            "home_abbr": ["DAL", "TEN", "PIT"],
+            "predicted_winner": ["DAL", "HOU", "PIT"],
+            "home_win_prob": [0.7928, 0.291, 0.505],
+            "away_win_prob": [0.2072, 0.709, 0.495],
+            "confidence_rank": [3, 2, 1],
+        }
+    )
+
+
+def _newer_predictions() -> pl.DataFrame:
+    """Return predictions rewritten after the lock: IND now picked, and the ranks reshuffled."""
+    return _frame(
+        home_win_prob=[0.7928, 0.291, 0.45],
+        away_win_prob=[0.2072, 0.709, 0.55],
+        predicted_winner=["DAL", "HOU", "IND"],
+        confidence_rank=[3, 1, 2],
+    )
+
+
+def _build_pre_lock(finals: dict[str, tuple[int, int]]) -> ConfidenceSheet:
+    """Build the pre-lock sheet of the fixture week, the picks written on 2026-10-07."""
+    submitted = SubmittedPicks(
+        _pre_lock_picks(),
+        "season_2026_week_05_confidence_picks.csv",
+        datetime(2026, 10, 7, tzinfo=UTC),
+    )
+    return build_pre_lock_sheet(
+        _newer_predictions(), submitted, finals, datetime(2026, 10, 10, tzinfo=UTC)
+    )
+
+
+def test_pre_lock_sheet_scores_the_picks_made_before_the_lock() -> None:
+    """After the lock the sheet and its points come from the picks entered before it."""
+    # Arrange
+    finals = {"2026_05_TB_DAL": (10, 31), "2026_05_IND_PIT": (17, 24)}
+
+    # Act
+    sheet = _build_pre_lock(finals)
+
+    # Assert
+    assert [(row.points, row.pick, row.result, row.points_won) for row in sheet.rows] == [
+        (3, "DAL", "win", 3),
+        (2, "HOU", None, None),
+        (1, "PIT", "win", 1),
+    ]
+    assert (sheet.points_won, sheet.generated_after_lock) == (4, False)
+    assert sheet.picks_file == "season_2026_week_05_confidence_picks.csv"
+
+
+def test_pre_lock_sheet_notes_the_newer_ranks() -> None:
+    """Games whose pick or points changed after the lock carry the newer ones as a note."""
+    # Act
+    sheet = _build_pre_lock({})
+
+    # Assert
+    notes = {row.game_id: (row.newer_points, row.newer_pick) for row in sheet.rows}
+    assert notes == {
+        "2026_05_TB_DAL": (None, None),
+        "2026_05_HOU_TEN": (1, "HOU"),
+        "2026_05_IND_PIT": (2, "IND"),
+    }
+    assert sheet.changed_after_lock == 2
+    assert sheet.newer_predictions_at == "2026-10-10T00:00:00+00:00"
+
+
+def test_pre_lock_sheet_takes_the_kickoffs_from_the_predictions() -> None:
+    """The picks file has no kickoff times, so the lock and kickoffs come from the predictions."""
+    # Act
+    sheet = _build_pre_lock({})
+
+    # Assert
+    assert sheet.lock_at == "2026-10-08T20:15:00-04:00"
+    assert sheet.rows[0].kickoff == "2026-10-08T20:15:00-04:00"

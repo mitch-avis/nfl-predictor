@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -188,13 +189,20 @@ def test_picks_for_a_later_week_come_from_its_predictions(
 def test_picks_follow_predictions_written_after_the_picks_file(
     project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
-    """Predicting the run's own week again (after a lines refresh) supersedes its picks file."""
+    """Predicting the run's own week again before its lock supersedes its picks file.
+
+    The fixture week's first kickoff is Sept. 13; the picks are written on Sept. 10 and the week
+    is predicted again (after a lines refresh) on Sept. 12.
+    """
     # Arrange
     run_dir = _weekly_run_with_a_later_week(project_root / "models")
     picks = run_dir / "season_2026_week_05_confidence_picks.csv"
     factories.write_picks_csv(picks, 2026, OWN_WEEK)
     picks.write_text(picks.read_text(encoding="utf-8").replace("2026_05_", "stale_"), "utf-8")
-    os.utime(picks, (1_000_000_000, 1_000_000_000))
+    picks_day = datetime(2026, 9, 10, tzinfo=UTC).timestamp()
+    repredicted = datetime(2026, 9, 12, tzinfo=UTC).timestamp()
+    os.utime(picks, (picks_day, picks_day))
+    os.utime(run_dir / "season_2026_week_05_predictions.csv", (repredicted, repredicted))
     app.state.run_index.invalidate()
 
     # Act

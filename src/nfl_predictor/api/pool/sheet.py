@@ -5,17 +5,19 @@ run and the ``predict`` command assign each week's unique ranks ``1..N`` from th
 probability, and the pool is scored by the repository's rules (``README.md``, "Confidence pool
 rules"): a correct pick earns its rank in points, and a tie scores as incorrect for both sides.
 Picks are single-shot before the week's first game, so the sheet names that kickoff and flags
-predictions written after it.
+predictions written after it. When a week's predictions were rewritten after the lock (a lines
+refresh chains a new prediction) and the weekly run's picks file was written before it, the sheet
+and its points come from that picks file, with the newer ranks only as a note.
 """
 
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
 
 from nfl_predictor import constants
-from nfl_predictor.api.pool.kickoff import kickoff_eastern
+from nfl_predictor.api.pool.kickoff import first_kickoff, kickoff_eastern
 from nfl_predictor.api.readers.market import is_number
 
 if TYPE_CHECKING:
@@ -25,11 +27,17 @@ if TYPE_CHECKING:
     import polars as pl
 
 Result = Literal["win", "loss", "tie"]
+SCHEDULE_COLUMNS = ("game_datetime", "date", "gametime", "away_score", "home_score")
+"""Columns a pre-lock sheet takes from the week's predictions: kickoffs and final scores."""
 
 
 @dataclass(frozen=True, kw_only=True)
 class SheetRow:
-    """One game on the sheet: the pick, its points and, once played, how it scored."""
+    """One game on the sheet: the pick, its points and, once played, how it scored.
+
+    ``newer_points`` and ``newer_pick`` are set on a sheet built from the picks entered before
+    the lock, for a game whose points or pick differ in the predictions written after it.
+    """
 
     game_id: str
     points: int | None
@@ -45,11 +53,18 @@ class SheetRow:
     home_score: int | None
     result: Result | None
     points_won: int | None
+    newer_points: int | None = None
+    newer_pick: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
 class ConfidenceSheet:
-    """A week's confidence pool sheet and its totals."""
+    """A week's confidence pool sheet and its totals.
+
+    ``picks_file`` names the picks file the sheet was built from when the week's predictions were
+    rewritten after the lock; ``newer_predictions_at`` is when, and ``changed_after_lock`` counts
+    the games whose pick or points the newer predictions changed.
+    """
 
     rows: list[SheetRow]
     games: int
@@ -61,6 +76,9 @@ class ConfidenceSheet:
     lock_at: str | None
     generated_after_lock: bool | None
     rank_problem: str | None
+    picks_file: str | None = None
+    newer_predictions_at: str | None = None
+    changed_after_lock: int = 0
 
 
 def _int(value: object) -> int | None:
@@ -190,8 +208,7 @@ def build_sheet(
     points_won = sum(row.points_won or 0 for row in final) if final else None
     open_points = sum(row.points or 0 for row in rows if row.result is None)
     expected = [row.expected_points for row in rows]
-    kickoffs = [kickoff for row in records if (kickoff := kickoff_eastern(row)) is not None]
-    lock = min(kickoffs) if kickoffs else None
+    lock = first_kickoff(records)
     return ConfidenceSheet(
         rows=rows,
         games=games,
@@ -205,4 +222,59 @@ def build_sheet(
         lock_at=lock.isoformat() if lock else None,
         generated_after_lock=None if lock is None or generated_at is None else generated_at > lock,
         rank_problem=problem,
+    )
+
+
+@dataclass(frozen=True)
+class SubmittedPicks:
+    """A weekly run's picks file for one week, written before that week's lock."""
+
+    frame: pl.DataFrame
+    file_name: str
+    written_at: datetime
+
+
+def build_pre_lock_sheet(
+    predictions: pl.DataFrame,
+    submitted: SubmittedPicks,
+    finals: Mapping[str, tuple[int, int]],
+    predictions_written_at: datetime,
+) -> ConfidenceSheet:
+    """Build the sheet from the picks entered before the lock, noting what changed after it.
+
+    Args:
+        predictions: The week's predictions, written after the lock; they supply the kickoffs
+            and any final scores, and their ranks become the notes.
+        submitted: The weekly run's picks file, written before the lock.
+        finals: ``game_id -> (away_score, home_score)`` for games already played.
+        predictions_written_at: When the predictions were rewritten (aware).
+
+    Returns:
+        The sheet of the pre-lock picks, scored like any sheet.
+
+    """
+    schedule = predictions.select(
+        "game_id", *(column for column in SCHEDULE_COLUMNS if column in predictions.columns)
+    )
+    picks = submitted.frame
+    entered = picks.drop([column for column in SCHEDULE_COLUMNS if column in picks.columns]).join(
+        schedule, on="game_id", how="left"
+    )
+    sheet = build_sheet(entered, finals, submitted.written_at)
+    newer = {row.game_id: row for row in build_sheet(predictions, finals, None).rows}
+    rows: list[SheetRow] = []
+    changed = 0
+    for row in sheet.rows:
+        latest = newer.get(row.game_id)
+        if latest is None or (latest.points, latest.pick) == (row.points, row.pick):
+            rows.append(row)
+            continue
+        changed += 1
+        rows.append(replace(row, newer_points=latest.points, newer_pick=latest.pick))
+    return replace(
+        sheet,
+        rows=rows,
+        picks_file=submitted.file_name,
+        newer_predictions_at=predictions_written_at.isoformat(),
+        changed_after_lock=changed,
     )

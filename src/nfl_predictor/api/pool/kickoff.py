@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -42,3 +42,9 @@ def kickoff_eastern(row: Mapping[str, object]) -> datetime | None:
     if kickoff.tzinfo is None:
         return kickoff.replace(tzinfo=EASTERN)
     return kickoff.astimezone(EASTERN)
+
+
+def first_kickoff(rows: Iterable[Mapping[str, object]]) -> datetime | None:
+    """Return the earliest kickoff among ``rows``: when a week's single-shot pool picks lock."""
+    kickoffs = [kickoff for row in rows if (kickoff := kickoff_eastern(row)) is not None]
+    return min(kickoffs) if kickoffs else None

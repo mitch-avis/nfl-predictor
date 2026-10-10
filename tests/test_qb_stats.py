@@ -32,6 +32,8 @@ _PLAY_DEFAULTS: dict[str, Any] = {
     "cpoe": None,
     "passer_player_id": None,
     "passer_player_name": None,
+    "rusher_player_id": None,
+    "rusher_player_name": None,
 }
 
 _PLAY_DTYPES: dict[str, Any] = {
@@ -40,6 +42,8 @@ _PLAY_DTYPES: dict[str, Any] = {
     "cpoe": pl.Float64,
     "passer_player_id": pl.String,
     "passer_player_name": pl.String,
+    "rusher_player_id": pl.String,
+    "rusher_player_name": pl.String,
 }
 
 
@@ -140,15 +144,15 @@ def test_build_qb_identity_drops_ambiguous_names_and_adds_aliases() -> None:
 
 
 def test_aggregate_qb_game_stats_counts_one_quarterback_game() -> None:
-    """Sums a starter's and a backup's dropbacks, crediting scrambles to the starter."""
+    """Sums a starter's and a backup's dropbacks, crediting a scramble to the scrambler."""
     # Arrange
     plays = [
         _starter_pass(complete_pass=1, yards_gained=10.0, pass_touchdown=1, qb_epa=2.0, cpoe=20.0),
         _starter_pass(qb_epa=-0.5, cpoe=-10.0),
         _starter_pass(interception=1, qb_epa=-3.0),
         _starter_pass(sack=1, yards_gained=-7.0, qb_epa=-1.5),
-        # Scramble: a dropback with no passer, credited to the team-game's primary passer.
-        _play(qb_dropback=1, rush=1, yards_gained=8.0, qb_epa=1.0),
+        # Scramble: a dropback with no passer, credited to its rusher.
+        _play(qb_dropback=1, yards_gained=8.0, qb_epa=1.0, rusher_player_id="S"),
         # Spike and two-point try: excluded, like the team dropback definition.
         _starter_pass(qb_spike=1, qb_epa=-0.2),
         _starter_pass(two_point_attempt=1, qb_epa=0.9),
@@ -193,6 +197,53 @@ def test_aggregate_qb_game_stats_counts_one_quarterback_game() -> None:
     assert (backup["dropbacks"], backup["attempts"], backup["completions"]) == (1, 1, 1)
     assert backup["qb_epa_sum"] == pytest.approx(0.3)
     assert backup["cpoe_count"] == 1
+
+
+def test_aggregate_qb_game_stats_credits_a_scramble_to_its_rusher_not_the_busiest_passer() -> None:
+    """A starter's scramble stays his even when a backup threw more often in the game."""
+    # Arrange
+    backup = {"passer_player_id": "B", "passer_player_name": "B.Backup"}
+    plays = [
+        _starter_pass(qb_epa=0.5),
+        *[_play(qb_dropback=1, qb_epa=0.1, **backup) for _ in range(3)],
+        _play(qb_dropback=1, qb_epa=2.0, rusher_player_id="S", rusher_player_name="S.Starter"),
+    ]
+    frame = pl.DataFrame(plays, schema_overrides=_PLAY_DTYPES)
+
+    # Act
+    games = qb_stats.aggregate_qb_game_stats(frame)
+
+    # Assert
+    rows = {row["qb_id"]: row for row in games.iter_rows(named=True)}
+    assert (rows["S"]["dropbacks"], rows["S"]["attempts"]) == (2, 1)
+    assert rows["S"]["qb_epa_sum"] == pytest.approx(2.5)
+    assert rows["B"]["dropbacks"] == 3
+
+
+def test_aggregate_qb_game_stats_credits_a_dropback_without_ids_to_no_one() -> None:
+    """A dropback with neither a passer nor a rusher id is no quarterback's."""
+    # Arrange
+    plays = [_starter_pass(qb_epa=0.5), _play(qb_dropback=1, qb_epa=3.0)]
+    frame = pl.DataFrame(plays, schema_overrides=_PLAY_DTYPES)
+
+    # Act
+    games = qb_stats.aggregate_qb_game_stats(frame)
+
+    # Assert
+    assert games.select("qb_id", "dropbacks", "qb_epa_sum").rows() == [("S", 1.0, 0.5)]
+
+
+def test_aggregate_qb_game_stats_names_a_scramble_only_quarterback_by_his_rusher_name() -> None:
+    """A quarterback who only scrambled keeps a name for the passer-name fallback."""
+    # Arrange
+    plays = [_play(qb_dropback=1, qb_epa=1.0, rusher_player_id="R", rusher_player_name="R.Run")]
+    frame = pl.DataFrame(plays, schema_overrides=_PLAY_DTYPES)
+
+    # Act
+    games = qb_stats.aggregate_qb_game_stats(frame)
+
+    # Assert
+    assert games.select("qb_id", "passer_name", "attempts").rows() == [("R", "R.Run", 0.0)]
 
 
 def test_attach_qb_features_uses_only_earlier_weeks_and_shrinks_to_the_league() -> None:

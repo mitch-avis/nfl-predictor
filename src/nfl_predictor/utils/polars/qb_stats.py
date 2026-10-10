@@ -39,11 +39,9 @@ Formulas, with ``K = constants.QB_PRIOR_DROPBACKS``:
 - ``qb_history_dropbacks``: career dropbacks, so the model can see how much evidence stands
   behind the rates. Null when the quarterback cannot be identified.
 
-Deviation from the ``nfl-sos-ratings`` reference (read-only): it credits scrambles through
-``rusher_player_id``, which this family does not read, though the play-by-play cache keeps it.
-Here a scramble (a dropback with no passer) is credited to the team-game's primary passer, the
-one with the most dropbacks that carry a passer id. Scrambles are about 5% of dropbacks, and
-nearly all of them belong to the starter.
+A scramble (a dropback with no passer id) is credited to its rusher, the quarterback who
+scrambled (``rusher_player_id``), as the ``nfl-sos-ratings`` reference (read-only) credits it;
+a dropback with neither id is no quarterback's.
 """
 
 from __future__ import annotations
@@ -173,11 +171,12 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
     """Sum play-by-play dropbacks into one row per quarterback game.
 
     Rows are ``(season, week, team_abbr, qb_id)`` with the defense faced (``opponent_abbr``),
-    ``passer_name`` and the sums in ``QB_GAME_SUM_COLUMNS``. Definitions (regular season
-    only, dropbacks as in ``pbp.dropback_condition``):
+    ``passer_name`` (his play-by-play passer name, or rusher name on a scramble) and the sums
+    in ``QB_GAME_SUM_COLUMNS``. Definitions (regular season only, dropbacks as in
+    ``pbp.dropback_condition``):
 
-    - ``dropbacks``: every dropback, a scramble included (credited as the module docstring
-      describes).
+    - ``dropbacks``: every dropback credited to him: as the passer, or as the rusher of a
+      scramble (a dropback with no passer id). A dropback with neither id is left out.
     - ``attempts``: dropbacks with a passer id that are not sacks.
     - ``completions``, ``pass_tds``, ``interceptions``: attempts with ``complete_pass``,
       ``pass_touchdown`` and ``interception`` set.
@@ -196,31 +195,28 @@ def aggregate_qb_game_stats(pbp_df: pl.DataFrame) -> pl.DataFrame:
         return empty_qb_game_frame()
     plays = pbp.regular_season_plays(pbp_df)
     columns = plays.columns
-    drops = plays.filter(pbp.dropback_condition(columns)).with_columns(
-        pl.col("passer_player_id").cast(pl.String).alias("_passer"),
-        (
-            pl.col("passer_player_name").cast(pl.String)
-            if "passer_player_name" in columns
-            else pl.lit(None, dtype=pl.String)
-        ).alias("_passer_name"),
+
+    def text(column: str) -> pl.Expr:
+        """Return a text column, or a null text column when the frame lacks it."""
+        if column in columns:
+            return pl.col(column).cast(pl.String)
+        return pl.lit(None, dtype=pl.String)
+
+    drops = (
+        plays.filter(pbp.dropback_condition(columns))
+        .with_columns(
+            text("passer_player_id").alias("_passer"),
+            pl.coalesce(text("passer_player_id"), text("rusher_player_id")).alias("qb_id"),
+            pl.coalesce(text("passer_player_name"), text("rusher_player_name")).alias(
+                "_passer_name"
+            ),
+        )
+        .filter(pl.col("qb_id").is_not_null())
     )
     if drops.height == 0:
         return empty_qb_game_frame()
 
     team_game = ["season", "week", "posteam"]
-    primary = (
-        drops.filter(pl.col("_passer").is_not_null())
-        .group_by([*team_game, "_passer"], maintain_order=True)
-        .len()
-        .sort([*team_game, "len", "_passer"], descending=[False, False, False, True, False])
-        .unique(subset=team_game, keep="first", maintain_order=True)
-        .select(*team_game, pl.col("_passer").alias("_primary"))
-    )
-    drops = (
-        drops.join(primary, on=team_game, how="left")
-        .with_columns(pl.coalesce("_passer", "_primary").alias("qb_id"))
-        .filter(pl.col("qb_id").is_not_null())
-    )
 
     is_attempt = pl.col("_passer").is_not_null() & ~_flag(columns, "sack")
     is_sack = _flag(columns, "sack")

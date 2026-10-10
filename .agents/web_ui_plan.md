@@ -276,13 +276,10 @@ Done when: in week 1 the user selects week 3 and sees predictions from the activ
 - Picks export (`/predictions/picks?format=csv`).
 - `GET /pool/tiebreakers?week=`: MNF and SNF games from `game_datetime` weekday and latest
   kickoff, with predicted scores and p10-p90 band; highest and lowest projected team score.
-- `POST /pool/survivor {season, start_week, used_teams, horizon_weeks}`: pure module
-  `src/nfl_predictor/api/pool/survivor.py`. Surviving every predicted week with each team used
-  once is an assignment of weeks to teams at cost `-log p`, solved exactly
-  (`scipy.optimize.linear_sum_assignment`) once per possible pick this week, so strong teams are
-  saved for the weeks where they are worth most; returns ranked plans with weekly picks and
-  cumulative survival probability, `horizon_weeks` setting only how many weeks show as near-term
-  picks. Depends on Phase 3 per-week files.
+- `POST /pool/survivor {season, start_week, used_teams, horizon_weeks, beam_width}`: pure module
+  `src/nfl_predictor/api/pool/survivor.py`, beam search over (used-set, log survival) states with a
+  future-value lookahead penalty so strong teams are saved; returns ranked plans with weekly picks
+  and cumulative survival probability. Depends on Phase 3 per-week files.
 - `/pool` page with Confidence / Tiebreakers / Survivor tabs.
 Done when: the tiebreaker card answers Yahoo's two tiebreakers and a survivor plan renders.
 
@@ -511,14 +508,18 @@ validation; the adapters with fakes; the poller and `/api/live`; the live views.
     scores, which run well past the best and worst projections, so the card gives the median of
     each extreme of normal team scores (spreads from the quantile bands) and names the projected
     top and bottom teams beside it.
-  - **Survivor plans are exact.** The first design searched the next weeks approximately with a
-    future-value penalty; the review found its plans below the exact optimum, and the problem is
-    an assignment that `linear_sum_assignment` solves exactly in milliseconds, so each possible
-    pick this week gets the exact best plan over every week with predictions (decision log, entry
-    9).
-    Plans come back one per first pick; a team's future value is what the weeks after this one
-    lose without it. Weeks without predictions are listed rather than guessed, games already
-    final are not offered, and a request lists at most 32 used teams.
+  - **Survivor plans are exact: a substitute method, on the user's approval list.** The task
+    text above asks for a beam search over (used-set, log survival) states with a future-value
+    lookahead penalty. The first build did that; the independent review found its plans below
+    the exact optimum, and the problem is an assignment of weeks to teams at cost `-log p` that
+    `scipy.optimize.linear_sum_assignment` solves exactly in milliseconds. So each possible pick
+    this week gets the exact best plan over every week with predictions, `beam_width` is gone, and
+    `horizon_weeks` only sets how many weeks show as near-term picks (decision log, entry 9).
+    Under `AGENTS.md` rule 2 this substitute for the task text's method needs the user's approval
+    before task 58.1 is checked off. Plans come back one per first pick; a team's future value is
+    what the weeks after this one lose without it. Weeks without predictions are listed rather
+    than guessed, games already final are not offered, and a request lists at most 32 used
+    teams.
 
   Fixed along the way: predicting a later week into the active run (Phase 3's Generate) moved the
   run to that week and hid its own week (the selector dropped it and asking for it returned 404);

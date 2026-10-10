@@ -228,11 +228,14 @@ none of the pool modules or `margin_rows`.
 - **How to reverse it:** edit the Phase 6 section; nothing is built.
 - **Review:** not yet reviewed.
 
-## 9. The survivor planner is solved exactly
+## 9. The survivor planner is solved exactly (a substitute method, on the user's approval list)
 
-- **What differs:** entry 6's first build searched the planned weeks with a beam of partial plans
-  and left the weeks after them to an exact assignment; the independent review found its plans
-  below the exact optimum.
+- **What differs:** the task text (`.agents/web_ui_plan.md`, Phase 4) asks for a beam search over
+  (used-set, log survival) states with a future-value lookahead penalty. Entry 6's first build
+  did that, searching the planned weeks with a beam of partial plans and leaving the weeks after
+  them to an exact assignment; the independent review found its plans below the exact optimum.
+  Replacing the task text's method is a substitute under `AGENTS.md` rule 2, so it goes on the
+  user's approval list, and task 58.1 stays open until the user accepts it.
 - **Options:** keep the beam with a wider default; or solve exactly: maximizing the product of
   independent win probabilities with each team used once is an assignment of weeks to teams at
   cost `-log p`, so fix each possible pick this week and assign every later week with

@@ -117,6 +117,89 @@ def test_rebuilt_team_rates_lists_each_rate_it_rebuilds() -> None:
     assert rates == ("passing_yards_per_offensive_snap", "completion_pct", "completion_pct_allowed")
 
 
+def _game_logs(**columns: list[object]) -> pl.DataFrame:
+    """Return the two sides of two games (DEN-KC, DEN-LV) with the given published columns."""
+    return pl.DataFrame(
+        {
+            "game_id": ["g1", "g2", "g1", "g2"],
+            "week": [1, 2, 1, 2],
+            "team": ["DEN", "DEN", "KC", "LV"],
+            "opponent_team": ["KC", "LV", "DEN", "DEN"],
+            **columns,
+        }
+    )
+
+
+def _parts(games: pl.DataFrame, rate: str) -> list[tuple[object, object]]:
+    """Return a rate's hidden numerator and denominator, row by row."""
+    return games.select(numerator_column(rate), denominator_column(rate)).rows()
+
+
+def test_team_stat_rows_from_published_counts_working_snaps_as_offensive_snaps() -> None:
+    """EPA per snap divides by the scrimmage snaps the logs publish as ``offensive_snaps``."""
+    # Arrange
+    logs = _game_logs(
+        offensive_epa=[3.5, -1.25, 0.5, 2.0],
+        offensive_snaps=[70, 50, 60, 64],
+        epa_per_offensive_snap=[3.5 / 70, -1.25 / 50, 0.5 / 60, 2.0 / 64],
+    )
+
+    # Act
+    games = published_logs.team_stat_rows_from_published(logs)
+
+    # Assert
+    assert _parts(games, "epa_per_offensive_snap") == [(3.5, 70), (-1.25, 50), (0.5, 60), (2.0, 64)]
+
+
+def test_team_stat_rows_from_published_rounds_a_whole_number_numerator() -> None:
+    """Explosive passes are a count, so the rate times the dropbacks rounds to it exactly."""
+    # Arrange
+    logs = _game_logs(dropbacks=[35, 28, 22, 0], explosive_pass_rate=[3 / 35, 0.0, 5 / 22, None])
+
+    # Act
+    games = published_logs.team_stat_rows_from_published(logs)
+
+    # Assert
+    assert _parts(games, "explosive_pass_rate") == [(3.0, 35), (0.0, 28), (5.0, 22), (None, 0)]
+
+
+def test_team_stat_rows_from_published_takes_a_mirrors_denominator_from_the_opponent() -> None:
+    """Points per drive allowed divides the opponent's points by the opponent's drives."""
+    # Arrange
+    logs = _game_logs(
+        drives=[11, 9, 12, 10], points_per_drive_allowed=[21 / 12, 17 / 10, 24 / 11, 30 / 9]
+    )
+
+    # Act
+    games = published_logs.team_stat_rows_from_published(logs)
+
+    # Assert
+    assert _parts(games, "points_per_drive_allowed") == [
+        (21.0, 12),
+        (17.0, 10),
+        (24.0, 11),
+        (30.0, 9),
+    ]
+
+
+def test_team_stat_rows_from_published_gives_a_parts_only_mirror_the_opponents_parts() -> None:
+    """Yards per attempt allowed is never published; its parts still feed a formula rate."""
+    # Arrange
+    logs = _game_logs(attempts=[30, 25, 20, 40], yards_per_attempt=[7.0, 6.4, 6.5, 8.0])
+
+    # Act
+    games = published_logs.team_stat_rows_from_published(logs)
+
+    # Assert
+    assert _parts(games, "yards_per_attempt_allowed") == [
+        (130.0, 20),
+        (320.0, 40),
+        (210.0, 30),
+        (160.0, 25),
+    ]
+    assert "yards_per_attempt_allowed" in published_logs.rebuilt_team_rates(logs.columns)
+
+
 def test_qb_stat_rows_from_published_reads_the_passers_rows_without_the_game_context() -> None:
     # Arrange
     logs = pl.DataFrame(

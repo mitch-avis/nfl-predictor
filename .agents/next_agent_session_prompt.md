@@ -31,7 +31,9 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   `0.54.0` the ratings in the ETL, the play-by-play corrections, one quarterback starter and both
   own Elo presets in the datasets; `0.55.0` the red-zone trip definition; `0.55.1` the
   four-week trend fix for upcoming games; `0.56.0` the ETL step that writes the season statistics
-  tables beside the ratings tables. Gate (`--web`) on `0.56.0`: 3132 passed, web 50 files.
+  tables beside the ratings tables; `0.57.0` the power-ranking methods on the ported ratings and
+  the model (`ported`, `model`, `blend`; the composite still the default) and their reviewed
+  next-week margin score. Gate on `0.57.0`: 3232 passed.
 - Phase-4 runs in progress since 2026-10-10 10:08: the driver `models/step6/driver.sh` (started by
   `models/step6/launch.sh`, log `models/step6/driver.log`) runs ten walk-forwards back to back
   from the run worktree `~/scratch/step6_runs` (detached at `d6064eb`, `0.55.0`, the build's
@@ -52,13 +54,12 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   After each run: a check-in with its numbers; after both seeds of an arm: `nfl-predictor compare`
   against its reference and an independent reviewer's rescore (rule 3) before any number enters a
   doc.
-- Still running at 12:15 (subagents, each in its own worktree under `.claude/worktrees/`): the
-  second-round review of phase 5's power rankings (the review fixes and a two-seed supplement,
-  branch `worktree-agent-aa082302f4fc5ac12`; the first round is `models/step6/rankings/REVIEW.md`);
-  the source's open rating tests (report only); the own Elo's alternative quarterback adjustment
-  (report only, third attempt). Still to start: the phase-1 refresh, and the adoption chunk once
-  the decision rules have read the runs. The stream table, the integration design and the user's
-  list are in `.agents/step6_plan.md`.
+- Still running at 12:20 (subagents, each in its own worktree under `.claude/worktrees/`): the
+  source's open rating tests (report only); the own Elo's alternative quarterback adjustment
+  (report only, third attempt); the phase-1 inventory and parity refresh on the candidate build;
+  the betting report's edge decomposition (the "(step 6, phase 5)" follow-up in `TODO.md`). Still
+  to start: the adoption chunk, once the decision rules have read the runs. The stream table, the
+  integration design and the user's list are in `.agents/step6_plan.md`.
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
   or restart it yourself (rule 5); it loads new code only when the user restarts it.
 - Roadmap step 4 (feature values, `0.37.2`-`0.45.0`) and step 5 (market-free baseline) are closed

@@ -171,6 +171,38 @@ def test_build_team_stat_trends_gives_a_playoff_week_the_full_regular_season_tre
     assert playoff["turnover_margin_4wk_trend"][0] == pytest.approx(1.5 - 6.0 / 7.0)
 
 
+def test_build_team_stat_trends_keeps_a_game_without_a_value_in_the_window() -> None:
+    """A game without a value fills a window slot but counts in neither mean.
+
+    The week right after it has no season mean, so no trend (the week builder publishes 0.0).
+    """
+    # Arrange
+    stats = _team_stat_games(6).with_columns(
+        pl.when(pl.col("week") == 3)
+        .then(None)
+        .otherwise(pl.col("scoring_margin"))
+        .alias("scoring_margin")
+    )
+
+    # Act
+    trends = polars_utils.build_team_stat_trends(
+        stats,
+        season=2023,
+        stats=["scoring_margin"],
+        schedule_df=_schedule(list(range(1, 8))),
+        window=4,
+    )
+
+    # Assert
+    aaa = trends.filter(pl.col("team_abbr") == "AAA")
+    by_week = dict(zip(aaa["week"], aaa["scoring_margin_4wk_trend"], strict=True))
+    assert by_week[4] is None
+    # Week 6: weeks 2-5 hold 1, (none), 1, 10 against 13 over four values.
+    assert by_week[6] == pytest.approx(12.0 / 3.0 - 13.0 / 4.0)
+    # Week 7: weeks 3-6 hold (none), 1, 10, 10 against 23 over five values.
+    assert by_week[7] == pytest.approx(21.0 / 3.0 - 23.0 / 5.0)
+
+
 def test_build_team_stat_trends_is_zero_for_a_team_without_an_earlier_game() -> None:
     """A team-week with no earlier game has no trend signal yet, published as 0.0."""
     # Arrange

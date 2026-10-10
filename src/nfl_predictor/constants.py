@@ -478,6 +478,110 @@ NFLREADPY_SCHEDULE_RENAME = {
 # nflverse player sources: weekly player stats, snap counts, the players file, rosters, ESPN QBR
 # ============================================================================
 
+# The first season each source publishes. Its loader returns no rows for an earlier season
+# without asking nflreadpy, which refuses some of them with a ValueError. nflverse's 2012 snap
+# counts file holds no rows, so snap counts start in 2013 in practice.
+NFLREADPY_PLAYER_STATS_MIN_SEASON = 1999
+NFLREADPY_SNAP_COUNTS_MIN_SEASON = 2012
+NFLREADPY_ROSTERS_MIN_SEASON = 1920
+NFLREADPY_WEEKLY_ROSTERS_MIN_SEASON = 2002
+
+# Columns kept from `nflreadpy.load_player_stats(summary_level="week")`, one row per player and
+# game: identity, the official passing and rushing totals the quarterback rating reads, and the
+# defensive stats only the box score charts.
+NFLREADPY_PLAYER_STATS_COLUMNS = [
+    "player_id",
+    "player_name",
+    "player_display_name",
+    "position",
+    "season",
+    "week",
+    "season_type",
+    "game_id",
+    "team",
+    "opponent_team",
+    "completions",
+    "attempts",
+    "passing_yards",
+    "passing_tds",
+    "passing_interceptions",
+    "sacks_suffered",
+    "sack_yards_lost",
+    "passing_epa",
+    "passing_cpoe",
+    "carries",
+    "rushing_yards",
+    "rushing_tds",
+    "rushing_first_downs",
+    "rushing_epa",
+    "rushing_fumbles",
+    "rushing_fumbles_lost",
+    "rushing_2pt_conversions",
+    "def_tackles_for_loss",
+    "def_fumbles_forced",
+    "def_sacks",
+    "def_qb_hits",
+    "def_interceptions",
+    "def_pass_defended",
+    "def_safeties",
+]
+
+# Weekly player stats credit no one with these stats in these seasons (inclusive) and publish 0
+# instead of a missing value; the loader leaves them null there. nflverse charts one tackle for
+# loss in all of 2006.
+NFLREADPY_PLAYER_STAT_GAPS: dict[str, tuple[int, int]] = {
+    "def_tackles_for_loss": (2003, 2011),
+    "def_qb_hits": (2003, 2005),
+}
+
+# Columns kept from `nflreadpy.load_snap_counts`, keyed by the Pro Football Reference player id.
+NFLREADPY_SNAP_COUNT_COLUMNS = [
+    "game_id",
+    "season",
+    "game_type",
+    "week",
+    "player",
+    "pfr_player_id",
+    "position",
+    "team",
+    "opponent",
+    "offense_snaps",
+    "offense_pct",
+]
+
+# Columns kept from `nflreadpy.load_players`, one row per player with his latest position and the
+# ids other sources key on (Pro Football Reference for snap counts, ESPN for QBR).
+NFLREADPY_PLAYERS_COLUMNS = [
+    "gsis_id",
+    "display_name",
+    "position",
+    "pfr_id",
+    "espn_id",
+]
+
+# Columns kept from `nflreadpy.load_rosters` and `nflreadpy.load_rosters_weekly`, which share a
+# schema. Season rosters before 2002 carry no week or game type.
+NFLREADPY_ROSTER_COLUMNS = [
+    "season",
+    "week",
+    "game_type",
+    "team",
+    "position",
+    "full_name",
+    "gsis_id",
+    "pfr_id",
+]
+
+# League (GSIS) team codes the 2002-2015 season and weekly rosters use, with nflverse's code for
+# each; the loaders then normalize nflverse's codes through ALIAS_TO_CANONICAL as usual.
+NFLVERSE_ROSTER_TEAM_CODES = {
+    "ARZ": "ARI",
+    "BLT": "BAL",
+    "CLV": "CLE",
+    "HST": "HOU",
+    "SL": "STL",
+}
+
 # The position a source lists a quarterback at. A player the players file or any regular-season
 # week of the season's weekly roster lists here is a quarterback that season, whatever else he
 # plays (`utils/polars/player_identity.py`).

@@ -24,6 +24,8 @@ function row(overrides: Partial<SheetRow>): SheetRow {
     home_score: null,
     result: null,
     points_won: null,
+    newer_points: null,
+    newer_pick: null,
     ...overrides,
   }
 }
@@ -49,6 +51,9 @@ function sheet(overrides: Partial<ConfidenceSheet> = {}): ConfidenceSheet {
     lock_at: '2026-10-08T20:15:00-04:00',
     generated_after_lock: false,
     rank_problem: null,
+    picks_file: null,
+    newer_predictions_at: null,
+    changed_after_lock: 0,
     ...overrides,
   }
 }
@@ -95,6 +100,44 @@ describe('ConfidenceSheetView', () => {
 
     // Assert
     expect(screen.getByRole('alert')).toHaveTextContent(/written after the week’s first kickoff/)
+  })
+
+  it('says the sheet holds the picks entered before the lock', () => {
+    // Arrange
+    const entered = sheet({
+      picks_file: 'season_2026_week_05_confidence_picks.csv',
+      newer_predictions_at: '2026-10-10T14:00:00+00:00',
+      changed_after_lock: 1,
+    })
+
+    // Act
+    renderWithProviders(<ConfidenceSheetView sheet={entered} csvUrl="/csv" />)
+
+    // Assert
+    const note = screen.getByRole('status')
+    expect(note).toHaveTextContent('Picks entered before the lock')
+    expect(note).toHaveTextContent('season_2026_week_05_confidence_picks.csv')
+    expect(note).toHaveTextContent('1 game')
+  })
+
+  it('notes a game whose points changed after the lock', () => {
+    // Arrange
+    const entered = sheet({
+      rows: [
+        row({ game_id: 'a', points: 3 }),
+        row({ game_id: 'b', points: 2, pick: 'HOU', newer_points: 1, newer_pick: 'HOU' }),
+        row({ game_id: 'c', points: 1, pick: 'PIT', newer_points: 2, newer_pick: 'IND' }),
+      ],
+      picks_file: 'season_2026_week_05_confidence_picks.csv',
+      changed_after_lock: 2,
+    })
+
+    // Act
+    renderWithProviders(<ConfidenceSheetView sheet={entered} csvUrl="/csv" />)
+
+    // Assert
+    expect(screen.getByText('now 1 points')).toBeInTheDocument()
+    expect(screen.getByText('now IND for 2')).toBeInTheDocument()
   })
 
   it('reports ranks that are not one to N', () => {

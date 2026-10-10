@@ -24,8 +24,16 @@ function ResultChip({ row }: { row: SheetRow }) {
   )
 }
 
+/** What the predictions written after the lock say instead, or null when nothing changed. */
+function newerNote(row: SheetRow): string | null {
+  if (row.newer_points === null && row.newer_pick === null) return null
+  if (row.newer_pick === row.pick) return `now ${row.newer_points ?? '—'} points`
+  return `now ${row.newer_pick ?? '—'} for ${row.newer_points ?? '—'}`
+}
+
 function SheetLine({ row }: { row: SheetRow }) {
   const final = row.away_score !== null && row.home_score !== null
+  const note = newerNote(row)
   return (
     <li data-pick={row.pick ?? ''} className="flex items-center gap-3 px-3 py-2">
       <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
@@ -40,6 +48,11 @@ function SheetLine({ row }: { row: SheetRow }) {
           {formatKickoff(row.kickoff)}
           {final ? ` · final ${row.away_abbr} ${row.away_score}, ${row.home_abbr} ${row.home_score}` : ''}
         </div>
+        {note ? (
+          <div className="text-xs text-muted-foreground" title="The predictions written after the lock; the sheet keeps the picks entered before it.">
+            {note}
+          </div>
+        ) : null}
       </div>
       <ResultChip row={row} />
       <div className="w-20 shrink-0 text-right">
@@ -56,6 +69,17 @@ export function ConfidenceSheetView({ sheet, csvUrl }: { sheet: ConfidenceSheet;
   const rows = sortSheetRows(sheet.rows, order)
   return (
     <div className="space-y-4">
+      {sheet.picks_file ? (
+        <Alert role="status">
+          <Lock />
+          <AlertTitle>Picks entered before the lock</AlertTitle>
+          <AlertDescription>
+            The week’s predictions were written again after the first kickoff ({formatKickoff(sheet.newer_predictions_at)}). Picks are single-shot, so this sheet and its
+            points come from {sheet.picks_file}, written before that kickoff; {sheet.changed_after_lock} {sheet.changed_after_lock === 1 ? 'game has' : 'games have'} a
+            different pick or points in the newer predictions, noted as “now”.
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {sheet.generated_after_lock ? (
         <Alert>
           <AlertTriangle />

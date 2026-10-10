@@ -20,6 +20,8 @@ function row(overrides: Partial<SheetRow>): SheetRow {
     home_score: null,
     result: null,
     points_won: null,
+    newer_points: null,
+    newer_pick: null,
     ...overrides,
   }
 }

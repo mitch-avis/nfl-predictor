@@ -146,9 +146,15 @@ export interface SheetRow {
   home_score: number | null
   result: 'win' | 'loss' | 'tie' | null
   points_won: number | null
+  /** On a sheet of the picks entered before the lock: the points and pick predicted since, when they differ. */
+  newer_points: number | null
+  newer_pick: string | null
 }
 
-/** A week's confidence pool sheet: picks by points, the lock (first kickoff) and the scoring. */
+/**
+ * A week's confidence pool sheet: picks by points, the lock (first kickoff) and the scoring. When
+ * the predictions were rewritten after the lock, `picks_file` names the pre-lock picks it shows.
+ */
 export interface ConfidenceSheet {
   run_id: string | null
   source: string
@@ -165,6 +171,9 @@ export interface ConfidenceSheet {
   lock_at: string | null
   generated_after_lock: boolean | null
   rank_problem: string | null
+  picks_file: string | null
+  newer_predictions_at: string | null
+  changed_after_lock: number
 }
 
 /** A game's whole-point tiebreak entry and the p10 to p90 bands behind it. */
